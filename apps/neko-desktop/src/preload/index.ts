@@ -302,13 +302,12 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   workspaceGrants: {
-    async choose(windowId, expectedWindowRevision) {
+    async choose(windowId) {
       const context = requireShellMutationContext();
       const request = createDesktopWorkspaceGrantChooseRequest({
         requestId: nextRequestId('desktop-workspace-grant-choose'),
         rendererSessionId: context.rendererSessionId,
         windowId,
-        expectedWindowRevision,
       });
       const response: unknown = await ipcRenderer.invoke(DESKTOP_WORKSPACE_GRANT_CHANNEL, request);
       return parseDesktopWorkspaceGrantChooseResult(response, request.requestId);
@@ -965,7 +964,6 @@ const bridge: OpenNekoDesktopBridge &
       const request = createDesktopWindowMutationRequest(
         nextRequestId('desktop-project-open'),
         context.rendererSessionId,
-        context.windowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.projectOpenContent,
@@ -981,7 +979,6 @@ const bridge: OpenNekoDesktopBridge &
         nextRequestId('desktop-project-catalog-open'),
         projectId,
         context.rendererSessionId,
-        context.windowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.projectOpenCatalog,
@@ -991,14 +988,12 @@ const bridge: OpenNekoDesktopBridge &
       rememberShellProjection(result.projection);
       return result;
     },
-    async removeRecent(projectId, expectedWindowRevision, expectedCatalogRevision) {
+    async removeRecent(projectId) {
       const context = requireShellMutationContext();
       const request = createDesktopProjectRemoveRecentRequest(
         nextRequestId('desktop-project-remove-recent'),
         projectId,
         context.rendererSessionId,
-        expectedWindowRevision,
-        expectedCatalogRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.projectRemoveRecent,
@@ -1023,14 +1018,12 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   conversations: {
-    async delete(navigation, expectedWindowRevision, expectedAgentHomeRevision) {
+    async delete(navigation) {
       const context = requireShellMutationContext();
       const request = createDesktopConversationDeleteRequest(
         nextRequestId('desktop-conversation-delete'),
         navigation,
         context.rendererSessionId,
-        expectedWindowRevision,
-        expectedAgentHomeRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.conversationDelete,
@@ -1042,13 +1035,12 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   tabs: {
-    async activateHome(expectedWindowRevision) {
+    async activateHome() {
       const context = requireShellMutationContext();
       const request = createDesktopTabMutationRequest(
         nextRequestId('desktop-home-activate'),
         'home',
         context.rendererSessionId,
-        expectedWindowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.homeActivate,
@@ -1058,13 +1050,12 @@ const bridge: OpenNekoDesktopBridge &
         parseDesktopShellResponse(response, request.requestId).projection,
       );
     },
-    async activate(tabId, expectedWindowRevision) {
+    async activate(tabId) {
       const context = requireShellMutationContext();
       const request = createDesktopTabMutationRequest(
         nextRequestId('desktop-tab-activate'),
         tabId,
         context.rendererSessionId,
-        expectedWindowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
         DESKTOP_SHELL_CHANNELS.tabActivate,
@@ -1074,13 +1065,12 @@ const bridge: OpenNekoDesktopBridge &
         parseDesktopShellResponse(response, request.requestId).projection,
       );
     },
-    async close(tabId, expectedWindowRevision) {
+    async close(tabId) {
       const context = requireShellMutationContext();
       const request = createDesktopTabMutationRequest(
         nextRequestId('desktop-tab-close'),
         tabId,
         context.rendererSessionId,
-        expectedWindowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(DESKTOP_SHELL_CHANNELS.tabClose, request);
       return rememberShellProjection(
@@ -1089,12 +1079,11 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   workbench: {
-    async update(workbenchInstanceId, workbench, expectedWindowRevision) {
+    async update(workbenchInstanceId, workbench) {
       const context = requireShellMutationContext();
       const request = createDesktopWorkbenchMutationRequest(
         nextRequestId('desktop-workbench-update'),
         context.rendererSessionId,
-        expectedWindowRevision,
         workbenchInstanceId,
         workbench,
       );
@@ -1127,13 +1116,12 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   scenes: {
-    async transition(windowId, intent, expectedWindowRevision, sceneId) {
+    async transition(windowId, intent, sceneId) {
       const context = requireShellMutationContext();
       const request = createDesktopSceneTransitionRequest({
         requestId: nextRequestId('desktop-scene-transition'),
         rendererSessionId: context.rendererSessionId,
         windowId,
-        expectedWindowRevision,
         sceneId,
         intent,
       });
@@ -1270,7 +1258,6 @@ function nextRequestId(prefix: string): string {
 function rememberShellProjection<
   T extends {
     readonly rendererSessionId: string;
-    readonly window: { readonly revision: number };
   },
 >(projection: T): T {
   latestShellProjection = projectDesktopShellMutationContext(latestShellProjection, projection);
@@ -1279,7 +1266,6 @@ function rememberShellProjection<
 
 function requireShellMutationContext(): {
   readonly rendererSessionId: string;
-  readonly windowRevision: number;
 } {
   if (!latestShellProjection) {
     throw new Error('Desktop Shell mutation requires an authoritative snapshot.');

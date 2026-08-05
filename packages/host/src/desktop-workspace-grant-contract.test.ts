@@ -52,7 +52,6 @@ describe('Desktop Workspace grant contract', () => {
         requestId: 'request-1',
         rendererSessionId: 'epoch-1',
         windowId: '',
-        expectedWindowRevision: 0,
       }),
     ).toThrow(/Window identity is required/);
   });

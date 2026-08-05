@@ -780,7 +780,23 @@ async function startDesktop(): Promise<void> {
     host,
     userHome: homedir,
     credentialRuntime,
-    resources: resourceRegistry,
+    resources: {
+      registerFile: (owner, source) =>
+        resourceRegistry.registerFile(
+          {
+            windowId: owner.windowId,
+            viewId: owner.viewId,
+            sessionId: owner.sessionId,
+            rendererSessionId: owner.connectionId,
+            revision: owner.sourceFingerprint,
+          },
+          {
+            absolutePath: source.absolutePath,
+            mediaType: source.mediaType,
+            revision: source.sourceFingerprint,
+          },
+        ),
+    },
     contentInteraction: {
       openContent: async ({ identity, absolutePath }) => {
         requireOwnerWindow(identity.windowId);

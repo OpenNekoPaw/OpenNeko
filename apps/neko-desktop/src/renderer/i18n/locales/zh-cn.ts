@@ -267,7 +267,6 @@ export const zhCN = {
   'workspace.profile': '类型',
   'workspace.workspace': '工作区',
   'workspace.project': '项目',
-  'workspace.windowRevision': '窗口修订',
   'workspace.openHome': '返回主页',
   'workspace.openAnother': '打开另一个项目',
   'workspace.agentPromptPlaceholder': '向 Neko Agent 询问当前项目…',

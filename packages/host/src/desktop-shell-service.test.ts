@@ -68,7 +68,6 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       projection.rendererSessionId,
-      projection.window.revision,
     );
     expect(opened.projection.window.activeTarget.kind).toBe('project');
     first.service.releaseWindow(windowId);
@@ -90,13 +89,7 @@ describe('DesktopShellService', () => {
     const firstWindowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(firstWindowId, 'renderer-session-1');
     const initial = await first.service.getProjection(firstWindowId);
-    await openContent(
-      first,
-      firstWindowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    await openContent(first, firstWindowId, '/workspace/demo', initial.rendererSessionId);
     first.service.releaseWindow(firstWindowId);
     await first.service.dispose();
 
@@ -105,7 +98,6 @@ describe('DesktopShellService', () => {
     second.service.setAgentHomeProjectionSource({
       setHomeWorkspaceScope,
       readHomeProjection: () => ({
-        revision: 1,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
@@ -141,7 +133,6 @@ describe('DesktopShellService', () => {
     first.service.setAgentHomeProjectionSource({
       setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
-        revision: 2,
         conversations: [
           homeConversation('conversation:invalid-owner'),
           homeConversation('conversation:valid-sibling'),
@@ -159,7 +150,6 @@ describe('DesktopShellService', () => {
         requestId: 'open-settings-before-invalid-session',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection.window).sceneId,
         intent: { kind: 'open-settings' },
       }),
@@ -172,7 +162,6 @@ describe('DesktopShellService', () => {
         requestId: 'open-entry-before-invalid-session',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection.window).sceneId,
         intent: { kind: 'open-agent-entry' },
       }),
@@ -190,7 +179,6 @@ describe('DesktopShellService', () => {
         requestId: 'bind-invalid-assistant-session',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection.window).sceneId,
         intent: { kind: 'bind-agent-assistant', draftId: entry.scene.context.scope.draftId },
       }),
@@ -215,7 +203,6 @@ describe('DesktopShellService', () => {
         requestId: 'open-valid-sibling-entry',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection.window).sceneId,
         intent: { kind: 'open-agent-entry' },
       }),
@@ -233,7 +220,6 @@ describe('DesktopShellService', () => {
         requestId: 'bind-valid-assistant-sibling',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection.window).sceneId,
         intent: {
           kind: 'bind-agent-assistant',
@@ -261,7 +247,6 @@ describe('DesktopShellService', () => {
         requestId: 'reactivate-invalid-session-before-restart',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection.window).sceneId,
         intent: {
           kind: 'restore-conversation',
@@ -296,7 +281,6 @@ describe('DesktopShellService', () => {
     restored.service.setAgentHomeProjectionSource({
       setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
-        revision: 3,
         conversations: [homeConversation('conversation:valid-sibling')],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
         diagnostics: [
@@ -364,7 +348,6 @@ describe('DesktopShellService', () => {
     fixture.service.setAgentHomeProjectionSource({
       setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
-        revision: 4,
         conversations: [
           {
             navigation,
@@ -389,22 +372,14 @@ describe('DesktopShellService', () => {
       fixture.service.assertAgentHomeConversation(
         windowId,
         projection.rendererSessionId,
-        projection.window.revision,
-        projection.agentHome.revision,
         navigation,
       ),
     ).resolves.toBeUndefined();
     await expect(
-      fixture.service.assertAgentHomeConversation(
-        windowId,
-        projection.rendererSessionId,
-        projection.window.revision,
-        projection.agentHome.revision,
-        {
-          conversationId: navigation.conversationId,
-          owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:other' },
-        },
-      ),
+      fixture.service.assertAgentHomeConversation(windowId, projection.rendererSessionId, {
+        conversationId: navigation.conversationId,
+        owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:other' },
+      }),
     ).rejects.toMatchObject({
       code: 'desktop-shell-conversation-not-found',
     });
@@ -455,7 +430,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-1',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: initialScene.sceneId,
         intent: { kind: 'open-settings', sectionId: 'agent' },
       }),
@@ -499,7 +473,6 @@ describe('DesktopShellService', () => {
         requestId: 'start-creating-1',
         rendererSessionId: initial.rendererSessionId,
         windowId,
-        expectedWindowRevision: initial.window.revision,
         sceneId: activeScene(initial.window).sceneId,
         intent: { kind: 'open-agent-entry' },
       }),
@@ -513,7 +486,6 @@ describe('DesktopShellService', () => {
         requestId: 'start-creating-2',
         rendererSessionId: afterFirst.rendererSessionId,
         windowId,
-        expectedWindowRevision: afterFirst.window.revision,
         sceneId: activeScene(afterFirst.window).sceneId,
         intent: { kind: 'open-agent-entry' },
       }),
@@ -564,7 +536,6 @@ describe('DesktopShellService', () => {
         requestId: 'bind-assistant-1',
         rendererSessionId: initial.rendererSessionId,
         windowId,
-        expectedWindowRevision: initial.window.revision,
         sceneId: activeScene(initial.window).sceneId,
         intent: { kind: 'bind-agent-assistant', draftId },
       }),
@@ -585,7 +556,6 @@ describe('DesktopShellService', () => {
           requestId: 'bind-assistant-stale',
           rendererSessionId: afterBound.rendererSessionId,
           windowId,
-          expectedWindowRevision: afterBound.window.revision,
           sceneId: activeScene(afterBound.window).sceneId,
           intent: { kind: 'bind-agent-assistant', draftId },
         }),
@@ -604,7 +574,6 @@ describe('DesktopShellService', () => {
       requestId: 'scene-request-stale',
       rendererSessionId: projection.rendererSessionId,
       windowId,
-      expectedWindowRevision: projection.window.revision,
       sceneId: `${scene.sceneId}:stale`,
       intent: { kind: 'open-settings' },
     });
@@ -618,7 +587,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-workspace',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: scene.sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: 'grant-1' },
       }),
@@ -634,9 +602,7 @@ describe('DesktopShellService', () => {
       },
     });
     expect(await fixture.service.getSceneProjection(windowId)).toEqual(scene);
-    expect((await fixture.service.getProjection(windowId)).window.revision).toBe(
-      projection.window.revision,
-    );
+    expect(await fixture.service.getProjection(windowId)).toEqual(projection);
   });
 
   it('resolves an opaque Workspace grant into an exact draft Scene without duplicating Project facts', async () => {
@@ -655,13 +621,7 @@ describe('DesktopShellService', () => {
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     let projection = await fixture.service.getProjection(windowId);
-    await openContent(
-      fixture,
-      windowId,
-      '/workspace/demo',
-      projection.rendererSessionId,
-      projection.window.revision,
-    );
+    await openContent(fixture, windowId, '/workspace/demo', projection.rendererSessionId);
     projection = await fixture.service.getProjection(windowId);
     const grant = authority.authorize({
       windowId,
@@ -674,7 +634,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-workspace',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection.window).sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
       }),
@@ -727,7 +686,6 @@ describe('DesktopShellService', () => {
       windowId,
       workspace.workspacePath,
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const grant = authority.authorize({
       windowId,
@@ -739,7 +697,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-workspace-preview',
         rendererSessionId: opened.projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: opened.projection.window.revision,
         sceneId: activeScene(opened.projection.window).sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
       }),
@@ -752,7 +709,6 @@ describe('DesktopShellService', () => {
     const updated = await first.service.updateWorkbench(
       windowId,
       workspaceProjection.rendererSessionId,
-      workspaceProjection.window.revision,
       activeInstance(workspaceProjection.window).workbenchInstanceId,
       {
         ...current,
@@ -840,7 +796,6 @@ describe('DesktopShellService', () => {
       windowId,
       workspace.workspacePath,
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const project = opened.projection.catalog.projects[0]!;
     const entry = await fixture.service.transitionScene(
@@ -848,7 +803,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-recent-project-entry',
         rendererSessionId: opened.projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: opened.projection.window.revision,
         sceneId: activeScene(opened.projection.window).sceneId,
         intent: { kind: 'open-agent-entry' },
       }),
@@ -863,7 +817,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-recent-project',
         rendererSessionId: entryProjection.rendererSessionId,
         windowId,
-        expectedWindowRevision: entryProjection.window.revision,
         sceneId: activeScene(entryProjection.window).sceneId,
         intent: { kind: 'open-project-workspace', projectId: project.projectId },
       }),
@@ -916,7 +869,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-assistant-fixture',
         rendererSessionId: initial.rendererSessionId,
         windowId,
-        expectedWindowRevision: initial.window.revision,
         sceneId: activeScene(initial.window).sceneId,
         intent: { kind: 'bind-agent-assistant', draftId: currentContext.scope.draftId },
       }),
@@ -943,7 +895,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-rebind',
         rendererSessionId: projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: scene.sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
       }),
@@ -1002,7 +953,6 @@ describe('DesktopShellService', () => {
       windowId,
       workspace.workspacePath,
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const project = opened.projection.catalog.projects[0]!;
     const workspaceResult = await fixture.service.transitionScene(
@@ -1010,7 +960,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-open-project',
         rendererSessionId: opened.projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: opened.projection.window.revision,
         sceneId: activeScene(opened.projection.window).sceneId,
         intent: { kind: 'open-project-workspace', projectId: project.projectId },
       }),
@@ -1036,7 +985,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-current-project',
         rendererSessionId: before.rendererSessionId,
         windowId,
-        expectedWindowRevision: before.window.revision,
         sceneId: activeScene(before.window).sceneId,
         intent: { kind: 'open-project-workspace', projectId: project.projectId },
       }),
@@ -1073,7 +1021,6 @@ describe('DesktopShellService', () => {
       windowId,
       workspace.workspacePath,
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const project = opened.projection.catalog.projects[0]!;
     const workspaceResult = await fixture.service.transitionScene(
@@ -1081,7 +1028,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-open-project-session-fixture',
         rendererSessionId: opened.projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: opened.projection.window.revision,
         sceneId: activeScene(opened.projection.window).sceneId,
         intent: { kind: 'open-project-workspace', projectId: project.projectId },
       }),
@@ -1114,7 +1060,6 @@ describe('DesktopShellService', () => {
       windows: [
         {
           ...storedWindow,
-          revision: storedWindow.revision + 1,
           workbenches: putDesktopAgentSurface({
             catalog: storedWindow.workbenches,
             workbenchInstanceId: activeInstance(storedWindow).workbenchInstanceId,
@@ -1138,7 +1083,6 @@ describe('DesktopShellService', () => {
         requestId: 'scene-request-current-project-session',
         rendererSessionId: before.rendererSessionId,
         windowId,
-        expectedWindowRevision: before.window.revision,
         sceneId: sessionScene.sceneId,
         intent: { kind: 'open-project-workspace', projectId: project.projectId },
       }),
@@ -1220,7 +1164,6 @@ describe('DesktopShellService', () => {
       width: 304,
     });
     const after = await first.service.getProjection(windowId);
-    expect(after.window.revision).toBe(projection.window.revision);
     expect(activeWorkbench(after.window)).toEqual(activeWorkbench(projection.window));
     await expect(
       first.service.updateApplicationSidebar(
@@ -1232,7 +1175,7 @@ describe('DesktopShellService', () => {
           width: 240,
         }),
       ),
-    ).rejects.toMatchObject({ code: 'desktop-shell-stale-revision' });
+    ).rejects.toMatchObject({ code: 'desktop-shell-request-mismatch' });
 
     first.service.releaseWindow(windowId);
     await first.service.dispose();
@@ -1256,20 +1199,18 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const second = await openContent(
       fixture,
       windowId,
       '/workspace/demo',
       first.projection.rendererSessionId,
-      first.projection.window.revision,
     );
 
     expect(first.projection.catalog.projects).toHaveLength(1);
     expect(second.projection.catalog.projects).toHaveLength(1);
     expect(second.projection.window.tabs).toHaveLength(1);
-    expect(second.projection.window.revision).toBe(first.projection.window.revision);
+    expect(second.projection.window.tabs).toEqual(first.projection.window.tabs);
     expect(first.workspace).toEqual(second.workspace);
     expect(fixture.registry.resolve).toHaveBeenCalledTimes(3);
   });
@@ -1285,7 +1226,6 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
 
     expect(activeWorkbench(opened.projection.window)).toMatchObject({
@@ -1313,20 +1253,13 @@ describe('DesktopShellService', () => {
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
-    const opened = await openContent(
-      first,
-      windowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const current = activeWorkbench(opened.projection.window);
     const canvasView = current.main.views[0];
     if (!canvasView) throw new Error('Expected the default Workspace Canvas View.');
     await first.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
       activeInstance(opened.projection.window).workbenchInstanceId,
       closeMainView(current, canvasView.viewId),
     );
@@ -1377,7 +1310,6 @@ describe('DesktopShellService', () => {
         requestId: 'activate-live-workspace',
         rendererSessionId: initial.rendererSessionId,
         windowId,
-        expectedWindowRevision: initial.window.revision,
         sceneId: activeScene(initial.window).sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
       }),
@@ -1389,7 +1321,6 @@ describe('DesktopShellService', () => {
     const closed = await fixture.service.updateWorkbench(
       windowId,
       active.rendererSessionId,
-      active.window.revision,
       activeInstance(active.window).workbenchInstanceId,
       closeMainView(activeWorkbench(active.window), mainView.viewId),
     );
@@ -1429,13 +1360,7 @@ describe('DesktopShellService', () => {
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
-    const opened = await openContent(
-      first,
-      windowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const project = opened.projection.catalog.projects[0];
     const tab = opened.projection.window.tabs[0];
     if (!project || !tab) throw new Error('Expected the persisted Workspace Project and Tab.');
@@ -1446,7 +1371,6 @@ describe('DesktopShellService', () => {
     restored.service.setAgentHomeProjectionSource({
       setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
-        revision: 1,
         conversations: [
           {
             navigation: {
@@ -1489,7 +1413,6 @@ describe('DesktopShellService', () => {
         requestId: 'restore-workspace-conversation-atomically',
         rendererSessionId: entry.rendererSessionId,
         windowId: restoredWindowId,
-        expectedWindowRevision: entry.window.revision,
         sceneId: activeScene(entry.window).sceneId,
         intent: {
           kind: 'restore-conversation',
@@ -1533,7 +1456,6 @@ describe('DesktopShellService', () => {
         requestId: 'restore-second-workspace-conversation-in-existing-workbench',
         rendererSessionId: committed.rendererSessionId,
         windowId: restoredWindowId,
-        expectedWindowRevision: committed.window.revision,
         sceneId: activeScene(committed.window).sceneId,
         intent: {
           kind: 'restore-conversation',
@@ -1580,14 +1502,12 @@ describe('DesktopShellService', () => {
       firstWindow,
       '/workspace/demo',
       firstInitial.rendererSessionId,
-      firstInitial.window.revision,
     );
     const second = await openContent(
       fixture,
       secondWindow,
       '/workspace/demo',
       secondInitial.rendererSessionId,
-      secondInitial.window.revision,
     );
 
     expect(first.projection.catalog.projects[0]?.projectId).toBe(
@@ -1616,23 +1536,14 @@ describe('DesktopShellService', () => {
       firstWindow,
       '/workspace/demo',
       firstInitial.rendererSessionId,
-      firstInitial.window.revision,
     );
-    await openContent(
-      fixture,
-      secondWindow,
-      '/workspace/demo',
-      secondInitial.rendererSessionId,
-      secondInitial.window.revision,
-    );
+    await openContent(fixture, secondWindow, '/workspace/demo', secondInitial.rendererSessionId);
     const project = firstOpened.projection.catalog.projects[0]!;
 
     const removed = await fixture.service.removeRecentProject(
       firstWindow,
       project.projectId,
       firstOpened.projection.rendererSessionId,
-      firstOpened.projection.window.revision,
-      firstOpened.projection.catalog.revision,
     );
     const secondProjection = await fixture.service.getProjection(secondWindow);
 
@@ -1654,20 +1565,13 @@ describe('DesktopShellService', () => {
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
-    const opened = await openContent(
-      first,
-      windowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const project = opened.projection.catalog.projects[0]!;
     const tab = opened.projection.window.tabs[0]!;
     const current = activeWorkbench(opened.projection.window);
     const withCanvas = await first.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
       activeInstance(opened.projection.window).workbenchInstanceId,
       {
         ...current,
@@ -1695,18 +1599,12 @@ describe('DesktopShellService', () => {
         },
       },
     );
-    const home = await first.service.activateHome(
-      windowId,
-      withCanvas.rendererSessionId,
-      withCanvas.window.revision,
-    );
+    const home = await first.service.activateHome(windowId, withCanvas.rendererSessionId);
 
     const removed = await first.service.removeRecentProject(
       windowId,
       project.projectId,
       home.rendererSessionId,
-      home.window.revision,
-      home.catalog.revision,
     );
 
     expect(activeWorkbench(removed.window).main.views).toEqual([]);
@@ -1733,7 +1631,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('rejects a stale Project catalog removal without changing Project or Tab state', async () => {
+  it('rejects an unknown Project removal without changing Project or Tab state', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -1743,24 +1641,21 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const project = opened.projection.catalog.projects[0]!;
 
     await expect(
       fixture.service.removeRecentProject(
         windowId,
-        project.projectId,
+        `${project.projectId}:missing`,
         opened.projection.rendererSessionId,
-        opened.projection.window.revision,
-        opened.projection.catalog.revision - 1,
       ),
-    ).rejects.toMatchObject({ code: 'desktop-shell-stale-revision' });
+    ).rejects.toMatchObject({ code: 'desktop-shell-project-not-found' });
 
     expect(await fixture.service.getProjection(windowId)).toEqual(opened.projection);
   });
 
-  it('rejects stale Window revisions without changing state', async () => {
+  it('rejects a closed Tab identity without changing state', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -1770,24 +1665,13 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const tabId = opened.projection.window.tabs[0]!.tabId;
-    await fixture.service.closeTab(
-      windowId,
-      tabId,
-      opened.projection.rendererSessionId,
-      opened.projection.window.revision,
-    );
+    await fixture.service.closeTab(windowId, tabId, opened.projection.rendererSessionId);
 
     await expect(
-      fixture.service.activateTab(
-        windowId,
-        tabId,
-        opened.projection.rendererSessionId,
-        opened.projection.window.revision,
-      ),
-    ).rejects.toMatchObject({ code: 'desktop-shell-stale-revision' });
+      fixture.service.activateTab(windowId, tabId, opened.projection.rendererSessionId),
+    ).rejects.toThrow(`Unknown Desktop Project Tab '${tabId}'`);
     expect((await fixture.service.getProjection(windowId)).window.tabs).toEqual([]);
   });
 
@@ -1811,13 +1695,7 @@ describe('DesktopShellService', () => {
     const firstWindow = await first.service.claimWindowId();
     first.service.setRendererSessionId(firstWindow, 'renderer-session-1');
     const initial = await first.service.getProjection(firstWindow);
-    await openContent(
-      first,
-      firstWindow,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    await openContent(first, firstWindow, '/workspace/demo', initial.rendererSessionId);
     first.service.releaseWindow(firstWindow);
     await first.service.dispose();
 
@@ -1838,13 +1716,7 @@ describe('DesktopShellService', () => {
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
-    const opened = await openContent(
-      first,
-      windowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const current = activeWorkbench(opened.projection.window);
     const next = {
       ...current,
@@ -1857,7 +1729,6 @@ describe('DesktopShellService', () => {
     const updated = await first.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
       activeInstance(opened.projection.window).workbenchInstanceId,
       next,
     );
@@ -1889,13 +1760,11 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const current = activeWorkbench(opened.projection.window);
     const withResources = await fixture.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
       activeInstance(opened.projection.window).workbenchInstanceId,
       {
         ...current,
@@ -1908,7 +1777,6 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       withResources.rendererSessionId,
-      withResources.window.revision,
     );
 
     expect(activeWorkbench(reattached.projection.window).resourceDock).toEqual({
@@ -1927,13 +1795,8 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
-    const home = await fixture.service.activateHome(
-      windowId,
-      opened.projection.rendererSessionId,
-      opened.projection.window.revision,
-    );
+    await fixture.service.activateHome(windowId, opened.projection.rendererSessionId);
     fixture.service.setRendererSessionId(windowId, 'renderer-session-2');
     const reattachedHome = await fixture.service.getProjection(windowId);
     const current = activeWorkbench(reattachedHome.window);
@@ -1941,7 +1804,6 @@ describe('DesktopShellService', () => {
       fixture.service.updateWorkbench(
         windowId,
         reattachedHome.rendererSessionId,
-        home.window.revision,
         activeInstance(reattachedHome.window).workbenchInstanceId,
         {
           ...current,
@@ -1966,18 +1828,11 @@ describe('DesktopShellService', () => {
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
-    const opened = await openContent(
-      first,
-      windowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const current = activeWorkbench(opened.projection.window);
     await first.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
       activeInstance(opened.projection.window).workbenchInstanceId,
       {
         ...current,
@@ -2040,20 +1895,13 @@ describe('DesktopShellService', () => {
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
-    const opened = await openContent(
-      first,
-      windowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const current = activeWorkbench(opened.projection.window);
     const tab = opened.projection.window.tabs[0]!;
     const project = opened.projection.catalog.projects[0]!;
     await first.service.updateWorkbench(
       windowId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
       activeInstance(opened.projection.window).workbenchInstanceId,
       {
         ...current,
@@ -2109,13 +1957,7 @@ describe('DesktopShellService', () => {
     const windowId = await first.service.claimWindowId();
     first.service.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await first.service.getProjection(windowId);
-    const opened = await openContent(
-      first,
-      windowId,
-      '/workspace/demo',
-      initial.rendererSessionId,
-      initial.window.revision,
-    );
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
     const workspaceId = opened.workspace.workspaceId;
     first.service.releaseWindow(windowId);
     await first.service.dispose();
@@ -2135,13 +1977,8 @@ describe('DesktopShellService', () => {
     fixture.service.setRendererSessionId(windowId, 'renderer-session-2');
 
     await expect(
-      fixture.service.openContent(
-        windowId,
-        '/workspace/demo',
-        stale.rendererSessionId,
-        stale.window.revision,
-      ),
-    ).rejects.toMatchObject({ code: 'desktop-shell-stale-revision' });
+      fixture.service.openContent(windowId, '/workspace/demo', stale.rendererSessionId),
+    ).rejects.toMatchObject({ code: 'desktop-shell-request-mismatch' });
     expect(fixture.registry.resolve).not.toHaveBeenCalled();
   });
 
@@ -2155,7 +1992,6 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const firstView = opened.projection.window.tabs[0];
     fixture.service.setRendererSessionId(windowId, 'renderer-session-2');
@@ -2179,20 +2015,17 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const firstTab = opened.projection.window.tabs[0]!;
     const closed = await fixture.service.closeTab(
       windowId,
       firstTab.tabId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
     );
     const reopened = await fixture.service.openCatalogProject(
       windowId,
       opened.projection.catalog.projects[0]!.projectId,
       closed.rendererSessionId,
-      closed.window.revision,
     );
 
     expect(reopened.projection.window.tabs[0]?.viewId).not.toBe(firstTab.viewId);
@@ -2210,7 +2043,6 @@ describe('DesktopShellService', () => {
       windowId,
       '/workspace/demo',
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const project = opened.projection.catalog.projects[0];
     const tab = opened.projection.window.tabs[0];
@@ -2293,13 +2125,9 @@ async function openContent(
   windowId: string,
   workspacePath: string,
   rendererSessionId: string,
-  expectedWindowRevision: number,
 ) {
   const current = await fixture.service.getProjection(windowId);
-  if (
-    current.rendererSessionId !== rendererSessionId ||
-    current.window.revision !== expectedWindowRevision
-  ) {
+  if (current.rendererSessionId !== rendererSessionId) {
     throw new Error('Desktop test Workspace open context is stale.');
   }
   const workspace = await fixture.registry.resolve(workspacePath);
@@ -2318,10 +2146,9 @@ async function openContent(
       };
   const result = await fixture.service.transitionScene(
     createDesktopSceneTransitionRequest({
-      requestId: `test-open-workspace:${workspace.workspaceId}:${expectedWindowRevision}`,
+      requestId: `test-open-workspace:${workspace.workspaceId}:${rendererSessionId}`,
       rendererSessionId,
       windowId,
-      expectedWindowRevision,
       sceneId: activeScene(current.window).sceneId,
       intent,
     }),

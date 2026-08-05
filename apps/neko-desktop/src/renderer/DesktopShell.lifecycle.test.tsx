@@ -417,9 +417,8 @@ function projectProjection(
       height: 280,
     },
   };
-  const catalog = { revision: 1, projects: [project] };
+  const catalog = { projects: [project] };
   const agentHome = {
-    revision: 0,
     conversations: [],
     attention: { needsInput: 0, needsReview: 0, running: 0 },
   } as const;
@@ -479,7 +478,6 @@ function projectProjection(
     catalog,
     window: {
       windowId: 'window-1',
-      revision: 1,
       activeTarget: { kind: 'project', tabId: 'tab-1' },
       tabs: [
         {

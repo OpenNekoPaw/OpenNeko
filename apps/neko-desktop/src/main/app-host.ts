@@ -712,7 +712,6 @@ export class DesktopAppHost {
     await this.shell.assertWindowMutationContext(
       window.windowId,
       request.rendererSessionId,
-      request.expectedWindowRevision,
     );
     const selection = await selectWorkspace();
     if (!selection) {
@@ -724,7 +723,6 @@ export class DesktopAppHost {
     await this.shell.assertWindowMutationContext(
       window.windowId,
       request.rendererSessionId,
-      request.expectedWindowRevision,
     );
     return {
       requestId: request.requestId,
@@ -841,7 +839,6 @@ export class DesktopAppHost {
     await this.shell.assertWindowMutationContext(
       window.windowId,
       request.rendererSessionId,
-      request.expectedWindowRevision,
     );
     const workspacePath = await selectWorkspace();
     if (!workspacePath) {
@@ -863,7 +860,6 @@ export class DesktopAppHost {
         requestId: request.requestId,
         rendererSessionId: request.rendererSessionId,
         windowId: window.windowId,
-        expectedWindowRevision: request.expectedWindowRevision,
         sceneId: resolveActiveDesktopWindowWorkbench(initial.window).scene.sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
       }),
@@ -892,7 +888,6 @@ export class DesktopAppHost {
         requestId: request.requestId,
         rendererSessionId: request.rendererSessionId,
         windowId: window.windowId,
-        expectedWindowRevision: request.expectedWindowRevision,
         sceneId: resolveActiveDesktopWindowWorkbench(initial.window).scene.sceneId,
         intent: { kind: 'open-project-workspace', projectId: request.projectId },
       }),
@@ -920,8 +915,6 @@ export class DesktopAppHost {
         window.windowId,
         request.projectId,
         request.rendererSessionId,
-        request.expectedWindowRevision,
-        request.expectedCatalogRevision,
       ),
     };
   }
@@ -936,8 +929,6 @@ export class DesktopAppHost {
     await this.shell.assertAgentHomeConversation(
       window.windowId,
       request.rendererSessionId,
-      request.expectedWindowRevision,
-      request.expectedAgentHomeRevision,
       request.navigation,
     );
     const owner = request.navigation.owner;
@@ -1239,7 +1230,6 @@ export class DesktopAppHost {
       projection: await this.shell.activateHome(
         window.windowId,
         request.rendererSessionId,
-        request.expectedWindowRevision,
       ),
     };
   }
@@ -1261,7 +1251,6 @@ export class DesktopAppHost {
     const projection = await this.shell.updateWorkbench(
       window.windowId,
       request.rendererSessionId,
-      request.expectedWindowRevision,
       request.workbenchInstanceId,
       request.workbench,
     );
@@ -1954,7 +1943,6 @@ export class DesktopAppHost {
           requestId: request.requestId,
           rendererSessionId: request.rendererSessionId,
           windowId: window.windowId,
-          expectedWindowRevision: request.expectedWindowRevision,
           sceneId: resolveActiveDesktopWindowWorkbench(current.window).scene.sceneId,
           intent: { kind: 'open-project-workspace', projectId: targetTab.projectId },
         }),
@@ -1968,7 +1956,6 @@ export class DesktopAppHost {
         window.windowId,
         request.tabId,
         request.rendererSessionId,
-        request.expectedWindowRevision,
       );
     }
     if (operation === 'close') {

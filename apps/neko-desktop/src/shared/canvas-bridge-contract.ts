@@ -336,13 +336,6 @@ function requireIdentity(value: unknown, label: string): string {
   return value;
 }
 
-function requirePositiveInteger(value: unknown, label: string): number {
-  if (!Number.isSafeInteger(value) || typeof value !== 'number' || value < 1) {
-    throw new Error(`Desktop Canvas ${label} must be a positive integer.`);
-  }
-  return value;
-}
-
 function parseWorkspaceFileLocator(value: unknown): {
   readonly kind: 'workspace-file';
   readonly path: string;

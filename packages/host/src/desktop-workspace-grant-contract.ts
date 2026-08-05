@@ -10,7 +10,6 @@ export interface DesktopWorkspaceGrantChooseRequest {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly expectedWindowRevision: number;
 }
 
 export type DesktopWorkspaceGrantChooseResult =
@@ -26,10 +25,7 @@ export type DesktopWorkspaceGrantChooseResult =
 
 export interface OpenNekoDesktopWorkspaceGrantBridge {
   readonly workspaceGrants: {
-    choose(
-      windowId: string,
-      expectedWindowRevision: number,
-    ): Promise<DesktopWorkspaceGrantChooseResult>;
+    choose(windowId: string): Promise<DesktopWorkspaceGrantChooseResult>;
   };
 }
 
@@ -47,7 +43,6 @@ export function createDesktopWorkspaceGrantChooseRequest(input: {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly expectedWindowRevision: number;
 }): DesktopWorkspaceGrantChooseRequest {
   return parseDesktopWorkspaceGrantChooseRequest(input);
 }
@@ -58,7 +53,7 @@ export function parseDesktopWorkspaceGrantChooseRequest(
   const record = requireRecord(value, 'Desktop Workspace grant request must be an object.');
   requireExactKeys(
     record,
-    ['requestId', 'rendererSessionId', 'windowId', 'expectedWindowRevision'],
+    ['requestId', 'rendererSessionId', 'windowId'],
     'Desktop Workspace grant request',
   );
   return {
@@ -68,10 +63,6 @@ export function parseDesktopWorkspaceGrantChooseRequest(
       'Desktop Workspace grant renderer session identity',
     ),
     windowId: requireIdentity(record['windowId'], 'Desktop Workspace grant Window'),
-    expectedWindowRevision: requireRevision(
-      record['expectedWindowRevision'],
-      'Desktop Workspace grant Window revision',
-    ),
   };
 }
 
@@ -125,13 +116,6 @@ function requireIdentity(value: unknown, label: string): string {
     throw invalid(`${label} identity is required.`);
   }
   return value;
-}
-
-function requireRevision(value: unknown, label: string): number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
-    throw invalid(`${label} must be a non-negative safe integer.`);
-  }
-  return value as number;
 }
 
 function requireExactKeys(

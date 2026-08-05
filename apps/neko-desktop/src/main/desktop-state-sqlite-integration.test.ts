@@ -37,7 +37,6 @@ describe('Desktop SQLite application state composition', () => {
     const first = await openState(root);
     const shell = await first.shell.commit({
       ...createEmptyDesktopShellState(),
-      catalogRevision: 1,
     });
     const settingsService = new DesktopApplicationSettingsService(first.settings);
     await settingsService.initialize();
@@ -77,7 +76,6 @@ describe('Desktop SQLite application state composition', () => {
     const sceneId = 'scene:window-old:project-management';
     const removedSchemaField = ['schema', 'Ver', 'sion'].join('');
     const retiredState = {
-      catalogRevision: 0,
       primaryWindowId: 'window-old',
       projects: [],
       windows: [
@@ -139,6 +137,7 @@ describe('Desktop SQLite application state composition', () => {
         now: () => '2026-08-05T00:00:00.000Z',
       });
       const windowId = await service.claimWindowId();
+      service.setRendererSessionId(windowId, 'renderer-session:test');
       const projection = await service.getProjection(windowId);
 
       expect(windowId).not.toBe('window-old');
@@ -242,6 +241,7 @@ describe('Desktop SQLite application state composition', () => {
         now: () => '2026-08-05T00:00:00.000Z',
       });
       const windowId = await service.claimWindowId();
+      service.setRendererSessionId(windowId, 'renderer-session:test');
       const projection = await service.getProjection(windowId);
       expect(projection.window.workbenches.instances).toHaveLength(1);
       expect(projection.stateDiagnostics).toEqual([
@@ -278,7 +278,6 @@ describe('Desktop SQLite application state composition', () => {
     const initial = await openState(root);
     const expectedShell = await initial.shell.commit({
       ...createEmptyDesktopShellState(),
-      catalogRevision: 1,
     });
     await initial.store.dispose();
 

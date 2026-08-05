@@ -486,11 +486,9 @@ function projectionWithScene(scene: DesktopWorkbenchSceneProjection): DesktopShe
 
 function baseProjection(): DesktopShellProjection {
   const catalog = {
-    revision: 1,
     projects: [projectFixture('workspace-1', '2026-07-27T00:00:00.000Z')],
   };
   const agentHome = {
-    revision: 0,
     conversations: [
       {
         navigation: {
@@ -521,7 +519,6 @@ function baseProjection(): DesktopShellProjection {
     catalog,
     window: {
       windowId: 'window-1',
-      revision: 1,
       activeTarget: { kind: 'home' },
       tabs: [],
       workbenches: parseDesktopWindowWorkbenchCatalog({

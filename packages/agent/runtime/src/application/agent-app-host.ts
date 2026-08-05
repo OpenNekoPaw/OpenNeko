@@ -220,7 +220,6 @@ class DefaultAgentAppHost implements AgentAppHost {
   private readonly homeProjectionListeners = new Set<() => void>();
   private readonly homeConversationWorkspaceIds: readonly string[];
   private homeWorkspaceScope: readonly string[];
-  private homeProjectionRevision = 0;
   private pluginGeneration: AgentPluginRuntimeGeneration | undefined;
   private pluginRuntimeChanging = false;
   private disposed = false;
@@ -378,7 +377,6 @@ class DefaultAgentAppHost implements AgentAppHost {
       running: countAttention(conversations, 'running'),
     };
     return freezeClone({
-      revision: this.homeProjectionRevision,
       conversations,
       attention,
       diagnostics,
@@ -471,7 +469,6 @@ class DefaultAgentAppHost implements AgentAppHost {
 
   private readonly emitHomeProjectionChanged = (): void => {
     if (this.disposed) return;
-    this.homeProjectionRevision += 1;
     for (const listener of this.homeProjectionListeners) listener();
   };
 

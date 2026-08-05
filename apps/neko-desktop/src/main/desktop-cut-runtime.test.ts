@@ -153,11 +153,10 @@ describe('DesktopCutRuntime', () => {
       updatedAt: '2026-07-29T00:00:00.000Z',
     };
     const agentHome = {
-      revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     } as const;
-    const catalog = { revision: 1, projects: [project] };
+    const catalog = { projects: [project] };
     const sceneId = 'scene:window-1:workspace-1';
     const scope = {
       kind: 'workspace' as const,
@@ -168,7 +167,6 @@ describe('DesktopCutRuntime', () => {
     const scene = parseDesktopWorkbenchSceneProjection({
       sceneId,
       windowId: 'window-1',
-      revision: 1,
       context: { kind: 'agent', agentViewId: 'project-view-1', scope },
       slots: {
         interaction: {
@@ -187,7 +185,6 @@ describe('DesktopCutRuntime', () => {
       catalog,
       window: {
         windowId: 'window-1',
-        revision: 0,
         activeTarget: { kind: 'project', tabId: 'tab-1' },
         tabs: [
           {
@@ -220,7 +217,6 @@ describe('DesktopCutRuntime', () => {
       async (
         _windowId: string,
         _rendererSessionId: string,
-        _windowRevision: number,
         _workbenchInstanceId: string,
         next: DesktopWorkbenchLayoutProjection,
       ) => {

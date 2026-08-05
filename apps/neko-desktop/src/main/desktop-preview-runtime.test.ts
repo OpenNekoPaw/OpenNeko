@@ -212,14 +212,12 @@ describe('DesktopPreviewRuntime', () => {
         mode: 'chat-main',
       },
     };
-    let windowRevision = 1;
     let rendererSessionId = 'endpoint-1';
     const shell: DesktopPreviewShellPort = {
-      getProjection: async () => createShellProjection(workbench, rendererSessionId, windowRevision),
+      getProjection: async () => createShellProjection(workbench, rendererSessionId),
       updateWorkbench: vi.fn(
-        async (_windowId, _rendererSessionId, _windowRevision, _workbenchInstanceId, next) => {
+        async (_windowId, _rendererSessionId, _workbenchInstanceId, next) => {
           workbench = next;
-          windowRevision += 1;
         },
       ),
     };
@@ -512,7 +510,6 @@ describe('DesktopPreviewRuntime', () => {
 function createShellProjection(
   workbench: ReturnType<typeof createDefaultDesktopWorkbenchLayout>,
   rendererSessionId = 'endpoint-1',
-  windowRevision = 1,
 ): Awaited<ReturnType<DesktopPreviewShellPort['getProjection']>> {
   const sceneId = 'scene:window-1:workspace-1';
   const scope = {
@@ -524,7 +521,6 @@ function createShellProjection(
   const scene = parseDesktopWorkbenchSceneProjection({
     sceneId,
     windowId: 'window-1',
-    revision: 1,
     context: { kind: 'agent', agentViewId: 'project-view-1', scope },
     slots: {
       interaction: {
@@ -546,7 +542,6 @@ function createShellProjection(
   return {
     rendererSessionId,
     catalog: {
-      revision: 1,
       projects: [
         {
           projectId: 'project-1',
@@ -560,7 +555,6 @@ function createShellProjection(
     },
     window: {
       windowId: 'window-1',
-      revision: windowRevision,
       activeTarget: { kind: 'project', tabId: 'tab-1' },
       tabs: [
         {

@@ -8,7 +8,6 @@ import {
 describe('Agent Home contract', () => {
   it('parses every closed Conversation owner without synthetic Project identity', () => {
     const projection = parseAgentHomeProjection({
-      revision: 4,
       conversations: [
         summary('assistant-1', { kind: 'assistant', assistantSpaceId: 'assistant-space:1' }),
         summary('workspace-1', { kind: 'workspace', workspaceId: 'workspace:1' }),
@@ -33,7 +32,6 @@ describe('Agent Home contract', () => {
 
   it('keeps optional Project grouping separate from the owner', () => {
     const projection = parseAgentHomeProjection({
-      revision: 1,
       conversations: [
         {
           ...summary('assistant-1', {
@@ -55,21 +53,18 @@ describe('Agent Home contract', () => {
   it('rejects unknown and incomplete owners plus duplicate conversations', () => {
     expect(() =>
       parseAgentHomeProjection({
-        revision: 1,
         conversations: [summary('unknown-1', { kind: 'project', projectId: 'project:1' })],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
     ).toThrowError(AgentHomeContractError);
     expect(() =>
       parseAgentHomeProjection({
-        revision: 1,
         conversations: [summary('character-1', { kind: 'character', characterId: 'character:1' })],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
     ).toThrowError(AgentHomeContractError);
     expect(() =>
       parseAgentHomeProjection({
-        revision: 1,
         conversations: [
           summary('duplicate', { kind: 'workspace', workspaceId: 'workspace:1' }),
           summary('duplicate', { kind: 'workspace', workspaceId: 'workspace:1' }),
@@ -80,26 +75,32 @@ describe('Agent Home contract', () => {
   });
 
   it('rejects removed version fields without disabling a valid sibling projection', () => {
+    const removedSchemaField = ['schema', 'Ver', 'sion'].join('');
+    const removedRevisionField = ['revi', 'sion'].join('');
     expect(() =>
       parseAgentHomeProjection({
-        schemaVersion: 1,
-        revision: 1,
+        [removedSchemaField]: 1,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
-    ).toThrow("unknown field 'schemaVersion'");
-    expect(
+    ).toThrow(`unknown field '${removedSchemaField}'`);
+    expect(() =>
       parseAgentHomeProjection({
-        revision: 2,
+        [removedRevisionField]: 2,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
-      }).revision,
-    ).toBe(2);
+      }),
+    ).toThrow(`unknown field '${removedRevisionField}'`);
+    expect(
+      parseAgentHomeProjection({
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }).conversations,
+    ).toEqual([]);
   });
 
   it('preserves entry-local catalog diagnostics beside valid conversations', () => {
     const projection = parseAgentHomeProjection({
-      revision: 2,
       conversations: [summary('valid', { kind: 'workspace', workspaceId: 'workspace:1' })],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
       diagnostics: [

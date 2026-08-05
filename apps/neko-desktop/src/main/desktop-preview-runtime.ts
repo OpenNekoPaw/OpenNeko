@@ -47,7 +47,6 @@ export interface DesktopPreviewShellPort {
   updateWorkbench(
     windowId: string,
     rendererSessionId: string,
-    expectedWindowRevision: number,
     workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
   ): Promise<unknown>;
@@ -196,7 +195,6 @@ export class DesktopPreviewRuntime {
       await this.options.shell.updateWorkbench(
         input.identity.windowId,
         shellProjection.rendererSessionId,
-        shellProjection.window.revision,
         workspaceWorkbench.workbenchInstanceId,
         workbench,
       );
@@ -453,7 +451,6 @@ export class DesktopPreviewRuntime {
     await this.options.shell.updateWorkbench(
       session.identity.windowId,
       shellProjection.rendererSessionId,
-      shellProjection.window.revision,
       workbenchInstanceId,
       workbench,
     );
@@ -475,7 +472,6 @@ export class DesktopPreviewRuntime {
     await this.options.shell.updateWorkbench(
       session.identity.windowId,
       shellProjection.rendererSessionId,
-      shellProjection.window.revision,
       workbenchInstanceId,
       workbench,
     );

@@ -230,7 +230,6 @@ export class DesktopCutRuntime {
     await this.options.shell.updateWorkbench(
       input.identity.windowId,
       current.rendererSessionId,
-      current.window.revision,
       workspaceWorkbench.workbenchInstanceId,
       workbench,
     );

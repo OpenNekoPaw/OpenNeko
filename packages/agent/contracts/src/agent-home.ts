@@ -68,7 +68,6 @@ export interface AgentHomeDiagnostic {
 }
 
 export interface AgentHomeProjection {
-  readonly revision: number;
   readonly conversations: readonly AgentHomeConversationSummary[];
   readonly attention: AgentHomeAttentionProjection;
   readonly diagnostics?: readonly AgentHomeDiagnostic[];
@@ -158,8 +157,8 @@ export function parseAgentHomeProjection(value: unknown): AgentHomeProjection {
   const record = requireRecord(value, 'Agent Home projection must be an object.');
   requireAllowedKeys(
     record,
-    ['revision', 'conversations', 'attention', 'diagnostics'],
-    ['revision', 'conversations', 'attention'],
+    ['conversations', 'attention', 'diagnostics'],
+    ['conversations', 'attention'],
     'Agent Home projection',
   );
   const conversations = requireArray(record['conversations'], 'Agent Home conversations').map(
@@ -172,7 +171,6 @@ export function parseAgentHomeProjection(value: unknown): AgentHomeProjection {
   const attention = requireRecord(record['attention'], 'Agent Home attention must be an object.');
   requireExactKeys(attention, ['needsInput', 'needsReview', 'running'], 'Agent Home attention');
   return Object.freeze({
-    revision: requireNonNegativeInteger(record['revision'], 'Agent Home revision'),
     conversations: Object.freeze(conversations),
     attention: Object.freeze({
       needsInput: requireNonNegativeInteger(attention['needsInput'], 'needsInput'),

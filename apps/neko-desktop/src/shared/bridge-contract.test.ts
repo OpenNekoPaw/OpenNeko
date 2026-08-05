@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDesktopBootstrapRequest,
-  DesktopBridgeContractError,
   parseDesktopBootstrapProjection,
   parseDesktopLifecycleEvent,
 } from './bridge-contract';

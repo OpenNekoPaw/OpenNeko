@@ -4,7 +4,6 @@ import {
   FolderIcon,
   GridIcon,
   IconButton,
-  InfoIcon,
   PackageIcon,
   PlusIcon,
   RetainedSurfaceDeck,
@@ -220,7 +219,6 @@ export function DesktopApplication(): JSX.Element {
       .transition(
         projection.window.windowId,
         intent,
-        projection.window.revision,
         activeWorkbench.scene.sceneId,
       )
       .then(async (result) => {
@@ -254,8 +252,6 @@ export function DesktopApplication(): JSX.Element {
       void runMutation(() =>
         window.openNekoDesktop.conversations.delete(
           conversation.navigation,
-          projection.window.revision,
-          projection.agentHome.revision,
         ),
       );
     },
@@ -268,8 +264,6 @@ export function DesktopApplication(): JSX.Element {
       void runMutation(() =>
         window.openNekoDesktop.projects.removeRecent(
           project.projectId,
-          projection.window.revision,
-          projection.catalog.revision,
         ),
       );
     },
@@ -284,7 +278,6 @@ export function DesktopApplication(): JSX.Element {
         window.openNekoDesktop.workbench.update(
           workbenchInstanceId,
           workbench,
-          projection.window.revision,
         ),
       );
     },
@@ -301,13 +294,12 @@ export function DesktopApplication(): JSX.Element {
       setPending(true);
       setDiagnostic(undefined);
       void window.openNekoDesktop.workspaceGrants
-        .choose(projection.window.windowId, projection.window.revision)
+        .choose(projection.window.windowId)
         .then(async (result) => {
           if (result.status === 'cancelled') return;
           const transition = await window.openNekoDesktop.scenes.transition(
             projection.window.windowId,
             { kind: 'open-workspace', workspaceGrantId: result.grant.workspaceGrantId },
-            projection.window.revision,
             activeWorkbench.scene.sceneId,
           );
           if (transition.status !== 'transitioned') {

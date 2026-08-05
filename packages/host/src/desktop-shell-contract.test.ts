@@ -32,7 +32,6 @@ describe('Desktop Shell contract', () => {
       assistantSpaceId: 'assistant-space:local-user',
     });
     const navigation = projectDesktopConversationNavigation(catalog, {
-      revision: 3,
       conversations: [assistantConversation, workspaceConversation],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     });
@@ -62,7 +61,6 @@ describe('Desktop Shell contract', () => {
     };
 
     const navigation = projectDesktopConversationNavigation(catalog, {
-      revision: 3,
       conversations: [assistantConversation],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     });
@@ -83,9 +81,8 @@ describe('Desktop Shell contract', () => {
   it('rejects Workspace conversations without one exact Project and unknown associations', () => {
     expect(() =>
       projectDesktopConversationNavigation(
-        { revision: 1, projects: [] },
+        { projects: [] },
         {
-          revision: 1,
           conversations: [
             conversation('workspace-conversation', {
               kind: 'workspace',
@@ -102,7 +99,6 @@ describe('Desktop Shell contract', () => {
     );
     expect(() =>
       projectDesktopConversationNavigation(validProjection().catalog, {
-        revision: 1,
         conversations: [
           {
             ...conversation('assistant-conversation', {
@@ -121,23 +117,21 @@ describe('Desktop Shell contract', () => {
     );
   });
 
-  it('creates fixed profile and revision-bound Tab requests', () => {
+  it('creates fixed profile and sender-bound mutation requests', () => {
     expect(createDesktopProfileRequest('request-1', 'character')).toEqual({
       requestId: 'request-1',
       profile: 'character',
     });
-    expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'renderer-session-1', 4)).toEqual({
+    expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'renderer-session-1')).toEqual({
       requestId: 'request-2',
       rendererSessionId: 'renderer-session-1',
       tabId: 'tab-1',
-      expectedWindowRevision: 4,
     });
     expect(
-      createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'renderer-session-1', 5),
+      createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'renderer-session-1'),
     ).toEqual({
       requestId: 'request-3',
       rendererSessionId: 'renderer-session-1',
-      expectedWindowRevision: 5,
       projectId: 'content:workspace-1',
     });
     expect(
@@ -145,14 +139,10 @@ describe('Desktop Shell contract', () => {
         'request-4',
         'content:workspace-1',
         'renderer-session-1',
-        5,
-        3,
       ),
     ).toEqual({
       requestId: 'request-4',
       rendererSessionId: 'renderer-session-1',
-      expectedWindowRevision: 5,
-      expectedCatalogRevision: 3,
       projectId: 'content:workspace-1',
     });
     expect(
@@ -163,14 +153,10 @@ describe('Desktop Shell contract', () => {
           owner: { kind: 'workspace', workspaceId: 'workspace-1' },
         },
         'renderer-session-1',
-        5,
-        7,
       ),
     ).toEqual({
       requestId: 'request-5',
       rendererSessionId: 'renderer-session-1',
-      expectedWindowRevision: 5,
-      expectedAgentHomeRevision: 7,
       navigation: {
         conversationId: 'conversation-1',
         owner: { kind: 'workspace', workspaceId: 'workspace-1' },
@@ -194,7 +180,6 @@ describe('Desktop Shell contract', () => {
     const projection = parseDesktopShellProjection({
       ...validProjection(),
       catalog: {
-        revision: 1,
         projects: [
           {
             ...validProjection().catalog.projects[0],
@@ -366,7 +351,6 @@ function validProjection() {
     applicationInstanceId: 'app-1',
     rendererSessionId: 'renderer-session-1',
     catalog: {
-      revision: 1,
       projects: [
         {
           projectId: 'content:workspace-1',
@@ -380,7 +364,6 @@ function validProjection() {
     },
     window: {
       windowId: 'window-1',
-      revision: 1,
       activeTarget: { kind: 'project' as const, tabId: 'tab-1' },
       tabs: [
         {
@@ -398,13 +381,10 @@ function validProjection() {
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
-      revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
     conversationNavigation: {
-      projectCatalogRevision: 1,
-      agentHomeRevision: 0,
       groups: [
         {
           kind: 'project' as const,

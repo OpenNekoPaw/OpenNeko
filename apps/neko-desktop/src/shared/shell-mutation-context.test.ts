@@ -6,11 +6,9 @@ describe('Desktop Shell mutation context', () => {
     expect(
       projectDesktopShellMutationContext(undefined, {
         rendererSessionId: 'app-1:window-1:1',
-        window: { revision: 3 },
       }),
     ).toEqual({
       rendererSessionId: 'app-1:window-1:1',
-      windowRevision: 3,
     });
   });
 
@@ -19,11 +17,9 @@ describe('Desktop Shell mutation context', () => {
       projectDesktopShellMutationContext(
         {
           rendererSessionId: 'app-1:window-1:1',
-          windowRevision: 0,
         },
         {
           rendererSessionId: 'app-1:window-1:2',
-          window: { revision: 0 },
         },
       ),
     ).toThrow('endpoint changed');

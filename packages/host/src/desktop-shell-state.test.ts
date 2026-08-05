@@ -119,7 +119,6 @@ describe('Desktop Shell state codec', () => {
 
   it('rejects a non-canonical root record without conversion or input mutation', () => {
     const invalidState = {
-      catalogRevision: 0,
       primaryWindowId: null,
       projects: [],
       windows: [],
@@ -162,7 +161,6 @@ describe('Desktop Shell state codec', () => {
   it('keeps a superseded Window record unchanged while allowing a new canonical Window', async () => {
     const oldWindow = {
       windowId: 'window:old',
-      revision: 3,
       activeTarget: { kind: 'home' },
       tabs: [],
       workbench: createDefaultDesktopWorkbenchLayout('window:old'),
@@ -215,7 +213,6 @@ function withCatalog(
     windows: [
       {
         windowId: catalog.windowId,
-        revision: 0,
         activeTarget: { kind: 'home' },
         tabs: [],
         workbenches: catalog,

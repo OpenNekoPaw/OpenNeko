@@ -284,7 +284,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       windowId,
       workspacePath,
       initial.rendererSessionId,
-      initial.window.revision,
     );
     const workspaceGrant = workspaceGrantAuthority.authorize({
       windowId,
@@ -296,7 +295,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
         requestId: 'open-workspace-scene',
         rendererSessionId: opened.projection.rendererSessionId,
         windowId,
-        expectedWindowRevision: opened.projection.window.revision,
         sceneId: resolveActiveDesktopWindowWorkbench(opened.projection.window).scene
           .sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: workspaceGrant.workspaceGrantId },
@@ -432,7 +430,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           requestId: 'leave-workspace-scene',
           rendererSessionId: projection.rendererSessionId,
           windowId,
-          expectedWindowRevision: projection.window.revision,
           sceneId: resolveActiveDesktopWindowWorkbench(projection.window).scene
           .sceneId,
           intent: { kind: 'open-agent-entry' },
@@ -709,7 +706,6 @@ function shellWithViews(views: readonly DesktopWorkbenchViewRef[]) {
   const projection: Pick<DesktopShellProjection, 'window'> = {
     window: {
       windowId: 'window-1',
-      revision: 0,
       activeTarget: { kind: 'home' },
       tabs: [],
       workbenches: parseDesktopWindowWorkbenchCatalog({

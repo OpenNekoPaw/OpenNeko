@@ -81,7 +81,6 @@ describe('DesktopApplication scene lifecycle', () => {
         ...projection.window,
         applicationSidebar: {
           ...projection.window.applicationSidebar,
-          revision: 1,
           visible: false,
         },
       },
@@ -126,7 +125,6 @@ describe('DesktopApplication scene lifecycle', () => {
         ...assistant,
         window: {
           ...assistant.window,
-          revision: assistant.window.revision + 1,
         },
       },
       settingsScene(),
@@ -160,7 +158,6 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(transition).toHaveBeenCalledWith(
       'window-1',
       { kind: 'open-settings' },
-      assistant.window.revision,
       activeScene(assistant).sceneId,
     );
     expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBe(workbench);
@@ -190,7 +187,6 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(transition).toHaveBeenCalledWith(
       'window-1',
       { kind: 'open-agent-entry' },
-      projection.window.revision,
       activeScene(projection).sceneId,
     );
     await act(async () => root.unmount());
@@ -224,7 +220,6 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(transition).toHaveBeenCalledWith(
       'window-1',
       { kind: 'open-asset-center' },
-      projection.window.revision,
       activeScene(projection).sceneId,
     );
     expect(getSnapshot).toHaveBeenCalledTimes(1);
@@ -365,7 +360,6 @@ describe('DesktopApplication scene lifecycle', () => {
         ...projection,
         window: {
           ...projection.window,
-          revision: projection.window.revision + 1,
         },
       },
       settingsScene(),
@@ -411,7 +405,6 @@ describe('DesktopApplication scene lifecycle', () => {
         ...projection,
         window: {
           ...projection.window,
-          revision: projection.window.revision + 1,
         },
       },
       settingsScene(),
@@ -495,7 +488,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const projection = withActiveScene(
       {
         ...base,
-        catalog: { revision: 1, projects: [project] },
+        catalog: { projects: [project] },
       },
       projectManagementScene(),
     );
@@ -545,9 +538,8 @@ describe('DesktopApplication scene lifecycle', () => {
         occurredAt: '2026-07-29T00:00:00.000Z',
       },
     };
-    const catalog = { revision: 3, projects: [project] };
+    const catalog = { projects: [project] };
     const agentHome = {
-      revision: 4,
       conversations: [conversation],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     } as const;
@@ -561,8 +553,7 @@ describe('DesktopApplication scene lifecycle', () => {
       async (
         _windowId: string,
         _intent: unknown,
-        _windowRevision: number,
-        _sceneRevision: number,
+        _sceneId: string,
       ) => ({
         status: 'transitioned' as const,
         requestId: 'recent-transition',
@@ -597,14 +588,12 @@ describe('DesktopApplication scene lifecycle', () => {
       1,
       projection.window.windowId,
       { kind: 'open-project-workspace', projectId: project.projectId },
-      projection.window.revision,
       activeScene(projection).sceneId,
     );
     expect(transition).toHaveBeenNthCalledWith(
       2,
       projection.window.windowId,
       { kind: 'restore-conversation', navigation: conversation.navigation },
-      projection.window.revision,
       activeScene(projection).sceneId,
     );
 
@@ -621,15 +610,11 @@ describe('DesktopApplication scene lifecycle', () => {
     await waitFor(() => removeRecentProject.mock.calls.length === 1);
     expect(removeRecentProject).toHaveBeenCalledWith(
       project.projectId,
-      projection.window.revision,
-      projection.catalog.revision,
     );
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
     expect(deleteConversation).toHaveBeenCalledWith(
       conversation.navigation,
-      projection.window.revision,
-      projection.agentHome.revision,
     );
     await act(async () => root.unmount());
   });
@@ -652,9 +637,8 @@ describe('DesktopApplication scene lifecycle', () => {
         occurredAt: `2026-08-0${index + 1}T00:00:00.000Z`,
       },
     }));
-    const catalog = { revision: 1, projects: [] };
+    const catalog = { projects: [] };
     const agentHome = {
-      revision: 2,
       conversations,
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     } as const;
@@ -697,7 +681,6 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(transition).toHaveBeenCalledWith(
       projection.window.windowId,
       { kind: 'restore-conversation', navigation: conversations[0]?.navigation },
-      projection.window.revision,
       activeScene(projection).sceneId,
     );
     await act(async () => root.unmount());
@@ -759,7 +742,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const projection = withActiveScene(
       {
         ...base,
-        catalog: { revision: 1, projects: [project] },
+        catalog: { projects: [project] },
         window: {
           ...base.window,
           activeTarget: { kind: 'project', tabId: tab.tabId },
@@ -848,9 +831,8 @@ async function renderApplication(strict = false) {
 }
 
 function createProjection(): DesktopShellProjection {
-  const catalog = { revision: 0, projects: [] } as const;
+  const catalog = { projects: [] } as const;
   const agentHome = {
-    revision: 0,
     conversations: [],
     attention: { needsInput: 0, needsReview: 0, running: 0 },
   } as const;
@@ -867,7 +849,6 @@ function createProjection(): DesktopShellProjection {
     catalog,
     window: {
       windowId: 'window-1',
-      revision: 1,
       activeTarget: { kind: 'home' },
       tabs: [],
       workbenches: parseDesktopWindowWorkbenchCatalog({

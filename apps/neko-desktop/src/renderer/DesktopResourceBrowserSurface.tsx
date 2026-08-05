@@ -5,7 +5,6 @@ import type {
   DesktopProjectTabProjection,
   DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
-import { resolveDesktopWindowWorkspaceWorkbench } from '@neko/host/desktop-shell-contract';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import { createElectronResourceBrowserHostRuntime } from './desktop-resource-browser-host-runtime';
 import { useDesktopApplicationSettings } from './application-settings-context';
@@ -35,10 +34,6 @@ export function DesktopResourceBrowserSurface({
 }): JSX.Element {
   const { locale, t } = useTranslation();
   const applicationSettings = useDesktopApplicationSettings();
-  const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
-    projection.window,
-    project.workspaceId,
-  );
   const runtime = useMemo(
     () =>
       createElectronResourceBrowserHostRuntime({

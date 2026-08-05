@@ -238,7 +238,6 @@ describe('DesktopAppHost', () => {
         createDesktopWindowMutationRequest(
           'request-1',
           fixture.projection.rendererSessionId,
-          fixture.projection.window.revision,
         ),
         selectWorkspace,
       ),
@@ -253,7 +252,6 @@ describe('DesktopAppHost', () => {
       requestId: 'scene-transition-1',
       rendererSessionId: fixture.projection.rendererSessionId,
       windowId: fixture.windowId,
-      expectedWindowRevision: fixture.projection.window.revision,
       sceneId: activeScene(fixture.projection).sceneId,
       intent: { kind: 'open-settings', sectionId: 'appearance' },
     });
@@ -284,7 +282,6 @@ describe('DesktopAppHost', () => {
       requestId: 'workspace-choose-1',
       rendererSessionId: fixture.projection.rendererSessionId,
       windowId: fixture.windowId,
-      expectedWindowRevision: fixture.projection.window.revision,
     });
     const initialScene = activeScene(fixture.projection);
     const foreignPicker = vi.fn(async () => ({
@@ -331,7 +328,6 @@ describe('DesktopAppHost', () => {
         requestId: 'workspace-transition-1',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
         sceneId: initialScene.sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: selected.grant.workspaceGrantId },
       }),
@@ -437,7 +433,6 @@ describe('DesktopAppHost', () => {
         requestId: 'open-settings-before-launch-attach',
         rendererSessionId: projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: scene.sceneId,
         intent: { kind: 'open-settings', sectionId: 'general' },
       }),
@@ -753,7 +748,6 @@ describe('DesktopAppHost', () => {
         requestId: 'open-settings-before-restore',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
         sceneId: activeScene(fixture.projection).sceneId,
         intent: { kind: 'open-settings' },
       }),
@@ -766,7 +760,6 @@ describe('DesktopAppHost', () => {
         requestId: 'restore-assistant-1',
         rendererSessionId: projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection).sceneId,
         intent: {
           kind: 'restore-conversation',
@@ -854,7 +847,6 @@ describe('DesktopAppHost', () => {
         requestId: 'restore-character-unavailable',
         rendererSessionId: projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: projection.window.revision,
         sceneId: activeScene(projection).sceneId,
         intent: { kind: 'restore-conversation', navigation },
       }),
@@ -902,7 +894,6 @@ describe('DesktopAppHost', () => {
           requestId: 'restore-owner-mismatch',
           rendererSessionId: projection.rendererSessionId,
           windowId: fixture.windowId,
-          expectedWindowRevision: projection.window.revision,
           sceneId: activeScene(projection).sceneId,
           intent: { kind: 'restore-conversation', navigation },
         }),
@@ -963,7 +954,6 @@ describe('DesktopAppHost', () => {
         requestId: 'assistant-resource-restore',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
         sceneId: activeScene(fixture.projection).sceneId,
         intent: {
           kind: 'restore-conversation',
@@ -1060,7 +1050,6 @@ describe('DesktopAppHost', () => {
         requestId: 'restore-workspace-grant',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
       }),
       async () => ({ label: 'Demo', hostResource: workspace.workspacePath }),
     );
@@ -1071,7 +1060,6 @@ describe('DesktopAppHost', () => {
         requestId: 'restore-workspace-open',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
         sceneId: activeScene(fixture.projection).sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: selected.grant.workspaceGrantId },
       }),
@@ -1099,7 +1087,6 @@ describe('DesktopAppHost', () => {
         requestId: 'restore-workspace-settings',
         rendererSessionId: afterOpen.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: afterOpen.window.revision,
         sceneId: activeScene(afterOpen).sceneId,
         intent: { kind: 'open-settings' },
       }),
@@ -1111,7 +1098,6 @@ describe('DesktopAppHost', () => {
         requestId: 'restore-workspace-conversation',
         rendererSessionId: settings.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: settings.window.revision,
         sceneId: activeScene(settings).sceneId,
         intent: {
           kind: 'restore-conversation',
@@ -1230,7 +1216,6 @@ describe('DesktopAppHost', () => {
         requestId: 'pi-only-workspace-grant',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
       }),
       async () => ({ label: 'Demo', hostResource: workspace.workspacePath }),
     );
@@ -1242,7 +1227,6 @@ describe('DesktopAppHost', () => {
         requestId: 'open-pi-only-workspace',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
         sceneId: activeScene(fixture.projection).sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId },
       }),
@@ -1260,7 +1244,6 @@ describe('DesktopAppHost', () => {
           requestId: 'restore-pi-only-conversation',
           rendererSessionId: beforeRestore.rendererSessionId,
           windowId: fixture.windowId,
-          expectedWindowRevision: beforeRestore.window.revision,
           sceneId: activeScene(beforeRestore).sceneId,
           intent: {
             kind: 'restore-conversation',
@@ -1322,7 +1305,6 @@ describe('DesktopAppHost', () => {
         requestId: 'restore-pi-only-assistant',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
         sceneId: activeScene(fixture.projection).sceneId,
         intent: {
           kind: 'restore-conversation',
@@ -1417,11 +1399,10 @@ describe('DesktopAppHost', () => {
         createDesktopWindowMutationRequest(
           'request-1',
           fixture.projection.rendererSessionId,
-          fixture.projection.window.revision,
         ),
         selectWorkspace,
       ),
-    ).rejects.toMatchObject({ code: 'desktop-shell-stale-revision' });
+    ).rejects.toMatchObject({ code: 'desktop-shell-request-mismatch' });
     expect(selectWorkspace).not.toHaveBeenCalled();
     expect(fixture.registry.resolve).not.toHaveBeenCalled();
   });
@@ -1435,7 +1416,6 @@ describe('DesktopAppHost', () => {
       createDesktopWindowMutationRequest(
         'request-1',
         fixture.projection.rendererSessionId,
-        fixture.projection.window.revision,
       ),
       selectWorkspace,
     );
@@ -1460,7 +1440,6 @@ describe('DesktopAppHost', () => {
       createDesktopWindowMutationRequest(
         'request-1',
         fixture.projection.rendererSessionId,
-        fixture.projection.window.revision,
       ),
       async () => resolution.workspacePath,
     );
@@ -1493,7 +1472,6 @@ describe('DesktopAppHost', () => {
       createDesktopWindowMutationRequest(
         'open-1',
         fixture.projection.rendererSessionId,
-        fixture.projection.window.revision,
       ),
       async () => resolution.workspacePath,
     );
@@ -1503,7 +1481,6 @@ describe('DesktopAppHost', () => {
       fixture.windowId,
       tab.tabId,
       opened.projection.rendererSessionId,
-      opened.projection.window.revision,
     );
 
     const reopened = await fixture.appHost.openCatalogProject(
@@ -1512,7 +1489,6 @@ describe('DesktopAppHost', () => {
         'reopen-1',
         project.projectId,
         closed.rendererSessionId,
-        closed.window.revision,
       ),
     );
 
@@ -1557,7 +1533,6 @@ describe('DesktopAppHost', () => {
       createDesktopWindowMutationRequest(
         'open-1',
         fixture.projection.rendererSessionId,
-        fixture.projection.window.revision,
       ),
       async () => resolution.workspacePath,
     );
@@ -1567,7 +1542,6 @@ describe('DesktopAppHost', () => {
       owner: { kind: 'workspace' as const, workspaceId: project.workspaceId },
     };
     fixture.agent.readHomeProjection.mockReturnValue({
-      revision: 1,
       conversations: [
         {
           navigation,
@@ -1585,7 +1559,6 @@ describe('DesktopAppHost', () => {
     const runtime = createAgentWorkspaceRuntime(project.workspaceId);
     const deleteConversation = vi.fn(async () => {
       fixture.agent.readHomeProjection.mockReturnValue({
-        revision: 2,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       });
@@ -1602,14 +1575,11 @@ describe('DesktopAppHost', () => {
         'conversation-delete-1',
         navigation,
         projection.rendererSessionId,
-        projection.window.revision,
-        projection.agentHome.revision,
       ),
     );
 
     expect(deleteConversation).toHaveBeenCalledWith('conversation-1');
     expect(result.projection.agentHome).toMatchObject({
-      revision: 2,
       conversations: [],
     });
   });
@@ -1624,7 +1594,6 @@ describe('DesktopAppHost', () => {
       },
     };
     fixture.agent.readHomeProjection.mockReturnValue({
-      revision: 1,
       conversations: [
         {
           navigation,
@@ -1641,7 +1610,6 @@ describe('DesktopAppHost', () => {
     });
     const deleteConversation = vi.fn(async () => {
       fixture.agent.readHomeProjection.mockReturnValue({
-        revision: 2,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       });
@@ -1659,8 +1627,6 @@ describe('DesktopAppHost', () => {
         'assistant-conversation-delete',
         navigation,
         projection.rendererSessionId,
-        projection.window.revision,
-        projection.agentHome.revision,
       ),
     );
 
@@ -1863,7 +1829,6 @@ describe('DesktopAppHost', () => {
         requestId: 'leave-extensions-1',
         rendererSessionId: extensions.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: extensions.projection.window.revision,
         sceneId: activeScene(extensions.projection).sceneId,
         intent: { kind: 'open-settings', sectionId: 'general' },
       }),
@@ -1903,7 +1868,6 @@ describe('DesktopAppHost', () => {
         requestId: 'open-asset-center-1',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: fixture.projection.window.revision,
         sceneId: activeScene(fixture.projection).sceneId,
         intent: { kind: 'open-asset-center' },
       }),
@@ -1931,7 +1895,6 @@ describe('DesktopAppHost', () => {
         requestId: 'leave-asset-center-1',
         rendererSessionId: beforeLeave.rendererSessionId,
         windowId: fixture.windowId,
-        expectedWindowRevision: beforeLeave.window.revision,
         sceneId: activeScene(beforeLeave).sceneId,
         intent: { kind: 'open-settings', sectionId: 'general' },
       }),
@@ -1964,7 +1927,6 @@ describe('DesktopAppHost', () => {
       createDesktopWindowMutationRequest(
         'open-1',
         fixture.projection.rendererSessionId,
-        fixture.projection.window.revision,
       ),
       async () => resolution.workspacePath,
     );
@@ -2003,7 +1965,6 @@ describe('DesktopAppHost', () => {
       createDesktopWindowMutationRequest(
         'open-1',
         fixture.projection.rendererSessionId,
-        fixture.projection.window.revision,
       ),
       async () => resolution.workspacePath,
     );
@@ -2280,7 +2241,6 @@ async function bindAssistantDraft(fixture: Awaited<ReturnType<typeof createShell
       requestId: 'bind-assistant-fixture',
       rendererSessionId: fixture.projection.rendererSessionId,
       windowId: fixture.windowId,
-      expectedWindowRevision: fixture.projection.window.revision,
       sceneId: scene.sceneId,
       intent: { kind: 'bind-agent-assistant', draftId: scene.context.scope.draftId },
     }),
@@ -2310,7 +2270,6 @@ async function openExtensionsScene(fixture: Awaited<ReturnType<typeof createShel
       requestId: 'open-extensions-1',
       rendererSessionId: fixture.projection.rendererSessionId,
       windowId: fixture.windowId,
-      expectedWindowRevision: fixture.projection.window.revision,
       sceneId: activeScene(fixture.projection).sceneId,
       intent: { kind: 'open-extensions' },
     }),
@@ -2404,7 +2363,6 @@ function createAgentComposition(): AgentAppHost & {
     hasActiveTurns: vi.fn(() => false),
     reconcilePluginRuntime: vi.fn(async () => new Map()),
     readHomeProjection: vi.fn(() => ({
-      revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     })),
@@ -2418,7 +2376,6 @@ function setAgentHomeConversation(
   navigation: AgentHomeNavigationIdentity,
 ): void {
   agent.readHomeProjection.mockReturnValue({
-    revision: 1,
     conversations: [
       {
         navigation,

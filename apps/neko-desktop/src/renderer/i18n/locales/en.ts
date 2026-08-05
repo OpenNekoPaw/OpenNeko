@@ -291,7 +291,6 @@ export const en = {
   'workspace.profile': 'Profile',
   'workspace.workspace': 'Workspace',
   'workspace.project': 'Project',
-  'workspace.windowRevision': 'Window revision',
   'workspace.openHome': 'Go to Home',
   'workspace.openAnother': 'Open another project',
   'workspace.agentPromptPlaceholder': 'Ask Neko Agent about this project…',

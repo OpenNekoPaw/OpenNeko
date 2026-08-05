@@ -62,12 +62,12 @@ describe('Desktop Agent resource display projector', () => {
       windowId: 'window-1',
       viewId: 'view-1',
       sessionId: 'agent-display:conversation-1:attachment-1',
-      rendererSessionId: 'connection-1',
-      revision: expect.any(String),
+      connectionId: 'connection-1',
+      sourceFingerprint: expect.any(String),
     });
     expect(source).toMatchObject({
       mediaType: 'video/mp4',
-      revision: expect.any(String),
+      sourceFingerprint: expect.any(String),
     });
     expect(source?.absolutePath).toMatch(/[/\\]media[/\\]clip\.mp4$/u);
     expect(recordProjection).toHaveBeenCalledWith({
@@ -158,7 +158,7 @@ describe('Desktop Agent resource display projector', () => {
     await expect(projector.project(snapshotFrame({}))).rejects.toThrow('disposed');
   });
 
-  it('isolates display leases across renderer connection epochs', async () => {
+  it('isolates display leases across exact renderer connections', async () => {
     const fixture = await createFixture('media/clip.mp4');
     const releaseOld = vi.fn();
     const releaseCurrent = vi.fn();
@@ -188,7 +188,7 @@ describe('Desktop Agent resource display projector', () => {
     expect(releaseOld).toHaveBeenCalledOnce();
     expect(releaseCurrent).not.toHaveBeenCalled();
     expect(currentResources.registerFile).toHaveBeenCalledWith(
-      expect.objectContaining({ rendererSessionId: 'connection-2' }),
+      expect.objectContaining({ connectionId: 'connection-2' }),
       expect.any(Object),
     );
     currentProjector.dispose();

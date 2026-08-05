@@ -61,13 +61,12 @@ describe('Desktop Workspace grant preload bridge', () => {
     electron.invoke.mockReset();
   });
 
-  it('sends only revision-fenced choose data and decodes an opaque grant', async () => {
+  it('sends only renderer-session-bound choose data and decodes an opaque grant', async () => {
     electron.invoke.mockImplementation(
       async (channel: string, request: Record<string, unknown>) => {
         expect(channel).toBe(DESKTOP_WORKSPACE_GRANT_CHANNEL);
         expect(request).toMatchObject({
           windowId: 'window-1',
-          expectedWindowRevision: 0,
           rendererSessionId: 'application-1:window-1:1',
         });
         expect(request).not.toHaveProperty('path');
@@ -85,7 +84,7 @@ describe('Desktop Workspace grant preload bridge', () => {
     );
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
-    await expect(bridge.workspaceGrants.choose('window-1', 0)).resolves.toMatchObject({
+    await expect(bridge.workspaceGrants.choose('window-1')).resolves.toMatchObject({
       status: 'authorized',
       grant: { workspaceGrantId: 'workspace-grant:1', label: 'demo' },
     });
@@ -100,7 +99,7 @@ describe('Desktop Workspace grant preload bridge', () => {
         status: 'cancelled',
       }),
     );
-    await expect(bridge.workspaceGrants.choose('window-1', 0)).resolves.toMatchObject({
+    await expect(bridge.workspaceGrants.choose('window-1')).resolves.toMatchObject({
       status: 'cancelled',
     });
     electron.invoke.mockImplementationOnce(
@@ -115,7 +114,7 @@ describe('Desktop Workspace grant preload bridge', () => {
         },
       }),
     );
-    await expect(bridge.workspaceGrants.choose('window-1', 0)).rejects.toThrow(
+    await expect(bridge.workspaceGrants.choose('window-1')).rejects.toThrow(
       /unknown field 'path'/,
     );
   });
@@ -132,10 +131,9 @@ function shellProjection() {
   return {
     applicationInstanceId: 'application-1',
     rendererSessionId: 'application-1:window-1:1',
-    catalog: { revision: 0, projects: [] },
+    catalog: { projects: [] },
     window: {
       windowId: 'window-1',
-      revision: 0,
       activeTarget: { kind: 'home' as const },
       tabs: [],
       workbenches: parseDesktopWindowWorkbenchCatalog({
@@ -146,13 +144,10 @@ function shellProjection() {
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
-      revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
     conversationNavigation: {
-      projectCatalogRevision: 0,
-      agentHomeRevision: 0,
       groups: [],
     },
     domains: [],

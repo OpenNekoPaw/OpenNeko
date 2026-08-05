@@ -33,7 +33,6 @@ export interface DesktopStoredProject {
 
 export interface DesktopStoredWindow {
   readonly windowId: string;
-  readonly revision: number;
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
   readonly workbenches: DesktopWindowWorkbenchCatalogProjection;
@@ -41,7 +40,6 @@ export interface DesktopStoredWindow {
 }
 
 export interface DesktopShellStoredState {
-  readonly catalogRevision: number;
   readonly primaryWindowId: string | null;
   readonly projects: readonly DesktopStoredProject[];
   readonly windows: readonly DesktopStoredWindow[];
@@ -77,7 +75,6 @@ export class DesktopShellStateError extends Error {
 
 export function createEmptyDesktopShellState(): DesktopShellStoredState {
   return {
-    catalogRevision: 0,
     primaryWindowId: null,
     projects: [],
     windows: [],
@@ -86,11 +83,7 @@ export function createEmptyDesktopShellState(): DesktopShellStoredState {
 
 export function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
   const record = requireRecord(value, 'Desktop Shell state must be an object.');
-  requireExactKeys(
-    record,
-    ['catalogRevision', 'primaryWindowId', 'projects', 'windows'],
-    'Desktop Shell state',
-  );
+  requireExactKeys(record, ['primaryWindowId', 'projects', 'windows'], 'Desktop Shell state');
   const projects = requireArray(record['projects'], 'Desktop Shell projects must be an array.').map(
     parseStoredProject,
   );
@@ -160,10 +153,6 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
       ? storedPrimaryWindowId
       : null;
   const parsed: DesktopShellStateWithRetainedInvalidWindows = {
-    catalogRevision: requireNonNegativeInteger(
-      record['catalogRevision'],
-      'Desktop Shell catalog revision is invalid.',
-    ),
     primaryWindowId,
     projects,
     windows,
@@ -181,7 +170,6 @@ export function readDesktopShellStateDiagnostics(
 export function serializeDesktopShellStoredState(state: DesktopShellStoredState): unknown {
   const parsed = parseDesktopShellStoredState(state);
   return {
-    catalogRevision: parsed.catalogRevision,
     primaryWindowId: parsed.primaryWindowId,
     projects: parsed.projects,
     windows: [
@@ -194,7 +182,6 @@ export function serializeDesktopShellStoredState(state: DesktopShellStoredState)
 function serializeStoredWindow(window: DesktopStoredWindow): unknown {
   return {
     windowId: window.windowId,
-    revision: window.revision,
     activeTarget: window.activeTarget,
     tabs: window.tabs,
     workbenches: serializeDesktopWindowWorkbenchCatalog(window.workbenches),
@@ -274,7 +261,7 @@ function parseStoredWindow(value: unknown, projectIds: ReadonlySet<string>): Des
   const record = requireRecord(value, 'Desktop stored Window must be an object.');
   requireExactKeys(
     record,
-    ['windowId', 'revision', 'activeTarget', 'tabs', 'workbenches', 'applicationSidebar'],
+    ['windowId', 'activeTarget', 'tabs', 'workbenches', 'applicationSidebar'],
     'Desktop stored Window',
   );
   const tabs = requireArray(record['tabs'], 'Desktop stored Project Tabs must be an array.').map(
@@ -304,10 +291,6 @@ function parseStoredWindow(value: unknown, projectIds: ReadonlySet<string>): Des
   const applicationSidebar = parseStoredApplicationSidebar(record['applicationSidebar'], windowId);
   return {
     windowId,
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Desktop stored Window revision is invalid.',
-    ),
     activeTarget,
     tabs,
     workbenches,
@@ -471,13 +454,6 @@ function isUnknownRecord(value: unknown): value is Readonly<Record<string, unkno
 
 function requireNonEmptyString(value: unknown, message: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) throw invalidState(message);
-  return value;
-}
-
-function requireNonNegativeInteger(value: unknown, message: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw invalidState(message);
-  }
   return value;
 }
 

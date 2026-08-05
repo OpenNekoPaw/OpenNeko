@@ -102,13 +102,6 @@ function requireIdentity(value: unknown, label: string): string {
   return value;
 }
 
-function requireNonNegativeInteger(value: unknown, label: string): number {
-  if (!Number.isInteger(value) || (value as number) < 0) {
-    throw invalidPayload(`${label} must be a non-negative integer.`);
-  }
-  return value as number;
-}
-
 function invalidPayload(message: string): PreviewContractError {
   return new PreviewContractError('invalid-preview-payload', message);
 }

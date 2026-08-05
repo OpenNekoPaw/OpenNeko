@@ -26,13 +26,13 @@ export interface AgentResourceDisplayRegistrationPort {
       readonly windowId: string;
       readonly viewId: string;
       readonly sessionId: string;
-      readonly rendererSessionId: string;
-      readonly revision: string;
+      readonly connectionId: string;
+      readonly sourceFingerprint: string;
     },
     source: {
       readonly absolutePath: string;
       readonly mediaType: string;
-      readonly revision: string;
+      readonly sourceFingerprint: string;
     },
   ): Promise<AgentResourceDisplayLease>;
 }
@@ -53,7 +53,7 @@ export interface AgentResourceDisplayHostIdentity {
 
 interface DisplayLease {
   readonly attachmentId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly lease: AgentResourceDisplayLease;
 }
 
@@ -84,10 +84,10 @@ export function createAgentResourceDisplayProjector<
     if (!mediaType) return undefined;
     const metadata = await contentRead.stat(locator);
     if (metadata.status !== 'ready') return undefined;
-    const revision = contentRevision(metadata.fingerprint, metadata.byteLength);
+    const sourceFingerprint = resourceFingerprint(metadata.fingerprint, metadata.byteLength);
     const key = `${attachmentId}:${contentLocatorKey(locator)}`;
     const current = leases.get(key);
-    if (current?.revision === revision) return current.lease.url;
+    if (current?.sourceFingerprint === sourceFingerprint) return current.lease.url;
     current?.lease.release();
     leases.delete(key);
     const absolutePath = await resolveWorkspaceFile(input.workspace.workspacePath, relativePath);
@@ -96,12 +96,12 @@ export function createAgentResourceDisplayProjector<
         windowId: input.identity.windowId,
         viewId: input.identity.viewId,
         sessionId: `agent-display:${conversationId}:${attachmentId}`,
-        rendererSessionId: input.identity.connectionId,
-        revision,
+        connectionId: input.identity.connectionId,
+        sourceFingerprint,
       },
-      { absolutePath, mediaType, revision },
+      { absolutePath, mediaType, sourceFingerprint },
     );
-    leases.set(key, { attachmentId, revision, lease });
+    leases.set(key, { attachmentId, sourceFingerprint, lease });
     return lease.url;
   };
 
@@ -275,7 +275,7 @@ async function resolveWorkspaceFile(workspaceRoot: string, relativePath: string)
   return target;
 }
 
-function contentRevision(fingerprint: ContentFingerprint, byteLength: number): string {
+function resourceFingerprint(fingerprint: ContentFingerprint, byteLength: number): string {
   return `${fingerprint.strategy}:${fingerprint.value}:${byteLength}`;
 }
 

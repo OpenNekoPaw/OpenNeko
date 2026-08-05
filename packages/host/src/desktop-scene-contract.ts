@@ -123,7 +123,6 @@ export interface DesktopSceneTransitionRequest {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly expectedWindowRevision: number;
   readonly sceneId: string;
   readonly intent: DesktopSceneTransitionIntent;
 }
@@ -358,7 +357,6 @@ export function createDesktopSceneTransitionRequest(input: {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly expectedWindowRevision: number;
   readonly sceneId: string;
   readonly intent: DesktopSceneTransitionIntent;
 }): DesktopSceneTransitionRequest {
@@ -438,7 +436,7 @@ export function parseDesktopSceneTransitionRequest(value: unknown): DesktopScene
   const record = requireRecord(value, 'Desktop Scene transition request must be an object.');
   requireExactKeys(
     record,
-    ['requestId', 'rendererSessionId', 'windowId', 'expectedWindowRevision', 'sceneId', 'intent'],
+    ['requestId', 'rendererSessionId', 'windowId', 'sceneId', 'intent'],
     'Desktop Scene transition request',
   );
   return {
@@ -448,10 +446,6 @@ export function parseDesktopSceneTransitionRequest(value: unknown): DesktopScene
       'Desktop renderer session identity',
     ),
     windowId: requireIdentity(record['windowId'], 'Desktop Scene Window'),
-    expectedWindowRevision: requireRevision(
-      record['expectedWindowRevision'],
-      'Desktop Window revision',
-    ),
     sceneId: requireIdentity(record['sceneId'], 'Desktop Scene'),
     intent: parseSceneTransitionIntent(record['intent']),
   };
@@ -1050,13 +1044,6 @@ function requireIdentity(value: unknown, label: string): string {
     throw invalid(`${label} identity is required.`);
   }
   return value;
-}
-
-function requireRevision(value: unknown, label: string): number {
-  if (!Number.isInteger(value) || (value as number) < 0) {
-    throw invalid(`${label} must be a non-negative integer.`);
-  }
-  return value as number;
 }
 
 function requireBoolean(value: unknown, message: string): boolean {
