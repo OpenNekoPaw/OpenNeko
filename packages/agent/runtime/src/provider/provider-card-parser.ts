@@ -9,6 +9,10 @@ import type {
   StyleAffinityLevel,
   StyleFamily,
 } from '@neko/agent-contracts';
+import {
+  getProviderExpressionProfileId,
+  providerCardLayerToAgentProfileSource,
+} from '@neko/agent-contracts';
 
 const STYLE_FAMILIES: readonly StyleFamily[] = [
   'photorealistic',
@@ -27,6 +31,14 @@ const CAPABILITIES: readonly ProviderGenerationCapability[] = [
   'audio.generate',
 ];
 
+const PROVIDER_CARD_ATTRIBUTES = new Set([
+  'providerId',
+  'modelId',
+  'displayName',
+  'capabilities',
+  'inputModalities',
+]);
+
 export interface ParseProviderCardOptions {
   readonly sourceLayer: ProviderCardLayer;
   readonly sourceRef?: string;
@@ -37,19 +49,25 @@ export function parseProviderCardMarkdown(
   options: ParseProviderCardOptions,
 ): ProviderCard {
   const attributes = parseAttributes(markdown);
+  for (const key of attributes.keys()) {
+    if (!PROVIDER_CARD_ATTRIBUTES.has(key)) {
+      throw new Error(`Provider card contains unsupported attribute: ${key}`);
+    }
+  }
   const providerId = readRequiredAttribute(attributes, 'providerId');
   const modelId = attributes.get('modelId');
   const displayName =
     attributes.get('displayName') ?? parseTitle(markdown) ?? modelId ?? providerId;
-  const version = attributes.get('version') ?? '0.0.0';
   const capabilities = parseCapabilities(attributes.get('capabilities'));
   const inputModalities = parseInputModalities(attributes.get('inputModalities'));
 
   return {
+    profileId: getProviderExpressionProfileId({ providerId, ...(modelId ? { modelId } : {}) }),
+    kind: 'provider-expression',
+    source: providerCardLayerToAgentProfileSource(options.sourceLayer),
     providerId,
     ...(modelId ? { modelId } : {}),
     displayName,
-    version,
     capabilities,
     ...(inputModalities ? { inputModalities } : {}),
     sourceLayer: options.sourceLayer,

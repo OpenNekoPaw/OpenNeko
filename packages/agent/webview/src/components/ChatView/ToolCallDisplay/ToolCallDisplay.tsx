@@ -9,7 +9,7 @@ import { useState, useCallback, memo, type ReactNode } from 'react';
 import type { ToolCall, ToolCallProgress } from '@neko/agent-contracts';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { RichContentRenderer } from '../RichContent';
-import { AgentHostMessages } from '../../../messages';
+import { useAgentHostMessages } from '../../../host-runtime-context';
 import { useMessageActions } from '../MessageActionsContext';
 import { SubAgentCard } from '../SubAgentCard';
 import type { AgentArtifactTransferPayload } from '@neko/agent-contracts';
@@ -50,6 +50,7 @@ function ToolCallDisplayComponent({
   workItemIds,
 }: ToolCallDisplayProps) {
   const { t } = useTranslation();
+  const agentHostMessages = useAgentHostMessages();
   const { workItems } = useMessageActions();
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -57,9 +58,12 @@ function ToolCallDisplayComponent({
     setIsExpanded((prev) => !prev);
   }, []);
 
-  const handleOpenFile = useCallback((contentLocator: import('@neko/content').ContentLocator) => {
-    AgentHostMessages.openFile(contentLocator);
-  }, []);
+  const handleOpenFile = useCallback(
+    (contentLocator: import('@neko/content').ContentLocator) => {
+      agentHostMessages.openFile(contentLocator);
+    },
+    [agentHostMessages],
+  );
 
   const handleCopyText = useCallback((text: string) => {
     void navigator.clipboard.writeText(text);
@@ -77,9 +81,9 @@ function ToolCallDisplayComponent({
         logger.warn('Cannot confirm tool without conversationId');
         return;
       }
-      AgentHostMessages.confirmTool(toolCall.id, approved, conversationId);
+      agentHostMessages.confirmTool(toolCall.id, approved, conversationId);
     },
-    [toolCall.id, toolCall.name, conversationId],
+    [agentHostMessages, toolCall.id, toolCall.name, conversationId],
   );
 
   const projection = projectToolCallDisplayState(toolCall, progress);

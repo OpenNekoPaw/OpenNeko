@@ -25,7 +25,6 @@ import {
   projectSettingsDataMessage,
   projectSettingsMutationError,
 } from '../presenters/config-message-presenter';
-import { AgentHostMessages } from '../messages';
 import type { SettingsDataProjection } from '@neko/agent-contracts';
 
 /**
@@ -46,7 +45,7 @@ const handleSettingsData: MessageHandler<'settingsData'> = (
     settingsPatch: projection.settingsPatch,
   });
   if (!projection.selectedModel && defaultChatModel) {
-    AgentHostMessages.updateSettings(
+    context.agentHostMessages.updateSettings(
       {
         providerId: defaultChatModel.providerId,
         modelId: defaultChatModel.modelId,

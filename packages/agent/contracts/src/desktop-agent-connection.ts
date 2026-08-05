@@ -1,20 +1,19 @@
 export interface DesktopAgentViewIdentity {
   readonly projectId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
 }
 
 export interface DesktopAssistantAgentViewIdentity {
   readonly assistantSpaceId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
 }
 
 interface DesktopAgentConnectionOwnerIdentity {
   readonly applicationInstanceId: string;
   readonly windowId: string;
+  readonly workbenchInstanceId: string;
+  readonly agentSurfaceId: string;
   readonly workspaceId: string;
-  readonly rendererEpoch: number;
   readonly connectionId: string;
 }
 

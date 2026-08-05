@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, memo } from 'react';
-import { AgentHostMessages } from '../../../messages';
+import { useAgentHostMessages } from '../../../host-runtime-context';
 import { openMediaTarget } from './openMediaTarget';
 
 interface ImageGridCardProps {
@@ -28,6 +28,7 @@ function ImageGridCardComponent({
   openOnClick = true,
   className,
 }: ImageGridCardProps) {
+  const agentHostMessages = useAgentHostMessages();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const handleOpen = useCallback(
@@ -37,7 +38,7 @@ function ImageGridCardComponent({
       const src = localPath ?? urls[index];
       if (!src) return;
 
-      openMediaTarget(src);
+      openMediaTarget(agentHostMessages, src);
     },
     [localPaths, openOnClick, urls],
   );
@@ -48,7 +49,7 @@ function ImageGridCardComponent({
       const localPath = localPaths?.[index];
       if (!localPath) return;
       const fileName = localPath.split(/[\\/]/).pop() ?? 'image';
-      AgentHostMessages.dndStart({ path: localPath, mediaType: 'image', name: fileName });
+      agentHostMessages.dndStart({ path: localPath, mediaType: 'image', name: fileName });
     },
     [localPaths],
   );

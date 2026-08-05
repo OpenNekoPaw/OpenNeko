@@ -112,60 +112,6 @@ export const COMMAND_DIRECTORIES = {
 } as const;
 
 /**
- * Subpackage dependency declared by a Skill (ADR §5.2.1 `requiredSubpackages:`).
- *
- * Keeps dependency granularity at the subpackage level rather than the
- * command level (user intuition, low maintenance). Activation-time guard
- * rejects or warns per the strict/optional flag.
- */
-export interface RequiredSubpackage {
-  /** Subpackage id (e.g. `neko-cut`). */
-  id: string;
-  /** Required (blocks activation if missing) vs optional (warn + degrade). */
-  required: boolean;
-  /** Semver constraint the caller's installed version must satisfy. */
-  minVersion?: string;
-  /** Fallback message / behaviour when the subpackage is absent. */
-  fallback?: {
-    message: string;
-  };
-}
-
-/**
- * Asset reference declared by a Skill (ADR §5.2.1 `referencedAssets:`).
- *
- * Assets live in the media library, not inside the Skill folder, so the
- * Skill only carries an `asset://` URI. Absent required assets block
- * activation; absent optional ones just log a warning.
- */
-export interface SkillAssetReference {
-  /** `asset://{type}/{id}` URI resolved by PathResolver. */
-  uri: string;
-  /** Whether the asset is required for the Skill to function. */
-  required?: boolean;
-  /** Short note explaining what the asset is used for. */
-  purpose?: string;
-}
-
-/**
- * Cross-Skill reference (ADR §5.2.1 `referencedSkills:`).
- *
- * Declares collaboration or delegation relationships so runtime tooling
- * (e.g. auto-suggesting a collaborator mid-flow) can surface the link
- * without scanning the registry.
- *
- * Distinct from the existing `SkillReference` (a support-document
- * reference defined below) — this type names a related *Skill*, not a
- * support file.
- */
-export interface RelatedSkill {
-  /** Referenced Skill name. */
-  id: string;
-  /** Nature of the relationship. */
-  relationship: 'collaborator' | 'delegator';
-}
-
-/**
  * Typed profile reference declared by a Skill.
  *
  * The Skill references registered Profile contracts by id; it does not own
@@ -175,7 +121,6 @@ export interface SkillProfileReference {
   readonly profileId: string;
   readonly kind: AgentProfileKind;
   readonly relationship: AgentProfileRelationship;
-  readonly versionRange?: string;
 }
 
 /**
@@ -217,24 +162,6 @@ export interface SkillMediaWorkflowHint {
   operations?: string[];
 }
 
-/**
- * Compliance metadata (ADR §5.2.1 / §9.6 `compliance:`).
- *
- * Purely declarative. Audit tooling reads this block to decide
- * whether a Skill's execution must be recorded with extra evidence
- * (e.g. the skillSha chain in audits.jsonl).
- */
-export interface SkillCompliance {
-  /** Named compliance framework (SOC2, GDPR, "creator-standard", …). */
-  framework?: string;
-  /** Whether audit capture is mandatory when this Skill runs. */
-  auditRequired?: boolean;
-  /** Reviewer roles that signed off on the Skill definition. */
-  reviewedBy?: string[];
-  /** ISO date of the last compliance review. */
-  reviewDate?: string;
-}
-
 // =============================================================================
 // Skill Catalog Projection Types
 // =============================================================================
@@ -268,10 +195,8 @@ export type SkillCatalogActionInput = SkillCatalogActionId | SkillCatalogAction;
  * Workflow ordering, branching, routes, and executable stages stay in Skill
  * prompt content.
  *
- * @deprecated Prefer `SkillCatalogPolicy`; this compatibility name remains for
- * existing Host policy call sites and explicit legacy migration only.
  */
-export interface SkillCatalogManifest {
+export interface SkillCatalogPolicy {
   readonly role?: SkillCatalogRole;
   readonly groupId?: string;
   readonly parentSkillIds?: readonly string[];
@@ -279,9 +204,6 @@ export interface SkillCatalogManifest {
   readonly editable?: boolean;
   readonly actions?: readonly SkillCatalogActionInput[];
 }
-
-/** Host-owned input used to project runtime catalog metadata. */
-export type SkillCatalogPolicy = SkillCatalogManifest;
 
 export interface SkillCatalogMeta {
   readonly role: SkillCatalogRole;
@@ -481,8 +403,7 @@ export interface Skill {
 
   /**
    * Slash command trigger (without `/`) for command artifacts.
-   * Ordinary Skills may still carry this temporarily for legacy migration, but
-   * canonical explicit Skill invocation is `$<name>`.
+   * Canonical explicit Skill invocation is `$<name>`.
    * @example "commit", "review-pr"
    */
   command?: string;
@@ -501,56 +422,6 @@ export interface Skill {
    */
   supportsArguments?: boolean;
 
-  // ===========================================================================
-  // Legacy flattened metadata compatibility
-  //
-  // Existing runtime contributors may still project these fields while the
-  // explicit migration boundary is in use. Canonical file loading does not read
-  // them from a root manifest. New author and Host data belongs in
-  // portableDefinition, nekoOverlay, or hostProjection below.
-  // ===========================================================================
-
-  /**
-   * Semver version string. Required by the SDD spec so audit / compatibility
-   * tooling can pin to a specific Skill revision.
-   * @example "1.0.0"
-   */
-  version?: string;
-
-  /**
-   * Domain identifier — groups Skills by creative vertical (cut / story /
-   * canvas / …). Free-form for now so new domains can be added without a
-   * schema bump.
-   * @example "cut"
-   */
-  domain?: string;
-
-  /**
-   * Subpackages the Skill depends on. Activation-time guard enforces the
-   * `required` flag and optionally the `minVersion` constraint.
-   */
-  requiredSubpackages?: RequiredSubpackage[];
-
-  /**
-   * Whether AutoMode may auto-select this Skill based on description
-   * matching. Falls back to true when omitted; set false for high-risk or
-   * test Skills that should only activate on explicit user intent.
-   * @default true
-   */
-  autoInvoke?: boolean;
-
-  /**
-   * Assets (characters, styles, LoRAs, …) the Skill relies on. Resolved
-   * through PathResolver against the configured media library.
-   */
-  referencedAssets?: SkillAssetReference[];
-
-  /**
-   * Related Skills — collaborators the runtime can surface when the user
-   * crosses domain boundaries, or delegators the Skill hands off to.
-   */
-  referencedSkills?: RelatedSkill[];
-
   /**
    * Profiles this Skill consumes, produces, requires, or prefers. Canonical
    * runtime contract; `mediaWorkflow.artifactProfiles` remains a shorthand for
@@ -560,12 +431,6 @@ export interface Skill {
 
   /** Media workflow discovery hints. Not an executable workflow definition. */
   mediaWorkflow?: SkillMediaWorkflowHint;
-
-  /**
-   * Compliance metadata. Consumed by audit tooling; does not change
-   * runtime behaviour on its own.
-   */
-  compliance?: SkillCompliance;
 
   /** UI catalog metadata. Display/management only; not workflow ordering. */
   catalog?: SkillCatalogMeta;
@@ -857,11 +722,7 @@ export interface ISkillService {
 // Loading
 // =============================================================================
 
-/**
- * Legacy/runtime-compatible frontmatter projection. Canonical Skill authoring uses
- * `PortableSkillDefinition`; Host-owned fields remain here only for existing runtime DTOs
- * and explicit legacy migration compatibility.
- */
+/** Frontmatter projection parsed from the canonical portable SKILL.md. */
 export interface SkillFrontmatter {
   /** Skill name (required) */
   name: string;
@@ -915,61 +776,6 @@ export interface SkillFrontmatter {
    * @example "@publisher/skill-name"
    */
   'market-id'?: string;
-
-  // Legacy manifest-era fields are projected onto `Skill` only by explicit
-  // migration/compatibility adapters. Canonical packages use portable SKILL.md
-  // plus optional agents/neko.yaml and never author a root manifest.
-}
-
-// =============================================================================
-// Legacy Skill manifest compatibility
-// =============================================================================
-
-/**
- * Legacy Neko Skill metadata retained for explicit migration and compatibility
- * validation. It is not the canonical authoring contract and normal Skill loading
- * must not read a root `manifest.json`. Representable author metadata migrates to
- * portable `SKILL.md` or `agents/neko.yaml`; Host facts stay Host-owned.
- *
- * @deprecated Use portable Skill and Neko overlay contracts for new code.
- */
-export interface SkillManifest {
-  /** Semver version string. Required by the SDD spec for audit tracing. */
-  version?: string;
-
-  /** Domain identifier (cut / story / canvas / ...). Free-form. */
-  domain?: string;
-
-  /** Subpackage dependencies enforced at activation time. */
-  requiredSubpackages?: RequiredSubpackage[];
-
-  /**
-   * Whether AutoMode may auto-select this Skill. Defaults to true when
-   * omitted; set false for high-risk or test-only Skills.
-   */
-  autoInvoke?: boolean;
-
-  /** Assets the Skill depends on (resolved via PathResolver). */
-  referencedAssets?: SkillAssetReference[];
-
-  /** Cross-Skill relationships surfaced by the runtime. */
-  referencedSkills?: RelatedSkill[];
-
-  /**
-   * Profiles this Skill consumes, produces, requires, or prefers. Canonical
-   * runtime contract; `mediaWorkflow.artifactProfiles` remains supported as a
-   * shorthand for produced Artifact Profiles.
-   */
-  profileReferences?: SkillProfileReference[];
-
-  /** Media workflow discovery hints. Not an executable workflow definition. */
-  mediaWorkflow?: SkillMediaWorkflowHint;
-
-  /** Compliance metadata consumed by audit tooling. */
-  compliance?: SkillCompliance;
-
-  /** UI catalog metadata. Display/management only; not workflow ordering. */
-  catalog?: SkillCatalogManifest;
 }
 
 /**
@@ -1402,15 +1208,6 @@ export function collectSkillProfileReferences(
   return references;
 }
 
-/**
- * Semver-ish regex: major.minor.patch with optional pre-release and build
- * metadata. Deliberately not importing a full semver library — Skills
- * author-input versions are validated to catch typos, not to run complex
- * range queries.
- */
-const SEMVER_RE =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
-
 const SKILL_NAME_RE = /^[a-z0-9-]+$/;
 const MAX_SKILL_NAME_LENGTH = 64;
 const MAX_SKILL_DESCRIPTION_LENGTH = 2048;
@@ -1487,6 +1284,21 @@ export function validateSkill(skill: Partial<Skill>): SkillValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  for (const field of [
+    'version',
+    'domain',
+    'requiredSubpackages',
+    'autoInvoke',
+    'referencedAssets',
+    'referencedSkills',
+    'compliance',
+    'manifest',
+  ]) {
+    if (Object.hasOwn(skill, field)) {
+      errors.push(`Unsupported Skill field: ${field}`);
+    }
+  }
+
   if (typeof skill.name !== 'string' || skill.name.length === 0) {
     errors.push('Missing required field: name');
   } else {
@@ -1510,7 +1322,9 @@ export function validateSkill(skill: Partial<Skill>): SkillValidationResult {
     validateSkillPromptChainLanguage(skill.content, warnings);
   }
 
-  validateLegacySkillMetadata(skill, errors, warnings, false);
+  validateSkillProfileReferences(skill.profileReferences, errors);
+  validateSkillMediaWorkflowHint(skill.mediaWorkflow, errors);
+  validateSkillCatalogPolicy(skill.catalog, errors);
   return { valid: errors.length === 0, errors, warnings };
 }
 
@@ -1526,147 +1340,6 @@ function validateSkillPromptChainLanguage(content: string, warnings: string[]): 
   warnings.push(
     'Skill prompt text appears to describe executable workflow/DAG/runtime behavior. Skills may provide prompt-chain guidance, but execution, lifecycle, approval, and state stay Agent-native.',
   );
-}
-
-/** @deprecated Explicit legacy migration/compatibility validation only. */
-export function validateSkillManifest(
-  manifest: Partial<SkillManifest>,
-  errors: string[] = [],
-  warnings: string[] = [],
-): SkillValidationResult {
-  return validateLegacySkillMetadata(manifest, errors, warnings, true);
-}
-
-function validateLegacySkillMetadata(
-  manifest: Partial<SkillManifest>,
-  errors: string[],
-  warnings: string[],
-  warnMissingRecommendedFields: boolean,
-): SkillValidationResult {
-  // version: explicit legacy validation warns if missing; canonical runtime projections do not.
-  if (manifest.version === undefined) {
-    if (warnMissingRecommendedFields) {
-      warnings.push('Missing legacy metadata field: version (recommended, semver string)');
-    }
-  } else if (typeof manifest.version !== 'string' || !SEMVER_RE.test(manifest.version)) {
-    errors.push(`Invalid version "${manifest.version}" — must be a semver string (e.g. "1.0.0")`);
-  }
-
-  // domain: explicit legacy validation warns if missing; canonical projections do not.
-  if (manifest.domain === undefined) {
-    if (warnMissingRecommendedFields) {
-      warnings.push('Missing legacy metadata field: domain (recommended, e.g. "cut" / "story")');
-    }
-  } else if (typeof manifest.domain !== 'string' || manifest.domain.trim().length === 0) {
-    errors.push('Field "domain" must be a non-empty string');
-  }
-
-  // requiredSubpackages: shape check. Duplicate ids are an error.
-  if (manifest.requiredSubpackages !== undefined) {
-    if (!Array.isArray(manifest.requiredSubpackages)) {
-      errors.push('Field "requiredSubpackages" must be an array');
-    } else {
-      const seenIds: Record<string, true> = {};
-      for (let idx = 0; idx < manifest.requiredSubpackages.length; idx++) {
-        const dep = manifest.requiredSubpackages[idx];
-        if (!dep || typeof dep !== 'object') {
-          errors.push(`requiredSubpackages[${idx}] must be an object`);
-          continue;
-        }
-        if (typeof dep.id !== 'string' || dep.id.length === 0) {
-          errors.push(`requiredSubpackages[${idx}].id must be a non-empty string`);
-        } else if (seenIds[dep.id]) {
-          errors.push(`Duplicate requiredSubpackages entry for id "${dep.id}"`);
-        } else {
-          seenIds[dep.id] = true;
-        }
-        if (typeof dep.required !== 'boolean') {
-          errors.push(`requiredSubpackages[${idx}].required must be a boolean`);
-        }
-        if (dep.minVersion !== undefined && !SEMVER_RE.test(String(dep.minVersion))) {
-          errors.push(`requiredSubpackages[${idx}].minVersion must be a semver string`);
-        }
-      }
-    }
-  }
-
-  // autoInvoke: boolean if present.
-  if (manifest.autoInvoke !== undefined && typeof manifest.autoInvoke !== 'boolean') {
-    errors.push('Field "autoInvoke" must be a boolean');
-  }
-
-  // Atomic tools are contributed by subpackages through AgentCapabilityProvider.
-  // Skills remain prompt-chain instructions; the Agent drives execution via TOOL_NAMES.
-  // If a real cross-Skill sharing need emerges, introduce explicit reference fields
-  // instead of inline operation definitions.
-
-  // referencedAssets: require asset:// URI.
-  if (manifest.referencedAssets !== undefined) {
-    if (!Array.isArray(manifest.referencedAssets)) {
-      errors.push('Field "referencedAssets" must be an array');
-    } else {
-      for (let idx = 0; idx < manifest.referencedAssets.length; idx++) {
-        const ref = manifest.referencedAssets[idx];
-        if (!ref || typeof ref !== 'object') {
-          errors.push(`referencedAssets[${idx}] must be an object`);
-          continue;
-        }
-        if (typeof ref.uri !== 'string' || !ref.uri.startsWith('asset://')) {
-          errors.push(`referencedAssets[${idx}].uri must start with "asset://"`);
-        }
-      }
-    }
-  }
-
-  // referencedSkills: require relationship enum.
-  if (manifest.referencedSkills !== undefined) {
-    if (!Array.isArray(manifest.referencedSkills)) {
-      errors.push('Field "referencedSkills" must be an array');
-    } else {
-      for (let idx = 0; idx < manifest.referencedSkills.length; idx++) {
-        const ref = manifest.referencedSkills[idx];
-        if (!ref || typeof ref !== 'object') {
-          errors.push(`referencedSkills[${idx}] must be an object`);
-          continue;
-        }
-        if (typeof ref.id !== 'string' || ref.id.length === 0) {
-          errors.push(`referencedSkills[${idx}].id must be a non-empty string`);
-        }
-        if (ref.relationship !== 'collaborator' && ref.relationship !== 'delegator') {
-          errors.push(
-            `referencedSkills[${idx}].relationship must be "collaborator" or "delegator"`,
-          );
-        }
-      }
-    }
-  }
-
-  validateSkillProfileReferences(manifest.profileReferences, errors);
-  validateSkillMediaWorkflowHint(manifest.mediaWorkflow, errors);
-  validateSkillCatalogManifest(manifest.catalog, errors);
-
-  // compliance: light shape check; semantics are caller-defined.
-  if (manifest.compliance !== undefined) {
-    if (typeof manifest.compliance !== 'object' || Array.isArray(manifest.compliance)) {
-      errors.push('Field "compliance" must be an object');
-    } else {
-      const c = manifest.compliance;
-      if (c.framework !== undefined && typeof c.framework !== 'string') {
-        errors.push('compliance.framework must be a string');
-      }
-      if (c.auditRequired !== undefined && typeof c.auditRequired !== 'boolean') {
-        errors.push('compliance.auditRequired must be a boolean');
-      }
-      if (c.reviewedBy !== undefined && !Array.isArray(c.reviewedBy)) {
-        errors.push('compliance.reviewedBy must be an array of strings');
-      }
-      if (c.reviewDate !== undefined && typeof c.reviewDate !== 'string') {
-        errors.push('compliance.reviewDate must be an ISO date string');
-      }
-    }
-  }
-
-  return { valid: errors.length === 0, errors, warnings };
 }
 
 function validateSkillProfileReferences(
@@ -1696,13 +1369,6 @@ function validateSkillProfileReferences(
         `profileReferences[${index}].relationship must be "consumes", "produces", "requires", or "prefers"`,
       );
     }
-    if (
-      reference.versionRange !== undefined &&
-      (typeof reference.versionRange !== 'string' || reference.versionRange.trim().length === 0)
-    ) {
-      errors.push(`profileReferences[${index}].versionRange must be a non-empty string`);
-    }
-
     const key = toSkillProfileReferenceKey(reference);
     if (seen.has(key)) {
       errors.push(`Duplicate profileReferences entry for "${reference.profileId}"`);
@@ -1713,16 +1379,11 @@ function validateSkillProfileReferences(
 }
 
 function toSkillProfileReferenceKey(reference: SkillProfileReference): string {
-  return [
-    reference.kind,
-    reference.relationship,
-    reference.profileId,
-    reference.versionRange ?? '',
-  ].join('\u0000');
+  return [reference.kind, reference.relationship, reference.profileId].join('\u0000');
 }
 
-function validateSkillCatalogManifest(
-  catalog: SkillCatalogManifest | undefined,
+function validateSkillCatalogPolicy(
+  catalog: SkillCatalogPolicy | undefined,
   errors: string[],
 ): void {
   if (catalog === undefined) return;
@@ -1928,10 +1589,9 @@ export function validateCommand(command: Partial<SlashCommand>): SkillValidation
 
 /**
  * Create the runtime Skill projection from parsed content and Host-owned source facts.
- * Canonical parsing/validation happens before this compatibility constructor and does
- * not read a root `manifest.json`.
+ * Canonical parsing and validation happen before this constructor.
  *
- * @param frontmatter Parsed portable or compatibility frontmatter projection
+ * @param frontmatter Parsed portable frontmatter projection
  * @param content SKILL.md body content
  * @param source Skill source (builtin, personal, project)
  * @param directoryPath Skill directory path

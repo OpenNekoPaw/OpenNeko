@@ -69,7 +69,6 @@ function createContext(): AgentHostRouteEffectContext {
       windowId: 'window-1',
       viewId: 'view-1',
       workspaceId: 'workspace-1',
-      rendererEpoch: 'renderer-1',
       connectionId: 'connection-1',
     },
     post: vi.fn(),
@@ -94,7 +93,6 @@ describe('Agent Host message controller', () => {
     });
     await controller.tryHandle({
       type: 'projectionEndpointDiscover',
-      protocolVersion: 1,
       realmId: 'realm-1',
     });
 
@@ -110,7 +108,6 @@ describe('Agent Host message controller', () => {
     expect(effects.projection.discoverEndpoint).toHaveBeenCalledWith(
       {
         type: 'projectionEndpointDiscover',
-        protocolVersion: 1,
         realmId: 'realm-1',
       },
       context,

@@ -108,7 +108,7 @@ function normalizeCompositeBlock(value: unknown): CompositeBlockData | null {
   }
 
   const semanticStoryboard =
-    template === 'storyboard-table' && (value.schemaVersion === 1 || value.scenes !== undefined)
+    template === 'storyboard-table' && value.scenes !== undefined
       ? normalizeStoryboardCompositePayload(value)
       : undefined;
   const title = readString(value, 'title') ?? semanticStoryboard?.displayTable?.title;
@@ -172,7 +172,7 @@ function dedupeStoryboardDiagnostics(
 function normalizeArtifactBackedStoryboardBlock(
   value: Record<string, unknown>,
 ): CompositeBlockData | null {
-  if (value.kind !== 'composite-artifact' || value.schemaVersion !== 1) return null;
+  if (value.kind !== 'composite-artifact' || Object.hasOwn(value, 'schemaVersion')) return null;
   const blocks = Array.isArray(value.blocks) ? value.blocks : [];
   const storyboardBlock = blocks.find(isStoryboardDomainBlock);
   const animationPlanBlocks = blocks.filter(isAnimationPlanDomainBlock);
@@ -267,6 +267,7 @@ function normalizeStoryboardPlanBlocks(
 function isStoryboardDomainBlock(value: unknown): value is Record<string, unknown> {
   return (
     isRecord(value) &&
+    !Object.hasOwn(value, 'schemaVersion') &&
     value.kind === 'domain' &&
     value.domainKind === STORYBOARD_DOMAIN_KIND &&
     value.payload !== undefined
@@ -276,6 +277,7 @@ function isStoryboardDomainBlock(value: unknown): value is Record<string, unknow
 function isAnimationPlanDomainBlock(value: unknown): value is Record<string, unknown> {
   return (
     isRecord(value) &&
+    !Object.hasOwn(value, 'schemaVersion') &&
     value.kind === 'domain' &&
     value.domainKind === ANIMATION_PLAN_DOMAIN_KIND &&
     value.payload !== undefined

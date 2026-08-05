@@ -12,7 +12,7 @@ export interface ConversationStreamingSnapshot {
   readonly isThinking: boolean;
   readonly queuedMessageCount: number;
   readonly queuedMessages: readonly AgentQueuedMessageItem[];
-  readonly messageQueueVersion?: number;
+  readonly messageQueueSequence?: number;
 }
 
 export interface ConversationRenderSnapshot {
@@ -38,7 +38,7 @@ export type ConversationRenderMutation =
       readonly kind: 'queue-status';
       readonly queuedMessageCount: number;
       readonly queuedMessages: readonly AgentQueuedMessageItem[];
-      readonly messageQueueVersion?: number;
+      readonly messageQueueSequence?: number;
       readonly isThinking?: boolean;
     })
   | (RevisionedConversationMutation & {

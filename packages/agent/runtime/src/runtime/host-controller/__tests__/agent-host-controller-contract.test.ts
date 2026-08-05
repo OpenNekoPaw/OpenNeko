@@ -40,7 +40,6 @@ describe('Agent Host controller contract', () => {
         windowId: 'window-1',
         viewId: 'view-1',
         workspaceId: 'workspace-1',
-        rendererEpoch: 'renderer-1',
         connectionId: 'connection-1',
       },
       post,

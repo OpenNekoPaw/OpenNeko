@@ -100,7 +100,6 @@ describe('storyboard transfer presenter', () => {
       title: 'Opening',
       diagnostics: [],
       storyboardTable: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Opening',
         scenes: [
@@ -176,9 +175,7 @@ describe('storyboard transfer presenter', () => {
       title: 'Two Scenes',
       diagnostics: [],
       storyboardTable: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
-        contractVersion: 1,
         sourceProfile: 'from-script',
         sourceTrace: [
           {

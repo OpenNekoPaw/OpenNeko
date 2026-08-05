@@ -1,9 +1,5 @@
 import { isContentLocator, isHostProjectedRuntimeValue, type ContentLocator } from '@neko/content';
 
-export const CREATIVE_AI_INVOCATION_SCHEMA_VERSION = 1 as const;
-
-export type CreativeAiInvocationSchemaVersion = typeof CREATIVE_AI_INVOCATION_SCHEMA_VERSION;
-
 export const CREATIVE_AI_INVOCATION_DOMAINS = [
   'agent-internal',
   'external-creative-package',
@@ -205,7 +201,6 @@ export interface CreativeAiRoutingHint {
 }
 
 export interface AgentInternalInvocation {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly domain: 'agent-internal';
   readonly invocationId: string;
   readonly conversationId: string;
@@ -222,7 +217,6 @@ export interface AgentInternalInvocation {
 }
 
 export interface ExternalCreativeAiInvocation {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly domain: 'external-creative-package';
   readonly invocationId: string;
   readonly sourcePackage: string;
@@ -295,7 +289,6 @@ export interface CreativeAiRunAggregateSnapshot {
 }
 
 export interface CreativeAiRunSnapshot {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly runId: string;
   readonly conversationId: string;
   readonly invocationId: string;
@@ -323,7 +316,6 @@ export interface CreativeAiRunSnapshot {
 }
 
 export interface ConversationLifecycleCommand {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly commandId: string;
   readonly conversationId: string;
   readonly action: ConversationLifecycleAction;
@@ -345,7 +337,6 @@ export interface CreativeAiOutputRef {
 }
 
 export interface CreativeAiApplyRequest {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly requestId: string;
   readonly conversationId: string;
   readonly runId: string;
@@ -367,7 +358,6 @@ export interface CreativeAiCandidateApplyRequest extends CreativeAiApplyRequest 
 }
 
 export interface CreativeAiCandidatePromotionRequest {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly requestId: string;
   readonly sourcePackage: string;
   readonly targetRef: CreativeAiTargetRef;
@@ -545,7 +535,7 @@ export function validateAgentInternalInvocation(
     return invalidRootResult('creative-ai-invalid-agent-internal-invocation');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectRemovedSchemaVersion(value, diagnostics);
   validateLiteral(
     value['domain'],
     'agent-internal',
@@ -583,7 +573,7 @@ export function validateExternalCreativeAiInvocation(
     return invalidRootResult('creative-ai-invalid-external-invocation');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectRemovedSchemaVersion(value, diagnostics);
   validateLiteral(
     value['domain'],
     'external-creative-package',
@@ -727,7 +717,7 @@ export function validateCreativeAiRunSnapshot(
     return invalidRootResult('creative-ai-invalid-run-snapshot');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectRemovedSchemaVersion(value, diagnostics);
   requireStableString(value['runId'], 'runId', diagnostics);
   requireStableString(
     value['conversationId'],
@@ -818,7 +808,7 @@ export function validateConversationLifecycleCommand(
     return invalidRootResult('creative-ai-invalid-lifecycle-command');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectRemovedSchemaVersion(value, diagnostics);
   requireStableString(value['commandId'], 'commandId', diagnostics);
   requireStableString(
     value['conversationId'],
@@ -865,7 +855,7 @@ export function validateCreativeAiApplyRequest(
     return invalidRootResult('creative-ai-invalid-apply-request');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectRemovedSchemaVersion(value, diagnostics);
   requireStableString(value['requestId'], 'requestId', diagnostics);
   requireStableString(
     value['conversationId'],
@@ -942,7 +932,7 @@ export function validateCreativeAiCandidatePromotionRequest(
     return invalidRootResult('creative-ai-invalid-candidate-promotion-request');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectRemovedSchemaVersion(value, diagnostics);
   requireStableString(value['requestId'], 'requestId', diagnostics);
   requireStableString(
     value['sourcePackage'],
@@ -1119,16 +1109,19 @@ function validateOptionalChildTargetRefs(
   }
 }
 
-function validateSchemaVersion(value: unknown, diagnostics: CreativeAiDiagnostic[]): void {
-  if (value !== CREATIVE_AI_INVOCATION_SCHEMA_VERSION) {
+function rejectRemovedSchemaVersion(
+  value: Readonly<Record<string, unknown>>,
+  diagnostics: CreativeAiDiagnostic[],
+): void {
+  if (Object.hasOwn(value, 'schemaVersion')) {
     diagnostics.push(
       diagnostic(
         'error',
-        'creative-ai-unsupported-schema-version',
-        'Creative AI invocation schemaVersion is unsupported.',
+        'creative-ai-unsupported-field',
+        'Creative AI field schemaVersion is not supported.',
         'schemaVersion',
-        CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
-        value,
+        undefined,
+        value['schemaVersion'],
       ),
     );
   }

@@ -41,8 +41,9 @@ import type {
   Message,
   TabType,
 } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../messages';
+import { useAgentHostMessages } from '../host-runtime-context';
 import { ChatView } from './ChatView';
+import { AgentDiagnosticToast } from './AgentDiagnosticToast';
 import {
   InputAreaProvider,
   type MediaModelSelection,
@@ -187,6 +188,7 @@ export function ChatWorkspace({
   onInitialSessionModeRequestConsumed,
   queuedEditDraftConflictMessage,
 }: ChatWorkspaceProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { snapshot: tabRenderSnapshot, updateState: updateTabRenderState } =
     useTabRenderStore(tabRenderStore);
   const tabState = tabRenderSnapshot.state;
@@ -505,7 +507,7 @@ export function ChatWorkspace({
     const trailingMention = projectTrailingMention(initialInputRequest.messageText);
     if (trailingMention && !isCharacterRoleSession) {
       onMentionSearchFilterChange(trailingMention.requestFilter);
-      AgentHostMessages.searchProjectFiles(
+      agentHostMessages.searchProjectFiles(
         trailingMention.requestFilter,
         sessionMutationConversationId,
       );
@@ -642,7 +644,7 @@ export function ChatWorkspace({
           clearInput();
           return;
         }
-        AgentHostMessages.clearHistory(sessionMutationConversationId);
+        agentHostMessages.clearHistory(sessionMutationConversationId);
         clearMessages();
         clearInput();
       }),
@@ -673,7 +675,7 @@ export function ChatWorkspace({
     if (isCharacterRoleSession || isCompressing || !sessionMutationConversationId) return;
     conversationCompressingRef.current.set(sessionMutationConversationId, true);
     forceRender((n) => n + 1);
-    AgentHostMessages.compressContext(sessionMutationConversationId);
+    agentHostMessages.compressContext(sessionMutationConversationId);
   }, [
     isCharacterRoleSession,
     isCompressing,
@@ -684,7 +686,7 @@ export function ChatWorkspace({
   const handleExecutionModeChange = (mode: ShellExecutionMode) => {
     if (!sessionMutationConversationId) return;
     updateTabRenderState({ executionMode: mode });
-    AgentHostMessages.updateSettings({ executionMode: mode }, sessionMutationConversationId);
+    agentHostMessages.updateSettings({ executionMode: mode }, sessionMutationConversationId);
   };
 
   const handleMediaModelSelect = useCallback(
@@ -736,7 +738,7 @@ export function ChatWorkspace({
   const handlePromoteQueuedMessage = useCallback(
     (queueItemId: string) => {
       if (!sessionMutationConversationId || isCharacterRoleSession) return;
-      AgentHostMessages.promoteQueuedMessage(sessionMutationConversationId, queueItemId);
+      agentHostMessages.promoteQueuedMessage(sessionMutationConversationId, queueItemId);
     },
     [sessionMutationConversationId, isCharacterRoleSession],
   );
@@ -744,7 +746,7 @@ export function ChatWorkspace({
   const handleCancelQueuedMessage = useCallback(
     (queueItemId: string) => {
       if (!sessionMutationConversationId || isCharacterRoleSession) return;
-      AgentHostMessages.cancelQueuedMessage(sessionMutationConversationId, queueItemId);
+      agentHostMessages.cancelQueuedMessage(sessionMutationConversationId, queueItemId);
     },
     [sessionMutationConversationId, isCharacterRoleSession],
   );
@@ -752,7 +754,7 @@ export function ChatWorkspace({
   const handleEditQueuedMessage = useCallback(
     (queueItemId: string) => {
       if (!sessionMutationConversationId || isCharacterRoleSession) return;
-      AgentHostMessages.editQueuedMessage(
+      agentHostMessages.editQueuedMessage(
         tabRenderSnapshot.tabId,
         sessionMutationConversationId,
         queueItemId,
@@ -792,7 +794,7 @@ export function ChatWorkspace({
       onRequestFiles={(filter) => {
         onMentionSearchFilterChange(filter);
         if (!isCharacterRoleSession && sessionMutationConversationId) {
-          AgentHostMessages.searchProjectFiles(filter, sessionMutationConversationId);
+          agentHostMessages.searchProjectFiles(filter, sessionMutationConversationId);
         }
       }}
       mentionItems={mentionItems}
@@ -805,16 +807,12 @@ export function ChatWorkspace({
       onGenCategoryChange={setGenCategory}
       onGenParamsChange={updateGenParams}
     >
-      {latestSessionDiagnostic && foregroundConversationAvailability?.kind !== 'unavailable' ? (
-        <div
-          className="fixed right-4 top-12 z-50 max-w-[360px] rounded-lg border border-[var(--neko-inputValidation-errorBorder,var(--agent-border))] bg-[var(--neko-inputValidation-errorBackground,var(--agent-elevated))] px-3 py-2 text-sm text-[var(--neko-inputValidation-errorForeground,var(--agent-fg))] shadow-lg animate-slide-in"
-          role="alert"
-        >
-          <div className="font-medium">会话错误</div>
-          <div className="mt-1 opacity-90">
-            {latestSessionDiagnostic.code}: {latestSessionDiagnostic.message}
-          </div>
-        </div>
+      {isVisible &&
+      latestSessionDiagnostic &&
+      foregroundConversationAvailability?.kind !== 'unavailable' ? (
+        <AgentDiagnosticToast title="会话错误">
+          {latestSessionDiagnostic.code}: {latestSessionDiagnostic.message}
+        </AgentDiagnosticToast>
       ) : null}
       <ChatView
         composerDisabled={!isModelConfigurationReady}

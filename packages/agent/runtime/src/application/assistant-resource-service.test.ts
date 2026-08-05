@@ -23,7 +23,6 @@ describe('Assistant Resource service', () => {
     });
     await service.authorizePreview({
       identity: identity(),
-      endpointEpoch: 'endpoint:1',
       scratchArtifactId: 'scratch:1',
     });
     expect(preview.authorize).toHaveBeenCalledWith(
@@ -49,7 +48,6 @@ describe('Assistant Resource service', () => {
     await expect(
       service.authorizePreview({
         identity: identity(),
-        endpointEpoch: 'endpoint:1',
         scratchArtifactId: 'scratch:other',
       }),
     ).rejects.toThrow('does not belong');
@@ -66,10 +64,8 @@ function identity() {
 
 function conversationRecord() {
   return {
-    schemaVersion: 1 as const,
     conversationId: 'conversation:1',
     context: {
-      schemaVersion: 1 as const,
       kind: 'assistant' as const,
       assistantSpaceId: 'assistant:1',
       baseGrantIds: ['grant:1'],
@@ -80,7 +76,6 @@ function conversationRecord() {
     pendingTurn: { requestId: 'request:1', turnId: 'turn:1', status: 'running' as const },
     scratchArtifacts: [
       {
-        schemaVersion: 1 as const,
         scratchArtifactId: 'scratch:1',
         assistantSpaceId: 'assistant:1',
         conversationId: 'conversation:1',
@@ -101,7 +96,6 @@ function previewPort() {
 
 function previewProjection() {
   return {
-    schemaVersion: 1 as const,
     identity: {
       previewSessionId: 'preview:1',
       windowId: 'window:1',

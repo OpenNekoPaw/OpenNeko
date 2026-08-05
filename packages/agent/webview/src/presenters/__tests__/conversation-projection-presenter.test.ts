@@ -87,7 +87,7 @@ describe('conversation projection presenter', () => {
       workItems: [],
       isThinking: true,
       streamingMessageId: 'legacy-message',
-      projection: { conversationId: 'conv-1', projectionVersion: 0, turns: [] },
+      projection: { conversationId: 'conv-1', turns: [] },
     });
 
     expect(result).toMatchObject({ messages: [], isThinking: true, streamingMessageId: null });
@@ -183,7 +183,6 @@ function projection(
   );
   return {
     conversationId: 'conv-1',
-    projectionVersion: 1,
     turns: [
       {
         turnId: 'turn-1',

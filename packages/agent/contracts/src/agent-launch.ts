@@ -3,18 +3,15 @@ import {
   type AgentAuthorityScopeProjection,
 } from './agent-root-presentation';
 
-export const AGENT_LAUNCH_CONTRACT_VERSION = 1 as const;
-
 export type AgentLaunchScopeRequirement = 'any' | 'assistant' | 'workspace';
 export type AgentLaunchResourceKind = 'file' | 'directory' | 'microphone';
 
 export interface AgentLaunchConnectionIdentity {
-  readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
   readonly applicationInstanceId: string;
   readonly windowId: string;
+  readonly workbenchInstanceId: string;
+  readonly agentSurfaceId: string;
   readonly viewId: string;
-  readonly rendererEpoch: number;
-  readonly connectionEpoch: number;
   readonly connectionId: string;
   readonly scope: AgentAuthorityScopeProjection;
 }
@@ -52,7 +49,6 @@ export interface AgentLaunchResourceCatalogEntry extends AgentLaunchCatalogEntry
 }
 
 export interface AgentLaunchCatalogProjection {
-  readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
   readonly connection: AgentLaunchConnectionIdentity;
   readonly revision: number;
   readonly models: readonly AgentLaunchModelCatalogEntry[];
@@ -64,23 +60,20 @@ export interface AgentLaunchCatalogProjection {
 export function parseAgentLaunchConnectionIdentity(value: unknown): AgentLaunchConnectionIdentity {
   const record = requireRecord(value, 'Agent launch connection must be an object.');
   requireExactKeys(record, [
-    'schemaVersion',
     'applicationInstanceId',
     'windowId',
+    'workbenchInstanceId',
+    'agentSurfaceId',
     'viewId',
-    'rendererEpoch',
-    'connectionEpoch',
     'connectionId',
     'scope',
   ]);
-  requireVersion(record['schemaVersion']);
   return {
-    schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
     applicationInstanceId: requireIdentity(record['applicationInstanceId'], 'application instance'),
     windowId: requireIdentity(record['windowId'], 'Window'),
+    workbenchInstanceId: requireIdentity(record['workbenchInstanceId'], 'Workbench'),
+    agentSurfaceId: requireIdentity(record['agentSurfaceId'], 'Agent Surface'),
     viewId: requireIdentity(record['viewId'], 'View'),
-    rendererEpoch: requirePositiveInteger(record['rendererEpoch'], 'renderer epoch'),
-    connectionEpoch: requirePositiveInteger(record['connectionEpoch'], 'connection epoch'),
     connectionId: requireIdentity(record['connectionId'], 'connection'),
     scope: parseAgentAuthorityScopeProjection(record['scope']),
   };
@@ -88,18 +81,8 @@ export function parseAgentLaunchConnectionIdentity(value: unknown): AgentLaunchC
 
 export function parseAgentLaunchCatalogProjection(value: unknown): AgentLaunchCatalogProjection {
   const record = requireRecord(value, 'Agent launch catalog must be an object.');
-  requireExactKeys(record, [
-    'schemaVersion',
-    'connection',
-    'revision',
-    'models',
-    'commands',
-    'skills',
-    'resources',
-  ]);
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['connection', 'revision', 'models', 'commands', 'skills', 'resources']);
   return {
-    schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
     connection: parseAgentLaunchConnectionIdentity(record['connection']),
     revision: requireNonNegativeInteger(record['revision'], 'catalog revision'),
     models: parseArray(record['models'], parseModel),
@@ -260,12 +243,6 @@ function requireExactKeys(
   }
 }
 
-function requireVersion(value: unknown): void {
-  if (value !== AGENT_LAUNCH_CONTRACT_VERSION) {
-    throw new Error(`Unsupported Agent launch contract version '${String(value)}'.`);
-  }
-}
-
 function requireIdentity(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`Agent launch ${label} identity is required.`);
@@ -275,13 +252,6 @@ function requireIdentity(value: unknown, label: string): string {
 
 function requireString(value: unknown, label: string): string {
   if (typeof value !== 'string') throw new Error(`Agent launch ${label} is required.`);
-  return value;
-}
-
-function requirePositiveInteger(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`Agent launch ${label} must be a positive integer.`);
-  }
   return value;
 }
 

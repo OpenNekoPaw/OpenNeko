@@ -1,6 +1,5 @@
 ---
 providerId: sora
-version: 1.0.0
 displayName: Sora
 capabilities: [video.generate]
 ---

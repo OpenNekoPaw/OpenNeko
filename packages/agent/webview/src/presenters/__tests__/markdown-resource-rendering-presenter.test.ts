@@ -816,7 +816,6 @@ function createReadImageDocumentResourceToolCall(
       ],
       perceptionCards: [
         {
-          version: 1,
           assetId: 'read-image-page-1',
           modality: 'image',
           createdAt: 1,
@@ -1028,7 +1027,6 @@ function createPerceptionOnlyToolCall(): ToolCall {
       ],
       perceptionCards: [
         {
-          version: 1,
           assetId: 'read-image-page-1',
           modality: 'image',
           createdAt: 1,

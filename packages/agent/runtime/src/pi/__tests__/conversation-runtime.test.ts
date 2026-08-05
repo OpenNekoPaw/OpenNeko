@@ -657,7 +657,7 @@ describe('PiConversationRuntime', () => {
       ).resolves.toBeUndefined();
       expect(authority.readCheckpoint('conversation-1', 'turn-2')).toMatchObject({
         terminalState: 'completed',
-        writerEpoch: 1,
+        writerLeaseId: lease.leaseId,
       });
     } finally {
       runtime.dispose();

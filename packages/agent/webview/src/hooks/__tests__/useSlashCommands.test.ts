@@ -7,11 +7,11 @@ const hostMocks = vi.hoisted(() => ({
   invokePluginSlashCommand: vi.fn(),
 }));
 
-vi.mock('../../messages', () => ({
-  AgentHostMessages: {
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({
     invokeSlashCommand: hostMocks.invokeSlashCommand,
     invokePluginSlashCommand: hostMocks.invokePluginSlashCommand,
-  },
+  }),
 }));
 
 vi.mock('../../i18n/I18nContext', () => ({

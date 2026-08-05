@@ -6,22 +6,19 @@ function parse(md: string) {
 }
 
 describe('parsePreferences', () => {
-  it('parses frontmatter version + scope', () => {
-    const { preferences, warnings } = parse(
-      `---\nkind: user-preferences\nscope: project\nversion: 2\n---\n`,
-    );
-    expect(preferences.version).toBe(2);
+  it('parses canonical frontmatter scope', () => {
+    const { preferences, warnings } = parse(`---\nkind: user-preferences\nscope: project\n---\n`);
+    expect(preferences.scope).toBe('project');
     expect(warnings).toEqual([]);
   });
 
-  it('defaults version to 1 when missing', () => {
-    const { preferences } = parse('');
-    expect(preferences.version).toBe(1);
-  });
-
-  it('warns on invalid version', () => {
-    const { warnings } = parse('---\nversion: huh\n---\n');
-    expect(warnings.some((w) => w.includes('Invalid preferences version'))).toBe(true);
+  it('reports a removed version field without changing valid preference sections', () => {
+    const { preferences, warnings } = parse(
+      '---\nversion: 2\nscope: project\n---\n## Default mode\nplan\n',
+    );
+    expect(preferences).not.toHaveProperty('version');
+    expect(preferences.defaultMode).toBe('plan');
+    expect(warnings).toEqual(['Unsupported preferences frontmatter field "version"; ignoring']);
   });
 
   it('warns when declared scope conflicts with loader scope', () => {
@@ -110,7 +107,6 @@ describe('parsePreferences', () => {
     const md = `---
 kind: user-preferences
 scope: project
-version: 1
 ---
 
 # My creative prefs

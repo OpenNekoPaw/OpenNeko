@@ -1,6 +1,4 @@
 import {
-  AGENT_CONVERSATION_CONTEXT_VERSION,
-  migrateAgentConversationContext,
   parseAgentConversationContext,
   parseAgentScratchArtifactRef,
   type AgentConversationContext,
@@ -12,7 +10,6 @@ import {
 export type AgentPendingTurnStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface AgentConversationLifecycleRecord {
-  readonly schemaVersion: typeof AGENT_CONVERSATION_CONTEXT_VERSION;
   readonly conversationId: string;
   readonly context: AgentConversationContext;
   readonly createdAt: string;
@@ -74,10 +71,6 @@ export interface AgentConversationLifecycleRepositoryPort {
     requestId: string,
   ): Promise<AgentConversationLifecycleRecord | undefined>;
   readConversationContext(conversationId: string): Promise<AgentConversationContext | undefined>;
-  commitMigratedConversationContext(
-    conversationId: string,
-    context: AgentConversationContext,
-  ): Promise<AgentConversationContext>;
   addScratchArtifact(
     conversationId: string,
     artifact: AgentScratchArtifactRef,
@@ -143,6 +136,7 @@ export interface AgentConversationSessionMaterializationPort {
 
 export interface AgentConversationLifecycleService {
   firstSubmit(input: AgentFirstSubmitInput): Promise<AgentConversationLifecycleRecord>;
+  startProviderExecution(conversationId: string): Promise<AgentConversationLifecycleRecord>;
   waitForProviderIdle(): Promise<void>;
   readFirstSubmitRecord(
     conversationId: string,
@@ -194,15 +188,6 @@ export function createAgentConversationLifecycleService(options: {
   readonly reportError: (error: Error) => void;
   readonly createIdentity: () => string;
   readonly now: () => string;
-  readonly conversationContextMigration?: {
-    resolveExactWorkspaceIdentity(conversationId: string): Promise<
-      | {
-          readonly workspaceId: string;
-          readonly workspaceGrantId: string;
-        }
-      | undefined
-    >;
-  };
 }): AgentConversationLifecycleService {
   const providerExecutions = new Set<Promise<void>>();
   const trackProviderExecution = (operation: Promise<void>): void => {
@@ -234,7 +219,6 @@ export function createAgentConversationLifecycleService(options: {
     const conversationId = `conversation:${options.createIdentity()}`;
     const turnId = `turn:${options.createIdentity()}`;
     const record: AgentConversationLifecycleRecord = {
-      schemaVersion: AGENT_CONVERSATION_CONTEXT_VERSION,
       conversationId,
       context,
       createdAt: options.now(),
@@ -258,8 +242,22 @@ export function createAgentConversationLifecycleService(options: {
       conversationId: exact.conversationId,
       context: exact.context,
     });
-    if (!(await options.repository.claimProviderExecution(exact.pendingTurn.turnId))) return exact;
-    const running = await options.repository.updatePendingTurn(exact.conversationId, {
+    return exact;
+  };
+
+  const startProviderExecution = async (
+    conversationIdValue: string,
+  ): Promise<AgentConversationLifecycleRecord> => {
+    const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
+    const exact = await options.repository.readConversation(conversationId);
+    if (!exact) throw new Error(`Agent Conversation '${conversationId}' is not present.`);
+    if (exact.pendingTurn.status !== 'pending') return exact;
+    if (!(await options.repository.claimProviderExecution(exact.pendingTurn.turnId))) {
+      const claimed = await options.repository.readConversation(conversationId);
+      if (!claimed) throw new Error(`Agent Conversation '${conversationId}' is not present.`);
+      return claimed;
+    }
+    const running = await options.repository.updatePendingTurn(conversationId, {
       ...exact.pendingTurn,
       status: 'running',
     });
@@ -283,7 +281,7 @@ export function createAgentConversationLifecycleService(options: {
         status: 'completed',
       });
     })().catch(async (error: unknown) => {
-      await options.repository.updatePendingTurn(exact.conversationId, {
+      await options.repository.updatePendingTurn(conversationId, {
         ...exact.pendingTurn,
         status: 'failed',
         diagnostic: describeError(error),
@@ -312,12 +310,7 @@ export function createAgentConversationLifecycleService(options: {
     const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
     const stored = await options.repository.readConversationContext(conversationId);
     if (stored) return stored;
-    const exactWorkspaceIdentity =
-      await options.conversationContextMigration?.resolveExactWorkspaceIdentity(conversationId);
-    const migrated = migrateAgentConversationContext({
-      ...(exactWorkspaceIdentity === undefined ? {} : { exactWorkspaceIdentity }),
-    });
-    return options.repository.commitMigratedConversationContext(conversationId, migrated);
+    throw new Error(`Agent Conversation '${conversationId}' context is not present.`);
   };
 
   const requireScratch = async (
@@ -346,6 +339,7 @@ export function createAgentConversationLifecycleService(options: {
 
   return {
     firstSubmit,
+    startProviderExecution,
     async waitForProviderIdle() {
       while (providerExecutions.size > 0) {
         await Promise.all([...providerExecutions]);
@@ -364,7 +358,6 @@ export function createAgentConversationLifecycleService(options: {
         throw new Error('Agent Scratch artifacts require Assistant conversation scope.');
       }
       const artifact = parseAgentScratchArtifactRef({
-        schemaVersion: AGENT_CONVERSATION_CONTEXT_VERSION,
         scratchArtifactId: `scratch:${options.createIdentity()}`,
         assistantSpaceId: record.context.assistantSpaceId,
         conversationId: record.conversationId,
@@ -458,20 +451,6 @@ export function createInMemoryAgentConversationLifecycleRepository(): AgentConve
     async readConversationContext(conversationId) {
       const context = contextsByConversation.get(conversationId);
       return context ? cloneContext(context) : undefined;
-    },
-    async commitMigratedConversationContext(conversationId, context) {
-      const parsed = parseAgentConversationContext(context);
-      const existing = contextsByConversation.get(conversationId);
-      if (existing) {
-        if (JSON.stringify(existing) !== JSON.stringify(parsed)) {
-          throw new Error(
-            `Agent Conversation '${conversationId}' context changed during migration.`,
-          );
-        }
-        return cloneContext(existing);
-      }
-      contextsByConversation.set(conversationId, cloneContext(parsed));
-      return cloneContext(parsed);
     },
     async addScratchArtifact(conversationId, artifact) {
       const current = requireRecord(recordsByConversation, conversationId);

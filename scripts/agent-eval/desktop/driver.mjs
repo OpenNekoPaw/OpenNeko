@@ -12,6 +12,12 @@ export function createDesktopAgentDriver(input) {
     async createConversation(timeoutMs = 10_000) {
       return evaluate({ kind: 'create-conversation', timeoutMs });
     },
+    async markEventOffset() {
+      return evaluate({ kind: 'mark-event-offset' });
+    },
+    async waitForActiveConversation(afterEventOffset, timeoutMs) {
+      return evaluate({ kind: 'wait-for-active-conversation', afterEventOffset, timeoutMs });
+    },
     async submit(command) {
       return evaluate({ kind: 'submit', ...command });
     },
@@ -119,23 +125,37 @@ function requireConnection(connection, label) {
 
 function assertReloadIdentity(previous, current) {
   if (
-    current?.applicationInstanceId !== previous.applicationInstanceId ||
-    current?.workspaceId !== previous.workspaceId ||
-    current?.rendererEpoch === previous.rendererEpoch ||
+    !hasSameConnectionOwner(previous, current) ||
+    current.applicationInstanceId !== previous.applicationInstanceId ||
     current?.connectionId === previous.connectionId
   ) {
-    throw new Error('Desktop Agent renderer reload identity did not advance exactly.');
+    throw new Error('Desktop Agent renderer reload did not replace the exact owner connection.');
   }
 }
 
 function assertRestartIdentity(previous, current) {
   if (
+    !hasSameConnectionOwner(previous, current) ||
     current?.applicationInstanceId === previous.applicationInstanceId ||
-    current?.workspaceId !== previous.workspaceId ||
     current?.connectionId === previous.connectionId
   ) {
     throw new Error('Desktop Agent application restart identity did not restore exactly.');
   }
+}
+
+function hasSameConnectionOwner(previous, current) {
+  const ownerKey = 'assistantSpaceId' in previous ? 'assistantSpaceId' : 'projectId';
+  return (
+    current !== undefined &&
+    current !== null &&
+    ownerKey in current &&
+    current[ownerKey] === previous[ownerKey] &&
+    current.windowId === previous.windowId &&
+    current.workbenchInstanceId === previous.workbenchInstanceId &&
+    current.agentSurfaceId === previous.agentSurfaceId &&
+    current.workspaceId === previous.workspaceId &&
+    current.viewId === previous.viewId
+  );
 }
 
 export function driverExpression(command) {
@@ -294,9 +314,10 @@ export function driverExpression(command) {
         globalThis[stateKey]?.unsubscribe?.();
         const identity = command.identity;
         const bootstrap = await bridge.getBootstrap(
+          requireText(identity?.workbenchInstanceId, 'Workbench instance identity'),
+          requireText(identity?.agentSurfaceId, 'Agent Surface identity'),
           requireText(identity?.projectId, 'Project identity'),
           requireText(identity?.viewId, 'View identity'),
-          identity?.viewEpoch,
         );
         if (bootstrap.status !== 'ready') {
           throw new Error(bootstrap.diagnostic?.message ?? 'Desktop Agent bootstrap is unavailable.');
@@ -347,6 +368,22 @@ export function driverExpression(command) {
           await new Promise((resolve) => setTimeout(resolve, 25));
         }
         throw new Error('Desktop Agent conversation creation did not publish an active conversation.');
+      }
+      case 'mark-event-offset':
+        return { eventOffset: requireState().events.length };
+      case 'wait-for-active-conversation': {
+        const state = requireState();
+        return waitForEvent(
+          state,
+          command.afterEventOffset,
+          command.timeoutMs,
+          (event) => event?.type === 'activeConversation' &&
+              typeof event?.conversation?.id === 'string' &&
+              event.conversation.id.length > 0
+            ? { conversationId: event.conversation.id }
+            : undefined,
+          'Desktop Agent UI submission did not publish an active conversation.',
+        );
       }
       case 'cancel': {
         const state = requireState();
@@ -434,12 +471,15 @@ export function driverExpression(command) {
         const state = requireState();
         const conversationId = requireText(command.conversationId, 'Conversation identity');
         const afterIdentity = state.terminalIdentityByConversation.get(conversationId);
-        const result = await requireAutomation().execute({
-          kind: 'wait-for-idle',
-          conversationId,
-          timeoutMs: command.timeoutMs,
-          ...(afterIdentity ? { afterIdentity } : {}),
-        });
+        const result = await requireAutomation().execute(
+          state.connection,
+          {
+            kind: 'wait-for-idle',
+            conversationId,
+            timeoutMs: command.timeoutMs,
+            ...(afterIdentity ? { afterIdentity } : {}),
+          },
+        );
         if (result?.status !== 'idle' || !result.identity) {
           throw new Error('Desktop Agent idle observation did not return a terminal identity.');
         }
@@ -457,14 +497,19 @@ export function driverExpression(command) {
       case 'read-facts': {
         const state = requireState();
         assertTerminalIdentity(state, command.identity);
-        return requireAutomation().execute({ kind: 'read-facts', ...command.identity });
+        return requireAutomation().execute(state.connection, {
+          kind: 'read-facts',
+          ...command.identity,
+        });
       }
-      case 'reload-renderer':
-        requireState();
-        return requireAutomation().execute({ kind: 'reload-renderer' });
-      case 'close-application':
-        requireState();
-        return requireAutomation().execute({ kind: 'close-application' });
+      case 'reload-renderer': {
+        const state = requireState();
+        return requireAutomation().execute(state.connection, { kind: 'reload-renderer' });
+      }
+      case 'close-application': {
+        const state = requireState();
+        return requireAutomation().execute(state.connection, { kind: 'close-application' });
+      }
       case 'dispose': {
         const state = globalThis[stateKey];
         state?.unsubscribe?.();

@@ -52,10 +52,10 @@ import type {
   AgentHomeActivitySummary,
   AgentHomeAttentionStatus,
   AgentHomeConversationSummary,
+  AgentHomeDiagnostic,
   AgentHomeProjection,
   AgentConversationOwnerRef,
 } from '@neko/agent-contracts';
-import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import type { AgentCredentialRuntime } from '../pi/credential-runtime';
 import { resolveWorkspaceContentLocator } from '@neko/assets-node';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
@@ -124,7 +124,7 @@ export interface AgentConversationEvidence {
   readonly conversationId: string;
   readonly branchId: string;
   readonly piSessionId: string;
-  readonly writerEpoch: number;
+  readonly writerLeaseId: string;
 }
 
 export interface AgentWorkspaceRuntime {
@@ -347,26 +347,41 @@ class DefaultAgentAppHost implements AgentAppHost {
 
   readHomeProjection(): AgentHomeProjection {
     this.requireActive();
-    const conversations = this.options.catalogReader
-      .listConversations(this.homeWorkspaceScope)
-      .map((record) => {
-        const owner = projectAgentConversationOwner(record, this.homeConversationWorkspaceIds);
-        const workspace = this.workspaces.get(record.workspaceId);
-        return workspace
-          ? workspace.projectHomeConversation(record, owner)
-          : projectAgentHomeConversationSummary(record, owner, undefined, undefined);
-      })
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    const catalog = this.options.catalogReader.listConversations(this.homeWorkspaceScope);
+    const conversations: AgentHomeConversationSummary[] = [];
+    const diagnostics: AgentHomeDiagnostic[] = [...catalog.diagnostics];
+    for (const record of catalog.records) {
+      const ownerProjection = projectAgentConversationOwner(
+        record,
+        this.homeConversationWorkspaceIds,
+      );
+      if (ownerProjection.kind === 'invalid') {
+        diagnostics.push(ownerProjection.diagnostic);
+        continue;
+      }
+      const workspace = this.workspaces.get(record.workspaceId);
+      conversations.push(
+        workspace
+          ? workspace.projectHomeConversation(record, ownerProjection.owner)
+          : projectAgentHomeConversationSummary(
+              record,
+              ownerProjection.owner,
+              undefined,
+              undefined,
+            ),
+      );
+    }
+    conversations.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     const attention = {
       needsInput: countAttention(conversations, 'needs-input'),
       needsReview: countAttention(conversations, 'needs-review'),
       running: countAttention(conversations, 'running'),
     };
     return freezeClone({
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: this.homeProjectionRevision,
       conversations,
       attention,
+      diagnostics,
     });
   }
 
@@ -828,7 +843,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       conversationId,
       branchId: owner.branchId,
       piSessionId: branch.session.id,
-      writerEpoch: owner.writerEpoch,
+      writerLeaseId: owner.writerLeaseId,
     });
   }
 
@@ -973,7 +988,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         projection,
         input.models,
         branchId,
-        lease.epoch,
+        lease.leaseId,
       );
       this.conversations.set(input.conversationId, owner);
       this.options.onHomeProjectionChanged();
@@ -1096,7 +1111,7 @@ class AgentConversationOwner {
     readonly projection: ConversationProjectionStore,
     private readonly models: OpenPiConversationRuntimeOptions['models'],
     readonly branchId: string,
-    readonly writerEpoch: number,
+    readonly writerLeaseId: string,
   ) {}
 
   assertModels(models: OpenPiConversationRuntimeOptions['models']): void {
@@ -1310,29 +1325,71 @@ export function projectAgentHomeConversationSummary(
   };
 }
 
+type AgentConversationOwnerProjection =
+  | {
+      readonly kind: 'valid';
+      readonly owner: AgentConversationOwnerRef;
+    }
+  | {
+      readonly kind: 'invalid';
+      readonly diagnostic: AgentHomeDiagnostic;
+    };
+
 function projectAgentConversationOwner(
   record: PiConversationCatalogRecord,
   assistantSpaceIds: readonly string[],
-): AgentConversationOwnerRef {
+): AgentConversationOwnerProjection {
   if (record.context?.kind === 'assistant') {
     if (record.context.assistantSpaceId !== record.workspaceId) {
-      throw new Error(
+      return invalidAgentConversationOwner(
+        record,
         `Agent catalog Conversation '${record.conversationId}' Assistant Space does not match its Pi runtime scope.`,
       );
     }
-    return { kind: 'assistant', assistantSpaceId: record.context.assistantSpaceId };
+    return {
+      kind: 'valid',
+      owner: { kind: 'assistant', assistantSpaceId: record.context.assistantSpaceId },
+    };
   }
   if (record.context?.kind === 'workspace') {
     if (record.context.workspaceId !== record.workspaceId) {
-      throw new Error(
+      return invalidAgentConversationOwner(
+        record,
         `Agent catalog Conversation '${record.conversationId}' Workspace context does not match its Pi runtime scope.`,
       );
     }
-    return { kind: 'workspace', workspaceId: record.context.workspaceId };
+    if (assistantSpaceIds.includes(record.context.workspaceId)) {
+      return invalidAgentConversationOwner(
+        record,
+        `Agent catalog Conversation '${record.conversationId}' Workspace context resolves to an Assistant Space.`,
+      );
+    }
+    return {
+      kind: 'valid',
+      owner: { kind: 'workspace', workspaceId: record.context.workspaceId },
+    };
   }
-  return assistantSpaceIds.includes(record.workspaceId)
-    ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
-    : { kind: 'workspace', workspaceId: record.workspaceId };
+  return {
+    kind: 'valid',
+    owner: assistantSpaceIds.includes(record.workspaceId)
+      ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
+      : { kind: 'workspace', workspaceId: record.workspaceId },
+  };
+}
+
+function invalidAgentConversationOwner(
+  record: PiConversationCatalogRecord,
+  message: string,
+): AgentConversationOwnerProjection {
+  return {
+    kind: 'invalid',
+    diagnostic: {
+      code: 'invalid-conversation-record',
+      workspaceId: record.workspaceId,
+      conversationId: record.conversationId,
+      message,
+    },
+  };
 }
 
 function projectGenerationJobSummary(
@@ -1351,16 +1408,13 @@ function projectGenerationJobSummary(
   const kind = candidate['kind'] ?? ref?.['kind'];
   if (kind !== undefined && kind !== 'generation-job' && kind !== 'generation') return undefined;
   const jobId = readString(candidate, 'jobId') ?? readString(ref, 'jobId');
-  const revision =
-    readNonNegativeInteger(candidate, 'revision') ??
-    readNonNegativeInteger(candidate, 'jobRevision');
   const phase =
     readString(candidate, 'phase') ??
     (readString(candidate, 'status') === 'completed'
       ? 'succeeded'
       : readString(candidate, 'status'));
-  if (!jobId || revision === undefined || !phase) return undefined;
-  return { jobId, revision, phase };
+  if (!jobId || !phase) return undefined;
+  return { jobId, phase };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -1374,14 +1428,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function readString(record: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = record?.[key];
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
-}
-
-function readNonNegativeInteger(
-  record: Record<string, unknown> | undefined,
-  key: string,
-): number | undefined {
-  const value = record?.[key];
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 function latestTurnActivityAt(

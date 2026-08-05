@@ -76,8 +76,6 @@ import type {
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
 } from './conversation-projection';
-export { NEKO_AGENT_HOST_MESSAGE_EVENT } from './host-message-event';
-
 export type ProtocolModelCategory = ModelType;
 
 export type MediaModelCategory = Exclude<ProtocolModelCategory, 'llm'>;
@@ -437,18 +435,13 @@ export type ConversationProjectionAttachmentHostFrame = ProjectionAttachmentHost
 
 export interface ProjectionEndpointDiscoverRequest {
   readonly type: 'projectionEndpointDiscover';
-  readonly protocolVersion: typeof AGENT_WEBVIEW_PROTOCOL_VERSION;
   readonly realmId: string;
 }
 
 export interface ProjectionEndpointReadyMessage {
   readonly type: 'projectionEndpointReady';
-  readonly protocolVersion: typeof AGENT_WEBVIEW_PROTOCOL_VERSION;
   readonly realmId: string;
-  readonly endpointEpoch: string;
 }
-
-export const AGENT_WEBVIEW_PROTOCOL_VERSION = 1 as const;
 
 export type AgentWebviewToHostMessage =
   | SendMessageWebviewMessage
@@ -568,8 +561,8 @@ export interface AgentMessageQueueSnapshot {
   conversationId: string;
   items: readonly AgentQueuedMessageItem[];
   pendingCount: number;
-  /** Conversation-local monotonic version used to ignore stale Webview queue snapshots. */
-  version: number;
+  /** Live event order owned by one in-memory Conversation queue. */
+  sequence: number;
 }
 
 export type AgentMessageQueueErrorCode =
@@ -1336,7 +1329,7 @@ function cloneAgentMessageQueueSnapshot(
   return {
     conversationId,
     pendingCount: snapshot.pendingCount,
-    version: snapshot.version,
+    sequence: snapshot.sequence,
     items: snapshot.items.map((item) =>
       cloneAgentQueuedMessageItem(item, conversationId, messageType),
     ),
@@ -1363,8 +1356,8 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
 
   const type = raw.type;
   if (type === 'projectionEndpointDiscover') {
-    return raw.protocolVersion === AGENT_WEBVIEW_PROTOCOL_VERSION && isNonEmptyString(raw.realmId)
-      ? { type, protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION, realmId: raw.realmId }
+    return hasOnlyKeys(raw, ['type', 'realmId']) && isNonEmptyString(raw.realmId)
+      ? { type, realmId: raw.realmId }
       : null;
   }
   if (type === 'projectionAttach') {
@@ -1373,9 +1366,8 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
   }
   if (type === 'projectionSnapshotAck') {
     const key = parseProjectionAttachmentKey(raw.key);
-    const projectionVersion = nonNegativeInteger(raw.projectionVersion);
-    if (!key || raw.sequence !== 0 || projectionVersion === null) return null;
-    return { type, key, sequence: 0, projectionVersion };
+    if (!key || !hasOnlyKeys(raw, ['type', 'key', 'sequence']) || raw.sequence !== 0) return null;
+    return { type, key, sequence: 0 };
   }
   if (type === 'projectionDetach') {
     const key = parseProjectionAttachmentKey(raw.key);
@@ -3169,12 +3161,11 @@ function nonNegativeInteger(value: unknown): number | null {
 
 function parseProjectionAttachmentKey(value: unknown): ProjectionAttachmentKey | null {
   if (!isRecord(value)) return null;
-  const endpointEpoch = requiredString(value.endpointEpoch);
   const attachmentId = requiredString(value.attachmentId);
   const tabId = requiredString(value.tabId);
   const conversationId = requiredString(value.conversationId);
-  if (!endpointEpoch || !attachmentId || !tabId || !conversationId) return null;
-  return { endpointEpoch, attachmentId, tabId, conversationId };
+  if (!attachmentId || !tabId || !conversationId) return null;
+  return { attachmentId, tabId, conversationId };
 }
 
 function isProjectionDetachReason(value: unknown): value is ProjectionDetachMessage['reason'] {

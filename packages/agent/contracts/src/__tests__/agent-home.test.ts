@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_HOME_PROJECTION_VERSION,
   AgentHomeContractError,
   isSameAgentConversationOwner,
   parseAgentHomeProjection,
@@ -9,7 +8,6 @@ import {
 describe('Agent Home contract', () => {
   it('parses every closed Conversation owner without synthetic Project identity', () => {
     const projection = parseAgentHomeProjection({
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 4,
       conversations: [
         summary('assistant-1', { kind: 'assistant', assistantSpaceId: 'assistant-space:1' }),
@@ -35,7 +33,6 @@ describe('Agent Home contract', () => {
 
   it('keeps optional Project grouping separate from the owner', () => {
     const projection = parseAgentHomeProjection({
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 1,
       conversations: [
         {
@@ -58,7 +55,6 @@ describe('Agent Home contract', () => {
   it('rejects unknown and incomplete owners plus duplicate conversations', () => {
     expect(() =>
       parseAgentHomeProjection({
-        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
         revision: 1,
         conversations: [summary('unknown-1', { kind: 'project', projectId: 'project:1' })],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -66,7 +62,6 @@ describe('Agent Home contract', () => {
     ).toThrowError(AgentHomeContractError);
     expect(() =>
       parseAgentHomeProjection({
-        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
         revision: 1,
         conversations: [summary('character-1', { kind: 'character', characterId: 'character:1' })],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -74,7 +69,6 @@ describe('Agent Home contract', () => {
     ).toThrowError(AgentHomeContractError);
     expect(() =>
       parseAgentHomeProjection({
-        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
         revision: 1,
         conversations: [
           summary('duplicate', { kind: 'workspace', workspaceId: 'workspace:1' }),
@@ -83,6 +77,48 @@ describe('Agent Home contract', () => {
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
     ).toThrowError(AgentHomeContractError);
+  });
+
+  it('rejects removed version fields without disabling a valid sibling projection', () => {
+    expect(() =>
+      parseAgentHomeProjection({
+        schemaVersion: 1,
+        revision: 1,
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+    ).toThrow("unknown field 'schemaVersion'");
+    expect(
+      parseAgentHomeProjection({
+        revision: 2,
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }).revision,
+    ).toBe(2);
+  });
+
+  it('preserves entry-local catalog diagnostics beside valid conversations', () => {
+    const projection = parseAgentHomeProjection({
+      revision: 2,
+      conversations: [summary('valid', { kind: 'workspace', workspaceId: 'workspace:1' })],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+      diagnostics: [
+        {
+          code: 'invalid-conversation-record',
+          workspaceId: 'workspace:1',
+          conversationId: 'invalid',
+          message: 'Conversation context contains an unsupported field.',
+        },
+      ],
+    });
+
+    expect(projection.conversations).toHaveLength(1);
+    expect(projection.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'invalid-conversation-record',
+        conversationId: 'invalid',
+      }),
+    ]);
   });
 
   it('compares exact owner identity', () => {

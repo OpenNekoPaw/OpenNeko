@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXTERNAL_PROCESSOR_SCHEMA,
-  EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   createExternalProcessorRegistry,
   type ExternalProcessorManifest,
 } from '@neko/agent-contracts';
@@ -164,7 +163,6 @@ function manifest(
   const inputSlot = options.inputSlot ?? 'source';
   return {
     schema: EXTERNAL_PROCESSOR_SCHEMA,
-    schemaVersion: EXTERNAL_PROCESSOR_SCHEMA_VERSION,
     id,
     kind: 'external-processor',
     displayName: id,

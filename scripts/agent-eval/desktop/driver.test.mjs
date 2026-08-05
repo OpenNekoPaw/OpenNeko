@@ -5,7 +5,7 @@ describe('Desktop Agent external driver adapter', () => {
   it('uses only the renderer/preload public Agent bridge for every operation', async () => {
     const evaluate = vi.fn(async () => ({ accepted: true }));
     const driver = createDesktopAgentDriver({ evaluate });
-    await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+    await driver.connect(owner());
     await driver.createConversation();
     await driver.submit({
       conversationId: 'conversation-1',
@@ -52,8 +52,11 @@ describe('Desktop Agent external driver adapter', () => {
     expect(expressions).toContain("kind: 'read-facts'");
     expect(expressions).toContain("kind: 'reload-renderer'");
     expect(expressions).toContain("kind: 'close-application'");
+    expect(expressions).toContain('workbenchInstanceId');
+    expect(expressions).toContain('agentSurfaceId');
+    expect(expressions).toContain('execute(state.connection');
     expect(expressions).not.toMatch(
-      /ipcRenderer|DesktopAgentWorkspaceRuntime|PiConversationRuntime|AgentSession/iu,
+      /ipcRenderer|DesktopAgentWorkspaceRuntime|PiConversationRuntime|AgentSession|viewEpoch|rendererEpoch/iu,
     );
   });
 
@@ -78,7 +81,7 @@ describe('Desktop Agent external driver adapter', () => {
         agent: {
           getBootstrap: vi.fn(async () => ({
             status: 'ready',
-            connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+            connection: connection('app-1', 'connection-1'),
           })),
           subscribe: vi.fn((_connection, listener) => {
             publish = listener;
@@ -93,7 +96,7 @@ describe('Desktop Agent external driver adapter', () => {
       evaluate: async (expression) => (0, eval)(expression),
     });
     try {
-      await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+      await driver.connect(owner());
       await driver.submit({ conversationId: 'conversation-1', prompt: 'hello' });
       const waiting = driver.waitForIdentity('conversation-1', 0, 1000);
       await Promise.resolve();
@@ -129,7 +132,7 @@ describe('Desktop Agent external driver adapter', () => {
         agent: {
           getBootstrap: vi.fn(async () => ({
             status: 'ready',
-            connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+            connection: connection('app-1', 'connection-1'),
           })),
           subscribe: vi.fn(() => () => {}),
           send: vi.fn(),
@@ -141,7 +144,7 @@ describe('Desktop Agent external driver adapter', () => {
       evaluate: async (expression) => (0, eval)(expression),
     });
     try {
-      await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+      await driver.connect(owner());
       await expect(driver.readFacts(identity)).rejects.toThrow(
         'facts identity was not observed at terminal idle',
       );
@@ -165,7 +168,7 @@ describe('Desktop Agent external driver adapter', () => {
         agent: {
           getBootstrap: vi.fn(async () => ({
             status: 'ready',
-            connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+            connection: connection('app-1', 'connection-1'),
           })),
           subscribe: vi.fn((_connection, listener) => {
             publish = listener;
@@ -179,7 +182,7 @@ describe('Desktop Agent external driver adapter', () => {
       evaluate: async (expression) => (0, eval)(expression),
     });
     try {
-      await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+      await driver.connect(owner());
       const submitted = await driver.submit({
         conversationId: 'conversation-1',
         prompt: 'hello',
@@ -236,7 +239,7 @@ describe('Desktop Agent external driver adapter', () => {
       });
       expect(sent).toEqual([
         {
-          connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+          connection: connection('app-1', 'connection-1'),
           message: expect.objectContaining({
             type: 'sendMessage',
             conversationId: 'conversation-1',
@@ -253,8 +256,8 @@ describe('Desktop Agent external driver adapter', () => {
     expect(() => createDesktopAgentDriver({})).toThrow('requires a CDP renderer evaluate function');
   });
 
-  it('reloads, reconnects and restores the exact conversation with an advanced renderer lease', async () => {
-    const next = connection('app-1', 2, 'connection-2');
+  it('reloads, reconnects and restores the exact conversation with a replacement connection', async () => {
+    const next = connection('app-1', 'connection-2');
     const evaluate = vi
       .fn()
       .mockResolvedValueOnce({ status: 'accepted' })
@@ -265,7 +268,7 @@ describe('Desktop Agent external driver adapter', () => {
       });
     const waitForRenderer = vi.fn(async () => undefined);
     const driver = createDesktopAgentDriver({ evaluate, waitForRenderer });
-    const prior = connection('app-1', 1, 'connection-1');
+    const prior = connection('app-1', 'connection-1');
 
     await expect(
       driver.reloadAndRestore({
@@ -274,15 +277,15 @@ describe('Desktop Agent external driver adapter', () => {
         timeoutMs: 1000,
       }),
     ).resolves.toMatchObject({
-      connection: { applicationInstanceId: 'app-1', rendererEpoch: 2 },
+      connection: { applicationInstanceId: 'app-1', connectionId: 'connection-2' },
       snapshot: { id: 'conversation-1' },
     });
     expect(waitForRenderer).toHaveBeenCalledOnce();
   });
 
   it('restarts the application, restores workspace/conversation identity and requires disposal facts', async () => {
-    const prior = connection('app-1', 1, 'connection-1');
-    const next = connection('app-2', 1, 'connection-2');
+    const prior = connection('app-1', 'connection-1');
+    const next = connection('app-2', 'connection-2');
     const evaluate = vi
       .fn()
       .mockResolvedValueOnce({ connection: next })
@@ -314,15 +317,24 @@ describe('Desktop Agent external driver adapter', () => {
   });
 });
 
-function connection(applicationInstanceId, rendererEpoch, connectionId) {
+function owner() {
+  return {
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
+    projectId: 'project-1',
+    viewId: 'view-1',
+  };
+}
+
+function connection(applicationInstanceId, connectionId) {
   return {
     applicationInstanceId,
     windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     viewId: 'view-1',
-    viewEpoch: 1,
-    rendererEpoch,
     connectionId,
   };
 }

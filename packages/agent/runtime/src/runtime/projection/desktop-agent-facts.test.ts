@@ -19,7 +19,6 @@ describe('Desktop Agent neutral facts', () => {
 
     expect(assertCompleteDesktopAgentNeutralFacts(facts)).toBe(facts);
     expect(facts).toMatchObject({
-      schemaVersion: 1,
       identity: {
         conversationId: 'conversation-1',
         piSessionId: 'pi-session-1',
@@ -31,7 +30,7 @@ describe('Desktop Agent neutral facts', () => {
         runtime: 'pi-conversation-runtime',
         forbiddenPathCount: 0,
       },
-      projection: { revision: 2, terminalState: 'completed' },
+      projection: { terminalState: 'completed' },
       resourceDisplayProjections: {
         droppedCount: 0,
         items: [
@@ -189,11 +188,11 @@ function input(): MutableFactsInput {
   const connection: DesktopAgentConnectionIdentity = {
     applicationInstanceId: 'application-1',
     windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     viewId: 'view-1',
-    viewEpoch: 1,
-    rendererEpoch: 1,
     connectionId: 'connection-1',
   };
   const conversation: DesktopAgentConversationEvidence = {
@@ -201,7 +200,7 @@ function input(): MutableFactsInput {
     conversationId: 'conversation-1',
     branchId: 'branch-1',
     piSessionId: 'pi-session-1',
-    writerEpoch: 1,
+    writerLeaseId: 'writer-lease-1',
   };
   const turn: DesktopAgentFactsTurnResult = {
     identity: {
@@ -214,7 +213,6 @@ function input(): MutableFactsInput {
     durability: 'durable',
     projection: {
       conversationId: 'conversation-1',
-      projectionVersion: 2,
       turns: [
         {
           turnId: 'turn-1',

@@ -1,7 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { createAgentDraftPresentation, type AgentContextPayload } from '@neko/agent-contracts';
+import {
+  createAgentDraftPresentation,
+  type AgentContextPayload,
+  type AgentHostToWebviewMessage,
+} from '@neko/agent-contracts';
 import type {
   AgentQueuedMessageItem,
   AgentState,
@@ -41,22 +45,20 @@ const hostMocks = vi.hoisted(() => ({
   getMessageQueue: vi.fn(),
   submitDraft: vi.fn(),
 }));
-
-vi.mock('../messages', () => ({
-  AgentHostMessages: hostMocks,
-  getAgentHostRuntimeAdapter: () => ({
-    getState: () => undefined,
-    setState: vi.fn(),
-    submitDraft: hostMocks.submitDraft,
-  }),
+const hostRuntimeMocks = vi.hoisted(() => ({
+  listener: undefined as ((message: AgentHostToWebviewMessage) => void) | undefined,
 }));
 
 vi.mock('../host-runtime-context', () => ({
+  useAgentHostMessages: () => hostMocks,
   useAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
     runtimeId: hostMocks.runtimeId,
     send: vi.fn(),
-    subscribe: vi.fn(() => ({ dispose: vi.fn() })),
+    subscribe: vi.fn((listener: (message: AgentHostToWebviewMessage) => void) => {
+      hostRuntimeMocks.listener = listener;
+      return { dispose: vi.fn() };
+    }),
     getState: () => undefined,
     setState: vi.fn(),
     submitDraft: hostMocks.submitDraft,
@@ -454,6 +456,22 @@ vi.mock('./ChatView/InputArea', async () => {
 });
 
 describe('ConversationController entry state', () => {
+  it('projects a global Host error through the renderer body portal', () => {
+    render(<ConversationController {...createProps()} />);
+
+    act(() => {
+      hostRuntimeMocks.listener?.({
+        type: 'globalError',
+        message: 'Desktop Agent failed globally.',
+      });
+    });
+
+    const alert = screen.getByRole('alert');
+    expect(alert.parentElement).toBe(document.body);
+    expect(alert.getAttribute('data-agent-diagnostic-toast')).toBe('true');
+    expect(alert.textContent).toContain('Desktop Agent failed globally.');
+  });
+
   it('keeps the existing entry controller and controls available in draft presentation', () => {
     vi.clearAllMocks();
     render(
@@ -534,7 +552,6 @@ describe('ConversationController entry state', () => {
 
     await act(async () => undefined);
     expect(hostMocks.submitDraft).toHaveBeenCalledWith({
-      schemaVersion: 1,
       target: { kind: 'automatic-assistant', draftId: 'draft-entry-1' },
       messageText: 'Help with this idea',
       resourceGrantIds: [],
@@ -2540,7 +2557,6 @@ function message(id: string, content: string): Message {
 function projectionSnapshot(conversationId: string, messageId: string, content: string) {
   return {
     conversationId,
-    projectionVersion: 1,
     turns: [
       {
         turnId: `turn-${conversationId}`,

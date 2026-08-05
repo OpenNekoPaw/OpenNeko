@@ -134,7 +134,6 @@ export interface TabProjectionAttachmentBinding extends Pick<
   ProjectionAttachmentClientOptions,
   'send' | 'reportError'
 > {
-  readonly endpointEpoch: string;
   readonly attachmentId: string;
 }
 
@@ -369,7 +368,6 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     });
     this.currentProjectionAttachment = client;
     client.attach({
-      endpointEpoch: binding.endpointEpoch,
       attachmentId: binding.attachmentId,
     });
   }

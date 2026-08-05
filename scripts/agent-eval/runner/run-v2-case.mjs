@@ -11,6 +11,7 @@ export async function runV2Case(selection, options = {}) {
   if (!selection) throw configurationError('Desktop Agent Evaluation selection is required.');
   const executionCase = resolveExecutionCase(selection);
   assertDesktopEvidenceSupport(executionCase.assertions);
+  const windowMode = resolveWindowMode(executionCase, options.windowMode);
   const authorization = readProviderAuthorization(options.providerAuthorization, options.env ?? {});
   const runDesktop = options.runDesktop ?? runAutomatedDesktopFunctional;
   const scenario = (options.createScenario ?? createDesktopAgentEvaluationScenario)(
@@ -25,7 +26,7 @@ export async function runV2Case(selection, options = {}) {
     execution = await runDesktop({
       scenario,
       target: options.target ?? 'development',
-      windowMode: options.windowMode ?? 'hidden',
+      windowMode,
       reportPath: resolve(outputRoot, runId, 'desktop-functional.json'),
       scenarioTimeoutMs: executionCase.budget.timeoutMs,
       executablePath: options.executablePath,
@@ -67,6 +68,22 @@ export async function runV2Case(selection, options = {}) {
     desktopReportPath: execution.reportPath,
     desktopReportLocation: `${runId}/desktop-functional.json`,
   };
+}
+
+function resolveWindowMode(executionCase, explicitMode) {
+  const evidenceLevel = executionCase.execution?.evidenceLevel ?? 'hidden-desktop';
+  if (evidenceLevel === 'key-free') {
+    throw configurationError(
+      `Desktop Agent case ${executionCase.caseId} is key-free and cannot run as real Desktop evidence.`,
+    );
+  }
+  const requiredMode = evidenceLevel === 'visible-desktop' ? 'visible' : 'hidden';
+  if (explicitMode !== undefined && explicitMode !== requiredMode) {
+    throw configurationError(
+      `Desktop Agent case ${executionCase.caseId} requires ${requiredMode} window mode.`,
+    );
+  }
+  return requiredMode;
 }
 
 export async function runV2CaseRepeated(selection, options = {}) {
@@ -181,6 +198,7 @@ const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
   'cancel',
   'confirm',
   'resume',
+  'restart',
   'feedback',
 ]);
 

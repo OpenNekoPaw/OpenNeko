@@ -24,7 +24,6 @@ import {
   useSyncExternalStore,
 } from 'react';
 import {
-  NEKO_AGENT_HOST_MESSAGE_EVENT,
   type AgentHostToWebviewMessage,
   SettingsState,
   AgentState,
@@ -35,7 +34,6 @@ import {
   SessionMode,
   TabType,
 } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../messages';
 import type {
   SkillSummary,
   EntryPromptMenu,
@@ -68,7 +66,7 @@ import type { ActivationProgressTimeline } from '../presenters/activation-progre
 import { shouldActivateForegroundConversation } from '../handlers/foreground-activation';
 import { ConversationTabRuntimeView } from './ConversationTabRuntimeView';
 import { useRetainedTabComponents } from '../render-runtime/useRetainedTabComponents';
-import { useAgentHostRuntimeAdapter } from '../host-runtime-context';
+import { useAgentHostMessages, useAgentHostRuntimeAdapter } from '../host-runtime-context';
 import { isCharacterRoleConversationKind } from '../presenters/character-role-session-presenter';
 import type {
   ConversationStreamingSnapshot,
@@ -102,6 +100,7 @@ import { useProjectionEndpoint } from '../render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import { submitRoleplayEntrySelection } from './ChatView/roleplay-entry-action';
+import { AgentDiagnosticToast } from './AgentDiagnosticToast';
 
 // =============================================================================
 // Props
@@ -204,6 +203,7 @@ export function ConversationController({
 }: ConversationControllerProps) {
   const { t } = useTranslation();
   const hostRuntimeAdapter = useAgentHostRuntimeAdapter();
+  const agentHostMessages = useAgentHostMessages();
   const isDraftPresentation = agentPresentation?.kind === 'draft';
   // ---- Conversation state ----
   const conversation = useConversationState();
@@ -270,7 +270,7 @@ export function ConversationController({
   const conversationTokenCountRef = useRef<Map<string, number>>(new Map());
   const conversationCompressingRef = useRef<Map<string, boolean>>(new Map());
   const conversationMediaCallCountRef = useRef<Map<string, number>>(new Map());
-  const [projectionVersion, forceUpdate] = useState(0);
+  const [renderSignal, setRenderSignal] = useState(false);
 
   const mentionSearchFilterRef = useRef(mentionSearchFilter);
   useEffect(() => {
@@ -322,7 +322,7 @@ export function ConversationController({
   // ---- Agent state ----
   const [, setAgentState] = useState<AgentState | null>(null);
   const conversationAgentStateRef = useRef<Map<string, AgentState>>(new Map());
-  const forceAgentStateUpdate = useCallback(() => forceUpdate((n) => n + 1), []);
+  const forceAgentStateUpdate = useCallback(() => setRenderSignal((current) => !current), []);
   const isTablessConversationViewRef = useRef(false);
   const pendingForegroundConversationActivationRef =
     useRef<PendingForegroundConversationActivation | null>(null);
@@ -495,7 +495,7 @@ export function ConversationController({
     ambientNodesByConversation,
     conversationRenderCoordinator,
     openTabs,
-    projectionVersion,
+    renderSignal,
     visibleConversationId,
     workItemsByConversation,
   ]);
@@ -582,7 +582,7 @@ export function ConversationController({
       const selectedProviderId = selectedOption.providerId;
       const selectedModelId = selectedOption.modelId;
 
-      AgentHostMessages.updateSettings(
+      agentHostMessages.updateSettings(
         {
           providerId: selectedProviderId,
           modelId: selectedModelId,
@@ -590,7 +590,7 @@ export function ConversationController({
         conversationId,
       );
     },
-    [activeSettings.chatModelOptions],
+    [activeSettings.chatModelOptions, agentHostMessages],
   );
   const handleEntryModelSelect = useCallback(
     (modelId: string) => {
@@ -612,7 +612,7 @@ export function ConversationController({
   );
   const conversationKind = activeOpenTab?.kind ?? 'chat';
 
-  const triggerForceUpdate = useCallback(() => forceUpdate((n) => n + 1), []);
+  const triggerForceUpdate = useCallback(() => setRenderSignal((current) => !current), []);
   const updateConversationRenderState = useCallback(
     (conversationId: string, updater: ConversationRenderStateUpdater) => {
       commitConversationRenderState(conversationId, updater);
@@ -621,13 +621,16 @@ export function ConversationController({
     [commitConversationRenderState, triggerForceUpdate],
   );
   const requestConfigSnapshot = useCallback(() => {
-    AgentHostMessages.refreshConfigSnapshot();
-  }, []);
-  const requestConversationResourceSnapshot = useCallback((conversationId: string) => {
-    AgentHostMessages.getSettings(conversationId);
-    AgentHostMessages.getContextTokenCount(conversationId);
-    AgentHostMessages.getMessageQueue(conversationId);
-  }, []);
+    agentHostMessages.refreshConfigSnapshot();
+  }, [agentHostMessages]);
+  const requestConversationResourceSnapshot = useCallback(
+    (conversationId: string) => {
+      agentHostMessages.getSettings(conversationId);
+      agentHostMessages.getContextTokenCount(conversationId);
+      agentHostMessages.getMessageQueue(conversationId);
+    },
+    [agentHostMessages],
+  );
 
   const handleUserMessageSent = useCallback(
     (event: { conversationId: string; message: Message }) => {
@@ -751,6 +754,7 @@ export function ConversationController({
 
   // ---- Message handler ----
   const { handleMessage, disposeConversationRendering } = useMessageHandler({
+    agentHostMessages,
     messages,
     isThinking,
     activeConversationId,
@@ -888,36 +892,31 @@ export function ConversationController({
   }, [markInitialNavigationHydrated]);
 
   useEffect(() => {
-    const handleScopedDesktopHostMessage = (event: Event) => {
-      const message = (event as CustomEvent<AgentHostToWebviewMessage>).detail;
-      if (!message?.type) return;
+    const subscription = hostRuntimeAdapter.subscribe((message) => {
       if (message.type === 'conversationList' || message.type === 'tabState') {
         markInitialNavigationHydrated(message.type);
       }
       controllerMessageHandlerRef.current({
         data: message,
       } as MessageEvent<AgentHostToWebviewMessage>);
-    };
-
-    window.addEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, handleScopedDesktopHostMessage);
-    return () =>
-      window.removeEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, handleScopedDesktopHostMessage);
-  }, [markInitialNavigationHydrated]);
+    });
+    return () => subscription.dispose();
+  }, [hostRuntimeAdapter, markInitialNavigationHydrated]);
 
   // ---- Request data on mount ----
   useEffect(() => {
     isTablessConversationViewRef.current = true;
     if (!isDraftPresentation) {
-      AgentHostMessages.getConversations();
-      AgentHostMessages.getActiveConversation();
+      agentHostMessages.getConversations();
+      agentHostMessages.getActiveConversation();
       // Desktop keeps same-process tab state across Webview reloads. Request it
       // explicitly because Developer: Reload Webviews does not trigger a visibility change.
-      AgentHostMessages.getTabState();
+      agentHostMessages.getTabState();
     }
     requestConfigSnapshot();
-    AgentHostMessages.getAgentStates();
-    AgentHostMessages.getSkills();
-  }, [isDraftPresentation, requestConfigSnapshot]);
+    agentHostMessages.getAgentStates();
+    agentHostMessages.getSkills();
+  }, [agentHostMessages, isDraftPresentation, requestConfigSnapshot]);
 
   // ---- Context token count on conversation change ----
   useEffect(() => {
@@ -941,9 +940,9 @@ export function ConversationController({
     isTablessConversationViewRef.current = false;
     beginForegroundConversationActivation();
     requestConfigSnapshot();
-    AgentHostMessages.newConversation();
+    agentHostMessages.newConversation();
     setActiveTab('chat');
-  }, [beginForegroundConversationActivation, requestConfigSnapshot]);
+  }, [agentHostMessages, beginForegroundConversationActivation, requestConfigSnapshot]);
 
   const handleNewChat = useCallback(() => {
     setPendingSendRequest(null);
@@ -956,12 +955,15 @@ export function ConversationController({
   const handleRequestRoleplayItems = useCallback(() => {
     setMentionItems([]);
     updateMentionSearchFilter('');
-    AgentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
-  }, [setMentionItems, updateMentionSearchFilter]);
+    agentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
+  }, [agentHostMessages, setMentionItems, updateMentionSearchFilter]);
 
-  const handleSelectRoleplayItem = useCallback((item: MentionItem) => {
-    submitRoleplayEntrySelection(item);
-  }, []);
+  const handleSelectRoleplayItem = useCallback(
+    (item: MentionItem) => {
+      submitRoleplayEntrySelection(agentHostMessages, item);
+    },
+    [agentHostMessages],
+  );
 
   const startNewForegroundConversationWithGenerationMode = useCallback(
     (mode: Extract<SessionMode, GenCategory>, messageText?: string) => {
@@ -1066,13 +1068,11 @@ export function ConversationController({
                 context:
                   agentPresentation.scope.kind === 'assistant'
                     ? {
-                        schemaVersion: 1 as const,
                         kind: 'assistant' as const,
                         assistantSpaceId: agentPresentation.scope.assistantSpaceId,
                         baseGrantIds: resourceGrantIds,
                       }
                     : {
-                        schemaVersion: 1 as const,
                         kind: 'workspace' as const,
                         workspaceId: agentPresentation.scope.workspaceId,
                         workspaceGrantId: agentPresentation.scope.workspaceGrantId,
@@ -1080,7 +1080,6 @@ export function ConversationController({
               };
         setIsForegroundConversationActivationPending(true);
         void submitDraft({
-          schemaVersion: 1,
           target,
           messageText,
           resourceGrantIds,
@@ -1295,9 +1294,9 @@ export function ConversationController({
       }
 
       cleanupClosedConversation(conversationId);
-      AgentHostMessages.deleteConversation(conversationId);
+      agentHostMessages.deleteConversation(conversationId);
     },
-    [cleanupClosedConversation, isProtectedConversation],
+    [agentHostMessages, cleanupClosedConversation, isProtectedConversation],
   );
 
   const handleClearClosedConversations = useCallback(() => {
@@ -1320,7 +1319,7 @@ export function ConversationController({
     const cleanup = projectHistoryCleanup({ historyItems });
     for (const conversationId of cleanup.deletableConversationIds) {
       cleanupClosedConversation(conversationId);
-      AgentHostMessages.deleteConversation(conversationId);
+      agentHostMessages.deleteConversation(conversationId);
     }
   }, [
     activeConversationId,
@@ -1439,7 +1438,7 @@ export function ConversationController({
         conversationRenderCoordinator,
         conversations.map((conversation) => conversation.id),
       ),
-    [conversationRenderCoordinator, conversations, projectionVersion],
+    [conversationRenderCoordinator, conversations, renderSignal],
   );
 
   const displayTabs = useMemo(
@@ -1455,7 +1454,7 @@ export function ConversationController({
       conversations,
       visibleConversationId,
       visibleSessionState,
-      projectionVersion,
+      renderSignal,
       tabRenderSnapshots,
     ],
   );
@@ -1544,7 +1543,7 @@ export function ConversationController({
               mentionItems={mentionItems}
               onRequestFiles={(filter) => {
                 updateMentionSearchFilter(filter);
-                AgentHostMessages.searchProjectFiles(filter, undefined, { purpose: 'entry' });
+                agentHostMessages.searchProjectFiles(filter, undefined, { purpose: 'entry' });
               }}
               genCategory={entryGenCategory}
               genParams={entryGenParams}
@@ -1685,13 +1684,7 @@ export function ConversationController({
       })}
 
       {globalError ? (
-        <div
-          role="alert"
-          className="fixed right-4 top-12 z-50 max-w-[360px] rounded-lg border border-[var(--neko-inputValidation-errorBorder,var(--agent-border))] bg-[var(--neko-inputValidation-errorBackground,var(--agent-elevated))] px-3 py-2 text-sm text-[var(--neko-inputValidation-errorForeground,var(--agent-fg))] shadow-lg animate-slide-in"
-        >
-          <div className="font-medium">全局错误</div>
-          <div className="mt-1 opacity-90">{globalError}</div>
-        </div>
+        <AgentDiagnosticToast title="全局错误">{globalError}</AgentDiagnosticToast>
       ) : null}
     </>
   );

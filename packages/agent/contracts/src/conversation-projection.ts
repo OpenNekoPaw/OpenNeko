@@ -14,7 +14,6 @@ export interface ConversationTurnProjection {
 
 export interface ConversationProjectionSnapshot {
   readonly conversationId: string;
-  readonly projectionVersion: number;
   readonly turns: readonly ConversationTurnProjection[];
 }
 
@@ -31,8 +30,6 @@ export interface ConversationProjectionUpdate {
 export interface ConversationProjectionPatch {
   readonly type: 'conversationProjectionPatch';
   readonly conversationId: string;
-  readonly baseProjectionVersion: number;
-  readonly projectionVersion: number;
   readonly turnId: string;
   readonly runId: string;
   readonly messageId: string;
@@ -86,16 +83,6 @@ export function applyConversationProjectionPatch(
       `Conversation projection patch owner mismatch: expected ${snapshot.conversationId}, received ${patch.conversationId}.`,
     );
   }
-  if (patch.baseProjectionVersion !== snapshot.projectionVersion) {
-    throw new Error(
-      `Conversation projection patch base mismatch: expected ${snapshot.projectionVersion}, received ${patch.baseProjectionVersion}.`,
-    );
-  }
-  if (patch.projectionVersion <= patch.baseProjectionVersion) {
-    throw new Error(
-      `Conversation projection patch version must increase from ${patch.baseProjectionVersion}, received ${patch.projectionVersion}.`,
-    );
-  }
   if (patch.operations.length === 0 && !patch.completion) {
     throw new Error('Conversation projection patch must contain operations or completion.');
   }
@@ -132,7 +119,6 @@ export function applyConversationProjectionPatch(
 
   return freezeProjectionSnapshot({
     conversationId: snapshot.conversationId,
-    projectionVersion: patch.projectionVersion,
     turns,
   });
 }

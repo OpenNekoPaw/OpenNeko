@@ -28,7 +28,6 @@ function createMediaMock() {
       ref,
       lifecycleMode: input.lifecycleMode,
       phase: 'pending',
-      revision: 1,
       createdAt: 1,
       updatedAt: 1,
       request: input,
@@ -37,7 +36,6 @@ function createMediaMock() {
     terminals.set(jobId, {
       ...initial,
       phase: 'succeeded',
-      revision: 3,
       updatedAt: 3,
       progress: { stage: 'completed', percent: 100 },
       resultLocators: result.outputs.map((output, index) =>
@@ -52,7 +50,6 @@ function createMediaMock() {
     yield {
       ...terminal,
       phase: 'running' as const,
-      revision: 2,
       updatedAt: 2,
       progress: { stage: 'waiting-provider' as const, percent: 45 },
       resultLocators: undefined,
@@ -189,7 +186,6 @@ describe('registerMediaAgentTools', () => {
       ...terminal,
       ref: { kind: 'generation', jobId: 'generation-job-2' },
       phase: 'pending',
-      revision: 1,
     });
     jobs.reconcileGeneration.mockResolvedValue(terminal);
 
@@ -197,34 +193,22 @@ describe('registerMediaAgentTools', () => {
       executeAgentTool(registry, 'DescribeGenerationJob', { jobId: ref.jobId }),
     ).resolves.toMatchObject({
       success: true,
-      data: { jobId: ref.jobId, phase: 'succeeded', revision: 3 },
+      data: { jobId: ref.jobId, phase: 'succeeded' },
     });
     await expect(
-      executeAgentTool(registry, 'ObserveGenerationJob', {
-        jobId: ref.jobId,
-        afterRevision: 1,
-      }),
+      executeAgentTool(registry, 'ObserveGenerationJob', { jobId: ref.jobId }),
     ).resolves.toMatchObject({
       success: true,
-      data: { jobId: ref.jobId, phase: 'running', revision: 2 },
+      data: { jobId: ref.jobId, phase: 'running' },
     });
-    await executeAgentTool(registry, 'CancelGenerationJob', {
-      jobId: ref.jobId,
-      expectedRevision: 3,
-    });
-    await executeAgentTool(registry, 'RetryGenerationJob', {
-      jobId: ref.jobId,
-      expectedRevision: 3,
-    });
-    await executeAgentTool(registry, 'ReconcileGenerationJob', {
-      jobId: ref.jobId,
-      expectedRevision: 3,
-    });
+    await executeAgentTool(registry, 'CancelGenerationJob', { jobId: ref.jobId });
+    await executeAgentTool(registry, 'RetryGenerationJob', { jobId: ref.jobId });
+    await executeAgentTool(registry, 'ReconcileGenerationJob', { jobId: ref.jobId });
 
-    expect(jobs.observeGeneration).toHaveBeenCalledWith(ref, 1);
-    expect(jobs.cancelGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 3 });
-    expect(jobs.retryGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 3 });
-    expect(jobs.reconcileGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 3 });
+    expect(jobs.observeGeneration).toHaveBeenCalledWith(ref);
+    expect(jobs.cancelGeneration).toHaveBeenCalledWith({ ref });
+    expect(jobs.retryGeneration).toHaveBeenCalledWith({ ref });
+    expect(jobs.reconcileGeneration).toHaveBeenCalledWith({ ref });
   });
 
   it('submits one detached Generation Job through the Host-bound purpose target', async () => {
@@ -256,7 +240,6 @@ describe('registerMediaAgentTools', () => {
         jobKind: 'generation',
         jobId: 'generation-job-1',
         phase: 'pending',
-        revision: 1,
         progress: { stage: 'queued', percent: 0 },
       },
     });
@@ -542,7 +525,6 @@ describe('registerMediaAgentTools', () => {
         data: expect.objectContaining({
           kind: 'generation-job',
           jobId: 'generation-job-1',
-          revision: expect.any(Number),
           phase: 'running',
         }),
       }),

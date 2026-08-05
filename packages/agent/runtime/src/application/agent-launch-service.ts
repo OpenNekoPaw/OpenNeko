@@ -1,5 +1,4 @@
 import {
-  AGENT_LAUNCH_CONTRACT_VERSION,
   listBuiltinSlashCommands,
   parseAgentLaunchCatalogProjection,
   parseAgentLaunchConnectionIdentity,
@@ -37,8 +36,9 @@ export interface AgentLaunchAuthorizationPort {
 export interface AgentLaunchAttachInput {
   readonly applicationInstanceId: string;
   readonly windowId: string;
+  readonly workbenchInstanceId: string;
+  readonly agentSurfaceId: string;
   readonly viewId: string;
-  readonly rendererEpoch: number;
   readonly scope: AgentAuthorityScopeProjection;
 }
 
@@ -116,7 +116,6 @@ interface AgentLaunchState {
 
 class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationService {
   private readonly connections = new Map<string, AgentLaunchState>();
-  private readonly connectionEpochs = new Map<string, number>();
   private readonly pendingAttachments = new Map<string, Promise<AgentLaunchState>>();
   private readonly releasedConnectionIds = new Set<string>();
   private disposed = false;
@@ -131,7 +130,7 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
 
   async attach(input: AgentLaunchAttachInput): Promise<AgentLaunchCatalogProjection> {
     this.requireActive();
-    const key = ownerKey(input.windowId, input.viewId);
+    const key = ownerKey(input.windowId, input.workbenchInstanceId, input.agentSurfaceId);
     const pending = this.pendingAttachments.get(key);
     if (pending) {
       await pending;
@@ -157,12 +156,8 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
     existing: AgentLaunchState | undefined,
   ): Promise<AgentLaunchState> {
     if (existing) await this.release(key, existing);
-    const connectionEpoch = (this.connectionEpochs.get(key) ?? 0) + 1;
-    this.connectionEpochs.set(key, connectionEpoch);
     const connection = parseAgentLaunchConnectionIdentity({
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       ...input,
-      connectionEpoch,
       connectionId: this.input.createIdentity(),
     });
     const catalog = await this.input.catalog.readCatalog(connection.scope);
@@ -208,7 +203,9 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
   async detach(connection: AgentLaunchConnectionIdentity): Promise<void> {
     this.requireActive();
     const parsed = parseAgentLaunchConnectionIdentity(connection);
-    const state = this.connections.get(ownerKey(parsed.windowId, parsed.viewId));
+    const state = this.connections.get(
+      ownerKey(parsed.windowId, parsed.workbenchInstanceId, parsed.agentSurfaceId),
+    );
     if (!state || !sameConnection(state.connection, parsed)) {
       if (this.releasedConnectionIds.has(parsed.connectionId)) return;
       throw new Error(`Stale Agent launch connection '${parsed.connectionId}'.`);
@@ -217,7 +214,14 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
       state.attachmentCount -= 1;
       return;
     }
-    await this.release(ownerKey(state.connection.windowId, state.connection.viewId), state);
+    await this.release(
+      ownerKey(
+        state.connection.windowId,
+        state.connection.workbenchInstanceId,
+        state.connection.agentSurfaceId,
+      ),
+      state,
+    );
   }
 
   async detachWindow(windowId: string): Promise<void> {
@@ -253,7 +257,9 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
   private requireConnection(connectionValue: AgentLaunchConnectionIdentity): AgentLaunchState {
     this.requireActive();
     const connection = parseAgentLaunchConnectionIdentity(connectionValue);
-    const state = this.connections.get(ownerKey(connection.windowId, connection.viewId));
+    const state = this.connections.get(
+      ownerKey(connection.windowId, connection.workbenchInstanceId, connection.agentSurfaceId),
+    );
     if (!state || !sameConnection(state.connection, connection)) {
       throw new Error(`Stale Agent launch connection '${connection.connectionId}'.`);
     }
@@ -273,7 +279,6 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
 
 function project(state: AgentLaunchState): AgentLaunchCatalogProjection {
   return parseAgentLaunchCatalogProjection({
-    schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
     connection: state.connection,
     revision: state.revision,
     models: state.models,
@@ -290,8 +295,9 @@ function sameAttachIdentity(
   return (
     connection.applicationInstanceId === input.applicationInstanceId &&
     connection.windowId === input.windowId &&
+    connection.workbenchInstanceId === input.workbenchInstanceId &&
+    connection.agentSurfaceId === input.agentSurfaceId &&
     connection.viewId === input.viewId &&
-    connection.rendererEpoch === input.rendererEpoch &&
     sameScope(connection.scope, input.scope)
   );
 }
@@ -300,11 +306,7 @@ function sameConnection(
   left: AgentLaunchConnectionIdentity,
   right: AgentLaunchConnectionIdentity,
 ): boolean {
-  return (
-    sameAttachIdentity(left, right) &&
-    left.connectionEpoch === right.connectionEpoch &&
-    left.connectionId === right.connectionId
-  );
+  return sameAttachIdentity(left, right) && left.connectionId === right.connectionId;
 }
 
 function sameScope(
@@ -326,8 +328,8 @@ function sameScope(
   );
 }
 
-function ownerKey(windowId: string, viewId: string): string {
-  return `${windowId}\u0000${viewId}`;
+function ownerKey(windowId: string, workbenchInstanceId: string, agentSurfaceId: string): string {
+  return `${windowId}\u0000${workbenchInstanceId}\u0000${agentSurfaceId}`;
 }
 
 function throwAggregate(results: readonly PromiseSettledResult<void>[], message: string): void {

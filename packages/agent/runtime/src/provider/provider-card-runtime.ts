@@ -5,7 +5,6 @@ import {
   type ProviderCard,
   type ProviderCardLayer,
 } from '@neko/agent-contracts';
-import { toProviderExpressionProfile } from '@neko/agent-contracts';
 import {
   registerProviderCardDirectory,
   type ProviderCardLoadError,
@@ -86,7 +85,7 @@ async function registerProviderCardRuntimeDirectory(input: {
       onError: (error) => emitProviderCardLoadWarning(input.options.logger, error, input.layer),
     });
     for (const card of cards) {
-      input.options.providerExpressionProfileRegistry?.register(toProviderExpressionProfile(card));
+      input.options.providerExpressionProfileRegistry?.register(card);
     }
     return cards;
   } catch (error) {

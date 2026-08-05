@@ -48,7 +48,6 @@ describe('collectCreatorVisibleArtifacts', () => {
             type: 'artifactSnapshot',
             complete: true,
             artifact: {
-              schemaVersion: 1,
               kind: 'composite-artifact',
               artifactId: 'analysis-1',
               title: 'Material Analysis',
@@ -96,7 +95,6 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('collects an accessed document only with an explicit fenced reviewable artifact', () => {
     const assistantMarkdown = `Review complete.\n\n~~~NEKO\n${JSON.stringify({
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'material-analysis',
       title: 'Material Analysis',
@@ -272,7 +270,6 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('does not duplicate an explicit composite artifact after ReadImage analysis', () => {
     const assistantMarkdown = `~~~NEKO\n${JSON.stringify({
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'declared-storyboard-analysis',
       title: 'Storyboard Analysis',
@@ -290,7 +287,6 @@ describe('collectCreatorVisibleArtifacts', () => {
               type: 'artifactSnapshot',
               complete: true,
               artifact: {
-                schemaVersion: 1,
                 kind: 'composite-artifact',
                 artifactId: 'declared-storyboard-analysis',
                 title: 'Storyboard Analysis',
@@ -332,7 +328,6 @@ describe('collectCreatorVisibleArtifacts', () => {
         },
       ],
       assistantMarkdown: `~~~NEKO\n${JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'analysis-1',
         title: 'Material Analysis',

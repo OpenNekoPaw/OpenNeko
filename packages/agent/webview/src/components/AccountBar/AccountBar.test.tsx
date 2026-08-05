@@ -22,11 +22,11 @@ vi.mock('../../i18n/I18nContext', () => ({
   }),
 }));
 
-vi.mock('../../messages', () => ({
-  AgentHostMessages: {
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({
     openConfigFile: messageMocks.openConfigFile,
     openUserConfigFile: messageMocks.openUserConfigFile,
-  },
+  }),
 }));
 
 describe('AccountBar', () => {

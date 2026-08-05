@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildInjectContextMessage,
   buildQueuedMessageEditRequestedMessage,
   parseAmbientCanvasUpdateNodes,
@@ -65,26 +64,23 @@ describe('webview protocol parser', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
-        protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
         realmId: 'realm-1',
       }),
     ).toEqual({
       type: 'projectionEndpointDiscover',
-      protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
       realmId: 'realm-1',
     });
     expect(parseAgentWebviewToHostMessage({ type: 'projectionEndpointDiscover' })).toBeNull();
     expect(
       parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
-        protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION + 1,
+        protocolVersion: 1,
         realmId: 'realm-1',
       }),
     ).toBeNull();
     expect(
       parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
-        protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
         realmId: '',
       }),
     ).toBeNull();
@@ -92,7 +88,6 @@ describe('webview protocol parser', () => {
 
   it('accepts projection attachment lifecycle messages with complete identity', () => {
     const key = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: 'conv-1',
@@ -107,13 +102,11 @@ describe('webview protocol parser', () => {
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
-        projectionVersion: 3,
       }),
     ).toEqual({
       type: 'projectionSnapshotAck',
       key,
       sequence: 0,
-      projectionVersion: 3,
     });
     expect(
       parseAgentWebviewToHostMessage({
@@ -141,13 +134,12 @@ describe('webview protocol parser', () => {
 
   it('rejects malformed projection attachment lifecycle messages', () => {
     const key = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: 'conv-1',
     };
 
-    for (const field of ['endpointEpoch', 'attachmentId', 'tabId', 'conversationId'] as const) {
+    for (const field of ['attachmentId', 'tabId', 'conversationId'] as const) {
       expect(
         parseAgentWebviewToHostMessage({
           type: 'projectionAttach',
@@ -160,7 +152,6 @@ describe('webview protocol parser', () => {
         type: 'projectionSnapshotAck',
         key,
         sequence: 1,
-        projectionVersion: 3,
       }),
     ).toBeNull();
     expect(
@@ -168,15 +159,7 @@ describe('webview protocol parser', () => {
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
-        projectionVersion: -1,
-      }),
-    ).toBeNull();
-    expect(
-      parseAgentWebviewToHostMessage({
-        type: 'projectionSnapshotAck',
-        key,
-        sequence: 0,
-        projectionVersion: 1.5,
+        projectionVersion: 1,
       }),
     ).toBeNull();
     expect(
@@ -385,7 +368,7 @@ describe('webview protocol parser', () => {
         snapshot: {
           conversationId: 'conv-1',
           pendingCount: 0,
-          version: 2,
+          sequence: 2,
           items: [],
         },
       }),
@@ -408,7 +391,7 @@ describe('webview protocol parser', () => {
         snapshot: {
           conversationId: 'conv-1',
           pendingCount: 0,
-          version: 2,
+          sequence: 2,
           items: [],
         },
       }),
@@ -791,15 +774,11 @@ describe('webview protocol parser', () => {
 
   it('accepts a validated purpose-aware 3D reference context', () => {
     const data = {
-      contractVersion: 1,
       staging: {
-        schemaVersion: 1,
         sessionId: 'session-1',
-        revision: 2,
         subject: {
           kind: 'builtin-preset',
           presetId: 'guide-neutral-mannequin',
-          presetVersion: 1,
           fingerprint: 'preset-fingerprint',
           presetKind: 'mannequin',
           appearancePolicy: 'guide-only',
@@ -822,7 +801,7 @@ describe('webview protocol parser', () => {
         {
           kind: 'pose',
           sessionId: 'session-1',
-          revision: 2,
+          requestId: 'request-pose',
           controlImage: contentLocator,
           controlMode: 'pose',
           joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
@@ -839,7 +818,7 @@ describe('webview protocol parser', () => {
         contextPayloads: [
           {
             type: '3d-reference',
-            id: '3d-reference:session-1:2',
+            id: '3d-reference:session-1',
             label: 'Neutral mannequin',
             summary: 'Pose reference',
             data,

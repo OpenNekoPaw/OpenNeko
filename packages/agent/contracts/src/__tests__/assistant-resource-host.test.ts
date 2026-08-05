@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ASSISTANT_RESOURCE_HOST_VERSION,
   parseAssistantResourceHostRequest,
   parseAssistantResourceHostResult,
 } from '../assistant-resource-host';
@@ -8,9 +7,7 @@ import {
 describe('Assistant Resource Host contract', () => {
   it('strictly decodes exact conversation-owned routes', () => {
     const request = {
-      schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
       requestId: 'request:1',
-      endpointEpoch: 'endpoint:1',
       identity: {
         assistantSpaceId: 'assistant:1',
         conversationId: 'conversation:1',
@@ -25,9 +22,7 @@ describe('Assistant Resource Host contract', () => {
   it('rejects raw paths, unknown fields and cross-request results', () => {
     expect(() =>
       parseAssistantResourceHostRequest({
-        schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
         requestId: 'request:1',
-        endpointEpoch: 'endpoint:1',
         identity: {
           assistantSpaceId: 'assistant:1',
           conversationId: 'conversation:1',
@@ -39,9 +34,20 @@ describe('Assistant Resource Host contract', () => {
       }),
     ).toThrow('unsupported fields');
     expect(() =>
+      parseAssistantResourceHostRequest({
+        requestId: 'request:1',
+        identity: {
+          assistantSpaceId: 'assistant:1',
+          conversationId: 'conversation:1',
+          windowId: 'window:1',
+        },
+        route: 'snapshot.get',
+        rendererSessionId: 'removed-endpoint',
+      }),
+    ).toThrow('unsupported fields');
+    expect(() =>
       parseAssistantResourceHostResult(
         {
-          schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
           requestId: 'request:other',
           route: 'preview.release',
           status: 'released',

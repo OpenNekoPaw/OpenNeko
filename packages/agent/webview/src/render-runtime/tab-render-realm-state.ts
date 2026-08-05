@@ -10,9 +10,6 @@ import type {
   TabRenderStateUpdate,
 } from './tab-render-runtime';
 
-export const TAB_RENDER_REALM_STATE_VERSION = 'neko.agent.tab-render-realm-state.v1' as const;
-const LEGACY_TIMELINE_RECOVERY_STATE_KEY = 'agentTurnTimelineRecoveries';
-
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly inputValue: string;
   readonly selectedModel: string;
@@ -25,12 +22,25 @@ export interface TabRenderDraftSnapshot extends TabRenderBinding {
 }
 
 export interface TabRenderRealmState {
-  readonly schemaVersion: typeof TAB_RENDER_REALM_STATE_VERSION;
   readonly drafts: readonly TabRenderDraftSnapshot[];
+}
+
+export interface TabRenderRealmStateDiagnostic {
+  readonly code:
+    'invalid-realm-state' | 'invalid-draft' | 'duplicate-draft' | 'draft-owner-mismatch';
+  readonly message: string;
+  readonly draftIndex?: number;
+  readonly tabId?: string;
+}
+
+export interface ParsedTabRenderRealmState {
+  readonly state: TabRenderRealmState;
+  readonly diagnostics: readonly TabRenderRealmStateDiagnostic[];
 }
 
 export interface TabRenderRealmStateCoordinator {
   reconcile(bindings: readonly TabRenderBinding[]): boolean;
+  getDiagnostics(): readonly TabRenderRealmStateDiagnostic[];
   flush(): void;
   dispose(): void;
 }
@@ -38,6 +48,7 @@ export interface TabRenderRealmStateCoordinator {
 export interface TabRenderRealmStateHost {
   getState(): unknown;
   setState(state: TabRenderRealmState): void;
+  reportStateDiagnostic?(diagnostic: TabRenderRealmStateDiagnostic): void;
 }
 
 export function createTabRenderRealmStateCoordinator(
@@ -47,26 +58,43 @@ export function createTabRenderRealmStateCoordinator(
   return new DefaultTabRenderRealmStateCoordinator(host, registry);
 }
 
-export function parseTabRenderRealmState(value: unknown): TabRenderRealmState {
-  if (value === undefined) return { schemaVersion: TAB_RENDER_REALM_STATE_VERSION, drafts: [] };
-  if (isLegacyTimelineRecoveryState(value)) {
-    return { schemaVersion: TAB_RENDER_REALM_STATE_VERSION, drafts: [] };
-  }
-  if (!isRecord(value) || value.schemaVersion !== TAB_RENDER_REALM_STATE_VERSION) {
-    throw new Error('Unsupported Agent Tab render realm state schema.');
+export function parseTabRenderRealmState(value: unknown): ParsedTabRenderRealmState {
+  if (value === undefined) return { state: { drafts: [] }, diagnostics: [] };
+  if (!isRecord(value)) {
+    return invalidRealmState('Agent Tab render realm state must be an object.');
   }
   if (!Array.isArray(value.drafts)) {
-    throw new Error('Agent Tab render realm state drafts must be an array.');
+    return invalidRealmState('Agent Tab render realm state drafts must be an array.');
   }
-  const drafts = value.drafts.map((draft, index) => parseDraft(draft, index));
+  const drafts: TabRenderDraftSnapshot[] = [];
+  const diagnostics: TabRenderRealmStateDiagnostic[] = [];
   const tabIds = new Set<string>();
-  for (const draft of drafts) {
+  for (const [index, valueDraft] of value.drafts.entries()) {
+    let draft: TabRenderDraftSnapshot;
+    try {
+      draft = parseDraft(valueDraft, index);
+    } catch (error) {
+      diagnostics.push({
+        code: 'invalid-draft',
+        message: error instanceof Error ? error.message : `Agent Tab draft ${index} is invalid.`,
+        draftIndex: index,
+        ...(readTabId(valueDraft) ? { tabId: readTabId(valueDraft) } : {}),
+      });
+      continue;
+    }
     if (tabIds.has(draft.tabId)) {
-      throw new Error(`Duplicate persisted Agent Tab draft for ${draft.tabId}.`);
+      diagnostics.push({
+        code: 'duplicate-draft',
+        message: `Duplicate persisted Agent Tab draft for ${draft.tabId}.`,
+        draftIndex: index,
+        tabId: draft.tabId,
+      });
+      continue;
     }
     tabIds.add(draft.tabId);
+    drafts.push(draft);
   }
-  return { schemaVersion: TAB_RENDER_REALM_STATE_VERSION, drafts };
+  return { state: { drafts }, diagnostics };
 }
 
 class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordinator {
@@ -74,6 +102,7 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
   private readonly subscriptions = new Map<string, () => void>();
   private readonly restoredTabIds = new Set<string>();
   private readonly knownBindings = new Map<string, string>();
+  private readonly diagnostics: TabRenderRealmStateDiagnostic[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
 
@@ -82,11 +111,9 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
     private readonly registry: TabRenderRuntimeRegistry,
   ) {
     const persistedState = host.getState();
-    const state = parseTabRenderRealmState(persistedState);
-    if (isLegacyTimelineRecoveryState(persistedState)) {
-      host.setState(state);
-    }
-    for (const draft of state.drafts) {
+    const parsed = parseTabRenderRealmState(persistedState);
+    for (const diagnostic of parsed.diagnostics) this.reportDiagnostic(diagnostic);
+    for (const draft of parsed.state.drafts) {
       this.drafts.set(draft.tabId, draft);
     }
   }
@@ -100,11 +127,15 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
         throw new Error(`Duplicate Tab draft binding for ${binding.tabId}.`);
       }
       nextBindings.set(binding.tabId, binding.conversationId);
-      const persisted = this.drafts.get(binding.tabId);
+      let persisted = this.drafts.get(binding.tabId);
       if (persisted && persisted.conversationId !== binding.conversationId) {
-        throw new Error(
-          `Persisted Tab draft ${binding.tabId} belongs to ${persisted.conversationId}, not ${binding.conversationId}.`,
-        );
+        this.reportDiagnostic({
+          code: 'draft-owner-mismatch',
+          message: `Persisted Tab draft ${binding.tabId} belongs to ${persisted.conversationId}, not ${binding.conversationId}.`,
+          tabId: binding.tabId,
+        });
+        this.drafts.delete(binding.tabId);
+        persisted = undefined;
       }
       const runtime = this.registry.require(binding.tabId);
       if (!this.restoredTabIds.has(binding.tabId)) {
@@ -144,6 +175,10 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
     return changed;
   }
 
+  getDiagnostics(): readonly TabRenderRealmStateDiagnostic[] {
+    return this.diagnostics;
+  }
+
   flush(): void {
     this.assertActive();
     if (this.flushTimer !== undefined) {
@@ -151,7 +186,6 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
       this.flushTimer = undefined;
     }
     this.host.setState({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
       drafts: [...this.drafts.values()],
     });
   }
@@ -171,6 +205,11 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
 
   private assertActive(): void {
     if (this.disposed) throw new Error('Agent Tab render realm state coordinator is disposed.');
+  }
+
+  private reportDiagnostic(diagnostic: TabRenderRealmStateDiagnostic): void {
+    this.diagnostics.push(diagnostic);
+    this.host.reportStateDiagnostic?.(diagnostic);
   }
 }
 
@@ -323,35 +362,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isLegacyTimelineRecoveryState(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  const keys = Object.keys(value);
-  return (
-    keys.length === 1 &&
-    keys[0] === LEGACY_TIMELINE_RECOVERY_STATE_KEY &&
-    Array.isArray(value[LEGACY_TIMELINE_RECOVERY_STATE_KEY]) &&
-    value[LEGACY_TIMELINE_RECOVERY_STATE_KEY].every(isLegacyTimelineRecoveryDescriptor)
-  );
+function invalidRealmState(message: string): ParsedTabRenderRealmState {
+  return {
+    state: { drafts: [] },
+    diagnostics: [{ code: 'invalid-realm-state', message }],
+  };
 }
 
-function isLegacyTimelineRecoveryDescriptor(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  const keys = Object.keys(value);
-  return (
-    keys.length === 5 &&
-    keys.includes('connectionEpoch') &&
-    keys.includes('conversationId') &&
-    keys.includes('turnId') &&
-    keys.includes('messageId') &&
-    keys.includes('lastAppliedDeliveryRevision') &&
-    isNonEmptyString(value.connectionEpoch) &&
-    isNonEmptyString(value.conversationId) &&
-    isNonEmptyString(value.turnId) &&
-    isNonEmptyString(value.messageId) &&
-    typeof value.lastAppliedDeliveryRevision === 'number' &&
-    Number.isInteger(value.lastAppliedDeliveryRevision) &&
-    value.lastAppliedDeliveryRevision > 0
-  );
+function readTabId(value: unknown): string | undefined {
+  return isRecord(value) && isNonEmptyString(value.tabId) ? value.tabId : undefined;
 }
 
 function isNonEmptyString(value: unknown): value is string {

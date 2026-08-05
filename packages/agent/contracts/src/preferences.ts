@@ -73,8 +73,6 @@ export interface PreferenceCostThresholds {
 export interface UserPreferences {
   /** Layer this block was parsed from. */
   scope: 'project' | 'global';
-  /** Schema version — bump on breaking changes. */
-  version: number;
   /** Subjects the user always wants to approve manually (escalate). */
   alwaysApprove: readonly PreferenceSubjectRule[];
   /**

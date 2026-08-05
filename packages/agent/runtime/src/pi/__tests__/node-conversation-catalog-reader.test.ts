@@ -26,12 +26,15 @@ describe('NodePiConversationCatalogReader', () => {
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
     readers.push(reader);
 
-    expect(reader.listConversations(['workspace-a'])).toEqual([
-      expect.objectContaining({
-        workspaceId: 'workspace-a',
-        conversationId: 'conversation-a',
-      }),
-    ]);
+    expect(reader.listConversations(['workspace-a'])).toEqual({
+      records: [
+        expect.objectContaining({
+          workspaceId: 'workspace-a',
+          conversationId: 'conversation-a',
+        }),
+      ],
+      diagnostics: [],
+    });
     expect(reader.findConversation('conversation-a')).toMatchObject({
       workspaceId: 'workspace-a',
       conversationId: 'conversation-a',
@@ -50,7 +53,7 @@ describe('NodePiConversationCatalogReader', () => {
   it('returns an empty cold-start catalog before Pi storage exists and fails after disposal', async () => {
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
 
-    expect(reader.listConversations(['workspace-a'])).toEqual([]);
+    expect(reader.listConversations(['workspace-a'])).toEqual({ records: [], diagnostics: [] });
     expect(reader.findConversation('conversation-a')).toBeUndefined();
     reader.dispose();
     expect(() => reader.listConversations(['workspace-a'])).toThrow(
@@ -60,8 +63,7 @@ describe('NodePiConversationCatalogReader', () => {
 
   it('joins the exact persisted conversation context from the canonical SQLite snapshot', async () => {
     await createConversation('assistant-space:local-user', 'conversation-assistant');
-    await writeConversationContext('conversation-assistant', 1, {
-      schemaVersion: 1,
+    await writeConversationContext('conversation-assistant', {
       kind: 'assistant',
       assistantSpaceId: 'assistant-space:local-user',
       baseGrantIds: [],
@@ -72,27 +74,61 @@ describe('NodePiConversationCatalogReader', () => {
     expect(reader.findConversation('conversation-assistant')).toMatchObject({
       conversationId: 'conversation-assistant',
       context: {
-        schemaVersion: 1,
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
       },
     });
   });
 
-  it('fails visibly when persisted context metadata has a mismatched version', async () => {
-    await createConversation('workspace-a', 'conversation-a');
-    await writeConversationContext('conversation-a', 2, {
+  it('isolates an invalid context from a valid sibling Conversation', async () => {
+    await createConversation('workspace-a', 'conversation-invalid');
+    await createConversation('workspace-a', 'conversation-valid');
+    await writeConversationContext('conversation-invalid', {
       schemaVersion: 1,
       kind: 'workspace',
       workspaceId: 'workspace-a',
       workspaceGrantId: 'grant-a',
     });
+    await writeConversationContext('conversation-valid', {
+      kind: 'workspace',
+      workspaceId: 'workspace-a',
+      workspaceGrantId: 'grant-valid',
+    });
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
     readers.push(reader);
 
-    expect(() => reader.findConversation('conversation-a')).toThrow(
-      "Pi conversation context version '2' does not match its payload.",
+    expect(() => reader.findConversation('conversation-invalid')).toThrow(
+      "unknown field 'schemaVersion'",
     );
+    expect(reader.findConversation('conversation-valid')).toMatchObject({
+      context: { workspaceGrantId: 'grant-valid' },
+    });
+    expect(reader.listConversations(['workspace-a'])).toEqual({
+      records: [
+        expect.objectContaining({
+          conversationId: 'conversation-valid',
+          context: expect.objectContaining({ workspaceGrantId: 'grant-valid' }),
+        }),
+      ],
+      diagnostics: [
+        expect.objectContaining({
+          code: 'invalid-conversation-record',
+          workspaceId: 'workspace-a',
+          conversationId: 'conversation-invalid',
+          message: expect.stringContaining("unknown field 'schemaVersion'"),
+        }),
+      ],
+    });
+  });
+
+  it('does not inspect the retired context table', async () => {
+    await createConversation('workspace-a', 'conversation-retired');
+    await writeRetiredConversationContext('conversation-retired');
+    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
+    readers.push(reader);
+
+    expect(reader.findConversation('conversation-retired')).not.toHaveProperty('context');
+    expect(await countRetiredConversationContexts()).toBe(1);
   });
 
   async function createConversation(
@@ -116,11 +152,26 @@ describe('NodePiConversationCatalogReader', () => {
     return authority;
   }
 
-  async function writeConversationContext(
-    conversationId: string,
-    contextVersion: number,
-    context: object,
-  ): Promise<void> {
+  async function writeConversationContext(conversationId: string, context: object): Promise<void> {
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
+    try {
+      database.exec(`CREATE TABLE IF NOT EXISTS agent_conversation_authority (
+        conversation_id TEXT PRIMARY KEY,
+        context_json TEXT NOT NULL
+      ) STRICT`);
+      database
+        .prepare(
+          `INSERT INTO agent_conversation_authority(conversation_id, context_json)
+           VALUES (?, ?)`,
+        )
+        .run(conversationId, JSON.stringify(context));
+    } finally {
+      database.close();
+    }
+  }
+
+  async function writeRetiredConversationContext(conversationId: string): Promise<void> {
     const sqlite = await import('node:sqlite');
     const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
     try {
@@ -130,12 +181,22 @@ describe('NodePiConversationCatalogReader', () => {
         context_json TEXT NOT NULL
       ) STRICT`);
       database
-        .prepare(
-          `INSERT INTO agent_conversation_context(
-             conversation_id, context_version, context_json
-           ) VALUES (?, ?, ?)`,
-        )
-        .run(conversationId, contextVersion, JSON.stringify(context));
+        .prepare(`INSERT INTO agent_conversation_context VALUES (?, ?, ?)`)
+        .run(conversationId, 1, JSON.stringify({ schemaVersion: 1, kind: 'workspace' }));
+    } finally {
+      database.close();
+    }
+  }
+
+  async function countRetiredConversationContexts(): Promise<number> {
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(root, 'neko.db'), { readOnly: true });
+    try {
+      const row = database
+        .prepare(`SELECT COUNT(*) AS count FROM agent_conversation_context`)
+        .get();
+      if (!row || typeof row.count !== 'number') throw new Error('Expected retired row count.');
+      return row.count;
     } finally {
       database.close();
     }

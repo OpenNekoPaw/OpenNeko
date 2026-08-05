@@ -65,6 +65,7 @@ export {
 export {
   NodePiConversationCatalogReader,
   type CreateNodePiConversationCatalogReaderOptions,
+  type PiConversationCatalogSnapshot,
   type PiConversationCatalogReader,
 } from './node-conversation-catalog-reader';
 export {
@@ -105,7 +106,7 @@ export {
   type PiConversationCompactionResult,
 } from './conversation-runtime';
 export {
-  migratePiConversationSchema,
+  initializePiConversationTables,
   openNodePiConversationStorage,
   type NodePiConversationStorage,
 } from './node-conversation-storage';

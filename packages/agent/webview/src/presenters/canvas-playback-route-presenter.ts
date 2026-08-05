@@ -29,7 +29,6 @@ export interface CanvasPlaybackRouteCardProjection {
 }
 
 const PROFILE_ID = 'canvas-playback-route';
-const PROFILE_VERSION = 1;
 const DEFAULT_MAX_UNITS = 12;
 
 export function projectCanvasPlaybackRouteCard(
@@ -63,11 +62,9 @@ export function projectCanvasPlaybackRouteCard(
 
   return {
     artifact: {
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: `canvas-playback-route:${selectedRoute?.id ?? 'missing'}`,
       profile: PROFILE_ID,
-      profileVersion: PROFILE_VERSION,
       title: selectedRoute?.title ?? 'Canvas Playback Route',
       blocks,
       suggestedActions: [
@@ -199,11 +196,9 @@ function createOrderedUnitsTable(
   units: readonly CanvasPlaybackUnit[],
 ): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: `canvas-playback-route-units:${route?.id ?? 'missing'}`,
     profile: PROFILE_ID,
-    profileVersion: PROFILE_VERSION,
     title: 'Canvas Playback Order',
     columns: [
       { columnId: 'index', label: '#', cellType: 'number' },

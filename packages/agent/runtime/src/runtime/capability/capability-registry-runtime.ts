@@ -4,12 +4,10 @@ import type {
   AgentCapabilityHostRequirement,
   AgentCapabilityLifecycleHook,
   AgentCapabilityManifest,
-  AgentCapabilityProtocolVersion,
   AgentCapabilityProvider,
   AgentCapabilityTrustLevel,
   AgentProfileRegistrationResult,
   AgentProfileSource,
-  AgentProfileVersion,
   IProviderCardRegistry,
   IProviderExpressionProfileRegistry,
   IToolCategoryRegistry,
@@ -20,11 +18,9 @@ import type {
   Tool,
 } from '@neko/agent-contracts';
 import type { ArtifactProfileDescriptor, IArtifactProfileRegistry } from '@neko/agent-contracts';
-import { toProviderExpressionProfile } from '@neko/agent-contracts';
 
 export interface CapabilityProtocolInfo {
   readonly providerId: string;
-  readonly protocolVersion: AgentCapabilityProtocolVersion;
   readonly trustLevel: AgentCapabilityTrustLevel;
   readonly hostRequirements: readonly AgentCapabilityHostRequirement[];
   readonly lifecycleHooks: readonly AgentCapabilityLifecycleHook[];
@@ -38,7 +34,6 @@ interface ProviderCardTarget {
 
 interface ProfileTarget {
   readonly profileId: string;
-  readonly version: AgentProfileVersion;
   readonly source: AgentProfileSource;
 }
 
@@ -156,19 +151,6 @@ export class CapabilityRegistryRuntime {
   }
 
   upsertManifest(manifest: AgentCapabilityManifest): boolean {
-    const protocol = resolveCapabilityProtocolInfo(manifest.id, manifest, 'manifest');
-    if (!isSupportedCapabilityProtocol(protocol.protocolVersion)) {
-      emitCapabilityDiagnostic(this.logger, 'warn', {
-        code: 'extension.capability.protocol.unsupported',
-        reason: 'unsupported-protocol-version',
-        message: 'Skipping unsupported capability manifest protocol version.',
-        context: {
-          providerId: manifest.id,
-          protocolVersion: protocol.protocolVersion,
-        },
-      });
-      return false;
-    }
     this.manifests.set(manifest.id, manifest);
     return true;
   }
@@ -225,23 +207,39 @@ export class CapabilityRegistryRuntime {
       this.logger.warn(`Failed to get tools from provider "${id}"`, { error: err });
     }
 
-    if (provider.getProviderCards && this.deps.providerCardRegistry) {
+    if (
+      provider.getProviderExpressionProfiles &&
+      (this.deps.providerCardRegistry || this.deps.providerExpressionProfileRegistry)
+    ) {
       try {
-        const cards: ProviderCard[] = provider.getProviderCards(context);
-        for (const card of cards) {
-          this.recordCapabilityNameCollision({
-            kind: 'provider-card',
-            name: formatProviderCardTarget(card),
-            providerId: id,
-            existingOwner: this.providerCardOwners.get(toProviderCardOwnerKey(card)),
-            existsInRuntime: false,
-          });
-          this.deps.providerCardRegistry.register(card);
-          this.providerCardOwners.set(toProviderCardOwnerKey(card), id);
-          registeredProviderCards.push(toProviderCardTarget(card));
+        const profiles: ProviderExpressionProfileDescriptor[] =
+          provider.getProviderExpressionProfiles(context);
+        for (const profile of profiles) {
+          if (this.deps.providerCardRegistry) {
+            this.recordCapabilityNameCollision({
+              kind: 'provider-card',
+              name: formatProviderCardTarget(profile),
+              providerId: id,
+              existingOwner: this.providerCardOwners.get(toProviderCardOwnerKey(profile)),
+              existsInRuntime: false,
+            });
+            this.deps.providerCardRegistry.register(profile);
+            this.providerCardOwners.set(toProviderCardOwnerKey(profile), id);
+            registeredProviderCards.push(toProviderCardTarget(profile));
+          }
+          if (this.deps.providerExpressionProfileRegistry) {
+            this.recordProfileRegistrationResult(
+              this.deps.providerExpressionProfileRegistry.register(profile),
+              id,
+              'provider-expression-profile',
+            );
+            registeredProviderExpressionProfiles.push(toProfileTarget(profile));
+          }
         }
       } catch (err) {
-        this.logger.warn(`Failed to get provider cards from provider "${id}"`, { error: err });
+        this.logger.warn(`Failed to get provider expression profiles from provider "${id}"`, {
+          error: err,
+        });
       }
     }
 
@@ -261,27 +259,6 @@ export class CapabilityRegistryRuntime {
       }
     }
 
-    if (this.deps.providerExpressionProfileRegistry) {
-      try {
-        const profiles: ProviderExpressionProfileDescriptor[] =
-          provider.getProviderExpressionProfiles?.(context) ??
-          provider.getProviderCards?.(context)?.map(toProviderExpressionProfile) ??
-          [];
-        for (const profile of profiles) {
-          this.recordProfileRegistrationResult(
-            this.deps.providerExpressionProfileRegistry.register(profile),
-            id,
-            'provider-expression-profile',
-          );
-          registeredProviderExpressionProfiles.push(toProfileTarget(profile));
-        }
-      } catch (err) {
-        this.logger.warn(`Failed to get provider expression profiles from provider "${id}"`, {
-          error: err,
-        });
-      }
-    }
-
     this.providers.set(id, {
       provider,
       protocol: resolveCapabilityProtocolInfo(id, provider, 'provider'),
@@ -292,7 +269,7 @@ export class CapabilityRegistryRuntime {
     });
 
     this.logger.info(
-      `Provider "${id}" v${provider.version} registered: ` +
+      `Provider "${id}" registered: ` +
         `${registeredTools.length} tools, ${registeredProviderCards.length} provider cards, ` +
         `${registeredArtifactProfiles.length} artifact profiles, ` +
         `${registeredProviderExpressionProfiles.length} provider expression profiles`,
@@ -328,21 +305,13 @@ export class CapabilityRegistryRuntime {
 
     if (this.deps.artifactProfileRegistry) {
       for (const target of entry.registeredArtifactProfiles) {
-        this.deps.artifactProfileRegistry.unregister(
-          target.profileId,
-          target.source,
-          target.version as ArtifactProfileDescriptor['version'],
-        );
+        this.deps.artifactProfileRegistry.unregister(target.profileId, target.source);
       }
     }
 
     if (this.deps.providerExpressionProfileRegistry) {
       for (const target of entry.registeredProviderExpressionProfiles) {
-        this.deps.providerExpressionProfileRegistry.unregister(
-          target.profileId,
-          target.source,
-          target.version as ProviderExpressionProfileDescriptor['version'],
-        );
+        this.deps.providerExpressionProfileRegistry.unregister(target.profileId, target.source);
       }
     }
 
@@ -444,12 +413,11 @@ export class CapabilityRegistryRuntime {
     return [...this.diagnostics];
   }
 
-  getSubpackage(id: string): { id: string; version: string; enabled: boolean } | null {
+  getSubpackage(id: string): { id: string; enabled: boolean } | null {
     const registered = this.providers.get(id);
     if (registered) {
       return {
         id,
-        version: registered.provider.version,
         enabled: true,
       };
     }
@@ -457,7 +425,6 @@ export class CapabilityRegistryRuntime {
     if (manifest) {
       return {
         id,
-        version: manifest.version,
         enabled: false,
       };
     }
@@ -612,12 +579,10 @@ function toProviderCardTarget(card: ProviderCard): ProviderCardTarget {
 
 function toProfileTarget(profile: {
   readonly profileId: string;
-  readonly version: AgentProfileVersion;
   readonly source: AgentProfileSource;
 }): ProfileTarget {
   return {
     profileId: profile.profileId,
-    version: profile.version,
     source: profile.source,
   };
 }
@@ -633,7 +598,6 @@ function formatProviderCardTarget(target: ProviderCardTarget): string {
 function resolveCapabilityProtocolInfo(
   providerId: string,
   metadata: {
-    readonly protocolVersion?: AgentCapabilityProtocolVersion;
     readonly trustLevel?: AgentCapabilityTrustLevel;
     readonly hostRequirements?: readonly AgentCapabilityHostRequirement[];
     readonly lifecycleHooks?: readonly AgentCapabilityLifecycleHook[];
@@ -642,7 +606,6 @@ function resolveCapabilityProtocolInfo(
 ): CapabilityProtocolInfo {
   return {
     providerId,
-    protocolVersion: metadata.protocolVersion ?? '1.0',
     trustLevel: metadata.trustLevel ?? 'core',
     hostRequirements:
       metadata.hostRequirements && metadata.hostRequirements.length > 0
@@ -651,8 +614,4 @@ function resolveCapabilityProtocolInfo(
     lifecycleHooks: metadata.lifecycleHooks ?? [],
     source,
   };
-}
-
-function isSupportedCapabilityProtocol(version: AgentCapabilityProtocolVersion): boolean {
-  return version === '1.0';
 }

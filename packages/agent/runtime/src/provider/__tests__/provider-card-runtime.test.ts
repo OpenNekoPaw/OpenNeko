@@ -124,9 +124,11 @@ function createRegistry(): IProviderCardRegistry {
 
 function createProviderCard(providerId: string): ProviderCard {
   return {
+    profileId: `provider-expression:${providerId}`,
+    kind: 'provider-expression',
+    source: 'personal',
     providerId,
     displayName: providerId,
-    version: '1.0.0',
     sourceLayer: 'personal',
     sourceRef: `${providerId}.card.md`,
     capabilities: [],

@@ -4,8 +4,6 @@ import type {
   EffectiveAgentConfigurationProjection,
 } from '@neko/agent-contracts';
 
-export const DESKTOP_AGENT_FACTS_VERSION = 1 as const;
-
 export interface DesktopAgentBoundedFacts<T> {
   readonly limit: number;
   readonly items: readonly T[];
@@ -37,7 +35,6 @@ export interface DesktopAgentPermissionReceipt {
 }
 
 export interface DesktopAgentNeutralFacts {
-  readonly schemaVersion: typeof DESKTOP_AGENT_FACTS_VERSION;
   readonly identity: {
     readonly connection: DesktopAgentConnectionIdentity;
     readonly conversationId: string;
@@ -65,7 +62,6 @@ export interface DesktopAgentNeutralFacts {
     readonly permissions: DesktopAgentBoundedFacts<DesktopAgentPermissionReceipt>;
   };
   readonly projection: {
-    readonly revision: number;
     readonly terminalState: 'completed' | 'cancelled' | 'failed';
   };
   readonly resourceDisplayProjections: DesktopAgentBoundedFacts<AgentResourceDisplayProjectionFact>;
@@ -93,7 +89,6 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
   const record = exactRecord(
     input,
     [
-      'schemaVersion',
       'identity',
       'runtimePath',
       'configuration',
@@ -107,9 +102,6 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
     ],
     'Desktop Agent facts',
   );
-  if (record['schemaVersion'] !== DESKTOP_AGENT_FACTS_VERSION) {
-    throw new Error('Desktop Agent facts version is unsupported.');
-  }
   const identity = exactRecord(
     record['identity'],
     ['connection', 'conversationId', 'branchId', 'piSessionId', 'turnId', 'runId'],
@@ -142,7 +134,7 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
   );
   const projection = exactRecord(
     record['projection'],
-    ['revision', 'terminalState'],
+    ['terminalState'],
     'Desktop Agent projection facts',
   );
   const persistence = exactRecord(
@@ -165,7 +157,6 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
     'Desktop Agent disposal facts',
   );
   return Object.freeze({
-    schemaVersion: DESKTOP_AGENT_FACTS_VERSION,
     identity: Object.freeze({
       connection: parseConnection(identity['connection']),
       conversationId: text(identity['conversationId'], 'Conversation'),
@@ -193,7 +184,6 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
       permissions: parseBounded(receipts['permissions'], 'permission', parsePermissionReceipt),
     }),
     projection: Object.freeze({
-      revision: nonNegativeInteger(projection['revision'], 'projection revision'),
       terminalState: oneOf(
         projection['terminalState'],
         ['completed', 'cancelled', 'failed'] as const,
@@ -241,12 +231,9 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
 function parseConfigurationProjection(input: unknown): EffectiveAgentConfigurationProjection {
   const record = exactRecord(
     input,
-    ['schemaVersion', 'profileId', 'digest', 'values', 'sources', 'dimensions'],
+    ['profileId', 'digest', 'values', 'sources', 'dimensions'],
     'Desktop Agent effective configuration facts',
   );
-  if (record['schemaVersion'] !== 1) {
-    throw new Error('Desktop Agent effective configuration facts version is unsupported.');
-  }
   const configurationDigest = digest(record['digest'], 'effective configuration');
   const expectedProfileId = `effective-agent-${configurationDigest.slice(
     'sha256:'.length,
@@ -296,7 +283,6 @@ function parseConfigurationProjection(input: unknown): EffectiveAgentConfigurati
   });
   const dimensions = parseConfigurationDimensions(record['dimensions']);
   return Object.freeze({
-    schemaVersion: 1,
     profileId: expectedProfileId,
     digest: configurationDigest,
     values: Object.freeze({
@@ -377,11 +363,11 @@ function parseConnection(input: unknown): DesktopAgentConnectionIdentity {
     [
       'applicationInstanceId',
       'windowId',
+      'workbenchInstanceId',
+      'agentSurfaceId',
       ownerKey,
       'workspaceId',
       'viewId',
-      'viewEpoch',
-      'rendererEpoch',
       'connectionId',
     ],
     'Desktop Agent facts connection',
@@ -389,10 +375,10 @@ function parseConnection(input: unknown): DesktopAgentConnectionIdentity {
   const common = {
     applicationInstanceId: text(record['applicationInstanceId'], 'application'),
     windowId: text(record['windowId'], 'Window'),
+    workbenchInstanceId: text(record['workbenchInstanceId'], 'Workbench instance'),
+    agentSurfaceId: text(record['agentSurfaceId'], 'Agent Surface'),
     workspaceId: text(record['workspaceId'], 'Workspace'),
     viewId: text(record['viewId'], 'View'),
-    viewEpoch: positiveInteger(record['viewEpoch'], 'View epoch'),
-    rendererEpoch: positiveInteger(record['rendererEpoch'], 'renderer epoch'),
     connectionId: text(record['connectionId'], 'connection'),
   };
   return Object.freeze(

@@ -94,7 +94,6 @@ function hostSnapshot(conversationId: string) {
 function projectionSnapshot(conversationId: string, messageId: string) {
   return {
     conversationId,
-    projectionVersion: 1,
     turns: [
       {
         turnId: `turn-${messageId}`,

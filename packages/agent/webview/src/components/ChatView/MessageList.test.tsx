@@ -39,6 +39,17 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({
+    openFile: vi.fn(),
+    confirmTool: vi.fn(),
+    revealDocumentLocator: vi.fn(),
+    invokeAgentCapabilityLifecycle: vi.fn(),
+    sendToPlugin: vi.fn(),
+    requestCanvasAuthoringHandoff: vi.fn(),
+  }),
+}));
+
 describe('MessageList auto-scroll lifecycle', () => {
   beforeEach(() => {
     scrollToMock.mockClear();

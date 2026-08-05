@@ -18,8 +18,6 @@ export interface EffectiveAgentConfigDimensionDescriptor {
 
 export type AgentExecutionMode = 'plan' | 'ask' | 'auto';
 
-export const EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION = 1 as const;
-
 export const EFFECTIVE_AGENT_CONFIG_DIMENSIONS: readonly EffectiveAgentConfigDimensionDescriptor[] =
   Object.freeze([
     dimension('modelBinding', 'model-binding'),
@@ -44,7 +42,6 @@ export interface EffectiveAgentConfigurationValues {
 }
 
 export interface EffectiveAgentConfigurationProjection {
-  readonly schemaVersion: typeof EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION;
   readonly profileId: string;
   readonly digest: `sha256:${string}`;
   readonly values: EffectiveAgentConfigurationValues;

@@ -132,7 +132,7 @@ describe('AgentAppHost', () => {
       workspaceId: fixture.workspace.workspaceId,
       conversationId: 'conversation-1',
       branchId: 'main',
-      writerEpoch: 1,
+      writerLeaseId: expect.any(String),
     });
     expect(evidence.piSessionId).toBeTruthy();
     expect(first.path).toEqual({
@@ -474,7 +474,10 @@ describe('AgentAppHost', () => {
       catalogReader: {
         listConversations: (workspaceIds) => {
           observedScopes.push([...workspaceIds]);
-          return conversations.filter((record) => workspaceIds.includes(record.workspaceId));
+          return {
+            records: conversations.filter((record) => workspaceIds.includes(record.workspaceId)),
+            diagnostics: [],
+          };
         },
         findConversation: (conversationId) =>
           conversations.find((record) => record.conversationId === conversationId),
@@ -520,6 +523,150 @@ describe('AgentAppHost', () => {
     compositions.push(composition);
 
     expect(() => composition.readHomeProjection()).toThrow('catalog fixture failed');
+  });
+
+  it('projects a valid Home Conversation beside an entry-local catalog diagnostic', async () => {
+    const fixture = await createFixture();
+    const validRecord = {
+      workspaceId: fixture.workspace.workspaceId,
+      conversationId: 'conversation-valid',
+      title: 'Valid conversation',
+      activeBranchId: 'main',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:01:00.000Z',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: fixture.workspace.workspaceId,
+        workspaceGrantId: 'grant-valid',
+      },
+    };
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-local-catalog-failure',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: () => ({
+          records: [validRecord],
+          diagnostics: [
+            {
+              code: 'invalid-conversation-record',
+              workspaceId: fixture.workspace.workspaceId,
+              conversationId: 'conversation-invalid',
+              message: "Agent Conversation context contains unknown field 'schemaVersion'.",
+            },
+          ],
+        }),
+        findConversation: (conversationId) =>
+          conversationId === validRecord.conversationId ? validRecord : undefined,
+        dispose: () => undefined,
+      },
+    });
+    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId]);
+    compositions.push(composition);
+
+    expect(composition.readHomeProjection()).toMatchObject({
+      conversations: [
+        {
+          navigation: { conversationId: 'conversation-valid' },
+        },
+      ],
+      diagnostics: [
+        {
+          code: 'invalid-conversation-record',
+          conversationId: 'conversation-invalid',
+        },
+      ],
+    });
+  });
+
+  it('isolates a Workspace context that resolves to an Assistant Space from valid siblings', async () => {
+    const fixture = await createFixture();
+    const assistantSpaceId = 'assistant-space:local-user';
+    const records = [
+      {
+        workspaceId: assistantSpaceId,
+        conversationId: 'conversation-invalid-workspace-owner',
+        title: 'Invalid workspace owner',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:03:00.000Z',
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: assistantSpaceId,
+          workspaceGrantId: 'workspace-grant:invalid',
+        },
+      },
+      {
+        workspaceId: assistantSpaceId,
+        conversationId: 'conversation-valid-assistant',
+        title: 'Valid assistant',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:02:00.000Z',
+        context: {
+          kind: 'assistant' as const,
+          assistantSpaceId,
+          baseGrantIds: [],
+        },
+      },
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-valid-workspace',
+        title: 'Valid workspace',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:01:00.000Z',
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: fixture.workspace.workspaceId,
+          workspaceGrantId: 'workspace-grant:valid',
+        },
+      },
+    ];
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-invalid-owner-scope',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: (workspaceIds) => ({
+          records: records.filter((record) => workspaceIds.includes(record.workspaceId)),
+          diagnostics: [],
+        }),
+        findConversation: (conversationId) =>
+          records.find((record) => record.conversationId === conversationId),
+        dispose: () => undefined,
+      },
+      homeConversationWorkspaceIds: [assistantSpaceId],
+    });
+    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId]);
+    compositions.push(composition);
+
+    expect(composition.readHomeProjection()).toMatchObject({
+      conversations: [
+        {
+          navigation: {
+            conversationId: 'conversation-valid-assistant',
+            owner: { kind: 'assistant', assistantSpaceId },
+          },
+        },
+        {
+          navigation: {
+            conversationId: 'conversation-valid-workspace',
+            owner: { kind: 'workspace', workspaceId: fixture.workspace.workspaceId },
+          },
+        },
+      ],
+      diagnostics: [
+        {
+          code: 'invalid-conversation-record',
+          workspaceId: assistantSpaceId,
+          conversationId: 'conversation-invalid-workspace-owner',
+          message: expect.stringContaining('Workspace context resolves to an Assistant Space'),
+        },
+      ],
+    });
   });
 
   it('reports no active turn for a durable conversation that has not opened a Pi runtime', async () => {
@@ -599,7 +746,6 @@ describe('AgentAppHost', () => {
       { kind: 'workspace', workspaceId: 'workspace-1' },
       {
         conversationId: 'conversation-generation',
-        projectionVersion: 1,
         turns: [
           {
             turnId: 'turn-1',
@@ -627,7 +773,6 @@ describe('AgentAppHost', () => {
                         generationJob: {
                           kind: 'generation-job',
                           jobId: 'generation-1',
-                          revision: 4,
                           phase: 'succeeded',
                         },
                       },
@@ -647,7 +792,6 @@ describe('AgentAppHost', () => {
 
     expect(summary.lastActivity.generationJob).toEqual({
       jobId: 'generation-1',
-      revision: 4,
       phase: 'succeeded',
     });
     expect(JSON.stringify(summary)).not.toContain('CancelGenerationJob');
@@ -666,7 +810,6 @@ describe('AgentAppHost', () => {
       { kind: 'workspace', workspaceId: 'workspace-1' },
       {
         conversationId: 'conversation-confirmation',
-        projectionVersion: 1,
         turns: [
           {
             turnId: 'turn-1',
@@ -827,7 +970,7 @@ describe('AgentAppHost', () => {
     });
 
     expect(secondEvidence.piSessionId).toBe(firstEvidence.piSessionId);
-    expect(secondEvidence.writerEpoch).toBe(1);
+    expect(secondEvidence.writerLeaseId).not.toBe(firstEvidence.writerLeaseId);
     expect(secondWorkspace.listConversations()).toHaveLength(1);
     expect(JSON.stringify(observedContexts)).toContain('before restart');
     expect(JSON.stringify(observedContexts).match(/before restart/g)).toHaveLength(1);
@@ -917,7 +1060,9 @@ describe('AgentAppHost', () => {
         baseSystemPrompt: 'Desktop Agent fixture',
       }),
     ).rejects.toMatchObject({ code: 'lease-held' });
-    expect(firstWorkspace.readConversationEvidence('conversation-fenced').writerEpoch).toBe(1);
+    expect(
+      firstWorkspace.readConversationEvidence('conversation-fenced').writerLeaseId,
+    ).not.toHaveLength(0);
   });
 
   it('releases owned runtime, lease, projection and SQLite handles on disposal', async () => {
@@ -1284,7 +1429,6 @@ function createFixtureModels(
 
 function fixtureConfiguration(): AgentTurnConfigurationSnapshot {
   const projection: EffectiveAgentConfigurationProjection = Object.freeze({
-    schemaVersion: 1,
     profileId: 'effective-agent-aaaaaaaaaaaaaaaa',
     digest: `sha256:${'a'.repeat(64)}`,
     values: Object.freeze({

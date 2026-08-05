@@ -28,8 +28,8 @@ const hostMocks = vi.hoisted(() => ({
   startCharacterDialogueFromSlash: vi.fn(),
 }));
 
-vi.mock('../../../messages', () => ({
-  AgentHostMessages: hostMocks,
+vi.mock('../../../host-runtime-context', () => ({
+  useAgentHostMessages: () => hostMocks,
 }));
 
 const translations: Record<string, string> = {

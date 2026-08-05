@@ -7,7 +7,6 @@ import type {
 import type { AgentCapabilitySource } from './capability';
 
 export const EXTERNAL_PROCESSOR_SCHEMA = 'neko.externalProcessor';
-export const EXTERNAL_PROCESSOR_SCHEMA_VERSION = 2;
 
 export const EXTERNAL_PROCESSOR_ROOT_ALIASES = [
   'workspace',
@@ -47,7 +46,6 @@ export type ExternalProcessorDiagnosticSeverity = 'error' | 'warning' | 'info';
 export type ExternalProcessorDiagnosticCode =
   | 'invalid-manifest'
   | 'unknown-schema'
-  | 'unknown-schema-version'
   | 'invalid-processor-kind'
   | 'missing-required-field'
   | 'invalid-field-type'
@@ -118,7 +116,6 @@ export interface ExternalProcessorEnvProfile {
 
 export interface ExternalProcessorManifest {
   readonly schema: typeof EXTERNAL_PROCESSOR_SCHEMA;
-  readonly schemaVersion: typeof EXTERNAL_PROCESSOR_SCHEMA_VERSION;
   readonly id: string;
   readonly kind: 'external-processor';
   readonly displayName: string;
@@ -253,7 +250,6 @@ export interface ExternalProcessorPersonalRegistryEntry {
 }
 
 export interface ExternalProcessorPersonalRegistry {
-  readonly version: 1;
   readonly entries: readonly ExternalProcessorPersonalRegistryEntry[];
 }
 
@@ -337,7 +333,6 @@ export function validateExternalProcessorManifest(
   }
 
   const schema = readString(value, 'schema', diagnostics);
-  const schemaVersion = value['schemaVersion'];
   const kind = readString(value, 'kind', diagnostics);
   const id = readString(value, 'id', diagnostics);
   const displayName = readString(value, 'displayName', diagnostics);
@@ -348,12 +343,12 @@ export function validateExternalProcessorManifest(
       diagnostic('unknown-schema', 'error', `Unknown processor schema: ${schema}`, 'schema'),
     );
   }
-  if (schemaVersion !== EXTERNAL_PROCESSOR_SCHEMA_VERSION) {
+  if (Object.hasOwn(value, 'schemaVersion')) {
     diagnostics.push(
       diagnostic(
-        'unknown-schema-version',
+        'invalid-manifest',
         'error',
-        'External processor manifest schemaVersion must be 1.',
+        'External processor manifest field schemaVersion is not supported.',
         'schemaVersion',
       ),
     );
@@ -390,7 +385,6 @@ export function validateExternalProcessorManifest(
   return {
     manifest: {
       schema: EXTERNAL_PROCESSOR_SCHEMA,
-      schemaVersion: EXTERNAL_PROCESSOR_SCHEMA_VERSION,
       id: id!,
       kind: 'external-processor',
       displayName: displayName!,

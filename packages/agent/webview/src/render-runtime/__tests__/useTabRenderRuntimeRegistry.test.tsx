@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentHostRuntimeAdapter, OpenTab } from '@neko/agent-contracts';
 import { AgentHostRuntimeProvider } from '../../host-runtime-context';
 import { useTabRenderRuntimeRegistry } from '../useTabRenderRuntimeRegistry';
-import { TAB_RENDER_REALM_STATE_VERSION } from '../tab-render-realm-state';
 
 const tabA: OpenTab = { id: 'tab-a', title: 'A', conversationId: 'conv-a' };
 const tabB: OpenTab = { id: 'tab-b', title: 'B', conversationId: 'conv-b' };
@@ -59,7 +58,6 @@ describe('useTabRenderRuntimeRegistry', () => {
 
   it('preserves user draft settings while discarding retired runtime-only fields', () => {
     const getState = vi.fn(() => ({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
       drafts: [
         {
           tabId: 'tab-a',
@@ -106,6 +104,10 @@ describe('useTabRenderRuntimeRegistry', () => {
     expect(state).not.toHaveProperty('idcRun');
     expect(state).not.toHaveProperty('stagePersona');
     expect(state).not.toHaveProperty('checkpoint');
+    act(() => window.dispatchEvent(new Event('pagehide')));
+    expect(host.setState).toHaveBeenCalledWith({
+      drafts: [expect.objectContaining({ tabId: 'tab-a', inputValue: 'restored draft' })],
+    });
     unmount();
   });
 });

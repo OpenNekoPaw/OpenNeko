@@ -8,7 +8,7 @@
     "userBehavior": "Cancel an active long Markdown stream and return the session to terminal idle.",
     "canonicalPath": ["message.submit", "Pi Agent event stream", "shared Pi Timeline projector", "conversation projection store", "message.cancel", "cancelled terminal projection", "session.waitForIdle"],
     "forbiddenFallback": ["wait for complete stream", "legacy AgentEvent projector", "direct Pi conversation mutation", "post-terminal patch", "fabricated final answer", "second renderer"],
-    "observables": [{ "ref": "cancel-facts", "kind": "runtime-fact", "description": "Exact cancellation identity, monotonic projection revisions, frozen cancelled terminal version, zero accepted post-terminal patches, runtime diagnostics, and terminal idle facts.", "required": true }],
+    "observables": [{ "ref": "cancel-facts", "kind": "runtime-fact", "description": "Exact cancellation and Timeline owner identity, one cancelled terminal patch, zero accepted post-terminal patches, runtime diagnostics, and terminal idle facts.", "required": true }],
     "expectedResult": "The active stream cancellation is accepted and all runtime concerns become terminal idle.",
     "expectedFailure": "Rejected cancellation, remaining work, or runtime errors fail."
   },

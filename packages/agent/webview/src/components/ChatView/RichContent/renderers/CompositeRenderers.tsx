@@ -11,7 +11,7 @@ import type {
 } from '../../../../presenters/composite-content-presenter';
 import type { StoryboardSceneRow, StoryboardShotRow, StoryboardTextCue } from '@neko/canvas-domain';
 import type { StoryboardShotPlanOverlay } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../../../../messages';
+import { useAgentHostMessages } from '../../../../host-runtime-context';
 import { SendToMenu } from '../../SendToMenu';
 import { useTranslation } from '../../../../i18n/I18nContext';
 import {
@@ -731,6 +731,7 @@ function AssetGalleryRendererComponent({
   data,
   className,
 }: RichContentProps<AssetGalleryRichData>) {
+  const agentHostMessages = useAgentHostMessages();
   const assets = data.sections.flatMap((section) =>
     section.media.map((media) => ({ section, media })),
   );
@@ -753,7 +754,7 @@ function AssetGalleryRendererComponent({
                 <button
                   type="button"
                   className="rounded border border-[var(--agent-input-border)] px-1.5 py-0.5 text-[10px] text-[var(--agent-fg)] hover:bg-[var(--agent-hover)]"
-                  onClick={() => openMedia(media)}
+                  onClick={() => openMedia(agentHostMessages, media)}
                 >
                   Open
                 </button>
@@ -797,6 +798,7 @@ function MediaPreview({
   media: ResolvedCompositeMedia;
   compact?: boolean;
 }) {
+  const agentHostMessages = useAgentHostMessages();
   const [imageFailed, setImageFailed] = useState(false);
   const label = media.caption ?? media.label ?? media.assetId ?? 'Media';
   const imagePreviewFrameClassName = compact
@@ -818,7 +820,7 @@ function MediaPreview({
         <button
           type="button"
           className={`min-w-0 items-center justify-center overflow-hidden rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] disabled:cursor-default ${imagePreviewFrameClassName}`}
-          onClick={() => openMedia(media)}
+          onClick={() => openMedia(agentHostMessages, media)}
           disabled={!canOpen}
           title={label}
         >
@@ -884,7 +886,7 @@ function MediaPreview({
       <button
         type="button"
         className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
-        onClick={() => openMedia(media)}
+        onClick={() => openMedia(agentHostMessages, media)}
         title={label}
       >
         3D Model - {label}
@@ -896,7 +898,7 @@ function MediaPreview({
     <button
       type="button"
       className="flex w-full items-center justify-center rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] px-2 py-4 text-[10px] text-[var(--agent-fg-secondary)]"
-      onClick={() => openMedia(media)}
+      onClick={() => openMedia(agentHostMessages, media)}
       title={label}
     >
       {label}
@@ -915,12 +917,13 @@ function MediaPreviewFallbackFrame({
   compact: boolean;
   previewHeightClassName: string;
 }) {
+  const agentHostMessages = useAgentHostMessages();
   const canOpen = canOpenMedia(media);
   return (
     <button
       type="button"
       className={`flex w-full min-w-0 overflow-hidden rounded border border-[var(--agent-divider)] bg-[var(--neko-editor-background)] disabled:cursor-default ${previewHeightClassName}`}
-      onClick={() => openMedia(media)}
+      onClick={() => openMedia(agentHostMessages, media)}
       disabled={!canOpen}
       title={label}
     >
@@ -1044,9 +1047,12 @@ function Diagnostics({
   );
 }
 
-function openMedia(media: ResolvedCompositeMedia): void {
+function openMedia(
+  hostMessages: ReturnType<typeof useAgentHostMessages>,
+  media: ResolvedCompositeMedia,
+): void {
   if (isExternalOpenUrl(media.src)) {
-    AgentHostMessages.openUrl(media.src);
+    hostMessages.openUrl(media.src);
   }
 }
 

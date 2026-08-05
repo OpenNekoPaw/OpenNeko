@@ -116,7 +116,7 @@ describe('shot image prep contracts', () => {
   });
 
   it('defines a shared media-production.shot-image-prep table profile', () => {
-    const table = buildShotImagePrepTable([makePlan()], { includeProfileVersion: true });
+    const table = buildShotImagePrepTable([makePlan()]);
 
     expect(SHOT_IMAGE_PREP_PROFILE.profileId).toBe(MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID);
     expect(table.profile).toBe(MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID);
@@ -155,7 +155,7 @@ describe('shot image prep contracts', () => {
   });
 
   it('diagnoses malformed prep profile tables', () => {
-    const table = buildShotImagePrepTable([makePlan()], { includeProfileVersion: true });
+    const table = buildShotImagePrepTable([makePlan()]);
     const result = validateGenericTable(
       {
         ...table,
@@ -389,7 +389,6 @@ const sourceRef: StoryboardMediaRef = {
 
 function makePlan(overrides: Partial<ShotImagePrepPlan> = {}): ShotImagePrepPlan {
   return {
-    schemaVersion: 1,
     kind: 'shot-image-prep-plan',
     planId: 'shot-1-image-prep',
     sceneId: 'scene-1',
@@ -422,7 +421,6 @@ function makePlan(overrides: Partial<ShotImagePrepPlan> = {}): ShotImagePrepPlan
 
 function makeStoryboard(): StoryboardTable {
   return {
-    schemaVersion: 1,
     kind: 'storyboard-table',
     profile: 'from-comic',
     sourceProfile: 'from-comic',
@@ -470,7 +468,6 @@ function makeStoryboard(): StoryboardTable {
 
 function makeStoryboardWithComicImageAudit(): StoryboardTable {
   return {
-    schemaVersion: 1,
     kind: 'storyboard-table',
     profile: 'from-comic',
     sourceProfile: 'from-comic',

@@ -69,6 +69,40 @@ describe('Desktop Agent evaluation driver boundary', () => {
     );
   });
 
+  it('uses the declared visible window mode and rejects a mismatched launch', async () => {
+    const input = selection();
+    input.scenario.execution = {
+      evidenceLevel: 'visible-desktop',
+      resourceClass: 'visible-ui',
+      protected: true,
+    };
+    const runDesktop = vi.fn(async (options) => ({
+      reportPath: '/reports/visible/desktop-functional.json',
+      report: { evidence: {}, scenario: options.scenario.id },
+    }));
+    const runPipeline = vi.fn(async () => ({ outcome: 'pass', result: {} }));
+    const options = {
+      providerAuthorization: {
+        providerId: 'provider-1',
+        modelId: 'model-1',
+        configurationFile: '/fixtures/config.toml',
+        costApproved: true,
+      },
+      runDesktop,
+      createScenario: () => ({ id: 'visible', owner: 'evaluation' }),
+      runPipeline,
+      outputRoot: '/reports',
+      runId: 'visible',
+    };
+
+    await runV2Case(input, options);
+    expect(runDesktop).toHaveBeenCalledWith(expect.objectContaining({ windowMode: 'visible' }));
+    await expect(runV2Case(input, { ...options, windowMode: 'hidden' })).rejects.toMatchObject({
+      code: 'configuration-invalid',
+      message: expect.stringContaining('requires visible window mode'),
+    });
+  });
+
   it('runs every repetition as a separately identified Desktop sample and writes one aggregate', async () => {
     const input = selection();
     input.scenario.budget.repetitions = 3;

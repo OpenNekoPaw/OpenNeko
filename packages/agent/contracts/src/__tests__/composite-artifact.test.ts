@@ -11,7 +11,6 @@ const profile: ArtifactProfileDescriptor = {
   profileId: 'media-production.shot-image-prep',
   kind: 'artifact',
   protocol: 'GenericTable',
-  version: 1,
   source: 'skill-local',
   columns: [
     { columnId: 'shotId', cellType: 'string', required: true },
@@ -32,7 +31,6 @@ describe('composite artifact contracts', () => {
   it('validates a composite artifact with a profiled generic table', () => {
     const table = makeTable();
     const artifact: CompositeArtifact = {
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'artifact-1',
       title: 'Media production from comic',
@@ -54,7 +52,6 @@ describe('composite artifact contracts', () => {
 
   it('diagnoses unknown block and cell kinds without treating them as executable', () => {
     const artifact = {
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'artifact-1',
       title: 'Bad artifact',
@@ -101,17 +98,32 @@ describe('composite artifact contracts', () => {
     expect(result.diagnostics.map((d) => d.code)).toContain('unsafe-runtime-handle');
   });
 
-  it('keeps persisted profile versions lightweight but fail-closed on unsupported versions', () => {
-    const table = makeTable({ profileVersion: 2 });
+  it('rejects removed version fields without invalidating a valid sibling artifact', () => {
+    const table = { ...makeTable(), schemaVersion: 1, profileVersion: 2 };
+    const persistedProfile: ArtifactProfileDescriptor = { ...profile, source: 'builtin' };
 
-    const result = validateGenericTable(table, { profiles: [profile], persisted: true });
+    const result = validateGenericTable(table, { profiles: [persistedProfile], persisted: true });
+    const sibling = validateGenericTable(makeTable(), {
+      profiles: [persistedProfile],
+      persisted: true,
+    });
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'unsupported-profile-version', severity: 'error' }),
+        expect.objectContaining({
+          code: 'unsupported-field',
+          path: ['schemaVersion'],
+          severity: 'error',
+        }),
+        expect.objectContaining({
+          code: 'unsupported-field',
+          path: ['profileVersion'],
+          severity: 'error',
+        }),
       ]),
     );
+    expect(sibling).toEqual({ ok: true, diagnostics: [] });
   });
 
   it('fails closed when a persisted artifact references a missing profile descriptor', () => {
@@ -127,8 +139,8 @@ describe('composite artifact contracts', () => {
     );
   });
 
-  it('allows temporary profiled chat tables to omit profileVersion', () => {
-    const result = validateGenericTable(makeTable({ profileVersion: undefined }), {
+  it('allows temporary profiled chat tables without technical version fields', () => {
+    const result = validateGenericTable(makeTable(), {
       profiles: [profile],
       persisted: false,
     });
@@ -170,7 +182,6 @@ describe('composite artifact contracts', () => {
       profileId: 'strict-shot-profile',
       kind: 'artifact',
       protocol: 'GenericTable',
-      version: 1,
       source: 'builtin',
       columns: [
         { columnId: 'review', cellType: 'enum', required: true, enumValues: ['approved'] },
@@ -239,7 +250,6 @@ describe('composite artifact contracts', () => {
       profileId: 'comic-shot-review',
       kind: 'artifact',
       protocol: 'GenericTable',
-      version: 1,
       source: 'skill-local',
       fieldDefinitions: [
         { columnId: 'shotId', cellType: 'string', required: true },
@@ -315,7 +325,6 @@ describe('composite artifact contracts', () => {
       profileId: 'broken-comic-shot-review',
       kind: 'artifact',
       protocol: 'GenericTable',
-      version: 1,
       source: 'skill-local',
       fieldDefinitions: [{ columnId: 'shotId', cellType: 'string', required: true }],
       fieldGroups: [{ groupId: 'shot-core', fieldIds: ['shotId', 'missingField'] }],
@@ -348,11 +357,9 @@ describe('composite artifact contracts', () => {
 
 function makeTable(overrides: Partial<GenericTable> = {}): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: 'asset-prep',
     profile: 'media-production.shot-image-prep',
-    profileVersion: 1,
     title: 'Asset prep',
     columns: [
       { columnId: 'shotId', cellType: 'string', required: true },

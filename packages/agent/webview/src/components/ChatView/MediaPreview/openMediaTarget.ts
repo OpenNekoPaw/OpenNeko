@@ -1,11 +1,11 @@
-import { AgentHostMessages } from '../../../messages';
+import type { AgentHostMessageSender } from '../../../messages';
 
-export function openMediaTarget(target: string): void {
+export function openMediaTarget(hostMessages: AgentHostMessageSender, target: string): void {
   if (isHostFileOpenTarget(target)) {
     throw new Error('Host file open requires a ContentLocator.');
   }
 
-  AgentHostMessages.openUrl(target);
+  hostMessages.openUrl(target);
 }
 
 function isHostFileOpenTarget(target: string): boolean {

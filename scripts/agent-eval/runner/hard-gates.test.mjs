@@ -72,10 +72,7 @@ describe('M1 deterministic hard gates', () => {
       (facts) =>
         facts.turns.push({ id: 'a2', role: 'assistant', content: 'failed', isError: true }),
     ],
-    [
-      'non-idle state',
-      (facts) => (facts.idle = { fullyIdle: false, turnIdle: { idle: false } }),
-    ],
+    ['non-idle state', (facts) => (facts.idle = { fullyIdle: false, turnIdle: { idle: false } })],
     ['missing canonical user turn', (facts) => (facts.turns = facts.turns.slice(1))],
     ['empty final answer', (facts) => (facts.turns[1].content = '  ')],
   ])('fails on %s without allowing result-only success', (_label, mutate) => {
@@ -642,13 +639,27 @@ function m3Facts() {
     turnId: 'turn-1',
     runId: 'run-1',
     messageId: 'assistant-turn-1',
-    projectionVersion: 3,
-    terminalProjectionVersion: 3,
     completionStatus: 'completed',
     patches: [
-      { baseProjectionVersion: 0, projectionVersion: 1 },
-      { baseProjectionVersion: 1, projectionVersion: 2 },
-      { baseProjectionVersion: 2, projectionVersion: 3 },
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'assistant-turn-1',
+      },
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'assistant-turn-1',
+      },
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'assistant-turn-1',
+        completionStatus: 'completed',
+      },
     ],
     droppedPatchCount: 0,
     acceptedPostTerminalPatchCount: 0,
@@ -947,9 +958,9 @@ describe('M3 process hard gates', () => {
       (facts) => (facts.piRuntime.implementation = 'AgentSession'),
     ],
     [
-      'projection version gap',
+      'projection owner mismatch',
       1,
-      (facts) => (facts.timelineProjection.patches[1].baseProjectionVersion = 0),
+      (facts) => (facts.timelineProjection.patches[1].runId = 'run-other'),
     ],
     ['out-of-order event', 2, (facts) => facts.automation.steps.splice(1, 1)],
     ['queue not accepted', 3, (facts) => (facts.automation.steps[1].queued = false)],

@@ -147,15 +147,11 @@ describe('reference-token-presenter', () => {
 
 function threeReferenceData() {
   return {
-    contractVersion: 1,
     staging: {
-      schemaVersion: 1,
       sessionId: 'session-1',
-      revision: 2,
       subject: {
         kind: 'builtin-preset',
         presetId: 'guide-neutral-mannequin',
-        presetVersion: 1,
         fingerprint: 'preset-fingerprint',
         presetKind: 'mannequin',
         appearancePolicy: 'guide-only',
@@ -175,7 +171,7 @@ function threeReferenceData() {
       {
         kind: 'pose',
         sessionId: 'session-1',
-        revision: 2,
+        requestId: 'request-pose',
         controlImage: contentLocator('pose-control'),
         controlMode: 'pose',
         joints: [],
@@ -183,7 +179,7 @@ function threeReferenceData() {
       {
         kind: 'camera',
         sessionId: 'session-1',
-        revision: 2,
+        requestId: 'request-camera',
         camera: {
           cameraId: 'front',
           position: { x: 0, y: 1, z: 3 },

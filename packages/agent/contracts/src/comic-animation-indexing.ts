@@ -30,8 +30,6 @@ import type { PerceptionCard, PerceptionEvidenceEntry } from './perception-card'
 import type { CharacterReferenceRef, ShotReferenceBundle } from './shot-image-prep';
 import type { StoryboardMediaRef } from '@neko/canvas-domain';
 
-export const COMIC_ANIMATION_INDEXING_SCHEMA_VERSION = 1 as const;
-
 export interface MediaBoundingBox {
   readonly x: number;
   readonly y: number;
@@ -225,7 +223,7 @@ export type ComicAnimationPathSegment = CharacterMemoryPathSegment;
 
 export type ComicAnimationDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-schema-version'
+  | 'unsupported-field'
   | 'invalid-kind'
   | 'missing-required-field'
   | 'invalid-required-field'
@@ -297,7 +295,6 @@ export interface IndexTaskState {
 }
 
 export interface IndexedRangeState {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof INDEXED_RANGE_STATE_KIND;
   readonly rangeId: string;
   readonly assetId: string;
@@ -310,7 +307,6 @@ export interface IndexedRangeState {
 }
 
 export interface VisualOccurrence {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof VISUAL_OCCURRENCE_KIND;
   readonly occurrenceId: string;
   readonly sourceRef: CharacterMemorySourceRef;
@@ -357,7 +353,6 @@ export interface StoryPositionRef {
 }
 
 export interface PlotEvent {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof PLOT_EVENT_KIND;
   readonly eventId: string;
   readonly summary: string;
@@ -373,7 +368,6 @@ export interface PlotEvent {
 }
 
 export interface CharacterStateChange {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof CHARACTER_STATE_CHANGE_KIND;
   readonly changeId: string;
   readonly characterRef: CreativeEntityRef;
@@ -392,7 +386,6 @@ export interface CharacterStateChange {
 }
 
 export interface ContinuityConstraint {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof CONTINUITY_CONSTRAINT_KIND;
   readonly constraintId: string;
   readonly type: ContinuityConstraintType;
@@ -426,7 +419,6 @@ export interface StoryContinuityQuery {
 }
 
 export interface StoryContinuitySnapshot {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof STORY_CONTINUITY_SNAPSHOT_KIND;
   readonly snapshotId: string;
   readonly query: StoryContinuityQuery;
@@ -492,7 +484,6 @@ export interface BatchExecutionItem {
 }
 
 export interface BatchExecutionPlan {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof BATCH_EXECUTION_PLAN_KIND;
   readonly planId: string;
   readonly sourceArtifactRefs?: readonly string[];
@@ -784,7 +775,6 @@ export function projectPerceptionCardToIndexedRangeState(
   const tasks = input.tasks ?? perceptionCardTasks(input.card);
   const rangeId = input.rangeId ?? `${input.card.assetId}:${input.rangeKind ?? 'asset'}`;
   return {
-    schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
     kind: INDEXED_RANGE_STATE_KIND,
     rangeId,
     assetId: input.card.assetId,
@@ -821,7 +811,6 @@ export function projectVisualOccurrenceFromEvidence(
       })
     : [];
   return {
-    schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
     kind: VISUAL_OCCURRENCE_KIND,
     occurrenceId: input.occurrenceId,
     sourceRef: input.sourceRef,
@@ -909,7 +898,6 @@ export function buildComicAnimationReviewArtifact(input: {
     });
   }
   return {
-    schemaVersion: 1,
     kind: 'composite-artifact',
     artifactId: input.artifactId,
     profile: 'comic-animation-review',
@@ -924,7 +912,6 @@ export function buildVisualOccurrenceReviewTable(
   options: { readonly tableId?: string; readonly title?: string } = {},
 ): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? 'visual-occurrence-review',
     profile: 'comic-visual-occurrence-review',
@@ -939,7 +926,6 @@ export function buildBatchExecutionReviewTable(
   options: { readonly tableId?: string; readonly title?: string } = {},
 ): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? `${plan.planId}-review`,
     profile: 'batch-execution-review',
@@ -959,7 +945,6 @@ export function buildContinuityDiagnosticsReviewTable(
     ...(snapshot.unresolvedQuestions ?? []).map(projectUnresolvedQuestionToRow),
   ];
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? `${snapshot.snapshotId}-continuity-review`,
     profile: 'story-continuity-diagnostics-review',
@@ -1457,15 +1442,14 @@ function validateEnvelope(
   kind: string,
   diagnostics: ComicAnimationDiagnostic[],
 ): void {
-  if (value['schemaVersion'] !== COMIC_ANIMATION_INDEXING_SCHEMA_VERSION) {
+  if (Object.hasOwn(value, 'schemaVersion')) {
     diagnostics.push(
       diagnostic(
         'error',
-        'invalid-schema-version',
+        'unsupported-field',
         [...path, 'schemaVersion'],
-        'Invalid schema version.',
+        'Comic animation field schemaVersion is not supported.',
         {
-          expected: String(COMIC_ANIMATION_INDEXING_SCHEMA_VERSION),
           actual: diagnosticValue(value['schemaVersion']),
         },
       ),

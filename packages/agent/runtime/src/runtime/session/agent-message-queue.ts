@@ -104,8 +104,8 @@ export function createAgentConversationMessageQueue(
 class DefaultAgentConversationMessageQueue implements AgentConversationMessageQueue {
   readonly conversationId: string;
   private readonly items: AgentQueuedMessageItem[] = [];
-  private version = 0;
-  private sequence = 0;
+  private eventSequence = 0;
+  private idSequence = 0;
   private pausedAfterActiveTurnCancel = false;
   private draining = false;
 
@@ -133,7 +133,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       ...(input.metadata ? { metadata: { ...input.metadata } } : {}),
     };
     this.items.push(item);
-    this.bumpVersion();
+    this.advanceEventSequence();
     return cloneItem(item);
   }
 
@@ -142,14 +142,14 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       conversationId: this.conversationId,
       items: this.items.map(cloneItem),
       pendingCount: this.items.length,
-      version: this.version,
+      sequence: this.eventSequence,
     };
   }
 
   promote(queueItemId: string): AgentQueuedMessageItem {
     const item = this.take(queueItemId);
     this.items.unshift(item);
-    this.bumpVersion();
+    this.advanceEventSequence();
     return cloneItem(item);
   }
 
@@ -169,13 +169,13 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       updatedAt: now,
     };
     this.items[index] = updated;
-    this.bumpVersion();
+    this.advanceEventSequence();
     return cloneItem(updated);
   }
 
   remove(queueItemId: string): AgentQueuedMessageItem {
     const item = this.take(queueItemId);
-    this.bumpVersion();
+    this.advanceEventSequence();
     if (this.items.length === 0) {
       this.pausedAfterActiveTurnCancel = false;
     }
@@ -198,7 +198,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       updatedAt: now,
       metadata: { ...current.metadata, status: 'discarded' },
     };
-    this.bumpVersion();
+    this.advanceEventSequence();
     if (this.items.length === 0) {
       this.pausedAfterActiveTurnCancel = false;
     }
@@ -215,7 +215,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
     if (!item) {
       return null;
     }
-    this.bumpVersion();
+    this.advanceEventSequence();
     return cloneItem(item);
   }
 
@@ -242,7 +242,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       return;
     }
     this.pausedAfterActiveTurnCancel = true;
-    this.bumpVersion();
+    this.advanceEventSequence();
   }
 
   resume(): void {
@@ -250,7 +250,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
       return;
     }
     this.pausedAfterActiveTurnCancel = false;
-    this.bumpVersion();
+    this.advanceEventSequence();
   }
 
   isPausedAfterActiveTurnCancel(): boolean {
@@ -263,7 +263,7 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
     }
     this.items.length = 0;
     this.pausedAfterActiveTurnCancel = false;
-    this.bumpVersion();
+    this.advanceEventSequence();
   }
 
   private take(queueItemId: string): AgentQueuedMessageItem {
@@ -302,16 +302,16 @@ class DefaultAgentConversationMessageQueue implements AgentConversationMessageQu
     if (this.options.createId) {
       return this.options.createId();
     }
-    this.sequence += 1;
-    return `${this.conversationId}:queue:${this.readNow().toString(36)}:${this.sequence.toString(36)}`;
+    this.idSequence += 1;
+    return `${this.conversationId}:queue:${this.readNow().toString(36)}:${this.idSequence.toString(36)}`;
   }
 
   private readNow(): number {
     return this.options.now?.() ?? Date.now();
   }
 
-  private bumpVersion(): void {
-    this.version += 1;
+  private advanceEventSequence(): void {
+    this.eventSequence += 1;
   }
 }
 

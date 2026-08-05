@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 import { stableStringify } from '@neko/shared';
 import {
-  DESKTOP_AGENT_FACTS_VERSION,
-  EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION,
   type AgentResourceDisplayProjectionFact,
   type DesktopAgentConnectionIdentity,
   type DesktopAgentBoundedFacts,
@@ -22,14 +20,13 @@ export interface DesktopAgentConversationEvidence {
   readonly conversationId: string;
   readonly branchId: string;
   readonly piSessionId: string;
-  readonly writerEpoch: number;
+  readonly writerLeaseId: string;
 }
 
 export interface DesktopAgentFactsTurnResult {
   readonly identity: PiToolRunIdentity;
   readonly durability: 'volatile' | 'persisting' | 'durable' | 'persistence-delayed';
   readonly projection: {
-    readonly projectionVersion: number;
     readonly turns: readonly {
       readonly turnId: string;
       readonly completion?: {
@@ -78,7 +75,6 @@ export function createDesktopAgentNeutralFacts(
   assertIdentity(input.connection.workspaceId, input.turn.identity.workspaceId, 'turn Workspace');
   const limit = requireFactLimit(input.factLimit ?? DEFAULT_FACT_LIMIT);
   const facts: DesktopAgentNeutralFacts = Object.freeze({
-    schemaVersion: DESKTOP_AGENT_FACTS_VERSION,
     identity: Object.freeze({
       connection: input.connection,
       conversationId: input.conversation.conversationId,
@@ -103,10 +99,6 @@ export function createDesktopAgentNeutralFacts(
       permissions: bounded(input.permissionReceipts, limit),
     }),
     projection: Object.freeze({
-      revision: requireNonNegativeInteger(
-        input.turn.projection.projectionVersion,
-        'projection revision',
-      ),
       terminalState: terminalState(input.turn),
     }),
     resourceDisplayProjections: bounded(input.resourceDisplayProjections ?? [], limit),
@@ -125,9 +117,6 @@ export function createDesktopAgentNeutralFacts(
 export function assertCompleteDesktopAgentNeutralFacts(
   facts: DesktopAgentNeutralFacts,
 ): DesktopAgentNeutralFacts {
-  if (facts.schemaVersion !== DESKTOP_AGENT_FACTS_VERSION) {
-    throw new Error(`Unsupported Desktop Agent facts version: ${facts.schemaVersion}`);
-  }
   for (const [label, collection] of Object.entries({
     prompts: facts.receipts.prompts,
     skills: facts.receipts.skills,
@@ -155,13 +144,9 @@ export function assertCompleteDesktopAgentNeutralFacts(
 function assertEffectiveAgentConfigurationProjection(
   input: EffectiveAgentConfigurationProjection,
 ): EffectiveAgentConfigurationProjection {
-  if (input.schemaVersion !== EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION) {
-    throw new Error(`Unsupported effective Agent configuration version: ${input.schemaVersion}`);
-  }
   const expectedDigest = `sha256:${createHash('sha256')
     .update(
       stableStringify({
-        schemaVersion: EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION,
         values: input.values,
         sources: input.sources,
       }),
@@ -242,10 +227,4 @@ function requireFactLimit(value: number): number {
   return value;
 }
 
-function requireNonNegativeInteger(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`Desktop Agent ${label} must be a non-negative integer.`);
-  }
-  return value;
-}
 import { isAbsolute } from 'node:path';

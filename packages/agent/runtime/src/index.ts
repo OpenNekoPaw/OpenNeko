@@ -308,10 +308,6 @@ export {
 
 // Export session management
 export {
-  RetiredAgentMetadataStoreError,
-  type RetiredAgentMetadataStoreKind,
-} from './retired-metadata-store';
-export {
   buildConversationHistoryClearedMessage,
   createConversationId,
   getConversationWorkDirHash,

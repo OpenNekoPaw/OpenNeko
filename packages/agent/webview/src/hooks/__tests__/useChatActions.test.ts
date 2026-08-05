@@ -11,13 +11,13 @@ const hostMocks = vi.hoisted(() => ({
   cancelMessage: vi.fn(),
 }));
 
-vi.mock('../../messages', () => ({
-  AgentHostMessages: {
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({
     sendMessage: hostMocks.sendMessage,
     invokeSlashCommand: hostMocks.invokeSlashCommand,
     invokeSkill: hostMocks.invokeSkill,
     cancelMessage: hostMocks.cancelMessage,
-  },
+  }),
 }));
 
 describe('useChatActions', () => {

@@ -310,6 +310,7 @@ const STEP_SCHEMA = s.union([
     timeoutMs: s.integer({ min: 1, max: 600_000 }),
   }),
   s.object({ id: ID, kind: s.literal('resume'), conversationRef: s.literal('current') }),
+  s.object({ id: ID, kind: s.literal('restart'), conversationRef: s.literal('current') }),
   s.object({ id: ID, kind: s.literal('feedback'), prompt: TEXT, afterStepId: ID }),
   s.object({
     id: ID,
@@ -975,6 +976,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'cancel',
     'confirm',
     'resume',
+    'restart',
     'feedback',
     'resize',
   ]),
@@ -1194,11 +1196,11 @@ function validateWorkflowSteps(steps) {
       if (state !== 'idle') throw new Error(`feedback ${step.id} requires idle state`);
       state = 'active';
       hasSessionTurn = true;
-    } else if (step.kind === 'resume') {
+    } else if (step.kind === 'resume' || step.kind === 'restart') {
       if (!hasSessionTurn) {
-        throw new Error(`resume ${step.id} cannot reference current before a session turn`);
+        throw new Error(`${step.kind} ${step.id} cannot reference current before a session turn`);
       }
-      if (state !== 'idle') throw new Error(`resume ${step.id} requires idle state`);
+      if (state !== 'idle') throw new Error(`${step.kind} ${step.id} requires idle state`);
     } else if (step.kind === 'resize') {
       if (state !== 'idle') throw new Error(`resize ${step.id} requires idle state`);
     }

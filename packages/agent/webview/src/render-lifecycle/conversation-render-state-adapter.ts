@@ -10,7 +10,7 @@ export interface ConversationRenderStreamingState {
   readonly isThinking: boolean;
   readonly queuedMessageCount?: number;
   readonly queuedMessages?: readonly AgentQueuedMessageItem[];
-  readonly messageQueueVersion?: number;
+  readonly messageQueueSequence?: number;
 }
 
 export type ConversationRenderStateUpdater<
@@ -103,8 +103,8 @@ function toConversationStreamingSnapshot(
     isThinking: streaming.isThinking,
     queuedMessageCount: streaming.queuedMessageCount ?? 0,
     queuedMessages: streaming.queuedMessages ?? [],
-    ...(streaming.messageQueueVersion !== undefined
-      ? { messageQueueVersion: streaming.messageQueueVersion }
+    ...(streaming.messageQueueSequence !== undefined
+      ? { messageQueueSequence: streaming.messageQueueSequence }
       : {}),
   };
 }

@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
-  AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
   type AgentContextPayload,
 } from '@neko/agent-contracts';
 import { contentLocatorKey, type ContentLocator } from '@neko/content';
@@ -220,7 +219,6 @@ describe('message runtime helpers', () => {
         label: '小橘',
         summary: 'thin search summary',
         data: {
-          schemaVersion: AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
           kind: AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
           entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
           entity: {
@@ -945,7 +943,7 @@ describe('message runtime helpers', () => {
           controlImage: {
             imageRef: contentLocator('pose-control'),
             mode: 'depth',
-            identity: { sessionId: 'session-1', revision: 2 },
+            identity: { sessionId: 'session-1', requestId: 'request-pose' },
           },
           camera: {
             value: {
@@ -955,7 +953,7 @@ describe('message runtime helpers', () => {
               fieldOfViewDeg: 45,
               aspectRatio: 1,
             },
-            identity: { sessionId: 'session-1', revision: 2 },
+            identity: { sessionId: 'session-1', requestId: 'request-camera' },
           },
         },
       }),
@@ -1965,19 +1963,15 @@ function contentLocator(path: string): ContentLocator {
 function threeReferencePayload(): AgentContextPayload {
   return {
     type: '3d-reference',
-    id: '3d-reference:session-1:2',
+    id: '3d-reference:session-1',
     label: 'Neutral mannequin',
     summary: 'Pose and camera guide',
     data: {
-      contractVersion: 1,
       staging: {
-        schemaVersion: 1,
         sessionId: 'session-1',
-        revision: 2,
         subject: {
           kind: 'builtin-preset',
           presetId: 'guide-neutral-mannequin',
-          presetVersion: 1,
           fingerprint: 'preset-fingerprint',
           presetKind: 'mannequin',
           appearancePolicy: 'guide-only',
@@ -1997,7 +1991,7 @@ function threeReferencePayload(): AgentContextPayload {
         {
           kind: 'pose',
           sessionId: 'session-1',
-          revision: 2,
+          requestId: 'request-pose',
           controlImage: contentLocator('pose-control'),
           controlMode: 'depth',
           joints: [],
@@ -2005,7 +1999,7 @@ function threeReferencePayload(): AgentContextPayload {
         {
           kind: 'camera',
           sessionId: 'session-1',
-          revision: 2,
+          requestId: 'request-camera',
           camera: {
             cameraId: 'front',
             position: { x: 0, y: 1, z: 3 },

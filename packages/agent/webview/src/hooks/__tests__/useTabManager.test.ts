@@ -12,8 +12,8 @@ const hostMocks = vi.hoisted(() => ({
   deleteConversation: vi.fn(),
 }));
 
-vi.mock('../../messages', () => ({
-  AgentHostMessages: hostMocks,
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => hostMocks,
 }));
 
 describe('useTabManager', () => {

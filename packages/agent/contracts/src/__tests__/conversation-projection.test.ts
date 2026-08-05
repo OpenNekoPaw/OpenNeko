@@ -62,17 +62,14 @@ describe('conversation projection contract', () => {
 });
 
 describe('conversation projection patch application', () => {
-  it('creates immutable replica snapshots without mutating the previous version', () => {
+  it('creates immutable replica snapshots without mutating the previous snapshot', () => {
     const snapshot = Object.freeze({
       conversationId: 'conversation-a',
-      projectionVersion: 0,
       turns: Object.freeze([]),
     });
     const next = applyConversationProjectionPatch(snapshot, {
       type: 'conversationProjectionPatch',
       conversationId: 'conversation-a',
-      baseProjectionVersion: 0,
-      projectionVersion: 1,
       turnId: 'turn-a',
       runId: 'run-a',
       messageId: 'message-a',
@@ -80,39 +77,34 @@ describe('conversation projection patch application', () => {
     });
 
     expect(snapshot.turns).toEqual([]);
-    expect(next.projectionVersion).toBe(1);
     expect(next.turns[0]?.items[0]).toMatchObject({ payload: { content: 'first' } });
     expect(Object.isFrozen(next)).toBe(true);
     expect(Object.isFrozen(next.turns)).toBe(true);
     expect(Object.isFrozen(next.turns[0]?.items)).toBe(true);
   });
 
-  it('rejects projection version gaps before applying item operations', () => {
+  it('rejects patches owned by another conversation before applying item operations', () => {
     expect(() =>
       applyConversationProjectionPatch(
-        { conversationId: 'conversation-a', projectionVersion: 2, turns: [] },
+        { conversationId: 'conversation-a', turns: [] },
         {
           type: 'conversationProjectionPatch',
-          conversationId: 'conversation-a',
-          baseProjectionVersion: 1,
-          projectionVersion: 3,
+          conversationId: 'conversation-b',
           turnId: 'turn-a',
           runId: 'run-a',
           messageId: 'message-a',
           operations: [{ operation: 'append', item: textItem('gap', 1) }],
         },
       ),
-    ).toThrow(/patch base mismatch/);
+    ).toThrow(/owner mismatch/);
   });
 
   it('rejects an empty or changed run owner before applying item operations', () => {
     const snapshot = applyConversationProjectionPatch(
-      { conversationId: 'conversation-a', projectionVersion: 0, turns: [] },
+      { conversationId: 'conversation-a', turns: [] },
       {
         type: 'conversationProjectionPatch',
         conversationId: 'conversation-a',
-        baseProjectionVersion: 0,
-        projectionVersion: 1,
         turnId: 'turn-a',
         runId: 'run-a',
         messageId: 'message-a',
@@ -124,8 +116,6 @@ describe('conversation projection patch application', () => {
       applyConversationProjectionPatch(snapshot, {
         type: 'conversationProjectionPatch',
         conversationId: 'conversation-a',
-        baseProjectionVersion: 1,
-        projectionVersion: 2,
         turnId: 'turn-a',
         runId: '',
         messageId: 'message-a',
@@ -137,8 +127,6 @@ describe('conversation projection patch application', () => {
       applyConversationProjectionPatch(snapshot, {
         type: 'conversationProjectionPatch',
         conversationId: 'conversation-a',
-        baseProjectionVersion: 1,
-        projectionVersion: 2,
         turnId: 'turn-a',
         runId: 'run-b',
         messageId: 'message-a',

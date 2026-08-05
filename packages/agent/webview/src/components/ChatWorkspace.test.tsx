@@ -27,8 +27,8 @@ const hostMocks = vi.hoisted(() => ({
   clearActiveSkill: vi.fn(),
 }));
 
-vi.mock('../messages', () => ({
-  AgentHostMessages: hostMocks,
+vi.mock('../host-runtime-context', () => ({
+  useAgentHostMessages: () => hostMocks,
 }));
 
 vi.mock('./ChatView/InputAreaContext', () => ({
@@ -770,6 +770,32 @@ describe('ChatWorkspace pending send', () => {
     fireEvent.click(getByTestId('send'));
 
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('projects a retained session diagnostic only while its owning Tab is visible', () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-1', conversationId: 'conv-1' });
+    runtime.store.updateState({
+      diagnostics: [
+        {
+          type: 'sessionDiagnostic',
+          code: 'active-tab-mismatch',
+          severity: 'error',
+          action: 'session-mutation',
+          message: 'The exact conversation is no longer active.',
+        },
+      ],
+    });
+    const props = createProps({ tabRenderStore: runtime.store, isVisible: false });
+    const { rerender } = render(<ChatWorkspace {...props} />);
+
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    rerender(<ChatWorkspace {...props} isVisible />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert.parentElement).toBe(document.body);
+    expect(alert.textContent).toContain('active-tab-mismatch');
+    expect(alert.textContent).toContain('The exact conversation is no longer active.');
   });
 
   it('routes visible mutations through the immutable Tab runtime binding', () => {

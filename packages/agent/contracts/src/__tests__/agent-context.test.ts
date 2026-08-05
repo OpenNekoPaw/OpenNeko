@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
-  AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
   isAgentResolvedEntityContextData,
 } from '../agent-context';
 
 describe('Agent resolved Entity context contract', () => {
   const context = {
-    schemaVersion: AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
     kind: AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
     entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
     entity: {
@@ -21,6 +19,11 @@ describe('Agent resolved Entity context contract', () => {
   } as const;
 
   it('accepts a matching canonical Entity snapshot', () => {
+    expect(isAgentResolvedEntityContextData(context)).toBe(true);
+  });
+
+  it('rejects the removed schemaVersion only for the affected context', () => {
+    expect(isAgentResolvedEntityContextData({ ...context, schemaVersion: 1 })).toBe(false);
     expect(isAgentResolvedEntityContextData(context)).toBe(true);
   });
 

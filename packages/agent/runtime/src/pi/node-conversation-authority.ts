@@ -16,7 +16,7 @@ import { openNodePiConversationStorage } from './node-conversation-storage';
 export interface ConversationExecutionLease {
   readonly conversationId: string;
   readonly holderId: string;
-  readonly epoch: number;
+  readonly leaseId: string;
   readonly expiresAt: number;
 }
 
@@ -49,7 +49,7 @@ export interface PiTurnCheckpointRecord {
   readonly branchId: string;
   readonly piSessionId: string;
   readonly leafId: string | null;
-  readonly writerEpoch: number;
+  readonly writerLeaseId: string;
   readonly terminalState: 'completed' | 'cancelled' | 'failed';
   readonly committedAt: string;
 }
@@ -193,26 +193,26 @@ export class NodePiConversationAuthority {
           .prepare('SELECT * FROM pi_execution_leases WHERE conversation_id = ?')
           .get(conversationId),
       );
-      let epoch: number;
+      let leaseId: string;
       if (current === undefined) {
-        epoch = 1;
+        leaseId = uuidv7();
         this.database
           .prepare(
-            'INSERT INTO pi_execution_leases (conversation_id, holder_id, epoch, expires_at) VALUES (?, ?, ?, ?)',
+            'INSERT INTO pi_execution_leases (conversation_id, holder_id, lease_id, expires_at) VALUES (?, ?, ?, ?)',
           )
-          .run(conversationId, this.hostId, epoch, expiresAt);
+          .run(conversationId, this.hostId, leaseId, expiresAt);
       } else if (current.holderId === this.hostId && current.expiresAt > now) {
-        epoch = current.epoch;
+        leaseId = current.leaseId;
         this.database
           .prepare('UPDATE pi_execution_leases SET expires_at = ? WHERE conversation_id = ?')
           .run(expiresAt, conversationId);
       } else if (current.expiresAt <= now || options?.takeover === true) {
-        epoch = current.epoch + 1;
+        leaseId = uuidv7();
         this.database
           .prepare(
-            'UPDATE pi_execution_leases SET holder_id = ?, epoch = ?, expires_at = ? WHERE conversation_id = ?',
+            'UPDATE pi_execution_leases SET holder_id = ?, lease_id = ?, expires_at = ? WHERE conversation_id = ?',
           )
-          .run(this.hostId, epoch, expiresAt, conversationId);
+          .run(this.hostId, leaseId, expiresAt, conversationId);
       } else {
         throw new PiConversationAuthorityError(
           'lease-held',
@@ -220,7 +220,7 @@ export class NodePiConversationAuthority {
         );
       }
       this.database.exec('COMMIT');
-      return Object.freeze({ conversationId, holderId: this.hostId, epoch, expiresAt });
+      return Object.freeze({ conversationId, holderId: this.hostId, leaseId, expiresAt });
     } catch (error) {
       this.database.exec('ROLLBACK');
       throw error;
@@ -248,7 +248,7 @@ export class NodePiConversationAuthority {
     if (lease.holderId !== this.hostId) {
       throw new PiConversationAuthorityError(
         'lease-stale',
-        `Conversation writer lease ${lease.conversationId}@${lease.epoch} belongs to another Host.`,
+        `Conversation writer lease '${lease.leaseId}' belongs to another Host.`,
       );
     }
     const remaining = lease.expiresAt - this.now();
@@ -261,9 +261,9 @@ export class NodePiConversationAuthority {
       this.assertLease(lease, this.now(), false);
       this.database
         .prepare(
-          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
+          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND lease_id = ?',
         )
-        .run(lease.conversationId, lease.holderId, lease.epoch);
+        .run(lease.conversationId, lease.holderId, lease.leaseId);
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -469,9 +469,9 @@ export class NodePiConversationAuthority {
         .run(conversationId);
       this.database
         .prepare(
-          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
+          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND lease_id = ?',
         )
-        .run(conversationId, lease.holderId, lease.epoch);
+        .run(conversationId, lease.holderId, lease.leaseId);
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -595,14 +595,14 @@ export class NodePiConversationAuthority {
           branchId: input.branchId,
           piSessionId: branch.session.id,
           leafId,
-          writerEpoch: input.lease.epoch,
+          writerLeaseId: input.lease.leaseId,
           terminalState: input.terminalState,
           committedAt,
         };
         this.database
           .prepare(
             `INSERT INTO pi_turn_checkpoints
-              (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_epoch, terminal_state, committed_at)
+              (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_lease_id, terminal_state, committed_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
@@ -611,7 +611,7 @@ export class NodePiConversationAuthority {
             record.branchId,
             record.piSessionId,
             record.leafId,
-            record.writerEpoch,
+            record.writerLeaseId,
             record.terminalState,
             record.committedAt,
           );
@@ -761,13 +761,13 @@ export class NodePiConversationAuthority {
     if (
       current === undefined ||
       current.holderId !== lease.holderId ||
-      current.epoch !== lease.epoch ||
+      current.leaseId !== lease.leaseId ||
       lease.holderId !== this.hostId ||
       (requireUnexpired && current.expiresAt <= now)
     ) {
       throw new PiConversationAuthorityError(
         'lease-stale',
-        `Conversation writer lease ${lease.conversationId}@${lease.epoch} is stale.`,
+        `Conversation writer lease '${lease.leaseId}' is stale.`,
       );
     }
   }
@@ -868,7 +868,7 @@ function readLeaseRow(value: unknown): ConversationExecutionLease | undefined {
   return Object.freeze({
     conversationId: requireString(row, 'conversation_id'),
     holderId: requireString(row, 'holder_id'),
-    epoch: requireInteger(row, 'epoch'),
+    leaseId: requireString(row, 'lease_id'),
     expiresAt: requireInteger(row, 'expires_at'),
   });
 }
@@ -890,7 +890,7 @@ function readCheckpointRow(value: unknown): PiTurnCheckpointRecord | undefined {
     branchId: requireString(row, 'branch_id'),
     piSessionId: requireString(row, 'pi_session_id'),
     leafId: optionalString(row, 'leaf_id') ?? null,
-    writerEpoch: requireInteger(row, 'writer_epoch'),
+    writerLeaseId: requireString(row, 'writer_lease_id'),
     terminalState,
     committedAt: requireString(row, 'committed_at'),
   });

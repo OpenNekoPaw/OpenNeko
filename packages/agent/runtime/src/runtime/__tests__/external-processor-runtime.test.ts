@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   EXTERNAL_PROCESSOR_SCHEMA,
-  EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   createExternalProcessorRegistry,
   type ExternalProcessorManifest,
 } from '@neko/agent-contracts';
@@ -13,7 +12,6 @@ import {
 
 const manifest = {
   schema: EXTERNAL_PROCESSOR_SCHEMA,
-  schemaVersion: EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   id: 'upscale-image',
   kind: 'external-processor',
   displayName: 'Upscale Image',

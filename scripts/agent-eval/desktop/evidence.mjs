@@ -369,7 +369,6 @@ function assertTimelineProjection(assertion, input) {
     conversationId: terminal.conversationId,
     turnId: terminal.turnId,
     runId: terminal.runId,
-    projectionVersion: terminal.projectionVersion,
     completionStatus: terminal.completion.status,
   };
 }

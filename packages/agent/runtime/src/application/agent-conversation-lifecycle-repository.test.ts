@@ -6,8 +6,8 @@ import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentConversationLifecycleRecord } from './agent-conversation-lifecycle-service';
 import {
-  AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS,
   createPersistentAgentConversationLifecycleRepository,
+  initializeAgentConversationLifecycleTables,
 } from './agent-conversation-lifecycle-repository';
 
 const roots: string[] = [];
@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe('persistent Agent conversation lifecycle repository', () => {
-  it('recovers the exact first-submit record and provider lease after repository replacement', async () => {
+  it('recovers the exact canonical first-submit record, context and provider claim', async () => {
     const fixture = await createFixture();
     const record = createRecord('conversation:1', 'request:1', 'turn:1');
 
@@ -35,6 +35,79 @@ describe('persistent Agent conversation lifecycle repository', () => {
     ).resolves.toEqual({ record, created: false });
     await expect(replacement.claimProviderExecution('turn:1')).resolves.toBe(false);
     await expect(replacement.readConversation('conversation:1')).resolves.toEqual(record);
+    await expect(replacement.readConversationContext('conversation:1')).resolves.toEqual(
+      record.context,
+    );
+    await fixture.store.dispose();
+  });
+
+  it('isolates an invalid canonical context from a valid sibling Conversation', async () => {
+    const fixture = await createFixture();
+    const valid = createRecord('conversation:valid', 'request:valid', 'turn:valid');
+    await fixture.repository.commitFirstSubmit(valid);
+    await fixture.store.transaction(
+      { mode: 'state-write', ownership: 'state', operation: 'insert-invalid-agent-context' },
+      async ({ sql }) => {
+        await sql.run(
+          `INSERT INTO agent_conversation_authority(conversation_id, context_json)
+           VALUES (?, ?)`,
+          [
+            'conversation:invalid',
+            JSON.stringify({
+              schemaVersion: 1,
+              kind: 'assistant',
+              assistantSpaceId: 'assistant-space:invalid',
+              baseGrantIds: [],
+            }),
+          ],
+        );
+      },
+    );
+
+    await expect(
+      fixture.repository.readConversationContext('conversation:invalid'),
+    ).rejects.toThrow("unknown field 'schemaVersion'");
+    await expect(fixture.repository.readConversationContext(valid.conversationId)).resolves.toEqual(
+      valid.context,
+    );
+    await fixture.store.dispose();
+  });
+
+  it('does not read or rewrite retired conversation tables', async () => {
+    const fixture = await createFixture();
+    await fixture.store.transaction(
+      { mode: 'state-write', ownership: 'state', operation: 'seed-retired-agent-tables' },
+      async ({ sql }) => {
+        await sql.run(`CREATE TABLE agent_conversation_lifecycle (
+          conversation_id TEXT PRIMARY KEY,
+          snapshot_version INTEGER NOT NULL,
+          snapshot_json TEXT NOT NULL
+        ) STRICT`);
+        await sql.run(`CREATE TABLE agent_conversation_context (
+          conversation_id TEXT PRIMARY KEY,
+          context_version INTEGER NOT NULL,
+          context_json TEXT NOT NULL
+        ) STRICT`);
+        await sql.run(`INSERT INTO agent_conversation_lifecycle VALUES (?, ?, ?)`, [
+          'conversation:retired',
+          7,
+          '{"retired":true}',
+        ]);
+        await sql.run(`INSERT INTO agent_conversation_context VALUES (?, ?, ?)`, [
+          'conversation:retired',
+          7,
+          '{"retired":true}',
+        ]);
+      },
+    );
+
+    await expect(
+      fixture.repository.readConversation('conversation:retired'),
+    ).resolves.toBeUndefined();
+    await expect(
+      fixture.repository.readConversationContext('conversation:retired'),
+    ).resolves.toBeUndefined();
+    await expect(readRetiredRows(fixture)).resolves.toEqual({ lifecycle: 1, context: 1 });
     await fixture.store.dispose();
   });
 
@@ -45,7 +118,6 @@ describe('persistent Agent conversation lifecycle repository', () => {
     await fixture.repository.commitFirstSubmit(first);
     await fixture.repository.commitFirstSubmit(second);
     const artifact = {
-      schemaVersion: 1 as const,
       scratchArtifactId: 'scratch:1',
       assistantSpaceId: 'assistant-space:local-user',
       conversationId: first.conversationId,
@@ -64,53 +136,9 @@ describe('persistent Agent conversation lifecycle repository', () => {
     await replacement.deleteConversation(first.conversationId);
     await expect(replacement.readConversation(first.conversationId)).resolves.toBeUndefined();
     await expect(replacement.readConversation(second.conversationId)).resolves.toEqual(second);
-    await fixture.store.dispose();
-  });
-
-  it('rejects an unknown persisted snapshot version', async () => {
-    const fixture = await createFixture();
-    const record = createRecord('conversation:1', 'request:1', 'turn:1');
-    await fixture.repository.commitFirstSubmit(record);
-    await fixture.store.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'corrupt-agent-snapshot-version' },
-      async ({ sql }) => {
-        await sql.run(
-          `UPDATE agent_conversation_lifecycle SET snapshot_version = 99 WHERE conversation_id = ?`,
-          [record.conversationId],
-        );
-      },
+    await expect(replacement.readConversationContext(second.conversationId)).resolves.toEqual(
+      second.context,
     );
-
-    await expect(fixture.repository.readConversation(record.conversationId)).rejects.toThrow(
-      "Unsupported Agent Conversation lifecycle snapshot version '99'",
-    );
-    await fixture.store.dispose();
-  });
-
-  it('persists one exact migrated Workspace context without manufacturing lifecycle state', async () => {
-    const fixture = await createFixture();
-    const context = {
-      schemaVersion: 1 as const,
-      kind: 'workspace' as const,
-      workspaceId: 'workspace-legacy',
-      workspaceGrantId: 'workspace-grant:legacy:conversation-legacy',
-    };
-    await expect(
-      fixture.repository.commitMigratedConversationContext('conversation-legacy', context),
-    ).resolves.toEqual(context);
-    const replacement = createPersistentAgentConversationLifecycleRepository({
-      metadataStore: fixture.store,
-    });
-    await expect(replacement.readConversationContext('conversation-legacy')).resolves.toEqual(
-      context,
-    );
-    await expect(replacement.readConversation('conversation-legacy')).resolves.toBeUndefined();
-    await expect(
-      replacement.commitMigratedConversationContext('conversation-legacy', {
-        ...context,
-        workspaceId: 'workspace-other',
-      }),
-    ).rejects.toThrow("Conversation 'conversation-legacy' context changed");
     await fixture.store.dispose();
   });
 });
@@ -120,11 +148,24 @@ async function createFixture() {
   roots.push(root);
   const store = createNodeSqliteLocalMetadataStore({ homedir: root });
   await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
-  await store.migrateNamespace(AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS);
+  await initializeAgentConversationLifecycleTables(store);
   return {
     store,
     repository: createPersistentAgentConversationLifecycleRepository({ metadataStore: store }),
   };
+}
+
+async function readRetiredRows(
+  fixture: Awaited<ReturnType<typeof createFixture>>,
+): Promise<{ readonly lifecycle: number; readonly context: number }> {
+  return fixture.store.transaction(
+    { mode: 'read', ownership: 'state', operation: 'read-retired-agent-tables' },
+    async ({ sql }) => {
+      const lifecycle = await sql.all(`SELECT conversation_id FROM agent_conversation_lifecycle`);
+      const context = await sql.all(`SELECT conversation_id FROM agent_conversation_context`);
+      return { lifecycle: lifecycle.length, context: context.length };
+    },
+  );
 }
 
 function createRecord(
@@ -133,10 +174,8 @@ function createRecord(
   turnId: string,
 ): AgentConversationLifecycleRecord {
   return {
-    schemaVersion: 1,
     conversationId,
     context: {
-      schemaVersion: 1,
       kind: 'assistant',
       assistantSpaceId: 'assistant-space:local-user',
       baseGrantIds: [],

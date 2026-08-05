@@ -1,5 +1,4 @@
 import {
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildAgentSessionDiagnosticMessage,
   buildAmbientCanvasUpdateMessage,
   buildExternalInputMessage,
@@ -206,14 +205,6 @@ export function buildChatTabStateMessage(tabState: TabState, revision: number): 
 
 export function buildInvalidWebviewPayloadMessage(raw: unknown): AgentSessionDiagnosticMessage {
   const messageType = readMessageType(raw);
-  if (messageType === 'projectionEndpointDiscover') {
-    const receivedVersion = readProtocolVersion(raw);
-    return buildAgentSessionDiagnosticMessage({
-      code: 'webview-protocol-mismatch',
-      action: messageType,
-      message: `Agent Webview protocol mismatch: Desktop host expects v${AGENT_WEBVIEW_PROTOCOL_VERSION}, Webview sent ${receivedVersion === null ? 'no version' : `v${receivedVersion}`}. Reload the Webview.`,
-    });
-  }
   const keys = readMessageKeys(raw);
   return buildAgentSessionDiagnosticMessage({
     code: 'invalid-webview-message',
@@ -224,10 +215,6 @@ export function buildInvalidWebviewPayloadMessage(raw: unknown): AgentSessionDia
 
 function readMessageType(raw: unknown): string | null {
   return isRecord(raw) && typeof raw.type === 'string' ? raw.type : null;
-}
-
-function readProtocolVersion(raw: unknown): number | null {
-  return isRecord(raw) && typeof raw.protocolVersion === 'number' ? raw.protocolVersion : null;
 }
 
 function readMessageKeys(raw: unknown): string[] {

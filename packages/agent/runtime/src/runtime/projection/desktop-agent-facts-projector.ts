@@ -139,7 +139,12 @@ export function createDesktopAgentFactsProjector(input: {
     readLatestIdentity(conversationId) {
       return [...records.values()]
         .reverse()
-        .find((record) => record.identity.conversationId === conversationId)?.identity;
+        .find(
+          (record) =>
+            record.identity.conversationId === conversationId &&
+            record.conversation !== undefined &&
+            record.turn !== undefined,
+        )?.identity;
     },
     dispose() {
       if (disposed) return;

@@ -57,7 +57,6 @@ export type AgentCapabilityApprovalSource = (typeof AGENT_CAPABILITY_APPROVAL_SO
 
 export interface AgentCapabilitySchemaRef {
   readonly id: string;
-  readonly version?: number;
 }
 
 export interface AgentCapabilityLifecycleDescriptor {
@@ -508,7 +507,7 @@ export function isRuntimeOnlyAgentCapabilityResourceValue(value: string): boolea
 
 function isAgentCapabilitySchemaRef(value: unknown): value is AgentCapabilitySchemaRef {
   if (!isRecord(value)) return false;
-  return isNonEmptyString(value['id']) && optionalNumber(value['version']);
+  return isNonEmptyString(value['id']);
 }
 
 function isAgentCapabilityLifecycleTargetRef(

@@ -79,7 +79,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Ordered Images',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Ordered Images',
           scenes: [
@@ -186,7 +185,6 @@ describe('composite content presenter', () => {
     };
     const composites = parseCompositeContentJson(
       JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'artifact-storyboard',
         title: 'Comic artifact',
@@ -199,9 +197,7 @@ describe('composite content presenter', () => {
             kind: 'domain',
             title: 'Storyboard Payload',
             domainKind: 'StoryboardTable',
-            schemaVersion: 1,
             payload: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Opening',
               scenes: [
@@ -296,7 +292,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -368,7 +363,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -497,7 +491,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -589,7 +582,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -695,7 +687,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -791,7 +782,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -878,7 +868,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -1272,7 +1261,6 @@ describe('composite content presenter', () => {
   it('projects AnimationPlan domain blocks as storyboard shot overlays', () => {
     const composites = parseCompositeContentJson(
       JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'artifact-1',
         title: 'Storyboard With Plan',
@@ -1282,7 +1270,6 @@ describe('composite content presenter', () => {
             kind: 'domain',
             domainKind: 'StoryboardTable',
             payload: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Storyboard',
               scenes: [

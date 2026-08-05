@@ -9,7 +9,7 @@
     "canonicalPath": [
       "message.submit",
       "session.waitForIdle",
-      "session.dispose",
+      "Desktop application/session owner restart",
       "session.resume",
       "Pi Session reopen and buildContext",
       "SQLite conversation catalog",
@@ -42,7 +42,7 @@
       "prompt": "Reply with one concise sentence confirming that this is the persistence checkpoint."
     },
     { "id": "checkpoint-idle", "kind": "wait-for-idle", "timeoutMs": 120000 },
-    { "id": "resume", "kind": "resume", "conversationRef": "current" },
+    { "id": "restart", "kind": "restart", "conversationRef": "current" },
     {
       "id": "continue",
       "kind": "submit",
@@ -68,7 +68,7 @@
     {
       "id": "recovered",
       "kind": "recovery",
-      "resumeStepId": "resume",
+      "resumeStepId": "restart",
       "submitStepId": "continue",
       "idleStepId": "continued-idle",
       "evidenceRef": "turn-facts"

@@ -1,6 +1,5 @@
 ---
 providerId: flux
-version: 1.0.0
 displayName: Flux.1
 capabilities: [image.generate]
 ---

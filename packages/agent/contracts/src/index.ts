@@ -313,7 +313,6 @@ export {
   EXTERNAL_PROCESSOR_REGISTRY_CHANGE_KINDS,
   EXTERNAL_PROCESSOR_ROOT_ALIASES,
   EXTERNAL_PROCESSOR_SCHEMA,
-  EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   EXTERNAL_PROCESSOR_SOURCE_SCOPES,
   isExternalProcessorRootAlias,
   isExternalProcessorSourceScope,
@@ -551,8 +550,6 @@ export {
   isSessionMode,
   parseSendMessageWebviewMessage,
   parseAgentWebviewToHostMessage,
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
-  NEKO_AGENT_HOST_MESSAGE_EVENT,
 } from './webview-protocol';
 
 // Builtin slash command metadata shared across runtime + UI surfaces

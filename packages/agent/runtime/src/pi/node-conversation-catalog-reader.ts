@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { parseAgentConversationContext } from '@neko/agent-contracts';
+import { parseAgentConversationContext, type AgentHomeDiagnostic } from '@neko/agent-contracts';
 import type { PiConversationCatalogRecord } from './node-conversation-authority';
 import { openNodePiConversationStorage } from './node-conversation-storage';
 
@@ -10,9 +10,14 @@ export interface CreateNodePiConversationCatalogReaderOptions {
 }
 
 export interface PiConversationCatalogReader {
-  listConversations(workspaceIds: readonly string[]): readonly PiConversationCatalogRecord[];
+  listConversations(workspaceIds: readonly string[]): PiConversationCatalogSnapshot;
   findConversation(conversationId: string): PiConversationCatalogRecord | undefined;
   dispose(): void;
+}
+
+export interface PiConversationCatalogSnapshot {
+  readonly records: readonly PiConversationCatalogRecord[];
+  readonly diagnostics: readonly AgentHomeDiagnostic[];
 }
 
 type DatabaseSyncConstructor = new (
@@ -43,10 +48,12 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
     );
   }
 
-  listConversations(workspaceIds: readonly string[]): readonly PiConversationCatalogRecord[] {
+  listConversations(workspaceIds: readonly string[]): PiConversationCatalogSnapshot {
     this.requireActive();
     const scope = [...new Set(workspaceIds.map(requireWorkspaceId))];
-    if (scope.length === 0 || !existsSync(this.databasePath)) return [];
+    if (scope.length === 0 || !existsSync(this.databasePath)) {
+      return { records: [], diagnostics: [] };
+    }
     const database = new this.Database(this.databasePath, {
       readOnly: true,
       timeout: 5_000,
@@ -54,7 +61,7 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
     try {
       const placeholders = scope.map(() => '?').join(', ');
       const contextProjection = conversationContextProjection(database);
-      return database
+      const rows = database
         .prepare(
           `SELECT p.workspace_id, p.conversation_id, p.title, p.active_branch_id,
                   p.created_at, p.updated_at, ${contextProjection.select}
@@ -63,8 +70,17 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
             WHERE p.workspace_id IN (${placeholders})
             ORDER BY p.updated_at DESC`,
         )
-        .all(...scope)
-        .map(parseConversationRecord);
+        .all(...scope);
+      const records: PiConversationCatalogRecord[] = [];
+      const diagnostics: AgentHomeDiagnostic[] = [];
+      for (const row of rows) {
+        try {
+          records.push(parseConversationRecord(row));
+        } catch (error) {
+          diagnostics.push(createInvalidConversationDiagnostic(row, error));
+        }
+      }
+      return { records, diagnostics };
     } finally {
       database.close();
     }
@@ -107,22 +123,30 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
   }
 }
 
+function createInvalidConversationDiagnostic(value: unknown, error: unknown): AgentHomeDiagnostic {
+  const workspaceId = readDiagnosticIdentity(value, 'workspace_id');
+  const conversationId = readDiagnosticIdentity(value, 'conversation_id');
+  return Object.freeze({
+    code: 'invalid-conversation-record',
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(conversationId === undefined ? {} : { conversationId }),
+    message: error instanceof Error ? error.message : String(error),
+  });
+}
+
+function readDiagnosticIdentity(value: unknown, key: string): string | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const field = Object.fromEntries(Object.entries(value))[key];
+  return typeof field === 'string' && field.trim().length > 0 ? field : undefined;
+}
+
 function parseConversationRecord(value: unknown): PiConversationCatalogRecord {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError('Pi conversation catalog row must be an object.');
   }
   const contextJson = readOptionalString(value, 'context_json');
-  const contextVersion = readOptionalInteger(value, 'context_version');
-  if ((contextJson === undefined) !== (contextVersion === undefined)) {
-    throw new TypeError('Pi conversation catalog row has incomplete context metadata.');
-  }
   const context =
     contextJson === undefined ? undefined : parseAgentConversationContext(JSON.parse(contextJson));
-  if (context !== undefined && context.schemaVersion !== contextVersion) {
-    throw new TypeError(
-      `Pi conversation context version '${String(contextVersion)}' does not match its payload.`,
-    );
-  }
   return Object.freeze({
     workspaceId: readRequiredString(value, 'workspace_id'),
     conversationId: readRequiredString(value, 'conversation_id'),
@@ -140,12 +164,12 @@ function conversationContextProjection(database: DatabaseSync): {
 } {
   const table = database
     .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
-    .get('agent_conversation_context');
+    .get('agent_conversation_authority');
   return table === undefined
-    ? { select: 'NULL AS context_version, NULL AS context_json', join: '' }
+    ? { select: 'NULL AS context_json', join: '' }
     : {
-        select: 'c.context_version, c.context_json',
-        join: 'LEFT JOIN agent_conversation_context c ON c.conversation_id = p.conversation_id',
+        select: 'c.context_json',
+        join: 'LEFT JOIN agent_conversation_authority c ON c.conversation_id = p.conversation_id',
       };
 }
 
@@ -161,15 +185,6 @@ function readOptionalString(value: object, key: string): string | undefined {
   const field = Object.fromEntries(Object.entries(value))[key];
   if (field === null || field === undefined) return undefined;
   if (typeof field !== 'string' || field.length === 0) {
-    throw new TypeError(`Pi conversation catalog row has invalid ${key}.`);
-  }
-  return field;
-}
-
-function readOptionalInteger(value: object, key: string): number | undefined {
-  const field = Object.fromEntries(Object.entries(value))[key];
-  if (field === null || field === undefined) return undefined;
-  if (typeof field !== 'number' || !Number.isSafeInteger(field) || field < 0) {
     throw new TypeError(`Pi conversation catalog row has invalid ${key}.`);
   }
   return field;

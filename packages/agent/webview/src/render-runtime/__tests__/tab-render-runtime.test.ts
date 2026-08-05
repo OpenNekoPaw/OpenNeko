@@ -313,13 +313,11 @@ describe('TabRenderRuntimeRegistry', () => {
     const messagesA: unknown[] = [];
     const messagesB: unknown[] = [];
     runtimeA.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: (message) => messagesA.push(message),
       reportError: vi.fn(),
     });
     runtimeB.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-b',
       send: (message) => messagesB.push(message),
       reportError: vi.fn(),
@@ -328,16 +326,13 @@ describe('TabRenderRuntimeRegistry', () => {
     runtimeA.acceptProjectionFrame({
       type: 'projectionSnapshot',
       key: {
-        endpointEpoch: 'endpoint-1',
         attachmentId: 'attachment-a',
         tabId: 'tab-a',
         conversationId: 'conversation-shared',
       },
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -352,19 +347,14 @@ describe('TabRenderRuntimeRegistry', () => {
     runtimeA.acceptProjectionFrame({
       type: 'projectionPatch',
       key: {
-        endpointEpoch: 'endpoint-1',
         attachmentId: 'attachment-a',
         tabId: 'tab-a',
         conversationId: 'conversation-shared',
       },
       sequence: 1,
-      baseProjectionVersion: 0,
-      projectionVersion: 1,
       patch: {
         type: 'conversationProjectionPatch',
         conversationId: 'conversation-shared',
-        baseProjectionVersion: 0,
-        projectionVersion: 1,
         turnId: 'turn-1',
 
         runId: 'run-a',
@@ -380,7 +370,7 @@ describe('TabRenderRuntimeRegistry', () => {
     });
     expect(runtimeA.projectionReplica).not.toBe(runtimeB.projectionReplica);
     expect(runtimeA.markdownSessions).not.toBe(runtimeB.markdownSessions);
-    expect(runtimeA.projectionReplica.getSnapshot().projection?.projectionVersion).toBe(1);
+    expect(runtimeA.projectionReplica.getSnapshot().projection?.turns).toHaveLength(1);
     expect(runtimeB.projectionReplica.getSnapshot().projection).toBeNull();
     expect(runtimeA.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial update');
     expect(runtimeB.markdownSessions.getSnapshot(markdownKey)).toBeUndefined();
@@ -402,25 +392,21 @@ describe('TabRenderRuntimeRegistry', () => {
     const markdownA = runtimeA.markdownSessions;
     const markdownB = runtimeB.markdownSessions;
     const keyA = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       tabId: 'tab-a',
       conversationId: 'conversation-shared',
     } as const;
     const keyB = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-b',
       tabId: 'tab-b',
       conversationId: 'conversation-shared',
     } as const;
     runtimeA.attachProjection({
-      endpointEpoch: keyA.endpointEpoch,
       attachmentId: keyA.attachmentId,
       send: vi.fn(),
       reportError: vi.fn(),
     });
     runtimeB.attachProjection({
-      endpointEpoch: keyB.endpointEpoch,
       attachmentId: keyB.attachmentId,
       send: vi.fn(),
       reportError: vi.fn(),
@@ -429,10 +415,8 @@ describe('TabRenderRuntimeRegistry', () => {
       type: 'projectionSnapshot',
       key: keyA,
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -447,10 +431,8 @@ describe('TabRenderRuntimeRegistry', () => {
       type: 'projectionSnapshot',
       key: keyB,
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -472,13 +454,9 @@ describe('TabRenderRuntimeRegistry', () => {
           type: 'projectionPatch',
           key,
           sequence: revision,
-          baseProjectionVersion: revision - 1,
-          projectionVersion: revision,
           patch: {
             type: 'conversationProjectionPatch',
             conversationId: 'conversation-shared',
-            baseProjectionVersion: revision - 1,
-            projectionVersion: revision,
             turnId: 'turn-1',
 
             runId: 'run-a',
@@ -522,13 +500,11 @@ describe('TabRenderRuntimeRegistry', () => {
     });
     const reportError = vi.fn();
     runtime.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: vi.fn(),
       reportError,
     });
     const key = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       tabId: 'tab-a',
       conversationId: 'conversation-shared',
@@ -537,10 +513,8 @@ describe('TabRenderRuntimeRegistry', () => {
       type: 'projectionSnapshot',
       key,
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -563,13 +537,9 @@ describe('TabRenderRuntimeRegistry', () => {
         type: 'projectionPatch',
         key,
         sequence: 1,
-        baseProjectionVersion: 0,
-        projectionVersion: 1,
         patch: {
           type: 'conversationProjectionPatch',
           conversationId: 'conversation-shared',
-          baseProjectionVersion: 0,
-          projectionVersion: 1,
           turnId: 'turn-1',
 
           runId: 'run-a',
@@ -588,7 +558,9 @@ describe('TabRenderRuntimeRegistry', () => {
     ).toThrow(/rejected its live patch/);
 
     expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial');
-    expect(runtime.projectionReplica.getSnapshot().projection?.projectionVersion).toBe(0);
+    expect(runtime.projectionReplica.getSnapshot().projection?.turns[0]?.items[0]).toMatchObject({
+      payload: { content: 'initial' },
+    });
     expect(runtime.projectionAttachment?.getSnapshot().phase).toBe('fatal');
     expect(reportError).toHaveBeenCalledOnce();
   });
@@ -606,7 +578,6 @@ describe('TabRenderRuntimeRegistry', () => {
     const runtimeB = registry.require('tab-b');
     const messagesA: unknown[] = [];
     runtimeA.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: (message) => messagesA.push(message),
       reportError: vi.fn(),

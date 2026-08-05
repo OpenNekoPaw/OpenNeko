@@ -57,7 +57,6 @@ describe('PerceptionPipeline', () => {
       expect.objectContaining({ assetId: 'asset-1', resolvedPath: '/tmp/asset-1' }),
     );
     expect(result.card).toMatchObject({
-      version: 1,
       assetId: 'asset-1',
       modality: 'image',
       layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'skipped' },
@@ -409,7 +408,6 @@ describe('PerceiveTool', () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
-          version: 1 as const,
           assetId: 'asset-1',
           modality: 'image' as const,
           createdAt: 1,
@@ -461,7 +459,6 @@ describe('PerceiveTool', () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
-          version: 1 as const,
           assetId: 'asset-1',
           modality: 'image' as const,
           createdAt: 1,
@@ -506,7 +503,6 @@ describe('PerceiveTool', () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
-          version: 1 as const,
           assetId: 'asset-1',
           modality: 'image' as const,
           createdAt: 1,
@@ -539,7 +535,6 @@ describe('PerceiveTool', () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
-          version: 1 as const,
           assetId: 'asset-1',
           modality: 'image' as const,
           createdAt: 1,
@@ -576,7 +571,6 @@ describe('PerceiveTool', () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
-          version: 1 as const,
           assetId: 'asset-1',
           modality: 'image' as const,
           createdAt: 1,
@@ -623,7 +617,6 @@ describe('PerceiveTool', () => {
     const pipeline = {
       perceive: vi.fn(async () => ({
         card: {
-          version: 1 as const,
           assetId: 'generated-1',
           modality: 'image' as const,
           createdAt: 1,

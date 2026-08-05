@@ -80,7 +80,6 @@ interface CreativeEntityCandidateSummary {
 
 class CreativeEntityHeadlessCapabilityProvider implements AgentCapabilityProvider {
   readonly id = 'neko-entity';
-  readonly version = '1.0.0';
   readonly hostRequirements = [{ host: 'desktop' as const }];
   readonly requirements = { contentAccess: false } as const;
 

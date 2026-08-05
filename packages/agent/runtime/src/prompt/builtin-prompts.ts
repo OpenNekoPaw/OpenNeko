@@ -53,7 +53,7 @@ For document images, use the canonical two-step contract: first call \`ReadDocum
 
 When the requested output is a structured creative artifact, produce the target artifact directly according to the current artifact profile, runtime capability contract, validation requirements, and applicable skill task guidance. Do not downgrade it into a simplified analysis table or invent a fixed schema from this base prompt. Use Markdown tables when the current artifact profile asks for structured review data, and keep useful extension metadata visible instead of hiding it in private payloads. Resource tokens or Markdown images are valid only when backed by host-provided stable resource references. Do not output domain node JSON, retired transfer payloads, forge resource refs, or replace source tokens with cache paths, Webview URIs, blob URLs, system temp paths, Engine tokens, document entry paths, or absolute paths.
 
-When the user explicitly requests a named, reviewable Markdown artifact and no more specific artifact profile applies, return it as one NEKO fenced JSON composite artifact with schemaVersion 1, kind "composite-artifact", a stable descriptive artifactId, the requested title, and one or more blocks with stable blockId, kind "text", and Markdown text. Ordinary conversational answers must remain ordinary Markdown and must not be wrapped as artifacts.
+When the user explicitly requests a named, reviewable Markdown artifact and no more specific artifact profile applies, return it as one NEKO fenced JSON composite artifact with kind "composite-artifact", a stable descriptive artifactId, the requested title, and one or more blocks with stable blockId, kind "text", and Markdown text. Ordinary conversational answers must remain ordinary Markdown and must not be wrapped as artifacts.
 
 ### Skills
 
@@ -114,7 +114,7 @@ OpenNeko —— Desktop 创作工作空间。输出内容应与当前激活技�
 
 当请求产物是结构化创作 artifact 时，直接按当前 artifact profile、runtime capability contract、validation requirements 和适用的 Skill 任务指导生成目标产物；不要降级成简化分析表，也不要从基础提示词发明固定 schema。当前 artifact profile 要求结构化审阅数据时，可以使用 Markdown 表格，并保留有用的扩展 metadata，不要藏进私有 payload。资源 token 或 Markdown 图片只有在 host 提供稳定 ContentLocator 时才有效。不要输出领域节点 JSON、旧 transfer payload，不要伪造 locator，也不要把 source token 替换成缓存路径、Webview URI、blob URL、系统临时路径、Engine token、文档 entry path 或绝对路径。
 
-当用户明确要求一个具名、可审阅的 Markdown artifact，且没有更具体的 artifact profile 时，以一个 NEKO fenced JSON composite artifact 返回：包含 schemaVersion 1、kind "composite-artifact"、稳定且有描述性的 artifactId、用户要求的 title，以及一个或多个具有稳定 blockId、kind "text" 和 Markdown text 的 blocks。普通对话回答仍使用普通 Markdown，不得包装成 artifact。
+当用户明确要求一个具名、可审阅的 Markdown artifact，且没有更具体的 artifact profile 时，以一个 NEKO fenced JSON composite artifact 返回：包含 kind "composite-artifact"、稳定且有描述性的 artifactId、用户要求的 title，以及一个或多个具有稳定 blockId、kind "text" 和 Markdown text 的 blocks。普通对话回答仍使用普通 Markdown，不得包装成 artifact。
 
 ### 技能
 

@@ -1,5 +1,4 @@
 import {
-  AGENT_LAUNCH_CONTRACT_VERSION,
   parseAgentLaunchCatalogProjection,
   parseAgentLaunchConnectionIdentity,
   type AgentLaunchCatalogProjection,
@@ -17,34 +16,30 @@ import {
   type AgentDraftSubmitProjection,
 } from './agent-draft-submit';
 
-export { AGENT_LAUNCH_CONTRACT_VERSION } from './agent-launch';
-
 export const AGENT_LAUNCH_HOST_CHANNEL = 'neko:agent:launch' as const;
 
 export type AgentLaunchHostRequest =
   | {
-      readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
       readonly requestId: string;
       readonly operation: 'attach';
+      readonly workbenchInstanceId: string;
+      readonly agentSurfaceId: string;
       readonly viewId: string;
       readonly scope: AgentAuthorityScopeProjection;
     }
   | {
-      readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
       readonly requestId: string;
       readonly operation: 'authorize-resource';
       readonly connection: AgentLaunchConnectionIdentity;
       readonly resourceKind: AgentLaunchResourceKind;
     }
   | {
-      readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
       readonly requestId: string;
       readonly operation: 'submit-draft';
       readonly connection: AgentLaunchConnectionIdentity;
       readonly input: AgentDraftSubmitInput;
     }
   | {
-      readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
       readonly requestId: string;
       readonly operation: 'detach';
       readonly connection: AgentLaunchConnectionIdentity;
@@ -52,18 +47,15 @@ export type AgentLaunchHostRequest =
 
 export type AgentLaunchHostResult =
   | {
-      readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
       readonly requestId: string;
       readonly status: 'ready';
       readonly catalog: AgentLaunchCatalogProjection;
     }
   | {
-      readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
       readonly requestId: string;
       readonly status: 'cancelled' | 'detached';
     }
   | {
-      readonly schemaVersion: typeof AGENT_LAUNCH_CONTRACT_VERSION;
       readonly requestId: string;
       readonly status: 'committed';
       readonly projection: AgentDraftSubmitProjection;
@@ -72,6 +64,8 @@ export type AgentLaunchHostResult =
 export interface OpenNekoAgentLaunchBridge {
   readonly agentLaunch: {
     attach(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
       viewId: string,
       scope: AgentAuthorityScopeProjection,
     ): Promise<AgentLaunchCatalogProjection>;
@@ -89,29 +83,29 @@ export interface OpenNekoAgentLaunchBridge {
 
 export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequest {
   const record = requireRecord(value);
-  requireVersion(record['schemaVersion']);
   const requestId = requireIdentity(record['requestId'], 'request');
   if (record['operation'] === 'attach') {
-    requireExactKeys(record, ['schemaVersion', 'requestId', 'operation', 'viewId', 'scope']);
+    requireExactKeys(record, [
+      'requestId',
+      'operation',
+      'workbenchInstanceId',
+      'agentSurfaceId',
+      'viewId',
+      'scope',
+    ]);
     return {
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       requestId,
       operation: 'attach',
+      workbenchInstanceId: requireIdentity(record['workbenchInstanceId'], 'Workbench'),
+      agentSurfaceId: requireIdentity(record['agentSurfaceId'], 'Agent Surface'),
       viewId: requireIdentity(record['viewId'], 'View'),
       scope: parseAgentAuthorityScopeProjection(record['scope']),
     };
   }
   if (record['operation'] === 'authorize-resource') {
-    requireExactKeys(record, [
-      'schemaVersion',
-      'requestId',
-      'operation',
-      'connection',
-      'resourceKind',
-    ]);
+    requireExactKeys(record, ['requestId', 'operation', 'connection', 'resourceKind']);
     const resourceKind = parseResourceKind(record['resourceKind']);
     return {
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       requestId,
       operation: 'authorize-resource',
       connection: parseAgentLaunchConnectionIdentity(record['connection']),
@@ -119,9 +113,8 @@ export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequ
     };
   }
   if (record['operation'] === 'submit-draft') {
-    requireExactKeys(record, ['schemaVersion', 'requestId', 'operation', 'connection', 'input']);
+    requireExactKeys(record, ['requestId', 'operation', 'connection', 'input']);
     return {
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       requestId,
       operation: 'submit-draft',
       connection: parseAgentLaunchConnectionIdentity(record['connection']),
@@ -129,9 +122,8 @@ export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequ
     };
   }
   if (record['operation'] === 'detach') {
-    requireExactKeys(record, ['schemaVersion', 'requestId', 'operation', 'connection']);
+    requireExactKeys(record, ['requestId', 'operation', 'connection']);
     return {
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       requestId,
       operation: 'detach',
       connection: parseAgentLaunchConnectionIdentity(record['connection']),
@@ -145,31 +137,27 @@ export function parseAgentLaunchHostResult(
   expectedRequestId: string,
 ): AgentLaunchHostResult {
   const record = requireRecord(value);
-  requireVersion(record['schemaVersion']);
   const requestId = requireIdentity(record['requestId'], 'response request');
   if (requestId !== expectedRequestId)
     throw new Error('Agent launch Host request identity mismatch.');
   if (record['status'] === 'ready') {
-    requireExactKeys(record, ['schemaVersion', 'requestId', 'status', 'catalog']);
+    requireExactKeys(record, ['requestId', 'status', 'catalog']);
     return {
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       requestId,
       status: 'ready',
       catalog: parseAgentLaunchCatalogProjection(record['catalog']),
     };
   }
   if (record['status'] === 'cancelled' || record['status'] === 'detached') {
-    requireExactKeys(record, ['schemaVersion', 'requestId', 'status']);
+    requireExactKeys(record, ['requestId', 'status']);
     return {
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       requestId,
       status: record['status'],
     };
   }
   if (record['status'] === 'committed') {
-    requireExactKeys(record, ['schemaVersion', 'requestId', 'status', 'projection']);
+    requireExactKeys(record, ['requestId', 'status', 'projection']);
     return {
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       requestId,
       status: 'committed',
       projection: parseAgentDraftSubmitProjection(record['projection']),
@@ -199,12 +187,6 @@ function requireExactKeys(
   const actual = Object.keys(record);
   if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) {
     throw new Error('Agent launch Host payload contains unsupported fields.');
-  }
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== AGENT_LAUNCH_CONTRACT_VERSION) {
-    throw new Error(`Unsupported Agent launch Host version '${String(value)}'.`);
   }
 }
 

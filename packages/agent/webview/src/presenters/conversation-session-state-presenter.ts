@@ -81,8 +81,8 @@ function normalizeSessionStreamingState(
     isThinking: streaming.isThinking,
     queuedMessageCount: streaming.queuedMessageCount ?? 0,
     queuedMessages: streaming.queuedMessages ? [...streaming.queuedMessages] : [],
-    ...(streaming.messageQueueVersion !== undefined
-      ? { messageQueueVersion: streaming.messageQueueVersion }
+    ...(streaming.messageQueueSequence !== undefined
+      ? { messageQueueSequence: streaming.messageQueueSequence }
       : {}),
   };
 }

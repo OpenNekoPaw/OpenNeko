@@ -541,7 +541,6 @@ function createReadImagePerceptionCard(input: {
   };
 
   return {
-    version: 1,
     assetId,
     modality: 'image',
     createdAt: input.createdAt,

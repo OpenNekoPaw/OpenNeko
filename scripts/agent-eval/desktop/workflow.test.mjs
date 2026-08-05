@@ -46,9 +46,50 @@ describe('Desktop Agent workflow interpreter', () => {
       conversationId: 'conversation-1',
       prompt: 'Improve: previous answer',
     });
+    expect(result.conversationId).toBe('conversation-1');
     expect(result.terminalIdle.identity).toEqual(identity);
     expect(Object.isFrozen(result.receipts)).toBe(true);
     expect(checkpoints).toHaveLength(6);
+  });
+
+  it('binds a visible first submission and application restart to the established conversation', async () => {
+    const identity = { conversationId: 'conversation-1', turnId: 'turn-2', runId: 'run-2' };
+    const driver = {
+      submit: vi.fn(async (command) => ({
+        accepted: true,
+        eventOffset: 3,
+        conversationId: command.conversationId ?? 'conversation-1',
+      })),
+      waitForIdle: vi.fn(async () => ({ identity })),
+      restart: vi.fn(async () => ({
+        accepted: true,
+        snapshot: { id: 'conversation-1', messages: [{ role: 'user', content: 'first' }] },
+      })),
+    };
+
+    const result = await executeDesktopAgentWorkflow({
+      driver,
+      defaultTimeoutMs: 30_000,
+      steps: [
+        { id: 'submit', kind: 'submit', prompt: 'first' },
+        { id: 'idle-1', kind: 'wait-for-idle', timeoutMs: 1000 },
+        { id: 'restart', kind: 'restart', conversationRef: 'current' },
+        { id: 'continue', kind: 'submit', prompt: 'continue' },
+        { id: 'idle-2', kind: 'wait-for-idle', timeoutMs: 1000 },
+      ],
+    });
+
+    expect(driver.submit).toHaveBeenNthCalledWith(1, { prompt: 'first' });
+    expect(driver.restart).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      timeoutMs: 30_000,
+    });
+    expect(driver.submit).toHaveBeenNthCalledWith(2, {
+      conversationId: 'conversation-1',
+      prompt: 'continue',
+    });
+    expect(result.conversationId).toBe('conversation-1');
+    expect(result.receipts.restart.snapshot.messages).toHaveLength(1);
   });
 
   it('binds Tool confirmation to public projection identity and supports resume', async () => {

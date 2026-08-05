@@ -9,6 +9,7 @@ import { commandHandlers } from '../command-handlers';
 import type { HandlerRegistration, MessageHandlerContext, StreamingState } from '../types';
 import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
 import { ingestConversationRenderSnapshot } from '../../render-lifecycle/conversation-render-state-adapter';
+import { createTestAgentHostMessageSender } from '../../test-utils/agent-host-messages';
 
 describe('command handlers conversation isolation', () => {
   beforeEach(() => {
@@ -222,6 +223,7 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
   const isTablessConversationViewRef = ref(false);
 
   const context: MessageHandlerContext = {
+    agentHostMessages: createTestAgentHostMessageSender(),
     messages,
     isThinking: streaming.isThinking,
     streamingMessageId: streaming.streamingMessageId,

@@ -52,7 +52,6 @@ export interface GeneratedPromptSection {
 export interface GeneratedStructuredSchema {
   readonly id: string;
   readonly purpose: GeneratedSchemaPurpose;
-  readonly version: string;
   readonly schema: Record<string, unknown>;
 }
 

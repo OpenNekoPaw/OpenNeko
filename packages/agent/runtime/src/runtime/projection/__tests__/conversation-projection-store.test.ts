@@ -79,12 +79,10 @@ describe('ConversationProjectionStore', () => {
 
     expect(conversationA.snapshot()).toMatchObject({
       conversationId: 'conversation-a',
-      projectionVersion: 1,
       turns: [{ turnId: 'turn-a', messageId: 'message-a' }],
     });
     expect(conversationB.snapshot()).toMatchObject({
       conversationId: 'conversation-b',
-      projectionVersion: 1,
       turns: [{ turnId: 'turn-b', messageId: 'message-b' }],
     });
     expect(readText(conversationA.snapshot())).toBe('A');
@@ -106,8 +104,7 @@ describe('ConversationProjectionStore', () => {
         messageId: 'message-a',
         operations: [appendText({ content, itemRevision: index + 1 })],
       });
-      expect(patch.baseProjectionVersion).toBe(index);
-      expect(patch.projectionVersion).toBe(index + 1);
+      expect(patch.conversationId).toBe('conversation-a');
       expect(patch.operations).toHaveLength(1);
       expect(patch).not.toHaveProperty('turns');
     }
@@ -144,7 +141,7 @@ describe('ConversationProjectionStore', () => {
     expect(Object.isFrozen(firstSnapshot.turns[0]?.items)).toBe(true);
   });
 
-  it('publishes ordered structural and completion patches with monotonic versions', () => {
+  it('publishes structural and completion patches in owner order', () => {
     const store = createConversationProjectionStore('conversation-a');
     const patches: unknown[] = [];
     store.subscribe((patch) => patches.push(patch));
@@ -177,8 +174,15 @@ describe('ConversationProjectionStore', () => {
       completion: completion(),
     });
 
-    expect(first).toMatchObject({ baseProjectionVersion: 0, projectionVersion: 1 });
-    expect(second).toMatchObject({ baseProjectionVersion: 1, projectionVersion: 2 });
+    expect(first).toMatchObject({
+      conversationId: 'conversation-a',
+      operations: [{ operation: 'append' }],
+    });
+    expect(second).toMatchObject({
+      conversationId: 'conversation-a',
+      operations: [{ operation: 'complete' }],
+      completion: { status: 'completed' },
+    });
     expect(patches).toEqual([first, second]);
     expect(store.snapshot().turns[0]).toMatchObject({
       completion: { status: 'completed' },
@@ -219,7 +223,6 @@ describe('ConversationProjectionStore', () => {
       }),
     ).toThrow(/unknown text item/i);
 
-    expect(store.snapshot()).toMatchObject({ projectionVersion: 1 });
     expect(readText(store.snapshot())).toBe('first');
   });
 

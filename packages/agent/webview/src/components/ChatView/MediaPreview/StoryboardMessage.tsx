@@ -14,6 +14,7 @@ import { ChevronDownIcon as ChevronIcon } from '@neko/ui/icons';
 import { SendToMenu, type PluginsAvailable } from '../SendToMenu';
 import { projectStoryboardScenesAssetBatch } from '../../../presenters/storyboard-transfer-presenter';
 import { openMediaTarget } from './openMediaTarget';
+import { useAgentHostMessages } from '../../../host-runtime-context';
 
 /** A single shot within a scene */
 export interface StoryboardShot {
@@ -83,12 +84,16 @@ function SceneGroup({
   assetBatchPayload?: ReturnType<typeof projectStoryboardScenesAssetBatch>;
   onRegenerate?: (sceneIndex: number) => void;
 }) {
+  const agentHostMessages = useAgentHostMessages();
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const handleOpenShot = useCallback((shot: StoryboardShot) => {
-    const pathToOpen = shot.localPath ?? shot.url;
-    openMediaTarget(pathToOpen);
-  }, []);
+  const handleOpenShot = useCallback(
+    (shot: StoryboardShot) => {
+      const pathToOpen = shot.localPath ?? shot.url;
+      openMediaTarget(agentHostMessages, pathToOpen);
+    },
+    [agentHostMessages],
+  );
 
   // Determine grid columns based on shot count
   const cols = scene.shots.length <= 2 ? scene.shots.length : 3;

@@ -9,7 +9,6 @@ import {
   type AuthorizedPreviewSessionProjection,
 } from '@neko/preview-domain/authorized-session';
 
-export const ASSISTANT_RESOURCE_HOST_VERSION = 1 as const;
 export const ASSISTANT_RESOURCE_HOST_CHANNEL = 'neko:agent:assistant-resources' as const;
 
 export interface AssistantResourceIdentity {
@@ -19,7 +18,6 @@ export interface AssistantResourceIdentity {
 }
 
 export interface AssistantResourceProjection {
-  readonly schemaVersion: typeof ASSISTANT_RESOURCE_HOST_VERSION;
   readonly identity: AssistantResourceIdentity;
   readonly baseGrants: readonly AgentResourceGrant[];
   readonly scratchArtifacts: readonly AgentScratchArtifactRef[];
@@ -27,24 +25,18 @@ export interface AssistantResourceProjection {
 
 export type AssistantResourceHostRequest =
   | {
-      readonly schemaVersion: typeof ASSISTANT_RESOURCE_HOST_VERSION;
       readonly requestId: string;
-      readonly endpointEpoch: string;
       readonly identity: AssistantResourceIdentity;
       readonly route: 'snapshot.get';
     }
   | {
-      readonly schemaVersion: typeof ASSISTANT_RESOURCE_HOST_VERSION;
       readonly requestId: string;
-      readonly endpointEpoch: string;
       readonly identity: AssistantResourceIdentity;
       readonly route: 'preview.authorize';
       readonly scratchArtifactId: string;
     }
   | {
-      readonly schemaVersion: typeof ASSISTANT_RESOURCE_HOST_VERSION;
       readonly requestId: string;
-      readonly endpointEpoch: string;
       readonly identity: AssistantResourceIdentity;
       readonly route: 'preview.get' | 'preview.release';
       readonly previewSessionId: string;
@@ -52,19 +44,16 @@ export type AssistantResourceHostRequest =
 
 export type AssistantResourceHostResult =
   | {
-      readonly schemaVersion: typeof ASSISTANT_RESOURCE_HOST_VERSION;
       readonly requestId: string;
       readonly route: 'snapshot.get';
       readonly projection: AssistantResourceProjection;
     }
   | {
-      readonly schemaVersion: typeof ASSISTANT_RESOURCE_HOST_VERSION;
       readonly requestId: string;
       readonly route: 'preview.authorize' | 'preview.get';
       readonly preview: AuthorizedPreviewSessionProjection;
     }
   | {
-      readonly schemaVersion: typeof ASSISTANT_RESOURCE_HOST_VERSION;
       readonly requestId: string;
       readonly route: 'preview.release';
       readonly status: 'released';
@@ -84,26 +73,16 @@ export interface AssistantResourceRuntime {
 
 export function parseAssistantResourceHostRequest(value: unknown): AssistantResourceHostRequest {
   const record = requireRecord(value, 'Assistant Resource Host request must be an object.');
-  requireVersion(record['schemaVersion']);
   const base = {
-    schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
     requestId: identity(record['requestId'], 'request'),
-    endpointEpoch: identity(record['endpointEpoch'], 'endpoint epoch'),
     identity: parseAssistantResourceIdentity(record['identity']),
   };
   if (record['route'] === 'snapshot.get') {
-    exactKeys(record, ['schemaVersion', 'requestId', 'endpointEpoch', 'identity', 'route']);
+    exactKeys(record, ['requestId', 'identity', 'route']);
     return { ...base, route: 'snapshot.get' };
   }
   if (record['route'] === 'preview.authorize') {
-    exactKeys(record, [
-      'schemaVersion',
-      'requestId',
-      'endpointEpoch',
-      'identity',
-      'route',
-      'scratchArtifactId',
-    ]);
+    exactKeys(record, ['requestId', 'identity', 'route', 'scratchArtifactId']);
     return {
       ...base,
       route: 'preview.authorize',
@@ -111,14 +90,7 @@ export function parseAssistantResourceHostRequest(value: unknown): AssistantReso
     };
   }
   if (record['route'] === 'preview.get' || record['route'] === 'preview.release') {
-    exactKeys(record, [
-      'schemaVersion',
-      'requestId',
-      'endpointEpoch',
-      'identity',
-      'route',
-      'previewSessionId',
-    ]);
+    exactKeys(record, ['requestId', 'identity', 'route', 'previewSessionId']);
     return {
       ...base,
       route: record['route'],
@@ -133,36 +105,32 @@ export function parseAssistantResourceHostResult(
   expectedRequestId: string,
 ): AssistantResourceHostResult {
   const record = requireRecord(value, 'Assistant Resource Host result must be an object.');
-  requireVersion(record['schemaVersion']);
   const requestId = identity(record['requestId'], 'response request');
   if (requestId !== expectedRequestId) {
     throw new Error('Assistant Resource Host response request identity mismatch.');
   }
   if (record['route'] === 'snapshot.get') {
-    exactKeys(record, ['schemaVersion', 'requestId', 'route', 'projection']);
+    exactKeys(record, ['requestId', 'route', 'projection']);
     return {
-      schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
       requestId,
       route: 'snapshot.get',
       projection: parseAssistantResourceProjection(record['projection']),
     };
   }
   if (record['route'] === 'preview.authorize' || record['route'] === 'preview.get') {
-    exactKeys(record, ['schemaVersion', 'requestId', 'route', 'preview']);
+    exactKeys(record, ['requestId', 'route', 'preview']);
     return {
-      schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
       requestId,
       route: record['route'],
       preview: parseAuthorizedPreviewSessionProjection(record['preview']),
     };
   }
   if (record['route'] === 'preview.release') {
-    exactKeys(record, ['schemaVersion', 'requestId', 'route', 'status']);
+    exactKeys(record, ['requestId', 'route', 'status']);
     if (record['status'] !== 'released') {
       throw new Error('Assistant Resource Preview release status is invalid.');
     }
     return {
-      schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
       requestId,
       route: 'preview.release',
       status: 'released',
@@ -173,13 +141,11 @@ export function parseAssistantResourceHostResult(
 
 export function parseAssistantResourceProjection(value: unknown): AssistantResourceProjection {
   const record = requireRecord(value, 'Assistant Resource projection must be an object.');
-  requireVersion(record['schemaVersion']);
-  exactKeys(record, ['schemaVersion', 'identity', 'baseGrants', 'scratchArtifacts']);
+  exactKeys(record, ['identity', 'baseGrants', 'scratchArtifacts']);
   if (!Array.isArray(record['baseGrants']) || !Array.isArray(record['scratchArtifacts'])) {
     throw new Error('Assistant Resource projection lists are invalid.');
   }
   return {
-    schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
     identity: parseAssistantResourceIdentity(record['identity']),
     baseGrants: record['baseGrants'].map(parseAgentResourceGrant),
     scratchArtifacts: record['scratchArtifacts'].map(parseAgentScratchArtifactRef),
@@ -194,12 +160,6 @@ export function parseAssistantResourceIdentity(value: unknown): AssistantResourc
     conversationId: identity(record['conversationId'], 'Conversation'),
     windowId: identity(record['windowId'], 'Window'),
   };
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== ASSISTANT_RESOURCE_HOST_VERSION) {
-    throw new Error(`Unsupported Assistant Resource Host version '${String(value)}'.`);
-  }
 }
 
 function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {

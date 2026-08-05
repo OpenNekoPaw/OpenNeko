@@ -26,9 +26,8 @@ export interface AgentResourceDisplayRegistrationPort {
       readonly windowId: string;
       readonly viewId: string;
       readonly sessionId: string;
-      readonly endpointEpoch: string;
+      readonly rendererSessionId: string;
       readonly revision: string;
-      readonly generation: string;
     },
     source: {
       readonly absolutePath: string;
@@ -77,7 +76,6 @@ export function createAgentResourceDisplayProjector<
     context: { readonly mediaType?: string },
     attachmentId: string,
     conversationId: string,
-    generation: number,
   ): Promise<string | undefined> => {
     if (disposed) throw new Error('Desktop Agent resource display projector is disposed.');
     const relativePath = projectableWorkspacePath(locator);
@@ -98,9 +96,8 @@ export function createAgentResourceDisplayProjector<
         windowId: input.identity.windowId,
         viewId: input.identity.viewId,
         sessionId: `agent-display:${conversationId}:${attachmentId}`,
-        endpointEpoch: input.identity.connectionId,
+        rendererSessionId: input.identity.connectionId,
         revision,
-        generation: String(generation),
       },
       { absolutePath, mediaType, revision },
     );
@@ -118,11 +115,7 @@ export function createAgentResourceDisplayProjector<
             ...frame,
             projection: await projectConversationProjectionSnapshotForResourceDisplay(
               frame.projection,
-              projectionOptions(
-                frame.key.attachmentId,
-                frame.key.conversationId,
-                frame.projectionVersion,
-              ),
+              projectionOptions(frame.key.attachmentId, frame.key.conversationId),
             ),
           };
           break;
@@ -131,11 +124,7 @@ export function createAgentResourceDisplayProjector<
             ...frame,
             patch: await projectConversationProjectionPatchForResourceDisplay(
               frame.patch,
-              projectionOptions(
-                frame.key.attachmentId,
-                frame.key.conversationId,
-                frame.projectionVersion,
-              ),
+              projectionOptions(frame.key.attachmentId, frame.key.conversationId),
             ),
           };
           break;
@@ -162,10 +151,10 @@ export function createAgentResourceDisplayProjector<
     },
   };
 
-  function projectionOptions(attachmentId: string, conversationId: string, generation: number) {
+  function projectionOptions(attachmentId: string, conversationId: string) {
     return {
       resolveContentLocator: (locator: ContentLocator, context: { readonly mediaType?: string }) =>
-        resolveContentLocator(locator, context, attachmentId, conversationId, generation),
+        resolveContentLocator(locator, context, attachmentId, conversationId),
     };
   }
 }

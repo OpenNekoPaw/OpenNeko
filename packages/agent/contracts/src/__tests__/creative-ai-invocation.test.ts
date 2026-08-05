@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
   type CreativeAiDocumentRef,
   type CreativeAiSourceRef,
   type CreativeAiTargetRef,
@@ -47,7 +46,6 @@ const targetRef: CreativeAiTargetRef = {
 
 function validExternalInvocation() {
   return {
-    schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
     domain: 'external-creative-package',
     invocationId: 'invoke-1',
     sourcePackage: 'neko-canvas',
@@ -73,7 +71,6 @@ function validExternalInvocation() {
 describe('creative AI invocation contracts', () => {
   it('validates Agent-internal invocations against the selected conversation', () => {
     const valid = {
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       domain: 'agent-internal',
       invocationId: 'agent-action-1',
       conversationId: 'conversation-1',
@@ -119,6 +116,22 @@ describe('creative AI invocation contracts', () => {
         target: 'sourceRef',
       }),
     ]);
+  });
+
+  it('rejects a removed schemaVersion without invalidating a valid sibling invocation', () => {
+    const legacy = validateExternalCreativeAiInvocation({
+      ...validExternalInvocation(),
+      schemaVersion: 1,
+    });
+
+    expect(legacy.valid).toBe(false);
+    expect(legacy.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'creative-ai-unsupported-field',
+        target: 'schemaVersion',
+      }),
+    ]);
+    expect(validateExternalCreativeAiInvocation(validExternalInvocation()).valid).toBe(true);
   });
 
   it('rejects unknown routing fields', () => {
@@ -226,7 +239,6 @@ describe('creative AI invocation contracts', () => {
 
     expect(
       validateConversationLifecycleCommand({
-        schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
         commandId: 'archive-1',
         conversationId: 'conversation-1',
         action: 'stop-and-delete',
@@ -235,7 +247,6 @@ describe('creative AI invocation contracts', () => {
     ).toBe(true);
 
     const runSnapshot = validateCreativeAiRunSnapshot({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       runId: 'run-1',
       conversationId: 'conversation-1',
       invocationId: 'invoke-1',
@@ -275,7 +286,6 @@ describe('creative AI invocation contracts', () => {
       candidateOnly: true,
     };
     const candidateApply = validateCreativeAiCandidateApplyRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'candidate-apply-1',
       conversationId: 'conversation-1',
       runId: 'run-1',
@@ -291,7 +301,6 @@ describe('creative AI invocation contracts', () => {
     expect(candidateApply.valid).toBe(true);
 
     const wrongWriteback = validateCreativeAiCandidateApplyRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'candidate-apply-2',
       conversationId: 'conversation-1',
       runId: 'run-1',
@@ -312,7 +321,6 @@ describe('creative AI invocation contracts', () => {
     ]);
 
     const promotion = validateCreativeAiCandidatePromotionRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'promote-1',
       sourcePackage: 'neko-canvas',
       targetRef,
@@ -331,7 +339,6 @@ describe('creative AI invocation contracts', () => {
     expect(promotion.valid).toBe(true);
 
     const missingRevision = validateCreativeAiCandidatePromotionRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'promote-2',
       sourcePackage: 'neko-canvas',
       targetRef,
@@ -357,7 +364,6 @@ describe('creative AI invocation contracts', () => {
       candidateOnly: true,
     };
     const base = {
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'candidate-image-1',
       conversationId: 'conversation-1',
       runId: 'run-1',

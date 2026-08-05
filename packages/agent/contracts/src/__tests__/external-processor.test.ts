@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXTERNAL_PROCESSOR_SCHEMA,
-  EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   createExternalProcessorRegistry,
   isExternalProcessorRootAlias,
   matchesExternalProcessorSecretEnvPattern,
@@ -16,7 +15,6 @@ import {
 
 const validManifest = {
   schema: EXTERNAL_PROCESSOR_SCHEMA,
-  schemaVersion: EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   id: 'upscale-image',
   kind: 'external-processor',
   displayName: 'Upscale Image',
@@ -56,7 +54,7 @@ describe('external processor contract', () => {
     expect(result.manifest).toEqual(validManifest);
   });
 
-  it('rejects unknown schema and schema version', () => {
+  it('rejects an unknown schema and the removed internal schema version', () => {
     const result = validateExternalProcessorManifest({
       ...validManifest,
       schema: 'example.processor',
@@ -65,14 +63,13 @@ describe('external processor contract', () => {
 
     expect(result.manifest).toBeUndefined();
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining(['unknown-schema', 'unknown-schema-version']),
+      expect.arrayContaining(['unknown-schema', 'invalid-manifest']),
     );
   });
 
   it('rejects legacy resourceCache output policy instead of migrating it implicitly', () => {
     const result = validateExternalProcessorManifest({
       ...validManifest,
-      schemaVersion: 1,
       outputs: {
         image: { produces: ['image/png'], root: 'resourceCache' },
       },
@@ -85,7 +82,7 @@ describe('external processor contract', () => {
 
     expect(result.manifest).toBeUndefined();
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining(['unknown-schema-version', 'invalid-root-alias']),
+      expect.arrayContaining(['invalid-root-alias']),
     );
   });
 

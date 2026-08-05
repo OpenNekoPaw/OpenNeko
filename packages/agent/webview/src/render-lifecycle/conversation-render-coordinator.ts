@@ -139,8 +139,8 @@ function createNextSnapshot(
           ...base.streaming,
           queuedMessageCount: mutation.queuedMessageCount,
           queuedMessages: [...mutation.queuedMessages],
-          ...(mutation.messageQueueVersion !== undefined
-            ? { messageQueueVersion: mutation.messageQueueVersion }
+          ...(mutation.messageQueueSequence !== undefined
+            ? { messageQueueSequence: mutation.messageQueueSequence }
             : {}),
           ...(mutation.isThinking !== undefined ? { isThinking: mutation.isThinking } : {}),
         },

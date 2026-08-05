@@ -242,6 +242,7 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
       { id: 'cancel', kind: 'cancel', afterStepId: 'feedback' },
       { id: 'cancel-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
       { id: 'resume', kind: 'resume', conversationRef: 'current' },
+      { id: 'restart', kind: 'restart', conversationRef: 'current' },
       { id: 'final-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
     ];
     expect(validateScenarioForExecution(workflow)).toBe(workflow);

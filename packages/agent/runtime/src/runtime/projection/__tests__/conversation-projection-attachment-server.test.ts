@@ -16,7 +16,6 @@ type HostFrame = ProjectionAttachmentHostFrame<
 >;
 
 const keyA: ProjectionAttachmentKey = {
-  endpointEpoch: 'endpoint-1',
   attachmentId: 'attachment-a',
   tabId: 'tab-a',
   conversationId: 'conversation-a',
@@ -88,7 +87,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const snapshotDelivery = deferred<boolean>();
     const frames: HostFrame[] = [];
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection: () => projection,
       postMessage: async (frame) => {
         frames.push(frame);
@@ -113,7 +111,6 @@ describe('ConversationProjectionAttachmentServer', () => {
       type: 'projectionSnapshotAck',
       key: keyA,
       sequence: 0,
-      projectionVersion: 0,
     });
 
     expect(frames.map((frame) => frame.type)).toEqual([
@@ -125,20 +122,14 @@ describe('ConversationProjectionAttachmentServer', () => {
     expect(frames[1]).toMatchObject({
       type: 'projectionPatch',
       sequence: 1,
-      baseProjectionVersion: 0,
-      projectionVersion: 1,
     });
     expect(frames[2]).toMatchObject({
       type: 'projectionPatch',
       sequence: 2,
-      baseProjectionVersion: 1,
-      projectionVersion: 2,
     });
     expect(frames[3]).toMatchObject({
       type: 'projectionPatch',
       sequence: 3,
-      baseProjectionVersion: 2,
-      projectionVersion: 3,
     });
 
     const snapshotFrame = frames[0];
@@ -152,7 +143,6 @@ describe('ConversationProjectionAttachmentServer', () => {
       return applyConversationProjectionPatch(current, frame.patch);
     }, snapshotFrame.projection);
     expect(finalProjection).toMatchObject({
-      projectionVersion: 3,
       turns: [
         {
           completion: { status: 'completed', completedAt: 3 },
@@ -171,7 +161,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const projection = createConversationProjectionStore('conversation-a');
     const frames = new Map<string, HostFrame[]>();
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection: () => projection,
       postMessage: async (frame) => {
         const attachmentFrames = frames.get(frame.key.attachmentId) ?? [];
@@ -193,7 +182,6 @@ describe('ConversationProjectionAttachmentServer', () => {
       type: 'projectionSnapshotAck',
       key: keyB,
       sequence: 0,
-      projectionVersion: 0,
     });
     expect(frames.get(keyA.attachmentId)?.map((frame) => frame.type)).toEqual([
       'projectionSnapshot',
@@ -207,7 +195,6 @@ describe('ConversationProjectionAttachmentServer', () => {
       type: 'projectionSnapshotAck',
       key: keyA,
       sequence: 0,
-      projectionVersion: 0,
     });
     expect(frames.get(keyA.attachmentId)?.map((frame) => frame.type)).toEqual([
       'projectionSnapshot',
@@ -221,7 +208,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const secondPatchPosted = deferred<void>();
     const frames: HostFrame[] = [];
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection: () => projection,
       postMessage: async (frame) => {
         frames.push(frame);
@@ -241,7 +227,6 @@ describe('ConversationProjectionAttachmentServer', () => {
       type: 'projectionSnapshotAck',
       key: keyA,
       sequence: 0,
-      projectionVersion: 0,
     });
     projection.apply(appendUpdate('a', 1));
     await nextMicrotask();
@@ -267,7 +252,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const firstPatchDelivery = deferred<boolean>();
     const frames: HostFrame[] = [];
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection: () => projection,
       postMessage: async (frame) => {
         frames.push(frame);
@@ -284,7 +268,6 @@ describe('ConversationProjectionAttachmentServer', () => {
       type: 'projectionSnapshotAck',
       key: keyA,
       sequence: 0,
-      projectionVersion: 0,
     });
     projection.apply(appendUpdate('a', 1));
     await nextMicrotask();
@@ -306,7 +289,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const projection = createConversationProjectionStore('conversation-a');
     const frames: HostFrame[] = [];
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection: () => projection,
       postMessage: async (frame) => {
         frames.push(frame);
@@ -336,7 +318,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const frames: HostFrame[] = [];
     const resolveProjection = vi.fn(() => projection);
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection,
       postMessage: async (frame) => {
         frames.push(frame);
@@ -359,7 +340,6 @@ describe('ConversationProjectionAttachmentServer', () => {
         type: 'projectionSnapshotAck',
         key: keyA,
         sequence: 0,
-        projectionVersion: 0,
       }),
     ).rejects.toThrow('disposed');
   });
@@ -368,7 +348,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const projection = createConversationProjectionStore('conversation-a');
     const frames: HostFrame[] = [];
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection: () => projection,
       postMessage: async (frame) => {
         frames.push(frame);
@@ -391,7 +370,6 @@ describe('ConversationProjectionAttachmentServer', () => {
     const frames: HostFrame[] = [];
     const reportError = vi.fn();
     const server = createConversationProjectionAttachmentServer({
-      endpointEpoch: 'endpoint-1',
       resolveProjection: () => projection,
       postMessage: async (frame) => {
         frames.push(frame);
@@ -408,7 +386,6 @@ describe('ConversationProjectionAttachmentServer', () => {
         type: 'projectionSnapshotAck',
         key: { ...keyA, tabId: 'wrong-tab' },
         sequence: 0,
-        projectionVersion: 0,
       }),
     ).rejects.toThrow('attachment identity');
     expect(frames.map((frame) => frame.type)).toEqual(['projectionSnapshot']);

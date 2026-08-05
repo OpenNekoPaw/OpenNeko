@@ -8,10 +8,10 @@ import { CharacterDialogueHeader } from './CharacterDialogueHeader';
 
 const exitCharacterDialogueSession = vi.fn();
 
-vi.mock('../../messages', () => ({
-  AgentHostMessages: {
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({
     exitCharacterDialogueSession: (...args: unknown[]) => exitCharacterDialogueSession(...args),
-  },
+  }),
 }));
 
 describe('CharacterDialogueHeader', () => {

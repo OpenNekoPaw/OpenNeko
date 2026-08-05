@@ -203,7 +203,7 @@ function evidenceInput(assertions) {
         tools: bounded(),
         permissions: bounded(),
       },
-      projection: { revision: 1, terminalState: 'completed' },
+      projection: { terminalState: 'completed' },
       resourceDisplayProjections: bounded(),
       persistence: { durability: 'durable', checkpoint: 'observed' },
       diagnostics: bounded(),

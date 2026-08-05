@@ -1,11 +1,9 @@
 import {
-  AGENT_CONVERSATION_CONTEXT_VERSION,
   parseAgentConversationContext,
   type AgentConversationContext,
 } from './agent-conversation-context';
 
 export interface AgentDraftSubmitInput {
-  readonly schemaVersion: typeof AGENT_CONVERSATION_CONTEXT_VERSION;
   readonly target: AgentDraftSubmitTarget;
   readonly messageText: string;
   readonly resourceGrantIds: readonly string[];
@@ -27,7 +25,6 @@ export type AgentDraftSubmitTarget =
     };
 
 export interface AgentDraftSubmitProjection {
-  readonly schemaVersion: typeof AGENT_CONVERSATION_CONTEXT_VERSION;
   readonly conversationId: string;
   readonly turnId: string;
   readonly turnStatus: 'pending' | 'running' | 'completed' | 'failed';
@@ -36,10 +33,9 @@ export interface AgentDraftSubmitProjection {
 
 export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInput {
   const record = requireRecord(value, 'Agent draft submit input must be an object.');
-  requireVersion(record['schemaVersion']);
   requireExactKeys(
     record,
-    ['schemaVersion', 'target', 'messageText', 'resourceGrantIds', 'configuration'],
+    ['target', 'messageText', 'resourceGrantIds', 'configuration'],
     'Agent draft submit input',
   );
   const configuration = requireRecord(
@@ -56,7 +52,6 @@ export function parseAgentDraftSubmitInput(value: unknown): AgentDraftSubmitInpu
     throw new Error(`Unknown Agent draft execution mode '${String(executionMode)}'.`);
   }
   return {
-    schemaVersion: AGENT_CONVERSATION_CONTEXT_VERSION,
     target: parseTarget(record['target']),
     messageText: requireIdentity(record['messageText'], 'message'),
     resourceGrantIds: requireIdentityArray(record['resourceGrantIds'], 'Resource grant'),
@@ -86,12 +81,11 @@ function parseTarget(value: unknown): AgentDraftSubmitTarget {
 
 export function parseAgentDraftSubmitProjection(value: unknown): AgentDraftSubmitProjection {
   const record = requireRecord(value, 'Agent draft submit projection must be an object.');
-  requireVersion(record['schemaVersion']);
-  const allowed = ['schemaVersion', 'conversationId', 'turnId', 'turnStatus', 'diagnostic'];
+  const allowed = ['conversationId', 'turnId', 'turnStatus', 'diagnostic'];
   const unknown = Object.keys(record).find((key) => !allowed.includes(key));
   if (unknown)
     throw new Error(`Agent draft submit projection contains unknown field '${unknown}'.`);
-  for (const required of ['schemaVersion', 'conversationId', 'turnId', 'turnStatus']) {
+  for (const required of ['conversationId', 'turnId', 'turnStatus']) {
     if (!(required in record)) {
       throw new Error(`Agent draft submit projection is missing field '${required}'.`);
     }
@@ -113,18 +107,11 @@ export function parseAgentDraftSubmitProjection(value: unknown): AgentDraftSubmi
     throw new Error('Agent draft submit diagnostic must be a non-empty string.');
   }
   return {
-    schemaVersion: AGENT_CONVERSATION_CONTEXT_VERSION,
     conversationId: requireIdentity(record['conversationId'], 'Conversation'),
     turnId: requireIdentity(record['turnId'], 'Turn'),
     turnStatus,
     ...(diagnostic === undefined ? {} : { diagnostic }),
   };
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== AGENT_CONVERSATION_CONTEXT_VERSION) {
-    throw new Error(`Unsupported Agent draft submit version '${String(value)}'.`);
-  }
 }
 
 function requireRecord(value: unknown, message: string): Record<string, unknown> {

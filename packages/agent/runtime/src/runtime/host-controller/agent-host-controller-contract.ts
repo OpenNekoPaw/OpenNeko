@@ -18,7 +18,6 @@ export interface AgentHostConnectionIdentity {
   readonly windowId: string;
   readonly viewId: string;
   readonly workspaceId: string;
-  readonly rendererEpoch: string;
   readonly connectionId: string;
 }
 

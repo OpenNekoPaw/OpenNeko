@@ -227,7 +227,6 @@ describe('AppShell onboarding lifecycle', () => {
     render(
       <AppShell
         agentPresentation={{
-          schemaVersion: 2,
           kind: 'draft',
           draftId: 'draft-1',
           scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },

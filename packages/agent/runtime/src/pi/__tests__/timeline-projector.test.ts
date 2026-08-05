@@ -121,7 +121,6 @@ describe('Pi Timeline projector', () => {
     projector.emit(event({ type: 'turn.completed' }));
 
     const snapshot = store.snapshot();
-    expect(snapshot.projectionVersion).toBe(8);
     expect(snapshot.turns).toHaveLength(1);
     expect(snapshot.turns[0]).toMatchObject({
       turnId: identity.turnId,

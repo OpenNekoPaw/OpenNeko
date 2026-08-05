@@ -18,13 +18,12 @@ import type {
   PendingForegroundConversationActivation,
   StreamingState,
 } from '../types';
+import { createTestAgentHostMessageSender } from '../../test-utils/agent-host-messages';
 
 const hostMessageMocks = vi.hoisted(() => ({
   getConversationSnapshot: vi.fn(),
   getSettings: vi.fn(),
 }));
-
-vi.mock('../../messages', () => ({ AgentHostMessages: hostMessageMocks }));
 
 describe('character role context isolation', () => {
   it('routes conversation diagnostics without replacing global UI state', () => {
@@ -389,6 +388,7 @@ function createContextHarness(options: ContextHarnessOptions = {}): ContextHarne
   );
 
   const context = {
+    agentHostMessages: createTestAgentHostMessageSender(hostMessageMocks),
     messages,
     isThinking: streaming.isThinking,
     streamingMessageId: streaming.streamingMessageId,

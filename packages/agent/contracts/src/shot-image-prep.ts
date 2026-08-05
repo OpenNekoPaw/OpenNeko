@@ -22,9 +22,7 @@ import type {
   StoryboardTable,
 } from '@neko/canvas-domain';
 
-export const SHOT_IMAGE_PREP_SCHEMA_VERSION = 1 as const;
 export const SHOT_IMAGE_PREP_KIND = 'shot-image-prep-plan' as const;
-export const SHOT_IMAGE_PREP_PROFILE_VERSION = 1 as const;
 export const MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID =
   'media-production.shot-image-prep' as const;
 
@@ -109,7 +107,7 @@ export interface ShotImageRegenerationRecommendation {
 
 export type ShotImagePrepDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-schema-version'
+  | 'unsupported-field'
   | 'invalid-kind'
   | 'missing-required-field'
   | 'invalid-required-field'
@@ -187,7 +185,6 @@ export interface ShotReferenceBundle {
 }
 
 export interface ShotImagePrepPlan {
-  readonly schemaVersion: typeof SHOT_IMAGE_PREP_SCHEMA_VERSION;
   readonly kind: typeof SHOT_IMAGE_PREP_KIND;
   readonly planId: string;
   readonly storyboardId?: string;
@@ -257,7 +254,6 @@ export const SHOT_IMAGE_PREP_PROFILE: ArtifactProfileDescriptor = {
   profileId: MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID,
   kind: 'artifact',
   protocol: 'GenericTable',
-  version: SHOT_IMAGE_PREP_PROFILE_VERSION,
   source: 'builtin',
   title: 'Shot Image Prep',
   fieldDefinitions: [
@@ -489,15 +485,12 @@ export function buildShotImagePrepTable(
   options: {
     readonly tableId?: string;
     readonly title?: string;
-    readonly includeProfileVersion?: boolean;
   } = {},
 ): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? 'shot-image-prep',
     profile: MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID,
-    ...(options.includeProfileVersion ? { profileVersion: SHOT_IMAGE_PREP_PROFILE_VERSION } : {}),
     title: options.title ?? 'Shot Image Prep',
     columns: shotImagePrepColumns(),
     rows: plans.map(projectPlanToRow),
@@ -631,7 +624,6 @@ function deriveShotImagePrepPlanFromShot(input: {
   }
 
   const plan: ShotImagePrepPlan = {
-    schemaVersion: SHOT_IMAGE_PREP_SCHEMA_VERSION,
     kind: SHOT_IMAGE_PREP_KIND,
     planId: `${shotId}-image-prep`,
     ...(input.storyboardId ? { storyboardId: input.storyboardId } : {}),
@@ -996,13 +988,17 @@ function validateShotImagePrepPlanValue(
     );
     return;
   }
-  validateLiteral(
-    value['schemaVersion'],
-    SHOT_IMAGE_PREP_SCHEMA_VERSION,
-    [...path, 'schemaVersion'],
-    'invalid-schema-version',
-    diagnostics,
-  );
+  if (Object.hasOwn(value, 'schemaVersion')) {
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'unsupported-field',
+        [...path, 'schemaVersion'],
+        'Shot image prep field schemaVersion is not supported.',
+        { actual: diagnosticValue(value['schemaVersion']) },
+      ),
+    );
+  }
   validateLiteral(
     value['kind'],
     SHOT_IMAGE_PREP_KIND,
@@ -1486,8 +1482,8 @@ function mapDiagnosticCode(code: ShotImagePrepDiagnosticCode): ArtifactDiagnosti
   switch (code) {
     case 'invalid-root':
       return 'invalid-root';
-    case 'invalid-schema-version':
-      return 'invalid-schema-version';
+    case 'unsupported-field':
+      return 'unsupported-field';
     case 'invalid-kind':
       return 'invalid-kind';
     case 'missing-required-field':

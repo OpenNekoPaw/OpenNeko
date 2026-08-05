@@ -15,7 +15,6 @@ function createRequest() {
   return createAgentExtensionManagementHostRequest({
     route: 'snapshot.get',
     requestId: 'extensions-1',
-    endpointEpoch: 'application-1:window-1:1',
     identity,
   });
 }
@@ -72,7 +71,6 @@ describe('Agent Extension Management Host contract', () => {
     expect(
       parseAgentExtensionManagementHostResult(
         {
-          schemaVersion: 1,
           requestId: request.requestId,
           route: request.route,
           projection: createProjection(),
@@ -85,7 +83,6 @@ describe('Agent Extension Management Host contract', () => {
   it('rejects stale owners, unknown fields and physical paths', () => {
     const request = createRequest();
     const result = {
-      schemaVersion: 1,
       requestId: request.requestId,
       route: request.route,
       projection: createProjection(),
@@ -122,7 +119,6 @@ describe('Agent Extension Management Host contract', () => {
   it('rejects inconsistent management capabilities and discovery diagnostics', () => {
     const request = createRequest();
     const result = {
-      schemaVersion: 1,
       requestId: request.requestId,
       route: request.route,
       projection: createProjection(),

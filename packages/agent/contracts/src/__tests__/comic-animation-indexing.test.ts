@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { CreativeEntityRef } from '@neko/entity-domain';
 import type { PerceptionCard } from '../perception-card';
 import {
-  COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
   BATCH_EXECUTION_PLAN_KIND,
   CHARACTER_STATE_CHANGE_KIND,
   CONTINUITY_CONSTRAINT_KIND,
@@ -47,7 +46,6 @@ describe('comic animation incremental indexing contracts', () => {
     });
 
     expect(state).toMatchObject({
-      schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
       kind: INDEXED_RANGE_STATE_KIND,
       assetId: 'asset-page-1',
       status: 'partial',
@@ -58,6 +56,22 @@ describe('comic animation incremental indexing contracts', () => {
     });
     expect(state.tasks.map((task) => task.task)).toEqual(['asr', 'vlm-review']);
     expect(validateIndexedRangeState(state)).toEqual({ ok: true, diagnostics: [] });
+  });
+
+  it('rejects removed schemaVersion only for the affected indexing record', () => {
+    const valid = projectPerceptionCardToIndexedRangeState({
+      card: makePerceptionCard(),
+      sourceRef: sourceRef(),
+    });
+    const invalid = validateIndexedRangeState({ ...valid, schemaVersion: 1 });
+
+    expect(invalid.ok).toBe(false);
+    expect(invalid.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unsupported-field', path: ['schemaVersion'] }),
+      ]),
+    );
+    expect(validateIndexedRangeState(valid)).toEqual({ ok: true, diagnostics: [] });
   });
 
   it('rejects unsafe runtime handles in visual occurrence refs', () => {
@@ -234,7 +248,6 @@ function sourceRef() {
 
 function makePerceptionCard(): PerceptionCard {
   return {
-    version: 1,
     assetId: 'asset-page-1',
     modality: 'image',
     createdAt: 1_800_000_000,
@@ -267,7 +280,6 @@ function makePerceptionCard(): PerceptionCard {
 
 function makeOccurrence(): VisualOccurrence {
   return {
-    schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
     kind: VISUAL_OCCURRENCE_KIND,
     occurrenceId: 'occ-rin-page-1-panel-2',
     sourceRef: sourceRef(),
@@ -301,7 +313,6 @@ function makeOccurrence(): VisualOccurrence {
 
 function makeContinuitySnapshot(): StoryContinuitySnapshot {
   return {
-    schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
     kind: STORY_CONTINUITY_SNAPSHOT_KIND,
     snapshotId: 'continuity-scene-1',
     query: {
@@ -315,7 +326,6 @@ function makeContinuitySnapshot(): StoryContinuitySnapshot {
     },
     events: [
       {
-        schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
         kind: PLOT_EVENT_KIND,
         eventId: 'event-1',
         summary: 'Rin discovers the closed gate.',
@@ -332,7 +342,6 @@ function makeContinuitySnapshot(): StoryContinuitySnapshot {
     ],
     characterStates: [
       {
-        schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
         kind: CHARACTER_STATE_CHANGE_KIND,
         changeId: 'state-1',
         characterRef,
@@ -344,7 +353,6 @@ function makeContinuitySnapshot(): StoryContinuitySnapshot {
     ],
     constraints: [
       {
-        schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
         kind: CONTINUITY_CONSTRAINT_KIND,
         constraintId: 'constraint-1',
         type: 'blocking',
@@ -365,7 +373,6 @@ function makeContinuitySnapshot(): StoryContinuitySnapshot {
 
 function makeBatchPlan(): BatchExecutionPlan {
   return {
-    schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
     kind: BATCH_EXECUTION_PLAN_KIND,
     planId: 'batch-index-1',
     sourceArtifactRefs: ['artifact-storyboard-1'],

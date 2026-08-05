@@ -1,14 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AudioCard } from './AudioCard';
 import { VideoCard } from './VideoCard';
-
-vi.mock('../../../messages', () => ({
-  AgentHostMessages: {
-    openFile: vi.fn(),
-    openUrl: vi.fn(),
-  },
-}));
 
 describe('Agent media preview time labels', () => {
   it('formats audio preview duration through the shared media formatter', () => {

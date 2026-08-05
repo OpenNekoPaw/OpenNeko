@@ -1,5 +1,4 @@
 import {
-  ASSISTANT_RESOURCE_HOST_VERSION,
   parseAssistantResourceIdentity,
   parseAssistantResourceProjection,
   type AgentResourceGrantKind,
@@ -25,17 +24,14 @@ type AssistantConversationRecord = Omit<AgentConversationLifecycleRecord, 'conte
 export interface AssistantResourcePreviewPort {
   authorize(input: {
     readonly identity: AssistantResourceIdentity;
-    readonly endpointEpoch: string;
     readonly artifact: AgentScratchArtifactRef;
   }): Promise<AuthorizedPreviewSessionProjection>;
   read(input: {
     readonly identity: AssistantResourceIdentity;
-    readonly endpointEpoch: string;
     readonly previewSessionId: string;
   }): AuthorizedPreviewSessionProjection;
   release(input: {
     readonly identity: AssistantResourceIdentity;
-    readonly endpointEpoch: string;
     readonly previewSessionId: string;
   }): void;
 }
@@ -44,17 +40,14 @@ export interface AssistantResourceService {
   snapshot(identity: AssistantResourceIdentity): Promise<AssistantResourceProjection>;
   authorizePreview(input: {
     readonly identity: AssistantResourceIdentity;
-    readonly endpointEpoch: string;
     readonly scratchArtifactId: string;
   }): Promise<AuthorizedPreviewSessionProjection>;
   readPreview(input: {
     readonly identity: AssistantResourceIdentity;
-    readonly endpointEpoch: string;
     readonly previewSessionId: string;
   }): AuthorizedPreviewSessionProjection;
   releasePreview(input: {
     readonly identity: AssistantResourceIdentity;
-    readonly endpointEpoch: string;
     readonly previewSessionId: string;
   }): void;
 }
@@ -100,7 +93,6 @@ export function createAssistantResourceService(options: {
           );
         }
         return {
-          schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
           resourceGrantId,
           assistantSpaceId: identity.assistantSpaceId,
           kind: grant.resourceKind,
@@ -108,7 +100,6 @@ export function createAssistantResourceService(options: {
         };
       });
       return parseAssistantResourceProjection({
-        schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
         identity,
         baseGrants,
         scratchArtifacts: record.scratchArtifacts,
@@ -124,7 +115,7 @@ export function createAssistantResourceService(options: {
           `Assistant Scratch artifact '${input.scratchArtifactId}' does not belong to Conversation '${identity.conversationId}'.`,
         );
       }
-      return options.preview.authorize({ identity, endpointEpoch: input.endpointEpoch, artifact });
+      return options.preview.authorize({ identity, artifact });
     },
     readPreview(input) {
       return options.preview.read({

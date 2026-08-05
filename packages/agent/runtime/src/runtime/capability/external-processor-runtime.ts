@@ -787,7 +787,6 @@ function createDeveloperModeManifest(input: {
   const allowedInputRoots = input.allowedInputRoots ?? ['workspace'];
   return {
     schema: 'neko.externalProcessor',
-    schemaVersion: 2,
     id: 'developer-mode.one-shot-command',
     kind: 'external-processor',
     displayName: 'Developer Mode One-shot Command',

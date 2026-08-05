@@ -12,7 +12,6 @@ import {
 } from './tab-render-realm-state';
 
 interface RegistryRootLease {
-  generation: number;
   active: boolean;
 }
 
@@ -27,7 +26,7 @@ export function useTabRenderRuntimeRegistry(
     throw new Error('Tab render runtime registry requires an injected Agent host runtime adapter.');
   }
   const registryRef = useRef<TabRenderRuntimeRegistry>();
-  const rootLeaseRef = useRef<RegistryRootLease>({ generation: 0, active: false });
+  const rootLeaseRef = useRef<RegistryRootLease>();
   const realmStateRef = useRef<TabRenderRealmStateCoordinator>();
   const [, publishReconciliation] = useReducer((revision: number) => revision + 1, 0);
   registryRef.current ??= createTabRenderRuntimeRegistry();
@@ -47,10 +46,8 @@ export function useTabRenderRuntimeRegistry(
   }, [activeTabId, openTabs, realmState, registry]);
 
   useEffect(() => {
-    const lease = rootLeaseRef.current;
-    const generation = lease.generation + 1;
-    lease.generation = generation;
-    lease.active = true;
+    const lease: RegistryRootLease = { active: true };
+    rootLeaseRef.current = lease;
     const handlePageHide = (): void => realmState.flush();
     window.addEventListener('pagehide', handlePageHide);
 
@@ -58,7 +55,7 @@ export function useTabRenderRuntimeRegistry(
       window.removeEventListener('pagehide', handlePageHide);
       lease.active = false;
       queueMicrotask(() => {
-        if (!lease.active && lease.generation === generation) {
+        if (!lease.active && rootLeaseRef.current === lease) {
           realmState.dispose();
           registry.dispose();
         }

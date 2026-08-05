@@ -8,7 +8,7 @@ import {
   NodePiConversationAuthority,
   type ConversationExecutionLease,
 } from '../node-conversation-authority';
-import { migratePiConversationSchema } from '../node-conversation-storage';
+import { initializePiConversationTables } from '../node-conversation-storage';
 
 describe('NodePiConversationAuthority', () => {
   let root: string;
@@ -116,7 +116,7 @@ describe('NodePiConversationAuthority', () => {
     expect((await authority.buildContext('conversation-1', 'branch-alt')).messages).toHaveLength(1);
   });
 
-  it('fences stale cross-Host writers with monotonically increasing epochs', async () => {
+  it('fences stale cross-Host writers with exact lease identities', async () => {
     const primary = await createAuthority('desktop-primary');
     const secondary = await createAuthority('desktop-secondary');
     const primaryLease = primary.acquireLease('conversation-1');
@@ -130,7 +130,7 @@ describe('NodePiConversationAuthority', () => {
       expect.objectContaining({ code: 'lease-held' }),
     );
     const secondaryLease = secondary.acquireLease('conversation-1', { takeover: true });
-    expect(secondaryLease.epoch).toBe(primaryLease.epoch + 1);
+    expect(secondaryLease.leaseId).not.toBe(primaryLease.leaseId);
     await expect(
       primary.checkpointTurn({
         lease: primaryLease,
@@ -153,8 +153,8 @@ describe('NodePiConversationAuthority', () => {
       terminalState: 'failed',
     });
     expect(primary.getTurnDurability('conversation-1', 'turn-stale')).toBe('durable');
-    expect(primary.readCheckpoint('conversation-1', 'turn-stale')?.writerEpoch).toBe(
-      recoveredLease.epoch,
+    expect(primary.readCheckpoint('conversation-1', 'turn-stale')?.writerLeaseId).toBe(
+      recoveredLease.leaseId,
     );
   });
 
@@ -262,12 +262,13 @@ describe('NodePiConversationAuthority', () => {
       branchId: 'branch-main',
     });
     lease = authority.renewLease(lease);
+    const expiredLeaseId = lease.leaseId;
     now = lease.expiresAt + 1;
     expect(() => authority.renewLease(lease)).toThrowError(
       expect.objectContaining({ code: 'lease-stale' }),
     );
     const next = authority.acquireLease('conversation-1');
-    expect(next.epoch).toBe(lease.epoch + 1);
+    expect(next.leaseId).not.toBe(expiredLeaseId);
 
     const replace = vi.fn();
     await authority.projectCatalog({ replace });
@@ -287,13 +288,14 @@ describe('NodePiConversationAuthority', () => {
     ).toThrowError(expect.objectContaining({ code: 'conversation-not-found' }));
   });
 
-  it('transactionally imports and archives the retired Agent metadata database', async () => {
-    const legacyRoot = join(root, 'agent', 'pi');
-    await mkdir(legacyRoot, { recursive: true });
+  it('leaves the retired Agent metadata database untouched and unread', async () => {
+    const retiredRoot = join(root, 'agent', 'pi');
+    await mkdir(retiredRoot, { recursive: true });
     const sqlite = await import('node:sqlite');
-    const legacy = new sqlite.DatabaseSync(join(legacyRoot, 'metadata.sqlite'));
-    migratePiConversationSchema(legacy);
-    legacy
+    const retiredPath = join(retiredRoot, 'metadata.sqlite');
+    const retired = new sqlite.DatabaseSync(retiredPath);
+    initializePiConversationTables(retired);
+    retired
       .prepare(
         `INSERT INTO pi_conversations
           (workspace_id, conversation_id, title, active_branch_id, created_at, updated_at)
@@ -301,35 +303,30 @@ describe('NodePiConversationAuthority', () => {
       )
       .run(
         'workspace-1',
-        'legacy-conversation',
-        'Legacy title',
-        'legacy-branch',
+        'retired-conversation',
+        'Retired title',
+        'retired-branch',
         '2026-08-01T00:00:00.000Z',
         '2026-08-01T00:00:00.000Z',
       );
-    legacy.close();
+    retired.close();
+    const before = await stat(retiredPath);
 
-    const authority = await createAuthority('desktop-migration');
+    const authority = await createAuthority('desktop-current');
 
-    expect(authority.readConversation('legacy-conversation')).toMatchObject({
-      workspaceId: 'workspace-1',
-      title: 'Legacy title',
-    });
-    await expect(access(join(legacyRoot, 'metadata.sqlite'))).rejects.toThrow();
-    await expect(stat(join(legacyRoot, 'metadata.sqlite.migrated-v1'))).resolves.toMatchObject({
-      size: expect.any(Number),
-    });
+    expect(authority.readConversation('retired-conversation')).toBeUndefined();
+    await expect(access(retiredPath)).resolves.toBeUndefined();
+    await expect(stat(retiredPath)).resolves.toMatchObject({ size: before.size });
   });
 
-  it('rebuilds the retired embedded-context table before creating a conversation', async () => {
+  it('rejects a retired embedded-context table without rewriting it', async () => {
     const sqlite = await import('node:sqlite');
-    const database = new sqlite.DatabaseSync(join(root, 'neko.db'), {
-      enableForeignKeyConstraints: true,
-    });
+    const databasePath = join(root, 'neko.db');
+    const database = new sqlite.DatabaseSync(databasePath);
     database.exec(`
       CREATE TABLE pi_conversations (
-        context_schema_version INTEGER NOT NULL CHECK(context_schema_version = 1),
-        context_kind TEXT NOT NULL CHECK(context_kind IN ('scratch', 'workspace-authoring')),
+        context_schema_version INTEGER NOT NULL,
+        context_kind TEXT NOT NULL,
         context_id TEXT NOT NULL,
         project_id TEXT,
         workspace_id TEXT,
@@ -337,115 +334,31 @@ describe('NodePiConversationAuthority', () => {
         title TEXT NOT NULL,
         active_branch_id TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        CHECK (
-          (context_kind = 'scratch' AND project_id IS NULL AND workspace_id IS NULL) OR
-          (context_kind = 'workspace-authoring' AND project_id IS NOT NULL AND workspace_id = context_id)
-        )
-      );
-      CREATE INDEX pi_conversations_context_updated
-        ON pi_conversations(context_kind, context_id, updated_at DESC);
-      CREATE INDEX pi_conversations_workspace_updated
-        ON pi_conversations(workspace_id, updated_at DESC)
-        WHERE workspace_id IS NOT NULL;
-      CREATE TABLE pi_branches (
-        conversation_id TEXT NOT NULL,
-        branch_id TEXT NOT NULL,
-        parent_branch_id TEXT,
-        state TEXT NOT NULL CHECK(state IN ('active', 'historical')),
-        pi_session_id TEXT NOT NULL UNIQUE,
-        pi_session_created_at TEXT NOT NULL,
-        pi_session_cwd TEXT NOT NULL,
-        pi_session_path TEXT NOT NULL,
-        pi_parent_session_path TEXT,
-        pi_metadata_json TEXT,
-        leaf_id TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY(conversation_id, branch_id),
-        FOREIGN KEY(conversation_id) REFERENCES pi_conversations(conversation_id) ON DELETE CASCADE
+        updated_at TEXT NOT NULL
       );
     `);
-    const timestamp = '2026-08-05T00:00:00.000Z';
-    database
-      .prepare(
-        `INSERT INTO pi_conversations VALUES
-          (1, 'workspace-authoring', 'workspace-1', 'project-1', 'workspace-1',
-           'legacy-workspace', 'Workspace', 'branch-main', ?, ?),
-          (1, 'scratch', 'scratch-scope-1', NULL, NULL,
-           'legacy-scratch', 'Scratch', 'branch-scratch', ?, ?)`,
-      )
-      .run(timestamp, timestamp, timestamp, timestamp);
-    database
-      .prepare(
-        `INSERT INTO pi_branches (
-           conversation_id, branch_id, parent_branch_id, state, pi_session_id,
-           pi_session_created_at, pi_session_cwd, pi_session_path, pi_parent_session_path,
-           pi_metadata_json, leaf_id, created_at, updated_at
-         ) VALUES (?, ?, NULL, 'active', ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
-      )
-      .run(
-        'legacy-workspace',
-        'branch-main',
-        'session-legacy',
-        timestamp,
-        '/__neko_workspaces/workspace-1',
-        '/sessions/legacy.jsonl',
-        timestamp,
-        timestamp,
-      );
     database.close();
+    const before = await stat(databasePath);
 
-    const authority = await createAuthority('desktop-migrated');
-    expect(authority.readConversation('legacy-workspace')).toMatchObject({
-      workspaceId: 'workspace-1',
-      conversationId: 'legacy-workspace',
-    });
-    expect(authority.listBranches('legacy-workspace')).toEqual([
-      expect.objectContaining({
-        branchId: 'branch-main',
-        session: expect.objectContaining({ id: 'session-legacy' }),
-      }),
-    ]);
-    const lease = authority.acquireLease('new-conversation');
-    await expect(
-      authority.createConversation({
-        lease,
-        conversationId: 'new-conversation',
-        branchId: 'branch-new',
-      }),
-    ).resolves.toBeDefined();
-
-    const scratch = await createAuthority('desktop-scratch', 30_000, 'scratch-scope-1');
-    expect(scratch.readConversation('legacy-scratch')).toMatchObject({
-      workspaceId: 'scratch-scope-1',
-      conversationId: 'legacy-scratch',
-    });
-    const migrated = new sqlite.DatabaseSync(join(root, 'neko.db'), { readOnly: true });
+    await expect(createAuthority('desktop-retired-shape')).rejects.toThrow(
+      'Pi conversation table contract is unsupported',
+    );
+    await expect(stat(databasePath)).resolves.toMatchObject({ size: before.size });
+    const unchanged = new sqlite.DatabaseSync(databasePath, { readOnly: true });
     try {
       expect(
-        migrated
+        unchanged
           .prepare(`PRAGMA table_info(pi_conversations)`)
           .all()
-          .map((row) => (row as { name: string }).name),
-      ).toEqual([
-        'workspace_id',
-        'conversation_id',
-        'title',
-        'active_branch_id',
-        'created_at',
-        'updated_at',
-      ]);
-      expect(
-        migrated
-          .prepare(
-            `SELECT COUNT(*) AS count FROM sqlite_master
-              WHERE type = 'index' AND name = 'pi_conversations_context_updated'`,
-          )
-          .get(),
-      ).toEqual({ count: 0 });
+          .map((row) => {
+            if (!('name' in row) || typeof row.name !== 'string') {
+              throw new TypeError('Expected SQLite column name.');
+            }
+            return row.name;
+          }),
+      ).toContain('context_schema_version');
     } finally {
-      migrated.close();
+      unchanged.close();
     }
   });
 
@@ -464,7 +377,7 @@ describe('NodePiConversationAuthority', () => {
     database.close();
 
     await expect(createAuthority('desktop-unknown')).rejects.toThrow(
-      'Pi conversation table schema is unsupported',
+      'Pi conversation table contract is unsupported',
     );
     const unchanged = new sqlite.DatabaseSync(join(root, 'neko.db'), { readOnly: true });
     try {
@@ -472,7 +385,12 @@ describe('NodePiConversationAuthority', () => {
         unchanged
           .prepare(`PRAGMA table_info(pi_conversations)`)
           .all()
-          .map((row) => (row as { name: string }).name),
+          .map((row) => {
+            if (!('name' in row) || typeof row.name !== 'string') {
+              throw new TypeError('Expected SQLite column name.');
+            }
+            return row.name;
+          }),
       ).toContain('unknown_context');
     } finally {
       unchanged.close();

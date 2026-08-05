@@ -33,7 +33,6 @@ export function useProjectionEndpoint(
         reportError: (error, context) => {
           logger.error(error.message, {
             operation: context.operation,
-            endpointEpoch: context.key.endpointEpoch,
             attachmentId: context.key.attachmentId,
             tabId: context.key.tabId,
             conversationId: context.key.conversationId,

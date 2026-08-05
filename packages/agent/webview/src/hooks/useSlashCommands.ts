@@ -19,7 +19,7 @@ import {
   formatSlashCommandHelpCatalog,
 } from '../components/ChatView/InputArea/slash-command-catalog';
 import { useTranslation } from '../i18n/I18nContext';
-import { AgentHostMessages } from '../messages';
+import { useAgentHostMessages } from '../host-runtime-context';
 
 export interface UseSlashCommandsProps {
   skills: SkillSummary[];
@@ -43,6 +43,7 @@ export function useSlashCommands({
   clearInput,
 }: UseSlashCommandsProps): UseSlashCommandsReturn {
   const { t } = useTranslation();
+  const agentHostMessages = useAgentHostMessages();
 
   const handleSlashCommand = useCallback(
     (command: SlashCommand) => {
@@ -54,7 +55,7 @@ export function useSlashCommands({
           return;
         }
         clearInput();
-        AgentHostMessages.invokePluginSlashCommand(
+        agentHostMessages.invokePluginSlashCommand(
           command.pluginId,
           command.commandId ?? command.id,
           activeConversationId,
@@ -100,7 +101,7 @@ export function useSlashCommands({
       }
 
       clearInput();
-      AgentHostMessages.invokeSlashCommand(
+      agentHostMessages.invokeSlashCommand(
         command.commandId ?? command.id,
         args,
         activeConversationId,

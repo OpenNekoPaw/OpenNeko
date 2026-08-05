@@ -112,7 +112,6 @@ describe('MarkdownRenderer structured artifacts', () => {
 
 \`\`\`NEKO
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "artifact-storyboard",
   "title": "Comic artifact",
@@ -122,9 +121,7 @@ describe('MarkdownRenderer structured artifacts', () => {
       "kind": "domain",
       "title": "Storyboard Payload",
       "domainKind": "StoryboardTable",
-      "schemaVersion": 1,
       "payload": {
-        "schemaVersion": 1,
         "kind": "storyboard-table",
         "title": "Opening",
         "scenes": [
@@ -159,14 +156,13 @@ describe('MarkdownRenderer structured artifacts', () => {
     renderMarkdown(
       `\`\`\`neko
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "blocks": [`,
       true,
     );
 
     expect(screen.getByText('Generating structured content...')).toBeTruthy();
-    expect(screen.queryByText(/"schemaVersion": 1/)).toBeNull();
+    expect(screen.queryByText(/"kind": "composite-artifact"/)).toBeNull();
   });
 
   it('keeps ordinary json code blocks visible', () => {
@@ -181,7 +177,6 @@ describe('MarkdownRenderer structured artifacts', () => {
   it('renders non-storyboard composite artifacts with the generic artifact renderer', () => {
     renderMarkdown(`\`\`\`NEKO
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "character-review",
   "title": "Character Review",
@@ -192,7 +187,6 @@ describe('MarkdownRenderer structured artifacts', () => {
       "kind": "table",
       "title": "Review Table",
       "table": {
-        "schemaVersion": 1,
         "kind": "generic-table",
         "tableId": "characters",
         "title": "Characters",
@@ -1000,8 +994,6 @@ function createTimelineMarkdownSession(content: string): string {
 
     runId: 'run-a',
     messageId,
-    projectionVersion: 1,
-    baseProjectionVersion: 0,
     operations: [
       {
         operation: 'append',

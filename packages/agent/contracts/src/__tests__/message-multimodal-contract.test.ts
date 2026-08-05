@@ -29,7 +29,6 @@ describe('multimodal message contracts', () => {
         ],
         perceptionCards: [
           {
-            version: 1,
             assetId: 'asset-1',
             modality: 'image',
             createdAt: 1,
@@ -83,7 +82,6 @@ function makeArtifactSnapshot(): AgentArtifactTransferPayload {
   return {
     type: 'artifactSnapshot',
     artifact: {
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'artifact-1',
       title: 'Shot plan',

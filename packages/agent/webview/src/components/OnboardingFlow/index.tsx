@@ -8,7 +8,7 @@
  */
 import { useState } from 'react';
 import { useTranslation } from '../../i18n/I18nContext';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
 
 type Step = 'choose' | 'fileOpened';
 
@@ -17,11 +17,12 @@ interface OnboardingFlowProps {
 }
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('choose');
 
   const handleOpenConfigFile = () => {
-    AgentHostMessages.openUserConfigFile();
+    agentHostMessages.openUserConfigFile();
     setStep('fileOpened');
   };
 

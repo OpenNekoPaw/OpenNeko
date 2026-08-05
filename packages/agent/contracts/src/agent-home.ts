@@ -1,5 +1,3 @@
-export const AGENT_HOME_PROJECTION_VERSION = 1 as const;
-
 export interface AgentHomeAttentionProjection {
   readonly needsInput: number;
   readonly needsReview: number;
@@ -49,7 +47,6 @@ export interface AgentHomeActivitySummary {
   readonly toolCallId?: string;
   readonly generationJob?: {
     readonly jobId: string;
-    readonly revision: number;
     readonly phase: string;
   };
 }
@@ -63,15 +60,22 @@ export interface AgentHomeConversationSummary {
   readonly lastActivity: AgentHomeActivitySummary;
 }
 
+export interface AgentHomeDiagnostic {
+  readonly code: 'invalid-conversation-record';
+  readonly workspaceId?: string;
+  readonly conversationId?: string;
+  readonly message: string;
+}
+
 export interface AgentHomeProjection {
-  readonly schemaVersion: typeof AGENT_HOME_PROJECTION_VERSION;
   readonly revision: number;
   readonly conversations: readonly AgentHomeConversationSummary[];
   readonly attention: AgentHomeAttentionProjection;
+  readonly diagnostics?: readonly AgentHomeDiagnostic[];
 }
 
 export class AgentHomeContractError extends Error {
-  readonly code: 'invalid-agent-home-projection' | 'unsupported-agent-home-projection-version';
+  readonly code: 'invalid-agent-home-projection';
 
   constructor(code: AgentHomeContractError['code'], message: string) {
     super(message);
@@ -152,17 +156,12 @@ export function parseAgentHomeConversationSummary(value: unknown): AgentHomeConv
 
 export function parseAgentHomeProjection(value: unknown): AgentHomeProjection {
   const record = requireRecord(value, 'Agent Home projection must be an object.');
-  requireExactKeys(
+  requireAllowedKeys(
     record,
-    ['schemaVersion', 'revision', 'conversations', 'attention'],
+    ['revision', 'conversations', 'attention', 'diagnostics'],
+    ['revision', 'conversations', 'attention'],
     'Agent Home projection',
   );
-  if (record['schemaVersion'] !== AGENT_HOME_PROJECTION_VERSION) {
-    throw new AgentHomeContractError(
-      'unsupported-agent-home-projection-version',
-      `Unsupported Agent Home projection version '${String(record['schemaVersion'])}'.`,
-    );
-  }
   const conversations = requireArray(record['conversations'], 'Agent Home conversations').map(
     parseAgentHomeConversationSummary,
   );
@@ -173,7 +172,6 @@ export function parseAgentHomeProjection(value: unknown): AgentHomeProjection {
   const attention = requireRecord(record['attention'], 'Agent Home attention must be an object.');
   requireExactKeys(attention, ['needsInput', 'needsReview', 'running'], 'Agent Home attention');
   return Object.freeze({
-    schemaVersion: AGENT_HOME_PROJECTION_VERSION,
     revision: requireNonNegativeInteger(record['revision'], 'Agent Home revision'),
     conversations: Object.freeze(conversations),
     attention: Object.freeze({
@@ -181,6 +179,34 @@ export function parseAgentHomeProjection(value: unknown): AgentHomeProjection {
       needsReview: requireNonNegativeInteger(attention['needsReview'], 'needsReview'),
       running: requireNonNegativeInteger(attention['running'], 'running'),
     }),
+    ...(record['diagnostics'] === undefined
+      ? {}
+      : {
+          diagnostics: Object.freeze(
+            requireArray(record['diagnostics'], 'Agent Home diagnostics').map(
+              parseAgentHomeDiagnostic,
+            ),
+          ),
+        }),
+  });
+}
+
+function parseAgentHomeDiagnostic(value: unknown): AgentHomeDiagnostic {
+  const record = requireRecord(value, 'Agent Home diagnostic must be an object.');
+  requireAllowedKeys(
+    record,
+    ['code', 'workspaceId', 'conversationId', 'message'],
+    ['code', 'message'],
+    'Agent Home diagnostic',
+  );
+  if (record['code'] !== 'invalid-conversation-record') {
+    throw invalid(`Unknown Agent Home diagnostic code '${String(record['code'])}'.`);
+  }
+  return Object.freeze({
+    code: record['code'],
+    ...optionalIdentity(record, 'workspaceId', 'Diagnostic Workspace'),
+    ...optionalIdentity(record, 'conversationId', 'Diagnostic Conversation'),
+    message: requireIdentity(record['message'], 'Agent Home diagnostic message'),
   });
 }
 
@@ -230,10 +256,9 @@ function parseActivity(value: unknown): AgentHomeActivitySummary {
   let generationJob: AgentHomeActivitySummary['generationJob'];
   if (generationJobValue !== undefined) {
     const job = requireRecord(generationJobValue, 'Generation Job summary must be an object.');
-    requireExactKeys(job, ['jobId', 'revision', 'phase'], 'Generation Job summary');
+    requireExactKeys(job, ['jobId', 'phase'], 'Generation Job summary');
     generationJob = Object.freeze({
       jobId: requireIdentity(job['jobId'], 'Generation Job'),
-      revision: requireNonNegativeInteger(job['revision'], 'Generation Job revision'),
       phase: requireIdentity(job['phase'], 'Generation Job phase'),
     });
   }

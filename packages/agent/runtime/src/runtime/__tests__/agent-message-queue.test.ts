@@ -6,7 +6,7 @@ import {
 } from '../session/agent-message-queue';
 
 describe('AgentConversationMessageQueue', () => {
-  it('owns conversation identity and monotonic snapshots', () => {
+  it('owns conversation identity and live event ordering', () => {
     const queue = createAgentConversationMessageQueue({
       conversationId: 'conv-1',
       createId: vi.fn().mockReturnValueOnce('queue-1').mockReturnValueOnce('queue-2'),
@@ -17,7 +17,7 @@ describe('AgentConversationMessageQueue', () => {
       conversationId: 'conv-1',
       items: [],
       pendingCount: 0,
-      version: 0,
+      sequence: 0,
     });
 
     queue.enqueue({ content: ' first ', source: 'user', now: 10 });
@@ -31,7 +31,7 @@ describe('AgentConversationMessageQueue', () => {
     expect(queue.snapshot()).toEqual({
       conversationId: 'conv-1',
       pendingCount: 2,
-      version: 2,
+      sequence: 2,
       items: [
         expect.objectContaining({
           id: 'queue-1',

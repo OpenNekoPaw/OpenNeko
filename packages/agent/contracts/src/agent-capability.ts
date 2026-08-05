@@ -13,17 +13,15 @@
 import type { Tool, ToolCategory } from './tool';
 import type { LoadingTier } from './loading-tier';
 import type { PromptFragment } from './prompt-fragment';
-import type { ProviderCard, ProviderExpressionProfileDescriptor } from './provider-card';
+import type { ProviderExpressionProfileDescriptor } from './provider-card';
 import type { ArtifactProfileDescriptor } from './composite-artifact';
 import type { PerceptionCapabilityFacet } from './comic-animation-indexing';
 import type { AgentCapabilityLifecycleDescriptor } from './agent-capability-lifecycle';
 import type { AgentReferenceContributor } from './reference-contributor';
 
 // =============================================================================
-// Protocol v1 metadata
+// Capability metadata
 // =============================================================================
-
-export type AgentCapabilityProtocolVersion = '1.0';
 
 export type AgentCapabilityTrustLevel = 'core' | 'community' | 'untrusted';
 
@@ -51,8 +49,6 @@ export interface AgentCapabilityRuntimeRequirementDescriptor {
 }
 
 export interface AgentCapabilityProtocolMetadata {
-  /** Capability protocol version. Omitted legacy providers are treated as 1.0-compatible. */
-  readonly protocolVersion?: AgentCapabilityProtocolVersion;
   /** Trust tier used by future policy enforcement; omitted providers default to core. */
   readonly trustLevel?: AgentCapabilityTrustLevel;
   /** Hosts supported by this provider. Omitted providers use the Desktop host. */
@@ -63,9 +59,8 @@ export interface AgentCapabilityProtocolMetadata {
   readonly lifecycleHooks?: readonly AgentCapabilityLifecycleHook[];
 }
 
-export interface CapabilityContributionV1 extends AgentCapabilityProtocolMetadata {
+export interface CapabilityContribution extends AgentCapabilityProtocolMetadata {
   readonly id: string;
-  readonly version: string;
   readonly displayName: string;
   readonly capabilities: readonly CapabilityDeclaration[];
 }
@@ -81,9 +76,6 @@ export interface CapabilityContributionV1 extends AgentCapabilityProtocolMetadat
 export interface AgentCapabilityManifest extends AgentCapabilityProtocolMetadata {
   /** Unique provider ID matching the extension's short name (e.g. "neko-cut") */
   id: string;
-
-  /** Semantic version of the capability set */
-  version: string;
 
   /** Human-readable display name */
   displayName: string;
@@ -123,7 +115,6 @@ export interface AgentArtifactProtocolContribution {
   readonly id: string;
   readonly artifactKind: string;
   readonly profile?: string;
-  readonly schemaVersion: number;
   readonly validatorId: string;
   readonly rendererIds?: readonly string[];
   readonly projectorIds?: readonly string[];
@@ -133,7 +124,6 @@ export interface AgentArtifactProfileContribution {
   readonly id: string;
   readonly profileId: string;
   readonly protocol: string;
-  readonly version: number;
   readonly descriptorRef?: string;
 }
 
@@ -160,7 +150,6 @@ export interface AgentArtifactExecutionCapabilityContribution {
   readonly actions: readonly string[];
   readonly risk: AgentArtifactCapabilityRisk;
   readonly requiresApproval: boolean;
-  readonly minVersion?: string;
 }
 
 export interface AgentArtifactFacetsContribution {
@@ -229,9 +218,6 @@ export interface AgentCapabilityProvider extends AgentCapabilityProtocolMetadata
   /** Provider ID (must match manifest.id) */
   readonly id: string;
 
-  /** Provider version (must match manifest.version) */
-  readonly version: string;
-
   /**
    * Return tools provided by this sub-package.
    * Called once during registration; returned tools are registered in the ToolRegistry.
@@ -261,19 +247,8 @@ export interface AgentCapabilityProvider extends AgentCapabilityProtocolMetadata
   getArtifactProfiles?(context: AgentCapabilityContext): ArtifactProfileDescriptor[];
 
   /**
-   * Optional: Return ProviderCards contributed by this sub-package.
-   *
-   * ProviderCards describe model syntax, concept coverage, and training-profile
-   * preferences for ProviderExpressionContext. They are registered into the
-   * ProviderCard registry when available, but remain optional for backward
-   * compatibility with existing AgentCapabilityProvider implementations.
-   */
-  getProviderCards?(context: AgentCapabilityContext): ProviderCard[];
-
-  /**
    * Optional: Return provider/model expression profiles contributed by this
-   * provider/package. Implementations may initially derive these from
-   * getProviderCards() to preserve ProviderCard compatibility.
+   * provider/package.
    */
   getProviderExpressionProfiles?(
     context: AgentCapabilityContext,

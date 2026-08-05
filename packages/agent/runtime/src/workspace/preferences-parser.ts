@@ -72,7 +72,7 @@ export function parsePreferences(
   const warnings: string[] = [];
 
   const { frontmatter, body } = _splitFrontmatter(markdown);
-  const version = _parseVersion(frontmatter, warnings);
+  _warnUnsupportedFrontmatter(frontmatter, warnings);
   const declaredScope = _parseScope(frontmatter, warnings);
   if (declaredScope && declaredScope !== scope) {
     warnings.push(
@@ -132,7 +132,6 @@ export function parsePreferences(
 
   const preferences: UserPreferences = {
     scope,
-    version,
     alwaysApprove,
     autoApprove,
     costThresholds,
@@ -151,7 +150,6 @@ export function parsePreferences(
 export function emptyPreferences(scope: 'project' | 'global', sourcePath = ''): UserPreferences {
   return {
     scope,
-    version: 1,
     alwaysApprove: [],
     autoApprove: [],
     costThresholds: {},
@@ -213,7 +211,6 @@ export function mergePreferences(
 
   const merged: UserPreferences = {
     scope: 'project',
-    version: project.version,
     alwaysApprove,
     autoApprove,
     costThresholds,
@@ -239,15 +236,14 @@ function _splitFrontmatter(md: string): { frontmatter: string; body: string } {
   return { frontmatter: match[1] ?? '', body: match[2] ?? '' };
 }
 
-function _parseVersion(frontmatter: string, warnings: string[]): number {
-  const match = /^version:\s*(.+)$/m.exec(frontmatter);
-  if (!match) return 1;
-  const parsed = Number(match[1]!.trim());
-  if (Number.isNaN(parsed) || parsed <= 0) {
-    warnings.push(`Invalid preferences version "${match[1]}"; defaulting to 1`);
-    return 1;
+function _warnUnsupportedFrontmatter(frontmatter: string, warnings: string[]): void {
+  for (const line of frontmatter.split(/\r?\n/u)) {
+    const match = /^([^:#]+):/u.exec(line);
+    const field = match?.[1]?.trim();
+    if (field && field !== 'kind' && field !== 'scope') {
+      warnings.push(`Unsupported preferences frontmatter field "${field}"; ignoring`);
+    }
   }
-  return parsed;
 }
 
 function _parseScope(frontmatter: string, warnings: string[]): 'project' | 'global' | null {

@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react';
-import { AgentHostMessages } from '../../../messages';
+import { useAgentHostMessages } from '../../../host-runtime-context';
 import { CopyIcon, FileIcon } from '@neko/ui/icons';
 import { SendToMenu } from '../SendToMenu';
 import { useMessageActions } from '../MessageActionsContext';
@@ -11,16 +11,20 @@ interface DocumentImageThumbnailsProps {
 }
 
 function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnailsProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { pluginsAvailable, contextChips, ambientNodes, activeConversationId } =
     useMessageActions();
 
-  const handleOpen = useCallback((thumbnail: DocumentImageThumbnailProjection) => {
-    if (!thumbnail.locator || !thumbnail.contentLocator) return;
-    AgentHostMessages.revealDocumentLocator({
-      contentLocator: thumbnail.contentLocator,
-      locator: thumbnail.locator,
-    });
-  }, []);
+  const handleOpen = useCallback(
+    (thumbnail: DocumentImageThumbnailProjection) => {
+      if (!thumbnail.locator || !thumbnail.contentLocator) return;
+      agentHostMessages.revealDocumentLocator({
+        contentLocator: thumbnail.contentLocator,
+        locator: thumbnail.locator,
+      });
+    },
+    [agentHostMessages],
+  );
 
   const handleCopy = useCallback(async (value: string) => {
     await navigator.clipboard.writeText(value);

@@ -2,6 +2,7 @@ import {
   createModels,
   createProvider,
   type Api,
+  type Credential,
   type CredentialStore,
   type Model,
   type MutableModels,
@@ -50,6 +51,10 @@ export interface OpenNekoPiProviderProjection {
   readonly models: readonly Model<Api>[];
 }
 
+export interface OpenNekoPiModels extends MutableModels {
+  setConfiguredApiKey(providerId: string, apiKey: string | undefined): void;
+}
+
 export type OpenNekoPiProviderProjectionErrorCode =
   'invalid-provider' | 'invalid-endpoint' | 'invalid-model' | 'unsupported-protocol';
 
@@ -63,8 +68,13 @@ export class OpenNekoPiProviderProjectionError extends Error {
   }
 }
 
-export function createOpenNekoPiModels(credentials: CredentialStore): MutableModels {
-  return createModels({ credentials });
+export function createOpenNekoPiModels(credentials: CredentialStore): OpenNekoPiModels {
+  const scopedCredentials = new ConfiguredApiKeyCredentialStore(credentials);
+  return Object.assign(createModels({ credentials: scopedCredentials }), {
+    setConfiguredApiKey: (providerId: string, apiKey: string | undefined): void => {
+      scopedCredentials.setConfiguredApiKey(providerId, apiKey);
+    },
+  });
 }
 
 export function projectOpenNekoPiProvider(
@@ -164,6 +174,61 @@ export function registerOpenNekoPiProvider(
   const projection = projectOpenNekoPiProvider(config);
   models.setProvider(projection.provider);
   return projection;
+}
+
+class ConfiguredApiKeyCredentialStore implements CredentialStore {
+  private readonly configured = new Map<string, Credential>();
+
+  constructor(private readonly durable: CredentialStore) {}
+
+  setConfiguredApiKey(providerId: string, apiKey: string | undefined): void {
+    const identity = requireProviderIdentity(providerId);
+    if (typeof apiKey === 'undefined') {
+      this.configured.delete(identity);
+      return;
+    }
+    const key = apiKey.trim();
+    if (key.length === 0) {
+      throw new OpenNekoPiProviderProjectionError(
+        'invalid-provider',
+        `OpenNeko provider ${identity} has an empty configured API key.`,
+      );
+    }
+    this.configured.set(identity, Object.freeze({ type: 'api_key', key }));
+  }
+
+  async read(providerId: string): Promise<Credential | undefined> {
+    const configured = this.configured.get(requireProviderIdentity(providerId));
+    return configured === undefined ? this.durable.read(providerId) : structuredClone(configured);
+  }
+
+  modify(
+    providerId: string,
+    operation: (current: Credential | undefined) => Promise<Credential | undefined>,
+  ): Promise<Credential | undefined> {
+    const identity = requireProviderIdentity(providerId);
+    if (this.configured.has(identity)) {
+      throw new Error(
+        `Configured API key for provider ${identity} cannot be modified through runtime credentials.`,
+      );
+    }
+    return this.durable.modify(identity, operation);
+  }
+
+  delete(providerId: string): Promise<void> {
+    return this.durable.delete(requireProviderIdentity(providerId));
+  }
+}
+
+function requireProviderIdentity(providerId: string): string {
+  const identity = providerId.trim();
+  if (identity.length === 0 || identity !== providerId) {
+    throw new OpenNekoPiProviderProjectionError(
+      'invalid-provider',
+      'OpenNeko provider id must be a non-empty normalized value.',
+    );
+  }
+  return identity;
 }
 
 function resolveApiId(protocol: OpenNekoPiProtocolProfile): Api {

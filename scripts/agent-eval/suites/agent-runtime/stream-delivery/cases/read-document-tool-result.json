@@ -28,7 +28,7 @@
       {
         "ref": "read-document-facts",
         "kind": "runtime-fact",
-        "description": "Pi runtime and exact Timeline identity, monotonic projection/item revisions, one successful ReadDocument Tool item, terminal freeze, no-fallback, and terminal answer facts.",
+        "description": "Pi runtime and exact Timeline/Item identity, one successful ReadDocument Tool item, one exact terminal patch, no-fallback, and terminal answer facts.",
         "required": true
       }
     ],

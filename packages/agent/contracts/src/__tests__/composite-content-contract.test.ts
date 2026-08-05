@@ -79,7 +79,6 @@ describe('composite content contract', () => {
       template: 'storyboard-table',
       title: 'Opening',
       storyboardTable: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         scenes: [
           {
@@ -162,7 +161,6 @@ describe('composite content contract', () => {
   it('does not promote flat Storyboard artifact payloads to canonical Canvas input', () => {
     const result = parseCompositeContentJson(
       JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'artifact-flat-storyboard',
         blocks: [
@@ -170,7 +168,6 @@ describe('composite content contract', () => {
             blockId: 'storyboard-domain',
             kind: 'domain',
             domainKind: 'StoryboardTable',
-            schemaVersion: 1,
             payload: {
               schemaVersion: 1,
               kind: 'storyboard-table',
@@ -207,7 +204,6 @@ describe('composite content contract', () => {
   it('extracts storyboard domain blocks from composite artifacts', () => {
     const result = parseCompositeContentJson(
       JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'artifact-storyboard',
         title: 'Comic artifact',
@@ -242,7 +238,6 @@ describe('composite content contract', () => {
             kind: 'domain',
             title: 'Storyboard Payload',
             domainKind: 'StoryboardTable',
-            schemaVersion: 1,
             payload: {
               schemaVersion: 1,
               kind: 'storyboard-table',
@@ -316,7 +311,6 @@ describe('composite content contract', () => {
 
 \`\`\`json
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "artifact-storyboard",
   "title": "Comic artifact",
@@ -351,7 +345,6 @@ describe('composite content contract', () => {
       "kind": "domain",
       "title": "Storyboard Payload",
       "domainKind": "StoryboardTable",
-      "schemaVersion": 1,
       "payload": {
         "schemaVersion": 1,
         "kind": "storyboard-table",
@@ -425,7 +418,6 @@ Done.`;
 
 \`\`\`NEKO
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "artifact-storyboard",
   "title": "Comic artifact",
@@ -435,7 +427,6 @@ Done.`;
       "kind": "domain",
       "title": "Storyboard Payload",
       "domainKind": "StoryboardTable",
-      "schemaVersion": 1,
       "payload": {
         "schemaVersion": 1,
         "kind": "storyboard-table",
@@ -493,7 +484,6 @@ Done.`;
   "kind": "neko-composite",
   "composites": [
     {
-      "schemaVersion": 1,
       "kind": "composite-artifact",
       "artifactId": "artifact-review",
       "title": "Review Artifact",
@@ -508,7 +498,6 @@ Done.`;
     expect(result).toHaveLength(1);
     expect(result[0]?.language).toBe('neko');
     expect(result[0]?.value).toMatchObject({
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'artifact-review',
       title: 'Review Artifact',
@@ -517,7 +506,7 @@ Done.`;
 
   it('accepts a CommonMark tilde fence for an explicit NEKO artifact', () => {
     const candidates = extractCompositeContentFenceCandidates(`~~~NEKO
-{"schemaVersion":1,"kind":"composite-artifact","artifactId":"analysis","title":"Analysis","blocks":[{"blockId":"summary","kind":"text","text":"Findings."}]}
+{"kind":"composite-artifact","artifactId":"analysis","title":"Analysis","blocks":[{"blockId":"summary","kind":"text","text":"Findings."}]}
 ~~~`);
 
     expect(candidates).toHaveLength(1);

@@ -67,6 +67,7 @@ import type {
   SessionMode,
 } from '@neko/agent-contracts';
 import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
+import { useAgentHostMessages } from '../../../host-runtime-context';
 import { useComposerWorkspacePresentation } from '../../ComposerWorkspaceContext';
 
 interface InputAreaProps {
@@ -216,6 +217,7 @@ export function InputArea({
   focusRequestTarget = 'none',
   focusRequestRevision = 0,
 }: InputAreaProps) {
+  const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
   // Global configuration from context (model, modes, compression, skills)
   const {
@@ -904,7 +906,7 @@ export function InputArea({
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    submitRoleplayEntrySelection(item, inputValue);
+    submitRoleplayEntrySelection(agentHostMessages, item, inputValue);
     textareaRef.current?.focus();
   };
 

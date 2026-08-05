@@ -20,7 +20,7 @@ import { MessageAvatar } from './MessageAvatar';
 import { useMessageActions } from './MessageActionsContext';
 import { SendToMenu } from './SendToMenu';
 import { useTranslation } from '../../i18n/I18nContext';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
 import { projectCanonicalStoryboardCanvasAuthoringHandoff } from '../../presenters/storyboard-transfer-presenter';
 import { projectMarkdownResourceRendering } from '../../presenters/markdown-resource-rendering-presenter';
 import {
@@ -497,6 +497,7 @@ function CanvasLifecycleActionButton({
   parentRequestId: string;
   t: ChatTranslation;
 }) {
+  const agentHostMessages = useAgentHostMessages();
   const invocation = projectCanvasLifecycleActionInvocation(action);
   const disabledReason = !conversationId
     ? t('chat.canvasLifecycle.disabled.conversationUnavailable')
@@ -512,7 +513,7 @@ function CanvasLifecycleActionButton({
       title={disabledReason ?? `${action.capabilityId} ${action.phase}`}
       onClick={() => {
         if (!conversationId || !invocation) return;
-        AgentHostMessages.invokeAgentCapabilityLifecycle(
+        agentHostMessages.invokeAgentCapabilityLifecycle(
           conversationId,
           `${action.capabilityId}:${action.actionId}:${parentRequestId}`,
           invocation,

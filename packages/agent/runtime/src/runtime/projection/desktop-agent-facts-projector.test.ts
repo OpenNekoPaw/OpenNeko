@@ -95,6 +95,7 @@ describe('Desktop Agent authoritative facts projector', () => {
   it('fails visibly for missing terminal facts and mismatched event identities', () => {
     const projector = createProjector();
     const events = projector.beginTurn({ identity, systemPrompt: 'prompt' });
+    expect(projector.readLatestIdentity(identity.conversationId)).toBeUndefined();
     expect(() => projector.readFacts(identity)).toThrow('before terminal completion');
     expect(() =>
       events.emit(event({ type: 'turn.started' }, { ...identity, runId: 'run-stale' })),
@@ -102,6 +103,9 @@ describe('Desktop Agent authoritative facts projector', () => {
     expect(() => projector.readFacts({ ...identity, turnId: 'turn-missing' })).toThrow(
       'do not own turn',
     );
+
+    projector.completeTurn({ conversation: conversationEvidence(), turn: turnResult() });
+    expect(projector.readLatestIdentity(identity.conversationId)).toEqual(identity);
   });
 
   it('preserves dropped-count failure when an authoritative collection is truncated', () => {
@@ -135,11 +139,11 @@ function createProjector(factLimit?: number) {
     connection: {
       applicationInstanceId: 'application-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       viewId: 'view-1',
-      viewEpoch: 1,
-      rendererEpoch: 1,
       connectionId: 'connection-1',
     },
     ...(factLimit === undefined ? {} : { factLimit }),
@@ -159,7 +163,7 @@ function conversationEvidence() {
     conversationId: identity.conversationId,
     branchId: identity.branchId,
     piSessionId: 'pi-session-1',
-    writerEpoch: 1,
+    writerLeaseId: 'writer-lease-1',
   };
 }
 
@@ -192,7 +196,6 @@ function turnResult(): DesktopAgentFactsTurnResult {
     durability: 'durable',
     projection: {
       conversationId: identity.conversationId,
-      projectionVersion: 2,
       turns: [
         {
           turnId: identity.turnId,

@@ -343,11 +343,10 @@ describe('conversation-tab-runtime', () => {
     });
     expect(buildInvalidWebviewPayloadMessage({ type: 'projectionEndpointDiscover' })).toEqual({
       type: 'sessionDiagnostic',
-      code: 'webview-protocol-mismatch',
+      code: 'invalid-webview-message',
       severity: 'error',
       action: 'projectionEndpointDiscover',
-      message:
-        'Agent Webview protocol mismatch: Desktop host expects v1, Webview sent no version. Reload the Webview.',
+      message: 'Invalid Agent Webview message "projectionEndpointDiscover"; payload keys: type.',
     });
   });
 });

@@ -1,15 +1,13 @@
 {
   "name": "@neko/agent-contracts",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./agent-launch-host": "./src/agent-launch-host.ts",
     "./assistant-resource-host": "./src/assistant-resource-host.ts",
     "./extension-management": "./src/extension-management.ts",
-    "./extension-management-host": "./src/extension-management-host.ts",
-    "./host-message-event": "./src/host-message-event.ts"
+    "./extension-management-host": "./src/extension-management-host.ts"
   },
   "scripts": {
     "test": "vitest run",

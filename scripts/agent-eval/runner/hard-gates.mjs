@@ -682,13 +682,6 @@ function assertTimelineProjection(assertion, facts) {
       `Timeline terminal status expected=${assertion.terminalStatus} observed=${projection.completionStatus ?? 'unavailable'}`,
     );
   }
-  if (
-    !Number.isInteger(projection.projectionVersion) ||
-    projection.projectionVersion < 1 ||
-    projection.terminalProjectionVersion !== projection.projectionVersion
-  ) {
-    throw new Error('Timeline projection did not remain frozen at its terminal version');
-  }
   if (projection.droppedPatchCount !== 0) {
     throw new Error(`Timeline patch evidence dropped ${projection.droppedPatchCount} patch(es)`);
   }
@@ -701,20 +694,23 @@ function assertTimelineProjection(assertion, facts) {
   if (patches.length === 0) {
     throw new Error('Timeline projection patch chain is empty');
   }
-  let previousVersion;
   for (const patch of patches) {
     if (
-      !Number.isInteger(patch?.baseProjectionVersion) ||
-      !Number.isInteger(patch?.projectionVersion) ||
-      patch.projectionVersion !== patch.baseProjectionVersion + 1 ||
-      (previousVersion !== undefined && patch.baseProjectionVersion !== previousVersion)
+      patch?.conversationId !== projection.conversationId ||
+      patch?.turnId !== projection.turnId ||
+      patch?.runId !== projection.runId ||
+      patch?.messageId !== projection.messageId
     ) {
-      throw new Error('Timeline projection patch versions are not contiguous and monotonic');
+      throw new Error('Timeline projection patch owner identity is stale or mismatched');
     }
-    previousVersion = patch.projectionVersion;
   }
-  if (previousVersion !== projection.projectionVersion) {
-    throw new Error('Timeline projection patch chain does not end at the reported version');
+  const terminalPatches = patches.filter((patch) => patch?.completionStatus !== undefined);
+  if (
+    terminalPatches.length !== 1 ||
+    terminalPatches[0] !== patches.at(-1) ||
+    terminalPatches[0]?.completionStatus !== assertion.terminalStatus
+  ) {
+    throw new Error('Timeline projection did not freeze on one exact terminal patch');
   }
   const itemIds = new Set();
   for (const item of arrayOrEmpty(projection.items)) {
@@ -745,7 +741,6 @@ function assertTimelineProjection(assertion, facts) {
     turnId: projection.turnId,
     runId: projection.runId,
     messageId: projection.messageId,
-    projectionVersion: projection.projectionVersion,
     completionStatus: projection.completionStatus,
     patchCount: patches.length,
     itemRevisions: arrayOrEmpty(projection.items).map((item) => ({

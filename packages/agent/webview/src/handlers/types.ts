@@ -33,6 +33,7 @@ import type {
   ConversationRenderStateUpdater as CanonicalConversationRenderStateUpdater,
   ConversationRenderStreamingState,
 } from '../render-lifecycle/conversation-render-state-adapter';
+import type { AgentHostMessageSender } from '../messages';
 
 /**
  * Streaming state for a conversation
@@ -197,6 +198,7 @@ export interface MessageHandlerContext
     GlobalNotificationContext,
     ContextManagementContext,
     HelperContext {
+  readonly agentHostMessages: AgentHostMessageSender;
   // Conversation list management
   setConversations: React.Dispatch<React.SetStateAction<ConversationSummary[]>>;
   setActiveConversationId: React.Dispatch<React.SetStateAction<string | null>>;

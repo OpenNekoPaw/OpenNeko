@@ -17,7 +17,7 @@ describe('agent markdown session registry', () => {
     registry.subscribe(key, listener);
 
     const publication = registry.commitProjectionPatch({
-      ...projectionPatch('', 1, 1),
+      ...projectionPatch('', 1),
       operations: [
         appendOperation('| A', 1),
         appendOperation(' | B |\n', 2),
@@ -42,10 +42,10 @@ describe('agent markdown session registry', () => {
     const registry = createAgentMarkdownSessionRegistry();
     const key = sessionKey();
 
-    registry.commitProjectionPatch(projectionPatch('| Shot | Prompt |\n', 1, 1)).publish();
+    registry.commitProjectionPatch(projectionPatch('| Shot | Prompt |\n', 1)).publish();
     const first = registry.getSnapshot(key);
-    registry.commitProjectionPatch(projectionPatch('| --- | --- |\n', 2, 2)).publish();
-    registry.commitProjectionPatch(projectionPatch('| 1 | Pan right |', 3, 3)).publish();
+    registry.commitProjectionPatch(projectionPatch('| --- | --- |\n', 2)).publish();
+    registry.commitProjectionPatch(projectionPatch('| 1 | Pan right |', 3)).publish();
     const final = registry.getSnapshot(key);
 
     expect(final).toMatchObject({
@@ -101,7 +101,7 @@ describe('agent markdown session registry', () => {
 
     registry
       .commitProjectionPatch({
-        ...projectionPatch('', 2, 2),
+        ...projectionPatch('', 2),
         operations: [
           {
             operation: 'complete',
@@ -118,9 +118,7 @@ describe('agent markdown session registry', () => {
       .publish();
 
     expect(registry.getSnapshot(key)).toMatchObject({ source: 'final', isFinal: true });
-    registry
-      .commitProjectionSnapshot({ conversationId: 'conv-1', projectionVersion: 3, turns: [] })
-      .publish();
+    registry.commitProjectionSnapshot({ conversationId: 'conv-1', turns: [] }).publish();
     expect(registry.getSnapshot(key)).toBeUndefined();
   });
 
@@ -161,15 +159,12 @@ function sessionKey(conversationId = 'conv-1'): string {
 
 function projectionPatch(
   content: string,
-  projectionVersion: number,
   itemRevision: number,
   conversationId = 'conv-1',
 ): ConversationProjectionPatch {
   return {
     type: 'conversationProjectionPatch',
     conversationId,
-    projectionVersion,
-    baseProjectionVersion: projectionVersion - 1,
     turnId: 'turn-1',
 
     runId: 'run-a',
@@ -192,7 +187,6 @@ function projectionSnapshot(
 ): ConversationProjectionSnapshot {
   return {
     conversationId,
-    projectionVersion: itemRevision,
     turns: [
       {
         turnId: 'turn-1',

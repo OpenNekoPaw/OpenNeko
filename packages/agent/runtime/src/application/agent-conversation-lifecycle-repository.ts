@@ -1,12 +1,8 @@
-import {
-  AGENT_CONVERSATION_CONTEXT_VERSION,
-  parseAgentConversationContext,
-  parseAgentScratchArtifactRef,
-} from '@neko/agent-contracts';
+import { parseAgentConversationContext, parseAgentScratchArtifactRef } from '@neko/agent-contracts';
 import {
   LocalMetadataError,
+  initializeLocalMetadataTables,
   serializeLocalMetadataJson,
-  type LocalMetadataMigration,
   type LocalMetadataSqlRow,
   type LocalMetadataSqlExecutor,
   type LocalMetadataStore,
@@ -16,43 +12,27 @@ import type {
   AgentConversationLifecycleRepositoryPort,
 } from './agent-conversation-lifecycle-service';
 
-const AGENT_CONVERSATION_LIFECYCLE_SNAPSHOT_VERSION = 1;
-
-export const AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS: readonly LocalMetadataMigration[] = [
-  {
-    namespace: 'agent-conversation-lifecycle',
-    version: 1,
-    name: 'create Agent conversation lifecycle authority',
-    checksum: 'sha256:agent-conversation-lifecycle-v1-20260803',
+export function initializeAgentConversationLifecycleTables(
+  store: LocalMetadataStore,
+): Promise<void> {
+  return initializeLocalMetadataTables(store, {
     ownership: 'state',
-    destructive: false,
     statements: [
-      `CREATE TABLE IF NOT EXISTS agent_conversation_lifecycle (
+      `CREATE TABLE IF NOT EXISTS agent_conversation_records (
         conversation_id TEXT PRIMARY KEY,
         request_id TEXT NOT NULL UNIQUE,
         turn_id TEXT NOT NULL UNIQUE,
-        snapshot_version INTEGER NOT NULL,
-        snapshot_json TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
         provider_claimed INTEGER NOT NULL CHECK (provider_claimed IN (0, 1))
       ) STRICT`,
-    ],
-  },
-  {
-    namespace: 'agent-conversation-lifecycle',
-    version: 2,
-    name: 'create exact Agent conversation context authority',
-    checksum: 'sha256:agent-conversation-context-v2-20260803',
-    ownership: 'state',
-    destructive: false,
-    statements: [
-      `CREATE TABLE IF NOT EXISTS agent_conversation_context (
+      `CREATE TABLE IF NOT EXISTS agent_conversation_authority (
         conversation_id TEXT PRIMARY KEY,
-        context_version INTEGER NOT NULL,
         context_json TEXT NOT NULL
       ) STRICT`,
     ],
-  },
-];
+    operation: 'initialize-agent-conversation-lifecycle-tables',
+  });
+}
 
 export function createPersistentAgentConversationLifecycleRepository(options: {
   readonly metadataStore: LocalMetadataStore;
@@ -66,8 +46,8 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
       { mode: 'state-write', ownership: 'state', operation },
       async ({ sql }) => {
         const rows = await sql.all(
-          `SELECT conversation_id, request_id, turn_id, snapshot_version, snapshot_json
-             FROM agent_conversation_lifecycle
+          `SELECT conversation_id, request_id, turn_id, payload_json
+             FROM agent_conversation_records
             WHERE conversation_id = ?`,
           [conversationId],
         );
@@ -75,11 +55,10 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         const next = parseAgentConversationLifecycleRecord(update(current));
         assertStableRecordIdentity(current, next);
         const result = await sql.run(
-          `UPDATE agent_conversation_lifecycle
-              SET snapshot_version = ?, snapshot_json = ?
+          `UPDATE agent_conversation_records
+              SET payload_json = ?
             WHERE conversation_id = ? AND request_id = ? AND turn_id = ?`,
           [
-            AGENT_CONVERSATION_LIFECYCLE_SNAPSHOT_VERSION,
             encodeRecord(next),
             current.conversationId,
             current.pendingTurn.requestId,
@@ -103,21 +82,20 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         async ({ sql }) => {
           const parsed = parseAgentConversationLifecycleRecord(record);
           const result = await sql.run(
-            `INSERT INTO agent_conversation_lifecycle(
-               conversation_id, request_id, turn_id, snapshot_version, snapshot_json, provider_claimed
-             ) VALUES (?, ?, ?, ?, ?, 0)
+            `INSERT INTO agent_conversation_records(
+               conversation_id, request_id, turn_id, payload_json, provider_claimed
+             ) VALUES (?, ?, ?, ?, 0)
              ON CONFLICT(request_id) DO NOTHING`,
             [
               parsed.conversationId,
               parsed.pendingTurn.requestId,
               parsed.pendingTurn.turnId,
-              AGENT_CONVERSATION_LIFECYCLE_SNAPSHOT_VERSION,
               encodeRecord(parsed),
             ],
           );
           const rows = await sql.all(
-            `SELECT conversation_id, request_id, turn_id, snapshot_version, snapshot_json
-               FROM agent_conversation_lifecycle
+            `SELECT conversation_id, request_id, turn_id, payload_json
+               FROM agent_conversation_records
               WHERE request_id = ?`,
             [parsed.pendingTurn.requestId],
           );
@@ -136,14 +114,14 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         { mode: 'state-write', ownership: 'state', operation: 'claim-agent-provider-execution' },
         async ({ sql }) => {
           const result = await sql.run(
-            `UPDATE agent_conversation_lifecycle
+            `UPDATE agent_conversation_records
                 SET provider_claimed = 1
               WHERE turn_id = ? AND provider_claimed = 0`,
             [turnId],
           );
           if (result.changes === 1) return true;
           const rows = await sql.all(
-            `SELECT provider_claimed FROM agent_conversation_lifecycle WHERE turn_id = ?`,
+            `SELECT provider_claimed FROM agent_conversation_records WHERE turn_id = ?`,
             [turnId],
           );
           if (rows.length !== 1 || readInteger(rows[0]!, 'provider_claimed') !== 1) {
@@ -165,8 +143,8 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         { mode: 'read', ownership: 'state', operation: 'read-agent-conversation-lifecycle' },
         async ({ sql }) => {
           const rows = await sql.all(
-            `SELECT conversation_id, request_id, turn_id, snapshot_version, snapshot_json
-               FROM agent_conversation_lifecycle
+            `SELECT conversation_id, request_id, turn_id, payload_json
+               FROM agent_conversation_records
               WHERE conversation_id = ?`,
             [conversationId],
           );
@@ -179,8 +157,8 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         { mode: 'read', ownership: 'state', operation: 'read-agent-first-submit-request' },
         async ({ sql }) => {
           const rows = await sql.all(
-            `SELECT conversation_id, request_id, turn_id, snapshot_version, snapshot_json
-               FROM agent_conversation_lifecycle
+            `SELECT conversation_id, request_id, turn_id, payload_json
+               FROM agent_conversation_records
               WHERE request_id = ?`,
             [requestId],
           );
@@ -193,8 +171,8 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         { mode: 'read', ownership: 'state', operation: 'read-agent-conversation-context' },
         async ({ sql }) => {
           const rows = await sql.all(
-            `SELECT context_version, context_json
-               FROM agent_conversation_context
+            `SELECT context_json
+               FROM agent_conversation_authority
               WHERE conversation_id = ?`,
             [conversationId],
           );
@@ -204,32 +182,8 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
               `Agent Conversation '${conversationId}' resolves to multiple contexts.`,
             );
           }
-          if (rows.length === 1) return decodeContextRow(rows[0]!);
-          const lifecycleRows = await sql.all(
-            `SELECT conversation_id, request_id, turn_id, snapshot_version, snapshot_json
-               FROM agent_conversation_lifecycle
-              WHERE conversation_id = ?`,
-            [conversationId],
-          );
-          return lifecycleRows.length === 0
-            ? undefined
-            : decodeRequiredRow(lifecycleRows, conversationId).context;
+          return rows.length === 0 ? undefined : decodeContextRow(rows[0]!);
         },
-      ),
-    commitMigratedConversationContext: (conversationId, context) =>
-      options.metadataStore.transaction(
-        {
-          mode: 'state-write',
-          ownership: 'state',
-          operation: 'migrate-agent-conversation-context',
-        },
-        async ({ sql }) =>
-          commitContext(
-            sql,
-            conversationId,
-            parseAgentConversationContext(context),
-            'migrate-agent-conversation-context',
-          ),
       ),
     addScratchArtifact: (conversationId, artifact) =>
       writeRecord('add-agent-scratch-artifact', conversationId, (current) => {
@@ -280,7 +234,7 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         },
         async ({ sql }) => {
           const result = await sql.run(
-            `DELETE FROM agent_conversation_lifecycle WHERE conversation_id = ?`,
+            `DELETE FROM agent_conversation_records WHERE conversation_id = ?`,
             [conversationId],
           );
           if (result.changes !== 1) {
@@ -289,7 +243,7 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
               `Agent Conversation '${conversationId}' is not present.`,
             );
           }
-          await sql.run(`DELETE FROM agent_conversation_context WHERE conversation_id = ?`, [
+          await sql.run(`DELETE FROM agent_conversation_authority WHERE conversation_id = ?`, [
             conversationId,
           ]);
         },
@@ -305,18 +259,14 @@ async function commitContext(
   operation: string,
 ): Promise<ReturnType<typeof parseAgentConversationContext>> {
   await sql.run(
-    `INSERT INTO agent_conversation_context(conversation_id, context_version, context_json)
-     VALUES (?, ?, ?)
+    `INSERT INTO agent_conversation_authority(conversation_id, context_json)
+     VALUES (?, ?)
      ON CONFLICT(conversation_id) DO NOTHING`,
-    [
-      conversationId,
-      AGENT_CONVERSATION_CONTEXT_VERSION,
-      serializeLocalMetadataJson(context, operation),
-    ],
+    [conversationId, serializeLocalMetadataJson(context, operation)],
   );
   const rows = await sql.all(
-    `SELECT context_version, context_json
-       FROM agent_conversation_context
+    `SELECT context_json
+       FROM agent_conversation_authority
       WHERE conversation_id = ?`,
     [conversationId],
   );
@@ -333,13 +283,6 @@ async function commitContext(
 function decodeContextRow(
   row: LocalMetadataSqlRow,
 ): ReturnType<typeof parseAgentConversationContext> {
-  const version = readInteger(row, 'context_version');
-  if (version !== AGENT_CONVERSATION_CONTEXT_VERSION) {
-    throw persistenceError(
-      'decode-agent-conversation-context',
-      `Unsupported Agent Conversation context version '${version}'.`,
-    );
-  }
   const source = readString(row, 'context_json');
   try {
     return parseAgentConversationContext(JSON.parse(source));
@@ -358,7 +301,6 @@ export function parseAgentConversationLifecycleRecord(
   const record = exactRecord(
     value,
     [
-      'schemaVersion',
       'conversationId',
       'context',
       'createdAt',
@@ -369,12 +311,6 @@ export function parseAgentConversationLifecycleRecord(
     ],
     'Agent Conversation lifecycle record',
   );
-  if (record['schemaVersion'] !== AGENT_CONVERSATION_CONTEXT_VERSION) {
-    throw persistenceError(
-      'decode-agent-conversation-lifecycle',
-      `Unsupported Agent Conversation lifecycle version '${String(record['schemaVersion'])}'.`,
-    );
-  }
   const initialMessage = exactRecord(
     record['initialMessage'],
     ['messageId', 'text', 'resourceGrantIds'],
@@ -430,7 +366,6 @@ export function parseAgentConversationLifecycleRecord(
     );
   }
   return {
-    schemaVersion: AGENT_CONVERSATION_CONTEXT_VERSION,
     conversationId: identity(record['conversationId'], 'Conversation'),
     context: parseAgentConversationContext(record['context']),
     createdAt: identity(record['createdAt'], 'createdAt'),
@@ -481,14 +416,7 @@ function decodeRequiredRow(
 }
 
 function decodeRow(row: LocalMetadataSqlRow): AgentConversationLifecycleRecord {
-  const version = readInteger(row, 'snapshot_version');
-  if (version !== AGENT_CONVERSATION_LIFECYCLE_SNAPSHOT_VERSION) {
-    throw persistenceError(
-      'decode-agent-conversation-lifecycle',
-      `Unsupported Agent Conversation lifecycle snapshot version '${version}'.`,
-    );
-  }
-  const serialized = readString(row, 'snapshot_json');
+  const serialized = readString(row, 'payload_json');
   let decoded: unknown;
   try {
     decoded = JSON.parse(serialized);

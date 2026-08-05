@@ -9,7 +9,6 @@ import {
 describe('perception card contracts', () => {
   it('keeps PerceptionCard JSON-serializable with stable asset refs', () => {
     const card: PerceptionCard = {
-      version: 1,
       assetId: 'asset-1',
       modality: 'image',
       sourceToolCallId: 'call-1',
@@ -81,7 +80,6 @@ describe('perception card contracts', () => {
 
 function makeCard(assetId: string, createdAt: number): PerceptionCard {
   return {
-    version: 1,
     assetId,
     modality: 'image',
     createdAt,

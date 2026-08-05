@@ -31,7 +31,6 @@ import {
 } from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
 import { projectPiConversationEntries } from '@neko/agent-runtime/runtime/projection/pi-conversation-history-projector';
 import {
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildAgentStateSnapshotMessage,
   buildConfigStateMessage,
   buildGlobalErrorMessage,
@@ -249,12 +248,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       recordProjection: (fact) => facts.recordResourceDisplayProjection(fact),
     });
     const projection = createConversationProjectionAttachmentServer({
-      endpointEpoch: input.identity.connectionId,
       resolveProjection: (conversationId) => ({
         conversationId,
-        get projectionVersion() {
-          return input.workspace.readConversationProjection(conversationId).projectionVersion;
-        },
         apply: () => {
           throw new Error('Desktop projection attachment exposes a read-only projection view.');
         },
@@ -390,11 +385,11 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       connection: {
         applicationInstanceId: 'agent-conversation-authority',
         windowId: `conversation:${input.conversationId}`,
+        workbenchInstanceId: `conversation:${input.conversationId}`,
+        agentSurfaceId: `initial-turn:${input.turnId}`,
         projectId: `conversation:${input.conversationId}`,
         workspaceId: input.workspace.workspaceId,
         viewId: `conversation:${input.conversationId}`,
-        viewEpoch: 1,
-        rendererEpoch: 1,
         connectionId: `initial-turn:${input.turnId}`,
       },
     });
@@ -424,7 +419,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
               windowId: `conversation:${input.conversationId}`,
               viewId: `conversation:${input.conversationId}`,
               workspaceId: input.workspace.workspaceId,
-              rendererEpoch: 'authority',
               connectionId: `initial-turn:${input.turnId}`,
             },
             post: () => undefined,
@@ -918,16 +912,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return {
       discoverEndpoint: async (message, context) => {
         bind(context);
-        if (message.protocolVersion !== AGENT_WEBVIEW_PROTOCOL_VERSION) {
-          throw new Error(
-            `Unsupported Desktop Agent projection protocol ${message.protocolVersion}.`,
-          );
-        }
         await context.post({
           type: 'projectionEndpointReady',
-          protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
           realmId: message.realmId,
-          endpointEpoch: context.identity.connectionId,
         });
       },
       attach: (message, context) => run(() => projection.attach(message), message.key, context),
@@ -1089,13 +1076,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     validateModelSelection(provider, model, selected.providerId, selected.modelId);
     if (!provider || !model)
       throw new Error('Validated Desktop Agent model selection disappeared.');
-    if (provider.apiKey) {
-      await this.options.credentialRuntime.credentials.replace(
-        provider.id,
-        { type: 'api_key', key: provider.apiKey },
-        'user-config-import',
-      );
-    }
+    workspace.models.setConfiguredApiKey(provider.id, provider.apiKey);
     const projection = registerOpenNekoPiProvider(workspace.models, {
       id: provider.id,
       name: provider.displayName,
@@ -1105,14 +1086,19 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       auth: resolveAuth(provider, model),
       models: [projectPiModel(model)],
     });
-    let credential = await this.options.credentialRuntime.credentials.read(provider.id);
-    if (provider.requiresApiKey !== false && credential === undefined) {
+    let credentialConfigured = provider.apiKey !== undefined;
+    if (!credentialConfigured) {
+      credentialConfigured =
+        (await this.options.credentialRuntime.credentials.read(provider.id)) !== undefined;
+    }
+    if (provider.requiresApiKey !== false && !credentialConfigured) {
       await this.options.credentialRuntime.auth.login({
         provider: projection.provider,
         method: 'api-key',
         interaction: this.options.credentialRuntime.interaction,
       });
-      credential = await this.options.credentialRuntime.credentials.read(provider.id);
+      credentialConfigured =
+        (await this.options.credentialRuntime.credentials.read(provider.id)) !== undefined;
     }
     const projectedModel = projection.models.find((candidate) => candidate.id === model.name);
     if (!projectedModel) {
@@ -1140,9 +1126,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           credentialState:
             provider.requiresApiKey === false
               ? 'not-required'
-              : credential === undefined
-                ? 'missing'
-                : 'configured',
+              : credentialConfigured
+                ? 'configured'
+                : 'missing',
         },
       ],
       userBindings: {

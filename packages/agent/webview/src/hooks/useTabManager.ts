@@ -12,7 +12,7 @@ import type {
   ConversationSummary,
   TabType,
 } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../messages';
+import { useAgentHostMessages } from '../host-runtime-context';
 import { isCharacterRoleTab } from '../presenters/character-role-session-presenter';
 
 export interface UseTabManagerProps {
@@ -60,6 +60,7 @@ export function useTabManager({
   tabStateRevision,
   onTabStateRevisionAllocated,
 }: UseTabManagerProps): UseTabManagerReturn {
+  const agentHostMessages = useAgentHostMessages();
   const optimisticTabStateRevisionRef = useRef(tabStateRevision);
   const activationIdRef = useRef(0);
   const revisionOwnerRef = useRef(revisionOwnerId);
@@ -84,9 +85,9 @@ export function useTabManager({
 
   const persistTabState = useCallback(
     (nextOpenTabs: OpenTab[], nextActiveTabId: string | null): void => {
-      AgentHostMessages.updateTabState(nextOpenTabs, nextActiveTabId, beginTabStateMutation());
+      agentHostMessages.updateTabState(nextOpenTabs, nextActiveTabId, beginTabStateMutation());
     },
-    [beginTabStateMutation],
+    [agentHostMessages, beginTabStateMutation],
   );
 
   const activateOrdinaryConversation = useCallback(
@@ -99,13 +100,18 @@ export function useTabManager({
         expectedTabStateRevision: beginTabStateMutation(),
       };
       onBeforeConversationActivation?.(request);
-      AgentHostMessages.activateConversation({
+      agentHostMessages.activateConversation({
         ...request,
         tabState: { openTabs: nextOpenTabs, activeTabId: tab.id },
       });
       onConversationActivated?.(tab.conversationId);
     },
-    [beginTabStateMutation, onBeforeConversationActivation, onConversationActivated],
+    [
+      agentHostMessages,
+      beginTabStateMutation,
+      onBeforeConversationActivation,
+      onConversationActivated,
+    ],
   );
 
   const handleOpenTab = useCallback(
@@ -165,11 +171,11 @@ export function useTabManager({
       const tabIndex = openTabs.findIndex((t) => t.id === tabId);
       const newTabs = openTabs.filter((t) => t.id !== tabId);
       if (tab.kind === 'character-dialogue') {
-        AgentHostMessages.exitCharacterDialogueSession(tab.conversationId);
+        agentHostMessages.exitCharacterDialogueSession(tab.conversationId);
       } else if (tab.kind === 'embody-character') {
-        AgentHostMessages.exitEmbodyCharacterSession(tab.conversationId);
+        agentHostMessages.exitEmbodyCharacterSession(tab.conversationId);
       } else if (shouldDeleteEmptyConversation) {
-        AgentHostMessages.deleteConversation(tab.conversationId, {
+        agentHostMessages.deleteConversation(tab.conversationId, {
           activateNext: false,
         });
       }

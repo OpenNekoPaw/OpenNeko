@@ -11,7 +11,6 @@ describe('Agent Conversation lifecycle service', () => {
     const input = {
       requestId: 'request-1',
       context: {
-        schemaVersion: 1 as const,
         kind: 'workspace' as const,
         workspaceId: 'workspace-1',
         workspaceGrantId: 'workspace-grant:1',
@@ -20,8 +19,10 @@ describe('Agent Conversation lifecycle service', () => {
       resourceGrantIds: [],
       configuration: configuration(),
     };
-    const first = await fixture.service.firstSubmit(input);
+    const committed = await fixture.service.firstSubmit(input);
     const replay = await fixture.service.firstSubmit(input);
+    expect(fixture.provider.start).not.toHaveBeenCalled();
+    const first = await fixture.service.startProviderExecution(committed.conversationId);
 
     expect(first).toMatchObject({
       context: input.context,
@@ -41,6 +42,7 @@ describe('Agent Conversation lifecycle service', () => {
       conversationId: first.conversationId,
       context: input.context,
     });
+    await fixture.service.waitForProviderIdle();
     expect(fixture.provider.start).toHaveBeenCalledOnce();
     expect(fixture.provider.start).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -51,7 +53,6 @@ describe('Agent Conversation lifecycle service', () => {
         contextPayloads: [],
       }),
     );
-    await fixture.service.waitForProviderIdle();
     await expect(fixture.service.readConversation(first.conversationId)).resolves.toMatchObject({
       pendingTurn: { requestId: input.requestId, status: 'completed' },
     });
@@ -62,7 +63,6 @@ describe('Agent Conversation lifecycle service', () => {
     const committed = await fixture.service.firstSubmit({
       requestId: 'request-resource',
       context: {
-        schemaVersion: 1,
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: ['resource-grant:1'],
@@ -71,6 +71,8 @@ describe('Agent Conversation lifecycle service', () => {
       resourceGrantIds: ['resource-grant:1'],
       configuration: configuration(),
     });
+    await fixture.service.startProviderExecution(committed.conversationId);
+    await fixture.service.waitForProviderIdle();
 
     expect(fixture.grants.resolveForTurn).toHaveBeenCalledWith({
       context: committed.context,
@@ -99,8 +101,10 @@ describe('Agent Conversation lifecycle service', () => {
     );
 
     const committed = await fixture.service.firstSubmit(assistantInput('request-context-pending'));
+    const running = await fixture.service.startProviderExecution(committed.conversationId);
 
-    expect(committed.pendingTurn.status).toBe('running');
+    expect(committed.pendingTurn.status).toBe('pending');
+    expect(running.pendingTurn.status).toBe('running');
     expect(fixture.session.materialize).toHaveBeenCalledOnce();
     expect(fixture.provider.start).not.toHaveBeenCalled();
     if (!releaseContext) throw new Error('Expected provider context resolution to be pending.');
@@ -119,8 +123,10 @@ describe('Agent Conversation lifecycle service', () => {
     fixture.grants.resolveForTurn.mockRejectedValueOnce(new Error('resource unavailable'));
 
     const committed = await fixture.service.firstSubmit(assistantInput('request-context-failure'));
+    const running = await fixture.service.startProviderExecution(committed.conversationId);
 
-    expect(committed.pendingTurn.status).toBe('running');
+    expect(committed.pendingTurn.status).toBe('pending');
+    expect(running.pendingTurn.status).toBe('running');
     await fixture.service.waitForProviderIdle();
     await expect(fixture.service.readConversation(committed.conversationId)).resolves.toMatchObject(
       {
@@ -133,60 +139,16 @@ describe('Agent Conversation lifecycle service', () => {
     expect(fixture.provider.start).not.toHaveBeenCalled();
   });
 
-  it('lazily migrates and persists only an exact legacy Workspace Conversation context', async () => {
-    const repository = createInMemoryAgentConversationLifecycleRepository();
-    const resolveExactWorkspaceIdentity = vi.fn(async (conversationId: string) =>
-      conversationId === 'legacy-conversation'
-        ? {
-            workspaceId: 'workspace-exact',
-            workspaceGrantId: 'workspace-grant:legacy:legacy-conversation',
-          }
-        : undefined,
+  it('fails only the Conversation whose canonical context is absent', async () => {
+    const fixture = createFixture();
+
+    await expect(fixture.service.readConversationContext('missing-conversation')).rejects.toThrow(
+      "Agent Conversation 'missing-conversation' context is not present.",
     );
-    const fixture = createFixture({ repository, resolveExactWorkspaceIdentity });
 
-    await expect(fixture.service.readConversationContext('legacy-conversation')).resolves.toEqual({
-      schemaVersion: 1,
-      kind: 'workspace',
-      workspaceId: 'workspace-exact',
-      workspaceGrantId: 'workspace-grant:legacy:legacy-conversation',
-    });
-    await expect(fixture.service.readConversationContext('legacy-conversation')).resolves.toEqual({
-      schemaVersion: 1,
-      kind: 'workspace',
-      workspaceId: 'workspace-exact',
-      workspaceGrantId: 'workspace-grant:legacy:legacy-conversation',
-    });
-    expect(resolveExactWorkspaceIdentity).toHaveBeenCalledOnce();
-    await expect(
-      fixture.service.readConversationContext('unknown-conversation'),
-    ).rejects.toMatchObject({
-      code: 'unresolved-agent-conversation-context-migration',
-    });
-  });
-
-  it('keeps first-submit metadata optional for an exact Pi-only conversation context', async () => {
-    const fixture = createFixture({
-      resolveExactWorkspaceIdentity: async (conversationId) =>
-        conversationId === 'pi-only-conversation'
-          ? {
-              workspaceId: 'workspace-exact',
-              workspaceGrantId: 'workspace-grant:pi-only',
-            }
-          : undefined,
-    });
-
-    await expect(
-      fixture.service.readConversationContext('pi-only-conversation'),
-    ).resolves.toMatchObject({
-      kind: 'workspace',
-      workspaceId: 'workspace-exact',
-    });
-    await expect(
-      fixture.service.readFirstSubmitRecord('pi-only-conversation'),
-    ).resolves.toBeUndefined();
-    await expect(fixture.service.readConversation('pi-only-conversation')).rejects.toThrow(
-      "Agent Conversation 'pi-only-conversation' is not present.",
+    const valid = await fixture.service.firstSubmit(assistantInput('request-valid-sibling'));
+    await expect(fixture.service.readConversationContext(valid.conversationId)).resolves.toEqual(
+      valid.context,
     );
   });
 
@@ -196,7 +158,6 @@ describe('Agent Conversation lifecycle service', () => {
     const committed = await fixture.service.firstSubmit({
       requestId: 'request-assistant',
       context: {
-        schemaVersion: 1,
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: ['resource-grant:1'],
@@ -205,7 +166,8 @@ describe('Agent Conversation lifecycle service', () => {
       resourceGrantIds: ['resource-grant:1'],
       configuration: configuration(),
     });
-    expect(committed.pendingTurn).toMatchObject({ status: 'running' });
+    expect(committed.pendingTurn).toMatchObject({ status: 'pending' });
+    await fixture.service.startProviderExecution(committed.conversationId);
     await fixture.service.waitForProviderIdle();
     const failed = await fixture.service.readConversation(committed.conversationId);
     expect(failed.pendingTurn).toMatchObject({
@@ -222,10 +184,11 @@ describe('Agent Conversation lifecycle service', () => {
     });
   });
 
-  it('repairs session materialization after a committed provider claim without restarting it', async () => {
+  it('materializes a committed session after replacement without restarting its provider turn', async () => {
     const repository = createInMemoryAgentConversationLifecycleRepository();
     const first = createFixture({ repository });
     const committed = await first.service.firstSubmit(assistantInput('request-replay'));
+    await first.service.startProviderExecution(committed.conversationId);
     await first.service.waitForProviderIdle();
     const completed = await first.service.readConversation(committed.conversationId);
     const replacement = createFixture({ repository });
@@ -247,7 +210,6 @@ describe('Agent Conversation lifecycle service', () => {
     const conversation = await fixture.service.firstSubmit({
       requestId: 'request-1',
       context: {
-        schemaVersion: 1,
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: [],
@@ -294,7 +256,6 @@ describe('Agent Conversation lifecycle service', () => {
     const conversation = await fixture.service.firstSubmit({
       requestId: 'request-1',
       context: {
-        schemaVersion: 1,
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: [],
@@ -360,7 +321,6 @@ function assistantInput(requestId: string) {
   return {
     requestId,
     context: {
-      schemaVersion: 1 as const,
       kind: 'assistant' as const,
       assistantSpaceId: 'assistant-space:default',
       baseGrantIds: [],
@@ -378,9 +338,6 @@ function configuration() {
 function createFixture(options?: {
   readonly repository?: ReturnType<typeof createInMemoryAgentConversationLifecycleRepository>;
   readonly providerError?: Error;
-  readonly resolveExactWorkspaceIdentity?: (
-    conversationId: string,
-  ) => Promise<{ readonly workspaceId: string; readonly workspaceGrantId: string } | undefined>;
 }) {
   let identity = 0;
   const repository = options?.repository ?? createInMemoryAgentConversationLifecycleRepository();
@@ -435,13 +392,6 @@ function createFixture(options?: {
       reportError: vi.fn(),
       createIdentity: () => `identity-${(identity += 1)}`,
       now: () => '2026-08-03T00:00:00.000Z',
-      ...(options?.resolveExactWorkspaceIdentity
-        ? {
-            conversationContextMigration: {
-              resolveExactWorkspaceIdentity: options.resolveExactWorkspaceIdentity,
-            },
-          }
-        : {}),
     }),
   };
 }

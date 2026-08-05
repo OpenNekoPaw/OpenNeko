@@ -22,7 +22,7 @@ import {
   type SessionMode,
   type TabType,
 } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../messages';
+import { useAgentHostMessages } from '../host-runtime-context';
 import type {
   MessageAttachment,
   SelectedFileReference,
@@ -123,6 +123,7 @@ export function useChatActions({
   ensureConversationForSend,
   onUserMessageSent,
 }: UseChatActionsProps): UseChatActionsReturn {
+  const agentHostMessages = useAgentHostMessages();
   // Lightweight dedup guard: prevent double-click within 1s
   const lastSentRef = useRef<{ hash: string; time: number }>();
 
@@ -195,7 +196,7 @@ export function useChatActions({
         clearInput();
         setAttachedFiles([]);
         setSelectedFileReferences?.([]);
-        AgentHostMessages.invokeSlashCommand(
+        agentHostMessages.invokeSlashCommand(
           slashCommand.command,
           slashCommand.args,
           conversationId,
@@ -208,7 +209,7 @@ export function useChatActions({
         clearInput();
         setAttachedFiles([]);
         setSelectedFileReferences?.([]);
-        AgentHostMessages.invokeSkill(
+        agentHostMessages.invokeSkill(
           skillInvocation.skillName,
           skillInvocation.args,
           conversationId,
@@ -266,7 +267,7 @@ export function useChatActions({
         modelProjection.purposeModels,
         input?.understandingModels ?? understandingModels,
       );
-      AgentHostMessages.sendMessage({
+      agentHostMessages.sendMessage({
         conversationId,
         message: trimmed,
         sessionMode: effectiveSessionMode,
@@ -367,7 +368,7 @@ export function useChatActions({
         chatModelOptions: availableModels,
         sessionMode: 'agent',
       });
-      AgentHostMessages.sendMessage({
+      agentHostMessages.sendMessage({
         conversationId,
         message: messageText,
         sessionMode: 'agent',
@@ -404,7 +405,7 @@ export function useChatActions({
 
     const conversationId = activeConversationIdRef.current;
     if (isThinking && conversationId) {
-      AgentHostMessages.cancelMessage(conversationId);
+      agentHostMessages.cancelMessage(conversationId);
       setIsThinking(false);
     }
   }, [isThinking, isConversationSwitching, activeConversationIdRef, setIsThinking]);

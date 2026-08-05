@@ -5,13 +5,10 @@ import {
   type AgentExtensionManagementSessionIdentity,
 } from './extension-management';
 
-export const AGENT_EXTENSION_MANAGEMENT_HOST_VERSION = 1 as const;
 export const AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL = 'neko:agent:extension-management' as const;
 
 interface RequestBase {
-  readonly schemaVersion: typeof AGENT_EXTENSION_MANAGEMENT_HOST_VERSION;
   readonly requestId: string;
-  readonly endpointEpoch: string;
   readonly identity: AgentExtensionManagementSessionIdentity;
 }
 
@@ -33,7 +30,6 @@ export type AgentExtensionManagementHostRequest =
     });
 
 export interface AgentExtensionManagementHostResult {
-  readonly schemaVersion: typeof AGENT_EXTENSION_MANAGEMENT_HOST_VERSION;
   readonly requestId: string;
   readonly route: AgentExtensionManagementHostRequest['route'];
   readonly projection: AgentExtensionManagementProjection;
@@ -47,32 +43,20 @@ export interface OpenNekoAgentExtensionManagementBridge {
   };
 }
 
-type RequestInput = AgentExtensionManagementHostRequest extends infer Request
-  ? Request extends { readonly schemaVersion: number }
-    ? Omit<Request, 'schemaVersion'>
-    : never
-  : never;
+type RequestInput = AgentExtensionManagementHostRequest;
 
 export function createAgentExtensionManagementHostRequest(
   input: RequestInput,
 ): AgentExtensionManagementHostRequest {
-  return parseAgentExtensionManagementHostRequest({
-    schemaVersion: AGENT_EXTENSION_MANAGEMENT_HOST_VERSION,
-    ...input,
-  });
+  return parseAgentExtensionManagementHostRequest(input);
 }
 
 export function parseAgentExtensionManagementHostRequest(
   value: unknown,
 ): AgentExtensionManagementHostRequest {
   const record = requireRecord(value, 'Agent Extension Management request must be an object.');
-  if (record['schemaVersion'] !== AGENT_EXTENSION_MANAGEMENT_HOST_VERSION) {
-    throw new Error('Unsupported Agent Extension Management version.');
-  }
   const base = {
-    schemaVersion: AGENT_EXTENSION_MANAGEMENT_HOST_VERSION,
     requestId: requireId(record['requestId'], 'request'),
-    endpointEpoch: requireId(record['endpointEpoch'], 'endpoint'),
     identity: parseIdentity(record['identity']),
   } as const;
   switch (record['route']) {
@@ -114,12 +98,8 @@ export function parseAgentExtensionManagementHostResult(
   request: AgentExtensionManagementHostRequest,
 ): AgentExtensionManagementHostResult {
   const record = requireRecord(value, 'Agent Extension Management result must be an object.');
-  requireExactKeys(record, ['schemaVersion', 'requestId', 'route', 'projection']);
-  if (
-    record['schemaVersion'] !== AGENT_EXTENSION_MANAGEMENT_HOST_VERSION ||
-    record['requestId'] !== request.requestId ||
-    record['route'] !== request.route
-  ) {
+  requireExactKeys(record, ['requestId', 'route', 'projection']);
+  if (record['requestId'] !== request.requestId || record['route'] !== request.route) {
     throw new Error('Agent Extension Management result identity is stale.');
   }
   const projection = parseAgentExtensionManagementProjection(record['projection']);
@@ -131,14 +111,13 @@ export function parseAgentExtensionManagementHostResult(
     throw new Error('Agent Extension Management projection owner identity is stale.');
   }
   return {
-    schemaVersion: AGENT_EXTENSION_MANAGEMENT_HOST_VERSION,
     requestId: request.requestId,
     route: request.route,
     projection,
   };
 }
 
-const BASE_KEYS = ['schemaVersion', 'requestId', 'endpointEpoch', 'identity', 'route'] as const;
+const BASE_KEYS = ['requestId', 'identity', 'route'] as const;
 
 function parseIdentity(value: unknown): AgentExtensionManagementSessionIdentity {
   return parseAgentExtensionManagementSessionIdentity(value);

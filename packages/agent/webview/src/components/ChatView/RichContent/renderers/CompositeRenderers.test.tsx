@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { I18nProvider } from '../../../../i18n/I18nContext';
 import { chat as enChat } from '../../../../i18n/locales/en/chat';
@@ -13,6 +13,10 @@ import type {
   ComparisonGridRichData,
   StoryboardTableRichData,
 } from '../../../../presenters/composite-content-presenter';
+
+vi.mock('../../../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({ openUrl: vi.fn() }),
+}));
 
 describe('composite rich content renderers', () => {
   it('registers storyboard, comparison, and gallery renderers', () => {
@@ -32,7 +36,6 @@ describe('composite rich content renderers', () => {
         kind="composite-artifact"
         data={
           {
-            schemaVersion: 1,
             kind: 'composite-artifact',
             artifactId: 'comic-review-1',
             profile: 'comic-animation-review',
@@ -60,7 +63,6 @@ describe('composite rich content renderers', () => {
                 kind: 'table',
                 title: 'Visual Occurrences',
                 table: {
-                  schemaVersion: 1,
                   kind: 'generic-table',
                   tableId: 'visual-occurrence-review',
                   profile: 'comic-visual-occurrence-review',
@@ -98,7 +100,6 @@ describe('composite rich content renderers', () => {
                 kind: 'table',
                 title: 'Batch Execution',
                 table: {
-                  schemaVersion: 1,
                   kind: 'generic-table',
                   tableId: 'batch-execution-review',
                   profile: 'batch-execution-review',
@@ -216,7 +217,6 @@ describe('composite rich content renderers', () => {
             template: 'storyboard-table',
             title: 'Semantic Opening',
             storyboardTable: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Semantic Opening',
               scenes: [
@@ -292,7 +292,6 @@ describe('composite rich content renderers', () => {
             },
             storyboardPlanOverlays: [
               {
-                schemaVersion: 1,
                 kind: 'animation-plan-overlay',
                 overlayType: 'AnimationPlan',
                 sourceStoryboardRef: { kind: 'artifact', artifactId: 'storyboard-1' },
@@ -384,7 +383,6 @@ describe('composite rich content renderers', () => {
             template: 'storyboard-table',
             title: 'Image Review',
             storyboardTable: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Image Review',
               scenes: [
@@ -449,7 +447,6 @@ describe('composite rich content renderers', () => {
             title: 'Transferable Storyboard',
             plugins: { canvas: true, cut: true },
             storyboardTable: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Transferable Storyboard',
               scenes: [
@@ -522,7 +519,6 @@ describe('composite rich content renderers', () => {
             template: 'storyboard-table',
             title: '中文分镜',
             storyboardTable: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: '中文分镜',
               scenes: [

@@ -49,7 +49,6 @@ interface SanitizedProjectSearchItem {
 
 class ProjectSearchHeadlessCapabilityProvider implements AgentCapabilityProvider {
   readonly id = 'neko-search';
-  readonly version = '1.0.0';
   readonly hostRequirements = [{ host: 'desktop' as const }];
   readonly requirements = { contentAccess: false } as const;
 
@@ -122,7 +121,6 @@ class ProjectSearchHeadlessCapabilityProvider implements AgentCapabilityProvider
           itemCount: result.items.length,
           partitions: result.partitions.map(sanitizePartitionStatus),
           freshness: result.freshness,
-          ...(result.generation !== undefined ? { generation: result.generation } : {}),
         },
       };
     } catch (error) {
@@ -198,7 +196,6 @@ function sanitizePartitionStatus(
     status: status.status,
     freshness: status.freshness,
     ...(status.itemCount !== undefined ? { itemCount: status.itemCount } : {}),
-    ...(status.generation !== undefined ? { generation: status.generation } : {}),
     ...(status.updatedAt ? { updatedAt: status.updatedAt } : {}),
     ...(status.error ? { error: status.error } : {}),
     ...(status.provider ? { provider: status.provider } : {}),
@@ -207,15 +204,10 @@ function sanitizePartitionStatus(
           semantic: {
             providerId: status.semantic.providerId,
             ...(status.semantic.model ? { model: status.semantic.model } : {}),
-            ...(status.semantic.modelVersion ? { modelVersion: status.semantic.modelVersion } : {}),
-            ...(status.semantic.chunkingVersion
-              ? { chunkingVersion: status.semantic.chunkingVersion }
-              : {}),
-            ...(status.semantic.schemaVersion
-              ? { schemaVersion: status.semantic.schemaVersion }
+            ...(status.semantic.sourceIdentity
+              ? { sourceIdentity: status.semantic.sourceIdentity }
               : {}),
             ...(status.semantic.skillId ? { skillId: status.semantic.skillId } : {}),
-            ...(status.semantic.skillVersion ? { skillVersion: status.semantic.skillVersion } : {}),
           },
         }
       : {}),

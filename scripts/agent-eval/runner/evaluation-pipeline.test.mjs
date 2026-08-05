@@ -248,7 +248,7 @@ function desktopEvidence(artifactChecks) {
         tools: bounded(),
         permissions: bounded(),
       },
-      projection: { revision: 1, terminalState: 'completed' },
+      projection: { terminalState: 'completed' },
       resourceDisplayProjections: bounded(),
       persistence: { durability: 'durable', checkpoint: 'observed' },
       usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.01 },

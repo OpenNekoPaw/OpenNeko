@@ -1,6 +1,5 @@
 /** Identity of one render replica attached to one conversation projection. */
 export interface ProjectionAttachmentKey {
-  readonly endpointEpoch: string;
   readonly attachmentId: string;
   readonly tabId: string;
   readonly conversationId: string;
@@ -15,7 +14,6 @@ export interface ProjectionSnapshotFrame<TProjection> {
   readonly type: 'projectionSnapshot';
   readonly key: ProjectionAttachmentKey;
   readonly sequence: 0;
-  readonly projectionVersion: number;
   readonly projection: Readonly<TProjection>;
 }
 
@@ -23,15 +21,12 @@ export interface ProjectionSnapshotAcknowledgement {
   readonly type: 'projectionSnapshotAck';
   readonly key: ProjectionAttachmentKey;
   readonly sequence: 0;
-  readonly projectionVersion: number;
 }
 
 export interface ProjectionPatchFrame<TPatch> {
   readonly type: 'projectionPatch';
   readonly key: ProjectionAttachmentKey;
   readonly sequence: number;
-  readonly baseProjectionVersion: number;
-  readonly projectionVersion: number;
   readonly patch: Readonly<TPatch>;
 }
 
@@ -46,7 +41,7 @@ export type ProjectionAttachmentProtocolDiagnosticCode =
   | 'attachment-snapshot-required'
   | 'attachment-stale-ack'
   | 'attachment-frame-gap'
-  | 'attachment-patch-base-mismatch';
+  | 'attachment-patch-rejected';
 
 export interface ProjectionAttachmentProtocolDiagnostic {
   readonly type: 'projectionProtocolDiagnostic';
@@ -68,7 +63,6 @@ export function isSameProjectionAttachment(
   right: ProjectionAttachmentKey,
 ): boolean {
   return (
-    left.endpointEpoch === right.endpointEpoch &&
     left.attachmentId === right.attachmentId &&
     left.tabId === right.tabId &&
     left.conversationId === right.conversationId

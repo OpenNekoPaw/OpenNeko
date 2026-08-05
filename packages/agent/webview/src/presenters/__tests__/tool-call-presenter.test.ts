@@ -17,7 +17,6 @@ describe('tool-call-presenter', () => {
           generationJob: {
             kind: 'generation-job',
             jobId: 'generation-1',
-            revision: 3,
             phase: 'succeeded',
             stage: 'completed',
             percent: 100,
@@ -46,7 +45,6 @@ describe('tool-call-presenter', () => {
       isSuccess: true,
       generationJob: {
         jobId: 'generation-1',
-        revision: 3,
         phase: 'succeeded',
         stage: 'completed',
         percent: 100,
@@ -69,7 +67,6 @@ describe('tool-call-presenter', () => {
         data: {
           status: 'completed',
           jobId: 'generation-1',
-          jobRevision: 4,
           routedTo: { provider: 'image-provider', model: 'image-model' },
           outputs: [
             {
@@ -88,7 +85,6 @@ describe('tool-call-presenter', () => {
       audioUrls: [],
       generationJob: {
         jobId: 'generation-1',
-        revision: 4,
         phase: 'succeeded',
         stage: 'completed',
         percent: 100,
@@ -224,7 +220,6 @@ describe('tool-call-presenter', () => {
         success: true,
         data: {
           authoringResult: {
-            version: 99,
             status: 'ok',
             refs: 'node-1',
             diagnostics: [],
@@ -242,7 +237,6 @@ describe('tool-call-presenter', () => {
     });
     expect(projection.canvasAuthoringResult?.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'unsupported-catalog-version' }),
         expect.objectContaining({ code: 'malformed-authoring-status' }),
         expect.objectContaining({ code: 'malformed-authoring-ref' }),
       ]),

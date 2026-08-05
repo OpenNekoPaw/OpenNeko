@@ -1,6 +1,5 @@
 ---
 providerId: dalle
-version: 1.0.0
 displayName: DALL-E
 capabilities: [image.generate]
 ---

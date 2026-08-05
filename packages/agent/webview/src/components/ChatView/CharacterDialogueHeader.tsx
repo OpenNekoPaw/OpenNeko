@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { NpcProfileFact } from '@neko/chara/contracts';
 import type { CharacterDialogueSessionProjection } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
 import { useTranslation } from '../../i18n/I18nContext';
 import { projectCharacterFactLabel } from '../../presenters/character-role-session-presenter';
 
@@ -10,6 +10,7 @@ interface CharacterDialogueHeaderProps {
 }
 
 export function CharacterDialogueHeader({ session }: CharacterDialogueHeaderProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const profileRegionId = `character-dialogue-profile-${session.sessionId}`;
@@ -54,7 +55,7 @@ export function CharacterDialogueHeader({ session }: CharacterDialogueHeaderProp
         </button>
         <button
           type="button"
-          onClick={() => AgentHostMessages.exitCharacterDialogueSession(session.sessionId)}
+          onClick={() => agentHostMessages.exitCharacterDialogueSession(session.sessionId)}
           className="rounded px-2 py-1 text-[11px] text-[var(--neko-foreground)] hover:bg-[var(--neko-toolbar-hoverBackground)]"
         >
           {t('characterRole.action.exit')}

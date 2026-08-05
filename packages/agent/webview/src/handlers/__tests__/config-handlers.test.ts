@@ -3,15 +3,10 @@ import type { AgentHostToWebviewMessage } from '@neko/agent-contracts';
 import { configHandlers } from '../config-handlers';
 import type { MessageHandlerContext } from '../types';
 import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
+import { createTestAgentHostMessageSender } from '../../test-utils/agent-host-messages';
 
 const messageMocks = vi.hoisted(() => ({
   updateSettingsMessage: vi.fn(),
-}));
-
-vi.mock('../../messages', () => ({
-  AgentHostMessages: {
-    updateSettings: messageMocks.updateSettingsMessage,
-  },
 }));
 
 describe('configHandlers', () => {
@@ -265,6 +260,9 @@ function dispatch(message: AgentHostToWebviewMessage, context: MessageHandlerCon
 
 function createContext(): MessageHandlerContext {
   return {
+    agentHostMessages: createTestAgentHostMessageSender({
+      updateSettings: messageMocks.updateSettingsMessage,
+    }),
     messages: [],
     isThinking: false,
     streamingMessageId: null,

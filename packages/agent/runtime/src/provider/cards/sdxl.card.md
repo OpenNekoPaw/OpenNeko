@@ -1,6 +1,5 @@
 ---
 providerId: sdxl
-version: 1.0.0
 displayName: SDXL
 capabilities: [image.generate]
 ---

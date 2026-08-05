@@ -40,6 +40,7 @@ import {
   type ConversationRenderRuntimeLifecycle,
 } from '../render-lifecycle/conversation-render-runtime-lifecycle';
 import { getAgentMarkdownSessionRegistry } from '../markdown/agent-markdown-session-registry';
+import type { AgentHostMessageSender } from '../messages';
 
 const logger = getLogger('MessageHandler');
 const FOREIGN_FEATURE_HOST_MESSAGE_TYPES = new Set([
@@ -62,6 +63,7 @@ const PROJECTION_HOST_MESSAGE_TYPES = new Set([
  * Props for useMessageHandler hook
  */
 export interface UseMessageHandlerProps {
+  readonly agentHostMessages: AgentHostMessageSender;
   // Current state values
   messages: Message[];
   isThinking: boolean;
@@ -167,6 +169,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
   useEffect(() => bindConversationRenderRuntimeLifecycle(renderRuntime), [renderRuntime]);
 
   const {
+    agentHostMessages,
     messages,
     isThinking,
     activeConversationId,
@@ -233,6 +236,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
   // Create context object
   const context = useMemo<MessageHandlerContext>(
     () => ({
+      agentHostMessages,
       activeConversationId,
       activeConversationIdRef,
       messages,

@@ -7,7 +7,6 @@
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
 import type { TabStateMessage } from './messages';
-import { AgentHostMessages } from '../messages';
 import { isCharacterRoleTab } from '../presenters/character-role-session-presenter';
 
 /**
@@ -57,8 +56,8 @@ const handleTabState: MessageHandler<'tabState'> = (message: TabStateMessage, co
     for (const conversationId of ordinaryConversationIds) {
       if (restoredConversationIds.current.has(conversationId)) continue;
       restoredConversationIds.current.add(conversationId);
-      AgentHostMessages.getConversationSnapshot(conversationId);
-      AgentHostMessages.getSettings(conversationId);
+      context.agentHostMessages.getConversationSnapshot(conversationId);
+      context.agentHostMessages.getSettings(conversationId);
     }
 
     if (isEmptyTabState) {

@@ -14,7 +14,6 @@ import {
   type IAgentProfileRegistry,
 } from './agent-profile';
 
-export const COMPOSITE_ARTIFACT_SCHEMA_VERSION = 1 as const;
 export const COMPOSITE_ARTIFACT_PROTOCOL = 'CompositeArtifact' as const;
 export const GENERIC_TABLE_PROTOCOL = 'GenericTable' as const;
 export const COMPOSITE_ARTIFACT_KIND = 'composite-artifact' as const;
@@ -98,7 +97,7 @@ export type ArtifactPathSegment = string | number;
 
 export type ArtifactDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-schema-version'
+  | 'unsupported-field'
   | 'invalid-kind'
   | 'invalid-block-kind'
   | 'invalid-cell-type'
@@ -110,7 +109,6 @@ export type ArtifactDiagnosticCode =
   | 'invalid-artifact-reference'
   | 'invalid-content-locator'
   | 'invalid-profile'
-  | 'unsupported-profile-version'
   | 'missing-profile-descriptor'
   | 'skill-local-profile-persisted'
   | 'profile-field-group-missing'
@@ -205,11 +203,9 @@ export interface ArtifactAction {
 }
 
 export interface CompositeArtifact {
-  readonly schemaVersion: typeof COMPOSITE_ARTIFACT_SCHEMA_VERSION;
   readonly kind: typeof COMPOSITE_ARTIFACT_KIND;
   readonly artifactId: string;
   readonly profile?: string;
-  readonly profileVersion?: number;
   readonly title: string;
   readonly blocks: readonly CompositeArtifactBlock[];
   readonly provenance?: ArtifactProvenance;
@@ -291,7 +287,6 @@ export interface CompositeArtifactTimelineBlock extends CompositeArtifactBlockBa
 export interface CompositeArtifactDomainBlock extends CompositeArtifactBlockBase {
   readonly kind: 'domain';
   readonly domainKind: string;
-  readonly schemaVersion?: number;
   readonly payload: ArtifactJsonValue;
 }
 
@@ -313,11 +308,9 @@ export interface ArtifactMediaItem {
 }
 
 export interface GenericTable {
-  readonly schemaVersion: typeof COMPOSITE_ARTIFACT_SCHEMA_VERSION;
   readonly kind: typeof GENERIC_TABLE_KIND;
   readonly tableId: string;
   readonly profile?: string;
-  readonly profileVersion?: number;
   readonly title: string;
   readonly columns: readonly GenericTableColumn[];
   readonly rows: readonly GenericTableRow[];
@@ -374,7 +367,7 @@ export type GenericTableCell =
     }
   | { readonly type: 'action'; readonly value: ArtifactAction };
 
-export interface ArtifactProfileDescriptor extends AgentProfileIdentity<'artifact', number> {
+export interface ArtifactProfileDescriptor extends AgentProfileIdentity<'artifact'> {
   readonly protocol: typeof COMPOSITE_ARTIFACT_PROTOCOL | typeof GENERIC_TABLE_PROTOCOL | string;
   readonly title?: string;
   readonly blockComposition?: readonly ArtifactProfileBlockRule[];
@@ -425,7 +418,6 @@ export interface ArtifactProfileColumnRule {
 
 export interface ArtifactProfileSchemaRef {
   readonly schemaId: string;
-  readonly version?: string | number;
   readonly required?: boolean;
 }
 
@@ -468,7 +460,6 @@ export interface ArtifactProfileMapping {
 
 export interface ArtifactValidationOptions {
   readonly profiles?: readonly ArtifactProfileDescriptor[];
-  readonly requireProfileVersionForPersisted?: boolean;
   readonly persisted?: boolean;
   readonly maxJsonCellBytes?: number;
   readonly maxDiagnostics?: number;
@@ -560,11 +551,11 @@ export function validateCompositeArtifact(
     };
   }
 
-  validateSchemaVersion(value['schemaVersion'], [], diagnostics);
+  rejectRemovedField(value, 'schemaVersion', [], diagnostics);
+  rejectRemovedField(value, 'profileVersion', [], diagnostics);
   validateLiteralKind(value['kind'], COMPOSITE_ARTIFACT_KIND, ['kind'], diagnostics);
   requireString(value['artifactId'], ['artifactId'], diagnostics);
   requireString(value['title'], ['title'], diagnostics);
-  validateOptionalProfileVersion(value, diagnostics, options);
   validateExtensions(value['extensions'], ['extensions'], diagnostics);
   validateDiagnosticsArray(value['diagnostics'], ['diagnostics'], diagnostics);
   validateActionsArray(value['suggestedActions'], ['suggestedActions'], diagnostics);
@@ -595,11 +586,11 @@ export function validateGenericTable(
     };
   }
 
-  validateSchemaVersion(value['schemaVersion'], [], diagnostics);
+  rejectRemovedField(value, 'schemaVersion', [], diagnostics);
+  rejectRemovedField(value, 'profileVersion', [], diagnostics);
   validateLiteralKind(value['kind'], GENERIC_TABLE_KIND, ['kind'], diagnostics);
   requireString(value['tableId'], ['tableId'], diagnostics);
   requireString(value['title'], ['title'], diagnostics);
-  validateOptionalProfileVersion(value, diagnostics, options);
   validateExtensions(value['extensions'], ['extensions'], diagnostics);
   validateDiagnosticsArray(value['diagnostics'], ['diagnostics'], diagnostics);
   validateActionsArray(value['actions'], ['actions'], diagnostics);
@@ -842,6 +833,7 @@ function validateCompositeArtifactBlock(
       );
       break;
     case 'domain':
+      rejectRemovedField(value, 'schemaVersion', path, diagnostics);
       requireString(value['domainKind'], [...path, 'domainKind'], diagnostics);
       validateSerializableValue(value['payload'], [...path, 'payload'], diagnostics);
       break;
@@ -1056,12 +1048,7 @@ function validateProfileForCompositeArtifact(
 ): void {
   const profile = readOptionalString(artifact['profile']);
   if (!profile) return;
-  const descriptor = findProfileDescriptor(
-    profile,
-    artifact['profileVersion'],
-    options,
-    diagnostics,
-  );
+  const descriptor = findProfileDescriptor(profile, options, diagnostics);
   if (!descriptor) {
     return;
   }
@@ -1118,7 +1105,7 @@ function validateProfileForGenericTable(
 ): void {
   const profile = readOptionalString(table['profile']);
   if (!profile) return;
-  const descriptor = findProfileDescriptor(profile, table['profileVersion'], options, diagnostics);
+  const descriptor = findProfileDescriptor(profile, options, diagnostics);
   if (!descriptor) {
     return;
   }
@@ -1551,36 +1538,10 @@ function matchesJsonShapeType(value: unknown, expectedType: string): boolean {
 
 function findProfileDescriptor(
   profileId: string,
-  profileVersion: unknown,
   options: ArtifactValidationOptions,
   diagnostics: ArtifactDiagnostic[],
 ): ArtifactProfileDescriptor | undefined {
   const descriptors = options.profiles ?? [];
-  const version = typeof profileVersion === 'number' ? profileVersion : undefined;
-  if (version !== undefined) {
-    const exact = descriptors.find(
-      (descriptor) => descriptor.profileId === profileId && descriptor.version === version,
-    );
-    if (exact) {
-      return isArtifactProfileUsableForValidation(exact, diagnostics, options) ? exact : undefined;
-    }
-    const profileExists = descriptors.some((descriptor) => descriptor.profileId === profileId);
-    const severity = profileExists || options.persisted ? 'error' : 'warning';
-    diagnostics.push(
-      artifactDiagnostic(
-        severity,
-        profileExists ? 'unsupported-profile-version' : 'missing-profile-descriptor',
-        ['profile'],
-        profileExists
-          ? 'Profile descriptor exists but not for the requested profileVersion.'
-          : 'No profile descriptor is available for this profile.',
-        {
-          actual: profileExists ? version : profileId,
-        },
-      ),
-    );
-    return undefined;
-  }
   const descriptor = descriptors.find((candidate) => candidate.profileId === profileId);
   if (!descriptor) {
     diagnostics.push(
@@ -1619,39 +1580,11 @@ function isArtifactProfileUsableForValidation(
         actual: descriptor.source,
         details: {
           profileId: descriptor.profileId,
-          profileVersion: descriptor.version,
         },
       },
     ),
   );
   return false;
-}
-
-function validateOptionalProfileVersion(
-  value: Record<string, unknown>,
-  diagnostics: ArtifactDiagnostic[],
-  options: ArtifactValidationOptions,
-): void {
-  if (value['profileVersion'] !== undefined && !Number.isInteger(value['profileVersion'])) {
-    diagnostics.push(
-      invalidFieldDiagnostic(['profileVersion'], 'integer', value['profileVersion']),
-    );
-  }
-  if (
-    options.persisted &&
-    options.requireProfileVersionForPersisted &&
-    value['profile'] !== undefined &&
-    value['profileVersion'] === undefined
-  ) {
-    diagnostics.push(
-      artifactDiagnostic(
-        'warning',
-        'unsupported-profile-version',
-        ['profileVersion'],
-        'Persisted profiled artifact should declare profileVersion.',
-      ),
-    );
-  }
 }
 
 function validateMediaItem(
@@ -1882,21 +1815,21 @@ function validateSerializableValue(
   }
 }
 
-function validateSchemaVersion(
-  value: unknown,
+function rejectRemovedField(
+  value: Record<string, unknown>,
+  field: 'schemaVersion' | 'profileVersion',
   path: readonly ArtifactPathSegment[],
   diagnostics: ArtifactDiagnostic[],
 ): void {
-  if (value !== COMPOSITE_ARTIFACT_SCHEMA_VERSION) {
+  if (Object.hasOwn(value, field)) {
     diagnostics.push(
       artifactDiagnostic(
         'error',
-        'invalid-schema-version',
-        [...path, 'schemaVersion'],
-        'Artifact schemaVersion must be 1.',
+        'unsupported-field',
+        [...path, field],
+        `Artifact field ${field} is not supported.`,
         {
-          expected: '1',
-          actual: serializableDiagnosticValue(value),
+          actual: serializableDiagnosticValue(value[field]),
         },
       ),
     );

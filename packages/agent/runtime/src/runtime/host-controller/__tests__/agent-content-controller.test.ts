@@ -14,7 +14,6 @@ function createContext(): AgentHostRouteEffectContext {
       windowId: 'window-1',
       viewId: 'view-1',
       workspaceId: 'workspace-1',
-      rendererEpoch: 'renderer-1',
       connectionId: 'connection-1',
     },
     post: vi.fn(),

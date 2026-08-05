@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { ConfiguredProvider } from '@neko/agent-contracts';
 import { useTranslation } from '../../i18n/I18nContext';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
 import { EditIcon, FileIcon, SettingsIcon } from '@neko/ui/icons';
 
 interface AccountBarProps {
@@ -16,6 +16,7 @@ const ACCOUNT_MENU_STYLE: CSSProperties = {
 };
 
 export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBarProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -42,11 +43,11 @@ export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBar
   const triggerLabel = activeProvider?.name ?? t('accountBar.connectTitle');
   const closeAndOpenConfigFile = () => {
     setOpen(false);
-    AgentHostMessages.openConfigFile();
+    agentHostMessages.openConfigFile();
   };
   const closeAndOpenUserConfigFile = () => {
     setOpen(false);
-    AgentHostMessages.openUserConfigFile();
+    agentHostMessages.openUserConfigFile();
   };
 
   if (!isConfigured) {

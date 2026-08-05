@@ -1252,7 +1252,7 @@ function formatThreeReferenceContext(
     data.staging.subject.appearancePolicy === 'guide-only';
   const lines = [
     `[${isZh ? '3D 参考' : '3D Reference'}: ${payload.label}]`,
-    `${isZh ? '会话版本' : 'Session revision'}: ${data.staging.sessionId}:${data.staging.revision}`,
+    `${isZh ? '会话' : 'Session'}: ${data.staging.sessionId}`,
     `${isZh ? '用途角色' : 'Purpose roles'}: ${data.outputs.map((output) => output.kind).join(', ')}`,
   ];
   if (guideOnly) {

@@ -1,21 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import {
-  AGENT_LAUNCH_CONTRACT_VERSION,
-  isAgentLaunchEntryAvailable,
-  parseAgentLaunchCatalogProjection,
-} from '../agent-launch';
+import { isAgentLaunchEntryAvailable, parseAgentLaunchCatalogProjection } from '../agent-launch';
 
 describe('Agent launch contract', () => {
   it('parses an exact secret-free, scope-qualified launch catalog', () => {
     const projection = parseAgentLaunchCatalogProjection({
-      schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
       connection: {
-        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
         applicationInstanceId: 'application-1',
         windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
         viewId: 'agent-view-1',
-        rendererEpoch: 2,
-        connectionEpoch: 3,
         connectionId: 'launch-connection-1',
         scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
       },
@@ -78,14 +72,12 @@ describe('Agent launch contract', () => {
 
   it('rejects paths, secrets, unknown scopes and stale identity shapes', () => {
     const base = {
-      schemaVersion: 1,
       connection: {
-        schemaVersion: 1,
         applicationInstanceId: 'application-1',
         windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
         viewId: 'agent-view-1',
-        rendererEpoch: 2,
-        connectionEpoch: 3,
         connectionId: 'launch-connection-1',
         scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
       },
@@ -116,8 +108,8 @@ describe('Agent launch contract', () => {
     expect(() =>
       parseAgentLaunchCatalogProjection({
         ...base,
-        connection: { ...base.connection, rendererEpoch: 0 },
+        connection: { ...base.connection, rendererSessionId: 1 },
       }),
-    ).toThrow('renderer epoch must be a positive integer');
+    ).toThrow('unsupported fields');
   });
 });

@@ -28,7 +28,6 @@ export interface PerceptionEvidenceEntry {
 }
 
 export interface PerceptionCard {
-  readonly version: 1;
   readonly assetId: string;
   readonly modality: AgentObservationModality;
   readonly sourceToolCallId?: string;

@@ -8,10 +8,10 @@ import { EmbodyCharacterHeader } from './EmbodyCharacterHeader';
 
 const exitEmbodyCharacterSession = vi.fn();
 
-vi.mock('../../messages', () => ({
-  AgentHostMessages: {
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({
     exitEmbodyCharacterSession: (...args: unknown[]) => exitEmbodyCharacterSession(...args),
-  },
+  }),
 }));
 
 describe('EmbodyCharacterHeader', () => {
