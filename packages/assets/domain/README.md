@@ -55,11 +55,12 @@ Library connections and OpenNeko-owned Asset Library files. It accepts only opaq
 identities, catalog revisions, relative Media Library locators, and revisioned `icon`/`hover`
 thumbnail descriptors. Basenames beginning with `.` never enter either projection.
 
-Desktop Main remains the authority for native selection, absolute-path resolution, thumbnail
-generation, operation-owned Asset import staging, and system-trash removal. Removing a Media
-Library connection unlinks only the managed connection; removing an Asset validates the current
-owned regular file and moves it to the operating-system trash. Hover previews are static images and
-do not open or autoplay a media session.
+Desktop Main remains the authority for native selection and Electron wiring. Assets Node owns
+absolute-path resolution, thumbnail input authorization, operation-owned import staging, and the
+persistent Asset Library membership lifecycle. Removing a Media Library connection unlinks only the
+managed connection; the ordinary Asset remove action marks only its membership record as removed and
+preserves the source file. Uninstall and unreferenced-byte garbage collection are separate explicit
+operations. Hover previews are static images and do not open or autoplay a media session.
 
 Retired Entity Asset graph data is handled only by explicit inspection and migration in
 `@neko/entity-node`; the normal Assets runtime does not read a legacy Asset catalog.

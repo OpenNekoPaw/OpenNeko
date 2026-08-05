@@ -66,6 +66,7 @@ import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-por
 import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
 import { closeDesktopWindows } from './window-lifecycle';
 import {
+  ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS,
   DESKTOP_STATE_AUTHORITY_KEYS,
   migrateDesktopStateToSqlite,
   resolveGlobalStorageLayout,
@@ -196,6 +197,7 @@ async function startDesktop(): Promise<void> {
       settingsCodec: applicationSettingsCodec,
       digest: (content) => createHash('sha256').update(content).digest('hex'),
     });
+    await localMetadataStore.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
     await localMetadataStore.migrateNamespace(AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS);
   } catch (error) {
     await localMetadataStore.dispose();
@@ -595,6 +597,7 @@ async function startDesktop(): Promise<void> {
   const resourceBrowser = new ResourceBrowserNodeRuntime({
     globalAssetRoot: globalStorage.assets,
     globalMediaLibraryRoot: globalStorage.mediaLibraries,
+    assetLibraryMemberships: metadataRepositories.assetLibraryMemberships,
     localMetadataRepositories: metadataRepositories,
     refreshEntityProjections: (workspace) => entityProjectionRuntime.refresh(workspace),
     shell: shellService,
@@ -713,7 +716,6 @@ async function startDesktop(): Promise<void> {
       }
       return result.filePaths;
     },
-    trashGlobalAsset: (assetPath) => shell.trashItem(assetPath),
   });
   const assetCenter = new AssetCenterNodeRuntime({
     resourceBrowser,

@@ -11,3 +11,4 @@ export * from './secret-boundary';
 export * from './storage';
 export * from './versioned-json-state-repository';
 export * from './desktop-state-migration';
+export { ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS } from './sqlite/asset-library-membership-schema';

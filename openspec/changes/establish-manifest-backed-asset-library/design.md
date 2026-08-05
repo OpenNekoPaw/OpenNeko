@@ -119,6 +119,13 @@ owned by the Entity change; Asset sync only installs the immutable Entity Asset 
 Alternative considered: mirror remote deletion locally. Rejected because remote account changes must not
 silently destroy valuable offline or project data.
 
+The default Asset Library delete icon means “remove record from library”. It changes only the mutable local
+membership/head projection and leaves source files, installed immutable revisions, blobs, project pins and remote
+revisions intact. Explicit uninstall and unreferenced-byte garbage collection remain separate commands with their
+own blocker analysis. The current path-scanner plus `shell.trashItem` implementation cannot satisfy this contract:
+the Assets-owned record repository must persist active/removed membership, and removed entries must stay absent
+after restart without hiding or deleting ordinary Media Library files.
+
 ### 5. UI and Desktop depend only on typed public ports
 
 | Owner                              | Package role and canonical public entry                          | Producer                                                            | Consumer                                | Runtime boundary               | Replaced path                                     | User-data impact                                                      |
@@ -126,6 +133,7 @@ silently destroy valuable offline or project data.
 | Asset contracts and orchestration  | `packages/assets/domain` via `@neko/assets-domain`               | Manifest codecs, lifecycle/sync planner, diagnostics                | Node, Webview, Desktop adapters, Entity | Host-neutral TypeScript        | Flat `GlobalAssetItem` and path-derived identity  | Defines validated replacement facts; no direct IO                     |
 | Local package and transfer runtime | `packages/assets/node` via `@neko/assets-node`                   | Managed storage, staging, integrity, atomic install, remote adapter | Desktop composition                     | Node only                      | Direct flat-file copy/remove                      | Migrates owned bytes only after archive/validation                    |
 | Asset Library presentation         | `packages/assets/webview` via `@neko/assets-webview`             | Asset source UI and typed intents                                   | Desktop renderer                        | Renderer/Webview sandbox       | Generic flat Asset list and `materials` ambiguity | No durable facts; shows diagnostics and progress                      |
+| Asset membership persistence       | Assets domain contract plus `packages/local-metadata` repository | Active/removed membership and one-time existing-file registration   | Asset Node/domain runtime               | Host-neutral contract + SQLite | Path scan as catalog authority                    | Preserved user choice; removal never deletes source or package bytes  |
 | Rebuildable local state            | `packages/local-metadata` public local-metadata port             | Remote heads, cursors, checkpoints, projections                     | Asset Node/domain runtime               | Node/SQLite                    | Ad hoc or absent sync state                       | May be deleted and rebuilt; contains no credentials or owned bytes    |
 | Application composition            | `apps/neko-desktop` public preload contract and composition root | Window/account lifecycle, IPC binding, OS credential adapter wiring | Renderer and package services           | Electron Main/preload/renderer | App-owned Asset business logic                    | No new business authority; only Electron sender binding and lifecycle |
 

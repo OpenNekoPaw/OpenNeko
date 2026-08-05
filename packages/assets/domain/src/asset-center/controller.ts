@@ -240,8 +240,19 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
   }
 
   async removeAsset(item: GlobalAssetItem, expectedRevision: number): Promise<void> {
-    this.requireRevision(expectedRevision);
+    const current = this.requireRevision(expectedRevision);
     await this.library.removeAsset(item);
+    if (current.selection?.itemId !== item.id) return;
+    if (current.preview.status === 'ready') {
+      if (!this.previewPorts) {
+        throw new Error('Asset Center Preview lifecycle port is unavailable.');
+      }
+      await this.previewPorts.previewSessions.release({
+        identity: this.identity,
+        previewSessionId: current.preview.previewSessionId,
+      });
+    }
+    this.publish(this.session.clearSelection(current.revision));
   }
 
   async addMediaLibrary(

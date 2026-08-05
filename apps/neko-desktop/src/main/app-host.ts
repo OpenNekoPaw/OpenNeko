@@ -1060,7 +1060,11 @@ export class DesktopAppHost {
         projection = await runtime.revealMediaLibrary(request);
         break;
     }
-    if (request.route === 'selection.select') {
+    if (
+      request.route === 'selection.select' ||
+      request.route === 'asset.remove' ||
+      request.route === 'preview.detach'
+    ) {
       await this.shell.projectAssetCenterPreview({
         windowId: window.windowId,
         expectedEndpointEpoch: request.endpointEpoch,

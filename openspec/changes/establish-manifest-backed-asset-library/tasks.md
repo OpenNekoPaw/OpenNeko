@@ -11,6 +11,7 @@
 - [ ] 2.2 Implement dependency-closure planning, size/policy checks, digest verification, atomic install, cancellation, and cleanup of unreferenced staging content.
 - [ ] 2.3 Implement explicit local import, update-head, uninstall, and garbage-collection services with project/dependency pin diagnostics.
 - [ ] 2.4 Add producer tests proving interrupted/corrupt installs expose no partial revision and removal preserves pinned or shared bytes.
+- [x] 2.5 Add the canonical persistent Asset membership repository and record-only removal; migrate current flat entries without deleting bytes and poison the `shell.trashItem` removal path.
 
 ## 3. Cloud publication and replication
 
@@ -26,6 +27,7 @@
 - [ ] 4.2 Replace the flat Asset surface with a distinct Asset Library source showing package identity, revision, dependency, local/remote, transfer, conflict, tombstone, and account states.
 - [ ] 4.3 Add typed import, install, update, publish, sync, cancel, inspect, and uninstall intents while keeping ordinary files on Media Library/content ports.
 - [ ] 4.4 Add Webview consumer tests proving cross-source search preserves owner identity and no file discovery creates Asset membership.
+- [x] 4.5 Rename the ordinary delete affordance/confirmation to record removal and add restart/source-preservation UI coverage.
 
 ## 5. Desktop composition and migration
 
@@ -39,4 +41,5 @@
 - [ ] 6.1 Update Asset, Media Library, Resource Browser, local storage, cloud credential, and package-boundary documentation in Chinese and English where semantics changed.
 - [ ] 6.2 Run affected package tests/typechecks plus `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, and `pnpm check:unused`; record command results and canonical-path evidence.
 - [ ] 6.3 Run a real Electron Asset Library scenario covering import, offline open, sync progress/cancel, publish conflict, update, tombstone, and uninstall blockers using isolated fixtures.
+- [x] 6.5 Run an isolated Electron record-removal scenario proving the item stays absent after restart while the source file is unchanged and no trash call occurs.
 - [ ] 6.4 Complete `pnpm ci:local`, record provider/evaluation gaps and residual migration, storage, performance, and credential risks, and verify no legacy path returned success.

@@ -12,6 +12,7 @@ import type {
   ProjectSearchSourceRef,
 } from '@neko/search-domain';
 import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from './model';
+import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 
 export interface WorkspaceRegistryRecord {
   readonly workspaceId: string;
@@ -382,6 +383,7 @@ export function evaluateLocalMetadataCacheQuota(
 }
 
 export interface LocalMetadataRepositories {
+  readonly assetLibraryMemberships: AssetLibraryMembershipRepository;
   readonly workspaces: WorkspaceRegistryRepository;
   readonly projectionVersions: ProjectionVersionRepository;
   readonly conversations: ConversationCatalogRepository;

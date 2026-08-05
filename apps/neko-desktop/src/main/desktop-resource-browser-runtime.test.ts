@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { DEFAULT_CANVAS_DATA } from '@neko/canvas-domain';
@@ -30,10 +30,23 @@ import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-gra
 import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import {
+  ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS,
+  resolveGlobalStorageLayout,
+  type LocalMetadataStore,
+} from '@neko/local-metadata';
+import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
+import { M1_LOCAL_METADATA_MIGRATIONS } from '@neko/local-metadata/sqlite';
 
 const temporaryRoots: string[] = [];
+const metadataStores: LocalMetadataStore[] = [];
 
 afterEach(async () => {
+  await Promise.all(
+    metadataStores.splice(0).map(async (store) => {
+      if (store.state !== 'disposed') await store.dispose();
+    }),
+  );
   for (const root of temporaryRoots.splice(0)) {
     await rm(root, { recursive: true, force: true });
   }
@@ -329,7 +342,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       selectConfiguredGlobalMediaLibrary: async () => undefined,
       selectGlobalMediaLibrarySource: async () => undefined,
       selectGlobalAssetSources: async () => undefined,
-      trashGlobalAsset: async () => undefined,
       createThumbnail: async () => 'data:image/png;base64,AA==',
       createGlobalLibraryThumbnail: async () => 'data:image/png;base64,AA==',
       openQuickPreview: async () => {
@@ -508,7 +520,55 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
         expectedRevision: media.revision,
       }),
     ).rejects.toThrow('wrong owner');
-    expect(fixture.trashGlobalAsset).not.toHaveBeenCalled();
+  });
+
+  it('removes only the membership record and preserves source bytes across metadata reopen', async () => {
+    const fixture = await createGlobalLibraryRuntimeFixture();
+    const assetPath = path.join(fixture.assetRoot, 'hero.png');
+    await mkdir(fixture.assetRoot, { recursive: true });
+    await writeFile(assetPath, 'preserved-source');
+    const initial = await fixture.runtime.searchHomeAssets({
+      windowId: fixture.windowId,
+      endpointEpoch: fixture.endpointEpoch,
+      query: '',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      limit: 20,
+    });
+    const asset = initial.items[0];
+    if (!asset) throw new Error('Fixture Asset is required.');
+
+    await expect(
+      fixture.runtime.removeHomeAsset({
+        windowId: fixture.windowId,
+        endpointEpoch: fixture.endpointEpoch,
+        assetId: asset.id,
+        expectedRevision: initial.revision,
+      }),
+    ).resolves.toMatchObject({ status: 'removed', assetId: asset.id });
+    await expect(readFile(assetPath, 'utf8')).resolves.toBe('preserved-source');
+    await expect(
+      fixture.runtime.searchHomeAssets({
+        windowId: fixture.windowId,
+        endpointEpoch: fixture.endpointEpoch,
+        query: '',
+        sortBy: 'name',
+        sortDirection: 'ascending',
+        limit: 20,
+      }),
+    ).resolves.toMatchObject({ items: [] });
+
+    await fixture.metadataStore.dispose();
+    const reopened = createNodeSqliteLocalMetadataStore({ homedir: fixture.home });
+    metadataStores.push(reopened);
+    await reopened.open({
+      databasePath: resolveGlobalStorageLayout(fixture.home).database,
+      busyTimeoutMs: 1_000,
+    });
+    await reopened.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+    await reopened.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
+    await expect(reopened.repositories.assetLibraryMemberships.listActive()).resolves.toEqual([]);
+    await expect(readFile(assetPath, 'utf8')).resolves.toBe('preserved-source');
   });
 
   it('serializes Asset mutations without blocking Media Library reads', async () => {
@@ -675,10 +735,18 @@ async function createGlobalLibraryRuntimeFixture(
     overrides.selectGlobalAssetSources ?? vi.fn(async () => undefined);
   const createGlobalLibraryThumbnail =
     overrides.createGlobalLibraryThumbnail ?? vi.fn(async () => 'data:image/png;base64,AA==');
-  const trashGlobalAsset = vi.fn(async () => undefined);
+  const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: home });
+  metadataStores.push(metadataStore);
+  await metadataStore.open({
+    databasePath: resolveGlobalStorageLayout(home).database,
+    busyTimeoutMs: 1_000,
+  });
+  await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+  await metadataStore.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
   const runtime = new ResourceBrowserNodeRuntime({
     globalAssetRoot: assetRoot,
     globalMediaLibraryRoot: mediaLibraryRoot,
+    assetLibraryMemberships: metadataStore.repositories.assetLibraryMemberships,
     shell,
     host,
     openPreview: async () => undefined,
@@ -687,7 +755,6 @@ async function createGlobalLibraryRuntimeFixture(
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,
     selectGlobalAssetSources,
-    trashGlobalAsset,
     createThumbnail: async () => 'data:image/png;base64,AA==',
     createGlobalLibraryThumbnail,
     openQuickPreview: async () => {
@@ -710,13 +777,14 @@ async function createGlobalLibraryRuntimeFixture(
   });
   return {
     root,
+    home,
     assetRoot,
     mediaLibraryRoot,
     runtime,
     windowId,
     endpointEpoch,
     selectGlobalAssetSources,
-    trashGlobalAsset,
+    metadataStore,
     createGlobalLibraryThumbnail,
   };
 }

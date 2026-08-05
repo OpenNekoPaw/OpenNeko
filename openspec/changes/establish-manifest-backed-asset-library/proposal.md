@@ -26,6 +26,8 @@ for publishing, downloading, verifying, reconciling, or working offline with clo
   existing `remote` / `registry` source values no longer act as runtime download resolvers.
 - Add Asset Library browsing, search, import/install, update, remove, publish, and dependency diagnostics
   as an explicit Resource Browser source distinct from Media Library.
+- Define the ordinary “remove from Asset Library” action as record/membership removal only. It MUST preserve
+  source files and installed package bytes; byte deletion remains a separate explicit garbage-collection action.
 - Support `identity` / Entity Asset packages as a first-class Asset type while leaving project Entity
   creation, facts, merge, binding, and update application to the Entity owner.
 - **BREAKING**: retire successful flat-file Asset identity based on filename/path and migrate valuable
@@ -72,3 +74,5 @@ for publishing, downloading, verifying, reconciling, or working offline with clo
 - The Entity change `manage-project-entities-as-publishable-assets` consumes the generic Asset publish,
   install, version, dependency, and lookup ports defined here; neither change introduces a separate
   global Entity catalog or sync service.
+- The current flat scanner/trash command is replaced at this boundary: `shell.trashItem` is not a valid
+  implementation of record removal, and restart must not rediscover a removed membership as active.

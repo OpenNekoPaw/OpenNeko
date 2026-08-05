@@ -2,6 +2,7 @@ import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/fu
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
 import { resourceBrowserEntityManagementScenario } from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
+import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopStateSqliteMigrationScenario } from './desktop-state-sqlite-migration.mjs';
 import {
@@ -19,6 +20,7 @@ const scenarios = new Map(
     desktopConversationNavigationScenario,
     desktopWorkbenchScenesScenario,
     resourceBrowserEntityManagementScenario,
+    assetLibraryRecordRemovalScenario,
   ].map((scenario) => [scenario.id, scenario]),
 );
 

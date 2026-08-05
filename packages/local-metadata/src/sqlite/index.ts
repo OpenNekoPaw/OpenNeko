@@ -6,5 +6,6 @@ export * from './media-metadata-schema';
 export * from './search-projection-schema';
 export * from './entity-asset-projection-schema';
 export * from './catalog-projection-schema';
+export * from './asset-library-membership-schema';
 export * from './sqlite-local-metadata-store';
 export * from './sqlite-corruption-error';

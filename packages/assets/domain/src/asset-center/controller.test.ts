@@ -141,6 +141,73 @@ describe('AssetCenterController', () => {
       previewSessionId: 'preview:asset-center:1',
     });
   });
+
+  it('releases Preview and clears selection when the selected Asset membership is removed', async () => {
+    const source = libraryRuntime();
+    const asset = {
+      id: 'asset-membership-1',
+      owner: 'global-asset-library' as const,
+      label: 'hero.png',
+      kind: 'asset' as const,
+      mediaType: 'image',
+      availability: 'available' as const,
+    };
+    source.searchAssets = vi.fn(async () => ({ revision: 8, items: [asset] }));
+    const release = vi.fn(async () => undefined);
+    const controller = new AssetCenterController(
+      new AssetCenterSession({
+        assetCenterSessionId: 'asset-center:window-1',
+        windowId: 'window-1',
+      }),
+      source,
+      { resolve: async () => ({ kind: 'workspace-file', path: 'hero.png' }) },
+      {
+        contentAuthorization: {
+          authorize: async () => ({ status: 'ready', descriptor: previewDescriptor() }),
+        },
+        previewSessions: {
+          create: async () => ({
+            schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
+            identity: {
+              previewSessionId: 'preview:asset-center:asset-1',
+              windowId: 'window-1',
+              owner: {
+                kind: 'asset-center',
+                assetCenterSessionId: 'asset-center:window-1',
+                resourceOwner: 'global-asset-library',
+                itemId: asset.id,
+              },
+              revision: 0,
+            },
+            status: 'ready',
+            descriptor: previewDescriptor(),
+          }),
+          release,
+        },
+      },
+    );
+    const initial = controller.getSnapshot();
+    const loading = controller.updateFilter(initial.revision, {
+      ...initial.filter,
+      catalog: 'global-asset-library',
+    });
+    const ready = await controller.refresh(loading.revision);
+    const selected = await controller.select({
+      expectedRevision: ready.revision,
+      owner: asset.owner,
+      itemId: asset.id,
+    });
+
+    await controller.removeAsset(asset, selected.revision);
+
+    expect(source.removeAsset).toHaveBeenCalledWith(asset.id, 8);
+    expect(release).toHaveBeenCalledWith({
+      identity: controller.identity,
+      previewSessionId: 'preview:asset-center:asset-1',
+    });
+    expect(controller.getSnapshot()).toMatchObject({ preview: { status: 'empty' } });
+    expect(controller.getSnapshot().selection).toBeUndefined();
+  });
 });
 
 function createController(

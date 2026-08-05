@@ -15,6 +15,7 @@
     "./global-library": "./src/global-library/index.ts",
     "./global-library/contract": "./src/global-library/contract.ts",
     "./global-library/controller": "./src/global-library/controller.ts",
+    "./global-library/membership": "./src/global-library/membership.ts",
     "./media-library-copy": "./src/services/MediaLibraryCopyService.ts",
     "./resource-browser": "./src/resource-browser/index.ts",
     "./resource-browser/contract": "./src/resource-browser/contract.ts",

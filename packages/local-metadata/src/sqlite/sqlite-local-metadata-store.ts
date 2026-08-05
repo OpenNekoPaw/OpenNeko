@@ -102,6 +102,13 @@ import type {
   SqliteRow,
 } from './driver';
 import { serializeLocalMetadataJson } from '../secret-boundary';
+import {
+  assertAssetLibraryMembershipRegistration,
+  type AssetLibraryInventoryInitializationResult,
+  type AssetLibraryMembershipRecord,
+  type AssetLibraryMembershipRegistration,
+  type AssetLibraryMembershipRepository,
+} from '@neko/assets-domain/global-library/membership';
 
 const MIGRATION_REGISTRY_SQL = `CREATE TABLE IF NOT EXISTS schema_migrations (
   namespace TEXT NOT NULL,
@@ -275,6 +282,39 @@ function decodeConversation(row: SqliteRow): ConversationCatalogRecord {
     title: readString(row, 'title'),
     source,
     model: readNullableString(row, 'model'),
+    createdAt: readString(row, 'created_at'),
+    updatedAt: readString(row, 'updated_at'),
+  };
+}
+
+function decodeAssetLibraryMembership(row: SqliteRow): AssetLibraryMembershipRecord {
+  const state = readString(row, 'membership_state');
+  if (state !== 'active' && state !== 'removed') {
+    throw new LocalMetadataError({
+      code: 'metadata-integrity-failed',
+      operation: 'decode-asset-library-membership',
+      message: `Unknown Asset Library membership state: ${state}`,
+    });
+  }
+  const byteLength = row['byte_length'];
+  if (
+    byteLength !== null &&
+    (typeof byteLength !== 'number' || !Number.isSafeInteger(byteLength))
+  ) {
+    throw new LocalMetadataError({
+      code: 'metadata-integrity-failed',
+      operation: 'decode-asset-library-membership',
+      message: 'Stored Asset Library membership byteLength is invalid.',
+    });
+  }
+  return {
+    membershipId: readString(row, 'membership_id'),
+    sourceRelativePath: readString(row, 'source_relative_path'),
+    label: readString(row, 'label'),
+    mediaType: readNullableString(row, 'media_type'),
+    byteLength,
+    modifiedAt: readNullableString(row, 'modified_at'),
+    state,
     createdAt: readString(row, 'created_at'),
     updatedAt: readString(row, 'updated_at'),
   };
@@ -805,6 +845,128 @@ class RawConversationCatalogRepository implements ConversationCatalogRepository 
     await this.connection().run('DELETE FROM conversations WHERE workspace_id = ?', [workspaceId]);
   }
 }
+
+class RawAssetLibraryMembershipRepository implements AssetLibraryMembershipRepository {
+  constructor(private readonly connection: () => SqliteConnection) {}
+
+  async get(membershipId: string): Promise<AssetLibraryMembershipRecord | null> {
+    const rows = await this.connection().all(
+      `${ASSET_LIBRARY_MEMBERSHIP_SELECT} WHERE membership_id = ?`,
+      [membershipId],
+    );
+    return rows[0] ? decodeAssetLibraryMembership(rows[0]) : null;
+  }
+
+  async findBySourceRelativePath(
+    sourceRelativePath: string,
+  ): Promise<AssetLibraryMembershipRecord | null> {
+    const rows = await this.connection().all(
+      `${ASSET_LIBRARY_MEMBERSHIP_SELECT} WHERE source_relative_path = ?`,
+      [sourceRelativePath],
+    );
+    return rows[0] ? decodeAssetLibraryMembership(rows[0]) : null;
+  }
+
+  async listActive(): Promise<readonly AssetLibraryMembershipRecord[]> {
+    const rows = await this.connection().all(
+      `${ASSET_LIBRARY_MEMBERSHIP_SELECT}
+       WHERE membership_state = 'active'
+       ORDER BY label, membership_id`,
+    );
+    return rows.map(decodeAssetLibraryMembership);
+  }
+
+  async initializeExistingInventory(
+    registrations: readonly AssetLibraryMembershipRegistration[],
+    completedAt: string,
+  ): Promise<AssetLibraryInventoryInitializationResult> {
+    const state = await this.connection().all(
+      `SELECT completed_at FROM asset_library_inventory_state WHERE inventory_id = 'flat-v1'`,
+    );
+    if (state.length > 0) return { status: 'already-initialized' };
+    for (const registration of registrations) {
+      await this.writeActive(registration);
+    }
+    await this.connection().run(
+      `INSERT INTO asset_library_inventory_state (inventory_id, completed_at)
+       VALUES ('flat-v1', ?)`,
+      [completedAt],
+    );
+    return { status: 'initialized', importedCount: registrations.length };
+  }
+
+  async activate(
+    registration: AssetLibraryMembershipRegistration,
+  ): Promise<AssetLibraryMembershipRecord> {
+    await this.writeActive(registration);
+    const membership = await this.findBySourceRelativePath(registration.sourceRelativePath);
+    if (!membership) {
+      throw new LocalMetadataError({
+        code: 'metadata-transaction-failed',
+        operation: 'activate-asset-library-membership',
+        message: `Asset membership was not committed: ${registration.membershipId}`,
+      });
+    }
+    return membership;
+  }
+
+  async remove(membershipId: string, removedAt: string): Promise<AssetLibraryMembershipRecord> {
+    const result = await this.connection().run(
+      `UPDATE asset_library_memberships
+       SET membership_state = 'removed', updated_at = ?
+       WHERE membership_id = ? AND membership_state = 'active'`,
+      [removedAt, membershipId],
+    );
+    if (result.changes !== 1) {
+      throw new LocalMetadataError({
+        code: 'metadata-transaction-failed',
+        operation: 'remove-asset-library-membership',
+        message: `Active Asset membership does not exist: ${membershipId}`,
+      });
+    }
+    const membership = await this.get(membershipId);
+    if (!membership) {
+      throw new LocalMetadataError({
+        code: 'metadata-integrity-failed',
+        operation: 'remove-asset-library-membership',
+        message: `Removed Asset membership disappeared: ${membershipId}`,
+      });
+    }
+    return membership;
+  }
+
+  private async writeActive(registration: AssetLibraryMembershipRegistration): Promise<void> {
+    assertAssetLibraryMembershipRegistration(registration);
+    await this.connection().run(
+      `INSERT INTO asset_library_memberships (
+        membership_id, source_relative_path, label, media_type, byte_length, modified_at,
+        membership_state, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
+      ON CONFLICT(source_relative_path) DO UPDATE SET
+        label = excluded.label,
+        media_type = excluded.media_type,
+        byte_length = excluded.byte_length,
+        modified_at = excluded.modified_at,
+        membership_state = 'active',
+        updated_at = excluded.updated_at`,
+      [
+        registration.membershipId,
+        registration.sourceRelativePath,
+        registration.label,
+        registration.mediaType,
+        registration.byteLength,
+        registration.modifiedAt,
+        registration.registeredAt,
+        registration.registeredAt,
+      ],
+    );
+  }
+}
+
+const ASSET_LIBRARY_MEMBERSHIP_SELECT = `SELECT
+  membership_id, source_relative_path, label, media_type, byte_length, modified_at,
+  membership_state, created_at, updated_at
+  FROM asset_library_memberships`;
 
 class RawTaskStateRepository implements TaskStateRepository {
   constructor(private readonly connection: () => SqliteConnection) {}
@@ -2863,6 +3025,56 @@ class ExclusiveConversationCatalogRepository implements ConversationCatalogRepos
   }
 }
 
+class ExclusiveAssetLibraryMembershipRepository implements AssetLibraryMembershipRepository {
+  constructor(
+    private readonly raw: AssetLibraryMembershipRepository,
+    private readonly exclusive: ExclusiveCoordinator,
+    private readonly transaction: <T>(
+      mode: LocalMetadataTransactionMode,
+      operation: () => Promise<T>,
+    ) => Promise<T>,
+  ) {}
+
+  get(membershipId: string): Promise<AssetLibraryMembershipRecord | null> {
+    return this.exclusive.run(() => this.raw.get(membershipId));
+  }
+
+  findBySourceRelativePath(
+    sourceRelativePath: string,
+  ): Promise<AssetLibraryMembershipRecord | null> {
+    return this.exclusive.run(() => this.raw.findBySourceRelativePath(sourceRelativePath));
+  }
+
+  listActive(): Promise<readonly AssetLibraryMembershipRecord[]> {
+    return this.exclusive.run(() => this.raw.listActive());
+  }
+
+  initializeExistingInventory(
+    registrations: readonly AssetLibraryMembershipRegistration[],
+    completedAt: string,
+  ): Promise<AssetLibraryInventoryInitializationResult> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () =>
+        this.raw.initializeExistingInventory(registrations, completedAt),
+      ),
+    );
+  }
+
+  activate(
+    registration: AssetLibraryMembershipRegistration,
+  ): Promise<AssetLibraryMembershipRecord> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () => this.raw.activate(registration)),
+    );
+  }
+
+  remove(membershipId: string, removedAt: string): Promise<AssetLibraryMembershipRecord> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () => this.raw.remove(membershipId, removedAt)),
+    );
+  }
+}
+
 class ExclusiveTaskStateRepository implements TaskStateRepository {
   constructor(
     private readonly raw: TaskStateRepository,
@@ -3188,6 +3400,7 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
 
   constructor(private readonly options: SqliteLocalMetadataStoreOptions) {
     const getConnection = (): SqliteConnection => this.requireConnection('repository-operation');
+    const assetLibraryMemberships = new RawAssetLibraryMembershipRepository(getConnection);
     const workspaces = new RawWorkspaceRegistryRepository(getConnection);
     const conversations = new RawConversationCatalogRepository(getConnection);
     const tasks = new RawTaskStateRepository(getConnection);
@@ -3211,6 +3424,7 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       projectionVersions,
     );
     this.rawRepositories = {
+      assetLibraryMemberships,
       workspaces,
       conversations,
       tasks,
@@ -3225,6 +3439,11 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       cacheMaintenance,
     };
     this.repositories = {
+      assetLibraryMemberships: new ExclusiveAssetLibraryMembershipRepository(
+        assetLibraryMemberships,
+        this.exclusive,
+        (mode, operation) => this.executeTransaction(mode, operation),
+      ),
       workspaces: new ExclusiveWorkspaceRegistryRepository(workspaces, this.exclusive),
       conversations: new ExclusiveConversationCatalogRepository(
         conversations,

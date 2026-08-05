@@ -134,6 +134,11 @@ Asset Management 与 authorized Preview 使用两个独立、无单项 tab strip
 panel shell 内重复 descriptor header。Preview 内容背景保持透明并继承所在 shell 的主题；Desktop 和
 Assets management 均不得实现第二套 viewer 或复制 Preview 主题。
 
+普通删除按钮只执行“从素材库移除记录”：它更新用户级 SQLite 中的 mutable membership state，
+不得移动源文件到系统废纸篓，也不得卸载 immutable revision、删除 blob 或修改项目引用。首次升级时可将
+现有 flat managed files 原子登记为 membership；初始化完成后，文件扫描不得把已移除记录自动恢复。
+真正的 uninstall 和无引用字节回收必须是独立、显式且可报告 blocker 的操作。
+
 ### 素材云同步（目标）
 
 素材云同步复制的是 manifest-backed immutable package revision，不是文件夹双向同步：
@@ -230,6 +235,7 @@ reader、publication lifecycle 和 remote provider 接入前，生产 Inspector 
 | Credential、mount secret                                     | SecretStorage/system keychain | 普通 SQLite 不具备对应安全与信任边界                                        |
 | Requirement freshness、probe cache、snapshot task/checkpoint | 用户级 `~/.neko/neko.db`      | 可重建 projection 与最小跨重启状态；不得包含 target、绝对路径或 media bytes |
 | 已安装 Asset manifest 与 package bytes                       | Asset Library managed storage | 用户可离线使用的素材内容，不是可删除重建的 metadata                         |
+| Asset Library mutable membership / removed state             | 用户级 `~/.neko/neko.db`      | 有价值的用户选择；普通移除只更新记录，文件扫描不得重建                      |
 | remote head、cursor、transfer checkpoint、Asset search rows  | 用户级 `~/.neko/neko.db`      | 可重建同步/查询状态；不得包含 credential 或充当 installed package authority |
 
 ## 已知限制与发布风险

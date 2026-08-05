@@ -20,6 +20,10 @@ import {
 } from '@neko/entity-domain';
 import type { ILogger } from '@neko/shared/logger';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
+import type {
+  AssetLibraryMembershipRecord,
+  AssetLibraryMembershipRepository,
+} from '@neko/assets-domain/global-library/membership';
 import { presentResourceBrowserContentItem } from '@neko/assets-domain/resource-browser/presenter';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import {
@@ -247,6 +251,7 @@ describe('Desktop Resource Browser source', () => {
     const assets = await searchGlobalAssetCatalog({
       globalAssetRoot,
       files: host.files,
+      memberships: createMemoryAssetMembershipRepository(),
       query: '',
       sortBy: 'name',
       sortDirection: 'ascending',
@@ -1069,6 +1074,7 @@ function createComposition(
   });
   return createResourceBrowserNodeProjectionSource({
     globalAssetRoot: path.join(path.dirname(workspacePath), '.openneko', 'assets'),
+    assetLibraryMemberships: createMemoryAssetMembershipRepository(),
     globalMediaLibraryRoot: path.join(path.dirname(workspacePath), '.openneko', 'media-libraries'),
     workspace: {
       workspaceId: 'workspace-1',
@@ -1092,6 +1098,68 @@ function createComposition(
       throw new Error('Entity management is not expected by this source test.');
     },
   });
+}
+
+function createMemoryAssetMembershipRepository(): AssetLibraryMembershipRepository {
+  const records = new Map<string, AssetLibraryMembershipRecord>();
+  let inventoryInitialized = false;
+  return {
+    async get(membershipId) {
+      return records.get(membershipId) ?? null;
+    },
+    async findBySourceRelativePath(sourceRelativePath) {
+      return (
+        [...records.values()].find((record) => record.sourceRelativePath === sourceRelativePath) ??
+        null
+      );
+    },
+    async listActive() {
+      return [...records.values()].filter((record) => record.state === 'active');
+    },
+    async initializeExistingInventory(registrations) {
+      if (inventoryInitialized) return { status: 'already-initialized' };
+      inventoryInitialized = true;
+      for (const registration of registrations) {
+        records.set(registration.membershipId, {
+          membershipId: registration.membershipId,
+          sourceRelativePath: registration.sourceRelativePath,
+          label: registration.label,
+          mediaType: registration.mediaType,
+          byteLength: registration.byteLength,
+          modifiedAt: registration.modifiedAt,
+          state: 'active',
+          createdAt: registration.registeredAt,
+          updatedAt: registration.registeredAt,
+        });
+      }
+      return { status: 'initialized', importedCount: registrations.length };
+    },
+    async activate(registration) {
+      const existing = [...records.values()].find(
+        (record) => record.sourceRelativePath === registration.sourceRelativePath,
+      );
+      const record: AssetLibraryMembershipRecord = {
+        membershipId: existing?.membershipId ?? registration.membershipId,
+        sourceRelativePath: registration.sourceRelativePath,
+        label: registration.label,
+        mediaType: registration.mediaType,
+        byteLength: registration.byteLength,
+        modifiedAt: registration.modifiedAt,
+        state: 'active',
+        createdAt: existing?.createdAt ?? registration.registeredAt,
+        updatedAt: registration.registeredAt,
+      };
+      records.set(record.membershipId, record);
+      return record;
+    },
+    async remove(membershipId, removedAt) {
+      const existing = records.get(membershipId);
+      if (!existing || existing.state !== 'active') throw new Error('missing active membership');
+      const removed = { ...existing, state: 'removed' as const, updatedAt: removedAt };
+      records.set(membershipId, removed);
+      return removed;
+    },
+  };
 }
 
 function createLogger(): ILogger {

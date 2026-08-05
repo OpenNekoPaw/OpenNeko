@@ -807,26 +807,31 @@ function useDesktopAssetCenterScene(input: {
       window.openNekoDesktop,
     );
   }, [assetCenterSessionId, input.endpointEpoch, input.scene.windowId, input.viewMode]);
-  const [sessionProjection, setSessionProjection] = useState<AssetCenterSessionProjection>();
+  const [sessionState, setSessionState] = useState<{
+    readonly runtime: DesktopAssetCenterRuntime;
+    readonly projection: AssetCenterSessionProjection;
+  }>();
   useDisposeRuntime(runtime);
   useEffect(() => {
-    setSessionProjection(undefined);
+    setSessionState(undefined);
     if (!runtime) return;
     let active = true;
     const unsubscribe = runtime.subscribe((next) => {
-      if (active) setSessionProjection(next);
+      if (active) setSessionState({ runtime, projection: next });
     });
     void runtime.getSnapshot().then((next) => {
-      if (active) setSessionProjection(next);
+      if (active) setSessionState({ runtime, projection: next });
     });
     return () => {
       active = false;
       unsubscribe();
     };
   }, [runtime]);
+  const projection =
+    sessionState && sessionState.runtime === runtime ? sessionState.projection : undefined;
   return {
     ...(runtime ? { runtime } : {}),
-    ...(sessionProjection ? { projection: sessionProjection } : {}),
+    ...(projection ? { projection } : {}),
   };
 }
 

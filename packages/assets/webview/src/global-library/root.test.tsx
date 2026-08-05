@@ -312,7 +312,7 @@ describe('AssetManagementRoot', () => {
     await act(async () => root.unmount());
   });
 
-  it('imports and confirms trash removal only in the Asset Library', async () => {
+  it('imports and confirms record-only removal in the Asset Library', async () => {
     const asset: GlobalAssetItem = {
       id: 'global-asset-library:asset123',
       owner: 'global-asset-library',
@@ -357,11 +357,13 @@ describe('AssetManagementRoot', () => {
     expect(runtime.source.importAssets).toHaveBeenCalledWith(4);
 
     const removeButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Move asset to trash: hero.png"]',
+      'button[aria-label="Remove Asset Library record: hero.png"]',
     );
     await act(async () => removeButton?.click());
     await act(async () => wait(0));
-    expect(confirmAction).toHaveBeenCalledWith('Move "hero.png" to the system trash?');
+    expect(confirmAction).toHaveBeenCalledWith(
+      'Remove "hero.png" from the Asset Library? The source file will be preserved.',
+    );
     expect(runtime.source.removeAsset).toHaveBeenCalledWith(asset.id, 4);
     expect(runtime.source.removeMediaLibrary).not.toHaveBeenCalled();
 

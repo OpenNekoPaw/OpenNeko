@@ -74,7 +74,8 @@ import {
   searchGlobalMediaLibraries,
   type ResourceBrowserNodeSourceOptions,
 } from './resource-browser-node-source';
-import { importGlobalAssetFiles, removeGlobalAssetFile } from './global-asset-files';
+import { importGlobalAssetFiles } from './global-asset-files';
+import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
 import type { ContentLocator } from '@neko/content';
@@ -134,6 +135,7 @@ export interface ResourceBrowserShellPort {
 export interface ResourceBrowserNodeRuntimeOptions {
   readonly globalAssetRoot: string;
   readonly globalMediaLibraryRoot: string;
+  readonly assetLibraryMemberships?: AssetLibraryMembershipRepository;
   readonly localMetadataRepositories?: LocalMetadataRepositories;
   readonly refreshEntityProjections?: ResourceBrowserNodeSourceOptions['refreshEntityProjections'];
   readonly shell: ResourceBrowserShellPort;
@@ -144,7 +146,6 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly selectConfiguredGlobalMediaLibrary: ResourceBrowserNodeSourceOptions['selectGlobalLibrary'];
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
   readonly selectGlobalAssetSources: (windowId: string) => Promise<readonly string[] | undefined>;
-  readonly trashGlobalAsset: (absolutePath: string) => Promise<void>;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
   readonly createGlobalLibraryThumbnail: (input: {
     readonly absolutePath: string;
@@ -253,7 +254,7 @@ export class ResourceBrowserNodeRuntime {
     const absolutePath = await resolveResourceBrowserItemPath({
       workspace,
       globalAssetRoot: this.options.globalAssetRoot,
-      files: this.options.host.files,
+      memberships: this.requireAssetLibraryMemberships(),
       item,
     });
     const opened = await this.options.openQuickPreview({
@@ -414,6 +415,7 @@ export class ResourceBrowserNodeRuntime {
     const items = await searchGlobalAssetCatalog({
       globalAssetRoot: this.options.globalAssetRoot,
       files: this.options.host.files,
+      memberships: this.requireAssetLibraryMemberships(),
       query: input.query,
       sortBy: input.sortBy,
       sortDirection: input.sortDirection,
@@ -576,6 +578,7 @@ export class ResourceBrowserNodeRuntime {
       const outcomes = await importGlobalAssetFiles({
         globalAssetRoot: this.options.globalAssetRoot,
         sourcePaths: sources,
+        memberships: this.requireAssetLibraryMemberships(),
       });
       const changed = outcomes.some((outcome) => outcome.status === 'added');
       return {
@@ -599,16 +602,7 @@ export class ResourceBrowserNodeRuntime {
       if (item.owner !== 'global-asset-library') {
         throw new Error('Desktop global Asset identity has the wrong owner.');
       }
-      const assetPath = await resolveGlobalAssetItemPath({
-        globalAssetRoot: this.options.globalAssetRoot,
-        files: this.options.host.files,
-        itemId: item.id,
-      });
-      await removeGlobalAssetFile({
-        globalAssetRoot: this.options.globalAssetRoot,
-        assetPath,
-        trash: this.options.trashGlobalAsset,
-      });
+      await this.requireAssetLibraryMemberships().remove(item.id, new Date().toISOString());
       return {
         status: 'removed',
         assetId: item.id,
@@ -791,7 +785,7 @@ export class ResourceBrowserNodeRuntime {
       return this.requireContainedRealFile(
         await resolveGlobalAssetItemPath({
           globalAssetRoot: this.options.globalAssetRoot,
-          files: this.options.host.files,
+          memberships: this.requireAssetLibraryMemberships(),
           itemId: item.id,
         }),
         this.options.globalAssetRoot,
@@ -899,6 +893,9 @@ export class ResourceBrowserNodeRuntime {
     };
     const composition = createResourceBrowserNodeProjectionSource({
       globalAssetRoot: this.options.globalAssetRoot,
+      ...((this.options.assetLibraryMemberships ?? this.options.localMetadataRepositories)
+        ? { assetLibraryMemberships: this.requireAssetLibraryMemberships() }
+        : {}),
       globalMediaLibraryRoot: this.options.globalMediaLibraryRoot,
       workspaceMediaLibrarySync: this.workspaceMediaLibrarySync,
       entityProjections: this.options.localMetadataRepositories?.entityAssetProjections,
@@ -956,6 +953,16 @@ export class ResourceBrowserNodeRuntime {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
     }
     return { workspace, libraryName: item.libraryName };
+  }
+
+  private requireAssetLibraryMemberships(): AssetLibraryMembershipRepository {
+    const memberships =
+      this.options.assetLibraryMemberships ??
+      this.options.localMetadataRepositories?.assetLibraryMemberships;
+    if (!memberships) {
+      throw new Error('Desktop Asset Library membership repository is unavailable.');
+    }
+    return memberships;
   }
 
   private requireActive(): void {

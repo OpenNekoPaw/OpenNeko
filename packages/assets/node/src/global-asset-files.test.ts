@@ -2,7 +2,12 @@ import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { importGlobalAssetFiles, removeGlobalAssetFile } from './global-asset-files';
+import type {
+  AssetLibraryMembershipRecord,
+  AssetLibraryMembershipRegistration,
+  AssetLibraryMembershipRepository,
+} from '@neko/assets-domain/global-library/membership';
+import { importGlobalAssetFiles } from './global-asset-files';
 
 const temporaryRoots: string[] = [];
 
@@ -22,10 +27,13 @@ describe('Desktop global Asset files', () => {
     await writeFile(path.join(assets, 'Existing.png'), 'original');
     await writeFile(path.join(incoming, 'Hero.png'), 'hero');
     await writeFile(path.join(incoming, 'Existing.png'), 'replacement');
+    const memberships = createMembershipRepository();
 
     const outcomes = await importGlobalAssetFiles({
       globalAssetRoot: assets,
       sourcePaths: [path.join(incoming, 'Hero.png'), path.join(incoming, 'Existing.png')],
+      memberships,
+      createMembershipId: () => 'membership-hero',
     });
 
     expect(outcomes).toMatchObject([
@@ -49,6 +57,7 @@ describe('Desktop global Asset files', () => {
     await symlink(path.join(incoming, 'source.png'), path.join(incoming, 'linked.png'));
     await writeFile(path.join(incoming, '.hidden.png'), 'hidden');
     await writeFile(path.join(incoming, 'notes.bin'), 'unsupported');
+    const memberships = createMembershipRepository();
 
     const outcomes = await importGlobalAssetFiles({
       globalAssetRoot: assets,
@@ -58,6 +67,7 @@ describe('Desktop global Asset files', () => {
         path.join(incoming, '.hidden.png'),
         path.join(incoming, 'notes.bin'),
       ],
+      memberships,
     });
 
     expect(outcomes).toHaveLength(4);
@@ -67,56 +77,47 @@ describe('Desktop global Asset files', () => {
     ]);
   });
 
-  it('trashes only an owned regular file and preserves it when trash fails', async () => {
+  it('reactivates an explicitly reimported preserved file with the same membership identity', async () => {
     const root = await createFixture();
     const assets = path.join(root, 'assets');
-    const assetPath = path.join(assets, 'Hero.png');
-    await mkdir(assets);
-    await writeFile(assetPath, 'hero');
-    const trash = vi.fn(async () => undefined);
-
-    await removeGlobalAssetFile({
+    const incoming = path.join(root, 'incoming');
+    await mkdir(incoming);
+    const sourcePath = path.join(incoming, 'Hero.png');
+    await writeFile(sourcePath, 'hero');
+    const memberships = createMembershipRepository();
+    const first = await importGlobalAssetFiles({
       globalAssetRoot: assets,
-      assetPath,
-      trash,
+      sourcePaths: [sourcePath],
+      memberships,
+      createMembershipId: () => 'membership-original',
     });
-    expect(trash).toHaveBeenCalledWith(
-      await import('node:fs/promises').then((fs) => fs.realpath(assetPath)),
-    );
+    expect(first).toMatchObject([{ status: 'added', assetId: 'membership-original' }]);
+    await memberships.remove('membership-original', '2026-08-05T08:01:00.000Z');
 
-    trash.mockRejectedValueOnce(new Error('trash unavailable'));
-    await expect(
-      removeGlobalAssetFile({
-        globalAssetRoot: assets,
-        assetPath,
-        trash,
-      }),
-    ).rejects.toThrow('trash unavailable');
-    await expect(readFile(assetPath, 'utf8')).resolves.toBe('hero');
+    const second = await importGlobalAssetFiles({
+      globalAssetRoot: assets,
+      sourcePaths: [sourcePath],
+      memberships,
+      createMembershipId: () => 'discarded-reimport-id',
+    });
+    expect(second).toMatchObject([{ status: 'added', assetId: 'membership-original' }]);
+    await expect(readFile(path.join(assets, 'Hero.png'), 'utf8')).resolves.toBe('hero');
   });
 
-  it('rejects hidden staging, directories, symbolic links, and paths outside the owned root', async () => {
+  it('rolls back a newly copied library file when persistent membership commit fails', async () => {
     const root = await createFixture();
     const assets = path.join(root, 'assets');
-    const outside = path.join(root, 'outside.png');
-    await mkdir(path.join(assets, '.imports'), { recursive: true });
-    await writeFile(path.join(assets, '.imports', 'stage.png'), 'stage');
-    await mkdir(path.join(assets, 'Folder'));
-    await writeFile(outside, 'outside');
-    await symlink(outside, path.join(assets, 'linked.png'));
-    const trash = vi.fn(async () => undefined);
+    const sourcePath = path.join(root, 'Hero.png');
+    await writeFile(sourcePath, 'hero');
+    const memberships = createMembershipRepository();
+    memberships.activate = vi.fn(async () => {
+      throw new Error('membership commit failed');
+    });
 
-    for (const assetPath of [
-      path.join(assets, '.imports', 'stage.png'),
-      path.join(assets, 'Folder'),
-      path.join(assets, 'linked.png'),
-      outside,
-    ]) {
-      await expect(
-        removeGlobalAssetFile({ globalAssetRoot: assets, assetPath, trash }),
-      ).rejects.toThrow();
-    }
-    expect(trash).not.toHaveBeenCalled();
+    await expect(
+      importGlobalAssetFiles({ globalAssetRoot: assets, sourcePaths: [sourcePath], memberships }),
+    ).rejects.toThrow('membership commit failed');
+    await expect(lstat(path.join(assets, 'Hero.png'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
 
@@ -124,4 +125,47 @@ async function createFixture(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'openneko-global-assets-'));
   temporaryRoots.push(root);
   return root;
+}
+
+function createMembershipRepository(): AssetLibraryMembershipRepository {
+  const records = new Map<string, AssetLibraryMembershipRecord>();
+  const findByPath = (sourceRelativePath: string): AssetLibraryMembershipRecord | undefined =>
+    [...records.values()].find((record) => record.sourceRelativePath === sourceRelativePath);
+  return {
+    async get(membershipId) {
+      return records.get(membershipId) ?? null;
+    },
+    async findBySourceRelativePath(sourceRelativePath) {
+      return findByPath(sourceRelativePath) ?? null;
+    },
+    async listActive() {
+      return [...records.values()].filter((record) => record.state === 'active');
+    },
+    async initializeExistingInventory() {
+      return { status: 'already-initialized' };
+    },
+    async activate(registration: AssetLibraryMembershipRegistration) {
+      const existing = findByPath(registration.sourceRelativePath);
+      const record: AssetLibraryMembershipRecord = {
+        membershipId: existing?.membershipId ?? registration.membershipId,
+        sourceRelativePath: registration.sourceRelativePath,
+        label: registration.label,
+        mediaType: registration.mediaType,
+        byteLength: registration.byteLength,
+        modifiedAt: registration.modifiedAt,
+        state: 'active',
+        createdAt: existing?.createdAt ?? registration.registeredAt,
+        updatedAt: registration.registeredAt,
+      };
+      records.set(record.membershipId, record);
+      return record;
+    },
+    async remove(membershipId, removedAt) {
+      const existing = records.get(membershipId);
+      if (!existing || existing.state !== 'active') throw new Error('missing active membership');
+      const removed = { ...existing, state: 'removed' as const, updatedAt: removedAt };
+      records.set(membershipId, removed);
+      return removed;
+    },
+  };
 }

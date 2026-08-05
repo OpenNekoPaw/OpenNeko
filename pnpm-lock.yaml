@@ -1032,6 +1032,9 @@ importers:
 
   packages/local-metadata:
     dependencies:
+      '@neko/assets-domain':
+        specifier: workspace:*
+        version: link:../assets/domain
       '@neko/content':
         specifier: workspace:*
         version: link:../content

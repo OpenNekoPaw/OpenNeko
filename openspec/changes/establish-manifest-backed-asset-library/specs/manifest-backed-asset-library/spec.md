@@ -91,6 +91,25 @@ those references through their owning workflows.
 - **WHEN** an installed dependency or project reference pins the revision
 - **THEN** uninstall fails with the exact blockers and preserves all package data
 
+### Requirement: Removing an Asset Library record preserves all bytes
+
+The ordinary Asset Library remove action SHALL remove only the mutable library membership record. It MUST NOT
+move a source file to the system trash, uninstall an immutable revision, delete a blob, or mutate a project
+reference. Uninstall and garbage collection SHALL remain separate explicit operations.
+
+#### Scenario: User removes a material from the Asset Library
+
+- **WHEN** the user confirms the remove-record action for an active Asset membership
+- **THEN** the record is absent from subsequent searches and after application restart
+- **AND** the source file and installed package bytes remain byte-for-byte unchanged
+- **AND** the Electron trash capability is not invoked
+
+#### Scenario: User imports the same preserved material again
+
+- **WHEN** the user explicitly imports content whose prior membership was removed
+- **THEN** the Asset owner creates or reactivates a validated membership through the canonical record path
+- **AND** filesystem discovery alone does not silently restore it
+
 ### Requirement: Entity Assets use the generic Asset lifecycle
 
 The Asset Library SHALL support `identity` Entity Asset packages through the same manifest, revision,
