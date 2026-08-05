@@ -165,6 +165,31 @@ describe('Agent Conversation lifecycle service', () => {
     });
   });
 
+  it('keeps first-submit metadata optional for an exact Pi-only conversation context', async () => {
+    const fixture = createFixture({
+      resolveExactWorkspaceIdentity: async (conversationId) =>
+        conversationId === 'pi-only-conversation'
+          ? {
+              workspaceId: 'workspace-exact',
+              workspaceGrantId: 'workspace-grant:pi-only',
+            }
+          : undefined,
+    });
+
+    await expect(
+      fixture.service.readConversationContext('pi-only-conversation'),
+    ).resolves.toMatchObject({
+      kind: 'workspace',
+      workspaceId: 'workspace-exact',
+    });
+    await expect(
+      fixture.service.readFirstSubmitRecord('pi-only-conversation'),
+    ).resolves.toBeUndefined();
+    await expect(fixture.service.readConversation('pi-only-conversation')).rejects.toThrow(
+      "Agent Conversation 'pi-only-conversation' is not present.",
+    );
+  });
+
   it('preserves a committed Assistant conversation when provider startup fails and reloads it', async () => {
     const repository = createInMemoryAgentConversationLifecycleRepository();
     const fixture = createFixture({ repository, providerError: new Error('provider unavailable') });

@@ -52,3 +52,4 @@
 - [x] 5.5 Extend `desktop-agent-provider-ui` to observe live transcript execution with the real provider, prove the legacy status region is absent throughout the run, and retain terminal response/lifecycle evidence.
       Evidence: `desktop-agent-provider-ui` passed with `nekoapi-chat / gpt-5.6-luna`; the report recorded transcript activity, no legacy status, no terminal activity residue, a visible provider response, and a completed persisted lifecycle.
 - [x] 5.6 Extend the real-provider Electron scenario to assert the exact sent prompt remains visible and the transcript rail is centered and narrower than the Agent panel, then rerun focused tests, build, evaluation and quality review.
+- [x] 5.7 Add regression tests and the canonical restore path for Pi conversations that have exact context but no first-submit lifecycle record.

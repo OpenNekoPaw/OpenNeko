@@ -144,6 +144,9 @@ export interface AgentConversationSessionMaterializationPort {
 export interface AgentConversationLifecycleService {
   firstSubmit(input: AgentFirstSubmitInput): Promise<AgentConversationLifecycleRecord>;
   waitForProviderIdle(): Promise<void>;
+  readFirstSubmitRecord(
+    conversationId: string,
+  ): Promise<AgentConversationLifecycleRecord | undefined>;
   readConversation(conversationId: string): Promise<AgentConversationLifecycleRecord>;
   readFirstSubmitByRequest(
     requestId: string,
@@ -290,12 +293,15 @@ export function createAgentConversationLifecycleService(options: {
     return running;
   };
 
+  const readFirstSubmitRecord = async (
+    conversationId: string,
+  ): Promise<AgentConversationLifecycleRecord | undefined> =>
+    options.repository.readConversation(requireIdentity(conversationId, 'Agent Conversation'));
+
   const readConversation = async (
     conversationId: string,
   ): Promise<AgentConversationLifecycleRecord> => {
-    const record = await options.repository.readConversation(
-      requireIdentity(conversationId, 'Agent Conversation'),
-    );
+    const record = await readFirstSubmitRecord(conversationId);
     if (!record) throw new Error(`Agent Conversation '${conversationId}' is not present.`);
     return record;
   };
@@ -345,6 +351,7 @@ export function createAgentConversationLifecycleService(options: {
         await Promise.all([...providerExecutions]);
       }
     },
+    readFirstSubmitRecord,
     readConversation,
     readFirstSubmitByRequest: (requestId) =>
       options.repository.readFirstSubmitByRequest(

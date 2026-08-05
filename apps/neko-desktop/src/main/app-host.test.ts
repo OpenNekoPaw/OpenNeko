@@ -1115,6 +1115,241 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('bootstraps an exact Pi-only Workspace conversation without synthetic first-submit state', async () => {
+    const workspace = createWorkspaceResolution();
+    const conversationId = 'pi-only-conversation';
+    const workspaceGrantId = 'workspace-grant:grant-1';
+    const conversationLifecycle = createAgentConversationLifecycleService({
+      repository: createInMemoryAgentConversationLifecycleRepository(),
+      grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      scratch: {
+        create: async () => undefined,
+        release: async () => undefined,
+        authorizePreview: async () => ({
+          previewSessionId: 'preview-1',
+          descriptorId: 'descriptor-1',
+        }),
+      },
+      publication: {
+        publishToAssets: async () => ({ assetId: 'asset-1' }),
+        publishToWorkspace: async () => ({ documentId: 'document-1' }),
+      },
+      session: { materialize: async () => undefined },
+      provider: { start: async () => undefined },
+      reportError: vi.fn(),
+      createIdentity: () => 'pi-only-unused',
+      now: () => '2026-08-05T00:00:00.000Z',
+      conversationContextMigration: {
+        resolveExactWorkspaceIdentity: async (candidateConversationId) =>
+          candidateConversationId === conversationId
+            ? {
+                workspaceId: workspace.workspaceId,
+                workspaceGrantId,
+              }
+            : undefined,
+      },
+    });
+    const fixture = await createShellAppHost({ conversationLifecycle });
+    fixture.registry.resolve.mockResolvedValue(workspace);
+    const selected = await fixture.appHost.chooseWorkspaceGrant(
+      fixture.sender,
+      createDesktopWorkspaceGrantChooseRequest({
+        requestId: 'pi-only-workspace-grant',
+        expectedEndpointEpoch: fixture.projection.endpointEpoch,
+        windowId: fixture.windowId,
+        expectedWindowRevision: fixture.projection.window.revision,
+      }),
+      async () => ({ label: 'Demo', hostResource: workspace.workspacePath }),
+    );
+    if (selected.status !== 'authorized') throw new Error('Expected Workspace authorization.');
+    expect(selected.grant.workspaceGrantId).toBe(workspaceGrantId);
+    const opened = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'open-pi-only-workspace',
+        expectedEndpointEpoch: fixture.projection.endpointEpoch,
+        windowId: fixture.windowId,
+        expectedWindowRevision: fixture.projection.window.revision,
+        expectedSceneRevision: fixture.projection.window.scene.revision,
+        intent: { kind: 'open-workspace', workspaceGrantId },
+      }),
+    );
+    if (opened.status !== 'transitioned') throw new Error('Expected Workspace Scene.');
+    setAgentHomeConversation(fixture.agent, {
+      conversationId,
+      owner: { kind: 'workspace', workspaceId: workspace.workspaceId },
+    });
+    const beforeRestore = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const restored = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'restore-pi-only-conversation',
+        expectedEndpointEpoch: beforeRestore.endpointEpoch,
+        windowId: fixture.windowId,
+        expectedWindowRevision: beforeRestore.window.revision,
+        expectedSceneRevision: beforeRestore.window.scene.revision,
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId,
+            owner: { kind: 'workspace', workspaceId: workspace.workspaceId },
+          },
+        },
+      }),
+    );
+    if (restored.status !== 'transitioned') throw new Error('Expected Pi conversation restore.');
+    const committed = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const restoredProject = committed.catalog.projects.find(
+      (candidate) => candidate.workspaceId === workspace.workspaceId,
+    );
+    const activeTab = committed.window.tabs.find(
+      (candidate) => candidate.projectId === restoredProject?.projectId,
+    );
+    if (!activeTab) throw new Error('Expected the restored Workspace Project Tab.');
+    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
+      createAgentWorkspaceRuntime(workspace.workspaceId),
+    );
+    const createBootstrap = vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap');
+
+    await expect(
+      fixture.appHost.createAgentBootstrap(
+        fixture.sender,
+        createDesktopAgentBootstrapRequest(
+          'bootstrap-pi-only-conversation',
+          activeTab.projectId,
+          activeTab.viewId,
+          activeTab.viewEpoch,
+          conversationId,
+        ),
+        vi.fn(),
+      ),
+    ).resolves.toBeDefined();
+    expect(createBootstrap).toHaveBeenCalledWith(
+      expect.objectContaining({ initialConversationId: conversationId }),
+    );
+    expect(createBootstrap.mock.calls[0]?.[0]).not.toHaveProperty('initialConversationMessage');
+    await expect(
+      conversationLifecycle.readFirstSubmitRecord(conversationId),
+    ).resolves.toBeUndefined();
+    await fixture.appHost.dispose();
+  });
+
+  it('keeps an exact Pi-only Assistant conversation active for bootstrap and later messages', async () => {
+    const assistantSpaceId = 'assistant-space:local-user';
+    const conversationId = 'pi-only-assistant-conversation';
+    const repository = createInMemoryAgentConversationLifecycleRepository();
+    await repository.commitMigratedConversationContext(conversationId, {
+      schemaVersion: 1,
+      kind: 'assistant',
+      assistantSpaceId,
+      baseGrantIds: [],
+    });
+    const conversationLifecycle = createAgentConversationLifecycleService({
+      repository,
+      grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      scratch: {
+        create: async () => undefined,
+        release: async () => undefined,
+        authorizePreview: async () => ({
+          previewSessionId: 'preview-1',
+          descriptorId: 'descriptor-1',
+        }),
+      },
+      publication: {
+        publishToAssets: async () => ({ assetId: 'asset-1' }),
+        publishToWorkspace: async () => ({ documentId: 'document-1' }),
+      },
+      session: { materialize: async () => undefined },
+      provider: { start: async () => undefined },
+      reportError: vi.fn(),
+      createIdentity: () => 'pi-only-assistant-unused',
+      now: () => '2026-08-05T00:00:00.000Z',
+    });
+    const fixture = await createShellAppHost({ conversationLifecycle });
+    setAgentHomeConversation(fixture.agent, {
+      conversationId,
+      owner: { kind: 'assistant', assistantSpaceId },
+    });
+    const restored = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'restore-pi-only-assistant',
+        expectedEndpointEpoch: fixture.projection.endpointEpoch,
+        windowId: fixture.windowId,
+        expectedWindowRevision: fixture.projection.window.revision,
+        expectedSceneRevision: fixture.projection.window.scene.revision,
+        intent: {
+          kind: 'restore-conversation',
+          navigation: {
+            conversationId,
+            owner: { kind: 'assistant', assistantSpaceId },
+          },
+        },
+      }),
+    );
+    if (
+      restored.status !== 'transitioned' ||
+      restored.scene.context.kind !== 'agent' ||
+      restored.scene.context.scope.kind !== 'assistant'
+    ) {
+      throw new Error('Expected the Pi-only Assistant Scene.');
+    }
+    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
+      createAgentWorkspaceRuntime(assistantSpaceId),
+    );
+    const createBootstrap = vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap');
+    await fixture.appHost.createAgentBootstrap(
+      fixture.sender,
+      createDesktopAssistantAgentBootstrapRequest(
+        'bootstrap-pi-only-assistant',
+        assistantSpaceId,
+        conversationId,
+        restored.scene.context.agentViewId,
+      ),
+      vi.fn(),
+    );
+    expect(createBootstrap).toHaveBeenCalledWith(
+      expect.objectContaining({ initialConversationId: conversationId }),
+    );
+    expect(createBootstrap.mock.calls[0]?.[0]).not.toHaveProperty('initialConversationMessage');
+
+    const send = vi.spyOn(fixture.appHost.agentBridge, 'send').mockResolvedValue({
+      schemaVersion: 1,
+      requestId: 'pi-only-assistant-get-conversations',
+      status: 'accepted',
+    });
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest(
+          'pi-only-assistant-get-conversations',
+          {
+            applicationInstanceId: 'app-1',
+            windowId: fixture.windowId,
+            assistantSpaceId,
+            workspaceId: assistantSpaceId,
+            viewId: restored.scene.context.agentViewId,
+            viewEpoch: 1,
+            rendererEpoch: 1,
+            connectionId: 'pi-only-assistant-connection',
+          },
+          { type: 'getConversations' },
+        ),
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: 'pi-only-assistant-get-conversations',
+      }),
+      expect.objectContaining({
+        assistantSpaceId,
+        workspaceId: assistantSpaceId,
+        viewId: restored.scene.context.agentViewId,
+      }),
+    );
+    await fixture.appHost.dispose();
+  });
+
   it('rejects a replaced renderer before opening the workspace picker', async () => {
     const fixture = await createShellAppHost();
     const selectWorkspace = vi.fn(async () => '/workspace/demo');

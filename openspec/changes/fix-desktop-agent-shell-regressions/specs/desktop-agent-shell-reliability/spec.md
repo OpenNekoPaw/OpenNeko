@@ -269,3 +269,21 @@ The Agent Webview SHALL treat the roleplay selector as package-owned conversatio
 - **THEN** the Header does not render the roleplay selector
 - **AND** no duplicate character-session entry remains in the Agent panel
 - **AND** entity discovery and character-session launch remain owned by Resource management entity interactions
+
+### Requirement: Existing Pi conversations restore without synthetic lifecycle state
+
+Desktop SHALL restore an exact persisted Pi conversation when its catalog/context exists even if it predates
+the first-submit lifecycle repository. Lifecycle-owned initial-message projection SHALL be optional and SHALL
+NOT be manufactured for such a conversation.
+
+#### Scenario: Existing conversation has context but no lifecycle record
+
+- **WHEN** the user opens a persisted conversation whose Pi catalog and exact owner context exist but whose
+  first-submit lifecycle record is absent
+- **THEN** Desktop bootstraps the same conversation and renders its Pi transcript
+- **AND** it does not create a replacement conversation, select a recent conversation, or synthesize lifecycle state
+
+#### Scenario: Existing conversation context conflicts with the Scene
+
+- **WHEN** the persisted context owner differs from the requested Assistant or Workspace Scene
+- **THEN** bootstrap fails visibly before attaching or sending

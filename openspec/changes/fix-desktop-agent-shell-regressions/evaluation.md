@@ -175,3 +175,40 @@ Date: 2026-08-03
   cases for this focused change.
 - The visible scenario uses a wide `1440px` Desktop viewport. Narrow-panel behavior is covered by
   CSS/DOM contract tests, not a second real-provider screenshot.
+
+## 2026-08-05 Pi-only conversation restore update
+
+### Evaluation Scope
+
+- Change/feature: restore exact Assistant and Workspace Pi conversations whose immutable context
+  exists but which predate Entry Draft first-submit lifecycle metadata.
+- Decision: deterministic producer/consumer and Desktop projection tests cover this ownership-only
+  correction. Pi remains the conversation/catalog/transcript authority; lifecycle owns optional
+  first-submit metadata, and Renderer owns only mounted presentation state and visibility.
+- Canonical path: exact Scene conversation identity -> lifecycle context owner validation -> Pi
+  workspace catalog lookup -> target Pi transcript projection. Forbidden paths are requiring or
+  synthesizing a lifecycle record, creating a replacement conversation, selecting the active/recent
+  conversation, or storing transcript facts in Renderer.
+
+### Verification
+
+- Agent Runtime regression proves an exact Pi-only context returns no first-submit record while the
+  existing required lifecycle read remains fail-visible.
+- Desktop AppHost regressions prove Pi-only Workspace and Assistant conversations bootstrap with the
+  exact `initialConversationId`, omit synthetic `initialConversationMessage`, reject owner mismatch,
+  and keep subsequent Assistant business messages bound to the exact restored Scene.
+- Focused Main/Bridge/preload/Renderer projection tests passed with `4 files / 61 tests`; full Agent
+  Runtime passed `116 files / 1089 tests`, full Desktop passed `65 files / 367 tests`, both affected
+  typechecks passed, and `pnpm test:agent:eval` passed key-free validation with `45 files / 288 tests`
+  plus `22 suites / 53 cases` in dry-run.
+- Repository `pnpm build`, `pnpm test` and `pnpm check` passed. The production darwin-arm64 Desktop
+  package was rebuilt, and the isolated packaged `desktop-workbench-scenes` scenario completed
+  Workspace/Assistant activation, application restart, exact Assistant restore and a second visible
+  send without console errors, renderer exceptions or attachment identity diagnostics. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T10-33-38.961Z-desktop-workbench-scenes-packaged/report.json`.
+
+### Residual Risk
+
+- A visible two-conversation provider-backed switch/restart case remains task 5.9 and requires an
+  explicit provider, model and cost authorization. Configuration availability alone is not treated
+  as permission to invoke the provider.

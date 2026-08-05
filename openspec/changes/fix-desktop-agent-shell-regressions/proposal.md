@@ -18,6 +18,8 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 将 Agent 运行状态投影到所属会话的 transcript 时间线，复用既有 thinking、Tool Call、Process Record 与 streaming message 展示；移除 composer 上方独立的“思考中/执行中”状态条。
 - 保证已提交的用户消息在 optimistic commit、Host/Timeline 投影、完成与恢复期间持续保留，并让全部 transcript 记录共享与 composer 对齐的居中最大宽度内容轨道。
 - Desktop 工作区 Agent 不再展示 package-owned 角色对话 Header 入口；角色会话的发起归属工作区资源管理中的实体管理动作。
+- 让只有 Pi catalog/context、尚无 first-submit lifecycle record 的既有会话按原 identity 恢复，
+  bootstrap 不再把 lifecycle-only initial message 当成所有会话的前置条件。
 
 ## Capabilities
 

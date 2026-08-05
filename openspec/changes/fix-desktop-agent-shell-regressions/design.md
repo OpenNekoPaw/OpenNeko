@@ -163,3 +163,11 @@ thinking 等待期使用无“思考中”文字的轻量动态活动；acting �
 ## Open Questions
 
 无。Home 只展示当前 Desktop Project catalog scope，历史未登记 workspace 保留在 Pi authority 中但不出现在 UI。
+
+## Follow-up decisions: persisted conversation convergence
+
+Pi catalog/context 是既有会话 identity 与 owner 的 authority，first-submit lifecycle 只拥有新 Entry
+Draft 的初始消息、配置和首次执行状态。Desktop bootstrap 先通过 exact context 校验 Scene owner，
+再可选读取 lifecycle record；只有该 record 存在时才投影 lifecycle-owned initial message。仅有 Pi
+catalog/context 的会话直接从 Pi transcript 恢复，不创建替代会话、不选择最近会话，也不伪造
+lifecycle terminal。缺失或冲突的 context 继续 fail-visible。

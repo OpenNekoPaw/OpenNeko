@@ -372,10 +372,13 @@ export class DesktopAppHost {
       ) {
         throw new Error('Desktop Assistant Agent bootstrap does not match the exact active Scene.');
       }
-      const record = await this.conversationLifecycle.readConversation(request.conversationId);
+      const [context, firstSubmitRecord] = await Promise.all([
+        this.conversationLifecycle.readConversationContext(request.conversationId),
+        this.conversationLifecycle.readFirstSubmitRecord(request.conversationId),
+      ]);
       if (
-        record.context.kind !== 'assistant' ||
-        record.context.assistantSpaceId !== request.assistantSpaceId
+        context.kind !== 'assistant' ||
+        context.assistantSpaceId !== request.assistantSpaceId
       ) {
         throw new Error(
           'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
@@ -400,7 +403,12 @@ export class DesktopAppHost {
         },
         workspace,
         initialConversationId: request.conversationId,
-        initialConversationMessage: projectAgentConversationInitialMessage(record),
+        ...(firstSubmitRecord === undefined
+          ? {}
+          : {
+              initialConversationMessage:
+                projectAgentConversationInitialMessage(firstSubmitRecord),
+            }),
         publish,
       });
     }
@@ -448,16 +456,21 @@ export class DesktopAppHost {
         );
       }
     }
-    const initialConversationRecord = initialConversationId
-      ? await this.conversationLifecycle.readConversation(initialConversationId)
-      : undefined;
+    const initialConversation =
+      initialConversationId === undefined
+        ? undefined
+        : await Promise.all([
+            this.conversationLifecycle.readConversationContext(initialConversationId),
+            this.conversationLifecycle.readFirstSubmitRecord(initialConversationId),
+          ]);
     if (
-      initialConversationRecord &&
-      (initialConversationRecord.context.kind !== 'workspace' ||
-        initialConversationRecord.context.workspaceId !== grant.workspaceId)
+      initialConversation &&
+      (initialConversation[0].kind !== 'workspace' ||
+        initialConversation[0].workspaceId !== grant.workspaceId)
     ) {
-      throw new Error('Desktop Workspace Agent bootstrap lifecycle belongs to another Workspace.');
+      throw new Error('Desktop Workspace Agent bootstrap context belongs to another Workspace.');
     }
+    const initialConversationRecord = initialConversation?.[1];
     return this.agentBridge.createBootstrap({
       requestId: request.requestId,
       grant,
@@ -1841,10 +1854,10 @@ export class DesktopAppHost {
           'Desktop Assistant Agent connection does not match the exact active Scene.',
         );
       }
-      const record = await this.conversationLifecycle.readConversation(conversationId);
+      const context = await this.conversationLifecycle.readConversationContext(conversationId);
       if (
-        record.context.kind !== 'assistant' ||
-        record.context.assistantSpaceId !== connection.assistantSpaceId
+        context.kind !== 'assistant' ||
+        context.assistantSpaceId !== connection.assistantSpaceId
       ) {
         throw new Error(
           'Desktop Assistant Agent connection does not match its persisted Conversation context.',
