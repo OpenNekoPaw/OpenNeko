@@ -176,6 +176,85 @@ Date: 2026-08-03
 - The visible scenario uses a wide `1440px` Desktop viewport. Narrow-panel behavior is covered by
   CSS/DOM contract tests, not a second real-provider screenshot.
 
+## 2026-08-05 Agent diagnostic portal update
+
+### Evaluation Scope
+
+- Change/feature: Agent global/session diagnostic presentation inside a clipped Desktop Workbench
+  Dock next to Main and Resource management surfaces.
+- Decision: deterministic renderer layout behavior does not require provider-backed Agent
+  Evaluation. The canonical path is package-owned global/session diagnostic state → one
+  `AgentDiagnosticToast` → renderer `document.body` portal. The forbidden paths are duplicated
+  fixed blocks, relaxed Workbench overflow, hidden-Tab projection and a Desktop-owned copy of Agent
+  error state.
+
+### Verification
+
+- Red-capable tests: the new component test first failed because the canonical portal component did
+  not exist; the hidden-Tab integration test first failed because the retained `ChatWorkspace`
+  still rendered its alert. After implementation, the three focused component/controller files
+  passed with 71 tests.
+- Package checks: `pnpm --filter @neko/agent-webview build` passed and
+  `pnpm package:desktop` produced the verified darwin-arm64 package.
+- Packaged visible Electron: `pnpm test:local:ui --scenario desktop-agent-diagnostic-portal
+  --target packaged` passed against an isolated fixture. A real workspace composer click triggered
+  the visible global diagnostic while Agent, Canvas Main and Resource management were present.
+  The alert was a direct `document.body` child, was outside the Agent Root, measured `360px` at
+  `left=824/right=1184` in a `1200px` viewport, extended beyond the Agent Dock boundary, resolved
+  `position=fixed` and `z-index=60`, and won the center-point hit test. No console error, renderer
+  exception or poisoned resource request was observed. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T09-25-20.768Z-desktop-agent-diagnostic-portal-packaged/report.json`;
+  screenshot: `screenshots/01-agent-diagnostic-portal-visible.png` under that report.
+- The full Agent Webview run completed 711 tests with 697 passing. Fourteen tests across nine
+  unrelated UI files exceeded the shared 5-second timeout under concurrent repository load; all
+  failures were timeouts rather than assertion failures. The focused changed-path tests passed
+  before and after that run.
+
+### Residual Risk
+
+- The packaged scenario validates the global diagnostic through a real visible composer and the
+  session diagnostic uses the same canonical portal component with deterministic visible/hidden
+  Tab coverage. It does not wait for a provider-backed session failure, because model behavior is
+  outside this layout-only delta.
+
+## 2026-08-05 Same-Workspace retained conversation update
+
+### Evaluation Scope
+
+- Change/feature: create or restore another Agent conversation for an already open Workspace while
+  retaining the Workspace layout/Main resources and every open conversation's independent Webview
+  Root, connection and projection state.
+- Decision and owning suite: `update`
+  `agent-runtime.workflow-controller/conversation-persistence-resume` for real multi-conversation
+  switching and reopen behavior; deterministic Host/Desktop tests own identity, lifecycle and
+  visibility mechanics.
+- Canonical path: exact Workspace conversation owner → existing Project Tab/Workbench → distinct
+  Agent connection and Surface Root → active-Surface visibility selection. Forbidden paths are
+  opening a second same-Workspace Workbench, rebuilding the Workspace panel tree, routing hidden
+  events through the active conversation, or accepting a forged/stale attachment.
+
+### Verification
+
+- Host regressions prove a fresh same-Workspace draft, new conversation attach and second
+  conversation restore preserve exact Tabs, Workbench layout/revision and Main Views.
+- Desktop renderer regressions prove two same-Workspace Agent Roots stay mounted and only visibility
+  changes. Main/preload tests prove connection-scoped cursors and exact projection attachment
+  ownership, including retired detach and forged-key rejection.
+- `pnpm test:agent:eval` passed key-free harness validation with `45 files / 288 tests` and selected
+  `22 suites / 53 cases` in dry-run. This is runner/schema evidence only.
+- The rebuilt packaged `desktop-workbench-scenes` scenario passed with no console errors, warnings or
+  renderer exceptions:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T10-08-20.185Z-desktop-workbench-scenes-packaged/report.json`.
+
+### Residual Risk
+
+- A visible real-provider case across two conversations and two Workspaces remains unexecuted because
+  this environment lacks explicit provider/model/cost authorization. No model behavior claim is made
+  from the deterministic or packaged no-provider scenario.
+- The current retained deck is scoped to one active Workspace. Full Window-owned Workbench/Agent
+  Surface catalogs, cross-Workspace retained panel trees and close/archive release remain open in
+  `compose-desktop-workbench-scenes` tasks 11.1-11.7.
+
 ## 2026-08-05 Pi-only conversation restore update
 
 ### Evaluation Scope

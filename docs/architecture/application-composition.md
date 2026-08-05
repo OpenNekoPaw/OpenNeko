@@ -59,7 +59,7 @@ renderer/webview packages -X-> electron or node:*
 
 `apps/neko-desktop` 不得拥有：
 
-- 领域实体、业务状态机、业务 revision/CAS、业务错误 taxonomy 或领域校验；
+- 领域实体、业务状态机、业务并发控制、业务错误 taxonomy 或领域校验；
 - Prompt/Skill/Tool、Agent workflow、Canvas/Cut/Assets/Media/Generation 的策略和数据变换；
 - 通过注入 file/time/credential/process 等 port 即可脱离 Electron 运行的同步、恢复、authoring、
   portability 或其他业务事务；
@@ -101,8 +101,8 @@ workspace package 的角色、拆分条件、领域家族命名和 inactive capa
 ## Desktop Workbench 组合
 
 每个 Desktop Window 只组合一个 `ControlledWorkbenchShell` 和一个持续存在的
-PrimarySidebar。Host 以 closed、versioned scene projection 拥有当前 scene、slot refs 与独立的
-sidebar presentation revision；renderer 只能把已验证的 package public Root 映射到
+PrimarySidebar。Host 以 closed canonical scene projection 拥有 open Workbench instance catalog、
+active identity、slot refs 与独立 sidebar presentation；renderer 只能把已验证的 package public Root 映射到
 Interaction、Main、Secondary Main、Manager、Timeline 和 Status slot，不得根据 route、当前组件、
 active/first/recent Project 或模型文本推断场景和权限。
 
@@ -114,13 +114,13 @@ Project selection 保留在 catalog，并以独立行操作显式打开 Workspac
 未具备真实 owner/runtime/public Root 的 Character/Chatroom scene 必须返回 owner-qualified unavailable，
 Desktop 不得伪造占位业务 UI。
 
-Host 把项目 catalog 与 owner-qualified Agent conversation catalog 组合成一个 versioned grouped
+Host 把项目 catalog 与 owner-qualified Agent conversation catalog 组合成一个 canonical grouped
 navigation projection，PrimarySidebar 只消费该投影，不在 React 中重新 join 或推断。Project header
 是容器入口，conversation child 携带 exact `conversationId + owner`；无 Project 的 Assistant、Character
 和 Room conversation 位于独立 owner group。可选 Project grouping 只改变导航位置，不改变 capability、
 memory、resource grant 或 Scene owner。场景切换、renderer reload 和应用重启不得丢失这些 identity；
-每组默认展示有界 child 并显式展开/收起。sidebar 展开、折叠和宽度修改只更新 sidebar aggregate，
-不修改 Workspace revision。Workspace 只能由显式 Project identity 或 sender/Window-bound opaque
+每组默认展示有界 child 并显式展开/收起。sidebar 展开、折叠和宽度修改只更新 Window-owned sidebar aggregate，
+不修改任何 Workspace instance。Workspace 只能由显式 Project identity 或 sender/Window-bound opaque
 directory grant 打开；取消授权保持原 scene，且不得创建 Workspace 或 conversation。
 
 PrimarySidebar 是 Desktop 唯一用户级 conversation switcher。Agent Webview 在 Desktop dock 中保留

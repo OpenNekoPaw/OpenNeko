@@ -92,6 +92,28 @@ The shared Popover primitive SHALL render a semantic surface with non-transparen
 - **WHEN** a package consumes the shared Popover without compiling `@neko/ui` source utility classes
 - **THEN** the semantic surface styling remains present through the shared stylesheet
 
+### Requirement: Agent diagnostics escape Workbench pane clipping
+
+The Agent Webview SHALL retain ownership of global and conversation diagnostic content while rendering visible diagnostic alerts through a renderer-level portal that is not clipped by Workbench pane overflow. It SHALL NOT relax Workbench content clipping or project diagnostics from retained hidden Tabs.
+
+#### Scenario: Global error appears beside a Resource Browser Main View
+
+- **WHEN** Agent renders a global error from a narrow Workbench Dock next to another Main View
+- **THEN** the alert is attached to the renderer portal layer rather than the Agent pane
+- **AND** its complete bounded content remains readable above surrounding Workbench panels
+
+#### Scenario: Visible conversation reports an error
+
+- **WHEN** the active conversation owns a session diagnostic
+- **THEN** the same canonical diagnostic alert surface renders through the portal layer
+- **AND** long diagnostic content wraps within the viewport instead of extending beyond it
+
+#### Scenario: Retained hidden conversation owns an error
+
+- **WHEN** a non-active retained Tab still owns a session diagnostic
+- **THEN** that Tab does not create a window-level alert
+- **AND** activating the Tab may project its exact retained diagnostic without changing its owner
+
 ### Requirement: Project opens the canonical Workspace Canvas
 
 The Desktop Host SHALL open or focus `neko/boards/workspace.nkc` as the default Canvas Main View whenever a Project is attached or restored without a project-owned Main View. The renderer SHALL NOT replace this behavior with an empty Main placeholder or a private Canvas document.
@@ -269,7 +291,6 @@ The Agent Webview SHALL treat the roleplay selector as package-owned conversatio
 - **THEN** the Header does not render the roleplay selector
 - **AND** no duplicate character-session entry remains in the Agent panel
 - **AND** entity discovery and character-session launch remain owned by Resource management entity interactions
-
 ### Requirement: Existing Pi conversations restore without synthetic lifecycle state
 
 Desktop SHALL restore an exact persisted Pi conversation when its catalog/context exists even if it predates
@@ -287,3 +308,80 @@ NOT be manufactured for such a conversation.
 
 - **WHEN** the persisted context owner differs from the requested Assistant or Workspace Scene
 - **THEN** bootstrap fails visibly before attaching or sending
+
+### Requirement: Live and persisted assistant records converge by turn identity
+
+The Agent transcript SHALL render one assistant presentation for a completed turn after both Timeline and Pi
+history are available. Reconciliation SHALL use checkpoint-projected transcript identity and SHALL NOT compare
+message text as identity.
+
+#### Scenario: Live response becomes durable
+
+- **WHEN** a Timeline assistant response completes and the same turn is committed to Pi history
+- **THEN** the durable Pi assistant entry and rich Timeline presentation merge into one visible record
+- **AND** reopening the application still shows one record for that turn
+
+#### Scenario: Separate turns return the same text
+
+- **WHEN** two different turns produce identical assistant text
+- **THEN** both records remain visible because their turn and transcript identities differ
+
+### Requirement: Agent acceptance covers the complete visible conversation lifecycle
+
+The local Desktop acceptance SHALL use isolated fixtures, actual visible Electron controls and the configured
+real provider API to validate first submit, multi-conversation switching, application reopen, transcript and
+generation-record restoration, and conversation isolation.
+
+#### Scenario: Visible full-flow acceptance
+
+- **WHEN** the local full-flow scenario creates two conversations, submits provider-backed turns, switches
+  between them and restarts the application
+- **THEN** each conversation shows only its own exact user, assistant and execution records
+- **AND** each completed turn has one assistant record before and after restart
+- **AND** bridge-created conversations, direct turn runners and mock provider output do not satisfy the scenario
+
+### Requirement: Agent connection replacement preserves exact cleanup isolation
+
+Desktop SHALL distinguish active-Surface Agent operations from connection-owned projection control. An open
+hidden Surface SHALL keep its own projection endpoint active, while a closed Agent adapter SHALL be able to
+acknowledge cleanup only for the exact projection endpoint it created. Ordinary operations from a retired
+connection remain rejected.
+
+#### Scenario: Retired adapter releases its projection
+
+- **WHEN** a Scene or same-View bootstrap replacement retires an Agent connection and its old adapter sends
+  `projectionDetach` with that connection's exact endpoint and attachment identity
+- **THEN** Desktop accepts the cleanup without requiring the retired Scene to still be active
+- **AND** it does not route the detach through the replacement connection or revive retired effects
+
+#### Scenario: Same View has multiple open conversations
+
+- **WHEN** two retained Agent Surfaces under one Workspace View bootstrap different conversation identities
+- **THEN** both exact connections remain active and isolated
+- **AND** creating the second connection does not retire the first
+
+#### Scenario: Retired adapter sends an ordinary operation
+
+- **WHEN** the same retired connection sends a conversation, configuration, attach, acknowledge or business message
+- **THEN** Desktop rejects it before any current connection effect executes
+
+#### Scenario: Cleanup identity is unknown or forged
+
+- **WHEN** a detach uses an unknown connection, mismatched sender identity or endpoint epoch
+- **THEN** Desktop fails visibly and does not report cleanup success
+
+### Requirement: Retired Agent events do not poison the current conversation
+
+Preload SHALL track Agent event sequence by exact connection lifecycle. It SHALL discard queued events from a
+known retired connection and SHALL NOT project them as errors or transcript records into the current connection.
+
+#### Scenario: Old event arrives after replacement bootstrap
+
+- **WHEN** preload has registered a replacement connection and then receives an event queued for the known retired connection
+- **THEN** no listener for the current connection receives that event or a synthetic global error
+- **AND** the current connection continues from its own sequence baseline
+
+#### Scenario: Foreign event arrives
+
+- **WHEN** preload receives an event for an unknown or identity-conflicting connection
+- **THEN** it exposes a fail-visible protocol diagnostic and does not advance any valid connection cursor

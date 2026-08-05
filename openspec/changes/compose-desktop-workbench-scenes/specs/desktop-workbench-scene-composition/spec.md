@@ -21,18 +21,18 @@ The PrimarySidebar SHALL retain application navigation, recent Projects, recent 
 
 ### Requirement: Sidebar presentation is independent of scene and workspace layout
 
-Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a versioned window-level presentation aggregate with its own revision/CAS. Scene transitions SHALL preserve it and sidebar updates MUST NOT mutate Workspace Main, Dock, Timeline or display revisions.
+Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a Window-owned presentation aggregate, independent from every Workbench instance. Scene transitions SHALL preserve it and sidebar updates MUST NOT mutate Workspace Main, Dock, Timeline or display state. Sidebar mutation requests SHALL carry exact Window and request identities and SHALL be serialized by that Window owner without an internal version discriminator.
 
 #### Scenario: User completes sidebar resize
 
 - **WHEN** the user resizes the expanded PrimarySidebar and ends the pointer interaction
-- **THEN** its width is committed exactly once against the expected sidebar revision
+- **THEN** its width is committed exactly once by the exact Window owner for that request identity
 - **AND** pointer ownership and the resize indicator are released
 - **AND** Workspace layout state is unchanged
 
 #### Scenario: A stale sidebar mutation arrives
 
-- **WHEN** a sidebar toggle or resize request carries a stale Window, endpoint or sidebar revision
+- **WHEN** a sidebar toggle or resize request carries an unknown Window, reused request identity or mismatched sidebar owner
 - **THEN** Host rejects it with a typed stale diagnostic
 - **AND** it does not retry against current state or write through the legacy Workbench sidebar field
 
@@ -41,14 +41,14 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a versione
 - **WHEN** the window transitions among Agent, Workspace, Assets, Extensions, project management or Settings scenes
 - **THEN** the same PrimarySidebar continues to render recent Projects and recent Agent conversations from their authoritative projections
 - **AND** selecting an item uses an exact typed Project or conversation identity
-- **AND** no active, first or recent Project fallback chooses a different Workspace
+- **AND** active, first or recent Project state never chooses a different Workspace
 
 #### Scenario: User toggles the application sidebar
 
 - **WHEN** the PrimarySidebar is expanded or collapsed in any scene
 - **THEN** a dedicated icon control remains visible in the window-level sidebar chrome
 - **AND** the control exposes the inverse action without using the application brand text as the only target
-- **AND** the same sidebar presentation CAS handles both directions
+- **AND** the same Window-owned serialized sidebar command path handles both directions
 
 #### Scenario: Workspace layout controls are available
 
@@ -57,6 +57,12 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a versione
 - **AND** each control changes only its owned region while Agent and Main keep at least one business region visible
 - **AND** active, hover and keyboard-focus states do not resize or shift the control row
 - **AND** no layout control is rendered in the sidebar footer, Workspace Main tab header or a domain Surface
+
+#### Scenario: Packaged layout control icons use canonical font assets
+
+- **WHEN** the PrimarySidebar top controls render from the packaged `openneko://desktop` application
+- **THEN** their Codicon font resolves through a query-free hashed renderer asset URL with the `font/ttf` content type
+- **AND** the controls remain visibly identifiable while query-bearing application asset URLs continue to fail closed
 
 ### Requirement: Workbench uses explicit variable scene shapes
 
@@ -82,7 +88,7 @@ The shared Workbench SHALL reuse the Workspace visual/layout primitives while su
 
 ### Requirement: Scene projections and transitions are closed and owner-validated
 
-The Host-neutral scene authority SHALL produce a versioned projection with exact Window, scene, context and instance identities plus slot-specific Surface references. Navigation SHALL use typed transition intents with revision fencing. Desktop renderer MUST NOT infer executable scenes from route strings, active/first/recent Project fallback, arbitrary model text or component availability.
+The Host-neutral scene authority SHALL produce one canonical projection with exact Window, scene, context and instance identities plus slot-specific Surface references. Navigation SHALL use typed transition intents carrying exact request and target identities, and each Window owner SHALL serialize its scene mutations. Desktop renderer MUST NOT infer executable scenes from route strings, active/first/recent Project selection, arbitrary model text or component availability.
 
 #### Scenario: Assistant scene is projected
 
@@ -94,7 +100,7 @@ The Host-neutral scene authority SHALL produce a versioned projection with exact
 
 - **WHEN** Host activates a validated Workspace grant
 - **THEN** the projection permits the exact Agent View, Workspace Main, Workspace Resources and applicable Timeline/Status refs for that Workspace
-- **AND** a mismatched Window, Workspace, View, epoch or conversation prevents mounting
+- **AND** a mismatched Window, Workbench, Workspace, View, connection or conversation prevents mounting only that Surface
 
 #### Scenario: Invalid slot composition is decoded
 
@@ -138,7 +144,7 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **WHEN** the user submits a first message from an `unbound` Agent presentation without selecting a Project directory, Character or Room
 - **THEN** the package-owned Agent entry path deterministically selects Assistant user-space
 - **AND** it binds the exact current draft and commits the first Assistant conversation through the canonical draft-submit transaction
-- **AND** no owner-selection card blocks sending and no active, first or recent Project fallback participates
+- **AND** no owner-selection card blocks sending and active, first or recent Project state does not participate
 
 #### Scenario: Direct Entry Draft submit carries an authorized file
 
@@ -199,7 +205,7 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 
 - **WHEN** an Agent draft or Assistant session encounters a Tool, command or Skill requiring Workspace files or domain mutation
 - **THEN** capability projection excludes it from executable success or returns `workspace-scope-required`
-- **AND** it does not use an active, recent or first Project as fallback
+- **AND** it does not substitute an active, recent or first Project
 
 ### Requirement: Explicit directory authorization selects Workspace scope
 
@@ -223,7 +229,7 @@ Workspace capability SHALL be activated only from an explicit user directory/Pro
 
 - **WHEN** the native picker is cancelled
 - **THEN** the current Agent scope, draft, scene and grants remain unchanged
-- **AND** no empty Workspace, fallback Project or diagnostic success is created
+- **AND** no empty Workspace, substituted Project or diagnostic success is created
 
 #### Scenario: Active conversation targets another directory
 
@@ -314,7 +320,7 @@ Submitting an Agent draft SHALL validate the explicit scope and grants, atomical
 
 ### Requirement: Resource center keeps Assets management as Main and composes optional Preview
 
-The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog, filtering, selection and revision. Workbench SHALL place the Assets Management Root in Main and MAY add a Secondary Main Preview Root bound to an authorized descriptor for the selected resource. Preview MUST NOT replace or narrow the management Main. Desktop MUST NOT own Asset selection, resource facts, ContentLocator interpretation or preview-kind policy.
+The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog, filtering, selection and owner-serialized mutation. Workbench SHALL place the Assets Management Root in Main and MAY add a Secondary Main Preview Root bound to an authorized descriptor for the selected resource. Preview MUST NOT replace or narrow the management Main. Desktop MUST NOT own Asset selection, resource facts, ContentLocator interpretation or preview-kind policy.
 
 #### Scenario: User opens the resource center
 
@@ -345,8 +351,9 @@ The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog,
 #### Scenario: Resource center scene is left
 
 - **WHEN** another scene replaces the resource center slots
-- **THEN** view-scoped Preview handles and subscriptions are released
-- **AND** Assets-owned catalog and selection facts remain intact
+- **THEN** the open Asset Center Workbench, management Root and opened Preview/page Roots remain mounted but hidden
+- **AND** their exact selection, scroll, filter, page and authorized session state remain isolated
+- **AND** handles and subscriptions are released only when their exact Preview/page or Asset Center instance is explicitly closed, or when the owning Window terminates
 
 ### Requirement: Management and Settings surfaces use the same scene model
 
@@ -390,8 +397,9 @@ Extensions and project management SHALL place their package-owned management Roo
 #### Scenario: User opens Settings
 
 - **WHEN** Settings is selected from any scene
-- **THEN** Workbench composes Settings navigation and configuration Main slots inside the existing shell
-- **AND** no separate Settings sidebar, top-level page branch or Workbench instance is mounted
+- **THEN** the window activates the retained Settings management Workbench inside the existing shell chrome
+- **AND** Settings navigation and configuration Main slots keep previously opened section Roots mounted while only the active section is visible
+- **AND** no separate application sidebar or top-level page shell is mounted
 
 ### Requirement: Scene and Surface lifecycle remains instance-scoped
 
@@ -418,7 +426,7 @@ PrimarySidebar SHALL keep owner-qualified recent session and recent container pr
 
 - **WHEN** a recent Assistant, Workspace, Character dialogue or Room session is selected
 - **THEN** Host restores that exact top-level session identity and its complete Workbench/Agent state atomically
-- **AND** no first, active or recent container fallback chooses another owner
+- **AND** no first, active or recent container state chooses another owner
 
 #### Scenario: User selects a recent Project
 
@@ -429,8 +437,17 @@ PrimarySidebar SHALL keep owner-qualified recent session and recent container pr
 #### Scenario: Renderer reload restores a scene
 
 - **WHEN** the renderer reloads while any scene is active
-- **THEN** it restores the exact versioned scene/sidebar projections and attaches each allowed Root to matching identities
+- **THEN** it restores the exact canonical scene/sidebar records and attaches each allowed Root to matching identities
 - **AND** it does not create duplicate conversations, workspaces, AssetCenter sessions, Preview sessions, execution leases or sidebar owners
+
+#### Scenario: Persisted Agent Surface points to a rejected Conversation owner
+
+- **WHEN** Window claim finds a stored session Agent Surface whose exact `conversationId + owner` is absent from the canonical owner-qualified Agent catalog
+- **THEN** Host rejects only that Shell Surface binding before renderer bootstrap and keeps valid sibling Workbenches and Agent Surfaces available
+- **AND** an invalid active Surface is replaced by a fresh draft in the same AssistantSpace or Workspace owner so the Workbench remains usable
+- **AND** Desktop projects the matching `invalid-conversation-record` diagnostic instead of throwing from the bootstrap IPC handler
+- **AND** the original Conversation authority record and Pi transcript remain unchanged and are not converted, deleted or rebound
+- **AND** bootstrap retains strict context qualification and does not fall back to an active or recent Conversation
 
 #### Scenario: User closes the last Workspace Main View
 
@@ -439,12 +456,40 @@ PrimarySidebar SHALL keep owner-qualified recent session and recent container pr
 - **AND** the exact Workspace Agent Interaction and Workspace Resources remain active and usable
 - **AND** renderer projection, Preview cleanup and later workbench mutations do not require a fabricated active Main View
 
-#### Scenario: A stored prelaunch management scene is upgraded
+#### Scenario: One stored scene record is invalid
 
-- **WHEN** Desktop reads a version 5 Shell state containing the retired `project-catalog`, `extension-catalog`, `asset-catalog` or Assistant resources Manager Surface
-- **THEN** the versioned state codec migrates that exact known shape once into the canonical Main/Secondary Main or Agent-only slots
-- **AND** Window, scene, management-session, Agent scope, sidebar and storage revisions remain exact
-- **AND** the current stored-state version and unknown retired kinds remain fail-visible
+- **WHEN** Desktop reads multiple independently identified Window/Workbench scene records and one record does not satisfy the canonical shape
+- **THEN** the codec leaves that record unchanged and reports its exact Window/Workbench identity
+- **AND** valid sibling Window, Workbench, management-session and Agent records remain available
+- **AND** product startup does not convert, rebuild, import or route the invalid record through an older reader
+
+#### Scenario: The stored primary Window uses a superseded shape
+
+- **WHEN** the primary Window record contains non-canonical fields such as the replaced singular `scene` and `workbench`
+- **THEN** Host excludes that exact Window from the runnable catalog and creates a new canonical Entry Draft Window
+- **AND** Desktop renders the new Workbench together with an exact rejected-Window diagnostic instead of failing startup
+- **AND** the rejected Window object remains preserved by the Shell serialization boundary and is neither converted nor silently deleted
+- **AND** valid Project records and sibling Windows remain available for explicit reopening
+
+#### Scenario: The stored Shell root uses a superseded shape
+
+- **WHEN** the Shell authority document fails the canonical root codec before individual Windows can be parsed
+- **THEN** Local Metadata atomically preserves the exact original document and storage revision in a separate quarantine record
+- **AND** initializes a new empty canonical Shell authority so Desktop can open a new Entry Draft Window
+- **AND** Host projects an explicit invalid-stored-state diagnostic in the new Window
+- **AND** Settings, Project files, Agent conversations, Assets and every other authority remain unchanged
+- **AND** the old root is not converted, ignored by a compatibility reader, or reported as a successful restore
+- **AND** a quarantine write or replacement failure remains startup-blocking and fail-visible
+
+#### Scenario: The stored Application Settings root uses a superseded shape
+
+- **WHEN** the independent Desktop Application Settings authority fails its canonical root codec
+- **THEN** Local Metadata atomically preserves its exact original document and storage revision in a separate quarantine record
+- **AND** initializes only canonical default Application Settings so Desktop can continue opening
+- **AND** Host projects an explicit authority-qualified invalid-stored-state diagnostic in the new Window
+- **AND** Shell, Project files, Agent conversations, Assets and every other authority remain unchanged
+- **AND** Settings recovery does not run unless the Settings codec rejects that exact authority
+- **AND** a quarantine write or replacement failure remains startup-blocking and fail-visible
 
 #### Scenario: Window closes
 
@@ -469,8 +514,8 @@ open instance's layout, Views, subscriptions, running tasks or renderer UI state
 #### Scenario: User changes one Workspace layout
 
 - **WHEN** the user resizes, opens, closes or reorders panels in Workspace A
-- **THEN** only A's Workbench revision and layout change
-- **AND** Workspace B and the Assistant Workbench retain their revisions and layouts
+- **THEN** only A's Workbench owner commits the layout mutation
+- **AND** Workspace B and the Assistant Workbench retain their layouts and mutable state
 
 #### Scenario: Workspace instance closes
 
@@ -508,3 +553,71 @@ selection SHALL NOT be used as the state owner.
 - **WHEN** a running hidden conversation receives events or acknowledges its connection-owned projection frames
 - **THEN** exact connection-scoped delivery continues without routing through the visible conversation
 - **AND** stale, unknown or forged connections remain fail-visible
+
+### Requirement: Navigation at every surface layer retains independent open instances
+
+Every navigation layer that opens stateful product UI SHALL model an owner-qualified open instance catalog and an
+active identity. This includes Workbench instances, slot shell/panel instances, Main tabs, resource management
+facets/pages/details/previews and Canvas node inspectors/editors. Activating a sibling SHALL only change visibility
+and MUST NOT dispose, reconstruct, rebind or overwrite another open instance. A generic active selection MUST NOT
+own the mutable state of multiple instances. Each owning Surface contract SHALL classify its instances as
+`hot-retained`, `suspendable` or `ephemeral`; Desktop MUST NOT infer that policy from file extension, current route
+or component availability.
+
+#### Scenario: User switches Workbench shell or panel
+
+- **WHEN** the user moves between Agent, Main, Manager, Preview/Detail or Timeline shells that remain open
+- **THEN** each shell keeps its exact Root, layout, subscription, scroll and pending UI state
+- **AND** visibility changes do not recreate its package runtime or reuse another shell's mutable state
+
+#### Scenario: User switches Main tabs
+
+- **WHEN** the user activates another Canvas, Cut, Model or Preview tab in a Workbench group
+- **THEN** every lightweight open tab Root remains mounted under its stable View identity
+- **AND** a high-memory tab keeps its owner model and UI snapshot while its package runtime suspends GPU, decoder, playback and frame-loop resources
+- **AND** switching back restores the same viewport, selection, playhead/editor and transient UI state without reloading existing business data or showing an empty shell
+- **AND** closing a tab releases only that View and its owned resources
+
+#### Scenario: User switches resource management pages
+
+- **WHEN** the user changes directory, media library, material library, entity, detail or preview pages within an open resource manager
+- **THEN** each opened page keeps an independent Root and page-scoped state while hidden
+- **AND** package-owned resource facts continue to update without being routed through the currently visible page
+- **AND** removing a resource fact does not implicitly close unrelated page instances
+
+#### Scenario: User switches Canvas nodes
+
+- **WHEN** the user selects node B after editing node A in the same Canvas
+- **THEN** the Canvas owner model and A's opened inspector/editor UI instance remain isolated
+- **AND** B uses its own node-qualified UI instance while both consume current Canvas-owned node facts
+- **AND** selecting A again restores its uncommitted control, expansion and scroll state
+- **AND** an inactive media/GPU node viewer is suspended and releases playback, decoder, frame-loop and GPU handles without discarding its recoverable snapshot
+- **AND** deleting A releases only A's node UI instance after the Canvas owner commits deletion
+
+#### Scenario: Parent instance becomes hidden
+
+- **WHEN** a parent Workbench or shell becomes inactive while descendants remain open
+- **THEN** its complete descendant instance catalog and owner models remain alive
+- **AND** hot-retained descendants remain mounted and hidden while suspendable descendants enter their package-owned suspended lifecycle
+- **AND** hidden Agent events, media tasks and package projections continue through their exact instance identities
+- **AND** no descendant is released until an explicit lifecycle action reaches its owner
+
+#### Scenario: Modal or context dialog closes
+
+- **WHEN** a Modal, Dialog, context menu or context editor invocation ends
+- **THEN** its ephemeral instance and uncommitted invocation-local state are disposed
+- **AND** reopening for another target creates a new invocation identity initialized from that target's current owning facts
+- **AND** no prior target's draft, validation error or selection leaks into the new invocation
+
+#### Scenario: Suspendable view resumes offline
+
+- **WHEN** a suspended editor resumes while an API or network provider is unavailable
+- **THEN** it restores its owner model, last durable or shadow draft and UI snapshot without refetching already available business data
+- **AND** unavailable external refresh or execution is reported separately without clearing the restored view
+
+#### Scenario: Window or user context terminates
+
+- **WHEN** the owning Window closes or a future user/account context is replaced
+- **THEN** every hot-retained, suspended and ephemeral descendant is recursively disposed exactly once
+- **AND** user-scoped in-memory caches, handles, subscriptions and pending UI drafts do not leak into the next context
+- **AND** durable project, conversation and explicitly persisted shadow data follow their owning retention policy

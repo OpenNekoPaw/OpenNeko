@@ -6,6 +6,8 @@ Agent Surface 又把两个独立的准备步骤串行化：renderer 等待 Main 
 
 Workbench display menu 使用 Radix portal。首轮实现已把 semantic class 编入 production renderer bundle，但真实 Electron 仍显示透明表面，证明源码/产物字符串检查不足以验证 portal 的最终 token、层叠与实际窗口 bundle。布局菜单虽然允许空 Main 选择 `chat-main`，却只渲染 `desktop-canvas-not-mounted` placeholder；这与项目打开即进入创作 Canvas 的产品路径不一致。
 
+Agent 全局错误与会话错误虽然使用 `position: fixed`，DOM owner 仍位于 Agent Dock 内。Workbench Dock、package panel、Agent workspace 和 Agent Root 都以 `overflow: hidden` 维护分栏、圆角和 resize 边界，导致超过窄 Agent pane 的错误提示在相邻 Resource Browser Main 前被裁剪。两处提示还复制了同一视觉结构，且隐藏 Tab 依靠祖先 `hidden` 抑制显示；直接改为 portal 而不绑定可见 Tab 会让已保留的隐藏会话重新向窗口投影错误。
+
 Workbench 的侧边栏、Dock、Main split 与 Timeline 共用 `@neko/ui` 的 `useResizable`。该 hook 用 ref 阻止真实卸载后的 state update，但 effect 只在 cleanup 把 ref 置为未挂载，没有在 setup 恢复。Desktop renderer 本身运行在 React StrictMode 下；开发期 effect 重放后，仍然挂载的 resize owner 会被永久误判为已卸载，因此 pointerup 已完成尺寸提交和 `onResizeEnd`，却跳过 `setIsResizing(false)`，最终留下 `data-resizing="true"` 与持续可见的提示线。
 
 Desktop light theme 已定义 `main=#ffffff`、`surface=#fafafa`、`surface-muted=#f3f3f2` 三层表面。创作 Main 使用纯白 `main`，Agent 与 Resource Browser 的外层 Dock 及 package Root 却分别读取 `surface` 或全局 `--neko-sideBar-background=surface-muted`，形成三个主区域底色不一致。Agent composer rail 还额外绘制顶部分隔线，Resource Browser 则在 Desktop Dock 标题下再次渲染 package 标题栏，进一步制造视觉割裂。全局 sidebar token 仍服务应用导航，不应为修复这两个 Workbench consumer 而改变。
@@ -26,6 +28,7 @@ Agent Webview 同时渲染两份运行提示：MessageList 尾部的 thinking �
 - Agent chunk 与 Host bootstrap 并行，并保证所有初始化请求发出前 Host 订阅已建立。
 - 新会话 pending send 穿过完整 tabless → conversation → Tab realm 路径，在精确 Tab/conversation runtime 上可见、只消费一次并进入 Pi turn；缺失 config 或发送失败保持 fail-visible。
 - Desktop portal surface 在深浅主题下都有稳定不透明背景、边框和层级，并由 production renderer computed style 证明。
+- Agent 全局错误和当前会话错误在 Desktop Workbench 与 standalone Agent 中都进入 renderer portal 层，保持窄窗口可读且不从隐藏 Tab 泄露。
 - Project 没有 Main View 时由 Host 打开 canonical Workspace Canvas，不建立 renderer 私有文档事实。
 - 项目 Resource Browser 以独立 Main View identity 打开/聚焦/关闭/恢复，不再通过 Resource Dock 展示。
 - 共享 resize primitive 在 StrictMode effect 重放和真实卸载两种生命周期下都保持正确的 pointer session 与视觉反馈语义。
@@ -78,6 +81,14 @@ pending send 由 controller 按 request identity 绑定到 Host 创建的 conver
 `@neko/ui` Popover 使用稳定 semantic class，基础 CSS 明确定义 background-color、opacity、foreground、border、shadow 和 z-index。Desktop 通过现有 Desktop theme token 投影最终不透明颜色，业务菜单只定义内部排版。验收读取 production renderer portal content 的 `getComputedStyle()`，要求 background alpha 为 1、opacity 为 1，且实际加载的 stylesheet/bundle 与本次 package identity 一致。
 
 不在每个业务菜单复制背景，也不依赖消费者 Tailwind content scan 恰好包含 `@neko/ui` 源码。
+
+### 4a. Agent 诊断内容由 package 拥有，绘制进入 renderer portal 层
+
+`@neko/agent-webview` 提取唯一的诊断提示组件，继续由 Agent controller/session state 决定标题、正文、生命周期和 `role="alert"` 语义，但通过 `react-dom` portal 直接绘制到当前 renderer 的 `document.body`。该组件不是 Desktop Shell notification 状态 owner，也不新增跨 runtime message；standalone Agent 与 Desktop 组合使用同一 canonical path。
+
+Workbench pane 的 `overflow: hidden` 是真实布局边界，不能为允许提示越界而放松。提示宽度同时受 `360px` 和 viewport inline size 约束，并允许长 diagnostic 断行。会话提示只在 owning `ChatWorkspace.isVisible` 为真时创建 portal；保留但隐藏的 Tab 仍持有自身诊断状态，却不能向窗口层投影。全局提示由当前 Agent Root 的 `ConversationController` 唯一投影。
+
+不把两个提示分别改成 `overflow: visible` 或继续提高局部 `z-index`，因为这既无法形成窗口级 ownership，也会破坏 Dock 裁剪契约。不把 Agent 文案和生命周期提升到 Desktop Shell，因为 Desktop 不应复制 package-owned error state。
 
 ### 5. Host workbench 默认打开 canonical Workspace Canvas
 
@@ -171,3 +182,37 @@ Draft 的初始消息、配置和首次执行状态。Desktop bootstrap 先通�
 再可选读取 lifecycle record；只有该 record 存在时才投影 lifecycle-owned initial message。仅有 Pi
 catalog/context 的会话直接从 Pi transcript 恢复，不创建替代会话、不选择最近会话，也不伪造
 lifecycle terminal。缺失或冲突的 context 继续 fail-visible。
+
+Timeline 负责实时执行记录，Pi transcript 负责可重开历史。Pi turn checkpoint 完成后把该 turn 的
+最终 transcript entry identity 投影到 completion metadata；Webview 按此 identity 用 Timeline 的丰富
+内容替换对应 Pi assistant presentation，而不是追加第二条消息。相同文本的两个独立 turn 必须保持
+两条记录；缺失或不匹配 identity 不得靠文本、时间邻近或当前 active conversation 猜测。
+
+可见真实 API 场景继续使用隔离 HOME、SQLite、workspace 和真实 Entry composer。场景创建至少两个
+会话，断言每次提交只出现一条 user/assistant 记录，切换后 transcript 隔离，重启后 exact conversation
+和生成/Timeline 记录恢复。项目资源、Entity 与 EPUB 的 UI 检查由各 owning package scenario 提供，
+聚合入口只顺序运行并收集 path-level evidence，不复制业务操作或引入测试专用产品 handler。
+
+## Follow-up decisions: connection-owned projection cleanup
+
+Agent user/business messages and projection control have different authorization lifecycles. `sendMessage`,
+configuration mutations, conversation mutations and automation operations remain bound to the exact active
+Agent Surface. Projection discovery/attach/acknowledge/detach are authorized by the sender-bound Window/renderer
+identity, the exact bridge-known open connection and the attachment endpoint epoch that connection created, so
+a hidden running Surface can acknowledge its own projection without using the visible Surface identity.
+Visibility replacement MUST NOT authorize user/business operations from another Surface.
+
+When an explicit Surface close/delete/archive retires a connection, Desktop Bridge immediately disposes its
+effects and abandons Host-owned projection resources, then retains only an identity tombstone until the old
+renderer adapter sends its expected detach or the Window/renderer lifecycle ends. Same-View bootstraps for
+different open conversations coexist and MUST NOT retire each other. An exact detach against a tombstone is an
+idempotent acknowledgement of already completed Host cleanup; it does not revive effects or route through
+another connection. Unknown, forged, wrong-endpoint and ordinary retired-connection messages remain
+fail-visible. This keeps resource cleanup connection-owned without delaying Host disposal.
+
+Preload owns event cursors per exact connection rather than through one global cursor. Registering another
+conversation in the same View creates another active cursor; only subscription disposal or renderer lifecycle
+replacement retires that cursor.
+Queued events for a known retired connection are discarded as lifecycle races and MUST NOT be rewritten as a
+`globalError` for the current connection. Events for the active exact connection still require contiguous
+sequence, while an unknown or identity-conflicting connection remains a visible protocol failure.

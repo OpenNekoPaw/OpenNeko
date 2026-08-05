@@ -10,7 +10,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 
 - 建立唯一的窗口级 `ApplicationPrimarySidebar` 与 `ControlledWorkbenchShell`；Agent、目录工作区、资源中心、扩展/Skill、项目管理和 Settings 都是同一个 Workbench 内的 scene，不再存在 Home/Project/Settings 顶层页面分支。
 - PrimarySidebar 保留应用导航、最近项目、最近 Agent 会话和底部状态/设置；删除 Home 页面不得删除这些窗口级导航投影。
-- 定义 closed、versioned、slot-specific Workbench scene projection。Scene authority 只投影 owner-qualified Surface identity；Desktop renderer 只将公开 Roots 放入 Interaction、Main、Secondary Main、Manager、Timeline 和 Status slots。
+- 定义 closed、slot-specific Workbench scene projection。Scene authority 只投影 owner-qualified Surface identity；Desktop renderer 只将公开 Roots 放入 Interaction、Main、Secondary Main、Manager、Timeline 和 Status slots。
 - 定义可变形 Workbench：默认 draft 只显示 Agent；Assistant 激活后显示 Agent + Preview Main；Workspace 显示 Agent + creative Main + Workspace Resources；未来角色扮演/聊天室显示 Agent 对话或群聊 + Interactive Main + Character Manager。缺少真实 Character/Interactive owner 时必须 owner-qualified unavailable，不在 Desktop 伪造实现。
 - 以现有 `AgentWebviewRoot` 作为入口、assistant session 和 workspace session 的唯一 Agent UI/controller/composer。未创建会话时只隐藏 session-only chrome，不复制 textarea、模型选择、命令、Skill、附件、审批或语音控件。
 - “开始创作”改为创建带全新 `draftId` 的 `unbound` Entry Draft；它没有 conversation、AssistantSpace、Workspace 或角色 owner。用户直接输入并提交时自动绑定 Assistant 用户区并创建精确 session；选择目录/Project 时绑定 Workspace，选择未来 Character/Room 时绑定对应角色 owner。
@@ -24,7 +24,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - 扩展/Skill、项目管理和 Settings 也通过明确 Surface slots 组合；缺失真实 owner/public Root 时显示 owner-qualified unavailable，而不是在 Desktop 复制临时业务实现。
 - Conversation 创建本地原子提交 context、conversation、initial message 和 durable pending-turn intent，并在返回 session Scene 前把同一 identity 物化到精确 Assistant/Workspace Agent runtime；外部 provider turn 以 request identity 幂等启动和恢复，不宣称与本地事务原子。
 - Entry Draft 首次提交完成一次 owner/session/endpoint 交接：lifecycle authority 已提交 initial message/pending intent、正确 scope 的 runtime conversation 可启动、session Scene 和新 projection endpoint 同时可附着；旧 launch attachment 只能经旧 endpoint 释放。崩溃重放可修复缺失的本地 session materialization，但不得重复 provider execution 或忽略 endpoint identity mismatch。
-- **BREAKING**：删除 `HomeStartCreating`、Home 独立 Agent composer、`agentInitialInput` handoff、Home/Project/Settings 顶层分支、场景级 sidebar frame、默认首个/最近/active Project fallback，以及模型意图决定可执行场景的路径；不保留成功 fallback。
+- **BREAKING**：删除 `HomeStartCreating`、Home 独立 Agent composer、`agentInitialInput` handoff、Home/Project/Settings 顶层分支、场景级 sidebar frame，以及通过首个/最近/active Project 或模型意图决定可执行场景的路径；只保留单一 canonical owner-qualified path。
 - PrimarySidebar 将“最近会话”定义为恢复精确 interactive session，将“最近打开”定义为打开 Project/Character/Room 容器并进入新的 owner-bound draft；不得把容器选择当作旧会话恢复，也不得把内部角色 AgentSession 作为 Room 最近项暴露。
 - Workspace 顶部布局 chrome 使用 VS Code 风格的紧凑独立图标控件，分别管理一级侧栏、Agent、Main 与管理面板显隐；Main tab header 和领域 Surface 不再重复渲染布局按钮。
 - Renderer view-scoped runtime 的 effect 只拥有 subscription；runtime instance 只在 identity 被替换或组件真正卸载时 dispose。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实 Electron exception/DOM 证据验收。
@@ -35,6 +35,19 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - 每个未关闭、未删除或未归档的 Agent draft/session 都是独立常驻的 Webview Root/connection/UI
   state owner；每个 Workbench instance 只切换 `activeAgentSurfaceId`，Workspace 切换只切换
   `activeWorkbenchInstanceId`。选择状态不得模拟实例所有权或触发隐藏实例释放/重建。
+- 将 retained instance 规则贯穿所有真实导航层级：Workbench、slot shell/panel、Main tab、资源管理
+  facet/page/detail/preview 与 Canvas node inspector/editor 分别维护 owner-qualified open catalog 和 active
+  identity。父层或同层切换只改变可见性；只有显式关闭、删除、归档或 owning Window teardown 才精确
+  释放对应 Root、subscription、handle 和 runtime。
+- Renderer 只保留浏览器 UI 状态与 package public Root；Workspace 文档、Canvas node、Asset selection、
+  Agent transcript 和运行任务等事实仍由 owning package/runtime 管理。不得用 retained DOM 代替领域持久化，
+  也不得用全局 active selection 模拟多个实例。
+- Surface 生命周期按真实成本分为三类：主导航、Agent、工作流表单和轻量页面为 `hot-retained`；
+  Canvas、视频、大图、3D 等高内存 Surface 为 `suspendable`，隐藏时保留 ViewModel/UI snapshot 并释放
+  GPU/decoder/playback 资源；Dialog/Modal/context editor 为 `ephemeral`，每次按新 invocation identity
+  初始化。Window teardown 与未来账号 context 更换递归清理所有类型。
+- 核心编辑草稿和未提交修改由 owning package 的内存 model 与适用的本地 shadow persistence 保持，
+  断网和 View suspend 不得触发业务数据重新拉取、静默丢失或空白重建。
 - 本变更定义 Character/Chatroom 的 Workbench 形态，但不实现尚不存在的 Character Manager、Interactive Main、World authoring/experience owner；未具备 owner/runtime/Surface 的显式导航请求返回 unavailable，active conversation 不允许原地 rebind。
 
 ## Capabilities
@@ -49,7 +62,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 
 ## Impact
 
-- `@neko/host` 拥有 host-neutral、versioned window/scene/sidebar projection、scene transition CAS、精确 Window/View/Workspace/session identity，以及 directory grant 到 Workspace identity 的授权边界；不持有 Agent transcript、Asset selection 或领域文档事实。
+- `@neko/host` 拥有 host-neutral window/scene/sidebar projection、每 Window owner 内串行化的 scene transition、精确 Window/Workbench/View/Workspace/session/request identity，以及 directory grant 到 Workspace identity 的授权边界；不持有 Agent transcript、Asset selection 或领域文档事实。
 - `@neko/ui` 继续拥有无领域状态的 `ControlledWorkbenchShell`、slots、resize 与可访问交互 primitive；不新增产品 scene registry 或领域判断。
 - `@neko/agent-contracts`、`@neko/agent-runtime` 与 `@neko/agent-webview` 拥有唯一 Agent Root、draft/session presentation、`assistant | workspace` scope、launch-safe capability catalog、conversation context、Assistant user-space/scratch lifecycle 和幂等 initial turn。
 - `@neko/assets-domain` 与 `@neko/assets-webview` 拥有 `AssetCenterSession`、management selection 和资源 Root；`@neko/preview-*` 消费 Host 授权的 exact resource descriptor，不接收本地路径。
@@ -59,4 +72,6 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - `@neko/host` 同时拥有 Entry Draft identity 与 `unbound -> owner-bound draft -> session` Scene transition fencing；`@neko/agent-webview` 拥有同一 Root 内 presentation reset，Desktop renderer 不推断或缓存 scope。
 - `@neko/host` 拥有 Window 内 open Workbench/Agent Surface 目录、active identity 和关闭生命周期；
   package runtime 继续拥有各实例业务状态，Desktop renderer 只把全部 open Roots 常驻挂载并切换可见性。
-- 用户数据不删除、不复制、不静默迁移。现有 Project/Workspace conversation 保持；旧 sidebar 值一次性迁移到独立窗口 presentation aggregate。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。
+- 用户数据不删除、不复制，产品运行时不迁移、不兼容读取也不自动修复。持久记录必须长期保持单一稳定 shape；无法满足 canonical shape 的记录在其最小实例边界返回明确 diagnostic，其他 Window、Workbench、conversation 和 Project 继续可用。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。
+
+本变更依赖 `remove-internal-versioning-and-product-migrations` 的 Host/Desktop contract、Agent connection 与 runtime ordering 切片。两项变更必须一次性更新本次边界内全部 producer、consumer、fixture 和测试，不建立版本判别、产品迁移、兼容 reader、双路径或内部代际别名。

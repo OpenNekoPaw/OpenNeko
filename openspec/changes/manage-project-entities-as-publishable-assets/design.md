@@ -252,3 +252,39 @@ remain explicit confirmation items. Residual user-data risk is limited to real h
 migration coverage, not an unclassified deletion path. Complete reference-owner participation and the
 manifest-backed publication/provider/tombstone runtime remain capability blockers, so tasks 5.3, 5.4,
 and 6.3 stay open.
+
+## Project-open migration composition
+
+`@neko/entity-node` owns one `restoreProjectEntities` application path: inspect canonical document and legacy
+inventory, archive and migrate only an unambiguous inventory, then refresh canonical Entity/candidate/occurrence
+projection. Desktop Main only injects authorized workspace and local-metadata ports and calls this path before the
+Assets Resource Browser snapshot is described as ready. Renderer must not read `characters.json`, candidate
+registries, or semantic occurrence tables directly. Ambiguity, stale revision, archive failure, or invalid source
+returns a typed diagnostic rather than a successful empty Entity facet.
+
+## Resource context-menu ownership
+
+Resource Browser owns one presentation-level context menu whose commands are derived from the selected
+facet, item role, and declared capabilities. Workspace Files may create directories, import picker-authorized
+local files, and move files or directories to the OS Trash through Assets Node operations with expected
+projection revision and contained workspace locators. Import copies bytes in Node and never transports large
+file bodies through Renderer IPC.
+
+Media exposes library-link management and existing content actions, but deleting a linked content item is not
+offered because the physical library may be shared by multiple projects. Assets remain read-only until the
+manifest-backed Asset lifecycle owner exists. Entity lifecycle changes remain typed Entity Inspector intents.
+The menu must not infer a generic delete operation across these owners or turn unsupported operations into a
+successful no-op.
+
+## Component-local data lifecycle
+
+Resource Browser presentation state is rebuildable component-local memory. It has no schema/version field and no
+migration path. A stale selection, expanded container, query, or view preference is discarded or reconciled only
+inside the exact project Resource Browser instance; it never invalidates Project Entity facts, workspace content,
+Canvas, Agent, or the surrounding Desktop scene.
+
+Main/preload/Renderer messages are ephemeral typed wire contracts rather than component data. They remain strict
+and fail-visible, but every runtime must load their canonical package source instead of a copied dependency
+prebundle. Development reload does not add old/new-version compatibility branches: a changed contract rebuilds the
+participating runtimes together. A Resource Browser snapshot or operation failure renders the owner-local
+unavailable state and must not replace or disable sibling product surfaces.

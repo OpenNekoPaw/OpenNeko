@@ -66,3 +66,5 @@ global Entity catalog or synchronization system.
 - This change depends on the generic manifest/version/publish/install boundaries from
   `establish-manifest-backed-asset-library`, including its cloud replication boundary, but remains
   independently implementable up to its Asset adapter contract and project management surface.
+- Desktop project attach composes the Entity-owned migration/restore application path before Resource Browser
+  projection so valid legacy facts become visible without renderer fallback reads.

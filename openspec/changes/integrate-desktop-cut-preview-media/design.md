@@ -20,3 +20,12 @@ After the remaining app-owned Cut/Preview session state moves to package public 
 the package-owned Electron scenarios pass, update current
 capability documentation and Phase 1 program 5.x. The documentation must describe only the current
 Desktop path and its remaining risks.
+
+## EPUB incremental layout
+
+`@neko/preview-webview` remains the EPUB presentation owner. Waterfall mode keeps estimated placeholder heights,
+loads and measures chapters only when `IntersectionObserver` marks them visible, and prefetches a bounded neighbor
+set. Initialization must not run an all-spine height warmup. Measured chapters update the shared estimate and scroll
+metrics incrementally; leaving the retention range unloads chapter DOM/resources. The authorized archive resource
+may still require one initial EPUB container fetch, which is a separate byte-transport optimization and must not be
+misreported as Range-backed ZIP streaming.

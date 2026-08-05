@@ -8,13 +8,13 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 
 ### 五层分析
 
-| 层次 | 结论                                                                                                                                                                                                              |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 职责 | Host Shell 拥有窗口 scene/sidebar projection 与 transition CAS；Agent authority 拥有 scope、conversation 和 scratch lifecycle；Assets 拥有资源中心 selection session；Desktop 只组合 Roots 和 Electron adapters。 |
-| 依赖 | Scene contract host-neutral；Webview 不依赖 Electron/Node；目录和资源只以 opaque grant/descriptor 跨 preload；领域 package 不依赖 app root。                                                                      |
-| 接口 | 使用 closed scene union、slot-specific Surface refs、精确 instance identity 和 typed transition request；不传 React component、绝对路径、credential 或任意 registry key。                                         |
-| 扩展 | 新 scene 必须先有 owner、runtime、public Surface 和 lifecycle；closed union 按真实能力升级，不建立动态页面 DSL。                                                                                                  |
-| 测试 | Producer codec/CAS、package Root、Desktop delegation、poison path、Agent evaluation 与真实 Electron layout/lifecycle 分层验证。                                                                                   |
+| 层次 | 结论                                                                                                                                                                                                                                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Host Shell 拥有窗口 scene/sidebar projection、实例目录与 owner 内串行 transition；Agent authority 拥有 scope、conversation 和 scratch lifecycle；Assets 拥有资源中心 selection session；Desktop 只组合 Roots 和 Electron adapters。 |
+| 依赖 | Scene contract host-neutral；Webview 不依赖 Electron/Node；目录和资源只以 opaque grant/descriptor 跨 preload；领域 package 不依赖 app root。                                                                                        |
+| 接口 | 使用 closed scene union、slot-specific Surface refs、精确 instance identity 和 typed transition request；不传 React component、绝对路径、credential 或任意 registry key。                                                           |
+| 扩展 | 新 scene 必须先有 owner、runtime、public Surface 和 lifecycle；closed union 按真实能力升级，不建立动态页面 DSL。                                                                                                                    |
+| 测试 | Producer/consumer codec、实例隔离、package Root、Desktop delegation、旧路径缺席、Agent evaluation 与真实 Electron layout/lifecycle 分层验证。                                                                                       |
 
 ## Goals / Non-Goals
 
@@ -70,7 +70,10 @@ Window
 ├─ activeWorkbenchInstanceId
 └─ WorkbenchInstance[]
    ├─ owner: assistant-space | workspace | management | entry-draft
-   ├─ layout + Main/Manager/Timeline View identities
+   ├─ layout + slot shell instance identities
+   ├─ active Surface identity per slot/group
+   ├─ SurfaceInstance[]
+   │  └─ package-owned page/tab/node child instance catalog
    ├─ activeAgentSurfaceId
    └─ AgentSurface[]
       └─ draft/session connection + Webview UI state
@@ -87,6 +90,71 @@ Agent Surface。Entry Draft 首次提交后原 Surface 原地从 draft 交接到
 普通 scene 切换都不构成 disposal。持久布局用于应用重开恢复；scroll、输入 selection 等 renderer
 可恢复 UI state 在进程存续期由常驻 Root 保留，必要的 draft/input state 继续经现有 presentation
 storage 恢复，但不能伪造正在运行的资源句柄。
+
+Retained ownership 逐层组合而不是由一个全局 registry 接管。Host 只拥有 Window 下 Workbench 与
+Agent Surface 的 open/active/close 生命周期；Workbench Main View catalog 继续拥有 document tabs；
+Assets session 拥有资源 facet/page/selection，Canvas Root 拥有已打开 node inspector/editor identity。
+共享 UI 只提供按稳定 key 常驻挂载并以 `hidden` 切换的无业务 `RetainedSurfaceDeck` primitive，以及
+不拥有领域资源的 active/suspended presentation signal。每层必须从 owning facts 精确清理已关闭
+identity，禁止以 active identity、React `key` 或 scene 条件分支触发兄弟实例释放。
+
+实例树遵循以下不变量：
+
+1. parent hidden 不等于 child close，整棵未关闭子树继续挂载；
+2. sibling selection 只更新该层 `activeInstanceId`，不会更新兄弟实例状态；
+3. close/delete/archive 从精确 owner 向下释放，不影响父级和兄弟级；
+4. durable facts 由 owning package 保存，Renderer Root 只保留 scroll、selection、展开、草稿输入、
+   viewport 和未提交控件状态；
+5. 应用重启重建不能持久化的资源句柄，但必须从 Host/package catalog 恢复 open identity、布局、文档、
+   会话 transcript 和可恢复 presentation state。
+
+#### Retention policies
+
+| policy         | owner examples                                                                   | inactive behavior                                                                                                                       | close behavior                 |
+| -------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `hot-retained` | Primary navigation、Agent Surface、向导/表单、轻量管理 page                      | Root 常驻，`hidden` 切换；subscription 继续按精确 identity 投影                                                                         | dispose exact Root/model       |
+| `suspendable`  | Canvas GPU surface、video/audio player、large-image/3D preview、重型 Cut runtime | 保留 owner model、open identity、viewport/scroll/selection/playhead snapshot；暂停 task presentation 并释放 GPU/decoder/playback handle | dispose snapshot、model 与资源 |
+| `ephemeral`    | Modal、Dialog、context editor/menu                                               | invocation 结束即销毁；下一次以新 invocation identity 初始化                                                                            | dispose immediately            |
+
+Retention policy 由 Surface owning contract 声明，Desktop 不按 DOM 大小或文件扩展名猜测。可挂起 Root
+必须提供 package-owned `suspend/resume` 边界或可恢复 ViewModel snapshot；不能把普通 React unmount
+冒充 suspend。恢复时先用内存/本地 shadow state 画出稳定 shell，再异步恢复高成本资源，不能重新请求
+已经存在的业务列表或显示无内容白屏。未提交修改按领域 durability 规则写入内存 model，重度办公流程
+需要跨 View disposal 或离线恢复时使用 owning package 的 SQLite/项目 draft shadow，不写 Desktop-local
+临时副本。
+
+#### Invalid persisted Window isolation
+
+Shell authority 的 outer document、Project catalog 与存储并发字段仍是严格边界；Window 列表则按
+`windowId` 逐项解析。一个 Window 使用旧字段、未知 Scene、无效 active Workbench 或跨 owner 引用时，
+Host 不把它转换为 canonical Workbench，也不让它阻断 Desktop startup。该 Window 从可运行目录隔离，
+原始结构由 Shell codec 的显式 serialization boundary 随后续正常提交保留，安全 diagnostic 投影到新建
+Window。`primaryWindowId` 指向被隔离 Window 时只在运行投影中视为无可恢复主 Window，Host 创建新的
+Entry Draft Window；不得复用失效 identity、删除原对象或调用旧 reader。有效 Project catalog 和其他
+Window 继续可用，因此用户仍可从最近项目显式重新打开 Workspace。
+
+若失效发生在 Window 隔离之前的 Shell authority 根（例如包含已删除的内部版本字段），严格 codec 仍
+必须拒绝该文档，不能忽略字段或调用旧 reader。Local Metadata 在显式 Desktop startup recovery 边界内
+原样写入独立 quarantine 记录，并在同一事务中初始化新的空 canonical Shell authority；Host 通过只读
+diagnostic adapter 将该拒绝投影到新 Entry Draft Window。quarantine 必须保留原 `document_json`、原存储
+revision、authority identity、错误摘要和时间，正常 Shell commit 不得覆盖它。该恢复不得重置 Settings、
+项目文件、Agent conversation、Assets 或其他 authority；若 quarantine 写入失败，startup 继续 fail-visible。
+
+Application Settings 是与 Shell 分离的 Desktop presentation authority。若它自身因旧字段或非法根 shape
+被严格 codec 拒绝，同一个显式 startup recovery 边界必须单独 quarantine 原 Settings 文档并只初始化
+canonical 默认 Settings；不得借此重置已恢复的 Shell、项目、Agent conversation、Assets 或其他
+authority。Shell 与 Settings recovery 各自产生 owner-qualified startup diagnostic，任一 quarantine 或
+replacement 失败都保持 startup-blocking。Shell 失效时不得顺带恢复 Settings，Settings 失效时也不得修改
+Shell；只有各自 codec 实际拒绝的 authority 才进入 recovery。
+
+持久 Window/Workbench shape 通过 codec 后，Host 在 Window claim 时仍必须用 Agent authority 的
+owner-qualified Home projection 重新资格化每个 session Agent Surface。若某 Surface 的
+`conversationId + owner` 已被 canonical Conversation catalog 拒绝或不再存在，Host 只关闭该 Shell
+Surface binding；原 Conversation authority row、Pi transcript 和同 Window 的其他 Workbench/Surface
+保持不变。若失效 Surface 是该 Workbench 的 active Surface，Host 在同一 owner 下创建新的 draft
+Surface 并原子切换 Scene，使 renderer 不会先挂载一个必然 bootstrap 失败的 session。Agent Home 的
+`invalid-conversation-record` diagnostic 继续投影给 Desktop 展示；bootstrap 保留 exact context 断言，
+不得把错误 Workspace context 转换成 Assistant，也不得回退到 active/recent Conversation。
 
 明确形态矩阵：
 
@@ -113,7 +181,7 @@ Shell 或 sidebar frame。Renderer 必须逐一消费 Host 的 `interaction/main
 rightManager` 语义，不能把 Interaction 临时当 Main、把 management Main 当 Dock，或仅复用 Shell
 JSX 而丢失 Workspace CSS scope。
 
-### 2. Scene projection is closed, versioned and slot-specific
+### 2. Scene projection is closed, canonical and slot-specific
 
 `@neko/host/desktop-shell-contract` 增加窗口级 scene aggregate。下列类型表达约束形状；实现必须复用现有 identity codecs，不能退化为未校验字符串：
 
@@ -147,7 +215,7 @@ type MainSurfaceRef =
       previewSessionId: PreviewSessionId;
       assistantSpaceId: AssistantSpaceId;
     }
-  | { kind: 'workspace-main'; workspaceId: WorkspaceId; viewId: ViewId; viewEpoch: number }
+  | { kind: 'workspace-main'; workspaceId: WorkspaceId; viewId: ViewId }
   | { kind: 'asset-management'; assetCenterSessionId: AssetCenterSessionId }
   | {
       kind: 'asset-preview';
@@ -165,10 +233,8 @@ type ManagerSurfaceRef =
   | { kind: 'settings-navigation'; settingsSectionId: SettingsSectionId };
 
 interface DesktopWorkbenchSceneProjection {
-  schemaVersion: 1;
   sceneId: SceneId;
   windowId: WindowId;
-  revision: number;
   context: DesktopWorkbenchSceneContext;
   slots: {
     interaction?: InteractionSurfaceRef;
@@ -200,27 +266,25 @@ type DesktopSceneTransitionIntent =
   | { kind: 'restore-conversation'; conversationId: ConversationId };
 ```
 
-Request 携带 requestId、endpoint epoch、Window identity、expected window revision 和 expected scene revision。Host Shell service 根据 owner facts 产生下一个 projection；renderer 不根据 route string、组件可用性、active/first/recent Project 或模型文本推断 scene。显式请求尚未具备 owner/runtime/Surface 的 Character/World scene 时返回 owner-qualified unavailable。
+Request 携带 requestId、Window identity、目标 Workbench/Scene identity 和操作所需的 exact owner identity。Window-owned Shell command queue 串行处理 mutation，并以 request identity 保证重试幂等；跨实例、未知或已关闭 identity 在当前 operation 边界失败。Host Shell service 根据 owner facts 产生下一个 projection；renderer 不根据 route string、组件可用性、active/first/recent Project 或模型文本推断 scene。显式请求尚未具备 owner/runtime/Surface 的 Character/World scene 时返回 owner-qualified unavailable。
 
 Renderer reload 从 Host projection 恢复精确 scene。关闭最后一个 conversation 只回到同 scope 的 Agent draft，不默认切换目录或 Project。跨 scope/目录的 active conversation 不可原地 rebind。
 
-`open-agent-entry` 每次必须分配新的 `draftId` 和 presentation epoch，即使当前已经位于 Agent scene。它原子清除 Scene 中的 conversation/scope binding，但不删除任何持久 conversation。`bind-agent-assistant` 与显式 directory/Project action 只能绑定当前 exact draft；stale draft intent 必须失败。未来 Character/Room owner 提供 contract 前，相关绑定返回 owner-qualified unavailable。
+`open-agent-entry` 每次必须分配新的 `draftId`，即使当前已经位于 Agent scene。它原子创建一个没有 conversation/scope binding 的独立 Surface，但不删除任何持久 conversation。`bind-agent-assistant` 与显式 directory/Project action 只能绑定请求携带的 exact open draft；未知、已关闭或不匹配的 draft intent 必须失败。未来 Character/Room owner 提供 contract 前，相关绑定返回 owner-qualified unavailable。
 
 ### 4. Sidebar is a separate window presentation aggregate
 
-现有 sidebar 已位于 `window.workbench.primarySidebar`，但与 Main/Dock/Timeline 共享 Workbench revision。变更将其拆为独立窗口 presentation aggregate：
+Sidebar 是独立窗口 presentation aggregate，不与任一 Workbench instance 的 Main/Manager/Timeline mutable state 共用 owner：
 
 ```ts
 interface DesktopApplicationSidebarProjection {
-  schemaVersion: 1;
   windowId: WindowId;
-  revision: number;
   visible: boolean;
   width: number;
 }
 ```
 
-Sidebar mutation 携带 expected sidebar revision，并只更新 sidebar aggregate。旧值一次性迁移；所有 producer/consumer 同时切换后删除旧字段和 `workbench.update` 对 sidebar 的成功写入能力，不双读双写。Project Workbench revision 继续只保护 Main/Dock/Timeline/display。
+Sidebar mutation 携带 requestId 与 exact Window identity，在该 Window 的 presentation owner 中串行执行并只更新 sidebar aggregate。所有 producer/consumer、fixture 和测试同时使用这一 canonical shape；旧字段、旧 handler 和旧 storage dispatch 从产品路径删除，不双读双写、不在启动时转换数据。非法 sidebar 记录只禁用该 Window 的 sidebar record 并返回 diagnostic，不阻断其他 Window 或 Workbench record。
 
 ### 5. Agent Root, session phase and authority scope are orthogonal
 
@@ -240,7 +304,7 @@ Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog，以及目录/P
 
 Entry Draft 中显式授权的文件仍归 exact launch connection 与 `draftId` 所有。确定性 Assistant 首次提交在 conversation validation 前先校验请求中的全部 grant，再将匹配的 `unbound` grants 原子绑定到 exact AssistantSpace；缺失、跨 connection、跨 draft、已绑定其他 scope 或 conversation 的 grant 必须 fail-visible，且验证失败不能造成部分 scope 修改。相同 AssistantSpace 的幂等重试保持成功，但不得扩大授权集合或接受其他 draft 的 grant。
 
-Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不能 fallback 到 active Project。Root 不因 scope 改变而换成另一套 controller。
+Capability catalog 必须标记 scope requirements。Assistant draft 不展示 Workspace-only Tool/Skill 为可执行成功能力；缺少 Workspace scope 时返回 typed `workspace-scope-required`，不得改用 active Project。Root 不因 scope 改变而换成另一套 controller。
 
 Composer 视觉继续由 `@neko/agent-webview` 拥有并增强现有 `InputArea`、`ComposerConfigMenu`、`SessionModeSelector` 与 `ModeSelector`，不创建 Desktop composer 或平行控件。Desktop 只通过 Agent Root 的 React presentation prop 注入 Assistant 的目录选择命令，或当前 Project catalog 已有的安全 `displayName`；该短生命周期 UI projection 不进入 Agent authority、conversation facts 或持久 Scene schema。Composer 将目录上下文、textarea 与工具条收进同一居中悬浮表面，保留现有 `+`、模式、模型、命令、Skill、usage、审批和发送/停止能力；不复制 Codex 的 branch/local 元信息。窄 dock 通过 package-owned responsive CSS 收缩低优先级标签并允许工具条在稳定边界内换行，菜单仍向上定位且不得溢出 Workbench。
 
@@ -257,7 +321,7 @@ Project catalog entry 可以解析为同一 Workspace identity，但不能用 fi
 
 ### 7. Assistant scope owns user-space and conversation scratch
 
-`@neko/agent-runtime` application authority 增加 versioned `AgentConversationContext`：
+`@neko/agent-runtime` application authority增加单一 canonical `AgentConversationContext`：
 
 ```ts
 type AgentConversationContext =
@@ -277,7 +341,7 @@ AssistantSpace 是 OpenNeko product-managed logical user area，只投影 global
 
 Scratch 以 `ScratchArtifactRef` 作为临时 identity，不得作为 durable Asset/Project identity写入领域事实。Conversation 存续期间 scratch 可恢复；删除 conversation 或显式清理时回收。用户接受的产物必须先通过 owning Asset/Workspace publication port 获得 durable identity，之后才能清理 scratch。异常退出只留下可恢复或可诊断状态，不静默删除。
 
-现有 Workspace conversations 的 context 通过一次性 migration 从其精确 Workspace identity 补齐；无法解析的记录拒绝恢复并给出 diagnostic，不猜 active workspace。
+Conversation context 保持稳定字段语义。无法满足 canonical context shape 的记录在该 conversation 边界拒绝恢复并给出 diagnostic，不修改原记录、不猜 active workspace，且不影响其他 conversations。
 
 ### 8. First submit separates local commit from external execution
 
@@ -292,13 +356,15 @@ Draft submit request 携带 requestId、scope、selected model/configuration 和
 
 Provider failure、reload 或 adapter replacement不得重复 initial message/turn。失败保留 conversation 和 pending/failed turn diagnostic，可由现有 recovery policy恢复；不能回滚为 Home handoff、空 conversation 或另一个 scope。
 
-Session materialization 与 provider execution lease 是两个独立阶段。重放已提交 record 时，即使 provider lease 已被领取，也必须先校验并修复 exact Agent workspace conversation，再返回 record；物化缺失或 scope identity 冲突必须 fail-visible，不能由 bootstrap fallback 到 active conversation，也不能重新领取或执行 provider turn。lifecycle initial message/pending intent 与后续 Pi terminal checkpoint 使用各自真实 authority，不创建会阻塞同一 turn 执行的伪 pending Pi checkpoint。
+Session materialization 与 provider execution claim 是两个独立阶段。重放已提交 record 时，即使 provider claim 已存在，也必须先校验 exact Agent workspace conversation；缺失时由当前 canonical lifecycle operation 幂等物化该 conversation，scope identity 冲突则在该 conversation 边界 fail-visible。Bootstrap 不得改用 active conversation，也不能重新领取或执行 provider turn。lifecycle initial message/pending intent 与后续 Pi terminal checkpoint 使用各自真实 authority，不创建会阻塞同一 turn 执行的伪 pending Pi checkpoint。
 
-Entry Draft 到 session 的 renderer 交接保留同一个 `AgentWebviewRoot`，但 launch connection 与 session connection 拥有不同 endpoint epoch。endpoint replacement 必须先使用旧 binding/Host owner detach 旧 attachment，再接受新 endpoint attachment；旧 endpoint frame 继续因 stale/mismatch 失败，不能吞掉 `attachment-identity-mismatch`、用新 adapter 代旧 owner detach，或通过 React key remount 第二个 controller规避生命周期。
+Provider execution 只在精确 Conversation projection attachment 建立后启动。`config.toml` 中由配置 owner 解析的 API key 保留为对应 Agent Workspace models 实例的内存配置凭据，不重复导入全局 safeStorage；交互登录与 OAuth 凭据仍由 Host secret port 持久化。该分离避免 Electron Main 在普通配置 turn 中同步访问系统 Keychain，也避免同 provider identity 的不同 Workspace 通过共享可变凭据相互覆盖。
+
+Entry Draft 到 session 的 renderer 交接保留同一个 `AgentWebviewRoot`，launch connection 与 session connection 各自拥有不可复用的 connection identity。Connection replacement 必须先使用创建 attachment 的原 binding/Host owner detach，再接受新 connection attachment；携带未知、旧或不匹配 connection/request identity 的 frame 在该 operation 边界失败，不能吞掉 `attachment-identity-mismatch`、用新 adapter 代旧 owner detach，或通过 React key remount 第二个 controller 规避生命周期。
 
 ### 9. Asset Center is an Assets-owned management and preview session
 
-`@neko/assets-domain` 增加 `AssetCenterSession` application contract，拥有 catalog/filter/selection projection、revision/CAS 和 selected `ContentLocator`/Asset identity。`@neko/assets-webview` 的 Management Root 消费该 projection并提交 typed selection intent。
+`@neko/assets-domain` 增加 `AssetCenterSession` application contract，拥有 catalog/filter/selection projection、owner 内串行 mutation 和 selected `ContentLocator`/Asset identity。`@neko/assets-webview` 的 Management Root 消费该 projection 并提交携带 exact session/request identity 的 selection intent。
 
 选中资源时，Assets application service通过 Host content authorization port 请求 exact preview descriptor；`@neko/preview-*` 创建与同一 AssetCenterSession 绑定的 PreviewSession。Scene 组合：
 
@@ -307,21 +373,35 @@ main:          AssetManagementRoot(assetCenterSessionId)
 secondaryMain: PreviewRoot(previewSessionId) // only when selected and authorized
 ```
 
-没有 selection 时 Secondary Main 不显示；不支持的内容保留 Main selection 并在 Secondary Main 显示 typed unavailable diagnostic。Desktop 不持有 filter、selection、Asset facts、ContentLocator interpretation 或 preview-kind switch。切换 scene 释放 view-scoped preview handle/subscription，但保留 package-owned catalog/selection事实。
+没有 selection 时 Secondary Main 不显示；不支持的内容保留 Main selection 并在 Secondary Main 显示 typed unavailable diagnostic。Desktop 不持有 filter、selection、Asset facts、ContentLocator interpretation 或 preview-kind switch。切换到其他 Workbench/scene 只隐藏 Asset Center instance；其 management Root、已打开 page/detail/preview Root 与可继续使用的授权 session 保持。显式关闭 preview/page/Asset Center instance 或 Window teardown 才释放对应 handle/subscription。
 
 ### 10. Other management and Settings scenes use the same shell
 
 Extensions 使用 Agent extension application contract 与 package public management Root，并将该 Root 放入 Main；现有 Desktop `HomeExtensions` presentation 迁移后删除。Project management 的 catalog/management Root 同样占据 Main，selection 与 explicit open-workspace action分离。Settings 将当前 configuration Surface 放入 settings navigation/main slots；设置事实继续由 `@neko/host` settings owner管理。
 
+Assets、Extensions、Projects 与 Settings 各自拥有独立 management Workbench instance。Settings section、
+资源 facet/page、detail/preview 与其他可返回页面在首次打开后进入 owning instance 的 child catalog；
+后续导航只切换 active identity。关闭整个 management instance 才释放其子树，切换 PrimarySidebar 项
+不得通过 scene 条件渲染卸载它们。
+
+Canvas Root 本身继续拥有完整 canvas store/runtime；选择 Canvas node 不创建新的领域 node。对需要
+独立 UI 生命周期的 node inspector/editor，Canvas Webview 以 node identity 保留已访问 Root，并仅切换
+可见性。节点数据变化通过 Canvas store 投影到所有对应 Root；删除 node 才清理该 node UI instance。
+Canvas 的 GPU/媒体 node viewer 属于 `suspendable` child；切换节点时保留 node editor ViewModel 与
+viewport/control snapshot，但 inactive viewer 必须停止 frame loop、playback 和 decoder 并释放高成本
+handle。普通属性 inspector 仍可 hot-retain，Modal/context menu 始终 ephemeral。
+
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 
 Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个兄弟 shell：各自拥有独立 DOM、边框、圆角、背景、裁切和 overflow 边界，并由保留可见 gutter 的 resize composition 连接。禁止让两个内容区共享一块连续 Main 底板后只绘制分隔线。两个 shell 都不渲染 Workspace View tab/header 或 Preview descriptor header；只有 Workspace Main 的真实多 View group 拥有 Workbench tab。Workspace 与 Asset Center 的 Preview 内容都使用 `@neko/preview-webview` 的 content-only chrome，并以透明内容背景继承所在 shell 的主题，而不是在 Desktop 复制 viewer 或硬编码另一组主题 token。只有 owner-qualified 且信息足以支撑独立内容区域的 Preview/Detail 才挂载 Secondary Main；低信息量的 Project selection 保留在 catalog 中，显式打开 Workspace 的操作也位于对应 catalog row，不创建空洞的 Project Detail shell。组合时 management panel 使用紧凑目录宽度，Preview/Detail 获得主要内容宽度；没有合格 detail 时 management shell 独占可用区域，且不保留 secondary column 或 gutter。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
 
+PrimarySidebar 顶部布局控件继续复用 `@neko/ui` 的 Codicon 入口。生产 renderer 必须让 Vite 从 query-free 的 canonical 字体引用生成 hashed asset 路径；不能依赖 vendor CSS 自带的 query-bearing URL，因为 `openneko://desktop` 协议有意拒绝所有带 query/hash 的非 canonical 应用资源请求。Desktop Main 只补齐 `.ttf` 的 `font/ttf` 响应类型并保留 `nosniff` 与 query 拒绝规则，不增加旧 URL 读取路径或第二套图标实现。
+
 ### 11. Scene activation and empty Main are atomic presentation states
 
-打开显式 Project/Workspace 或恢复 conversation 时，Host Shell 在一个 stored-state commit 中同时更新 exact Project `activeTarget`、对应 Workbench attachment、Scene scope/slots 与 Agent `draft | session` phase。Desktop 只有在该提交完成后才返回 transition success；renderer 不得先启动旧 scope 的 launch adapter，再等待布局或 Agent 状态补齐。App composition 可以在返回前 attach 对应 package runtime，但不能用 active/recent Project fallback 修复不一致状态。
+打开显式 Project/Workspace 或恢复 conversation 时，Host Shell 在 Window owner 的一个串行 commit 中同时更新 exact Project `activeTarget`、对应 Workbench attachment、Scene scope/slots 与 Agent `draft | session` phase。Desktop 只有在该提交完成后才返回 transition success；renderer 不得先启动旧 scope 的 launch adapter，再等待布局或 Agent 状态补齐。App composition 可以在返回前 attach 对应 package runtime，但不能改用 active/recent Project 修复不一致状态。
 
-Workspace 的 Main View 集允许因用户关闭最后一个 Preview/View 暂时为空。此时 Workbench 保留 primary group，Scene 移除 `slots.main` 和无 owner 的 Timeline，同时继续保留 exact Workspace scope、Agent Interaction、Workspace Resources 与 Status。renderer epoch projection 只更新实际存在的 Main/Timeline ref；不得把空 Main 当作 scene corruption。应用重启时现有 `attachProjectWorkbench` 恢复 canonical Canvas，但运行中的关闭操作不隐式发明另一个 View。
+Workspace 的 Main View 集允许因用户关闭最后一个 Preview/View 暂时为空。此时 Workbench 保留 primary group，Scene 移除 `slots.main` 和无 owner 的 Timeline，同时继续保留 exact Workspace scope、Agent Interaction、Workspace Resources 与 Status。Renderer projection 只更新实际存在的 Main/Timeline ref；不得把空 Main 当作 scene corruption。应用重启时现有 `attachProjectWorkbench` 恢复 canonical Canvas，但运行中的关闭操作不隐式发明另一个 View。
 
 Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 `errorMessage` 投影到 package-owned Agent error presentation。空 content 不得把真实 diagnostic 降级成只有固定 `Error` 标题；错误仍保持 conversation/turn scoped，不自动重试或伪装成功。
 
@@ -331,7 +411,7 @@ Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 
 
 Desktop scene adapters such as `DesktopAssetCenterRuntime` are view-scoped resources. A React effect that subscribes to an existing runtime owns only that subscription; its cleanup cannot permanently dispose the memoized runtime because StrictMode deliberately executes an extra setup/cleanup/setup cycle. Runtime creation and final disposal must share the same identity owner and dispose only when the identity is replaced or the component actually leaves the tree.
 
-The canonical fix remains fail-visible after final disposal: methods on a disposed runtime still throw. It must not make `dispose()` reversible, ignore subscribe-after-dispose, add a fallback runtime or remove StrictMode. A StrictMode renderer regression plus a real Electron reload/startup scenario proves the lifecycle path.
+The canonical fix remains fail-visible after final disposal: methods on a disposed runtime still throw. It must not make `dispose()` reversible, ignore subscribe-after-dispose, add another runtime path or remove StrictMode. A StrictMode renderer regression plus a real Electron reload/startup scenario proves the lifecycle path.
 
 ### 13. Ownership and canonical paths
 
@@ -353,29 +433,29 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 - [删除 Home 容器误删一级侧栏内容] -> PrimarySidebar contract/test 显式断言最近项目、最近会话、attention 和对应操作在所有 scene 持续存在。
 - [Management Root 被压进 Dock] -> Scene codec 区分 management Main 与 optional detail/preview；Renderer path test 断言 Assets/Extensions management 位于 Main。
 - [Scene contract 演变为 UI DSL] -> slot-specific closed unions和固定 invariants；不提供 component registry、JSON layout或任意 kind。
-- [Assistant 变成隐式全盘文件权限] -> product-managed AssistantSpace + explicit ResourceGrant；poison Home/config/credential/raw-path访问。
-- [目录选择误建会话或扩大权限] -> picker grant 与 conversation creation分离；显式 scope projection和 no-fallback tests。
+- [Assistant 变成隐式全盘文件权限] -> product-managed AssistantSpace + explicit ResourceGrant；删除 Home/config/credential/raw-path 成功路径。
+- [目录选择误建会话或扩大权限] -> picker grant 与 conversation creation 分离；显式 scope projection 和 owner-identity path tests。
 - [初始 turn 重复] -> 本地 pending intent事务 + request/turn identity；renderer只 attach，不执行。
 - [提交后 lifecycle record 与 Agent workspace 会话分裂] -> provider lease 前执行幂等 session materialization；replay 先修复 exact conversation/checkpoint，再返回 session Scene，且不重跑 provider。
 - [launch/session endpoint replacement 交叉释放] -> attachment 保留创建它的 binding；旧 binding 完成 detach 后再附着新 endpoint，identity mismatch 继续 fail-visible。
 - [Scratch 丢失有价值产物] -> publish-before-cleanup contract；conversation删除/显式清理才回收。
-- [Asset manager/preview selection漂移] -> 单一 AssetCenterSession revision与 exact preview session binding。
+- [Asset manager/preview selection 漂移] -> 单一 AssetCenterSession owner 内串行 mutation 与 exact preview session binding。
 - [缺失 Extensions/Project detail Root] -> owner-qualified empty/unavailable；不复制 app-local domain UI。
-- [Sidebar 双写] -> 原子切换 producer/consumer并 poison旧 Workbench sidebar update。
+- [Sidebar 双写] -> 原子切换 producer/consumer，并删除旧 Workbench sidebar update handler、字段和注册。
 - [已写入的 prelaunch scene 无法启动] -> Shell state 升级到 v6，仅迁移 v5 中已知的 management catalog 与 Assistant resources Manager Surface；当前或未知 kind 继续 fail-visible。
-- [新 draft 显示旧 session] -> Host 分配 exact `draftId`，Agent package 在 identity transition 时清除 instance state，并 poison stable Scene/View fallback。
+- [新 draft 显示旧 session] -> Host 分配 exact `draftId`，Agent package 在 identity transition 时清除 instance state，并删除通过 stable Scene/View 猜测 draft 的路径。
 - [StrictMode cleanup 使 Desktop 白屏] -> subscription cleanup 与 runtime final disposal 分离；保留 disposed fail-visible，并以 StrictMode + development/packaged Electron exception 证据验证。
 
 ## Migration Plan
 
-1. 对齐冲突 active changes，并为 workspace Agent、Project Views、sidebar和全部 display mode建立基线/poison tests。
-2. 添加 slot-specific scene、typed transition和独立 sidebar contract/CAS，完成旧 sidebar值与已写入 prelaunch management scene 的一次性版本迁移。
+1. 对齐冲突 active changes，并为 workspace Agent、Project Views、sidebar 和全部 display mode 建立基线与旧路径缺席测试。
+2. 添加 slot-specific scene、typed transition 和独立 sidebar canonical contract；一次性更新 producer/consumer/fixture/test，并删除旧字段、handler 与 dispatch。
 3. 将 Desktop 收敛为一个 PrimarySidebar + ControlledWorkbenchShell，把现有 Project和Settings转换为 slots并完成 parity gate。
 4. 建立 Assets-owned AssetCenterSession，组合 management + preview并删除 Home asset layout。
 5. 迁移 Extensions/Project management presentation到 owner-qualified Roots/slots，删除 Home containers。
 6. 增加 Agent draft/session presentation、launch-safe catalog和显式 Assistant/Workspace scope。
-7. 增加 directory grant、AssistantSpace/scratch、conversation context migration和幂等 first-submit authority。
-8. 删除 Home composer、agentInitialInput、模型 intent scene routing与所有默认 Project fallback。
+7. 增加 directory grant、AssistantSpace/scratch、稳定 conversation context 和幂等 first-submit authority。
+8. 删除 Home composer、agentInitialInput、模型 intent scene routing 与所有隐式 Project owner selection。
 9. 运行 package tests/build、Agent evaluation、legacy/boundary gates和隔离真实 Electron大/小窗口场景。
 10. 引入 unbound Entry Draft identity、确定性的自动 Assistant 首次提交、显式 Workspace/Role binding 与 package-owned presentation reset；修复 renderer runtime StrictMode lifecycle并复验用户启动路径。
 

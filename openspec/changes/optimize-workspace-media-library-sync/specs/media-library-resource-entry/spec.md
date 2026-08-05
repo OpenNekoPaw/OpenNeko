@@ -79,3 +79,13 @@ surfaces while retaining Assets ownership of library interactions and presentati
   and content start position
 - **AND** Media Library list/grid browsing, directory activation, thumbnail preview, and mutations
   remain owned by the existing Global Library browser
+### Requirement: Restored Media facet navigation cannot hide a fresh root projection
+
+The Resource Browser SHALL validate retained facet navigation against each new authoritative projection before
+filtering visible items.
+
+#### Scenario: Media facet remounts after browsing a library
+
+- **WHEN** a previous Media container identity is retained but the remounted search returns the Media root
+- **THEN** the facet returns to root and displays every available linked library
+- **AND** it does not describe the root as an empty successful result

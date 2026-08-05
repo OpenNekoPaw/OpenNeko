@@ -132,3 +132,63 @@ src/runtime/projection/__tests__/pi-conversation-history-projector.test.ts` is t
 - Future Character/Room selection remains an explicit owner-qualified path. The current Desktop has no
   qualified Character/Room owner/runtime/Surface, so the path must fail visibly and cannot fall back to
   Assistant or Workspace. A real provider turn cannot add evidence until that owner exists.
+
+## Final Real-Provider Update
+
+Date: 2026-08-06
+
+This section supersedes the earlier infrastructure-blocked conclusion for the now-executable Agent
+lanes. The disposition remains `update` for
+`session-workflows -> agent-runtime.workflow-controller`; no second Agent controller or direct turn
+runner was introduced.
+
+- Visible packaged Desktop acceptance passed through the real composer and configured provider/model:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T20-05-59.873Z-desktop-agent-provider-ui-packaged/report.json`.
+  It proves unbound Entry Draft submission, exact Assistant conversation materialization, live
+  execution activity inside the transcript, terminal provider response, centered bounded message
+  rails and absence of legacy run-status or attachment diagnostics.
+- Hidden packaged batch acceptance passed as
+  `agent-runtime.workflow-controller/conversation-persistence-resume`, sample
+  `sample-e4d37cbfc97c15ce1637ed75`. It used the complete Desktop session owner and configured real
+  provider/model for two-turn persistence/restart/continuation behavior, with all `7/7` deterministic
+  hard gates passing.
+- Requested and effective configuration identities matched. The evidence contains Pi Session and
+  SQLite catalog authority, exact conversation/turn/run identity, restored message count, continuation
+  step, terminal idle and non-empty final answer; forbidden in-memory/new-conversation authority did
+  not participate.
+- The matrix aggregate is `non-comparable` only because a shard report field contains a local absolute
+  result path. The sample itself is `pass`; this is Evaluation report portability debt, not a target
+  behavior failure.
+- A development-target run that lost its CDP target after restart and second submit is classified
+  `infrastructure-fail` and excluded from acceptance. The packaged lane was selected after that
+  diagnosis and completed without retrying a behavior failure into success.
+
+The remaining provider-backed gap is not basic conversation or restart persistence. Character/Room
+owners remain unavailable by design, and a single combined scenario does not yet run real background
+Agent execution while interactively switching two Workspace containers and high-memory Canvas nodes.
+Those UI/instance lifecycle cells are covered by deterministic owner-isolation tests plus the separate
+packaged Workbench and Canvas scenarios; their combination remains residual evidence scope rather than
+an accepted model-quality claim.
+
+## Persisted Agent Surface Reconciliation Decision
+
+Date: 2026-08-06
+
+- Disposition: `excluded`. Task 11.11 changes only deterministic Host qualification of persisted Shell
+  Surface bindings against the existing owner-qualified Agent Home catalog. It does not change prompt
+  composition, provider/model selection, Tool routing, Pi turn execution, transcript projection or
+  Agent output.
+- Canonical path: Window claim -> persisted session Agent Surface `conversationId + owner` -> Agent
+  Home catalog qualification -> exact invalid Surface removal -> same-owner fresh draft activation ->
+  localized Desktop diagnostic. Bootstrap keeps its strict persisted Conversation context assertion.
+- Forbidden paths: converting a Workspace context to Assistant, selecting an active/recent
+  Conversation, mutating or deleting Conversation authority/Pi transcript, dropping valid sibling
+  Workbenches or returning a successful bootstrap for the rejected Surface.
+- Deterministic evidence: the focused Host regression proves exact-Surface rejection, same-owner draft
+  replacement and sibling retention; Desktop renderer/i18n tests prove localized user presentation
+  while preserving the original technical diagnostic as supplemental detail. The four live
+  `agent_conversation_authority.context_json` SQLite SHA3-256 values were unchanged before and after
+  startup.
+- Real provider execution is not required for this disposition because no Agent turn or behavior can
+  change. The existing key-free Evaluation harness remains infrastructure evidence only and is not
+  described as provider behavior acceptance.

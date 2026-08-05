@@ -8,6 +8,7 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 让 renderer 启动门禁预加载 Agent UI chunk，具体 Project/View bootstrap 仍按 owner 在
   Agent Surface 挂载时请求，并保证 Host 事件订阅先于子组件发出的初始化请求。
 - 为 Desktop portal surface 提供由 `@neko/ui` primitive 和 Desktop theme contract 共同拥有的稳定、不透明背景，并在生产 renderer 的 portal DOM 上验证最终 computed style。
+- 让 Agent 全局错误与当前会话错误通过 package-owned portal 提示层绘制，不再被 Workbench Dock/Main 的裁剪边界截断；隐藏 Tab 不得把诊断投影到窗口层。
 - 保证创建、恢复和发送会话时，tabless pending send、Tab state、optimistic user message 与 authoritative Timeline projection 按显式 conversation identity 进入同一可见 runtime；pending send 只能在 owning conversation 已持久接收消息后消费。
 - Project 首次打开或恢复到没有 Main View 时，由 Host workbench owner 打开 canonical Workspace Canvas `neko/boards/workspace.nkc`；当前会话中用户关闭最后一个 Main Tab 后则显示不含失败 diagnostic 的显式空状态。
 - 将项目 Resource Browser 作为独立 Workbench Main View 打开、聚焦、关闭和恢复；一级导航只发出 open/focus intent，不再把 Resource Browser 作为 project dock owner。
@@ -20,6 +21,13 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - Desktop 工作区 Agent 不再展示 package-owned 角色对话 Header 入口；角色会话的发起归属工作区资源管理中的实体管理动作。
 - 让只有 Pi catalog/context、尚无 first-submit lifecycle record 的既有会话按原 identity 恢复，
   bootstrap 不再把 lifecycle-only initial message 当成所有会话的前置条件。
+- 让持久 Pi transcript 与实时 Timeline 通过 turn 的持久 transcript identity 汇合，完成后只展示一条
+  assistant 记录；禁止按文本内容去重。
+- 把一次可见真实 API 首发扩展为隔离 Electron 全流程：创建与切换会话、重启恢复、记录去重、
+  工作区资源/实体恢复和 EPUB 按需加载均通过真实控件验收。
+- 收敛 Agent connection replacement 生命周期：业务消息继续要求 exact active Scene，旧 connection
+  仅可释放自己创建的 projection attachment；preload 丢弃已退休 connection 的迟到事件且不污染
+  当前会话，未知 connection 仍 fail-visible。
 
 ## Capabilities
 

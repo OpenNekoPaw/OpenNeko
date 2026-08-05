@@ -170,7 +170,7 @@ validated Interaction/Main/Secondary Main/Manager/Timeline/Status refs 映射到
 Main，也不得通过 active/first/recent Project fallback 决定 Workspace scope。目录授权只由 preload
 投影 sender-bound opaque grant，raw path 不进入 renderer contract。
 
-`@neko/agent-contracts` 拥有 closed conversation owner 与 versioned Agent Home codec；
+`@neko/agent-contracts` 拥有 closed conversation owner 与 canonical Agent Home codec；
 `@neko/agent-runtime` 从 Pi catalog 和同库 immutable lifecycle context 产生 exact Assistant/Workspace
 owner；`@neko/host` 拥有 Project + standalone owner 的 grouped navigation、排序和 identity validation。
 Desktop Main 只组合 sender/Window、Workspace grant 与 concrete runtime，renderer 只展示分组并发送

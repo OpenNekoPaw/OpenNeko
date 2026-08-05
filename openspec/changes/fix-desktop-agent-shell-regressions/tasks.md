@@ -13,6 +13,8 @@
 - [x] 1.11 Add Home renderer/CSS red tests proving the Agent heading has no standalone icon tile and centers its title/subtitle without removing action icons.
 - [x] 1.12 Add Agent Webview red tests proving live activity is inside MessageList, the composer-adjacent run-status region is absent, canonical tool/streaming records are not duplicated, and idle/conversation switching clears the temporary item.
 - [x] 1.13 Add red tests proving a committed user message survives assistant-only projection and every transcript item uses one centered maximum-width rail, while Desktop Dock renders no roleplay Header action.
+- [x] 1.14 Add red Main/Bridge/preload tests proving exact retired projection cleanup succeeds, ordinary or forged retired operations fail, and queued retired events do not poison the current connection.
+- [x] 1.15 Add red Agent Webview tests proving global/session diagnostics portal to the renderer body, remain viewport-bounded, and retained hidden Tabs do not project alerts.
 
 ## 2. Persistent Agent Home catalog
 
@@ -29,6 +31,7 @@
 - [x] 3.5 Move Agent module loading to one renderer-startup-owned promise and make every Agent Surface reuse it while keeping bootstrap and adapter state View scoped.
 - [x] 3.6 Project the active conversation Agent state through MessageList, replace the legacy thinking bubble with a transcript execution activity, and delete the independent `AgentRunStatus` path.
 - [x] 3.7 Preserve the owning user message across Host/Timeline completion and render user, assistant, process and execution records through the canonical transcript rail.
+- [x] 3.8 Split active-Scene Agent routing from sender-bound connection cleanup, retain bounded retired identity tombstones, and replace the preload global cursor with exact connection-scoped lifecycle tracking.
 
 ## 4. Desktop portal and Workbench layout
 
@@ -42,6 +45,7 @@
 - [x] 4.8 Replace Home primary-sidebar brand icons with the existing visibility action on `OpenNeko` text and center the Home Agent launchpad without changing its internal feature ownership.
 - [x] 4.9 Remove the decorative Agent heading icon tile and align the launchpad title/subtitle on one centered text axis while preserving task/template icons.
 - [x] 4.10 Hide the roleplay selector with the rest of package-owned conversation navigation in Desktop Dock and keep standalone Agent navigation unchanged.
+- [x] 4.11 Replace the duplicated fixed Agent error blocks with one package-owned portal diagnostic surface while preserving global/session state ownership and Workbench clipping.
 
 ## 5. Verification and documentation
 
@@ -53,3 +57,7 @@
       Evidence: `desktop-agent-provider-ui` passed with `nekoapi-chat / gpt-5.6-luna`; the report recorded transcript activity, no legacy status, no terminal activity residue, a visible provider response, and a completed persisted lifecycle.
 - [x] 5.6 Extend the real-provider Electron scenario to assert the exact sent prompt remains visible and the transcript rail is centered and narrower than the Agent panel, then rerun focused tests, build, evaluation and quality review.
 - [x] 5.7 Add regression tests and the canonical restore path for Pi conversations that have exact context but no first-submit lifecycle record.
+- [ ] 5.8 Bind completed Timeline turns to their persisted Pi transcript entry identity and prove live completion, restart, same-text turns and conversation switching do not duplicate records.
+- [ ] 5.9 Extend visible real-provider Electron acceptance through two conversations, switching, application restart, transcript/generation restoration and isolation; record path-level evidence and forbidden fallbacks.
+- [ ] 5.10 Run focused Main/preload/renderer/Agent projection tests and affected typechecks, then validate the visible real-provider conversation path without stale-connection errors.
+- [x] 5.11 Run focused Agent Webview tests/typecheck, package Desktop, and inspect the diagnostic portal in a real Electron Workbench with a narrow Agent pane; record residual risk and repeat quality review.

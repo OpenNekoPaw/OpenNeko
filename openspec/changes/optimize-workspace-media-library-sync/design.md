@@ -284,3 +284,11 @@ projects and remain usable.
   after the first correctness-focused implementation?
 - On Windows, must initial acceptance cover both local junction targets and a real UNC/NAS target, or
   can UNC remain a documented release blocker until a Windows host is available?
+
+## Resource Browser retained navigation
+
+Assets Webview may retain facet and navigation state by project identity, but a restored active container is valid
+only when the current root/children projection contains that owner. If a fresh search or remount returns a root
+projection without the retained container, the Resource Browser explicitly returns that facet to root before
+filtering items. It must not turn available linked libraries into a successful empty list. Replaying a deeper path
+requires an explicit Host children request and exact resource identities; no label/path guessing is permitted.

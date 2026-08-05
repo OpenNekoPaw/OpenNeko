@@ -88,3 +88,20 @@ fail closed.
 
 - **WHEN** a normal runtime path attempts to load semantic facts from a replaced fragmented file
 - **THEN** it fails with a migration diagnostic and does not return legacy success
+### Requirement: Project open restores legacy Entity facts through the canonical owner
+
+The Entity Node application service SHALL migrate an unambiguous legacy inventory before publishing the project
+Entity projection. Desktop SHALL only compose the service and SHALL NOT implement a legacy renderer or app-local
+reader fallback.
+
+#### Scenario: Legacy project contains valid character and candidate facts
+
+- **WHEN** a project without `neko/entities.json` is opened and its legacy inventory has no blockers
+- **THEN** the Entity owner archives the exact sources, commits the canonical document and refreshes projection
+- **AND** Resource Browser displays the migrated Entity facts in the same opening flow
+
+#### Scenario: Legacy inventory is ambiguous
+
+- **WHEN** migration inventory reports an identity, binding or schema blocker
+- **THEN** project Entity projection exposes a diagnostic requiring resolution
+- **AND** it does not report a successful empty facet or read legacy files as the normal authority

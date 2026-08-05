@@ -391,6 +391,183 @@ Preview checkpoints with `consoleErrors: []`, `consoleWarnings: []`, `exceptions
 `preview.detach` arriving after Scene exit still cleans up its exact runtime session but no longer
 projects Preview state into the newly active Scene.
 
-This evidence does not complete the Window-owned multi-Workbench catalog. Tasks 11.1-11.7 remain
-open for retained panel trees across two different Workspaces, instance-owned layout persistence,
-close/archive lifecycle and visible real-provider background execution across Workspace switching.
+This was an intermediate checkpoint. Tasks 11.5 and 11.7-11.9 were subsequently implemented and
+qualified; the final task 11.10 evidence and remaining cross-change gate are recorded below.
+
+## Invalid Stored Desktop State Recovery
+
+Task 11.3 now uses the Local Metadata repository as the only recovery boundary for an invalid
+Desktop presentation authority. Normal reads remain strict. During explicit startup recovery, a
+codec rejection atomically writes the exact original JSON and storage revision to
+`desktop_application_state_quarantine`, then replaces only that authority with its canonical empty
+state. Shell and Application Settings recover independently; quarantine or replacement failure still
+rolls back and blocks startup.
+
+Host projects the recovery as an owner-qualified, read-only startup diagnostic. Renderer acceptance
+proves the new Entry Draft Workbench and Agent composer remain usable while the banner reports that
+the old Workspace state was isolated and that Project, conversation and other data were not reset.
+The bootstrap Main boundary now also constructs the minimal host projection explicitly, preventing
+package-internal identity fields from crossing typed IPC.
+
+Focused verification passed on 2026-08-05:
+
+- Local Metadata: `21 files / 96 tests`, including exact JSON/revision retention and transactional
+  rollback when quarantine storage is unavailable.
+- Host: `37 files / 331 tests`, including valid sibling retention and startup diagnostic projection.
+- Desktop focused: `5 files / 60 tests`, including Shell/Settings authority isolation, renderer
+  warning presentation and strict bootstrap producer/consumer parsing.
+- `@neko/local-metadata` typecheck, Host TypeScript check, Desktop typecheck, Desktop production
+  package build, root `pnpm build`, root `pnpm test`, root `pnpm check`, `git diff --check` and
+  strict OpenSpec validation passed.
+
+A visible isolated Electron fixture started from a migrated SQLite database whose Shell document had
+an obsolete `schemaVersion` field. Startup completed without `Desktop startup failed`; the full
+Workbench and Agent composer rendered under the invalid-state banner. The fixture quarantine row
+retained authority `desktop.shell`, storage revision `0`, the original obsolete field and the codec
+diagnostic. A separate normal Desktop cold start also rendered the current persisted Workbench after
+clearing a stale, generated Vite dependency cache; no product data was deleted for that cache repair.
+
+The repository-wide `pnpm check:quality` remains blocked at `check:no-internal-versioning` by 310
+new audit-baseline occurrences across the broader in-progress Agent/Canvas/Host/Desktop worktree.
+`pnpm check:legacy-debt` likewise reports the existing 208 blocking migration/current-bridge ledger
+matches. No baseline or allowance was changed to mask either result; both are residual repository
+gate work outside this focused recovery path.
+
+## Task 11.10 Final Qualification Attempt
+
+Date: 2026-08-06
+
+The current Workbench implementation passed the focused and repository-wide executable gates:
+
+- `pnpm typecheck`
+- `pnpm build`, including the verified darwin-arm64 production package
+- `pnpm test`
+- `pnpm test:agent:eval` (`45 files / 290 tests`, `22 suites / 53 cases` dry-run)
+- `pnpm check` (`check:unused` produced only 73 configuration hints; dependency scan found zero
+  violations across 1426 modules and 4861 dependencies)
+- `pnpm check:application-boundaries` (1454 files, zero findings)
+- `git diff --check`
+- strict validation for both `compose-desktop-workbench-scenes` and
+  `remove-internal-versioning-and-product-migrations`
+
+Current affected suite totals include Host `37 files / 332 tests`, Desktop `64 / 378`, Agent
+Contracts `42 / 268`, Agent Runtime `116 / 1091`, Agent Webview `91 / 714`, UI `49 / 217`, Assets
+Domain `17 / 140`, Assets Node `10 / 54`, Assets Webview `6 / 49`, Canvas Domain `28 / 256`, Canvas
+Node `2 / 8` and Canvas Webview `61 / 337`. The large-file Assets Node and InputArea UI tests also
+passed under the repository's standard concurrency after isolated reruns proved earlier failures were
+parallel resource contention, not product behavior failures.
+
+The rebuilt packaged executable has SHA-256
+`c031715b2c770fdaa811ccf4671bee4073833f8e8dfe0055f85c546085bdc205`. Three fresh visible Electron
+scenarios passed against that package:
+
+- `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T20-05-59.873Z-desktop-agent-provider-ui-packaged/report.json`
+- `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T20-06-13.938Z-desktop-workbench-scenes-packaged/report.json`
+- `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T20-06-27.202Z-canvas-openneko-consumer-packaged/report.json`
+
+The visible Agent scenario used the actual composer and configured real provider/model, proved Entry
+Draft materialization, transcript-scoped live execution state and a completed response, and recorded
+zero console errors, warnings, renderer exceptions or poisoned requests. The Workbench scenario
+covered Agent, Assets management + canonical Preview, Extensions, Projects, Settings, explicit
+Workspace activation, display modes, exact recent Project restore, renderer reload, small-window
+layout and Assistant session restore. The Canvas scenario covered two retained Canvas roots, node
+authoring/inspection, video and audio playback, exact root/resource release, empty Main, application
+restart restoration, resize and theme surfaces.
+
+Packaged hidden real-provider Evaluation sample
+`sample-e4d37cbfc97c15ce1637ed75` passed all seven hard gates for Pi runtime identity, canonical turn,
+application/session-owner restart, SQLite conversation persistence, restored history, continuation,
+terminal idle and non-empty final answer:
+
+`reports/agent-eval/agent-runtime.workflow-controller/conversation-persistence-resume/sample-e4d37cbfc97c15ce1637ed75/`
+
+The matrix aggregate is `non-comparable` only because the shard embeds a machine-specific absolute
+result path; the sample outcome is `pass` with zero retries. A preceding development-lane attempt
+completed the first turn, restart and second submit but lost its CDP target before terminal reading;
+it is retained as `infrastructure-fail` and is not counted as Agent acceptance.
+
+At that qualification point, task 11.10 remained open because repository quality gates were shared
+with the active `remove-internal-versioning-and-product-migrations` change. On the
+current combined worktree `pnpm check:quality` stops at 489 unapproved internal-versioning audit
+occurrences, and `pnpm check:legacy-debt` reports 126 migration/current-bridge blockers. No baseline,
+allowance or gate was weakened. All Workbench-specific executable evidence above passed, but the task
+cannot be marked complete until that dependent change reaches its zero-unapproved-occurrence gate.
+
+## Task 11.10 Combined Scenario Addition
+
+Date: 2026-08-06
+
+The registered visible scenario `desktop-workbench-retention-provider-ui` now composes the missing
+acceptance matrix in one isolated Electron fixture: two Workspace projects, one real-provider
+conversation per Workspace, background execution while Asset Management is active, Workspace
+Resource Browser availability, one selected Canvas node/retained inspector per Workspace,
+Workbench suspend/resume, renderer-network-offline local switching and full application restart.
+It asserts two exact Workspace instances and two exact conversation owners before and after restart,
+and resolves each provider response through its exact
+`workspaceId -> conversationId -> agentSurfaceId` chain before checking the retained/restored Agent
+Root. The Canvas assertion captures the exact Workspace A outer Root, proves there is only one such
+View instance, verifies the same Root enters `suspended` with its heavy child removed while a
+management Workbench is active, then verifies the same Root returns to `active` and restores the
+selected node inspector. This replaces the earlier weak global-text check and incorrect expectation
+of two DOM roots for one Canvas View.
+
+Fixture self-tests, the shared runner discovery regression, scenario syntax/ESLint, focused Canvas
+lifecycle tests and the Desktop production package build passed. The real scenario was retried after
+these assertion corrections and stopped before Electron launch and before any API request because
+this process did not provide
+`OPENNEKO_AGENT_EVAL_PROVIDER_ID`, `OPENNEKO_AGENT_EVAL_MODEL_ID` and explicit cost authorization.
+The scenario did not read or print configuration contents. Task 11.10 therefore remains open; the
+historical single-feature Agent, Workbench and Canvas reports above are not promoted to combined
+acceptance evidence. The current combined-worktree `pnpm check:quality` also remains blocked by 545
+unapproved internal-versioning audit occurrences, while `pnpm check:legacy-debt` reports 52 blocking
+current-bridge/migration occurrences. A targeted audit reported no occurrence in the new retention
+scenario, ErrorBoundary, Entity read-isolation, fixture-queue or offline-repair files.
+
+## Invalid Persisted Agent Surface Recovery
+
+Date: 2026-08-06
+
+Task 11.11 qualifies persisted session Agent Surfaces before renderer bootstrap. The Host now removes
+only a Surface whose exact `conversationId + owner` is absent from the canonical Agent Home catalog,
+retains valid sibling Surfaces and Workbenches, and activates a fresh draft under the same
+AssistantSpace or Workspace owner when the rejected Surface was active. Bootstrap remains strict and
+does not provide an active/recent Conversation fallback.
+
+Focused verification passed on the final Surface-recovery and launch-identity path:
+
+- Host startup/recovery regressions: `2 passed | 37 skipped`. This includes a new Window claim before
+  renderer-session establishment: `emitAll` now projects only to Window runtimes with an exact claimed
+  renderer session, while snapshot, mutation and IPC paths continue to reject a missing or stale
+  `rendererSessionId`.
+- Desktop AppHost, preload launch bridge, retained Agent Surface, renderer startup and i18n: `5 files /
+  62 tests`.
+- Agent launch runtime exact-Surface isolation: `1 file / 4 tests`; Agent launch/Home contracts: `3 files
+  / 10 tests`.
+- Earlier full focused runs before unrelated concurrent repository-signature edits: Host `39 tests`,
+  Host full `37 files / 333 tests`, Desktop AppHost + renderer `2 files / 46 tests`, Agent catalog
+  `24 tests`, combined i18n/renderer/Host `3 files / 56 tests`, Agent Evaluation key-free `45 files /
+  290 tests`, dry-run `22 suites / 53 cases`, application boundaries `1446 files / 0 findings`,
+  `git diff --check` and strict OpenSpec validation.
+
+The real local SQLite authority contained four Conversation rows. Their `context_json` SQLite
+SHA3-256 values after recovery exactly matched the startup baseline (`3C11082D...`, `04962F24...`,
+`BF98C302...`, `D2C9854E...`), proving the recovery did not migrate, delete or rewrite Conversation
+authority.
+
+A fresh development Electron run rebuilt Main, preload and renderer together, initialized Host ports,
+claimed the Window and loaded the renderer without `bootstrap does not match`, `Agent launch attach
+does not match`, `Agent launch Host payload contains unsupported fields` or renderer bootstrap
+exceptions. Launch attachment now qualifies the retained hidden Agent Root by exact Window + Workbench
++ Agent Surface identity instead of requiring the active Scene; a forged Surface remains
+`desktop-agent-identity-mismatch`. The visible Workbench remained usable under the localized
+invalid-state banner. With the application locale following `zh-CN`, the banner rendered Chinese;
+changing Settings to English updated the same banner and Settings Surface immediately. Reloading the
+renderer while Settings was active restored Settings and the hidden Agent Root without launch,
+bootstrap or attachment identity errors; restoring system language returned the interface to Chinese.
+The raw Host diagnostic remained available only as supplemental `title` text.
+
+The current full Host run is `330 passed / 3 failed`: the remaining assertions still expect the
+superseded numeric or fixture-provided `viewInstanceId` instead of the current owner-generated identity.
+They are outside persisted Agent Surface recovery, and the focused recovery/startup path is green.
+Task 11.10 remains open for that repository-wide convergence and its combined
+multi-Workspace/provider/Canvas acceptance.

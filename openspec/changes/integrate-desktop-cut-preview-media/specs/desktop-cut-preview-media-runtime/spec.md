@@ -60,6 +60,19 @@ Canvas-node or Cut-clip embedded previews.
 - **THEN** Preview returns an explicit unsupported diagnostic
 - **AND** it does not open the raw file through a renderer fallback
 
+### Requirement: EPUB waterfall preview loads chapters incrementally
+
+The EPUB waterfall viewer SHALL render stable estimated placeholders and SHALL load/measure only visible chapters
+plus a bounded neighboring prefetch range. It SHALL NOT perform an all-spine background measurement during initial
+preview.
+
+#### Scenario: A large EPUB first opens
+
+- **WHEN** the spine contains many chapters and only the first viewport is visible
+- **THEN** initial readiness does not render or measure every chapter
+- **AND** scrolling loads newly visible chapters and releases chapters outside the retention range
+- **AND** the UI remains responsive while page metrics refine incrementally
+
 ### Requirement: Media transport is opaque, scoped and releasable
 
 The system MUST resolve thumbnails and preview media through Host-authorized descriptors scoped to

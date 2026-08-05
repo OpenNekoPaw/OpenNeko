@@ -109,3 +109,5 @@
       residual risks.
 - [x] 7.6 Add regression coverage for the reported legacy NKC search failure and run real Electron
       visual acceptance for the aligned global Media/Asset Library surface.
+- [x] 7.7 Reset stale retained Media facet containers against fresh root projections, add remount/facet-switch regression coverage, and prove an isolated Electron project still displays linked libraries.
+  - Assets Webview regression tests distinguish an explicit empty child container from a stale retained container. The packaged Electron report at `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T09-54-49.980Z-resource-browser-entity-management-packaged/report.json` proves a facet switch returns to the linked `Assets` library root instead of retaining the stale `portrait.png` child view.

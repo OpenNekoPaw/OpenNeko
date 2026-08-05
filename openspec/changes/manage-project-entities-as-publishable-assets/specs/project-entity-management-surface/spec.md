@@ -86,3 +86,46 @@ operation before changing project facts.
 
 - **WHEN** the remote revision is tombstoned but the Project Entity exists
 - **THEN** the Entity remains fully manageable and shows provenance availability separately
+
+### Requirement: Resource context actions preserve owning lifecycle
+
+Resource Browser SHALL expose a keyboard- and pointer-operable context menu whose commands are derived from
+the exact facet, item role, and owner capabilities. Workspace Files MAY create a directory, import
+picker-authorized local files, or move a selected workspace item to OS Trash. Media content, Asset packages,
+and Entity records MUST NOT receive a generic file deletion command.
+
+#### Scenario: Manage a workspace directory
+
+- **WHEN** the user opens the Files context menu on the workspace root or a contained directory
+- **THEN** create-directory and import-file commands target that exact contained parent under expected revision
+- **AND** imported file bytes remain in Host/Node and are not transported through Renderer
+
+#### Scenario: Delete a workspace file
+
+- **WHEN** the user confirms deletion of an exact Files item
+- **THEN** the owning Node operation revalidates its contained locator and moves it to OS Trash before refreshing
+
+#### Scenario: Inspect resources owned elsewhere
+
+- **WHEN** the user opens a context menu for linked Media content, an Asset item, or an Entity
+- **THEN** only owner-declared read, library-link, Asset lifecycle, or Entity Inspector actions are shown
+- **AND** unsupported deletion is absent rather than routed through a generic filesystem fallback
+
+### Requirement: Resource Browser presentation data is disposable and failure-scoped
+
+Resource Browser component presentation state SHALL be unversioned and rebuildable. It MUST NOT introduce a
+component-state migration path or compatibility reader. Invalid retained state SHALL be discarded only for the
+affected Resource Browser instance. Ephemeral typed Desktop wire contracts SHALL resolve from one canonical
+package source and MUST NOT be duplicated through a stale dependency prebundle.
+
+#### Scenario: Component presentation state becomes invalid
+
+- **WHEN** retained selection or navigation state no longer matches the current authoritative projection
+- **THEN** Resource Browser resets only that local display state and reprojects authoritative resources
+- **AND** it does not migrate component data or invalidate Project Entity, Canvas, Agent, or workspace state
+
+#### Scenario: Resource Browser runtime data is invalid
+
+- **WHEN** a snapshot or operation violates the current typed runtime contract
+- **THEN** the Resource Browser surface displays an owner-local unavailable diagnostic
+- **AND** sibling Desktop surfaces remain mounted and usable
