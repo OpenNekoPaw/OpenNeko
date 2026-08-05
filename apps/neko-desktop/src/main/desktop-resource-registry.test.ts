@@ -84,7 +84,7 @@ describe('DesktopResourceRegistry', () => {
       windowId: 'window-1',
       viewId: 'cut-1',
       sessionId: 'cut-session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
       revision: 'revision-1',
     });
     const stdout = new PassThrough();
@@ -115,7 +115,7 @@ describe('DesktopResourceRegistry', () => {
       windowId: 'window-1',
       viewId: 'cut-1',
       sessionId: 'cut-session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
       revision: 'revision-1',
     });
     const createStream = vi.fn();
@@ -206,9 +206,8 @@ function owner(overrides: Partial<DesktopResourceOwner> = {}): DesktopResourceOw
     windowId: 'window-1',
     viewId: 'view-1',
     sessionId: 'session-1',
-    endpointEpoch: 'endpoint-1',
+    rendererSessionId: 'endpoint-1',
     revision: 'revision-1',
-    generation: 'generation-1',
     ...overrides,
   };
 }

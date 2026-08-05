@@ -15,10 +15,12 @@ const PreviewRoot = lazy(async () => {
 export function DesktopPreviewSurface({
   project,
   projection,
+  lifecyclePresentation,
   view,
 }: {
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
+  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const { locale, t } = useTranslation();
@@ -33,21 +35,20 @@ export function DesktopPreviewSurface({
         workspaceId: project.workspaceId,
         windowId: projection.window.windowId,
         viewId: view.viewId,
-        viewEpoch: view.viewEpoch,
+        viewInstanceId: view.viewInstanceId,
         documentId: view.documentId,
         sessionId: view.ownerId,
-        endpointEpoch: projection.endpointEpoch,
-        revision: 0,
+        rendererSessionId: projection.rendererSessionId,
       },
     });
   }, [
     project.projectId,
     project.workspaceId,
-    projection.endpointEpoch,
+    projection.rendererSessionId,
     projection.window.windowId,
     view.documentId,
     view.ownerId,
-    view.viewEpoch,
+    view.viewInstanceId,
     view.viewId,
   ]);
 
@@ -65,7 +66,12 @@ export function DesktopPreviewSurface({
           </div>
         }
       >
-        <PreviewRoot chrome="content-only" runtime={runtime} locale={locale} />
+        <PreviewRoot
+          chrome="content-only"
+          lifecyclePresentation={lifecyclePresentation}
+          runtime={runtime}
+          locale={locale}
+        />
       </Suspense>
     </section>
   );

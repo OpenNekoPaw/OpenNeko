@@ -1,8 +1,12 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { createDesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createDesktopWorkspaceRegistry,
+  createRestoringDesktopWorkspaceResolver,
+  type DesktopWorkspaceRegistry,
+} from './desktop-workspace-registry';
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -11,6 +15,40 @@ afterEach(async () => {
 });
 
 describe('Desktop workspace registry', () => {
+  it('restores package-owned project state before returning resolved workspaces', async () => {
+    const workspace = {
+      workspaceId: 'workspace-1',
+      workspacePath: '/workspace',
+      displayName: 'Workspace',
+      locator: { kind: 'relative' as const, value: 'workspace' },
+    };
+    const operations: string[] = [];
+    const registry: DesktopWorkspaceRegistry = {
+      resolve: vi.fn(async () => {
+        operations.push('resolve');
+        return workspace;
+      }),
+      restore: vi.fn(async () => {
+        operations.push('restore-resolution');
+        return workspace;
+      }),
+      dispose: vi.fn(async () => undefined),
+    };
+    const resolver = createRestoringDesktopWorkspaceResolver(registry, async (resolved) => {
+      expect(resolved).toBe(workspace);
+      operations.push('restore-project');
+    });
+
+    await expect(resolver.resolve('/workspace')).resolves.toBe(workspace);
+    await expect(resolver.restore?.('workspace-1')).resolves.toBe(workspace);
+    expect(operations).toEqual([
+      'resolve',
+      'restore-project',
+      'restore-resolution',
+      'restore-project',
+    ]);
+  });
+
   it('migrates every local metadata namespace required by project portability', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'neko-desktop-workspace-registry-'));
     const homedir = path.join(root, 'home');

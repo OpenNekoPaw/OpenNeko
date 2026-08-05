@@ -7,7 +7,6 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAutomatedDesktopFunctional } from './desktop-functional/runner.mjs';
 import { resolveDesktopFunctionalScenarios } from './desktop-functional/scenarios.mjs';
-import { desktopStateSqliteRestartScenario } from './desktop-functional/desktop-state-sqlite-migration.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixturePrefix = 'openneko-desktop-functional-';
@@ -78,27 +77,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const cli = parseCli(process.argv.slice(2));
     if (!cli.scenario) {
       process.exitCode = await runDesktopUiFunctional();
-    } else if (cli.scenario === 'desktop-state-sqlite-migration') {
-      const fixtureHome = await mkdtemp(join(tmpdir(), fixturePrefix));
-      try {
-        for (const scenario of [
-          ...resolveDesktopFunctionalScenarios(cli.scenario),
-          desktopStateSqliteRestartScenario,
-        ]) {
-          const result = await runAutomatedDesktopFunctional({
-            scenario,
-            target: cli.target,
-            createTemporaryRoot: async () => fixtureHome,
-            removeTemporaryRoot: async () => undefined,
-          });
-          process.stdout.write(
-            `Desktop functional scenario '${scenario.id}' passed: ${result.reportPath}\n`,
-          );
-        }
-        process.exitCode = 0;
-      } finally {
-        await rm(fixtureHome, { recursive: true, force: true });
-      }
     } else {
       for (const scenario of resolveDesktopFunctionalScenarios(cli.scenario)) {
         const result = await runAutomatedDesktopFunctional({

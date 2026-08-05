@@ -24,7 +24,6 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
 
   constructor(
     identity: AssetCenterSessionIdentity,
-    private readonly endpointEpoch: string,
     private readonly initialViewMode: AssetCenterFilterProjection['viewMode'],
     private readonly bridge: OpenNekoAssetCenterBridge,
   ) {
@@ -46,19 +45,15 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
     return () => this.listeners.delete(listener);
   }
 
-  updateFilter(
-    expectedRevision: number,
-    filter: AssetCenterFilterProjection,
-  ): Promise<AssetCenterSessionProjection> {
-    return this.execute({ route: 'filter.update', expectedRevision, filter });
+  updateFilter(filter: AssetCenterFilterProjection): Promise<AssetCenterSessionProjection> {
+    return this.execute({ route: 'filter.update', filter });
   }
 
-  refresh(expectedRevision: number): Promise<AssetCenterSessionProjection> {
-    return this.execute({ route: 'catalog.refresh', expectedRevision });
+  refresh(): Promise<AssetCenterSessionProjection> {
+    return this.execute({ route: 'catalog.refresh' });
   }
 
   select(input: {
-    readonly expectedRevision: number;
     readonly owner: GlobalLibraryItem['owner'];
     readonly itemId: string;
   }): Promise<AssetCenterSessionProjection> {
@@ -72,10 +67,8 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
     }
     const request = createAssetCenterHostRequest({
       requestId: crypto.randomUUID(),
-      endpointEpoch: this.endpointEpoch,
       identity: this.identity,
       route: 'thumbnail.resolve',
-      expectedRevision: projection.revision,
       itemId: item.id,
       variant,
     });
@@ -87,31 +80,28 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
     });
   }
 
-  async importAssets(expectedRevision: number): Promise<void> {
-    await this.execute({ route: 'asset.import', expectedRevision });
+  async importAssets(): Promise<void> {
+    await this.execute({ route: 'asset.import' });
   }
 
-  async removeAsset(item: GlobalAssetItem, expectedRevision: number): Promise<void> {
-    await this.execute({ route: 'asset.remove', expectedRevision, itemId: item.id });
+  async removeAsset(item: GlobalAssetItem): Promise<void> {
+    await this.execute({ route: 'asset.remove', itemId: item.id });
   }
 
-  async addMediaLibrary(
-    locationKind: GlobalMediaLibraryLocationKind,
-    expectedRevision: number,
-  ): Promise<void> {
-    await this.execute({ route: 'media-library.add', expectedRevision, locationKind });
+  async addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind): Promise<void> {
+    await this.execute({ route: 'media-library.add', locationKind });
   }
 
-  async relinkMediaLibrary(libraryId: string, expectedRevision: number): Promise<void> {
-    await this.execute({ route: 'media-library.relink', expectedRevision, libraryId });
+  async relinkMediaLibrary(libraryId: string): Promise<void> {
+    await this.execute({ route: 'media-library.relink', libraryId });
   }
 
-  async removeMediaLibrary(libraryId: string, expectedRevision: number): Promise<void> {
-    await this.execute({ route: 'media-library.remove', expectedRevision, libraryId });
+  async removeMediaLibrary(libraryId: string): Promise<void> {
+    await this.execute({ route: 'media-library.remove', libraryId });
   }
 
-  async revealMediaLibrary(libraryId: string, expectedRevision: number): Promise<void> {
-    await this.execute({ route: 'media-library.reveal', expectedRevision, libraryId });
+  async revealMediaLibrary(libraryId: string): Promise<void> {
+    await this.execute({ route: 'media-library.reveal', libraryId });
   }
 
   dispose(): void {
@@ -123,7 +113,6 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
       void this.bridge.assetCenter.execute(
         createAssetCenterHostRequest({
           requestId: crypto.randomUUID(),
-          endpointEpoch: this.endpointEpoch,
           identity: this.identity,
           route: 'preview.detach',
         }),
@@ -136,37 +125,31 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
       | { readonly route: 'attach'; readonly initialViewMode: 'list' | 'grid' }
       | {
           readonly route: 'filter.update';
-          readonly expectedRevision: number;
           readonly filter: AssetCenterFilterProjection;
         }
-      | { readonly route: 'catalog.refresh'; readonly expectedRevision: number }
+      | { readonly route: 'catalog.refresh' }
       | {
           readonly route: 'selection.select';
-          readonly expectedRevision: number;
           readonly owner: GlobalLibraryItem['owner'];
           readonly itemId: string;
         }
-      | { readonly route: 'asset.import'; readonly expectedRevision: number }
+      | { readonly route: 'asset.import' }
       | {
           readonly route: 'asset.remove';
-          readonly expectedRevision: number;
           readonly itemId: string;
         }
       | {
           readonly route: 'media-library.add';
-          readonly expectedRevision: number;
           readonly locationKind: GlobalMediaLibraryLocationKind;
         }
       | {
           readonly route: 'media-library.relink' | 'media-library.remove' | 'media-library.reveal';
-          readonly expectedRevision: number;
           readonly libraryId: string;
         },
   ): Promise<AssetCenterSessionProjection> {
     this.requireActive();
     const request = createAssetCenterHostRequest({
       requestId: crypto.randomUUID(),
-      endpointEpoch: this.endpointEpoch,
       identity: this.identity,
       ...input,
     });

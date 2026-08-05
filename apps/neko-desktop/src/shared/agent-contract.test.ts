@@ -9,13 +9,21 @@ import {
 } from './agent-contract';
 
 describe('Desktop Agent contract', () => {
-  it('creates a fixed versioned bootstrap request', () => {
-    expect(createDesktopAgentBootstrapRequest('request-1', 'project-1', 'view-1', 2)).toEqual({
-      schemaVersion: 1,
+  it('creates a canonical bootstrap request', () => {
+    expect(
+      createDesktopAgentBootstrapRequest(
+        'request-1',
+        'workbench-1',
+        'agent-surface-1',
+        'project-1',
+        'view-1',
+      ),
+    ).toEqual({
       requestId: 'request-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       projectId: 'project-1',
       viewId: 'view-1',
-      viewEpoch: 2,
     });
   });
 
@@ -23,17 +31,18 @@ describe('Desktop Agent contract', () => {
     expect(
       createDesktopAgentBootstrapRequest(
         'request-1',
+        'workbench-1',
+        'agent-surface-1',
         'project-1',
         'view-1',
-        2,
         'conversation-1',
       ),
     ).toEqual({
-      schemaVersion: 1,
       requestId: 'request-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       projectId: 'project-1',
       viewId: 'view-1',
-      viewEpoch: 2,
       conversationId: 'conversation-1',
     });
   });
@@ -51,7 +60,6 @@ describe('Desktop Agent contract', () => {
     expect(() =>
       parseDesktopAgentBootstrapProjection(
         {
-          schemaVersion: 1,
           requestId: 'request-2',
           status: 'ready',
           connection: connection(),
@@ -65,7 +73,6 @@ describe('Desktop Agent contract', () => {
     expect(
       parseDesktopAgentMessageResult(
         {
-          schemaVersion: 1,
           requestId: 'request-1',
           status: 'unavailable',
           diagnostic: {
@@ -92,7 +99,6 @@ describe('Desktop Agent contract', () => {
   it('rejects an event with an unknown Host message type', () => {
     expect(() =>
       parseDesktopAgentMessageEvent({
-        schemaVersion: 1,
         connection: connection(),
         sequence: 1,
         message: { type: 'forgedHostMessage' },
@@ -105,11 +111,11 @@ function connection() {
   return {
     applicationInstanceId: 'app-1',
     windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     viewId: 'view-1',
-    viewEpoch: 1,
-    rendererEpoch: 1,
     connectionId: 'connection-1',
   };
 }

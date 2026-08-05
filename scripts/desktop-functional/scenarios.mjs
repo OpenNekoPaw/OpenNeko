@@ -4,7 +4,8 @@ import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/
 import { resourceBrowserEntityManagementScenario } from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
-import { desktopStateSqliteMigrationScenario } from './desktop-state-sqlite-migration.mjs';
+import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
+import { desktopWorkbenchRetentionProviderUiScenario } from './desktop-workbench-retention-provider-ui.mjs';
 import {
   desktopConversationNavigationScenario,
   desktopWorkbenchScenesScenario,
@@ -16,7 +17,8 @@ const scenarios = new Map(
     canvasOpenNekoConsumerScenario,
     previewOpenNekoConsumerScenario,
     desktopAgentProviderUiScenario,
-    desktopStateSqliteMigrationScenario,
+    desktopAgentDiagnosticPortalScenario,
+    desktopWorkbenchRetentionProviderUiScenario,
     desktopConversationNavigationScenario,
     desktopWorkbenchScenesScenario,
     resourceBrowserEntityManagementScenario,

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
-  DESKTOP_WORKSPACE_GRANT_CONTRACT_VERSION,
   parseDesktopWorkspaceGrantProjection,
   type DesktopWorkspaceGrantProjection,
 } from './desktop-workspace-grant-contract';
@@ -69,7 +68,6 @@ export class DesktopWorkspaceGrantAuthority implements DesktopWorkspaceGrantAuth
     }
     const workspaceGrantId = `workspace-grant:${(this.options.createIdentity ?? randomUUID)()}`;
     const projection = parseDesktopWorkspaceGrantProjection({
-      schemaVersion: DESKTOP_WORKSPACE_GRANT_CONTRACT_VERSION,
       workspaceGrantId,
       windowId: input.windowId,
       label: input.label,
@@ -144,7 +142,6 @@ export class DesktopWorkspaceGrantAuthority implements DesktopWorkspaceGrantAuth
       );
     }
     const projection = parseDesktopWorkspaceGrantProjection({
-      schemaVersion: DESKTOP_WORKSPACE_GRANT_CONTRACT_VERSION,
       workspaceGrantId,
       windowId,
       label: workspace.displayName,

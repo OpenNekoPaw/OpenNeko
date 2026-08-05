@@ -6,7 +6,7 @@ import {
 } from './desktop-agent-host-runtime-adapter';
 
 describe('Electron AgentHostRuntimeAdapter', () => {
-  it('delegates only the fixed Agent namespace and scopes presentation state by View epoch', () => {
+  it('delegates only the fixed Agent namespace and scopes presentation state by Workspace owner', () => {
     const send = vi.fn();
     const subscribe = vi.fn(() => vi.fn());
     const storage = createStorage();
@@ -19,47 +19,86 @@ describe('Electron AgentHostRuntimeAdapter', () => {
           subscribe,
         },
       },
-      bootstrap: bootstrap('view-1', 3),
+      bootstrap: bootstrap('view-1'),
       storage,
     });
 
     adapter.send({ type: 'newConversation' });
-    adapter.setState({ schemaVersion: 'presentation.v1', draft: 'hello' });
+    adapter.setState({ draft: 'hello' });
 
-    expect(send).toHaveBeenCalledWith(bootstrap('view-1', 3).connection, {
+    expect(send).toHaveBeenCalledWith(bootstrap('view-1').connection, {
       type: 'newConversation',
     });
-    expect(adapter.getState()).toEqual({
-      schemaVersion: 'presentation.v1',
-      draft: 'hello',
-    });
+    expect(adapter.getState()).toEqual({ draft: 'hello' });
     expect(storage.values).toEqual(
       new Map([
         [
-          'openneko:agent:presentation:view-1:3',
-          '{"schemaVersion":"presentation.v1","draft":"hello"}',
+          'openneko:agent:presentation:workspace:workspace-1:view-1',
+          '{"draft":"hello"}',
         ],
       ]),
     );
   });
 
-  it('keeps another View epoch presentation state isolated', () => {
+  it('restores presentation state across exact connection replacement', () => {
     const storage = createStorage();
     const first = createElectronAgentHostRuntimeAdapter({
       bridge: bridge(),
-      bootstrap: bootstrap('view-1', 1),
+      bootstrap: bootstrap('view-1', 'connection-1'),
       storage,
     });
     const second = createElectronAgentHostRuntimeAdapter({
       bridge: bridge(),
-      bootstrap: bootstrap('view-1', 2),
+      bootstrap: bootstrap('view-1', 'connection-2'),
       storage,
     });
     first.setState({ draft: 'old' });
+    expect(second.getState()).toEqual({ draft: 'old' });
     second.setState({ draft: 'current' });
+    expect(first.getState()).toEqual({ draft: 'current' });
+  });
 
-    expect(first.getState()).toEqual({ draft: 'old' });
-    expect(second.getState()).toEqual({ draft: 'current' });
+  it('keeps another Workspace presentation state isolated', () => {
+    const storage = createStorage();
+    const first = createElectronAgentHostRuntimeAdapter({
+      bridge: bridge(),
+      bootstrap: bootstrap('view-1', 'connection-1'),
+      storage,
+    });
+    const second = createElectronAgentHostRuntimeAdapter({
+      bridge: bridge(),
+      bootstrap: {
+        ...bootstrap('view-1', 'connection-2'),
+        connection: {
+          ...bootstrap('view-1', 'connection-2').connection,
+          workspaceId: 'workspace-2',
+        },
+      },
+      storage,
+    });
+    first.setState({ draft: 'first' });
+    second.setState({ draft: 'second' });
+
+    expect(first.getState()).toEqual({ draft: 'first' });
+    expect(second.getState()).toEqual({ draft: 'second' });
+  });
+
+  it('returns a local invalid-state marker without rewriting malformed JSON', () => {
+    const storage = createStorage();
+    storage.values.set(
+      'openneko:agent:presentation:workspace:workspace-1:view-1',
+      '{invalid',
+    );
+    const adapter = createElectronAgentHostRuntimeAdapter({
+      bridge: bridge(),
+      bootstrap: bootstrap('view-1'),
+      storage,
+    });
+
+    expect(adapter.getState()).toEqual({ stateReadFailure: 'invalid-json' });
+    expect(storage.values.get('openneko:agent:presentation:workspace:workspace-1:view-1')).toBe(
+      '{invalid',
+    );
   });
 
   it('disposes the preload subscription without owning Host lifecycle', () => {
@@ -79,14 +118,14 @@ describe('Electron AgentHostRuntimeAdapter', () => {
           subscribe,
         },
       },
-      bootstrap: bootstrap('view-1', 1),
+      bootstrap: bootstrap('view-1'),
       storage: createStorage(),
     });
 
     const subscription = adapter.subscribe(vi.fn());
     subscription.dispose();
 
-    expect(subscribe).toHaveBeenCalledWith(bootstrap('view-1', 1).connection, expect.any(Function));
+    expect(subscribe).toHaveBeenCalledWith(bootstrap('view-1').connection, expect.any(Function));
     expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
@@ -101,8 +140,8 @@ describe('Electron AgentHostRuntimeAdapter', () => {
         subscribe,
       },
     };
-    const firstBootstrap = bootstrap('view-1', 1, 'connection-old');
-    const nextBootstrap = bootstrap('view-1', 1, 'connection-new');
+    const firstBootstrap = bootstrap('view-1', 'connection-old');
+    const nextBootstrap = bootstrap('view-1', 'connection-new');
     const first = createElectronAgentHostRuntimeAdapter({
       bridge: sharedBridge,
       bootstrap: firstBootstrap,
@@ -119,7 +158,6 @@ describe('Electron AgentHostRuntimeAdapter', () => {
     first.send({
       type: 'projectionDetach',
       key: {
-        endpointEpoch: 'endpoint-old',
         attachmentId: 'attachment-old',
         tabId: 'tab-old',
         conversationId: 'conversation-old',
@@ -133,7 +171,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
       firstBootstrap.connection,
       expect.objectContaining({
         type: 'projectionDetach',
-        key: expect.objectContaining({ endpointEpoch: 'endpoint-old' }),
+        key: expect.objectContaining({ attachmentId: 'attachment-old' }),
       }),
     );
     expect(send).not.toHaveBeenCalledWith(
@@ -154,19 +192,18 @@ function bridge() {
   };
 }
 
-function bootstrap(viewId: string, viewEpoch: number, connectionId = 'connection-1') {
+function bootstrap(viewId: string, connectionId = 'connection-1') {
   return {
-    schemaVersion: 1 as const,
     requestId: 'request-1',
     status: 'ready' as const,
     connection: {
       applicationInstanceId: 'app-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: `agent-surface:${connectionId}`,
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       viewId,
-      viewEpoch,
-      rendererEpoch: 1,
       connectionId,
     },
   };

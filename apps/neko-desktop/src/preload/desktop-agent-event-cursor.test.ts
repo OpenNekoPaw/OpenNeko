@@ -8,7 +8,7 @@ import {
 
 describe('Desktop Agent preload event cursor', () => {
   it('preserves the sequence baseline when bootstrap reuses the exact connection', () => {
-    const connection = createConnection('connection-1', 1, 1);
+    const connection = createConnection('connection-1');
     const current = {
       connection,
       sequence: 31,
@@ -19,10 +19,10 @@ describe('Desktop Agent preload event cursor', () => {
 
   it('resets the sequence baseline for a replacement connection', () => {
     const current = {
-      connection: createConnection('connection-1', 1, 1),
+      connection: createConnection('connection-1'),
       sequence: 31,
     };
-    const replacement = createConnection('connection-2', 2, 2);
+    const replacement = createConnection('connection-2');
 
     expect(advanceDesktopAgentBootstrapCursor(current, replacement)).toEqual({
       connection: replacement,
@@ -56,8 +56,8 @@ describe('Desktop Agent preload event cursor', () => {
 
   it('keeps two same-View conversation connections independently sequenced', () => {
     const registry = new DesktopAgentEventCursorRegistry();
-    const previous = createConnection('connection-1', 1, 1);
-    const replacement = createConnection('connection-2', 1, 1);
+    const previous = createConnection('connection-1');
+    const replacement = createConnection('connection-2');
     registry.register(previous);
     registry.register(replacement);
 
@@ -77,8 +77,8 @@ describe('Desktop Agent preload event cursor', () => {
 
   it('drops a queued event only after the exact connection is retired', () => {
     const registry = new DesktopAgentEventCursorRegistry();
-    const previous = createConnection('connection-1', 1, 1);
-    const current = createConnection('connection-2', 1, 1);
+    const previous = createConnection('connection-1');
+    const current = createConnection('connection-2');
     registry.register(previous);
     registry.register(current);
     registry.retire(previous);
@@ -89,18 +89,16 @@ describe('Desktop Agent preload event cursor', () => {
 
   it('keeps unknown and identity-conflicting events fail-visible', () => {
     const registry = new DesktopAgentEventCursorRegistry();
-    const current = createConnection('connection-current', 1, 1);
+    const current = createConnection('connection-current');
     registry.register(current);
 
-    expect(registry.advance(createConnection('connection-foreign', 1, 1), 1)).toEqual({
+    expect(registry.advance(createConnection('connection-foreign'), 1)).toEqual({
       kind: 'foreign',
-      currentConnection: current,
     });
     expect(
       registry.advance({ ...current, workspaceId: 'workspace-forged' }, 1),
     ).toEqual({
       kind: 'foreign',
-      currentConnection: current,
     });
     expect(registry.advance(current, 3)).toEqual({
       kind: 'sequence-mismatch',
@@ -112,8 +110,8 @@ describe('Desktop Agent preload event cursor', () => {
 
   it('retires an unsubscribed connection and preserves another active View', () => {
     const registry = new DesktopAgentEventCursorRegistry();
-    const first = createConnection('connection-1', 1, 1);
-    const second = { ...createConnection('connection-2', 1, 1), viewId: 'view-2' };
+    const first = createConnection('connection-1');
+    const second = { ...createConnection('connection-2'), viewId: 'view-2' };
     registry.register(first);
     registry.register(second);
     registry.retire(second);
@@ -123,19 +121,15 @@ describe('Desktop Agent preload event cursor', () => {
   });
 });
 
-function createConnection(
-  connectionId: string,
-  viewEpoch: number,
-  rendererEpoch: number,
-): DesktopAgentConnectionIdentity {
+function createConnection(connectionId: string): DesktopAgentConnectionIdentity {
   return {
     applicationInstanceId: 'application-1',
     windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: `agent-surface:${connectionId}`,
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     viewId: 'view-1',
     connectionId,
-    viewEpoch,
-    rendererEpoch,
   };
 }

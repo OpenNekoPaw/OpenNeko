@@ -12,39 +12,44 @@ describe('Desktop Preview bridge contract', () => {
         projectId: 'project-1',
         workspaceId: 'workspace-1',
         viewId: 'preview-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       }),
     ).toEqual({
-      schemaVersion: 1,
       requestId: 'request-1',
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       viewId: 'preview-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       sessionId: 'session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
     });
   });
 
-  it('rejects raw paths and unknown versions', () => {
+  it('rejects raw paths and unknown fields', () => {
     expect(() =>
       parseDesktopPreviewBootstrapRequest({
-        schemaVersion: 1,
         requestId: 'request-1',
         projectId: '/Users/private/project',
         workspaceId: 'workspace-1',
         viewId: 'preview-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       }),
     ).toThrow('Project identity is invalid');
     expect(() =>
       parseDesktopPreviewBootstrapRequest({
-        schemaVersion: 2,
+        requestId: 'request-1',
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        viewId: 'preview-1',
+        viewInstanceId: 'view-instance-1',
+        sessionId: 'session-1',
+        rendererSessionId: 'endpoint-1',
+        removedTechnicalField: true,
       }),
-    ).toThrow('Unsupported Desktop Preview version');
+    ).toThrow('unsupported fields');
   });
 });

@@ -1609,17 +1609,19 @@ code {
 .desktop-scene-workbench--agent-only.neko-controlled-workbench-shell {
   grid-template-columns:
     var(--neko-controlled-primary-width)
-    minmax(420px, 1fr)
     0
+    minmax(420px, 1fr)
     0;
 }
 
-.desktop-scene-workbench--agent-only .neko-controlled-workbench-main {
-  display: none;
-}
-
-.desktop-scene-workbench--agent-only .neko-controlled-workbench-dock--left {
-  padding-right: 8px;
+.desktop-workbench-slot-deck,
+.desktop-workbench-slot-deck__item,
+.desktop-workbench-slot-target {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .project-workspace .neko-controlled-workbench-dock--right {
@@ -1778,6 +1780,14 @@ code {
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.project-main-group__content > [data-neko-retained-surface-deck='true'] {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -2446,4 +2456,44 @@ code {
     outline-offset: 2px;
     box-shadow: none;
   }
+}
+.desktop-render-error {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: var(--neko-editor-foreground);
+  background: var(--neko-editor-background);
+  text-align: center;
+}
+
+.desktop-render-error__content {
+  display: flex;
+  max-width: 440px;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.desktop-render-error__content h2,
+.desktop-render-error__content p {
+  margin: 0;
+}
+
+.desktop-render-error__content p {
+  color: var(--neko-description-foreground);
+  font-size: 12px;
+}
+
+.desktop-render-error__retry {
+  border: 1px solid var(--neko-button-border, transparent);
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: var(--neko-button-foreground);
+  background: var(--neko-button-background);
+  cursor: pointer;
 }

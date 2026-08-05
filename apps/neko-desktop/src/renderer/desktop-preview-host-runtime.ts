@@ -1,5 +1,4 @@
 import {
-  PREVIEW_HOST_RUNTIME_VERSION,
   type PreviewHostRuntime,
   type PreviewRuntimeIdentity,
 } from '@neko/preview-domain';
@@ -21,16 +20,13 @@ export function createElectronPreviewHostRuntime(input: {
           projectId: input.identity.projectId,
           workspaceId: input.identity.workspaceId,
           viewId: input.identity.viewId,
-          viewEpoch: input.identity.viewEpoch,
+          viewInstanceId: input.identity.viewInstanceId,
           sessionId: input.identity.sessionId,
-          endpointEpoch: input.identity.endpointEpoch,
+          rendererSessionId: input.identity.rendererSessionId,
         }),
       );
     },
     async execute(request) {
-      if (request.schemaVersion !== PREVIEW_HOST_RUNTIME_VERSION) {
-        throw new Error(`Desktop Preview route '${request.route}' uses an unsupported version.`);
-      }
       return input.bridge.preview.execute(request);
     },
     subscribe() {

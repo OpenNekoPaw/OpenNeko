@@ -4,11 +4,11 @@ import type { LocalMetadataRepositories, LocalMetadataStore } from '@neko/local-
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import {
-  AGENT_STATE_MIGRATIONS,
-  ENTITY_ASSET_PROJECTION_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
-  SEARCH_PROJECTION_MIGRATIONS,
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+  initializeEntityAssetProjectionTables,
+  initializeMediaMetadataTables,
+  initializeSearchProjectionTables,
 } from '@neko/local-metadata/sqlite';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
@@ -19,6 +19,28 @@ export interface DesktopWorkspaceRegistry {
   resolve(workspacePath: string): Promise<AssetWorkspaceResolution>;
   restore?(workspaceId: string): Promise<AssetWorkspaceResolution>;
   dispose(): Promise<void>;
+}
+
+export function createRestoringDesktopWorkspaceResolver(
+  registry: DesktopWorkspaceRegistry,
+  restoreWorkspace: (workspace: AssetWorkspaceResolution) => Promise<void>,
+): Pick<DesktopWorkspaceRegistry, 'resolve' | 'restore'> {
+  const restoreResolvedWorkspace = async (
+    workspace: AssetWorkspaceResolution,
+  ): Promise<AssetWorkspaceResolution> => {
+    await restoreWorkspace(workspace);
+    return workspace;
+  };
+  return {
+    resolve: async (workspacePath) =>
+      restoreResolvedWorkspace(await registry.resolve(workspacePath)),
+    restore: async (workspaceId) => {
+      if (!registry.restore) {
+        throw new Error('Desktop Workspace registry does not support persisted restore.');
+      }
+      return restoreResolvedWorkspace(await registry.restore(workspaceId));
+    },
+  };
 }
 
 export async function createDesktopWorkspaceRegistry(options: {
@@ -37,16 +59,11 @@ export async function createDesktopWorkspaceRegistry(options: {
   } else if (metadataStore.state !== 'open') {
     throw new Error('Desktop workspace registry requires an open local metadata Store.');
   }
-  await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await metadataStore.migrateNamespace(AGENT_STATE_MIGRATIONS);
-  await metadataStore.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
-  await metadataStore.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
-  await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
-    destructiveBackup: {
-      destinationPath: `${databasePath}.pre-project-entity-projections-v3.bak`,
-      reason: 'migration',
-    },
-  });
+  await initializeCoreLocalMetadataTables(metadataStore);
+  await initializeAgentStateTables(metadataStore);
+  await initializeMediaMetadataTables(metadataStore);
+  await initializeSearchProjectionTables(metadataStore);
+  await initializeEntityAssetProjectionTables(metadataStore);
   return new NodeDesktopWorkspaceRegistry(homedir, metadataStore, ownsMetadataStore);
 }
 

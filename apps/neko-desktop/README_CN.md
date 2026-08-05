@@ -97,7 +97,6 @@ pnpm --filter @neko/app-desktop dev
 pnpm test:functional:headless
 pnpm test:local:ui
 pnpm test:local:ui --scenario=all-openneko-consumers
-pnpm test:local:ui --scenario=desktop-state-sqlite-migration
 pnpm test:local:ui --scenario=all-openneko-consumers --target=packaged
 pnpm test:local:media-openneko
 ```
@@ -123,10 +122,6 @@ Agent Evaluation 的 suite、Scenario、assertion、ablation、pass/fail 和报�
 `scripts/agent-eval`。Desktop 只提供固定 typed 产品操作与中立 facts，不解析测试计划，也不根据
 case、Skill 或 variant 选择成功路径。Agent Evaluation harness、真实 API、隐藏/可见 Desktop matrix
 和所有消融入口均为显式本地操作，不得加入 GitHub Actions 或通用 CI。
-
-`--scenario=desktop-state-sqlite-migration` 连续启动两个独立 Electron 进程：首次验证旧 Shell /
-应用设置 JSON 的事务导入、内容一致归档和 SQLite commit，第二次使用损坏的 legacy poison
-文件验证已提交 marker 后仅从 `~/.neko/neko.db` 恢复，且不会重新读取、归档或改写旧 authority。
 
 `pnpm test:local:media-openneko` 使用合成 H.264/WAV/Main10-PQ 和 32 MiB fixture 运行专用
 Electron OpenNeko resource qualification，验证 metadata、seek、Range、SHA-256、变化帧、

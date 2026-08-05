@@ -9,8 +9,6 @@ import {
   type DesktopAgentViewIdentity,
 } from '@neko/agent-contracts';
 
-export const DESKTOP_AGENT_CONTRACT_VERSION = 1 as const;
-
 export const DESKTOP_AGENT_CHANNELS = {
   bootstrapGet: 'openneko:desktop:agent:bootstrap:get',
   messageSend: 'openneko:desktop:agent:message:send',
@@ -29,17 +27,16 @@ export const DESKTOP_AGENT_RUNTIME_REQUIREMENTS = [
 export type DesktopAgentRuntimeRequirement = (typeof DESKTOP_AGENT_RUNTIME_REQUIREMENTS)[number];
 
 export interface DesktopWorkspaceAgentBootstrapRequest extends DesktopAgentViewIdentity {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
+  readonly workbenchInstanceId: string;
+  readonly agentSurfaceId: string;
   readonly conversationId?: string;
 }
 
-export interface DesktopAssistantAgentBootstrapRequest extends Omit<
-  DesktopAssistantAgentViewIdentity,
-  'viewEpoch'
-> {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
+export interface DesktopAssistantAgentBootstrapRequest extends DesktopAssistantAgentViewIdentity {
   readonly requestId: string;
+  readonly workbenchInstanceId: string;
+  readonly agentSurfaceId: string;
   readonly conversationId: string;
 }
 
@@ -47,7 +44,6 @@ export type DesktopAgentBootstrapRequest =
   DesktopWorkspaceAgentBootstrapRequest | DesktopAssistantAgentBootstrapRequest;
 
 export interface DesktopAgentReadyBootstrapProjection {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly status: 'ready';
   readonly connection: DesktopAgentConnectionIdentity;
@@ -61,7 +57,6 @@ export interface DesktopAgentUnavailableDiagnostic {
 }
 
 export interface DesktopAgentUnavailableBootstrapProjection {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly status: 'unavailable';
   readonly diagnostic: DesktopAgentUnavailableDiagnostic;
@@ -71,20 +66,17 @@ export type DesktopAgentBootstrapProjection =
   DesktopAgentReadyBootstrapProjection | DesktopAgentUnavailableBootstrapProjection;
 
 export interface DesktopAgentMessageRequest {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly connection: DesktopAgentConnectionIdentity;
   readonly message: AgentWebviewToHostMessage;
 }
 
 export interface DesktopAgentAcceptedMessageResult {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly status: 'accepted';
 }
 
 export interface DesktopAgentUnavailableMessageResult {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly requestId: string;
   readonly status: 'unavailable';
   readonly diagnostic: AgentHostRouteUnavailableDiagnostic;
@@ -94,7 +86,6 @@ export type DesktopAgentMessageResult =
   DesktopAgentAcceptedMessageResult | DesktopAgentUnavailableMessageResult;
 
 export interface DesktopAgentMessageEvent {
-  readonly schemaVersion: typeof DESKTOP_AGENT_CONTRACT_VERSION;
   readonly connection: DesktopAgentConnectionIdentity;
   readonly sequence: number;
   readonly message: AgentHostToWebviewMessage;
@@ -103,12 +94,15 @@ export interface DesktopAgentMessageEvent {
 export interface OpenNekoDesktopAgentBridge {
   readonly agent: {
     getBootstrap(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
       projectId: string,
       viewId: string,
-      viewEpoch: number,
       conversationId?: string,
     ): Promise<DesktopAgentBootstrapProjection>;
     getAssistantBootstrap(
+      workbenchInstanceId: string,
+      agentSurfaceId: string,
       assistantSpaceId: string,
       conversationId: string,
       viewId: string,
@@ -125,11 +119,8 @@ export class DesktopAgentContractError extends Error {
   constructor(
     readonly code:
       | 'invalid-desktop-agent-payload'
-      | 'unsupported-desktop-agent-version'
       | 'desktop-agent-request-mismatch'
-      | 'desktop-agent-identity-mismatch'
-      | 'desktop-agent-stale-renderer-epoch'
-      | 'desktop-agent-stale-view-epoch',
+      | 'desktop-agent-identity-mismatch',
     message: string,
   ) {
     super(message);
@@ -139,20 +130,24 @@ export class DesktopAgentContractError extends Error {
 
 export function createDesktopAgentBootstrapRequest(
   requestId: string,
+  workbenchInstanceId: string,
+  agentSurfaceId: string,
   projectId: string,
   viewId: string,
-  viewEpoch: number,
   conversationId?: string,
 ): DesktopAgentBootstrapRequest {
   return {
-    schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop Agent bootstrap requestId is required.'),
+    workbenchInstanceId: requireNonEmptyString(
+      workbenchInstanceId,
+      'Desktop Agent Workbench instance identity is required.',
+    ),
+    agentSurfaceId: requireNonEmptyString(
+      agentSurfaceId,
+      'Desktop Agent Surface identity is required.',
+    ),
     projectId: requireNonEmptyString(projectId, 'Desktop Agent Project identity is required.'),
     viewId: requireNonEmptyString(viewId, 'Desktop Agent View identity is required.'),
-    viewEpoch: requirePositiveInteger(
-      viewEpoch,
-      'Desktop Agent View epoch must be a positive integer.',
-    ),
     ...(conversationId === undefined
       ? {}
       : {
@@ -166,13 +161,22 @@ export function createDesktopAgentBootstrapRequest(
 
 export function createDesktopAssistantAgentBootstrapRequest(
   requestId: string,
+  workbenchInstanceId: string,
+  agentSurfaceId: string,
   assistantSpaceId: string,
   conversationId: string,
   viewId: string,
 ): DesktopAssistantAgentBootstrapRequest {
   return {
-    schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop Agent bootstrap requestId is required.'),
+    workbenchInstanceId: requireNonEmptyString(
+      workbenchInstanceId,
+      'Desktop Agent Workbench instance identity is required.',
+    ),
+    agentSurfaceId: requireNonEmptyString(
+      agentSurfaceId,
+      'Desktop Agent Surface identity is required.',
+    ),
     assistantSpaceId: requireNonEmptyString(
       assistantSpaceId,
       'Desktop Agent Assistant Space identity is required.',
@@ -187,15 +191,29 @@ export function createDesktopAssistantAgentBootstrapRequest(
 
 export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentBootstrapRequest {
   const record = requireRecord(value, 'Desktop Agent bootstrap request must be an object.');
-  requireVersion(record['schemaVersion']);
   if ('assistantSpaceId' in record) {
     requireExactKeys(
       record,
-      ['schemaVersion', 'requestId', 'assistantSpaceId', 'conversationId', 'viewId'],
+      [
+        'requestId',
+        'workbenchInstanceId',
+        'agentSurfaceId',
+        'assistantSpaceId',
+        'conversationId',
+        'viewId',
+      ],
       'Desktop Assistant Agent bootstrap request',
     );
     return createDesktopAssistantAgentBootstrapRequest(
       requireNonEmptyString(record['requestId'], 'Desktop Agent bootstrap requestId is required.'),
+      requireNonEmptyString(
+        record['workbenchInstanceId'],
+        'Desktop Agent Workbench instance identity is required.',
+      ),
+      requireNonEmptyString(
+        record['agentSurfaceId'],
+        'Desktop Agent Surface identity is required.',
+      ),
       requireNonEmptyString(
         record['assistantSpaceId'],
         'Desktop Agent Assistant Space identity is required.',
@@ -210,11 +228,11 @@ export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentB
   requireExactKeys(
     record,
     [
-      'schemaVersion',
       'requestId',
+      'workbenchInstanceId',
+      'agentSurfaceId',
       'projectId',
       'viewId',
-      'viewEpoch',
       ...('conversationId' in record ? ['conversationId'] : []),
     ],
     'Desktop Workspace Agent bootstrap request',
@@ -222,14 +240,18 @@ export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentB
   return createDesktopAgentBootstrapRequest(
     requireNonEmptyString(record['requestId'], 'Desktop Agent bootstrap requestId is required.'),
     requireNonEmptyString(
+      record['workbenchInstanceId'],
+      'Desktop Agent Workbench instance identity is required.',
+    ),
+    requireNonEmptyString(
+      record['agentSurfaceId'],
+      'Desktop Agent Surface identity is required.',
+    ),
+    requireNonEmptyString(
       record['projectId'],
       'Desktop Agent bootstrap Project identity is required.',
     ),
     requireNonEmptyString(record['viewId'], 'Desktop Agent bootstrap View identity is required.'),
-    requirePositiveInteger(
-      record['viewEpoch'],
-      'Desktop Agent bootstrap View epoch must be a positive integer.',
-    ),
     'conversationId' in record
       ? requireNonEmptyString(
           record['conversationId'],
@@ -249,7 +271,6 @@ export function createDesktopAgentMessageRequest(
     throw invalidPayload('Desktop Agent message is not a valid Agent Webview-to-Host message.');
   }
   return {
-    schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop Agent message requestId is required.'),
     connection: parseConnectionIdentity(connection),
     message: parsedMessage,
@@ -258,7 +279,7 @@ export function createDesktopAgentMessageRequest(
 
 export function parseDesktopAgentMessageRequest(value: unknown): DesktopAgentMessageRequest {
   const record = requireRecord(value, 'Desktop Agent message request must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId', 'connection', 'message'], 'Desktop Agent message request');
   return createDesktopAgentMessageRequest(
     requireNonEmptyString(record['requestId'], 'Desktop Agent message requestId is required.'),
     parseConnectionIdentity(record['connection']),
@@ -271,19 +292,26 @@ export function parseDesktopAgentBootstrapProjection(
   expectedRequestId?: string,
 ): DesktopAgentBootstrapProjection {
   const record = requireRecord(value, 'Desktop Agent bootstrap projection must be an object.');
-  requireVersion(record['schemaVersion']);
   const requestId = requireExpectedRequestId(record, expectedRequestId);
   if (record['status'] === 'ready') {
+    requireExactKeys(
+      record,
+      ['requestId', 'status', 'connection'],
+      'Desktop Agent ready bootstrap projection',
+    );
     return {
-      schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
       requestId,
       status: 'ready',
       connection: parseConnectionIdentity(record['connection']),
     };
   }
   if (record['status'] === 'unavailable') {
+    requireExactKeys(
+      record,
+      ['requestId', 'status', 'diagnostic'],
+      'Desktop Agent unavailable bootstrap projection',
+    );
     return {
-      schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
       requestId,
       status: 'unavailable',
       diagnostic: parseUnavailableDiagnostic(record['diagnostic']),
@@ -297,16 +325,20 @@ export function parseDesktopAgentMessageResult(
   expectedRequestId?: string,
 ): DesktopAgentMessageResult {
   const record = requireRecord(value, 'Desktop Agent message result must be an object.');
-  requireVersion(record['schemaVersion']);
   const requestId = requireExpectedRequestId(record, expectedRequestId);
   if (record['status'] === 'accepted') {
+    requireExactKeys(record, ['requestId', 'status'], 'Desktop Agent accepted message result');
     return {
-      schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
       requestId,
       status: 'accepted',
     };
   }
   if (record['status'] === 'unavailable') {
+    requireExactKeys(
+      record,
+      ['requestId', 'status', 'diagnostic'],
+      'Desktop Agent unavailable message result',
+    );
     const diagnostic = requireRecord(
       record['diagnostic'],
       'Desktop Agent route diagnostic is required.',
@@ -327,7 +359,6 @@ export function parseDesktopAgentMessageResult(
       throw invalidPayload('Desktop Agent route diagnostic owner is invalid.');
     }
     return {
-      schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
       requestId,
       status: 'unavailable',
       diagnostic: {
@@ -349,13 +380,16 @@ export function parseDesktopAgentMessageResult(
 
 export function parseDesktopAgentMessageEvent(value: unknown): DesktopAgentMessageEvent {
   const record = requireRecord(value, 'Desktop Agent message event must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(
+    record,
+    ['connection', 'sequence', 'message'],
+    'Desktop Agent message event',
+  );
   const message = record['message'];
   if (!isAgentHostToWebviewMessage(message)) {
     throw invalidPayload('Desktop Agent event message type is invalid.');
   }
   return {
-    schemaVersion: DESKTOP_AGENT_CONTRACT_VERSION,
     connection: parseConnectionIdentity(record['connection']),
     sequence: requirePositiveInteger(
       record['sequence'],
@@ -376,19 +410,19 @@ function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity
       record['windowId'],
       'Desktop Agent Window identity is required.',
     ),
+    workbenchInstanceId: requireNonEmptyString(
+      record['workbenchInstanceId'],
+      'Desktop Agent Workbench instance identity is required.',
+    ),
+    agentSurfaceId: requireNonEmptyString(
+      record['agentSurfaceId'],
+      'Desktop Agent Surface identity is required.',
+    ),
     workspaceId: requireNonEmptyString(
       record['workspaceId'],
       'Desktop Agent Workspace identity is required.',
     ),
     viewId: requireNonEmptyString(record['viewId'], 'Desktop Agent View identity is required.'),
-    viewEpoch: requirePositiveInteger(
-      record['viewEpoch'],
-      'Desktop Agent View epoch must be a positive integer.',
-    ),
-    rendererEpoch: requirePositiveInteger(
-      record['rendererEpoch'],
-      'Desktop Agent renderer epoch must be a positive integer.',
-    ),
     connectionId: requireNonEmptyString(
       record['connectionId'],
       'Desktop Agent connection identity is required.',
@@ -400,11 +434,11 @@ function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity
       [
         'applicationInstanceId',
         'windowId',
+        'workbenchInstanceId',
+        'agentSurfaceId',
         'assistantSpaceId',
         'workspaceId',
         'viewId',
-        'viewEpoch',
-        'rendererEpoch',
         'connectionId',
       ],
       'Desktop Assistant Agent connection identity',
@@ -422,11 +456,11 @@ function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity
     [
       'applicationInstanceId',
       'windowId',
+      'workbenchInstanceId',
+      'agentSurfaceId',
       'projectId',
       'workspaceId',
       'viewId',
-      'viewEpoch',
-      'rendererEpoch',
       'connectionId',
     ],
     'Desktop Workspace Agent connection identity',
@@ -475,15 +509,6 @@ function requireExpectedRequestId(
     );
   }
   return requestId;
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== DESKTOP_AGENT_CONTRACT_VERSION) {
-    throw new DesktopAgentContractError(
-      'unsupported-desktop-agent-version',
-      `Unsupported Desktop Agent contract version '${String(value)}'.`,
-    );
-  }
 }
 
 function requireRuntimeRequirement(value: unknown): DesktopAgentRuntimeRequirement {

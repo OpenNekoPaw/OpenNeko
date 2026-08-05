@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, realpath, rm } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
@@ -38,13 +38,14 @@ import { DesktopShellService } from '@neko/host/desktop-shell-service';
 import {
   createEmptyDesktopShellState,
   parseDesktopShellStoredState,
+  serializeDesktopShellStoredState,
 } from '@neko/host/desktop-shell-state';
 import {
   createAgentAppHost,
   createAgentConversationLifecycleService,
   createAssistantResourceService,
   createPersistentAgentConversationLifecycleRepository,
-  AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS,
+  initializeAgentConversationLifecycleTables,
 } from '@neko/agent-runtime/application';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
@@ -54,6 +55,7 @@ import {
 } from '@neko/entity-node';
 import {
   resolveDesktopAgentAutomationLaunch,
+  consumeDesktopFunctionalWorkspaceSelection,
   resolveDesktopFunctionalCutExport,
   resolveDesktopFunctionalWorkspace,
   resolveDesktopFunctionalWindowMode,
@@ -66,11 +68,11 @@ import { createEncryptedDesktopSecretPort } from './encrypted-desktop-secret-por
 import { createMacOSProtectedAuthPrompt } from './macos-protected-auth-prompt';
 import { closeDesktopWindows } from './window-lifecycle';
 import {
-  ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS,
   DESKTOP_STATE_AUTHORITY_KEYS,
-  migrateDesktopStateToSqlite,
+  initializeAssetLibraryMembershipTables,
   resolveGlobalStorageLayout,
-  SqliteVersionedJsonStateRepository,
+  SqliteJsonStateRepository,
+  type InvalidJsonStateRejection,
 } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import {
@@ -112,7 +114,6 @@ import {
 } from '@neko/agent-runtime/extensions';
 import { createPersonalSkillManager } from '@neko/agent-runtime/pi';
 import { ProjectPortabilityRuntime } from '@neko/assets-node';
-import { createDesktopRetiredJsonStatePort } from './desktop-state-migration-adapter';
 import { createDesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { createDesktopAssistantPreviewRuntime } from './desktop-assistant-preview-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
@@ -176,44 +177,44 @@ async function startDesktop(): Promise<void> {
   const shellStateCodec = {
     createEmpty: createEmptyDesktopShellState,
     parse: parseDesktopShellStoredState,
-    readStorageRevision: (state: ReturnType<typeof createEmptyDesktopShellState>) =>
-      state.storageRevision,
+    serialize: serializeDesktopShellStoredState,
   };
   const applicationSettingsCodec = {
     createEmpty: createDefaultDesktopApplicationSettingsState,
     parse: parseDesktopApplicationSettingsStoredState,
-    readStorageRevision: (state: ReturnType<typeof createDefaultDesktopApplicationSettingsState>) =>
-      state.storageRevision,
   };
-  const retiredJsonState = createDesktopRetiredJsonStatePort({
-    shellStatePath: path.join(userData, 'state', 'desktop-shell-state.json'),
-    applicationSettingsPath: path.join(userData, 'state', 'desktop-application-settings.v1.json'),
+  const shellStateRepository = new SqliteJsonStateRepository({
+    store: localMetadataStore,
+    authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+    codec: shellStateCodec,
   });
-  try {
-    await migrateDesktopStateToSqlite({
-      store: localMetadataStore,
-      retiredJson: retiredJsonState,
-      shellCodec: shellStateCodec,
-      settingsCodec: applicationSettingsCodec,
-      digest: (content) => createHash('sha256').update(content).digest('hex'),
-    });
-    await localMetadataStore.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
-    await localMetadataStore.migrateNamespace(AGENT_CONVERSATION_LIFECYCLE_MIGRATIONS);
-  } catch (error) {
-    await localMetadataStore.dispose();
-    throw error;
-  }
-  const applicationSettingsRepository = new SqliteVersionedJsonStateRepository({
+  const applicationSettingsRepository = new SqliteJsonStateRepository({
     store: localMetadataStore,
     authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
     codec: applicationSettingsCodec,
   });
+  let stateRejections: readonly InvalidJsonStateRejection[] = [];
+  try {
+    await shellStateRepository.prepare();
+    const rejections = await Promise.all([
+      shellStateRepository.inspectInvalidState(),
+      applicationSettingsRepository.inspectInvalidState(),
+    ]);
+    stateRejections = rejections.filter(
+      (rejection): rejection is InvalidJsonStateRejection => rejection !== undefined,
+    );
+    await initializeAssetLibraryMembershipTables(localMetadataStore);
+    await initializeAgentConversationLifecycleTables(localMetadataStore);
+  } catch (error) {
+    await localMetadataStore.dispose();
+    throw error;
+  }
   const applicationSettings = new DesktopApplicationSettingsService(applicationSettingsRepository);
   const initialApplicationSettings = await applicationSettings.initialize();
   nativeTheme.themeSource = initialApplicationSettings.preferences.theme;
   const applicationInstanceId = randomUUID();
   const secrets = createEncryptedDesktopSecretPort({
-    filePath: path.join(userData, 'secrets', 'agent-credentials.v1.json'),
+    filePath: path.join(userData, 'secrets', 'agent-credentials.json'),
     encryption: {
       assertAvailable: () => {
         if (!safeStorage.isEncryptionAvailable()) {
@@ -227,7 +228,6 @@ async function startDesktop(): Promise<void> {
   const host = createElectronNekoHostPorts({
     homedir,
     nekoHome: globalStorage.root,
-    version: app.getVersion(),
     logger,
     secrets,
     openExternal: async (uri) => {
@@ -282,14 +282,17 @@ async function startDesktop(): Promise<void> {
   });
   const shellService = new DesktopShellService({
     applicationInstanceId,
-    stateRepository: new SqliteVersionedJsonStateRepository({
-      store: localMetadataStore,
-      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
-      codec: shellStateCodec,
-    }),
+    stateRepository: shellStateRepository,
     workspaceRegistry,
     workspaceGrantAuthority,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
+    startupStateDiagnostics: stateRejections.map((rejection) => ({
+      code: 'desktop-stored-state-invalid',
+      severity: 'error',
+      authorityKey: rejection.authorityKey,
+      rejectionId: rejection.rejectionId,
+      message: `Stored Desktop state '${rejection.authorityKey}' was rejected: ${rejection.diagnostic}`,
+    })),
   });
   const assistantSpaceId = 'assistant-space:local-user';
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
@@ -540,8 +543,8 @@ async function startDesktop(): Promise<void> {
           workspaceId: identity.workspaceId,
           windowId: identity.windowId,
           viewId: `resource-browser:${identity.viewId}`,
-          viewEpoch: identity.viewEpoch,
-          endpointEpoch: identity.endpointEpoch,
+          viewInstanceId: identity.viewInstanceId,
+          rendererSessionId: identity.rendererSessionId,
         },
         item: {
           resourceId: `canvas-content:${identity.documentId}:${JSON.stringify(locator)}`,
@@ -584,8 +587,8 @@ async function startDesktop(): Promise<void> {
           workspaceId: identity.workspaceId,
           windowId: identity.windowId,
           viewId: `canvas-material:${identity.viewId}`,
-          viewEpoch: identity.viewEpoch,
-          endpointEpoch: identity.endpointEpoch,
+          viewInstanceId: identity.viewInstanceId,
+          rendererSessionId: identity.rendererSessionId,
         },
         item,
         absolutePath,
@@ -636,6 +639,17 @@ async function startDesktop(): Promise<void> {
       }
       return selectedPath;
     },
+    selectWorkspaceFiles: async (windowId) => {
+      const owner = requireOwnerWindow(windowId);
+      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      const result = await dialog.showOpenDialog(owner, {
+        title: chinese ? '导入工作区文件' : 'Import Workspace Files',
+        buttonLabel: chinese ? '导入' : 'Import',
+        properties: ['openFile', 'multiSelections'],
+      });
+      return result.canceled ? undefined : result.filePaths;
+    },
+    trashWorkspaceItem: (absolutePath) => shell.trashItem(absolutePath),
     selectConfiguredGlobalMediaLibrary: async ({ windowId, libraries }) => {
       const owner = requireOwnerWindow(windowId);
       const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
@@ -720,7 +734,23 @@ async function startDesktop(): Promise<void> {
   const assetCenter = new AssetCenterNodeRuntime({
     resourceBrowser,
     resources: {
-      registerFile: (owner, resource) => resourceRegistry.registerFile(owner, resource),
+      registerFile: async (owner, resource) => {
+        const shellProjection = await shellService.getProjection(owner.windowId);
+        return resourceRegistry.registerFile(
+          {
+            windowId: owner.windowId,
+            viewId: owner.viewId,
+            sessionId: owner.sessionId,
+            rendererSessionId: shellProjection.rendererSessionId,
+            revision: owner.sourceFingerprint,
+          },
+          {
+            absolutePath: resource.absolutePath,
+            mediaType: resource.mediaType,
+            revision: resource.sourceFingerprint,
+          },
+        );
+      },
       releaseSession: (sessionId) => resourceRegistry.releaseSession(sessionId),
     },
   });
@@ -934,17 +964,6 @@ async function startDesktop(): Promise<void> {
     },
     createIdentity: randomUUID,
     now: () => new Date().toISOString(),
-    conversationContextMigration: {
-      resolveExactWorkspaceIdentity: async (conversationId) => {
-        const storedConversation = agentComposition.findConversation(conversationId);
-        return storedConversation
-          ? {
-              workspaceId: storedConversation.workspaceId,
-              workspaceGrantId: `workspace-grant:migrated:${conversationId}`,
-            }
-          : undefined;
-      },
-    },
   });
   const assistantPreview = createDesktopAssistantPreviewRuntime({
     resolveScratchRoot,
@@ -957,7 +976,6 @@ async function startDesktop(): Promise<void> {
   });
   const appHost = new DesktopAppHost({
     host,
-    version: app.getVersion(),
     logger,
     shell: shellService,
     agent: agentComposition,
@@ -1012,7 +1030,15 @@ async function startDesktop(): Promise<void> {
       ) {
         return undefined;
       }
-      const selectedPath = functionalWorkspace ?? (await chooseWorkspaceDirectory(owner));
+      const selectedPath =
+        (functionalWorkspace
+          ? await consumeDesktopFunctionalWorkspaceSelection({
+              argv: process.argv,
+              fixtureHome: homedir,
+            })
+          : undefined) ??
+        functionalWorkspace ??
+        (await chooseWorkspaceDirectory(owner));
       return selectedPath
         ? { label: path.basename(selectedPath), hostResource: selectedPath }
         : undefined;
@@ -1128,7 +1154,7 @@ async function startDesktop(): Promise<void> {
           registration.windowId,
           appHost.applicationIdentity.instanceId,
         );
-        appHost.shell.setRendererEpoch(registration.windowId, event.rendererEpoch);
+        appHost.shell.setRendererSessionId(registration.windowId, event.rendererSessionId);
         sendLifecycleEvent(createdWindow, event);
       });
       createdWindow.webContents.on('did-finish-load', () => {

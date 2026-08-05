@@ -4,7 +4,6 @@ import { DesktopExtensionManagementRuntime } from './desktop-extension-managemen
 describe('DesktopExtensionManagementRuntime', () => {
   it('projects the exact owner session and fails visibly after disposal', async () => {
     const execute = vi.fn(async (request) => ({
-      schemaVersion: 1 as const,
       requestId: request.requestId,
       route: request.route,
       projection: {
@@ -18,7 +17,6 @@ describe('DesktopExtensionManagementRuntime', () => {
     }));
     const runtime = new DesktopExtensionManagementRuntime(
       { extensionManagementSessionId: 'extension-management:1', windowId: 'window-1' },
-      'endpoint-1',
       {
         extensionManagement: { execute },
       },

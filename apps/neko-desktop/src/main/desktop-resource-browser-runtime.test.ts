@@ -3,11 +3,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { DEFAULT_CANVAS_DATA } from '@neko/canvas-domain';
 import type { ILogger } from '@neko/shared/logger';
-import {
-  CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
-  parseCanvasHostIntentRequest,
-  type CanvasHostIntentResult,
-} from '@neko/canvas-domain';
+import { parseCanvasHostIntentRequest, type CanvasHostIntentResult } from '@neko/canvas-domain';
 import {
   createResourceBrowserEntityIntentRequest,
   createResourceBrowserSearchRequest,
@@ -16,7 +12,11 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
-import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
+import {
+  DESKTOP_PRIMARY_MAIN_GROUP_ID,
+  createDefaultDesktopWorkbenchLayout,
+  type DesktopWorkbenchViewRef,
+} from '@neko/host/desktop-workbench-contract';
 import {
   createResourceToCanvasInteraction,
   ResourceBrowserNodeRuntime,
@@ -25,18 +25,31 @@ import {
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import { DesktopShellService } from '@neko/host/desktop-shell-service';
-import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
+import {
+  resolveActiveDesktopWindowWorkbench,
+  resolveDesktopWindowWorkspaceWorkbench,
+  type DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
+import {
+  createDefaultDesktopApplicationSidebar,
+  createDesktopSceneTransitionRequest,
+  parseDesktopWorkbenchSceneProjection,
+} from '@neko/host/desktop-scene-contract';
+import {
+  createDesktopWorkbenchInstanceFromScene,
+  parseDesktopWindowWorkbenchCatalog,
+} from '@neko/host/desktop-workbench-instance-contract';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import {
-  ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS,
+  initializeAssetLibraryMembershipTables,
   resolveGlobalStorageLayout,
   type LocalMetadataStore,
 } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
-import { M1_LOCAL_METADATA_MIGRATIONS } from '@neko/local-metadata/sqlite';
+import { initializeCoreLocalMetadataTables } from '@neko/local-metadata/sqlite';
 
 const temporaryRoots: string[] = [];
 const metadataStores: LocalMetadataStore[] = [];
@@ -57,12 +70,12 @@ const resourceIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'resource-browser:project-view-1',
-  viewEpoch: 1,
-  endpointEpoch: 'endpoint-1',
+  viewInstanceId: 'view-instance-1',
+  rendererSessionId: 'endpoint-1',
 } as const;
 const canvasView: DesktopWorkbenchViewRef = {
   viewId: 'canvas:board-a',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   projectId: 'project-1',
   workspaceId: 'workspace-1',
   kind: 'canvas',
@@ -96,7 +109,7 @@ describe('createResourceToCanvasInteraction', () => {
       },
       target: {
         documentId: 'boards/a.nkc',
-        sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
+        sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
         expectedRevision: 4,
       },
     });
@@ -108,7 +121,7 @@ describe('createResourceToCanvasInteraction', () => {
         identity: expect.objectContaining({
           viewId: canvasView.viewId,
           documentId: 'boards/a.nkc',
-          sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
+          sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
         }),
         intent: {
           type: 'author-material',
@@ -117,7 +130,7 @@ describe('createResourceToCanvasInteraction', () => {
             identity: {
               projectId: 'project-1',
               canvasId: 'boards/a.nkc',
-              canvasSessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
+              canvasSessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
             },
             locator: { kind: 'workspace-file', path: 'media/cat.png' },
             mediaKind: 'image',
@@ -189,7 +202,6 @@ describe('createResourceToCanvasInteraction', () => {
         sourceOwners: ['project-entity'],
         attentionBindingIds: [],
         inspector: {
-          projectRevision: 3,
           status: 'confirmed',
           kind: 'character',
           names: { canonical: 'Neko', aliases: [] },
@@ -210,7 +222,7 @@ describe('createResourceToCanvasInteraction', () => {
       },
       target: {
         documentId: 'boards/a.nkc',
-        sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewEpoch),
+        sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
         expectedRevision: 7,
       },
     });
@@ -266,12 +278,12 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       createIdentity: () => 'window-1',
     });
     const windowId = await shell.claimWindowId();
-    shell.setRendererEpoch(windowId, 1);
+    shell.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await shell.getProjection(windowId);
     const opened = await shell.openContent(
       windowId,
       workspacePath,
-      initial.endpointEpoch,
+      initial.rendererSessionId,
       initial.window.revision,
     );
     const workspaceGrant = workspaceGrantAuthority.authorize({
@@ -282,10 +294,11 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     await shell.transitionScene(
       createDesktopSceneTransitionRequest({
         requestId: 'open-workspace-scene',
-        expectedEndpointEpoch: opened.projection.endpointEpoch,
+        rendererSessionId: opened.projection.rendererSessionId,
         windowId,
         expectedWindowRevision: opened.projection.window.revision,
-        expectedSceneRevision: opened.projection.window.scene.revision,
+        sceneId: resolveActiveDesktopWindowWorkbench(opened.projection.window).scene
+          .sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: workspaceGrant.workspaceGrantId },
       }),
     );
@@ -297,9 +310,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     await writeFile(
       path.join(workspacePath, 'neko', 'entities.json'),
       `${JSON.stringify({
-        schemaVersion: 1,
         projectId: project.workspaceId,
-        revision: 2,
         entities: [
           {
             entityId: 'character-rin',
@@ -320,13 +331,12 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       workspaceId: project.workspaceId,
       windowId,
       projectViewId: tab.viewId,
-      projectViewEpoch: tab.viewEpoch,
-      endpointEpoch: projection.endpointEpoch,
+      projectViewInstanceId: tab.viewInstanceId,
+      rendererSessionId: projection.rendererSessionId,
     });
     const host = createElectronNekoHostPorts({
       homedir: root,
       nekoHome: path.join(root, '.neko'),
-      version: '0.0.1',
       logger: createLogger(),
       revealPath: () => undefined,
     });
@@ -339,6 +349,8 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       openPreview: async () => undefined,
       openCut: async () => undefined,
       selectSource: async () => undefined,
+      selectWorkspaceFiles: async () => undefined,
+      trashWorkspaceItem: async () => undefined,
       selectConfiguredGlobalMediaLibrary: async () => undefined,
       selectGlobalMediaLibrarySource: async () => undefined,
       selectGlobalAssetSources: async () => undefined,
@@ -366,9 +378,10 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           createResourceBrowserSnapshotRequest({ requestId: 'snapshot-1', identity }),
         ),
       ).resolves.toMatchObject({ identity });
-      expect(projection.window.workbench.main.views).toEqual([
-        expect.objectContaining({ kind: 'canvas' }),
-      ]);
+      expect(
+        resolveDesktopWindowWorkspaceWorkbench(projection.window, project.workspaceId).layout.main
+          .views,
+      ).toEqual([expect.objectContaining({ kind: 'canvas' })]);
       const entities = await runtime.search(
         windowId,
         createResourceBrowserSearchRequest({
@@ -384,7 +397,6 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       }
       const intent = {
         type: 'edit' as const,
-        expectedRevision: 2,
         entityId: 'character-rin',
         changes: { facts: { role: 'lead' } },
       };
@@ -418,10 +430,11 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       await shell.transitionScene(
         createDesktopSceneTransitionRequest({
           requestId: 'leave-workspace-scene',
-          expectedEndpointEpoch: projection.endpointEpoch,
+          rendererSessionId: projection.rendererSessionId,
           windowId,
           expectedWindowRevision: projection.window.revision,
-          expectedSceneRevision: projection.window.scene.revision,
+          sceneId: resolveActiveDesktopWindowWorkbench(projection.window).scene
+          .sceneId,
           intent: { kind: 'open-agent-entry' },
         }),
       );
@@ -430,7 +443,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           windowId,
           createResourceBrowserSnapshotRequest({ requestId: 'snapshot-assistant', identity }),
         ),
-      ).rejects.toThrow('Project is not attached');
+      ).rejects.toThrow("Desktop Workspace 'workspace-1' has no open Workbench instance");
     } finally {
       runtime.dispose();
       shell.releaseWindow(windowId);
@@ -456,7 +469,6 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
 
     const assets = await fixture.runtime.searchHomeAssets({
       windowId: fixture.windowId,
-      endpointEpoch: fixture.endpointEpoch,
       query: '',
       sortBy: 'name',
       sortDirection: 'ascending',
@@ -466,13 +478,11 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     if (!asset?.thumbnail) throw new Error('Fixture asset thumbnail is required.');
     const result = await fixture.runtime.resolveHomeLibraryThumbnail({
       windowId: fixture.windowId,
-      endpointEpoch: fixture.endpointEpoch,
       request: {
         owner: asset.owner,
         itemId: asset.id,
-        expectedCatalogRevision: assets.revision,
         descriptorId: asset.thumbnail.descriptorId,
-        thumbnailRevision: asset.thumbnail.revision,
+        sourceFingerprint: asset.thumbnail.sourceFingerprint,
         variant: 'icon',
       },
     });
@@ -490,21 +500,18 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     await expect(
       fixture.runtime.resolveHomeLibraryThumbnail({
         windowId: fixture.windowId,
-        endpointEpoch: fixture.endpointEpoch,
         request: {
           owner: asset.owner,
           itemId: asset.id,
-          expectedCatalogRevision: assets.revision + 1,
           descriptorId: asset.thumbnail.descriptorId,
-          thumbnailRevision: asset.thumbnail.revision,
+          sourceFingerprint: 'stale-fingerprint',
           variant: 'hover',
         },
       }),
-    ).rejects.toThrow('expected revision');
+    ).rejects.toThrow('thumbnail identity is stale');
 
     const media = await fixture.runtime.searchHomeMediaLibraries({
       windowId: fixture.windowId,
-      endpointEpoch: fixture.endpointEpoch,
       query: 'shot',
       sortBy: 'name',
       sortDirection: 'ascending',
@@ -515,9 +522,7 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     await expect(
       fixture.runtime.removeHomeAsset({
         windowId: fixture.windowId,
-        endpointEpoch: fixture.endpointEpoch,
         assetId: mediaItem.id,
-        expectedRevision: media.revision,
       }),
     ).rejects.toThrow('wrong owner');
   });
@@ -529,7 +534,6 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     await writeFile(assetPath, 'preserved-source');
     const initial = await fixture.runtime.searchHomeAssets({
       windowId: fixture.windowId,
-      endpointEpoch: fixture.endpointEpoch,
       query: '',
       sortBy: 'name',
       sortDirection: 'ascending',
@@ -541,16 +545,13 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     await expect(
       fixture.runtime.removeHomeAsset({
         windowId: fixture.windowId,
-        endpointEpoch: fixture.endpointEpoch,
         assetId: asset.id,
-        expectedRevision: initial.revision,
       }),
     ).resolves.toMatchObject({ status: 'removed', assetId: asset.id });
     await expect(readFile(assetPath, 'utf8')).resolves.toBe('preserved-source');
     await expect(
       fixture.runtime.searchHomeAssets({
         windowId: fixture.windowId,
-        endpointEpoch: fixture.endpointEpoch,
         query: '',
         sortBy: 'name',
         sortDirection: 'ascending',
@@ -565,8 +566,8 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
       databasePath: resolveGlobalStorageLayout(fixture.home).database,
       busyTimeoutMs: 1_000,
     });
-    await reopened.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await reopened.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(reopened);
+    await initializeAssetLibraryMembershipTables(reopened);
     await expect(reopened.repositories.assetLibraryMemberships.listActive()).resolves.toEqual([]);
     await expect(readFile(assetPath, 'utf8')).resolves.toBe('preserved-source');
   });
@@ -588,34 +589,30 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
 
     const pendingImport = fixture.runtime.importHomeAssets({
       windowId: fixture.windowId,
-      endpointEpoch: fixture.endpointEpoch,
-      expectedRevision: 0,
     });
     await waitFor(() => selectGlobalAssetSources.mock.calls.length === 1);
 
-    await expect(
-      fixture.runtime.importHomeAssets({
-        windowId: fixture.windowId,
-        endpointEpoch: fixture.endpointEpoch,
-        expectedRevision: 0,
-      }),
-    ).rejects.toThrow('already in progress');
+    const queuedImport = fixture.runtime.importHomeAssets({
+      windowId: fixture.windowId,
+    });
+    expect(selectGlobalAssetSources).toHaveBeenCalledTimes(1);
     await expect(
       fixture.runtime.searchHomeMediaLibraries({
         windowId: fixture.windowId,
-        endpointEpoch: fixture.endpointEpoch,
         query: '',
         sortBy: 'name',
         sortDirection: 'ascending',
         limit: 20,
       }),
-    ).resolves.toMatchObject({ revision: 0 });
+    ).resolves.toMatchObject({ items: expect.any(Array) });
 
     selectedSources.resolve(undefined);
-    await expect(pendingImport).resolves.toEqual({ status: 'cancelled', revision: 0 });
+    await expect(pendingImport).resolves.toEqual({ status: 'cancelled' });
+    await expect(queuedImport).resolves.toEqual({ status: 'cancelled' });
+    expect(selectGlobalAssetSources).toHaveBeenCalledTimes(2);
   });
 
-  it('rejects stale endpoints, permits bounded parallel thumbnail variants, and aborts on detach', async () => {
+  it('rejects unknown Windows, permits bounded parallel thumbnail variants, and aborts on detach', async () => {
     const thumbnailsStarted = deferred<void>();
     let startedCount = 0;
     const fixture = await createGlobalLibraryRuntimeFixture({
@@ -635,16 +632,13 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
 
     await expect(
       fixture.runtime.importHomeAssets({
-        windowId: fixture.windowId,
-        endpointEpoch: 'stale-endpoint',
-        expectedRevision: 0,
+        windowId: 'missing-window',
       }),
-    ).rejects.toThrow('endpoint identity is stale');
+    ).rejects.toThrow('missing-window');
     expect(fixture.selectGlobalAssetSources).not.toHaveBeenCalled();
 
     const assets = await fixture.runtime.searchHomeAssets({
       windowId: fixture.windowId,
-      endpointEpoch: fixture.endpointEpoch,
       query: '',
       sortBy: 'name',
       sortDirection: 'ascending',
@@ -654,13 +648,11 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     if (!asset?.thumbnail) throw new Error('Fixture asset thumbnail is required.');
     const thumbnailRequest = {
       windowId: fixture.windowId,
-      endpointEpoch: fixture.endpointEpoch,
       request: {
         owner: asset.owner,
         itemId: asset.id,
-        expectedCatalogRevision: assets.revision,
         descriptorId: asset.thumbnail.descriptorId,
-        thumbnailRevision: asset.thumbnail.revision,
+        sourceFingerprint: asset.thumbnail.sourceFingerprint,
         variant: 'hover',
       },
     } as const;
@@ -677,22 +669,69 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
 });
 
 function shellWithViews(views: readonly DesktopWorkbenchViewRef[]) {
+  const scope = {
+    kind: 'workspace' as const,
+    draftId: 'draft-workspace-1',
+    workspaceId: 'workspace-1',
+    workspaceGrantId: 'workspace-grant-1',
+  };
+  const scene = parseDesktopWorkbenchSceneProjection({
+    sceneId: 'scene:window-1:workspace-1',
+    windowId: 'window-1',
+    context: { kind: 'agent', agentViewId: 'agent-view-1', scope },
+    slots: {
+      interaction: { kind: 'agent', agentViewId: 'agent-view-1', phase: 'draft', scope },
+      rightManager: { kind: 'workspace-resources', workspaceId: 'workspace-1' },
+      status: { kind: 'scene-status', sceneId: 'scene:window-1:workspace-1' },
+    },
+  });
+  const defaultLayout = createDefaultDesktopWorkbenchLayout('window-1');
+  const layout = {
+    ...defaultLayout,
+    main: {
+      views,
+      groups: [
+        {
+          groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+          viewIds: views.map((view) => view.viewId),
+          ...(views[0] ? { activeViewId: views[0].viewId } : {}),
+        },
+      ],
+      activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+    },
+  };
+  const workbench = createDesktopWorkbenchInstanceFromScene({
+    workbenchInstanceId: 'workbench:window-1:workspace-1',
+    agentSurfaceId: 'agent-surface:window-1:workspace-1',
+    layout,
+    scene,
+  });
+  const projection: Pick<DesktopShellProjection, 'window'> = {
+    window: {
+      windowId: 'window-1',
+      revision: 0,
+      activeTarget: { kind: 'home' },
+      tabs: [],
+      workbenches: parseDesktopWindowWorkbenchCatalog({
+        windowId: 'window-1',
+        activeWorkbenchInstanceId: workbench.workbenchInstanceId,
+        instances: [workbench],
+      }),
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+    },
+  };
   return {
-    getProjection: async () => ({
-      window: { workbench: { main: { views } } },
-    }),
+    getProjection: async () => projection,
   };
 }
 
 function accepted(value: unknown): CanvasHostIntentResult {
   const request = parseCanvasHostIntentRequest(value);
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     requestId: request.requestId,
     commandId: request.commandId,
     status: 'accepted',
     snapshot: {
-      schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       identity: request.identity,
       revision: request.expectedRevision + 1,
       dirty: true,
@@ -722,12 +761,10 @@ async function createGlobalLibraryRuntimeFixture(
   const mediaLibraryRoot = path.join(home, '.neko', 'media-libraries');
   const shell = createGlobalLibraryShell();
   const windowId = await shell.claimWindowId();
-  shell.setRendererEpoch(windowId, 1);
-  const endpointEpoch = (await shell.getProjection(windowId)).endpointEpoch;
+  shell.setRendererSessionId(windowId, 'renderer-session-1');
   const host = createElectronNekoHostPorts({
     homedir: home,
     nekoHome: path.join(home, '.neko'),
-    version: '0.0.1',
     logger: createLogger(),
     revealPath: () => undefined,
   });
@@ -741,8 +778,8 @@ async function createGlobalLibraryRuntimeFixture(
     databasePath: resolveGlobalStorageLayout(home).database,
     busyTimeoutMs: 1_000,
   });
-  await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await metadataStore.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(metadataStore);
+  await initializeAssetLibraryMembershipTables(metadataStore);
   const runtime = new ResourceBrowserNodeRuntime({
     globalAssetRoot: assetRoot,
     globalMediaLibraryRoot: mediaLibraryRoot,
@@ -752,6 +789,8 @@ async function createGlobalLibraryRuntimeFixture(
     openPreview: async () => undefined,
     openCut: async () => undefined,
     selectSource: async () => undefined,
+    selectWorkspaceFiles: async () => undefined,
+    trashWorkspaceItem: async () => undefined,
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,
     selectGlobalAssetSources,
@@ -782,7 +821,6 @@ async function createGlobalLibraryRuntimeFixture(
     mediaLibraryRoot,
     runtime,
     windowId,
-    endpointEpoch,
     selectGlobalAssetSources,
     metadataStore,
     createGlobalLibraryThumbnail,

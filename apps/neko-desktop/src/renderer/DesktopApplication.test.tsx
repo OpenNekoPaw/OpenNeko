@@ -4,23 +4,24 @@ import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 import {
-  DESKTOP_SCENE_CONTRACT_VERSION,
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
   parseDesktopWorkbenchSceneProjection,
 } from '@neko/host/desktop-scene-contract';
 import {
-  DESKTOP_SHELL_CONTRACT_VERSION,
   projectDesktopConversationNavigation,
   type DesktopShellProjection,
   type DesktopShellProjectionEvent,
 } from '@neko/host/desktop-shell-contract';
 import {
+  createDesktopWorkbenchInstanceFromScene,
+  parseDesktopWindowWorkbenchCatalog,
+  resolveActiveDesktopWorkbenchInstance,
+} from '@neko/host/desktop-workbench-instance-contract';
+import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
-  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
 } from '@neko/host/application-settings';
 import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
@@ -71,12 +72,11 @@ describe('DesktopApplication scene lifecycle', () => {
     vi.restoreAllMocks();
   });
 
-  it('owns one Shell subscription and commits Sidebar state only through Sidebar CAS', async () => {
+  it('owns one Shell subscription and commits Sidebar state through its sender-bound owner', async () => {
     const projection = createProjection();
     const updateWorkbench = vi.fn();
     const updateApplicationSidebar = vi.fn(async () => ({
       ...projection,
-      projectionRevision: projection.projectionRevision + 1,
       window: {
         ...projection.window,
         applicationSidebar: {
@@ -112,7 +112,7 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!collapse) throw new Error('Desktop fixture requires the Sidebar toggle.');
     await act(async () => collapse.click());
     await waitFor(() => updateApplicationSidebar.mock.calls.length === 1);
-    expect(updateApplicationSidebar).toHaveBeenCalledWith('window-1', false, 240, 0);
+    expect(updateApplicationSidebar).toHaveBeenCalledWith('window-1', false, 240);
     expect(updateWorkbench).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
@@ -121,22 +121,23 @@ describe('DesktopApplication scene lifecycle', () => {
 
   it('keeps the Workbench and PrimarySidebar mounted while Host switches to Settings', async () => {
     const assistant = createProjection();
-    const settings = {
-      ...assistant,
-      projectionRevision: assistant.projectionRevision + 1,
-      window: {
-        ...assistant.window,
-        revision: assistant.window.revision + 1,
-        scene: settingsScene(),
+    const settings = withActiveScene(
+      {
+        ...assistant,
+        window: {
+          ...assistant.window,
+          revision: assistant.window.revision + 1,
+        },
       },
-    };
+      settingsScene(),
+    );
     let snapshot = assistant;
     const transition = vi.fn(async () => {
       snapshot = settings;
       return {
         status: 'transitioned' as const,
         requestId: 'transition-1',
-        scene: settings.window.scene,
+        scene: activeScene(settings),
       };
     });
     installBridge({
@@ -160,7 +161,7 @@ describe('DesktopApplication scene lifecycle', () => {
       'window-1',
       { kind: 'open-settings' },
       assistant.window.revision,
-      assistant.window.scene.revision,
+      activeScene(assistant).sceneId,
     );
     expect(container.querySelector('[data-neko-controlled-workbench="true"]')).toBe(workbench);
     expect(container.querySelector('[data-primary-sidebar="application"]')).toBe(sidebar);
@@ -174,7 +175,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const transition = vi.fn(async () => ({
       status: 'transitioned' as const,
       requestId: 'start-creating-1',
-      scene: projection.window.scene,
+      scene: activeScene(projection),
     }));
     installBridge({ projection, transition });
     const { container, root } = await renderApplication();
@@ -190,7 +191,7 @@ describe('DesktopApplication scene lifecycle', () => {
       'window-1',
       { kind: 'open-agent-entry' },
       projection.window.revision,
-      projection.window.scene.revision,
+      activeScene(projection).sceneId,
     );
     await act(async () => root.unmount());
   });
@@ -224,10 +225,126 @@ describe('DesktopApplication scene lifecycle', () => {
       'window-1',
       { kind: 'open-asset-center' },
       projection.window.revision,
-      projection.window.scene.revision,
+      activeScene(projection).sceneId,
     );
     expect(getSnapshot).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain('Connecting to Agent');
+    await act(async () => root.unmount());
+  });
+
+  it('shows a rejected stored Window diagnostic while keeping the new Workbench usable', async () => {
+    const projection: DesktopShellProjection = {
+      ...createProjection(),
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-window-invalid',
+          severity: 'error',
+          windowId: 'window:old',
+          message: "Stored Window 'window:old' is unavailable and was not opened.",
+        },
+      ],
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'Saved workspace window window:old is no longer compatible and was not opened.',
+    );
+    expect(alert?.getAttribute('title')).toBe(
+      "Stored Window 'window:old' is unavailable and was not opened.",
+    );
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+    expect(container.querySelector('.agent-workspace')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('shows a rejected Shell authority diagnostic while keeping the new Workbench usable', async () => {
+    const projection: DesktopShellProjection = {
+      ...createProjection(),
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-state-invalid',
+          severity: 'error',
+          authorityKey: 'desktop.shell',
+          rejectionId: 3,
+          message: 'Stored Desktop Shell state was rejected: removed root field.',
+        },
+      ],
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'The saved workspace state is no longer compatible and was safely isolated.',
+    );
+    expect(alert?.getAttribute('title')).toBe(
+      'Stored Desktop Shell state was rejected: removed root field.',
+    );
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+    expect(container.querySelector('.agent-workspace')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('shows a rejected Application Settings diagnostic while keeping the Workbench usable', async () => {
+    const projection: DesktopShellProjection = {
+      ...createProjection(),
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-state-invalid',
+          severity: 'error',
+          authorityKey: 'desktop.application-settings',
+          rejectionId: 4,
+          message: 'Stored Desktop application settings were rejected.',
+        },
+      ],
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'The saved application settings are no longer compatible and were safely isolated.',
+    );
+    expect(alert?.getAttribute('title')).toBe(
+      'Stored Desktop application settings were rejected.',
+    );
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('shows an invalid Conversation diagnostic while keeping the recovered draft usable', async () => {
+    const projection: DesktopShellProjection = {
+      ...createProjection(),
+      agentHome: {
+        ...createProjection().agentHome,
+        diagnostics: [
+          {
+            code: 'invalid-conversation-record',
+            workspaceId: 'assistant-space:local-user',
+            conversationId: 'conversation:invalid-owner',
+            message:
+              "Agent catalog Conversation 'conversation:invalid-owner' Workspace context resolves to an Assistant Space.",
+          },
+        ],
+      },
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      "Saved conversation 'conversation:invalid-owner' is no longer compatible and was isolated.",
+    );
+    expect(alert?.textContent).not.toContain('Workspace context resolves to an Assistant Space');
+    expect(alert?.getAttribute('title')).toContain('conversation:invalid-owner');
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+    expect(container.querySelector('.agent-workspace')).not.toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -243,21 +360,21 @@ describe('DesktopApplication scene lifecycle', () => {
     });
     const { container, root } = await renderApplication();
     const workbench = container.querySelector('[data-neko-controlled-workbench="true"]');
-    const settings = {
-      ...projection,
-      projectionRevision: projection.projectionRevision + 1,
-      window: {
-        ...projection.window,
-        revision: projection.window.revision + 1,
-        scene: settingsScene(),
+    const settings = withActiveScene(
+      {
+        ...projection,
+        window: {
+          ...projection.window,
+          revision: projection.window.revision + 1,
+        },
       },
-    };
+      settingsScene(),
+    );
     await act(async () => {
       listener?.({
-        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
         applicationInstanceId: projection.applicationInstanceId,
         windowId: projection.window.windowId,
-        rendererEpoch: 1,
+        rendererSessionId: 'renderer-session-1',
         sequence: 1,
         projection: settings,
       });
@@ -269,10 +386,10 @@ describe('DesktopApplication scene lifecycle', () => {
 
   it('disposes the exact Extensions runtime when Settings replaces its Scene slots', async () => {
     const assistant = createProjection();
-    const projection = {
-      ...assistant,
-      window: { ...assistant.window, scene: extensionsScene('extension-management:window-1:1') },
-    };
+    const projection = withActiveScene(
+      assistant,
+      extensionsScene('extension-management:window-1:1'),
+    );
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     const dispose = vi.spyOn(DesktopExtensionManagementRuntime.prototype, 'dispose');
     installBridge({
@@ -289,21 +406,21 @@ describe('DesktopApplication scene lifecycle', () => {
       ),
     ).not.toBeNull();
 
-    const settings = {
-      ...projection,
-      projectionRevision: projection.projectionRevision + 1,
-      window: {
-        ...projection.window,
-        revision: projection.window.revision + 1,
-        scene: settingsScene(),
+    const settings = withActiveScene(
+      {
+        ...projection,
+        window: {
+          ...projection.window,
+          revision: projection.window.revision + 1,
+        },
       },
-    };
+      settingsScene(),
+    );
     await act(async () => {
       listener?.({
-        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
         applicationInstanceId: projection.applicationInstanceId,
         windowId: projection.window.windowId,
-        rendererEpoch: 1,
+        rendererSessionId: 'renderer-session-1',
         sequence: 1,
         projection: settings,
       });
@@ -318,17 +435,12 @@ describe('DesktopApplication scene lifecycle', () => {
     const base = createProjection();
     const assetCenterSessionId = 'asset-center:window-1:1';
     const scene = assetCenterPreviewScene();
-    const projection: DesktopShellProjection = {
-      ...base,
-      window: { ...base.window, scene },
-    };
+    const projection = withActiveScene(base, scene);
     const sessionProjection: AssetCenterSessionProjection = {
-      schemaVersion: 1,
       identity: {
         assetCenterSessionId,
         windowId: scene.windowId,
       },
-      revision: 1,
       filter: createDefaultAssetCenterFilter(),
       catalog: { status: 'loading' },
       preview: {
@@ -353,6 +465,11 @@ describe('DesktopApplication scene lifecycle', () => {
     );
 
     expectManagementSplit(container, 'asset-management', 'asset-preview');
+    expect(
+      container
+        .querySelector('[data-neko-controlled-workbench="true"]')
+        ?.getAttribute('data-interaction-presentation'),
+    ).toBe('hidden');
     expect(container.querySelector('[data-asset-management-root="assets"]')).not.toBeNull();
     expect(
       container.querySelector('[data-asset-preview-surface="preview-webview-adapter"]'),
@@ -375,11 +492,13 @@ describe('DesktopApplication scene lifecycle', () => {
       createdAt: '2026-07-28T00:00:00.000Z',
       updatedAt: '2026-07-29T00:00:00.000Z',
     };
-    const projection: DesktopShellProjection = {
-      ...base,
-      catalog: { revision: 1, projects: [project] },
-      window: { ...base.window, scene: projectManagementScene() },
-    };
+    const projection = withActiveScene(
+      {
+        ...base,
+        catalog: { revision: 1, projects: [project] },
+      },
+      projectManagementScene(),
+    );
     installBridge({ projection });
 
     const { container, root } = await renderApplication();
@@ -394,7 +513,9 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(shell?.dataset.mainSplit).toBe('none');
     expect(shell?.dataset.mainComposition).toBe('continuous');
     expect(container.querySelector('[data-workbench-main-panel="project-detail"]')).toBeNull();
-    expect(container.querySelector('[data-workbench-main-shell="secondary"]')).toBeNull();
+    expect(
+      container.querySelector('[data-workbench-main-shell="secondary"]')?.hasAttribute('hidden'),
+    ).toBe(true);
     expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
     expect(container.querySelector('[aria-label="Open project: Project one"]')).not.toBeNull();
     expect(container.textContent).toContain('Project one');
@@ -426,7 +547,6 @@ describe('DesktopApplication scene lifecycle', () => {
     };
     const catalog = { revision: 3, projects: [project] };
     const agentHome = {
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 4,
       conversations: [conversation],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -446,7 +566,7 @@ describe('DesktopApplication scene lifecycle', () => {
       ) => ({
         status: 'transitioned' as const,
         requestId: 'recent-transition',
-        scene: projection.window.scene,
+        scene: activeScene(projection),
       }),
     );
     const deleteConversation = vi.fn(async () => projection);
@@ -478,14 +598,14 @@ describe('DesktopApplication scene lifecycle', () => {
       projection.window.windowId,
       { kind: 'open-project-workspace', projectId: project.projectId },
       projection.window.revision,
-      projection.window.scene.revision,
+      activeScene(projection).sceneId,
     );
     expect(transition).toHaveBeenNthCalledWith(
       2,
       projection.window.windowId,
       { kind: 'restore-conversation', navigation: conversation.navigation },
       projection.window.revision,
-      projection.window.scene.revision,
+      activeScene(projection).sceneId,
     );
 
     const removeButton = container.querySelector<HTMLButtonElement>(
@@ -534,7 +654,6 @@ describe('DesktopApplication scene lifecycle', () => {
     }));
     const catalog = { revision: 1, projects: [] };
     const agentHome = {
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 2,
       conversations,
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -548,7 +667,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const transition = vi.fn(async () => ({
       status: 'transitioned' as const,
       requestId: 'assistant-transition',
-      scene: projection.window.scene,
+      scene: activeScene(projection),
     }));
     installBridge({ projection, transition });
     const { container, root } = await renderApplication();
@@ -562,9 +681,7 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(group.textContent).not.toContain('Assistant conversation 1');
     expect(group.textContent).toContain('Assistant conversation 6');
 
-    const expand = group.querySelector<HTMLButtonElement>(
-      '.primary-conversation-group__expand',
-    );
+    const expand = group.querySelector<HTMLButtonElement>('.primary-conversation-group__expand');
     if (!expand) throw new Error('Desktop fixture requires the conversation expand action.');
     expect(expand.textContent).toContain('Show more');
     await act(async () => expand.click());
@@ -581,7 +698,7 @@ describe('DesktopApplication scene lifecycle', () => {
       projection.window.windowId,
       { kind: 'restore-conversation', navigation: conversations[0]?.navigation },
       projection.window.revision,
-      projection.window.scene.revision,
+      activeScene(projection).sceneId,
     );
     await act(async () => root.unmount());
   });
@@ -600,56 +717,58 @@ describe('DesktopApplication scene lifecycle', () => {
       tabId: 'tab:workspace-empty',
       projectId: project.projectId,
       viewId: 'agent-view:workspace-empty',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
     };
     const sceneId = 'scene:window-1:workspace-empty';
-    const projection: DesktopShellProjection = {
-      ...base,
-      catalog: { revision: 1, projects: [project] },
-      window: {
-        ...base.window,
-        activeTarget: { kind: 'project', tabId: tab.tabId },
-        tabs: [tab],
-        workbench: {
-          ...createDefaultDesktopWorkbenchLayout('window-1'),
-          display: {
-            ...createDefaultDesktopWorkbenchLayout('window-1').display,
-            mode: 'chat-main',
-          },
-        },
-        scene: parseDesktopWorkbenchSceneProjection({
-          schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
-          sceneId,
-          windowId: 'window-1',
-          revision: 1,
-          context: {
-            kind: 'agent',
-            agentViewId: tab.viewId,
-            scope: {
-              kind: 'workspace',
-              draftId: 'draft-workspace-empty',
-              workspaceId: project.workspaceId,
-              workspaceGrantId: 'workspace-grant:empty',
-            },
-          },
-          slots: {
-            interaction: {
-              kind: 'agent',
-              agentViewId: tab.viewId,
-              phase: 'draft',
-              scope: {
-                kind: 'workspace',
-                draftId: 'draft-workspace-empty',
-                workspaceId: project.workspaceId,
-                workspaceGrantId: 'workspace-grant:empty',
-              },
-            },
-            rightManager: { kind: 'workspace-resources', workspaceId: project.workspaceId },
-            status: { kind: 'scene-status', sceneId },
-          },
-        }),
+    const layout = {
+      ...createDefaultDesktopWorkbenchLayout('window-1'),
+      display: {
+        ...createDefaultDesktopWorkbenchLayout('window-1').display,
+        mode: 'chat-main' as const,
       },
     };
+    const scene = parseDesktopWorkbenchSceneProjection({
+      sceneId,
+      windowId: 'window-1',
+      context: {
+        kind: 'agent',
+        agentViewId: tab.viewId,
+        scope: {
+          kind: 'workspace',
+          draftId: 'draft-workspace-empty',
+          workspaceId: project.workspaceId,
+          workspaceGrantId: 'workspace-grant:empty',
+        },
+      },
+      slots: {
+        interaction: {
+          kind: 'agent',
+          agentViewId: tab.viewId,
+          phase: 'draft',
+          scope: {
+            kind: 'workspace',
+            draftId: 'draft-workspace-empty',
+            workspaceId: project.workspaceId,
+            workspaceGrantId: 'workspace-grant:empty',
+          },
+        },
+        rightManager: { kind: 'workspace-resources', workspaceId: project.workspaceId },
+        status: { kind: 'scene-status', sceneId },
+      },
+    });
+    const projection = withActiveScene(
+      {
+        ...base,
+        catalog: { revision: 1, projects: [project] },
+        window: {
+          ...base.window,
+          activeTarget: { kind: 'project', tabId: tab.tabId },
+          tabs: [tab],
+        },
+      },
+      scene,
+      layout,
+    );
     installBridge({ projection });
 
     const { container, root } = await renderApplication();
@@ -712,8 +831,6 @@ async function renderApplication(strict = false) {
       <DesktopApplicationSettingsProvider
         value={{
           projection: {
-            schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-            revision: 0,
             eventSequence: 0,
             preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
           },
@@ -733,24 +850,31 @@ async function renderApplication(strict = false) {
 function createProjection(): DesktopShellProjection {
   const catalog = { revision: 0, projects: [] } as const;
   const agentHome = {
-    schemaVersion: AGENT_HOME_PROJECTION_VERSION,
     revision: 0,
     conversations: [],
     attention: { needsInput: 0, needsReview: 0, running: 0 },
   } as const;
+  const scene = createDefaultDesktopAgentScene('window-1', 'draft:test');
+  const instance = createDesktopWorkbenchInstanceFromScene({
+    workbenchInstanceId: 'workbench:window-1:entry',
+    agentSurfaceId: 'agent-surface:window-1:entry',
+    layout: createDefaultDesktopWorkbenchLayout('window-1'),
+    scene,
+  });
   return {
-    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
-    endpointEpoch: 'app-1:window-1:1',
-    projectionRevision: 2,
+    rendererSessionId: 'app-1:window-1:1',
     catalog,
     window: {
       windowId: 'window-1',
       revision: 1,
       activeTarget: { kind: 'home' },
       tabs: [],
-      workbench: createDefaultDesktopWorkbenchLayout('window-1'),
-      scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
+      workbenches: parseDesktopWindowWorkbenchCatalog({
+        windowId: 'window-1',
+        activeWorkbenchInstanceId: instance.workbenchInstanceId,
+        instances: [instance],
+      }),
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome,
@@ -759,13 +883,42 @@ function createProjection(): DesktopShellProjection {
   };
 }
 
+function activeScene(projection: DesktopShellProjection) {
+  return resolveActiveDesktopWorkbenchInstance(projection.window.workbenches).scene;
+}
+
+function withActiveScene(
+  projection: DesktopShellProjection,
+  scene: ReturnType<typeof parseDesktopWorkbenchSceneProjection>,
+  layout = resolveActiveDesktopWorkbenchInstance(projection.window.workbenches).layout,
+): DesktopShellProjection {
+  const current = resolveActiveDesktopWorkbenchInstance(projection.window.workbenches);
+  const instance = createDesktopWorkbenchInstanceFromScene({
+    workbenchInstanceId: current.workbenchInstanceId,
+    ...(scene.slots.interaction === undefined
+      ? {}
+      : { agentSurfaceId: current.activeAgentSurfaceId ?? 'agent-surface:test' }),
+    layout,
+    scene,
+  });
+  return {
+    ...projection,
+    window: {
+      ...projection.window,
+      workbenches: parseDesktopWindowWorkbenchCatalog({
+        windowId: projection.window.windowId,
+        activeWorkbenchInstanceId: instance.workbenchInstanceId,
+        instances: [instance],
+      }),
+    },
+  };
+}
+
 function settingsScene() {
   const sceneId = 'scene:window-1:settings';
   return parseDesktopWorkbenchSceneProjection({
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId,
     windowId: 'window-1',
-    revision: 1,
     context: { kind: 'settings', settingsSectionId: 'general' },
     slots: {
       leftManager: { kind: 'settings-navigation', settingsSectionId: 'general' },
@@ -778,10 +931,8 @@ function settingsScene() {
 function extensionsScene(extensionManagementSessionId: string) {
   const sceneId = 'scene:window-1:extensions';
   return parseDesktopWorkbenchSceneProjection({
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId,
     windowId: 'window-1',
-    revision: 1,
     context: { kind: 'extensions', extensionManagementSessionId },
     slots: {
       main: { kind: 'extension-management', extensionManagementSessionId },
@@ -794,10 +945,8 @@ function assetCenterPreviewScene() {
   const sceneId = 'scene:window-1:asset-center';
   const assetCenterSessionId = 'asset-center:window-1:1';
   return parseDesktopWorkbenchSceneProjection({
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId,
     windowId: 'window-1',
-    revision: 1,
     context: { kind: 'asset-center', assetCenterSessionId },
     slots: {
       main: { kind: 'asset-management', assetCenterSessionId },
@@ -815,10 +964,8 @@ function projectManagementScene() {
   const sceneId = 'scene:window-1:project-management';
   const projectManagementSessionId = 'project-management:window-1:1';
   return parseDesktopWorkbenchSceneProjection({
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId,
     windowId: 'window-1',
-    revision: 1,
     context: { kind: 'project-management', projectManagementSessionId },
     slots: {
       main: { kind: 'project-management', projectManagementSessionId },

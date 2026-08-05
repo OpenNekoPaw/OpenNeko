@@ -222,7 +222,6 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
     const projection = createEffectiveAgentConfigurationProjection(snapshot);
     expect(assertEffectiveAgentConfigurationProjection(projection)).toBe(projection);
     expect(projection).toMatchObject({
-      schemaVersion: 1,
       profileId: expect.stringMatching(/^effective-agent-[a-f0-9]{16}$/u),
       digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
       values: {

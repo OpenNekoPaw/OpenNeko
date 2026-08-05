@@ -263,7 +263,6 @@ export class DesktopCanvasMediaRuntime {
           ? {
               audioSessionId: audio.sessionId,
               audio: {
-                version: 1,
                 url: audio.url,
                 mimeType: audioMimeType(sourcePath),
                 durationSeconds: mediaInfo.duration,
@@ -313,7 +312,7 @@ export class DesktopCanvasMediaRuntime {
           windowId: identity.windowId,
           viewId: identity.viewId,
           sessionId: `canvas-media:${identity.sessionId}:${nodeId}`,
-          endpointEpoch: identity.endpointEpoch,
+          rendererSessionId: identity.rendererSessionId,
           revision,
         }),
       }),
@@ -410,10 +409,10 @@ function streamKey(identity: CanvasHostRuntimeIdentity, nodeId: string): string 
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
     nodeId,
   ].join('\u0000');
 }

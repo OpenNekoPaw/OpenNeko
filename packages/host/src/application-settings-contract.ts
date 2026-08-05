@@ -1,5 +1,3 @@
-export const DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION = 2 as const;
-
 export const DESKTOP_APPLICATION_SETTINGS_CHANNELS = {
   snapshotGet: 'openneko:desktop:settings:snapshot:get',
   update: 'openneko:desktop:settings:update',
@@ -20,36 +18,29 @@ export interface DesktopApplicationPreferences {
 }
 
 export interface DesktopApplicationSettingsProjection {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION;
-  readonly revision: number;
   readonly eventSequence: number;
   readonly preferences: DesktopApplicationPreferences;
 }
 
 export interface DesktopApplicationSettingsRequest {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION;
   readonly requestId: string;
 }
 
 export interface DesktopApplicationSettingsUpdateRequest extends DesktopApplicationSettingsRequest {
-  readonly expectedRevision: number;
   readonly preferences: DesktopApplicationPreferences;
 }
 
 export interface DesktopApplicationSettingsResponse {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION;
   readonly requestId: string;
   readonly projection: DesktopApplicationSettingsProjection;
 }
 
 export interface DesktopApplicationSettingsProjectionEvent {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION;
   readonly sequence: number;
   readonly projection: DesktopApplicationSettingsProjection;
 }
 
 export interface DesktopAgentAdvancedSettingsResult {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION;
   readonly requestId: string;
   readonly status: 'opened';
 }
@@ -59,7 +50,6 @@ export interface OpenNekoDesktopApplicationSettingsBridge {
     get(): Promise<DesktopApplicationSettingsProjection>;
     update(
       preferences: DesktopApplicationPreferences,
-      expectedRevision: number,
     ): Promise<DesktopApplicationSettingsProjection>;
     openAgentAdvanced(): Promise<void>;
     subscribe(listener: (event: DesktopApplicationSettingsProjectionEvent) => void): () => void;
@@ -69,9 +59,7 @@ export interface OpenNekoDesktopApplicationSettingsBridge {
 export class DesktopApplicationSettingsContractError extends Error {
   readonly code:
     | 'invalid-desktop-application-settings-payload'
-    | 'unsupported-desktop-application-settings-version'
     | 'desktop-application-settings-request-mismatch'
-    | 'desktop-application-settings-stale-revision'
     | 'desktop-application-settings-event-sequence';
 
   constructor(code: DesktopApplicationSettingsContractError['code'], message: string) {
@@ -92,22 +80,16 @@ export function createDesktopApplicationSettingsRequest(
   requestId: string,
 ): DesktopApplicationSettingsRequest {
   return {
-    schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop settings requestId is required.'),
   };
 }
 
 export function createDesktopApplicationSettingsUpdateRequest(
   requestId: string,
-  expectedRevision: number,
   preferences: DesktopApplicationPreferences,
 ): DesktopApplicationSettingsUpdateRequest {
   return {
     ...createDesktopApplicationSettingsRequest(requestId),
-    expectedRevision: requireNonNegativeInteger(
-      expectedRevision,
-      'Desktop settings expected revision must be a non-negative integer.',
-    ),
     preferences: parseDesktopApplicationPreferences(preferences),
   };
 }
@@ -117,10 +99,9 @@ export function parseDesktopApplicationSettingsRequest(
 ): DesktopApplicationSettingsRequest {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'requestId'],
+    ['requestId'],
     'Desktop settings request must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   return createDesktopApplicationSettingsRequest(
     requireNonEmptyString(record['requestId'], 'Desktop settings requestId is required.'),
   );
@@ -131,16 +112,11 @@ export function parseDesktopApplicationSettingsUpdateRequest(
 ): DesktopApplicationSettingsUpdateRequest {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'requestId', 'expectedRevision', 'preferences'],
+    ['requestId', 'preferences'],
     'Desktop settings update request must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   return createDesktopApplicationSettingsUpdateRequest(
     requireNonEmptyString(record['requestId'], 'Desktop settings requestId is required.'),
-    requireNonNegativeInteger(
-      record['expectedRevision'],
-      'Desktop settings expected revision must be a non-negative integer.',
-    ),
     parseDesktopApplicationPreferences(record['preferences']),
   );
 }
@@ -172,16 +148,10 @@ function parseDesktopApplicationSettingsProjection(
 ): DesktopApplicationSettingsProjection {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'revision', 'eventSequence', 'preferences'],
+    ['eventSequence', 'preferences'],
     'Desktop settings projection must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   return {
-    schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Desktop settings revision must be a non-negative integer.',
-    ),
     eventSequence: requireNonNegativeInteger(
       record['eventSequence'],
       'Desktop settings event sequence must be a non-negative integer.',
@@ -196,10 +166,9 @@ export function parseDesktopApplicationSettingsResponse(
 ): DesktopApplicationSettingsResponse {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'requestId', 'projection'],
+    ['requestId', 'projection'],
     'Desktop settings response must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   const requestId = requireNonEmptyString(
     record['requestId'],
     'Desktop settings response requestId is required.',
@@ -211,7 +180,6 @@ export function parseDesktopApplicationSettingsResponse(
     );
   }
   return {
-    schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
     requestId,
     projection: parseDesktopApplicationSettingsProjection(record['projection']),
   };
@@ -222,10 +190,9 @@ export function parseDesktopApplicationSettingsProjectionEvent(
 ): DesktopApplicationSettingsProjectionEvent {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'sequence', 'projection'],
+    ['sequence', 'projection'],
     'Desktop settings projection event must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   const projection = parseDesktopApplicationSettingsProjection(record['projection']);
   const sequence = requireNonNegativeInteger(
     record['sequence'],
@@ -237,7 +204,6 @@ export function parseDesktopApplicationSettingsProjectionEvent(
     );
   }
   return {
-    schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
     sequence,
     projection,
   };
@@ -249,10 +215,9 @@ export function parseDesktopAgentAdvancedSettingsResult(
 ): DesktopAgentAdvancedSettingsResult {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'requestId', 'status'],
+    ['requestId', 'status'],
     'Desktop Agent advanced settings result must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   const requestId = requireNonEmptyString(
     record['requestId'],
     'Desktop Agent advanced settings result requestId is required.',
@@ -267,19 +232,9 @@ export function parseDesktopAgentAdvancedSettingsResult(
     throw invalidPayload('Desktop Agent advanced settings status must be opened.');
   }
   return {
-    schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
     requestId,
     status: 'opened',
   };
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION) {
-    throw new DesktopApplicationSettingsContractError(
-      'unsupported-desktop-application-settings-version',
-      `Unsupported Desktop application settings version '${String(value)}'.`,
-    );
-  }
 }
 
 function requireExactRecord(

@@ -32,7 +32,6 @@ import { resolveStorageLayout } from '@neko/local-metadata';
 export interface ElectronNekoHostPortsOptions {
   readonly homedir: string;
   readonly nekoHome: string;
-  readonly version: string;
   readonly logger: ILogger;
   readonly workspaceRoot?: string;
   readonly trust?: HostWorkspaceTrust;
@@ -114,7 +113,6 @@ function createDesktopEnvironmentPort(options: ElectronNekoHostPortsOptions): Ho
         kind: 'electron',
         ui: 'graphical',
         displayName: 'OpenNeko Desktop',
-        version: options.version,
       };
     },
     getRuntimeInfo(): HostRuntimeInfo {

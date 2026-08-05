@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentHostToWebviewMessage } from '@neko/agent-contracts';
 import { createElectronAgentLaunchHostRuntimeAdapter } from './desktop-agent-launch-host-runtime-adapter';
+import type { DesktopAgentPresentationStorage } from './desktop-agent-host-runtime-adapter';
 
 describe('Electron Agent launch Host runtime adapter', () => {
   it('projects secret-free launch catalogs and denies Workspace routes in Assistant scope', () => {
@@ -54,6 +55,33 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(bridge.agentLaunch.detach).toHaveBeenCalledOnce();
   });
 
+  it('restores Assistant draft state across connection replacement with a stable owner key', () => {
+    const storage = createStorage();
+    const first = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge: createBridge(),
+      catalog: createCatalog(),
+      storage,
+    });
+    const replacement = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge: createBridge(),
+      catalog: {
+        ...createCatalog(),
+        connection: {
+          ...createCatalog().connection,
+          connectionId: 'launch-replacement',
+        },
+      },
+      storage,
+    });
+
+    first.setState({ drafts: [{ tabId: 'tab-1' }] });
+
+    expect(replacement.getState()).toEqual({ drafts: [{ tabId: 'tab-1' }] });
+    expect([...storage.values.keys()]).toEqual([
+      'openneko:agent:presentation:assistant:assistant:1:agent-view:window-1',
+    ]);
+  });
+
   it('authorizes a file into an opaque context payload without projecting its Host path', async () => {
     const bridge = createBridge();
     bridge.agentLaunch.authorizeResource.mockResolvedValueOnce({
@@ -98,14 +126,12 @@ function createBridge() {
 
 function createCatalog() {
   return {
-    schemaVersion: 1 as const,
     connection: {
-      schemaVersion: 1 as const,
       applicationInstanceId: 'app-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       viewId: 'agent-view:window-1',
-      rendererEpoch: 1,
-      connectionEpoch: 1,
       connectionId: 'launch-1',
       scope: { kind: 'assistant' as const, assistantSpaceId: 'assistant:1' },
     },
@@ -143,5 +169,16 @@ function createCatalog() {
       },
     ],
     resources: [],
+  };
+}
+
+function createStorage(): DesktopAgentPresentationStorage & {
+  readonly values: Map<string, string>;
+} {
+  const values = new Map<string, string>();
+  return {
+    values,
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
   };
 }

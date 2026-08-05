@@ -2,7 +2,6 @@
   "name": "@neko/host",
   "description": "Host adapter port contracts for OpenNeko clients",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -17,6 +16,7 @@
     "./desktop-workspace-grant-authority": "./src/desktop-workspace-grant-authority.ts",
     "./desktop-workspace-grant-contract": "./src/desktop-workspace-grant-contract.ts",
     "./desktop-workbench-contract": "./src/desktop-workbench-contract.ts",
+    "./desktop-workbench-instance-contract": "./src/desktop-workbench-instance-contract.ts",
     "./testing/desktop-shell-state": "./src/testing/in-memory-desktop-shell-state-repository.ts",
     "./files": "./src/files/index.ts",
     "./ports": "./src/ports.ts",

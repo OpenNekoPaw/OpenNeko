@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { assertDesktopAgentAutomationLaunch } from '../shared/agent-automation-contract';
 
 const FUNCTIONAL_FIXTURE_ARGUMENT = '--openneko-functional-fixture';
@@ -7,6 +8,7 @@ const FUNCTIONAL_FIXTURE_ENVIRONMENT = 'OPENNEKO_DESKTOP_FUNCTIONAL_HOME';
 const FUNCTIONAL_WORKSPACE_ENVIRONMENT = 'OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE';
 const FUNCTIONAL_CUT_EXPORT_ENVIRONMENT = 'OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT';
 const FUNCTIONAL_FIXTURE_PREFIX = 'openneko-desktop-functional-';
+const FUNCTIONAL_WORKSPACE_QUEUE = '.openneko-functional-workspace-queue.json';
 
 export function resolveDesktopRuntimeHome(input: {
   readonly systemHome: string;
@@ -56,6 +58,49 @@ export function resolveDesktopFunctionalWindowMode(argv: readonly string[]): 'vi
     throw new Error('Desktop functional hidden mode requires the explicit fixture argument.');
   }
   return 'hidden';
+}
+
+export async function consumeDesktopFunctionalWorkspaceSelection(input: {
+  readonly argv: readonly string[];
+  readonly fixtureHome: string;
+}): Promise<string | undefined> {
+  if (!input.argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT)) return undefined;
+  const fixtureHome = path.resolve(input.fixtureHome);
+  const queuePath = path.join(fixtureHome, FUNCTIONAL_WORKSPACE_QUEUE);
+  let source: string;
+  try {
+    source = await readFile(queuePath, 'utf8');
+  } catch (error: unknown) {
+    if (hasNodeErrorCode(error, 'ENOENT')) return undefined;
+    throw error;
+  }
+  const parsed: unknown = JSON.parse(source);
+  if (!Array.isArray(parsed) || !parsed.every((entry) => typeof entry === 'string')) {
+    throw new Error('Desktop functional Workspace queue is invalid.');
+  }
+  const [next, ...remaining] = parsed;
+  if (!next) {
+    await rm(queuePath, { force: false });
+    return undefined;
+  }
+  const resolved = path.resolve(fixtureHome, next);
+  const relative = path.relative(fixtureHome, resolved);
+  if (
+    path.isAbsolute(next) ||
+    relative.length === 0 ||
+    relative.startsWith('..') ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error('Desktop functional queued Workspace must remain inside the fixture home.');
+  }
+  if (remaining.length === 0) {
+    await rm(queuePath, { force: false });
+  } else {
+    const temporary = `${queuePath}.tmp`;
+    await writeFile(temporary, `${JSON.stringify(remaining)}\n`, 'utf8');
+    await rename(temporary, queuePath);
+  }
+  return resolved;
 }
 
 export function resolveDesktopFunctionalCutExport(input: {
@@ -108,4 +153,8 @@ export function resolveDesktopAgentAutomationLaunch(input: {
   }
   assertDesktopAgentAutomationLaunch({ fixtureLaunch: true, isolatedUserData });
   return true;
+}
+
+function hasNodeErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }

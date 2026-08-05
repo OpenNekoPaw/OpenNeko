@@ -32,8 +32,9 @@ export interface DesktopAgentLaunchRuntime {
   attach(input: {
     readonly applicationInstanceId: string;
     readonly windowId: string;
+    readonly workbenchInstanceId: string;
+    readonly agentSurfaceId: string;
     readonly viewId: string;
-    readonly rendererEpoch: number;
     readonly scope: AgentAuthorityScopeProjection;
   }): Promise<AgentLaunchCatalogProjection>;
   readCatalog(connection: AgentLaunchConnectionIdentity): AgentLaunchCatalogProjection;

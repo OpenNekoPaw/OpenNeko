@@ -59,19 +59,77 @@ describe('Desktop architecture boundaries', () => {
     expect(violations).toEqual([]);
   });
 
+  it('keeps retired Desktop JSON state outside product startup and commands', () => {
+    const main = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
+    const packageJson = readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8');
+
+    expect(main).not.toContain('migrateDesktopStateToSqlite');
+    expect(main).not.toContain('createDesktopRetiredJsonStatePort');
+    expect(packageJson).not.toContain('desktop:state:export-legacy');
+    expect(existsSync(path.join(sourceRoot, 'main', 'desktop-state-migration-adapter.ts'))).toBe(
+      false,
+    );
+    expect(
+      existsSync(path.join(repositoryRoot, 'scripts', 'export-desktop-state-for-downgrade.mts')),
+    ).toBe(false);
+    expect(
+      existsSync(
+        path.join(
+          repositoryRoot,
+          'scripts',
+          'desktop-functional',
+          'desktop-state-sqlite-migration.mjs',
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      readFileSync(
+        path.join(repositoryRoot, 'scripts', 'desktop-functional', 'scenarios.mjs'),
+        'utf8',
+      ),
+    ).not.toContain('desktop-state-sqlite-migration');
+    expect(
+      readFileSync(path.join(repositoryRoot, 'scripts', 'run-desktop-ui-functional.mjs'), 'utf8'),
+    ).not.toContain('desktop-state-sqlite-migration');
+  });
+
   it('keeps Desktop Agent composition on the canonical host-neutral Pi path', () => {
     const mainRoot = path.join(sourceRoot, 'main');
+    const agentRoot = path.join(repositoryRoot, 'packages', 'agent');
     const violations = findForbiddenImports(mainRoot, [
       '@neko-agent/extension',
       '@neko/extension',
       'vscode',
     ]);
+    const removedAgentTokens = [
+      'host-message-event',
+      'retired-metadata-store',
+      'projectionVersion',
+      'baseProjectionVersion',
+      'messageQueueVersion',
+      'viewInstanceId',
+      'rendererSessionId',
+      'connectionEpoch',
+    ] as const;
+    const removedAgentTokenViolations = walkProductionTypeScript(agentRoot).flatMap((file) => {
+      const content = readFileSync(file, 'utf8');
+      return removedAgentTokens
+        .filter((token) => content.includes(token))
+        .map((token) => `${path.relative(repositoryRoot, file)} -> ${token}`);
+    });
     const composition = readFileSync(
       path.join(sourceRoot, '../../../packages/agent/runtime/src/application/agent-app-host.ts'),
       'utf8',
     );
 
     expect(violations).toEqual([]);
+    expect(removedAgentTokenViolations).toEqual([]);
+    expect(
+      existsSync(path.join(agentRoot, 'contracts', 'src', 'host-message-event.ts')),
+    ).toBe(false);
+    expect(
+      existsSync(path.join(agentRoot, 'runtime', 'src', 'retired-metadata-store.ts')),
+    ).toBe(false);
     expect(composition).toContain('PiConversationRuntime.open');
     expect(composition).toContain('NodePiConversationAuthority.create');
     expect(composition).toContain('createConversationProjectionStore');
@@ -248,9 +306,7 @@ describe('Desktop architecture boundaries', () => {
       expect(existsSync(path.join(mainRoot, retiredFile))).toBe(false);
     }
     expect(
-      existsSync(
-        path.join(repositoryRoot, 'packages/media/src/node/NodeMediaLoopbackServer.ts'),
-      ),
+      existsSync(path.join(repositoryRoot, 'packages/media/src/node/NodeMediaLoopbackServer.ts')),
     ).toBe(false);
 
     expect(openNekoProtocol).toContain('protocol.handle(');
@@ -341,8 +397,28 @@ describe('Desktop architecture boundaries', () => {
     const optimizeDepsExclude = rendererConfig.match(/exclude:\s*\[([^\]]*)\]/s)?.[1];
     const optimizeDepsInclude = rendererConfig.match(/include:\s*\[([^\]]*)\]/s)?.[1];
     expect(optimizeDepsExclude).toContain("'@neko/agent-contracts'");
-    expect(optimizeDepsExclude).toContain("'@neko/agent-contracts/host-message-event'");
+    expect(optimizeDepsExclude).not.toContain("'@neko/agent-contracts/host-message-event'");
     expect(optimizeDepsInclude).not.toContain("'@neko/agent-contracts'");
+    for (const assetsWireContract of [
+      '@neko/assets-domain/asset-center/contract',
+      '@neko/assets-domain/asset-center/host-contract',
+      '@neko/assets-domain/contracts',
+      '@neko/assets-domain/global-library/contract',
+      '@neko/assets-domain/resource-browser/contract',
+    ]) {
+      expect(optimizeDepsExclude).toContain(`'${assetsWireContract}'`);
+      expect(optimizeDepsInclude).not.toContain(`'${assetsWireContract}'`);
+    }
+    for (const hostWireContract of [
+      '@neko/host/application-settings',
+      '@neko/host/desktop-scene-contract',
+      '@neko/host/desktop-shell-contract',
+      '@neko/host/desktop-workbench-contract',
+      '@neko/host/desktop-workbench-instance-contract',
+    ]) {
+      expect(optimizeDepsExclude).toContain(`'${hostWireContract}'`);
+      expect(optimizeDepsInclude).not.toContain(`'${hostWireContract}'`);
+    }
   });
 
   it('releases window resources through the registered sender identity after Electron closes', () => {
@@ -381,15 +457,19 @@ describe('Desktop architecture boundaries', () => {
     const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
     const contract = readFileSync(path.join(sourceRoot, 'shared', 'agent-contract.ts'), 'utf8');
     expect(preload).toContain('agent: {');
-    expect(preload).toContain('getBootstrap(projectId, viewId, viewEpoch, conversationId)');
+    expect(preload).toContain(`async getBootstrap(
+      workbenchInstanceId,
+      agentSurfaceId,
+      projectId,
+      viewId,
+      conversationId,
+    )`);
     expect(preload).toContain('createDesktopAgentMessageRequest');
     expect(preload).toContain('createDesktopWorkbenchMutationRequest');
     expect(preload).toContain('workbench: {');
     expect(preload).toContain('resources: {');
     expect(preload).toContain('parseResourceBrowserSnapshotRequest');
-    expect(preload).toContain(
-      'process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)',
-    );
+    expect(preload).toContain('process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)');
     expect(preload).toContain('createDesktopAgentAutomationRequest');
     expect(preload).toContain('DESKTOP_AGENT_AUTOMATION_CHANNEL');
     expect(preload).not.toContain('ipcRenderer.send');

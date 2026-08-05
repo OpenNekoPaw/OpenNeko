@@ -16,16 +16,18 @@ import {
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
 import {
+  parseDesktopWindowWorkbenchCatalog,
+  resolveActiveDesktopWorkbenchInstance,
+  resolveDesktopWorkbenchInstanceByOwner,
+  type DesktopWorkbenchInstanceProjection,
+  type DesktopWindowWorkbenchCatalogProjection,
+} from './desktop-workbench-instance-contract';
+import {
   parseDesktopApplicationSidebarProjection,
-  parseDesktopWorkbenchSceneProjection,
   type DesktopApplicationSidebarProjection,
-  type DesktopWorkbenchSceneProjection,
   type DesktopSceneTransitionIntent,
   type DesktopSceneTransitionResult,
 } from './desktop-scene-contract';
-
-export const DESKTOP_SHELL_CONTRACT_VERSION = 3 as const;
-export const DESKTOP_CONVERSATION_NAVIGATION_VERSION = 1 as const;
 
 export const DESKTOP_SHELL_CHANNELS = {
   snapshotGet: 'openneko:desktop:shell:snapshot:get',
@@ -61,22 +63,18 @@ const DESKTOP_DOMAIN_SURFACES = [
 export type DesktopDomainSurface = (typeof DESKTOP_DOMAIN_SURFACES)[number];
 
 export interface DesktopShellRequest {
-  readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
   readonly requestId: string;
 }
 
 export interface DesktopWindowMutationRequest extends DesktopShellRequest {
-  readonly expectedEndpointEpoch: string;
-  readonly expectedWindowRevision: number;
+  readonly rendererSessionId: string;
 }
 
 export interface DesktopProjectOpenRequest extends DesktopWindowMutationRequest {
   readonly projectId: string;
 }
 
-export interface DesktopProjectRemoveRecentRequest extends DesktopProjectOpenRequest {
-  readonly expectedCatalogRevision: number;
-}
+export interface DesktopProjectRemoveRecentRequest extends DesktopProjectOpenRequest {}
 
 export interface DesktopProjectCatalogItem {
   readonly projectId: string;
@@ -88,7 +86,6 @@ export interface DesktopProjectCatalogItem {
 }
 
 export interface DesktopProjectCatalogProjection {
-  readonly revision: number;
   readonly projects: readonly DesktopProjectCatalogItem[];
 }
 
@@ -96,7 +93,7 @@ export interface DesktopProjectTabProjection {
   readonly tabId: string;
   readonly projectId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
 }
 
 export type DesktopWindowActiveTarget =
@@ -104,12 +101,30 @@ export type DesktopWindowActiveTarget =
 
 export interface DesktopWindowShellProjection {
   readonly windowId: string;
-  readonly revision: number;
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
-  readonly workbench: DesktopWorkbenchLayoutProjection;
-  readonly scene: DesktopWorkbenchSceneProjection;
+  readonly workbenches: DesktopWindowWorkbenchCatalogProjection;
   readonly applicationSidebar: DesktopApplicationSidebarProjection;
+}
+
+export function resolveActiveDesktopWindowWorkbench(
+  window: DesktopWindowShellProjection,
+): DesktopWorkbenchInstanceProjection {
+  return resolveActiveDesktopWorkbenchInstance(window.workbenches);
+}
+
+export function resolveDesktopWindowWorkspaceWorkbench(
+  window: DesktopWindowShellProjection,
+  workspaceId: string,
+): DesktopWorkbenchInstanceProjection {
+  const instance = resolveDesktopWorkbenchInstanceByOwner(window.workbenches, {
+    kind: 'workspace',
+    workspaceId: requireNonEmptyString(workspaceId, 'Desktop Workspace identity is required.'),
+  });
+  if (!instance) {
+    throw invalidPayload(`Desktop Workspace '${workspaceId}' has no open Workbench instance.`);
+  }
+  return instance;
 }
 
 export interface DesktopAttentionProjection {
@@ -125,7 +140,6 @@ export type DesktopAgentHomeActivityKind = AgentHomeActivityKind;
 export type DesktopAgentHomeNavigationIdentity = AgentHomeNavigationIdentity;
 
 export interface DesktopConversationDeleteRequest extends DesktopWindowMutationRequest {
-  readonly expectedAgentHomeRevision: number;
   readonly navigation: DesktopAgentHomeNavigationIdentity;
 }
 
@@ -160,9 +174,6 @@ export type DesktopConversationNavigationGroup =
     };
 
 export interface DesktopConversationNavigationProjection {
-  readonly schemaVersion: typeof DESKTOP_CONVERSATION_NAVIGATION_VERSION;
-  readonly projectCatalogRevision: number;
-  readonly agentHomeRevision: number;
   readonly groups: readonly DesktopConversationNavigationGroup[];
 }
 
@@ -203,20 +214,37 @@ export interface DesktopUnavailableDomainCapabilityProjection {
 export type DesktopDomainCapabilityProjection =
   DesktopReadyDomainCapabilityProjection | DesktopUnavailableDomainCapabilityProjection;
 
+export interface DesktopStoredWindowInvalidDiagnosticProjection {
+  readonly code: 'desktop-stored-window-invalid';
+  readonly severity: 'error';
+  readonly windowId: string;
+  readonly message: string;
+}
+
+export interface DesktopStoredStateInvalidDiagnosticProjection {
+  readonly code: 'desktop-stored-state-invalid';
+  readonly severity: 'error';
+  readonly authorityKey: 'desktop.shell' | 'desktop.application-settings';
+  readonly rejectionId: number;
+  readonly message: string;
+}
+
+export type DesktopShellStateDiagnosticProjection =
+  DesktopStoredWindowInvalidDiagnosticProjection | DesktopStoredStateInvalidDiagnosticProjection;
+
 export interface DesktopShellProjection {
-  readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
   readonly applicationInstanceId: string;
-  readonly endpointEpoch: string;
-  readonly projectionRevision: number;
+  readonly rendererSessionId: string;
   readonly catalog: DesktopProjectCatalogProjection;
   readonly window: DesktopWindowShellProjection;
   readonly agentHome: DesktopAgentHomeProjection;
   readonly conversationNavigation: DesktopConversationNavigationProjection;
   readonly domains: readonly DesktopDomainCapabilityProjection[];
+  /** Absent permanently means that no persisted Shell records were rejected. */
+  readonly stateDiagnostics?: readonly DesktopShellStateDiagnosticProjection[];
 }
 
 export interface DesktopShellResponse {
-  readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
   readonly requestId: string;
   readonly projection: DesktopShellProjection;
 }
@@ -238,21 +266,19 @@ export interface DesktopProfileRequestResult extends DesktopShellResponse {
 }
 
 export interface DesktopTabMutationRequest extends DesktopShellRequest {
-  readonly expectedEndpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly tabId: string;
-  readonly expectedWindowRevision: number;
 }
 
 export interface DesktopWorkbenchMutationRequest extends DesktopWindowMutationRequest {
-  readonly expectedWorkbenchRevision: number;
+  readonly workbenchInstanceId: string;
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }
 
 export interface DesktopShellProjectionEvent {
-  readonly schemaVersion: typeof DESKTOP_SHELL_CONTRACT_VERSION;
   readonly applicationInstanceId: string;
   readonly windowId: string;
-  readonly rendererEpoch: number;
+  readonly rendererSessionId: string;
   readonly sequence: number;
   readonly projection: DesktopShellProjection;
 }
@@ -265,46 +291,31 @@ export interface OpenNekoDesktopShellBridge {
   readonly projects: {
     openContent(): Promise<DesktopOpenContentResult>;
     open(projectId: string): Promise<DesktopOpenContentResult>;
-    removeRecent(
-      projectId: string,
-      expectedWindowRevision: number,
-      expectedCatalogRevision: number,
-    ): Promise<DesktopShellProjection>;
+    removeRecent(projectId: string): Promise<DesktopShellProjection>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly conversations: {
-    delete(
-      navigation: DesktopAgentHomeNavigationIdentity,
-      expectedWindowRevision: number,
-      expectedAgentHomeRevision: number,
-    ): Promise<DesktopShellProjection>;
+    delete(navigation: DesktopAgentHomeNavigationIdentity): Promise<DesktopShellProjection>;
   };
   readonly tabs: {
-    activateHome(expectedWindowRevision: number): Promise<DesktopShellProjection>;
-    activate(tabId: string, expectedWindowRevision: number): Promise<DesktopShellProjection>;
-    close(tabId: string, expectedWindowRevision: number): Promise<DesktopShellProjection>;
+    activateHome(): Promise<DesktopShellProjection>;
+    activate(tabId: string): Promise<DesktopShellProjection>;
+    close(tabId: string): Promise<DesktopShellProjection>;
   };
   readonly workbench: {
     update(
+      workbenchInstanceId: string,
       workbench: DesktopWorkbenchLayoutProjection,
-      expectedWindowRevision: number,
-      expectedWorkbenchRevision: number,
     ): Promise<DesktopShellProjection>;
   };
   readonly applicationSidebar: {
-    update(
-      windowId: string,
-      visible: boolean,
-      width: number,
-      expectedSidebarRevision: number,
-    ): Promise<DesktopShellProjection>;
+    update(windowId: string, visible: boolean, width: number): Promise<DesktopShellProjection>;
   };
   readonly scenes: {
     transition(
       windowId: string,
       intent: DesktopSceneTransitionIntent,
-      expectedWindowRevision: number,
-      expectedSceneRevision: number,
+      sceneId: string,
     ): Promise<DesktopSceneTransitionResult>;
   };
 }
@@ -312,9 +323,7 @@ export interface OpenNekoDesktopShellBridge {
 export class DesktopShellContractError extends Error {
   readonly code:
     | 'invalid-desktop-shell-payload'
-    | 'unsupported-desktop-shell-version'
     | 'desktop-shell-request-mismatch'
-    | 'desktop-shell-stale-revision'
     | 'desktop-shell-project-not-found'
     | 'desktop-shell-project-identity-mismatch'
     | 'desktop-shell-conversation-not-found';
@@ -396,9 +405,6 @@ export function projectDesktopConversationNavigation(
     standaloneGroups.set(key, appendConversation(current, conversation));
   }
   return Object.freeze({
-    schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
-    projectCatalogRevision: catalog.revision,
-    agentHomeRevision: agentHome.revision,
     groups: Object.freeze(
       [...projectGroups.values(), ...standaloneGroups.values()].map((group) =>
         Object.freeze({
@@ -449,7 +455,6 @@ function createStandaloneGroup(
 
 export function createDesktopShellRequest(requestId: string): DesktopShellRequest {
   return {
-    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop Shell requestId is required.'),
   };
 }
@@ -467,66 +472,45 @@ export function createDesktopProfileRequest(
 export function createDesktopTabMutationRequest(
   requestId: string,
   tabId: string,
-  expectedEndpointEpoch: string,
-  expectedWindowRevision: number,
+  rendererSessionId: string,
 ): DesktopTabMutationRequest {
   return {
     ...createDesktopShellRequest(requestId),
-    expectedEndpointEpoch: requireNonEmptyString(
-      expectedEndpointEpoch,
-      'Desktop expected endpoint epoch is required.',
+    rendererSessionId: requireNonEmptyString(
+      rendererSessionId,
+      'Desktop renderer session identity is required.',
     ),
     tabId: requireNonEmptyString(tabId, 'Desktop Project Tab identity is required.'),
-    expectedWindowRevision: requireNonNegativeInteger(
-      expectedWindowRevision,
-      'Desktop expected Window revision must be a non-negative integer.',
-    ),
   };
 }
 
 export function createDesktopWindowMutationRequest(
   requestId: string,
-  expectedEndpointEpoch: string,
-  expectedWindowRevision: number,
+  rendererSessionId: string,
 ): DesktopWindowMutationRequest {
   return {
     ...createDesktopShellRequest(requestId),
-    expectedEndpointEpoch: requireNonEmptyString(
-      expectedEndpointEpoch,
-      'Desktop expected endpoint epoch is required.',
-    ),
-    expectedWindowRevision: requireNonNegativeInteger(
-      expectedWindowRevision,
-      'Desktop expected Window revision must be a non-negative integer.',
+    rendererSessionId: requireNonEmptyString(
+      rendererSessionId,
+      'Desktop renderer session identity is required.',
     ),
   };
 }
 
 export function createDesktopWorkbenchMutationRequest(
   requestId: string,
-  expectedEndpointEpoch: string,
-  expectedWindowRevision: number,
-  expectedWorkbenchRevision: number,
+  rendererSessionId: string,
+  workbenchInstanceId: string,
   workbench: DesktopWorkbenchLayoutProjection,
 ): DesktopWorkbenchMutationRequest {
-  const request = createDesktopWindowMutationRequest(
-    requestId,
-    expectedEndpointEpoch,
-    expectedWindowRevision,
-  );
+  const request = createDesktopWindowMutationRequest(requestId, rendererSessionId);
   const parsedWorkbench = parseDesktopWorkbenchLayout(workbench);
-  const expectedRevision = requireNonNegativeInteger(
-    expectedWorkbenchRevision,
-    'Desktop expected Workbench revision must be a non-negative integer.',
-  );
-  if (parsedWorkbench.revision !== expectedRevision + 1) {
-    throw invalidPayload(
-      'Desktop Workbench mutation must advance the expected Workbench revision exactly once.',
-    );
-  }
   return {
     ...request,
-    expectedWorkbenchRevision: expectedRevision,
+    workbenchInstanceId: requireNonEmptyString(
+      workbenchInstanceId,
+      'Desktop Workbench instance identity is required.',
+    ),
     workbench: parsedWorkbench,
   };
 }
@@ -534,11 +518,10 @@ export function createDesktopWorkbenchMutationRequest(
 export function createDesktopProjectOpenRequest(
   requestId: string,
   projectId: string,
-  expectedEndpointEpoch: string,
-  expectedWindowRevision: number,
+  rendererSessionId: string,
 ): DesktopProjectOpenRequest {
   return {
-    ...createDesktopWindowMutationRequest(requestId, expectedEndpointEpoch, expectedWindowRevision),
+    ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
     projectId: requireNonEmptyString(projectId, 'Desktop Project identity is required.'),
   };
 }
@@ -546,99 +529,82 @@ export function createDesktopProjectOpenRequest(
 export function createDesktopProjectRemoveRecentRequest(
   requestId: string,
   projectId: string,
-  expectedEndpointEpoch: string,
-  expectedWindowRevision: number,
-  expectedCatalogRevision: number,
+  rendererSessionId: string,
 ): DesktopProjectRemoveRecentRequest {
   return {
-    ...createDesktopProjectOpenRequest(
-      requestId,
-      projectId,
-      expectedEndpointEpoch,
-      expectedWindowRevision,
-    ),
-    expectedCatalogRevision: requireNonNegativeInteger(
-      expectedCatalogRevision,
-      'Desktop expected Project catalog revision must be a non-negative integer.',
-    ),
+    ...createDesktopProjectOpenRequest(requestId, projectId, rendererSessionId),
   };
 }
 
 export function createDesktopConversationDeleteRequest(
   requestId: string,
   navigation: DesktopAgentHomeNavigationIdentity,
-  expectedEndpointEpoch: string,
-  expectedWindowRevision: number,
-  expectedAgentHomeRevision: number,
+  rendererSessionId: string,
 ): DesktopConversationDeleteRequest {
   return {
-    ...createDesktopWindowMutationRequest(requestId, expectedEndpointEpoch, expectedWindowRevision),
-    expectedAgentHomeRevision: requireNonNegativeInteger(
-      expectedAgentHomeRevision,
-      'Desktop expected Agent Home revision must be a non-negative integer.',
-    ),
+    ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
     navigation: parseDesktopAgentHomeNavigationIdentity(navigation),
   };
 }
 
 export function parseDesktopShellRequest(value: unknown): DesktopShellRequest {
   const record = requireRecord(value, 'Desktop Shell request must be an object.');
-  requireVersion(record['schemaVersion']);
-  return createDesktopShellRequest(
-    requireNonEmptyString(record['requestId'], 'Desktop Shell requestId is required.'),
-  );
+  requireExactKeys(record, ['requestId'], 'Desktop Shell request');
+  return createDesktopShellRequest(parseDesktopShellRequestId(record));
 }
 
 export function parseDesktopProfileRequest(value: unknown): DesktopProfileRequest {
   const record = requireRecord(value, 'Desktop profile request must be an object.');
-  const request = parseDesktopShellRequest(record);
+  requireExactKeys(record, ['requestId', 'profile'], 'Desktop profile request');
   return {
-    ...request,
+    ...createDesktopShellRequest(parseDesktopShellRequestId(record)),
     profile: requireUnavailableProfile(record['profile']),
   };
 }
 
 export function parseDesktopTabMutationRequest(value: unknown): DesktopTabMutationRequest {
   const record = requireRecord(value, 'Desktop Tab mutation request must be an object.');
-  const request = parseDesktopShellRequest(record);
+  requireExactKeys(
+    record,
+    ['requestId', 'rendererSessionId', 'tabId'],
+    'Desktop Tab mutation request',
+  );
   return createDesktopTabMutationRequest(
-    request.requestId,
+    parseDesktopShellRequestId(record),
     requireNonEmptyString(record['tabId'], 'Desktop Project Tab identity is required.'),
     requireNonEmptyString(
-      record['expectedEndpointEpoch'],
-      'Desktop expected endpoint epoch is required.',
-    ),
-    requireNonNegativeInteger(
-      record['expectedWindowRevision'],
-      'Desktop expected Window revision must be a non-negative integer.',
+      record['rendererSessionId'],
+      'Desktop renderer session identity is required.',
     ),
   );
 }
 
 export function parseDesktopWindowMutationRequest(value: unknown): DesktopWindowMutationRequest {
   const record = requireRecord(value, 'Desktop Window mutation request must be an object.');
-  const request = parseDesktopShellRequest(record);
+  requireExactKeys(record, ['requestId', 'rendererSessionId'], 'Desktop Window mutation request');
   return createDesktopWindowMutationRequest(
-    request.requestId,
+    parseDesktopShellRequestId(record),
     requireNonEmptyString(
-      record['expectedEndpointEpoch'],
-      'Desktop expected endpoint epoch is required.',
-    ),
-    requireNonNegativeInteger(
-      record['expectedWindowRevision'],
-      'Desktop expected Window revision must be a non-negative integer.',
+      record['rendererSessionId'],
+      'Desktop renderer session identity is required.',
     ),
   );
 }
 
 export function parseDesktopProjectOpenRequest(value: unknown): DesktopProjectOpenRequest {
   const record = requireRecord(value, 'Desktop Project open request must be an object.');
-  const request = parseDesktopWindowMutationRequest(record);
+  requireExactKeys(
+    record,
+    ['requestId', 'projectId', 'rendererSessionId'],
+    'Desktop Project open request',
+  );
   return createDesktopProjectOpenRequest(
-    request.requestId,
+    parseDesktopShellRequestId(record),
     requireNonEmptyString(record['projectId'], 'Desktop Project identity is required.'),
-    request.expectedEndpointEpoch,
-    request.expectedWindowRevision,
+    requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop renderer session identity is required.',
+    ),
   );
 }
 
@@ -646,15 +612,17 @@ export function parseDesktopProjectRemoveRecentRequest(
   value: unknown,
 ): DesktopProjectRemoveRecentRequest {
   const record = requireRecord(value, 'Desktop Project remove-recent request must be an object.');
-  const request = parseDesktopProjectOpenRequest(record);
+  requireExactKeys(
+    record,
+    ['requestId', 'projectId', 'rendererSessionId'],
+    'Desktop Project remove-recent request',
+  );
   return createDesktopProjectRemoveRecentRequest(
-    request.requestId,
-    request.projectId,
-    request.expectedEndpointEpoch,
-    request.expectedWindowRevision,
-    requireNonNegativeInteger(
-      record['expectedCatalogRevision'],
-      'Desktop expected Project catalog revision must be a non-negative integer.',
+    parseDesktopShellRequestId(record),
+    requireNonEmptyString(record['projectId'], 'Desktop Project identity is required.'),
+    requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop renderer session identity is required.',
     ),
   );
 }
@@ -666,15 +634,17 @@ export function parseDesktopConversationDeleteRequest(
     value,
     'Desktop Agent Home conversation delete request must be an object.',
   );
-  const request = parseDesktopWindowMutationRequest(record);
+  requireExactKeys(
+    record,
+    ['requestId', 'navigation', 'rendererSessionId'],
+    'Desktop Agent Home conversation delete request',
+  );
   return createDesktopConversationDeleteRequest(
-    request.requestId,
+    parseDesktopShellRequestId(record),
     parseDesktopAgentHomeNavigationIdentity(record['navigation']),
-    request.expectedEndpointEpoch,
-    request.expectedWindowRevision,
-    requireNonNegativeInteger(
-      record['expectedAgentHomeRevision'],
-      'Desktop expected Agent Home revision must be a non-negative integer.',
+    requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop renderer session identity is required.',
     ),
   );
 }
@@ -683,14 +653,20 @@ export function parseDesktopWorkbenchMutationRequest(
   value: unknown,
 ): DesktopWorkbenchMutationRequest {
   const record = requireRecord(value, 'Desktop Workbench mutation request must be an object.');
-  const request = parseDesktopWindowMutationRequest(record);
+  requireExactKeys(
+    record,
+    ['requestId', 'rendererSessionId', 'workbenchInstanceId', 'workbench'],
+    'Desktop Workbench mutation request',
+  );
   return createDesktopWorkbenchMutationRequest(
-    request.requestId,
-    request.expectedEndpointEpoch,
-    request.expectedWindowRevision,
-    requireNonNegativeInteger(
-      record['expectedWorkbenchRevision'],
-      'Desktop expected Workbench revision must be a non-negative integer.',
+    parseDesktopShellRequestId(record),
+    requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop renderer session identity is required.',
+    ),
+    requireNonEmptyString(
+      record['workbenchInstanceId'],
+      'Desktop Workbench instance identity is required.',
     ),
     parseDesktopWorkbenchLayout(record['workbench']),
   );
@@ -701,13 +677,8 @@ export function parseDesktopShellResponse(
   expectedRequestId: string,
 ): DesktopShellResponse {
   const record = requireRecord(value, 'Desktop Shell response must be an object.');
-  requireVersion(record['schemaVersion']);
-  const requestId = requireMatchingRequestId(record['requestId'], expectedRequestId);
-  return {
-    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
-    requestId,
-    projection: parseDesktopShellProjection(record['projection']),
-  };
+  requireExactKeys(record, ['requestId', 'projection'], 'Desktop Shell response');
+  return parseDesktopShellResponseRecord(record, expectedRequestId);
 }
 
 export function parseDesktopOpenContentResult(
@@ -715,7 +686,8 @@ export function parseDesktopOpenContentResult(
   expectedRequestId: string,
 ): DesktopOpenContentResult {
   const record = requireRecord(value, 'Desktop open Content result must be an object.');
-  const response = parseDesktopShellResponse(record, expectedRequestId);
+  requireExactKeys(record, ['requestId', 'projection', 'status'], 'Desktop open Content result');
+  const response = parseDesktopShellResponseRecord(record, expectedRequestId);
   const status = record['status'];
   if (status !== 'opened' && status !== 'cancelled') {
     throw invalidPayload('Desktop open Content result status is invalid.');
@@ -728,7 +700,12 @@ export function parseDesktopProfileRequestResult(
   expectedRequestId: string,
 ): DesktopProfileRequestResult {
   const record = requireRecord(value, 'Desktop profile result must be an object.');
-  const response = parseDesktopShellResponse(record, expectedRequestId);
+  requireExactKeys(
+    record,
+    ['requestId', 'projection', 'status', 'diagnostic'],
+    'Desktop profile result',
+  );
+  const response = parseDesktopShellResponseRecord(record, expectedRequestId);
   if (record['status'] !== 'unavailable') {
     throw invalidPayload('Desktop unavailable profile result status is invalid.');
   }
@@ -759,12 +736,41 @@ export function parseDesktopProfileRequestResult(
 
 export function parseDesktopShellProjection(value: unknown): DesktopShellProjection {
   const record = requireRecord(value, 'Desktop Shell projection must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(
+    record,
+    record['stateDiagnostics'] === undefined
+      ? [
+          'applicationInstanceId',
+          'rendererSessionId',
+          'catalog',
+          'window',
+          'agentHome',
+          'conversationNavigation',
+          'domains',
+        ]
+      : [
+          'applicationInstanceId',
+          'rendererSessionId',
+          'catalog',
+          'window',
+          'agentHome',
+          'conversationNavigation',
+          'domains',
+          'stateDiagnostics',
+        ],
+    'Desktop Shell projection',
+  );
   const catalogRecord = requireRecord(
     record['catalog'],
     'Desktop Project catalog projection is required.',
   );
   const windowRecord = requireRecord(record['window'], 'Desktop Window projection is required.');
+  requireExactKeys(catalogRecord, ['projects'], 'Desktop Project catalog projection');
+  requireExactKeys(
+    windowRecord,
+    ['windowId', 'activeTarget', 'tabs', 'workbenches', 'applicationSidebar'],
+    'Desktop Window projection',
+  );
   const agentHomeRecord = requireRecord(
     record['agentHome'],
     'Desktop Agent Home projection is required.',
@@ -778,18 +784,13 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     'Desktop Project catalog items must be an array.',
   ).map(parseProjectCatalogItem);
   const catalog: DesktopProjectCatalogProjection = {
-    revision: requireNonNegativeInteger(
-      catalogRecord['revision'],
-      'Desktop Project catalog revision must be a non-negative integer.',
-    ),
     projects,
   };
   const tabs = requireArray(windowRecord['tabs'], 'Desktop Project Tabs must be an array.').map(
     parseProjectTab,
   );
   const activeTarget = parseActiveTarget(windowRecord['activeTarget']);
-  const workbench = parseDesktopWorkbenchLayout(windowRecord['workbench']);
-  const scene = parseDesktopWorkbenchSceneProjection(windowRecord['scene']);
+  const workbenches = parseDesktopWindowWorkbenchCatalog(windowRecord['workbenches']);
   const applicationSidebar = parseDesktopApplicationSidebarProjection(
     windowRecord['applicationSidebar'],
   );
@@ -797,11 +798,11 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     windowRecord['windowId'],
     'Desktop Window identity is required.',
   );
-  if (workbench.windowId !== windowId) {
-    throw invalidPayload('Desktop Workbench projection belongs to another Window.');
+  if (workbenches.windowId !== windowId) {
+    throw invalidPayload('Desktop Workbench catalog belongs to another Window.');
   }
-  if (scene.windowId !== windowId || applicationSidebar.windowId !== windowId) {
-    throw invalidPayload('Desktop Scene or Application Sidebar belongs to another Window.');
+  if (applicationSidebar.windowId !== windowId) {
+    throw invalidPayload('Desktop Application Sidebar belongs to another Window.');
   }
   if (activeTarget.kind === 'project' && !tabs.some((tab) => tab.tabId === activeTarget.tabId)) {
     throw invalidPayload('Desktop active Project Tab is not present in the Window projection.');
@@ -810,40 +811,42 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   if (tabs.some((tab) => !projectIds.has(tab.projectId))) {
     throw invalidPayload('Desktop Project Tab references an unknown Project.');
   }
-  if (workbench.main.views.some((view) => !projectIds.has(view.projectId))) {
+  if (
+    workbenches.instances.some((instance) =>
+      instance.layout.main.views.some((view) => !projectIds.has(view.projectId)),
+    )
+  ) {
     throw invalidPayload('Desktop Workbench View references an unknown Project.');
   }
   if (activeTarget.kind === 'project') {
     const activeTab = tabs.find((tab) => tab.tabId === activeTarget.tabId);
-    if (!activeTab || workbench.main.views.some((view) => view.projectId !== activeTab.projectId)) {
+    const activeWorkbench = workbenches.instances.find(
+      (instance) => instance.workbenchInstanceId === workbenches.activeWorkbenchInstanceId,
+    );
+    if (
+      !activeTab ||
+      !activeWorkbench ||
+      (activeWorkbench.owner.kind === 'workspace' &&
+        activeWorkbench.layout.main.views.some((view) => view.projectId !== activeTab.projectId))
+    ) {
       throw invalidPayload('Desktop Workbench View belongs to another active Project.');
     }
   }
   return {
-    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: requireNonEmptyString(
       record['applicationInstanceId'],
       'Desktop Shell application instance identity is required.',
     ),
-    endpointEpoch: requireNonEmptyString(
-      record['endpointEpoch'],
-      'Desktop Shell endpoint epoch is required.',
-    ),
-    projectionRevision: requireNonNegativeInteger(
-      record['projectionRevision'],
-      'Desktop Shell projection revision must be a non-negative integer.',
+    rendererSessionId: requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop Shell renderer session identity is required.',
     ),
     catalog,
     window: {
       windowId,
-      revision: requireNonNegativeInteger(
-        windowRecord['revision'],
-        'Desktop Window revision must be a non-negative integer.',
-      ),
       activeTarget,
       tabs,
-      workbench,
-      scene,
+      workbenches,
       applicationSidebar,
     },
     agentHome,
@@ -856,6 +859,70 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
       record['domains'],
       'Desktop domain capability projection must be an array.',
     ).map(parseDesktopDomainCapabilityProjection),
+    stateDiagnostics:
+      record['stateDiagnostics'] === undefined
+        ? []
+        : requireArray(
+            record['stateDiagnostics'],
+            'Desktop Shell state diagnostics must be an array.',
+          ).map(parseDesktopShellStateDiagnosticProjection),
+  };
+}
+
+function parseDesktopShellStateDiagnosticProjection(
+  value: unknown,
+): DesktopShellStateDiagnosticProjection {
+  const record = requireRecord(value, 'Desktop Shell state diagnostic must be an object.');
+  if (record['code'] === 'desktop-stored-state-invalid') {
+    requireExactKeys(
+      record,
+      ['code', 'severity', 'authorityKey', 'rejectionId', 'message'],
+      'Desktop Shell state diagnostic',
+    );
+    if (
+      record['severity'] !== 'error' ||
+      (record['authorityKey'] !== 'desktop.shell' &&
+        record['authorityKey'] !== 'desktop.application-settings')
+    ) {
+      throw invalidPayload('Desktop Shell state diagnostic identity is invalid.');
+    }
+    const rejectionId = requireNonNegativeInteger(
+      record['rejectionId'],
+      'Desktop rejected state identity is invalid.',
+    );
+    if (rejectionId === 0) {
+      throw invalidPayload('Desktop rejected state identity is invalid.');
+    }
+    return {
+      code: 'desktop-stored-state-invalid',
+      severity: 'error',
+      authorityKey: record['authorityKey'],
+      rejectionId,
+      message: requireNonEmptyString(
+        record['message'],
+        'Desktop invalid stored state diagnostic message is required.',
+      ),
+    };
+  }
+  requireExactKeys(
+    record,
+    ['code', 'severity', 'windowId', 'message'],
+    'Desktop Shell state diagnostic',
+  );
+  if (record['code'] !== 'desktop-stored-window-invalid' || record['severity'] !== 'error') {
+    throw invalidPayload('Desktop Shell state diagnostic identity is invalid.');
+  }
+  return {
+    code: 'desktop-stored-window-invalid',
+    severity: 'error',
+    windowId: requireNonEmptyString(
+      record['windowId'],
+      'Desktop invalid stored Window identity is required.',
+    ),
+    message: requireNonEmptyString(
+      record['message'],
+      'Desktop invalid stored Window diagnostic message is required.',
+    ),
   };
 }
 
@@ -868,14 +935,9 @@ export function parseDesktopConversationNavigationProjection(
   );
   requireExactKeys(
     record,
-    ['schemaVersion', 'projectCatalogRevision', 'agentHomeRevision', 'groups'],
+    ['groups'],
     'Desktop Conversation navigation projection',
   );
-  if (record['schemaVersion'] !== DESKTOP_CONVERSATION_NAVIGATION_VERSION) {
-    throw invalidPayload(
-      `Unsupported Desktop Conversation navigation version '${String(record['schemaVersion'])}'.`,
-    );
-  }
   const groups = requireArray(
     record['groups'],
     'Desktop Conversation navigation groups must be an array.',
@@ -887,15 +949,6 @@ export function parseDesktopConversationNavigationProjection(
     throw invalidPayload('Desktop Conversation navigation places a Conversation more than once.');
   }
   return Object.freeze({
-    schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
-    projectCatalogRevision: requireNonNegativeInteger(
-      record['projectCatalogRevision'],
-      'Desktop Conversation Project catalog revision is invalid.',
-    ),
-    agentHomeRevision: requireNonNegativeInteger(
-      record['agentHomeRevision'],
-      'Desktop Conversation Agent Home revision is invalid.',
-    ),
     groups: Object.freeze(groups),
   });
 }
@@ -1003,7 +1056,11 @@ function parseDesktopAgentHomeNavigationIdentity(
 
 export function parseDesktopShellProjectionEvent(value: unknown): DesktopShellProjectionEvent {
   const record = requireRecord(value, 'Desktop Shell projection event must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(
+    record,
+    ['applicationInstanceId', 'windowId', 'rendererSessionId', 'sequence', 'projection'],
+    'Desktop Shell projection event',
+  );
   const projection = parseDesktopShellProjection(record['projection']);
   const applicationInstanceId = requireNonEmptyString(
     record['applicationInstanceId'],
@@ -1020,12 +1077,11 @@ export function parseDesktopShellProjectionEvent(value: unknown): DesktopShellPr
     throw invalidPayload('Desktop Shell event identity does not match its projection.');
   }
   return {
-    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId,
     windowId,
-    rendererEpoch: requireNonNegativeInteger(
-      record['rendererEpoch'],
-      'Desktop Shell renderer epoch must be a non-negative integer.',
+    rendererSessionId: requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop Shell renderer session identity is required.',
     ),
     sequence: requireNonNegativeInteger(
       record['sequence'],
@@ -1062,9 +1118,9 @@ function parseProjectTab(value: unknown): DesktopProjectTabProjection {
     tabId: requireNonEmptyString(record['tabId'], 'Desktop Project Tab identity is required.'),
     projectId: requireNonEmptyString(record['projectId'], 'Desktop Project identity is required.'),
     viewId: requireNonEmptyString(record['viewId'], 'Desktop View identity is required.'),
-    viewEpoch: requireNonNegativeInteger(
-      record['viewEpoch'],
-      'Desktop View epoch must be a non-negative integer.',
+    viewInstanceId: requireNonEmptyString(
+      record['viewInstanceId'],
+      'Desktop View instance identity is required.',
     ),
   };
 }
@@ -1144,13 +1200,18 @@ function requireUnavailableProfile(value: unknown): DesktopUnavailableProjectPro
   throw invalidPayload(`Desktop project profile '${String(value)}' is not requestable here.`);
 }
 
-function requireVersion(value: unknown): void {
-  if (value !== DESKTOP_SHELL_CONTRACT_VERSION) {
-    throw new DesktopShellContractError(
-      'unsupported-desktop-shell-version',
-      `Unsupported Desktop Shell version '${String(value)}'.`,
-    );
-  }
+function parseDesktopShellRequestId(record: Readonly<Record<string, unknown>>): string {
+  return requireNonEmptyString(record['requestId'], 'Desktop Shell requestId is required.');
+}
+
+function parseDesktopShellResponseRecord(
+  record: Readonly<Record<string, unknown>>,
+  expectedRequestId: string,
+): DesktopShellResponse {
+  return {
+    requestId: requireMatchingRequestId(record['requestId'], expectedRequestId),
+    projection: parseDesktopShellProjection(record['projection']),
+  };
 }
 
 function requireMatchingRequestId(value: unknown, expectedRequestId: string): string {

@@ -73,7 +73,6 @@ describe('ElectronNekoHostPorts', () => {
     const host = createElectronNekoHostPorts({
       homedir: root,
       nekoHome: path.join(root, '.neko'),
-      version: '0.0.1',
       logger: createLogger(),
       secrets: {
         get: async (key) => values.get(key),
@@ -103,7 +102,6 @@ function createHost(homedir: string, workspaceRoot?: string) {
   return createElectronNekoHostPorts({
     homedir,
     nekoHome: path.join(homedir, '.openneko'),
-    version: '0.0.1',
     logger: createLogger(),
     ...(workspaceRoot ? { workspaceRoot } : {}),
   });

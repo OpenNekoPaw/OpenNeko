@@ -17,11 +17,13 @@ const CutWebviewRoot = lazy(async () => {
 export function DesktopCutSurface({
   project,
   projection,
+  lifecyclePresentation,
   timelineTarget,
   view,
 }: {
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
+  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly timelineTarget?: Element;
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
@@ -37,18 +39,18 @@ export function DesktopCutSurface({
         workspaceId: project.workspaceId,
         windowId: projection.window.windowId,
         viewId: view.viewId,
-        viewEpoch: view.viewEpoch,
+        viewInstanceId: view.viewInstanceId,
         documentId,
-        sessionId: createCutHostSessionId(view.viewId, view.viewEpoch),
-        endpointEpoch: projection.endpointEpoch,
+        sessionId: createCutHostSessionId(view.viewId, view.viewInstanceId),
+        rendererSessionId: projection.rendererSessionId,
       }),
     [
       project.projectId,
       project.workspaceId,
-      projection.endpointEpoch,
+      projection.rendererSessionId,
       projection.window.windowId,
       documentId,
-      view.viewEpoch,
+      view.viewInstanceId,
       view.viewId,
     ],
   );
@@ -67,7 +69,12 @@ export function DesktopCutSurface({
           </div>
         }
       >
-        <CutWebviewRoot bridge={bridge} locale={locale} timelineTarget={timelineTarget} />
+        <CutWebviewRoot
+          bridge={bridge}
+          lifecyclePresentation={lifecyclePresentation}
+          locale={locale}
+          timelineTarget={timelineTarget}
+        />
       </Suspense>
     </section>
   );

@@ -15,10 +15,7 @@ export type DesktopAgentEventCursorAdvanceResult =
       readonly connection: DesktopAgentConnectionIdentity;
     }
   | { readonly kind: 'retired' }
-  | {
-      readonly kind: 'foreign';
-      readonly currentConnection?: DesktopAgentConnectionIdentity;
-    }
+  | { readonly kind: 'foreign' }
   | {
       readonly kind: 'sequence-mismatch';
       readonly connection: DesktopAgentConnectionIdentity;
@@ -73,7 +70,7 @@ export class DesktopAgentEventCursorRegistry {
     const current = this.active.get(connection.connectionId);
     if (current) {
       if (!isSameDesktopAgentEventConnection(current.connection, connection)) {
-        return { kind: 'foreign', currentConnection: this.currentConnection };
+        return { kind: 'foreign' };
       }
       const expectedSequence = current.sequence + 1;
       if (sequence !== expectedSequence) {
@@ -94,13 +91,7 @@ export class DesktopAgentEventCursorRegistry {
     if (retired && isSameDesktopAgentEventConnection(retired, connection)) {
       return { kind: 'retired' };
     }
-    return { kind: 'foreign', currentConnection: this.currentConnection };
-  }
-
-  get currentConnection(): DesktopAgentConnectionIdentity | undefined {
-    let current: DesktopAgentConnectionIdentity | undefined;
-    for (const cursor of this.active.values()) current = cursor.connection;
-    return current;
+    return { kind: 'foreign' };
   }
 }
 
@@ -141,11 +132,11 @@ export function isSameDesktopAgentEventConnection(
   return (
     left.applicationInstanceId === right.applicationInstanceId &&
     left.windowId === right.windowId &&
+    left.workbenchInstanceId === right.workbenchInstanceId &&
+    left.agentSurfaceId === right.agentSurfaceId &&
     sameAgentConnectionOwner(left, right) &&
     left.workspaceId === right.workspaceId &&
     left.viewId === right.viewId &&
-    left.viewEpoch === right.viewEpoch &&
-    left.rendererEpoch === right.rendererEpoch &&
     left.connectionId === right.connectionId
   );
 }

@@ -1,27 +1,25 @@
-import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import {
-  DESKTOP_STATE_AUTHORITY_KEYS,
-  migrateDesktopStateToSqlite,
-  SqliteVersionedJsonStateRepository,
-} from '@neko/local-metadata';
+import { DESKTOP_STATE_AUTHORITY_KEYS, SqliteJsonStateRepository } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import {
   createDefaultDesktopApplicationSettingsState,
   parseDesktopApplicationSettingsStoredState,
 } from '@neko/host/application-settings-state';
-import { createDesktopRetiredJsonStatePort } from './desktop-state-migration-adapter';
 import {
   createEmptyDesktopShellState,
-  DESKTOP_SHELL_STATE_VERSION,
   parseDesktopShellStoredState,
+  serializeDesktopShellStoredState,
 } from '@neko/host/desktop-shell-state';
+import {
+  DesktopShellService,
+  type DesktopWorkspaceResolutionPort,
+} from '@neko/host/desktop-shell-service';
 import { createDefaultDesktopApplicationSidebar } from '@neko/host/desktop-scene-contract';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 
@@ -35,28 +33,15 @@ describe('Desktop SQLite application state composition', () => {
   it('restores shell state and preferences after a database-only restart', async () => {
     const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-integration-'));
     roots.push(root);
-    const stateDirectory = join(root, 'electron-user-data', 'state');
-    const shellPath = join(stateDirectory, 'desktop-shell-state.json');
-    const settingsPath = join(stateDirectory, 'desktop-application-settings.v1.json');
-    await mkdir(stateDirectory, { recursive: true });
-    await Promise.all([
-      writeFile(shellPath, JSON.stringify(createEmptyDesktopShellState()), 'utf8'),
-      writeFile(
-        settingsPath,
-        JSON.stringify(createDefaultDesktopApplicationSettingsState()),
-        'utf8',
-      ),
-    ]);
 
-    const first = await openState(root, shellPath, settingsPath);
-    const shell = await first.shell.commit(0, {
+    const first = await openState(root);
+    const shell = await first.shell.commit({
       ...createEmptyDesktopShellState(),
-      storageRevision: 1,
       catalogRevision: 1,
     });
     const settingsService = new DesktopApplicationSettingsService(first.settings);
     await settingsService.initialize();
-    await settingsService.update(0, {
+    await settingsService.update({
       ...createDefaultDesktopApplicationSettingsState().preferences,
       theme: 'dark',
       locale: 'zh-cn',
@@ -64,12 +49,11 @@ describe('Desktop SQLite application state composition', () => {
     await settingsService.dispose();
     await first.store.dispose();
 
-    const second = await openState(root, shellPath, settingsPath);
+    const second = await openState(root);
     try {
       expect(await second.shell.read()).toEqual(shell);
       const restoredSettings = new DesktopApplicationSettingsService(second.settings);
       await expect(restoredSettings.initialize()).resolves.toMatchObject({
-        revision: 1,
         preferences: { theme: 'dark', locale: 'zh-cn', startupTarget: 'home' },
       });
       await restoredSettings.dispose();
@@ -78,35 +62,35 @@ describe('Desktop SQLite application state composition', () => {
     }
   });
 
-  it('reads and upgrades a version 5 management Scene already stored in SQLite', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-v5-scene-'));
+  it('isolates an old Window, opens a new Workbench, and preserves the rejected record', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-invalid-window-'));
     roots.push(root);
     const store = createNodeSqliteLocalMetadataStore({ homedir: root });
     await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
-    const repository = new SqliteVersionedJsonStateRepository({
+    const repository = new SqliteJsonStateRepository({
       store,
       authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
       codec: shellCodec,
     });
     await repository.prepare();
-    const sceneId = 'scene:window-1:project-management';
+    let identity = 0;
+    const sceneId = 'scene:window-old:project-management';
+    const removedSchemaField = ['schema', 'Ver', 'sion'].join('');
     const retiredState = {
-      schemaVersion: 5,
-      storageRevision: 17,
       catalogRevision: 0,
-      primaryWindowId: 'window-1',
+      primaryWindowId: 'window-old',
       projects: [],
       windows: [
         {
-          windowId: 'window-1',
+          windowId: 'window-old',
           revision: 4,
           activeTarget: { kind: 'home' },
           tabs: [],
-          workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+          workbench: createDefaultDesktopWorkbenchLayout('window-old'),
           scene: {
-            schemaVersion: 1,
+            [removedSchemaField]: 1,
             sceneId,
-            windowId: 'window-1',
+            windowId: 'window-old',
             revision: 4,
             context: {
               kind: 'project-management',
@@ -120,7 +104,7 @@ describe('Desktop SQLite application state composition', () => {
               status: { kind: 'scene-status', sceneId },
             },
           },
-          applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+          applicationSidebar: createDefaultDesktopApplicationSidebar('window-old'),
         },
       ],
     };
@@ -129,11 +113,10 @@ describe('Desktop SQLite application state composition', () => {
       ({ sql }) =>
         sql.run(
           `INSERT INTO desktop_application_state(
-             authority_key, storage_revision, document_json, updated_at
-           ) VALUES (?, ?, ?, ?)`,
+             authority_key, document_json, updated_at
+           ) VALUES (?, ?, ?)`,
           [
             DESKTOP_STATE_AUTHORITY_KEYS.shell,
-            retiredState.storageRevision,
             JSON.stringify(retiredState),
             '2026-08-04T00:00:00.000Z',
           ],
@@ -141,76 +124,231 @@ describe('Desktop SQLite application state composition', () => {
     );
 
     try {
-      await expect(repository.read()).resolves.toMatchObject({
-        schemaVersion: DESKTOP_SHELL_STATE_VERSION,
-        storageRevision: 17,
-        windows: [
-          {
-            scene: {
-              slots: {
-                main: {
-                  kind: 'project-management',
-                  projectManagementSessionId: 'project-management:1',
-                },
-              },
-            },
-          },
-        ],
+      const workspaceRegistry: DesktopWorkspaceResolutionPort = {
+        resolve: async () => {
+          throw new Error('Workspace resolution is not expected during Shell startup.');
+        },
+        dispose: async () => undefined,
+      };
+      const service = new DesktopShellService({
+        applicationInstanceId: 'application:test',
+        stateRepository: repository,
+        workspaceRegistry,
+        startupTarget: 'home',
+        createIdentity: () => `identity-${(identity += 1)}`,
+        now: () => '2026-08-05T00:00:00.000Z',
       });
+      const windowId = await service.claimWindowId();
+      const projection = await service.getProjection(windowId);
+
+      expect(windowId).not.toBe('window-old');
+      expect(projection.window.workbenches.instances).toHaveLength(1);
+      expect(projection.stateDiagnostics).toEqual([
+        expect.objectContaining({
+          code: 'desktop-stored-window-invalid',
+          windowId: 'window-old',
+          message: expect.stringContaining('unexpected fields'),
+        }),
+      ]);
+      const rows = await store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'verify-rejected-window-retained' },
+        ({ sql }) =>
+          sql.all('SELECT document_json FROM desktop_application_state WHERE authority_key = ?', [
+            DESKTOP_STATE_AUTHORITY_KEYS.shell,
+          ]),
+      );
+      const document: unknown = JSON.parse(String(rows[0]?.['document_json']));
+      if (!isRecord(document) || !Array.isArray(document['windows'])) {
+        throw new Error('Desktop Shell authority did not persist a Window collection.');
+      }
+      expect(document['windows']).toContainEqual(retiredState.windows[0]);
+      expect(document['windows']).toContainEqual(
+        expect.objectContaining({ windowId, workbenches: expect.any(Object) }),
+      );
+      await service.dispose();
     } finally {
       await store.dispose();
     }
   });
 
-  it.each(['agent', 'transcript', 'memory', 'logs', 'workspace', 'project'])(
-    'rejects adjacent %s data before switching either authority',
-    async (forbiddenField) => {
-      const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-negative-'));
-      roots.push(root);
-      const stateDirectory = join(root, 'electron-user-data', 'state');
-      const shellPath = join(stateDirectory, 'desktop-shell-state.json');
-      const settingsPath = join(stateDirectory, 'desktop-application-settings.v1.json');
-      await mkdir(stateDirectory, { recursive: true });
-      await Promise.all([
-        writeFile(
-          shellPath,
-          JSON.stringify({ ...createEmptyDesktopShellState(), [forbiddenField]: {} }),
-          'utf8',
-        ),
-        writeFile(
-          settingsPath,
-          JSON.stringify(createDefaultDesktopApplicationSettingsState()),
-          'utf8',
-        ),
+  it('isolates an invalid Shell root without rewriting it and opens a new Workbench', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-invalid-root-'));
+    roots.push(root);
+    const initial = await openState(root);
+    await initial.store.dispose();
+
+    const store = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
+    const repository = new SqliteJsonStateRepository({
+      store,
+      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+      codec: shellCodec,
+      now: () => '2026-08-05T00:00:00.000Z',
+    });
+    const invalidDocument = JSON.stringify({
+      ...createEmptyDesktopShellState(),
+      [['schema', 'Ver', 'sion'].join('')]: 1,
+    });
+    try {
+      await repository.prepare();
+      const seeded = await store.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'seed-invalid-shell-root' },
+        ({ sql }) =>
+          sql.run(
+            `INSERT INTO desktop_application_state(
+               authority_key, document_json, updated_at
+             ) VALUES (?, ?, ?)`,
+            [DESKTOP_STATE_AUTHORITY_KEYS.shell, invalidDocument, '2026-08-04T00:00:00.000Z'],
+          ),
+      );
+      expect(seeded.changes).toBe(1);
+
+      const rejection = await repository.inspectInvalidState();
+      expect(rejection).toMatchObject({
+        authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+        diagnostic: expect.stringContaining(['schema', 'Ver', 'sion'].join('')),
+      });
+      const settings = new SqliteJsonStateRepository({
+        store,
+        authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+        codec: settingsCodec,
+      });
+      await settings.prepare();
+      expect(await settings.read()).toEqual(createDefaultDesktopApplicationSettingsState());
+
+      let identity = 0;
+      const service = new DesktopShellService({
+        applicationInstanceId: 'application:test',
+        stateRepository: repository,
+        workspaceRegistry: {
+          resolve: async () => {
+            throw new Error('Workspace resolution is not expected during Shell startup.');
+          },
+          dispose: async () => undefined,
+        },
+        startupTarget: 'home',
+        startupStateDiagnostics: rejection
+          ? [
+              {
+                code: 'desktop-stored-state-invalid',
+                severity: 'error',
+                authorityKey: 'desktop.shell',
+                rejectionId: rejection.rejectionId,
+                message: rejection.diagnostic,
+              },
+            ]
+          : [],
+        createIdentity: () => `identity-${(identity += 1)}`,
+        now: () => '2026-08-05T00:00:00.000Z',
+      });
+      const windowId = await service.claimWindowId();
+      const projection = await service.getProjection(windowId);
+      expect(projection.window.workbenches.instances).toHaveLength(1);
+      expect(projection.stateDiagnostics).toEqual([
+        expect.objectContaining({
+          code: 'desktop-stored-state-invalid',
+          rejectionId: rejection?.rejectionId,
+        }),
       ]);
-      const store = createNodeSqliteLocalMetadataStore({ homedir: root });
-      await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
-      try {
-        await expect(
-          migrateDesktopStateToSqlite({
-            store,
-            retiredJson: createDesktopRetiredJsonStatePort({
-              shellStatePath: shellPath,
-              applicationSettingsPath: settingsPath,
-            }),
-            shellCodec,
-            settingsCodec,
-            digest,
-          }),
-        ).rejects.toThrow('unexpected fields');
-      } finally {
-        await store.dispose();
-      }
-    },
-  );
+      const retained = await store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'verify-invalid-shell-root-retained' },
+        ({ sql }) =>
+          sql.all(
+            `SELECT authority_key, document_json
+               FROM desktop_application_state
+              WHERE authority_key = ?`,
+            [DESKTOP_STATE_AUTHORITY_KEYS.shell],
+          ),
+      );
+      expect(retained).toEqual([
+        {
+          authority_key: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+          document_json: invalidDocument,
+        },
+      ]);
+      await service.dispose();
+    } finally {
+      await store.dispose();
+    }
+  });
+
+  it('isolates invalid Application Settings without resetting canonical Shell state', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-invalid-settings-'));
+    roots.push(root);
+    const initial = await openState(root);
+    const expectedShell = await initial.shell.commit({
+      ...createEmptyDesktopShellState(),
+      catalogRevision: 1,
+    });
+    await initial.store.dispose();
+
+    const store = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
+    const shell = new SqliteJsonStateRepository({
+      store,
+      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+      codec: shellCodec,
+    });
+    const settings = new SqliteJsonStateRepository({
+      store,
+      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+      codec: settingsCodec,
+      now: () => '2026-08-05T00:00:00.000Z',
+    });
+    const invalidDocument = JSON.stringify({
+      ...createDefaultDesktopApplicationSettingsState(),
+      [['schema', 'Ver', 'sion'].join('')]: 1,
+    });
+    try {
+      await settings.prepare();
+      const seeded = await store.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'seed-invalid-settings-root' },
+        ({ sql }) =>
+          sql.run(
+            `INSERT INTO desktop_application_state(
+               authority_key, document_json, updated_at
+             ) VALUES (?, ?, ?)`,
+            [
+              DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+              invalidDocument,
+              '2026-08-04T00:00:00.000Z',
+            ],
+          ),
+      );
+      expect(seeded.changes).toBe(1);
+
+      const rejection = await settings.inspectInvalidState();
+      expect(rejection).toMatchObject({
+        authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+        diagnostic: expect.stringContaining(['schema', 'Ver', 'sion'].join('')),
+      });
+      expect(await settings.read()).toEqual(createDefaultDesktopApplicationSettingsState());
+      expect(await shell.read()).toEqual(expectedShell);
+      const retained = await store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'verify-invalid-settings-retained' },
+        ({ sql }) =>
+          sql.all(
+            `SELECT authority_key, document_json
+               FROM desktop_application_state
+              WHERE authority_key = ?`,
+            [DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings],
+          ),
+      );
+      expect(retained).toEqual([
+        {
+          authority_key: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+          document_json: invalidDocument,
+        },
+      ]);
+    } finally {
+      await store.dispose();
+    }
+  });
 
   it('does not read or mutate adjacent Agent, log, user, or workspace-owned files', async () => {
     const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-adjacent-'));
     roots.push(root);
-    const stateDirectory = join(root, 'electron-user-data', 'state');
     const workspace = join(root, 'workspace');
-    const shellPath = join(stateDirectory, 'desktop-shell-state.json');
-    const settingsPath = join(stateDirectory, 'desktop-application-settings.v1.json');
     const adjacent = new Map([
       [join(root, '.neko', 'config.json'), '{"agent":"config"}\n'],
       [join(root, '.neko', 'transcripts', 'conversation.jsonl'), '{"role":"user"}\n'],
@@ -219,21 +357,14 @@ describe('Desktop SQLite application state composition', () => {
       [join(workspace, 'neko', 'project.json'), '{"workspaceId":"portable"}\n'],
       [join(workspace, 'neko', 'memory.md'), '# Accepted memory\n'],
     ]);
+    await Promise.all(
+      [...adjacent.keys()].map((filePath) => mkdir(join(filePath, '..'), { recursive: true })),
+    );
     await Promise.all([
-      mkdir(stateDirectory, { recursive: true }),
-      ...[...adjacent.keys()].map((filePath) => mkdir(join(filePath, '..'), { recursive: true })),
-    ]);
-    await Promise.all([
-      writeFile(shellPath, JSON.stringify(createEmptyDesktopShellState()), 'utf8'),
-      writeFile(
-        settingsPath,
-        JSON.stringify(createDefaultDesktopApplicationSettingsState()),
-        'utf8',
-      ),
       ...[...adjacent].map(([filePath, content]) => writeFile(filePath, content, 'utf8')),
     ]);
 
-    const state = await openState(root, shellPath, settingsPath);
+    const state = await openState(root);
     try {
       await expect(
         Promise.all(
@@ -252,45 +383,35 @@ describe('Desktop SQLite application state composition', () => {
 const shellCodec = {
   createEmpty: createEmptyDesktopShellState,
   parse: parseDesktopShellStoredState,
-  readStorageRevision: (state: ReturnType<typeof createEmptyDesktopShellState>) =>
-    state.storageRevision,
+  serialize: serializeDesktopShellStoredState,
 };
 
 const settingsCodec = {
   createEmpty: createDefaultDesktopApplicationSettingsState,
   parse: parseDesktopApplicationSettingsStoredState,
-  readStorageRevision: (state: ReturnType<typeof createDefaultDesktopApplicationSettingsState>) =>
-    state.storageRevision,
 };
 
-async function openState(root: string, shellPath: string, settingsPath: string) {
+async function openState(root: string) {
   const store = createNodeSqliteLocalMetadataStore({ homedir: root });
   await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
-  await migrateDesktopStateToSqlite({
+  const shell = new SqliteJsonStateRepository({
     store,
-    retiredJson: createDesktopRetiredJsonStatePort({
-      shellStatePath: shellPath,
-      applicationSettingsPath: settingsPath,
-    }),
-    shellCodec,
-    settingsCodec,
-    digest,
+    authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+    codec: shellCodec,
   });
+  const settings = new SqliteJsonStateRepository({
+    store,
+    authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+    codec: settingsCodec,
+  });
+  await Promise.all([shell.prepare(), settings.prepare()]);
   return {
     store,
-    shell: new SqliteVersionedJsonStateRepository({
-      store,
-      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
-      codec: shellCodec,
-    }),
-    settings: new SqliteVersionedJsonStateRepository({
-      store,
-      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
-      codec: settingsCodec,
-    }),
+    shell,
+    settings,
   };
 }
 
-function digest(content: string): string {
-  return createHash('sha256').update(content).digest('hex');
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

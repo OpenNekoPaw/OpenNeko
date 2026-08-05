@@ -1,5 +1,4 @@
 import {
-  ASSISTANT_RESOURCE_HOST_VERSION,
   type AssistantResourceIdentity,
   type OpenNekoAssistantResourceBridge,
 } from '@neko/agent-contracts/assistant-resource-host';
@@ -19,14 +18,14 @@ const AuthorizedPreviewRoot = lazy(async () => {
 export function DesktopAssistantPreviewSurface({
   assistantSpaceId,
   conversationId,
-  endpointEpoch,
+  lifecyclePresentation,
   previewSessionId,
   scratchArtifactId,
   windowId,
 }: {
   readonly assistantSpaceId: string;
   readonly conversationId: string;
-  readonly endpointEpoch: string;
+  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly previewSessionId: string;
   readonly scratchArtifactId: string;
   readonly windowId: string;
@@ -42,14 +41,18 @@ export function DesktopAssistantPreviewSurface({
         previewSessionId,
         scratchArtifactId,
         resourceIdentity,
-        endpointEpoch,
         window.openNekoDesktop,
       ),
-    [endpointEpoch, previewSessionId, resourceIdentity, scratchArtifactId],
+    [previewSessionId, resourceIdentity, scratchArtifactId],
   );
   return (
     <Suspense fallback={null}>
-      <AuthorizedPreviewRoot chrome="content-only" locale={locale} runtime={runtime} />
+      <AuthorizedPreviewRoot
+        chrome="content-only"
+        lifecyclePresentation={lifecyclePresentation}
+        locale={locale}
+        runtime={runtime}
+      />
     </Suspense>
   );
 }
@@ -61,7 +64,6 @@ class DesktopAssistantAuthorizedPreviewRuntime implements AuthorizedPreviewSessi
     previewSessionId: string,
     scratchArtifactId: string,
     private readonly resourceIdentity: AssistantResourceIdentity,
-    private readonly endpointEpoch: string,
     private readonly bridge: OpenNekoAssistantResourceBridge,
   ) {
     this.identity = {
@@ -73,15 +75,12 @@ class DesktopAssistantAuthorizedPreviewRuntime implements AuthorizedPreviewSessi
         conversationId: resourceIdentity.conversationId,
         scratchArtifactId,
       },
-      revision: 0,
     };
   }
 
   async getSnapshot(): Promise<AuthorizedPreviewSessionProjection> {
     const request = {
-      schemaVersion: ASSISTANT_RESOURCE_HOST_VERSION,
       requestId: crypto.randomUUID(),
-      endpointEpoch: this.endpointEpoch,
       identity: this.resourceIdentity,
       route: 'preview.get' as const,
       previewSessionId: this.identity.previewSessionId,

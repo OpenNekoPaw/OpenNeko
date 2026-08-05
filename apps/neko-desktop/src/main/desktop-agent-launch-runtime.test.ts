@@ -20,8 +20,9 @@ describe('Desktop Agent launch native adapter', () => {
     const catalog = await runtime.attach({
       applicationInstanceId: 'app-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       viewId: 'agent-view:window-1',
-      rendererEpoch: 1,
       scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
     });
     const authorized = await runtime.authorizeResource(catalog.connection, 'file');
@@ -39,7 +40,6 @@ describe('Desktop Agent launch native adapter', () => {
     await expect(
       runtime.resolveResourceContexts(
         {
-          schemaVersion: 1,
           kind: 'assistant',
           assistantSpaceId: 'assistant:1',
           baseGrantIds: ['identity-2'],
@@ -76,42 +76,47 @@ describe('Desktop Agent launch native adapter', () => {
     const catalog = await runtime.attach({
       applicationInstanceId: 'app-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       viewId: 'agent-view:window-1',
-      rendererEpoch: 1,
       scope: { kind: 'unbound', draftId: 'draft:1' },
     });
     await runtime.authorizeResource(catalog.connection, 'file');
     const assistantContext = {
-      schemaVersion: 1 as const,
       kind: 'assistant' as const,
       assistantSpaceId: 'assistant:1',
       baseGrantIds: ['identity-2'],
     };
 
-    await expect(
-      runtime.validateResourceGrants(assistantContext, ['identity-2']),
-    ).rejects.toThrow("Agent Resource grant 'identity-2' belongs to another scope.");
+    await expect(runtime.validateResourceGrants(assistantContext, ['identity-2'])).rejects.toThrow(
+      "Agent Resource grant 'identity-2' belongs to another scope.",
+    );
     await expect(
       runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', [
         'identity-2',
         'missing-grant',
       ]),
-    ).rejects.toThrow("Agent Resource grant 'missing-grant' does not belong to its launch connection.");
-    await expect(
-      runtime.validateResourceGrants(assistantContext, ['identity-2']),
-    ).rejects.toThrow("Agent Resource grant 'identity-2' belongs to another scope.");
+    ).rejects.toThrow(
+      "Agent Resource grant 'missing-grant' does not belong to its launch connection.",
+    );
+    await expect(runtime.validateResourceGrants(assistantContext, ['identity-2'])).rejects.toThrow(
+      "Agent Resource grant 'identity-2' belongs to another scope.",
+    );
 
     const otherCatalog = await runtime.attach({
       applicationInstanceId: 'app-1',
       windowId: 'window-2',
+      workbenchInstanceId: 'workbench-2',
+      agentSurfaceId: 'agent-surface-2',
       viewId: 'agent-view:window-2',
-      rendererEpoch: 1,
       scope: { kind: 'unbound', draftId: 'draft:2' },
     });
     await runtime.authorizeResource(otherCatalog.connection, 'file');
     await expect(
       runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-4']),
-    ).rejects.toThrow("Agent Resource grant 'identity-4' does not belong to its launch connection.");
+    ).rejects.toThrow(
+      "Agent Resource grant 'identity-4' does not belong to its launch connection.",
+    );
 
     await runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-2']);
     await runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-2']);

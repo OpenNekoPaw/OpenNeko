@@ -62,9 +62,8 @@ describe('Desktop Agent resource display projector', () => {
       windowId: 'window-1',
       viewId: 'view-1',
       sessionId: 'agent-display:conversation-1:attachment-1',
-      endpointEpoch: 'connection-1',
+      rendererSessionId: 'connection-1',
       revision: expect.any(String),
-      generation: '3',
     });
     expect(source).toMatchObject({
       mediaType: 'video/mp4',
@@ -189,7 +188,7 @@ describe('Desktop Agent resource display projector', () => {
     expect(releaseOld).toHaveBeenCalledOnce();
     expect(releaseCurrent).not.toHaveBeenCalled();
     expect(currentResources.registerFile).toHaveBeenCalledWith(
-      expect.objectContaining({ endpointEpoch: 'connection-2' }),
+      expect.objectContaining({ rendererSessionId: 'connection-2' }),
       expect.any(Object),
     );
     currentProjector.dispose();
@@ -210,8 +209,6 @@ function createProjector(
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       viewId: 'view-1',
-      viewEpoch: 1,
-      rendererEpoch: 1,
       connectionId,
     },
     workspace: {
@@ -259,16 +256,13 @@ function snapshotFrame(data: unknown): ConversationProjectionAttachmentHostFrame
   return {
     type: 'projectionSnapshot',
     key: {
-      endpointEpoch: 'connection-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: 'conversation-1',
     },
     sequence: 0,
-    projectionVersion: 3,
     projection: {
       conversationId: 'conversation-1',
-      projectionVersion: 3,
       turns: [
         {
           turnId: 'turn-1',

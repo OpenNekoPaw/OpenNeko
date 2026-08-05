@@ -40,7 +40,7 @@ describe('EncryptedDesktopSecretPort', () => {
     await expect(port.get('provider:b')).resolves.toBe('second-plain-secret');
   });
 
-  it('fails visibly when encryption is unavailable or persisted schema is invalid', async () => {
+  it('fails visibly when encryption is unavailable or persisted shape is invalid', async () => {
     const root = await createRoot();
     const unavailable = createEncryptedDesktopSecretPort({
       filePath: join(root, 'unavailable.json'),
@@ -61,7 +61,7 @@ describe('EncryptedDesktopSecretPort', () => {
       filePath,
       encryption: fixtureEncryption(),
     });
-    await expect(port.get('provider:a')).rejects.toThrow('unknown schema version');
+    await expect(port.get('provider:a')).rejects.toThrow('unsupported fields: schemaVersion');
   });
 
   async function createRoot(): Promise<string> {

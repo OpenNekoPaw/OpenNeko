@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { RetainedSurfaceDeck } from '@neko/ui/workbench';
 import type {
   AgentHostRuntimeAdapter,
   AgentLaunchCatalogProjection,
@@ -14,6 +15,7 @@ import {
 } from './desktop-agent-launch-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
+import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
 
 const AgentWebviewRoot = lazy(() =>
   loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
@@ -35,6 +37,8 @@ type DesktopAgentSurfaceState =
 export type DesktopAgentSurfaceProps =
   | {
       readonly binding: 'workspace';
+      readonly workbenchInstanceId: string;
+      readonly agentSurfaceId: string;
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly initialInput?: { readonly id: string; readonly value: string };
       readonly tab: DesktopProjectTabProjection;
@@ -43,6 +47,8 @@ export type DesktopAgentSurfaceProps =
     }
   | {
       readonly binding: 'launch';
+      readonly workbenchInstanceId: string;
+      readonly agentSurfaceId: string;
       readonly agentPresentation: AgentRootPresentation;
       readonly viewId: string;
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
@@ -53,7 +59,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   const launchAdapterRef = useRef<ElectronAgentLaunchHostRuntimeAdapter>();
   const { locale, t } = useTranslation();
   const viewId = props.binding === 'workspace' ? props.tab.viewId : props.viewId;
-  const viewEpoch = props.binding === 'workspace' ? props.tab.viewEpoch : undefined;
   const projectId = props.binding === 'workspace' ? props.tab.projectId : undefined;
   const agentPresentation = props.agentPresentation;
   const binding = props.binding;
@@ -63,16 +68,17 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     let active = true;
     let bootstrapOperation: Promise<DesktopAgentBootstrapProjection | AgentLaunchCatalogProjection>;
     if (binding === 'workspace') {
-      if (projectId === undefined || viewEpoch === undefined) {
-        throw new Error('Workspace-bound Agent requires Project and View epoch identities.');
+      if (projectId === undefined) {
+        throw new Error('Workspace-bound Agent requires a Project identity.');
       }
       bootstrapOperation = prepareDesktopAgentSurfaceResources({
         loadModule: loadDesktopAgentWebviewRootModule,
         getBootstrap: () =>
           window.openNekoDesktop.agent.getBootstrap(
+            props.workbenchInstanceId,
+            props.agentSurfaceId,
             projectId,
             viewId,
-            viewEpoch,
             agentPresentation?.kind === 'session'
               ? agentPresentation.conversationId
               : props.initialConversation?.id,
@@ -92,6 +98,8 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           loadModule: loadDesktopAgentWebviewRootModule,
           getBootstrap: () =>
             window.openNekoDesktop.agent.getAssistantBootstrap(
+              props.workbenchInstanceId,
+              props.agentSurfaceId,
               assistantSpaceId,
               sessionPresentation.conversationId,
               viewId,
@@ -101,7 +109,12 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     } else {
       bootstrapOperation = Promise.all([
         loadDesktopAgentWebviewRootModule(),
-        window.openNekoDesktop.agentLaunch.attach(viewId, agentPresentation.scope),
+        window.openNekoDesktop.agentLaunch.attach(
+          props.workbenchInstanceId,
+          props.agentSurfaceId,
+          viewId,
+          agentPresentation.scope,
+        ),
       ]).then(([, catalog]) => catalog);
     }
     void bootstrapOperation
@@ -169,7 +182,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     return () => {
       active = false;
     };
-  }, [binding, connectionKey, projectId, viewEpoch, viewId]);
+  }, [binding, connectionKey, projectId, viewId]);
 
   useEffect(
     () => () => {
@@ -223,53 +236,45 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
 }
 
 export function RetainedDesktopAgentSurfaceDeck({
-  activeSurface,
-  retainedConversationIds,
+  activeAgentSurfaceId,
+  surfaces,
+  visible = true,
 }: {
-  readonly activeSurface: DesktopAgentSurfaceProps;
-  readonly retainedConversationIds: ReadonlySet<string>;
+  readonly activeAgentSurfaceId?: string;
+  readonly surfaces: readonly {
+    readonly agentSurfaceId: string;
+    readonly lifecycle: 'hot-retained';
+    readonly surface: DesktopAgentSurfaceProps;
+  }[];
+  readonly visible?: boolean;
 }): JSX.Element {
-  const surfacesRef = useRef(new Map<string, DesktopAgentSurfaceProps>());
-  const activeKey = createDesktopAgentConnectionKey(activeSurface);
-  for (const [key, surface] of surfacesRef.current) {
-    const presentation = surface.agentPresentation;
-    if (
-      key !== activeKey &&
-      (presentation?.kind === 'draft' ||
-        (presentation?.kind === 'session' &&
-          !retainedConversationIds.has(presentation.conversationId)))
-    ) {
-      surfacesRef.current.delete(key);
-    }
-  }
-  surfacesRef.current.set(activeKey, activeSurface);
-
   return (
-    <div className="desktop-agent-surface-deck" data-agent-surface-count={surfacesRef.current.size}>
-      {[...surfacesRef.current].map(([key, surface]) => (
-        <div
-          className="desktop-agent-surface-deck__item"
-          data-active={key === activeKey ? 'true' : 'false'}
-          data-agent-surface-id={key}
-          hidden={key !== activeKey}
-          key={key}
-        >
-          <DesktopAgentSurface {...surface} />
-        </div>
-      ))}
-    </div>
+    <RetainedSurfaceDeck
+      className="desktop-agent-surface-deck"
+      itemClassName="desktop-agent-surface-deck__item"
+      itemIdentityAttribute="data-agent-surface-id"
+      items={surfaces}
+      activeId={activeAgentSurfaceId}
+      visible={visible}
+      getId={(item) => item.agentSurfaceId}
+      getLifecycle={(item) => item.lifecycle}
+      renderItem={(item) => (
+        <DesktopSurfaceErrorBoundary surfaceIdentity={`agent:${item.agentSurfaceId}`}>
+          <DesktopAgentSurface {...item.surface} />
+        </DesktopSurfaceErrorBoundary>
+      )}
+    />
   );
 }
 
-function createDesktopAgentConnectionKey(props: DesktopAgentSurfaceProps): string {
+function createDesktopAgentSurfaceKey(props: DesktopAgentSurfaceProps): string {
   const viewId = props.binding === 'workspace' ? props.tab.viewId : props.viewId;
-  const viewEpoch = props.binding === 'workspace' ? props.tab.viewEpoch : 'launch';
   const presentation = props.agentPresentation;
   if (!presentation) {
     if (props.binding !== 'workspace') {
       throw new Error('Launch-bound Agent requires an explicit presentation identity.');
     }
-    return ['workspace', props.tab.projectId, viewId, viewEpoch, 'implicit-session'].join(':');
+    return ['workspace', props.tab.projectId, viewId, 'implicit-session'].join(':');
   }
   const scope =
     presentation.scope.kind === 'unbound'
@@ -278,13 +283,18 @@ function createDesktopAgentConnectionKey(props: DesktopAgentSurfaceProps): strin
         ? ['assistant', presentation.scope.assistantSpaceId]
         : ['workspace', presentation.scope.workspaceId, presentation.scope.workspaceGrantId];
   return [
+    props.workbenchInstanceId,
+    props.agentSurfaceId,
     props.binding,
     viewId,
-    viewEpoch,
     presentation.kind,
     presentation.kind === 'session' ? presentation.conversationId : presentation.draftId,
     ...scope,
   ].join(':');
+}
+
+function createDesktopAgentConnectionKey(props: DesktopAgentSurfaceProps): string {
+  return createDesktopAgentSurfaceKey(props);
 }
 
 export async function prepareDesktopAgentSurfaceResources(input: {

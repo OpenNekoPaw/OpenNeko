@@ -5,6 +5,7 @@ import type {
   DesktopProjectTabProjection,
   DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
+import { resolveDesktopWindowWorkspaceWorkbench } from '@neko/host/desktop-shell-contract';
 import { createDesktopResourceBrowserIdentity } from '../shared/resource-browser-bridge-contract';
 import { createElectronResourceBrowserHostRuntime } from './desktop-resource-browser-host-runtime';
 import { useDesktopApplicationSettings } from './application-settings-context';
@@ -20,11 +21,13 @@ const QuickPreviewSurface = lazy(async () => {
 });
 
 export function DesktopResourceBrowserSurface({
+  lifecyclePresentation,
   onOpenCanvasDocument,
   project,
   projection,
   tab,
 }: {
+  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly onOpenCanvasDocument: (documentId: string, presentation: 'main' | 'side') => void;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
@@ -32,6 +35,10 @@ export function DesktopResourceBrowserSurface({
 }): JSX.Element {
   const { locale, t } = useTranslation();
   const applicationSettings = useDesktopApplicationSettings();
+  const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+    projection.window,
+    project.workspaceId,
+  );
   const runtime = useMemo(
     () =>
       createElectronResourceBrowserHostRuntime({
@@ -41,16 +48,16 @@ export function DesktopResourceBrowserSurface({
           workspaceId: project.workspaceId,
           windowId: projection.window.windowId,
           projectViewId: tab.viewId,
-          projectViewEpoch: tab.viewEpoch,
-          endpointEpoch: projection.endpointEpoch,
+          projectViewInstanceId: tab.viewInstanceId,
+          rendererSessionId: projection.rendererSessionId,
         }),
       }),
     [
       project.projectId,
       project.workspaceId,
-      projection.endpointEpoch,
+      projection.rendererSessionId,
       projection.window.windowId,
-      tab.viewEpoch,
+      tab.viewInstanceId,
       tab.viewId,
     ],
   );
@@ -67,12 +74,12 @@ export function DesktopResourceBrowserSurface({
           chrome="embedded"
           runtime={runtime}
           locale={locale}
+          lifecyclePresentation={lifecyclePresentation}
           refreshControl="hidden"
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
           previewTarget={{
             viewId: `preview:${tab.viewId}:temporary`,
             presentation: 'temporary',
-            expectedWorkbenchRevision: projection.window.workbench.revision,
           }}
           onOpenCanvas={(item, presentation) => {
             if (

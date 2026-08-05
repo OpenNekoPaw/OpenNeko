@@ -7,7 +7,11 @@ import {
   type AgentLaunchCatalogProjection,
 } from '@neko/agent-contracts';
 import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
-import type { DesktopAgentPresentationStorage } from './desktop-agent-host-runtime-adapter';
+import {
+  createDesktopAgentPresentationStateKey,
+  readDesktopAgentPresentationState,
+  type DesktopAgentPresentationStorage,
+} from './desktop-agent-host-runtime-adapter';
 
 export interface ElectronAgentLaunchHostRuntimeAdapter extends AgentHostRuntimeAdapter {
   readonly catalog: AgentLaunchCatalogProjection;
@@ -25,12 +29,10 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
   let catalog = input.catalog;
   const storage = input.storage ?? window.sessionStorage;
   const listeners = new Set<(message: AgentHostToWebviewMessage) => void>();
-  const stateKey = [
-    'openneko:agent:presentation',
+  const stateKey = createDesktopAgentPresentationStateKey(
+    launchStateOwnerIdentity(connection.scope),
     connection.viewId,
-    connection.rendererEpoch,
-    connection.connectionEpoch,
-  ].join(':');
+  );
   let disposed = false;
   const emit = (message: AgentHostToWebviewMessage): void => {
     if (disposed) throw new Error('Agent launch adapter is disposed.');
@@ -127,8 +129,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
       };
     },
     getState(): unknown {
-      const serialized = storage.getItem(stateKey);
-      return serialized === null ? undefined : JSON.parse(serialized);
+      return readDesktopAgentPresentationState(storage, stateKey);
     },
     setState(state: unknown): void {
       storage.setItem(stateKey, JSON.stringify(state));
@@ -189,4 +190,17 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
 
 function sameIdentities(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((identity, index) => identity === right[index]);
+}
+
+function launchStateOwnerIdentity(
+  scope: AgentLaunchCatalogProjection['connection']['scope'],
+): string {
+  switch (scope.kind) {
+    case 'assistant':
+      return `assistant:${scope.assistantSpaceId}`;
+    case 'workspace':
+      return `workspace:${scope.workspaceId}`;
+    case 'unbound':
+      return `draft:${scope.draftId}`;
+  }
 }

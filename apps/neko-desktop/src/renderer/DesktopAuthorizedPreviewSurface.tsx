@@ -18,12 +18,12 @@ const AuthorizedPreviewRoot = lazy(async () => {
 
 export function DesktopAuthorizedPreviewSurface({
   bridge,
-  endpointEpoch,
+  lifecyclePresentation,
   previewSessionId,
   projection,
 }: {
   readonly bridge: OpenNekoAssetCenterBridge;
-  readonly endpointEpoch: string;
+  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly previewSessionId: string;
   readonly projection: AssetCenterSessionProjection;
 }): JSX.Element {
@@ -44,14 +44,11 @@ export function DesktopAuthorizedPreviewSurface({
             resourceOwner: selection.owner,
             itemId: selection.itemId,
           },
-          revision: 0,
         },
-        endpointEpoch,
         bridge,
       ),
     [
       bridge,
-      endpointEpoch,
       previewSessionId,
       projection.identity.assetCenterSessionId,
       projection.identity.windowId,
@@ -61,7 +58,12 @@ export function DesktopAuthorizedPreviewSurface({
   );
   return (
     <Suspense fallback={null}>
-      <AuthorizedPreviewRoot chrome="content-only" locale={locale} runtime={runtime} />
+      <AuthorizedPreviewRoot
+        chrome="content-only"
+        lifecyclePresentation={lifecyclePresentation}
+        locale={locale}
+        runtime={runtime}
+      />
     </Suspense>
   );
 }
@@ -69,7 +71,6 @@ export function DesktopAuthorizedPreviewSurface({
 class DesktopAuthorizedPreviewRuntime implements AuthorizedPreviewSessionRuntime {
   constructor(
     readonly identity: AuthorizedPreviewSessionIdentity,
-    private readonly endpointEpoch: string,
     private readonly bridge: OpenNekoAssetCenterBridge,
   ) {}
 
@@ -79,7 +80,6 @@ class DesktopAuthorizedPreviewRuntime implements AuthorizedPreviewSessionRuntime
     }
     const request = createAssetCenterHostRequest({
       requestId: crypto.randomUUID(),
-      endpointEpoch: this.endpointEpoch,
       identity: {
         assetCenterSessionId: this.identity.owner.assetCenterSessionId,
         windowId: this.identity.windowId,

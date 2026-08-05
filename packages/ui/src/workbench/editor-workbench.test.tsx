@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode } from 'react';
+import { act, StrictMode, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -186,6 +186,52 @@ describe('editor workbench shell primitives', () => {
     expect(host.querySelector('[aria-label="Resize primary"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Resize timeline"]')).not.toBeNull();
+  });
+
+  it('moves one retained Interaction between Main and a dock without remounting it', () => {
+    const mounted = vi.fn();
+    const disposed = vi.fn();
+    const interaction = <LifecycleProbe mounted={mounted} disposed={disposed} />;
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          interaction={interaction}
+          interactionPresentation="main"
+          leftDock={<div data-testid="retained-left-target" />}
+          leftDockPresentation="hidden"
+          main={<div data-testid="main" />}
+        />,
+      );
+    });
+
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(disposed).not.toHaveBeenCalled();
+    expect(
+      host.querySelector('.neko-controlled-workbench-interaction[data-presentation="main"]'),
+    ).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          interaction={interaction}
+          interactionPresentation="docked"
+          interactionPosition="left"
+          leftDock={<div data-testid="retained-left-target" />}
+          leftDockPresentation="hidden"
+          main={<div data-testid="main" />}
+        />,
+      );
+    });
+
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(disposed).not.toHaveBeenCalled();
+    expect(
+      host.querySelector('.neko-controlled-workbench-interaction[data-presentation="docked"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-controlled-workbench-dock--left[data-presentation="hidden"]'),
+    ).not.toBeNull();
   });
 
   it('updates a panel live and emits one final resize size', () => {
@@ -414,6 +460,20 @@ describe('editor workbench shell primitives', () => {
     expect(onTabReorder).toHaveBeenCalledWith('a', 'b');
   });
 });
+
+function LifecycleProbe({
+  disposed,
+  mounted,
+}: {
+  readonly disposed: () => void;
+  readonly mounted: () => void;
+}): JSX.Element {
+  useEffect(() => {
+    mounted();
+    return disposed;
+  }, [disposed, mounted]);
+  return <div data-testid="interaction" />;
+}
 
 function dispatchPointer(
   target: HTMLElement,

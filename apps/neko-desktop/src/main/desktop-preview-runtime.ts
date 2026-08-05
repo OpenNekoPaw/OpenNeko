@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
-  PREVIEW_HOST_RUNTIME_VERSION,
   PREVIEW_HOST_RUNTIME_ROUTES,
   assertPreviewRuntimeIdentity,
   detectPreviewContentKind,
@@ -29,38 +28,27 @@ import {
   type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
 import {
+  resolveDesktopWindowWorkspaceWorkbench,
+  type DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
+import {
   parseDesktopPreviewBootstrapRequest,
   type DesktopPreviewBootstrapRequest,
 } from '../shared/preview-bridge-contract';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
 
-interface DesktopPreviewShellProjection {
-  readonly endpointEpoch: string;
-  readonly catalog: {
-    readonly projects: readonly {
-      readonly projectId: string;
-      readonly workspaceId: string;
-    }[];
-  };
-  readonly window: {
-    readonly windowId: string;
-    readonly revision: number;
-    readonly tabs: readonly {
-      readonly projectId: string;
-      readonly viewId: string;
-      readonly viewEpoch: number;
-    }[];
-    readonly workbench: DesktopWorkbenchLayoutProjection;
-  };
-}
+type DesktopPreviewShellProjection = Pick<
+  DesktopShellProjection,
+  'rendererSessionId' | 'catalog' | 'window'
+>;
 
 export interface DesktopPreviewShellPort {
   getProjection(windowId: string): Promise<DesktopPreviewShellProjection>;
   updateWorkbench(
     windowId: string,
-    expectedEndpointEpoch: string,
+    rendererSessionId: string,
     expectedWindowRevision: number,
-    expectedWorkbenchRevision: number,
+    workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
   ): Promise<unknown>;
 }
@@ -90,7 +78,6 @@ export class DesktopPreviewRuntime {
     readonly target?: {
       readonly viewId: string;
       readonly presentation: 'temporary' | 'side';
-      readonly expectedWorkbenchRevision: number;
     };
   }): Promise<PreviewProjection> {
     this.requireActive();
@@ -106,20 +93,20 @@ export class DesktopPreviewRuntime {
     if (
       !project ||
       !tab ||
-      shellProjection.endpointEpoch !== input.identity.endpointEpoch ||
-      input.identity.viewEpoch !== tab.viewEpoch
+      shellProjection.rendererSessionId !== input.identity.rendererSessionId ||
+      input.identity.viewInstanceId !== tab.viewInstanceId
     ) {
       throw new Error('Desktop Preview Resource owner is stale.');
     }
+    const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+      shellProjection.window,
+      project.workspaceId,
+    );
     const presentation = input.target?.presentation ?? 'temporary';
     const expectedViewId = `preview:${tab.viewId}:${presentation}`;
     const viewId = input.target?.viewId ?? expectedViewId;
-    if (
-      viewId !== expectedViewId ||
-      (input.target &&
-        input.target.expectedWorkbenchRevision !== shellProjection.window.workbench.revision)
-    ) {
-      throw new Error('Desktop Preview target View or workbench revision is stale.');
+    if (viewId !== expectedViewId) {
+      throw new Error('Desktop Preview target View identity is stale.');
     }
     const sessionId = `preview-session:${this.createIdentity()}`;
     const runtimeIdentity: PreviewRuntimeIdentity = {
@@ -127,18 +114,16 @@ export class DesktopPreviewRuntime {
       workspaceId: project.workspaceId,
       windowId: input.identity.windowId,
       viewId,
-      viewEpoch: tab.viewEpoch,
+      viewInstanceId: tab.viewInstanceId,
       documentId: input.item.resourceId,
       sessionId,
-      endpointEpoch: shellProjection.endpointEpoch,
-      revision: 0,
+      rendererSessionId: shellProjection.rendererSessionId,
     };
     const contentKind = detectPreviewContentKind(input.item.label);
     const mediaType = getPreviewMediaType(input.item.label);
     let projection: PreviewProjection;
     if (!contentKind || !mediaType) {
       projection = parsePreviewProjection({
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
         identity: runtimeIdentity,
         presentation,
         status: 'unsupported',
@@ -158,9 +143,8 @@ export class DesktopPreviewRuntime {
           windowId: input.identity.windowId,
           viewId,
           sessionId,
-          endpointEpoch: input.identity.endpointEpoch,
+          rendererSessionId: input.identity.rendererSessionId,
           revision,
-          generation: String(runtimeIdentity.revision),
         },
         absolutePath: input.absolutePath,
         displayName: input.item.label,
@@ -169,13 +153,12 @@ export class DesktopPreviewRuntime {
         revision,
       });
       projection = parsePreviewProjection({
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
         identity: runtimeIdentity,
         presentation,
         status: 'ready',
         descriptor: {
           descriptorId,
-          revision,
+          sourceFingerprint: revision,
           contentLocator: resolvePreviewContentLocator(input.item),
           url: resource.url,
           ...(resource.resourceUris ? { resourceUris: resource.resourceUris } : {}),
@@ -186,10 +169,10 @@ export class DesktopPreviewRuntime {
         },
       });
     }
-    const currentWorkbench = shellProjection.window.workbench;
+    const currentWorkbench = workspaceWorkbench.layout;
     const previewView: DesktopWorkbenchLayoutProjection['main']['views'][number] = {
       viewId,
-      viewEpoch: tab.viewEpoch,
+      viewInstanceId: tab.viewInstanceId,
       projectId: project.projectId,
       workspaceId: project.workspaceId,
       kind: 'preview',
@@ -205,10 +188,6 @@ export class DesktopPreviewRuntime {
         ...(presentation === 'side' ? { splitAxis: 'columns' as const } : {}),
         replaceTemporaryPreview: presentation === 'temporary',
       });
-      workbench = {
-        ...workbench,
-        revision: currentWorkbench.revision + 1,
-      };
     } catch (error) {
       this.options.resources.releaseSession(sessionId);
       throw error;
@@ -216,9 +195,9 @@ export class DesktopPreviewRuntime {
     try {
       await this.options.shell.updateWorkbench(
         input.identity.windowId,
-        shellProjection.endpointEpoch,
+        shellProjection.rendererSessionId,
         shellProjection.window.revision,
-        currentWorkbench.revision,
+        workspaceWorkbench.workbenchInstanceId,
         workbench,
       );
       for (const releasedSessionId of this.sessions.register(projection)) {
@@ -252,8 +231,8 @@ export class DesktopPreviewRuntime {
     if (
       !project ||
       !tab ||
-      shellProjection.endpointEpoch !== input.identity.endpointEpoch ||
-      input.identity.viewEpoch !== tab.viewEpoch
+      shellProjection.rendererSessionId !== input.identity.rendererSessionId ||
+      input.identity.viewInstanceId !== tab.viewInstanceId
     ) {
       throw new Error('Desktop quick Preview Resource owner is stale.');
     }
@@ -275,9 +254,8 @@ export class DesktopPreviewRuntime {
         windowId: input.identity.windowId,
         viewId: input.identity.viewId,
         sessionId: previewSessionId,
-        endpointEpoch: input.identity.endpointEpoch,
+        rendererSessionId: input.identity.rendererSessionId,
         revision,
-        generation: '0',
       },
       {
         absolutePath: input.absolutePath,
@@ -290,7 +268,7 @@ export class DesktopPreviewRuntime {
       previewSessionId,
       descriptor: {
         descriptorId,
-        revision,
+        sourceFingerprint: revision,
         contentLocator: resolvePreviewContentLocator(input.item),
         url: lease.url,
         contentKind,
@@ -315,14 +293,18 @@ export class DesktopPreviewRuntime {
     const request = parseDesktopPreviewBootstrapRequest(value);
     const session = this.sessions.read(request.sessionId);
     const projection = await this.options.shell.getProjection(windowId);
-    const view = projection.window.workbench.main.views.find(
+    const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+      projection.window,
+      request.workspaceId,
+    );
+    const view = workspaceWorkbench.layout.main.views.find(
       (candidate) =>
         candidate.kind === 'preview' &&
         candidate.viewId === request.viewId &&
         candidate.ownerId === request.sessionId,
     );
     if (!view) throw new Error('Desktop Preview View is no longer attached.');
-    if (request.endpointEpoch !== projection.endpointEpoch) {
+    if (request.rendererSessionId !== projection.rendererSessionId) {
       throw new Error('Desktop Preview bootstrap endpoint is stale.');
     }
     const requestedIdentity = {
@@ -331,12 +313,12 @@ export class DesktopPreviewRuntime {
       workspaceId: request.workspaceId,
       windowId,
       viewId: request.viewId,
-      viewEpoch: request.viewEpoch,
+      viewInstanceId: request.viewInstanceId,
       sessionId: request.sessionId,
-      endpointEpoch: session.identity.endpointEpoch,
+      rendererSessionId: session.identity.rendererSessionId,
     };
     assertPreviewRuntimeIdentity(session.identity, requestedIdentity);
-    if (session.identity.endpointEpoch !== request.endpointEpoch) {
+    if (session.identity.rendererSessionId !== request.rendererSessionId) {
       throw new Error('Desktop Preview session endpoint is stale.');
     }
     return session.projection;
@@ -353,7 +335,11 @@ export class DesktopPreviewRuntime {
     }
     const session = this.sessions.assertIdentity(request.identity);
     const shellProjection = await this.options.shell.getProjection(windowId);
-    const currentWorkbench = shellProjection.window.workbench;
+    const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+      shellProjection.window,
+      session.identity.workspaceId,
+    );
+    const currentWorkbench = workspaceWorkbench.layout;
     const view = currentWorkbench.main.views.find(
       (candidate) =>
         candidate.kind === 'preview' &&
@@ -365,11 +351,28 @@ export class DesktopPreviewRuntime {
       case PREVIEW_HOST_RUNTIME_ROUTES.snapshotGet:
         return session.projection;
       case PREVIEW_HOST_RUNTIME_ROUTES.viewPin:
-        return this.updatePresentation(session, shellProjection, view, 'pinned');
+        return this.updatePresentation(
+          session,
+          shellProjection,
+          workspaceWorkbench.workbenchInstanceId,
+          view,
+          'pinned',
+        );
       case PREVIEW_HOST_RUNTIME_ROUTES.viewOpen:
-        return this.updatePresentation(session, shellProjection, view, 'side');
+        return this.updatePresentation(
+          session,
+          shellProjection,
+          workspaceWorkbench.workbenchInstanceId,
+          view,
+          'side',
+        );
       case PREVIEW_HOST_RUNTIME_ROUTES.viewClose:
-        return this.closeSession(session, shellProjection, view);
+        return this.closeSession(
+          session,
+          shellProjection,
+          workspaceWorkbench.workbenchInstanceId,
+          view,
+        );
       case PREVIEW_HOST_RUNTIME_ROUTES.contentResolve:
         throw new Error(
           'Desktop Preview content is resolved only through its Host-authorized descriptor.',
@@ -383,8 +386,12 @@ export class DesktopPreviewRuntime {
     }
   }
 
-  reconcileWorkbench(windowId: string, workbench: DesktopWorkbenchLayoutProjection): void {
-    const attachedSessionIds = workbench.main.views
+  reconcileWindow(
+    windowId: string,
+    workbenches: readonly DesktopWorkbenchLayoutProjection[],
+  ): void {
+    const attachedSessionIds = workbenches
+      .flatMap((workbench) => workbench.main.views)
       .filter((view) => view.kind === 'preview')
       .map((view) => view.ownerId);
     for (const sessionId of this.sessions.reconcileWindow(windowId, attachedSessionIds)) {
@@ -407,11 +414,15 @@ export class DesktopPreviewRuntime {
   private async updatePresentation(
     session: PreviewSessionSnapshot,
     shellProjection: DesktopPreviewShellProjection,
+    workbenchInstanceId: string,
     view: DesktopWorkbenchLayoutProjection['main']['views'][number],
     presentation: Exclude<PreviewViewPresentation, 'temporary'>,
   ): Promise<PreviewProjection> {
     if (session.projection.presentation === presentation) return session.projection;
-    const currentWorkbench = shellProjection.window.workbench;
+    const currentWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+      shellProjection.window,
+      session.identity.workspaceId,
+    ).layout;
     const nextViewId =
       session.projection.presentation === 'temporary'
         ? `preview:${view.viewId.split(':')[1] ?? view.viewId}:${session.identity.sessionId}`
@@ -439,15 +450,11 @@ export class DesktopPreviewRuntime {
         ? { splitAxis: 'columns' as const }
         : {}),
     });
-    workbench = {
-      ...workbench,
-      revision: currentWorkbench.revision + 1,
-    };
     await this.options.shell.updateWorkbench(
       session.identity.windowId,
-      shellProjection.endpointEpoch,
+      shellProjection.rendererSessionId,
       shellProjection.window.revision,
-      currentWorkbench.revision,
+      workbenchInstanceId,
       workbench,
     );
     return this.sessions.commit(transition).projection;
@@ -456,16 +463,20 @@ export class DesktopPreviewRuntime {
   private async closeSession(
     session: PreviewSessionSnapshot,
     shellProjection: DesktopPreviewShellProjection,
+    workbenchInstanceId: string,
     view: DesktopWorkbenchLayoutProjection['main']['views'][number],
   ): Promise<PreviewProjection> {
-    const currentWorkbench = shellProjection.window.workbench;
+    const currentWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+      shellProjection.window,
+      session.identity.workspaceId,
+    ).layout;
     const workbench = closeMainView(currentWorkbench, view.viewId);
     const transition = this.sessions.planClose(session.identity.sessionId);
     await this.options.shell.updateWorkbench(
       session.identity.windowId,
-      shellProjection.endpointEpoch,
+      shellProjection.rendererSessionId,
       shellProjection.window.revision,
-      currentWorkbench.revision,
+      workbenchInstanceId,
       workbench,
     );
     this.options.resources.releaseSession(session.identity.sessionId);

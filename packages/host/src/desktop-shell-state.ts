@@ -2,39 +2,18 @@ import * as path from 'node:path';
 
 import type {
   DesktopProjectTabProjection,
+  DesktopShellStateDiagnosticProjection,
   DesktopWindowActiveTarget,
 } from './desktop-shell-contract';
 import {
-  createDefaultDesktopAgentScene,
-  createDefaultDesktopApplicationSidebar,
   parseDesktopApplicationSidebarProjection,
-  parseDesktopWorkbenchSceneProjection,
   type DesktopApplicationSidebarProjection,
-  type DesktopWorkbenchSceneProjection,
 } from './desktop-scene-contract';
 import {
-  createDefaultDesktopWorkbenchLayout,
-  migrateDesktopWorkbenchV1,
-  migrateDesktopWorkbenchV2,
-  migrateDesktopWorkbenchV3,
-  parseDesktopWorkbenchLayout,
-  migrateDesktopWorkbenchSidebarV1ToV3,
-  type DesktopWorkbenchLayoutProjection,
-} from './desktop-workbench-contract';
-
-export const DESKTOP_SHELL_STATE_VERSION = 7 as const;
-// Version 1 remains readable because it contains user-owned local Project and Window state.
-const DESKTOP_SHELL_STATE_V1 = 1 as const;
-// Version 2 carries the prelaunch Workbench v1 presentation.
-const DESKTOP_SHELL_STATE_V2 = 2 as const;
-// Version 3 carries the prelaunch Workbench v2 presentation.
-const DESKTOP_SHELL_STATE_V3 = 3 as const;
-// Version 4 is the final state whose Workbench owned the application sidebar.
-const DESKTOP_SHELL_STATE_V4 = 4 as const;
-// Version 5 contains prelaunch Scene slots whose management catalogs lived in Manager surfaces.
-const DESKTOP_SHELL_STATE_V5 = 5 as const;
-// Version 6 is the final state whose Agent draft was implicitly Assistant-bound.
-const DESKTOP_SHELL_STATE_V6 = 6 as const;
+  parseDesktopWindowWorkbenchCatalog,
+  serializeDesktopWindowWorkbenchCatalog,
+  type DesktopWindowWorkbenchCatalogProjection,
+} from './desktop-workbench-instance-contract';
 
 export const DESKTOP_DEFAULT_ASSISTANT_SPACE_ID = 'assistant-space:local-user' as const;
 
@@ -57,30 +36,37 @@ export interface DesktopStoredWindow {
   readonly revision: number;
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
-  readonly workbench: DesktopWorkbenchLayoutProjection;
-  readonly scene: DesktopWorkbenchSceneProjection;
+  readonly workbenches: DesktopWindowWorkbenchCatalogProjection;
   readonly applicationSidebar: DesktopApplicationSidebarProjection;
 }
 
 export interface DesktopShellStoredState {
-  readonly schemaVersion: typeof DESKTOP_SHELL_STATE_VERSION;
-  readonly storageRevision: number;
   readonly catalogRevision: number;
   readonly primaryWindowId: string | null;
   readonly projects: readonly DesktopStoredProject[];
   readonly windows: readonly DesktopStoredWindow[];
 }
 
+export type DesktopShellStateDiagnostic = DesktopShellStateDiagnosticProjection;
+
+interface DesktopRetainedInvalidWindow {
+  readonly record: unknown;
+  readonly diagnostic: DesktopShellStateDiagnostic;
+}
+
+const RETAINED_INVALID_WINDOWS: unique symbol = Symbol('desktop-retained-invalid-windows');
+
+type DesktopShellStateWithRetainedInvalidWindows = DesktopShellStoredState & {
+  readonly [RETAINED_INVALID_WINDOWS]: readonly DesktopRetainedInvalidWindow[];
+};
+
 export interface DesktopShellStateRepositoryPort {
   read(): Promise<DesktopShellStoredState>;
-  commit(
-    expectedStorageRevision: number,
-    nextState: DesktopShellStoredState,
-  ): Promise<DesktopShellStoredState>;
+  commit(nextState: DesktopShellStoredState): Promise<DesktopShellStoredState>;
 }
 
 export class DesktopShellStateError extends Error {
-  readonly code: 'desktop-shell-invalid-state' | 'desktop-shell-stale-storage-revision';
+  readonly code: 'desktop-shell-invalid-state';
 
   constructor(code: DesktopShellStateError['code'], message: string) {
     super(message);
@@ -91,8 +77,6 @@ export class DesktopShellStateError extends Error {
 
 export function createEmptyDesktopShellState(): DesktopShellStoredState {
   return {
-    schemaVersion: DESKTOP_SHELL_STATE_VERSION,
-    storageRevision: 0,
     catalogRevision: 0,
     primaryWindowId: null,
     projects: [],
@@ -104,30 +88,9 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
   const record = requireRecord(value, 'Desktop Shell state must be an object.');
   requireExactKeys(
     record,
-    [
-      'schemaVersion',
-      'storageRevision',
-      'catalogRevision',
-      'primaryWindowId',
-      'projects',
-      'windows',
-    ],
+    ['catalogRevision', 'primaryWindowId', 'projects', 'windows'],
     'Desktop Shell state',
   );
-  const sourceVersion = record['schemaVersion'];
-  if (
-    sourceVersion !== DESKTOP_SHELL_STATE_VERSION &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V6 &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V5 &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V4 &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V3 &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V2 &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V1
-  ) {
-    throw invalidState(
-      `Unsupported Desktop Shell state version '${String(record['schemaVersion'])}'.`,
-    );
-  }
   const projects = requireArray(record['projects'], 'Desktop Shell projects must be an array.').map(
     parseStoredProject,
   );
@@ -140,26 +103,63 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
     projectIds.add(project.projectId);
     workspaceIds.add(project.workspaceId);
   }
-  const windows = requireArray(record['windows'], 'Desktop Shell windows must be an array.').map(
-    (item) => parseStoredWindow(item, projectIds, sourceVersion),
-  );
+  const retainedInvalidWindows = readRetainedInvalidWindows(value);
+  const windowCandidates = [
+    ...requireArray(record['windows'], 'Desktop Shell windows must be an array.'),
+    ...retainedInvalidWindows.map((invalid) => invalid.record),
+  ];
+  const windows: DesktopStoredWindow[] = [];
+  const invalidWindows: DesktopRetainedInvalidWindow[] = [];
   const windowIds = new Set<string>();
-  for (const window of windows) {
+  const candidateWindowIds = new Set<string>();
+  for (const [index, candidate] of windowCandidates.entries()) {
+    const candidateWindowId = readCandidateWindowId(candidate, index);
+    candidateWindowIds.add(candidateWindowId);
+    let window: DesktopStoredWindow;
+    try {
+      window = parseStoredWindow(candidate, projectIds);
+    } catch (error) {
+      invalidWindows.push({
+        record: candidate,
+        diagnostic: {
+          code: 'desktop-stored-window-invalid',
+          severity: 'error',
+          windowId: candidateWindowId,
+          message: `Stored Window '${candidateWindowId}' is unavailable and was not opened: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        },
+      });
+      continue;
+    }
     if (windowIds.has(window.windowId)) {
-      throw invalidState(`Duplicate Desktop Window identity '${window.windowId}'.`);
+      invalidWindows.push({
+        record: candidate,
+        diagnostic: {
+          code: 'desktop-stored-window-invalid',
+          severity: 'error',
+          windowId: window.windowId,
+          message: `Duplicate Desktop Window identity '${window.windowId}'.`,
+        },
+      });
+      continue;
     }
     windowIds.add(window.windowId);
+    windows.push(window);
   }
-  const primaryWindowId = readNullableString(record['primaryWindowId']);
-  if (primaryWindowId !== null && !windowIds.has(primaryWindowId)) {
+  const storedPrimaryWindowId = readNullableString(record['primaryWindowId']);
+  if (
+    storedPrimaryWindowId !== null &&
+    !windowIds.has(storedPrimaryWindowId) &&
+    !candidateWindowIds.has(storedPrimaryWindowId)
+  ) {
     throw invalidState('Desktop primary Window identity is not present in stored windows.');
   }
-  return {
-    schemaVersion: DESKTOP_SHELL_STATE_VERSION,
-    storageRevision: requireNonNegativeInteger(
-      record['storageRevision'],
-      'Desktop Shell storage revision is invalid.',
-    ),
+  const primaryWindowId =
+    storedPrimaryWindowId !== null && windowIds.has(storedPrimaryWindowId)
+      ? storedPrimaryWindowId
+      : null;
+  const parsed: DesktopShellStateWithRetainedInvalidWindows = {
     catalogRevision: requireNonNegativeInteger(
       record['catalogRevision'],
       'Desktop Shell catalog revision is invalid.',
@@ -167,6 +167,38 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
     primaryWindowId,
     projects,
     windows,
+    [RETAINED_INVALID_WINDOWS]: invalidWindows,
+  };
+  return parsed;
+}
+
+export function readDesktopShellStateDiagnostics(
+  state: DesktopShellStoredState,
+): readonly DesktopShellStateDiagnostic[] {
+  return readRetainedInvalidWindows(state).map((invalid) => invalid.diagnostic);
+}
+
+export function serializeDesktopShellStoredState(state: DesktopShellStoredState): unknown {
+  const parsed = parseDesktopShellStoredState(state);
+  return {
+    catalogRevision: parsed.catalogRevision,
+    primaryWindowId: parsed.primaryWindowId,
+    projects: parsed.projects,
+    windows: [
+      ...parsed.windows.map(serializeStoredWindow),
+      ...readRetainedInvalidWindows(parsed).map((invalid) => invalid.record),
+    ],
+  };
+}
+
+function serializeStoredWindow(window: DesktopStoredWindow): unknown {
+  return {
+    windowId: window.windowId,
+    revision: window.revision,
+    activeTarget: window.activeTarget,
+    tabs: window.tabs,
+    workbenches: serializeDesktopWindowWorkbenchCatalog(window.workbenches),
+    applicationSidebar: window.applicationSidebar,
   };
 }
 
@@ -238,36 +270,11 @@ function parseStoredProject(value: unknown): DesktopStoredProject {
   };
 }
 
-function parseStoredWindow(
-  value: unknown,
-  projectIds: ReadonlySet<string>,
-  sourceVersion:
-    | typeof DESKTOP_SHELL_STATE_VERSION
-    | typeof DESKTOP_SHELL_STATE_V6
-    | typeof DESKTOP_SHELL_STATE_V5
-    | typeof DESKTOP_SHELL_STATE_V4
-    | typeof DESKTOP_SHELL_STATE_V3
-    | typeof DESKTOP_SHELL_STATE_V2
-    | typeof DESKTOP_SHELL_STATE_V1,
-): DesktopStoredWindow {
+function parseStoredWindow(value: unknown, projectIds: ReadonlySet<string>): DesktopStoredWindow {
   const record = requireRecord(value, 'Desktop stored Window must be an object.');
   requireExactKeys(
     record,
-    sourceVersion === DESKTOP_SHELL_STATE_V1
-      ? ['windowId', 'revision', 'activeTarget', 'tabs']
-      : sourceVersion === DESKTOP_SHELL_STATE_VERSION ||
-          sourceVersion === DESKTOP_SHELL_STATE_V6 ||
-          sourceVersion === DESKTOP_SHELL_STATE_V5
-        ? [
-            'windowId',
-            'revision',
-            'activeTarget',
-            'tabs',
-            'workbench',
-            'scene',
-            'applicationSidebar',
-          ]
-        : ['windowId', 'revision', 'activeTarget', 'tabs', 'workbench'],
+    ['windowId', 'revision', 'activeTarget', 'tabs', 'workbenches', 'applicationSidebar'],
     'Desktop stored Window',
   );
   const tabs = requireArray(record['tabs'], 'Desktop stored Project Tabs must be an array.').map(
@@ -293,32 +300,8 @@ function parseStoredWindow(
     record['windowId'],
     'Desktop stored Window identity is required.',
   );
-  const workbench =
-    sourceVersion === DESKTOP_SHELL_STATE_V1
-      ? createDefaultDesktopWorkbenchLayout(windowId)
-      : parseStoredWorkbench(record['workbench'], windowId, sourceVersion);
-  const scene =
-    sourceVersion === DESKTOP_SHELL_STATE_VERSION
-      ? parseStoredScene(record['scene'], windowId)
-      : sourceVersion === DESKTOP_SHELL_STATE_V6
-        ? migrateStoredSceneV6(record['scene'], windowId)
-        : sourceVersion === DESKTOP_SHELL_STATE_V5
-          ? migrateStoredSceneV5(record['scene'], windowId)
-          : createDefaultDesktopAgentScene(
-              windowId,
-              `draft:migrated:${windowId}:v${String(sourceVersion)}`,
-            );
-  const applicationSidebar =
-    sourceVersion === DESKTOP_SHELL_STATE_VERSION ||
-    sourceVersion === DESKTOP_SHELL_STATE_V6 ||
-    sourceVersion === DESKTOP_SHELL_STATE_V5
-      ? parseStoredApplicationSidebar(record['applicationSidebar'], windowId)
-      : {
-          ...createDefaultDesktopApplicationSidebar(windowId),
-          ...(sourceVersion === DESKTOP_SHELL_STATE_V1
-            ? {}
-            : migrateDesktopWorkbenchSidebarV1ToV3(record['workbench'])),
-        };
+  const workbenches = parseStoredWorkbenchCatalog(record['workbenches'], windowId);
+  const applicationSidebar = parseStoredApplicationSidebar(record['applicationSidebar'], windowId);
   return {
     windowId,
     revision: requireNonNegativeInteger(
@@ -327,219 +310,66 @@ function parseStoredWindow(
     ),
     activeTarget,
     tabs,
-    workbench,
-    scene,
+    workbenches,
     applicationSidebar,
   };
 }
 
-function parseStoredWorkbench(
+function readCandidateWindowId(value: unknown, index: number): string {
+  if (isUnknownRecord(value)) {
+    const windowId = value['windowId'];
+    if (typeof windowId === 'string' && windowId.trim().length > 0) return windowId;
+  }
+  return `invalid-window-record:${index + 1}`;
+}
+
+function readRetainedInvalidWindows(value: unknown): readonly DesktopRetainedInvalidWindow[] {
+  if (!isUnknownRecord(value) || !(RETAINED_INVALID_WINDOWS in value)) return [];
+  const retained = value[RETAINED_INVALID_WINDOWS];
+  if (!Array.isArray(retained)) {
+    throw invalidState('Desktop retained invalid Window records must be an array.');
+  }
+  return retained.map((candidate) => {
+    if (!isRetainedInvalidWindow(candidate)) {
+      throw invalidState('Desktop retained invalid Window record is invalid.');
+    }
+    return candidate;
+  });
+}
+
+function isRetainedInvalidWindow(value: unknown): value is DesktopRetainedInvalidWindow {
+  if (!isUnknownRecord(value)) return false;
+  const diagnostic = value['diagnostic'];
+  return (
+    'record' in value &&
+    isUnknownRecord(diagnostic) &&
+    diagnostic['code'] === 'desktop-stored-window-invalid' &&
+    diagnostic['severity'] === 'error' &&
+    typeof diagnostic['windowId'] === 'string' &&
+    diagnostic['windowId'].trim().length > 0 &&
+    typeof diagnostic['message'] === 'string' &&
+    diagnostic['message'].trim().length > 0
+  );
+}
+
+function parseStoredWorkbenchCatalog(
   value: unknown,
   windowId: string,
-  sourceVersion:
-    | typeof DESKTOP_SHELL_STATE_VERSION
-    | typeof DESKTOP_SHELL_STATE_V6
-    | typeof DESKTOP_SHELL_STATE_V5
-    | typeof DESKTOP_SHELL_STATE_V4
-    | typeof DESKTOP_SHELL_STATE_V3
-    | typeof DESKTOP_SHELL_STATE_V2,
-): DesktopWorkbenchLayoutProjection {
-  let workbench: DesktopWorkbenchLayoutProjection;
+): DesktopWindowWorkbenchCatalogProjection {
+  let workbenches: DesktopWindowWorkbenchCatalogProjection;
   try {
-    workbench =
-      sourceVersion === DESKTOP_SHELL_STATE_V2
-        ? migrateDesktopWorkbenchV1(value)
-        : sourceVersion === DESKTOP_SHELL_STATE_V3
-          ? migrateDesktopWorkbenchV2(value)
-          : sourceVersion === DESKTOP_SHELL_STATE_V4
-            ? migrateDesktopWorkbenchV3(value)
-            : parseDesktopWorkbenchLayout(value);
+    workbenches = parseDesktopWindowWorkbenchCatalog(value);
   } catch (error) {
     throw invalidState(
-      `Desktop stored Workbench layout is invalid: ${
+      `Desktop stored Workbench catalog is invalid: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   }
-  if (workbench.windowId !== windowId) {
-    throw invalidState('Desktop stored Workbench belongs to another Window.');
+  if (workbenches.windowId !== windowId) {
+    throw invalidState('Desktop stored Workbench catalog belongs to another Window.');
   }
-  return workbench;
-}
-
-function parseStoredScene(value: unknown, windowId: string): DesktopWorkbenchSceneProjection {
-  let scene: DesktopWorkbenchSceneProjection;
-  try {
-    scene = parseDesktopWorkbenchSceneProjection(value);
-  } catch (error) {
-    throw invalidState(
-      `Desktop stored Scene is invalid: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-  if (scene.windowId !== windowId) {
-    throw invalidState('Desktop stored Scene belongs to another Window.');
-  }
-  return scene;
-}
-
-function migrateStoredSceneV6(value: unknown, windowId: string): DesktopWorkbenchSceneProjection {
-  const record = requireRecord(value, 'Desktop version 6 Scene must be an object.');
-  if (record['schemaVersion'] !== 1) {
-    throw invalidState('Desktop version 6 Scene contract version must be 1.');
-  }
-  const context = requireRecord(record['context'], 'Desktop version 6 Scene context is required.');
-  if (context['kind'] !== 'agent') {
-    return parseStoredScene({ ...record, schemaVersion: 2 }, windowId);
-  }
-  const sceneId = requireNonEmptyString(
-    record['sceneId'],
-    'Desktop version 6 Scene identity is required.',
-  );
-  const revision = requireNonNegativeInteger(
-    record['revision'],
-    'Desktop version 6 Scene revision is invalid.',
-  );
-  const draftId = `draft:migrated:${windowId}:${sceneId}:${String(revision)}`;
-  const scope = migrateStoredAgentScopeV6(context['scope'], draftId);
-  const slots = requireRecord(record['slots'], 'Desktop version 6 Scene slots are required.');
-  const interaction = requireRecord(
-    slots['interaction'],
-    'Desktop version 6 Agent Scene interaction is required.',
-  );
-  return parseStoredScene(
-    {
-      ...record,
-      schemaVersion: 2,
-      context: { ...context, scope },
-      slots: { ...slots, interaction: { ...interaction, scope } },
-    },
-    windowId,
-  );
-}
-
-function migrateStoredAgentScopeV6(value: unknown, draftId: string): Record<string, unknown> {
-  const scope = requireRecord(value, 'Desktop version 6 Agent scope must be an object.');
-  if (scope['kind'] !== 'assistant' && scope['kind'] !== 'workspace') {
-    throw invalidState(`Unknown Desktop version 6 Agent scope '${String(scope['kind'])}'.`);
-  }
-  return { ...scope, draftId };
-}
-
-function migrateStoredSceneV5(value: unknown, windowId: string): DesktopWorkbenchSceneProjection {
-  const record = requireRecord(value, 'Desktop version 5 Scene must be an object.');
-  const slots = requireRecord(record['slots'], 'Desktop version 5 Scene slots must be an object.');
-  const leftManager = slots['leftManager'];
-  if (!isUnknownRecord(leftManager)) return migrateStoredSceneV6(value, windowId);
-
-  const kind = leftManager['kind'];
-  if (kind === 'assistant-resources') {
-    requireExactKeys(
-      leftManager,
-      ['kind', 'assistantSpaceId'],
-      'Desktop version 5 Assistant Resources Surface',
-    );
-    const assistantSpaceId = requireNonEmptyString(
-      leftManager['assistantSpaceId'],
-      'Desktop version 5 Assistant Space identity is required.',
-    );
-    const migrated = migrateStoredSceneV6(
-      { ...record, slots: copySlotsWithout(slots, ['leftManager']) },
-      windowId,
-    );
-    if (
-      migrated.context.kind !== 'agent' ||
-      migrated.context.scope.kind !== 'assistant' ||
-      migrated.context.scope.assistantSpaceId !== assistantSpaceId
-    ) {
-      throw invalidState('Desktop version 5 Assistant Resources Surface has a scope mismatch.');
-    }
-    return migrated;
-  }
-
-  const management = readVersion5ManagementCatalog(leftManager);
-  if (!management) return migrateStoredSceneV6(value, windowId);
-  if (slots['secondaryMain'] !== undefined) {
-    throw invalidState('Desktop version 5 management Scene already contains Secondary Main.');
-  }
-  const previousMain = slots['main'];
-  return migrateStoredSceneV6(
-    {
-      ...record,
-      slots: {
-        ...copySlotsWithout(slots, ['leftManager', 'main']),
-        main: {
-          kind: management.mainKind,
-          [management.identityField]: management.identity,
-        },
-        ...(previousMain === undefined ? {} : { secondaryMain: previousMain }),
-      },
-    },
-    windowId,
-  );
-}
-
-function readVersion5ManagementCatalog(surface: Readonly<Record<string, unknown>>):
-  | {
-      readonly mainKind: 'asset-management' | 'extension-management' | 'project-management';
-      readonly identityField:
-        'assetCenterSessionId' | 'extensionManagementSessionId' | 'projectManagementSessionId';
-      readonly identity: string;
-    }
-  | undefined {
-  const kind = surface['kind'];
-  if (kind === 'asset-catalog') {
-    requireExactKeys(
-      surface,
-      ['kind', 'assetCenterSessionId'],
-      'Desktop version 5 Asset Catalog Surface',
-    );
-    return {
-      mainKind: 'asset-management',
-      identityField: 'assetCenterSessionId',
-      identity: requireNonEmptyString(
-        surface['assetCenterSessionId'],
-        'Desktop version 5 Asset Center Session identity is required.',
-      ),
-    };
-  }
-  if (kind === 'extension-catalog') {
-    requireExactKeys(
-      surface,
-      ['kind', 'extensionManagementSessionId'],
-      'Desktop version 5 Extension Catalog Surface',
-    );
-    return {
-      mainKind: 'extension-management',
-      identityField: 'extensionManagementSessionId',
-      identity: requireNonEmptyString(
-        surface['extensionManagementSessionId'],
-        'Desktop version 5 Extension Management Session identity is required.',
-      ),
-    };
-  }
-  if (kind === 'project-catalog') {
-    requireExactKeys(
-      surface,
-      ['kind', 'projectManagementSessionId'],
-      'Desktop version 5 Project Catalog Surface',
-    );
-    return {
-      mainKind: 'project-management',
-      identityField: 'projectManagementSessionId',
-      identity: requireNonEmptyString(
-        surface['projectManagementSessionId'],
-        'Desktop version 5 Project Management Session identity is required.',
-      ),
-    };
-  }
-  return undefined;
-}
-
-function copySlotsWithout(
-  slots: Readonly<Record<string, unknown>>,
-  removed: readonly string[],
-): Readonly<Record<string, unknown>> {
-  return Object.fromEntries(Object.entries(slots).filter(([slot]) => !removed.includes(slot)));
+  return workbenches;
 }
 
 function parseStoredApplicationSidebar(
@@ -566,7 +396,7 @@ function parseStoredTab(value: unknown): DesktopProjectTabProjection {
   const record = requireRecord(value, 'Desktop stored Project Tab must be an object.');
   requireExactKeys(
     record,
-    ['tabId', 'projectId', 'viewId', 'viewEpoch'],
+    ['tabId', 'projectId', 'viewId', 'viewInstanceId'],
     'Desktop stored Project Tab',
   );
   return {
@@ -579,9 +409,9 @@ function parseStoredTab(value: unknown): DesktopProjectTabProjection {
       'Desktop stored Project identity is required.',
     ),
     viewId: requireNonEmptyString(record['viewId'], 'Desktop stored View identity is required.'),
-    viewEpoch: requirePositiveInteger(
-      record['viewEpoch'],
-      'Desktop stored View epoch must be a positive integer.',
+    viewInstanceId: requireNonEmptyString(
+      record['viewInstanceId'],
+      'Desktop stored View instance identity is required.',
     ),
   };
 }
@@ -649,12 +479,6 @@ function requireNonNegativeInteger(value: unknown, message: string): number {
     throw invalidState(message);
   }
   return value;
-}
-
-function requirePositiveInteger(value: unknown, message: string): number {
-  const integer = requireNonNegativeInteger(value, message);
-  if (integer === 0) throw invalidState(message);
-  return integer;
 }
 
 function invalidState(message: string): DesktopShellStateError {

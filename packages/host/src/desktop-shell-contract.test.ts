@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import {
-  DESKTOP_CONVERSATION_NAVIGATION_VERSION,
-  DESKTOP_SHELL_CONTRACT_VERSION,
   createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
   createDesktopProjectOpenRequest,
@@ -18,6 +15,10 @@ import {
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
 } from './desktop-scene-contract';
+import {
+  createDesktopWorkbenchInstanceFromScene,
+  parseDesktopWindowWorkbenchCatalog,
+} from './desktop-workbench-instance-contract';
 
 describe('Desktop Shell contract', () => {
   it('groups Workspace conversations under exact Projects and Assistant conversations standalone', () => {
@@ -31,7 +32,6 @@ describe('Desktop Shell contract', () => {
       assistantSpaceId: 'assistant-space:local-user',
     });
     const navigation = projectDesktopConversationNavigation(catalog, {
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 3,
       conversations: [assistantConversation, workspaceConversation],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -62,7 +62,6 @@ describe('Desktop Shell contract', () => {
     };
 
     const navigation = projectDesktopConversationNavigation(catalog, {
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 3,
       conversations: [assistantConversation],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -86,7 +85,6 @@ describe('Desktop Shell contract', () => {
       projectDesktopConversationNavigation(
         { revision: 1, projects: [] },
         {
-          schemaVersion: AGENT_HOME_PROJECTION_VERSION,
           revision: 1,
           conversations: [
             conversation('workspace-conversation', {
@@ -104,7 +102,6 @@ describe('Desktop Shell contract', () => {
     );
     expect(() =>
       projectDesktopConversationNavigation(validProjection().catalog, {
-        schemaVersion: AGENT_HOME_PROJECTION_VERSION,
         revision: 1,
         conversations: [
           {
@@ -126,23 +123,20 @@ describe('Desktop Shell contract', () => {
 
   it('creates fixed profile and revision-bound Tab requests', () => {
     expect(createDesktopProfileRequest('request-1', 'character')).toEqual({
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-1',
       profile: 'character',
     });
-    expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'app-1:window-1:1', 4)).toEqual({
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
+    expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'renderer-session-1', 4)).toEqual({
       requestId: 'request-2',
-      expectedEndpointEpoch: 'app-1:window-1:1',
+      rendererSessionId: 'renderer-session-1',
       tabId: 'tab-1',
       expectedWindowRevision: 4,
     });
     expect(
-      createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'app-1:window-1:1', 5),
+      createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'renderer-session-1', 5),
     ).toEqual({
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-3',
-      expectedEndpointEpoch: 'app-1:window-1:1',
+      rendererSessionId: 'renderer-session-1',
       expectedWindowRevision: 5,
       projectId: 'content:workspace-1',
     });
@@ -150,14 +144,13 @@ describe('Desktop Shell contract', () => {
       createDesktopProjectRemoveRecentRequest(
         'request-4',
         'content:workspace-1',
-        'app-1:window-1:1',
+        'renderer-session-1',
         5,
         3,
       ),
     ).toEqual({
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-4',
-      expectedEndpointEpoch: 'app-1:window-1:1',
+      rendererSessionId: 'renderer-session-1',
       expectedWindowRevision: 5,
       expectedCatalogRevision: 3,
       projectId: 'content:workspace-1',
@@ -169,14 +162,13 @@ describe('Desktop Shell contract', () => {
           conversationId: 'conversation-1',
           owner: { kind: 'workspace', workspaceId: 'workspace-1' },
         },
-        'app-1:window-1:1',
+        'renderer-session-1',
         5,
         7,
       ),
     ).toEqual({
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: 'request-5',
-      expectedEndpointEpoch: 'app-1:window-1:1',
+      rendererSessionId: 'renderer-session-1',
       expectedWindowRevision: 5,
       expectedAgentHomeRevision: 7,
       navigation: {
@@ -219,27 +211,87 @@ describe('Desktop Shell contract', () => {
   it('rejects projection events whose Window identity does not match', () => {
     expect(() =>
       parseDesktopShellProjectionEvent({
-        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
         applicationInstanceId: 'app-1',
         windowId: 'window-2',
-        rendererEpoch: 1,
+        rendererSessionId: 'renderer-session-1',
         sequence: 1,
         projection: validProjection(),
       }),
     ).toThrowError(DesktopShellContractError);
   });
 
-  it('rejects the pre-Scene Shell wire version', () => {
+  it('rejects removed or unknown Shell projection fields', () => {
     expect(() =>
       parseDesktopShellProjection({
         ...validProjection(),
-        schemaVersion: 1,
+        removedTechnicalField: 1,
       }),
     ).toThrowError(
       expect.objectContaining<Partial<DesktopShellContractError>>({
-        code: 'unsupported-desktop-shell-version',
+        code: 'invalid-desktop-shell-payload',
       }),
     );
+  });
+
+  it('parses an exact rejected Shell authority diagnostic', () => {
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-state-invalid',
+            severity: 'error',
+            authorityKey: 'desktop.shell',
+            rejectionId: 12,
+            message: 'Stored Shell authority was rejected.',
+          },
+        ],
+      }).stateDiagnostics,
+    ).toEqual([
+      {
+        code: 'desktop-stored-state-invalid',
+        severity: 'error',
+        authorityKey: 'desktop.shell',
+        rejectionId: 12,
+        message: 'Stored Shell authority was rejected.',
+      },
+    ]);
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-state-invalid',
+            severity: 'error',
+            authorityKey: 'desktop.application-settings',
+            rejectionId: 13,
+            message: 'Stored Application Settings authority was rejected.',
+          },
+        ],
+      }).stateDiagnostics,
+    ).toEqual([
+      {
+        code: 'desktop-stored-state-invalid',
+        severity: 'error',
+        authorityKey: 'desktop.application-settings',
+        rejectionId: 13,
+        message: 'Stored Application Settings authority was rejected.',
+      },
+    ]);
+    expect(() =>
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-state-invalid',
+            severity: 'error',
+            authorityKey: 'desktop.shell',
+            rejectionId: 0,
+            message: 'Invalid rejection identity.',
+          },
+        ],
+      }),
+    ).toThrowError(DesktopShellContractError);
   });
 
   it('accepts ready domains only in their owning Phase 1 slices', () => {
@@ -303,11 +355,16 @@ describe('Desktop Shell contract', () => {
 });
 
 function validProjection() {
+  const scene = createDefaultDesktopAgentScene('window-1', 'draft:test');
+  const workbench = createDesktopWorkbenchInstanceFromScene({
+    workbenchInstanceId: 'workbench:window-1:entry',
+    agentSurfaceId: 'agent-surface:window-1:entry',
+    layout: createDefaultDesktopWorkbenchLayout('window-1'),
+    scene,
+  });
   return {
-    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'app-1',
-    endpointEpoch: 'app-1:window-1:1',
-    projectionRevision: 2,
+    rendererSessionId: 'renderer-session-1',
     catalog: {
       revision: 1,
       projects: [
@@ -330,21 +387,22 @@ function validProjection() {
           tabId: 'tab-1',
           projectId: 'content:workspace-1',
           viewId: 'view-1',
-          viewEpoch: 1,
+          viewInstanceId: 'view-instance-1',
         },
       ],
-      workbench: createDefaultDesktopWorkbenchLayout('window-1'),
-      scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:test'),
+      workbenches: parseDesktopWindowWorkbenchCatalog({
+        windowId: 'window-1',
+        activeWorkbenchInstanceId: workbench.workbenchInstanceId,
+        instances: [workbench],
+      }),
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
     conversationNavigation: {
-      schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
       projectCatalogRevision: 1,
       agentHomeRevision: 0,
       groups: [

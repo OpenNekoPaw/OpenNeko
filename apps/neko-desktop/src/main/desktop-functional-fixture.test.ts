@@ -1,11 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  consumeDesktopFunctionalWorkspaceSelection,
   resolveDesktopAgentAutomationLaunch,
   resolveDesktopFunctionalCutExport,
   resolveDesktopFunctionalWorkspace,
   resolveDesktopFunctionalWindowMode,
   resolveDesktopRuntimeHome,
 } from './desktop-functional-fixture';
+
+const fixtureRoots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    fixtureRoots.splice(0).map((root) => rm(root, { force: true, recursive: true })),
+  );
+});
 
 describe('Desktop functional fixture home', () => {
   it('keeps the system home for ordinary Desktop startup', () => {
@@ -96,6 +108,29 @@ describe('Desktop functional fixture home', () => {
         }),
       ).toThrow('functional workspace');
     }
+  });
+
+  it('consumes exact queued Workspace selections only inside the isolated fixture', async () => {
+    const fixtureHome = await mkdtemp(join(tmpdir(), 'openneko-desktop-functional-queue-'));
+    fixtureRoots.push(fixtureHome);
+    await Promise.all([
+      mkdir(join(fixtureHome, 'workspace-a')),
+      mkdir(join(fixtureHome, 'workspace-b')),
+    ]);
+    await writeFile(
+      join(fixtureHome, '.openneko-functional-workspace-queue.json'),
+      `${JSON.stringify(['workspace-a', 'workspace-b'])}\n`,
+      'utf8',
+    );
+    const input = { argv: ['--openneko-functional-fixture'], fixtureHome };
+
+    await expect(consumeDesktopFunctionalWorkspaceSelection(input)).resolves.toBe(
+      join(fixtureHome, 'workspace-a'),
+    );
+    await expect(consumeDesktopFunctionalWorkspaceSelection(input)).resolves.toBe(
+      join(fixtureHome, 'workspace-b'),
+    );
+    await expect(consumeDesktopFunctionalWorkspaceSelection(input)).resolves.toBeUndefined();
   });
 
   it('rejects a functional workspace override without the explicit fixture argument', () => {

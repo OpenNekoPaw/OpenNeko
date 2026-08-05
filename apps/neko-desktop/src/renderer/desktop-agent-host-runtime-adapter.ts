@@ -9,6 +9,29 @@ export interface DesktopAgentPresentationStorage {
   setItem(key: string, value: string): void;
 }
 
+const INVALID_PRESENTATION_STATE = Object.freeze({ stateReadFailure: 'invalid-json' as const });
+
+export function createDesktopAgentPresentationStateKey(
+  ownerIdentity: string,
+  viewId: string,
+): string {
+  return `openneko:agent:presentation:${ownerIdentity}:${viewId}`;
+}
+
+export function readDesktopAgentPresentationState(
+  storage: DesktopAgentPresentationStorage,
+  stateKey: string,
+): unknown {
+  const serialized = storage.getItem(stateKey);
+  if (serialized === null) return undefined;
+  try {
+    const state: unknown = JSON.parse(serialized);
+    return state;
+  } catch {
+    return INVALID_PRESENTATION_STATE;
+  }
+}
+
 export function createElectronAgentHostRuntimeAdapter(input: {
   readonly bridge: OpenNekoDesktopAgentBridge;
   readonly bootstrap: DesktopAgentReadyBootstrapProjection;
@@ -16,7 +39,10 @@ export function createElectronAgentHostRuntimeAdapter(input: {
 }): AgentHostRuntimeAdapter {
   const { connection } = input.bootstrap;
   const storage = input.storage ?? window.sessionStorage;
-  const stateKey = `openneko:agent:presentation:${connection.viewId}:${connection.viewEpoch}`;
+  const stateKey = createDesktopAgentPresentationStateKey(
+    `workspace:${connection.workspaceId}`,
+    connection.viewId,
+  );
   return {
     hostKind: 'electron',
     runtimeId: `neko.agent.webview.electron:${connection.connectionId}`,
@@ -32,10 +58,7 @@ export function createElectronAgentHostRuntimeAdapter(input: {
       };
     },
     getState(): unknown {
-      const serialized = storage.getItem(stateKey);
-      if (serialized === null) return undefined;
-      const state: unknown = JSON.parse(serialized);
-      return state;
+      return readDesktopAgentPresentationState(storage, stateKey);
     },
     setState(state: unknown): void {
       storage.setItem(stateKey, JSON.stringify(state));

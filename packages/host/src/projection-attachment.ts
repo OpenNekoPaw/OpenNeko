@@ -1,5 +1,5 @@
 export interface HostProjectionAttachmentIdentity {
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly attachmentId: string;
 }
 
@@ -83,5 +83,7 @@ export function isSameHostProjectionAttachment(
   left: HostProjectionAttachmentIdentity,
   right: HostProjectionAttachmentIdentity,
 ): boolean {
-  return left.endpointEpoch === right.endpointEpoch && left.attachmentId === right.attachmentId;
+  return (
+    left.rendererSessionId === right.rendererSessionId && left.attachmentId === right.attachmentId
+  );
 }

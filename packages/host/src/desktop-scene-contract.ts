@@ -4,8 +4,6 @@ import {
   type AgentHomeNavigationIdentity,
 } from '@neko/agent-contracts';
 
-export const DESKTOP_SCENE_CONTRACT_VERSION = 2 as const;
-export const DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION = 1 as const;
 export const DESKTOP_APPLICATION_SIDEBAR_DEFAULT_WIDTH = 240;
 export const DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS = { min: 208, max: 360 } as const;
 
@@ -55,7 +53,7 @@ export type DesktopWorkbenchMainSurfaceRef =
       readonly kind: 'workspace-main';
       readonly workspaceId: string;
       readonly viewId: string;
-      readonly viewEpoch: number;
+      readonly viewInstanceId: string;
     }
   | {
       readonly kind: 'asset-preview';
@@ -80,7 +78,7 @@ export interface DesktopWorkbenchTimelineSurfaceRef {
   readonly kind: 'workspace-timeline';
   readonly workspaceId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
   readonly ownerId: string;
 }
 
@@ -90,10 +88,8 @@ export interface DesktopWorkbenchStatusSurfaceRef {
 }
 
 export interface DesktopWorkbenchSceneProjection {
-  readonly schemaVersion: typeof DESKTOP_SCENE_CONTRACT_VERSION;
   readonly sceneId: string;
   readonly windowId: string;
-  readonly revision: number;
   readonly context: DesktopWorkbenchSceneContext;
   readonly slots: {
     readonly interaction?: DesktopAgentInteractionSurfaceRef;
@@ -107,9 +103,7 @@ export interface DesktopWorkbenchSceneProjection {
 }
 
 export interface DesktopApplicationSidebarProjection {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION;
   readonly windowId: string;
-  readonly revision: number;
   readonly visible: boolean;
   readonly width: number;
 }
@@ -126,12 +120,11 @@ export type DesktopSceneTransitionIntent =
   | { readonly kind: 'restore-conversation'; readonly navigation: AgentHomeNavigationIdentity };
 
 export interface DesktopSceneTransitionRequest {
-  readonly schemaVersion: typeof DESKTOP_SCENE_CONTRACT_VERSION;
   readonly requestId: string;
-  readonly expectedEndpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly windowId: string;
   readonly expectedWindowRevision: number;
-  readonly expectedSceneRevision: number;
+  readonly sceneId: string;
   readonly intent: DesktopSceneTransitionIntent;
 }
 
@@ -311,11 +304,9 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
 }
 
 export interface DesktopApplicationSidebarMutationRequest {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION;
   readonly requestId: string;
-  readonly expectedEndpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly expectedSidebarRevision: number;
   readonly visible: boolean;
   readonly width: number;
 }
@@ -323,7 +314,6 @@ export interface DesktopApplicationSidebarMutationRequest {
 export class DesktopSceneContractError extends Error {
   readonly code:
     | 'invalid-desktop-scene-payload'
-    | 'unsupported-desktop-scene-version'
     | 'desktop-scene-scope-mismatch'
     | 'desktop-scene-stale-identity';
 
@@ -338,9 +328,7 @@ export function createDefaultDesktopApplicationSidebar(
   windowId: string,
 ): DesktopApplicationSidebarProjection {
   return {
-    schemaVersion: DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
     windowId: requireIdentity(windowId, 'Desktop Sidebar Window'),
-    revision: 0,
     visible: true,
     width: DESKTOP_APPLICATION_SIDEBAR_DEFAULT_WIDTH,
   };
@@ -356,10 +344,8 @@ export function createDefaultDesktopAgentScene(
   const agentViewId = `agent-view:${exactWindowId}:${exactDraftId}`;
   const scope: DesktopAgentScopeProjection = { kind: 'unbound', draftId: exactDraftId };
   return {
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId,
     windowId: exactWindowId,
-    revision: 0,
     context: { kind: 'agent', agentViewId, scope },
     slots: {
       interaction: { kind: 'agent', agentViewId, phase: 'draft', scope },
@@ -370,54 +356,44 @@ export function createDefaultDesktopAgentScene(
 
 export function createDesktopSceneTransitionRequest(input: {
   readonly requestId: string;
-  readonly expectedEndpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly windowId: string;
   readonly expectedWindowRevision: number;
-  readonly expectedSceneRevision: number;
+  readonly sceneId: string;
   readonly intent: DesktopSceneTransitionIntent;
 }): DesktopSceneTransitionRequest {
-  return parseDesktopSceneTransitionRequest({
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
-    ...input,
-  });
+  return parseDesktopSceneTransitionRequest(input);
 }
 
 export function createDesktopApplicationSidebarMutationRequest(input: {
   readonly requestId: string;
-  readonly expectedEndpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly windowId: string;
-  readonly expectedSidebarRevision: number;
   readonly visible: boolean;
   readonly width: number;
 }): DesktopApplicationSidebarMutationRequest {
-  return parseDesktopApplicationSidebarMutationRequest({
-    schemaVersion: DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
-    ...input,
-  });
+  return parseDesktopApplicationSidebarMutationRequest(input);
 }
 
 export function applyDesktopApplicationSidebarMutation(input: {
   readonly projection: DesktopApplicationSidebarProjection;
   readonly request: DesktopApplicationSidebarMutationRequest;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
 }): DesktopApplicationSidebarProjection {
   const projection = parseDesktopApplicationSidebarProjection(input.projection);
   const request = parseDesktopApplicationSidebarMutationRequest(input.request);
-  const endpointEpoch = requireIdentity(input.endpointEpoch, 'Desktop endpoint epoch');
-  if (request.expectedEndpointEpoch !== endpointEpoch) {
-    throw stale('Desktop Sidebar mutation endpoint epoch is stale.');
+  const rendererSessionId = requireIdentity(
+    input.rendererSessionId,
+    'Desktop renderer session identity',
+  );
+  if (request.rendererSessionId !== rendererSessionId) {
+    throw stale('Desktop Sidebar mutation renderer session is stale.');
   }
   if (request.windowId !== projection.windowId) {
     throw stale('Desktop Sidebar mutation Window identity does not match its projection.');
   }
-  if (request.expectedSidebarRevision !== projection.revision) {
-    throw stale(
-      `Desktop Sidebar revision ${request.expectedSidebarRevision} is stale; current revision is ${projection.revision}.`,
-    );
-  }
   return {
     ...projection,
-    revision: projection.revision + 1,
     visible: request.visible,
     width: request.width,
   };
@@ -429,15 +405,12 @@ export function parseDesktopWorkbenchSceneProjection(
   const record = requireRecord(value, 'Desktop Workbench Scene projection must be an object.');
   requireExactKeys(
     record,
-    ['schemaVersion', 'sceneId', 'windowId', 'revision', 'context', 'slots'],
+    ['sceneId', 'windowId', 'context', 'slots'],
     'Desktop Workbench Scene projection',
   );
-  requireVersion(record['schemaVersion'], DESKTOP_SCENE_CONTRACT_VERSION, 'Scene');
   const projection: DesktopWorkbenchSceneProjection = {
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId: requireIdentity(record['sceneId'], 'Desktop Scene'),
     windowId: requireIdentity(record['windowId'], 'Desktop Scene Window'),
-    revision: requireRevision(record['revision'], 'Desktop Scene revision'),
     context: parseSceneContext(record['context']),
     slots: parseSceneSlots(record['slots']),
   };
@@ -451,18 +424,11 @@ export function parseDesktopApplicationSidebarProjection(
   const record = requireRecord(value, 'Desktop Application Sidebar projection must be an object.');
   requireExactKeys(
     record,
-    ['schemaVersion', 'windowId', 'revision', 'visible', 'width'],
+    ['windowId', 'visible', 'width'],
     'Desktop Application Sidebar projection',
   );
-  requireVersion(
-    record['schemaVersion'],
-    DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
-    'Application Sidebar',
-  );
   return {
-    schemaVersion: DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
     windowId: requireIdentity(record['windowId'], 'Desktop Sidebar Window'),
-    revision: requireRevision(record['revision'], 'Desktop Sidebar revision'),
     visible: requireBoolean(record['visible'], 'Desktop Sidebar visibility must be boolean.'),
     width: requireSidebarWidth(record['width']),
   };
@@ -472,34 +438,21 @@ export function parseDesktopSceneTransitionRequest(value: unknown): DesktopScene
   const record = requireRecord(value, 'Desktop Scene transition request must be an object.');
   requireExactKeys(
     record,
-    [
-      'schemaVersion',
-      'requestId',
-      'expectedEndpointEpoch',
-      'windowId',
-      'expectedWindowRevision',
-      'expectedSceneRevision',
-      'intent',
-    ],
+    ['requestId', 'rendererSessionId', 'windowId', 'expectedWindowRevision', 'sceneId', 'intent'],
     'Desktop Scene transition request',
   );
-  requireVersion(record['schemaVersion'], DESKTOP_SCENE_CONTRACT_VERSION, 'Scene');
   return {
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     requestId: requireIdentity(record['requestId'], 'Desktop Scene request'),
-    expectedEndpointEpoch: requireIdentity(
-      record['expectedEndpointEpoch'],
-      'Desktop endpoint epoch',
+    rendererSessionId: requireIdentity(
+      record['rendererSessionId'],
+      'Desktop renderer session identity',
     ),
     windowId: requireIdentity(record['windowId'], 'Desktop Scene Window'),
     expectedWindowRevision: requireRevision(
       record['expectedWindowRevision'],
       'Desktop Window revision',
     ),
-    expectedSceneRevision: requireRevision(
-      record['expectedSceneRevision'],
-      'Desktop Scene revision',
-    ),
+    sceneId: requireIdentity(record['sceneId'], 'Desktop Scene'),
     intent: parseSceneTransitionIntent(record['intent']),
   };
 }
@@ -510,34 +463,16 @@ export function parseDesktopApplicationSidebarMutationRequest(
   const record = requireRecord(value, 'Desktop Sidebar mutation request must be an object.');
   requireExactKeys(
     record,
-    [
-      'schemaVersion',
-      'requestId',
-      'expectedEndpointEpoch',
-      'windowId',
-      'expectedSidebarRevision',
-      'visible',
-      'width',
-    ],
+    ['requestId', 'rendererSessionId', 'windowId', 'visible', 'width'],
     'Desktop Sidebar mutation request',
   );
-  requireVersion(
-    record['schemaVersion'],
-    DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
-    'Application Sidebar',
-  );
   return {
-    schemaVersion: DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
     requestId: requireIdentity(record['requestId'], 'Desktop Sidebar request'),
-    expectedEndpointEpoch: requireIdentity(
-      record['expectedEndpointEpoch'],
-      'Desktop endpoint epoch',
+    rendererSessionId: requireIdentity(
+      record['rendererSessionId'],
+      'Desktop renderer session identity',
     ),
     windowId: requireIdentity(record['windowId'], 'Desktop Sidebar Window'),
-    expectedSidebarRevision: requireRevision(
-      record['expectedSidebarRevision'],
-      'Desktop Sidebar revision',
-    ),
     visible: requireBoolean(record['visible'], 'Desktop Sidebar visibility must be boolean.'),
     width: requireSidebarWidth(record['width']),
   };
@@ -551,7 +486,7 @@ function parseSceneContext(value: unknown): DesktopWorkbenchSceneContext {
     return {
       kind,
       agentViewId: requireIdentity(record['agentViewId'], 'Agent View'),
-      scope: parseAgentScope(record['scope']),
+      scope: parseDesktopAgentScopeProjection(record['scope']),
     };
   }
   if (kind === 'asset-center') {
@@ -595,7 +530,7 @@ function parseSceneContext(value: unknown): DesktopWorkbenchSceneContext {
   throw unsupported(`Unknown Desktop Scene context kind '${String(kind)}'.`);
 }
 
-function parseAgentScope(value: unknown): DesktopAgentScopeProjection {
+export function parseDesktopAgentScopeProjection(value: unknown): DesktopAgentScopeProjection {
   const record = requireRecord(value, 'Agent scope must be an object.');
   const kind = record['kind'];
   if (kind === 'unbound') {
@@ -679,7 +614,7 @@ function parseInteractionSurface(value: unknown): DesktopAgentInteractionSurface
     kind: 'agent',
     agentViewId: requireIdentity(record['agentViewId'], 'Agent View'),
     phase,
-    scope: parseAgentScope(record['scope']),
+    scope: parseDesktopAgentScopeProjection(record['scope']),
   };
 }
 
@@ -703,14 +638,14 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
   if (kind === 'workspace-main') {
     requireExactKeys(
       record,
-      ['kind', 'workspaceId', 'viewId', 'viewEpoch'],
+      ['kind', 'workspaceId', 'viewId', 'viewInstanceId'],
       'Workspace Main Surface ref',
     );
     return {
       kind,
       workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
       viewId: requireIdentity(record['viewId'], 'Workspace View'),
-      viewEpoch: requireRevision(record['viewEpoch'], 'Workspace View epoch'),
+      viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
     };
   }
   if (kind === 'asset-preview') {
@@ -815,7 +750,7 @@ function parseTimelineSurface(value: unknown): DesktopWorkbenchTimelineSurfaceRe
   const record = requireRecord(value, 'Timeline Surface ref must be an object.');
   requireExactKeys(
     record,
-    ['kind', 'workspaceId', 'viewId', 'viewEpoch', 'ownerId'],
+    ['kind', 'workspaceId', 'viewId', 'viewInstanceId', 'ownerId'],
     'Workspace Timeline Surface ref',
   );
   if (record['kind'] !== 'workspace-timeline') {
@@ -825,7 +760,7 @@ function parseTimelineSurface(value: unknown): DesktopWorkbenchTimelineSurfaceRe
     kind: 'workspace-timeline',
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     viewId: requireIdentity(record['viewId'], 'Workspace View'),
-    viewEpoch: requireRevision(record['viewEpoch'], 'Workspace View epoch'),
+    viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
     ownerId: requireIdentity(record['ownerId'], 'Timeline owner'),
   };
 }
@@ -1141,15 +1076,6 @@ function requireSidebarWidth(value: unknown): number {
     );
   }
   return value;
-}
-
-function requireVersion(value: unknown, expected: number, label: string): void {
-  if (value !== expected) {
-    throw new DesktopSceneContractError(
-      'unsupported-desktop-scene-version',
-      `Unsupported Desktop ${label} contract version '${String(value)}'.`,
-    );
-  }
 }
 
 function invalid(message: string): DesktopSceneContractError {

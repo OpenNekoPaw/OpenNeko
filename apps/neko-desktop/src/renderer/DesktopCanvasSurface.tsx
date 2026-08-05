@@ -9,10 +9,12 @@ import { createDesktopCanvasWebviewDelegate } from './desktop-canvas-webview-del
 export function DesktopCanvasSurface({
   project,
   projection,
+  lifecyclePresentation,
   view,
 }: {
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
+  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const documentId = requireCanvasDocumentId(view);
@@ -22,18 +24,18 @@ export function DesktopCanvasSurface({
       workspaceId: project.workspaceId,
       windowId: projection.window.windowId,
       viewId: view.viewId,
-      viewEpoch: view.viewEpoch,
+      viewInstanceId: view.viewInstanceId,
       documentId,
-      sessionId: createCanvasHostSessionId(view.viewId, view.viewEpoch),
-      endpointEpoch: projection.endpointEpoch,
+      sessionId: createCanvasHostSessionId(view.viewId, view.viewInstanceId),
+      rendererSessionId: projection.rendererSessionId,
     }),
     [
       project.projectId,
       project.workspaceId,
-      projection.endpointEpoch,
+      projection.rendererSessionId,
       projection.window.windowId,
       documentId,
-      view.viewEpoch,
+      view.viewInstanceId,
       view.viewId,
     ],
   );
@@ -46,7 +48,12 @@ export function DesktopCanvasSurface({
       data-owner-view-id={view.viewId}
       aria-label="Canvas"
     >
-      <CanvasWebviewRoot delegate={delegate} locale="zh-cn" runtime={runtime} />
+      <CanvasWebviewRoot
+        delegate={delegate}
+        lifecyclePresentation={lifecyclePresentation}
+        locale="zh-cn"
+        runtime={runtime}
+      />
     </section>
   );
 }

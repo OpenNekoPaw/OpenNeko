@@ -81,27 +81,22 @@ export const desktopAgentProviderUiScenario = Object.freeze({
     );
     await beginExecutionActivityObservation(evaluate);
     await click('.agent-composer-send');
+    checkpoint('visible-composer-submit-dispatched', await inspectVisibleAgentDom(evaluate));
 
-    await waitForCondition(
-      evaluate,
-      `(async () => {
-        const projection = await window.openNekoDesktop.shell.getSnapshot();
-        return projection.window.scene.context.kind === 'agent' &&
-          projection.window.scene.context.scope.kind === 'assistant' &&
-          typeof projection.window.scene.context.scope.conversationId === 'string';
-      })()`,
-      'Visible Entry Draft did not materialize an Assistant conversation.',
-    );
     await waitForCondition(
       evaluate,
       `(() => [...document.querySelectorAll(
         '[data-owner-root="agent"] .agent-user-prompt',
-      )].some((element) => element.textContent?.trim() === ${JSON.stringify(prompt)}))()`,
-      'Visible Desktop Agent did not retain the exact sent prompt in the transcript.',
+      )].some((element) => element.textContent?.trim() === ${JSON.stringify(prompt)}) &&
+        Boolean(document.querySelector(
+          '.primary-conversation-group[data-group-kind="assistant"] ' +
+            '.primary-recent-conversation-row[data-active="true"] .home-conversation-link',
+        )))()`,
+      'Visible Entry Draft did not activate its Assistant session and sent transcript.',
     );
     checkpoint(
       'visible-assistant-conversation-materialized',
-      await inspectProviderWaitState(evaluate),
+      await inspectVisibleAgentDom(evaluate),
     );
     await waitForCondition(
       evaluate,
@@ -115,7 +110,8 @@ export const desktopAgentProviderUiScenario = Object.freeze({
       prepared.databasePath,
       `(async () => {
         const projection = await window.openNekoDesktop.shell.getSnapshot();
-        const context = projection.window.scene.context;
+        ${requireActiveWorkbenchProjection('projection')}
+        const context = activeWorkbench.scene.context;
         const alerts = [...document.querySelectorAll('[role="alert"]')]
           .map((element) => element.textContent?.trim() ?? '')
           .filter(Boolean);
@@ -157,7 +153,7 @@ export const desktopAgentProviderUiScenario = Object.freeze({
 
     const [evidence, lifecycle] = await Promise.all([
       inspectCompletedConversation(evaluate, prompt),
-      readLatestLifecycleState(prepared.databasePath),
+      readLatestVisibleAgentLifecycleState(prepared.databasePath),
     ]);
     if (lifecycle?.status !== 'completed') {
       throw new Error('Visible Desktop Agent completed without a persisted lifecycle terminal.');
@@ -181,10 +177,31 @@ export const desktopAgentProviderUiScenario = Object.freeze({
   },
 });
 
+async function inspectVisibleAgentDom(evaluate) {
+  return evaluate(`(() => ({
+    activeConversationVisible: Boolean(document.querySelector(
+      '.primary-conversation-group[data-group-kind="assistant"] ' +
+        '.primary-recent-conversation-row[data-active="true"] .home-conversation-link',
+    )),
+    transcriptActivity: document.querySelector(
+      '[data-owner-root="agent"] .agent-message-list .agent-execution-activity',
+    )?.textContent?.trim() ?? undefined,
+    composerAvailable: Boolean(document.querySelector('.agent-composer-textarea')),
+    stopControlVisible: Boolean(document.querySelector('.agent-composer-stop')),
+    visibleMessages: [...document.querySelectorAll(
+      '[data-owner-root="agent"] .agent-message-row',
+    )].map((row) => row.textContent?.trim() ?? '').filter(Boolean),
+    alerts: [...document.querySelectorAll('[role="alert"]')]
+      .map((element) => element.textContent?.trim() ?? '')
+      .filter(Boolean),
+  }))()`);
+}
+
 async function inspectEntryDraft(evaluate) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    const context = projection.window.scene.context;
+    ${requireActiveWorkbenchProjection('projection')}
+    const context = activeWorkbench.scene.context;
     const textarea = document.querySelector('.agent-composer-textarea');
     if (context.kind !== 'agent' || context.scope.kind !== 'unbound') {
       throw new Error('Visible provider scenario did not start from an unbound Entry Draft.');
@@ -221,7 +238,8 @@ async function inspectSelectedModel(evaluate) {
 async function inspectCompletedConversation(evaluate, sentPrompt) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    const context = projection.window.scene.context;
+    ${requireActiveWorkbenchProjection('projection')}
+    const context = activeWorkbench.scene.context;
     if (context.kind !== 'agent' || context.scope.kind !== 'assistant' ||
         typeof context.scope.conversationId !== 'string') {
       throw new Error('Visible provider response did not retain an exact Assistant conversation.');
@@ -357,7 +375,7 @@ async function waitForProviderResponse(evaluate, databasePath, expression) {
   while (Date.now() < deadline) {
     const [uiComplete, lifecycleState] = await Promise.all([
       evaluate(expression),
-      readLatestLifecycleState(databasePath),
+      readLatestVisibleAgentLifecycleState(databasePath),
     ]);
     if (uiComplete && lifecycleState?.status === 'completed') return;
     if (lifecycleState?.status === 'failed') {
@@ -367,7 +385,7 @@ async function waitForProviderResponse(evaluate, databasePath, expression) {
   }
   const [uiState, lifecycleState] = await Promise.all([
     inspectProviderWaitState(evaluate),
-    readLatestLifecycleState(databasePath),
+    readLatestVisibleAgentLifecycleState(databasePath),
   ]);
   throw new Error(
     'Visible Desktop Agent did not render a completed provider response and active sidebar ' +
@@ -375,7 +393,7 @@ async function waitForProviderResponse(evaluate, databasePath, expression) {
   );
 }
 
-async function readLatestLifecycleState(databasePath) {
+export async function readLatestVisibleAgentLifecycleState(databasePath) {
   const sqlite = await import('node:sqlite');
   let database;
   try {
@@ -384,16 +402,24 @@ async function readLatestLifecycleState(databasePath) {
     return undefined;
   }
   try {
+    const lifecycleTable = database
+      .prepare(
+        `SELECT name
+           FROM sqlite_master
+          WHERE type = 'table' AND name = 'agent_conversation_records'`,
+      )
+      .get();
+    if (!lifecycleTable) return undefined;
     const row = database
       .prepare(
-        `SELECT snapshot_json
-           FROM agent_conversation_lifecycle
+        `SELECT payload_json
+           FROM agent_conversation_records
           ORDER BY rowid DESC
           LIMIT 1`,
       )
       .get();
-    if (!row || typeof row.snapshot_json !== 'string') return undefined;
-    const snapshot = JSON.parse(row.snapshot_json);
+    if (!row || typeof row.payload_json !== 'string') return undefined;
+    const snapshot = JSON.parse(row.payload_json);
     const pendingTurn = snapshot?.pendingTurn;
     if (!pendingTurn || typeof pendingTurn.status !== 'string') return undefined;
     return {
@@ -411,7 +437,8 @@ async function readLatestLifecycleState(databasePath) {
 async function inspectProviderWaitState(evaluate) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    const context = projection.window.scene.context;
+    ${requireActiveWorkbenchProjection('projection')}
+    const context = activeWorkbench.scene.context;
     const conversationId = context.kind === 'agent' && context.scope.kind !== 'unbound'
       ? context.scope.conversationId
       : undefined;
@@ -447,6 +474,16 @@ async function inspectProviderWaitState(evaluate) {
         .filter(Boolean),
     };
   })()`);
+}
+
+function requireActiveWorkbenchProjection(projectionName) {
+  return `const activeWorkbench = ${projectionName}.window.workbenches.instances.find(
+    (instance) => instance.workbenchInstanceId ===
+      ${projectionName}.window.workbenches.activeWorkbenchInstanceId,
+  );
+  if (!activeWorkbench) {
+    throw new Error('Desktop projection has no exact active Workbench instance.');
+  }`;
 }
 
 function requireEnvironmentIdentity(value, label) {

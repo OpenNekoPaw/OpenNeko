@@ -1,15 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AGENT_HOME_PROJECTION_VERSION } from '@neko/agent-contracts';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
-import {
-  DESKTOP_CONVERSATION_NAVIGATION_VERSION,
-  DESKTOP_SHELL_CONTRACT_VERSION,
-} from '@neko/host/desktop-shell-contract';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
 } from '@neko/host/desktop-scene-contract';
+import {
+  createDesktopWorkbenchInstanceFromScene,
+  parseDesktopWindowWorkbenchCatalog,
+} from '@neko/host/desktop-workbench-instance-contract';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -37,15 +36,12 @@ describe('Desktop Workspace grant preload bridge', () => {
     electron.invoke.mockReset();
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        schemaVersion: 1,
         requestId: request.requestId,
         application: {
-          schemaVersion: 1,
           applicationId: 'neko-desktop',
           instanceId: 'application-1',
-          version: '0.0.1',
         },
-        window: { windowId: 'window-1', rendererEpoch: 1 },
+        window: { windowId: 'window-1', rendererSessionId: 'renderer-session-1' },
         host: { id: 'electron', kind: 'electron', ui: 'graphical' },
         runtime: { platform: 'darwin' },
         status: 'foundation-ready',
@@ -57,7 +53,6 @@ describe('Desktop Workspace grant preload bridge', () => {
     electron.invoke.mockReset();
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
         requestId: request.requestId,
         projection: shellProjection(),
       }),
@@ -71,19 +66,16 @@ describe('Desktop Workspace grant preload bridge', () => {
       async (channel: string, request: Record<string, unknown>) => {
         expect(channel).toBe(DESKTOP_WORKSPACE_GRANT_CHANNEL);
         expect(request).toMatchObject({
-          schemaVersion: 1,
           windowId: 'window-1',
           expectedWindowRevision: 0,
-          expectedEndpointEpoch: 'application-1:window-1:1',
+          rendererSessionId: 'application-1:window-1:1',
         });
         expect(request).not.toHaveProperty('path');
         expect(request).not.toHaveProperty('hostResource');
         return {
-          schemaVersion: 1,
           requestId: request['requestId'],
           status: 'authorized',
           grant: {
-            schemaVersion: 1,
             workspaceGrantId: 'workspace-grant:1',
             windowId: 'window-1',
             label: 'demo',
@@ -104,7 +96,6 @@ describe('Desktop Workspace grant preload bridge', () => {
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        schemaVersion: 1,
         requestId: request.requestId,
         status: 'cancelled',
       }),
@@ -114,11 +105,9 @@ describe('Desktop Workspace grant preload bridge', () => {
     });
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        schemaVersion: 1,
         requestId: request.requestId,
         status: 'authorized',
         grant: {
-          schemaVersion: 1,
           workspaceGrantId: 'workspace-grant:1',
           windowId: 'window-1',
           label: 'demo',
@@ -133,29 +122,35 @@ describe('Desktop Workspace grant preload bridge', () => {
 });
 
 function shellProjection() {
+  const scene = createDefaultDesktopAgentScene('window-1', 'assistant-space:default');
+  const workbench = createDesktopWorkbenchInstanceFromScene({
+    workbenchInstanceId: 'workbench:window-1:entry',
+    agentSurfaceId: 'agent-surface:window-1:entry',
+    layout: createDefaultDesktopWorkbenchLayout('window-1'),
+    scene,
+  });
   return {
-    schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
     applicationInstanceId: 'application-1',
-    endpointEpoch: 'application-1:window-1:1',
-    projectionRevision: 0,
+    rendererSessionId: 'application-1:window-1:1',
     catalog: { revision: 0, projects: [] },
     window: {
       windowId: 'window-1',
       revision: 0,
       activeTarget: { kind: 'home' as const },
       tabs: [],
-      workbench: createDefaultDesktopWorkbenchLayout('window-1'),
-      scene: createDefaultDesktopAgentScene('window-1', 'assistant-space:default'),
+      workbenches: parseDesktopWindowWorkbenchCatalog({
+        windowId: 'window-1',
+        activeWorkbenchInstanceId: workbench.workbenchInstanceId,
+        instances: [workbench],
+      }),
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
-      schemaVersion: AGENT_HOME_PROJECTION_VERSION,
       revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
     conversationNavigation: {
-      schemaVersion: DESKTOP_CONVERSATION_NAVIGATION_VERSION,
       projectCatalogRevision: 0,
       agentHomeRevision: 0,
       groups: [],

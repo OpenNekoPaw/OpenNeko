@@ -5,7 +5,7 @@ import {
 } from '../projection-attachment';
 
 interface TestKey {
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly attachmentId: string;
   readonly ownerId: string;
 }
@@ -14,14 +14,14 @@ describe('Host projection attachment contract', () => {
   it('compares endpoint and attachment identity without assuming an owner shape', () => {
     expect(
       isSameHostProjectionAttachment(
-        { endpointEpoch: 'endpoint-1', attachmentId: 'attachment-1' },
-        { endpointEpoch: 'endpoint-1', attachmentId: 'attachment-1' },
+        { rendererSessionId: 'endpoint-1', attachmentId: 'attachment-1' },
+        { rendererSessionId: 'endpoint-1', attachmentId: 'attachment-1' },
       ),
     ).toBe(true);
     expect(
       isSameHostProjectionAttachment(
-        { endpointEpoch: 'endpoint-1', attachmentId: 'attachment-1' },
-        { endpointEpoch: 'endpoint-2', attachmentId: 'attachment-1' },
+        { rendererSessionId: 'endpoint-1', attachmentId: 'attachment-1' },
+        { rendererSessionId: 'endpoint-2', attachmentId: 'attachment-1' },
       ),
     ).toBe(false);
   });
@@ -30,7 +30,7 @@ describe('Host projection attachment contract', () => {
     const frame: HostProjectionAttachmentFrame<TestKey, { value: string }, { value: string }> = {
       type: 'projectionSnapshot',
       key: {
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
         attachmentId: 'attachment-1',
         ownerId: 'project-1',
       },

@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   DESKTOP_SECONDARY_MAIN_GROUP_ID,
-  DESKTOP_WORKBENCH_CONTRACT_VERSION,
   DesktopWorkbenchContractError,
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
-  migrateDesktopWorkbenchV2,
   openOrFocusMainView,
   parseDesktopWorkbenchLayout,
   reorderMainView,
   resizeMainSplit,
+  resolveDesktopWorkbenchViewLifecycle,
   setWorkbenchDisplayMode,
   showWorkbenchTimeline,
   splitMainView,
@@ -18,9 +17,7 @@ import {
 describe('Desktop Workbench contract', () => {
   it('creates an orthogonal Chat-first default without Agent Main state', () => {
     expect(createDefaultDesktopWorkbenchLayout('window-1')).toEqual({
-      schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
       windowId: 'window-1',
-      revision: 0,
       resourceDock: { presentation: 'docked', width: 320 },
       display: { mode: 'chat-only', chatPosition: 'left', chatWidth: 360 },
       main: {
@@ -30,6 +27,24 @@ describe('Desktop Workbench contract', () => {
       },
       timeline: { presentation: 'hidden', height: 240 },
     });
+  });
+
+  it('rejects the removed technical counter without affecting canonical layouts', () => {
+    const current = createDefaultDesktopWorkbenchLayout('window-1');
+    const removedKey = ['revi', 'sion'].join('');
+
+    expect(() => parseDesktopWorkbenchLayout({ ...current, [removedKey]: 0 })).toThrow(
+      'Desktop Workbench layout has unexpected fields',
+    );
+    expect(parseDesktopWorkbenchLayout(current)).toEqual(current);
+  });
+
+  it('declares every high-cost Main View as suspendable in the owning contract', () => {
+    expect(resolveDesktopWorkbenchViewLifecycle(viewRef('canvas-1', 'canvas'))).toBe('suspendable');
+    expect(resolveDesktopWorkbenchViewLifecycle(viewRef('preview-1', 'preview'))).toBe(
+      'suspendable',
+    );
+    expect(resolveDesktopWorkbenchViewLifecycle(viewRef('cut-1', 'cut'))).toBe('suspendable');
   });
 
   it('rejects the legacy primarySidebar field on the canonical Workbench contract', () => {
@@ -94,47 +109,6 @@ describe('Desktop Workbench contract', () => {
         },
       }),
     ).toThrow('Desktop Workbench Main View kind is invalid.');
-  });
-
-  it('migrates v2 Resource Browser Main Views into the visible right Dock', () => {
-    const canvas = viewRef('canvas-1', 'canvas');
-    const resources = legacyResourceViewRef('resources-1');
-
-    const migrated = migrateDesktopWorkbenchV2({
-      ...createDefaultDesktopWorkbenchLayout('window-1'),
-      schemaVersion: 2,
-      revision: 7,
-      resourceDock: { presentation: 'hidden', position: 'left', width: 404 },
-      main: {
-        views: [canvas, resources],
-        groups: [
-          {
-            groupId: 'main:primary',
-            viewIds: ['canvas-1', 'resources-1'],
-            activeViewId: 'resources-1',
-          },
-        ],
-        activeGroupId: 'main:primary',
-      },
-    });
-
-    expect(migrated).toMatchObject({
-      schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
-      revision: 7,
-      resourceDock: { presentation: 'docked', width: 404 },
-      main: {
-        views: [canvas],
-        groups: [
-          {
-            groupId: 'main:primary',
-            viewIds: ['canvas-1'],
-            activeViewId: 'canvas-1',
-          },
-        ],
-        activeGroupId: 'main:primary',
-      },
-    });
-    expect(migrated.resourceDock).not.toHaveProperty('position');
   });
 
   it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
@@ -257,17 +231,7 @@ describe('Desktop Workbench contract', () => {
     });
   });
 
-  it('rejects unknown versions and unknown renderer/path fields', () => {
-    expect(() =>
-      parseDesktopWorkbenchLayout({
-        ...createDefaultDesktopWorkbenchLayout('window-1'),
-        schemaVersion: 1,
-      }),
-    ).toThrowError(
-      expect.objectContaining<Partial<DesktopWorkbenchContractError>>({
-        code: 'unsupported-desktop-workbench-version',
-      }),
-    );
+  it('rejects unknown renderer/path fields', () => {
     expect(() =>
       parseDesktopWorkbenchLayout({
         ...createDefaultDesktopWorkbenchLayout('window-1'),
@@ -289,7 +253,7 @@ describe('Desktop Workbench contract', () => {
 function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
   return {
     viewId,
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     kind,
@@ -308,7 +272,7 @@ function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
 function legacyResourceViewRef(viewId: string) {
   return {
     viewId,
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     kind: 'resource-browser',

@@ -19,7 +19,12 @@ export async function openFixtureWorkspace(evaluate) {
 export async function replaceWorkbench(evaluate, createWorkbenchSource) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    const current = projection.window.workbench;
+    const instance = projection.window.workbenches.instances.find(
+      (candidate) => candidate.workbenchInstanceId ===
+        projection.window.workbenches.activeWorkbenchInstanceId,
+    );
+    if (!instance) throw new Error('Desktop functional active Workbench instance is missing.');
+    const current = instance.layout;
     const active = projection.window.activeTarget;
     if (active.kind !== 'project') throw new Error('Desktop functional Project is not active.');
     const tab = projection.window.tabs.find((candidate) => candidate.tabId === active.tabId);
@@ -30,6 +35,7 @@ export async function replaceWorkbench(evaluate, createWorkbenchSource) {
     if (!project) throw new Error('Desktop functional Project is missing.');
     const next = (${createWorkbenchSource})(projection, current, tab, project);
     return window.openNekoDesktop.workbench.update(
+      instance.workbenchInstanceId,
       next,
       projection.window.revision,
       current.revision,
@@ -76,7 +82,6 @@ export async function openPreviewResource(evaluate, portablePath) {
         candidate.locator.path === ${JSON.stringify(portablePath)},
     );
     if (!item) throw new Error('Preview fixture Resource was not found: ' + ${JSON.stringify(portablePath)});
-    const expectedWorkbenchRevision = projection.window.workbench.revision;
     await window.openNekoDesktop.resources.execute({
       schemaVersion: 8,
       requestId: crypto.randomUUID(),
@@ -87,7 +92,6 @@ export async function openPreviewResource(evaluate, portablePath) {
       targetPreview: {
         viewId: 'preview:' + tab.viewId + ':temporary',
         presentation: 'temporary',
-        expectedWorkbenchRevision,
       },
     });
     return { item: { resourceId: item.resourceId, label: item.label }, identity };

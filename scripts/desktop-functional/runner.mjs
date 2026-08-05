@@ -580,17 +580,17 @@ export async function scrollDesktopElement(cdp, selector, index = 0, options = {
 }
 
 export async function dragDesktopElement(cdp, sourceSelector, targetSelector, options = {}) {
-  const source = await waitForElementPoint(
-    cdp,
-    sourceSelector,
-    options.sourceIndex ?? 0,
-    options.sourcePosition ?? {},
-  );
   const target = await waitForElementPoint(
     cdp,
     targetSelector,
     options.targetIndex ?? 0,
     options.targetPosition ?? {},
+  );
+  const source = await waitForElementPoint(
+    cdp,
+    sourceSelector,
+    options.sourceIndex ?? 0,
+    options.sourcePosition ?? {},
   );
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -609,14 +609,20 @@ export async function dragDesktopElement(cdp, sourceSelector, targetSelector, op
     clickCount: 1,
     pointerType: 'mouse',
   });
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mouseMoved',
-    x: target.x,
-    y: target.y,
-    button: 'left',
-    buttons: 1,
-    pointerType: 'mouse',
-  });
+  await delayDesktopInputFrame();
+  const steps = 8;
+  for (let step = 1; step <= steps; step += 1) {
+    const progress = step / steps;
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: source.x + (target.x - source.x) * progress,
+      y: source.y + (target.y - source.y) * progress,
+      button: 'left',
+      buttons: 1,
+      pointerType: 'mouse',
+    });
+    await delayDesktopInputFrame();
+  }
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     x: target.x,
@@ -626,6 +632,10 @@ export async function dragDesktopElement(cdp, sourceSelector, targetSelector, op
     clickCount: 1,
     pointerType: 'mouse',
   });
+}
+
+function delayDesktopInputFrame() {
+  return new Promise((resolve) => setTimeout(resolve, 16));
 }
 
 export async function captureDesktopScreenshot(cdp) {

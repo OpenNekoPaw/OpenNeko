@@ -328,6 +328,53 @@
   min-height: 0;
 }
 
+.neko-controlled-workbench-interaction {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.neko-controlled-workbench-interaction[data-position='left'] {
+  grid-area: left;
+}
+
+.neko-controlled-workbench-interaction[data-position='right'] {
+  grid-area: right;
+}
+
+.neko-controlled-workbench-interaction[data-presentation='hidden'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.neko-controlled-workbench-interaction[data-presentation='overlay'] {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--neko-controlled-left-dock-width);
+}
+
+.neko-controlled-workbench-interaction[data-position='left'][data-presentation='overlay'] {
+  left: var(--neko-controlled-primary-width);
+}
+
+.neko-controlled-workbench-interaction[data-position='right'][data-presentation='overlay'] {
+  right: 0;
+  width: var(--neko-controlled-right-dock-width);
+}
+
+.neko-controlled-workbench-interaction[data-presentation='main'] {
+  grid-area: main;
+}
+
+.neko-controlled-workbench-shell[data-interaction-presentation='main']
+  .neko-controlled-workbench-main {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .neko-controlled-workbench-shell[data-main-split='columns'] .neko-controlled-workbench-main {
   grid-template-columns:
     minmax(0, var(--neko-controlled-main-split-ratio))
@@ -489,11 +536,11 @@
 }
 
 .neko-controlled-workbench-resize-handle--left {
-  left: -4px;
+  left: 0;
 }
 
 .neko-controlled-workbench-resize-handle--right {
-  right: -4px;
+  right: 0;
 }
 
 .neko-controlled-workbench-resize-handle--left::after,
@@ -505,7 +552,7 @@
 }
 
 .neko-controlled-workbench-resize-handle--top {
-  top: -4px;
+  top: 0;
   right: 0;
   left: 0;
   height: 8px;

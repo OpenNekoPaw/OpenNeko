@@ -52,9 +52,9 @@ import {
   parseDesktopSceneTransitionResult,
 } from '@neko/host/desktop-scene-contract';
 import {
-  advanceDesktopShellProjectionCursor,
-  type DesktopShellProjectionCursor,
-} from '../shared/projection-revision';
+  projectDesktopShellMutationContext,
+  type DesktopShellMutationContext,
+} from '../shared/shell-mutation-context';
 import {
   DesktopAgentEventCursorRegistry,
   isSameDesktopAgentEventConnection,
@@ -160,7 +160,6 @@ import {
   type OpenNekoAssetCenterBridge,
 } from '@neko/assets-domain/asset-center/host-contract';
 import {
-  AGENT_LAUNCH_CONTRACT_VERSION,
   AGENT_LAUNCH_HOST_CHANNEL,
   parseAgentLaunchHostRequest,
   parseAgentLaunchHostResult,
@@ -186,7 +185,7 @@ import {
 } from '@neko/agent-contracts/extension-management-host';
 
 let requestSequence = 0;
-let latestShellProjection: DesktopShellProjectionCursor | undefined;
+let latestShellProjection: DesktopShellMutationContext | undefined;
 const agentEventCursors = new DesktopAgentEventCursorRegistry();
 const agentListeners = new Set<{
   readonly connection: DesktopAgentConnectionIdentity;
@@ -244,11 +243,12 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   agentLaunch: {
-    async attach(viewId, scope) {
+    async attach(workbenchInstanceId, agentSurfaceId, viewId, scope) {
       const request = parseAgentLaunchHostRequest({
-        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
         requestId: nextRequestId('agent-launch-attach'),
         operation: 'attach',
+        workbenchInstanceId,
+        agentSurfaceId,
         viewId,
         scope,
       });
@@ -261,7 +261,6 @@ const bridge: OpenNekoDesktopBridge &
     },
     async authorizeResource(connection, resourceKind) {
       const request = parseAgentLaunchHostRequest({
-        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
         requestId: nextRequestId('agent-launch-authorize'),
         operation: 'authorize-resource',
         connection,
@@ -277,7 +276,6 @@ const bridge: OpenNekoDesktopBridge &
     },
     async submitDraft(connection, input) {
       const request = parseAgentLaunchHostRequest({
-        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
         requestId: nextRequestId('agent-launch-submit-draft'),
         operation: 'submit-draft',
         connection,
@@ -292,7 +290,6 @@ const bridge: OpenNekoDesktopBridge &
     },
     async detach(connection) {
       const request = parseAgentLaunchHostRequest({
-        schemaVersion: AGENT_LAUNCH_CONTRACT_VERSION,
         requestId: nextRequestId('agent-launch-detach'),
         operation: 'detach',
         connection,
@@ -309,7 +306,7 @@ const bridge: OpenNekoDesktopBridge &
       const context = requireShellMutationContext();
       const request = createDesktopWorkspaceGrantChooseRequest({
         requestId: nextRequestId('desktop-workspace-grant-choose'),
-        expectedEndpointEpoch: context.endpointEpoch,
+        rendererSessionId: context.rendererSessionId,
         windowId,
         expectedWindowRevision,
       });
@@ -318,12 +315,19 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   agent: {
-    async getBootstrap(projectId, viewId, viewEpoch, conversationId) {
+    async getBootstrap(
+      workbenchInstanceId,
+      agentSurfaceId,
+      projectId,
+      viewId,
+      conversationId,
+    ) {
       const request = createDesktopAgentBootstrapRequest(
         nextRequestId('desktop-agent-bootstrap'),
+        workbenchInstanceId,
+        agentSurfaceId,
         projectId,
         viewId,
-        viewEpoch,
         conversationId,
       );
       const response: unknown = await ipcRenderer.invoke(
@@ -334,9 +338,17 @@ const bridge: OpenNekoDesktopBridge &
       if (projection.status === 'ready') agentEventCursors.register(projection.connection);
       return projection;
     },
-    async getAssistantBootstrap(assistantSpaceId, conversationId, viewId) {
+    async getAssistantBootstrap(
+      workbenchInstanceId,
+      agentSurfaceId,
+      assistantSpaceId,
+      conversationId,
+      viewId,
+    ) {
       const request = createDesktopAssistantAgentBootstrapRequest(
         nextRequestId('desktop-assistant-agent-bootstrap'),
+        workbenchInstanceId,
+        agentSurfaceId,
         assistantSpaceId,
         conversationId,
         viewId,
@@ -394,14 +406,7 @@ const bridge: OpenNekoDesktopBridge &
     ...(process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)
       ? {
           automation: {
-            async execute(operation) {
-              const connection = agentEventCursors.currentConnection;
-              if (!connection) {
-                throw new DesktopAgentContractError(
-                  'desktop-agent-identity-mismatch',
-                  'Desktop Agent automation requires a ready sender-bound bootstrap.',
-                );
-              }
+            async execute(connection, operation) {
               const request = createDesktopAgentAutomationRequest(
                 nextRequestId('desktop-agent-automation'),
                 connection,
@@ -458,10 +463,9 @@ const bridge: OpenNekoDesktopBridge &
       currentSettingsProjection = projection;
       return projection;
     },
-    async update(preferences, expectedRevision) {
+    async update(preferences) {
       const request = createDesktopApplicationSettingsUpdateRequest(
         nextRequestId('desktop-application-settings-update'),
-        expectedRevision,
         preferences,
       );
       const response: unknown = await ipcRenderer.invoke(
@@ -555,7 +559,7 @@ const bridge: OpenNekoDesktopBridge &
         result.requestId !== request.requestId ||
         result.resourceId !== request.resourceId ||
         result.descriptorId !== request.descriptorId ||
-        result.revision !== request.revision
+        result.sourceFingerprint !== request.sourceFingerprint
       ) {
         throw new Error('Desktop Resource Browser thumbnail result identity does not match.');
       }
@@ -777,9 +781,9 @@ const bridge: OpenNekoDesktopBridge &
         projection.identity.projectId !== request.projectId ||
         projection.identity.workspaceId !== request.workspaceId ||
         projection.identity.viewId !== request.viewId ||
-        projection.identity.viewEpoch !== request.viewEpoch ||
+        projection.identity.viewInstanceId !== request.viewInstanceId ||
         projection.identity.sessionId !== request.sessionId ||
-        projection.identity.endpointEpoch !== request.endpointEpoch
+        projection.identity.rendererSessionId !== request.rendererSessionId
       ) {
         throw new Error('Desktop Preview projection owner identity does not match.');
       }
@@ -960,7 +964,7 @@ const bridge: OpenNekoDesktopBridge &
       const context = requireShellMutationContext();
       const request = createDesktopWindowMutationRequest(
         nextRequestId('desktop-project-open'),
-        context.endpointEpoch,
+        context.rendererSessionId,
         context.windowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
@@ -976,7 +980,7 @@ const bridge: OpenNekoDesktopBridge &
       const request = createDesktopProjectOpenRequest(
         nextRequestId('desktop-project-catalog-open'),
         projectId,
-        context.endpointEpoch,
+        context.rendererSessionId,
         context.windowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
@@ -992,7 +996,7 @@ const bridge: OpenNekoDesktopBridge &
       const request = createDesktopProjectRemoveRecentRequest(
         nextRequestId('desktop-project-remove-recent'),
         projectId,
-        context.endpointEpoch,
+        context.rendererSessionId,
         expectedWindowRevision,
         expectedCatalogRevision,
       );
@@ -1024,7 +1028,7 @@ const bridge: OpenNekoDesktopBridge &
       const request = createDesktopConversationDeleteRequest(
         nextRequestId('desktop-conversation-delete'),
         navigation,
-        context.endpointEpoch,
+        context.rendererSessionId,
         expectedWindowRevision,
         expectedAgentHomeRevision,
       );
@@ -1043,7 +1047,7 @@ const bridge: OpenNekoDesktopBridge &
       const request = createDesktopTabMutationRequest(
         nextRequestId('desktop-home-activate'),
         'home',
-        context.endpointEpoch,
+        context.rendererSessionId,
         expectedWindowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
@@ -1059,7 +1063,7 @@ const bridge: OpenNekoDesktopBridge &
       const request = createDesktopTabMutationRequest(
         nextRequestId('desktop-tab-activate'),
         tabId,
-        context.endpointEpoch,
+        context.rendererSessionId,
         expectedWindowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(
@@ -1075,7 +1079,7 @@ const bridge: OpenNekoDesktopBridge &
       const request = createDesktopTabMutationRequest(
         nextRequestId('desktop-tab-close'),
         tabId,
-        context.endpointEpoch,
+        context.rendererSessionId,
         expectedWindowRevision,
       );
       const response: unknown = await ipcRenderer.invoke(DESKTOP_SHELL_CHANNELS.tabClose, request);
@@ -1085,13 +1089,13 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   workbench: {
-    async update(workbench, expectedWindowRevision, expectedWorkbenchRevision) {
+    async update(workbenchInstanceId, workbench, expectedWindowRevision) {
       const context = requireShellMutationContext();
       const request = createDesktopWorkbenchMutationRequest(
         nextRequestId('desktop-workbench-update'),
-        context.endpointEpoch,
+        context.rendererSessionId,
         expectedWindowRevision,
-        expectedWorkbenchRevision,
+        workbenchInstanceId,
         workbench,
       );
       const response: unknown = await ipcRenderer.invoke(
@@ -1104,13 +1108,12 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   applicationSidebar: {
-    async update(windowId, visible, width, expectedSidebarRevision) {
+    async update(windowId, visible, width) {
       const context = requireShellMutationContext();
       const request = createDesktopApplicationSidebarMutationRequest({
         requestId: nextRequestId('desktop-application-sidebar-update'),
-        expectedEndpointEpoch: context.endpointEpoch,
+        rendererSessionId: context.rendererSessionId,
         windowId,
-        expectedSidebarRevision,
         visible,
         width,
       });
@@ -1124,14 +1127,14 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   scenes: {
-    async transition(windowId, intent, expectedWindowRevision, expectedSceneRevision) {
+    async transition(windowId, intent, expectedWindowRevision, sceneId) {
       const context = requireShellMutationContext();
       const request = createDesktopSceneTransitionRequest({
         requestId: nextRequestId('desktop-scene-transition'),
-        expectedEndpointEpoch: context.endpointEpoch,
+        rendererSessionId: context.rendererSessionId,
         windowId,
         expectedWindowRevision,
-        expectedSceneRevision,
+        sceneId,
         intent,
       });
       const response: unknown = await ipcRenderer.invoke(
@@ -1170,11 +1173,10 @@ ipcRenderer.on(
     const result = agentEventCursors.advance(event.connection, event.sequence);
     if (result.kind === 'retired') return;
     if (result.kind === 'foreign') {
-      emitAgentMessage(result.currentConnection ?? event.connection, {
-        type: 'globalError',
-        message: 'Desktop Agent rejected an event for a stale or foreign connection.',
-      });
-      return;
+      throw new DesktopAgentContractError(
+        'desktop-agent-identity-mismatch',
+        `Desktop Agent rejected an event for foreign connection '${event.connection.connectionId}'.`,
+      );
     }
     if (result.kind === 'sequence-mismatch') {
       emitAgentMessage(result.connection, {
@@ -1267,17 +1269,16 @@ function nextRequestId(prefix: string): string {
 
 function rememberShellProjection<
   T extends {
-    readonly endpointEpoch: string;
-    readonly projectionRevision: number;
+    readonly rendererSessionId: string;
     readonly window: { readonly revision: number };
   },
 >(projection: T): T {
-  latestShellProjection = advanceDesktopShellProjectionCursor(latestShellProjection, projection);
+  latestShellProjection = projectDesktopShellMutationContext(latestShellProjection, projection);
   return projection;
 }
 
 function requireShellMutationContext(): {
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly windowRevision: number;
 } {
   if (!latestShellProjection) {
@@ -1326,10 +1327,10 @@ function canvasIdentityKey(identity: CanvasHostRuntimeIdentity): string {
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
   ].join(':');
 }
 
@@ -1337,15 +1338,15 @@ function cutIdentityKey(identity: CutHostRuntimeIdentity): string {
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
   ].join(':');
 }
 
 function previewIdentityKey(identity: PreviewRuntimeIdentity): string {
-  return [identity.windowId, identity.sessionId, identity.endpointEpoch].join(':');
+  return [identity.windowId, identity.sessionId, identity.rendererSessionId].join(':');
 }
 
 function isSamePreviewIdentity(
@@ -1357,10 +1358,9 @@ function isSamePreviewIdentity(
     left.workspaceId === right.workspaceId &&
     left.windowId === right.windowId &&
     left.viewId === right.viewId &&
-    left.viewEpoch === right.viewEpoch &&
+    left.viewInstanceId === right.viewInstanceId &&
     left.documentId === right.documentId &&
     left.sessionId === right.sessionId &&
-    left.endpointEpoch === right.endpointEpoch &&
-    left.revision === right.revision
+    left.rendererSessionId === right.rendererSessionId
   );
 }

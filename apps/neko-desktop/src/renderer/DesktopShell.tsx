@@ -7,6 +7,7 @@ import {
   InfoIcon,
   PackageIcon,
   PlusIcon,
+  RetainedSurfaceDeck,
   SearchIcon,
   SettingsIcon,
   StorylineIcon,
@@ -21,17 +22,20 @@ import {
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   DesktopAgentHomeConversationSummary,
   DesktopConversationNavigationGroup,
   DesktopProjectCatalogItem,
   DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
+import { resolveActiveDesktopWindowWorkbench } from '@neko/host/desktop-shell-contract';
 import {
   DESKTOP_WORKBENCH_LIMITS,
   closeMainView,
   openOrFocusMainView,
   reorderMainView,
+  resolveDesktopWorkbenchViewLifecycle,
   resizeMainSplit,
   setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
@@ -41,9 +45,9 @@ import {
   DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS,
   type DesktopApplicationSidebarProjection,
   type DesktopSceneTransitionIntent,
+  type DesktopWorkbenchSceneProjection,
 } from '@neko/host/desktop-scene-contract';
 import {
-  DesktopAgentSurface,
   RetainedDesktopAgentSurfaceDeck,
   type DesktopAgentSurfaceProps,
 } from './DesktopAgentSurface';
@@ -76,6 +80,11 @@ import {
   createAgentSessionPresentation,
   type AgentRootPresentation,
 } from '@neko/agent-contracts';
+import type {
+  DesktopAgentSurfaceProjection,
+  DesktopWorkbenchInstanceProjection,
+} from '@neko/host/desktop-workbench-instance-contract';
+import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
 
 type ShellState =
   | { readonly kind: 'loading' }
@@ -90,7 +99,10 @@ interface ShellActions {
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
-  readonly onUpdateWorkbench: (workbench: DesktopWorkbenchLayoutProjection) => void;
+  readonly onUpdateWorkbench: (
+    workbenchInstanceId: string,
+    workbench: DesktopWorkbenchLayoutProjection,
+  ) => void;
   readonly onUpdateApplicationSidebar: (sidebar: DesktopApplicationSidebarProjection) => void;
   readonly onTransitionScene: (intent: DesktopSceneTransitionIntent) => void;
   readonly onChooseWorkspace: () => void;
@@ -102,19 +114,16 @@ export function DesktopApplication(): JSX.Element {
   const [pending, setPending] = useState(false);
   const [diagnostic, setDiagnostic] = useState<string>();
   const lastSequence = useRef<number | null>(null);
-  const endpointEpoch = useRef<string>();
-  const projectionRevision = useRef(-1);
+  const rendererSessionId = useRef<string>();
+  const pendingProjectionRequest = useRef<object>();
 
   const refresh = useCallback(async (): Promise<void> => {
+    const request = {};
+    pendingProjectionRequest.current = request;
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    if (
-      endpointEpoch.current === projection.endpointEpoch &&
-      projection.projectionRevision < projectionRevision.current
-    ) {
-      return;
-    }
-    endpointEpoch.current = projection.endpointEpoch;
-    projectionRevision.current = projection.projectionRevision;
+    if (pendingProjectionRequest.current !== request) return;
+    rendererSessionId.current = projection.rendererSessionId;
+    pendingProjectionRequest.current = undefined;
     lastSequence.current = null;
     setState({ kind: 'ready', projection });
   }, []);
@@ -123,7 +132,8 @@ export function DesktopApplication(): JSX.Element {
     let active = true;
     const unsubscribe = window.openNekoDesktop.shell.subscribe((event) => {
       if (!active) return;
-      if (endpointEpoch.current && event.projection.endpointEpoch !== endpointEpoch.current) {
+      pendingProjectionRequest.current = undefined;
+      if (rendererSessionId.current && event.projection.rendererSessionId !== rendererSessionId.current) {
         setState({ kind: 'error', message: t('shell.endpointChanged') });
         void refresh().catch((error: unknown) => {
           if (active) setState({ kind: 'error', message: describeError(error) });
@@ -138,12 +148,9 @@ export function DesktopApplication(): JSX.Element {
         });
         return;
       }
-      endpointEpoch.current = event.projection.endpointEpoch;
+      rendererSessionId.current = event.projection.rendererSessionId;
       lastSequence.current = event.sequence;
-      if (event.projection.projectionRevision >= projectionRevision.current) {
-        projectionRevision.current = event.projection.projectionRevision;
-        setState({ kind: 'ready', projection: event.projection });
-      }
+      setState({ kind: 'ready', projection: event.projection });
     });
     void refresh().catch((error: unknown) => {
       if (active) setState({ kind: 'error', message: describeError(error) });
@@ -159,12 +166,14 @@ export function DesktopApplication(): JSX.Element {
       setPending(true);
       setDiagnostic(undefined);
       try {
+        const request = {};
+        pendingProjectionRequest.current = request;
         const projection = await operation();
-        if (endpointEpoch.current !== projection.endpointEpoch) {
+        if (rendererSessionId.current !== projection.rendererSessionId) {
           throw new Error(t('shell.staleCommand'));
         }
-        if (projection.projectionRevision >= projectionRevision.current) {
-          projectionRevision.current = projection.projectionRevision;
+        if (pendingProjectionRequest.current === request) {
+          pendingProjectionRequest.current = undefined;
           setState({ kind: 'ready', projection });
         }
       } catch (error: unknown) {
@@ -185,6 +194,25 @@ export function DesktopApplication(): JSX.Element {
   }
 
   const projection = state.projection;
+  const persistedStateDiagnostic = projection.stateDiagnostics?.[0];
+  const persistedConversationDiagnostic = projection.agentHome.diagnostics?.[0];
+  const persistedConversationMessage = persistedConversationDiagnostic
+    ? persistedConversationDiagnostic.conversationId
+      ? t('shell.conversationRecordInvalid', {
+          conversationId: persistedConversationDiagnostic.conversationId,
+        })
+      : t('shell.conversationRecordInvalidUnknown')
+    : undefined;
+  const visibleDiagnostic =
+    diagnostic ??
+    (persistedStateDiagnostic
+      ? persistedStateDiagnostic.code === 'desktop-stored-window-invalid'
+        ? t('shell.storedWindowInvalid', { windowId: persistedStateDiagnostic.windowId })
+        : persistedStateDiagnostic.authorityKey === 'desktop.application-settings'
+          ? t('shell.storedSettingsInvalid')
+          : t('shell.storedStateInvalid')
+      : persistedConversationMessage);
+  const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
   const transitionScene = (intent: DesktopSceneTransitionIntent): void => {
     setPending(true);
     setDiagnostic(undefined);
@@ -193,7 +221,7 @@ export function DesktopApplication(): JSX.Element {
         projection.window.windowId,
         intent,
         projection.window.revision,
-        projection.window.scene.revision,
+        activeWorkbench.scene.sceneId,
       )
       .then(async (result) => {
         if (result.status !== 'transitioned') {
@@ -245,21 +273,27 @@ export function DesktopApplication(): JSX.Element {
         ),
       );
     },
-    onUpdateWorkbench: (workbench) =>
+    onUpdateWorkbench: (workbenchInstanceId, workbench) => {
+      const instance = projection.window.workbenches.instances.find(
+        (candidate) => candidate.workbenchInstanceId === workbenchInstanceId,
+      );
+      if (!instance) {
+        throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
+      }
       void runMutation(() =>
         window.openNekoDesktop.workbench.update(
+          workbenchInstanceId,
           workbench,
           projection.window.revision,
-          projection.window.workbench.revision,
         ),
-      ),
+      );
+    },
     onUpdateApplicationSidebar: (sidebar) =>
       void runMutation(() =>
         window.openNekoDesktop.applicationSidebar.update(
           sidebar.windowId,
           sidebar.visible,
           sidebar.width,
-          projection.window.applicationSidebar.revision,
         ),
       ),
     onTransitionScene: transitionScene,
@@ -274,7 +308,7 @@ export function DesktopApplication(): JSX.Element {
             projection.window.windowId,
             { kind: 'open-workspace', workspaceGrantId: result.grant.workspaceGrantId },
             projection.window.revision,
-            projection.window.scene.revision,
+            activeWorkbench.scene.sceneId,
           );
           if (transition.status !== 'transitioned') {
             setDiagnostic(transition.diagnostic.message);
@@ -293,10 +327,18 @@ export function DesktopApplication(): JSX.Element {
   return (
     <TooltipProvider>
       <div className="desktop-shell">
-        {diagnostic ? (
-          <div className="shell-diagnostic" role="alert">
+        {visibleDiagnostic ? (
+          <div
+            className="shell-diagnostic"
+            role="alert"
+            title={
+              diagnostic === undefined
+                ? (persistedStateDiagnostic?.message ?? persistedConversationDiagnostic?.message)
+                : undefined
+            }
+          >
             <WarningIcon size={15} />
-            <span>{diagnostic}</span>
+            <span>{visibleDiagnostic}</span>
           </div>
         ) : null}
         <DesktopSceneWorkbench
@@ -350,15 +392,32 @@ function DesktopSceneWorkbench({
 }): JSX.Element {
   const { t } = useTranslation();
   const settings = useDesktopApplicationSettings();
-  const scene = projection.window.scene;
-  const assetCenter = useDesktopAssetCenterScene({
-    scene,
-    endpointEpoch: projection.endpointEpoch,
-    viewMode: settings.projection.preferences.resourceBrowserView,
-  });
-  const extensionManagement = useDesktopExtensionManagementScene(scene, projection.endpointEpoch);
-  const projectManagement = useDesktopProjectManagementScene(scene, projection.catalog.projects);
-  const [managementSplitRatio, setManagementSplitRatio] = useState(0.34);
+  const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
+  const scene = activeWorkbench.scene;
+  const [managementSplitRatios, setManagementSplitRatios] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  const [portalTargets, setPortalTargets] = useState<ReadonlyMap<string, HTMLDivElement>>(
+    () => new Map(),
+  );
+  const registerPortalTarget = useCallback(
+    (
+      workbenchInstanceId: string,
+      slot: DesktopWorkbenchPortalSlot,
+      target: HTMLDivElement | null,
+    ) => {
+      const key = createDesktopWorkbenchPortalTargetKey(workbenchInstanceId, slot);
+      setPortalTargets((current) => {
+        if (target && current.get(key) === target) return current;
+        if (!target && !current.has(key)) return current;
+        const next = new Map(current);
+        if (target) next.set(key, target);
+        else next.delete(key);
+        return next;
+      });
+    },
+    [],
+  );
   const sidebar = projection.window.applicationSidebar;
   const compact = !sidebar.visible;
   const activeSection: HomeSection =
@@ -369,64 +428,386 @@ function DesktopSceneWorkbench({
         : scene.context.kind === 'project-management'
           ? 'projects'
           : 'create';
-  const workspaceProject = resolveWorkspaceSceneProject(projection);
-  const retainedWorkspaceConversationIds = new Set(
-    workspaceProject
-      ? projection.agentHome.conversations
-          .filter(
-            (conversation) =>
-              conversation.navigation.owner.kind === 'workspace' &&
-              conversation.navigation.owner.workspaceId === workspaceProject.workspaceId,
-          )
-          .map((conversation) => conversation.navigation.conversationId)
-      : [],
+  const workspaceProject = resolveWorkspaceSceneProject(projection, activeWorkbench);
+  const workspaceScene = scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace';
+  const launchScope =
+    scene.context.kind === 'agent' && scene.context.scope.kind !== 'workspace'
+      ? scene.context.scope
+      : undefined;
+  const assistantPreviewVisible =
+    launchScope?.kind === 'assistant' && scene.slots.main?.kind === 'assistant-preview';
+  const assetPreviewVisible =
+    scene.context.kind === 'asset-center' && scene.slots.secondaryMain?.kind === 'asset-preview';
+  const activeResourcePresentation = useResourceDockPresentation(
+    activeWorkbench.layout.resourceDock.presentation,
   );
+  const workspaceAgentVisible =
+    workspaceScene && activeWorkbench.layout.display.mode !== 'main-only';
+  const interactionVisible = Boolean(launchScope) || workspaceAgentVisible;
+  const interactionPresentation = launchScope
+    ? assistantPreviewVisible
+      ? ('docked' as const)
+      : ('main' as const)
+    : workspaceScene && activeWorkbench.layout.display.mode === 'chat-only'
+      ? ('main' as const)
+      : workspaceAgentVisible
+        ? ('docked' as const)
+        : ('hidden' as const);
+  const interactionPosition =
+    workspaceScene &&
+    activeResourcePresentation !== 'hidden' &&
+    activeWorkbench.layout.display.chatPosition === 'right'
+      ? ('left' as const)
+      : activeWorkbench.layout.display.chatPosition;
+  const activeAgentSurfaceId =
+    scene.context.kind === 'agent' ? requireActiveAgentSurfaceId(activeWorkbench) : undefined;
+  const allAgentSurfaces = projection.window.workbenches.instances.flatMap((instance) =>
+    instance.agentSurfaces.map((surface) => ({
+      agentSurfaceId: surface.agentSurfaceId,
+      lifecycle: surface.lifecycle,
+      surface: createDesktopAgentSurfaceProps({
+        projection,
+        workbenchInstanceId: instance.workbenchInstanceId,
+        surface,
+        onChooseWorkspace: actions.onChooseWorkspace,
+        workspaceSelectionDisabled: pending || !interactive,
+      }),
+    })),
+  );
+  const interaction = (
+    <DesktopSurfaceErrorBoundary surfaceIdentity="agent-interaction">
+      <div className="project-dock-panel" data-dock-owner="agent">
+        <section
+          className="agent-workspace desktop-assistant-agent"
+          data-agent-scope={scene.context.kind === 'agent' ? scene.context.scope.kind : undefined}
+          data-primary-surface="agent"
+        >
+          <RetainedDesktopAgentSurfaceDeck
+            activeAgentSurfaceId={activeAgentSurfaceId}
+            surfaces={allAgentSurfaces}
+            visible={interactionVisible}
+          />
+        </section>
+      </div>
+    </DesktopSurfaceErrorBoundary>
+  );
+  const sceneShape = launchScope
+    ? assistantPreviewVisible
+      ? 'assistant'
+      : 'agent-only'
+    : workspaceScene
+      ? 'workspace'
+      : 'management';
+  const managementSplitRatio =
+    managementSplitRatios.get(activeWorkbench.workbenchInstanceId) ?? 0.34;
+  const mainSplit = assetPreviewVisible
+    ? ('columns' as const)
+    : workspaceScene
+      ? (activeWorkbench.layout.main.split?.axis ?? 'none')
+      : 'none';
+  const secondaryMainVisible =
+    assetPreviewVisible || Boolean(workspaceScene && activeWorkbench.layout.main.groups[1]);
+  const mainSplitResize: ControlledWorkbenchResizeBinding | undefined = assetPreviewVisible
+    ? {
+        label: t('workspace.resizeMainSplit'),
+        minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
+        maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
+        onResizeEnd: (ratio) => {
+          setManagementSplitRatios((current) => {
+            const next = new Map(current);
+            next.set(activeWorkbench.workbenchInstanceId, ratio);
+            return next;
+          });
+        },
+      }
+    : workspaceScene && activeWorkbench.layout.main.split && !pending
+      ? {
+          label: t('workspace.resizeMainSplit'),
+          minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
+          maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
+          onResizeEnd: (ratio) => {
+            if (ratio === activeWorkbench.layout.main.split?.ratio) return;
+            actions.onUpdateWorkbench(
+              activeWorkbench.workbenchInstanceId,
+              resizeMainSplit(activeWorkbench.layout, ratio),
+            );
+          },
+        }
+      : undefined;
+  const resourceDockVisible = workspaceScene && activeResourcePresentation !== 'hidden';
+  const interactionResize =
+    workspaceScene && interactionPresentation === 'docked' && !pending
+      ? createProjectDockResizeBinding({
+          actions,
+          dock: {
+            owner: 'agent',
+            presentation: 'docked',
+            width: activeWorkbench.layout.display.chatWidth,
+            content: <></>,
+          },
+          workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+          label: t('workspace.resizeAgent'),
+          workbench: activeWorkbench.layout,
+        })
+      : undefined;
+  const resourceDockResize =
+    resourceDockVisible && !pending
+      ? createProjectDockResizeBinding({
+          actions,
+          dock: {
+            owner: 'resources',
+            presentation: activeResourcePresentation,
+            width: activeWorkbench.layout.resourceDock.width,
+            content: <></>,
+          },
+          workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+          label: t('workspace.resizeRightDock'),
+          workbench: activeWorkbench.layout,
+        })
+      : undefined;
+  const portalDeck = (slot: DesktopWorkbenchPortalSlot, visible = true): JSX.Element => (
+    <DesktopWorkbenchPortalTargetDeck
+      activeWorkbenchInstanceId={activeWorkbench.workbenchInstanceId}
+      instances={projection.window.workbenches.instances}
+      onTarget={registerPortalTarget}
+      slot={slot}
+      visible={visible}
+    />
+  );
+
+  return (
+    <>
+      <ControlledWorkbenchShell
+        className={`project-workspace desktop-scene-workbench desktop-scene-workbench--${sceneShape}`}
+        primarySidebar={
+          <ApplicationPrimarySidebar
+            activeSection={activeSection}
+            compact={compact}
+            disabled={pending}
+            activeProjectId={workspaceProject?.projectId}
+            onDeleteConversation={actions.onDeleteConversation}
+            onNavigate={(section) => actions.onTransitionScene(sceneIntentForSection(section))}
+            onOpenConversation={actions.onOpenConversation}
+            onOpenRecent={actions.onSelectProject}
+            onRemoveRecentProject={actions.onRemoveRecentProject}
+            onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
+            onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
+            projection={projection}
+            layoutControl={
+              workspaceProject ? (
+                <WorkspaceRegionControls
+                  actions={actions}
+                  disabled={pending}
+                  projection={projection}
+                />
+              ) : undefined
+            }
+            lifecycleControl={
+              workspaceProject && projectPortabilityPort ? (
+                <ProjectPortabilityControl
+                  disabled={pending}
+                  rendererSessionId={projection.rendererSessionId}
+                  project={workspaceProject}
+                  port={projectPortabilityPort}
+                  windowId={projection.window.windowId}
+                />
+              ) : undefined
+            }
+          />
+        }
+        primarySidebarVisible
+        primarySidebarWidth={compact ? 64 : sidebar.width}
+        primarySidebarResize={createApplicationPrimarySidebarResizeBinding({
+          actions,
+          disabled: pending || compact,
+          t,
+          sidebar,
+        })}
+        interaction={interaction}
+        interactionPresentation={interactionPresentation}
+        interactionPosition={interactionPosition}
+        interactionWidth={activeWorkbench.layout.display.chatWidth}
+        interactionResize={interactionResize}
+        main={portalDeck('main')}
+        secondaryMain={portalDeck('secondaryMain', secondaryMainVisible)}
+        secondaryMainVisible={secondaryMainVisible}
+        mainComposition={assetPreviewVisible ? 'independent-shells' : 'continuous'}
+        mainSplit={mainSplit}
+        mainSplitRatio={
+          assetPreviewVisible ? managementSplitRatio : activeWorkbench.layout.main.split?.ratio
+        }
+        mainSplitResize={mainSplitResize}
+        leftDock={portalDeck('leftDock', scene.context.kind === 'settings')}
+        leftDockPresentation={scene.context.kind === 'settings' ? 'docked' : 'hidden'}
+        leftDockWidth={scene.context.kind === 'settings' ? 300 : undefined}
+        rightDock={portalDeck('rightDock', resourceDockVisible)}
+        rightDockPresentation={resourceDockVisible ? activeResourcePresentation : 'hidden'}
+        rightDockWidth={activeWorkbench.layout.resourceDock.width}
+        rightDockResize={resourceDockResize}
+        timeline={portalDeck(
+          'timeline',
+          workspaceScene && activeWorkbench.layout.timeline.presentation === 'docked',
+        )}
+        timelineVisible={
+          workspaceScene && activeWorkbench.layout.timeline.presentation === 'docked'
+        }
+        timelineHeight={activeWorkbench.layout.timeline.height}
+        timelineResize={
+          workspaceScene && !pending
+            ? {
+                label: t('workspace.resizeTimeline'),
+                minSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.min,
+                maxSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.max,
+                onResizeEnd: (height) => {
+                  if (height === activeWorkbench.layout.timeline.height) return;
+                  actions.onUpdateWorkbench(
+                    activeWorkbench.workbenchInstanceId,
+                    resizeTimelineWorkbench(activeWorkbench.layout, height),
+                  );
+                },
+              }
+            : undefined
+        }
+      />
+      {projection.window.workbenches.instances.map((instance) => (
+        <DesktopSurfaceErrorBoundary
+          key={instance.workbenchInstanceId}
+          surfaceIdentity={`workbench:${instance.workbenchInstanceId}`}
+        >
+          <DesktopWorkbenchRuntimePortals
+            active={instance.workbenchInstanceId === activeWorkbench.workbenchInstanceId}
+            actions={actions}
+            instance={instance}
+            interactive={interactive}
+            pending={pending}
+            portalTargets={portalTargets}
+            projection={projection}
+            resourceBrowserView={settings.projection.preferences.resourceBrowserView}
+          />
+        </DesktopSurfaceErrorBoundary>
+      ))}
+    </>
+  );
+}
+
+type DesktopWorkbenchPortalSlot = 'main' | 'secondaryMain' | 'leftDock' | 'rightDock' | 'timeline';
+
+function createDesktopWorkbenchPortalTargetKey(
+  workbenchInstanceId: string,
+  slot: DesktopWorkbenchPortalSlot,
+): string {
+  return `${workbenchInstanceId}:${slot}`;
+}
+
+function DesktopWorkbenchPortalTargetDeck({
+  activeWorkbenchInstanceId,
+  instances,
+  onTarget,
+  slot,
+  visible,
+}: {
+  readonly activeWorkbenchInstanceId: string;
+  readonly instances: readonly DesktopWorkbenchInstanceProjection[];
+  readonly onTarget: (
+    workbenchInstanceId: string,
+    slot: DesktopWorkbenchPortalSlot,
+    target: HTMLDivElement | null,
+  ) => void;
+  readonly slot: DesktopWorkbenchPortalSlot;
+  readonly visible: boolean;
+}): JSX.Element {
+  return (
+    <RetainedSurfaceDeck
+      activeId={activeWorkbenchInstanceId}
+      className="desktop-workbench-slot-deck"
+      getId={(instance) => instance.workbenchInstanceId}
+      getLifecycle={() => 'hot-retained'}
+      items={instances}
+      itemClassName="desktop-workbench-slot-deck__item"
+      itemIdentityAttribute="data-workbench-instance-id"
+      renderItem={(instance) => (
+        <DesktopWorkbenchPortalTarget
+          instanceId={instance.workbenchInstanceId}
+          onTarget={onTarget}
+          slot={slot}
+        />
+      )}
+      visible={visible}
+    />
+  );
+}
+
+function DesktopWorkbenchPortalTarget({
+  instanceId,
+  onTarget,
+  slot,
+}: {
+  readonly instanceId: string;
+  readonly onTarget: (
+    workbenchInstanceId: string,
+    slot: DesktopWorkbenchPortalSlot,
+    target: HTMLDivElement | null,
+  ) => void;
+  readonly slot: DesktopWorkbenchPortalSlot;
+}): JSX.Element {
+  const setTarget = useCallback(
+    (target: HTMLDivElement | null) => onTarget(instanceId, slot, target),
+    [instanceId, onTarget, slot],
+  );
+  return (
+    <div ref={setTarget} className="desktop-workbench-slot-target" data-workbench-slot={slot} />
+  );
+}
+
+function DesktopWorkbenchRuntimePortals({
+  active,
+  actions,
+  instance,
+  interactive,
+  pending,
+  portalTargets,
+  projection,
+  resourceBrowserView,
+}: {
+  readonly active: boolean;
+  readonly actions: ShellActions;
+  readonly instance: DesktopWorkbenchInstanceProjection;
+  readonly interactive: boolean;
+  readonly pending: boolean;
+  readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
+  readonly projection: DesktopShellProjection;
+  readonly resourceBrowserView: 'list' | 'grid';
+}): JSX.Element {
+  const { t } = useTranslation();
+  const scene = instance.scene;
+  const assetCenter = useDesktopAssetCenterScene({ scene, viewMode: resourceBrowserView });
+  const extensionManagement = useDesktopExtensionManagementScene(scene);
+  const projectManagement = useDesktopProjectManagementScene(scene, projection.catalog.projects);
+  const workspaceProject = resolveWorkspaceSceneProject(projection, instance);
   const workspaceSlots = useContentProjectWorkbenchSlots({
+    active,
     actions,
+    instance,
     pending,
     projection,
     project: workspaceProject,
-    retainedConversationIds: retainedWorkspaceConversationIds,
   });
-  const launchContext =
-    scene.context.kind === 'agent' && scene.context.scope.kind !== 'workspace'
-      ? { ...scene.context, scope: scene.context.scope }
-      : undefined;
-  const launchScope = launchContext?.scope;
-  const assistantScope = launchScope?.kind === 'assistant' ? launchScope : undefined;
-  const assistantPreviewRef =
-    assistantScope && scene.slots.main?.kind === 'assistant-preview' ? scene.slots.main : undefined;
   const settingsSection =
     scene.context.kind === 'settings'
       ? parseDesktopSettingsSection(scene.context.settingsSectionId)
       : undefined;
-  const launchAgent =
-    launchScope && launchContext ? (
-      <div className="project-dock-panel" data-dock-owner="agent">
-        <section
-          className="agent-workspace desktop-assistant-agent"
-          data-agent-scope={launchScope.kind}
-          data-primary-surface="agent"
-        >
-          <DesktopAgentSurface
-            binding="launch"
-            composerWorkspace={{
-              kind: 'assistant',
-              onChoose: actions.onChooseWorkspace,
-              disabled: pending || !interactive,
-            }}
-            viewId={launchContext.agentViewId}
-            agentPresentation={createLaunchAgentPresentation(launchScope)}
-          />
-        </section>
-      </div>
-    ) : undefined;
+  const assistantScope =
+    scene.context.kind === 'agent' && scene.context.scope.kind === 'assistant'
+      ? scene.context.scope
+      : undefined;
+  const assistantPreviewRef =
+    assistantScope && scene.slots.main?.kind === 'assistant-preview' ? scene.slots.main : undefined;
   const assistantPreview =
     assistantPreviewRef && assistantScope?.conversationId ? (
       <DesktopAssistantPreviewSurface
         assistantSpaceId={assistantScope.assistantSpaceId}
         conversationId={assistantScope.conversationId}
-        endpointEpoch={projection.endpointEpoch}
+        lifecyclePresentation={active ? 'active' : 'suspended'}
         previewSessionId={assistantPreviewRef.previewSessionId}
         scratchArtifactId={assistantPreviewRef.scratchArtifactId}
         windowId={scene.windowId}
@@ -439,11 +820,10 @@ function DesktopSceneWorkbench({
   const assetPreview =
     typeof assetPreviewSession === 'string' && assetCenter.projection ? (
       <DesktopAssetCenterMainSurface
-        endpointEpoch={projection.endpointEpoch}
+        lifecyclePresentation={active ? 'active' : 'suspended'}
         projection={assetCenter.projection}
       />
     ) : undefined;
-  const managementDetailVisible = Boolean(assetPreview);
   const mainContent =
     settingsSection !== undefined ? (
       <DesktopSettingsMainSurface section={settingsSection} />
@@ -471,7 +851,7 @@ function DesktopSceneWorkbench({
       workspaceSlots.main
     ) : assistantScope ? (
       (assistantPreview ?? null)
-    ) : launchScope?.kind === 'unbound' ? null : (
+    ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'unbound' ? null : (
       <SceneSurfaceUnavailable owner="agent" />
     );
   const main =
@@ -480,7 +860,7 @@ function DesktopSceneWorkbench({
         label={t('home.mediaLibrary')}
         panelId="asset-management"
         role="management"
-        size={managementDetailVisible ? 'compact' : 'full'}
+        size={assetPreview ? 'compact' : 'full'}
       >
         {mainContent}
       </StaticWorkbenchMainPanelSurface>
@@ -497,136 +877,70 @@ function DesktopSceneWorkbench({
         label={t('home.allProjects')}
         panelId="project-management"
         role="management"
-        size="full"
       >
         {mainContent}
       </StaticWorkbenchMainPanelSurface>
     ) : (
       mainContent
     );
-  const leftDock =
-    settingsSection !== undefined ? (
-      <DesktopSettingsNavigationSurface
-        activeSection={settingsSection}
-        onSectionChange={(section) =>
-          actions.onTransitionScene({ kind: 'open-settings', sectionId: section })
-        }
-      />
-    ) : launchScope ? (
-      launchAgent
-    ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
-      workspaceSlots.leftDock
-    ) : undefined;
-  const workspaceScene = scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace';
-  const managementSplitScene = scene.context.kind === 'asset-center';
-  const rightDock = workspaceScene ? workspaceSlots.rightDock : undefined;
-  const secondaryMainContent =
-    scene.context.kind === 'asset-center'
-      ? assetPreview
-      : workspaceScene
-        ? workspaceSlots.secondaryMain
-        : undefined;
   const secondaryMain = assetPreview ? (
     <StaticWorkbenchMainPanelSurface
       label={t('workspace.preview')}
       panelId="asset-preview"
       role="detail"
     >
-      {secondaryMainContent}
+      {assetPreview}
     </StaticWorkbenchMainPanelSurface>
-  ) : (
-    secondaryMainContent
-  );
-  const sceneShape = launchScope
-    ? assistantPreview
-      ? 'assistant'
-      : 'agent-only'
-    : workspaceScene
-      ? 'workspace'
-      : 'management';
+  ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
+    workspaceSlots.secondaryMain
+  ) : undefined;
+  const leftDock =
+    settingsSection === undefined ? undefined : (
+      <DesktopSettingsNavigationSurface
+        activeSection={settingsSection}
+        onSectionChange={(section) =>
+          actions.onTransitionScene({ kind: 'open-settings', sectionId: section })
+        }
+      />
+    );
+  const rightDock =
+    scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace'
+      ? workspaceSlots.rightDock
+      : undefined;
+  const timeline =
+    scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace'
+      ? workspaceSlots.timeline
+      : undefined;
+  const contentBySlot: Readonly<Record<DesktopWorkbenchPortalSlot, ReactNode>> = {
+    main,
+    secondaryMain,
+    leftDock,
+    rightDock,
+    timeline,
+  };
 
   return (
-    <ControlledWorkbenchShell
-      {...workspaceSlots}
-      className={`project-workspace desktop-scene-workbench desktop-scene-workbench--${sceneShape}`}
-      primarySidebar={
-        <ApplicationPrimarySidebar
-          activeSection={activeSection}
-          compact={compact}
-          disabled={pending}
-          activeProjectId={workspaceProject?.projectId}
-          onDeleteConversation={actions.onDeleteConversation}
-          onNavigate={(section) => actions.onTransitionScene(sceneIntentForSection(section))}
-          onOpenConversation={actions.onOpenConversation}
-          onOpenRecent={actions.onSelectProject}
-          onRemoveRecentProject={actions.onRemoveRecentProject}
-          onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
-          onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
-          projection={projection}
-          layoutControl={
-            workspaceProject ? (
-              <WorkspaceRegionControls
-                actions={actions}
-                disabled={pending}
-                projection={projection}
-              />
-            ) : undefined
-          }
-          lifecycleControl={
-            workspaceProject && projectPortabilityPort ? (
-              <ProjectPortabilityControl
-                disabled={pending}
-                endpointEpoch={projection.endpointEpoch}
-                project={workspaceProject}
-                port={projectPortabilityPort}
-                windowId={projection.window.windowId}
-              />
-            ) : undefined
-          }
-        />
-      }
-      primarySidebarVisible
-      primarySidebarWidth={compact ? 64 : sidebar.width}
-      primarySidebarResize={createApplicationPrimarySidebarResizeBinding({
-        actions,
-        disabled: pending || compact,
-        t,
-        sidebar,
-      })}
-      main={main}
-      secondaryMain={secondaryMain}
-      mainComposition={managementDetailVisible ? 'independent-shells' : 'continuous'}
-      mainSplit={managementDetailVisible ? 'columns' : workspaceSlots.mainSplit}
-      mainSplitRatio={managementSplitScene ? managementSplitRatio : workspaceSlots.mainSplitRatio}
-      mainSplitResize={
-        managementDetailVisible
-          ? {
-              label: t('workspace.resizeMainSplit'),
-              minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
-              maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
-              onResizeEnd: setManagementSplitRatio,
-            }
-          : workspaceSlots.mainSplitResize
-      }
-      leftDock={leftDock}
-      leftDockPresentation={
-        settingsSection !== undefined || launchScope
-          ? 'docked'
-          : workspaceSlots.leftDockPresentation
-      }
-      leftDockWidth={
-        settingsSection !== undefined
-          ? 300
-          : launchScope
-            ? projection.window.workbench.display.chatWidth
-            : workspaceSlots.leftDockWidth
-      }
-      leftDockResize={
-        settingsSection !== undefined || launchScope ? undefined : workspaceSlots.leftDockResize
-      }
-      rightDock={rightDock}
-      rightDockPresentation={workspaceScene ? workspaceSlots.rightDockPresentation : 'hidden'}
-    />
+    <>
+      {(Object.entries(contentBySlot) as readonly [DesktopWorkbenchPortalSlot, ReactNode][]).map(
+        ([slot, content]) => {
+          const target = portalTargets.get(
+            createDesktopWorkbenchPortalTargetKey(instance.workbenchInstanceId, slot),
+          );
+          return target
+            ? createPortal(
+                <DesktopSurfaceErrorBoundary
+                  key={`${scene.sceneId}:${slot}`}
+                  surfaceIdentity={`${instance.workbenchInstanceId}:${slot}`}
+                >
+                  {content}
+                </DesktopSurfaceErrorBoundary>,
+                target,
+                slot,
+              )
+            : null;
+        },
+      )}
+    </>
   );
 }
 
@@ -686,10 +1000,7 @@ function WorkbenchMainPanelSurface({
 }
 
 function createLaunchAgentPresentation(
-  scope: Extract<
-    DesktopShellProjection['window']['scene']['context'],
-    { readonly kind: 'agent' }
-  >['scope'],
+  scope: Extract<DesktopWorkbenchSceneProjection['context'], { readonly kind: 'agent' }>['scope'],
 ): AgentRootPresentation {
   if (scope.kind === 'workspace') {
     throw new Error('Launch Agent presentation cannot use Workspace scope.');
@@ -706,8 +1017,80 @@ function createLaunchAgentPresentation(
     : createAgentDraftPresentation(scope.draftId, authorityScope);
 }
 
+function requireActiveAgentSurfaceId(instance: DesktopWorkbenchInstanceProjection): string {
+  if (!instance.activeAgentSurfaceId) {
+    throw new Error(
+      `Desktop Workbench '${instance.workbenchInstanceId}' has no active Agent Surface.`,
+    );
+  }
+  return instance.activeAgentSurfaceId;
+}
+
+function createDesktopAgentSurfaceProps(input: {
+  readonly projection: DesktopShellProjection;
+  readonly workbenchInstanceId: string;
+  readonly project?: DesktopProjectCatalogItem;
+  readonly surface: DesktopAgentSurfaceProjection;
+  readonly onChooseWorkspace?: () => void;
+  readonly workspaceSelectionDisabled?: boolean;
+}): DesktopAgentSurfaceProps {
+  const { interaction } = input.surface;
+  const scope = interaction.scope;
+  if (scope.kind === 'workspace') {
+    const project =
+      input.project ??
+      input.projection.catalog.projects.find(
+        (candidate) => candidate.workspaceId === scope.workspaceId,
+      );
+    if (!project) {
+      throw new Error(`Agent Surface '${input.surface.agentSurfaceId}' has no Workspace Project.`);
+    }
+    const tab = input.projection.window.tabs.find(
+      (candidate) => candidate.projectId === project.projectId,
+    );
+    if (!tab || tab.viewId !== interaction.agentViewId) {
+      throw new Error(
+        `Agent Surface '${input.surface.agentSurfaceId}' has no exact Workspace View.`,
+      );
+    }
+    const authorityScope = {
+      kind: 'workspace' as const,
+      workspaceId: scope.workspaceId,
+      workspaceGrantId: scope.workspaceGrantId,
+    };
+    const agentPresentation = scope.conversationId
+      ? createAgentSessionPresentation(authorityScope, scope.conversationId)
+      : createAgentDraftPresentation(scope.draftId, authorityScope);
+    return {
+      binding: 'workspace',
+      workbenchInstanceId: input.workbenchInstanceId,
+      agentSurfaceId: input.surface.agentSurfaceId,
+      tab,
+      agentPresentation,
+      composerWorkspace: { kind: 'workspace', label: project.displayName },
+    };
+  }
+  if (!input.onChooseWorkspace) {
+    throw new Error(`Agent Surface '${input.surface.agentSurfaceId}' has no Workspace chooser.`);
+  }
+  return {
+    binding: 'launch',
+    workbenchInstanceId: input.workbenchInstanceId,
+    agentSurfaceId: input.surface.agentSurfaceId,
+    viewId: interaction.agentViewId,
+    agentPresentation: createLaunchAgentPresentation(scope),
+    composerWorkspace: {
+      kind: 'assistant',
+      onChoose: input.onChooseWorkspace,
+      ...(input.workspaceSelectionDisabled === undefined
+        ? {}
+        : { disabled: input.workspaceSelectionDisabled }),
+    },
+  };
+}
+
 export function resolveAssetCenterPreviewSession(
-  scene: DesktopShellProjection['window']['scene'],
+  scene: DesktopWorkbenchSceneProjection,
   projection: AssetCenterSessionProjection,
 ): string | undefined | null {
   if (
@@ -730,8 +1113,9 @@ export function resolveAssetCenterPreviewSession(
 
 function resolveWorkspaceSceneProject(
   projection: DesktopShellProjection,
+  instance: DesktopWorkbenchInstanceProjection,
 ): DesktopProjectCatalogItem | undefined {
-  const { context, slots } = projection.window.scene;
+  const { context, slots } = instance.scene;
   if (context.kind !== 'agent' || context.scope.kind !== 'workspace') return undefined;
   if (slots.main && slots.main.kind !== 'workspace-main') {
     throw new Error('Workspace Scene Main Surface must use its exact Workspace View ref.');
@@ -759,15 +1143,15 @@ function resolveWorkspaceSceneProject(
     throw new Error('Workspace Scene Agent Surface does not match its exact Window View.');
   }
   if (workspaceMain) {
-    const mainView = projection.window.workbench.main.views.find(
+    const mainView = instance.layout.main.views.find(
       (candidate) =>
         candidate.viewId === workspaceMain.viewId &&
-        candidate.viewEpoch === workspaceMain.viewEpoch &&
+        candidate.viewInstanceId === workspaceMain.viewInstanceId &&
         candidate.workspaceId === workspaceScope.workspaceId &&
         candidate.projectId === project.projectId,
     );
     if (!mainView) throw new Error('Workspace Scene Main Surface has no exact Workbench View.');
-  } else if (projection.window.workbench.main.views.length > 0) {
+  } else if (instance.layout.main.views.length > 0) {
     throw new Error('Workspace Scene without Main cannot retain Workbench Views.');
   }
   return project;
@@ -796,8 +1180,7 @@ function SceneSurfaceUnavailable({ owner }: { readonly owner: string }): JSX.Ele
 }
 
 function useDesktopAssetCenterScene(input: {
-  readonly scene: DesktopShellProjection['window']['scene'];
-  readonly endpointEpoch: string;
+  readonly scene: DesktopWorkbenchSceneProjection;
   readonly viewMode: 'list' | 'grid';
 }): {
   readonly runtime?: DesktopAssetCenterRuntime;
@@ -811,11 +1194,10 @@ function useDesktopAssetCenterScene(input: {
     if (!assetCenterSessionId || typeof window === 'undefined') return undefined;
     return new DesktopAssetCenterRuntime(
       { assetCenterSessionId, windowId: input.scene.windowId },
-      input.endpointEpoch,
       input.viewMode,
       window.openNekoDesktop,
     );
-  }, [assetCenterSessionId, input.endpointEpoch, input.scene.windowId, input.viewMode]);
+  }, [assetCenterSessionId, input.scene.windowId, input.viewMode]);
   const [sessionState, setSessionState] = useState<{
     readonly runtime: DesktopAssetCenterRuntime;
     readonly projection: AssetCenterSessionProjection;
@@ -845,8 +1227,7 @@ function useDesktopAssetCenterScene(input: {
 }
 
 function useDesktopExtensionManagementScene(
-  scene: DesktopShellProjection['window']['scene'],
-  endpointEpoch: string,
+  scene: DesktopWorkbenchSceneProjection,
 ): DesktopExtensionManagementRuntime | undefined {
   const sessionId =
     scene.context.kind === 'extensions' ? scene.context.extensionManagementSessionId : undefined;
@@ -854,10 +1235,9 @@ function useDesktopExtensionManagementScene(
     if (!sessionId || typeof window === 'undefined') return undefined;
     return new DesktopExtensionManagementRuntime(
       { extensionManagementSessionId: sessionId, windowId: scene.windowId },
-      endpointEpoch,
       window.openNekoDesktop,
     );
-  }, [endpointEpoch, scene.windowId, sessionId]);
+  }, [scene.windowId, sessionId]);
   useDisposeRuntime(runtime);
   return runtime;
 }
@@ -881,7 +1261,7 @@ function useDisposeRuntime<T extends { dispose(): void }>(runtime: T | undefined
 }
 
 function useDesktopProjectManagementScene(
-  scene: DesktopShellProjection['window']['scene'],
+  scene: DesktopWorkbenchSceneProjection,
   projects: readonly DesktopProjectCatalogItem[],
 ): {
   readonly project?: DesktopProjectCatalogItem;
@@ -913,50 +1293,31 @@ function useDesktopProjectManagementScene(
 
 type ContentProjectWorkbenchSlots = Pick<
   ControlledWorkbenchShellProps,
-  | 'main'
-  | 'secondaryMain'
-  | 'mainSplit'
-  | 'mainSplitRatio'
-  | 'mainSplitResize'
-  | 'leftDock'
-  | 'leftDockPresentation'
-  | 'leftDockWidth'
-  | 'leftDockResize'
-  | 'rightDock'
-  | 'rightDockPresentation'
-  | 'rightDockWidth'
-  | 'rightDockResize'
-  | 'timeline'
-  | 'timelineVisible'
-  | 'timelineHeight'
-  | 'timelineResize'
+  'main' | 'secondaryMain' | 'rightDock' | 'timeline'
 >;
 
 function useContentProjectWorkbenchSlots({
+  active,
   actions,
-  initialConversation,
-  initialInput,
+  instance,
   pending,
   projection,
   project,
-  retainedConversationIds,
 }: {
+  readonly active: boolean;
   readonly actions: ShellActions;
-  readonly initialConversation?: { readonly id: string; readonly title: string };
-  readonly initialInput?: { readonly id: string; readonly value: string };
+  readonly instance: DesktopWorkbenchInstanceProjection;
   readonly pending: boolean;
   readonly projection: DesktopShellProjection;
   readonly project?: DesktopProjectCatalogItem;
-  readonly retainedConversationIds: ReadonlySet<string>;
 }): ContentProjectWorkbenchSlots {
   const { t } = useTranslation();
   const [cutTimelineTarget, setCutTimelineTarget] = useState<HTMLDivElement | null>(null);
-  const workbench = projection.window.workbench;
+  const workbench = instance.layout;
   const resourceDockPresentation = useResourceDockPresentation(workbench.resourceDock.presentation);
   if (!project) {
     return { main: <SceneSurfaceUnavailable owner="workspace-authority" /> };
   }
-  const agentCapability = projection.domains.find((candidate) => candidate.surface === 'agent');
   const canvasCapability = projection.domains.find((candidate) => candidate.surface === 'canvas');
   const assetsCapability = projection.domains.find(
     (candidate) => candidate.surface === 'media-library',
@@ -983,18 +1344,6 @@ function useContentProjectWorkbenchSlots({
       `Desktop Timeline owner '${timelineOwner.viewId}' is not attached to a Main group.`,
     );
   }
-  const agentMain = workbench.display.mode === 'chat-only';
-  const agentDock = (
-    <AgentWorkspaceSurface
-      agentReady={agentCapability?.status === 'ready'}
-      agentPresentation={createWorkspaceAgentPresentation(projection)}
-      initialConversation={initialConversation}
-      initialInput={initialInput}
-      project={project}
-      retainedConversationIds={retainedConversationIds}
-      tab={tab}
-    />
-  );
   const resourceDock =
     resourceDockPresentation === 'hidden'
       ? undefined
@@ -1014,6 +1363,7 @@ function useContentProjectWorkbenchSlots({
                 title={t('workspace.closeProjectResources')}
                 onClick={() =>
                   actions.onUpdateWorkbench(
+                    instance.workbenchInstanceId,
                     setResourceDockPresentationWorkbench(workbench, 'hidden'),
                   )
                 }
@@ -1022,8 +1372,12 @@ function useContentProjectWorkbenchSlots({
             <div className="project-resource-dock__content">
               {assetsCapability?.status === 'ready' ? (
                 <DesktopResourceBrowserSurface
+                  lifecyclePresentation={
+                    active ? 'active' : 'suspended'
+                  }
                   onOpenCanvasDocument={(documentId, presentation) =>
                     actions.onUpdateWorkbench(
+                      instance.workbenchInstanceId,
                       openCanvasDocumentWorkbench({
                         documentId,
                         presentation,
@@ -1049,25 +1403,17 @@ function useContentProjectWorkbenchSlots({
             </div>
           </div>,
         );
-  const effectiveAgentPosition =
-    resourceDock && workbench.display.mode === 'chat-main'
-      ? ('left' as const)
-      : workbench.display.chatPosition;
-  const leftDock = createAgentDock(workbench, 'left', effectiveAgentPosition, agentDock);
-  const rightAgentDock = createAgentDock(workbench, 'right', effectiveAgentPosition, agentDock);
-  const rightDock = resourceDock ?? rightAgentDock;
-  const mainSurface = agentMain ? (
-    <div className="project-main-chat-host">{agentDock}</div>
-  ) : (
+  const mainSurface = (
     <MainViewGroupSurface
+      visible={active && workbench.display.mode !== 'chat-only'}
       actions={actions}
-      allowCutRuntime
       canvasCapability={canvasCapability}
       cutCapability={cutCapability}
       group={primaryGroup}
       previewCapability={previewCapability}
       project={project}
       projection={projection}
+      workbenchInstanceId={instance.workbenchInstanceId}
       timelineOwnerViewId={
         timelineOwnerGroup?.groupId === primaryGroup.groupId ? timelineOwner?.viewId : undefined
       }
@@ -1084,64 +1430,25 @@ function useContentProjectWorkbenchSlots({
         <div className="project-main-host__content">{mainSurface}</div>
       </div>
     ),
-    secondaryMain:
-      !agentMain && secondaryGroup ? (
-        <MainViewGroupSurface
-          actions={actions}
-          allowCutRuntime={false}
-          canvasCapability={canvasCapability}
-          cutCapability={cutCapability}
-          group={secondaryGroup}
-          previewCapability={previewCapability}
-          project={project}
-          projection={projection}
-          timelineOwnerViewId={
-            timelineOwnerGroup?.groupId === secondaryGroup.groupId
-              ? timelineOwner?.viewId
-              : undefined
-          }
-          timelineTarget={cutTimelineTarget ?? undefined}
-          workbench={workbench}
-        />
-      ) : undefined,
-    mainSplit: workbench.main.split?.axis ?? 'none',
-    mainSplitRatio: workbench.main.split?.ratio,
-    mainSplitResize:
-      pending || !workbench.main.split
-        ? undefined
-        : {
-            label: t('workspace.resizeMainSplit'),
-            minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
-            maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
-            onResizeEnd: (ratio) => {
-              if (ratio === workbench.main.split?.ratio) return;
-              actions.onUpdateWorkbench(resizeMainSplit(workbench, ratio));
-            },
-          },
-    leftDock: leftDock?.content,
-    leftDockPresentation: leftDock?.presentation,
-    leftDockWidth: leftDock?.width,
-    leftDockResize:
-      pending || !leftDock
-        ? undefined
-        : createProjectDockResizeBinding({
-            actions,
-            dock: leftDock,
-            label: t('workspace.resizeLeftDock'),
-            workbench,
-          }),
-    rightDock: rightDock?.content,
-    rightDockPresentation: rightDock?.presentation,
-    rightDockWidth: rightDock?.width,
-    rightDockResize:
-      pending || !rightDock
-        ? undefined
-        : createProjectDockResizeBinding({
-            actions,
-            dock: rightDock,
-            label: t('workspace.resizeRightDock'),
-            workbench,
-          }),
+    secondaryMain: secondaryGroup ? (
+      <MainViewGroupSurface
+        visible={active && workbench.display.mode !== 'chat-only'}
+        actions={actions}
+        canvasCapability={canvasCapability}
+        cutCapability={cutCapability}
+        group={secondaryGroup}
+        previewCapability={previewCapability}
+        project={project}
+        projection={projection}
+        workbenchInstanceId={instance.workbenchInstanceId}
+        timelineOwnerViewId={
+          timelineOwnerGroup?.groupId === secondaryGroup.groupId ? timelineOwner?.viewId : undefined
+        }
+        timelineTarget={cutTimelineTarget ?? undefined}
+        workbench={workbench}
+      />
+    ) : undefined,
+    rightDock: resourceDock?.content,
     timeline:
       timelineOwner?.kind === 'cut' && cutCapability?.status === 'ready' ? (
         timelineOwnerRenderedInMain ? (
@@ -1163,61 +1470,34 @@ function useContentProjectWorkbenchSlots({
           }
         />
       ),
-    timelineVisible: workbench.timeline.presentation === 'docked',
-    timelineHeight: workbench.timeline.height,
-    timelineResize: pending
-      ? undefined
-      : {
-          label: t('workspace.resizeTimeline'),
-          minSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.min,
-          maxSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.max,
-          onResizeEnd: (height) => {
-            if (height === workbench.timeline.height) return;
-            actions.onUpdateWorkbench(resizeTimelineWorkbench(workbench, height));
-          },
-        },
   };
-}
-
-function createWorkspaceAgentPresentation(
-  projection: DesktopShellProjection,
-): AgentRootPresentation | undefined {
-  const context = projection.window.scene.context;
-  if (context.kind !== 'agent' || context.scope.kind !== 'workspace') return undefined;
-  const conversationId = context.scope.conversationId;
-  const authorityScope = {
-    kind: 'workspace' as const,
-    workspaceId: context.scope.workspaceId,
-    workspaceGrantId: context.scope.workspaceGrantId,
-  };
-  return conversationId === undefined
-    ? createAgentDraftPresentation(context.scope.draftId, authorityScope)
-    : createAgentSessionPresentation(authorityScope, conversationId);
 }
 
 function MainViewGroupSurface({
   actions,
-  allowCutRuntime,
   canvasCapability,
   cutCapability,
   group,
   previewCapability,
   project,
   projection,
+  workbenchInstanceId,
   timelineOwnerViewId,
   timelineTarget,
+  visible,
   workbench,
 }: {
   readonly actions: ShellActions;
-  readonly allowCutRuntime: boolean;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly group: DesktopWorkbenchMainGroup;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
+  readonly workbenchInstanceId: string;
   readonly timelineOwnerViewId?: string;
   readonly timelineTarget?: Element;
+  readonly visible: boolean;
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -1245,17 +1525,18 @@ function MainViewGroupSurface({
             closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
           }))}
           onClose={(viewId) => {
-            actions.onUpdateWorkbench(closeMainView(workbench, viewId));
+            actions.onUpdateWorkbench(workbenchInstanceId, closeMainView(workbench, viewId));
           }}
           onReorder={(sourceViewId, targetViewId) => {
             actions.onUpdateWorkbench(
+              workbenchInstanceId,
               reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
             );
           }}
           onSelect={(viewId) => {
             const view = views.find((candidate) => candidate.viewId === viewId);
             if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-            actions.onUpdateWorkbench(openOrFocusMainView(workbench, view));
+            actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusMainView(workbench, view));
           }}
         />
       }
@@ -1263,36 +1544,33 @@ function MainViewGroupSurface({
       {views.length === 0 ? (
         <EmptyMainSurface />
       ) : (
-        views.map((view) => {
-          const active = view.viewId === activeView?.viewId;
-          return (
-            <div
-              className="project-main-view-stack__item"
-              data-active={active ? 'true' : 'false'}
-              data-main-view-id={view.viewId}
-              hidden={!active}
-              key={`${view.viewId}:${view.viewEpoch}`}
-            >
-              {renderWorkbenchMainView({
-                allowCutRuntime,
-                canvasCapability,
-                previewCapability,
-                cutCapability,
-                project,
-                projection,
-                timelineTarget: view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
-                view,
-              })}
-            </div>
-          );
-        })
+        <RetainedSurfaceDeck
+          visible={visible}
+          items={views}
+          activeId={activeView?.viewId}
+          getId={(view) => view.viewId}
+          getLifecycle={resolveDesktopWorkbenchViewLifecycle}
+          itemClassName="project-main-view-stack__item"
+          itemIdentityAttribute="data-main-view-id"
+          renderItem={(view, presentation) =>
+            renderWorkbenchMainView({
+              canvasCapability,
+              previewCapability,
+              cutCapability,
+              project,
+              projection,
+              timelineTarget: view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
+              view,
+              lifecyclePresentation: presentation.suspended ? 'suspended' : 'active',
+            })
+          }
+        />
       )}
     </WorkbenchMainPanelSurface>
   );
 }
 
 function renderWorkbenchMainView({
-  allowCutRuntime,
   canvasCapability,
   previewCapability,
   cutCapability,
@@ -1300,8 +1578,8 @@ function renderWorkbenchMainView({
   projection,
   timelineTarget,
   view,
+  lifecyclePresentation,
 }: {
-  readonly allowCutRuntime: boolean;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
@@ -1309,24 +1587,32 @@ function renderWorkbenchMainView({
   readonly projection: DesktopShellProjection;
   readonly timelineTarget?: Element;
   readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number];
+  readonly lifecyclePresentation: 'active' | 'suspended';
 }): JSX.Element {
   if (view.kind === 'preview' && previewCapability?.status === 'ready') {
-    return <DesktopPreviewSurface project={project} projection={projection} view={view} />;
+    return (
+      <DesktopPreviewSurface
+        lifecyclePresentation={lifecyclePresentation}
+        project={project}
+        projection={projection}
+        view={view}
+      />
+    );
   }
   if (view.kind === 'canvas' && canvasCapability?.status === 'ready') {
-    return <DesktopCanvasSurface project={project} projection={projection} view={view} />;
+    return (
+      <DesktopCanvasSurface
+        lifecyclePresentation={lifecyclePresentation}
+        project={project}
+        projection={projection}
+        view={view}
+      />
+    );
   }
   if (view.kind === 'cut' && cutCapability?.status === 'ready') {
-    if (!allowCutRuntime) {
-      return (
-        <CreativeMainPlaceholder
-          canvasDiagnostic="desktop-cut-inactive-session-not-rendered"
-          project={project}
-        />
-      );
-    }
     return (
       <DesktopCutSurface
+        lifecyclePresentation={lifecyclePresentation}
         project={project}
         projection={projection}
         timelineTarget={timelineTarget}
@@ -1358,7 +1644,8 @@ function WorkspaceRegionControls({
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
-  const workbench = projection.window.workbench;
+  const instance = resolveActiveDesktopWindowWorkbench(projection.window);
+  const workbench = instance.layout;
   const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
   const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
   const managementVisible = isWorkbenchRegionVisible(workbench, 'management');
@@ -1377,7 +1664,12 @@ function WorkspaceRegionControls({
         size="xs"
         title={t('workspace.agent')}
         aria-pressed={agentVisible}
-        onClick={() => actions.onUpdateWorkbench(toggleWorkbenchRegion(workbench, 'agent'))}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'agent'),
+          )
+        }
       />
       <IconButton
         className="workbench-region-toggle"
@@ -1388,7 +1680,12 @@ function WorkspaceRegionControls({
         size="xs"
         title={t('workspace.mainPanel')}
         aria-pressed={mainVisible}
-        onClick={() => actions.onUpdateWorkbench(toggleWorkbenchRegion(workbench, 'main'))}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'main'),
+          )
+        }
       />
       <IconButton
         className="workbench-region-toggle"
@@ -1399,38 +1696,15 @@ function WorkspaceRegionControls({
         size="xs"
         title={t('workspace.projectResources')}
         aria-pressed={managementVisible}
-        onClick={() => actions.onUpdateWorkbench(toggleWorkbenchRegion(workbench, 'management'))}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'management'),
+          )
+        }
       />
     </div>
   );
-}
-
-function createAgentDock(
-  workbench: DesktopWorkbenchLayoutProjection,
-  position: 'left' | 'right',
-  effectivePosition: 'left' | 'right',
-  agent: JSX.Element,
-):
-  | {
-      readonly content: JSX.Element;
-      readonly owner: 'agent';
-      readonly presentation: 'docked' | 'overlay';
-      readonly width: number;
-    }
-  | undefined {
-  if (workbench.display.mode !== 'chat-main' || effectivePosition !== position) {
-    return undefined;
-  }
-  return {
-    content: (
-      <div className="project-dock-panel" data-dock-owner="agent">
-        {agent}
-      </div>
-    ),
-    owner: 'agent',
-    presentation: 'docked',
-    width: workbench.display.chatWidth,
-  };
 }
 
 function createResourceDock(
@@ -1474,12 +1748,18 @@ function createProjectDockResizeBinding({
   dock,
   label,
   workbench,
+  workbenchInstanceId,
 }: {
   readonly actions: ShellActions;
-  readonly dock:
-    NonNullable<ReturnType<typeof createAgentDock>> | ReturnType<typeof createResourceDock>;
+  readonly dock: {
+    readonly owner: 'agent' | 'resources';
+    readonly presentation: 'docked' | 'overlay';
+    readonly width: number;
+    readonly content: JSX.Element;
+  };
   readonly label: string;
   readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly workbenchInstanceId: string;
 }) {
   return {
     label,
@@ -1489,7 +1769,10 @@ function createProjectDockResizeBinding({
       const currentWidth =
         dock.owner === 'agent' ? workbench.display.chatWidth : workbench.resourceDock.width;
       if (currentWidth === width) return;
-      actions.onUpdateWorkbench(resizeProjectDockWorkbench(workbench, dock.owner, width));
+      actions.onUpdateWorkbench(
+        workbenchInstanceId,
+        resizeProjectDockWorkbench(workbench, dock.owner, width),
+      );
     },
   };
 }
@@ -1542,7 +1825,6 @@ export function resizeTimelineWorkbench(
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
-    revision: workbench.revision + 1,
     timeline: {
       ...workbench.timeline,
       height,
@@ -1557,7 +1839,6 @@ export function resizeProjectDockWorkbench(
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
-    revision: workbench.revision + 1,
     display:
       owner === 'agent'
         ? {
@@ -1581,7 +1862,6 @@ export function setResourceDockPresentationWorkbench(
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
-    revision: workbench.revision + 1,
     resourceDock: {
       ...workbench.resourceDock,
       presentation,
@@ -1674,7 +1954,7 @@ export function openCanvasDocumentWorkbench(input: {
     existing ??
     ({
       viewId: `canvas:${tab.viewId}:${stableViewSuffix(documentId)}`,
-      viewEpoch: tab.viewEpoch,
+      viewInstanceId: tab.viewInstanceId,
       projectId: project.projectId,
       workspaceId: project.workspaceId,
       kind: 'canvas' as const,
@@ -1786,57 +2066,6 @@ function TimelinePlaceholder({ diagnostic }: { readonly diagnostic: string }): J
         <span>{t('workspace.timelineDetail')}</span>
         <code>{diagnostic}</code>
       </div>
-    </section>
-  );
-}
-
-function AgentWorkspaceSurface({
-  agentReady,
-  agentPresentation,
-  initialConversation,
-  initialInput,
-  project,
-  retainedConversationIds,
-  tab,
-}: {
-  readonly agentReady: boolean;
-  readonly agentPresentation?: AgentRootPresentation;
-  readonly initialConversation?: { readonly id: string; readonly title: string };
-  readonly initialInput?: { readonly id: string; readonly value: string };
-  readonly project: DesktopProjectCatalogItem;
-  readonly retainedConversationIds: ReadonlySet<string>;
-  readonly tab: DesktopShellProjection['window']['tabs'][number];
-}): JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <section
-      className="agent-workspace"
-      data-agent-scope={agentPresentation?.scope.kind}
-      data-primary-surface="agent"
-      aria-label={`${t('workspace.agent')} · ${project.displayName}`}
-    >
-      {agentReady ? (
-        <RetainedDesktopAgentSurfaceDeck
-          retainedConversationIds={retainedConversationIds}
-          activeSurface={
-            {
-              agentPresentation,
-              binding: 'workspace',
-              composerWorkspace: { kind: 'workspace', label: project.displayName },
-              initialConversation,
-              initialInput,
-              tab,
-            } satisfies DesktopAgentSurfaceProps
-          }
-        />
-      ) : (
-        <div className="agent-unavailable-card">
-          <InfoIcon size={18} />
-          <strong>{t('workspace.agent.unavailable')}</strong>
-          <p>{t('workspace.agent.unavailableDetail')}</p>
-          <code>desktop-domain-surface-unavailable</code>
-        </div>
-      )}
     </section>
   );
 }
@@ -1953,10 +2182,10 @@ function PrimaryRecentNavigation({
 }): JSX.Element {
   const { t } = useTranslation();
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const activeScene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
   const activeConversationId =
-    projection.window.scene.context.kind === 'agent' &&
-    projection.window.scene.context.scope.kind !== 'unbound'
-      ? projection.window.scene.context.scope.conversationId
+    activeScene.context.kind === 'agent' && activeScene.context.scope.kind !== 'unbound'
+      ? activeScene.context.scope.conversationId
       : undefined;
   const toggleExpanded = (group: DesktopConversationNavigationGroup) => {
     const key = conversationGroupKey(group);

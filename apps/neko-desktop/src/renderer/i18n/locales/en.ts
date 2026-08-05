@@ -4,6 +4,11 @@ export const en = {
   'app.name': 'OpenNeko',
   'shell.connecting': 'Connecting to Desktop Shell…',
   'shell.unavailable': 'Desktop Shell unavailable',
+  'shell.rootRenderFailure': 'Desktop interface failed',
+  'shell.rootRenderFailureDetail': 'An unexpected render error stopped the Desktop interface.',
+  'shell.surfaceRenderFailure': 'This panel could not be displayed',
+  'shell.surfaceRenderFailureDetail': "Surface '{surface}' failed: {error}",
+  'shell.retrySurface': 'Retry',
   'shell.openProjects': 'Open projects',
   'shell.closeProjectTab': 'Close project tab',
   'shell.removeRecentProject': 'Remove {project} from recent projects',
@@ -61,6 +66,16 @@ export const en = {
   'shell.sequenceChanged':
     'Desktop Shell projection sequence changed. Reloading the authoritative state.',
   'shell.staleCommand': 'Desktop Shell command returned a stale endpoint projection.',
+  'shell.storedWindowInvalid':
+    'Saved workspace window {windowId} is no longer compatible and was not opened. Your projects and other data are still available.',
+  'shell.storedStateInvalid':
+    'The saved workspace state is no longer compatible and was safely isolated. A new creation view is open; projects, conversations, and other data were not reset.',
+  'shell.storedSettingsInvalid':
+    'The saved application settings are no longer compatible and were safely isolated. Defaults were restored; workspaces, projects, conversations, and other data were not reset.',
+  'shell.conversationRecordInvalid':
+    "Saved conversation '{conversationId}' is no longer compatible and was isolated. A new draft is open; other conversations, projects, and files were not changed.",
+  'shell.conversationRecordInvalidUnknown':
+    'A saved conversation is no longer compatible and was isolated. A new draft is open; other conversations, projects, and files were not changed.',
   'shell.projectDetached':
     'This project is not attached to the current Window. Re-open its workspace to continue.',
   'shell.conversationDetached':

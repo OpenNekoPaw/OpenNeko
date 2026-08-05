@@ -14,16 +14,16 @@ const identity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'canvas:view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'neko/boards/workspace.nkc',
-  sessionId: 'canvas-session:canvas:view-1:1',
-  endpointEpoch: 'app-1:window-1:1',
+  sessionId: 'canvas-session:canvas:view-1:view-instance-1',
+  rendererSessionId: 'app-1:window-1:1',
 };
 
 describe('Desktop Canvas bridge contract', () => {
   it('parses every explicit owner identity field', () => {
     expect(parseDesktopCanvasHostIdentity(identity)).toEqual(identity);
-    expect(createCanvasHostSessionId(identity.viewId, identity.viewEpoch)).toBe(identity.sessionId);
+    expect(createCanvasHostSessionId(identity.viewId, identity.viewInstanceId)).toBe(identity.sessionId);
     expect(isSameCanvasHostIdentity(identity, { ...identity })).toBe(true);
   });
 
@@ -37,7 +37,7 @@ describe('Desktop Canvas bridge contract', () => {
     expect(
       isSameCanvasHostIdentity(identity, {
         ...identity,
-        viewEpoch: identity.viewEpoch + 1,
+        viewInstanceId: 'view-instance-stale',
       }),
     ).toBe(false);
   });
@@ -130,7 +130,6 @@ describe('Desktop Canvas bridge contract', () => {
       },
       contentLocator: { kind: 'workspace-file', path: 'media/voice.aac' },
       audio: {
-        version: 1,
         url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         mimeType: 'audio/aac',
         durationSeconds: 12,

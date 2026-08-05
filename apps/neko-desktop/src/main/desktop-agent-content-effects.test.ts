@@ -68,9 +68,7 @@ describe('Desktop Agent content effects', () => {
       fixture.workspace.workspacePath,
       'neko/entities.json',
       JSON.stringify({
-        schemaVersion: 1,
         projectId: fixture.workspace.workspaceId,
-        revision: 1,
         entities: [
           {
             entityId: 'char_小橘',
@@ -86,6 +84,16 @@ describe('Desktop Agent content effects', () => {
                 acceptedAt: '2026-07-29T00:00:00.000Z',
               },
             ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-07-29T00:00:00.000Z',
+            updatedAt: '2026-07-29T00:00:00.000Z',
+          },
+          {
+            entityId: 'char_invalid',
+            kind: 'character',
+            names: { canonical: '', aliases: [] },
+            facts: {},
+            representations: [],
             lifecycle: { state: 'active' },
             createdAt: '2026-07-29T00:00:00.000Z',
             updatedAt: '2026-07-29T00:00:00.000Z',
@@ -331,7 +339,6 @@ async function createFixture(interactionOverrides: Partial<AgentContentInteracti
     homedir: path.dirname(workspacePath),
     nekoHome: path.join(path.dirname(workspacePath), '.openneko'),
     workspaceRoot: workspacePath,
-    version: '0.0.1',
     logger: createLogger(),
     openExternal,
     revealPath,
@@ -363,7 +370,6 @@ function createContext(workspaceId: string) {
       windowId: 'window-1',
       viewId: 'view-1',
       workspaceId,
-      rendererEpoch: 'renderer-1',
       connectionId: 'connection-1',
     },
     post,

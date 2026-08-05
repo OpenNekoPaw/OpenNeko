@@ -11,6 +11,7 @@ import type {
 } from '@neko/host/application-settings';
 import type { WebviewI18nAdapter } from '@neko/ui/i18n/webview';
 import { initializeDesktopRendererBridge } from './desktop-renderer-startup';
+import { DesktopRootErrorBoundary } from './DesktopSurfaceErrorBoundary';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -35,11 +36,17 @@ async function startRenderer(container: HTMLElement): Promise<void> {
   import.meta.hot?.dispose(disposeTheme);
   createRoot(container).render(
     <StrictMode>
-      <DesktopRendererRoot
-        i18n={desktopI18n}
-        initialSettings={initialSettings}
-        themeController={themeController}
-      />
+      <DesktopRootErrorBoundary
+        title={desktopI18n.t('shell.rootRenderFailure')}
+        description={desktopI18n.t('shell.rootRenderFailureDetail')}
+        retryLabel={desktopI18n.t('shell.retrySurface')}
+      >
+        <DesktopRendererRoot
+          i18n={desktopI18n}
+          initialSettings={initialSettings}
+          themeController={themeController}
+        />
+      </DesktopRootErrorBoundary>
     </StrictMode>,
   );
 }
@@ -75,9 +82,7 @@ function DesktopRendererRoot({
     () => ({
       projection: settings,
       async update(preferences: DesktopApplicationPreferences) {
-        applyProjection(
-          await window.openNekoDesktop.settings.update(preferences, settings.revision),
-        );
+        applyProjection(await window.openNekoDesktop.settings.update(preferences));
       },
       openAgentAdvanced: () => window.openNekoDesktop.settings.openAgentAdvanced(),
     }),

@@ -211,7 +211,7 @@ describe('DesktopCanvasMediaRuntime', () => {
       ...identity,
       viewId: 'canvas:view-2',
       documentId: 'Second.nkc',
-      sessionId: 'canvas-session:canvas:view-2:1',
+      sessionId: 'canvas-session:canvas:view-2:view-instance-1',
     };
     const request = {
       type: 'media:play' as const,
@@ -303,10 +303,10 @@ const identity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'canvas:view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'Untitled.nkc',
-  sessionId: 'canvas-session:canvas:view-1:1',
-  endpointEpoch: 'endpoint-1',
+  sessionId: 'canvas-session:canvas:view-1:view-instance-1',
+  rendererSessionId: 'endpoint-1',
 };
 
 async function createWorkspace(relativeFile: string): Promise<string> {
@@ -341,7 +341,6 @@ function createMediaPort() {
     ],
   };
   const video: HtmlVideoDescriptor = {
-    version: 1,
     url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     mimeType: 'video/mp4',
     preparationProfile: 'h264-mp4-direct',

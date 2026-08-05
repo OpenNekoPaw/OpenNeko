@@ -145,11 +145,11 @@ describe('Agent controller composition', () => {
       identity: {
         applicationInstanceId: 'app-1',
         windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
         projectId: 'project-1',
         workspaceId: workspace.workspaceId,
         viewId: 'view-1',
-        viewEpoch: 1,
-        rendererEpoch: 1,
         connectionId: 'connection-1',
       },
       initialConversationId: 'conversation-1',
@@ -168,7 +168,6 @@ describe('Agent controller composition', () => {
         windowId: 'window-1',
         viewId: 'view-1',
         workspaceId: workspace.workspaceId,
-        rendererEpoch: '1',
         connectionId: 'connection-1',
       },
       post: async (message: AgentHostToWebviewMessage) => {
@@ -245,11 +244,11 @@ describe('Agent controller composition', () => {
         identity: {
           applicationInstanceId: 'app-1',
           windowId: 'window-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'agent-surface-1',
           projectId: 'project-1',
           workspaceId: workspace.workspaceId,
           viewId: 'view-1',
-          viewEpoch: 1,
-          rendererEpoch: 1,
           connectionId: 'connection-1',
         },
         initialConversationId: 'conversation-missing',
@@ -289,12 +288,12 @@ describe('Agent controller composition', () => {
       identity: {
         applicationInstanceId: 'app-1',
         windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
         projectId: 'project-1',
-        workspaceId: workspace.workspaceId,
-        viewId: 'view-1',
-        viewEpoch: 1,
-        rendererEpoch: 1,
-        connectionId: 'connection-1',
+          workspaceId: workspace.workspaceId,
+          viewId: 'view-1',
+          connectionId: 'connection-1',
       },
     });
     const context = {
@@ -304,7 +303,6 @@ describe('Agent controller composition', () => {
         windowId: 'window-1',
         viewId: 'view-1',
         workspaceId: workspace.workspaceId,
-        rendererEpoch: '1',
         connectionId: 'connection-1',
       },
       post: async (message: AgentHostToWebviewMessage) => {
@@ -355,16 +353,13 @@ describe('Agent controller composition', () => {
     await effects.projection.discoverEndpoint(
       {
         type: 'projectionEndpointDiscover',
-        protocolVersion: 1,
         realmId: 'realm-1',
       },
       context,
     );
     expect(posted.at(-1)).toEqual({
       type: 'projectionEndpointReady',
-      protocolVersion: 1,
       realmId: 'realm-1',
-      endpointEpoch: 'connection-1',
     });
 
     effects.dispose();
@@ -436,12 +431,12 @@ describe('Agent controller composition', () => {
     const identity = {
       applicationInstanceId: 'app-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       projectId: 'project-1',
-      workspaceId: workspace.workspaceId,
-      viewId: 'view-1',
-      viewEpoch: 1,
-      rendererEpoch: 1,
-      connectionId: 'connection-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
     };
     const effects = composition.createEffects({ workspace, identity });
     const posted: AgentHostToWebviewMessage[] = [];
@@ -452,7 +447,6 @@ describe('Agent controller composition', () => {
         windowId: 'window-1',
         viewId: 'view-1',
         workspaceId: workspace.workspaceId,
-        rendererEpoch: '1',
         connectionId: 'connection-1',
       },
       post: async (message: AgentHostToWebviewMessage) => {
@@ -463,7 +457,6 @@ describe('Agent controller composition', () => {
       },
     };
     const key = {
-      endpointEpoch: 'connection-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: projection.conversationId,
@@ -491,7 +484,6 @@ function createWorkspace(
   workspacePath = '/workspace/demo',
   projection: ConversationProjectionSnapshot = {
     conversationId: 'conversation-1',
-    projectionVersion: 0,
     turns: [],
   },
 ): AgentWorkspaceRuntime & {
@@ -595,7 +587,6 @@ function createLocatorBackedProjection(): ConversationProjectionSnapshot {
   };
   return {
     conversationId: 'conversation-1',
-    projectionVersion: 1,
     turns: [
       {
         turnId: 'turn-1',

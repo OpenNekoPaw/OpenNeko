@@ -469,10 +469,10 @@ async function createFixture() {
     workspaceId: 'workspace-1',
     windowId: 'window-1',
     viewId: 'canvas:view-1',
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     documentId: 'neko/boards/workspace.nkc',
     sessionId: 'canvas-session-1',
-    endpointEpoch: 'endpoint-1',
+    rendererSessionId: 'endpoint-1',
   };
   const workspace: AssetWorkspaceResolution = {
     workspaceId: 'workspace-1',
@@ -488,7 +488,6 @@ async function createFixture() {
       homedir: workspacePath,
       nekoHome: path.join(workspacePath, '.neko-home'),
       workspaceRoot: workspacePath,
-      version: 'test',
       logger: new ConsoleLogger('CanvasMaterialAuthoringTest'),
     }),
   };

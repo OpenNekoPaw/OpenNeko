@@ -16,7 +16,6 @@ describe('Desktop Assistant Preview runtime', () => {
     const fixture = await createFixture('result.txt', 'hello');
     const projection = await fixture.runtime.authorize({
       identity: identity(),
-      endpointEpoch: 'endpoint:1',
       artifact: artifact('result.txt'),
     });
 
@@ -38,7 +37,6 @@ describe('Desktop Assistant Preview runtime', () => {
     await expect(
       unsupported.runtime.authorize({
         identity: identity(),
-        endpointEpoch: 'endpoint:1',
         artifact: artifact('archive.bin'),
       }),
     ).resolves.toMatchObject({ status: 'unavailable' });
@@ -48,7 +46,6 @@ describe('Desktop Assistant Preview runtime', () => {
     await expect(
       escaped.runtime.authorize({
         identity: identity(),
-        endpointEpoch: 'endpoint:1',
         artifact: artifact('../outside.txt'),
       }),
     ).rejects.toThrow('single managed filename');
@@ -59,7 +56,6 @@ describe('Desktop Assistant Preview runtime', () => {
     await expect(
       escaped.runtime.authorize({
         identity: identity(),
-        endpointEpoch: 'endpoint:1',
         artifact: artifact('linked.txt'),
       }),
     ).rejects.toThrow('escapes its conversation-owned root');
@@ -69,19 +65,16 @@ describe('Desktop Assistant Preview runtime', () => {
     const fixture = await createFixture('result.txt', 'hello');
     const first = await fixture.runtime.authorize({
       identity: identity(),
-      endpointEpoch: 'endpoint:1',
       artifact: artifact('result.txt'),
     });
     fixture.runtime.release({
       identity: identity(),
-      endpointEpoch: 'endpoint:1',
       previewSessionId: first.identity.previewSessionId,
     });
     expect(fixture.releaseSession).toHaveBeenCalledWith(first.identity.previewSessionId);
 
     const second = await fixture.runtime.authorize({
       identity: identity(),
-      endpointEpoch: 'endpoint:1',
       artifact: artifact('result.txt'),
     });
     fixture.runtime.detachWindow('window:1');
@@ -89,7 +82,6 @@ describe('Desktop Assistant Preview runtime', () => {
     expect(() =>
       fixture.runtime.read({
         identity: identity(),
-        endpointEpoch: 'endpoint:1',
         previewSessionId: second.identity.previewSessionId,
       }),
     ).toThrow('does not match its owner');

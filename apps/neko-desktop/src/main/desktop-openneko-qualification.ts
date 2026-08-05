@@ -155,7 +155,7 @@ async function runQualification(): Promise<void> {
     }
 
     const closeLease = await registry.registerFile(
-      owner('qualification-window-2', 'close-session', 'close-generation'),
+      owner('qualification-window-2', 'close-session'),
       {
         absolutePath: fixtures.imagePath,
         mediaType: 'image/png',
@@ -235,11 +235,7 @@ async function registerFixtures(
   registry: DesktopResourceRegistry,
   fixtures: Awaited<ReturnType<typeof createFixtures>>,
 ) {
-  const resourceOwner = owner(
-    'qualification-window-1',
-    'qualification-session',
-    'qualification-generation',
-  );
+  const resourceOwner = owner('qualification-window-1', 'qualification-session');
   const [video, audio, image, pdf, glb] = await Promise.all([
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.videoPath,
@@ -302,7 +298,7 @@ async function qualifyPcmCancellation(
     windowId: 'qualification-window-1',
     viewId: 'qualification-view',
     sessionId: `pcm-${mode}`,
-    endpointEpoch: 'qualification-epoch',
+    rendererSessionId: 'qualification-epoch',
     revision: 'pcm-revision',
   });
   const pcm = await publisher.registerPcm((signal) => {
@@ -356,14 +352,13 @@ async function qualifyPcmCancellation(
   return { firstChunkBytes, terminationCount };
 }
 
-function owner(windowId: string, sessionId: string, generation: string): DesktopResourceOwner {
+function owner(windowId: string, sessionId: string): DesktopResourceOwner {
   return {
     windowId,
     viewId: 'qualification-view',
     sessionId,
-    endpointEpoch: 'qualification-epoch',
+    rendererSessionId: 'qualification-epoch',
     revision: 'qualification-revision',
-    generation,
   };
 }
 

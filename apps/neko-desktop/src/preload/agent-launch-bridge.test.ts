@@ -27,15 +27,12 @@ describe('Desktop Agent launch preload bridge', () => {
     electron.invoke.mockReset();
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        schemaVersion: 1,
         requestId: request.requestId,
         application: {
-          schemaVersion: 1,
           applicationId: 'neko-desktop',
           instanceId: 'application-1',
-          version: '0.0.1',
         },
-        window: { windowId: 'window-1', rendererEpoch: 1 },
+        window: { windowId: 'window-1', rendererSessionId: 'renderer-session-1' },
         host: { id: 'electron', kind: 'electron', ui: 'graphical' },
         runtime: { platform: 'darwin' },
         status: 'foundation-ready',
@@ -48,35 +45,50 @@ describe('Desktop Agent launch preload bridge', () => {
   });
 
   it('attaches an exact scope without accepting a renderer-provided Window or path', async () => {
-    electron.invoke.mockImplementation(async (channel: string, request: { readonly requestId: string }) => {
-      expect(channel).toBe(AGENT_LAUNCH_HOST_CHANNEL);
-      expect(request).not.toHaveProperty('windowId');
-      expect(request).not.toHaveProperty('path');
-      return {
-        schemaVersion: 1,
-        requestId: request.requestId,
-        status: 'ready',
-        catalog: createCatalog(),
-      };
-    });
+    electron.invoke.mockImplementation(
+      async (channel: string, request: { readonly requestId: string }) => {
+        expect(channel).toBe(AGENT_LAUNCH_HOST_CHANNEL);
+        expect(request).toMatchObject({
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'agent-surface-1',
+          viewId: 'agent-view:window-1',
+        });
+        expect(request).not.toHaveProperty('windowId');
+        expect(request).not.toHaveProperty('path');
+        return {
+          requestId: request.requestId,
+          status: 'ready',
+          catalog: createCatalog(),
+        };
+      },
+    );
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
 
     await expect(
-      bridge.agentLaunch.attach('agent-view:window-1', {
-        kind: 'assistant',
-        assistantSpaceId: 'assistant:1',
-      }),
+      bridge.agentLaunch.attach(
+        'workbench-1',
+        'agent-surface-1',
+        'agent-view:window-1',
+        {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant:1',
+        },
+      ),
     ).resolves.toEqual(createCatalog());
   });
 
   it('preserves cancellation and detaches the exact connection', async () => {
     const catalog = createCatalog();
-    electron.invoke.mockImplementation(async (_channel: string, request: { readonly requestId: string; readonly operation: string }) => ({
-      schemaVersion: 1,
-      requestId: request.requestId,
-      status: request.operation === 'authorize-resource' ? 'cancelled' : 'detached',
-    }));
+    electron.invoke.mockImplementation(
+      async (
+        _channel: string,
+        request: { readonly requestId: string; readonly operation: string },
+      ) => ({
+        requestId: request.requestId,
+        status: request.operation === 'authorize-resource' ? 'cancelled' : 'detached',
+      }),
+    );
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
 
@@ -93,14 +105,12 @@ describe('Desktop Agent launch preload bridge', () => {
 
 function createCatalog() {
   return {
-    schemaVersion: 1 as const,
     connection: {
-      schemaVersion: 1 as const,
       applicationInstanceId: 'application-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       viewId: 'agent-view:window-1',
-      rendererEpoch: 1,
-      connectionEpoch: 1,
       connectionId: 'launch-1',
       scope: { kind: 'assistant' as const, assistantSpaceId: 'assistant:1' },
     },

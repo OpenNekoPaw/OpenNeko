@@ -9,31 +9,25 @@ import type {
 describe('DesktopAssetCenterRuntime', () => {
   it('attaches and updates only through the package-owned typed bridge', async () => {
     const execute = vi.fn(async (request) => ({
-      schemaVersion: 1 as const,
       requestId: request.requestId,
       route: request.route === 'preview.get' ? ('snapshot.get' as const) : request.route,
-      projection: projection(request.route === 'filter.update' ? 1 : 0),
+      projection: projection(),
     }));
     const runtime = new DesktopAssetCenterRuntime(
       { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
-      'endpoint-1',
       'grid',
       { assetCenter: { execute } },
     );
     await runtime.getSnapshot();
-    await runtime.updateFilter(0, { ...createDefaultAssetCenterFilter(), query: 'shot' });
+    await runtime.updateFilter({ ...createDefaultAssetCenterFilter(), query: 'shot' });
     expect(execute).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         route: 'attach',
-        endpointEpoch: 'endpoint-1',
         identity: { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
       }),
     );
-    expect(execute).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ route: 'filter.update', expectedRevision: 0 }),
-    );
+    expect(execute).toHaveBeenNthCalledWith(2, expect.objectContaining({ route: 'filter.update' }));
   });
 
   it('routes thumbnails and mutations through Asset Center without Home or raw-path payloads', async () => {
@@ -41,15 +35,13 @@ describe('DesktopAssetCenterRuntime', () => {
       async (request: AssetCenterHostRequest): Promise<AssetCenterHostResult> => {
         if (request.route === 'thumbnail.resolve') {
           return {
-            schemaVersion: 1 as const,
             requestId: request.requestId,
             route: request.route,
             thumbnail: {
               owner: 'global-asset-library' as const,
               itemId: 'global-asset-library:item-1',
-              expectedCatalogRevision: 5,
               descriptorId: 'thumbnail:item-1',
-              thumbnailRevision: 'revision-1',
+              sourceFingerprint: 'fingerprint-1',
               variant: 'hover' as const,
               dataUrl: 'data:image/png;base64,AA==',
             },
@@ -57,7 +49,6 @@ describe('DesktopAssetCenterRuntime', () => {
         }
         if (request.route === 'preview.get') throw new Error('Unexpected Preview request.');
         return {
-          schemaVersion: 1 as const,
           requestId: request.requestId,
           route: request.route,
           projection: readyProjection(),
@@ -66,18 +57,18 @@ describe('DesktopAssetCenterRuntime', () => {
     );
     const runtime = new DesktopAssetCenterRuntime(
       { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
-      'endpoint-1',
       'grid',
       { assetCenter: { execute } },
     );
     await runtime.getSnapshot();
-    const item = readyProjection().catalog.status === 'ready'
-      ? readyProjection().catalog.entries[0]?.item
-      : undefined;
+    const item =
+      readyProjection().catalog.status === 'ready'
+        ? readyProjection().catalog.entries[0]?.item
+        : undefined;
     if (!item) throw new Error('Asset fixture is unavailable.');
 
     await runtime.resolveThumbnail(item, 'hover');
-    await runtime.removeAsset(item, 0);
+    await runtime.removeAsset(item);
 
     expect(execute.mock.calls.map(([request]) => request.route)).toEqual([
       'attach',
@@ -90,11 +81,9 @@ describe('DesktopAssetCenterRuntime', () => {
   });
 });
 
-function projection(revision: number) {
+function projection() {
   return {
-    schemaVersion: 1 as const,
     identity: { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
-    revision,
     filter: createDefaultAssetCenterFilter(),
     catalog: { status: 'loading' as const },
     preview: { status: 'empty' as const },
@@ -103,11 +92,10 @@ function projection(revision: number) {
 
 function readyProjection() {
   return {
-    ...projection(0),
+    ...projection(),
     catalog: {
       status: 'ready' as const,
       owner: 'global-asset-library' as const,
-      catalogRevision: 5,
       entries: [
         {
           item: {
@@ -119,7 +107,7 @@ function readyProjection() {
             availability: 'available' as const,
             thumbnail: {
               descriptorId: 'thumbnail:item-1',
-              revision: 'revision-1',
+              sourceFingerprint: 'fingerprint-1',
               mediaType: 'image' as const,
             },
           },

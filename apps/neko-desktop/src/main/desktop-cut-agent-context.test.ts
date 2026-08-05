@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CUT_HOST_RUNTIME_VERSION, type CutHostRuntimeResult } from '@neko/cut-domain';
+import type { CutHostRuntimeResult } from '@neko/cut-domain';
 import { deliverCutAgentContext } from './app-host';
 
 describe('Desktop Cut to Agent context composition', () => {
@@ -26,20 +26,17 @@ describe('Desktop Cut to Agent context composition', () => {
 
 function fixtureResult(): CutHostRuntimeResult {
   return {
-    schemaVersion: CUT_HOST_RUNTIME_VERSION,
     snapshot: {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       identity: {
         projectId: 'project-1',
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'cut-view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'cuts/story.otio',
         sessionId: 'cut-session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       },
-      revision: 4,
       dirty: false,
       document: {},
       playback: {},
@@ -56,10 +53,10 @@ function fixtureResult(): CutHostRuntimeResult {
       type: 'agent-context',
       payload: {
         type: 'cut-clip',
-        id: 'cut:clip-1:r4',
+        id: 'cut:clip-1',
         label: 'Clip 1',
         summary: 'Explicit Clip 1',
-        data: { documentId: 'cuts/story.otio', revision: 4, clipId: 'clip-1' },
+        data: { documentId: 'cuts/story.otio', clipId: 'clip-1' },
       },
     },
   };

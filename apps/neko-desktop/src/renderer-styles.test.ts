@@ -143,18 +143,14 @@ describe('Desktop renderer styles', () => {
     expect(globalLibraryRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
   });
 
-  it('expands Agent-only into the full business area and removes the empty Main column', () => {
+  it('expands Agent-only interaction into the business area and collapses both docks', () => {
     const shellRule = styles.match(
       /\.desktop-scene-workbench--agent-only\.neko-controlled-workbench-shell\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
-    const mainRule = styles.match(
-      /\.desktop-scene-workbench--agent-only\s+\.neko-controlled-workbench-main\s*\{(?<body>[\s\S]*?)\n\}/u,
-    );
 
     expect(shellRule?.groups?.body).toMatch(
-      /grid-template-columns\s*:[\s\S]*?var\(--neko-controlled-primary-width\)[\s\S]*?minmax\(420px, 1fr\)[\s\S]*?0[\s\S]*?0/u,
+      /grid-template-columns\s*:[\s\S]*?var\(--neko-controlled-primary-width\)[\s\S]*?0[\s\S]*?minmax\(420px, 1fr\)[\s\S]*?0/u,
     );
-    expect(mainRule?.groups?.body).toMatch(/display\s*:\s*none/u);
   });
 
   it('gives the package-owned Preview Root its complete Workbench viewport', () => {
@@ -164,6 +160,17 @@ describe('Desktop renderer styles', () => {
     expect(previewSurfaceRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
     expect(previewSurfaceRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
     expect(previewSurfaceRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
+  });
+
+  it('gives retained Main View decks a stable full-height viewport', () => {
+    const retainedDeckRule = styles.match(
+      /\.project-main-group__content\s*>\s*\[data-neko-retained-surface-deck='true'\]\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(retainedDeckRule?.groups?.body).toMatch(/width\s*:\s*100%/u);
+    expect(retainedDeckRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(retainedDeckRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+    expect(retainedDeckRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
   });
 
   it('keeps Asset names visible in a compact management panel', () => {

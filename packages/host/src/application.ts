@@ -1,21 +1,16 @@
 import type { HostDiagnostic } from './ports';
 
-export const NEKO_APPLICATION_CONTRACT_VERSION = 1 as const;
-
 export const NEKO_APPLICATION_IDS = ['neko-desktop'] as const;
 
 export type NekoApplicationId = (typeof NEKO_APPLICATION_IDS)[number];
 
 export interface NekoApplicationIdentity {
-  readonly schemaVersion: typeof NEKO_APPLICATION_CONTRACT_VERSION;
   readonly applicationId: NekoApplicationId;
   readonly instanceId: string;
-  readonly version: string;
 }
 
 export type NekoApplicationDiagnosticCode =
   | 'invalid-application-contract'
-  | 'unsupported-application-contract-version'
   | 'unknown-application-identity'
   | 'stale-application-instance'
   | 'missing-application-handoff-capability';
@@ -35,7 +30,6 @@ export interface NekoApplicationHandoffTarget {
 }
 
 export interface NekoApplicationHandoffRequest {
-  readonly schemaVersion: typeof NEKO_APPLICATION_CONTRACT_VERSION;
   readonly requestId: string;
   readonly source: NekoApplicationIdentity;
   readonly target: NekoApplicationHandoffTarget;
@@ -85,7 +79,6 @@ export interface NekoApplicationStorageMigrationEntry {
 }
 
 export interface NekoApplicationStorageMigrationPlan {
-  readonly schemaVersion: typeof NEKO_APPLICATION_CONTRACT_VERSION;
   readonly sourceApplicationId: string;
   readonly targetApplicationId: NekoApplicationId;
   readonly entries: readonly NekoApplicationStorageMigrationEntry[];
@@ -103,13 +96,11 @@ export class NekoApplicationContractError extends Error {
 
 export function parseNekoApplicationIdentity(value: unknown): NekoApplicationIdentity {
   const record = requireRecord(value, 'Application identity must be an object.');
-  requireContractVersion(record['schemaVersion']);
+  requireExactKeys(record, ['applicationId', 'instanceId'], 'Application identity');
   const applicationId = requireApplicationId(record['applicationId']);
   return {
-    schemaVersion: NEKO_APPLICATION_CONTRACT_VERSION,
     applicationId,
     instanceId: requireNonEmptyString(record['instanceId'], 'Application instanceId is required.'),
-    version: requireNonEmptyString(record['version'], 'Application version is required.'),
   };
 }
 
@@ -118,7 +109,7 @@ export function parseNekoApplicationHandoffRequest(
   options: { readonly expectedSource?: NekoApplicationIdentity } = {},
 ): NekoApplicationHandoffRequest {
   const record = requireRecord(value, 'Application handoff request must be an object.');
-  requireContractVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId', 'source', 'target'], 'Application handoff request');
   const source = parseNekoApplicationIdentity(record['source']);
   if (options.expectedSource && !sameApplicationInstance(source, options.expectedSource)) {
     throw contractError(
@@ -128,8 +119,13 @@ export function parseNekoApplicationHandoffRequest(
     );
   }
   const target = requireRecord(record['target'], 'Application handoff target must be an object.');
+  requireExactKeys(
+    target,
+    ['toolId', 'workspaceId', 'projectId', 'resourceId', 'artifactId', 'taskId', 'editorId'],
+    'Application handoff target',
+    true,
+  );
   return {
-    schemaVersion: NEKO_APPLICATION_CONTRACT_VERSION,
     requestId: requireNonEmptyString(record['requestId'], 'Handoff requestId is required.'),
     source,
     target: {
@@ -159,16 +155,6 @@ export function validateNekoApplicationStorageMigrationPlan(
   plan: NekoApplicationStorageMigrationPlan,
 ): readonly NekoApplicationDiagnostic[] {
   const diagnostics: NekoApplicationDiagnostic[] = [];
-  if (plan.schemaVersion !== NEKO_APPLICATION_CONTRACT_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'unsupported-application-contract-version',
-        `Unsupported application storage migration schema '${String(plan.schemaVersion)}'.`,
-      ),
-    );
-    return diagnostics;
-  }
-
   const counts = new Map<NekoApplicationStorageCategory, number>();
   for (const entry of plan.entries) {
     counts.set(entry.category, (counts.get(entry.category) ?? 0) + 1);
@@ -230,20 +216,32 @@ function requireApplicationId(value: unknown): NekoApplicationId {
   );
 }
 
-function requireContractVersion(value: unknown): void {
-  if (value !== NEKO_APPLICATION_CONTRACT_VERSION) {
-    throw contractError(
-      'unsupported-application-contract-version',
-      `Unsupported application contract version '${String(value)}'.`,
-    );
-  }
-}
-
 function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {
   if (!isUnknownRecord(value)) {
     throw contractError('invalid-application-contract', message);
   }
   return value;
+}
+
+function requireExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+  label: string,
+  optional = false,
+): void {
+  const allowed = new Set(keys);
+  const unknown = Object.keys(record).find((key) => !allowed.has(key));
+  if (unknown) {
+    throw contractError(
+      'invalid-application-contract',
+      `${label} contains unknown field '${unknown}'.`,
+    );
+  }
+  if (optional) return;
+  const missing = keys.find((key) => !(key in record));
+  if (missing) {
+    throw contractError('invalid-application-contract', `${label} is missing field '${missing}'.`);
+  }
 }
 
 function isUnknownRecord(value: unknown): value is Readonly<Record<string, unknown>> {

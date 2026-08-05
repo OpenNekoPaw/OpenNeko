@@ -10,16 +10,16 @@ describe('Desktop Resource Browser bridge contract', () => {
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         projectViewId: 'project-view-1',
-        projectViewEpoch: 4,
-        endpointEpoch: 'endpoint-1',
+        projectViewInstanceId: 'view-instance-4',
+        rendererSessionId: 'endpoint-1',
       }),
     ).toEqual({
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: createResourceBrowserViewId('project-view-1'),
-      viewEpoch: 4,
-      endpointEpoch: 'endpoint-1',
+      viewInstanceId: 'view-instance-4',
+      rendererSessionId: 'endpoint-1',
     });
   });
 });

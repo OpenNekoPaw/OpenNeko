@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  RESOURCE_BROWSER_CONTRACT_VERSION,
   type ResourceBrowserIdentity,
   type ResourceBrowserProjection,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -12,13 +11,11 @@ const identity: ResourceBrowserIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'resource-browser:view-1',
-  viewEpoch: 1,
-  endpointEpoch: 'endpoint-1',
+  viewInstanceId: 'view-instance-1',
+  rendererSessionId: 'endpoint-1',
 };
 const projection: ResourceBrowserProjection = {
-  schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
   identity,
-  revision: 0,
   facet: 'media',
   query: '',
   items: [],
@@ -33,23 +30,21 @@ describe('Electron Resource Browser Host runtime', () => {
         getSnapshot: vi.fn(async () => projection),
         children: vi.fn(async () => projection),
         resolveThumbnail: vi.fn(async (request) => ({
-          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
           requestId: request.requestId,
           identity: request.identity,
           resourceId: request.resourceId,
           descriptorId: request.descriptorId,
-          revision: request.revision,
+          sourceFingerprint: request.sourceFingerprint,
           dataUrl: 'data:image/png;base64,aW1hZ2U=',
         })),
         resolveQuickPreview: vi.fn(async (request) => ({
-          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
           requestId: request.requestId,
           identity: request.identity,
           resourceId: request.resourceId,
           previewSessionId: 'hover-1',
           descriptor: {
             descriptorId: 'descriptor-1',
-            revision: 'revision-1',
+            sourceFingerprint: 'fingerprint-1',
             contentLocator: { kind: 'workspace-file' as const, path: 'media/clip.mp4' },
             url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
             contentKind: 'video' as const,
@@ -59,14 +54,12 @@ describe('Electron Resource Browser Host runtime', () => {
           },
         })),
         releaseQuickPreview: vi.fn(async (request) => ({
-          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
           requestId: request.requestId,
           identity: request.identity,
           previewSessionId: request.previewSessionId,
           status: 'released' as const,
         })),
         planRecovery: vi.fn(async (request) => ({
-          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
           requestId: request.requestId,
           identity: request.identity,
           resourceId: request.resourceId,
@@ -74,7 +67,6 @@ describe('Electron Resource Browser Host runtime', () => {
         })),
         applyRecovery: vi.fn(async () => projection),
         cancelRecovery: vi.fn(async (request) => ({
-          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
           requestId: request.requestId,
           identity: request.identity,
           planId: request.planId,
@@ -94,7 +86,6 @@ describe('Electron Resource Browser Host runtime', () => {
 
     await runtime.getSnapshot();
     await runtime.children({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'children-1',
       identity,
       route: 'children',
@@ -103,12 +94,10 @@ describe('Electron Resource Browser Host runtime', () => {
       limit: 100,
     });
     publish?.({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       sequence: 1,
-      projection: { ...projection, identity: { ...identity, viewEpoch: 2 } },
+      projection: { ...projection, identity: { ...identity, viewInstanceId: 'view-instance-2' } },
     });
     publish?.({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       sequence: 1,
       projection,
     });

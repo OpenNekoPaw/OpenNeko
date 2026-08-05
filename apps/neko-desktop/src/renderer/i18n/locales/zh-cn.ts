@@ -4,6 +4,11 @@ export const zhCN = {
   'app.name': 'OpenNeko',
   'shell.connecting': '正在连接桌面工作台…',
   'shell.unavailable': '桌面工作台不可用',
+  'shell.rootRenderFailure': '桌面界面渲染失败',
+  'shell.rootRenderFailureDetail': '意外的渲染错误中断了桌面界面。',
+  'shell.surfaceRenderFailure': '此面板无法显示',
+  'shell.surfaceRenderFailureDetail': '面板“{surface}”渲染失败：{error}',
+  'shell.retrySurface': '重试',
   'shell.openProjects': '已打开的项目',
   'shell.closeProjectTab': '关闭项目标签',
   'shell.removeRecentProject': '从最近项目中移除 {project}',
@@ -55,6 +60,16 @@ export const zhCN = {
   'shell.endpointChanged': '桌面工作台端点已变化，正在重新加载权威投影。',
   'shell.sequenceChanged': '桌面工作台投影序列已变化，正在重新加载权威状态。',
   'shell.staleCommand': '桌面工作台命令返回了过期的端点投影。',
+  'shell.storedWindowInvalid':
+    '旧工作区窗口“{windowId}”的数据已失效，本次未打开。项目和其他数据仍可继续使用。',
+  'shell.storedStateInvalid':
+    '旧工作区状态已失效并安全隔离，已为你打开新的创作界面。项目、会话和其他数据未被重置。',
+  'shell.storedSettingsInvalid':
+    '旧应用设置已失效并安全隔离，已恢复默认设置。工作区、项目、会话和其他数据未被重置。',
+  'shell.conversationRecordInvalid':
+    '旧会话“{conversationId}”的数据已失效并隔离，已打开新的草稿。其他会话、项目和文件均未修改。',
+  'shell.conversationRecordInvalidUnknown':
+    '一条旧会话的数据已失效并隔离，已打开新的草稿。其他会话、项目和文件均未修改。',
   'shell.projectDetached': '此项目未附加到当前窗口，请重新打开工作区后继续。',
   'shell.conversationDetached': '会话“{conversationId}”所属项目未附加到当前窗口。',
   'home.label': '主页',

@@ -35,15 +35,12 @@ describe('Desktop Extension Management preload bridge', () => {
     electron.invoke.mockReset();
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        schemaVersion: 1,
         requestId: request.requestId,
         application: {
-          schemaVersion: 1,
           applicationId: 'neko-desktop',
           instanceId: 'application-1',
-          version: '0.0.1',
         },
-        window: { windowId: 'window-1', rendererEpoch: 1 },
+        window: { windowId: 'window-1', rendererSessionId: 'renderer-session-1' },
         host: { id: 'electron', kind: 'electron', ui: 'graphical' },
         runtime: { platform: 'darwin' },
         status: 'foundation-ready',
@@ -58,7 +55,7 @@ describe('Desktop Extension Management preload bridge', () => {
   afterEach(() => {
     for (const [channel, request] of electron.invoke.mock.calls) {
       if (channel !== AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL) continue;
-      expect(request).toMatchObject({ endpointEpoch: 'application-1:window-1:1', identity });
+      expect(request).toMatchObject({ identity });
       expect(request).not.toHaveProperty('path');
       expect(request).not.toHaveProperty('args');
     }
@@ -68,13 +65,11 @@ describe('Desktop Extension Management preload bridge', () => {
     const request = createAgentExtensionManagementHostRequest({
       route: 'snapshot.get',
       requestId: 'extensions-1',
-      endpointEpoch: 'application-1:window-1:1',
       identity,
     });
     electron.invoke.mockImplementation(async (channel: string) => {
       expect(channel).toBe(AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL);
       return {
-        schemaVersion: 1,
         requestId: request.requestId,
         route: request.route,
         projection: {
@@ -102,13 +97,11 @@ describe('Desktop Extension Management preload bridge', () => {
     const request = createAgentExtensionManagementHostRequest({
       route: 'plugin.install',
       requestId: 'extensions-install-1',
-      endpointEpoch: 'application-1:window-1:1',
       identity,
       pluginId: 'computer-use@openneko',
       expectedCatalogRevision: catalogRevision,
     });
     electron.invoke.mockResolvedValue({
-      schemaVersion: 1,
       requestId: 'stale-request',
       route: request.route,
       projection: {

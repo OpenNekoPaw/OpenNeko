@@ -1,24 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDesktopBootstrapRequest,
-  DESKTOP_BRIDGE_CONTRACT_VERSION,
   DesktopBridgeContractError,
   parseDesktopBootstrapProjection,
   parseDesktopLifecycleEvent,
 } from './bridge-contract';
 
 describe('Desktop bridge contract', () => {
-  it('creates a versioned request and rejects an unsupported response version', () => {
+  it('creates a canonical request from its semantic identity', () => {
     expect(createDesktopBootstrapRequest('request-1')).toEqual({
-      schemaVersion: DESKTOP_BRIDGE_CONTRACT_VERSION,
       requestId: 'request-1',
     });
-    expect(() =>
-      parseDesktopBootstrapProjection({
-        ...validProjection(),
-        schemaVersion: 2,
-      }),
-    ).toThrowError(DesktopBridgeContractError);
   });
 
   it('rejects a response for another request', () => {
@@ -41,15 +33,30 @@ describe('Desktop bridge contract', () => {
         code: 'invalid-desktop-bridge-payload',
       }),
     );
+    expect(() =>
+      parseDesktopBootstrapProjection({
+        ...validProjection(),
+        application: { ...validProjection().application, version: '0.0.1' },
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        diagnostic: expect.objectContaining({ code: 'invalid-application-contract' }),
+      }),
+    );
+    expect(() =>
+      parseDesktopBootstrapProjection({
+        ...validProjection(),
+        host: { ...validProjection().host, version: '43.2.0' },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-desktop-bridge-payload' }));
   });
 
   it('rejects unknown lifecycle events', () => {
     expect(() =>
       parseDesktopLifecycleEvent({
-        schemaVersion: 1,
         applicationInstanceId: 'app-1',
         windowId: 'window-1',
-        rendererEpoch: 1,
+        rendererSessionId: 'renderer-session-1',
         sequence: 1,
         type: 'active-window-changed',
       }),
@@ -63,24 +70,20 @@ describe('Desktop bridge contract', () => {
 
 function validProjection() {
   return {
-    schemaVersion: 1 as const,
     requestId: 'request-1',
     application: {
-      schemaVersion: 1 as const,
       applicationId: 'neko-desktop' as const,
       instanceId: 'app-1',
-      version: '0.0.1',
     },
     window: {
       windowId: 'window-1',
-      rendererEpoch: 1,
+      rendererSessionId: 'renderer-session-1',
     },
     host: {
       id: 'electron-host',
       kind: 'electron' as const,
       ui: 'graphical' as const,
       displayName: 'OpenNeko Desktop',
-      version: '43.2.0',
     },
     runtime: {
       platform: 'darwin' as const,

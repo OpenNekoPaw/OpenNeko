@@ -13,8 +13,6 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-  PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
   encodeEntityRepresentationBindingFile,
   encodeProjectEntityDocument,
 } from '@neko/entity-domain';
@@ -46,8 +44,8 @@ const identity: ResourceBrowserIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'resource-browser:view-1',
-  viewEpoch: 1,
-  endpointEpoch: 'endpoint-1',
+  viewInstanceId: 'view-instance-1',
+  rendererSessionId: 'endpoint-1',
 };
 
 afterEach(async () => {
@@ -64,9 +62,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(
       path.join(nekoDirectory, 'entities.json'),
       encodeProjectEntityDocument({
-        schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
         projectId: identity.workspaceId,
-        revision: 1,
         entities: [
           {
             entityId: 'character-a',
@@ -95,7 +91,6 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(
       path.join(nekoDirectory, 'entity-representation-bindings.json'),
       encodeEntityRepresentationBindingFile({
-        version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
         bindings: [
           {
             id: 'binding-retired',
@@ -118,7 +113,6 @@ describe('Desktop Resource Browser source', () => {
       homedir: fixture.root,
       nekoHome: path.join(fixture.root, '.openneko'),
       workspaceRoot: fixture.workspace,
-      version: '0.0.1',
       logger: createLogger(),
     });
     const workspace = {
@@ -184,7 +178,6 @@ describe('Desktop Resource Browser source', () => {
       homedir: fixture.root,
       nekoHome: path.join(fixture.root, '.openneko'),
       workspaceRoot: fixture.workspace,
-      version: '0.0.1',
       logger: createLogger(),
     });
     const workspace = {
@@ -239,7 +232,6 @@ describe('Desktop Resource Browser source', () => {
       homedir: path.join(fixture.root, 'home'),
       nekoHome: path.join(fixture.root, 'home', '.neko'),
       workspaceRoot: fixture.workspace,
-      version: '0.0.1',
       logger: createLogger(),
     });
     const { libraryId } = await createGlobalMediaLibraryConnection({
@@ -307,7 +299,6 @@ describe('Desktop Resource Browser source', () => {
       homedir: path.join(fixture.root, 'home'),
       nekoHome: path.join(fixture.root, 'home', '.neko'),
       workspaceRoot: fixture.workspace,
-      version: '0.0.1',
       logger: createLogger(),
     });
     const { libraryId } = await createGlobalMediaLibraryConnection({
@@ -356,7 +347,6 @@ describe('Desktop Resource Browser source', () => {
       homedir: fixture.root,
       nekoHome: path.join(fixture.root, '.openneko'),
       workspaceRoot: fixture.workspace,
-      version: '0.0.1',
       logger: createLogger(),
     });
     const source = createResourceBrowserNodeReadSource({
@@ -397,9 +387,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(
       path.join(fixture.workspace, 'neko', 'entities.json'),
       JSON.stringify({
-        schemaVersion: 1,
         projectId: 'workspace-1',
-        revision: 1,
         entities: [
           {
             entityId: 'character-neko',
@@ -523,7 +511,6 @@ describe('Desktop Resource Browser source', () => {
     const target = {
       viewId: 'preview:project-view-1:temporary',
       presentation: 'temporary' as const,
-      expectedWorkbenchRevision: 3,
     };
     await composition.interactions.preview({ identity, item, target });
     await composition.interactions.reveal({ identity, item });
@@ -533,7 +520,7 @@ describe('Desktop Resource Browser source', () => {
         item,
         descriptor: {
           descriptorId: 'thumbnail-cat',
-          revision: '1',
+          sourceFingerprint: '1',
           mediaType: 'image',
         },
       }),
@@ -638,9 +625,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(
       path.join(fixture.workspace, 'neko', 'entities.json'),
       JSON.stringify({
-        schemaVersion: 1,
         projectId: 'workspace-1',
-        revision: 1,
         entities: [
           {
             entityId: 'confirmed',
@@ -702,9 +687,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(
       path.join(fixture.workspace, 'neko', 'entities.json'),
       JSON.stringify({
-        schemaVersion: 1,
         projectId: 'workspace-1',
-        revision: 4,
         entities: [
           {
             entityId: 'character-rin',
@@ -727,51 +710,54 @@ describe('Desktop Resource Browser source', () => {
         ],
       }),
     );
-    const list = vi.fn(async () => [
-      {
-        projectionId: 'candidate:mio',
-        kind: 'entity-candidate' as const,
-        sourceId: 'document:story',
-        candidateId: 'candidate-mio',
-        freshness: 'fresh' as const,
-        value: {
+    const list = vi.fn(async () => ({
+      records: [
+        {
+          projectionId: 'candidate:mio',
+          kind: 'entity-candidate' as const,
+          sourceId: 'document:story',
           candidateId: 'candidate-mio',
-          kind: 'character' as const,
-          proposedNames: { canonical: 'Mio', aliases: [] },
           freshness: 'fresh' as const,
-          evidence: [
-            {
-              evidenceId: 'evidence:mio',
-              owner: 'document' as const,
-              sourceId: 'document:story',
-            },
-          ],
-        },
-        updatedAt: '2026-08-05T01:00:00.000Z',
-      },
-      {
-        projectionId: 'binding:rin',
-        kind: 'binding-availability' as const,
-        sourceId: 'workspace-file:characters/rin.png',
-        entityId: 'character-rin',
-        freshness: 'fresh' as const,
-        value: {
-          bindingId: 'binding-rin',
-          entityId: 'character-rin',
-          entityKind: 'character' as const,
-          representation: { kind: 'workspace-file' as const, path: 'characters/rin.png' },
-          role: 'portrait' as const,
-          owner: 'workspace-file' as const,
-          availability: 'needs-attention' as const,
-          attention: {
-            diagnostic: { code: 'content-missing' as const },
-            action: 'rebind' as const,
+          value: {
+            candidateId: 'candidate-mio',
+            kind: 'character' as const,
+            proposedNames: { canonical: 'Mio', aliases: [] },
+            freshness: 'fresh' as const,
+            evidence: [
+              {
+                evidenceId: 'evidence:mio',
+                owner: 'document' as const,
+                sourceId: 'document:story',
+              },
+            ],
           },
-          checkedAt: '2026-08-05T01:00:00.000Z',
+          updatedAt: '2026-08-05T01:00:00.000Z',
         },
-        updatedAt: '2026-08-05T01:00:00.000Z',
-      },
-    ]);
+        {
+          projectionId: 'binding:rin',
+          kind: 'binding-availability' as const,
+          sourceId: 'workspace-file:characters/rin.png',
+          entityId: 'character-rin',
+          freshness: 'fresh' as const,
+          value: {
+            bindingId: 'binding-rin',
+            entityId: 'character-rin',
+            entityKind: 'character' as const,
+            representation: { kind: 'workspace-file' as const, path: 'characters/rin.png' },
+            role: 'portrait' as const,
+            owner: 'workspace-file' as const,
+            availability: 'needs-attention' as const,
+            attention: {
+              diagnostic: { code: 'content-missing' as const },
+              action: 'rebind' as const,
+            },
+            checkedAt: '2026-08-05T01:00:00.000Z',
+          },
+          updatedAt: '2026-08-05T01:00:00.000Z',
+        },
+      ],
+      diagnostics: [],
+    }));
     const refreshEntityProjections = vi.fn(async () => undefined);
 
     const result = await createComposition(fixture.workspace, {
@@ -791,7 +777,6 @@ describe('Desktop Resource Browser source', () => {
       kinds: ['entity-candidate', 'binding-availability'],
     });
     expect(result).toMatchObject({
-      projectRevision: 4,
       projections: [
         {
           projectionId: 'entity:character-rin',
@@ -819,10 +804,8 @@ describe('Desktop Resource Browser source', () => {
     const selected = path.join(fixture.root, 'Media Source');
     await mkdir(selected);
     await writeFile(path.join(selected, 'unreferenced.mov'), 'external-only');
-    const didMutateGlobalMediaLibraries = vi.fn();
     const composition = createComposition(fixture.workspace, {
       selectSource: async () => selected,
-      didMutateGlobalMediaLibraries,
     });
 
     await expect(composition.interactions.addDirectoryLibrary({ identity })).resolves.toBe('added');
@@ -853,7 +836,6 @@ describe('Desktop Resource Browser source', () => {
     await expect(readFile(path.join(selected, 'unreferenced.mov'), 'utf8')).resolves.toBe(
       'external-only',
     );
-    expect(didMutateGlobalMediaLibraries).toHaveBeenCalledOnce();
   });
 
   it('links a configured global library by identity without projecting its path', async () => {
@@ -886,15 +868,12 @@ describe('Desktop Resource Browser source', () => {
     await mkdir(selected);
     await mkdir(path.join(fixture.workspace, 'neko', 'assets', 'Conflict'), { recursive: true });
     const globalMediaLibraryRoot = path.join(fixture.root, '.openneko', 'media-libraries');
-    const didMutateGlobalMediaLibraries = vi.fn();
     const composition = createComposition(fixture.workspace, {
       selectSource: async () => selected,
-      didMutateGlobalMediaLibraries,
     });
 
     await expect(composition.interactions.addDirectoryLibrary({ identity })).rejects.toThrow();
     await expect(listGlobalMediaLibraryConnections(globalMediaLibraryRoot)).resolves.toEqual([]);
-    expect(didMutateGlobalMediaLibraries).not.toHaveBeenCalled();
   });
 
   it('relinks and removes only the selected managed media library root', async () => {
@@ -1054,7 +1033,6 @@ function createComposition(
     readonly selectGlobalLibrary?: Parameters<
       typeof createResourceBrowserNodeProjectionSource
     >[0]['selectGlobalLibrary'];
-    readonly didMutateGlobalMediaLibraries?: () => void;
     readonly createThumbnail?: (absolutePath: string) => Promise<string>;
     readonly entityProjections?: Parameters<
       typeof createResourceBrowserNodeProjectionSource
@@ -1068,7 +1046,6 @@ function createComposition(
     homedir: path.dirname(workspacePath),
     nekoHome: path.join(path.dirname(workspacePath), '.openneko'),
     workspaceRoot: workspacePath,
-    version: '0.0.1',
     logger: createLogger(),
     revealPath: effects.revealPath,
   });
@@ -1088,9 +1065,10 @@ function createComposition(
     openPreview: effects.openPreview ?? (async () => undefined),
     openCut: effects.openCut ?? (async () => undefined),
     selectSource: effects.selectSource ?? (async () => undefined),
+    selectWorkspaceFiles: async () => undefined,
+    trashWorkspaceItem: async () => undefined,
     selectGlobalLibrary: effects.selectGlobalLibrary ?? (async () => undefined),
     mutateGlobalMediaLibraries: (operation) => operation(),
-    didMutateGlobalMediaLibraries: effects.didMutateGlobalMediaLibraries ?? (() => undefined),
     createThumbnail: effects.createThumbnail ?? (async () => 'data:image/png;base64,aW1hZ2U='),
     addToCanvas: async () => undefined,
     addToCut: async () => undefined,

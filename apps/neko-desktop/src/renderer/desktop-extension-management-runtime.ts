@@ -9,12 +9,17 @@ import {
   type OpenNekoAgentExtensionManagementBridge,
 } from '@neko/agent-contracts/extension-management-host';
 
+type AgentExtensionManagementRequestInput<
+  Request extends AgentExtensionManagementHostRequest = AgentExtensionManagementHostRequest,
+> = Request extends unknown
+  ? Omit<Request, 'requestId' | 'identity'>
+  : never;
+
 export class DesktopExtensionManagementRuntime implements AgentExtensionManagementRuntime {
   private disposed = false;
 
   constructor(
     readonly identity: AgentExtensionManagementSessionIdentity,
-    private readonly endpointEpoch: string,
     private readonly bridge: OpenNekoAgentExtensionManagementBridge,
   ) {}
 
@@ -60,16 +65,11 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
   }
 
   private async execute(
-    input: AgentExtensionManagementHostRequest extends infer Request
-      ? Request extends { readonly schemaVersion: number }
-        ? Omit<Request, 'schemaVersion' | 'requestId' | 'endpointEpoch' | 'identity'>
-        : never
-      : never,
+    input: AgentExtensionManagementRequestInput,
   ): Promise<AgentExtensionManagementProjection> {
     this.requireActive();
     const request = createAgentExtensionManagementHostRequest({
       requestId: crypto.randomUUID(),
-      endpointEpoch: this.endpointEpoch,
       identity: this.identity,
       ...input,
     });

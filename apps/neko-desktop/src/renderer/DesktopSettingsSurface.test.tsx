@@ -5,7 +5,6 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
   type DesktopApplicationSettingsProjection,
 } from '@neko/host/application-settings';
 import {
@@ -106,8 +105,6 @@ async function renderSettings({
         <DesktopApplicationSettingsProvider
           value={{
             projection: {
-              schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-              revision: 3,
               eventSequence: 2,
               preferences: {
                 theme: 'system',

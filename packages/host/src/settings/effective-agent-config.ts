@@ -13,7 +13,6 @@ import {
   type ExternalResearchConfig,
 } from '@neko/agent-contracts';
 import {
-  EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION,
   EFFECTIVE_AGENT_CONFIG_DIMENSIONS,
   type EffectiveAgentConfigurationProjection,
   type EffectiveAgentConfigurationValues,
@@ -227,7 +226,6 @@ export function createEffectiveAgentConfigurationProjection(
   });
   const digest = configurationDigest(values, sources);
   return Object.freeze({
-    schemaVersion: EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION,
     profileId: `effective-agent-${digest.slice('sha256:'.length, 'sha256:'.length + 16)}`,
     digest,
     values,
@@ -239,9 +237,6 @@ export function createEffectiveAgentConfigurationProjection(
 export function assertEffectiveAgentConfigurationProjection(
   input: EffectiveAgentConfigurationProjection,
 ): EffectiveAgentConfigurationProjection {
-  if (input.schemaVersion !== EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION) {
-    throw new Error(`Unsupported effective Agent configuration version: ${input.schemaVersion}`);
-  }
   const expectedDigest = configurationDigest(input.values, input.sources);
   if (input.digest !== expectedDigest) {
     throw new Error('Effective Agent configuration digest does not match its frozen values.');
@@ -260,7 +255,6 @@ function configurationDigest(
   return `sha256:${createHash('sha256')
     .update(
       stableStringify({
-        schemaVersion: EFFECTIVE_AGENT_CONFIG_CONTRACT_VERSION,
         values,
         sources,
       }),

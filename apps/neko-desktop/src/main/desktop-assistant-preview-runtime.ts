@@ -7,7 +7,6 @@ import type {
 } from '@neko/agent-contracts';
 import type { AssistantResourcePreviewPort } from '@neko/agent-runtime/application';
 import {
-  AUTHORIZED_PREVIEW_SESSION_VERSION,
   parseAuthorizedPreviewSessionProjection,
   type AuthorizedPreviewSessionProjection,
 } from '@neko/preview-domain/authorized-session';
@@ -16,7 +15,6 @@ import type { DesktopResourceRegistry } from './desktop-resource-registry';
 
 interface AssistantPreviewEntry {
   readonly identity: AssistantResourceIdentity;
-  readonly endpointEpoch: string;
   readonly projection: AuthorizedPreviewSessionProjection;
 }
 
@@ -38,14 +36,12 @@ export function createDesktopAssistantPreviewRuntime(options: {
   };
   const requirePreview = (input: {
     readonly identity: AssistantResourceIdentity;
-    readonly endpointEpoch: string;
     readonly previewSessionId: string;
   }): AssistantPreviewEntry => {
     requireActive();
     const entry = previews.get(input.previewSessionId);
     if (
       !entry ||
-      entry.endpointEpoch !== input.endpointEpoch ||
       !sameAssistantResourceIdentity(entry.identity, input.identity)
     ) {
       throw new Error(
@@ -55,7 +51,7 @@ export function createDesktopAssistantPreviewRuntime(options: {
     return entry;
   };
   const runtime: DesktopAssistantPreviewRuntime = {
-    async authorize({ identity, endpointEpoch, artifact }) {
+    async authorize({ identity, artifact }) {
       requireActive();
       if (
         artifact.assistantSpaceId !== identity.assistantSpaceId ||
@@ -75,8 +71,7 @@ export function createDesktopAssistantPreviewRuntime(options: {
       let projection: AuthorizedPreviewSessionProjection;
       if (!contentKind || !mediaType) {
         projection = parseAuthorizedPreviewSessionProjection({
-          schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
-          identity: { previewSessionId, windowId: identity.windowId, owner, revision: 0 },
+          identity: { previewSessionId, windowId: identity.windowId, owner },
           status: 'unavailable',
           diagnostic: {
             code: 'preview-unsupported-kind',
@@ -95,19 +90,17 @@ export function createDesktopAssistantPreviewRuntime(options: {
             windowId: identity.windowId,
             viewId: identity.assistantSpaceId,
             sessionId: previewSessionId,
-            endpointEpoch,
+            rendererSessionId: previewSessionId,
             revision,
-            generation: '0',
           },
           { absolutePath, mediaType, revision },
         );
         projection = parseAuthorizedPreviewSessionProjection({
-          schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
-          identity: { previewSessionId, windowId: identity.windowId, owner, revision: 0 },
+          identity: { previewSessionId, windowId: identity.windowId, owner },
           status: 'ready',
           descriptor: {
             descriptorId: `descriptor:${previewSessionId}`,
-            revision,
+            sourceFingerprint: revision,
             contentLocator: {
               kind: 'generated-output',
               outputId: artifact.scratchArtifactId,
@@ -128,7 +121,7 @@ export function createDesktopAssistantPreviewRuntime(options: {
         previews.delete(existingId);
         options.resources.releaseSession(existingId);
       }
-      previews.set(previewSessionId, { identity, endpointEpoch, projection });
+      previews.set(previewSessionId, { identity, projection });
       return projection;
     },
     read(input) {

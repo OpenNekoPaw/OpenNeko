@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
-  DESKTOP_SCENE_CONTRACT_VERSION,
   DesktopSceneContractError,
   applyDesktopApplicationSidebarMutation,
   createDefaultDesktopAgentScene,
@@ -18,10 +16,8 @@ import {
 describe('Desktop Scene contract', () => {
   it('creates an unbound Entry Draft scene with exact Window and draft identities', () => {
     expect(createDefaultDesktopAgentScene('window-1', 'draft-1')).toEqual({
-      schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
       sceneId: 'scene:window-1:agent:draft-1',
       windowId: 'window-1',
-      revision: 0,
       context: {
         kind: 'agent',
         agentViewId: 'agent-view:window-1:draft-1',
@@ -82,7 +78,7 @@ describe('Desktop Scene contract', () => {
             kind: 'workspace-main',
             workspaceId: 'workspace-1',
             viewId: 'view-1',
-            viewEpoch: 1,
+            viewInstanceId: 'view-instance-1',
           },
         },
       }),
@@ -147,10 +143,8 @@ describe('Desktop Scene contract', () => {
 
   it('keeps Asset management and Preview on one AssetCenter session', () => {
     const projection = {
-      schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
       sceneId: 'scene:window-1:assets',
       windowId: 'window-1',
-      revision: 2,
       context: { kind: 'asset-center' as const, assetCenterSessionId: 'assets-1' },
       slots: {
         main: {
@@ -183,10 +177,8 @@ describe('Desktop Scene contract', () => {
   it('keeps management Roots in Main instead of manager docks', () => {
     const sceneId = 'scene:window-1:extensions';
     const projection = {
-      schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
       sceneId,
       windowId: 'window-1',
-      revision: 1,
       context: {
         kind: 'extensions' as const,
         extensionManagementSessionId: 'extension-management-1',
@@ -214,42 +206,41 @@ describe('Desktop Scene contract', () => {
     ).toThrow("Unknown Manager Surface kind 'extension-catalog'");
   });
 
-  it('creates revision-fenced transition requests and rejects arbitrary intent', () => {
+  it('creates exact Scene identity transition requests and rejects arbitrary intent', () => {
     expect(
       createDesktopSceneTransitionRequest({
         requestId: 'request-1',
-        expectedEndpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         expectedWindowRevision: 4,
-        expectedSceneRevision: 2,
+        sceneId: 'scene-2',
         intent: { kind: 'open-workspace', workspaceGrantId: 'grant-1' },
       }),
     ).toEqual({
-      schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
       requestId: 'request-1',
-      expectedEndpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
       windowId: 'window-1',
       expectedWindowRevision: 4,
-      expectedSceneRevision: 2,
+      sceneId: 'scene-2',
       intent: { kind: 'open-workspace', workspaceGrantId: 'grant-1' },
     });
     expect(
       createDesktopSceneTransitionRequest({
         requestId: 'request-project',
-        expectedEndpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         expectedWindowRevision: 4,
-        expectedSceneRevision: 2,
+        sceneId: 'scene-2',
         intent: { kind: 'open-project-workspace', projectId: 'project-1' },
       }).intent,
     ).toEqual({ kind: 'open-project-workspace', projectId: 'project-1' });
     expect(
       createDesktopSceneTransitionRequest({
         requestId: 'request-conversation',
-        expectedEndpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         expectedWindowRevision: 4,
-        expectedSceneRevision: 2,
+        sceneId: 'scene-2',
         intent: {
           kind: 'restore-conversation',
           navigation: {
@@ -267,23 +258,21 @@ describe('Desktop Scene contract', () => {
     });
     expect(() =>
       parseDesktopSceneTransitionRequest({
-        schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
         requestId: 'request-legacy-conversation',
-        expectedEndpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         expectedWindowRevision: 4,
-        expectedSceneRevision: 2,
+        sceneId: 'scene-2',
         intent: { kind: 'restore-conversation', conversationId: 'conversation-1' },
       }),
     ).toThrow("Restore Conversation intent contains unknown field 'conversationId'");
     expect(() =>
       parseDesktopSceneTransitionRequest({
-        schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
         requestId: 'request-1',
-        expectedEndpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         expectedWindowRevision: 4,
-        expectedSceneRevision: 2,
+        sceneId: 'scene-2',
         intent: { kind: 'open-home' },
       }),
     ).toThrow("Unknown Desktop Scene transition intent 'open-home'");
@@ -344,44 +333,39 @@ describe('Desktop Scene contract', () => {
     ).toThrow("contains unknown field 'component'");
   });
 
-  it('validates an independent Sidebar projection and mutation revision', () => {
+  it('validates an independent Sidebar projection and sender-bound mutation', () => {
     const sidebar = createDefaultDesktopApplicationSidebar('window-1');
     expect(sidebar).toEqual({
-      schemaVersion: DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
       windowId: 'window-1',
-      revision: 0,
       visible: true,
       width: 240,
     });
     const mutation = createDesktopApplicationSidebarMutationRequest({
       requestId: 'request-1',
-      expectedEndpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
       windowId: 'window-1',
-      expectedSidebarRevision: 3,
       visible: false,
       width: 288,
     });
     expect(mutation).toEqual({
-      schemaVersion: DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
       requestId: 'request-1',
-      expectedEndpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
       windowId: 'window-1',
-      expectedSidebarRevision: 3,
       visible: false,
       width: 288,
     });
     expect(
       applyDesktopApplicationSidebarMutation({
-        projection: { ...sidebar, revision: 3 },
+        projection: sidebar,
         request: mutation,
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       }),
-    ).toEqual({ ...sidebar, revision: 4, visible: false, width: 288 });
+    ).toEqual({ ...sidebar, visible: false, width: 288 });
     expect(() =>
       applyDesktopApplicationSidebarMutation({
         projection: sidebar,
         request: mutation,
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-2',
       }),
     ).toThrowError(
       expect.objectContaining<Partial<DesktopSceneContractError>>({
@@ -396,24 +380,21 @@ describe('Desktop Scene contract', () => {
     ).toThrow('Desktop Sidebar width must be between 208 and 360');
     expect(() =>
       parseDesktopApplicationSidebarMutationRequest({
-        schemaVersion: DESKTOP_APPLICATION_SIDEBAR_CONTRACT_VERSION,
         requestId: 'request-1',
-        expectedEndpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
-        expectedSidebarRevision: -1,
+        [['revi', 'sion'].join('')]: 1,
         visible: true,
         width: 240,
       }),
-    ).toThrow('Desktop Sidebar revision must be a non-negative integer');
+    ).toThrow("Desktop Sidebar mutation request contains unknown field 'revision'");
   });
 });
 
 function workspaceScene() {
   return {
-    schemaVersion: DESKTOP_SCENE_CONTRACT_VERSION,
     sceneId: 'scene:window-1:workspace-1',
     windowId: 'window-1',
-    revision: 1,
     context: {
       kind: 'agent' as const,
       agentViewId: 'agent-view:window-1',
@@ -442,14 +423,14 @@ function workspaceScene() {
         kind: 'workspace-main' as const,
         workspaceId: 'workspace-1',
         viewId: 'view-1',
-        viewEpoch: 3,
+        viewInstanceId: 'view-instance-3',
       },
       rightManager: { kind: 'workspace-resources' as const, workspaceId: 'workspace-1' },
       timeline: {
         kind: 'workspace-timeline' as const,
         workspaceId: 'workspace-1',
         viewId: 'view-1',
-        viewEpoch: 3,
+        viewInstanceId: 'view-instance-3',
         ownerId: 'cut-1',
       },
       status: { kind: 'scene-status' as const, sceneId: 'scene:window-1:workspace-1' },
