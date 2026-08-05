@@ -16,13 +16,19 @@ import type {
   CanvasReferencedContentLocator,
 } from '@neko/canvas-domain';
 import type { CanvasHostMessagePort } from '../hooks/useCanvasHostMessages';
-import { createCanvasViewportSnapshotKey } from '../utils/viewportWebviewState';
+import {
+  createCanvasViewportSnapshotKey,
+  readCanvasViewportSnapshot,
+  writeCanvasViewportSnapshot,
+  type CanvasWebviewStateDiagnostic,
+} from '../utils/viewportWebviewState';
 
 export interface CanvasWebviewDelegate extends CanvasHostMessagePort {
   supportsMessage?(messageType: string): boolean;
 }
 
 export interface CanvasWebviewHostPort extends CanvasHostMessagePort {
+  readonly documentId: string;
   supportsMessage(messageType: string): boolean;
   subscribe(listener: (message: unknown) => void): () => void;
   requestSource(
@@ -64,7 +70,7 @@ export function createCanvasWebviewHost(
 ): CanvasWebviewHostPort {
   const listeners = new Set<(message: unknown) => void>();
   let snapshot: CanvasHostSnapshot | undefined;
-  let state: unknown;
+  let state: unknown = delegate?.getState();
   let disposed = false;
   let started = false;
   let commandSequence = 0;
@@ -83,11 +89,22 @@ export function createCanvasWebviewHost(
     for (const listener of listeners) listener(message);
   };
 
+  const reportStateDiagnostic = (diagnostic: CanvasWebviewStateDiagnostic): void => {
+    delegate?.reportStateDiagnostic?.(diagnostic);
+  };
+
+  const updatePresentationState = (next: CanvasHostSnapshot): void => {
+    const previousState = state;
+    state = mergePresentationIntoWebviewState(state, next, reportStateDiagnostic);
+    if (state !== previousState) {
+      delegate?.setState(state);
+    }
+  };
+
   const publishSnapshot = (next: CanvasHostSnapshot): void => {
     if (isOlderSnapshot(next)) return;
     snapshot = next;
-    state = mergePresentationIntoWebviewState(state, next);
-    delegate?.setState(state);
+    updatePresentationState(next);
     emit({ type: 'update', data: next.canvas });
     emit({ type: 'canvas.hostPresentation', presentation: next.presentation });
   };
@@ -95,8 +112,7 @@ export function createCanvasWebviewHost(
   const adoptLocalSnapshot = (next: CanvasHostSnapshot): void => {
     if (isOlderSnapshot(next)) return;
     snapshot = next;
-    state = mergePresentationIntoWebviewState(state, next);
-    delegate?.setState(state);
+    updatePresentationState(next);
   };
 
   const start = (): void => {
@@ -147,7 +163,7 @@ export function createCanvasWebviewHost(
 
   const executeViewportState = async (nextState: unknown): Promise<void> => {
     const current = snapshot ?? (await runtime.getSnapshot());
-    const viewport = readViewportFromWebviewState(nextState, current.canvas);
+    const viewport = readViewportFromWebviewState(nextState, current, reportStateDiagnostic);
     if (!viewport) return;
     const presentation: CanvasHostPresentationState = {
       viewport,
@@ -264,6 +280,7 @@ export function createCanvasWebviewHost(
   };
 
   return {
+    documentId: runtime.identity.documentId,
     postMessage,
     supportsMessage,
     getState: () => delegate?.getState() ?? state,
@@ -272,6 +289,7 @@ export function createCanvasWebviewHost(
       delegate?.setState(next);
       enqueue(() => executeViewportState(next));
     },
+    reportStateDiagnostic,
     subscribe(listener) {
       if (disposed) throw new Error('Canvas Webview Host is disposed.');
       listeners.add(listener);
@@ -413,7 +431,6 @@ function mergeCanvasStatus(previous: CanvasData, value: unknown): CanvasData {
   }
   const next: unknown = {
     ...previous,
-    version: value['version'],
     name: value['name'],
     viewport: previous.viewport,
     nodes: value['nodes'],
@@ -446,27 +463,38 @@ function parseCanvasPresentation(value: unknown): CanvasHostPresentationState {
 function mergePresentationIntoWebviewState(
   currentState: unknown,
   snapshot: CanvasHostSnapshot,
+  reportStateDiagnostic: (diagnostic: CanvasWebviewStateDiagnostic) => void,
 ): unknown {
-  const baseState = isRecord(currentState) ? currentState : {};
-  const currentSnapshots = isRecord(baseState['canvasViewportSnapshots'])
-    ? baseState['canvasViewportSnapshots']
-    : {};
-  return {
-    ...baseState,
-    canvasViewportSnapshots: {
-      ...currentSnapshots,
-      [createCanvasViewportSnapshotKey(snapshot.canvas)]: snapshot.presentation.viewport,
+  let nextState = currentState;
+  writeCanvasViewportSnapshot(
+    {
+      getState: () => currentState,
+      setState: (value) => {
+        nextState = value;
+      },
+      reportStateDiagnostic,
     },
-  };
+    createCanvasViewportSnapshotKey(snapshot.identity.documentId),
+    snapshot.presentation.viewport,
+  );
+  return nextState;
 }
 
 function readViewportFromWebviewState(
   value: unknown,
-  canvas: CanvasData,
+  snapshot: CanvasHostSnapshot,
+  reportStateDiagnostic: (diagnostic: CanvasWebviewStateDiagnostic) => void,
 ): CanvasViewport | undefined {
-  if (!isRecord(value) || !isRecord(value['canvasViewportSnapshots'])) return undefined;
-  const viewport = value['canvasViewportSnapshots'][createCanvasViewportSnapshotKey(canvas)];
-  return isCanvasViewport(viewport) ? viewport : undefined;
+  return readCanvasViewportSnapshot(
+    {
+      getState: () => value,
+      setState: () => {
+        throw new Error('Canvas viewport state reader cannot write state.');
+      },
+      reportStateDiagnostic,
+    },
+    createCanvasViewportSnapshotKey(snapshot.identity.documentId),
+  );
 }
 
 function isCanvasViewport(value: unknown): value is CanvasViewport {

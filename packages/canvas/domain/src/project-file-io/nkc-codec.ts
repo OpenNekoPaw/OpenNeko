@@ -1,45 +1,23 @@
 import { loadNkc, saveNkc } from '../nkc/codec';
-import { CURRENT_NKC_VERSION } from '../nkc/migrator';
 import type { CanvasData } from '../types/canvas';
 import {
   createProjectFileDiagnostic,
   type ProjectFileDiagnostic,
 } from '@neko/content/project-file-io';
-import {
-  ProjectFormatCodecRegistry,
-  type ProjectFormatCodec,
-  type ProjectFormatMigrationMetadata,
-} from '@neko/content/project-file-io';
+import { ProjectFormatCodecRegistry, type ProjectFormatCodec } from '@neko/content/project-file-io';
 
 export const nkcProjectFormatCodec: ProjectFormatCodec<CanvasData> = {
   formatId: 'nkc',
   fileExtensions: ['.nkc'],
-  currentVersion: CURRENT_NKC_VERSION,
   load(json) {
     const result = loadNkc(json);
     const diagnostics = validationToDiagnostics(
       result.validation.errors,
       result.validation.warnings,
     );
-    const migration: ProjectFormatMigrationMetadata | undefined = result.migration?.migrated
-      ? {
-          fromVersion: result.migration.fromVersion,
-          toVersion: result.migration.toVersion,
-          appliedMigrations: result.migration.steps.map((step) => step.description),
-          warnings: result.migration.warnings,
-        }
-      : undefined;
     return {
       document: result.data,
       diagnostics,
-      ...(migration ? { migration } : {}),
-      compatibility: {
-        loadedVersion: migration?.fromVersion ?? result.data.version,
-        currentVersion: CURRENT_NKC_VERSION,
-        mode: migration ? 'migrated' : diagnostics.length > 0 ? 'invalid' : 'current',
-        readOnly: false,
-        warnings: migration?.warnings ?? [],
-      },
     };
   },
   save(document, context) {

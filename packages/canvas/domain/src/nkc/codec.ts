@@ -7,7 +7,6 @@
 
 import type { CanvasData } from '../types/canvas';
 import type { ValidationResult } from './validator';
-import { CURRENT_NKC_VERSION, migrateNkc, type NkcMigrationResult } from './migrator';
 import { validateNkc } from './validator';
 
 /** Result of loading an NKC file */
@@ -16,8 +15,6 @@ export interface NkcLoadResult {
   data: CanvasData;
   /** Validation result */
   validation: ValidationResult;
-  /** Migration result, when a loaded canvas was upgraded in memory. */
-  migration?: NkcMigrationResult;
 }
 
 /** Options for saving an NKC file */
@@ -53,23 +50,17 @@ export function loadNkc(json: string): NkcLoadResult {
     };
   }
 
-  if (!isMigratableCanvasRoot(parsed)) {
+  const validation = validateNkc(parsed);
+  if (!isCanvasRoot(parsed)) {
     return {
       data: createEmptyCanvas(),
-      validation: validateNkc(parsed),
+      validation,
     };
   }
 
-  // Step 2: Migrate legacy formats before validating the canonical schema.
-  const migration = migrateNkc(parsed);
-  const validation = validateNkc(migration.data as unknown);
-  if (migration.migrated) {
-    return { data: migration.data, validation, migration };
-  }
-
-  // Step 3: Return result
+  // Step 2: Return the parsed document unchanged. Invalid fields are reported locally.
   return {
-    data: parsed as unknown as CanvasData,
+    data: parsed,
     validation,
   };
 }
@@ -107,7 +98,6 @@ export function isValidNkc(data: unknown): data is CanvasData {
 
 function createEmptyCanvas(): CanvasData {
   return {
-    version: CURRENT_NKC_VERSION,
     name: '',
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
     nodes: [],
@@ -115,7 +105,7 @@ function createEmptyCanvas(): CanvasData {
   };
 }
 
-function isMigratableCanvasRoot(value: unknown): value is Record<string, unknown> {
+function isCanvasRoot(value: unknown): value is CanvasData {
   return (
     typeof value === 'object' &&
     value !== null &&

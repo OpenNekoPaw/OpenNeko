@@ -1,7 +1,6 @@
 import { DEFAULT_CANVAS_DATA } from '@neko/canvas-domain';
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   CANVAS_HOST_RUNTIME_ROUTES,
   CanvasHostRuntimeContractError,
   assertCanvasHostRuntimeIdentity,
@@ -17,10 +16,10 @@ const identity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'canvas-view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'canvas-document-1',
   sessionId: 'canvas-session-1',
-  endpointEpoch: 'endpoint-1',
+  rendererSessionId: 'endpoint-1',
 } as const;
 
 describe('Canvas Host runtime contract', () => {
@@ -95,15 +94,15 @@ describe('Canvas Host runtime contract', () => {
     ).toThrowError(CanvasHostRuntimeContractError);
   });
 
-  it('rejects unknown versions, absolute identities and stale sessions', () => {
+  it('rejects removed fields, absolute identities and stale sessions', () => {
     expect(() =>
       parseCanvasHostSnapshot({
         ...validSnapshot(),
-        schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION + 1,
+        schemaVersion: 5,
       }),
     ).toThrowError(
       expect.objectContaining<Partial<CanvasHostRuntimeContractError>>({
-        code: 'unsupported-canvas-host-runtime-version',
+        code: 'invalid-canvas-host-runtime-payload',
       }),
     );
     expect(() =>
@@ -128,7 +127,6 @@ describe('Canvas Host runtime contract', () => {
     expect(
       parseCanvasHostIntentResult(
         {
-          schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
           requestId: 'request-1',
           commandId: 'command-1',
           status: 'accepted',
@@ -141,7 +139,6 @@ describe('Canvas Host runtime contract', () => {
     expect(() =>
       parseCanvasHostIntentResult(
         {
-          schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
           requestId: 'request-other',
           commandId: 'command-1',
           status: 'accepted',
@@ -153,7 +150,6 @@ describe('Canvas Host runtime contract', () => {
     ).toThrowError(CanvasHostRuntimeContractError);
     expect(
       parseCanvasHostProjectionEvent({
-        schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
         sequence: 1,
         originCommandId: 'command-1',
         snapshot: validSnapshot(),
@@ -173,7 +169,6 @@ describe('Canvas Host runtime contract', () => {
 
 function validSnapshot() {
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     identity,
     revision: 4,
     dirty: false,
@@ -189,6 +184,5 @@ function validSnapshot() {
       sourceModes: ['import', 'reference'],
       generationMediaKinds: ['image', 'video', 'audio', 'model', 'document'],
     },
-    materialActions: [],
   };
 }

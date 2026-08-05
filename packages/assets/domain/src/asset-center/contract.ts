@@ -11,8 +11,6 @@ import {
   type GlobalMediaLibraryLocationKind,
 } from '../global-library/contract';
 
-export const ASSET_CENTER_SESSION_CONTRACT_VERSION = 1 as const;
-
 export interface AssetCenterSessionIdentity {
   readonly assetCenterSessionId: string;
   readonly windowId: string;
@@ -44,7 +42,6 @@ export type AssetCenterCatalogProjection =
   | {
       readonly status: 'ready';
       readonly owner: GlobalLibraryOwner;
-      readonly catalogRevision: number;
       readonly entries: readonly AssetCenterCatalogEntry[];
     }
   | {
@@ -82,9 +79,7 @@ export type AssetCenterPreviewProjection =
     };
 
 export interface AssetCenterSessionProjection {
-  readonly schemaVersion: typeof ASSET_CENTER_SESSION_CONTRACT_VERSION;
   readonly identity: AssetCenterSessionIdentity;
-  readonly revision: number;
   readonly filter: AssetCenterFilterProjection;
   readonly catalog: AssetCenterCatalogProjection;
   readonly selection?: AssetCenterSelectionProjection;
@@ -167,15 +162,9 @@ export function parseAssetCenterCatalogEntry(value: unknown): AssetCenterCatalog
 export function parseAssetCenterSessionProjection(value: unknown): AssetCenterSessionProjection {
   const record = requireExactRecord(
     value,
-    ['schemaVersion', 'identity', 'revision', 'filter', 'catalog', 'selection', 'preview'],
+    ['identity', 'filter', 'catalog', 'selection', 'preview'],
     'Asset Center session projection is invalid.',
   );
-  if (record['schemaVersion'] !== ASSET_CENTER_SESSION_CONTRACT_VERSION) {
-    throw new AssetCenterContractError(
-      'unsupported-asset-center-version',
-      `Unsupported Asset Center session version '${String(record['schemaVersion'])}'.`,
-    );
-  }
   const filter = parseAssetCenterFilterProjection(record['filter']);
   const catalog = parseAssetCenterCatalogProjection(record['catalog']);
   const selection =
@@ -186,9 +175,7 @@ export function parseAssetCenterSessionProjection(value: unknown): AssetCenterSe
     throw invalid('Asset Center catalog owner does not match the active filter.');
   }
   return {
-    schemaVersion: ASSET_CENTER_SESSION_CONTRACT_VERSION,
     identity: parseAssetCenterSessionIdentity(record['identity']),
-    revision: requireRevision(record['revision'], 'Asset Center session revision'),
     filter,
     catalog,
     ...(selection ? { selection } : {}),
@@ -199,9 +186,7 @@ export function parseAssetCenterSessionProjection(value: unknown): AssetCenterSe
 export class AssetCenterContractError extends Error {
   readonly code:
     | 'invalid-asset-center-payload'
-    | 'unsupported-asset-center-version'
     | 'asset-center-stale-identity'
-    | 'asset-center-stale-revision'
     | 'asset-center-item-unavailable'
     | 'asset-center-session-disposed';
 
@@ -260,11 +245,7 @@ function parseAssetCenterCatalogProjection(value: unknown): AssetCenterCatalogPr
   if (record['status'] !== 'ready') {
     throw invalid(`Unknown Asset Center catalog status '${String(record['status'])}'.`);
   }
-  requireExactKeys(
-    record,
-    ['status', 'owner', 'catalogRevision', 'entries'],
-    'Asset Center ready catalog',
-  );
+  requireExactKeys(record, ['status', 'owner', 'entries'], 'Asset Center ready catalog');
   const owner = requireOneOf(record['owner'], GLOBAL_LIBRARY_OWNERS, 'catalog owner');
   if (!Array.isArray(record['entries'])) {
     throw invalid('Asset Center catalog entries must be an array.');
@@ -280,7 +261,6 @@ function parseAssetCenterCatalogProjection(value: unknown): AssetCenterCatalogPr
   return {
     status: 'ready',
     owner,
-    catalogRevision: requireRevision(record['catalogRevision'], 'Asset Center catalog revision'),
     entries,
   };
 }
@@ -394,13 +374,6 @@ function requireIdentity(value: unknown, owner: string): string {
 
 function requireString(value: unknown, message: string): string {
   if (typeof value !== 'string') throw invalid(message);
-  return value;
-}
-
-function requireRevision(value: unknown, owner: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw invalid(`${owner} must be a non-negative integer.`);
-  }
   return value;
 }
 

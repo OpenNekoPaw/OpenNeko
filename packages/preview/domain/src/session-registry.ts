@@ -11,7 +11,7 @@ export interface PreviewSessionSnapshot {
 
 export interface PreviewSessionTransition {
   readonly sessionId: string;
-  readonly expectedRevision: number;
+  readonly previous: PreviewSessionSnapshot;
   readonly next: PreviewSessionSnapshot;
 }
 
@@ -73,14 +73,13 @@ export class PreviewSessionRegistry {
     if (session.projection.presentation === presentation) {
       return {
         sessionId,
-        expectedRevision: session.identity.revision,
+        previous: session,
         next: session,
       };
     }
     const identity: PreviewRuntimeIdentity = Object.freeze({
       ...session.identity,
       viewId: nextViewId,
-      revision: session.identity.revision + 1,
     });
     const projection = Object.freeze<PreviewProjection>({
       ...session.projection,
@@ -89,20 +88,15 @@ export class PreviewSessionRegistry {
     });
     return Object.freeze({
       sessionId,
-      expectedRevision: session.identity.revision,
+      previous: session,
       next: freezeSession(projection),
     });
   }
 
   planClose(sessionId: string): PreviewSessionTransition {
     const session = this.read(sessionId);
-    const identity: PreviewRuntimeIdentity = Object.freeze({
-      ...session.identity,
-      revision: session.identity.revision + 1,
-    });
     const projection = Object.freeze<PreviewProjection>({
-      schemaVersion: 1,
-      identity,
+      identity: session.identity,
       presentation: session.projection.presentation,
       status: 'unavailable',
       diagnostic: {
@@ -112,7 +106,7 @@ export class PreviewSessionRegistry {
     });
     return Object.freeze({
       sessionId,
-      expectedRevision: session.identity.revision,
+      previous: session,
       next: freezeSession(projection),
     });
   }
@@ -120,9 +114,9 @@ export class PreviewSessionRegistry {
   commit(transition: PreviewSessionTransition): PreviewSessionSnapshot {
     this.requireActive();
     const current = this.read(transition.sessionId);
-    if (current.identity.revision !== transition.expectedRevision) {
+    if (current !== transition.previous) {
       throw new Error(
-        `Preview session '${transition.sessionId}' revision ${transition.expectedRevision} is stale; current revision is ${current.identity.revision}.`,
+        `Preview session '${transition.sessionId}' changed before its transition committed.`,
       );
     }
     this.sessions.set(transition.sessionId, transition.next);
@@ -206,11 +200,10 @@ function assertSessionIdentity(
     'workspaceId',
     'windowId',
     'viewId',
-    'viewEpoch',
+    'viewInstanceId',
     'documentId',
     'sessionId',
-    'endpointEpoch',
-    'revision',
+    'rendererSessionId',
   ] as const) {
     if (expected[key] !== actual[key]) {
       throw new Error(`Preview ${key} does not match its owning runtime.`);

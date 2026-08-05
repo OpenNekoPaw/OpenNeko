@@ -14,7 +14,6 @@ import {
 
 export interface PublishProjectEntityAssetRequest {
   readonly operationId: string;
-  readonly expectedRevision: number;
   readonly entityId: string;
   readonly target: { readonly assetId: string; readonly revision: string };
   readonly representations: readonly ProjectEntityAssetRepresentationPublicationPlan[];
@@ -33,12 +32,6 @@ export class ProjectEntityAssetPublicationService {
     signal?: AbortSignal,
   ): Promise<ProjectEntityAssetRevisionRef> {
     const document = await this.options.repository.load(signal);
-    if (document.revision !== request.expectedRevision) {
-      throw publicationError(
-        'project-entity-revision-conflict',
-        `Project Entity revision conflict: expected ${String(request.expectedRevision)}, received ${String(document.revision)}.`,
-      );
-    }
     const entity = document.entities.find((candidate) => candidate.entityId === request.entityId);
     if (!entity || entity.lifecycle.state !== 'active') {
       throw publicationError(
@@ -66,7 +59,6 @@ export class ProjectEntityAssetPublicationService {
       );
       const dependencies = dependencyRevisions(entity, plans);
       const snapshot: ProjectEntityAssetPortableSnapshot = {
-        schemaVersion: 1,
         assetId: request.target.assetId,
         revision: request.target.revision,
         semantic,

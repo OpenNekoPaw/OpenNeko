@@ -6,7 +6,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 const repoRoot = process.cwd();
 const ledgerPath = 'quality/ledgers/code-debt-surface-ledger.json';
 
-const terms = ['legacy', 'fallback', 'deprecated'];
+const terms = ['legacy', 'fallback', 'deprecated', 'compat', 'shim', 'upgrade'];
 const requiredSemanticClasses = [
   'delete-now',
   'migrate-now',
@@ -16,12 +16,19 @@ const requiredSemanticClasses = [
   'boundary-canonicalizer',
   'presentation-default',
   'domain-status',
+  'external-contract',
   'generated-source',
   'test-only',
   'false-positive-word',
 ];
 const allowedSemanticClasses = new Set([...requiredSemanticClasses, 'needs-review']);
-const failingProductionSemanticClasses = new Set(['delete-now', 'migrate-now', 'needs-review']);
+const failingProductionSemanticClasses = new Set([
+  'current-bridge',
+  'delete-now',
+  'migrate-now',
+  'migration-only',
+  'needs-review',
+]);
 const retiredAssetCatalogBoundaryPathPatterns = [
   'packages/local-metadata/src/node-workspace-storage-inspection.ts',
   'packages/assets/domain/src/workspace-linked-media-library.ts',
@@ -158,7 +165,7 @@ if (args.has('--validate-ledger')) {
 function printHelp() {
   console.log(`Usage: node scripts/check-legacy-debt-surfaces.mjs [--json] [--validate-ledger] [--self-test]
 
-Scans TypeScript sources for legacy/fallback/deprecated cleanup surfaces.
+Scans TypeScript sources for legacy, fallback, deprecated, compatibility, and shim cleanup surfaces.
 
 Scopes:
   allSource      *.ts and *.tsx files, excluding generated build output directories
@@ -329,7 +336,7 @@ function buildReport(allMatches, sourceFiles, catalogMatches) {
 }
 
 function buildQualityGate(nonTestMatches, catalogMatches = []) {
-  const governedMatches = nonTestMatches.filter((match) => !isAgentGovernedPath(match.file));
+  const governedMatches = nonTestMatches;
   const failingMatches = governedMatches.filter((match) =>
     failingProductionSemanticClasses.has(match.semanticClass),
   );
@@ -346,8 +353,8 @@ function buildQualityGate(nonTestMatches, catalogMatches = []) {
   const catalogViolations = catalogMatches.filter((match) => match.allowlist === undefined);
 
   return {
-    scope: 'non-agent',
-    excludedAgentOccurrences: nonTestMatches.length - governedMatches.length,
+    scope: 'all-production',
+    excludedAgentOccurrences: 0,
     status: failingMatches.length === 0 && catalogViolations.length === 0 ? 'passed' : 'failed',
     failingProductionSemanticClasses: [...failingProductionSemanticClasses].sort(),
     blockingOccurrences: failingMatches.length + catalogViolations.length,
@@ -577,11 +584,17 @@ function classifySurface(file, line, term) {
   if (containsAny(lowerLine, ['false positive', 'knip', 'dynamic import']) && term !== 'fallback') {
     return 'false-positive-word';
   }
+  if (term === 'upgrade' && containsAny(lowerLine, ['knowledge upgrade', '知识升级'])) {
+    return 'false-positive-word';
+  }
   if (
     containsAny(lowerFile, ['vitest.config.ts']) &&
     containsAny(lowerLine, ['deprecated task-manager'])
   ) {
     return 'false-positive-word';
+  }
+  if (isExternalContractSurface(lowerFile, lowerLine, term)) {
+    return 'external-contract';
   }
   if (isExplicitBoundaryRejectionSurface(lowerFile, lowerLine)) {
     return 'boundary-canonicalizer';
@@ -625,7 +638,6 @@ function classifySurface(file, line, term) {
 
 function isMigrationOnlySurface(lowerFile) {
   return containsAny(lowerFile, [
-    'packages/canvas/domain/src/nkc/canvas-material-migration.ts',
     'packages/generation/src/media/generated-asset-index.ts',
     'packages/generation/src/media/generated-output-adoption.ts',
     'packages/generation/src/media/index.ts',
@@ -645,6 +657,13 @@ function isGeneratedPath(file) {
 }
 
 function isDomainDeprecatedSurface(lowerFile, lowerLine, term) {
+  if (
+    term === 'upgrade' &&
+    lowerFile === 'packages/assets/domain/src/contracts/asset/manifest.ts' &&
+    lowerLine.includes('upgradeto')
+  ) {
+    return true;
+  }
   if (
     term === 'fallback' &&
     (containsAny(lowerFile, ['representationresolver.ts', 'creative-entity-composition.ts']) ||
@@ -688,6 +707,23 @@ function isDomainFallbackSurface(lowerFile, lowerLine) {
       containsAny(lowerLine, ["source?: 'llm' | 'fallback'", "source: 'fallback'"])) ||
     (containsAny(lowerFile, ['types/narrative-production-binding.ts']) &&
       containsAny(lowerLine, ["'fallback'", 'narrative_production_binding_roles']))
+  );
+}
+
+function isExternalContractSurface(lowerFile, lowerLine, term) {
+  if (term === 'shim') {
+    return (
+      lowerFile === 'apps/neko-desktop/vite.renderer.config.ts' &&
+      lowerLine.includes('use-sync-external-store/shim/with-selector.js')
+    );
+  }
+  if (term !== 'compat') return false;
+  return (
+    lowerFile === 'packages/generation/src/media/adapters/openai-compat-media-adapter.ts' ||
+    (lowerFile === 'packages/generation/src/media/index.ts' &&
+      containsAny(lowerLine, ['openaicompat', 'openai-compat', 'openai-compatible'])) ||
+    (lowerFile === 'packages/agent/runtime/src/pi/capability-tool-bridge.ts' &&
+      lowerLine.includes('openai_compatible_tool_name'))
   );
 }
 
@@ -1025,7 +1061,7 @@ function validateQualityGate(report, errors) {
     .join(', ');
   const catalogViolations = report.qualityGate.retiredAssetCatalogViolations.occurrences;
   errors.push(
-    `Production unresolved legacy/fallback debt remains: ${summary || 'none'}; ` +
+    `Production unresolved canonical-path debt remains: ${summary || 'none'}; ` +
       `retired-asset-catalog=${catalogViolations}. ` +
       'Resolve, rename, or ledger-classify these surfaces before the gate can pass.',
   );
@@ -1039,8 +1075,8 @@ function validateLedgerRoot(ledger, errors) {
   if (ledger.schemaVersion !== 1) {
     errors.push('Ledger schemaVersion must be 1.');
   }
-  if (ledger.scope !== 'non-agent') {
-    errors.push('Ledger scope must be "non-agent".');
+  if (ledger.scope !== 'all-production') {
+    errors.push('Ledger scope must be "all-production".');
   }
   if (
     !ledger.semanticClasses ||
@@ -1216,9 +1252,6 @@ function addCoverageWarnings(report, entries, warnings) {
     Array.isArray(entry.paths) ? entry.paths : [],
   );
   for (const row of report.cleanupCandidates.slice(0, 12)) {
-    if (isAgentGovernedPath(row.key)) {
-      continue;
-    }
     const covered = coveredPatterns.some((pattern) => matchesGlob(row.key, pattern));
     if (!covered && row.occurrences >= 10) {
       warnings.push(
@@ -1266,7 +1299,7 @@ function globToRegExp(glob) {
 }
 
 function printHumanReport(report) {
-  console.log('Legacy debt surface scan');
+  console.log('Canonical-path debt surface scan');
   console.log('');
   console.log(`Generated: ${report.generatedAt}`);
   console.log(`Terms: ${report.scanner.terms.join(', ')}`);
@@ -1328,9 +1361,7 @@ function printScope(label, scope) {
   console.log(
     `${label}: ${scope.occurrences} occurrences in ${scope.filesWithMatches}/${scope.filesScanned} files`,
   );
-  console.log(
-    `  legacy=${scope.termCounts.legacy}, fallback=${scope.termCounts.fallback}, deprecated=${scope.termCounts.deprecated}`,
-  );
+  console.log(`  ${formatTermCounts(scope.termCounts)}`);
 }
 
 function printSemanticClassSummary(classes) {
@@ -1339,7 +1370,7 @@ function printSemanticClassSummary(classes) {
     const row = classes[semanticClass];
     console.log(
       `- ${semanticClass}: ${row.occurrences} occurrences, ${row.files} files ` +
-        `(legacy=${row.termCounts.legacy}, fallback=${row.termCounts.fallback}, deprecated=${row.termCounts.deprecated})`,
+        `(${formatTermCounts(row.termCounts)})`,
     );
   }
 }
@@ -1347,11 +1378,12 @@ function printSemanticClassSummary(classes) {
 function printHotspots(title, rows, limit) {
   console.log(title);
   for (const row of rows.slice(0, limit)) {
-    console.log(
-      `- ${row.key}: ${row.occurrences} ` +
-        `(legacy=${row.termCounts.legacy}, fallback=${row.termCounts.fallback}, deprecated=${row.termCounts.deprecated})`,
-    );
+    console.log(`- ${row.key}: ${row.occurrences} ` + `(${formatTermCounts(row.termCounts)})`);
   }
+}
+
+function formatTermCounts(termCounts) {
+  return terms.map((term) => `${term}=${termCounts[term] ?? 0}`).join(', ');
 }
 
 function printValidation(result) {
@@ -1391,6 +1423,46 @@ function runSelfTest() {
         'deprecated',
       ),
       expected: 'domain-status',
+    },
+    {
+      value: classifySurface(
+        'packages/generation/src/media/adapters/openai-compat-media-adapter.ts',
+        'export class OpenAICompatMediaAdapter extends BaseMediaAdapter {}',
+        'compat',
+      ),
+      expected: 'external-contract',
+    },
+    {
+      value: classifySurface(
+        'apps/neko-desktop/vite.renderer.config.ts',
+        "'use-sync-external-store/shim/with-selector.js',",
+        'shim',
+      ),
+      expected: 'external-contract',
+    },
+    {
+      value: classifySurface(
+        'packages/example/src/storage-upgrade.ts',
+        'const upgradeHandler = createUpgradeHandler();',
+        'upgrade',
+      ),
+      expected: 'needs-review',
+    },
+    {
+      value: classifySurface(
+        'packages/assets/domain/src/contracts/asset/manifest.ts',
+        'upgradeTo?: { packageId: string; version: string };',
+        'upgrade',
+      ),
+      expected: 'domain-status',
+    },
+    {
+      value: classifySurface(
+        'packages/agent/runtime/src/runtime/capability/external-research-capability-provider.ts',
+        'Do not present external research as a default model knowledge upgrade.',
+        'upgrade',
+      ),
+      expected: 'false-positive-word',
     },
     {
       value: classifySurface(
@@ -1465,6 +1537,29 @@ function runSelfTest() {
     {
       value: buildQualityGate([
         {
+          file: 'apps/neko-desktop/src/main/desktop-state-migration-adapter.ts',
+          packageName: '@neko/app-desktop',
+          lineNumber: 1,
+          term: 'legacy',
+          text: 'legacy adapter path',
+          isTest: false,
+          semanticClass: 'current-bridge',
+        },
+        {
+          file: 'packages/entity/node/src/entity-migration.ts',
+          packageName: '@neko/entity-node',
+          lineNumber: 1,
+          term: 'legacy',
+          text: 'legacy migration path',
+          isTest: false,
+          semanticClass: 'migration-only',
+        },
+      ]).status,
+      expected: 'failed',
+    },
+    {
+      value: buildQualityGate([
+        {
           file: 'packages/shared/src/project-file-io/save-session.ts',
           packageName: '@neko/shared',
           lineNumber: 1,
@@ -1488,7 +1583,7 @@ function runSelfTest() {
           semanticClass: 'migrate-now',
         },
       ]).status,
-      expected: 'passed',
+      expected: 'failed',
     },
     {
       value: classifySurface(
@@ -1528,15 +1623,15 @@ function runSelfTest() {
         'Resource contains an invalid or legacy projection.',
         'legacy',
       ),
-      expected: 'boundary-canonicalizer',
+      expected: 'migrate-now',
     },
     {
       value: classifySurface(
         'packages/shared/src/nkc/index.ts',
-        'inspectLegacyCanvasMaterialNodes,',
+        'legacyCanvasMaterialReader,',
         'legacy',
       ),
-      expected: 'boundary-canonicalizer',
+      expected: 'migrate-now',
     },
     {
       value: classifySurface(
@@ -1544,11 +1639,11 @@ function runSelfTest() {
         "code: 'canvas-material-legacy-generation-evidence',",
         'legacy',
       ),
-      expected: 'boundary-canonicalizer',
+      expected: 'migrate-now',
     },
     {
       value: retiredAssetCatalogAllowlist(
-        'packages/shared/src/types/content-locator.ts',
+        'packages/content/src/contracts/content-locator.ts',
         'asset-uri',
       ),
       expected: 'boundary-rejection',

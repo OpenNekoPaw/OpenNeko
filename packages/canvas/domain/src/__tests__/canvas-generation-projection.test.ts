@@ -14,12 +14,12 @@ const IDENTITY = {
 } as const;
 
 describe('Canvas Generation Job projection', () => {
-  it('projects owner revisions into one read-only Job node', () => {
+  it('projects owner state into one read-only Job node', () => {
     const pending = project(
       emptyWithSource(),
-      snapshot({ phase: 'pending', revision: 0, position: { x: 240, y: 180 } }),
+      snapshot({ phase: 'pending', position: { x: 240, y: 180 } }),
     );
-    const running = project(pending, snapshot({ phase: 'running', revision: 1 }));
+    const running = project(pending, snapshot({ phase: 'running' }));
 
     expect(running.nodes.filter((node) => node.type === 'job')).toEqual([
       expect.objectContaining({
@@ -27,7 +27,6 @@ describe('Canvas Generation Job projection', () => {
         position: { x: 240, y: 180 },
         data: expect.objectContaining({
           jobRef: { kind: 'generation', jobId: 'generation-1' },
-          revision: 1,
           status: 'running',
           inputRefs: [{ kind: 'canvas-node', nodeId: 'source-node' }],
           outputRefs: [],
@@ -48,7 +47,6 @@ describe('Canvas Generation Job projection', () => {
       emptyWithSource(),
       snapshot({
         phase: 'succeeded',
-        revision: 3,
         resultLocators: [resultLocator('output-1'), resultLocator('output-2')],
       }),
     );
@@ -56,7 +54,6 @@ describe('Canvas Generation Job projection', () => {
       succeeded,
       snapshot({
         phase: 'succeeded',
-        revision: 3,
         resultLocators: [resultLocator('output-1'), resultLocator('output-2')],
       }),
     );
@@ -104,7 +101,7 @@ describe('Canvas Generation Job projection', () => {
       failure: { code: 'cancelled', message: 'Cancelled by creator' },
     },
   ])('keeps $phase Jobs visible without source-less results', ({ phase, failure }) => {
-    const canvas = project(emptyWithSource(), snapshot({ phase, revision: 2, failure }));
+    const canvas = project(emptyWithSource(), snapshot({ phase, failure }));
 
     expect(canvas.nodes).toHaveLength(2);
     expect(canvas.nodes.find((node) => node.type === 'job')?.data).toMatchObject({
@@ -119,7 +116,6 @@ describe('Canvas Generation Job projection', () => {
       emptyWithSource(),
       snapshot({
         phase: 'failed',
-        revision: 2,
         failure: { code: 'provider-failed', message: 'Failed', retryable: true },
       }),
     );
@@ -129,7 +125,6 @@ describe('Canvas Generation Job projection', () => {
         ref: { kind: 'generation', jobId: 'generation-2' },
         retryOf: { kind: 'generation', jobId: 'generation-1' },
         phase: 'pending',
-        revision: 0,
       }),
     );
 
@@ -148,7 +143,6 @@ describe('Canvas Generation Job projection', () => {
       emptyWithSource(),
       snapshot({
         phase: 'succeeded',
-        revision: 3,
         resultLocators: [resultLocator('output-1')],
       }),
     );
@@ -158,7 +152,6 @@ describe('Canvas Generation Job projection', () => {
         ref: { kind: 'generation', jobId: 'generation-2' },
         regenerateOf: { kind: 'generation', jobId: 'generation-1' },
         phase: 'pending',
-        revision: 0,
       }),
     );
 
@@ -171,21 +164,24 @@ describe('Canvas Generation Job projection', () => {
     );
   });
 
-  it('rejects stale, mismatched and source-less successful projections', () => {
-    const running = project(emptyWithSource(), snapshot({ phase: 'running', revision: 2 }));
-    expect(() => project(running, snapshot({ phase: 'running', revision: 1 }))).toThrow(
-      'rejected stale revision',
+  it('rejects regressive, mismatched and source-less successful projections', () => {
+    const completed = project(
+      emptyWithSource(),
+      snapshot({ phase: 'succeeded', resultLocators: [resultLocator('output-1')] }),
+    );
+    expect(() => project(completed, snapshot({ phase: 'running' }))).toThrow(
+      'cannot move from completed to running',
     );
     expect(() =>
       projectGenerationSnapshotToCanvas({
         identity: { ...IDENTITY, canvasSessionId: 'wrong-session' },
         expectedIdentity: IDENTITY,
-        canvas: running,
-        snapshot: snapshot({ phase: 'running', revision: 3 }),
+        canvas: completed,
+        snapshot: snapshot({ phase: 'succeeded', resultLocators: [resultLocator('output-1')] }),
       }),
     ).toThrow('canvasSessionId does not match');
     expect(() =>
-      project(emptyWithSource(), snapshot({ phase: 'succeeded', revision: 3, resultLocators: [] })),
+      project(emptyWithSource(), snapshot({ phase: 'succeeded', resultLocators: [] })),
     ).toThrow('requires at least one committed result locator');
   });
 });
@@ -205,7 +201,6 @@ function snapshot(
   return {
     ref: { kind: 'generation', jobId: 'generation-1' },
     phase: 'pending',
-    revision: 0,
     title: 'Generate concept frame',
     inputNodeIds: ['source-node'],
     mediaKind: 'image',

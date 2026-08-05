@@ -1,6 +1,5 @@
 import { hashStableValue } from '@neko/shared';
 import {
-  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   createSafeCanvasWorkspaceProjectionDiagnostic,
   resolveCanvasWorkspaceBoardDocumentUri,
   type CanvasWorkspaceDeliveryClaim,
@@ -149,7 +148,6 @@ export class WorkspaceBoardDeliveryCoordinator {
         writer,
       );
       const result: CanvasWorkspaceProjectionResult = {
-        version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
         deliveryId: request.process.deliveryId,
         status: projection.status,
         target: { kind: explicit ? 'explicit' : 'workspace', documentUri },
@@ -157,7 +155,7 @@ export class WorkspaceBoardDeliveryCoordinator {
         nodeIds: projection.nodeIds,
         connectionIds: projection.connectionIds,
         artifactRoleCounts: countArtifactRoles(request),
-        writerEpoch: writer.epoch,
+        writerLeaseId: writer.leaseId,
         diagnostics: [],
       };
       await this.options.ledger.complete(createReceipt(request, result, this.now()), writer);
@@ -172,11 +170,10 @@ export class WorkspaceBoardDeliveryCoordinator {
         writer,
       });
       return {
-        version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
         deliveryId: request.process.deliveryId,
         status: state,
         artifactRoleCounts: countArtifactRoles(request),
-        writerEpoch: writer.epoch,
+        writerLeaseId: writer.leaseId,
         diagnostics: [diagnostic],
       };
     }
@@ -241,8 +238,8 @@ function createReceipt(
   if (result.status !== 'projected' && result.status !== 'noop') {
     throw new Error(`Canvas Board receipt cannot be created from ${result.status}.`);
   }
-  if (result.writerEpoch === undefined) {
-    throw new Error('Canvas Board receipt requires the fenced writer epoch.');
+  if (result.writerLeaseId === undefined) {
+    throw new Error('Canvas Board receipt requires the exact writer lease identity.');
   }
   return {
     deliveryId: request.process.deliveryId,
@@ -256,7 +253,7 @@ function createReceipt(
     revision: result.revision,
     nodeIds: result.nodeIds,
     connectionIds: result.connectionIds,
-    writerEpoch: result.writerEpoch,
+    writerLeaseId: result.writerLeaseId,
     diagnostics: result.diagnostics,
     completedAt,
   };
@@ -264,7 +261,6 @@ function createReceipt(
 
 function receiptToResult(receipt: CanvasWorkspaceDeliveryReceipt): CanvasWorkspaceProjectionResult {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     deliveryId: receipt.deliveryId,
     status: receipt.state,
     ...(receipt.target ? { target: receipt.target } : {}),
@@ -272,14 +268,13 @@ function receiptToResult(receipt: CanvasWorkspaceDeliveryReceipt): CanvasWorkspa
     ...(receipt.nodeIds ? { nodeIds: receipt.nodeIds } : {}),
     ...(receipt.connectionIds ? { connectionIds: receipt.connectionIds } : {}),
     artifactRoleCounts: countReceiptArtifactRoles(receipt),
-    writerEpoch: receipt.writerEpoch,
+    writerLeaseId: receipt.writerLeaseId,
     diagnostics: receipt.diagnostics,
   };
 }
 
 function queuedResult(request: CanvasWorkspaceProjectionRequest): CanvasWorkspaceProjectionResult {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     deliveryId: request.process.deliveryId,
     status: 'queued',
     artifactRoleCounts: countArtifactRoles(request),

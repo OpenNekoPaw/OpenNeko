@@ -7,7 +7,7 @@ describe('source Model Viewer host', () => {
       sessionId: 'session-1',
       source: {
         source: { kind: 'workspace-file', path: 'models/descriptor-1.glb' },
-        sourceFingerprint: 'revision-1',
+        sourceFingerprint: 'fingerprint-1',
         format: 'glb',
         entryUri: 'http://127.0.0.1:43125/v1/resources/descriptor-1',
         uriMap: {
@@ -21,8 +21,7 @@ describe('source Model Viewer host', () => {
 
     host.postMessage({
       type: '3d-reference/ready',
-      protocolVersion: 2,
-      sessionId: 'session-1',
+      identity: { sessionId: 'session-1', requestId: 'ready-1' },
     });
     await Promise.resolve();
 
@@ -46,7 +45,7 @@ describe('source Model Viewer host', () => {
       sessionId: 'session-strict',
       source: {
         source: { kind: 'workspace-file', path: 'models/descriptor-strict.glb' },
-        sourceFingerprint: 'revision-strict',
+        sourceFingerprint: 'fingerprint-strict',
         format: 'glb',
         entryUri: 'http://127.0.0.1:43125/v1/resources/descriptor-strict',
         uriMap: {
@@ -59,8 +58,7 @@ describe('source Model Viewer host', () => {
     const disposeFirst = host.subscribe(firstListener);
     host.postMessage({
       type: '3d-reference/ready',
-      protocolVersion: 2,
-      sessionId: 'session-strict',
+      identity: { sessionId: 'session-strict', requestId: 'ready-first' },
     });
     disposeFirst();
 
@@ -68,8 +66,7 @@ describe('source Model Viewer host', () => {
     host.subscribe(secondListener);
     host.postMessage({
       type: '3d-reference/ready',
-      protocolVersion: 2,
-      sessionId: 'session-strict',
+      identity: { sessionId: 'session-strict', requestId: 'ready-second' },
     });
     await Promise.resolve();
 
@@ -82,4 +79,55 @@ describe('source Model Viewer host', () => {
       }),
     );
   });
+
+  it('reports invalid stored staging only to its panel and leaves sibling state untouched', async () => {
+    const invalidHost = createHost('invalid-panel', 'invalid.glb', 'fingerprint-invalid');
+    const siblingHost = createHost('sibling-panel', 'sibling.glb', 'fingerprint-sibling');
+    const invalidState = { threeReferenceStaging: { sessionId: 'another-panel' } };
+    invalidHost.setState(invalidState);
+    const invalidListener = vi.fn();
+    const siblingListener = vi.fn();
+    invalidHost.subscribe(invalidListener);
+    siblingHost.subscribe(siblingListener);
+
+    invalidHost.postMessage({
+      type: '3d-reference/ready',
+      identity: { sessionId: 'invalid-panel', requestId: 'invalid-ready' },
+    });
+    siblingHost.postMessage({
+      type: '3d-reference/ready',
+      identity: { sessionId: 'sibling-panel', requestId: 'sibling-ready' },
+    });
+    await Promise.resolve();
+
+    expect(invalidHost.getState()).toBe(invalidState);
+    expect(invalidListener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: '3d-reference/diagnostic',
+        identity: { sessionId: 'invalid-panel', requestId: 'invalid-ready' },
+        diagnostic: expect.objectContaining({ code: 'staging-invalid' }),
+      }),
+    );
+    expect(siblingListener).toHaveBeenCalledOnce();
+    expect(siblingListener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: '3d-reference/session-init',
+        identity: { sessionId: 'sibling-panel', requestId: 'sibling-ready' },
+      }),
+    );
+  });
 });
+
+function createHost(sessionId: string, path: string, sourceFingerprint: string) {
+  return createSourceModelViewerHost({
+    sessionId,
+    source: {
+      source: { kind: 'workspace-file', path: `models/${path}` },
+      sourceFingerprint,
+      format: 'glb',
+      entryUri: `openneko://resource/${'a'.repeat(32)}`,
+      uriMap: { [path]: `openneko://resource/${'a'.repeat(32)}` },
+      sizeBytes: 100,
+    },
+  });
+}

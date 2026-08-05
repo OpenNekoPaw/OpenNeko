@@ -49,11 +49,10 @@ describe('SelectionMaterialGenerationBar', () => {
     expect(markup).not.toContain('data-material-generation-action');
   });
 
-  it('omits legacy heuristic-only generation context', () => {
-    const node = mediaNode('legacy-generated', {
-      assetPath: 'legacy/generated.png',
+  it('omits incomplete material without canonical Generation evidence', () => {
+    const node = mediaNode('incomplete-generated', {
+      assetPath: 'generated.png',
       mediaType: 'image',
-      generationContext: { prompt: 'Legacy prompt' },
     });
 
     const markup = render(node);

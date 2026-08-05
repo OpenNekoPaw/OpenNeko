@@ -79,47 +79,19 @@ import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/globa
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
 import type { ContentLocator } from '@neko/content';
+import {
+  resolveDesktopWindowWorkspaceWorkbench,
+  type DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
 
-export interface ResourceBrowserShellProjection {
-  readonly endpointEpoch: string;
-  readonly catalog: {
-    readonly projects: readonly {
-      readonly projectId: string;
-      readonly workspaceId: string;
-    }[];
-  };
-  readonly window: {
-    readonly tabs: readonly {
-      readonly tabId: string;
-      readonly projectId: string;
-      readonly viewId: string;
-      readonly viewEpoch: number;
-    }[];
-    readonly scene: {
-      readonly context:
-        | {
-            readonly kind: 'agent';
-            readonly agentViewId: string;
-            readonly scope:
-              | { readonly kind: 'unbound' }
-              | { readonly kind: 'assistant' }
-              | { readonly kind: 'workspace'; readonly workspaceId: string };
-          }
-        | {
-            readonly kind: 'asset-center' | 'extensions' | 'project-management' | 'settings';
-          };
-    };
-    readonly workbench: {
-      readonly main: {
-        readonly views: readonly ResourceBrowserWorkbenchView[];
-      };
-    };
-  };
-}
+export type ResourceBrowserShellProjection = Pick<
+  DesktopShellProjection,
+  'rendererSessionId' | 'catalog' | 'window'
+>;
 
 export interface ResourceBrowserWorkbenchView {
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
   readonly projectId: string;
   readonly workspaceId: string;
   readonly kind: string;
@@ -143,6 +115,8 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
   readonly openCut: ResourceBrowserNodeSourceOptions['openCut'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
+  readonly selectWorkspaceFiles: ResourceBrowserNodeSourceOptions['selectWorkspaceFiles'];
+  readonly trashWorkspaceItem: ResourceBrowserNodeSourceOptions['trashWorkspaceItem'];
   readonly selectConfiguredGlobalMediaLibrary: ResourceBrowserNodeSourceOptions['selectGlobalLibrary'];
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
   readonly selectGlobalAssetSources: (windowId: string) => Promise<readonly string[] | undefined>;
@@ -171,7 +145,7 @@ export interface ResourceBrowserNodeRuntimeOptions {
       readonly item: ResourceBrowserItem;
       readonly target: {
         readonly viewId: string;
-        readonly viewEpoch: number;
+        readonly viewInstanceId: string;
         readonly documentId: string;
         readonly sessionId: string;
         readonly expectedRevision: number;
@@ -191,9 +165,8 @@ export class ResourceBrowserNodeRuntime {
   private readonly controllers = new Map<string, ResourceBrowserController>();
   private readonly homeItemsByWindow = new Map<string, Map<string, GlobalLibraryItem>>();
   private readonly homeThumbnailControllers = new Map<string, Set<AbortController>>();
-  private homeCatalogRevision = 0;
-  private globalAssetMutationActive = false;
-  private globalMediaLibraryMutationActive = false;
+  private globalAssetMutationTail: Promise<void> = Promise.resolve();
+  private globalMediaLibraryMutationTail: Promise<void> = Promise.resolve();
   private disposed = false;
   private readonly workspaceMediaLibrarySync: WorkspaceMediaLibrarySyncService;
 
@@ -263,7 +236,6 @@ export class ResourceBrowserNodeRuntime {
       absolutePath,
     });
     return {
-      schemaVersion: request.schemaVersion,
       requestId: request.requestId,
       identity: request.identity,
       resourceId: request.resourceId,
@@ -280,7 +252,6 @@ export class ResourceBrowserNodeRuntime {
     await this.resolveController(windowId, request.identity);
     this.options.releaseQuickPreview(windowId, request.previewSessionId);
     return {
-      schemaVersion: request.schemaVersion,
       requestId: request.requestId,
       identity: request.identity,
       previewSessionId: request.previewSessionId,
@@ -298,7 +269,6 @@ export class ResourceBrowserNodeRuntime {
       const sourceDirectory = await this.options.selectSource(windowId);
       if (!sourceDirectory) {
         return {
-          schemaVersion: request.schemaVersion,
           requestId: request.requestId,
           identity: request.identity,
           resourceId: request.resourceId,
@@ -312,7 +282,6 @@ export class ResourceBrowserNodeRuntime {
         sourceDirectory,
       });
       return {
-        schemaVersion: request.schemaVersion,
         requestId: request.requestId,
         identity: request.identity,
         resourceId: request.resourceId,
@@ -325,7 +294,6 @@ export class ResourceBrowserNodeRuntime {
       libraryName: context.libraryName,
     });
     return {
-      schemaVersion: request.schemaVersion,
       requestId: request.requestId,
       identity: request.identity,
       resourceId: request.resourceId,
@@ -340,10 +308,6 @@ export class ResourceBrowserNodeRuntime {
   ): Promise<ResourceBrowserProjection> {
     const request = parseResourceBrowserRecoveryApplyRequest(value);
     const controller = await this.resolveController(windowId, request.identity);
-    const current = await controller.getSnapshot();
-    if (current.revision !== request.expectedRevision) {
-      throw new Error('Desktop Resource Browser recovery projection is stale.');
-    }
     const workspace = await this.options.shell.resolveProjectWorkspace(request.identity.projectId);
     if (workspace.workspaceId !== request.identity.workspaceId) {
       throw new Error('Desktop Resource Browser recovery Workspace is stale.');
@@ -355,9 +319,7 @@ export class ResourceBrowserNodeRuntime {
         expectedOperationRevision: request.expectedOperationRevision,
       }),
     );
-    this.advanceHomeRevision();
     return controller.execute({
-      schemaVersion: request.schemaVersion,
       requestId: `${request.requestId}:refresh`,
       identity: request.identity,
       route: RESOURCE_BROWSER_ROUTES.refresh,
@@ -379,7 +341,6 @@ export class ResourceBrowserNodeRuntime {
       planId: request.planId,
     });
     return {
-      schemaVersion: request.schemaVersion,
       requestId: request.requestId,
       identity: request.identity,
       planId: request.planId,
@@ -405,13 +366,12 @@ export class ResourceBrowserNodeRuntime {
 
   async searchHomeAssets(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly query: string;
     readonly sortBy: GlobalLibraryCatalogSort;
     readonly sortDirection: GlobalLibrarySortDirection;
     readonly limit: number;
   }): Promise<GlobalAssetProjection> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    await this.requireHomeWindow(input.windowId);
     const items = await searchGlobalAssetCatalog({
       globalAssetRoot: this.options.globalAssetRoot,
       files: this.options.host.files,
@@ -422,18 +382,17 @@ export class ResourceBrowserNodeRuntime {
       limit: input.limit,
     });
     this.recordHomeItems(input.windowId, 'global-asset-library', items);
-    return { revision: this.homeCatalogRevision, items };
+    return { items };
   }
 
   async searchHomeMediaLibraries(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly query: string;
     readonly sortBy: GlobalLibraryCatalogSort;
     readonly sortDirection: GlobalLibrarySortDirection;
     readonly limit: number;
   }): Promise<GlobalMediaLibraryProjection> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    await this.requireHomeWindow(input.windowId);
     const items = await searchGlobalMediaLibraries({
       mediaLibraryRoot: this.options.globalMediaLibraryRoot,
       files: this.options.host.files,
@@ -443,19 +402,18 @@ export class ResourceBrowserNodeRuntime {
       limit: input.limit,
     });
     this.recordHomeItems(input.windowId, 'media-library', items);
-    return { revision: this.homeCatalogRevision, items };
+    return { items };
   }
 
   async readHomeMediaLibraryChildren(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly libraryId: string;
     readonly relativePath: string;
     readonly sortBy: GlobalLibraryCatalogSort;
     readonly sortDirection: GlobalLibrarySortDirection;
     readonly limit: number;
   }): Promise<GlobalMediaLibraryProjection> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
+    await this.requireHomeWindow(input.windowId);
     const items = await readGlobalMediaLibraryChildren({
       mediaLibraryRoot: this.options.globalMediaLibraryRoot,
       files: this.options.host.files,
@@ -466,25 +424,19 @@ export class ResourceBrowserNodeRuntime {
       limit: input.limit,
     });
     this.recordHomeItems(input.windowId, 'media-library', items);
-    return { revision: this.homeCatalogRevision, items };
+    return { items };
   }
 
   async addHomeMediaLibrary(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly locationKind: GlobalMediaLibraryLocationKind;
-    readonly expectedRevision: number;
   }): Promise<
-    | { readonly status: 'added'; readonly libraryId: string; readonly revision: number }
-    | { readonly status: 'cancelled'; readonly revision: number }
+    { readonly status: 'added'; readonly libraryId: string } | { readonly status: 'cancelled' }
   > {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.expectedRevision);
+    await this.requireHomeWindow(input.windowId);
     return this.withGlobalMediaLibraryMutation(async () => {
       const sourceDirectory = await this.options.selectGlobalMediaLibrarySource(input.windowId);
-      if (!sourceDirectory) {
-        return { status: 'cancelled', revision: this.homeCatalogRevision };
-      }
+      if (!sourceDirectory) return { status: 'cancelled' };
       const connection = await createGlobalMediaLibraryConnection({
         mediaLibraryRoot: this.options.globalMediaLibraryRoot,
         sourceDirectory,
@@ -493,27 +445,20 @@ export class ResourceBrowserNodeRuntime {
       return {
         status: 'added',
         libraryId: connection.libraryId,
-        revision: this.advanceHomeRevision(),
       };
     });
   }
 
   async relinkHomeMediaLibrary(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly libraryId: string;
-    readonly expectedRevision: number;
   }): Promise<
-    | { readonly status: 'relinked'; readonly libraryId: string; readonly revision: number }
-    | { readonly status: 'cancelled'; readonly revision: number }
+    { readonly status: 'relinked'; readonly libraryId: string } | { readonly status: 'cancelled' }
   > {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.expectedRevision);
+    await this.requireHomeWindow(input.windowId);
     return this.withGlobalMediaLibraryMutation(async () => {
       const sourceDirectory = await this.options.selectGlobalMediaLibrarySource(input.windowId);
-      if (!sourceDirectory) {
-        return { status: 'cancelled', revision: this.homeCatalogRevision };
-      }
+      if (!sourceDirectory) return { status: 'cancelled' };
       await replaceGlobalMediaLibraryConnection({
         mediaLibraryRoot: this.options.globalMediaLibraryRoot,
         libraryId: input.libraryId,
@@ -522,36 +467,28 @@ export class ResourceBrowserNodeRuntime {
       return {
         status: 'relinked',
         libraryId: input.libraryId,
-        revision: this.advanceHomeRevision(),
       };
     });
   }
 
   async removeHomeMediaLibrary(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly libraryId: string;
-    readonly expectedRevision: number;
-  }): Promise<number> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.expectedRevision);
-    return this.withGlobalMediaLibraryMutation(async () => {
+  }): Promise<void> {
+    await this.requireHomeWindow(input.windowId);
+    await this.withGlobalMediaLibraryMutation(async () => {
       await removeGlobalMediaLibraryConnection({
         mediaLibraryRoot: this.options.globalMediaLibraryRoot,
         libraryId: input.libraryId,
       });
-      return this.advanceHomeRevision();
     });
   }
 
   async revealHomeMediaLibrary(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly libraryId: string;
-    readonly expectedRevision: number;
-  }): Promise<number> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.expectedRevision);
+  }): Promise<void> {
+    await this.requireHomeWindow(input.windowId);
     const revealPath = this.options.host.external?.revealPath;
     if (!revealPath) {
       throw new Error('Desktop global media-library reveal capability is unavailable.');
@@ -562,28 +499,20 @@ export class ResourceBrowserNodeRuntime {
         libraryId: input.libraryId,
       }),
     );
-    return this.homeCatalogRevision;
   }
 
-  async importHomeAssets(input: {
-    readonly windowId: string;
-    readonly endpointEpoch: string;
-    readonly expectedRevision: number;
-  }): Promise<GlobalAssetImportResult> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.expectedRevision);
+  async importHomeAssets(input: { readonly windowId: string }): Promise<GlobalAssetImportResult> {
+    await this.requireHomeWindow(input.windowId);
     return this.withGlobalAssetMutation(async () => {
       const sources = await this.options.selectGlobalAssetSources(input.windowId);
-      if (!sources) return { status: 'cancelled', revision: this.homeCatalogRevision };
+      if (!sources) return { status: 'cancelled' };
       const outcomes = await importGlobalAssetFiles({
         globalAssetRoot: this.options.globalAssetRoot,
         sourcePaths: sources,
         memberships: this.requireAssetLibraryMemberships(),
       });
-      const changed = outcomes.some((outcome) => outcome.status === 'added');
       return {
         status: 'completed',
-        revision: changed ? this.advanceHomeRevision() : this.homeCatalogRevision,
         outcomes,
       };
     });
@@ -591,12 +520,9 @@ export class ResourceBrowserNodeRuntime {
 
   async removeHomeAsset(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly assetId: string;
-    readonly expectedRevision: number;
   }): Promise<GlobalAssetRemoveResult> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.expectedRevision);
+    await this.requireHomeWindow(input.windowId);
     return this.withGlobalAssetMutation(async () => {
       const item = this.requireHomeItem(input.windowId, input.assetId, 'global-asset-library');
       if (item.owner !== 'global-asset-library') {
@@ -606,24 +532,21 @@ export class ResourceBrowserNodeRuntime {
       return {
         status: 'removed',
         assetId: item.id,
-        revision: this.advanceHomeRevision(),
       };
     });
   }
 
   async resolveHomeLibraryThumbnail(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly request: GlobalLibraryThumbnailRequest;
   }): Promise<GlobalLibraryThumbnailResult> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.request.expectedCatalogRevision);
+    await this.requireHomeWindow(input.windowId);
     const item = this.requireHomeItem(input.windowId, input.request.itemId, input.request.owner);
     const descriptor = item.thumbnail;
     if (
       !descriptor ||
       descriptor.descriptorId !== input.request.descriptorId ||
-      descriptor.revision !== input.request.thumbnailRevision
+      descriptor.sourceFingerprint !== input.request.sourceFingerprint
     ) {
       throw new Error('Desktop global Library thumbnail identity is stale.');
     }
@@ -648,17 +571,14 @@ export class ResourceBrowserNodeRuntime {
 
   async resolveAssetCenterSelection(input: {
     readonly windowId: string;
-    readonly endpointEpoch: string;
     readonly owner: GlobalLibraryItem['owner'];
     readonly itemId: string;
-    readonly expectedCatalogRevision: number;
   }): Promise<{
     readonly item: GlobalLibraryItem;
     readonly contentLocator: ContentLocator;
     readonly absolutePath: string;
   }> {
-    await this.requireHomeEndpoint(input.windowId, input.endpointEpoch);
-    this.requireHomeRevision(input.expectedCatalogRevision);
+    await this.requireHomeWindow(input.windowId);
     const item = this.requireHomeItem(input.windowId, input.itemId, input.owner);
     if (item.owner === 'media-library' && item.kind !== 'file') {
       throw new Error('Asset Center selection requires a content item.');
@@ -694,36 +614,27 @@ export class ResourceBrowserNodeRuntime {
     }
   }
 
-  private async requireHomeEndpoint(windowId: string, endpointEpoch: string): Promise<void> {
+  private async requireHomeWindow(windowId: string): Promise<void> {
     this.requireActive();
-    const projection = await this.options.shell.getProjection(windowId);
-    if (projection.endpointEpoch !== endpointEpoch) {
-      throw new Error('Desktop Home asset endpoint identity is stale.');
-    }
+    await this.options.shell.getProjection(windowId);
   }
 
   private async withGlobalMediaLibraryMutation<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.globalMediaLibraryMutationActive) {
-      throw new Error('Desktop global media-library mutation is already in progress.');
-    }
-    this.globalMediaLibraryMutationActive = true;
-    try {
-      return await operation();
-    } finally {
-      this.globalMediaLibraryMutationActive = false;
-    }
+    const result = this.globalMediaLibraryMutationTail.then(operation);
+    this.globalMediaLibraryMutationTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private async withGlobalAssetMutation<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.globalAssetMutationActive) {
-      throw new Error('Desktop global Asset mutation is already in progress.');
-    }
-    this.globalAssetMutationActive = true;
-    try {
-      return await operation();
-    } finally {
-      this.globalAssetMutationActive = false;
-    }
+    const result = this.globalAssetMutationTail.then(operation);
+    this.globalAssetMutationTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   dispose(): void {
@@ -763,19 +674,6 @@ export class ResourceBrowserNodeRuntime {
       throw new Error('Desktop global Library item identity is stale or has the wrong owner.');
     }
     return item;
-  }
-
-  private requireHomeRevision(expectedRevision: number): void {
-    if (expectedRevision !== this.homeCatalogRevision) {
-      throw new Error(
-        `Desktop global Library expected revision ${expectedRevision} but current revision is ${this.homeCatalogRevision}.`,
-      );
-    }
-  }
-
-  private advanceHomeRevision(): number {
-    this.homeCatalogRevision += 1;
-    return this.homeCatalogRevision;
   }
 
   private async resolveHomeItemPath(
@@ -832,10 +730,17 @@ export class ResourceBrowserNodeRuntime {
   ): Promise<ResourceBrowserController> {
     this.requireActive();
     const projection = await this.options.shell.getProjection(windowId);
-    if (identity.windowId !== windowId || identity.endpointEpoch !== projection.endpointEpoch) {
+    if (
+      identity.windowId !== windowId ||
+      identity.rendererSessionId !== projection.rendererSessionId
+    ) {
       throw new Error('Desktop Resource Browser owner identity is stale.');
     }
-    const sceneContext = projection.window.scene.context;
+    const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+      projection.window,
+      identity.workspaceId,
+    );
+    const sceneContext = workspaceWorkbench.scene.context;
     const tab =
       sceneContext.kind === 'agent' &&
       sceneContext.scope.kind === 'workspace' &&
@@ -861,8 +766,8 @@ export class ResourceBrowserNodeRuntime {
       workspaceId: project.workspaceId,
       windowId,
       viewId: createResourceBrowserViewId(tab.viewId),
-      viewEpoch: tab.viewEpoch,
-      endpointEpoch: projection.endpointEpoch,
+      viewInstanceId: tab.viewInstanceId,
+      rendererSessionId: projection.rendererSessionId,
     };
     assertResourceBrowserIdentity(expected, identity);
     const key = resourceBrowserControllerKey(expected);
@@ -905,11 +810,10 @@ export class ResourceBrowserNodeRuntime {
       openPreview: this.options.openPreview,
       openCut: this.options.openCut,
       selectSource: this.options.selectSource,
+      selectWorkspaceFiles: this.options.selectWorkspaceFiles,
+      trashWorkspaceItem: this.options.trashWorkspaceItem,
       selectGlobalLibrary: this.options.selectConfiguredGlobalMediaLibrary,
       mutateGlobalMediaLibraries: (operation) => this.withGlobalMediaLibraryMutation(operation),
-      didMutateGlobalMediaLibraries: () => {
-        this.advanceHomeRevision();
-      },
       createThumbnail: this.options.createThumbnail,
       addToCanvas,
       addToCut,
@@ -935,9 +839,6 @@ export class ResourceBrowserNodeRuntime {
   }> {
     const controller = await this.resolveController(windowId, request.identity);
     const projection = await controller.getSnapshot();
-    if (projection.revision !== request.expectedRevision) {
-      throw new Error('Desktop Resource Browser recovery projection is stale.');
-    }
     const item = projection.items.find((candidate) => candidate.resourceId === request.resourceId);
     if (
       !item ||
@@ -974,26 +875,24 @@ export class ResourceBrowserNodeRuntime {
 
 export function createResourceToCanvasInteraction(options: {
   readonly shell: {
-    getProjection(windowId: string): Promise<{
-      readonly window: {
-        readonly workbench: {
-          readonly main: { readonly views: readonly ResourceBrowserWorkbenchView[] };
-        };
-      };
-    }>;
+    getProjection(windowId: string): Promise<Pick<DesktopShellProjection, 'window'>>;
   };
   readonly canvas: ResourceBrowserNodeRuntimeOptions['canvas'];
   readonly windowId: string;
 }): NonNullable<ResourceBrowserNodeSourceOptions['addToCanvas']> {
   return async ({ identity: resourceIdentity, item, target }) => {
     const currentProjection = await options.shell.getProjection(options.windowId);
-    const canvasView = currentProjection.window.workbench.main.views.find(
+    const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
+      currentProjection.window,
+      resourceIdentity.workspaceId,
+    );
+    const canvasView = workspaceWorkbench.layout.main.views.find(
       (candidate) =>
         candidate.kind === 'canvas' &&
         candidate.projectId === resourceIdentity.projectId &&
         candidate.workspaceId === resourceIdentity.workspaceId &&
         candidate.documentId === target.documentId &&
-        createCanvasHostSessionId(candidate.viewId, candidate.viewEpoch) === target.sessionId,
+        createCanvasHostSessionId(candidate.viewId, candidate.viewInstanceId) === target.sessionId,
     );
     if (!canvasView) {
       throw new Error('Resource Browser target Canvas is stale or not attached.');
@@ -1003,10 +902,10 @@ export function createResourceToCanvasInteraction(options: {
       workspaceId: resourceIdentity.workspaceId,
       windowId: resourceIdentity.windowId,
       viewId: canvasView.viewId,
-      viewEpoch: canvasView.viewEpoch,
+      viewInstanceId: canvasView.viewInstanceId,
       documentId: target.documentId,
       sessionId: target.sessionId,
-      endpointEpoch: resourceIdentity.endpointEpoch,
+      rendererSessionId: resourceIdentity.rendererSessionId,
     };
     const locator =
       item.facet === 'entities'
@@ -1123,7 +1022,7 @@ function resourceBrowserControllerKey(identity: ResourceBrowserIdentity): string
     identity.windowId,
     identity.projectId,
     identity.viewId,
-    String(identity.viewEpoch),
-    identity.endpointEpoch,
+    String(identity.viewInstanceId),
+    identity.rendererSessionId,
   ].join(':');
 }

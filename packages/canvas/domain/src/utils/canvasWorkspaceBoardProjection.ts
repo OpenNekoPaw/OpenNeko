@@ -1,5 +1,4 @@
 import {
-  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   validateCanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceArtifactRole,
   type CanvasWorkspaceProjectionArtifact,
@@ -345,7 +344,6 @@ function planGeneratedBatchGroup(
   const rowOffsets = cumulativeOffsets(rowHeights, GROUP_HEADER, GROUP_GAP);
   return {
     id: `workspace-batch-${hashStableValue({
-      version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
       kind: 'generated-batch',
       deliveryId,
     }).slice(0, 24)}`,
@@ -422,7 +420,6 @@ function createGeneratedBatchGroupNode(
     },
     data: {
       provenance: {
-        version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
         kind: 'generated-batch',
         deliveryId: request.process.deliveryId,
         sourceHost: request.process.sourceHost,
@@ -584,7 +581,6 @@ function createSerializableProvenance(
 ): CanvasSerializableRecord {
   const provenance = artifact.provenance;
   return {
-    version: provenance.version,
     deliveryId: provenance.deliveryId,
     artifactId: provenance.artifactId,
     revision: provenance.revision,
@@ -655,7 +651,6 @@ function planArtifactConnections(
 
 function createRelationId(sourceNodeId: string, targetNodeId: string): string {
   return `workspace-relation-${hashStableValue({
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     type: 'derived-from',
     sourceNodeId,
     targetNodeId,

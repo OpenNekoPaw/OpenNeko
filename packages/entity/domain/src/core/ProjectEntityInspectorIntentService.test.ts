@@ -13,7 +13,6 @@ describe('ProjectEntityInspectorIntentService', () => {
 
     await service.execute({
       type: 'confirm',
-      expectedRevision: 3,
       candidateId: 'candidate-rin',
       accepted: {
         kind: 'character',
@@ -23,7 +22,6 @@ describe('ProjectEntityInspectorIntentService', () => {
     });
     await service.execute({
       type: 'bind',
-      expectedRevision: 4,
       entityId: 'entity-rin',
       binding: {
         role: 'portrait',
@@ -74,13 +72,11 @@ describe('ProjectEntityInspectorIntentService', () => {
 
     await service.execute({
       type: 'merge',
-      expectedRevision: 4,
       sourceEntityId: 'entity-old',
       targetEntityId: 'entity-rin',
     });
     await service.execute({
       type: 'publish',
-      expectedRevision: 4,
       entityId: 'entity-rin',
     });
     await service.execute({
@@ -130,7 +126,7 @@ function createService(
 }
 
 function document() {
-  return { schemaVersion: 1 as const, projectId: 'project-neko', revision: 1, entities: [] };
+  return { projectId: 'project-neko', entities: [] };
 }
 
 const NOW = '2026-08-05T00:00:00.000Z';

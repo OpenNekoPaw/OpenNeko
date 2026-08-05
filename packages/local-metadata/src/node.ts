@@ -1,4 +1,3 @@
-export * from './node-resource-cache-manifest-migration';
 export * from './node-workspace-resource-cache-binding';
 export * from './node-workspace-storage-inspection';
 export * from './node-workspace-git-hygiene';

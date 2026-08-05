@@ -15,9 +15,6 @@ import type {
 } from './types/storyboard-table';
 import { classifyStoryboardMediaIdentity, STORYBOARD_MEDIA_ROLES } from './types/storyboard-table';
 
-export const CANVAS_STORYBOARD_PROMPT_STATE_VERSION = 1 as const;
-export const CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION = 1 as const;
-
 export const CANVAS_STORYBOARD_PROMPT_BLOCK_KINDS = ['image', 'video', 'voice'] as const;
 
 export type CanvasStoryboardPromptBlockKind = (typeof CANVAS_STORYBOARD_PROMPT_BLOCK_KINDS)[number];
@@ -75,7 +72,6 @@ export type CanvasStoryboardAdvancedParameterId =
   (typeof CANVAS_STORYBOARD_ADVANCED_PARAMETER_IDS)[number];
 
 export interface CanvasStoryboardSemanticPromptDocument extends CanvasAuthoringSemanticPromptDocument {
-  readonly version: typeof CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION;
   readonly documentId: string;
   readonly blockKind: CanvasStoryboardPromptBlockKind;
   readonly baseRevision?: string;
@@ -149,38 +145,12 @@ export interface CanvasStoryboardNextCreativeState {
   readonly diagnostics?: readonly CanvasAuthoringDiagnostic[];
 }
 
-export type CanvasStoryboardMigrationSource =
-  | 'imagePrompt'
-  | 'videoPrompt'
-  | 'generationPrompt'
-  | 'promptSlots'
-  | 'visualDescription'
-  | 'characters'
-  | 'dialogue'
-  | 'duration'
-  | 'sourceMediaRefs'
-  | 'generatedMediaRefs'
-  | 'mediaRefs'
-  | 'shotImagePrepPlan'
-  | 'generatedVideoAsset';
-
-export interface CanvasStoryboardMigrationProvenance {
-  readonly migrationId: string;
-  readonly source: CanvasStoryboardMigrationSource;
-  readonly sourceFields: readonly string[];
-  readonly targetBlockKind?: CanvasStoryboardPromptBlockKind;
-  readonly migratedAt?: number;
-  readonly rawValueSummary?: string;
-}
-
 export interface CanvasStoryboardPromptState {
-  readonly version: typeof CANVAS_STORYBOARD_PROMPT_STATE_VERSION;
   readonly promptBlocks?: CanvasStoryboardPromptBlocks;
   readonly referenceMedia?: CanvasStoryboardReferenceMedia;
   readonly generationParams?: CanvasStoryboardGenerationParams;
   readonly nextCreativeState?: CanvasStoryboardNextCreativeState;
   readonly executionRefs?: CanvasStoryboardExecutionRefs;
-  readonly migrationProvenance?: readonly CanvasStoryboardMigrationProvenance[];
   readonly diagnostics?: readonly CanvasAuthoringDiagnostic[];
 }
 
@@ -194,13 +164,11 @@ export interface CanvasStoryboardShotTarget {
 export interface CanvasStoryboardPromptDocumentRef {
   readonly blockKind: CanvasStoryboardPromptBlockKind;
   readonly documentId: string;
-  readonly version: typeof CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION;
   readonly text?: string;
   readonly baseRevision?: string;
 }
 
 export interface CanvasStoryboardActionIntent {
-  readonly version: typeof CANVAS_STORYBOARD_PROMPT_STATE_VERSION;
   readonly actionId: CanvasStoryboardActionIntentId;
   readonly requestId?: string;
   readonly target: CanvasStoryboardShotTarget;
@@ -217,23 +185,7 @@ export interface CanvasStoryboardValidationOptions extends StoryboardMediaIdenti
   readonly supportedAdvancedParameters?: readonly CanvasStoryboardAdvancedParameterId[];
 }
 
-export interface CanvasStoryboardLegacyShotMigrationInput extends StoryboardMediaIdentityClassificationOptions {
-  readonly shotData: unknown;
-  readonly nodeId?: string;
-  readonly sceneNodeId?: string;
-  readonly shotId?: string;
-  readonly migratedAt?: number;
-}
-
-export interface CanvasStoryboardLegacyShotMigrationResult {
-  readonly migrated: boolean;
-  readonly promptState?: CanvasStoryboardPromptState;
-  readonly diagnostics: readonly CanvasAuthoringDiagnostic[];
-  readonly provenance: readonly CanvasStoryboardMigrationProvenance[];
-}
-
-export type CanvasStoryboardReviewRowSource =
-  'semantic-prompt-document' | 'migration-required' | 'empty';
+export type CanvasStoryboardReviewRowSource = 'semantic-prompt-document' | 'invalid' | 'empty';
 
 export interface CanvasStoryboardReviewRowInput {
   readonly nodeId: string;
@@ -303,20 +255,6 @@ const CANVAS_STORYBOARD_IMAGE_PROCESSING_PATTERNS = [
   /\b(fix|correct|repair)\s+(the\s+)?perspective\b/u,
 ] as const;
 
-interface LegacyPromptSlotLike {
-  readonly fieldId: string;
-  readonly scope: string;
-  readonly mediaType: string;
-  readonly operation: string;
-  readonly prompt: string;
-}
-
-interface MigrationPromptCandidate {
-  readonly source: CanvasStoryboardMigrationSource;
-  readonly sourceField: string;
-  readonly text: string;
-}
-
 export function validateCanvasStoryboardSemanticPromptDocument(
   value: unknown,
   options: CanvasStoryboardValidationOptions = {},
@@ -333,20 +271,6 @@ export function validateCanvasStoryboardSemanticPromptDocument(
     ]);
   }
 
-  if (record['version'] !== CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'unsupported-storyboard-prompt-document-version',
-        'Storyboard prompt document version is unsupported.',
-        {
-          target: 'version',
-          expected: CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
-          received: record['version'],
-        },
-      ),
-    );
-  }
   if (!isNonEmptyString(record['documentId'])) {
     diagnostics.push(
       diagnostic(
@@ -536,20 +460,6 @@ export function validateCanvasStoryboardActionIntent(
   }
 
   const diagnostics: CanvasAuthoringDiagnostic[] = [];
-  if (record['version'] !== CANVAS_STORYBOARD_PROMPT_STATE_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'unsupported-storyboard-action-intent-version',
-        'Storyboard action intent version is unsupported.',
-        {
-          target: 'version',
-          expected: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
-          received: record['version'],
-        },
-      ),
-    );
-  }
   if (!includesString(CANVAS_STORYBOARD_ACTION_INTENT_IDS, record['actionId'])) {
     diagnostics.push(
       diagnostic(
@@ -608,20 +518,6 @@ export function validateCanvasStoryboardPromptState(
   }
 
   const diagnostics: CanvasAuthoringDiagnostic[] = [];
-  if (record['version'] !== CANVAS_STORYBOARD_PROMPT_STATE_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'unsupported-storyboard-prompt-state-version',
-        'Storyboard prompt state version is unsupported.',
-        {
-          target: 'version',
-          expected: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
-          received: record['version'],
-        },
-      ),
-    );
-  }
   if (record['promptBlocks'] !== undefined) {
     diagnostics.push(
       ...validateCanvasStoryboardPromptBlocks(record['promptBlocks'], options).diagnostics,
@@ -643,9 +539,6 @@ export function validateCanvasStoryboardPromptState(
   if (record['executionRefs'] !== undefined) {
     diagnostics.push(...validateExecutionRefs(record['executionRefs'], 'executionRefs'));
   }
-  diagnostics.push(
-    ...validateMigrationProvenance(record['migrationProvenance'], 'migrationProvenance'),
-  );
   diagnostics.push(...validateOptionalDiagnostics(record['diagnostics'], 'diagnostics'));
   return validationResult(diagnostics);
 }
@@ -669,192 +562,6 @@ export function isCanvasStoryboardReferenceImageProcessingPrompt(
   );
 }
 
-export function migrateLegacyCanvasStoryboardShot(
-  input: CanvasStoryboardLegacyShotMigrationInput,
-): CanvasStoryboardLegacyShotMigrationResult {
-  const data = asRecord(input.shotData);
-  if (!data) {
-    return {
-      migrated: false,
-      diagnostics: [
-        diagnostic(
-          'error',
-          'malformed-legacy-storyboard-shot',
-          'Legacy storyboard shot data must be an object.',
-        ),
-      ],
-      provenance: [],
-    };
-  }
-
-  const diagnostics: CanvasAuthoringDiagnostic[] = [];
-  const provenance: CanvasStoryboardMigrationProvenance[] = [];
-  const migratedAt = input.migratedAt;
-  const shotKey =
-    readString(data, 'shotId') ??
-    input.shotId ??
-    input.nodeId ??
-    `shot-${readNumber(data, 'shotNumber') ?? 'unknown'}`;
-
-  const promptSlots = readLegacyPromptSlots(data['promptSlots']);
-  const slotDiagnostics = validateLegacyPromptSlots(data['promptSlots']);
-  diagnostics.push(...slotDiagnostics);
-
-  const imagePromptCandidates = uniqueMigrationPromptCandidates([
-    {
-      source: 'imagePrompt',
-      sourceField: '/imagePrompt',
-      text: readString(data, 'imagePrompt'),
-    },
-    {
-      source: 'promptSlots',
-      sourceField: '/promptSlots',
-      text: firstPromptSlotText(promptSlots, 'image'),
-    },
-    {
-      source: 'shotImagePrepPlan',
-      sourceField: '/shotImagePrepPlan/generationPrompt',
-      text: readString(asRecord(data['shotImagePrepPlan']), 'generationPrompt'),
-    },
-    {
-      source: 'generationPrompt',
-      sourceField: '/generationPrompt',
-      text: readString(data, 'generationPrompt'),
-    },
-  ]);
-  if (imagePromptCandidates.length > 1) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'ambiguous-legacy-prompt-authority',
-        'Legacy image prompt fields conflict and require explicit user or Agent resolution before migration.',
-        {
-          target: 'generationPrompt',
-          received: imagePromptCandidates.map((candidate) => candidate.sourceField),
-          retryable: true,
-        },
-      ),
-    );
-  }
-  const imagePromptCandidate = imagePromptCandidates[0];
-  const imagePromptText = imagePromptCandidate?.text;
-  const directVideoPrompt = readString(data, 'videoPrompt');
-  const videoPromptText =
-    directVideoPrompt ??
-    firstPromptSlotText(promptSlots, 'video') ??
-    readString(asRecord(data['generatedVideoAsset']), 'prompt') ??
-    assembleLegacyVideoPrompt(data);
-  const voicePromptText =
-    firstPromptSlotText(promptSlots, 'audio') ??
-    readString(data, 'dialogue') ??
-    readString(data, 'voiceOver');
-
-  const promptBlocks: CanvasStoryboardPromptBlocks = {
-    ...(imagePromptText
-      ? {
-          imagePromptDocument: createMigratedPromptDocument({
-            shotKey,
-            blockKind: 'image',
-            text: imagePromptText,
-            sourceField: imagePromptCandidate.sourceField,
-            migratedAt,
-          }),
-        }
-      : {}),
-    ...(videoPromptText
-      ? {
-          videoPromptDocument: createMigratedPromptDocument({
-            shotKey,
-            blockKind: 'video',
-            text: videoPromptText,
-            sourceField: directVideoPrompt
-              ? '/videoPrompt'
-              : firstPromptSlotText(promptSlots, 'video')
-                ? '/promptSlots'
-                : readString(asRecord(data['generatedVideoAsset']), 'prompt')
-                  ? '/generatedVideoAsset/prompt'
-                  : '/visualDescription',
-            migratedAt,
-          }),
-        }
-      : {}),
-    ...(voicePromptText
-      ? {
-          voicePromptDocument: createMigratedPromptDocument({
-            shotKey,
-            blockKind: 'voice',
-            text: voicePromptText,
-            sourceField: firstPromptSlotText(promptSlots, 'audio')
-              ? '/promptSlots'
-              : readString(data, 'dialogue')
-                ? '/dialogue'
-                : '/voiceOver',
-            migratedAt,
-          }),
-        }
-      : {}),
-  };
-
-  pushProvenance(provenance, {
-    migrationId: `${shotKey}:visualDescription`,
-    source: 'visualDescription',
-    sourceFields: ['/visualDescription', '/characterAction', '/cameraMovement', '/cameraAngle'],
-    targetBlockKind: 'video',
-    migratedAt,
-    rawValueSummary: videoPromptText,
-  });
-  if (imagePromptText) {
-    pushProvenance(provenance, {
-      migrationId: `${shotKey}:generationPrompt`,
-      source: imagePromptCandidate.source,
-      sourceFields: [imagePromptCandidate.sourceField],
-      targetBlockKind: 'image',
-      migratedAt,
-      rawValueSummary: imagePromptText,
-    });
-  }
-  if (voicePromptText) {
-    pushProvenance(provenance, {
-      migrationId: `${shotKey}:voice`,
-      source: readString(data, 'dialogue') ? 'dialogue' : 'promptSlots',
-      sourceFields: [readString(data, 'dialogue') ? '/dialogue' : '/promptSlots'],
-      targetBlockKind: 'voice',
-      migratedAt,
-      rawValueSummary: voicePromptText,
-    });
-  }
-
-  const referenceMedia = migrateReferenceMedia(data, diagnostics, input);
-  const executionRefs = migrateExecutionRefs(data, diagnostics, input);
-  const generationParams = migrateGenerationParams(data);
-  const nextCreativeState = resolveCanvasStoryboardNextCreativeState({
-    promptBlocks,
-    referenceMedia,
-    generationParams,
-    executionRefs,
-    diagnostics,
-  });
-  const promptState: CanvasStoryboardPromptState = {
-    version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
-    ...(hasPromptBlocks(promptBlocks) ? { promptBlocks } : {}),
-    ...(referenceMedia ? { referenceMedia } : {}),
-    ...(generationParams ? { generationParams } : {}),
-    nextCreativeState,
-    ...(executionRefs ? { executionRefs } : {}),
-    ...(provenance.length > 0 ? { migrationProvenance: provenance } : {}),
-    ...(diagnostics.length > 0 ? { diagnostics } : {}),
-  };
-
-  const validation = validateCanvasStoryboardPromptState(promptState, input);
-  const allDiagnostics = [...diagnostics, ...validation.diagnostics];
-  return {
-    migrated: validation.valid && allDiagnostics.every((item) => item.severity !== 'error'),
-    promptState,
-    diagnostics: allDiagnostics,
-    provenance,
-  };
-}
-
 export function projectCanvasStoryboardReviewRow(
   input: CanvasStoryboardReviewRowInput,
 ): CanvasStoryboardReviewRow {
@@ -870,11 +577,7 @@ export function projectCanvasStoryboardReviewRow(
     readNumber(asRecord(promptState), 'shotNumber');
 
   if (!promptState) {
-    const legacyPrompt = readString(data, 'generationPrompt');
-    const state = legacyPrompt ? createMigrationRequiredState() : createMissingVideoPromptState();
-    const diagnosticCode = legacyPrompt
-      ? 'legacy-generation-prompt-requires-migration'
-      : 'missing-semantic-storyboard-prompt';
+    const state = createMissingVideoPromptState();
     return {
       nodeId: input.nodeId,
       ...(input.sceneNodeId ? { sceneNodeId: input.sceneNodeId } : {}),
@@ -889,15 +592,13 @@ export function projectCanvasStoryboardReviewRow(
       actionId: state.nextActionId,
       diagnostics: [
         diagnostic(
-          legacyPrompt ? 'warning' : 'error',
-          diagnosticCode,
-          legacyPrompt
-            ? 'Legacy generationPrompt is migration input and is not canonical storyboard prompt authority.'
-            : 'Shot does not contain semantic storyboard prompt documents.',
+          'error',
+          'missing-semantic-storyboard-prompt',
+          'Shot does not contain semantic storyboard prompt documents.',
           { target: 'storyboardPrompt', retryable: true },
         ),
       ],
-      source: legacyPrompt ? 'migration-required' : 'empty',
+      source: 'empty',
     };
   }
 
@@ -927,7 +628,7 @@ export function projectCanvasStoryboardReviewRow(
     state: resolvedState,
     actionId: resolvedState.nextActionId,
     diagnostics: [...validation.diagnostics, ...(state?.diagnostics ?? [])],
-    source: validation.valid ? 'semantic-prompt-document' : 'migration-required',
+    source: validation.valid ? 'semantic-prompt-document' : 'invalid',
   };
 }
 
@@ -1276,7 +977,6 @@ function validatePromptDocumentRefs(
       !record ||
       !includesString(CANVAS_STORYBOARD_PROMPT_BLOCK_KINDS, record['blockKind']) ||
       !isNonEmptyString(record['documentId']) ||
-      record['version'] !== CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION ||
       (record['text'] !== undefined && typeof record['text'] !== 'string')
     ) {
       return [
@@ -1496,42 +1196,6 @@ function retiredTaskContractDiagnostic(
   );
 }
 
-function validateMigrationProvenance(
-  value: unknown,
-  target: string,
-): readonly CanvasAuthoringDiagnostic[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    return [
-      diagnostic(
-        'error',
-        'malformed-storyboard-migration-provenance',
-        'Storyboard migration provenance must be an array.',
-        { target, received: value },
-      ),
-    ];
-  }
-  return value.flatMap((item, index) => {
-    const record = asRecord(item);
-    if (
-      !record ||
-      !isNonEmptyString(record['migrationId']) ||
-      !isNonEmptyString(record['source']) ||
-      !Array.isArray(record['sourceFields'])
-    ) {
-      return [
-        diagnostic(
-          'error',
-          'malformed-storyboard-migration-provenance',
-          'Storyboard migration provenance item is malformed.',
-          { target: `${target}[${index}]`, received: item },
-        ),
-      ];
-    }
-    return [];
-  });
-}
-
 function validateOptionalDiagnostics(
   value: unknown,
   target: string,
@@ -1564,245 +1228,6 @@ function validateOptionalDiagnostics(
   });
 }
 
-function readLegacyPromptSlots(value: unknown): readonly LegacyPromptSlotLike[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      const record = asRecord(item);
-      if (!record) return undefined;
-      const fieldId = readString(record, 'fieldId');
-      const scope = readString(record, 'scope');
-      const mediaType = readString(record, 'mediaType');
-      const operation = readString(record, 'operation');
-      const prompt = readString(record, 'prompt');
-      if (!fieldId || !scope || !mediaType || !operation || !prompt) return undefined;
-      return { fieldId, scope, mediaType, operation, prompt };
-    })
-    .filter((item): item is LegacyPromptSlotLike => Boolean(item));
-}
-
-function validateLegacyPromptSlots(value: unknown): readonly CanvasAuthoringDiagnostic[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    return [
-      diagnostic(
-        'error',
-        'malformed-legacy-prompt-slots',
-        'Legacy promptSlots must be an array before migration.',
-        { target: 'promptSlots', received: value },
-      ),
-    ];
-  }
-  const parsed = readLegacyPromptSlots(value);
-  return parsed.length === value.length
-    ? []
-    : [
-        diagnostic(
-          'error',
-          'malformed-legacy-prompt-slots',
-          'One or more legacy promptSlots cannot be migrated safely.',
-          { target: 'promptSlots', received: value.length },
-        ),
-      ];
-}
-
-function firstPromptSlotText(
-  slots: readonly LegacyPromptSlotLike[],
-  mediaType: CanvasStoryboardPromptBlockKind | 'audio',
-): string | undefined {
-  const normalizedMediaType = mediaType === 'voice' ? 'audio' : mediaType;
-  return slots.find((slot) => slot.scope === 'shot' && slot.mediaType === normalizedMediaType)
-    ?.prompt;
-}
-
-function uniqueMigrationPromptCandidates(
-  candidates: readonly {
-    readonly source: CanvasStoryboardMigrationSource;
-    readonly sourceField: string;
-    readonly text?: string;
-  }[],
-): readonly MigrationPromptCandidate[] {
-  const unique: MigrationPromptCandidate[] = [];
-  const seenText = new Set<string>();
-  for (const candidate of candidates) {
-    const text = candidate.text?.trim();
-    if (!text) continue;
-    const normalizedText = text.replace(/\s+/g, ' ');
-    if (seenText.has(normalizedText)) continue;
-    seenText.add(normalizedText);
-    unique.push({
-      source: candidate.source,
-      sourceField: candidate.sourceField,
-      text,
-    });
-  }
-  return unique;
-}
-
-function createMigratedPromptDocument(input: {
-  readonly shotKey: string;
-  readonly blockKind: CanvasStoryboardPromptBlockKind;
-  readonly text: string;
-  readonly sourceField: string;
-  readonly migratedAt?: number;
-}): CanvasStoryboardSemanticPromptDocument {
-  return {
-    version: CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
-    documentId: `${input.shotKey}:${input.blockKind}:prompt`,
-    blockKind: input.blockKind,
-    text: input.text,
-    spans: input.text
-      ? [
-          {
-            id: `${input.shotKey}:${input.blockKind}:legacy-span`,
-            kind: input.blockKind === 'voice' ? 'voice' : 'prompt',
-            range: { start: 0, end: input.text.length },
-            fieldId:
-              input.blockKind === 'image'
-                ? 'shot.imagePrompt'
-                : input.blockKind === 'video'
-                  ? 'scene.videoPrompt'
-                  : 'voice.dialogue',
-            source: 'agent',
-          },
-        ]
-      : [],
-    fieldProjections: [
-      {
-        fieldId:
-          input.blockKind === 'image'
-            ? 'shot.imagePrompt'
-            : input.blockKind === 'video'
-              ? 'scene.videoPrompt'
-              : 'voice.dialogue',
-        value: input.text,
-        sourceSpanId: `${input.shotKey}:${input.blockKind}:legacy-span`,
-        alignmentState: 'in-sync',
-      },
-    ],
-    profileId: 'canvas.storyboard.semantic-prompt',
-    ...(input.migratedAt ? { updatedAt: input.migratedAt } : {}),
-    baseRevision: input.sourceField,
-  };
-}
-
-function migrateReferenceMedia(
-  data: Record<string, unknown>,
-  diagnostics: CanvasAuthoringDiagnostic[],
-  options: StoryboardMediaIdentityClassificationOptions,
-): CanvasStoryboardReferenceMedia | undefined {
-  const mediaRefCandidates = [
-    ...readUnknownArray(data['sourceMediaRefs']),
-    ...readUnknownArray(data['mediaRefs']),
-  ];
-  if (mediaRefCandidates.length === 0) return undefined;
-
-  const imageRefs: StoryboardMediaRef[] = [];
-  const videoRefs: StoryboardMediaRef[] = [];
-  const audioRefs: StoryboardMediaRef[] = [];
-  for (const [index, candidate] of mediaRefCandidates.entries()) {
-    const record = asRecord(candidate);
-    const refTarget = readString(record, 'refId') ?? String(index);
-    const refDiagnostics = validateMediaRef(candidate, `referenceMedia.${refTarget}`, options);
-    diagnostics.push(...refDiagnostics);
-    if (refDiagnostics.some((item) => item.severity === 'error')) continue;
-    const ref = candidate as StoryboardMediaRef;
-    if (isAudioRef(ref)) {
-      audioRefs.push(ref);
-    } else if (isVideoRef(ref)) {
-      videoRefs.push(ref);
-    } else {
-      imageRefs.push(ref);
-    }
-  }
-
-  return {
-    imageRefs,
-    ...(videoRefs.length > 0 ? { videoRefs } : {}),
-    ...(audioRefs.length > 0 ? { audioRefs } : {}),
-  };
-}
-
-function migrateExecutionRefs(
-  data: Record<string, unknown>,
-  diagnostics: CanvasAuthoringDiagnostic[],
-  options: StoryboardMediaIdentityClassificationOptions,
-): CanvasStoryboardExecutionRefs | undefined {
-  const resultRefs: CanvasStoryboardResultRef[] = [];
-  for (const [index, candidate] of readUnknownArray(data['generatedMediaRefs']).entries()) {
-    const record = asRecord(candidate);
-    const refTarget = readString(record, 'refId') ?? String(index);
-    const refDiagnostics = validateMediaRef(candidate, `generatedMediaRefs.${refTarget}`, options);
-    diagnostics.push(...refDiagnostics);
-    if (refDiagnostics.some((item) => item.severity === 'error')) continue;
-    resultRefs.push({ mediaRef: candidate as StoryboardMediaRef });
-  }
-  return resultRefs.length > 0 ? { resultRefs } : undefined;
-}
-
-function migrateGenerationParams(
-  data: Record<string, unknown>,
-): CanvasStoryboardGenerationParams | undefined {
-  const duration = readNumber(data, 'duration');
-  const dialogue = readString(data, 'dialogue');
-  const voiceOver = readString(data, 'voiceOver');
-  if (duration === undefined && !dialogue && !voiceOver) return undefined;
-  return {
-    ...(duration !== undefined ? { duration } : {}),
-    ...(dialogue ? { dialogue } : {}),
-    ...(voiceOver ? { voiceOver } : {}),
-  };
-}
-
-function assembleLegacyVideoPrompt(data: Record<string, unknown>): string | undefined {
-  const parts = [
-    readString(data, 'visualDescription'),
-    summarizeLegacyCharacters(data['characters']),
-    readString(data, 'characterAction'),
-    readString(data, 'shotScale'),
-    readString(data, 'cameraAngle'),
-    readString(data, 'cameraMovement'),
-    readString(data, 'visualStyle'),
-    readString(data, 'dialogue') ? `Dialogue: ${readString(data, 'dialogue')}` : undefined,
-  ].filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? parts.join('. ') : undefined;
-}
-
-function summarizeLegacyCharacters(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const names = value
-    .map((item) => {
-      const record = asRecord(item);
-      if (!record) return undefined;
-      const name = readString(record, 'characterName') ?? readString(record, 'name');
-      const action = readString(record, 'action');
-      const appearance = readString(record, 'appearanceNotes');
-      const details = [action, appearance].filter((part): part is string => Boolean(part));
-      if (!name) return details.join(', ') || undefined;
-      return details.length > 0 ? `${name} (${details.join(', ')})` : name;
-    })
-    .filter((part): part is string => Boolean(part));
-  return names.length > 0 ? `Characters: ${names.join(', ')}` : undefined;
-}
-
-function readUnknownArray(value: unknown): readonly unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function pushProvenance(
-  provenance: CanvasStoryboardMigrationProvenance[],
-  item: CanvasStoryboardMigrationProvenance,
-): void {
-  if (!item.rawValueSummary) return;
-  provenance.push(item);
-}
-
-function hasPromptBlocks(blocks: CanvasStoryboardPromptBlocks): boolean {
-  return Boolean(
-    blocks.imagePromptDocument || blocks.videoPromptDocument || blocks.voicePromptDocument,
-  );
-}
-
 function asCanvasStoryboardPromptState(value: unknown): CanvasStoryboardPromptState | undefined {
   return isCanvasStoryboardPromptState(value) ? value : undefined;
 }
@@ -1814,17 +1239,6 @@ function createMissingVideoPromptState(): CanvasStoryboardNextCreativeState {
     severity: 'warning',
     target: 'video-prompt',
     nextActionId: 'optimize-video-prompt',
-  };
-}
-
-function createMigrationRequiredState(): CanvasStoryboardNextCreativeState {
-  return {
-    id: 'legacy-migration-required',
-    label: 'Migrate prompt document',
-    severity: 'warning',
-    target: 'prompt-alignment',
-    nextActionId: 'fix-alignment',
-    blocker: 'Legacy generationPrompt must be migrated before prompt-first authoring.',
   };
 }
 
@@ -1858,14 +1272,6 @@ function formatShotNumber(value: number | undefined): string {
 
 function formatDuration(value: number | undefined): string {
   return value === undefined ? '' : `${value}s`;
-}
-
-function isAudioRef(ref: StoryboardMediaRef): boolean {
-  return ref.mimeType?.startsWith('audio/') ?? false;
-}
-
-function isVideoRef(ref: StoryboardMediaRef): boolean {
-  return ref.mimeType?.startsWith('video/') ?? false;
 }
 
 function validationResult(

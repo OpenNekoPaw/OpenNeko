@@ -4,9 +4,9 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
-  AGENT_STATE_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+  initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
 import { createWorkspaceMediaLibrarySyncMetadataBinding } from '../workspace-media-library-sync-binding';
 
@@ -138,9 +138,9 @@ async function createFixture() {
     databasePath: path.join(home, '.neko', 'neko.db'),
     busyTimeoutMs: 2_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
-  await store.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
+  await initializeMediaMetadataTables(store);
   const workspaceId = 'workspace-a';
   await store.repositories.workspaces.bind({
     identity: { version: 1, workspaceId },

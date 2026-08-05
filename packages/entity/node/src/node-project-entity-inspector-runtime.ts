@@ -16,11 +16,10 @@ import {
   type ProjectEntityDocument,
   type ProjectEntityInspectorIntent,
   type ProjectEntityOperationCommitPort,
-  type ProjectEntityOperationCommitRequest,
+  type ProjectEntityOperationMutation,
 } from '@neko/entity-domain';
 import { NodeProjectEntityRepository } from './node-project-entity-repository';
 
-const JOURNAL_SCHEMA_VERSION = 1 as const;
 const JOURNAL_WORKSPACE_PATH = 'neko/entity-operation-journal.json' as const;
 
 export interface NodeProjectEntityInspectorRuntimeOptions {
@@ -67,7 +66,6 @@ export class NodeProjectEntityInspectorRuntime {
       journalPath: this.journalPath,
     });
     const operations = new ProjectEntityOperationService({
-      repository: this.repository,
       candidates: this.candidates,
       references: [],
       commits: this.commits,
@@ -106,11 +104,12 @@ class NodeProjectEntityCandidateWorkflow implements ProjectEntityCandidateWorkfl
 
   async getCandidate(candidateId: string): Promise<ProjectEntityCandidateProjection | null> {
     const projections = this.requireProjections();
-    const records = await projections.list({
+    const result = await projections.list({
       partition: this.options.partition,
       candidateId,
       kinds: ['entity-candidate'],
     });
+    const records = result.records;
     const candidates = records.flatMap((record) =>
       record.kind === 'entity-candidate' && record.value.freshness !== 'failed'
         ? [record.value]
@@ -141,14 +140,14 @@ class NodeProjectEntityCandidateWorkflow implements ProjectEntityCandidateWorkfl
       candidateId,
       kinds: ['entity-candidate'],
     });
-    const sourceIds = [...new Set(matches.map((record) => record.sourceId))];
+    const sourceIds = [...new Set(matches.records.map((record) => record.sourceId))];
     const updatedAt = this.options.now();
     for (const sourceId of sourceIds) {
       const records = await projections.list({ partition: this.options.partition, sourceId });
       await projections.replaceSource({
         partition: this.options.partition,
         sourceId,
-        records: records.filter((record) => !isCandidateRecord(record, candidateId)),
+        records: records.records.filter((record) => !isCandidateRecord(record, candidateId)),
         updatedAt,
       });
     }
@@ -173,29 +172,32 @@ class NodeProjectEntityOperationCommitCoordinator implements ProjectEntityOperat
   constructor(private readonly options: CommitCoordinatorOptions) {}
 
   async commit(
-    request: ProjectEntityOperationCommitRequest,
+    mutation: ProjectEntityOperationMutation,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    if (request.referencePlan) {
-      throw nodeIntentError(
-        'project-entity-reference-plan-incomplete',
-        'Project Entity reference owners are not configured for an atomic rewrite.',
-      );
-    }
-    if (!request.candidateDecision) {
-      return this.options.repository.commit(request, signal);
-    }
-    const journal: NodeProjectEntityOperationJournal = {
-      schemaVersion: JOURNAL_SCHEMA_VERSION,
-      expectedRevision: request.expectedRevision,
-      next: request.next,
-      candidateDecision: {
-        kind: request.candidateDecision.kind,
-        candidateId: request.candidateDecision.candidate.candidateId,
-      },
-    };
-    await writeJournal(this.options.journalPath, journal);
-    const committed = await this.options.repository.commit(request, signal);
+    let journal: NodeProjectEntityOperationJournal | undefined;
+    const committed = await this.options.repository.mutate(async (current) => {
+      const request = await mutation(current);
+      if (request.referencePlan) {
+        throw nodeIntentError(
+          'project-entity-reference-plan-incomplete',
+          'Project Entity reference owners are not configured for an atomic rewrite.',
+        );
+      }
+      if (request.candidateDecision) {
+        journal = {
+          previous: current,
+          next: request.next,
+          candidateDecision: {
+            kind: request.candidateDecision.kind,
+            candidateId: request.candidateDecision.candidate.candidateId,
+          },
+        };
+        await writeJournal(this.options.journalPath, journal);
+      }
+      return request.next;
+    }, signal);
+    if (!journal) return committed;
     await this.options.candidates.remove(journal.candidateDecision.candidateId);
     await removeJournal(this.options.journalPath);
     return committed;
@@ -205,14 +207,19 @@ class NodeProjectEntityOperationCommitCoordinator implements ProjectEntityOperat
     const journal = await readJournal(this.options.journalPath);
     if (!journal) return;
     const current = await this.options.repository.load(signal);
-    if (current.revision === journal.expectedRevision) {
-      await this.options.repository.commit(
-        { expectedRevision: journal.expectedRevision, next: journal.next },
-        signal,
-      );
+    if (sameDocument(current, journal.previous)) {
+      await this.options.repository.mutate((latest) => {
+        if (!sameDocument(latest, journal.previous)) {
+          throw nodeIntentError(
+            'project-entity-operation-invalid',
+            'Project Entity operation journal no longer owns the canonical document.',
+          );
+        }
+        return journal.next;
+      }, signal);
     } else if (!sameDocument(current, journal.next)) {
       throw nodeIntentError(
-        'project-entity-revision-conflict',
+        'project-entity-operation-invalid',
         'Project Entity operation journal conflicts with the canonical document.',
       );
     }
@@ -222,8 +229,7 @@ class NodeProjectEntityOperationCommitCoordinator implements ProjectEntityOperat
 }
 
 interface NodeProjectEntityOperationJournal {
-  readonly schemaVersion: typeof JOURNAL_SCHEMA_VERSION;
-  readonly expectedRevision: number;
+  readonly previous: ProjectEntityDocument;
   readonly next: ProjectEntityDocument;
   readonly candidateDecision: {
     readonly kind: 'confirm' | 'merge-into';
@@ -295,18 +301,16 @@ async function readJournal(journalPath: string): Promise<NodeProjectEntityOperat
       error,
     );
   }
-  if (!isRecord(value) || value['schemaVersion'] !== JOURNAL_SCHEMA_VERSION) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['previous', 'next', 'candidateDecision'])) {
     throw nodeIntentError(
       'project-entity-io-failed',
-      'Project Entity operation journal uses an unsupported schema.',
+      'Project Entity operation journal is invalid.',
     );
   }
   const decision = value['candidateDecision'];
-  const expectedRevision = value['expectedRevision'];
   if (
-    typeof expectedRevision !== 'number' ||
-    !Number.isSafeInteger(expectedRevision) ||
     !isRecord(decision) ||
+    !hasOnlyKeys(decision, ['kind', 'candidateId']) ||
     (decision['kind'] !== 'confirm' && decision['kind'] !== 'merge-into') ||
     !isStableIdentity(decision['candidateId'])
   ) {
@@ -316,8 +320,7 @@ async function readJournal(journalPath: string): Promise<NodeProjectEntityOperat
     );
   }
   return {
-    schemaVersion: JOURNAL_SCHEMA_VERSION,
-    expectedRevision,
+    previous: assertProjectEntityDocument(value['previous']),
     next: assertProjectEntityDocument(value['next']),
     candidateDecision: {
       kind: decision['kind'],
@@ -344,6 +347,10 @@ function sameDocument(left: ProjectEntityDocument, right: ProjectEntityDocument)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
 }
 
 function isStableIdentity(value: unknown): value is string {

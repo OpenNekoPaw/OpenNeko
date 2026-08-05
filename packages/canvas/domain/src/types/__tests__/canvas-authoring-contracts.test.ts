@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_AUTHORING_CATALOG_VERSION,
   CANVAS_AUTHORING_FIELD_PROFILE_ALIGNMENT_STATES,
   CANVAS_AUTHORING_FIELD_ROLES,
   CANVAS_AUTHORING_FIELD_STORAGE_TARGETS,
@@ -16,21 +15,12 @@ import {
 } from '../..';
 
 describe('canvas authoring contracts', () => {
-  it('rejects unsupported catalog versions with typed diagnostics', () => {
+  it('accepts the stable catalog request shape', () => {
     const validation = validateCanvasAuthoringCatalogRequest({
-      version: 999,
       sections: ['nodeTypes'],
     });
 
-    expect(validation.valid).toBe(false);
-    expect(validation.diagnostics).toEqual([
-      expect.objectContaining({
-        severity: 'error',
-        code: 'unsupported-catalog-version',
-        expected: CANVAS_AUTHORING_CATALOG_VERSION,
-        received: 999,
-      }),
-    ]);
+    expect(validation).toEqual({ valid: true, diagnostics: [] });
   });
 
   it('rejects runtime-only resource identities in authoring results', () => {
@@ -41,7 +31,6 @@ describe('canvas authoring contracts', () => {
     expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('assets/cover.png')).toBe(false);
 
     const validation = validateCanvasAuthoringResultEnvelope({
-      version: 1,
       status: 'success',
       refs: [{ kind: 'resource', id: 'neko-media://panel/image.png' }],
       diagnostics: [],
@@ -59,7 +48,6 @@ describe('canvas authoring contracts', () => {
 
   it('rejects malformed refs and unknown operation descriptors visibly', () => {
     const catalogValidation = validateCanvasAuthoringCatalog({
-      version: 1,
       sections: ['operations'],
       operations: [
         {
@@ -81,7 +69,6 @@ describe('canvas authoring contracts', () => {
     ]);
 
     const resultValidation = validateCanvasAuthoringResultEnvelope({
-      version: 1,
       status: 'success',
       refs: [{ kind: 'node', id: '' }],
       diagnostics: [],
@@ -100,7 +87,6 @@ describe('canvas authoring contracts', () => {
     const profile = {
       id: 'storyboard.ai-native',
       namespace: 'canvas.storyboard',
-      version: 1,
       aliases: ['storyboard', '分镜'],
       unknownFieldPolicy: 'preserve-custom',
       fields: [
@@ -160,7 +146,6 @@ describe('canvas authoring contracts', () => {
     const validation = validateCanvasAuthoringFieldProfileDescriptor({
       id: 'storyboard.invalid',
       namespace: '',
-      version: 1,
       fields: [
         {
           id: '',
@@ -208,7 +193,6 @@ describe('canvas authoring contracts', () => {
     const profile = {
       id: 'storyboard.ai-native',
       namespace: 'canvas.storyboard',
-      version: 1,
       unknownFieldPolicy: 'preserve-custom',
       fields: [
         {

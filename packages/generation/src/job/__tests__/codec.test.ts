@@ -34,6 +34,7 @@ describe('Generation Job codec', () => {
   });
 
   it.each([
+    ['internal revision', { revision: 1 }],
     ['resultRefs', { resultRefs: [{ id: 'legacy-result' }] }],
     [
       'runtime URI',
@@ -83,14 +84,14 @@ describe('Generation Job codec', () => {
         },
       },
     ],
-  ])('rejects legacy %s payloads with a migration diagnostic', (_name, legacyFields) => {
+  ])('rejects removed %s payload fields at the record boundary', (_name, legacyFields) => {
     const value = {
       ...snapshot(),
       ...legacyFields,
     };
 
     expect(() => decodeGenerationJobSnapshot(JSON.stringify(value))).toThrow(
-      expect.objectContaining({ code: 'generation-job-migration-required' }),
+      expect.objectContaining({ code: 'generation-job-persistence-invalid' }),
     );
   });
 
@@ -140,7 +141,6 @@ function snapshot(): GenerationJobSnapshot {
     ref: { kind: 'generation', jobId: 'generation-1' },
     lifecycleMode: 'detached',
     phase: 'pending',
-    revision: 1,
     createdAt: 1,
     updatedAt: 1,
     request: {

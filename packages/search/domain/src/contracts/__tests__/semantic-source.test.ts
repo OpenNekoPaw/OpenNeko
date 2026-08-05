@@ -95,7 +95,6 @@ describe('semantic source contracts', () => {
 
   it('accepts only semantic indexes without a persistent textSegments field', () => {
     const index = {
-      version: 1,
       indexId: 'semantic:story',
       assetId: 'story',
       sourceRef: {
@@ -106,5 +105,31 @@ describe('semantic source contracts', () => {
     };
     expect(isCompactMediaSemanticIndex(index)).toBe(true);
     expect(isCompactMediaSemanticIndex({ ...index, textSegments: [] })).toBe(false);
+  });
+
+  it('rejects removed creative schema and semantic index version fields', () => {
+    expect(
+      isSemanticSourceDescriptor({
+        sourceId: 'workspace:story.json',
+        workspaceId: 'workspace-1',
+        rootId: 'workspace',
+        rootKind: 'workspace',
+        relativePath: 'story.json',
+        portablePath: '${WORKSPACE}/story.json',
+        format: 'json',
+        analysisMode: 'link-existing',
+        fingerprint: 'sha256:story',
+        sizeBytes: 120,
+        modifiedAtMs: 10,
+        creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+      }),
+    ).toBe(false);
+    expect(
+      isCompactMediaSemanticIndex({
+        version: 1,
+        assetId: 'story',
+        sourceRef: { kind: 'file', path: '${WORKSPACE}/story.json' },
+      }),
+    ).toBe(false);
   });
 });

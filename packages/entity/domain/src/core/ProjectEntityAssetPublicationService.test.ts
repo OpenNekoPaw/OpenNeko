@@ -56,7 +56,7 @@ describe('ProjectEntityAssetPublicationService', () => {
     expect(JSON.stringify(harness.published?.snapshot)).not.toContain('story.epub');
     expect(JSON.stringify(harness.published?.snapshot)).not.toContain('neko/generated/rin.png');
     expect(harness.document).toEqual(before);
-    expect(harness.repositoryCommit).not.toHaveBeenCalled();
+    expect(harness.repositoryMutation).not.toHaveBeenCalled();
   });
 
   it('rejects partial plans and external dependency substitution before staging', async () => {
@@ -96,11 +96,11 @@ describe('ProjectEntityAssetPublicationService', () => {
     expect(harness.aborted).toEqual(['publish-rin']);
   });
 
-  it('rejects stale Project revisions without reading or publishing Asset state', async () => {
+  it('rejects a missing Project Entity without reading or publishing Asset state', async () => {
     await expect(
-      harness.service.publish({ ...REQUEST, expectedRevision: 6 }),
+      harness.service.publish({ ...REQUEST, entityId: 'character-missing' }),
     ).rejects.toMatchObject({
-      diagnostics: [{ code: 'project-entity-revision-conflict' }],
+      diagnostics: [{ code: 'project-entity-not-found' }],
     });
     expect(harness.prepared).toHaveLength(0);
     expect(harness.publish).not.toHaveBeenCalled();
@@ -124,7 +124,7 @@ class PublicationHarness {
         preparedResources: readonly ProjectEntityAssetPreparedResource[];
       }
     | undefined;
-  readonly repositoryCommit = vi.fn();
+  readonly repositoryMutation = vi.fn();
   readonly publish = vi.fn(
     async (request: Parameters<ProjectEntityAssetPublicationAdapter['publish']>[0]) => {
       this.published = request;
@@ -135,7 +135,7 @@ class PublicationHarness {
   readonly service = new ProjectEntityAssetPublicationService({
     repository: {
       load: async () => this.document,
-      commit: this.repositoryCommit,
+      mutate: this.repositoryMutation,
     },
     assets: {
       prepareResource: async (request) => {
@@ -158,7 +158,6 @@ class PublicationHarness {
 
 const REQUEST = {
   operationId: 'publish-rin',
-  expectedRevision: 7,
   entityId: 'character-rin',
   target: { assetId: 'entity-asset-rin', revision: '5' },
   representations: [
@@ -184,9 +183,7 @@ const PUBLISHED_REF = {
 };
 
 const DOCUMENT: ProjectEntityDocument = {
-  schemaVersion: 1,
   projectId: 'project-neko',
-  revision: 7,
   entities: [
     {
       entityId: 'character-rin',

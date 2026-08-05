@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,11 +12,7 @@ import {
   LocalMetadataGeneratedOutputProjectionStore,
   type GeneratedOutputProjectionRejection,
 } from '@neko/generation/media';
-import {
-  GeneratedAssetIndex,
-  generateAssetId,
-  migrateLegacyGeneratedAssetIndex,
-} from '../generated-asset-index';
+import { GeneratedAssetIndex, generateAssetId } from '../generated-asset-index';
 
 const tempDirs: string[] = [];
 
@@ -105,9 +101,7 @@ describe('GeneratedAssetIndex', () => {
       },
     });
 
-    await expect(index.add(legacyAsset)).rejects.toThrow(
-      'generated-asset-index-migration-required',
-    );
+    await expect(index.add(legacyAsset)).rejects.toThrow('invalid-generated-asset');
     expect(manifest.current().entries).toEqual({});
   });
 
@@ -148,7 +142,7 @@ describe('GeneratedAssetIndex', () => {
     }
     Reflect.set(persistedLifecycle, 'resourceRef', { id: 'legacy-resource' });
 
-    await expect(store.load()).rejects.toThrow('generated-output-projection-migration-required');
+    await expect(store.load()).rejects.toThrow('invalid-generated-output-projection');
   });
 
   it('preserves and reports rejected projections when the Host explicitly isolates them', async () => {
@@ -207,9 +201,9 @@ describe('GeneratedAssetIndex', () => {
     await expect(isolatedStore.load()).resolves.toEqual([second]);
     expect(rejections).toEqual([
       {
-        code: 'generated-output-projection-migration-required',
+        code: 'invalid-generated-output-projection',
         resourceId: 'generated-output:asset-1',
-        message: expect.stringContaining('invalid or legacy projection'),
+        message: expect.stringContaining('invalid generated output projection'),
       },
     ]);
 
@@ -281,127 +275,11 @@ describe('GeneratedAssetIndex', () => {
     expect(manifest.current().entries).toEqual({});
   });
 
-  it('fails visibly instead of loading the removed generated-draft projection path', async () => {
-    const workspaceRoot = await createTempDir();
-    const asset = imageAsset({
-      path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'legacy.png'),
-    });
-    const manifest = createManifestStore({
-      version: 2,
-      createdAt: '2026-07-13T00:00:00.000Z',
-      updatedAt: '2026-07-13T00:00:00.000Z',
-      entries: {
-        'generated-draft:asset-1': {
-          descriptor: {
-            id: 'generated-draft:asset-1',
-            scope: 'project',
-            provider: 'generated-draft-index',
-            kind: 'generated',
-            source: {
-              kind: 'generated-asset',
-              generatedAssetId: 'asset-1',
-              projectRelativePath: 'neko/generated/image/legacy.png',
-            },
-            fingerprint: { strategy: 'provider', value: 'asset-1:legacy' },
-          },
-          variants: [],
-          createdAt: asset.generatedAt,
-          updatedAt: asset.generatedAt,
-          status: 'ready',
-          providerMetadata: {
-            generatedDraftProjection: {
-              version: 1,
-              asset: {
-                id: asset.id,
-                type: asset.type,
-                mimeType: asset.mimeType,
-                generatedAt: asset.generatedAt,
-                width: 1024,
-                height: 1024,
-                ratio: '1:1',
-              },
-              pathKey: '${WORKSPACE}/neko/generated/image/legacy.png',
-            },
-          },
-        },
-      },
-    });
-
-    await expect(
-      new LocalMetadataGeneratedOutputProjectionStore({
-        manifestStore: manifest.store,
-        workspaceRoot,
-        pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
-      }).load(),
-    ).rejects.toThrow('retired-generated-draft-projection');
-  });
-
-  it('backs up, imports, verifies, and archives the legacy generated asset index', async () => {
-    const workspaceRoot = await createTempDir();
-    const generatedDir = path.join(workspaceRoot, 'neko', 'generated');
-    const indexPath = path.join(generatedDir, 'index.json');
-    const asset = imageAsset({ path: path.join(generatedDir, 'image', 'a.png') });
-    await mkdir(generatedDir, { recursive: true });
-    await writeFile(indexPath, JSON.stringify({ version: 1, assets: [asset] }), 'utf8');
-    const manifest = createManifestStore();
-    const store = new LocalMetadataGeneratedOutputProjectionStore({
-      manifestStore: manifest.store,
-      workspaceRoot,
-      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
-    });
-
-    const report = await migrateLegacyGeneratedAssetIndex({
-      indexPath,
-      store,
-      now: () => '2026-07-13T04:00:00.000Z',
-    });
-
-    expect(report).toMatchObject({
-      sourceStatus: 'migrated',
-      importedEntryCount: 1,
-      verifiedEntryCount: 1,
-    });
-    await expect(access(report.backupPath!)).resolves.toBeUndefined();
-    await expect(access(report.archivedPath!)).resolves.toBeUndefined();
-    await expect(access(indexPath)).rejects.toThrow();
-    await expect(store.load()).resolves.toEqual([asset]);
-  });
-
-  it('backs up and quarantines a malformed legacy generated asset index', async () => {
-    const workspaceRoot = await createTempDir();
-    const generatedDir = path.join(workspaceRoot, 'neko', 'generated');
-    const indexPath = path.join(generatedDir, 'index.json');
-    await mkdir(generatedDir, { recursive: true });
-    await writeFile(indexPath, '{bad json', 'utf8');
-    const manifest = createManifestStore();
-    const store = new LocalMetadataGeneratedOutputProjectionStore({
-      manifestStore: manifest.store,
-      workspaceRoot,
-      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
-    });
-
-    const report = await migrateLegacyGeneratedAssetIndex({
-      indexPath,
-      store,
-      now: () => '2026-07-13T04:30:00.000Z',
-    });
-
-    expect(report).toMatchObject({
-      sourceStatus: 'quarantined',
-      importedEntryCount: 0,
-      verifiedEntryCount: 0,
-      sourceDiagnostic: expect.stringContaining('JSON'),
-    });
-    await expect(access(report.backupPath!)).resolves.toBeUndefined();
-    await expect(access(report.quarantinePath!)).resolves.toBeUndefined();
-    await expect(store.load()).resolves.toEqual([]);
-  });
-
-  it('rejects the retired JSON index constructor path', async () => {
+  it('rejects an invalid index store', async () => {
     const dir = await createTempDir();
 
     expect(() => new GeneratedAssetIndex(dir as never)).toThrow(
-      'Legacy generated asset JSON indexes are migration-only.',
+      'Generated asset index requires a GeneratedAssetIndexStore.',
     );
   });
 

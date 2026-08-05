@@ -32,6 +32,18 @@ describe('progressive character memory contracts', () => {
     expect(validateCharacterMemoryFile(result.memory)).toEqual({ ok: true, diagnostics: [] });
   });
 
+  it('rejects removed memory version fields without invalidating a canonical sibling file', () => {
+    const canonical = createEmptyCharacterMemoryFile('${WORKSPACE}');
+    const versionedRoot: Record<string, unknown> = { ...canonical };
+    const versionedLedger: Record<string, unknown> = { ...canonical.ledger };
+    Reflect.set(versionedRoot, 'version', 1);
+    Reflect.set(versionedLedger, 'version', 1);
+
+    expect(validateCharacterMemoryFile(versionedRoot).ok).toBe(false);
+    expect(validateCharacterMemoryFile({ ...canonical, ledger: versionedLedger }).ok).toBe(false);
+    expect(validateCharacterMemoryFile(canonical)).toEqual({ ok: true, diagnostics: [] });
+  });
+
   it('replaces existing observations by indexed observation id without reordering', () => {
     const first = makeObservation('obs-rin-shot-1');
     const second = makeObservation('obs-rin-shot-2');

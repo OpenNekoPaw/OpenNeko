@@ -17,7 +17,7 @@ import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 export interface ProjectPortabilityShellPort {
-  getProjection(windowId: string): Promise<{ readonly endpointEpoch: string }>;
+  getProjection(windowId: string): Promise<{ readonly rendererSessionId: string }>;
   resolveProjectWorkspace(projectId: string): Promise<AssetWorkspaceResolution>;
 }
 
@@ -175,7 +175,7 @@ export class ProjectPortabilityRuntime {
       this.options.shell.resolveProjectWorkspace(identity.projectId),
     ]);
     if (
-      projection.endpointEpoch !== identity.endpointEpoch ||
+      projection.rendererSessionId !== identity.rendererSessionId ||
       workspace.workspaceId !== identity.workspaceId
     ) {
       throw new Error('Project portability project identity is stale.');

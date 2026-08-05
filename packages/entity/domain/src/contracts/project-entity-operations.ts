@@ -23,7 +23,6 @@ export interface ProjectEntityCandidateWorkflowPort {
 }
 
 export interface ProjectEntityOperationCommitRequest {
-  readonly expectedRevision: number;
   readonly next: ProjectEntityDocument;
   readonly candidateDecision?: Exclude<
     ProjectEntityCandidateDecision,
@@ -32,13 +31,17 @@ export interface ProjectEntityOperationCommitRequest {
   readonly referencePlan?: ProjectEntityReferenceRewritePlan;
 }
 
+export type ProjectEntityOperationMutation = (
+  current: ProjectEntityDocument,
+) => ProjectEntityOperationCommitRequest | Promise<ProjectEntityOperationCommitRequest>;
+
 /**
  * Commits the canonical document and any declared candidate/reference effects as one operation.
  * Concrete adapters must reject partial commits rather than report success.
  */
 export interface ProjectEntityOperationCommitPort {
   commit(
-    request: ProjectEntityOperationCommitRequest,
+    mutation: ProjectEntityOperationMutation,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument>;
 }

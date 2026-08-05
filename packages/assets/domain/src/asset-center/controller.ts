@@ -22,7 +22,6 @@ export interface AssetCenterSelectionResolver {
     readonly identity: AssetCenterSessionIdentity;
     readonly owner: GlobalLibraryItem['owner'];
     readonly itemId: string;
-    readonly expectedCatalogRevision: number;
   }): Promise<ContentLocator>;
 }
 
@@ -31,12 +30,10 @@ export interface AssetCenterManagementRuntime {
   getSnapshot(): AssetCenterSessionProjection | Promise<AssetCenterSessionProjection>;
   subscribe(listener: (projection: AssetCenterSessionProjection) => void): () => void;
   updateFilter(
-    expectedRevision: number,
     filter: AssetCenterFilterProjection,
   ): AssetCenterSessionProjection | Promise<AssetCenterSessionProjection>;
-  refresh(expectedRevision: number): Promise<AssetCenterSessionProjection>;
+  refresh(): Promise<AssetCenterSessionProjection>;
   select(input: {
-    readonly expectedRevision: number;
     readonly owner: GlobalLibraryItem['owner'];
     readonly itemId: string;
   }): Promise<AssetCenterSessionProjection>;
@@ -44,15 +41,12 @@ export interface AssetCenterManagementRuntime {
     item: GlobalLibraryItem,
     variant: GlobalLibraryThumbnailVariant,
   ): Promise<GlobalLibraryThumbnailResult>;
-  importAssets(expectedRevision: number): Promise<void>;
-  removeAsset(item: GlobalAssetItem, expectedRevision: number): Promise<void>;
-  addMediaLibrary(
-    locationKind: GlobalMediaLibraryLocationKind,
-    expectedRevision: number,
-  ): Promise<void>;
-  relinkMediaLibrary(libraryId: string, expectedRevision: number): Promise<void>;
-  removeMediaLibrary(libraryId: string, expectedRevision: number): Promise<void>;
-  revealMediaLibrary(libraryId: string, expectedRevision: number): Promise<void>;
+  importAssets(): Promise<void>;
+  removeAsset(item: GlobalAssetItem): Promise<void>;
+  addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind): Promise<void>;
+  relinkMediaLibrary(libraryId: string): Promise<void>;
+  removeMediaLibrary(libraryId: string): Promise<void>;
+  revealMediaLibrary(libraryId: string): Promise<void>;
   dispose(): void;
 }
 
@@ -83,17 +77,13 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
     return () => this.listeners.delete(listener);
   }
 
-  updateFilter(
-    expectedRevision: number,
-    filter: AssetCenterFilterProjection,
-  ): AssetCenterSessionProjection {
-    const projection = this.session.updateFilter(expectedRevision, filter);
+  updateFilter(filter: AssetCenterFilterProjection): AssetCenterSessionProjection {
+    const projection = this.session.updateFilter(filter);
     this.publish(projection);
     return projection;
   }
 
-  async refresh(expectedRevision: number): Promise<AssetCenterSessionProjection> {
-    this.requireRevision(expectedRevision);
+  async refresh(): Promise<AssetCenterSessionProjection> {
     const filter = this.getSnapshot().filter;
     const input = {
       query: filter.query,
@@ -113,18 +103,14 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
               })
             : await this.library.searchMediaLibraries(input);
     } catch (error: unknown) {
-      this.requireRevision(expectedRevision);
       const unavailable = this.session.commitCatalogUnavailable(
-        expectedRevision,
         error instanceof Error ? error.message : String(error),
       );
       this.publish(unavailable);
       return unavailable;
     }
     const projection = this.session.commitCatalog({
-      expectedRevision,
       owner: filter.catalog,
-      catalogRevision: catalog.revision,
       entries: catalog.items.map((item) => ({ item })),
     });
     this.publish(projection);
@@ -132,11 +118,10 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
   }
 
   async select(input: {
-    readonly expectedRevision: number;
     readonly owner: GlobalLibraryItem['owner'];
     readonly itemId: string;
   }): Promise<AssetCenterSessionProjection> {
-    const projection = this.requireRevision(input.expectedRevision);
+    const projection = this.getSnapshot();
     if (projection.catalog.status !== 'ready' || projection.catalog.owner !== input.owner) {
       throw itemUnavailable(input.itemId);
     }
@@ -151,7 +136,6 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
       identity: this.identity,
       owner: input.owner,
       itemId: input.itemId,
-      expectedCatalogRevision: projection.catalog.catalogRevision,
     });
     if (previousPreview.status === 'ready') {
       await this.previewPorts?.previewSessions.release({
@@ -162,7 +146,7 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
     const selected = this.session.selectResolved({ ...input, contentLocator });
     this.publish(selected);
     if (!this.previewPorts) return selected;
-    const loading = this.session.commitPreview(selected.revision, {
+    const loading = this.session.commitPreview({
       status: 'loading',
       itemId: input.itemId,
     });
@@ -181,7 +165,7 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
       contentLocator: selection.contentLocator,
     });
     if (authorization.status === 'unavailable') {
-      const unavailable = this.session.commitPreview(loading.revision, {
+      const unavailable = this.session.commitPreview({
         status: 'unavailable',
         itemId: selection.itemId,
         diagnostic: authorization.diagnostic,
@@ -196,7 +180,7 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
     });
     assertPreviewOwner(this.identity, selection.itemId, preview);
     try {
-      const ready = this.session.commitPreview(loading.revision, {
+      const ready = this.session.commitPreview({
         status: 'ready',
         itemId: selection.itemId,
         previewSessionId: preview.identity.previewSessionId,
@@ -222,7 +206,7 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
       identity: this.identity,
       previewSessionId: current.preview.previewSessionId,
     });
-    const detached = this.session.commitPreview(current.revision, { status: 'empty' });
+    const detached = this.session.commitPreview({ status: 'empty' });
     this.publish(detached);
     return detached;
   }
@@ -234,13 +218,12 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
     return this.library.resolveThumbnail(item, variant);
   }
 
-  async importAssets(expectedRevision: number): Promise<void> {
-    this.requireRevision(expectedRevision);
+  async importAssets(): Promise<void> {
     await this.library.importAssets();
   }
 
-  async removeAsset(item: GlobalAssetItem, expectedRevision: number): Promise<void> {
-    const current = this.requireRevision(expectedRevision);
+  async removeAsset(item: GlobalAssetItem): Promise<void> {
+    const current = this.getSnapshot();
     await this.library.removeAsset(item);
     if (current.selection?.itemId !== item.id) return;
     if (current.preview.status === 'ready') {
@@ -252,29 +235,22 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
         previewSessionId: current.preview.previewSessionId,
       });
     }
-    this.publish(this.session.clearSelection(current.revision));
+    this.publish(this.session.clearSelection());
   }
 
-  async addMediaLibrary(
-    locationKind: GlobalMediaLibraryLocationKind,
-    expectedRevision: number,
-  ): Promise<void> {
-    this.requireRevision(expectedRevision);
+  async addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind): Promise<void> {
     await this.library.addMediaLibrary(locationKind);
   }
 
-  async relinkMediaLibrary(libraryId: string, expectedRevision: number): Promise<void> {
-    this.requireRevision(expectedRevision);
+  async relinkMediaLibrary(libraryId: string): Promise<void> {
     await this.library.relinkMediaLibrary(libraryId);
   }
 
-  async removeMediaLibrary(libraryId: string, expectedRevision: number): Promise<void> {
-    this.requireRevision(expectedRevision);
+  async removeMediaLibrary(libraryId: string): Promise<void> {
     await this.library.removeMediaLibrary(libraryId);
   }
 
-  async revealMediaLibrary(libraryId: string, expectedRevision: number): Promise<void> {
-    this.requireRevision(expectedRevision);
+  async revealMediaLibrary(libraryId: string): Promise<void> {
     await this.library.revealMediaLibrary(libraryId);
   }
 
@@ -284,17 +260,6 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
     this.library.dispose();
     this.session.dispose();
     this.listeners.clear();
-  }
-
-  private requireRevision(expectedRevision: number): AssetCenterSessionProjection {
-    const projection = this.getSnapshot();
-    if (projection.revision !== expectedRevision) {
-      throw new AssetCenterContractError(
-        'asset-center-stale-revision',
-        `Asset Center session revision ${expectedRevision} is stale; current revision is ${projection.revision}.`,
-      );
-    }
-    return projection;
   }
 
   private publish(projection: AssetCenterSessionProjection): void {

@@ -44,8 +44,6 @@ export interface ProxyEntry {
 
 /** Proxy manifest file structure */
 export interface ProxyManifest {
-  /** Manifest format version */
-  version: 1;
   /** Map of resourceId → ProxyEntry */
   proxies: Record<string, ProxyEntry>;
 }

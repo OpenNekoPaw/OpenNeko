@@ -2,11 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { assertProjectEntityInspectorIntent } from './project-entity-inspector';
 
 describe('Project Entity Inspector intents', () => {
-  it('parses revisioned semantic and binding operations', () => {
+  it('parses semantic and binding operations without renderer-owned concurrency state', () => {
     expect(
       assertProjectEntityInspectorIntent({
         type: 'confirm',
-        expectedRevision: 4,
         candidateId: 'candidate-nova',
         accepted: {
           kind: 'character',
@@ -14,11 +13,10 @@ describe('Project Entity Inspector intents', () => {
           facts: { role: 'lead' },
         },
       }),
-    ).toMatchObject({ type: 'confirm', expectedRevision: 4, candidateId: 'candidate-nova' });
+    ).toMatchObject({ type: 'confirm', candidateId: 'candidate-nova' });
     expect(
       assertProjectEntityInspectorIntent({
         type: 'bind',
-        expectedRevision: 4,
         entityId: 'character-nova',
         binding: {
           role: 'portrait',
@@ -50,9 +48,9 @@ describe('Project Entity Inspector intents', () => {
     ).toThrow('identity is invalid');
   });
 
-  it('rejects renderer-owned paths, extra fields, and malformed revisions', () => {
+  it('rejects removed concurrency fields, renderer-owned paths, and malformed Asset revisions', () => {
     for (const intent of [
-      { type: 'publish', expectedRevision: -1, entityId: 'character-nova' },
+      { type: 'publish', expectedRevision: 1, entityId: 'character-nova' },
       {
         type: 'reference',
         entityId: 'character-nova',
@@ -61,7 +59,6 @@ describe('Project Entity Inspector intents', () => {
       },
       {
         type: 'instantiate',
-        expectedRevision: 1,
         asset: { assetId: 'asset-nova', revision: '2', digest: 'bad' },
       },
     ]) {

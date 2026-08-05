@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  AUTHORIZED_PREVIEW_SESSION_VERSION,
-  parseAuthorizedPreviewSessionProjection,
-} from './authorized-session';
+import { parseAuthorizedPreviewSessionProjection } from './authorized-session';
 
 describe('Authorized Preview session contract', () => {
   it('accepts an exact Asset Center-owned descriptor without Project identity or a path', () => {
     const projection = parseAuthorizedPreviewSessionProjection({
-      schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
       identity: identity(),
       status: 'ready',
       descriptor: descriptor(),
@@ -27,7 +23,6 @@ describe('Authorized Preview session contract', () => {
   it('rejects mixed owner fields and raw path descriptors', () => {
     expect(() =>
       parseAuthorizedPreviewSessionProjection({
-        schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
         identity: { ...identity(), projectId: 'project-1' },
         status: 'ready',
         descriptor: descriptor(),
@@ -35,12 +30,25 @@ describe('Authorized Preview session contract', () => {
     ).toThrow('unsupported fields');
     expect(() =>
       parseAuthorizedPreviewSessionProjection({
-        schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
+        identity: { ...identity(), revision: 1 },
+        status: 'ready',
+        descriptor: descriptor(),
+      }),
+    ).toThrow('unsupported fields');
+    expect(() =>
+      parseAuthorizedPreviewSessionProjection({
         identity: identity(),
         status: 'ready',
         descriptor: { ...descriptor(), absolutePath: '/private/shot.png' },
       }),
     ).toThrow();
+    expect(
+      parseAuthorizedPreviewSessionProjection({
+        identity: identity(),
+        status: 'ready',
+        descriptor: descriptor(),
+      }),
+    ).toMatchObject({ status: 'ready' });
   });
 });
 
@@ -54,14 +62,13 @@ function identity() {
       resourceOwner: 'media-library' as const,
       itemId: 'media-library:item-1',
     },
-    revision: 0,
   };
 }
 
 function descriptor() {
   return {
     descriptorId: 'descriptor-1',
-    revision: 'revision-1',
+    sourceFingerprint: 'fingerprint-1',
     contentLocator: { kind: 'workspace-file' as const, path: 'shots/shot.png' },
     url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     contentKind: 'image' as const,

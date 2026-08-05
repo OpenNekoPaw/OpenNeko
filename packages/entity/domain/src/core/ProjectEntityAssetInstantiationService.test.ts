@@ -16,10 +16,10 @@ describe('ProjectEntityAssetInstantiationService', () => {
 
   it('instantiates the same immutable Asset twice as independent Project Entities', async () => {
     await expect(
-      harness.service.instantiate({ expectedRevision: 0, asset: ASSET_REF, createdAt: NOW }),
+      harness.service.instantiate({ asset: ASSET_REF, createdAt: NOW }),
     ).resolves.toMatchObject({ entityId: 'project-entity-1' });
     await expect(
-      harness.service.instantiate({ expectedRevision: 1, asset: ASSET_REF, createdAt: LATER }),
+      harness.service.instantiate({ asset: ASSET_REF, createdAt: LATER }),
     ).resolves.toMatchObject({ entityId: 'project-entity-2' });
 
     expect(harness.document.entities.map((entity) => entity.entityId)).toEqual([
@@ -48,7 +48,6 @@ describe('ProjectEntityAssetInstantiationService', () => {
 
   it('freezes the import base independently from later project edits', async () => {
     const instantiated = await harness.service.instantiate({
-      expectedRevision: 0,
       asset: ASSET_REF,
       createdAt: NOW,
     });
@@ -63,16 +62,10 @@ describe('ProjectEntityAssetInstantiationService', () => {
     expect(edited.provenance?.importBase.facts).toEqual({ role: 'support' });
   });
 
-  it('rejects stale document revisions and unavailable or mismatched Asset revisions', async () => {
-    harness.document = { ...harness.document, revision: 4 };
-    await expect(
-      harness.service.instantiate({ expectedRevision: 3, asset: ASSET_REF, createdAt: NOW }),
-    ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-revision-conflict' }] });
-
-    harness.document = { ...harness.document, revision: 0 };
+  it('rejects unavailable or mismatched managed Asset revisions', async () => {
     harness.snapshot = null;
     await expect(
-      harness.service.instantiate({ expectedRevision: 0, asset: ASSET_REF, createdAt: NOW }),
+      harness.service.instantiate({ asset: ASSET_REF, createdAt: NOW }),
     ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-asset-not-found' }] });
 
     harness.snapshot = {
@@ -80,7 +73,7 @@ describe('ProjectEntityAssetInstantiationService', () => {
       revision: { ...ASSET_REF, revision: '3' },
     };
     await expect(
-      harness.service.instantiate({ expectedRevision: 0, asset: ASSET_REF, createdAt: NOW }),
+      harness.service.instantiate({ asset: ASSET_REF, createdAt: NOW }),
     ).rejects.toMatchObject({ diagnostics: [{ code: 'invalid-project-entity-asset-snapshot' }] });
     expect(harness.commits).toHaveLength(0);
   });
@@ -88,7 +81,7 @@ describe('ProjectEntityAssetInstantiationService', () => {
   it('rejects Asset identity reuse and duplicate generated Project Entity IDs', async () => {
     harness.ids = [ASSET_REF.assetId];
     await expect(
-      harness.service.instantiate({ expectedRevision: 0, asset: ASSET_REF, createdAt: NOW }),
+      harness.service.instantiate({ asset: ASSET_REF, createdAt: NOW }),
     ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-operation-invalid' }] });
 
     harness.document = {
@@ -105,16 +98,14 @@ describe('ProjectEntityAssetInstantiationService', () => {
     };
     harness.ids = ['project-entity-1'];
     await expect(
-      harness.service.instantiate({ expectedRevision: 0, asset: ASSET_REF, createdAt: NOW }),
+      harness.service.instantiate({ asset: ASSET_REF, createdAt: NOW }),
     ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-operation-invalid' }] });
   });
 });
 
 class InstantiationHarness {
   document: ProjectEntityDocument = {
-    schemaVersion: 1,
     projectId: 'project-neko',
-    revision: 0,
     entities: [],
   };
   snapshot: ProjectEntityAssetSnapshot | null = structuredClone(SNAPSHOT);
@@ -122,18 +113,12 @@ class InstantiationHarness {
   readonly commits: ProjectEntityOperationCommitRequest[] = [];
 
   readonly service = new ProjectEntityAssetInstantiationService({
-    repository: {
-      load: async () => this.document,
-      commit: async () => {
-        throw new Error('Entity Asset instantiation must use the canonical operation commit port.');
-      },
-    },
     assets: {
       readExact: async () => this.snapshot,
     },
     commits: {
-      commit: async (request) => {
-        expect(request.expectedRevision).toBe(this.document.revision);
+      commit: async (mutation) => {
+        const request = await mutation(this.document);
         this.commits.push(request);
         this.document = request.next;
         return this.document;

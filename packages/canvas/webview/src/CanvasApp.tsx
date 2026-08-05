@@ -6,7 +6,7 @@ import {
   useReportWebviewKeyboardFocus,
 } from '@neko/ui/keyboard';
 import { CreativeWorkbenchShell } from '@neko/ui/workbench';
-import { CANVAS_VERSION, validateCanvasBoardRef } from '@neko/canvas-domain';
+import { validateCanvasBoardRef } from '@neko/canvas-domain';
 import type { CanvasDroppedAsset, ProjectedCanvasStatus } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
 import type {
@@ -28,6 +28,7 @@ import { InfiniteCanvas, ZoomControls, MiniMap } from './components';
 import { ContextMenu } from './components/common/ContextMenu';
 import { CanvasToolbar } from './components/toolbar/CanvasToolbar';
 import { PlaybackWorkspace } from './components/playback/PlaybackWorkspace';
+import { CanvasNodeInspectorDeck } from './components/panels/CanvasNodeInspectorDeck';
 import { MIN_ZOOM, MAX_ZOOM } from './hooks';
 import { useCanvasHostMessages } from './hooks/useCanvasHostMessages';
 import { useNodeHelpers } from './hooks/useNodeHelpers';
@@ -70,13 +71,18 @@ import { resolveCanvasRenderRefreshDecision } from './utils/renderRefreshTiering
 import { t } from './i18n';
 import { getLogger } from './utils/logger';
 import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
+import {
+  createCanvasNodeChildCatalog,
+  deactivateCanvasNodeInspector,
+  openCanvasNodeInspector,
+  reconcileCanvasNodeChildren,
+} from './node-lifecycle';
 
 // =============================================================================
 // Constants & Host API
 // =============================================================================
 
 const DEFAULT_CANVAS_DATA: CanvasData = {
-  version: CANVAS_VERSION,
   name: 'Untitled Canvas',
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   nodes: [],
@@ -136,7 +142,10 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const updateConnection = useCanvasStore((state) => state.updateConnection);
   const deleteSelected = useCanvasStore((state) => state.deleteSelected);
   const setPlaybackEntry = useCanvasStore((state) => state.setPlaybackEntry);
+  const updateNode = useCanvasStore((state) => state.updateNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
+  const updateNodePorts = useCanvasStore((state) => state.updateNodePorts);
+  const removeNode = useCanvasStore((state) => state.removeNode);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const moveNodeEnd = useCanvasStore((state) => state.moveNodeEnd);
@@ -163,6 +172,21 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const connections = canvasData?.connections ?? [];
   const selectedNodeIds = selection.nodeIds;
   const selectedConnectionIds = selection.connectionIds;
+  const [nodeChildCatalog, setNodeChildCatalog] = useState(() =>
+    createCanvasNodeChildCatalog(`canvas:${hostPort.documentId}`),
+  );
+  useEffect(() => {
+    setNodeChildCatalog(createCanvasNodeChildCatalog(`canvas:${hostPort.documentId}`));
+  }, [hostPort.documentId]);
+  useEffect(() => {
+    setNodeChildCatalog((current) => {
+      const next = reconcileCanvasNodeChildren(current, new Set(nodes.map((node) => node.id)));
+      const selectedNodeId = selectedNodeIds[0];
+      return selectedNodeId
+        ? openCanvasNodeInspector(next, selectedNodeId)
+        : deactivateCanvasNodeInspector(next);
+    });
+  }, [nodes, selectedNodeIds]);
   const isPanMode = interactionTool === 'pan';
   const setCanvasContainerRef = useCallback((element: HTMLDivElement | null) => {
     canvasContainerRef.current = element;
@@ -433,7 +457,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       });
     },
     onCanvasDataLoaded: (data) => {
-      const documentKey = createCanvasViewportSnapshotKey(data);
+      const documentKey = createCanvasViewportSnapshotKey(hostPort.documentId);
       seedViewportFromDocument(
         documentKey,
         readCanvasViewportSnapshot(hostPort, documentKey) ??
@@ -725,7 +749,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       return;
     }
 
-    const documentKey = createCanvasViewportSnapshotKey(canvasData);
+    const documentKey = createCanvasViewportSnapshotKey(hostPort.documentId);
     viewportSnapshotPolicyRef.current?.cancel();
     viewportSnapshotPolicyRef.current = createViewportSnapshotPolicy({
       writer: {
@@ -788,7 +812,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     hostPort.postMessage({
       type: 'canvasStatus',
       data: {
-        version: canvasData.version,
         name: canvasData.name,
         nodes: canvasData.nodes,
         connections: canvasData.connections,
@@ -998,6 +1021,8 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       ref={rootRef}
       className="canvas-workbench-root"
       data-neko-keyboard-focused={isKeyboardFocused ? 'true' : 'false'}
+      data-canvas-child-owner={nodeChildCatalog.canvasOwnerId}
+      data-active-node-inspector={nodeChildCatalog.activeInspectorId}
     >
       <CreativeWorkbenchShell
         className="canvas-workbench-shell"
@@ -1191,6 +1216,33 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
               </div>
             }
           />
+        }
+        rightDock={
+          nodeChildCatalog.activeInspectorId
+            ? {
+                id: 'canvas-node-inspector-dock',
+                panelId: `canvas-node-inspector:${hostPort.documentId}`,
+                defaultSize: 280,
+                minSize: 220,
+                maxSize: 440,
+                label: t('panel.properties'),
+                children: (
+                  <CanvasNodeInspectorDeck
+                    catalog={nodeChildCatalog}
+                    nodes={nodes}
+                    onUpdateNode={updateNode}
+                    onUpdateNodeData={updateNodeData}
+                    onUpdatePorts={updateNodePorts}
+                    onDeleteNode={removeNode}
+                    onToggleLock={(nodeId) => {
+                      const node = nodes.find((candidate) => candidate.id === nodeId);
+                      if (!node) throw new Error(`Canvas node '${nodeId}' is unavailable.`);
+                      updateNode(nodeId, { locked: !node.locked });
+                    }}
+                  />
+                ),
+              }
+            : undefined
         }
       />
     </div>

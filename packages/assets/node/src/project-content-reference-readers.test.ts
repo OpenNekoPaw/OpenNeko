@@ -8,7 +8,7 @@ import {
   serializeOtio,
   type OtioTimeline,
 } from '@neko/cut-domain';
-import { CURRENT_NKC_VERSION, loadNkc, type CanvasData } from '@neko/canvas-domain';
+import { loadNkc, type CanvasData } from '@neko/canvas-domain';
 import { describe, expect, it } from 'vitest';
 import {
   readProjectContentReferences,
@@ -69,7 +69,6 @@ describe('Desktop project content reference readers', () => {
     await writeFile(
       path.join(workspace, 'broken.nkc'),
       JSON.stringify({
-        version: CURRENT_NKC_VERSION,
         name: 'Broken',
         viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
         nodes: [
@@ -161,7 +160,7 @@ describe('Desktop project content reference readers', () => {
     expect(
       JSON.parse(await readFile(path.join(stagedWorkspace, 'neko', 'entities.json'), 'utf8')),
     ).toMatchObject({
-      revision: 2,
+      projectId: 'project-neko',
       entities: [
         {
           representations: [
@@ -188,9 +187,7 @@ async function writeCanonicalEntities(workspacePath: string): Promise<void> {
     path.join(workspacePath, 'neko', 'entities.json'),
     `${JSON.stringify(
       {
-        schemaVersion: 1,
         projectId: 'project-neko',
-        revision: 1,
         entities: [
           {
             entityId: 'character-a',
@@ -223,7 +220,6 @@ async function writeCanonicalEntities(workspacePath: string): Promise<void> {
 
 function canvasFixture(): CanvasData {
   return {
-    version: CURRENT_NKC_VERSION,
     name: 'Story',
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
     nodes: [

@@ -3,7 +3,6 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
-  WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION,
   type WorkspaceMediaLibraryPortabilityProjection,
   type WorkspaceMediaLibraryRecoveryPlan,
   type WorkspaceMediaLibraryRequirement,
@@ -512,7 +511,6 @@ export class WorkspaceMediaLibrarySyncService {
   }): WorkspaceMediaLibraryRecoveryPlan {
     const planId = `media-library-recovery:${randomUUID()}`;
     const publicPlan: WorkspaceMediaLibraryRecoveryPlan = {
-      contractVersion: WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION,
       planId,
       workspaceId: input.workspace.workspaceId,
       libraryName: input.requirement.libraryName,

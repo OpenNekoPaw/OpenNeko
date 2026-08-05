@@ -56,13 +56,13 @@ export function InlineAudioPlayer({
   const currentTimeRef = useRef(startTime);
   const handledPlaybackRequestRef = useRef<string | undefined>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused' | undefined>();
-  const playbackGenerationRef = useRef(0);
+  const playbackRequestRef = useRef<object>({});
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
-    playbackGenerationRef.current += 1;
+    playbackRequestRef.current = {};
     currentTimeRef.current = startTime;
     setCurrentTime(startTime);
     const element = elementRef.current;
@@ -76,7 +76,7 @@ export function InlineAudioPlayer({
       element.load();
     }
     return () => {
-      playbackGenerationRef.current += 1;
+      playbackRequestRef.current = {};
       handledPlaybackRequestRef.current = undefined;
       handledPlaybackStateRef.current = undefined;
       const current = elementRef.current;
@@ -88,7 +88,7 @@ export function InlineAudioPlayer({
   }, [audio, playbackRate, startTime]);
 
   const pause = useCallback(() => {
-    playbackGenerationRef.current += 1;
+    playbackRequestRef.current = {};
     const element = elementRef.current;
     element?.pause();
     if (element) currentTimeRef.current = element.currentTime;
@@ -99,8 +99,8 @@ export function InlineAudioPlayer({
   const resume = useCallback(() => {
     const element = elementRef.current;
     if (!element) return;
-    const generation = playbackGenerationRef.current + 1;
-    playbackGenerationRef.current = generation;
+    const request = {};
+    playbackRequestRef.current = request;
     element.playbackRate = playbackRate;
     element.muted = isMuted;
     if (Math.abs(element.currentTime - currentTimeRef.current) > PLAYBACK_SEEK_EPSILON_SECONDS) {
@@ -109,12 +109,12 @@ export function InlineAudioPlayer({
     void element
       .play()
       .then(() => {
-        if (generation !== playbackGenerationRef.current) return;
+        if (request !== playbackRequestRef.current) return;
         setIsPlaying(true);
         onResume();
       })
       .catch((error: unknown) => {
-        if (generation !== playbackGenerationRef.current) return;
+        if (request !== playbackRequestRef.current) return;
         logger.warn(`Inline audio playback failed: ${String(error)}`);
       });
   }, [isMuted, onResume, playbackRate]);

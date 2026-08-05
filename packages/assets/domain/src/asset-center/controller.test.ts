@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GlobalLibraryBrowserRuntime } from '../global-library';
 import { AssetCenterController } from './controller';
 import { AssetCenterSession } from './session';
-import { AUTHORIZED_PREVIEW_SESSION_VERSION } from '@neko/preview-domain/authorized-session';
 
 describe('AssetCenterController', () => {
   it('owns catalog filters and resolves exact selection through its Assets port', async () => {
@@ -12,9 +11,8 @@ describe('AssetCenterController', () => {
       path: 'shots/shot.png',
     }));
     const controller = createController(source, resolve);
-    const ready = await controller.refresh(0);
+    await controller.refresh();
     const selected = await controller.select({
-      expectedRevision: ready.revision,
       owner: 'media-library',
       itemId: 'media-library:item-1',
     });
@@ -26,7 +24,6 @@ describe('AssetCenterController', () => {
       },
       owner: 'media-library',
       itemId: 'media-library:item-1',
-      expectedCatalogRevision: 7,
     });
     expect(selected.selection?.contentLocator).toEqual({
       kind: 'workspace-file',
@@ -40,13 +37,12 @@ describe('AssetCenterController', () => {
       kind: 'workspace-file',
       path: 'shots/shot.png',
     }));
-    const ready = await controller.refresh(0);
+    await controller.refresh();
     const selected = await controller.select({
-      expectedRevision: ready.revision,
       owner: 'media-library',
       itemId: 'media-library:item-1',
     });
-    const loading = controller.updateFilter(selected.revision, {
+    const loading = controller.updateFilter({
       ...selected.filter,
       query: 'shot',
     });
@@ -60,16 +56,15 @@ describe('AssetCenterController', () => {
       kind: 'workspace-file',
       path: 'shots/shot.png',
     }));
-    const ready = await controller.refresh(0);
-    const selected = await controller.select({
-      expectedRevision: ready.revision,
+    await controller.refresh();
+    await controller.select({
       owner: 'media-library',
       itemId: 'media-library:item-1',
     });
     source.searchMediaLibraries = vi.fn(async () => {
       throw new Error('authorization failed');
     });
-    const unavailable = await controller.refresh(selected.revision);
+    const unavailable = await controller.refresh();
     expect(unavailable).toMatchObject({
       catalog: {
         status: 'unavailable',
@@ -86,7 +81,6 @@ describe('AssetCenterController', () => {
       descriptor: previewDescriptor(),
     }));
     const create = vi.fn(async () => ({
-      schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
       identity: {
         previewSessionId: 'preview:asset-center:1',
         windowId: 'window-1',
@@ -113,9 +107,8 @@ describe('AssetCenterController', () => {
         previewSessions: { create, release: vi.fn() },
       },
     );
-    const ready = await controller.refresh(0);
+    await controller.refresh();
     const selected = await controller.select({
-      expectedRevision: ready.revision,
       owner: 'media-library',
       itemId: 'media-library:item-1',
     });
@@ -152,7 +145,7 @@ describe('AssetCenterController', () => {
       mediaType: 'image',
       availability: 'available' as const,
     };
-    source.searchAssets = vi.fn(async () => ({ revision: 8, items: [asset] }));
+    source.searchAssets = vi.fn(async () => ({ items: [asset] }));
     const release = vi.fn(async () => undefined);
     const controller = new AssetCenterController(
       new AssetCenterSession({
@@ -167,7 +160,6 @@ describe('AssetCenterController', () => {
         },
         previewSessions: {
           create: async () => ({
-            schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
             identity: {
               previewSessionId: 'preview:asset-center:asset-1',
               windowId: 'window-1',
@@ -187,20 +179,19 @@ describe('AssetCenterController', () => {
       },
     );
     const initial = controller.getSnapshot();
-    const loading = controller.updateFilter(initial.revision, {
+    controller.updateFilter({
       ...initial.filter,
       catalog: 'global-asset-library',
     });
-    const ready = await controller.refresh(loading.revision);
-    const selected = await controller.select({
-      expectedRevision: ready.revision,
+    await controller.refresh();
+    await controller.select({
       owner: asset.owner,
       itemId: asset.id,
     });
 
-    await controller.removeAsset(asset, selected.revision);
+    await controller.removeAsset(asset);
 
-    expect(source.removeAsset).toHaveBeenCalledWith(asset.id, 8);
+    expect(source.removeAsset).toHaveBeenCalledWith(asset.id);
     expect(release).toHaveBeenCalledWith({
       identity: controller.identity,
       previewSessionId: 'preview:asset-center:asset-1',
@@ -216,7 +207,6 @@ function createController(
     readonly identity: { readonly assetCenterSessionId: string; readonly windowId: string };
     readonly owner: 'global-asset-library' | 'media-library';
     readonly itemId: string;
-    readonly expectedCatalogRevision: number;
   }) => Promise<{ readonly kind: 'workspace-file'; readonly path: string }>,
 ): AssetCenterController {
   return new AssetCenterController(
@@ -231,9 +221,8 @@ function createController(
 
 function libraryRuntime(): GlobalLibraryBrowserRuntime {
   return {
-    searchAssets: vi.fn(async () => ({ revision: 7, items: [] })),
+    searchAssets: vi.fn(async () => ({ items: [] })),
     searchMediaLibraries: vi.fn(async () => ({
-      revision: 7,
       items: [
         {
           id: 'media-library:item-1',
@@ -248,7 +237,7 @@ function libraryRuntime(): GlobalLibraryBrowserRuntime {
         },
       ] as const,
     })),
-    readMediaLibraryChildren: vi.fn(async () => ({ revision: 7, items: [] })),
+    readMediaLibraryChildren: vi.fn(async () => ({ items: [] })),
     resolveThumbnail: vi.fn(),
     importAssets: vi.fn(),
     removeAsset: vi.fn(),
@@ -262,7 +251,7 @@ function libraryRuntime(): GlobalLibraryBrowserRuntime {
 function previewDescriptor() {
   return {
     descriptorId: 'descriptor-1',
-    revision: 'revision-1',
+    sourceFingerprint: 'fingerprint-1',
     contentLocator: { kind: 'workspace-file' as const, path: 'shots/shot.png' },
     url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     contentKind: 'image' as const,

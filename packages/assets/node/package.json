@@ -1,7 +1,6 @@
 {
   "name": "@neko/assets-node",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "description": "Node adapters for Assets and workspace Media Library ownership",
   "exports": {

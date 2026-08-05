@@ -33,7 +33,6 @@ export function EntityInspector({
     if (!entityId || !canonicalName.trim()) return;
     void onIntent({
       type: 'edit',
-      expectedRevision: projection.projectRevision,
       entityId,
       changes: { names: { ...projection.names, canonical: canonicalName.trim() } },
     });
@@ -48,7 +47,6 @@ export function EntityInspector({
     if (!source) return;
     void onIntent({
       type: 'merge',
-      expectedRevision: projection.projectRevision,
       ...source,
       targetEntityId: mergeTargetId.trim(),
     });
@@ -57,7 +55,6 @@ export function EntityInspector({
     if (!entityId || !bindingPath.trim()) return;
     void onIntent({
       type: 'bind',
-      expectedRevision: projection.projectRevision,
       entityId,
       binding: {
         role: 'reference',
@@ -123,7 +120,6 @@ export function EntityInspector({
                     onClick={() =>
                       void onIntent({
                         type: 'unbind',
-                        expectedRevision: projection.projectRevision,
                         entityId,
                         bindingId: binding.bindingId,
                       })
@@ -172,7 +168,6 @@ export function EntityInspector({
             onClick={() =>
               void onIntent({
                 type: 'confirm',
-                expectedRevision: projection.projectRevision,
                 candidateId,
                 accepted: {
                   kind: projection.kind,
@@ -261,13 +256,13 @@ function DirectActions({
   if (projection.operations.includes('deprecate')) {
     actions.push({
       operation: 'deprecate',
-      intent: { type: 'deprecate', expectedRevision: projection.projectRevision, entityId },
+      intent: { type: 'deprecate', entityId },
     });
   }
   if (projection.operations.includes('publish')) {
     actions.push({
       operation: 'publish',
-      intent: { type: 'publish', expectedRevision: projection.projectRevision, entityId },
+      intent: { type: 'publish', entityId },
     });
   }
   if (projection.operations.includes('diff') && projection.provenance?.available) {

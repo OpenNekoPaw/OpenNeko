@@ -1,8 +1,6 @@
 import { contentLocatorsEqual, isContentLocator, type ContentLocator } from '@neko/content';
 import { isHostProjectedRuntimeValue } from '@neko/content';
 
-export const MEDIA_QUALITY_CONTRACT_VERSION = 1 as const;
-
 export const QUALITY_TARGET_KINDS = [
   'image',
   'video-clip',
@@ -35,8 +33,7 @@ export interface MediaTimeRange {
 export interface QualityProjectRef {
   readonly domain: 'canvas' | 'cut' | 'audio';
   readonly documentUri: string;
-  readonly projectRevision: string;
-  readonly contentDigest?: string;
+  readonly contentDigest: string;
 }
 
 export interface QualityLineageRef {
@@ -44,17 +41,14 @@ export interface QualityLineageRef {
     'source' | 'generated-from' | 'derived-from' | 'projected-from' | 'exported-from' | 'reference';
   readonly contentLocator?: ContentLocator;
   readonly projectRef?: QualityProjectRef;
-  readonly revision?: string;
 }
 
 export interface QualityTarget {
-  readonly version: typeof MEDIA_QUALITY_CONTRACT_VERSION;
   readonly targetId: string;
   readonly kind: QualityTargetKind;
   readonly contentLocator?: ContentLocator;
   readonly projectRef?: QualityProjectRef;
-  readonly revision?: string;
-  readonly contentDigest?: string;
+  readonly contentDigest: string;
   readonly mediaRange?: MediaTimeRange;
   readonly expectedIntent?: Readonly<Record<string, unknown>>;
   readonly lineage?: readonly QualityLineageRef[];
@@ -106,7 +100,6 @@ export interface QualityMetric {
 
 export interface QualityEvaluatorIdentity {
   readonly id: string;
-  readonly version: string;
   readonly evaluatorClass: QualityEvaluatorClass;
   readonly providerId?: string;
   readonly modelId?: string;
@@ -119,7 +112,6 @@ export interface QualityEvidenceLineage {
 }
 
 export interface QualityEvidence {
-  readonly version: typeof MEDIA_QUALITY_CONTRACT_VERSION;
   readonly evidenceId: string;
   readonly evaluator: QualityEvaluatorIdentity;
   readonly target: QualityTarget;
@@ -134,9 +126,7 @@ export interface QualityEvidence {
 }
 
 export interface QualityGatePolicy {
-  readonly version: typeof MEDIA_QUALITY_CONTRACT_VERSION;
   readonly policyId: string;
-  readonly policyVersion: string;
   readonly requiredProfiles: readonly string[];
   readonly requiredEvaluatorClasses: readonly QualityEvaluatorClass[];
   readonly blockingSeverities: readonly QualityIssueSeverity[];
@@ -157,14 +147,12 @@ export interface QualityRepairAction {
 export interface QualityRepairPlan {
   readonly planId: string;
   readonly actions: readonly QualityRepairAction[];
-  readonly requiresNewRevision: boolean;
 }
 
 export interface QualityGateResult {
-  readonly version: typeof MEDIA_QUALITY_CONTRACT_VERSION;
   readonly gateResultId: string;
   readonly target: QualityTarget;
-  readonly policy: Pick<QualityGatePolicy, 'policyId' | 'policyVersion' | 'requiredProfiles'>;
+  readonly policy: Pick<QualityGatePolicy, 'policyId' | 'requiredProfiles'>;
   readonly verdict: QualityGateVerdict;
   readonly evidenceIds: readonly string[];
   readonly staleEvidenceIds: readonly string[];
@@ -203,14 +191,15 @@ export interface QualityValidationResult {
 export function validateQualityTarget(target: QualityTarget): QualityValidationResult {
   const diagnostics: QualityDiagnostic[] = [];
   if (
-    target.version !== MEDIA_QUALITY_CONTRACT_VERSION ||
+    Object.hasOwn(target, 'version') ||
+    Object.hasOwn(target, 'revision') ||
     !target.targetId.trim() ||
     !QUALITY_TARGET_KINDS.some((kind) => kind === target.kind)
   ) {
     diagnostics.push({
       code: 'invalid-quality-target',
       severity: 'error',
-      message: 'QualityTarget has an unsupported version, kind, or empty target id.',
+      message: 'QualityTarget has removed fields, an invalid kind, or an empty target id.',
     });
   }
   if ((target.contentLocator ? 1 : 0) + (target.projectRef ? 1 : 0) !== 1) {
@@ -221,12 +210,12 @@ export function validateQualityTarget(target: QualityTarget): QualityValidationR
       path: ['contentLocator'],
     });
   }
-  if (!target.revision && !target.contentDigest && !target.projectRef?.projectRevision) {
+  if (!target.contentDigest.trim()) {
     diagnostics.push({
       code: 'invalid-quality-target',
       severity: 'error',
-      message: 'QualityTarget requires a revision or content digest.',
-      path: ['revision'],
+      message: 'QualityTarget requires a content digest.',
+      path: ['contentDigest'],
     });
   }
   if (target.contentLocator && !isContentLocator(target.contentLocator)) {
@@ -268,17 +257,18 @@ export function validateQualityEvidence(
 ): QualityValidationResult {
   const diagnostics: QualityDiagnostic[] = [...validateQualityTarget(evidence.target).diagnostics];
   if (
-    evidence.version !== MEDIA_QUALITY_CONTRACT_VERSION ||
+    Object.hasOwn(evidence, 'version') ||
+    Object.hasOwn(evidence.evaluator, 'version') ||
     !evidence.evidenceId.trim() ||
     !evidence.evaluator.id.trim() ||
-    !evidence.evaluator.version.trim() ||
     !QUALITY_EVALUATOR_CLASSES.some((kind) => kind === evidence.evaluator.evaluatorClass) ||
     !isIsoTimestamp(evidence.createdAt)
   ) {
     diagnostics.push({
       code: 'invalid-quality-evidence',
       severity: 'error',
-      message: 'QualityEvidence has invalid identity, evaluator, version, or creation time.',
+      message:
+        'QualityEvidence has removed fields or invalid identity, evaluator, or creation time.',
     });
   }
   if (evidence.confidence !== undefined && !isProbability(evidence.confidence)) {
@@ -342,7 +332,7 @@ export function validateQualityEvidence(
     diagnostics.push({
       code: 'stale-quality-evidence',
       severity: 'error',
-      message: 'QualityEvidence is stale for the current target revision or digest.',
+      message: 'QualityEvidence is stale for the current target content digest.',
       path: ['target'],
     });
   }
@@ -352,16 +342,17 @@ export function validateQualityEvidence(
 export function validateQualityGateResult(result: QualityGateResult): QualityValidationResult {
   const diagnostics: QualityDiagnostic[] = [...validateQualityTarget(result.target).diagnostics];
   if (
-    result.version !== MEDIA_QUALITY_CONTRACT_VERSION ||
+    Object.hasOwn(result, 'version') ||
+    Object.hasOwn(result.policy, 'policyVersion') ||
     !result.gateResultId.trim() ||
     !result.policy.policyId.trim() ||
-    !result.policy.policyVersion.trim() ||
     !isIsoTimestamp(result.createdAt)
   ) {
     diagnostics.push({
       code: 'invalid-quality-gate-result',
       severity: 'error',
-      message: 'QualityGateResult has invalid identity, policy, version, or creation time.',
+      message:
+        'QualityGateResult has removed fields or invalid identity, policy, or creation time.',
     });
   }
   if (
@@ -388,8 +379,6 @@ export function qualityTargetsMatch(left: QualityTarget, right: QualityTarget): 
   return (
     left.targetId === right.targetId &&
     left.kind === right.kind &&
-    (left.revision ?? left.projectRef?.projectRevision) ===
-      (right.revision ?? right.projectRef?.projectRevision) &&
     left.contentDigest === right.contentDigest &&
     ((!left.contentLocator && !right.contentLocator) ||
       (left.contentLocator !== undefined &&
@@ -404,11 +393,11 @@ function validateProjectRef(
   diagnostics: QualityDiagnostic[],
   path: readonly (string | number)[],
 ): void {
-  if (!ref.documentUri.trim() || !ref.projectRevision.trim()) {
+  if (!ref.documentUri.trim() || !ref.contentDigest.trim()) {
     diagnostics.push({
       code: 'invalid-quality-target',
       severity: 'error',
-      message: 'Project quality references require documentUri and projectRevision.',
+      message: 'Project quality references require documentUri and contentDigest.',
       path,
     });
   }

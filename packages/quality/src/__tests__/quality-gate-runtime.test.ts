@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  MEDIA_QUALITY_CONTRACT_VERSION,
-  type QualityEvidence,
-  type QualityGatePolicy,
-  type QualityTarget,
-} from '@neko/generation';
+import { type QualityEvidence, type QualityGatePolicy, type QualityTarget } from '@neko/generation';
 import {
   aggregateQualityGate,
   assertExternalPerceptionTarget,
@@ -24,11 +19,9 @@ const contentLocator = {
 
 function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
     targetId: 'hero-shot',
     kind: 'image',
     contentLocator,
-    revision: 'rev-1',
     contentDigest: 'sha256:v1',
     expectedIntent: { prompt: 'cinematic hero' },
     ...overrides,
@@ -37,9 +30,7 @@ function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
 
 function policy(overrides: Partial<QualityGatePolicy> = {}): QualityGatePolicy {
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
     policyId: 'production-default',
-    policyVersion: '1',
     requiredProfiles: ['image'],
     requiredEvaluatorClasses: ['technical', 'perception'],
     blockingSeverities: ['error', 'critical'],
@@ -58,11 +49,9 @@ function evidence(input: {
   confidence?: number;
 }): QualityEvidence {
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
     evidenceId: input.id,
     evaluator: {
       id: `${input.evaluatorClass}-test`,
-      version: '1',
       evaluatorClass: input.evaluatorClass,
     },
     target: input.target ?? target(),
@@ -136,7 +125,7 @@ describe('canonical quality gate runtime', () => {
       gateResultId: 'gate-1',
     });
     expect(result.verdict).toBe('fail');
-    expect(result.repairPlan?.requiresNewRevision).toBe(true);
+    expect(result.repairPlan?.actions).toHaveLength(1);
   });
 
   it('routes partial perception coverage to policy-controlled manual review', () => {
@@ -175,9 +164,9 @@ describe('canonical quality gate runtime', () => {
     expect(result.diagnostics.map((item) => item.code)).toContain('quality-policy-manual-review');
   });
 
-  it('marks revision or digest mismatches stale', () => {
+  it('marks content digest mismatches stale', () => {
     const result = aggregateQualityGate({
-      target: target({ revision: 'rev-2', contentDigest: 'sha256:v2' }),
+      target: target({ contentDigest: 'sha256:v2' }),
       profile: selectQualityProfile(target()),
       policy: policy(),
       evidence: [evidence({ id: 'old', evaluatorClass: 'technical' })],
@@ -220,7 +209,6 @@ describe('canonical quality gate runtime', () => {
           .mockResolvedValue({ message: { content: JSON.stringify({ score: 92, issues: [] }) } }),
       }),
       chatModel: { providerId: 'vision-provider', modelId: 'vision-model' },
-      evaluatorVersion: '2026-07',
     });
     const runtime = fixedRuntime([llm]);
     const result = await runtime.review({

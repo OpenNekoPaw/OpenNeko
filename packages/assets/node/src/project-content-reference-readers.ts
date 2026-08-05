@@ -261,9 +261,7 @@ async function rewriteEntityRepresentationReferences(
     workspacePath,
     projectId,
   });
-  const current = await service.inspect();
   await service.rewriteWorkspacePaths({
-    expectedRevision: current.documentRevision,
     replacements,
   });
 }

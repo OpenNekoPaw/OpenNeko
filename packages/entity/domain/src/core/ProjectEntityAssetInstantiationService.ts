@@ -3,7 +3,7 @@ import {
   assertProjectEntityDocument,
   type ProjectEntityAssetRevisionReader,
   type ProjectEntityAssetRevisionRef,
-  type ProjectEntityDocumentRepository,
+  type ProjectEntityDocument,
   type ProjectEntityFactValue,
   type ProjectEntityOperationCommitPort,
   type ProjectEntityRecord,
@@ -11,13 +11,11 @@ import {
 } from '../contracts/index';
 
 export interface InstantiateProjectEntityAssetRequest {
-  readonly expectedRevision: number;
   readonly asset: ProjectEntityAssetRevisionRef;
   readonly createdAt: string;
 }
 
 export interface ProjectEntityAssetInstantiationServiceOptions {
-  readonly repository: ProjectEntityDocumentRepository;
   readonly assets: ProjectEntityAssetRevisionReader;
   readonly commits: ProjectEntityOperationCommitPort;
   readonly createEntityId: () => string;
@@ -31,78 +29,70 @@ export class ProjectEntityAssetInstantiationService {
     request: InstantiateProjectEntityAssetRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityRecord> {
-    const current = await this.options.repository.load(signal);
-    if (current.revision !== request.expectedRevision) {
-      throw assetError(
-        'project-entity-revision-conflict',
-        `Project Entity revision conflict: expected ${String(request.expectedRevision)}, received ${String(current.revision)}.`,
-      );
-    }
-    const asset = await this.options.assets.readExact(request.asset, signal);
-    if (!asset) {
-      throw assetError(
-        'project-entity-asset-not-found',
-        `Entity Asset '${request.asset.assetId}' revision '${request.asset.revision}' is not installed.`,
-      );
-    }
-    if (!sameAssetRevision(asset.revision, request.asset)) {
-      throw assetError(
-        'invalid-project-entity-asset-snapshot',
-        'Entity Asset reader returned a different revision than requested.',
-      );
-    }
     const entityId = this.options.createEntityId();
-    if (
-      !isStableIdentity(entityId) ||
-      entityId === request.asset.assetId ||
-      current.entities.some((entity) => entity.entityId === entityId)
-    ) {
-      throw assetError(
-        'project-entity-operation-invalid',
-        'Entity Asset instantiation requires a new independent Project Entity identity.',
-      );
-    }
-    const semantic = instantiateSemantic(
-      asset.semantic,
-      entityId,
-      current,
-      this.options.createBindingId,
-    );
-    const representationOrigins = asset.semantic.representations.map((binding, index) => {
-      const projectBinding = semantic.representations[index];
-      if (!projectBinding) {
+    const committed = await this.options.commits.commit(async (current) => {
+      const asset = await this.options.assets.readExact(request.asset, signal);
+      if (!asset) {
         throw assetError(
-          'invalid-project-entity-asset-snapshot',
-          'Entity Asset representation instantiation lost binding lineage.',
+          'project-entity-asset-not-found',
+          `Entity Asset '${request.asset.assetId}' revision '${request.asset.revision}' is not installed.`,
         );
       }
-      return {
-        assetBindingId: binding.bindingId,
-        projectBindingId: projectBinding.bindingId,
+      if (!sameAssetRevision(asset.revision, request.asset)) {
+        throw assetError(
+          'invalid-project-entity-asset-snapshot',
+          'Entity Asset reader returned a different revision than requested.',
+        );
+      }
+      if (
+        !isStableIdentity(entityId) ||
+        entityId === request.asset.assetId ||
+        current.entities.some((entity) => entity.entityId === entityId)
+      ) {
+        throw assetError(
+          'project-entity-operation-invalid',
+          'Entity Asset instantiation requires a new independent Project Entity identity.',
+        );
+      }
+      const semantic = instantiateSemantic(
+        asset.semantic,
+        entityId,
+        current,
+        this.options.createBindingId,
+      );
+      const representationOrigins = asset.semantic.representations.map((binding, index) => {
+        const projectBinding = semantic.representations[index];
+        if (!projectBinding) {
+          throw assetError(
+            'invalid-project-entity-asset-snapshot',
+            'Entity Asset representation instantiation lost binding lineage.',
+          );
+        }
+        return {
+          assetBindingId: binding.bindingId,
+          projectBindingId: projectBinding.bindingId,
+        };
+      });
+      const record: ProjectEntityRecord = {
+        entityId,
+        ...semantic,
+        lifecycle: { state: 'active' },
+        provenance: {
+          origin: { ...request.asset },
+          applied: { ...request.asset },
+          importBase: cloneSemantic(asset.semantic),
+          representationOrigins,
+        },
+        createdAt: request.createdAt,
+        updatedAt: request.createdAt,
       };
-    });
-    const record: ProjectEntityRecord = {
-      entityId,
-      ...semantic,
-      lifecycle: { state: 'active' },
-      provenance: {
-        origin: { ...request.asset },
-        applied: { ...request.asset },
-        importBase: cloneSemantic(asset.semantic),
-        representationOrigins,
-      },
-      createdAt: request.createdAt,
-      updatedAt: request.createdAt,
-    };
-    const next = assertProjectEntityDocument({
-      ...current,
-      revision: current.revision + 1,
-      entities: [...current.entities, record],
-    });
-    const committed = await this.options.commits.commit(
-      { expectedRevision: current.revision, next },
-      signal,
-    );
+      return {
+        next: assertProjectEntityDocument({
+          ...current,
+          entities: [...current.entities, record],
+        }),
+      };
+    }, signal);
     const committedRecord = committed.entities.find((entity) => entity.entityId === entityId);
     if (!committedRecord) {
       throw assetError(
@@ -117,7 +107,7 @@ export class ProjectEntityAssetInstantiationService {
 function instantiateSemantic(
   snapshot: ProjectEntitySemanticSnapshot,
   entityId: string,
-  document: Awaited<ReturnType<ProjectEntityDocumentRepository['load']>>,
+  document: ProjectEntityDocument,
   createBindingId: (entityId: string, assetBindingId: string) => string,
 ): ProjectEntitySemanticSnapshot {
   const existingBindingIds = new Set(

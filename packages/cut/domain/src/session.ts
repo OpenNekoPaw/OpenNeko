@@ -6,7 +6,7 @@ import type { CutClipIdFactory, CutTrackIdFactory, OtioTimeline } from './types'
 
 export interface CutStoredDocument {
   readonly bytes: Uint8Array;
-  readonly version: string;
+  readonly fingerprint: string;
 }
 
 export interface CutDocumentStorage {
@@ -14,8 +14,8 @@ export interface CutDocumentStorage {
   write(
     documentUri: string,
     bytes: Uint8Array,
-    options: { readonly expectedVersion?: string },
-  ): Promise<{ readonly version: string }>;
+    options: { readonly expectedFingerprint?: string },
+  ): Promise<{ readonly fingerprint: string }>;
 }
 
 export interface CutDocumentSessionIdentity {
@@ -24,12 +24,10 @@ export interface CutDocumentSessionIdentity {
 }
 
 export interface CutDocumentCommandRequest extends CutDocumentSessionIdentity {
-  readonly expectedRevision: number;
   readonly command: CutCommand;
 }
 
 export interface CutDocumentBatchRequest extends CutDocumentSessionIdentity {
-  readonly expectedRevision: number;
   readonly commands: readonly CutCommand[];
 }
 
@@ -42,11 +40,7 @@ export interface CutDocumentSessionOptions {
 
 export class CutDocumentSessionError extends Error {
   readonly code:
-    | 'document-mismatch'
-    | 'session-mismatch'
-    | 'stale-revision'
-    | 'external-change-conflict'
-    | 'invalid-document';
+    'document-mismatch' | 'session-mismatch' | 'external-change-conflict' | 'invalid-document';
 
   constructor(code: CutDocumentSessionError['code'], message: string) {
     super(message);
@@ -57,8 +51,7 @@ export class CutDocumentSessionError extends Error {
 
 export class CutDocumentSession {
   private document: OtioTimeline;
-  private revisionValue = 0;
-  private storageVersion?: string;
+  private storageFingerprint?: string;
   private dirtyValue: boolean;
   private undoStack: OtioTimeline[] = [];
   private redoStack: OtioTimeline[] = [];
@@ -72,13 +65,13 @@ export class CutDocumentSession {
   private constructor(input: {
     readonly document: OtioTimeline;
     readonly documentUri: string;
-    readonly storageVersion?: string;
+    readonly storageFingerprint?: string;
     readonly dirty: boolean;
     readonly options: CutDocumentSessionOptions;
   }) {
     this.document = input.document;
     this.documentUri = input.documentUri;
-    this.storageVersion = input.storageVersion;
+    this.storageFingerprint = input.storageFingerprint;
     this.dirtyValue = input.dirty;
     this.storage = input.options.storage;
     this.createClipId = input.options.createClipId;
@@ -103,7 +96,7 @@ export class CutDocumentSession {
     return new CutDocumentSession({
       document: normalized.document,
       documentUri,
-      storageVersion: stored.version,
+      storageFingerprint: stored.fingerprint,
       dirty: normalizedTracks.changed || normalized.changed,
       options,
     });
@@ -124,10 +117,6 @@ export class CutDocumentSession {
     });
   }
 
-  get revision(): number {
-    return this.revisionValue;
-  }
-
   get dirty(): boolean {
     return this.dirtyValue;
   }
@@ -145,7 +134,6 @@ export class CutDocumentSession {
       document: this.document,
       documentUri: this.documentUri,
       sessionId: this.sessionId,
-      revision: this.revisionValue,
     });
   }
 
@@ -153,7 +141,6 @@ export class CutDocumentSession {
     return this.applyBatch({
       documentUri: request.documentUri,
       sessionId: request.sessionId,
-      expectedRevision: request.expectedRevision,
       commands: [request.command],
     });
   }
@@ -171,38 +158,35 @@ export class CutDocumentSession {
     this.undoStack.push(this.document);
     this.redoStack = [];
     this.document = next;
-    this.revisionValue += 1;
     this.dirtyValue = true;
     return this.view();
   }
 
-  undo(identity: CutDocumentSessionIdentity & { readonly expectedRevision: number }): TimelineView {
+  undo(identity: CutDocumentSessionIdentity): TimelineView {
     this.assertIdentity(identity);
     const previous = this.undoStack.pop();
     if (!previous) return this.view();
     this.redoStack.push(this.document);
     this.document = previous;
-    this.revisionValue += 1;
     this.dirtyValue = true;
     return this.view();
   }
 
-  redo(identity: CutDocumentSessionIdentity & { readonly expectedRevision: number }): TimelineView {
+  redo(identity: CutDocumentSessionIdentity): TimelineView {
     this.assertIdentity(identity);
     const next = this.redoStack.pop();
     if (!next) return this.view();
     this.undoStack.push(this.document);
     this.document = next;
-    this.revisionValue += 1;
     this.dirtyValue = true;
     return this.view();
   }
 
   async save(): Promise<void> {
     const result = await this.storage.write(this.documentUri, serializeOtio(this.document), {
-      ...(this.storageVersion ? { expectedVersion: this.storageVersion } : {}),
+      ...(this.storageFingerprint ? { expectedFingerprint: this.storageFingerprint } : {}),
     });
-    this.storageVersion = result.version;
+    this.storageFingerprint = result.fingerprint;
     this.dirtyValue = false;
   }
 
@@ -218,8 +202,7 @@ export class CutDocumentSession {
     const result = await this.storage.write(input.documentUri, serializeOtio(rebased), {});
     this.document = rebased;
     this.documentUri = input.documentUri;
-    this.storageVersion = result.version;
-    this.revisionValue += 1;
+    this.storageFingerprint = result.fingerprint;
     this.dirtyValue = false;
     this.undoStack = [];
     this.redoStack = [];
@@ -239,16 +222,15 @@ export class CutDocumentSession {
       assignMissingTrackIds(parsed.document, this.createTrackId).document,
       this.createClipId,
     ).document;
-    this.storageVersion = stored.version;
-    this.revisionValue += 1;
+    this.storageFingerprint = stored.fingerprint;
     this.dirtyValue = false;
     this.undoStack = [];
     this.redoStack = [];
     return this.view();
   }
 
-  async acceptExternalChange(version: string): Promise<TimelineView> {
-    if (version === this.storageVersion) return this.view();
+  async acceptExternalChange(fingerprint: string): Promise<TimelineView> {
+    if (fingerprint === this.storageFingerprint) return this.view();
     if (this.dirtyValue) {
       throw new CutDocumentSessionError(
         'external-change-conflict',
@@ -258,20 +240,12 @@ export class CutDocumentSession {
     return this.revert();
   }
 
-  private assertIdentity(
-    identity: CutDocumentSessionIdentity & { readonly expectedRevision: number },
-  ): void {
+  private assertIdentity(identity: CutDocumentSessionIdentity): void {
     if (identity.documentUri !== this.documentUri) {
       throw new CutDocumentSessionError('document-mismatch', 'Command targets another document.');
     }
     if (identity.sessionId !== this.sessionId) {
       throw new CutDocumentSessionError('session-mismatch', 'Command targets another session.');
-    }
-    if (identity.expectedRevision !== this.revisionValue) {
-      throw new CutDocumentSessionError(
-        'stale-revision',
-        `Expected revision ${this.revisionValue}; received ${identity.expectedRevision}.`,
-      );
     }
   }
 }

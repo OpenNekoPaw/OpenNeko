@@ -6,6 +6,7 @@ import type {
   SemanticOccurrenceEntityLinks,
   SemanticSourceAnalysisResult,
   SemanticSourceDescriptor,
+  SemanticSourceProjectionListResult,
 } from '@neko/search-domain';
 import type {
   EntityAssetProjectionRecord,
@@ -24,9 +25,9 @@ import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspac
 import type { SemanticProjectionRecord } from '@neko/local-metadata';
 import { assertProjectEntityDiscoveryProjectionBatch } from '@neko/search-domain';
 import {
-  ENTITY_ASSET_PROJECTION_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  SEARCH_PROJECTION_MIGRATIONS,
+  initializeEntityAssetProjectionTables,
+  initializeCoreLocalMetadataTables,
+  initializeSearchProjectionTables,
 } from '@neko/local-metadata/sqlite';
 
 export interface SemanticEntitySourceCommitRequest {
@@ -41,7 +42,7 @@ export interface NodeWorkspaceSemanticEntityMetadataBinding extends ProjectEntit
   readonly semanticPartition: LocalMetadataPartition;
   readonly entityPartition: LocalMetadataPartition;
   getSource(sourceId: string): Promise<SemanticProjectionRecord | null>;
-  listSources(rootId?: string): Promise<readonly SemanticSourceDescriptor[]>;
+  listSources(rootId?: string): Promise<SemanticSourceProjectionListResult>;
   replaceSource(request: SemanticEntitySourceCommitRequest): Promise<void>;
   deleteSource(sourceId: string, updatedAt: string): Promise<boolean>;
   markSourceStale(sourceId: string, diagnostic: string, updatedAt: string): Promise<void>;
@@ -76,14 +77,9 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
     } else if (metadataStore.state !== 'open') {
       throw new Error('Semantic Entity metadata requires an open local metadata Store.');
     }
-    await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
-    await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS, {
-      destructiveBackup: {
-        destinationPath: `${databasePath}.pre-project-entity-projections-v3.bak`,
-        reason: 'migration',
-      },
-    });
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeSearchProjectionTables(metadataStore);
+    await initializeEntityAssetProjectionTables(metadataStore);
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -102,28 +98,6 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
       workspaceId,
       domain: 'entity-asset-projection',
     };
-    const cleanupAt = (options.now ?? (() => new Date().toISOString()))();
-    await metadataStore.transaction(
-      {
-        mode: 'cache-write',
-        ownership: 'cache',
-        operation: 'clear-body-bearing-semantic-sources',
-      },
-      async ({ repositories }) => {
-        const sourceIds = await repositories.semanticProjections.clearBodyBearingSources(
-          semanticPartition,
-          cleanupAt,
-        );
-        for (const sourceId of sourceIds) {
-          await repositories.entityAssetProjections.replaceSource({
-            partition: entityPartition,
-            sourceId,
-            records: [],
-            updatedAt: cleanupAt,
-          });
-        }
-      },
-    );
     return {
       workspaceId,
       semanticPartition,
@@ -131,12 +105,20 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
       getSource: (sourceId) =>
         metadataStore.repositories.semanticProjections.get(semanticPartition, sourceId),
       listSources: async (rootId) => {
-        const records =
-          await metadataStore.repositories.semanticProjections.list(semanticPartition);
-        return records.flatMap((record) => {
+        const result = await metadataStore.repositories.semanticProjections.list(semanticPartition);
+        const sources = result.records.flatMap((record) => {
           const descriptor = readSemanticSourceDescriptor(record);
           return descriptor && (!rootId || descriptor.rootId === rootId) ? [descriptor] : [];
         });
+        return {
+          sources,
+          diagnostics: result.diagnostics.map((diagnostic) => ({
+            severity: 'error',
+            code: diagnostic.code,
+            message: diagnostic.message,
+            sourceId: diagnostic.sourceId,
+          })),
+        };
       },
       replaceSource: (request) =>
         metadataStore.transaction(
@@ -278,55 +260,57 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
             await repositories.entityAssetProjections.replaceSource({
               partition: entityPartition,
               sourceId,
-              records: entityRecords.map((record) => staleProjectionRecord(record, updatedAt)),
+              records: entityRecords.records.map((record) =>
+                staleProjectionRecord(record, updatedAt),
+              ),
               updatedAt,
             });
           },
         ),
       listCandidateProjections: async () => {
-        const records = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.entityAssetProjections.list({
           partition: entityPartition,
           kinds: ['entity-candidate'],
         });
-        return records.flatMap((record) =>
+        return result.records.flatMap((record) =>
           record.kind === 'entity-candidate' ? [record.value] : [],
         );
       },
       listDiscoveryOccurrences: async (query = {}) => {
-        const records = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.entityAssetProjections.list({
           partition: entityPartition,
           kinds: ['entity-occurrence'],
           ...projectionQuery(query),
         });
-        return records.flatMap((record) =>
+        return result.records.flatMap((record) =>
           record.kind === 'entity-occurrence' ? [record.value] : [],
         );
       },
       findOccurrencesByEntity: async (entityId) => {
-        const records = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.entityAssetProjections.list({
           partition: entityPartition,
           kinds: ['entity-occurrence'],
           entityId,
         });
-        return loadSemanticOccurrenceRecords(records);
+        return loadSemanticOccurrenceRecords(result.records);
       },
       findEntityLinksByOccurrence: async (occurrenceId) => {
-        const records = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.entityAssetProjections.list({
           partition: entityPartition,
           projectionId: occurrenceId,
           kinds: ['entity-occurrence'],
         });
-        const occurrences = await loadSemanticOccurrenceRecords(records);
+        const occurrences = await loadSemanticOccurrenceRecords(result.records);
         const occurrence = occurrences[0];
         return occurrence ? occurrenceLinks(occurrence) : null;
       },
       findEntityLinksByLocator: async (sourceId, locator) => {
-        const records = await metadataStore.repositories.entityAssetProjections.list({
+        const result = await metadataStore.repositories.entityAssetProjections.list({
           partition: entityPartition,
           sourceId,
           kinds: ['entity-occurrence'],
         });
-        const occurrences = await loadSemanticOccurrenceRecords(records);
+        const occurrences = await loadSemanticOccurrenceRecords(result.records);
         return occurrences
           .filter((record) => sameDocumentLocator(record.occurrence.locator, locator))
           .map(occurrenceLinks);
@@ -389,8 +373,6 @@ function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticPro
     provider: {
       providerId: 'neko.text-entity.deterministic',
       sourceIdentity: request.source.sourceId,
-      indexVersion: 'text-entity-v2',
-      schemaVersion: '2',
     },
     coverage: ['entity-mention'],
     freshness: 'fresh',

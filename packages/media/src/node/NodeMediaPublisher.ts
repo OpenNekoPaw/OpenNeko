@@ -12,7 +12,7 @@ export interface RegisteredPcmStream extends RegisteredMediaFile {
 }
 
 export interface NodeMediaPublisher {
-  registerFile(path: string, contentType: string, revision?: string): Promise<RegisteredMediaFile>;
+  registerFile(path: string, contentType: string): Promise<RegisteredMediaFile>;
   registerPcm(createStream: (signal: AbortSignal) => RunningProcess): Promise<RegisteredPcmStream>;
   unregister(token: string): void;
 }

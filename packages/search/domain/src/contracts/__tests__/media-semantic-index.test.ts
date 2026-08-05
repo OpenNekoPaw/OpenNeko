@@ -119,7 +119,6 @@ describe('media semantic index contracts', () => {
 
   it('projects perception cards into refs and searchable text segments without embedding full cards', () => {
     const card: SemanticPerceptionCard = {
-      version: 1,
       assetId: 'asset-page-1',
       modality: 'image',
       sourceToolCallId: 'tool-1',
@@ -238,7 +237,6 @@ describe('media semantic index contracts', () => {
 
 function makeIndex(): MediaSemanticIndex {
   return {
-    version: 1,
     indexId: 'index-page-1',
     assetId: 'asset-page-1',
     sourceRef: {

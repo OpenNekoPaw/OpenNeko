@@ -39,10 +39,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
     await refreshProjectEntityBindingAvailability(
       {
         documentRepository: {
-          load: async () => DOCUMENT,
-          commit: async () => {
-            throw new Error('Availability projection must not commit canonical Entity facts.');
-          },
+          readAvailable: async () => ({ document: DOCUMENT, diagnostics: [] }),
         },
         availability: { project: async () => [value] },
         projections: {
@@ -87,8 +84,7 @@ describe('refreshProjectEntityBindingAvailability', () => {
     await refreshProjectEntityBindingAvailability(
       {
         documentRepository: {
-          load: async () => DOCUMENT,
-          commit: vi.fn(),
+          readAvailable: async () => ({ document: DOCUMENT, diagnostics: [] }),
         },
         availability: { project: async () => [] },
         projections: { list: vi.fn(), replaceSource, insertMissing: vi.fn() },
@@ -175,18 +171,14 @@ describe('refreshProjectEntityBindingAvailability', () => {
 });
 
 const DOCUMENT: ProjectEntityDocument = {
-  schemaVersion: 1,
   projectId: 'project-neko',
-  revision: 1,
   entities: [],
 };
 const UPDATED_AT = '2026-08-05T03:00:00.000Z';
 
 function documentWithBindings(): ProjectEntityDocument {
   return {
-    schemaVersion: 1,
     projectId: 'project-neko',
-    revision: 7,
     entities: [
       {
         entityId: 'character-rin',

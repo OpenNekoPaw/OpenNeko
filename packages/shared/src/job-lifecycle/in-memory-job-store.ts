@@ -1,4 +1,4 @@
-import type { JobRef, JobSnapshotBase, JobStoreCommit, VersionedJobStore } from './contracts';
+import type { JobRef, JobSnapshotBase, JobStore } from './contracts';
 import {
   assertInitialJobSnapshot,
   assertJobRef,
@@ -6,11 +6,11 @@ import {
   formatJobRef,
   JobLifecycleError,
 } from './transition';
-import { createVersionedJobObservationHub } from './observation-hub';
+import { createJobObservationHub } from './observation-hub';
 
-export function createInMemoryVersionedJobStore<S extends JobSnapshotBase>(): VersionedJobStore<S> {
+export function createInMemoryJobStore<S extends JobSnapshotBase>(): JobStore<S> {
   const snapshots = new Map<string, S>();
-  const observations = createVersionedJobObservationHub<S>();
+  const observations = createJobObservationHub<S>();
 
   return Object.freeze({
     create: async (initial: S): Promise<S> => {
@@ -29,28 +29,22 @@ export function createInMemoryVersionedJobStore<S extends JobSnapshotBase>(): Ve
       return getRequiredSnapshot(snapshots, ref);
     },
 
-    commit: async (input: JobStoreCommit<S>): Promise<S> => {
-      assertJobRef(input.ref);
-      const current = getRequiredSnapshot(snapshots, input.ref);
-      assertExactRef(current.ref, input.ref);
-      assertJobTransition(current, input.next, input.expectedRevision);
-      const stored = freezeSnapshot(input.next);
+    save: async (snapshot: S): Promise<S> => {
+      assertJobRef(snapshot.ref);
+      const current = getRequiredSnapshot(snapshots, snapshot.ref);
+      assertExactRef(current.ref, snapshot.ref);
+      assertJobTransition(current, snapshot);
+      const stored = freezeSnapshot(snapshot);
       const key = formatJobRef(stored.ref);
       snapshots.set(key, stored);
       observations.publish(stored);
       return stored;
     },
 
-    observe: (ref: S['ref'], afterRevision: number): AsyncIterable<S> => {
+    observe: (ref: S['ref']): AsyncIterable<S> => {
       const current = getRequiredSnapshot(snapshots, ref);
       assertExactRef(current.ref, ref);
-      if (afterRevision > current.revision) {
-        throw new JobLifecycleError(
-          'revision-gap',
-          `Job ${formatJobRef(ref)} is at revision ${current.revision}, behind observer revision ${afterRevision}.`,
-        );
-      }
-      return observations.observe(ref, afterRevision, async () => current);
+      return observations.observe(ref, async () => current);
     },
   });
 }

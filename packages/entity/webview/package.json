@@ -2,7 +2,6 @@
   "name": "@neko/entity-webview",
   "description": "Browser-only Project Entity Inspector surface",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     "./inspector": "./src/inspector/EntityInspector.tsx"

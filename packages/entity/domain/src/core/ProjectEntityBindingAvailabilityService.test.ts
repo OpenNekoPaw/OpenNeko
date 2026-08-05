@@ -165,9 +165,7 @@ const PACKAGE: ProjectEntityDocument['entities'][number]['representations'][numb
   acceptedAt: '2026-08-05T00:00:00.000Z',
 };
 const DOCUMENT: ProjectEntityDocument = {
-  schemaVersion: 1,
   projectId: 'project-neko',
-  revision: 4,
   entities: [
     {
       entityId: 'character-rin',

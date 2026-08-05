@@ -12,11 +12,11 @@ import type { LocalMetadataStore } from '@neko/local-metadata';
 
 const DELIVERY_TASK_PREFIX = 'system:canvas-board-delivery:';
 const WRITER_TASK_PREFIX = 'system:canvas-board-writer:';
-const LEDGER_PAYLOAD_VERSION = 1 as const;
 
 export interface WorkspaceBoardDeliveryLedgerOptions {
   readonly metadataStore: LocalMetadataStore;
   readonly workspaceId: string;
+  readonly createIdentity: () => string;
   readonly now?: () => number;
 }
 
@@ -30,19 +30,16 @@ export interface WorkspaceBoardDeliveryTask {
 
 interface DeliveryTaskPayload extends WorkspaceBoardDeliveryTask {
   readonly kind: 'canvas-workspace-board-delivery';
-  readonly version: typeof LEDGER_PAYLOAD_VERSION;
   readonly requestDigest: string;
 }
 
 interface DeliveryReceiptPayload {
   readonly kind: 'canvas-workspace-board-receipt';
-  readonly version: typeof LEDGER_PAYLOAD_VERSION;
   readonly receipt: CanvasWorkspaceDeliveryReceipt;
 }
 
 interface WriterPayload {
   readonly kind: 'canvas-workspace-board-writer';
-  readonly version: typeof LEDGER_PAYLOAD_VERSION;
   readonly claim: CanvasWorkspaceDeliveryClaim;
 }
 
@@ -78,7 +75,6 @@ export class WorkspaceBoardDeliveryLedger {
         const now = this.now();
         const payload: DeliveryTaskPayload = {
           kind: 'canvas-workspace-board-delivery',
-          version: LEDGER_PAYLOAD_VERSION,
           request,
           requestDigest: hashStableValue(request),
           state: 'queued',
@@ -144,15 +140,17 @@ export class WorkspaceBoardDeliveryLedger {
         }
         const claim: CanvasWorkspaceDeliveryClaim = {
           holderId: input.holderId,
-          epoch:
+          leaseId:
             previous?.holderId === input.holderId && previous.expiresAt > now
-              ? previous.epoch
-              : (previous?.epoch ?? 0) + 1,
+              ? previous.leaseId
+              : requireNonEmptyIdentity(
+                  this.options.createIdentity(),
+                  'Canvas Board writer lease identity',
+                ),
           expiresAt: now + input.leaseDurationMs,
         };
         const payload: WriterPayload = {
           kind: 'canvas-workspace-board-writer',
-          version: LEDGER_PAYLOAD_VERSION,
           claim,
         };
         await repositories.tasks.upsert({
@@ -208,7 +206,7 @@ export class WorkspaceBoardDeliveryLedger {
         if (
           current.claim &&
           current.claim.expiresAt > now &&
-          (current.claim.holderId !== writer.holderId || current.claim.epoch !== writer.epoch)
+          (current.claim.holderId !== writer.holderId || current.claim.leaseId !== writer.leaseId)
         ) {
           return undefined;
         }
@@ -263,7 +261,6 @@ export class WorkspaceBoardDeliveryLedger {
         assertDeliveryClaim(current, writer);
         const payload: DeliveryReceiptPayload = {
           kind: 'canvas-workspace-board-receipt',
-          version: LEDGER_PAYLOAD_VERSION,
           receipt,
         };
         await repositories.tasks.upsert({
@@ -388,7 +385,7 @@ export class WorkspaceBoardDeliveryLedger {
     const current = parseWriterPayload(writer.payload).claim;
     if (
       current.holderId !== claim.holderId ||
-      current.epoch !== claim.epoch ||
+      current.leaseId !== claim.leaseId ||
       (requireUnexpired && current.expiresAt <= this.now())
     ) {
       throw new Error('stale-writer: Canvas Board writer lease is stale.');
@@ -423,16 +420,10 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
     throw new Error('Canvas Board delivery payload has an invalid kind.');
   }
   const request = value['request'];
-  if (requiresContentLocatorMigration(request)) {
-    throw new Error(
-      'canvas-board-delivery-migration-required: Pending Board content must be delivered again with contentLocator.',
-    );
-  }
   const state = value['state'];
   const attempt = value['attempt'];
   const diagnostics = value['diagnostics'];
   if (
-    value['version'] !== LEDGER_PAYLOAD_VERSION ||
     !isCanvasWorkspaceProjectionRequest(request) ||
     !isActiveDeliveryState(state) ||
     typeof attempt !== 'number' ||
@@ -456,7 +447,6 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
   }
   return {
     kind: 'canvas-workspace-board-delivery',
-    version: LEDGER_PAYLOAD_VERSION,
     request,
     requestDigest: value['requestDigest'],
     state,
@@ -466,32 +456,14 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
   };
 }
 
-function requiresContentLocatorMigration(value: unknown): boolean {
-  if (!isRecord(value) || !Array.isArray(value['artifacts'])) return false;
-  return value['artifacts'].some((artifact) => {
-    if (!isRecord(artifact) || artifact['kind'] === 'markdown') return false;
-    return (
-      artifact['contentLocator'] === undefined ||
-      artifact['resourceRef'] !== undefined ||
-      artifact['documentResourceRef'] !== undefined ||
-      artifact['localPath'] !== undefined ||
-      artifact['renderUri'] !== undefined ||
-      artifact['runtimeAssetPath'] !== undefined ||
-      artifact['providerUrl'] !== undefined ||
-      artifact['base64'] !== undefined
-    );
-  });
-}
-
 function parseReceiptPayload(value: unknown): DeliveryReceiptPayload | undefined {
   if (!isRecord(value) || value['kind'] !== 'canvas-workspace-board-receipt') return undefined;
   const receipt = value['receipt'];
-  if (value['version'] !== LEDGER_PAYLOAD_VERSION || !isDeliveryReceipt(receipt)) {
+  if (!isDeliveryReceipt(receipt)) {
     throw new Error('Canvas Board delivery receipt violates its contract.');
   }
   return {
     kind: 'canvas-workspace-board-receipt',
-    version: LEDGER_PAYLOAD_VERSION,
     receipt,
   };
 }
@@ -500,14 +472,12 @@ function parseWriterPayload(value: unknown): WriterPayload {
   if (
     !isRecord(value) ||
     value['kind'] !== 'canvas-workspace-board-writer' ||
-    value['version'] !== LEDGER_PAYLOAD_VERSION ||
     !isDeliveryClaim(value['claim'])
   ) {
     throw new Error('Canvas Board writer payload violates its contract.');
   }
   return {
     kind: 'canvas-workspace-board-writer',
-    version: LEDGER_PAYLOAD_VERSION,
     claim: value['claim'],
   };
 }
@@ -516,7 +486,7 @@ function assertDeliveryClaim(
   task: WorkspaceBoardDeliveryTask,
   writer: CanvasWorkspaceDeliveryClaim,
 ): void {
-  if (task.claim?.holderId !== writer.holderId || task.claim.epoch !== writer.epoch) {
+  if (task.claim?.holderId !== writer.holderId || task.claim.leaseId !== writer.leaseId) {
     throw new Error('stale-writer: Canvas Board delivery claim is stale.');
   }
 }
@@ -535,9 +505,8 @@ function isDeliveryClaim(value: unknown): value is CanvasWorkspaceDeliveryClaim 
   return (
     isRecord(value) &&
     typeof value['holderId'] === 'string' &&
-    Number.isInteger(value['epoch']) &&
-    typeof value['epoch'] === 'number' &&
-    value['epoch'] > 0 &&
+    typeof value['leaseId'] === 'string' &&
+    value['leaseId'].trim().length > 0 &&
     typeof value['expiresAt'] === 'number' &&
     Number.isFinite(value['expiresAt'])
   );
@@ -560,9 +529,8 @@ function isDeliveryReceipt(value: unknown): value is CanvasWorkspaceDeliveryRece
     (value['connectionIds'] === undefined ||
       (Array.isArray(value['connectionIds']) &&
         value['connectionIds'].every((connectionId) => typeof connectionId === 'string'))) &&
-    Number.isInteger(value['writerEpoch']) &&
-    typeof value['writerEpoch'] === 'number' &&
-    value['writerEpoch'] > 0 &&
+    typeof value['writerLeaseId'] === 'string' &&
+    value['writerLeaseId'].trim().length > 0 &&
     typeof value['completedAt'] === 'number'
   );
 }
@@ -578,6 +546,11 @@ function isProjectionDiagnostic(value: unknown): value is CanvasWorkspaceProject
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireNonEmptyIdentity(value: string, label: string): string {
+  if (value.trim().length === 0) throw new Error(`${label} is required.`);
+  return value;
 }
 
 async function incrementTaskRevision(

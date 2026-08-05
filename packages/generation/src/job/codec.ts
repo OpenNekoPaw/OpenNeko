@@ -44,7 +44,6 @@ const VIDEO_GENERATION_TYPES: ReadonlySet<string> = new Set([
 const AUDIO_GENERATION_TYPES: ReadonlySet<string> = new Set(['text-to-audio', 'text-to-music']);
 
 export function encodeGenerationJobSnapshot(snapshot: GenerationJobSnapshot): string {
-  assertNoLegacyGenerationPayload(snapshot);
   if (!isGenerationJobSnapshot(snapshot)) {
     throw invalidPersistence('Generation Job is not a valid snapshot.');
   }
@@ -58,9 +57,8 @@ export function decodeGenerationJobSnapshot(serialized: string): GenerationJobSn
   } catch (error) {
     throw invalidPersistence('Persisted Generation Job snapshot is not valid JSON.', error);
   }
-  assertNoLegacyGenerationPayload(value);
   if (!isGenerationJobSnapshot(value)) {
-    throw invalidPersistence('Persisted Generation Job snapshot violates schema version 2.');
+    throw invalidPersistence('Persisted Generation Job snapshot violates the stable contract.');
   }
   deepFreeze(value, new WeakSet<object>());
   return value;
@@ -77,10 +75,10 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
   const providerTask = value['providerTask'];
   const resultLocators = value['resultLocators'];
   if (
+    !hasOnlyKeys(value, GENERATION_JOB_SNAPSHOT_KEYS) ||
     !isGenerationRef(ref) ||
     (value['lifecycleMode'] !== 'linked' && value['lifecycleMode'] !== 'detached') ||
     !isJobPhase(phase) ||
-    !isPositiveInteger(value['revision']) ||
     !isTimestamp(value['createdAt']) ||
     !isTimestamp(value['updatedAt']) ||
     value['updatedAt'] < value['createdAt'] ||
@@ -160,13 +158,15 @@ function isGenerationPanoramaReference(value: unknown): boolean {
   const identity = value['identity'];
   return (
     isRecord(orientation) &&
+    hasOnlyKeys(orientation, PANORAMA_ORIENTATION_KEYS) &&
     optionalNumbersAreFinite(orientation, ['yawDeg', 'pitchDeg', 'fieldOfViewDeg']) &&
     typeof orientation['yawDeg'] === 'number' &&
     typeof orientation['pitchDeg'] === 'number' &&
     typeof orientation['fieldOfViewDeg'] === 'number' &&
     isRecord(identity) &&
+    hasOnlyKeys(identity, THREE_REFERENCE_IDENTITY_KEYS) &&
     isNonEmptyString(identity['sessionId']) &&
-    isPositiveInteger(identity['revision'])
+    isNonEmptyString(identity['requestId'])
   );
 }
 
@@ -234,30 +234,6 @@ function optionalContentLocators(value: Record<string, unknown>, keys: readonly 
   return keys.every((key) => value[key] === undefined || isContentLocator(value[key]));
 }
 
-function assertNoLegacyGenerationPayload(value: unknown): void {
-  if (!isRecord(value)) return;
-  const requestEnvelope = value['request'];
-  const request =
-    isRecord(requestEnvelope) && isRecord(requestEnvelope['request'])
-      ? requestEnvelope['request']
-      : undefined;
-  if ('resultRefs' in value || (request !== undefined && containsLegacyGenerationField(request))) {
-    throw new GenerationJobError(
-      'generation-job-migration-required',
-      'Persisted Generation Job uses retired resource-reference fields or materialized media fields and must be resubmitted.',
-    );
-  }
-}
-
-function containsLegacyGenerationField(value: unknown): boolean {
-  if (Array.isArray(value)) return value.some(containsLegacyGenerationField);
-  if (!isRecord(value)) return false;
-  return Object.entries(value).some(
-    ([key, nested]) =>
-      LEGACY_MATERIALIZED_REQUEST_KEYS.has(key) || containsLegacyGenerationField(nested),
-  );
-}
-
 function hasOnlyKeys(value: Record<string, unknown>, keys: ReadonlySet<string>): boolean {
   return Object.keys(value).every((key) => keys.has(key));
 }
@@ -320,10 +296,6 @@ function optionalNumbersAreFinite(
   );
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return Number.isSafeInteger(value) && typeof value === 'number' && value > 0;
-}
-
 function isTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
@@ -356,6 +328,20 @@ const BASE_REQUEST_KEYS = [
   'modelId',
   'metadata',
 ] as const;
+const GENERATION_JOB_SNAPSHOT_KEYS = new Set([
+  'ref',
+  'phase',
+  'createdAt',
+  'updatedAt',
+  'retryOf',
+  'failure',
+  'regenerateOf',
+  'lifecycleMode',
+  'request',
+  'progress',
+  'providerTask',
+  'resultLocators',
+]);
 const IMAGE_REQUEST_KEYS = new Set([
   ...BASE_REQUEST_KEYS,
   'operation',
@@ -403,24 +389,5 @@ const AUDIO_REQUEST_KEYS = new Set([
   'format',
 ]);
 const IP_ADAPTER_REFERENCE_KEYS = new Set(['imageLocator', 'mimeType', 'strength', 'mode']);
-const LEGACY_MATERIALIZED_REQUEST_KEYS: ReadonlySet<string> = new Set([
-  'referenceImageUrl',
-  'referenceImageBase64',
-  'referenceImageUri',
-  'maskBase64',
-  'maskUri',
-  'controlImageBase64',
-  'controlImageRef',
-  'controlImageUri',
-  'startFrameRef',
-  'endFrameRef',
-  'referenceVideoRef',
-  'referenceVideoUrl',
-  'startFrameImageBase64',
-  'endFrameImageBase64',
-  'sourceVideoUrl',
-  'imageBase64',
-  'imageRef',
-  'resourceRef',
-  'sourceImageRef',
-]);
+const PANORAMA_ORIENTATION_KEYS = new Set(['yawDeg', 'pitchDeg', 'fieldOfViewDeg']);
+const THREE_REFERENCE_IDENTITY_KEYS = new Set(['sessionId', 'requestId']);

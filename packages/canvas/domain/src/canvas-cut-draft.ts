@@ -15,17 +15,13 @@ import type {
 import { isContentLocator, type ContentLocator } from '@neko/content';
 import type { StoryboardTextCue, StoryboardVoiceCue } from './types/storyboard-table';
 
-export const CANVAS_CUT_DRAFT_SCHEMA_VERSION = 1 as const;
 export const CANVAS_CUT_DRAFT_KIND = 'canvas-cut-draft' as const;
 export const CANVAS_CUT_DRAFT_DEFAULT_EXTENSION_NAMESPACES = ['neko.canvas'] as const;
-
-export type CanvasCutDraftSchemaVersion = typeof CANVAS_CUT_DRAFT_SCHEMA_VERSION;
 
 export type CanvasCutDraftDiagnosticSeverity = 'info' | 'warning' | 'error';
 
 export type CanvasCutDraftDiagnosticCode =
   | 'draft-invalid-root'
-  | 'draft-invalid-schema-version'
   | 'draft-stale-source'
   | 'draft-missing-route'
   | 'draft-invalid-route'
@@ -127,7 +123,6 @@ export type CanvasCutDraftExtensions = Readonly<Record<string, CanvasSerializabl
 
 export interface CanvasCutDraftPayload {
   readonly kind: typeof CANVAS_CUT_DRAFT_KIND;
-  readonly schemaVersion: CanvasCutDraftSchemaVersion;
   readonly source: CanvasCutDraftSource;
   readonly route: CanvasCutDraftRoute;
   readonly projectName: string;
@@ -239,7 +234,6 @@ export function projectCanvasPlaybackRouteToCutDraft(
 
   const payload: CanvasCutDraftPayload = {
     kind: CANVAS_CUT_DRAFT_KIND,
-    schemaVersion: CANVAS_CUT_DRAFT_SCHEMA_VERSION,
     source: {
       canvasUri: input.sourceCanvasUri,
       ...(input.sourceRevision !== undefined ? { revision: input.sourceRevision } : {}),
@@ -290,17 +284,6 @@ export function validateCanvasCutDraftPayload(
       }),
     );
   }
-  if (value['schemaVersion'] !== CANVAS_CUT_DRAFT_SCHEMA_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'draft-invalid-schema-version',
-        'error',
-        `CanvasCutDraftPayload schemaVersion must be ${CANVAS_CUT_DRAFT_SCHEMA_VERSION}.`,
-        { path: ['schemaVersion'] },
-      ),
-    );
-  }
-
   validateSource(value['source'], options, diagnostics);
   validateRoute(value['route'], diagnostics);
   validateDraftUnits(value['units'], options, diagnostics);

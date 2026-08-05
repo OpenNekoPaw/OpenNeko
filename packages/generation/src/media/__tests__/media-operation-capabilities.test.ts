@@ -187,12 +187,12 @@ describe('media provider capability negotiation', () => {
           fieldOfViewDeg: 45,
           aspectRatio: 1,
         },
-        identity: { sessionId: 'camera-session', revision: 1 },
+        identity: { sessionId: 'camera-session', requestId: 'camera-request' },
       },
       panoramaReference: {
         imageLocator: contentLocator('preview:panorama'),
         orientation: { yawDeg: 0, pitchDeg: 0, fieldOfViewDeg: 70 },
-        identity: { sessionId: 'panorama-session', revision: 1 },
+        identity: { sessionId: 'panorama-session', requestId: 'panorama-request' },
       },
     };
 

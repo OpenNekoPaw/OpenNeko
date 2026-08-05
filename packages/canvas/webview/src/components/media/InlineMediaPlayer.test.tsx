@@ -24,13 +24,11 @@ vi.mock('@neko/ui/icons', () => ({
 }));
 
 const audioDescriptor: HtmlAudioDescriptor = {
-  version: 1,
   url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   mimeType: 'audio/wav',
   durationSeconds: 2,
 };
 const videoDescriptor: HtmlVideoDescriptor = {
-  version: 1,
   url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
   mimeType: 'video/mp4',
   preparationProfile: 'h264-mp4-direct',

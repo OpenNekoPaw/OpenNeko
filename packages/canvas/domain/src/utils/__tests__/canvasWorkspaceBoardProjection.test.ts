@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceMarkdownProjectionArtifact,
   type CanvasWorkspaceResourceProjectionArtifact,
@@ -510,7 +509,6 @@ function request(
 ): CanvasWorkspaceProjectionRequest {
   const deliveryId = input.deliveryId ?? 'delivery:batch-1';
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
     process: {
       deliveryId,
@@ -637,7 +635,6 @@ function provenance(
   sourceArtifactIds: readonly string[] = [],
 ) {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     deliveryId,
     artifactId,
     revision,

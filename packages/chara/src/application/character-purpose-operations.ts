@@ -149,7 +149,6 @@ export function projectCharacterRoleEvaluationPrompt(
       zh ? '## 期望 JSON 结构' : '## Expected JSON Shape',
       JSON.stringify(
         {
-          version: 1,
           createdAt: 'ISO timestamp',
           entityRef: artifact.entityRef,
           summary: zh ? '简短评估摘要' : 'short evaluation summary',

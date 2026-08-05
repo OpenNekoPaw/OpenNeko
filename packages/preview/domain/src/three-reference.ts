@@ -5,19 +5,18 @@ import {
 } from './model-preview.js';
 import { contentLocatorsEqual, isContentLocator, type ContentLocator } from '@neko/content';
 
-export const THREE_REFERENCE_CONTEXT_VERSION = 1 as const;
-export const THREE_REFERENCE_PROTOCOL_VERSION = 2 as const;
-export const THREE_REFERENCE_STAGING_SCHEMA_VERSION = 1 as const;
-
 export const THREE_REFERENCE_PURPOSES = ['appearance', 'pose', 'camera', 'panorama-scene'] as const;
 export type ThreeReferencePurpose = (typeof THREE_REFERENCE_PURPOSES)[number];
 
 export type ThreeReferencePresetKind = 'mannequin' | 'prop' | 'environment' | 'panorama-grid';
 export type ThreeReferenceAppearancePolicy = 'guide-only' | 'appearance-capable';
 
-export interface ThreeReferenceIdentity {
+export interface ThreeReferenceSessionIdentity {
   readonly sessionId: string;
-  readonly revision: number;
+}
+
+export interface ThreeReferenceRequestIdentity extends ThreeReferenceSessionIdentity {
+  readonly requestId: string;
 }
 
 export interface ThreeReferenceVector3 {
@@ -35,7 +34,6 @@ export interface ThreeReferenceEuler {
 
 export interface ThreeReferencePresetIdentity {
   readonly presetId: string;
-  readonly presetVersion: number;
   readonly fingerprint: string;
   readonly presetKind: ThreeReferencePresetKind;
   readonly appearancePolicy: ThreeReferenceAppearancePolicy;
@@ -164,8 +162,7 @@ export type ThreeReferencePanelSubject =
       readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'environment-only' }>;
     };
 
-export interface ThreeReferenceStagingSnapshot extends ThreeReferenceIdentity {
-  readonly schemaVersion: typeof THREE_REFERENCE_STAGING_SCHEMA_VERSION;
+export interface ThreeReferenceStagingSnapshot extends ThreeReferenceSessionIdentity {
   readonly subject: ThreeReferenceSubject;
   readonly environment?: ThreeReferenceEnvironment;
   readonly selectedPurposes: readonly ThreeReferencePurpose[];
@@ -173,7 +170,7 @@ export interface ThreeReferenceStagingSnapshot extends ThreeReferenceIdentity {
   readonly pose?: ThreeReferencePoseState;
 }
 
-interface ThreeReferenceOutputIdentity extends ThreeReferenceIdentity {}
+interface ThreeReferenceOutputIdentity extends ThreeReferenceRequestIdentity {}
 
 export type ThreeReferenceOutput =
   | (ThreeReferenceOutputIdentity & {
@@ -200,15 +197,11 @@ export type ThreeReferenceOutput =
     });
 
 export interface ThreeReferenceContextData {
-  readonly contractVersion: typeof THREE_REFERENCE_CONTEXT_VERSION;
   readonly staging: ThreeReferenceStagingSnapshot;
   readonly outputs: readonly ThreeReferenceOutput[];
 }
 
-export interface ThreeReferenceMediaOutputIdentity {
-  readonly sessionId: string;
-  readonly revision: number;
-}
+export interface ThreeReferenceMediaOutputIdentity extends ThreeReferenceRequestIdentity {}
 
 export interface ThreeReferenceAppearanceMediaReference {
   readonly imageRef: ContentLocator;
@@ -268,11 +261,11 @@ export function projectThreeReferenceMediaControls(
     if (!isThreeReferenceContextData(context)) {
       throw new ThreeReferenceMediaProjectionError(
         'invalid-3d-reference-context',
-        'Media projection requires a valid versioned 3d-reference context.',
+        'Media projection requires a valid 3d-reference context.',
       );
     }
     for (const output of context.outputs) {
-      const identity = { sessionId: output.sessionId, revision: output.revision };
+      const identity = { sessionId: output.sessionId, requestId: output.requestId };
       switch (output.kind) {
         case 'appearance':
           appearanceReferences.push({
@@ -331,7 +324,7 @@ export function projectThreeReferenceMediaControls(
 export type ThreeReferenceHostMessage =
   | {
       readonly type: '3d-reference/session-init';
-      readonly protocolVersion: typeof THREE_REFERENCE_PROTOCOL_VERSION;
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly panelSubject: ThreeReferencePanelSubject;
       readonly availablePresets: readonly ThreeReferencePresetOption[];
       readonly eligiblePurposes: readonly ThreeReferencePurpose[];
@@ -339,48 +332,48 @@ export type ThreeReferenceHostMessage =
     }
   | {
       readonly type: '3d-reference/environment-runtime';
-      readonly identity: ThreeReferenceIdentity;
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly staging: ThreeReferenceStagingSnapshot;
       readonly runtime: ThreeReferencePanoramaRuntimeDescriptor;
     }
   | {
       readonly type: '3d-reference/diagnostic';
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly diagnostic: ThreeReferenceDiagnostic;
     }
   | {
       readonly type: '3d-reference/cancel';
-      readonly identity: ThreeReferenceIdentity;
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly reason: string;
     };
 
 export type ThreeReferenceWebviewMessage =
   | {
       readonly type: '3d-reference/ready';
-      readonly protocolVersion: typeof THREE_REFERENCE_PROTOCOL_VERSION;
-      readonly sessionId: string;
+      readonly identity: ThreeReferenceRequestIdentity;
     }
   | {
       readonly type: '3d-reference/load-completed';
-      readonly identity: ThreeReferenceIdentity;
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly facts?: NormalizedModelFacts;
     }
   | {
       readonly type: '3d-reference/staging-changed';
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly staging: ThreeReferenceStagingSnapshot;
     }
   | {
       readonly type: '3d-reference/preset-subject-requested';
-      readonly identity: ThreeReferenceIdentity;
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly presetId: string;
     }
   | {
       readonly type: '3d-reference/panorama-picker-requested';
-      readonly identity: ThreeReferenceIdentity;
+      readonly identity: ThreeReferenceRequestIdentity;
     }
   | {
       readonly type: '3d-reference/capture-requested';
-      readonly requestId: string;
-      readonly identity: ThreeReferenceIdentity;
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly purpose: ThreeReferencePurpose;
       readonly imageDataUrl: string;
       readonly width: number;
@@ -389,14 +382,15 @@ export type ThreeReferenceWebviewMessage =
     }
   | {
       readonly type: '3d-reference/diagnostic';
+      readonly identity: ThreeReferenceRequestIdentity;
       readonly diagnostic: ThreeReferenceDiagnostic;
     };
 
 export const THREE_REFERENCE_DIAGNOSTIC_CODES = [
-  'contract-version-unsupported',
-  'staging-version-unsupported',
+  'message-invalid',
+  'staging-invalid',
   'session-mismatch',
-  'stale-revision',
+  'request-mismatch',
   'subject-invalid',
   'preset-invalid',
   'purpose-unsupported',
@@ -408,7 +402,6 @@ export const THREE_REFERENCE_DIAGNOSTIC_CODES = [
   'source-unsupported',
   'source-load-failed',
   'panorama-load-failed',
-  'protocol-mismatch',
   'renderer-unavailable',
   'renderer-lost',
   'cancelled',
@@ -420,7 +413,7 @@ export interface ThreeReferenceDiagnostic {
   readonly code: ThreeReferenceDiagnosticCode;
   readonly message: string;
   readonly severity: 'info' | 'warning' | 'error';
-  readonly identity?: Partial<ThreeReferenceIdentity>;
+  readonly identity?: Partial<ThreeReferenceRequestIdentity>;
   readonly purpose?: ThreeReferencePurpose;
 }
 
@@ -440,8 +433,14 @@ export function isThreeReferencePresetOption(value: unknown): value is ThreeRefe
   );
 }
 
-export function isThreeReferenceIdentity(value: unknown): value is ThreeReferenceIdentity {
-  return isRecord(value) && isIdentityFields(value);
+export function isThreeReferenceRequestIdentity(
+  value: unknown,
+): value is ThreeReferenceRequestIdentity {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, ['sessionId', 'requestId']) &&
+    isRequestIdentityFields(value)
+  );
 }
 
 export function isThreeReferenceSourceRuntimeDescriptor(
@@ -569,6 +568,7 @@ export function isThreeReferenceDiagnostic(value: unknown): value is ThreeRefere
   if (!isRecord(value)) return false;
   const identity = value['identity'];
   return (
+    hasOnlyKeys(value, ['code', 'message', 'severity', 'identity', 'purpose']) &&
     THREE_REFERENCE_DIAGNOSTIC_CODES.some((code) => code === value['code']) &&
     isNonEmptyString(value['message']) &&
     (value['severity'] === 'info' ||
@@ -580,9 +580,7 @@ export function isThreeReferenceDiagnostic(value: unknown): value is ThreeRefere
 }
 
 export function isThreeReferenceContextData(value: unknown): value is ThreeReferenceContextData {
-  if (!isRecord(value) || value['contractVersion'] !== THREE_REFERENCE_CONTEXT_VERSION) {
-    return false;
-  }
+  if (!isRecord(value) || !hasOnlyKeys(value, ['staging', 'outputs'])) return false;
   if (!isThreeReferenceStagingSnapshot(value['staging'])) return false;
   if (!isArrayOf(value['outputs'], isThreeReferenceOutput) || value['outputs'].length === 0) {
     return false;
@@ -593,10 +591,7 @@ export function isThreeReferenceContextData(value: unknown): value is ThreeRefer
   if (!sameUniquePurposes(staging.selectedPurposes, outputKinds)) return false;
 
   return value['outputs'].every(
-    (output) =>
-      output.sessionId === staging.sessionId &&
-      output.revision === staging.revision &&
-      outputMatchesStaging(output, staging),
+    (output) => output.sessionId === staging.sessionId && outputMatchesStaging(output, staging),
   );
 }
 
@@ -605,8 +600,15 @@ export function isThreeReferenceStagingSnapshot(
 ): value is ThreeReferenceStagingSnapshot {
   if (
     !isRecord(value) ||
-    value['schemaVersion'] !== THREE_REFERENCE_STAGING_SCHEMA_VERSION ||
-    !isIdentityFields(value) ||
+    !hasOnlyKeys(value, [
+      'sessionId',
+      'subject',
+      'environment',
+      'selectedPurposes',
+      'camera',
+      'pose',
+    ]) ||
+    !isSessionIdentityFields(value) ||
     !isThreeReferenceSubject(value['subject']) ||
     !isArrayOf(value['selectedPurposes'], isThreeReferencePurpose) ||
     value['selectedPurposes'].length === 0 ||
@@ -637,37 +639,70 @@ export function isThreeReferenceSubject(value: unknown): value is ThreeReference
   switch (value['kind']) {
     case 'source-model':
       return (
+        hasOnlyKeys(value, ['kind', 'source', 'fingerprint', 'format']) &&
         isContentLocator(value['source']) &&
         isNonEmptyString(value['fingerprint']) &&
         isModelPreviewFormat(value['format'])
       );
     case 'builtin-preset':
-      return isThreeReferencePresetIdentity(value);
+      return (
+        hasOnlyKeys(value, [
+          'kind',
+          'presetId',
+          'fingerprint',
+          'presetKind',
+          'appearancePolicy',
+          'allowedPurposes',
+        ]) && isThreeReferencePresetIdentity(value)
+      );
     case 'environment-only':
-      return true;
+      return hasOnlyKeys(value, ['kind']);
     default:
       return false;
   }
 }
 
 export function isThreeReferenceOutput(value: unknown): value is ThreeReferenceOutput {
-  if (!isRecord(value) || !isIdentityFields(value)) return false;
+  if (!isRecord(value) || !isRequestIdentityFields(value)) {
+    return false;
+  }
   switch (value['kind']) {
     case 'appearance':
-      return isContentLocator(value['image']) && isContentLocator(value['source']);
+      return (
+        hasOnlyKeys(value, ['kind', 'sessionId', 'requestId', 'image', 'source']) &&
+        isContentLocator(value['image']) &&
+        isContentLocator(value['source'])
+      );
     case 'pose':
       return (
+        hasOnlyKeys(value, [
+          'kind',
+          'sessionId',
+          'requestId',
+          'controlImage',
+          'controlMode',
+          'joints',
+        ]) &&
         isContentLocator(value['controlImage']) &&
         (value['controlMode'] === 'pose' || value['controlMode'] === 'depth') &&
         isArrayOf(value['joints'], isThreeReferenceJointPose)
       );
     case 'camera':
       return (
+        hasOnlyKeys(value, ['kind', 'sessionId', 'requestId', 'camera', 'compositionImage']) &&
         isThreeReferenceCamera(value['camera']) &&
         (value['compositionImage'] === undefined || isContentLocator(value['compositionImage']))
       );
     case 'panorama-scene':
       return (
+        hasOnlyKeys(value, [
+          'kind',
+          'sessionId',
+          'requestId',
+          'panorama',
+          'orientation',
+          'viewportImage',
+        ]) &&
         isContentLocator(value['panorama']) &&
         isThreeReferencePanoramaOrientation(value['orientation']) &&
         (value['viewportImage'] === undefined || isContentLocator(value['viewportImage']))
@@ -680,7 +715,6 @@ export function isThreeReferenceOutput(value: unknown): value is ThreeReferenceO
 function isThreeReferencePresetIdentity(value: Record<string, unknown>): boolean {
   return (
     isNonEmptyString(value['presetId']) &&
-    isPositiveInteger(value['presetVersion']) &&
     isNonEmptyString(value['fingerprint']) &&
     (value['presetKind'] === 'mannequin' ||
       value['presetKind'] === 'prop' ||
@@ -696,19 +730,24 @@ function isThreeReferencePresetIdentity(value: Record<string, unknown>): boolean
   );
 }
 
-function isIdentityFields(value: Record<string, unknown>): boolean {
-  return isNonEmptyString(value['sessionId']) && isNonNegativeInteger(value['revision']);
+function isSessionIdentityFields(value: Record<string, unknown>): boolean {
+  return isNonEmptyString(value['sessionId']);
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
 }
 
+function isRequestIdentityFields(value: Record<string, unknown>): boolean {
+  return isSessionIdentityFields(value) && isNonEmptyString(value['requestId']);
+}
+
 function isPartialThreeReferenceIdentity(value: unknown): boolean {
   return (
     isRecord(value) &&
+    hasOnlyKeys(value, ['sessionId', 'requestId']) &&
     (value['sessionId'] === undefined || isNonEmptyString(value['sessionId'])) &&
-    (value['revision'] === undefined || isNonNegativeInteger(value['revision']))
+    (value['requestId'] === undefined || isNonEmptyString(value['requestId']))
   );
 }
 
@@ -863,6 +902,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasOnlyKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(record).every((key) => keys.includes(key));
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
@@ -873,10 +916,6 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
-}
-
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 function isArrayOf<T>(value: unknown, guard: (item: unknown) => item is T): value is T[] {

@@ -4,6 +4,7 @@ import {
   type EntityAssetProjectionRepository,
   type EntityBindingAvailabilityProjectionValue,
   type ProjectEntityCandidateProjection,
+  type ProjectEntityDiagnostic,
   type ProjectEntityManagementProjection,
   type ProjectEntityRecord,
 } from '@neko/entity-domain';
@@ -11,23 +12,25 @@ import { NodeProjectEntityRepository } from './node-project-entity-repository';
 
 export interface ProjectEntityResources {
   readonly entities: readonly ProjectEntityRecord[];
+  readonly diagnostics: readonly ProjectEntityDiagnostic[];
 }
 
 export interface ProjectEntityManagementResources {
-  readonly projectRevision: number;
   readonly projections: readonly ProjectEntityManagementProjection[];
+  readonly diagnostics: readonly ProjectEntityDiagnostic[];
 }
 
 export async function readProjectEntityResources(input: {
   readonly workspace: { readonly workspaceId: string; readonly workspacePath: string };
   readonly signal?: AbortSignal;
 }): Promise<ProjectEntityResources> {
-  const document = await new NodeProjectEntityRepository({
+  const result = await new NodeProjectEntityRepository({
     workspacePath: input.workspace.workspacePath,
     projectId: input.workspace.workspaceId,
-  }).load(input.signal);
+  }).readAvailable(input.signal);
   return {
-    entities: document.entities.filter((entity) => entity.lifecycle.state === 'active'),
+    entities: result.document.entities.filter((entity) => entity.lifecycle.state === 'active'),
+    diagnostics: result.diagnostics,
   };
 }
 
@@ -41,16 +44,17 @@ export async function readProjectEntityManagementResources(input: {
   };
   readonly signal?: AbortSignal;
 }): Promise<ProjectEntityManagementResources> {
-  const document = await new NodeProjectEntityRepository({
+  const documentResult = await new NodeProjectEntityRepository({
     workspacePath: input.workspace.workspacePath,
     projectId: input.workspace.workspaceId,
-  }).load(input.signal);
-  const records = input.derivedProjection
+  }).readAvailable(input.signal);
+  const result = input.derivedProjection
     ? await input.derivedProjection.repository.list({
         partition: input.derivedProjection.partition,
         kinds: ['entity-candidate', 'binding-availability'],
       })
-    : [];
+    : { records: [], diagnostics: [] };
+  const records = result.records;
   const candidates = [
     ...(input.candidates ?? []),
     ...records.flatMap((record) =>
@@ -64,11 +68,11 @@ export async function readProjectEntityManagementResources(input: {
     ...records.flatMap((record) => (record.kind === 'binding-availability' ? [record.value] : [])),
   ];
   return {
-    projectRevision: document.revision,
     projections: projectEntityManagement({
-      document,
+      document: documentResult.document,
       candidates,
       bindingAvailability,
     }),
+    diagnostics: documentResult.diagnostics,
   };
 }

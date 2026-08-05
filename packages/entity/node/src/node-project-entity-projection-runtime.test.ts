@@ -2,10 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
-  encodeProjectEntityDocument,
-} from '@neko/entity-domain';
+import { encodeProjectEntityDocument } from '@neko/entity-domain';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { ensureNodeWorkspaceIdentityDescriptor } from '@neko/local-metadata/node-workspace-identity';
@@ -33,9 +30,7 @@ describe('NodeProjectEntityProjectionRuntime', () => {
     await writeFile(
       path.join(workspacePath, 'neko', 'entities.json'),
       encodeProjectEntityDocument({
-        schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
         projectId: WORKSPACE_ID,
-        revision: 2,
         entities: [
           {
             entityId: 'character-rin',
@@ -82,8 +77,8 @@ describe('NodeProjectEntityProjectionRuntime', () => {
         },
         kinds: ['entity-candidate', 'binding-availability'],
       }),
-    ).resolves.toEqual(
-      expect.arrayContaining([
+    ).resolves.toEqual({
+      records: expect.arrayContaining([
         expect.objectContaining({
           kind: 'entity-candidate',
           value: expect.objectContaining({ proposedNames: { canonical: 'MIO', aliases: [] } }),
@@ -97,7 +92,8 @@ describe('NodeProjectEntityProjectionRuntime', () => {
           }),
         }),
       ]),
-    );
+      diagnostics: [],
+    });
 
     await runtime.dispose();
     expect(metadataStore.state).toBe('open');

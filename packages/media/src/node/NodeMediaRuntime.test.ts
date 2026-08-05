@@ -114,7 +114,7 @@ describe('NodeMediaRuntime', () => {
     runtimes.push(runtime);
 
     const prepared = await runtime.prepareVideo(fixture, {
-      nativeCapabilities: { version: 1, av1Mp4: true, vp9Mp4: false },
+      nativeCapabilities: { av1Mp4: true, vp9Mp4: false },
     });
 
     expect(prepared.video.preparationProfile).toBe('av1-mp4-direct');
@@ -133,7 +133,7 @@ describe('NodeMediaRuntime', () => {
 
     await expect(
       runtime.planVideo(fixture, {
-        nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+        nativeCapabilities: { av1Mp4: false, vp9Mp4: false },
       }),
     ).resolves.toBe('h264-sdr-transcode');
 
@@ -147,7 +147,7 @@ describe('NodeMediaRuntime', () => {
     runtimes.push(runtime);
 
     const prepared = await runtime.prepareVideo(fixture, {
-      nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: true },
+      nativeCapabilities: { av1Mp4: false, vp9Mp4: true },
     });
 
     expect(prepared.video.preparationProfile).toBe('vp9-mp4-remux');
@@ -169,7 +169,7 @@ describe('NodeMediaRuntime', () => {
     runtimes.push(runtime);
 
     const prepared = await runtime.prepareVideo(fixture, {
-      nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+      nativeCapabilities: { av1Mp4: false, vp9Mp4: false },
     });
 
     expect(prepared.video.preparationProfile).toBe('h264-sdr-transcode');
@@ -207,7 +207,7 @@ describe('NodeMediaRuntime', () => {
 
     await expect(
       runtime.prepareVideo(fixture, {
-        nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+        nativeCapabilities: { av1Mp4: false, vp9Mp4: false },
       }),
     ).rejects.toMatchObject({
       name: 'MediaRuntimeUnavailableError',

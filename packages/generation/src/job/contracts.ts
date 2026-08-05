@@ -1,4 +1,4 @@
-import type { JobRef, JobSnapshotBase, VersionedJobStore } from '@neko/shared/job-lifecycle';
+import type { JobRef, JobSnapshotBase, JobStore } from '@neko/shared/job-lifecycle';
 import type { GeneratedOutputContentLocator } from '@neko/content';
 import type {
   AudioGenerationRequest,
@@ -57,8 +57,19 @@ export interface GenerationJobSnapshot extends JobSnapshotBase<typeof GENERATION
   readonly resultLocators?: readonly GeneratedOutputContentLocator[];
 }
 
-export interface GenerationJobStore extends VersionedJobStore<GenerationJobSnapshot> {
-  listRecoverable(): Promise<readonly GenerationJobSnapshot[]>;
+export interface GenerationJobReadDiagnostic {
+  readonly code: 'generation-job-persistence-invalid';
+  readonly ref: GenerationJobRef;
+  readonly message: string;
+}
+
+export interface GenerationJobRecoveryRecords {
+  readonly snapshots: readonly GenerationJobSnapshot[];
+  readonly diagnostics: readonly GenerationJobReadDiagnostic[];
+}
+
+export interface GenerationJobStore extends JobStore<GenerationJobSnapshot> {
+  listRecoverable(): Promise<GenerationJobRecoveryRecords>;
 }
 
 export type SubmitGenerationJobInput = GenerationJobRequest & {
@@ -79,7 +90,6 @@ export type SubmitPurposeGenerationJobInput = PurposeGenerationRequest;
 
 export interface GenerationJobCommandInput {
   readonly ref: GenerationJobRef;
-  readonly expectedRevision: number;
 }
 
 export interface GenerationJobResultCommitter {
@@ -92,10 +102,7 @@ export interface GenerationJobResultCommitter {
 export interface GenerationJobPort {
   submitGeneration(input: SubmitGenerationJobInput): Promise<GenerationJobSnapshot>;
   describeGeneration(ref: GenerationJobRef): Promise<GenerationJobSnapshot>;
-  observeGeneration(
-    ref: GenerationJobRef,
-    afterRevision: number,
-  ): AsyncIterable<GenerationJobSnapshot>;
+  observeGeneration(ref: GenerationJobRef): AsyncIterable<GenerationJobSnapshot>;
   cancelGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
   retryGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
   regenerateGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot>;
@@ -123,7 +130,6 @@ export type GenerationJobErrorCode =
   | 'generation-job-reconcile-unavailable'
   | 'generation-job-retry-unavailable'
   | 'generation-job-regenerate-unavailable'
-  | 'generation-job-migration-required'
   | 'generation-job-persistence-invalid';
 
 export class GenerationJobError extends Error {

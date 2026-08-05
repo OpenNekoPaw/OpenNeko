@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CanvasData, CanvasViewport } from '@neko/canvas-domain';
+import type { CanvasViewport } from '@neko/canvas-domain';
 import {
   createCanvasViewportSnapshotKey,
   readCanvasViewportSnapshot,
@@ -18,9 +18,7 @@ const VIEWPORT_B: CanvasViewport = {
 
 describe('viewport webview state', () => {
   it('uses a stable canvas document identity key for viewport snapshots', () => {
-    expect(createCanvasViewportSnapshotKey(createCanvas('Storyboard', '1.0'))).toBe(
-      'Storyboard:1.0',
-    );
+    expect(createCanvasViewportSnapshotKey('canvas-document-1')).toBe('canvas-document-1');
   });
 
   it('writes and reads viewport snapshots without dropping unrelated webview state', () => {
@@ -46,7 +44,8 @@ describe('viewport webview state', () => {
     });
   });
 
-  it('ignores malformed persisted viewport snapshots', () => {
+  it('reports only a malformed viewport snapshot and keeps valid siblings readable', () => {
+    const reportStateDiagnostic = vi.fn();
     const api = {
       getState: () => ({
         canvasViewportSnapshots: {
@@ -55,19 +54,38 @@ describe('viewport webview state', () => {
         },
       }),
       setState: vi.fn(),
+      reportStateDiagnostic,
     };
 
     expect(readCanvasViewportSnapshot(api, 'valid')).toEqual(VIEWPORT_A);
     expect(readCanvasViewportSnapshot(api, 'invalid')).toBeUndefined();
+    expect(reportStateDiagnostic).toHaveBeenCalledWith({
+      code: 'invalid-viewport-snapshot',
+      message: "Canvas viewport snapshot 'invalid' is invalid.",
+      documentId: 'invalid',
+    });
+  });
+
+  it('preserves malformed sibling bytes when writing another document snapshot', () => {
+    let state: unknown = {
+      canvasViewportSnapshots: {
+        invalid: { unsupportedField: 7, pan: null },
+      },
+    };
+    const api = {
+      getState: () => state,
+      setState: vi.fn((next: unknown) => {
+        state = next;
+      }),
+    };
+
+    writeCanvasViewportSnapshot(api, 'valid', VIEWPORT_A);
+
+    expect(state).toEqual({
+      canvasViewportSnapshots: {
+        invalid: { unsupportedField: 7, pan: null },
+        valid: VIEWPORT_A,
+      },
+    });
   });
 });
-
-function createCanvas(name: string, version: string): CanvasData {
-  return {
-    version,
-    name,
-    viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
-    nodes: [],
-    connections: [],
-  };
-}

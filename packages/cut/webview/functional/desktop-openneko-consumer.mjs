@@ -53,7 +53,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
           views: [
             {
               viewId: 'cut:functional',
-              viewEpoch: tab.viewEpoch,
+              viewInstanceId: tab.viewInstanceId,
               projectId: project.projectId,
               workspaceId: project.workspaceId,
               kind: 'cut',
@@ -110,13 +110,13 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     );
     checkpoint('cut-seek-ready', { currentTime: seeked.currentTime });
     const releasedStatus = await waitForReleasedUrl(evaluate, playing.url);
-    checkpoint('cut-generation-released');
+    checkpoint('cut-preview-request-released');
     const authoring = await qualifyCutAuthoring({ evaluate, prepared, checkpoint });
     const exported = await stat(
       join(prepared.workspacePath, 'exports', 'functional-cut-export.mp4'),
     );
     if (!exported.isFile() || exported.size === 0) {
-      throw new Error('Cut dirty revision export did not publish a non-empty output.');
+      throw new Error('Cut dirty snapshot export did not publish a non-empty output.');
     }
     return {
       ownerRoot: 'cut',
@@ -125,7 +125,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       advancedFrom: playing.startTime,
       advancedTo: playing.endTime,
       seekedTo: seeked.currentTime,
-      generationChanged: seeked.url !== playing.url,
+      previewRequestChanged: seeked.url !== playing.url,
       releasedStatus,
       trustedInteractions: seeked.clickEvidence,
       authoring: { ...authoring, exportBytes: exported.size },
@@ -141,8 +141,8 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     if (!evidence.changingFrames || evidence.advancedTo <= evidence.advancedFrom) {
       throw new Error('Cut package-owned playback did not advance changing frames.');
     }
-    if (!evidence.generationChanged || evidence.releasedStatus !== 0) {
-      throw new Error('Cut seek did not replace and release its prior generation.');
+    if (!evidence.previewRequestChanged || evidence.releasedStatus !== 0) {
+      throw new Error('Cut seek did not replace and release its prior preview request.');
     }
     if (
       !evidence.trustedInteractions?.some(
@@ -176,14 +176,12 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     const tab = projection.window.tabs.find((candidate) => candidate.tabId === active.tabId);
     const project = projection.catalog.projects.find((candidate) => candidate.projectId === tab?.projectId);
     if (!tab || !project) throw new Error('Cut functional Project identity is missing.');
-    const execute = (identity, expectedRevision, route, payload) =>
+    const execute = (identity, route, payload, requestId = crypto.randomUUID()) =>
       window.openNekoDesktop.cut.execute({
-        schemaVersion: 1,
-        requestId: crypto.randomUUID(),
+        requestId,
         commandId: crypto.randomUUID(),
         route,
         identity,
-        expectedRevision,
         ...(payload === undefined ? {} : { payload }),
       });
     const newIdentity = {
@@ -191,12 +189,12 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       workspaceId: project.workspaceId,
       windowId: projection.window.windowId,
       viewId: 'cut:new-target',
-      viewEpoch: tab.viewEpoch,
+      viewInstanceId: tab.viewInstanceId,
       documentId: ${JSON.stringify(prepared.newDocumentId)},
-      sessionId: 'cut-session:cut:new-target:' + tab.viewEpoch,
+      sessionId: 'cut-session:cut:new-target:' + tab.viewInstanceId,
       endpointEpoch: projection.endpointEpoch,
     };
-    const created = await execute(newIdentity, 0, 'document.create', {
+    const created = await execute(newIdentity, 'document.create', {
       type: 'cut:document-create',
       name: 'New from Canvas route',
       profile: {
@@ -225,21 +223,21 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
           ...currentWorkbench.main.views,
           {
             viewId: 'cut:authoring',
-            viewEpoch: tab.viewEpoch,
+            viewInstanceId: tab.viewInstanceId,
             projectId: project.projectId,
             workspaceId: project.workspaceId,
             kind: 'cut',
-            ownerId: 'cut-session:cut:authoring:' + tab.viewEpoch,
+            ownerId: 'cut-session:cut:authoring:' + tab.viewInstanceId,
             displayLabel: 'authoring.otio',
             documentId: ${JSON.stringify(prepared.authoringDocumentId)},
           },
           {
             viewId: 'cut:new-target',
-            viewEpoch: tab.viewEpoch,
+            viewInstanceId: tab.viewInstanceId,
             projectId: project.projectId,
             workspaceId: project.workspaceId,
             kind: 'cut',
-            ownerId: 'cut-session:cut:new-target:' + tab.viewEpoch,
+            ownerId: 'cut-session:cut:new-target:' + tab.viewInstanceId,
             displayLabel: 'new-from-route.otio',
             documentId: ${JSON.stringify(prepared.newDocumentId)},
           },
@@ -263,9 +261,9 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         workspaceId: view.workspaceId,
         windowId: projection.window.windowId,
         viewId: view.viewId,
-        viewEpoch: view.viewEpoch,
+        viewInstanceId: view.viewInstanceId,
         documentId: view.documentId,
-        sessionId: 'cut-session:' + view.viewId + ':' + view.viewEpoch,
+        sessionId: 'cut-session:' + view.viewId + ':' + view.viewInstanceId,
         endpointEpoch: projection.endpointEpoch,
       };
     };
@@ -274,7 +272,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     const playbackBefore = await window.openNekoDesktop.cut.getSnapshot(playbackIdentity);
     const authoringBefore = await window.openNekoDesktop.cut.getSnapshot(authoringIdentity);
 
-    let current = await execute(authoringIdentity, authoringBefore.revision, 'command.execute', {
+    let current = await execute(authoringIdentity, 'command.execute', {
       type: 'append-route',
       items: [{
         kind: 'media',
@@ -285,35 +283,34 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         rate: 30,
       }],
     });
-    current = await execute(authoringIdentity, current.snapshot.revision, 'command.execute', {
+    current = await execute(authoringIdentity, 'command.execute', {
       type: 'set-audio',
       clipId: 'clip-motion-a',
       settings: { muted: true, gainDb: 0, fadeInSeconds: 0, fadeOutSeconds: 0 },
     });
-    current = await execute(authoringIdentity, current.snapshot.revision, 'command.execute', {
+    current = await execute(authoringIdentity, 'command.execute', {
       type: 'separate-audio',
       videoClipId: 'clip-motion-a',
       audioClipId: 'separated-audio',
       audioTrackId: 'separated-audio-track',
     });
-    current = await execute(authoringIdentity, current.snapshot.revision, 'command.execute', {
+    current = await execute(authoringIdentity, 'command.execute', {
       type: 'unseparate-audio',
       videoClipId: 'clip-motion-a',
     });
     const separatedVideo = current.snapshot.document.tracks
       .flatMap((track) => track.items)
       .find((item) => item.kind === 'clip' && item.clipId === 'clip-motion-a');
-    current = await execute(authoringIdentity, current.snapshot.revision, 'command.execute', {
+    current = await execute(authoringIdentity, 'command.execute', {
       type: 'rename-clip',
       clipId: 'clip-motion-a',
       name: 'Saved authoring clip',
     });
-    const exportRevision = current.snapshot.revision;
-    current = await execute(authoringIdentity, exportRevision, 'export.start', {
+    const exportSnapshotId = crypto.randomUUID();
+    current = await execute(authoringIdentity, 'export.start', {
       type: 'cut:export-start',
       documentUri: authoringIdentity.documentId,
       sessionId: authoringIdentity.sessionId,
-      expectedRevision: exportRevision,
       settings: {
         outputName: 'functional-cut-export',
         container: 'mp4',
@@ -325,18 +322,19 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         audioBitrate: 128000,
         audioSampleRate: 48000,
       },
-    });
-    current = await execute(authoringIdentity, current.snapshot.revision, 'command.execute', {
+    }, exportSnapshotId);
+    current = await execute(authoringIdentity, 'command.execute', {
       type: 'rename-clip',
       clipId: 'clip-motion-b',
       name: 'Later edit after export acceptance',
     });
-    const laterRevision = current.snapshot.revision;
     let exported;
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
       const snapshot = await window.openNekoDesktop.cut.getSnapshot(authoringIdentity);
-      const task = snapshot.export.tasks.find((candidate) => candidate.sourceRevision === exportRevision);
+      const task = snapshot.export.tasks.find(
+        (candidate) => candidate.sourceSnapshotId === exportSnapshotId,
+      );
       if (task?.status === 'completed') {
         exported = { task, snapshot };
         break;
@@ -347,27 +345,25 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     if (!exported) throw new Error('Cut functional export timed out.');
-    const saved = await execute(authoringIdentity, laterRevision, 'document.save');
+    const saved = await execute(authoringIdentity, 'document.save');
     const playbackAfter = await window.openNekoDesktop.cut.getSnapshot(playbackIdentity);
     return {
       authoringIdentity,
-      playbackRevisionBefore: playbackBefore.revision,
-      playbackRevisionAfter: playbackAfter.revision,
+      playbackDocumentBefore: JSON.stringify(playbackBefore.document),
+      playbackDocumentAfter: JSON.stringify(playbackAfter.document),
       newTargetCreated: created.snapshot.identity.documentId === ${JSON.stringify(prepared.newDocumentId)} &&
-        created.snapshot.revision === 1 && created.snapshot.dirty === false,
+        created.snapshot.dirty === false,
       explicitTargetAppended: current.snapshot.document.tracks
         .flatMap((track) => track.items)
         .some((item) => item.kind === 'clip' && item.clipId === 'appended-route-clip'),
       manualMutePreserved: separatedVideo?.audio?.muted === true,
-      exportSourceRevision: exported.task.sourceRevision,
-      exportAcceptedDirty: exportRevision < laterRevision && exported.task.sourceRevision === exportRevision,
-      savedRevision: saved.snapshot.revision,
+      exportSourceSnapshotId: exported.task.sourceSnapshotId,
+      exportAcceptedDirty: exported.task.sourceSnapshotId === exportSnapshotId,
       savedDirty: saved.snapshot.dirty,
     };
   })()`);
   checkpoint('cut-authoring-exported', {
-    exportSourceRevision: firstPass.exportSourceRevision,
-    savedRevision: firstPass.savedRevision,
+    exportSourceSnapshotId: firstPass.exportSourceSnapshotId,
   });
 
   await replaceWorkbench(
@@ -396,11 +392,11 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         ...current.main,
         views: [...current.main.views, {
           viewId: 'cut:authoring-reopened',
-          viewEpoch: tab.viewEpoch,
+          viewInstanceId: tab.viewInstanceId,
           projectId: project.projectId,
           workspaceId: project.workspaceId,
           kind: 'cut',
-          ownerId: 'cut-session:cut:authoring-reopened:' + tab.viewEpoch,
+          ownerId: 'cut-session:cut:authoring-reopened:' + tab.viewInstanceId,
           displayLabel: 'authoring.otio',
           documentId: ${JSON.stringify(prepared.authoringDocumentId)},
         }],
@@ -422,9 +418,9 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       workspaceId: view.workspaceId,
       windowId: projection.window.windowId,
       viewId: view.viewId,
-      viewEpoch: view.viewEpoch,
+      viewInstanceId: view.viewInstanceId,
       documentId: view.documentId,
-      sessionId: 'cut-session:' + view.viewId + ':' + view.viewEpoch,
+      sessionId: 'cut-session:' + view.viewId + ':' + view.viewInstanceId,
       endpointEpoch: projection.endpointEpoch,
     };
     const snapshot = await window.openNekoDesktop.cut.getSnapshot(identity);
@@ -444,7 +440,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     explicitTargetAppended: firstPass.explicitTargetAppended,
     manualMutePreserved: firstPass.manualMutePreserved,
     multiDocumentIsolated:
-      firstPass.playbackRevisionBefore === 0 && firstPass.playbackRevisionAfter === 0,
+      firstPass.playbackDocumentBefore === firstPass.playbackDocumentAfter,
     exportAcceptedDirty: firstPass.exportAcceptedDirty,
     reopenedFromSavedState: reopened.sessionChanged && reopened.renamedClip && reopened.laterEdit,
   };
@@ -505,7 +501,7 @@ async function waitForCutPausedSeek(evaluate, previousUrl, requestsBeforeSeek, r
     await delay(100);
   }
   throw new Error(
-    `Cut package-owned paused seek did not publish a replacement generation: ${JSON.stringify(last)}`,
+    `Cut package-owned paused seek did not publish a replacement preview request: ${JSON.stringify(last)}`,
   );
 }
 
@@ -556,7 +552,7 @@ async function waitForReleasedUrl(evaluate, url) {
     if (status === 0) return status;
     await delay(100);
   }
-  throw new Error('Cut prior playback generation remained reachable after seek.');
+  throw new Error('Cut prior playback request remained reachable after seek.');
 }
 
 function cutVideoSampleExpression() {

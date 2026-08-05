@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   CUT_HOST_RUNTIME_ROUTES,
-  CUT_HOST_RUNTIME_VERSION,
   CutDocumentSession,
   createOtioTimeline,
   DEFAULT_CUT_HOST_PRESENTATION,
@@ -50,6 +49,7 @@ interface CutApplicationRuntimeEntry {
   preview: CutPreviewRuntimeController;
   presentation: CutHostPresentationState;
   sequence: number;
+  operationTail: Promise<void>;
 }
 
 type CutAgentContextOutput = Extract<
@@ -83,8 +83,8 @@ export interface CutApplicationRuntimeOptions {
     readonly windowId: string;
     readonly viewId: string;
     readonly sessionId: string;
-    readonly endpointEpoch: string;
-    readonly revision: string;
+    readonly rendererSessionId: string;
+    readonly requestId: string;
   }) => NodeMediaPublisher;
   readonly createMediaAdapter?: (
     workspacePath: string,
@@ -106,7 +106,7 @@ export interface CutApplicationRuntimeOptions {
   }) => Promise<readonly string[] | undefined>;
   readonly reportExportFailure?: (input: {
     readonly identity: CutHostRuntimeIdentity;
-    readonly sourceRevision: number;
+    readonly sourceSnapshotId: string;
     readonly outputWorkspaceRelativePath: string;
     readonly error: unknown;
   }) => void;
@@ -130,10 +130,9 @@ export class CutApplicationRuntime {
     readonly item: ResourceBrowserItem;
     readonly target: {
       readonly viewId: string;
-      readonly viewEpoch: number;
+      readonly viewInstanceId: string;
       readonly documentId: string;
       readonly sessionId: string;
-      readonly expectedRevision: number;
     };
   }): Promise<CutHostRuntimeSnapshot> {
     this.requireActive();
@@ -148,10 +147,10 @@ export class CutApplicationRuntime {
       workspaceId: input.resourceIdentity.workspaceId,
       windowId: input.resourceIdentity.windowId,
       viewId: input.target.viewId,
-      viewEpoch: input.target.viewEpoch,
+      viewInstanceId: input.target.viewInstanceId,
       documentId: input.target.documentId,
       sessionId: input.target.sessionId,
-      endpointEpoch: input.resourceIdentity.endpointEpoch,
+      rendererSessionId: input.resourceIdentity.rendererSessionId,
     };
     const entry = await this.requireSession(input.resourceIdentity.windowId, identity);
     const commandId = [
@@ -159,17 +158,10 @@ export class CutApplicationRuntime {
       input.resourceIdentity.viewId,
       input.item.resourceId,
       identity.sessionId,
-      String(input.target.expectedRevision),
     ].join(':');
     const completed = entry.completedCommands.get(commandId);
     if (completed) return completed.snapshot;
     const current = entry.session.view();
-    if (current.revision !== input.target.expectedRevision) {
-      throw new Error(
-        `Cut resource target revision ${input.target.expectedRevision} is stale; current revision is ${current.revision}.`,
-      );
-    }
-
     const sourcePath = await this.options.resolveResourcePath(
       input.resourceIdentity.workspaceId,
       input.item,
@@ -178,7 +170,7 @@ export class CutApplicationRuntime {
     const prepared = await importer.prepare(entry.documentPath, sourcePath);
     const mediaAdapter =
       this.options.createAuthoringMediaAdapter?.(entry.workspacePath) ??
-      this.createNodeMediaAdapter(entry.workspacePath, entry.identity, String(current.revision));
+      this.createNodeMediaAdapter(entry.workspacePath, entry.identity, commandId);
     let committed = false;
     try {
       const probe = await mediaAdapter.probe({
@@ -235,13 +227,11 @@ export class CutApplicationRuntime {
       entry.session.applyBatch({
         documentUri: identity.documentId,
         sessionId: identity.sessionId,
-        expectedRevision: input.target.expectedRevision,
         commands,
       });
       committed = true;
       const snapshot = this.projectSnapshot(entry);
       const result: CutHostRuntimeResult = {
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         snapshot,
       };
       entry.completedCommands.set(commandId, result);
@@ -272,21 +262,21 @@ export class CutApplicationRuntime {
       return this.createDocument(windowId, request);
     }
     const entry = await this.requireSession(windowId, request.identity);
+    return this.enqueueSessionOperation(entry, () => this.executeOwned(entry, request));
+  }
+
+  private async executeOwned(
+    entry: CutApplicationRuntimeEntry,
+    request: CutHostRuntimeRequest,
+  ): Promise<CutHostRuntimeResult> {
     const completed = entry.completedCommands.get(request.commandId);
     if (completed) return completed;
     assertCutHostRuntimeIdentity(entry.identity, request.identity);
-    const current = entry.session.view();
-    if (current.revision !== request.expectedRevision) {
-      throw new Error(
-        `Cut revision ${request.expectedRevision} is stale; current revision is ${current.revision}.`,
-      );
-    }
     switch (request.route) {
       case CUT_HOST_RUNTIME_ROUTES.commandExecute:
         entry.session.apply({
           documentUri: entry.identity.documentId,
           sessionId: entry.identity.sessionId,
-          expectedRevision: request.expectedRevision,
           command: requireCutCommand(request.payload),
         });
         break;
@@ -294,7 +284,6 @@ export class CutApplicationRuntime {
         entry.session.applyBatch({
           documentUri: entry.identity.documentId,
           sessionId: entry.identity.sessionId,
-          expectedRevision: request.expectedRevision,
           commands: requireCutCommandBatch(request.payload),
         });
         break;
@@ -302,14 +291,12 @@ export class CutApplicationRuntime {
         entry.session.undo({
           documentUri: entry.identity.documentId,
           sessionId: entry.identity.sessionId,
-          expectedRevision: request.expectedRevision,
         });
         break;
       case CUT_HOST_RUNTIME_ROUTES.redo:
         entry.session.redo({
           documentUri: entry.identity.documentId,
           sessionId: entry.identity.sessionId,
-          expectedRevision: request.expectedRevision,
         });
         break;
       case CUT_HOST_RUNTIME_ROUTES.save:
@@ -332,7 +319,7 @@ export class CutApplicationRuntime {
           trackKind: track.kind,
         });
         if (!selected || selected.length === 0) break;
-        await this.applyMediaPaths(entry, request.expectedRevision, {
+        await this.applyMediaPaths(entry, request.requestId, {
           ...payload,
           sourcePaths: selected,
         });
@@ -340,7 +327,7 @@ export class CutApplicationRuntime {
       }
       case CUT_HOST_RUNTIME_ROUTES.mediaDrop: {
         const payload = requireMediaDropPayload(request.payload);
-        await this.applyMediaPaths(entry, request.expectedRevision, {
+        await this.applyMediaPaths(entry, request.requestId, {
           ...payload,
           sourcePaths: payload.uris.map(requireLocalFileUri),
         });
@@ -350,7 +337,6 @@ export class CutApplicationRuntime {
         const payload = projectCutAgentContext(entry, request.payload);
         const snapshot = this.projectSnapshot(entry);
         const result: CutHostRuntimeResult = {
-          schemaVersion: CUT_HOST_RUNTIME_VERSION,
           snapshot,
           output: { type: 'agent-context', payload },
         };
@@ -365,7 +351,7 @@ export class CutApplicationRuntime {
           {
             documentUri: entry.identity.documentId,
             sessionId: entry.identity.sessionId,
-            expectedRevision: request.expectedRevision,
+            snapshotId: request.requestId,
           },
           readCutExportSettings(requireExportStartPayload(request.payload)),
         );
@@ -380,11 +366,11 @@ export class CutApplicationRuntime {
         if (selectedDestination === undefined) break;
         const outputWorkspaceRelativePath = selectedDestination;
         assertWorkspaceRelativeExportPath(outputWorkspaceRelativePath, frozen.settings.container);
-        await entry.preview.stop();
+        await entry.preview.stop(request.requestId);
         await this.exportTasks.start({
           documentUri: frozen.documentUri,
           sessionId: frozen.sessionId,
-          sourceRevision: frozen.sourceRevision,
+          sourceSnapshotId: frozen.sourceSnapshotId,
           settings: frozen.settings,
           outputWorkspaceRelativePath,
           run: async (signal) => {
@@ -393,7 +379,7 @@ export class CutApplicationRuntime {
               this.createNodeMediaAdapter(
                 entry.workspacePath,
                 entry.identity,
-                String(frozen.sourceRevision),
+                frozen.sourceSnapshotId,
               );
             try {
               await adapter.export(
@@ -410,7 +396,7 @@ export class CutApplicationRuntime {
             } catch (error: unknown) {
               this.options.reportExportFailure?.({
                 identity: entry.identity,
-                sourceRevision: frozen.sourceRevision,
+                sourceSnapshotId: frozen.sourceSnapshotId,
                 outputWorkspaceRelativePath,
                 error,
               });
@@ -434,11 +420,7 @@ export class CutApplicationRuntime {
         const paths = await CutWorkspaceMediaPaths.create(entry.workspacePath);
         const mediaAdapter =
           this.options.createMediaAdapter?.(entry.workspacePath) ??
-          this.createNodeMediaAdapter(
-            entry.workspacePath,
-            entry.identity,
-            String(entry.session.revision),
-          );
+          this.createNodeMediaAdapter(entry.workspacePath, entry.identity, request.requestId);
         try {
           const requestedView = entry.session.view();
           const results = await generateClipRepresentations({
@@ -453,21 +435,12 @@ export class CutApplicationRuntime {
               return { workspaceRelativePath: source.workspaceRelativePath };
             },
           });
-          const current = entry.session.view();
-          if (
-            current.sessionId !== requestedView.sessionId ||
-            current.documentUri !== requestedView.documentUri ||
-            current.revision !== requestedView.revision
-          ) {
-            throw new Error('Cut representation result became stale.');
-          }
           const snapshot = this.projectSnapshot(entry);
           const result: CutHostRuntimeResult = {
-            schemaVersion: CUT_HOST_RUNTIME_VERSION,
             snapshot,
             output: {
               type: 'representations',
-              revision: snapshot.revision,
+              requestId: request.requestId,
               results,
             },
           };
@@ -488,25 +461,27 @@ export class CutApplicationRuntime {
         return this.completePreviewRequest(entry, request.commandId, message);
       }
       case CUT_HOST_RUNTIME_ROUTES.previewActivate: {
-        const payload = requirePreviewGenerationPayload(request.payload, 'cut:preview-activate');
-        const message = await entry.preview.activate(payload.generation);
+        const payload = requirePreviewRequestIdPayload(request.payload, 'cut:preview-activate');
+        const message = await entry.preview.activate(payload.previewRequestId);
         return this.completePreviewRequest(entry, request.commandId, message);
       }
       case CUT_HOST_RUNTIME_ROUTES.previewPause: {
         const payload = requirePreviewPausePayload(request.payload);
-        await entry.preview.pause(payload.preparedGeneration);
+        await entry.preview.pause({
+          requestId: request.requestId,
+          ...(payload.preparedRequestId ? { preparedRequestId: payload.preparedRequestId } : {}),
+        });
         break;
       }
       case CUT_HOST_RUNTIME_ROUTES.previewStop:
-        requirePreviewGenerationPayload(request.payload, 'cut:preview-stop');
-        await entry.preview.stop();
+        requirePreviewRequestIdPayload(request.payload, 'cut:preview-stop');
+        await entry.preview.stop(request.requestId);
         break;
       default:
         throw new Error(`Cut route '${request.route}' is not integrated yet.`);
     }
     const snapshot = this.projectSnapshot(entry);
     const result: CutHostRuntimeResult = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       snapshot,
     };
     entry.completedCommands.set(request.commandId, result);
@@ -519,9 +494,6 @@ export class CutApplicationRuntime {
     request: CutHostRuntimeRequest,
   ): Promise<CutHostRuntimeResult> {
     this.requireActive();
-    if (request.expectedRevision !== 0) {
-      throw new Error('Cut document creation requires initial revision 0.');
-    }
     const key = cutSessionKey(request.identity);
     if (this.sessions.has(key)) {
       throw new Error('Cut document creation target already has an active session.');
@@ -542,7 +514,6 @@ export class CutApplicationRuntime {
       session.apply({
         documentUri: request.identity.documentId,
         sessionId: request.identity.sessionId,
-        expectedRevision: 0,
         command: { type: 'append-route', items: input.items },
       });
     }
@@ -558,13 +529,13 @@ export class CutApplicationRuntime {
         grant.documentPath,
         grant.workspacePath,
         request.identity,
-        session.revision,
+        request.requestId,
       ),
       presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
       sequence: 0,
+      operationTail: Promise.resolve(),
     };
     const result: CutHostRuntimeResult = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       snapshot: this.projectSnapshot(entry),
     };
     entry.completedCommands.set(request.commandId, result);
@@ -634,7 +605,7 @@ export class CutApplicationRuntime {
         candidate.identity.workspaceId === identity.workspaceId &&
         candidate.identity.windowId === identity.windowId &&
         candidate.identity.viewId === identity.viewId &&
-        candidate.identity.viewEpoch === identity.viewEpoch &&
+        candidate.identity.viewInstanceId === identity.viewInstanceId &&
         candidate.identity.documentId === identity.documentId &&
         candidate.identity.sessionId === identity.sessionId,
     );
@@ -647,7 +618,7 @@ export class CutApplicationRuntime {
         entry.documentPath,
         entry.workspacePath,
         entry.identity,
-        entry.session.revision,
+        `rebind:${entry.identity.sessionId}`,
       );
       this.sessions.set(key, entry);
       return entry;
@@ -671,10 +642,11 @@ export class CutApplicationRuntime {
         documentPath,
         grant.workspacePath,
         identity,
-        session.revision,
+        `open:${identity.sessionId}`,
       ),
       presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
       sequence: 0,
+      operationTail: Promise.resolve(),
     };
     this.sessions.set(key, entry);
     return entry;
@@ -682,9 +654,7 @@ export class CutApplicationRuntime {
 
   private projectSnapshot(entry: CutApplicationRuntimeEntry): CutHostRuntimeSnapshot {
     return {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       identity: { ...entry.identity },
-      revision: entry.session.revision,
       dirty: entry.session.dirty,
       document: entry.session.view(),
       playback: { status: 'idle' },
@@ -699,7 +669,7 @@ export class CutApplicationRuntime {
 
   private async applyMediaPaths(
     entry: CutApplicationRuntimeEntry,
-    expectedRevision: number,
+    requestId: string,
     input: {
       readonly trackId: string;
       readonly timelineStartFrames: number;
@@ -716,7 +686,7 @@ export class CutApplicationRuntime {
     const prepared: Awaited<ReturnType<CutWorkspaceMediaImporter['prepare']>>[] = [];
     const adapter =
       this.options.createAuthoringMediaAdapter?.(entry.workspacePath) ??
-      this.createNodeMediaAdapter(entry.workspacePath, entry.identity, String(expectedRevision));
+      this.createNodeMediaAdapter(entry.workspacePath, entry.identity, requestId);
     let committed = false;
     try {
       for (const sourcePath of input.sourcePaths) {
@@ -761,7 +731,6 @@ export class CutApplicationRuntime {
       entry.session.applyBatch({
         documentUri: entry.identity.documentId,
         sessionId: entry.identity.sessionId,
-        expectedRevision,
         commands,
       });
       committed = true;
@@ -788,7 +757,6 @@ export class CutApplicationRuntime {
   ): void {
     entry.sequence += 1;
     const event: CutHostRuntimeProjectionEvent = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       sequence: entry.sequence,
       snapshot,
     };
@@ -801,7 +769,6 @@ export class CutApplicationRuntime {
     event: CutPreviewRuntimeEvent,
   ): CutHostRuntimeResult {
     const result: CutHostRuntimeResult = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       snapshot: this.projectSnapshot(entry),
       output: { type: 'preview', message: event },
     };
@@ -819,11 +786,11 @@ export class CutApplicationRuntime {
     documentPath: string,
     workspacePath: string,
     identity: CutHostRuntimeIdentity,
-    revision: number,
+    requestId: string,
   ): CutPreviewRuntimeController {
     const mediaAdapter =
       this.options.createPreviewMediaAdapter?.(workspacePath) ??
-      this.createNodeMediaAdapter(workspacePath, identity, String(revision));
+      this.createNodeMediaAdapter(workspacePath, identity, requestId);
     return new CutPreviewRuntimeController({
       documentPath,
       workspacePath,
@@ -834,21 +801,34 @@ export class CutApplicationRuntime {
   private createNodeMediaAdapter(
     workspacePath: string,
     identity: CutHostRuntimeIdentity,
-    revision: string,
+    requestId: string,
   ): NodeFfmpegCutMediaAdapter {
     const publisher =
       this.options.createMediaPublisher?.({
         windowId: identity.windowId,
         viewId: identity.viewId,
         sessionId: identity.sessionId,
-        endpointEpoch: identity.endpointEpoch,
-        revision,
+        rendererSessionId: identity.rendererSessionId,
+        requestId,
       }) ?? UNAVAILABLE_MEDIA_PUBLISHER;
     return new NodeFfmpegCutMediaAdapter(workspacePath, { publisher });
   }
 
   private requireActive(): void {
     if (this.disposed) throw new Error('Cut runtime is disposed.');
+  }
+
+  private enqueueSessionOperation<T>(
+    entry: CutApplicationRuntimeEntry,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const result = entry.operationTail.then(operation);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    entry.operationTail = tail;
+    return result;
   }
 }
 
@@ -863,17 +843,15 @@ function projectCutAgentContext(
   const document = {
     locator: { kind: 'workspace-file' as const, path: entry.identity.documentId },
     sessionId: entry.identity.sessionId,
-    revision: view.revision,
   };
   if (selection.kind === 'track') {
     const clips = track.items.filter((item) => item.kind === 'clip');
     return {
       type: 'cut-clip',
-      id: `cut:${entry.identity.documentId}:track:${track.trackId}:r${view.revision}`,
+      id: `cut:${entry.identity.documentId}:track:${track.trackId}`,
       label: track.name,
       summary: `${track.kind} Track “${track.name}” with ${clips.length} Clip${clips.length === 1 ? '' : 's'}.`,
       data: {
-        schemaVersion: 1,
         kind: 'cut-track-selection',
         projectId: entry.identity.projectId,
         workspaceId: entry.identity.workspaceId,
@@ -895,11 +873,10 @@ function projectCutAgentContext(
   }
   return {
     type: 'cut-clip',
-    id: `cut:${entry.identity.documentId}:track:${track.trackId}:clip:${clip.clipId}:r${view.revision}`,
+    id: `cut:${entry.identity.documentId}:track:${track.trackId}:clip:${clip.clipId}`,
     label: clip.name,
     summary: `${track.kind} Clip “${clip.name}” at ${formatSeconds(clip.startSeconds)}–${formatSeconds(clip.startSeconds + clip.durationSeconds)}.`,
     data: {
-      schemaVersion: 1,
       kind: 'cut-clip-selection',
       projectId: entry.identity.projectId,
       workspaceId: entry.identity.workspaceId,
@@ -1232,7 +1209,7 @@ function assertWorkspaceRelativeExportPath(value: string, container: 'mp4' | 'mo
 
 function requirePreviewStartPayload(value: unknown): {
   readonly timelineTimeSeconds: number;
-  readonly generation: number;
+  readonly previewRequestId: string;
   readonly retainedVideoClipId?: string;
   readonly includeAudio?: boolean;
 } {
@@ -1246,7 +1223,10 @@ function requirePreviewStartPayload(value: unknown): {
       record['timelineTimeSeconds'],
       'Cut preview time is invalid.',
     ),
-    generation: requirePositiveInteger(record['generation'], 'Cut preview generation is invalid.'),
+    previewRequestId: requireIdentity(
+      record['previewRequestId'],
+      'Cut preview request identity is invalid.',
+    ),
     ...(retainedVideoClipId ? { retainedVideoClipId } : {}),
     ...(record['playbackMode'] === 'paused' ? { includeAudio: false } : {}),
   };
@@ -1254,7 +1234,7 @@ function requirePreviewStartPayload(value: unknown): {
 
 function requirePreviewPreparePayload(value: unknown): {
   readonly timelineTimeSeconds: number;
-  readonly generation: number;
+  readonly previewRequestId: string;
 } {
   const record = requirePreviewPayload(value, 'cut:preview-prepare');
   return {
@@ -1262,34 +1242,43 @@ function requirePreviewPreparePayload(value: unknown): {
       record['timelineTimeSeconds'],
       'Cut preview time is invalid.',
     ),
-    generation: requirePositiveInteger(record['generation'], 'Cut preview generation is invalid.'),
+    previewRequestId: requireIdentity(
+      record['previewRequestId'],
+      'Cut preview request identity is invalid.',
+    ),
   };
 }
 
-function requirePreviewGenerationPayload(
+function requirePreviewRequestIdPayload(
   value: unknown,
   type: 'cut:preview-activate' | 'cut:preview-stop',
-): { readonly generation: number } {
+): { readonly previewRequestId: string } {
   const record = requirePreviewPayload(value, type);
   return {
-    generation: requirePositiveInteger(record['generation'], 'Cut preview generation is invalid.'),
+    previewRequestId: requireIdentity(
+      record['previewRequestId'],
+      'Cut preview request identity is invalid.',
+    ),
   };
 }
 
 function requirePreviewPausePayload(value: unknown): {
-  readonly generation: number;
-  readonly preparedGeneration?: number;
+  readonly previewRequestId: string;
+  readonly preparedRequestId?: string;
 } {
   const record = requirePreviewPayload(value, 'cut:preview-pause');
-  const preparedGeneration = record['preparedGeneration'];
+  const preparedRequestId = record['preparedRequestId'];
   return {
-    generation: requirePositiveInteger(record['generation'], 'Cut preview generation is invalid.'),
-    ...(preparedGeneration === undefined
+    previewRequestId: requireIdentity(
+      record['previewRequestId'],
+      'Cut preview request identity is invalid.',
+    ),
+    ...(preparedRequestId === undefined
       ? {}
       : {
-          preparedGeneration: requirePositiveInteger(
-            preparedGeneration,
-            'Cut prepared preview generation is invalid.',
+          preparedRequestId: requireIdentity(
+            preparedRequestId,
+            'Cut prepared preview request identity is invalid.',
           ),
         }),
   };
@@ -1315,9 +1304,9 @@ function requireNonNegativeFinite(value: unknown, message: string): number {
   return value;
 }
 
-function requirePositiveInteger(value: unknown, message: string): number {
-  if (!Number.isInteger(value) || (value as number) < 1) throw new Error(message);
-  return value as number;
+function requireIdentity(value: unknown, message: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) throw new Error(message);
+  return value;
 }
 
 function isCutCommand(value: unknown): value is CutCommand {
@@ -1335,9 +1324,9 @@ function cutSessionKey(identity: CutHostRuntimeIdentity): string {
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
   ].join(':');
 }

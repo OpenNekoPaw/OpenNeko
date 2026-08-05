@@ -1,24 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  PREVIEW_HOST_RUNTIME_VERSION,
   PreviewSessionRegistry,
   parsePreviewProjection,
   type PreviewRuntimeIdentity,
 } from './index';
 
 describe('PreviewSessionRegistry', () => {
-  it('owns presentation transitions, revision CAS and same-slot replacement', () => {
+  it('owns presentation transitions by exact snapshot and same-slot replacement', () => {
     const registry = new PreviewSessionRegistry();
     const first = readyProjection(identity('session-1'), 'temporary');
     expect(registry.register(first)).toEqual([]);
 
     const transition = registry.planPresentation('session-1', 'pinned', 'preview:pinned');
     expect(registry.commit(transition).projection).toMatchObject({
-      identity: { viewId: 'preview:pinned', revision: 1 },
+      identity: { viewId: 'preview:pinned' },
       presentation: 'pinned',
     });
-    expect(() => registry.commit(transition)).toThrow('stale');
+    expect(() => registry.commit(transition)).toThrow('changed before');
 
     const second = readyProjection(identity('session-2'), 'temporary');
     expect(registry.register(second)).toEqual([]);
@@ -42,11 +41,10 @@ function identity(sessionId: string): PreviewRuntimeIdentity {
     workspaceId: 'workspace-1',
     windowId: 'window-1',
     viewId: `preview:${sessionId}`,
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     documentId: `${sessionId}.png`,
     sessionId,
-    endpointEpoch: 'endpoint-1',
-    revision: 0,
+    rendererSessionId: 'endpoint-1',
   };
 }
 
@@ -55,13 +53,12 @@ function readyProjection(
   presentation: 'temporary' | 'side',
 ) {
   return parsePreviewProjection({
-    schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
     identity: runtimeIdentity,
     presentation,
     status: 'ready',
     descriptor: {
       descriptorId: `descriptor:${runtimeIdentity.sessionId}`,
-      revision: 'fixture:1',
+      sourceFingerprint: 'fixture:1',
       contentLocator: { kind: 'workspace-file', path: runtimeIdentity.documentId },
       url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       contentKind: 'image',

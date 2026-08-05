@@ -32,7 +32,6 @@ export interface ProjectEntityAssetPreparedResource {
 }
 
 export interface ProjectEntityAssetPortableSnapshot {
-  readonly schemaVersion: 1;
   readonly assetId: string;
   readonly revision: string;
   readonly semantic: ProjectEntitySemanticSnapshot;

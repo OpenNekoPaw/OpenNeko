@@ -22,9 +22,9 @@ describe('AssetCenterNodeRuntime', () => {
       availability: 'available' as const,
     };
     const resources = {
-      searchHomeAssets: vi.fn(async () => ({ revision: 3, items: [] })),
-      searchHomeMediaLibraries: vi.fn(async () => ({ revision: 3, items: [item] })),
-      readHomeMediaLibraryChildren: vi.fn(async () => ({ revision: 3, items: [] })),
+      searchHomeAssets: vi.fn(async () => ({ items: [] })),
+      searchHomeMediaLibraries: vi.fn(async () => ({ items: [item] })),
+      readHomeMediaLibraryChildren: vi.fn(async () => ({ items: [] })),
       resolveHomeLibraryThumbnail: vi.fn(),
       importHomeAssets: vi.fn(),
       removeHomeAsset: vi.fn(),
@@ -52,11 +52,10 @@ describe('AssetCenterNodeRuntime', () => {
       assetCenterSessionId: 'asset-center:window-1',
       windowId: 'window-1',
     };
-    runtime.attach({ identity, endpointEpoch: 'endpoint-1' });
-    const catalog = await runtime.refresh({ identity, expectedRevision: 0 });
+    runtime.attach({ identity });
+    await runtime.refresh({ identity });
     const selected = await runtime.select({
       identity,
-      expectedRevision: catalog.revision,
       owner: 'media-library',
       itemId: item.id,
     });
@@ -86,15 +85,37 @@ describe('AssetCenterNodeRuntime', () => {
       assetCenterSessionId: 'asset-center:window-1',
       windowId: 'window-1',
     };
-    const first = runtime.attach({ identity, endpointEpoch: 'endpoint-1' });
-    const restored = runtime.attach({ identity, endpointEpoch: 'endpoint-2' });
+    const first = runtime.attach({ identity });
+    const restored = runtime.attach({ identity });
     expect(restored).toBe(first);
     expect(() =>
       runtime.attach({
         identity: { ...identity, windowId: 'window-2' },
-        endpointEpoch: 'endpoint-2',
       }),
     ).toThrow('owning Window');
+  });
+
+  it('continues the session queue after one operation fails locally', async () => {
+    const resources = emptyResourceBrowser();
+    const runtime = new AssetCenterNodeRuntime({
+      resourceBrowser: resources,
+      resources: { registerFile: vi.fn(), releaseSession: vi.fn() },
+    });
+    const identity = sessionIdentity();
+    runtime.attach({ identity });
+
+    await expect(
+      runtime.select({
+        identity,
+        owner: 'media-library',
+        itemId: 'missing-item',
+      }),
+    ).rejects.toThrow("Asset Center item 'missing-item' is unavailable");
+
+    await expect(runtime.refresh({ identity })).resolves.toMatchObject({
+      catalog: { status: 'ready', owner: 'media-library' },
+    });
+    expect(resources.searchHomeMediaLibraries).toHaveBeenCalledTimes(1);
   });
 
   it('keeps selection visible when Preview kind is unsupported', async () => {
@@ -109,11 +130,10 @@ describe('AssetCenterNodeRuntime', () => {
       resources: { registerFile, releaseSession: vi.fn() },
     });
     const identity = sessionIdentity();
-    runtime.attach({ identity, endpointEpoch: 'endpoint-1' });
-    const catalog = await runtime.refresh({ identity, expectedRevision: 0 });
+    runtime.attach({ identity });
+    await runtime.refresh({ identity });
     const selected = await runtime.select({
       identity,
-      expectedRevision: catalog.revision,
       owner: 'media-library',
       itemId: item.id,
     });
@@ -140,11 +160,10 @@ describe('AssetCenterNodeRuntime', () => {
       },
     });
     const identity = sessionIdentity();
-    runtime.attach({ identity, endpointEpoch: 'endpoint-1' });
-    const catalog = await runtime.refresh({ identity, expectedRevision: 0 });
+    runtime.attach({ identity });
+    await runtime.refresh({ identity });
     const selected = await runtime.select({
       identity,
-      expectedRevision: catalog.revision,
       owner: 'media-library',
       itemId: item.id,
     });
@@ -175,11 +194,10 @@ describe('AssetCenterNodeRuntime', () => {
       },
     });
     const identity = sessionIdentity();
-    runtime.attach({ identity, endpointEpoch: 'endpoint-1' });
-    const catalog = await runtime.refresh({ identity, expectedRevision: 0 });
+    runtime.attach({ identity });
+    await runtime.refresh({ identity });
     await runtime.select({
       identity,
-      expectedRevision: catalog.revision,
       owner: 'media-library',
       itemId: item.id,
     });
@@ -191,9 +209,9 @@ describe('AssetCenterNodeRuntime', () => {
 
 function emptyResourceBrowser() {
   return {
-    searchHomeAssets: vi.fn(async () => ({ revision: 0, items: [] })),
-    searchHomeMediaLibraries: vi.fn(async () => ({ revision: 0, items: [] })),
-    readHomeMediaLibraryChildren: vi.fn(async () => ({ revision: 0, items: [] })),
+    searchHomeAssets: vi.fn(async () => ({ items: [] })),
+    searchHomeMediaLibraries: vi.fn(async () => ({ items: [] })),
+    readHomeMediaLibraryChildren: vi.fn(async () => ({ items: [] })),
     resolveHomeLibraryThumbnail: vi.fn(),
     importHomeAssets: vi.fn(),
     removeHomeAsset: vi.fn(),
@@ -226,7 +244,7 @@ function mediaItem(label: string) {
 function resourceBrowserWithItem(item: ReturnType<typeof mediaItem>, absolutePath: string) {
   return {
     ...emptyResourceBrowser(),
-    searchHomeMediaLibraries: vi.fn(async () => ({ revision: 1, items: [item] })),
+    searchHomeMediaLibraries: vi.fn(async () => ({ items: [item] })),
     resolveAssetCenterSelection: vi.fn(async () => ({
       item,
       contentLocator: { kind: 'workspace-file' as const, path: item.relativePath },

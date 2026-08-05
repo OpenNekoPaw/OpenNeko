@@ -73,7 +73,6 @@ function tileKey(request: ReturnType<typeof thumbnailRequests>[number]): string 
 const longClipView: TimelineView = {
   documentUri: 'file:///workspace/project.otio',
   sessionId: 'session-1',
-  revision: 1,
   name: 'Long Clip',
   durationSeconds: 126.6,
   tracks: [

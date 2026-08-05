@@ -101,7 +101,7 @@ describe('SemanticSourceCoordinator', () => {
       file('config.json', 'sha256:config'),
       {
         ...file('story.json', 'sha256:story'),
-        creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+        creativeSchema: { schemaId: 'openneko.story' },
       },
     ]);
     fixture.coordinator.setScopes([scope]);
@@ -115,7 +115,7 @@ describe('SemanticSourceCoordinator', () => {
       expect.objectContaining({
         source: expect.objectContaining({
           relativePath: 'story.json',
-          creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+          creativeSchema: { schemaId: 'openneko.story' },
         }),
       }),
     );
@@ -131,9 +131,7 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
     async (input: SemanticSourceAnalysisInput): Promise<SemanticSourceAnalysisResult> => ({
       sourceId: input.source.sourceId,
       sourceFingerprint: input.source.fingerprint,
-      entityRevision: input.entities.revision,
       index: {
-        version: 1,
         assetId: input.source.sourceId,
         sourceRef: { kind: 'file', path: input.source.portablePath },
         updatedAt: input.analyzedAt,
@@ -184,8 +182,10 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
           const sourceFingerprint = storedFingerprints.get(sourceId);
           return sourceFingerprint ? { sourceId, sourceFingerprint } : null;
         },
-        listSources: async (rootId) =>
-          [...stored.values()].filter((source) => source.rootId === rootId),
+        listSources: async (rootId) => ({
+          sources: [...stored.values()].filter((source) => source.rootId === rootId),
+          diagnostics: [],
+        }),
         replaceSource,
         deleteSource: async (sourceId) => {
           const existed = stored.delete(sourceId);
@@ -196,7 +196,6 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
         markSourceStale: markStale,
       },
       getEntitySnapshot: async (): Promise<SemanticEntitySnapshot> => ({
-        revision: 1,
         entities: [],
       }),
       extractText: ({ source }) => [

@@ -2,7 +2,6 @@
   "name": "@neko/entity-domain",
   "description": "Creative entity runtime, stores, providers, and host adapters for OpenNeko",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

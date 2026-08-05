@@ -54,14 +54,14 @@ export function InlineVideoPlayer({
   const currentTimeRef = useRef(startTime);
   const handledPlaybackRequestRef = useRef<string>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused'>();
-  const generationRef = useRef(0);
+  const playbackRequestRef = useRef<object>({});
   const startingRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
 
   const disposeStreams = useCallback(() => {
-    generationRef.current += 1;
+    playbackRequestRef.current = {};
     startingRef.current = false;
     const element = videoRef.current;
     if (element) {
@@ -118,10 +118,10 @@ export function InlineVideoPlayer({
     }
     if (startingRef.current) return;
     startingRef.current = true;
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
+    const request = {};
+    playbackRequestRef.current = request;
     const start = async (): Promise<void> => {
-      if (generation !== generationRef.current) return;
+      if (request !== playbackRequestRef.current) return;
       element.crossOrigin = 'anonymous';
       element.muted = isMuted;
       element.defaultMuted = false;
@@ -134,13 +134,13 @@ export function InlineVideoPlayer({
       element.currentTime = startTime;
       currentTimeRef.current = startTime;
       await element.play();
-      if (generation !== generationRef.current) return;
+      if (request !== playbackRequestRef.current) return;
       startingRef.current = false;
       setIsPlaying(true);
       onResume();
     };
     void start().catch((error: unknown) => {
-      if (generation !== generationRef.current) return;
+      if (request !== playbackRequestRef.current) return;
       disposeStreams();
       setIsPlaying(false);
       logger.error(`Inline video playback failed: ${error}`);

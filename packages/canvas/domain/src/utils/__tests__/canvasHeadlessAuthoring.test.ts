@@ -60,7 +60,6 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         type: 'job' as const,
         data: {
           jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-          revision: 2,
           title: 'Generate key art',
           status: 'running',
         },
@@ -97,7 +96,6 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     });
     expect(canvas.nodes.find((node) => node.type === 'job')?.data).toMatchObject({
       jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-      revision: 2,
       status: 'running',
       inputRefs: [],
       outputRefs: [],

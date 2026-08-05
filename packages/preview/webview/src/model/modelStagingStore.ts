@@ -13,7 +13,7 @@ export function selectModelNode(
   state: ModelPreviewStagingState,
   nodePath: string | undefined,
 ): ModelPreviewStagingState {
-  return nextRevision(state, {
+  return updateState(state, {
     ...(nodePath ? { selectedNodePath: nodePath } : { selectedNodePath: undefined }),
   });
 }
@@ -24,7 +24,7 @@ export function patchModelTransform(
   transform: ModelPreviewTransform,
 ): ModelPreviewStagingState {
   const existing = state.transformPatches.filter((patch) => patch.nodePath !== nodePath);
-  return nextRevision(state, {
+  return updateState(state, {
     transformPatches: [...existing, { nodePath, transform }],
     selectedNodePath: nodePath,
   });
@@ -37,7 +37,7 @@ export function selectModelCamera(
   if (!state.cameraPresets.some((camera) => camera.id === cameraId)) {
     throw new Error(`Unknown Model Preview camera: ${cameraId}`);
   }
-  return nextRevision(state, { activeCameraId: cameraId });
+  return updateState(state, { activeCameraId: cameraId });
 }
 
 export function updateModelCamera(
@@ -50,7 +50,7 @@ export function updateModelCamera(
   if (camera.label.trim().length === 0) {
     throw new Error('Model Preview camera label cannot be empty.');
   }
-  return nextRevision(state, {
+  return updateState(state, {
     cameraPresets: state.cameraPresets.map((candidate) =>
       candidate.id === camera.id ? camera : candidate,
     ),
@@ -66,7 +66,7 @@ export function duplicateModelCamera(
   if (!source) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
   if (label.trim().length === 0) throw new Error('Model Preview camera label cannot be empty.');
   const id = nextCameraCopyId(state, cameraId);
-  return nextRevision(state, {
+  return updateState(state, {
     cameraPresets: [...state.cameraPresets, { ...source, id, label: label.trim() }],
   });
 }
@@ -81,7 +81,7 @@ export function addModelCamera(
     new Set(state.cameraPresets.map((camera) => camera.id)),
     `camera-${placement.id}`,
   );
-  return nextRevision(state, {
+  return updateState(state, {
     cameraPresets: [...state.cameraPresets, { id, label: label.trim(), ...placement.camera }],
   });
 }
@@ -101,7 +101,7 @@ export function removeModelCamera(
   if (!firstRemainingCamera) {
     throw new Error('Model Preview camera removal produced no remaining camera.');
   }
-  return nextRevision(state, {
+  return updateState(state, {
     cameraPresets,
     activeCameraId:
       state.activeCameraId === cameraId ? firstRemainingCamera.id : state.activeCameraId,
@@ -115,7 +115,7 @@ export function updateModelLight(
   if (!state.lightRig.lights.some((candidate) => candidate.id === light.id)) {
     throw new Error(`Unknown Model Preview light: ${light.id}`);
   }
-  return nextRevision(state, {
+  return updateState(state, {
     lightRig: {
       ...state.lightRig,
       lights: state.lightRig.lights.map((candidate) =>
@@ -139,7 +139,7 @@ export function addModelLight(
     `light-${placement.id}`,
   );
   const light: ModelPreviewLightEntry = { id, ...placement.light };
-  return nextRevision(state, {
+  return updateState(state, {
     lightRig: { ...state.lightRig, lights: [...state.lightRig.lights, light] },
   });
 }
@@ -148,7 +148,7 @@ export function updateModelEnvironmentIntensity(
   state: ModelPreviewStagingState,
   environmentIntensity: number,
 ): ModelPreviewStagingState {
-  return nextRevision(state, {
+  return updateState(state, {
     lightRig: { ...state.lightRig, environmentIntensity },
   });
 }
@@ -157,21 +157,21 @@ export function updateModelBackground(
   state: ModelPreviewStagingState,
   background: string,
 ): ModelPreviewStagingState {
-  return nextRevision(state, { background });
+  return updateState(state, { background });
 }
 
 export function updateModelCapture(
   state: ModelPreviewStagingState,
   capture: ModelPreviewCaptureSettings,
 ): ModelPreviewStagingState {
-  return nextRevision(state, { capture });
+  return updateState(state, { capture });
 }
 
-function nextRevision(
+function updateState(
   state: ModelPreviewStagingState,
   patch: Partial<ModelPreviewStagingState>,
 ): ModelPreviewStagingState {
-  return { ...state, ...patch, revision: state.revision + 1 };
+  return { ...state, ...patch };
 }
 
 function nextCameraCopyId(state: ModelPreviewStagingState, cameraId: string): string {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   CANVAS_WORKSPACE_BOARD_PATH,
   createGeneratedAssetsWorkspaceDeliveryRequest,
   resolveCanvasWorkspaceBoardDocumentUri,
@@ -200,7 +199,6 @@ describe('Canvas Workspace Board delivery contract', () => {
     });
 
     expect(delivery).toMatchObject({
-      version: 2,
       target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
       process: { sourceHost: 'desktop', operationId: 'operation-1', runId: 'run-1' },
       artifacts: [
@@ -250,13 +248,9 @@ describe('Canvas Workspace Board delivery contract', () => {
     ).toContain('invalid-content-locator');
   });
 
-  it('poisons legacy routing, runtime handles, cache values, and malformed refs', () => {
+  it('rejects runtime handles, cache values, and malformed refs', () => {
     const invalid = {
       ...request(),
-      activeCanvas: 'file:///workspace/project/active.nkc',
-      recentCanvas: 'file:///workspace/project/recent.nkc',
-      conversationId: 'conversation-1',
-      binding: { scopeKind: 'storyboard' },
       token: 'secret',
       renderUri: 'neko-media://preview/shot-1',
       cachePath: '.neko/.cache/generated/shot-1.png',
@@ -271,10 +265,9 @@ describe('Canvas Workspace Board delivery contract', () => {
     } as never);
 
     const invalidCodes = validateCanvasWorkspaceProjectionRequest(invalid).map(({ code }) => code);
-    expect(invalidCodes.filter((code) => code === 'legacy-routing-forbidden')).toHaveLength(4);
     expect(invalidCodes.filter((code) => code === 'runtime-value-forbidden')).toHaveLength(3);
     expect(validateCanvasWorkspaceProjectionRequest(legacyRef).map(({ code }) => code)).toContain(
-      'content-locator-migration-required',
+      'invalid-content-locator',
     );
   });
 
@@ -282,7 +275,6 @@ describe('Canvas Workspace Board delivery contract', () => {
     for (const status of ['blocked', 'conflict'] as const) {
       expect(
         validateCanvasWorkspaceProjectionResult({
-          version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
           status,
           target: {
             kind: 'workspace',
@@ -303,7 +295,6 @@ function request(
   } = {},
 ): CanvasWorkspaceProjectionRequest {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     target: {
       workspaceId: input.workspaceId ?? 'workspace-1',
       workspaceUri: 'file:///workspace/project/',
@@ -364,7 +355,6 @@ function provenance(
   role: 'source' | 'analysis' | 'output',
 ) {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     deliveryId: 'delivery:material-analysis:1',
     artifactId,
     revision,

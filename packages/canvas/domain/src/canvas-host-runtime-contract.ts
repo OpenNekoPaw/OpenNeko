@@ -10,10 +10,10 @@ import {
 import { isValidNkc } from './nkc/codec';
 import { type CanvasData } from './types/canvas';
 
-export const CANVAS_HOST_RUNTIME_CONTRACT_VERSION = 5 as const;
-
-export function createCanvasHostSessionId(viewId: string, viewEpoch: number): string {
-  return `canvas-session:${viewId}:${viewEpoch}`;
+export function createCanvasHostSessionId(viewId: string, viewInstanceId: string): string {
+  requireNonEmptyString(viewId, 'Canvas Host View identity is required.');
+  requireNonEmptyString(viewInstanceId, 'Canvas Host View instance identity is required.');
+  return `canvas-session:${viewId}:${viewInstanceId}`;
 }
 
 export const CANVAS_HOST_RUNTIME_ROUTES = {
@@ -31,10 +31,10 @@ export interface CanvasHostRuntimeIdentity {
   readonly workspaceId: string;
   readonly windowId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
   readonly documentId: string;
   readonly sessionId: string;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
 }
 
 export interface CanvasHostPresentationState {
@@ -51,7 +51,6 @@ export interface CanvasHostAuthoringCapabilities {
 }
 
 export interface CanvasHostSnapshot {
-  readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
   readonly identity: CanvasHostRuntimeIdentity;
   readonly revision: number;
   readonly dirty: boolean;
@@ -62,7 +61,6 @@ export interface CanvasHostSnapshot {
 }
 
 export interface CanvasMaterialActionResolutionRequest {
-  readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
   readonly requestId: string;
   readonly expectedRevision: number;
   readonly identity: CanvasHostRuntimeIdentity;
@@ -70,7 +68,6 @@ export interface CanvasMaterialActionResolutionRequest {
 }
 
 export interface CanvasMaterialActionResolution {
-  readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: CanvasHostRuntimeIdentity;
   readonly revision: number;
@@ -116,7 +113,6 @@ export type CanvasHostIntent =
     };
 
 export interface CanvasHostIntentRequest {
-  readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
   readonly requestId: string;
   readonly commandId: string;
   readonly expectedRevision: number;
@@ -126,14 +122,12 @@ export interface CanvasHostIntentRequest {
 
 export type CanvasHostIntentResult =
   | {
-      readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
       readonly requestId: string;
       readonly commandId: string;
       readonly status: 'accepted';
       readonly snapshot: CanvasHostSnapshot;
     }
   | {
-      readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
       readonly requestId: string;
       readonly commandId: string;
       readonly status: 'rejected';
@@ -149,7 +143,6 @@ export type CanvasHostIntentResult =
     };
 
 export interface CanvasHostProjectionEvent {
-  readonly schemaVersion: typeof CANVAS_HOST_RUNTIME_CONTRACT_VERSION;
   readonly sequence: number;
   /** Present when this projection was produced by an accepted Host intent. */
   readonly originCommandId?: string;
@@ -174,10 +167,7 @@ export function createCanvasMaterialActionResolutionRequest(input: {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly selectedNodeIds: readonly string[];
 }): CanvasMaterialActionResolutionRequest {
-  return parseCanvasMaterialActionResolutionRequest({
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
-    ...input,
-  });
+  return parseCanvasMaterialActionResolutionRequest(input);
 }
 
 export function parseCanvasMaterialActionResolutionRequest(
@@ -187,9 +177,8 @@ export function parseCanvasMaterialActionResolutionRequest(
     value,
     'Canvas material action resolution request must be an object.',
   );
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId', 'expectedRevision', 'identity', 'selectedNodeIds']);
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     requestId: requireOpaqueIdentity(
       record['requestId'],
       'Canvas material action resolution request identity is required.',
@@ -208,9 +197,8 @@ export function parseCanvasMaterialActionResolution(
   expectedRequestId: string,
 ): CanvasMaterialActionResolution {
   const record = requireRecord(value, 'Canvas material action resolution must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId', 'identity', 'revision', 'selectedNodeIds', 'descriptors']);
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     requestId: requireMatchingIdentity(
       record['requestId'],
       expectedRequestId,
@@ -227,10 +215,7 @@ export function parseCanvasMaterialActionResolution(
 }
 
 export class CanvasHostRuntimeContractError extends Error {
-  readonly code:
-    | 'invalid-canvas-host-runtime-payload'
-    | 'unsupported-canvas-host-runtime-version'
-    | 'canvas-host-runtime-stale-identity';
+  readonly code: 'invalid-canvas-host-runtime-payload' | 'canvas-host-runtime-stale-identity';
 
   constructor(code: CanvasHostRuntimeContractError['code'], message: string) {
     super(message);
@@ -246,17 +231,13 @@ export function createCanvasHostIntentRequest(input: {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly intent: CanvasHostIntent;
 }): CanvasHostIntentRequest {
-  return parseCanvasHostIntentRequest({
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
-    ...input,
-  });
+  return parseCanvasHostIntentRequest(input);
 }
 
 export function parseCanvasHostIntentRequest(value: unknown): CanvasHostIntentRequest {
   const record = requireRecord(value, 'Canvas Host intent request must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId', 'commandId', 'expectedRevision', 'identity', 'intent']);
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Canvas Host request identity is required.',
@@ -276,13 +257,19 @@ export function parseCanvasHostIntentRequest(value: unknown): CanvasHostIntentRe
 
 export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
   const record = requireRecord(value, 'Canvas Host snapshot must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, [
+    'identity',
+    'revision',
+    'dirty',
+    'canvas',
+    'presentation',
+    'authoringCapabilities',
+  ]);
   const canvas = record['canvas'];
   if (!isValidNkc(canvas)) {
     throw invalidPayload('Canvas Host snapshot does not contain a valid .nkc document.');
   }
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     identity: parseCanvasHostRuntimeIdentity(record['identity']),
     revision: requireNonNegativeInteger(
       record['revision'],
@@ -297,10 +284,9 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
 
 export function parseCanvasHostProjectionEvent(value: unknown): CanvasHostProjectionEvent {
   const record = requireRecord(value, 'Canvas Host projection event must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['sequence', 'originCommandId', 'snapshot']);
   const originCommandId = record['originCommandId'];
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     sequence: requirePositiveInteger(
       record['sequence'],
       'Canvas Host projection event sequence must be a positive integer.',
@@ -323,7 +309,6 @@ export function parseCanvasHostIntentResult(
   expectedCommandId: string,
 ): CanvasHostIntentResult {
   const record = requireRecord(value, 'Canvas Host intent result must be an object.');
-  requireVersion(record['schemaVersion']);
   const requestId = requireMatchingIdentity(
     record['requestId'],
     expectedRequestId,
@@ -335,8 +320,8 @@ export function parseCanvasHostIntentResult(
     'Canvas Host response command identity does not match.',
   );
   if (record['status'] === 'accepted') {
+    requireExactKeys(record, ['requestId', 'commandId', 'status', 'snapshot']);
     return {
-      schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       requestId,
       commandId,
       status: 'accepted',
@@ -346,12 +331,12 @@ export function parseCanvasHostIntentResult(
   if (record['status'] !== 'rejected') {
     throw invalidPayload('Canvas Host intent result status is invalid.');
   }
+  requireExactKeys(record, ['requestId', 'commandId', 'status', 'diagnostic']);
   const diagnostic = requireRecord(
     record['diagnostic'],
     'Canvas Host rejected result diagnostic is required.',
   );
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     requestId,
     commandId,
     status: 'rejected',
@@ -374,10 +359,10 @@ export function assertCanvasHostRuntimeIdentity(
     expected.workspaceId === actual.workspaceId &&
     expected.windowId === actual.windowId &&
     expected.viewId === actual.viewId &&
-    expected.viewEpoch === actual.viewEpoch &&
+    expected.viewInstanceId === actual.viewInstanceId &&
     expected.documentId === actual.documentId &&
     expected.sessionId === actual.sessionId &&
-    expected.endpointEpoch === actual.endpointEpoch;
+    expected.rendererSessionId === actual.rendererSessionId;
   if (!matches) {
     throw new CanvasHostRuntimeContractError(
       'canvas-host-runtime-stale-identity',
@@ -399,9 +384,9 @@ function parseCanvasHostRuntimeIdentity(value: unknown): CanvasHostRuntimeIdenti
     ),
     windowId: requireOpaqueIdentity(record['windowId'], 'Canvas Host Window identity is required.'),
     viewId: requireOpaqueIdentity(record['viewId'], 'Canvas Host View identity is required.'),
-    viewEpoch: requireNonNegativeInteger(
-      record['viewEpoch'],
-      'Canvas Host View epoch must be a non-negative integer.',
+    viewInstanceId: requireNonEmptyString(
+      record['viewInstanceId'],
+      'Canvas Host View instance identity is required.',
     ),
     documentId: requireOpaqueIdentity(
       record['documentId'],
@@ -411,9 +396,9 @@ function parseCanvasHostRuntimeIdentity(value: unknown): CanvasHostRuntimeIdenti
       record['sessionId'],
       'Canvas Host session identity is required.',
     ),
-    endpointEpoch: requireOpaqueIdentity(
-      record['endpointEpoch'],
-      'Canvas Host endpoint epoch is required.',
+    rendererSessionId: requireOpaqueIdentity(
+      record['rendererSessionId'],
+      'Canvas Host renderer session identity is required.',
     ),
   };
 }
@@ -637,20 +622,20 @@ function requireDiagnosticCode(
   return match;
 }
 
-function requireVersion(value: unknown): void {
-  if (value !== CANVAS_HOST_RUNTIME_CONTRACT_VERSION) {
-    throw new CanvasHostRuntimeContractError(
-      'unsupported-canvas-host-runtime-version',
-      `Unsupported Canvas Host runtime contract version: ${String(value)}.`,
-    );
-  }
-}
-
 function requireRecord(value: unknown, message: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw invalidPayload(message);
   }
   return value as Record<string, unknown>;
+}
+
+function requireExactKeys(record: Record<string, unknown>, keys: readonly string[]): void {
+  const unexpected = Object.keys(record).filter((key) => !keys.includes(key));
+  if (unexpected.length > 0) {
+    throw invalidPayload(
+      `Canvas Host payload contains unsupported fields: ${unexpected.join(', ')}.`,
+    );
+  }
 }
 
 function requireArray(value: unknown, message: string): readonly unknown[] {

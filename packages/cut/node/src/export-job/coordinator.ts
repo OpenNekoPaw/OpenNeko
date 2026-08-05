@@ -62,7 +62,6 @@ export class ExportJobCoordinator implements ExportJobPort {
     const initial = await this.options.store.create({
       ref,
       phase: 'pending',
-      revision: 1,
       createdAt: timestamp,
       updatedAt: timestamp,
       ...(input.retryOf ? { retryOf: input.retryOf } : {}),
@@ -77,13 +76,13 @@ export class ExportJobCoordinator implements ExportJobPort {
     return this.options.store.get(ref);
   }
 
-  observeExport(ref: ExportJobRef, afterRevision: number): AsyncIterable<ExportJobSnapshot> {
-    return this.options.store.observe(ref, afterRevision);
+  observeExport(ref: ExportJobRef): AsyncIterable<ExportJobSnapshot> {
+    return this.options.store.observe(ref);
   }
 
   cancelExport(input: ExportJobCommandInput): Promise<ExportJobSnapshot> {
     return this.enqueue(input.ref, async () => {
-      const current = await this.getAtExpectedRevision(input);
+      const current = await this.getCurrent(input);
       if (isTerminalJobPhase(current.phase)) {
         throw new JobLifecycleError(
           'terminal-mutation',
@@ -116,7 +115,7 @@ export class ExportJobCoordinator implements ExportJobPort {
 
   retryExport(input: ExportJobCommandInput): Promise<ExportJobSnapshot> {
     return this.enqueue(input.ref, async () => {
-      const current = await this.getAtExpectedRevision(input);
+      const current = await this.getCurrent(input);
       if (
         current.phase !== 'failed' &&
         current.phase !== 'cancelled' &&
@@ -133,7 +132,7 @@ export class ExportJobCoordinator implements ExportJobPort {
 
   reconcileExport(input: ExportJobCommandInput): Promise<ExportJobSnapshot> {
     return this.enqueue(input.ref, async () => {
-      const current = await this.getAtExpectedRevision(input);
+      const current = await this.getCurrent(input);
       if (isTerminalJobPhase(current.phase)) return current;
       if (!current.executionId) {
         throw new ExportJobError(
@@ -360,35 +359,22 @@ export class ExportJobCoordinator implements ExportJobPort {
     });
   }
 
-  private async getAtExpectedRevision(input: ExportJobCommandInput): Promise<ExportJobSnapshot> {
-    const current = await this.options.store.get(input.ref);
-    if (current.revision !== input.expectedRevision) {
-      throw new JobLifecycleError(
-        'stale-revision',
-        `Export Job ${input.ref.jobId} is at revision ${current.revision}, not ${input.expectedRevision}.`,
-      );
-    }
-    return current;
+  private getCurrent(input: ExportJobCommandInput): Promise<ExportJobSnapshot> {
+    return this.options.store.get(input.ref);
   }
 
   private commit(
     current: ExportJobSnapshot,
-    next: Omit<
-      ExportJobSnapshot,
-      'ref' | 'revision' | 'createdAt' | 'updatedAt' | 'request' | 'retryOf'
-    >,
+    next: Omit<ExportJobSnapshot, 'ref' | 'createdAt' | 'updatedAt' | 'request' | 'retryOf'>,
   ): Promise<ExportJobSnapshot> {
     const timestamp = Math.max(this.now(), current.updatedAt);
-    return this.options.store.commit({
-      ref: current.ref,
-      expectedRevision: current.revision,
-      next: {
-        ...current,
-        ...next,
-        revision: current.revision + 1,
-        updatedAt: timestamp,
-      },
-    });
+    const snapshot = {
+      ...current,
+      ...next,
+      updatedAt: timestamp,
+    };
+    assertExportTransition(current, snapshot);
+    return this.options.store.save(snapshot);
   }
 
   private enqueue<T>(ref: ExportJobRef, mutation: () => Promise<T>): Promise<T> {
@@ -422,6 +408,43 @@ function emptyProgress(
     estimatedRemainingMs: 0,
     currentFps: 0,
   };
+}
+
+const ALLOWED_EXPORT_TRANSITIONS: Readonly<
+  Record<ExportJobSnapshot['phase'], ReadonlySet<ExportJobSnapshot['phase']>>
+> = {
+  pending: new Set(['pending', 'running', 'succeeded', 'failed', 'cancelled', 'outcome-unknown']),
+  running: new Set(['running', 'succeeded', 'failed', 'cancelled', 'outcome-unknown']),
+  'outcome-unknown': new Set(['outcome-unknown', 'running', 'succeeded', 'failed', 'cancelled']),
+  succeeded: new Set(),
+  failed: new Set(),
+  cancelled: new Set(),
+};
+
+function assertExportTransition(current: ExportJobSnapshot, next: ExportJobSnapshot): void {
+  if (
+    current.ref.kind !== next.ref.kind ||
+    current.ref.jobId !== next.ref.jobId ||
+    current.createdAt !== next.createdAt ||
+    next.updatedAt < current.updatedAt
+  ) {
+    throw new ExportJobError(
+      'export-job-persistence-invalid',
+      `Export Job ${current.ref.jobId} transition changed its identity or timestamps.`,
+    );
+  }
+  if (isTerminalJobPhase(current.phase)) {
+    throw new JobLifecycleError(
+      'terminal-mutation',
+      `Terminal Export Job ${current.ref.jobId} cannot transition from ${current.phase}.`,
+    );
+  }
+  if (!ALLOWED_EXPORT_TRANSITIONS[current.phase].has(next.phase)) {
+    throw new JobLifecycleError(
+      'invalid-transition',
+      `Export Job ${current.ref.jobId} cannot transition from ${current.phase} to ${next.phase}.`,
+    );
+  }
 }
 
 function projectProgress(progress: ExportExecutionProgress): ExportJobSnapshot['progress'] {

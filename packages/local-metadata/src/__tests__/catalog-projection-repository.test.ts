@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveGlobalStorageLayout } from '../storage';
 import { createNodeSqliteLocalMetadataStore } from '../node-sqlite-local-metadata-store';
-import { CATALOG_PROJECTION_MIGRATIONS, M1_LOCAL_METADATA_MIGRATIONS } from '../sqlite';
+import { initializeCatalogProjectionTables, initializeCoreLocalMetadataTables } from '../sqlite';
 
 const temporaryDirectories: string[] = [];
 const WORKSPACE_ID = '58f5db7f-65ea-4f50-97b8-7f9ed117fe1b';
@@ -226,8 +226,8 @@ async function openCatalogStore() {
   const databasePath = resolveGlobalStorageLayout(homedir).database;
   const store = createNodeSqliteLocalMetadataStore({ homedir });
   await store.open({ databasePath, busyTimeoutMs: 1_000 });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(CATALOG_PROJECTION_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeCatalogProjectionTables(store);
   await store.repositories.workspaces.bind({
     identity: { version: 1, workspaceId: WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },

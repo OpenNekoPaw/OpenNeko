@@ -123,8 +123,8 @@ export class NodeProjectEntityProjectionRuntime {
         workspace: { workspaceId: workspace.workspaceId, workspacePath },
         projection: binding,
         getEntitySnapshot: async () => {
-          const document = await repository.load();
-          return { revision: document.revision, entities: document.entities };
+          const result = await repository.readAvailable();
+          return { entities: result.document.entities };
         },
         ...(this.options.now ? { now: this.options.now } : {}),
       });

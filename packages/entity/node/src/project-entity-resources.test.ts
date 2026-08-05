@@ -32,12 +32,10 @@ describe('readProjectEntityResources', () => {
       readProjectEntityResources({
         workspace: { workspaceId: 'project-neko', workspacePath },
       }),
-    ).resolves.toEqual({ entities: [] });
+    ).resolves.toEqual({ entities: [], diagnostics: [] });
 
     await writeJson(workspacePath, 'neko/entities.json', {
-      schemaVersion: 1,
       projectId: 'project-neko',
-      revision: 1,
       entities: [
         entity('canonical-character', 'Canonical', { state: 'active' }),
         entity('deprecated-character', 'Deprecated', {
@@ -54,12 +52,43 @@ describe('readProjectEntityResources', () => {
     expect(JSON.stringify(result)).not.toContain('legacy-character');
   });
 
+  it('projects valid sibling records with an exact diagnostic for an invalid Entity', async () => {
+    const workspacePath = await createWorkspace();
+    await writeJson(workspacePath, 'neko/entities.json', {
+      projectId: 'project-neko',
+      entities: [
+        entity('canonical-character', 'Canonical', { state: 'active' }),
+        {
+          ...entity('invalid-character', 'Invalid', { state: 'active' }),
+          names: { canonical: '', aliases: [] },
+        },
+      ],
+    });
+
+    await expect(
+      readProjectEntityManagementResources({
+        workspace: { workspaceId: 'project-neko', workspacePath },
+      }),
+    ).resolves.toMatchObject({
+      projections: [
+        expect.objectContaining({
+          projectionId: 'entity:canonical-character',
+          status: 'confirmed',
+        }),
+      ],
+      diagnostics: [
+        expect.objectContaining({
+          code: 'invalid-project-entity-document',
+          entityId: 'invalid-character',
+        }),
+      ],
+    });
+  });
+
   it('fails visibly when canonical data belongs to another Project identity', async () => {
     const workspacePath = await createWorkspace();
     await writeJson(workspacePath, 'neko/entities.json', {
-      schemaVersion: 1,
       projectId: 'project-other',
-      revision: 0,
       entities: [],
     });
 
@@ -73,9 +102,7 @@ describe('readProjectEntityResources', () => {
   it('projects deprecated records and rebuildable candidate state for management consumers', async () => {
     const workspacePath = await createWorkspace();
     await writeJson(workspacePath, 'neko/entities.json', {
-      schemaVersion: 1,
       projectId: 'project-neko',
-      revision: 1,
       entities: [
         entity('deprecated-character', 'Deprecated', {
           state: 'deprecated',
@@ -97,7 +124,6 @@ describe('readProjectEntityResources', () => {
       ],
     });
 
-    expect(result.projectRevision).toBe(1);
     expect(result.projections.map(({ projectionId, status }) => [projectionId, status])).toEqual([
       ['entity:deprecated-character', 'deprecated'],
       ['candidate:candidate-nova', 'candidate'],

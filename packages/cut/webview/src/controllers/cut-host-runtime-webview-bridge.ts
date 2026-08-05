@@ -1,6 +1,5 @@
 import {
   CUT_HOST_RUNTIME_ROUTES,
-  CUT_HOST_RUNTIME_VERSION,
   type CutCommand,
   type CutHostRuntime,
   type CutHostRuntimeRoute,
@@ -20,7 +19,7 @@ export function createCutHostRuntimeWebviewBridge(runtime: CutHostRuntime): CutW
   };
   const publishSnapshot = (snapshot: CutHostRuntimeSnapshot): void => {
     const snapshotKey = JSON.stringify([
-      snapshot.revision,
+      snapshot.document,
       snapshot.dirty,
       snapshot.presentation,
       snapshot.export,
@@ -84,17 +83,16 @@ async function dispatchIntent(input: {
   const clientMutationId = 'clientMutationId' in intent ? intent.clientMutationId : undefined;
   try {
     const snapshot = await runtime.getSnapshot();
-    assertLegacyIntentIdentity(intent, snapshot);
-    const requestId = input.nextRequestId();
+    assertIntentIdentity(intent, snapshot);
+    const requestId =
+      intent.type === 'cut:request-representations' ? intent.requestId : input.nextRequestId();
     const route = routeForIntent(intent);
     const payload = payloadForIntent(intent);
     const result = await runtime.execute({
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId,
       commandId: clientMutationId ?? requestId,
       route,
       identity: runtime.identity,
-      expectedRevision: intent.expectedRevision,
       ...(payload === undefined ? {} : { payload }),
     });
     input.publishSnapshot(result.snapshot);
@@ -103,7 +101,7 @@ async function dispatchIntent(input: {
         type: 'cut:representations',
         documentUri: result.snapshot.identity.documentId,
         sessionId: result.snapshot.identity.sessionId,
-        revision: result.output.revision,
+        requestId: result.output.requestId,
         results: result.output.results,
       });
     } else if (result.output?.type === 'preview') {
@@ -114,7 +112,6 @@ async function dispatchIntent(input: {
         type: 'cut:mutation-result',
         clientMutationId,
         succeeded: true,
-        revision: result.snapshot.revision,
       });
     }
   } catch {
@@ -124,17 +121,10 @@ async function dispatchIntent(input: {
       ...(clientMutationId ? { clientMutationId } : {}),
     });
     if (clientMutationId) {
-      let revision = intent.expectedRevision;
-      try {
-        revision = (await runtime.getSnapshot()).revision;
-      } catch {
-        // The explicit error projection remains the authoritative failure.
-      }
       input.publish({
         type: 'cut:mutation-result',
         clientMutationId,
         succeeded: false,
-        revision,
       });
     }
   }
@@ -235,14 +225,13 @@ function payloadForIntent(
   }
 }
 
-function assertLegacyIntentIdentity(
+function assertIntentIdentity(
   intent: Exclude<CutWebviewIntent, { readonly type: 'cut:ready' }>,
   snapshot: CutHostRuntimeSnapshot,
 ): void {
   if (
     intent.documentUri !== snapshot.identity.documentId ||
-    intent.sessionId !== snapshot.identity.sessionId ||
-    intent.expectedRevision !== snapshot.revision
+    intent.sessionId !== snapshot.identity.sessionId
   ) {
     throw new Error('Cut Webview intent does not match its owning Host runtime snapshot.');
   }

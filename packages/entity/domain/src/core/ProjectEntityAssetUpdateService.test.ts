@@ -36,7 +36,6 @@ describe('ProjectEntityAssetUpdateService', () => {
     const updated = await harness.service.apply({
       entityId: 'character-rin',
       available: AVAILABLE_REF,
-      expectedRevision: 3,
       selected: ['names.canonical', 'representations'],
       conflicts: [
         { field: 'kind', resolution: 'current' },
@@ -64,7 +63,7 @@ describe('ProjectEntityAssetUpdateService', () => {
         },
       ],
     });
-    expect(harness.document.revision).toBe(4);
+    expect(harness.document.entities[0]).toEqual(updated);
   });
 
   it('requires every conflict resolution and rejects incoming kind changes', async () => {
@@ -72,7 +71,6 @@ describe('ProjectEntityAssetUpdateService', () => {
       harness.service.apply({
         entityId: 'character-rin',
         available: AVAILABLE_REF,
-        expectedRevision: 3,
         selected: [],
         conflicts: [{ field: 'facts/role', resolution: 'current' }],
         updatedAt: UPDATED_AT,
@@ -82,7 +80,6 @@ describe('ProjectEntityAssetUpdateService', () => {
       harness.service.apply({
         entityId: 'character-rin',
         available: AVAILABLE_REF,
-        expectedRevision: 3,
         selected: [],
         conflicts: [
           { field: 'kind', resolution: 'incoming' },
@@ -94,7 +91,7 @@ describe('ProjectEntityAssetUpdateService', () => {
     expect(harness.commits).toHaveLength(0);
   });
 
-  it('rejects foreign, unavailable, and stale update inputs before commit', async () => {
+  it('rejects foreign and unavailable update inputs before commit', async () => {
     await expect(
       harness.service.inspect({
         entityId: 'character-rin',
@@ -105,17 +102,6 @@ describe('ProjectEntityAssetUpdateService', () => {
     await expect(
       harness.service.inspect({ entityId: 'character-rin', available: AVAILABLE_REF }),
     ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-asset-not-found' }] });
-    harness.available = AVAILABLE;
-    await expect(
-      harness.service.apply({
-        entityId: 'character-rin',
-        available: AVAILABLE_REF,
-        expectedRevision: 2,
-        selected: [],
-        conflicts: [],
-        updatedAt: UPDATED_AT,
-      }),
-    ).rejects.toMatchObject({ diagnostics: [{ code: 'project-entity-revision-conflict' }] });
     expect(harness.commits).toHaveLength(0);
   });
 });
@@ -127,13 +113,14 @@ class UpdateHarness {
   readonly service = new ProjectEntityAssetUpdateService({
     repository: {
       load: async () => this.document,
-      commit: async () => {
+      mutate: async () => {
         throw new Error('Entity Asset update must use the canonical operation commit port.');
       },
     },
     assets: { readExact: async () => this.available },
     commits: {
-      commit: async (request) => {
+      commit: async (mutation) => {
+        const request = await mutation(this.document);
         this.commits.push(request);
         this.document = request.next;
         return this.document;
@@ -177,9 +164,7 @@ const AVAILABLE: ProjectEntityAssetSnapshot = {
   },
 };
 const DOCUMENT: ProjectEntityDocument = {
-  schemaVersion: 1,
   projectId: 'project-neko',
-  revision: 3,
   entities: [
     {
       entityId: 'character-rin',

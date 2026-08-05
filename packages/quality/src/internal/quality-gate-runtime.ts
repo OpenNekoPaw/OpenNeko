@@ -1,6 +1,5 @@
 import { type ContentLocator } from '@neko/content';
 import {
-  MEDIA_QUALITY_CONTRACT_VERSION,
   qualityTargetsMatch,
   validateQualityEvidence,
   validateQualityTarget,
@@ -77,7 +76,6 @@ export interface QualityEvaluationContext {
 export interface QualityEvaluator {
   readonly evaluatorClass: QualityEvaluatorClass;
   readonly id: string;
-  readonly version: string;
   supports(profile: QualityProfile): boolean;
   evaluate(context: QualityEvaluationContext): Promise<QualityEvidence>;
 }
@@ -327,12 +325,10 @@ export function aggregateQualityGate(input: {
   else verdict = 'pass';
 
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
     gateResultId: input.gateResultId,
     target: input.target,
     policy: {
       policyId: input.policy.policyId,
-      policyVersion: input.policy.policyVersion,
       requiredProfiles: input.policy.requiredProfiles,
     },
     verdict,
@@ -344,7 +340,6 @@ export function aggregateQualityGate(input: {
       ? {
           repairPlan: {
             planId: `${input.gateResultId}-repair`,
-            requiresNewRevision: true,
             actions: createRepairActions(input.target, blockingIssues),
           },
         }
@@ -363,7 +358,7 @@ function createRepairActions(
       targetId: target.targetId,
       issueIds: issues.map((issue) => issue.id),
       instruction:
-        'Repair the blocking quality issues in the owning package and create a new revision.',
+        'Repair the blocking quality issues in the owning package and re-evaluate the updated content.',
     },
   ];
 }
@@ -381,12 +376,10 @@ function ownerForTarget(kind: QualityTargetKind): QualityRepairAction['owner'] {
 export function createMultimodalPerceptionEvaluator(deps: {
   readonly createService: () => MediaQualityLLMService;
   readonly chatModel: MediaQualityChatModelRef;
-  readonly evaluatorVersion?: string;
 }): PerceptionEvaluator {
   return {
     evaluatorClass: 'perception',
     id: 'multimodal-media-perception',
-    version: deps.evaluatorVersion ?? '1',
     supports: (profile) =>
       [
         'image',
@@ -436,7 +429,6 @@ export function createMultimodalPerceptionEvaluator(deps: {
           context,
           {
             id: 'multimodal-media-perception',
-            version: deps.evaluatorVersion ?? '1',
             evaluatorClass: 'perception',
             providerId: deps.chatModel.providerId,
             modelId: deps.chatModel.modelId,
@@ -467,7 +459,6 @@ function evidence(
   confidence?: number,
 ): QualityEvidence {
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
     evidenceId: context.createId('evidence'),
     evaluator,
     target: context.target,
@@ -503,11 +494,9 @@ function createEvaluatorFailureEvidence(
   error: unknown,
 ): QualityEvidence {
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
     evidenceId,
     evaluator: {
       id: evaluator.id,
-      version: evaluator.version,
       evaluatorClass: evaluator.evaluatorClass,
     },
     target,

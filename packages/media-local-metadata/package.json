@@ -1,7 +1,6 @@
 {
   "name": "@neko/media-local-metadata",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "scripts": {
@@ -9,9 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neko/local-metadata": "workspace:*",
-    "@neko/media": "workspace:*",
-    "@neko/shared": "workspace:*"
+    "@neko/local-metadata": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

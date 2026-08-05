@@ -81,7 +81,6 @@ export interface OccurrenceIndexEntry {
 // -- Serializable Snapshot --
 
 export interface CreativeEntityGraphSnapshot {
-  readonly version: 1;
   readonly nodes: readonly CreativeGraphNode[];
   readonly edges: readonly CreativeRelationEdge[];
 }

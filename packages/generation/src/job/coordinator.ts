@@ -14,6 +14,7 @@ import type { MediaAdapterResult } from '../contracts';
 import type {
   GenerationJobCommandInput,
   GenerationJobPort,
+  GenerationJobRecoveryRecords,
   GenerationJobRef,
   GenerationJobResultCommitter,
   GenerationJobSnapshot,
@@ -74,7 +75,6 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     const initial = await this.options.store.create({
       ref,
       phase: 'pending',
-      revision: 1,
       createdAt: timestamp,
       updatedAt: timestamp,
       lifecycleMode: input.lifecycleMode,
@@ -99,16 +99,13 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     return this.options.store.get(ref);
   }
 
-  observeGeneration(
-    ref: GenerationJobRef,
-    afterRevision: number,
-  ): AsyncIterable<GenerationJobSnapshot> {
-    return this.options.store.observe(ref, afterRevision);
+  observeGeneration(ref: GenerationJobRef): AsyncIterable<GenerationJobSnapshot> {
+    return this.options.store.observe(ref);
   }
 
   cancelGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot> {
     return this.enqueue(input.ref, async () => {
-      const current = await this.getAtExpectedRevision(input);
+      const current = await this.options.store.get(input.ref);
       if (isTerminalJobPhase(current.phase)) {
         throw new JobLifecycleError(
           'terminal-mutation',
@@ -139,7 +136,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
 
   retryGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot> {
     return this.enqueue(input.ref, async () => {
-      const current = await this.getAtExpectedRevision(input);
+      const current = await this.options.store.get(input.ref);
       if (
         current.phase !== 'failed' &&
         current.phase !== 'cancelled' &&
@@ -160,7 +157,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
 
   regenerateGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot> {
     return this.enqueue(input.ref, async () => {
-      const current = await this.getAtExpectedRevision(input);
+      const current = await this.options.store.get(input.ref);
       if (current.phase !== 'succeeded') {
         throw new GenerationJobError(
           'generation-job-regenerate-unavailable',
@@ -177,7 +174,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
 
   reconcileGeneration(input: GenerationJobCommandInput): Promise<GenerationJobSnapshot> {
     return this.enqueue(input.ref, async () => {
-      const current = await this.getAtExpectedRevision(input);
+      const current = await this.options.store.get(input.ref);
       if (isTerminalJobPhase(current.phase)) return current;
       if (!current.providerTask) {
         throw new GenerationJobError(
@@ -190,11 +187,11 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     });
   }
 
-  async recoverPersistedGenerationJobs(): Promise<readonly GenerationJobSnapshot[]> {
+  async recoverPersistedGenerationJobs(): Promise<GenerationJobRecoveryRecords> {
     this.assertNotDisposed();
     const recoverable = await this.options.store.listRecoverable();
     const installed: GenerationJobSnapshot[] = [];
-    for (const snapshot of recoverable) {
+    for (const snapshot of recoverable.snapshots) {
       const supervised = this.active.get(snapshot.ref.jobId);
       if (supervised) {
         installed.push(await this.options.store.get(snapshot.ref));
@@ -246,7 +243,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
       }
       installed.push(snapshot);
     }
-    return installed;
+    return { snapshots: installed, diagnostics: recoverable.diagnostics };
   }
 
   async dispose(): Promise<void> {
@@ -484,19 +481,6 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     }
   }
 
-  private async getAtExpectedRevision(
-    input: GenerationJobCommandInput,
-  ): Promise<GenerationJobSnapshot> {
-    const current = await this.options.store.get(input.ref);
-    if (current.revision !== input.expectedRevision) {
-      throw new JobLifecycleError(
-        'stale-revision',
-        `Generation Job ${input.ref.jobId} is at revision ${current.revision}, not ${input.expectedRevision}.`,
-      );
-    }
-    return current;
-  }
-
   private commit(
     current: GenerationJobSnapshot,
     changes: Pick<GenerationJobSnapshot, 'phase' | 'progress'> &
@@ -505,15 +489,10 @@ export class GenerationJobCoordinator implements GenerationJobPort {
     const next: GenerationJobSnapshot = {
       ...current,
       ...changes,
-      revision: current.revision + 1,
       updatedAt: this.now(),
       ...(changes.failure === undefined ? { failure: undefined } : {}),
     };
-    return this.options.store.commit({
-      ref: current.ref,
-      expectedRevision: current.revision,
-      next,
-    });
+    return this.options.store.save(next);
   }
 
   private enqueue<T>(ref: GenerationJobRef, operation: () => Promise<T>): Promise<T> {

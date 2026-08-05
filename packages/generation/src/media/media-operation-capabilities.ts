@@ -1,6 +1,5 @@
 import type { ProviderType } from '@neko/ai-contracts';
 import {
-  CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION,
   type CreativeMediaControlId,
   type CreativeMediaOperationDiagnostic,
   type CreativeMediaOperationSupport,
@@ -99,7 +98,6 @@ export function getProviderVideoOperationSupport(
     });
   }
   return {
-    version: CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION,
     mediaKind: 'video',
     operationId,
     level: profile.level,

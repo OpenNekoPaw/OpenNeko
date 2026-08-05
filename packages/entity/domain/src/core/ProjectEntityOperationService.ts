@@ -6,8 +6,8 @@ import {
   type ProjectEntityCandidateProjection,
   type ProjectEntityCandidateWorkflowPort,
   type ProjectEntityDocument,
-  type ProjectEntityDocumentRepository,
   type ProjectEntityOperationCommitPort,
+  type ProjectEntityOperationCommitRequest,
   type ProjectEntityRecord,
   type ProjectEntityFactValue,
   type ProjectEntityNames,
@@ -20,7 +20,6 @@ import {
 } from '../contracts/index';
 
 export interface CreateProjectEntityRequest {
-  readonly expectedRevision: number;
   readonly entityId: string;
   readonly semantic: ProjectEntitySemanticSnapshot;
   readonly createdAt: string;
@@ -31,7 +30,6 @@ export interface ConfirmProjectEntityCandidateRequest extends CreateProjectEntit
 }
 
 export interface MergeProjectEntityCandidateRequest {
-  readonly expectedRevision: number;
   readonly candidateId: string;
   readonly targetEntityId: string;
   readonly targetSemantic: ProjectEntitySemanticSnapshot;
@@ -39,12 +37,10 @@ export interface MergeProjectEntityCandidateRequest {
 }
 
 export interface DismissProjectEntityCandidateRequest {
-  readonly expectedRevision: number;
   readonly candidateId: string;
 }
 
 export interface EditProjectEntityRequest {
-  readonly expectedRevision: number;
   readonly entityId: string;
   readonly changes: {
     readonly names?: ProjectEntityNames;
@@ -54,14 +50,12 @@ export interface EditProjectEntityRequest {
 }
 
 export interface BindProjectEntityRepresentationRequest {
-  readonly expectedRevision: number;
   readonly entityId: string;
   readonly binding: ProjectEntityRepresentationBinding;
   readonly updatedAt: string;
 }
 
 export interface UnbindProjectEntityRepresentationRequest {
-  readonly expectedRevision: number;
   readonly entityId: string;
   readonly bindingId: string;
   readonly updatedAt: string;
@@ -69,7 +63,6 @@ export interface UnbindProjectEntityRepresentationRequest {
 
 export interface MergeProjectEntitiesRequest {
   readonly operationId: string;
-  readonly expectedRevision: number;
   readonly sourceEntityId: string;
   readonly targetEntityId: string;
   readonly targetSemantic: ProjectEntitySemanticSnapshot;
@@ -78,7 +71,6 @@ export interface MergeProjectEntitiesRequest {
 
 export interface DeprecateProjectEntityRequest {
   readonly operationId: string;
-  readonly expectedRevision: number;
   readonly entityId: string;
   readonly replacementEntityId?: string;
   readonly deprecatedAt: string;
@@ -86,12 +78,10 @@ export interface DeprecateProjectEntityRequest {
 
 export interface DeleteProjectEntityRequest {
   readonly operationId: string;
-  readonly expectedRevision: number;
   readonly entityId: string;
 }
 
 export interface ProjectEntityOperationServiceOptions {
-  readonly repository: ProjectEntityDocumentRepository;
   readonly candidates: ProjectEntityCandidateWorkflowPort;
   readonly references: readonly ProjectEntityReferenceRewriteParticipant[];
   readonly commits: ProjectEntityOperationCommitPort;
@@ -104,66 +94,64 @@ export class ProjectEntityOperationService {
     request: CreateProjectEntityRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    ensureEntityMissing(current, request.entityId);
-    const record: ProjectEntityRecord = {
-      entityId: request.entityId,
-      ...request.semantic,
-      lifecycle: { state: 'active' },
-      createdAt: request.createdAt,
-      updatedAt: request.createdAt,
-    };
-    return this.commit(current, [...current.entities, record], {}, signal);
+    return this.mutate((current) => {
+      ensureEntityMissing(current, request.entityId);
+      const record: ProjectEntityRecord = {
+        entityId: request.entityId,
+        ...request.semantic,
+        lifecycle: { state: 'active' },
+        createdAt: request.createdAt,
+        updatedAt: request.createdAt,
+      };
+      return { entities: [...current.entities, record] };
+    }, signal);
   }
 
   async confirmCandidate(
     request: ConfirmProjectEntityCandidateRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    ensureEntityMissing(current, request.entityId);
-    const candidate = await this.requireCandidate(request.candidateId, signal);
-    const record: ProjectEntityRecord = {
-      entityId: request.entityId,
-      ...request.semantic,
-      lifecycle: { state: 'active' },
-      createdAt: request.createdAt,
-      updatedAt: request.createdAt,
-    };
-    return this.commit(
-      current,
-      [...current.entities, record],
-      { candidateDecision: { kind: 'confirm', candidate } },
-      signal,
-    );
+    return this.mutate(async (current) => {
+      ensureEntityMissing(current, request.entityId);
+      const candidate = await this.requireCandidate(request.candidateId, signal);
+      const record: ProjectEntityRecord = {
+        entityId: request.entityId,
+        ...request.semantic,
+        lifecycle: { state: 'active' },
+        createdAt: request.createdAt,
+        updatedAt: request.createdAt,
+      };
+      return {
+        entities: [...current.entities, record],
+        candidateDecision: { kind: 'confirm', candidate },
+      };
+    }, signal);
   }
 
   async mergeCandidateInto(
     request: MergeProjectEntityCandidateRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    const target = requireActiveEntity(current, request.targetEntityId);
-    const candidate = await this.requireCandidate(request.candidateId, signal);
-    ensureSameKind(target.kind, request.targetSemantic.kind);
-    const updated: ProjectEntityRecord = {
-      ...target,
-      ...request.targetSemantic,
-      updatedAt: request.updatedAt,
-    };
-    return this.commit(
-      current,
-      replaceEntity(current.entities, updated),
-      { candidateDecision: { kind: 'merge-into', candidate } },
-      signal,
-    );
+    return this.mutate(async (current) => {
+      const target = requireActiveEntity(current, request.targetEntityId);
+      const candidate = await this.requireCandidate(request.candidateId, signal);
+      ensureSameKind(target.kind, request.targetSemantic.kind);
+      const updated: ProjectEntityRecord = {
+        ...target,
+        ...request.targetSemantic,
+        updatedAt: request.updatedAt,
+      };
+      return {
+        entities: replaceEntity(current.entities, updated),
+        candidateDecision: { kind: 'merge-into', candidate },
+      };
+    }, signal);
   }
 
   async dismissCandidate(
     request: DismissProjectEntityCandidateRequest,
     signal?: AbortSignal,
   ): Promise<void> {
-    await this.loadExpected(request.expectedRevision, signal);
     const candidate = await this.requireCandidate(request.candidateId, signal);
     await this.options.candidates.dismiss({ kind: 'dismiss', candidate }, signal);
   }
@@ -172,181 +160,163 @@ export class ProjectEntityOperationService {
     request: EditProjectEntityRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    const entity = requireActiveEntity(current, request.entityId);
-    if (!request.changes.names && !request.changes.facts) {
-      throw operationError(
-        'project-entity-operation-invalid',
-        'Project Entity edit requires at least one semantic change.',
-        { entityId: entity.entityId },
-      );
-    }
-    return this.commit(
-      current,
-      replaceEntity(current.entities, {
-        ...entity,
-        ...(request.changes.names ? { names: request.changes.names } : {}),
-        ...(request.changes.facts ? { facts: request.changes.facts } : {}),
-        updatedAt: request.updatedAt,
-      }),
-      {},
-      signal,
-    );
+    return this.mutate((current) => {
+      const entity = requireActiveEntity(current, request.entityId);
+      if (!request.changes.names && !request.changes.facts) {
+        throw operationError(
+          'project-entity-operation-invalid',
+          'Project Entity edit requires at least one semantic change.',
+          { entityId: entity.entityId },
+        );
+      }
+      return {
+        entities: replaceEntity(current.entities, {
+          ...entity,
+          ...(request.changes.names ? { names: request.changes.names } : {}),
+          ...(request.changes.facts ? { facts: request.changes.facts } : {}),
+          updatedAt: request.updatedAt,
+        }),
+      };
+    }, signal);
   }
 
   async bind(
     request: BindProjectEntityRepresentationRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    const entity = requireActiveEntity(current, request.entityId);
-    if (
-      current.entities.some((candidate) =>
-        candidate.representations.some(
-          (binding) => binding.bindingId === request.binding.bindingId,
-        ),
-      )
-    ) {
-      throw operationError(
-        'duplicate-project-entity-binding-id',
-        `Project Entity binding '${request.binding.bindingId}' already exists.`,
-        { entityId: entity.entityId },
-      );
-    }
-    const representations = request.binding.isDefault
-      ? [
-          ...entity.representations.map((binding) =>
-            binding.role === request.binding.role ? withoutDefault(binding) : binding,
+    return this.mutate((current) => {
+      const entity = requireActiveEntity(current, request.entityId);
+      if (
+        current.entities.some((candidate) =>
+          candidate.representations.some(
+            (binding) => binding.bindingId === request.binding.bindingId,
           ),
-          request.binding,
-        ]
-      : [...entity.representations, request.binding];
-    return this.commit(
-      current,
-      replaceEntity(current.entities, { ...entity, representations, updatedAt: request.updatedAt }),
-      {},
-      signal,
-    );
+        )
+      ) {
+        throw operationError(
+          'duplicate-project-entity-binding-id',
+          `Project Entity binding '${request.binding.bindingId}' already exists.`,
+          { entityId: entity.entityId },
+        );
+      }
+      const representations = request.binding.isDefault
+        ? [
+            ...entity.representations.map((binding) =>
+              binding.role === request.binding.role ? withoutDefault(binding) : binding,
+            ),
+            request.binding,
+          ]
+        : [...entity.representations, request.binding];
+      return {
+        entities: replaceEntity(current.entities, {
+          ...entity,
+          representations,
+          updatedAt: request.updatedAt,
+        }),
+      };
+    }, signal);
   }
 
   async unbind(
     request: UnbindProjectEntityRepresentationRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    const entity = requireActiveEntity(current, request.entityId);
-    if (!entity.representations.some((binding) => binding.bindingId === request.bindingId)) {
-      throw operationError(
-        'project-entity-operation-invalid',
-        `Project Entity binding '${request.bindingId}' does not exist.`,
-        { entityId: entity.entityId },
-      );
-    }
-    return this.commit(
-      current,
-      replaceEntity(current.entities, {
-        ...entity,
-        representations: entity.representations.filter(
-          (binding) => binding.bindingId !== request.bindingId,
-        ),
-        updatedAt: request.updatedAt,
-      }),
-      {},
-      signal,
-    );
+    return this.mutate((current) => {
+      const entity = requireActiveEntity(current, request.entityId);
+      if (!entity.representations.some((binding) => binding.bindingId === request.bindingId)) {
+        throw operationError(
+          'project-entity-operation-invalid',
+          `Project Entity binding '${request.bindingId}' does not exist.`,
+          { entityId: entity.entityId },
+        );
+      }
+      return {
+        entities: replaceEntity(current.entities, {
+          ...entity,
+          representations: entity.representations.filter(
+            (binding) => binding.bindingId !== request.bindingId,
+          ),
+          updatedAt: request.updatedAt,
+        }),
+      };
+    }, signal);
   }
 
   async merge(
     request: MergeProjectEntitiesRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    const source = requireActiveEntity(current, request.sourceEntityId);
-    const target = requireActiveEntity(current, request.targetEntityId);
-    ensureDistinctEntities(source, target);
-    ensureSameKind(source.kind, target.kind);
-    ensureSameKind(target.kind, request.targetSemantic.kind);
-    const operation = referenceOperation(current, request.operationId, 'merge', source, target);
-    const nextEntities = replaceEntity(
-      replaceEntity(current.entities, {
-        ...source,
-        lifecycle: {
-          state: 'deprecated',
-          deprecatedAt: request.committedAt,
-          replacementEntityId: target.entityId,
-        },
-        updatedAt: request.committedAt,
-      }),
-      { ...target, ...request.targetSemantic, updatedAt: request.committedAt },
-    );
-    return this.commitWithReferences(current, nextEntities, operation, signal);
+    return this.commitWithReferences((current) => {
+      const source = requireActiveEntity(current, request.sourceEntityId);
+      const target = requireActiveEntity(current, request.targetEntityId);
+      ensureDistinctEntities(source, target);
+      ensureSameKind(source.kind, target.kind);
+      ensureSameKind(target.kind, request.targetSemantic.kind);
+      return {
+        operation: referenceOperation(current, request.operationId, 'merge', source, target),
+        entities: replaceEntity(
+          replaceEntity(current.entities, {
+            ...source,
+            lifecycle: {
+              state: 'deprecated',
+              deprecatedAt: request.committedAt,
+              replacementEntityId: target.entityId,
+            },
+            updatedAt: request.committedAt,
+          }),
+          { ...target, ...request.targetSemantic, updatedAt: request.committedAt },
+        ),
+      };
+    }, signal);
   }
 
   async deprecate(
     request: DeprecateProjectEntityRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    const source = requireActiveEntity(current, request.entityId);
-    const replacement =
-      request.replacementEntityId === undefined
-        ? undefined
-        : requireActiveEntity(current, request.replacementEntityId);
-    if (replacement) {
-      ensureDistinctEntities(source, replacement);
-      ensureSameKind(source.kind, replacement.kind);
-    }
-    const operation = referenceOperation(
-      current,
-      request.operationId,
-      'deprecate',
-      source,
-      replacement,
-    );
-    const deprecated: ProjectEntityRecord = {
-      ...source,
-      lifecycle: {
-        state: 'deprecated',
-        deprecatedAt: request.deprecatedAt,
-        ...(replacement ? { replacementEntityId: replacement.entityId } : {}),
-      },
-      updatedAt: request.deprecatedAt,
-    };
-    return this.commitWithReferences(
-      current,
-      replaceEntity(current.entities, deprecated),
-      operation,
-      signal,
-    );
+    return this.commitWithReferences((current) => {
+      const source = requireActiveEntity(current, request.entityId);
+      const replacement =
+        request.replacementEntityId === undefined
+          ? undefined
+          : requireActiveEntity(current, request.replacementEntityId);
+      if (replacement) {
+        ensureDistinctEntities(source, replacement);
+        ensureSameKind(source.kind, replacement.kind);
+      }
+      const deprecated: ProjectEntityRecord = {
+        ...source,
+        lifecycle: {
+          state: 'deprecated',
+          deprecatedAt: request.deprecatedAt,
+          ...(replacement ? { replacementEntityId: replacement.entityId } : {}),
+        },
+        updatedAt: request.deprecatedAt,
+      };
+      return {
+        operation: referenceOperation(
+          current,
+          request.operationId,
+          'deprecate',
+          source,
+          replacement,
+        ),
+        entities: replaceEntity(current.entities, deprecated),
+      };
+    }, signal);
   }
 
   async delete(
     request: DeleteProjectEntityRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const current = await this.loadExpected(request.expectedRevision, signal);
-    const source = requireEntity(current, request.entityId);
-    const operation = referenceOperation(current, request.operationId, 'delete', source);
-    return this.commitWithReferences(
-      current,
-      current.entities.filter((entity) => entity.entityId !== source.entityId),
-      operation,
-      signal,
-    );
-  }
-
-  private async loadExpected(
-    expectedRevision: number,
-    signal?: AbortSignal,
-  ): Promise<ProjectEntityDocument> {
-    const current = await this.options.repository.load(signal);
-    if (current.revision !== expectedRevision) {
-      throw operationError(
-        'project-entity-revision-conflict',
-        `Project Entity revision conflict: expected ${String(expectedRevision)}, received ${String(current.revision)}.`,
-      );
-    }
-    return current;
+    return this.commitWithReferences((current) => {
+      const source = requireEntity(current, request.entityId);
+      return {
+        operation: referenceOperation(current, request.operationId, 'delete', source),
+        entities: current.entities.filter((entity) => entity.entityId !== source.entityId),
+      };
+    }, signal);
   }
 
   private async requireCandidate(
@@ -364,45 +334,57 @@ export class ProjectEntityOperationService {
     return candidate;
   }
 
-  private commit(
-    current: ProjectEntityDocument,
-    entities: readonly ProjectEntityRecord[],
-    effects: Pick<
-      Parameters<ProjectEntityOperationCommitPort['commit']>[0],
-      'candidateDecision' | 'referencePlan'
-    >,
+  private mutate(
+    mutation: (
+      current: ProjectEntityDocument,
+    ) =>
+      | ({ readonly entities: readonly ProjectEntityRecord[] } & Omit<
+          ProjectEntityOperationCommitRequest,
+          'next'
+        >)
+      | Promise<
+          { readonly entities: readonly ProjectEntityRecord[] } & Omit<
+            ProjectEntityOperationCommitRequest,
+            'next'
+          >
+        >,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
-    const next = assertProjectEntityDocument({
-      ...current,
-      revision: current.revision + 1,
-      entities,
-    });
-    return this.options.commits.commit(
-      { expectedRevision: current.revision, next, ...effects },
-      signal,
-    );
+    return this.options.commits.commit(async (current) => {
+      const { entities, ...effects } = await mutation(current);
+      return {
+        next: assertProjectEntityDocument({ ...current, entities }),
+        ...effects,
+      };
+    }, signal);
   }
 
   private async commitWithReferences(
-    current: ProjectEntityDocument,
-    entities: readonly ProjectEntityRecord[],
-    operation: ProjectEntityReferenceOperationRequest,
+    mutation: (current: ProjectEntityDocument) => {
+      readonly entities: readonly ProjectEntityRecord[];
+      readonly operation: ProjectEntityReferenceOperationRequest;
+    },
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     assertReferenceParticipants(this.options.references);
     const prepared: ProjectEntityReferenceOwnerReadyPlan[] = [];
     try {
-      const ownerPlans = [];
-      for (const ownerId of PROJECT_ENTITY_REFERENCE_OWNER_IDS) {
-        const participant = this.options.references.find((item) => item.ownerId === ownerId);
-        if (!participant) throw operationError('project-entity-reference-plan-incomplete', '');
-        const plan = await participant.prepare(operation, signal);
-        ownerPlans.push(plan);
-        if (plan.status === 'ready') prepared.push(plan);
-      }
-      const referencePlan = createProjectEntityReferenceRewritePlan({ operation, ownerPlans });
-      return await this.commit(current, entities, { referencePlan }, signal);
+      return await this.options.commits.commit(async (current) => {
+        const { entities, operation } = mutation(current);
+        const ownerPlans = [];
+        for (const ownerId of PROJECT_ENTITY_REFERENCE_OWNER_IDS) {
+          const participant = this.options.references.find((item) => item.ownerId === ownerId);
+          if (!participant) throw operationError('project-entity-reference-plan-incomplete', '');
+          const plan = await participant.prepare(operation, signal);
+          ownerPlans.push(plan);
+          if (plan.status === 'ready') prepared.push(plan);
+        }
+        const referencePlan = createProjectEntityReferenceRewritePlan({ operation, ownerPlans });
+        return {
+          next: assertProjectEntityDocument({ ...current, entities }),
+          referencePlan,
+        };
+      }, signal);
     } catch (error: unknown) {
       await abortPrepared(this.options.references, prepared, error);
       throw error;
@@ -427,7 +409,6 @@ function referenceOperation(
   return {
     operationId,
     projectId: document.projectId,
-    expectedDocumentRevision: document.revision,
     operation,
     source: { entityId: source.entityId, entityKind: source.kind },
     ...(replacement

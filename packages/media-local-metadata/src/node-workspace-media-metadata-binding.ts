@@ -1,30 +1,23 @@
-import { PathResolver, type PathVariableMap } from '@neko/shared/path';
-import { resolveGlobalStorageLayout, resolveStorageLayout } from '@neko/local-metadata';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
-import {
-  migrateLegacyMediaMetadata,
-  type MediaMetadataMigrationReport,
-} from './node-media-metadata-migration';
 import type { LocalMetadataPartition } from '@neko/local-metadata';
 import type { MediaMetadataRepository } from '@neko/local-metadata';
 import {
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
+  initializeCoreLocalMetadataTables,
+  initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
 
 export interface NodeWorkspaceMediaMetadataBinding {
   readonly workspaceId: string;
   readonly repository: MediaMetadataRepository;
   readonly partition: LocalMetadataPartition;
-  readonly migrationReport: MediaMetadataMigrationReport;
   dispose(): Promise<void>;
 }
 
 export async function createNodeWorkspaceMediaMetadataBinding(options: {
   readonly homedir: string;
   readonly workDir: string;
-  readonly pathVariables?: ReadonlyMap<string, string>;
   readonly createWorkspaceId?: () => string;
   readonly now?: () => string;
 }): Promise<NodeWorkspaceMediaMetadataBinding> {
@@ -34,8 +27,8 @@ export async function createNodeWorkspaceMediaMetadataBinding(options: {
       databasePath: resolveGlobalStorageLayout(options.homedir).database,
       busyTimeoutMs: 2_000,
     });
-    await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeMediaMetadataTables(metadataStore);
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -44,45 +37,19 @@ export async function createNodeWorkspaceMediaMetadataBinding(options: {
       ...(options.now ? { now: options.now } : {}),
     });
     const identity = identityResolution.identity;
-    const pathResolver = new PathResolver(createPathVariables(options));
     const partition: LocalMetadataPartition = {
       scope: 'workspace',
       workspaceId: identity.workspaceId,
       domain: 'media-metadata',
     };
-    const layout = resolveStorageLayout(options.workDir, options.homedir);
-    const migrationReport = await migrateLegacyMediaMetadata({
-      cachePath: layout.project.local.cache.mediaMetadata,
-      metadataStore,
-      partition,
-      pathResolver,
-      ...(options.now ? { now: options.now } : {}),
-    });
     return {
       workspaceId: identity.workspaceId,
       repository: metadataStore.repositories.mediaMetadata,
       partition,
-      migrationReport,
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {
     await metadataStore.dispose();
     throw error;
   }
-}
-
-function createPathVariables(options: {
-  readonly homedir: string;
-  readonly workDir: string;
-  readonly pathVariables?: ReadonlyMap<string, string>;
-}): PathVariableMap {
-  const variables = new Map(options.pathVariables);
-  variables.set('HOME', normalizePath(options.homedir));
-  variables.set('WORKSPACE', normalizePath(options.workDir));
-  return variables;
-}
-
-function normalizePath(value: string): string {
-  const normalized = value.replace(/\\/gu, '/');
-  return normalized.length > 1 ? normalized.replace(/\/+$/u, '') : normalized;
 }

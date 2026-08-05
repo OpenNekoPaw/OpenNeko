@@ -1,6 +1,5 @@
 {
   "name": "@neko/assets-domain",
-  "version": "0.0.1",
   "private": true,
   "description": "Desktop resource browser and media library copy contracts",
   "license": "AGPL-3.0-or-later",

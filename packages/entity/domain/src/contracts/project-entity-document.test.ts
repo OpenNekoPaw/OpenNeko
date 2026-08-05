@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
   ProjectEntityContractError,
   assertProjectEntityDocument,
   createEmptyProjectEntityDocument,
   decodeProjectEntityDocument,
   encodeProjectEntityDocument,
   isProjectEntityCandidateProjection,
-  validateProjectEntityCommitRequest,
   type ProjectEntityDocument,
   type ProjectEntityRecord,
 } from './project-entity-document';
@@ -60,7 +58,7 @@ describe('Project Entity document contract', () => {
 
     const decoded = decodeProjectEntityDocument(document);
 
-    expect(decoded).toEqual({ ok: true, document });
+    expect(decoded).toEqual({ ok: true, document, diagnostics: [] });
   });
 
   it('records an immutable import base independently from current Project Entity facts', () => {
@@ -117,15 +115,20 @@ describe('Project Entity document contract', () => {
         ]),
       ),
     ).toMatchObject({
-      ok: false,
+      ok: true,
+      document: { entities: [] },
       diagnostics: [{ code: 'invalid-project-entity-asset-provenance' }],
     });
   });
 
-  it('rejects unknown versions and projection or workflow authority fields', () => {
-    expect(decodeProjectEntityDocument({ ...createDocument([]), schemaVersion: 2 })).toMatchObject({
+  it('rejects removed version fields and projection or workflow authority fields', () => {
+    expect(decodeProjectEntityDocument({ ...createDocument([]), schemaVersion: 1 })).toMatchObject({
       ok: false,
-      diagnostics: [{ code: 'unsupported-project-entity-version' }],
+      diagnostics: [{ code: 'invalid-project-entity-document' }],
+    });
+    expect(decodeProjectEntityDocument({ ...createDocument([]), revision: 3 })).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: 'invalid-project-entity-document' }],
     });
     expect(decodeProjectEntityDocument({ ...createDocument([]), candidates: [] })).toMatchObject({
       ok: false,
@@ -145,7 +148,8 @@ describe('Project Entity document contract', () => {
         ]),
       ),
     ).toMatchObject({
-      ok: false,
+      ok: true,
+      document: { entities: [] },
       diagnostics: [{ code: 'invalid-project-entity-document' }],
     });
   });
@@ -153,7 +157,8 @@ describe('Project Entity document contract', () => {
   it('rejects duplicate Entity and binding identities', () => {
     const entity = createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' });
     expect(decodeProjectEntityDocument(createDocument([entity, entity]))).toMatchObject({
-      ok: false,
+      ok: true,
+      document: { entities: [entity] },
       diagnostics: [{ code: 'duplicate-project-entity-id', entityId: 'character-rin' }],
     });
 
@@ -179,7 +184,8 @@ describe('Project Entity document contract', () => {
         ]),
       ),
     ).toMatchObject({
-      ok: false,
+      ok: true,
+      document: { entities: [expect.objectContaining({ entityId: entity.entityId })] },
       diagnostics: [{ code: 'duplicate-project-entity-binding-id', bindingId: 'binding-shared' }],
     });
   });
@@ -207,12 +213,13 @@ describe('Project Entity document contract', () => {
     ]);
 
     expect(decodeProjectEntityDocument(document)).toMatchObject({
-      ok: false,
+      ok: true,
+      document: { entities: [] },
       diagnostics: [{ code: 'invalid-project-entity-document' }],
     });
   });
 
-  it('validates lifecycle references and expected revision commits', () => {
+  it('validates lifecycle references within the exact document', () => {
     const deprecated = {
       ...createEntity({ entityId: 'character-old', kind: 'character', canonical: 'Old Rin' }),
       lifecycle: {
@@ -226,17 +233,54 @@ describe('Project Entity document contract', () => {
       createEntity({ entityId: 'character-rin', kind: 'character', canonical: 'Rin' }),
     ]);
 
-    expect(validateProjectEntityCommitRequest({ expectedRevision: 0, next: document })).toEqual({
-      expectedRevision: 0,
-      next: document,
-    });
-    expect(() =>
-      validateProjectEntityCommitRequest({ expectedRevision: 1, next: document }),
-    ).toThrowError(ProjectEntityContractError);
-    expect(decodeProjectEntityDocument(createDocument([deprecated], 1))).toMatchObject({
-      ok: false,
+    expect(assertProjectEntityDocument(document)).toEqual(document);
+    expect(decodeProjectEntityDocument(createDocument([deprecated]))).toMatchObject({
+      ok: true,
+      document: { entities: [] },
       diagnostics: [{ code: 'invalid-project-entity-document', entityId: 'character-old' }],
     });
+  });
+
+  it('keeps valid sibling Entities available with exact diagnostics for invalid records', () => {
+    const valid = createEntity({
+      entityId: 'character-rin',
+      kind: 'character',
+      canonical: 'Rin',
+    });
+    const decoded = decodeProjectEntityDocument({
+      ...createDocument([]),
+      entities: [
+        valid,
+        {
+          ...createEntity({
+            entityId: 'character-invalid',
+            kind: 'character',
+            canonical: 'Invalid',
+          }),
+          names: { canonical: '', aliases: [] },
+        },
+      ],
+    });
+
+    expect(decoded).toEqual({
+      ok: true,
+      document: createDocument([valid]),
+      diagnostics: [
+        expect.objectContaining({
+          code: 'invalid-project-entity-document',
+          entityId: 'character-invalid',
+        }),
+      ],
+    });
+    expect(() =>
+      assertProjectEntityDocument({
+        ...createDocument([]),
+        entities: [
+          valid,
+          { ...valid, entityId: 'character-invalid', names: { canonical: '', aliases: [] } },
+        ],
+      }),
+    ).toThrow(ProjectEntityContractError);
   });
 
   it('keeps candidate evidence outside the canonical document and preserves its owner', () => {
@@ -267,9 +311,7 @@ describe('Project Entity document contract', () => {
 
   it('creates an empty canonical document without guessing a Project identity', () => {
     expect(createEmptyProjectEntityDocument('project-neko')).toEqual({
-      schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
       projectId: 'project-neko',
-      revision: 0,
       entities: [],
     });
     expect(() => createEmptyProjectEntityDocument('/Users/example/project')).toThrowError(
@@ -278,14 +320,9 @@ describe('Project Entity document contract', () => {
   });
 });
 
-function createDocument(
-  entities: readonly ProjectEntityRecord[],
-  revision = 1,
-): ProjectEntityDocument {
+function createDocument(entities: readonly ProjectEntityRecord[]): ProjectEntityDocument {
   return {
-    schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
     projectId: 'project-neko',
-    revision,
     entities,
   };
 }

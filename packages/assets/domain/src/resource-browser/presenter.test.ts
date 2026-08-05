@@ -62,7 +62,7 @@ describe('Resource Browser presenter', () => {
         bindingAvailability: [],
         sourceOwners: ['project-entity'],
       },
-      { canvasAvailable: true, projectRevision: 3 },
+      { canvasAvailable: true },
     );
 
     expect(item).toMatchObject({
@@ -99,7 +99,7 @@ describe('Resource Browser presenter', () => {
         },
         sourceOwners: ['workspace'],
       },
-      { projectRevision: 3 },
+      {},
     );
 
     expect(item).toMatchObject({

@@ -90,10 +90,11 @@ class EntitySearchAdapter implements ProjectSearchAdapter {
     if (!projection || !(await projection.readRevision())) {
       return { candidates: [], bindingAvailability: [] };
     }
-    const records = await projection.repository.list({
+    const result = await projection.repository.list({
       partition: projection.partition,
       kinds: ['entity-candidate', 'binding-availability'],
     });
+    const records = result.records;
     return {
       candidates: records.flatMap((record) =>
         record.kind === 'entity-candidate' && record.value.freshness !== 'failed'

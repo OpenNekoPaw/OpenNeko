@@ -29,7 +29,6 @@ export type {
   CanvasOperationSource,
 } from './edit-operations';
 export {
-  CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   CANVAS_HOST_RUNTIME_ROUTES,
   CanvasHostRuntimeContractError,
   assertCanvasHostRuntimeIdentity,

@@ -60,7 +60,7 @@ export function AssetManagementRoot({
   const [mutationError, setMutationError] = useState<string>();
   const collectionRef = useRef<HTMLDivElement>(null);
   const focusCollectionAfterRead = useRef(false);
-  const hoverGeneration = useRef(0);
+  const hoverRequest = useRef<object>({});
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
   const [hoverPreview, setHoverPreview] = useState<{
     readonly itemId: string;
@@ -68,7 +68,7 @@ export function AssetManagementRoot({
   }>();
 
   const cancelHoverPreview = useCallback((): void => {
-    hoverGeneration.current += 1;
+    hoverRequest.current = {};
     if (hoverTimer.current) {
       clearTimeout(hoverTimer.current);
       hoverTimer.current = undefined;
@@ -94,7 +94,7 @@ export function AssetManagementRoot({
     let active = true;
     cancelHoverPreview();
     const timeout = setTimeout(() => {
-      void runtime.refresh(projection.revision).then(
+      void runtime.refresh().then(
         () => {
           if (active) {
             if (focusCollectionAfterRead.current) {
@@ -115,12 +115,12 @@ export function AssetManagementRoot({
   const refresh = (): void => {
     if (!projection) return;
     setPendingMutation(true);
-    void runtime.refresh(projection.revision).finally(() => setPendingMutation(false));
+    void runtime.refresh().finally(() => setPendingMutation(false));
   };
 
   const updateFilter = (filter: AssetCenterFilterProjection): void => {
     if (!projection) return;
-    void Promise.resolve(runtime.updateFilter(projection.revision, filter))
+    void Promise.resolve(runtime.updateFilter(filter))
       .then(setProjection)
       .catch((error: unknown) => setMutationError(describeError(error)));
   };
@@ -163,15 +163,15 @@ export function AssetManagementRoot({
   const beginHoverPreview = (item: GlobalLibraryItem): void => {
     if (!item.thumbnail) return;
     cancelHoverPreview();
-    const generation = hoverGeneration.current;
+    const request = hoverRequest.current;
     hoverTimer.current = setTimeout(() => {
       hoverTimer.current = undefined;
       void runtime.resolveThumbnail(item, 'hover').then(
         (result) => {
           if (
-            generation === hoverGeneration.current &&
+            request === hoverRequest.current &&
             result.itemId === item.id &&
-            result.thumbnailRevision === item.thumbnail?.revision
+            result.sourceFingerprint === item.thumbnail?.sourceFingerprint
           ) {
             setHoverPreview({ itemId: item.id, dataUrl: result.dataUrl });
           }
@@ -190,8 +190,7 @@ export function AssetManagementRoot({
     try {
       const nextNotice = await operation();
       cancelHoverPreview();
-      const current = await Promise.resolve(runtime.getSnapshot());
-      await runtime.refresh(current.revision);
+      await runtime.refresh();
       if (nextNotice) setNotice(nextNotice);
     } catch (error: unknown) {
       const message = describeError(error);
@@ -259,7 +258,7 @@ export function AssetManagementRoot({
                 disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
                 onClick={() =>
                   void runMutation(async () => {
-                    await runtime.addMediaLibrary(locationKind, projection.revision);
+                    await runtime.addMediaLibrary(locationKind);
                     return undefined;
                   })
                 }
@@ -274,7 +273,7 @@ export function AssetManagementRoot({
               disabled={!interactive || pendingMutation || projection.catalog.status !== 'ready'}
               onClick={() =>
                 void runMutation(async () => {
-                  await runtime.importAssets(projection.revision);
+                  await runtime.importAssets();
                   return labels.imported;
                 })
               }
@@ -426,7 +425,6 @@ export function AssetManagementRoot({
                 }
                 void runtime
                   .select({
-                    expectedRevision: projection.revision,
                     owner: item.owner,
                     itemId: item.id,
                   })
@@ -439,13 +437,13 @@ export function AssetManagementRoot({
                   ) {
                     return labels.cancelled;
                   }
-                  await runtime.removeAsset(asset, projection.revision);
+                  await runtime.removeAsset(asset);
                   return labels.removed;
                 })
               }
               onRelinkLibrary={(library) =>
                 void runMutation(async () => {
-                  await runtime.relinkMediaLibrary(library.libraryId, projection.revision);
+                  await runtime.relinkMediaLibrary(library.libraryId);
                   return labels.relinked;
                 })
               }
@@ -458,13 +456,13 @@ export function AssetManagementRoot({
                   ) {
                     return labels.cancelled;
                   }
-                  await runtime.removeMediaLibrary(library.libraryId, projection.revision);
+                  await runtime.removeMediaLibrary(library.libraryId);
                   return labels.removed;
                 })
               }
               onRevealLibrary={(library) =>
                 void runMutation(async () => {
-                  await runtime.revealMediaLibrary(library.libraryId, projection.revision);
+                  await runtime.revealMediaLibrary(library.libraryId);
                   return labels.revealed;
                 })
               }
@@ -624,7 +622,7 @@ function GlobalLibraryIcon({
         if (
           active &&
           result.itemId === item.id &&
-          result.thumbnailRevision === item.thumbnail?.revision
+          result.sourceFingerprint === item.thumbnail?.sourceFingerprint
         ) {
           setDataUrl(result.dataUrl);
         }

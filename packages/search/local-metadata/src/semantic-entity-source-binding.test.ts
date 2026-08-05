@@ -34,7 +34,10 @@ describe('workspace semantic/entity metadata binding', () => {
       sourceFingerprint: request.source.fingerprint,
       freshness: 'fresh',
     });
-    await expect(binding.listSources('workspace')).resolves.toEqual([request.source]);
+    await expect(binding.listSources('workspace')).resolves.toEqual({
+      sources: [request.source],
+      diagnostics: [],
+    });
     await expect(binding.listCandidateProjections()).resolves.toEqual([
       expect.objectContaining({ candidateId: 'candidate:auto:character:nova' }),
     ]);
@@ -189,9 +192,7 @@ function commitRequest(): SemanticEntitySourceCommitRequest {
     result: {
       sourceId: source.sourceId,
       sourceFingerprint: source.fingerprint,
-      entityRevision: 1,
       index: {
-        version: 1,
         indexId: source.sourceId,
         assetId: source.sourceId,
         sourceRef: { kind: 'file', path: source.portablePath },
@@ -255,9 +256,7 @@ function occurrence(input: {
 
 const CANONICAL_ENTITY_SOURCE = `${JSON.stringify(
   {
-    schemaVersion: 1,
     projectId: '56f0b16b-a627-4d47-bcf4-42a15a119dae',
-    revision: 1,
     entities: [],
   },
   null,

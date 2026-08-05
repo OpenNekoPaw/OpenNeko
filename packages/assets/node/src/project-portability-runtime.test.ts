@@ -4,9 +4,9 @@ import * as path from 'node:path';
 import type { LocalMetadataRepositories } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
-  AGENT_STATE_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+  initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
 import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -33,7 +33,7 @@ describe('Desktop project portability runtime', () => {
       globalMediaLibraryRoot: fixture.globalRoot,
       metadataRepositories: fixture.repositories,
       shell: {
-        getProjection: async () => ({ endpointEpoch: 'endpoint-a' }),
+        getProjection: async () => ({ rendererSessionId: 'endpoint-a' }),
         resolveProjectWorkspace: async () => fixture.workspace,
       },
       selectDestination,
@@ -42,7 +42,7 @@ describe('Desktop project portability runtime', () => {
       projectId: 'project-a',
       workspaceId: fixture.workspace.workspaceId,
       windowId: 'window-a',
-      endpointEpoch: 'endpoint-a',
+      rendererSessionId: 'endpoint-a',
     };
 
     const inspection = await runtime.inspect('window-a', request('inspect-a', identity));
@@ -94,7 +94,7 @@ describe('Desktop project portability runtime', () => {
     await expect(
       runtime.inspect(
         'window-a',
-        request('inspect-stale', { ...identity, endpointEpoch: 'stale-endpoint' }),
+        request('inspect-stale', { ...identity, rendererSessionId: 'stale-endpoint' }),
       ),
     ).rejects.toThrow('Project portability project identity is stale.');
     expect(selectDestination).toHaveBeenCalledWith({
@@ -144,9 +144,9 @@ async function createFixture(): Promise<{
     databasePath: path.join(home, '.neko', 'neko.db'),
     busyTimeoutMs: 2_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
-  await store.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
+  await initializeMediaMetadataTables(store);
   const workspace: AssetWorkspaceResolution = {
     workspaceId: 'workspace-a',
     workspacePath,
@@ -176,9 +176,7 @@ async function writeBinding(workspacePath: string): Promise<void> {
     path.join(workspacePath, 'neko/entities.json'),
     `${JSON.stringify(
       {
-        schemaVersion: 1,
         projectId: 'workspace-a',
-        revision: 1,
         entities: [
           {
             entityId: 'character-a',

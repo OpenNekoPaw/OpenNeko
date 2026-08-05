@@ -64,6 +64,41 @@
   white-space: nowrap;
 }
 
+.neko-resource-browser__context-menu {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  width: max-content;
+  min-width: 178px;
+  padding: 4px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 7px;
+  color: var(--neko-foreground, #26312c);
+  background: var(--neko-elevated, #ffffff);
+  box-shadow: var(--neko-shadow, 0 8px 24px rgb(21 31 27 / 16%));
+}
+
+.neko-resource-browser__context-menu > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 7px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.neko-resource-browser__dialog input {
+  min-width: 220px;
+  height: 30px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 6px;
+  padding: 0 8px;
+  color: inherit;
+  background: var(--neko-input-background, #f7f8f7);
+}
+
 .neko-resource-browser button {
   border: 1px solid transparent;
   border-radius: 7px;
@@ -451,6 +486,16 @@
 
 .neko-resource-browser-status.is-error {
   color: var(--neko-errorForeground, #a3404e);
+}
+
+.neko-resource-browser__diagnostics {
+  display: grid;
+  gap: 2px;
+  padding: 5px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--neko-errorForeground, #a3404e) 35%, transparent);
+  color: var(--neko-errorForeground, #a3404e);
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .neko-resource-browser__dialog-backdrop {

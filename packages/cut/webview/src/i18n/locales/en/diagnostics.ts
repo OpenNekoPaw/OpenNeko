@@ -12,7 +12,6 @@ export const diagnostics = {
   'diagnostic.locked': 'Unlock the Clip or Track before editing it.',
   'diagnostic.document-mismatch': 'The edit belongs to a different Cut document.',
   'diagnostic.session-mismatch': 'The Cut editor session changed. Try the edit again.',
-  'diagnostic.stale-revision': 'The Cut changed before this edit completed. Try again.',
   'diagnostic.external-change-conflict':
     'The Cut changed on disk and cannot be overwritten by this edit.',
   'diagnostic.invalid-document': 'The Cut document is invalid and cannot be edited.',

@@ -10,7 +10,6 @@ import {
   validateWorkspaceLinkedMediaLibraryName,
 } from './workspace-linked-media-library';
 
-export const WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION = 1 as const;
 export const PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION = 1 as const;
 
 export type ProjectContentReferenceOwnerKind = 'canvas' | 'cut' | 'entity-representation';
@@ -42,7 +41,6 @@ export interface WorkspaceMediaLibraryRequirement {
 }
 
 export interface WorkspaceMediaLibraryRequirementSnapshot {
-  readonly contractVersion: typeof WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION;
   readonly revision: string;
   readonly coverage: 'complete' | 'incomplete';
   readonly missingOwnerKinds: readonly ProjectContentReferenceOwnerKind[];
@@ -95,7 +93,6 @@ export interface WorkspaceMediaLibraryStatus {
 }
 
 export interface WorkspaceMediaLibraryRecoveryPlan {
-  readonly contractVersion: typeof WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION;
   readonly planId: string;
   readonly workspaceId: string;
   readonly libraryName: string;
@@ -199,7 +196,6 @@ export function aggregateWorkspaceMediaLibraryRequirements(input: {
   }
 
   return {
-    contractVersion: WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION,
     revision: stableRequirementRevision(revisionParts),
     coverage: missingOwnerKinds.length === 0 ? 'complete' : 'incomplete',
     missingOwnerKinds,

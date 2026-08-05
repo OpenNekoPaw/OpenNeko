@@ -58,15 +58,12 @@ export interface MediaProbe {
 }
 
 export interface PcmStreamDescriptor {
-  readonly version: 1;
-  readonly protocol: 'neko-pcm-f32le-v1';
   readonly streamUrl: string;
   readonly sampleRate: number;
   readonly channels: number;
 }
 
 export interface HtmlAudioDescriptor {
-  readonly version: 1;
   readonly url: string;
   readonly mimeType: string;
   readonly durationSeconds: number;
@@ -81,7 +78,6 @@ export type HtmlVideoPreparationProfile =
   | 'h264-sdr-transcode';
 
 export interface HtmlVideoNativeCapabilities {
-  readonly version: 1;
   readonly av1Mp4: boolean;
   readonly vp9Mp4: boolean;
 }
@@ -91,7 +87,6 @@ export interface HtmlVideoPreparationOptions {
 }
 
 export interface HtmlVideoDescriptor {
-  readonly version: 1;
   readonly url: string;
   readonly mimeType: string;
   readonly preparationProfile: HtmlVideoPreparationProfile;

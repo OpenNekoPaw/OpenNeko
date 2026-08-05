@@ -25,7 +25,7 @@ export interface DesktopProjectPortabilityIdentity {
   readonly projectId: string;
   readonly workspaceId: string;
   readonly windowId: string;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
 }
 
 export interface DesktopProjectPortabilityRequest {
@@ -346,18 +346,18 @@ export function isSameDesktopProjectPortabilityIdentity(
     left.projectId === right.projectId &&
     left.workspaceId === right.workspaceId &&
     left.windowId === right.windowId &&
-    left.endpointEpoch === right.endpointEpoch
+    left.rendererSessionId === right.rendererSessionId
   );
 }
 
 function parseDesktopProjectPortabilityIdentity(value: unknown): DesktopProjectPortabilityIdentity {
   const record = requireRecord(value, 'Project portability identity must be an object.');
-  requireOnlyKeys(record, ['projectId', 'workspaceId', 'windowId', 'endpointEpoch']);
+  requireOnlyKeys(record, ['projectId', 'workspaceId', 'windowId', 'rendererSessionId']);
   return {
     projectId: requireOpaque(record['projectId'], 'Project identity is invalid.'),
     workspaceId: requireOpaque(record['workspaceId'], 'Workspace identity is invalid.'),
     windowId: requireOpaque(record['windowId'], 'Window identity is invalid.'),
-    endpointEpoch: requireOpaque(record['endpointEpoch'], 'Endpoint epoch is invalid.'),
+    rendererSessionId: requireOpaque(record['rendererSessionId'], 'Endpoint epoch is invalid.'),
   };
 }
 

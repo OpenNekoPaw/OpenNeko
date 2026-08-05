@@ -1,7 +1,6 @@
 import type { ProjectEntityRecord } from '@neko/entity-domain';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  RESOURCE_BROWSER_CONTRACT_VERSION,
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserContractError,
   createResourceBrowserChildrenRequest,
@@ -22,8 +21,8 @@ const identity: ResourceBrowserIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'resource-view-1',
-  viewEpoch: 3,
-  endpointEpoch: 'endpoint-1',
+  viewInstanceId: 'view-instance-3',
+  rendererSessionId: 'endpoint-1',
 };
 
 describe('Resource Browser controller', () => {
@@ -52,7 +51,7 @@ describe('Resource Browser controller', () => {
           resourceId: resourceId ?? '',
           descriptor: thumbnail ?? {
             descriptorId: 'missing',
-            revision: 'missing',
+            sourceFingerprint: 'missing',
             mediaType: 'image',
           },
         }),
@@ -71,24 +70,19 @@ describe('Resource Browser controller', () => {
       }),
     );
     const refreshed = await controller.execute({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'refresh-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.refresh,
     });
     const withGlobalLibrary = await controller.execute({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'global-library-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
-      expectedRevision: 2,
     });
     const withDirectoryLibrary = await controller.execute({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'directory-library-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.addDirectoryLibrary,
-      expectedRevision: 3,
     });
 
     expect(snapshot.facet).toBe('files');
@@ -99,12 +93,52 @@ describe('Resource Browser controller', () => {
       representationLocator: { kind: 'workspace-file', path: 'characters/neko.png' },
     });
     expect(source.refresh).toHaveBeenCalledWith(identity);
-    expect(refreshed.revision).toBe(2);
+    expect(refreshed.facet).toBe('entities');
     expect(interactions.linkGlobalLibrary).toHaveBeenCalledWith({ identity });
     expect(interactions.addDirectoryLibrary).toHaveBeenCalledWith({ identity });
-    expect(withGlobalLibrary.revision).toBe(3);
-    expect(withDirectoryLibrary.revision).toBe(4);
+    expect(withGlobalLibrary.facet).toBe('entities');
+    expect(withDirectoryLibrary.facet).toBe('entities');
     expect(listener.mock.calls.map(([event]) => event.sequence)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('keeps valid Entity items available beside an exact record diagnostic', async () => {
+    const source = createSource();
+    const entityResult = await source.entities.list({ identity, query: '', limit: 20 });
+    vi.mocked(source.entities.list).mockResolvedValue({
+      ...entityResult,
+      diagnostics: [
+        {
+          code: 'invalid-project-entity-document',
+          message: "Project Entity 'character-invalid' violates the canonical fact contract.",
+          entityId: 'character-invalid',
+        },
+      ],
+    });
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+
+    await expect(
+      controller.search(
+        createResourceBrowserSearchRequest({
+          requestId: 'search-local-diagnostic',
+          identity,
+          facet: 'entities',
+          query: '',
+        }),
+      ),
+    ).resolves.toMatchObject({
+      items: [expect.objectContaining({ label: 'Neko' })],
+      diagnostics: [
+        {
+          code: 'invalid-project-entity-document',
+          message: "Project Entity 'character-invalid' violates the canonical fact contract.",
+          recordId: 'character-invalid',
+        },
+      ],
+    });
   });
 
   it('fences stale owners and stale resource identity before an effect runs', async () => {
@@ -119,7 +153,7 @@ describe('Resource Browser controller', () => {
       controller.search(
         createResourceBrowserSearchRequest({
           requestId: 'stale-search',
-          identity: { ...identity, viewEpoch: identity.viewEpoch + 1 },
+          identity: { ...identity, viewInstanceId: 'view-instance-stale' },
           facet: 'media',
           query: '',
         }),
@@ -129,7 +163,6 @@ describe('Resource Browser controller', () => {
     } satisfies Partial<ResourceBrowserContractError>);
     await expect(
       controller.execute({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'stale-item',
         identity,
         route: RESOURCE_BROWSER_ROUTES.preview,
@@ -137,7 +170,6 @@ describe('Resource Browser controller', () => {
         targetPreview: {
           viewId: 'preview:resource-view-1:temporary',
           presentation: 'temporary',
-          expectedWorkbenchRevision: 0,
         },
       }),
     ).rejects.toMatchObject({
@@ -153,7 +185,7 @@ describe('Resource Browser controller', () => {
           requestId: 'stale-thumbnail',
           identity,
           resourceId: snapshot.items[0]?.resourceId ?? 'missing',
-          descriptor: { ...thumbnail, revision: 'stale-revision' },
+          descriptor: { ...thumbnail, sourceFingerprint: 'stale-fingerprint' },
         }),
       ),
     ).rejects.toMatchObject({
@@ -162,7 +194,110 @@ describe('Resource Browser controller', () => {
     expect(interactions.resolveThumbnail).not.toHaveBeenCalled();
   });
 
-  it('delegates Entity intents only after capability, identity, and project revision checks', async () => {
+  it('retains opened facet projections and does not reload an unchanged facet', async () => {
+    const source = createSource();
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+
+    const files = await controller.getSnapshot();
+    const media = await controller.search(
+      createResourceBrowserSearchRequest({
+        requestId: 'open-media',
+        identity,
+        facet: 'media',
+        query: '',
+      }),
+    );
+    const restoredFiles = await controller.search(
+      createResourceBrowserSearchRequest({
+        requestId: 'restore-files',
+        identity,
+        facet: 'files',
+        query: '',
+      }),
+    );
+
+    expect(media.facet).toBe('media');
+    expect(restoredFiles).toBe(files);
+    expect(source.files.list).toHaveBeenCalledTimes(1);
+    expect(source.media.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a valid sibling facet available when one facet entry read fails', async () => {
+    const source = createSource();
+    source.media.search = vi.fn(async () => {
+      throw new Error('Media entry media:broken is invalid.');
+    });
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions: createInteractions(),
+    });
+    const files = await controller.getSnapshot();
+
+    await expect(
+      controller.search(
+        createResourceBrowserSearchRequest({
+          requestId: 'media-invalid-entry',
+          identity,
+          facet: 'media',
+          query: '',
+        }),
+      ),
+    ).rejects.toThrow('media:broken');
+
+    await expect(
+      controller.search(
+        createResourceBrowserSearchRequest({
+          requestId: 'files-after-media-failure',
+          identity,
+          facet: 'files',
+          query: '',
+        }),
+      ),
+    ).resolves.toBe(files);
+    expect(source.files.list).toHaveBeenCalledOnce();
+  });
+
+  it('routes Workspace File mutations only through Files interactions', async () => {
+    const interactions = createInteractions();
+    const controller = new ResourceBrowserController({
+      identity,
+      source: createSource(),
+      interactions,
+    });
+    await controller.getSnapshot();
+
+    await controller.execute({
+      requestId: 'create-directory-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createDirectory,
+      directoryName: 'References',
+    });
+    await controller.execute({
+      requestId: 'import-files-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.importFiles,
+    });
+    const current = await controller.getSnapshot();
+    const file = current.items[0];
+    if (!file) throw new Error('Expected a projected Workspace File.');
+    await controller.execute({
+      requestId: 'trash-file-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.trashContent,
+      resourceId: file.resourceId,
+    });
+
+    expect(interactions.createDirectory).toHaveBeenCalledWith({ identity, name: 'References' });
+    expect(interactions.importFiles).toHaveBeenCalledWith({ identity });
+    expect(interactions.trashContent).toHaveBeenCalledWith({ identity, item: file });
+  });
+
+  it('delegates Entity intents only after capability and exact identity checks', async () => {
     const interactions = createInteractions();
     const controller = new ResourceBrowserController({
       identity,
@@ -177,7 +312,6 @@ describe('Resource Browser controller', () => {
     }
     const intent = {
       type: 'edit' as const,
-      expectedRevision: item.inspector.projectRevision,
       entityId: item.entityRef.entityId,
       changes: { names: { canonical: 'Neko Aoki', aliases: ['Neko'] } },
     };
@@ -192,16 +326,6 @@ describe('Resource Browser controller', () => {
     );
     expect(interactions.manageEntity).toHaveBeenCalledWith({ identity, item, intent });
 
-    await expect(
-      controller.execute(
-        createResourceBrowserEntityIntentRequest({
-          requestId: 'entity-stale',
-          identity,
-          resourceId: item.resourceId,
-          intent: { ...intent, expectedRevision: intent.expectedRevision - 1 },
-        }),
-      ),
-    ).rejects.toMatchObject({ code: 'resource-browser-stale-identity' });
     await expect(
       controller.execute(
         createResourceBrowserEntityIntentRequest({
@@ -228,7 +352,6 @@ describe('Resource Browser controller', () => {
 
     await expect(
       controller.execute({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'canvas-without-target',
         identity,
         route: RESOURCE_BROWSER_ROUTES.addToCanvas,
@@ -400,7 +523,6 @@ function createSource(): ResourceBrowserProjectionSource & {
     },
     entities: {
       list: vi.fn(async () => ({
-        projectRevision: 3,
         projections: [
           {
             projectionId: `entity:${entity.entityId}`,
@@ -428,6 +550,9 @@ function createInteractions(): ResourceBrowserInteractionPort & {
   readonly addToCut: ReturnType<typeof vi.fn>;
 } {
   return {
+    createDirectory: vi.fn(async () => undefined),
+    importFiles: vi.fn(async () => 'imported' as const),
+    trashContent: vi.fn(async () => undefined),
     manageEntity: vi.fn(async () => undefined),
     linkGlobalLibrary: vi.fn(async () => 'linked' as const),
     addDirectoryLibrary: vi.fn(async () => 'added' as const),

@@ -18,10 +18,12 @@ export interface CanvasWebviewRootProps {
   readonly locale?: SupportedLocale;
   readonly runtime: CanvasHostRuntime;
   readonly delegate?: CanvasWebviewDelegate;
+  readonly lifecyclePresentation?: 'active' | 'suspended';
 }
 
 export function CanvasWebviewRoot({
   delegate,
+  lifecyclePresentation = 'active',
   locale,
   runtime,
 }: CanvasWebviewRootProps): ReactElement {
@@ -46,13 +48,21 @@ export function CanvasWebviewRoot({
   }, [locale]);
 
   return (
-    <div className="canvas-webview-root" data-canvas-webview-root="true">
+    <div
+      className="canvas-webview-root"
+      data-canvas-webview-root="true"
+      data-lifecycle-presentation={lifecyclePresentation}
+    >
       <I18nProvider service={i18nService}>
         <CanvasHostProvider host={host}>
           <CanvasStoreScopeProvider operationPort={host}>
-            <ErrorBoundary>
-              <CanvasApp host={host} />
-            </ErrorBoundary>
+            {lifecyclePresentation === 'active' ? (
+              <ErrorBoundary>
+                <CanvasApp host={host} />
+              </ErrorBoundary>
+            ) : (
+              <div data-canvas-suspended="true" hidden />
+            )}
           </CanvasStoreScopeProvider>
         </CanvasHostProvider>
       </I18nProvider>

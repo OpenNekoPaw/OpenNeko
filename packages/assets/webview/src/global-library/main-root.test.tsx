@@ -85,9 +85,7 @@ function projectionForPreview(
       },
 ) {
   return {
-    schemaVersion: 1 as const,
     identity: { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
-    revision: 1,
     filter: createDefaultAssetCenterFilter(),
     catalog: { status: 'loading' as const },
     preview,

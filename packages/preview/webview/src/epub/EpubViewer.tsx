@@ -17,11 +17,7 @@ import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection, type DocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import { imgSrcToBase64 } from '../shared/imageToBase64';
-import {
-  usePersistedState,
-  initPersistedStore,
-  notifySubscribers,
-} from '../shared/usePersistedState';
+import { usePersistedState, usePersistedStateRestore } from '../shared/usePersistedState';
 
 /** Minimal section interface — epubjs doesn't export Section from its main entry.
  *  The actual runtime returns Promises despite the .d.ts saying otherwise. */
@@ -259,8 +255,9 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   const [currentChapter, setCurrentChapter] = usePersistedState('currentChapter', '');
   const [currentChapterHref, setCurrentChapterHref] = usePersistedState('currentChapterHref', '');
   const [viewMode, setViewMode] = usePersistedState<ViewMode>('viewMode', 'waterfall');
+  const restorePersistedState = usePersistedStateRestore();
   const [chapterCount, setChapterCount] = useState(0);
-  const [chapterLayoutVersion, setChapterLayoutVersion] = useState(0);
+  const [chapterLayoutToken, setChapterLayoutToken] = useState<object>({});
   const [waterfallPageMetrics, setWaterfallPageMetrics] = useState<WaterfallPageMetrics>({
     currentPage: 1,
     pageCount: 1,
@@ -279,7 +276,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   // Rendition mode refs (paginated)
   const viewerRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<Book | null>(null);
-  const bookLoadEpochRef = useRef(0);
+  const bookLoadRequestRef = useRef<object>({});
   const renditionRef = useRef<Rendition | null>(null);
   const restoreChapterRef = useRef<() => void>(() => undefined);
   const tocRef = useRef<TocItem[]>([]);
@@ -342,7 +339,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     if (chapterLayoutFrameRef.current !== null) return;
     chapterLayoutFrameRef.current = window.requestAnimationFrame(() => {
       chapterLayoutFrameRef.current = null;
-      setChapterLayoutVersion((version) => version + 1);
+      setChapterLayoutToken({});
     });
   }, []);
 
@@ -465,10 +462,10 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   }, []);
 
   const settleLoadedChapterHeight = useCallback(
-    async (entry: SpineEntry, el: HTMLElement, loadEpoch: number) => {
+    async (entry: SpineEntry, el: HTMLElement, loadRequest: object) => {
       await waitForChapterResources(el);
       if (
-        bookLoadEpochRef.current !== loadEpoch ||
+        bookLoadRequestRef.current !== loadRequest ||
         chapterRefsMap.current.get(entry.index) !== el ||
         !loadedChaptersRef.current.has(entry.index)
       ) {
@@ -602,8 +599,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   useHostMessage((msg) => {
     const m = msg as unknown as { type: string; payload: Record<string, unknown> };
     if (m.type === 'document:restoreState') {
-      initPersistedStore(m.payload as Record<string, unknown>);
-      notifySubscribers();
+      restorePersistedState(m.payload);
     } else if (!sourceUrl && msg.type === 'document:data') {
       void loadEpubFromUrl(msg.payload.url);
     } else if (msg.type === 'epub:navigate') {
@@ -658,7 +654,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     return () => {
-      bookLoadEpochRef.current += 1;
+      bookLoadRequestRef.current = {};
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       if (chapterLayoutFrameRef.current !== null) {
         cancelAnimationFrame(chapterLayoutFrameRef.current);
@@ -835,7 +831,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         measureContainerRef.current?.replaceChildren();
         setWaterfallPageMetrics({ currentPage: 1, pageCount: 1 });
         setWaterfallReady(true);
-        setChapterLayoutVersion((version) => version + 1);
+        setChapterLayoutToken({});
       } else {
         await renderBook(book, tocItems);
       }
@@ -884,8 +880,8 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   /** Load EPUB from either the Preview Node host or an embeddable archive URL. */
   const loadEpubFromUrl = useCallback(
     async (url: string) => {
-      const loadEpoch = bookLoadEpochRef.current + 1;
-      bookLoadEpochRef.current = loadEpoch;
+      const loadRequest = {};
+      bookLoadRequestRef.current = loadRequest;
       renditionRef.current?.destroy();
       renditionRef.current = null;
       bookRef.current?.destroy();
@@ -905,7 +901,8 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
           ) => Promise<object>,
         });
         bookRef.current = book;
-        const isCurrent = () => bookLoadEpochRef.current === loadEpoch && bookRef.current === book;
+        const isCurrent = () =>
+          bookLoadRequestRef.current === loadRequest && bookRef.current === book;
         const initialized = await initBook(book, isCurrent);
         if (!initialized) {
           book.destroy();
@@ -915,7 +912,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         loadingRef.current = false;
         restoreChapterRef.current();
       } catch (err) {
-        if (bookLoadEpochRef.current !== loadEpoch) return;
+        if (bookLoadRequestRef.current !== loadRequest) return;
         setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
         loadingRef.current = false;
@@ -961,7 +958,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     async (entry: SpineEntry) => {
       const book = bookRef.current;
       if (!book) return;
-      const loadEpoch = bookLoadEpochRef.current;
+      const loadRequest = bookLoadRequestRef.current;
       if (loadedChaptersRef.current.has(entry.index) || loadingChaptersRef.current.has(entry.index))
         return;
 
@@ -974,7 +971,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         const html = await entry.section.render(book.load.bind(book));
 
         if (
-          bookLoadEpochRef.current !== loadEpoch ||
+          bookLoadRequestRef.current !== loadRequest ||
           bookRef.current !== book ||
           chapterRefsMap.current.get(entry.index) !== el
         ) {
@@ -993,9 +990,9 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         const height = commitChapterHeight(entry.index, measureRenderedChapterHeight(el));
         el.style.minHeight = `${height}px`;
         updateWaterfallPageMetrics();
-        void settleLoadedChapterHeight(entry, el, loadEpoch).catch((error: unknown) => {
+        void settleLoadedChapterHeight(entry, el, loadRequest).catch((error: unknown) => {
           if (
-            bookLoadEpochRef.current !== loadEpoch ||
+            bookLoadRequestRef.current !== loadRequest ||
             bookRef.current !== book ||
             chapterRefsMap.current.get(entry.index) !== el ||
             !loadedChaptersRef.current.has(entry.index)
@@ -1191,7 +1188,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   useEffect(() => {
     if (viewMode !== 'waterfall' || !waterfallReady) return;
     updateWaterfallPageMetrics();
-  }, [viewMode, waterfallReady, chapterLayoutVersion, updateWaterfallPageMetrics]);
+  }, [viewMode, waterfallReady, chapterLayoutToken, updateWaterfallPageMetrics]);
 
   useEffect(() => {
     if (viewMode !== 'waterfall' || !waterfallReady) return;

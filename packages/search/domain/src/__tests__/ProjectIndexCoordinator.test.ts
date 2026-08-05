@@ -119,10 +119,8 @@ describe('ProjectIndexCoordinator', () => {
         },
         semantic: {
           providerId: 'semantic.test',
-          modelVersion: 'm1',
-          chunkingVersion: 'c1',
+          model: 'embedding-local',
           sourceIdentity: 'doc-1',
-          indexVersion: 'i1',
         },
       }),
     });
@@ -144,10 +142,8 @@ describe('ProjectIndexCoordinator', () => {
       expect.objectContaining({
         provider: expect.objectContaining({ semantic: true, rag: true }),
         semantic: expect.objectContaining({
-          modelVersion: 'm1',
-          chunkingVersion: 'c1',
+          model: 'embedding-local',
           sourceIdentity: 'doc-1',
-          indexVersion: 'i1',
         }),
       }),
     );

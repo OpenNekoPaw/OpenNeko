@@ -27,7 +27,6 @@ export interface ProjectEntityReferenceTarget {
 export interface ProjectEntityReferenceOperationRequest {
   readonly operationId: string;
   readonly projectId: string;
-  readonly expectedDocumentRevision: number;
   readonly operation: ProjectEntityReferenceOperationKind;
   readonly source: ProjectEntityReferenceTarget;
   readonly replacement?: ProjectEntityReferenceTarget;
@@ -53,7 +52,6 @@ export interface ProjectEntityReferenceOwnerReadyPlan {
   readonly status: 'ready';
   readonly ownerId: ProjectEntityReferenceOwnerId;
   readonly operationId: string;
-  readonly expectedOwnerRevision: string;
   readonly preparationId: string;
   readonly occurrences: readonly ProjectEntityReferenceOccurrence[];
   readonly resolutions: readonly ProjectEntityReferenceResolution[];
@@ -93,7 +91,6 @@ export function assertProjectEntityReferenceOperationRequest(
   if (
     !isStableIdentity(value.operationId) ||
     !isStableIdentity(value.projectId) ||
-    !isNonNegativeInteger(value.expectedDocumentRevision) ||
     !isOneOf(value.operation, PROJECT_ENTITY_REFERENCE_OPERATION_KINDS) ||
     !isReferenceTarget(value.source) ||
     (replacementRequired && !isReferenceTarget(value.replacement)) ||
@@ -165,8 +162,10 @@ function assertOwnerPlan(
     }
     return;
   }
-  if (!isStableIdentity(plan.expectedOwnerRevision) || !isStableIdentity(plan.preparationId)) {
-    throw incompletePlan(`Project Entity reference owner '${plan.ownerId}' omitted preconditions.`);
+  if (!isStableIdentity(plan.preparationId)) {
+    throw incompletePlan(
+      `Project Entity reference owner '${plan.ownerId}' omitted preparation identity.`,
+    );
   }
   const occurrenceIds = new Set(plan.occurrences.map((occurrence) => occurrence.referenceId));
   const resolutionIds = plan.resolutions.map((resolution) => resolution.referenceId);
@@ -253,8 +252,4 @@ function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value
 
 function isStableIdentity(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0 && !/[\\/\0]/u.test(value);
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }

@@ -13,7 +13,7 @@ import type { LocalMetadataStore } from '../contracts';
 import { executeNodeWorkspaceIdentityRecoveryAction } from '../node-workspace-identity-recovery';
 import { resolveNodeWorkspaceIdentity } from '../node-workspace-identity';
 import { createNodeSqliteLocalMetadataStore } from '../node-sqlite-local-metadata-store';
-import { M1_LOCAL_METADATA_MIGRATIONS } from '../sqlite';
+import { initializeCoreLocalMetadataTables } from '../sqlite';
 
 const SOURCE_WORKSPACE_ID = '9b2de3b5-5f50-4be4-9551-71fb5b512489';
 const CLONE_WORKSPACE_ID = 'bd82b3ee-b9d9-4aa0-a635-23fa356e67df';
@@ -562,7 +562,7 @@ async function createStore(homedir: string): Promise<LocalMetadataStore> {
     databasePath: resolveGlobalStorageLayout(homedir).database,
     busyTimeoutMs: 1_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
   return store;
 }
 
@@ -588,7 +588,6 @@ function failCloneRegistration(store: LocalMetadataStore): LocalMetadataStore {
         return result;
       }),
     readPartitionRevision: (partition) => store.readPartitionRevision(partition),
-    migrateNamespace: (migrations, options) => store.migrateNamespace(migrations, options),
     backup: (request) => store.backup(request),
     restore: (request) => store.restore(request),
     integrityCheck: () => store.integrityCheck(),

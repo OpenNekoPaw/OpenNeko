@@ -10,7 +10,6 @@ describe('EntityInspector', () => {
         locale="en"
         onIntent={onIntent}
         projection={{
-          projectRevision: 4,
           status: 'candidate',
           kind: 'character',
           names: { canonical: 'Nova', aliases: [] },
@@ -29,7 +28,6 @@ describe('EntityInspector', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(onIntent).toHaveBeenCalledWith({
       type: 'confirm',
-      expectedRevision: 4,
       candidateId: 'candidate-nova',
       accepted: { kind: 'character', names: { canonical: 'Nova', aliases: [] }, facts: {} },
     });
@@ -41,7 +39,6 @@ describe('EntityInspector', () => {
         locale="en"
         onIntent={vi.fn()}
         projection={{
-          projectRevision: 4,
           status: 'confirmed',
           kind: 'location',
           names: { canonical: 'School', aliases: [] },

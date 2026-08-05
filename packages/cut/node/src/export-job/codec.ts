@@ -44,20 +44,31 @@ export function decodeExportJobSnapshot(serialized: string): ExportJobSnapshot {
   } catch (error) {
     throw invalidPersistence('Persisted Export Job snapshot is not valid JSON.', error);
   }
-  if (isRecord(value) && ('engineJobId' in value || hasRetiredExecutionShape(value))) {
-    throw invalidPersistence(
-      'Persisted Export Job uses the retired Engine schema and cannot be resumed. Retry the export to create an executor-owned job.',
-    );
-  }
   if (!isExportJobSnapshot(value)) {
-    throw invalidPersistence('Persisted Export Job snapshot violates schema version 1.');
+    throw invalidPersistence('Persisted Export Job snapshot violates the canonical contract.');
   }
   deepFreeze(value, new WeakSet<object>());
   return value;
 }
 
 function isExportJobSnapshot(value: unknown): value is ExportJobSnapshot {
-  if (!isRecord(value)) return false;
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [
+      'ref',
+      'phase',
+      'createdAt',
+      'updatedAt',
+      'retryOf',
+      'failure',
+      'request',
+      'progress',
+      'executionId',
+      'result',
+    ])
+  ) {
+    return false;
+  }
   const ref = value['ref'];
   const retryOf = value['retryOf'];
   const phase = value['phase'];
@@ -67,7 +78,6 @@ function isExportJobSnapshot(value: unknown): value is ExportJobSnapshot {
   if (
     !isExportRef(ref) ||
     !isJobPhase(phase) ||
-    !isPositiveInteger(value['revision']) ||
     !isTimestamp(value['createdAt']) ||
     !isTimestamp(value['updatedAt']) ||
     value['updatedAt'] < value['createdAt'] ||
@@ -99,11 +109,6 @@ function isExportJobRequest(value: unknown): boolean {
     isExportConfig(value['config']) &&
     isJsonRecord(value['executionConfig'])
   );
-}
-
-function hasRetiredExecutionShape(value: Readonly<Record<string, unknown>>): boolean {
-  const request = value['request'];
-  return isRecord(request) && 'engineConfig' in request;
 }
 
 function isExportConfig(value: unknown): value is ExportConfig {
@@ -222,6 +227,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
 }
 
 function invalidPersistence(message: string, cause?: unknown): ExportJobError {

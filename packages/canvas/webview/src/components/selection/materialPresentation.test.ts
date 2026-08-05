@@ -123,12 +123,11 @@ describe('resolveCanvasMaterialPresentation', () => {
     });
   });
 
-  it('poisons path, ResourceCacheSource, provenance, and legacy summary classifiers in normal runtime', () => {
+  it('does not classify paths, cache refs, or generic provenance as generated material', () => {
     const data: MediaCanvasNode['data'] = {
       assetPath: 'neko/generated/image/task-1.png',
       mediaType: 'image',
       provenance: { projectionId: 'generated-output:legacy' },
-      generationContext: { prompt: 'Legacy prompt' },
     };
     Reflect.set(data, 'resourceRef', {
       id: 'generated-image-legacy',

@@ -13,7 +13,6 @@ describe('buildCanvasNode', () => {
     const group = createNode('group', { label: 'Chapter' });
     const job = createNode('job', {
       jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-      revision: 4,
       title: 'Generate key art',
       status: 'running',
     });
@@ -47,7 +46,6 @@ describe('buildCanvasNode', () => {
       type: 'job',
       data: {
         jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-        revision: 4,
         title: 'Generate key art',
         status: 'running',
         inputRefs: [],
@@ -93,7 +91,7 @@ describe('buildCanvasNode', () => {
         title: 'Generate key art',
         status: 'running',
       }),
-    ).toThrow('Canvas Job revision must be a non-negative integer');
+    ).toThrow('Canvas Job data rejects removed internal revision fields');
     expect(() =>
       createNode('media', { assetPath: 'media/path-only.png', mediaType: 'image' }),
     ).toThrow('Canvas Media creation requires a canonical ContentLocator');

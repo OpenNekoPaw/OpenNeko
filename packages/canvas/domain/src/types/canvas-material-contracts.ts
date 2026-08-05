@@ -187,7 +187,6 @@ export type CanvasMaterialPersistenceDiagnosticCode =
   | 'canvas-material-media-kind-invalid'
   | 'canvas-material-generation-evidence-required'
   | 'canvas-material-generation-evidence-forbidden'
-  | 'canvas-material-legacy-generation-evidence'
   | 'canvas-material-entity-evidence-invalid'
   | 'canvas-material-non-serializable-value'
   | 'canvas-material-sensitive-value-forbidden';
@@ -512,15 +511,6 @@ export function validateCanvasMaterialNodePersistence(
       code: 'canvas-material-content-locator-invalid',
       target: `${target}.contentLocator`,
       message: 'Canvas material ContentLocator is invalid or non-portable.',
-    });
-  }
-
-  if (data['generationContext'] !== undefined) {
-    diagnostics.push({
-      code: 'canvas-material-legacy-generation-evidence',
-      target: `${target}.generationContext`,
-      message:
-        'Legacy generationContext cannot classify material; migrate to a generated-output locator with stable Generation Job evidence.',
     });
   }
 

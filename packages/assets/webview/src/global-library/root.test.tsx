@@ -159,7 +159,7 @@ describe('AssetManagementRoot', () => {
       mediaType: 'image',
       thumbnail: {
         descriptorId: 'media-library:thumb123',
-        revision: '2026-07-31T00:00:00.000Z:50',
+        sourceFingerprint: '2026-07-31T00:00:00.000Z:50',
         mediaType: 'image',
       },
     };
@@ -214,8 +214,8 @@ describe('AssetManagementRoot', () => {
     const runtime = createRuntime(library);
     runtime.source.readMediaLibraryChildren = vi
       .fn()
-      .mockResolvedValueOnce({ revision: 0, items: [directory] })
-      .mockResolvedValue({ revision: 0, items: [] });
+      .mockResolvedValueOnce({ items: [directory] })
+      .mockResolvedValue({ items: [] });
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -271,9 +271,9 @@ describe('AssetManagementRoot', () => {
     const runtime = createRuntime(library);
     runtime.source.searchMediaLibraries = vi
       .fn()
-      .mockResolvedValueOnce({ revision: 0, items: [library] })
-      .mockResolvedValueOnce({ revision: 0, items: [searchDirectory] });
-    runtime.source.readMediaLibraryChildren = vi.fn(async () => ({ revision: 0, items: [] }));
+      .mockResolvedValueOnce({ items: [library] })
+      .mockResolvedValueOnce({ items: [searchDirectory] });
+    runtime.source.readMediaLibraryChildren = vi.fn(async () => ({ items: [] }));
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -322,10 +322,9 @@ describe('AssetManagementRoot', () => {
       availability: 'available',
     };
     const runtime = createRuntime(asset);
-    runtime.source.searchAssets = vi.fn(async () => ({ revision: 4, items: [asset] }));
+    runtime.source.searchAssets = vi.fn(async () => ({ items: [asset] }));
     runtime.source.importAssets = vi.fn(async () => ({
       status: 'completed' as const,
-      revision: 4,
       outcomes: [{ status: 'added' as const, label: 'hero.png', assetId: asset.id }],
     }));
     const confirmAction = vi.fn(async () => true);
@@ -354,7 +353,7 @@ describe('AssetManagementRoot', () => {
     );
     await act(async () => importButton?.click());
     await act(async () => wait(180));
-    expect(runtime.source.importAssets).toHaveBeenCalledWith(4);
+    expect(runtime.source.importAssets).toHaveBeenCalledWith();
 
     const removeButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Remove Asset Library record: hero.png"]',
@@ -364,7 +363,7 @@ describe('AssetManagementRoot', () => {
     expect(confirmAction).toHaveBeenCalledWith(
       'Remove "hero.png" from the Asset Library? The source file will be preserved.',
     );
-    expect(runtime.source.removeAsset).toHaveBeenCalledWith(asset.id, 4);
+    expect(runtime.source.removeAsset).toHaveBeenCalledWith(asset.id);
     expect(runtime.source.removeMediaLibrary).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
@@ -383,11 +382,10 @@ describe('AssetManagementRoot', () => {
     const runtime = createRuntime(asset);
     runtime.source.searchAssets = vi
       .fn()
-      .mockResolvedValueOnce({ revision: 4, items: [asset] })
+      .mockResolvedValueOnce({ items: [asset] })
       .mockImplementationOnce(() => refreshed.promise);
     runtime.source.importAssets = vi.fn(async () => ({
       status: 'completed' as const,
-      revision: 5,
       outcomes: [{ status: 'added' as const, label: 'hero.png', assetId: asset.id }],
     }));
     const container = document.createElement('div');
@@ -417,7 +415,7 @@ describe('AssetManagementRoot', () => {
     expect(container.textContent).not.toContain('Asset import finished.');
 
     await act(async () => {
-      refreshed.resolve({ revision: 5, items: [asset] });
+      refreshed.resolve({ items: [asset] });
       await wait(0);
     });
     expect(importButton?.disabled).toBe(false);
@@ -431,10 +429,9 @@ describe('AssetManagementRoot', () => {
     const hover = deferred<{
       readonly dataUrl: string;
       readonly descriptorId: string;
-      readonly expectedCatalogRevision: number;
       readonly itemId: string;
       readonly owner: 'media-library';
-      readonly thumbnailRevision: string;
+      readonly sourceFingerprint: string;
       readonly variant: 'hover';
     }>();
     const item: GlobalMediaLibraryItem = {
@@ -446,7 +443,7 @@ describe('AssetManagementRoot', () => {
       mediaType: 'image',
       thumbnail: {
         descriptorId: 'media-library:thumb123',
-        revision: 'revision:50',
+        sourceFingerprint: 'fingerprint:50',
         mediaType: 'image',
       },
     };
@@ -473,9 +470,8 @@ describe('AssetManagementRoot', () => {
       hover.resolve({
         owner: 'media-library',
         itemId: item.id,
-        expectedCatalogRevision: 0,
         descriptorId: item.thumbnail?.descriptorId ?? '',
-        thumbnailRevision: item.thumbnail?.revision ?? '',
+        sourceFingerprint: item.thumbnail?.sourceFingerprint ?? '',
         variant: 'hover',
         dataUrl: 'data:image/png;base64,LATE',
       });
@@ -535,35 +531,30 @@ function createRuntime(item: GlobalLibraryItem): {
 } {
   const source: GlobalLibraryBrowserRuntime = {
     searchAssets: vi.fn(async () => ({
-      revision: 0,
       items: item.owner === 'global-asset-library' ? [item] : [],
     })),
     searchMediaLibraries: vi.fn(async () => ({
-      revision: 0,
       items: item.owner === 'media-library' ? [item] : [],
     })),
-    readMediaLibraryChildren: vi.fn(async () => ({ revision: 0, items: [] })),
+    readMediaLibraryChildren: vi.fn(async () => ({ items: [] })),
     resolveThumbnail: vi.fn(async (request) => ({
       ...request,
       dataUrl: 'data:image/png;base64,AA==',
     })),
-    importAssets: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
+    importAssets: vi.fn(async () => ({ status: 'cancelled' as const })),
     removeAsset: vi.fn(async (assetId: string) => ({
       status: 'removed' as const,
       assetId,
-      revision: 1,
     })),
-    addMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
-    relinkMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
+    addMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),
+    relinkMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),
     removeMediaLibrary: vi.fn(async (libraryId: string) => ({
       status: 'removed' as const,
       libraryId,
-      revision: 1,
     })),
     revealMediaLibrary: vi.fn(async (libraryId: string) => ({
       status: 'revealed' as const,
       libraryId,
-      revision: 0,
     })),
   };
   const session = new AssetCenterSession({

@@ -206,7 +206,6 @@ function createVideoStub(): HTMLVideoElement {
 
 function createDescriptor(mediaTimeOriginSeconds: number) {
   return {
-    version: 1 as const,
     url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
     mimeType: 'video/mp4; codecs="avc1.4d0020"',
     mediaTimeOriginSeconds,

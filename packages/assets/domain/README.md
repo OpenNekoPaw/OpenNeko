@@ -62,5 +62,6 @@ managed connection; the ordinary Asset remove action marks only its membership r
 preserves the source file. Uninstall and unreferenced-byte garbage collection are separate explicit
 operations. Hover previews are static images and do not open or autoplay a media session.
 
-Retired Entity Asset graph data is handled only by explicit inspection and migration in
-`@neko/entity-node`; the normal Assets runtime does not read a legacy Asset catalog.
+Retired Entity Asset graph data stays outside product runtime reachability. The normal Assets
+runtime reads only the canonical Media Library and Entity owners and leaves unrelated bytes
+untouched.

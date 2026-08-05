@@ -5,7 +5,6 @@ import {
   NEKO_AGENT_EMBODY_CHARACTER_COMMAND,
   NPC_TEST_BENCH_AS_SLASH_COMMAND,
   NPC_TEST_BENCH_EXIT_AS_SLASH_COMMAND,
-  NPC_TRANSCRIPT_ARTIFACT_VERSION,
   isNpcAgentWorkflowRequest,
   isNpcEvaluationReport,
   isNpcEvaluationSuggestion,
@@ -82,7 +81,6 @@ const profile: NpcProfileSource = {
 };
 
 const evaluation: NpcEvaluationReport = {
-  version: NPC_TRANSCRIPT_ARTIFACT_VERSION,
   createdAt: '2026-06-01T00:00:00.000Z',
   entityRef,
   summary: 'Persona is mostly consistent, with one relationship gap.',
@@ -125,7 +123,6 @@ const evaluation: NpcEvaluationReport = {
 };
 
 const artifact: NpcTranscriptArtifact = {
-  version: NPC_TRANSCRIPT_ARTIFACT_VERSION,
   createdAt: '2026-06-01T00:05:00.000Z',
   entityRef,
   mode: 'roleplay',
@@ -159,6 +156,17 @@ describe('character role workflow contracts', () => {
     expect(NEKO_AGENT_CHARACTER_DIALOGUE_COMMAND).toBe('neko.agent.characterDialogue');
     expect(NEKO_AGENT_EMBODY_CHARACTER_COMMAND).toBe('neko.agent.embodyCharacter');
     expect(CHARACTER_ROLE_TEST_ARTIFACT_DIR).toBe('.neko/character-tests');
+  });
+
+  it('rejects removed transcript and evaluation version fields locally', () => {
+    const versionedArtifact: Record<string, unknown> = { ...artifact };
+    const versionedEvaluation: Record<string, unknown> = { ...evaluation };
+    Reflect.set(versionedArtifact, 'version', 1);
+    Reflect.set(versionedEvaluation, 'version', 1);
+
+    expect(isNpcTranscriptArtifact(versionedArtifact)).toBe(false);
+    expect(isNpcEvaluationReport(versionedEvaluation)).toBe(false);
+    expect(isNpcTranscriptArtifact(artifact)).toBe(true);
   });
 
   it('validates launch requests from Agent entry points', () => {

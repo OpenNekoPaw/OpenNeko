@@ -81,7 +81,6 @@ function createJsonCodec(formatId: string, extension: string): ProjectFormatCode
   return {
     formatId,
     fileExtensions: [extension],
-    currentVersion: '1',
     load: (json) => ({ document: JSON.parse(json) as unknown, diagnostics: [] }),
     save: (document) => ({ content: JSON.stringify(document), diagnostics: [] }),
   };

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { copyFile, link, lstat, mkdir, realpath, rm } from 'node:fs/promises';
+import { COPYFILE_EXCL } from 'node:constants';
 import * as path from 'node:path';
 import type { NekoHostPorts } from '@neko/host/ports';
 import { detectPreviewContentKind, type PreviewContentKind } from '@neko/preview-domain';
@@ -71,6 +72,8 @@ export interface ResourceBrowserNodeSourceOptions {
     readonly absolutePath: string;
   }) => Promise<void>;
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
+  readonly selectWorkspaceFiles: (windowId: string) => Promise<readonly string[] | undefined>;
+  readonly trashWorkspaceItem: (absolutePath: string) => Promise<void>;
   readonly selectGlobalLibrary: (input: {
     readonly windowId: string;
     readonly libraries: readonly {
@@ -82,7 +85,6 @@ export interface ResourceBrowserNodeSourceOptions {
   readonly mutateGlobalMediaLibraries: <Result>(
     operation: () => Promise<Result>,
   ) => Promise<Result>;
-  readonly didMutateGlobalMediaLibraries: () => void;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
   readonly addToCanvas: ResourceBrowserInteractionPort['addToCanvas'];
   readonly addToCut: ResourceBrowserInteractionPort['addToCut'];
@@ -335,6 +337,26 @@ export function createResourceBrowserNodeProjectionSource(
     new WorkspaceMediaLibrarySyncService(options.globalMediaLibraryRoot);
 
   const interactions: ResourceBrowserInteractionPort = {
+    async createDirectory({ parent, name }): Promise<void> {
+      const absoluteParent = await resolveWorkspaceFileParent(options.workspace, parent);
+      const target = path.join(absoluteParent, name);
+      await mkdir(target);
+    },
+    async importFiles({ identity, parent }): Promise<'imported' | 'cancelled'> {
+      const selectedFiles = await options.selectWorkspaceFiles(identity.windowId);
+      if (!selectedFiles || selectedFiles.length === 0) return 'cancelled';
+      const absoluteParent = await resolveWorkspaceFileParent(options.workspace, parent);
+      await importWorkspaceFiles(selectedFiles, absoluteParent);
+      return 'imported';
+    },
+    async trashContent({ item }): Promise<void> {
+      const absolutePath = await resolveWorkspaceContentLocator(options.workspace, item.locator);
+      const workspaceRoot = await realpath(options.workspace.workspacePath);
+      if (absolutePath === workspaceRoot || !isPathInside(absolutePath, workspaceRoot)) {
+        throw new Error('Resource Browser Trash target escapes the authorized Workspace.');
+      }
+      await options.trashWorkspaceItem(absolutePath);
+    },
     manageEntity: options.manageEntity,
     async linkGlobalLibrary({ identity }): Promise<'linked' | 'cancelled'> {
       const linkedNames = new Set(
@@ -381,7 +403,6 @@ export function createResourceBrowserNodeProjectionSource(
           locationKind: 'local',
         });
       });
-      options.didMutateGlobalMediaLibraries();
       return 'added';
     },
     async relinkSource({ identity, item }): Promise<'relinked' | 'cancelled'> {
@@ -396,7 +417,6 @@ export function createResourceBrowserNodeProjectionSource(
           locationKind: 'local',
         }),
       );
-      options.didMutateGlobalMediaLibraries();
       return 'relinked';
     },
     async removeSource({ item }): Promise<void> {
@@ -449,6 +469,99 @@ export function createResourceBrowserNodeProjectionSource(
     addToCut: options.addToCut,
   };
   return { source, interactions };
+}
+
+async function resolveWorkspaceFileParent(
+  workspace: AssetWorkspaceResolution,
+  parent: ResourceBrowserContentItem | undefined,
+): Promise<string> {
+  const workspaceRoot = await realpath(workspace.workspacePath);
+  if (!parent) return workspaceRoot;
+  if (parent.facet !== 'files' || parent.kind !== 'directory') {
+    throw new Error('Resource Browser Workspace File parent must be a Files directory.');
+  }
+  const absoluteParent = await resolveWorkspaceContentLocator(workspace, parent.locator);
+  const entry = await lstat(absoluteParent);
+  if (
+    !entry.isDirectory() ||
+    entry.isSymbolicLink() ||
+    !isPathInside(absoluteParent, workspaceRoot)
+  ) {
+    throw new Error('Resource Browser Workspace File parent is outside the authorized Workspace.');
+  }
+  return absoluteParent;
+}
+
+async function importWorkspaceFiles(
+  selectedFiles: readonly string[],
+  absoluteParent: string,
+): Promise<void> {
+  const sources = await Promise.all(
+    selectedFiles.map(async (selectedPath) => {
+      const entry = await lstat(selectedPath);
+      if (!entry.isFile() || entry.isSymbolicLink()) {
+        throw new Error('Resource Browser import accepts regular files only.');
+      }
+      const source = await realpath(selectedPath);
+      const name = path.basename(source);
+      if (!isPortableVisibleEntryName(name)) {
+        throw new Error('Resource Browser import requires a visible portable file name.');
+      }
+      return { source, name, destination: path.join(absoluteParent, name) };
+    }),
+  );
+  if (new Set(sources.map((source) => source.name)).size !== sources.length) {
+    throw new Error('Resource Browser import contains duplicate file names.');
+  }
+  await Promise.all(sources.map((source) => assertPathAbsent(source.destination)));
+
+  const staging = path.join(absoluteParent, `.neko-import-${randomUUID()}.tmp`);
+  const published: string[] = [];
+  await mkdir(staging);
+  try {
+    for (const source of sources) {
+      await copyFile(source.source, path.join(staging, source.name), COPYFILE_EXCL);
+    }
+    for (const source of sources) {
+      await link(path.join(staging, source.name), source.destination);
+      published.push(source.destination);
+    }
+  } catch (error: unknown) {
+    await Promise.all(published.map((target) => rm(target, { force: true })));
+    throw error;
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
+function isPortableVisibleEntryName(name: string): boolean {
+  return (
+    Boolean(name) &&
+    name !== '.' &&
+    name !== '..' &&
+    !name.startsWith('.') &&
+    !/[\\/\0]/u.test(name)
+  );
+}
+
+async function assertPathAbsent(target: string): Promise<void> {
+  try {
+    await lstat(target);
+  } catch (error: unknown) {
+    if (readErrorCode(error) === 'ENOENT') return;
+    throw error;
+  }
+  throw new Error(`Resource Browser destination '${path.basename(target)}' already exists.`);
+}
+
+function isPathInside(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative.length > 0 &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 
 function requireLibraryName(item: ResourceBrowserItem): string {

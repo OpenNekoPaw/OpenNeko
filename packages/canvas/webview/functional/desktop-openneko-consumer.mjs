@@ -42,44 +42,16 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     screenshot,
     waitForSelector,
   }) {
-    await waitForSelector('[data-home-composition="task-launchpad"]');
-    const homeLaunchpad = await evaluate(`(() => {
-      const main = document.querySelector('.home-main');
-      const launchpad = document.querySelector('[data-home-composition="task-launchpad"]');
-      const brand = document.querySelector('[data-primary-sidebar="application"] .home-brand');
-      const title = brand?.querySelector('.home-brand-title');
-      const heading = launchpad?.querySelector('.home-launchpad-heading');
-      const intentActions = launchpad?.querySelector('.home-intent-actions');
-      if (!(main instanceof HTMLElement)) throw new Error('Desktop Home Main is missing.');
-      if (!(launchpad instanceof HTMLElement)) {
-        throw new Error('Desktop Home Agent launchpad is missing.');
-      }
-      if (!(brand instanceof HTMLElement) || !(title instanceof HTMLButtonElement)) {
-        throw new Error('Desktop Home text brand action is missing.');
-      }
-      if (!(heading instanceof HTMLElement) || !(intentActions instanceof HTMLElement)) {
-        throw new Error('Desktop Home Agent heading or intent actions are missing.');
-      }
-      const mainRect = main.getBoundingClientRect();
-      const launchpadRect = launchpad.getBoundingClientRect();
-      return {
-        brandText: brand.textContent?.trim() ?? '',
-        brandChildCount: brand.children.length,
-        brandIconCount: brand.querySelectorAll('svg, .brand-mark').length,
-        titleActionLabel: title.getAttribute('aria-label'),
-        headingIconCount: heading.querySelectorAll('svg, .home-launchpad-heading-icon').length,
-        headingTextAlign: getComputedStyle(heading).textAlign,
-        intentActionIconCount: intentActions.querySelectorAll('svg').length,
-        horizontalCenterDelta: Math.abs(
-          launchpadRect.left + launchpadRect.width / 2 - (mainRect.left + mainRect.width / 2),
-        ),
-        verticalCenterDelta: Math.abs(
-          launchpadRect.top + launchpadRect.height / 2 - (mainRect.top + mainRect.height / 2),
-        ),
-      };
-    })()`);
-    checkpoint('home-agent-entry-centered', homeLaunchpad);
-    const homeLaunchpadScreenshot = await screenshot('home-agent-entry-centered');
+    await waitForSelector('[data-primary-sidebar="application"]');
+    const unifiedWorkbench = await evaluate(`(() => ({
+      shellCount: document.querySelectorAll('[data-neko-controlled-workbench="true"]').length,
+      primarySidebarCount: document.querySelectorAll('[data-primary-sidebar="application"]').length,
+      legacyHomeCount: document.querySelectorAll(
+        '[data-home-composition="task-launchpad"], .home-main, .home-launchpad-heading',
+      ).length,
+    }))()`);
+    checkpoint('unified-workbench-entry', unifiedWorkbench);
+    const unifiedWorkbenchScreenshot = await screenshot('unified-workbench-entry');
     await openFixtureWorkspace(evaluate);
     await replaceWorkbench(
       evaluate,
@@ -91,7 +63,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           views: [
             {
               viewId: 'canvas:functional:video',
-              viewEpoch: tab.viewEpoch,
+              viewInstanceId: tab.viewInstanceId,
               projectId: project.projectId,
               workspaceId: project.workspaceId,
               kind: 'canvas',
@@ -101,7 +73,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
             },
             {
               viewId: 'canvas:functional:audio',
-              viewEpoch: tab.viewEpoch,
+              viewInstanceId: tab.viewInstanceId,
               projectId: project.projectId,
               workspaceId: project.workspaceId,
               kind: 'canvas',
@@ -133,6 +105,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-media-node"][data-media-type="video"]',
     );
+    await waitForInteractiveSelector(
+      evaluate,
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
+    );
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="open-add-node-popover"]',
     );
@@ -148,12 +124,33 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
     );
-    checkpoint('canvas-material-actions-resolved');
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-canvas-node-child-instance][data-active="true"]',
+    );
+    checkpoint('canvas-material-actions-resolved', { retainedNodeInspector: true });
+    await evaluate(`(() => {
+      const viewport = document.querySelector(
+        '[data-owner-view-id="canvas:functional:video"] [data-canvas-viewport-root="true"]',
+      );
+      if (!(viewport instanceof HTMLElement)) throw new Error('Canvas viewport is unavailable.');
+      viewport.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('[data-owner-view-id="canvas:functional:video"] .canvas-workbench-root')
+        ?.getAttribute('data-active-node-inspector') === null`,
+      'Canvas active Node Inspector did not close after clearing selection.',
+    );
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="toggle-playback-panel"]',
     );
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-testid="canvas-playback-controller"]',
+    );
+    await waitForInteractiveSelector(
+      evaluate,
+      '[data-owner-view-id="canvas:functional:video"] [data-storyline-node="true"][data-source-node-id="video-node"]',
     );
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-storyline-node="true"][data-source-node-id="video-node"]',
@@ -273,7 +270,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const restoredDefault = await evaluate(`(async () => {
       const projection = await window.openNekoDesktop.shell.getSnapshot();
       const active = projection.window.activeTarget;
-      const views = projection.window.workbench.main.views;
+      const instance = projection.window.workbenches.instances.find(
+        (candidate) => candidate.workbenchInstanceId ===
+          projection.window.workbenches.activeWorkbenchInstanceId,
+      );
+      if (!instance) throw new Error('Restored active Workbench instance is missing.');
+      const views = instance.layout.main.views;
       return {
         activeTarget: active.kind,
         canvasViews: views
@@ -285,19 +287,20 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     })()`);
     checkpoint('default-workspace-canvas-restored', restoredDefault);
     const restoredScreenshot = await screenshot('default-workspace-canvas-restored');
-    const leftDockSelector =
-      '.neko-controlled-workbench-dock--left .neko-controlled-workbench-resize-handle--right';
-    await waitForSelector(leftDockSelector);
-    const leftDockWidthBeforeResize = await readLeftDockWidth(evaluate);
-    await drag(leftDockSelector, '.neko-controlled-workbench-main', {
-      targetPosition: { xRatio: 0.12, yRatio: 0.5 },
+    const interactionResizeSelector =
+      '.neko-controlled-workbench-interaction .neko-controlled-workbench-resize-handle--right';
+    await waitForSelector(interactionResizeSelector);
+    await waitForInteractiveSelector(evaluate, interactionResizeSelector);
+    const interactionWidthBeforeResize = await readInteractionWidth(evaluate);
+    await drag(interactionResizeSelector, '.neko-controlled-workbench-main', {
+      targetPosition: { xRatio: 0.5, yRatio: 0.5 },
     });
     const resizeLifecycle = await waitForResizeLifecycleCompletion(
       evaluate,
-      leftDockWidthBeforeResize,
+      interactionWidthBeforeResize,
     );
-    checkpoint('left-dock-resize-indicator-cleared', resizeLifecycle);
-    const resizedWorkbenchScreenshot = await screenshot('left-dock-resize-indicator-cleared');
+    checkpoint('interaction-resize-indicator-cleared', resizeLifecycle);
+    const resizedWorkbenchScreenshot = await screenshot('interaction-resize-indicator-cleared');
     await replaceWorkbench(
       evaluate,
       `(projection, current) => ({
@@ -333,6 +336,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
         agentBackground: agentStyle.backgroundColor,
         composerRailBackground: composerRailStyle.backgroundColor,
         composerRailBorderTopColor: composerRailStyle.borderTopColor,
+        composerRailBorderTopWidth: composerRailStyle.borderTopWidth,
         resourceBackground: getComputedStyle(resources).backgroundColor,
         resourceInputBackground: getComputedStyle(resourceInput).backgroundColor,
         resourcePackageHeaderCount: resources.querySelectorAll(
@@ -356,8 +360,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const themedDockScreenshot = await screenshot('desktop-dock-theme-surfaces');
     return {
       ownerRoot: 'canvas',
-      homeLaunchpad,
-      homeLaunchpadScreenshot,
+      unifiedWorkbench,
+      unifiedWorkbenchScreenshot,
       rootCount: 2,
       authoredNodeCount,
       locatorBackedNodes: ['video', 'audio'],
@@ -380,18 +384,12 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
   },
   assertObservation(observation, evidence) {
     if (
-      evidence.homeLaunchpad.brandText !== 'OpenNeko' ||
-      evidence.homeLaunchpad.brandChildCount !== 1 ||
-      evidence.homeLaunchpad.brandIconCount !== 0 ||
-      !evidence.homeLaunchpad.titleActionLabel ||
-      evidence.homeLaunchpad.headingIconCount !== 0 ||
-      evidence.homeLaunchpad.headingTextAlign !== 'center' ||
-      evidence.homeLaunchpad.intentActionIconCount === 0 ||
-      evidence.homeLaunchpad.horizontalCenterDelta > 2 ||
-      evidence.homeLaunchpad.verticalCenterDelta > 2
+      evidence.unifiedWorkbench.shellCount !== 1 ||
+      evidence.unifiedWorkbench.primarySidebarCount !== 1 ||
+      evidence.unifiedWorkbench.legacyHomeCount !== 0
     ) {
       throw new Error(
-        `Desktop Home brand or Agent launchpad composition is incorrect: ${JSON.stringify(evidence.homeLaunchpad)}`,
+        `Desktop did not use the canonical unified Workbench entry: ${JSON.stringify(evidence.unifiedWorkbench)}`,
       );
     }
     if (observation.openNekoResourceRequestCount < 2) {
@@ -443,15 +441,15 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evidence.themeSurfaces.desktopSurfaceRaised !== '#ffffff' ||
       evidence.themeSurfaces.agentBackground !== 'rgb(255, 255, 255)' ||
       evidence.themeSurfaces.composerRailBackground !== 'rgb(255, 255, 255)' ||
-      evidence.themeSurfaces.composerRailBorderTopColor !== 'rgba(0, 0, 0, 0)' ||
+      evidence.themeSurfaces.composerRailBorderTopWidth !== '0px' ||
       evidence.themeSurfaces.resourceBackground !== 'rgb(255, 255, 255)' ||
       evidence.themeSurfaces.resourceInputBackground !== 'rgb(255, 255, 255)' ||
       evidence.themeSurfaces.resourcePackageHeaderCount !== 0 ||
-      !evidence.themeSurfaces.resourceToolbarActionLabels.some((label) =>
-        ['配置媒体库', 'Configure media libraries'].includes(label),
+      evidence.themeSurfaces.resourceToolbarActionLabels.some((label) =>
+        ['刷新', 'Refresh'].includes(label),
       ) ||
       !evidence.themeSurfaces.resourceToolbarActionLabels.some((label) =>
-        ['刷新', 'Refresh'].includes(label),
+        ['列表视图', 'List view', '网格视图', 'Grid view'].includes(label),
       ) ||
       evidence.themeSurfaces.resourceManagementTitles.length !== 1 ||
       !['资源管理', 'Resource management'].includes(
@@ -465,12 +463,74 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
   },
 });
 
-function readLeftDockWidth(evaluate) {
+function readInteractionWidth(evaluate) {
   return evaluate(`(() => {
-    const dock = document.querySelector('.neko-controlled-workbench-dock--left');
-    if (!(dock instanceof HTMLElement)) throw new Error('Desktop left Dock is missing.');
-    return dock.getBoundingClientRect().width;
+    const interaction = document.querySelector('.neko-controlled-workbench-interaction');
+    if (!(interaction instanceof HTMLElement)) {
+      throw new Error('Desktop Agent Interaction is missing.');
+    }
+    return interaction.getBoundingClientRect().width;
   })()`);
+}
+
+async function waitForCondition(evaluate, expression, message, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await evaluate(expression)) return;
+    await delay(100);
+  }
+  throw new Error(message);
+}
+
+async function waitForInteractiveSelector(evaluate, selector) {
+  const deadline = Date.now() + 10_000;
+  let last;
+  while (Date.now() < deadline) {
+    const sample = await evaluate(`(() => {
+      const target = document.querySelector(${JSON.stringify(selector)});
+      if (!(target instanceof HTMLElement)) return { available: false };
+      const bounds = target.getBoundingClientRect();
+      const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+      const hit = document.elementFromPoint(point.x, point.y);
+      const workbench = target.closest('[data-workbench-instance-id]');
+      const ancestor = (selector) => {
+        const element = target.closest(selector);
+        if (!(element instanceof HTMLElement)) return undefined;
+        const rect = element.getBoundingClientRect();
+        return {
+          selector,
+          rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+          overflow: getComputedStyle(element).overflow,
+          position: getComputedStyle(element).position,
+        };
+      };
+      return {
+        available: true,
+        activeWorkbench: workbench?.getAttribute('data-active'),
+        hiddenWorkbench: workbench?.hasAttribute('hidden'),
+        bounds: {
+          left: bounds.left,
+          top: bounds.top,
+          width: bounds.width,
+          height: bounds.height,
+        },
+        hit: hit instanceof Element ? hit.tagName + '.' + hit.className : undefined,
+        ancestors: [
+          ancestor('.canvas-webview-root'),
+          ancestor('.project-main-view-stack__item'),
+          ancestor('.project-main-group__content'),
+          ancestor('.desktop-workbench-slot-target'),
+          ancestor('.neko-controlled-workbench-main'),
+        ],
+        interactive: bounds.width > 0 && bounds.height > 0 &&
+          (hit === target || (hit instanceof Node && target.contains(hit))),
+      };
+    })()`);
+    last = sample;
+    if (sample.interactive) return;
+    await delay(100);
+  }
+  throw new Error(`Desktop Canvas control is not interactive: ${JSON.stringify(last)}`);
 }
 
 async function waitForResizeLifecycleCompletion(evaluate, widthBefore) {
@@ -478,11 +538,13 @@ async function waitForResizeLifecycleCompletion(evaluate, widthBefore) {
   let last;
   while (Date.now() < deadline) {
     const sample = await evaluate(`(() => {
-      const dock = document.querySelector('.neko-controlled-workbench-dock--left');
-      if (!(dock instanceof HTMLElement)) throw new Error('Desktop left Dock is missing.');
+      const interaction = document.querySelector('.neko-controlled-workbench-interaction');
+      if (!(interaction instanceof HTMLElement)) {
+        throw new Error('Desktop Agent Interaction is missing.');
+      }
       return {
         widthBefore: ${String(widthBefore)},
-        widthAfter: dock.getBoundingClientRect().width,
+        widthAfter: interaction.getBoundingClientRect().width,
         resizingOwnerCount: document.querySelectorAll('[data-resizing="true"]').length,
       };
     })()`);
@@ -708,7 +770,6 @@ async function waitForReleasedUrl(evaluate, url, mediaType) {
 
 function canvasDocument(name, nodeId, path, mediaType) {
   return {
-    version: '3.0',
     name,
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
     nodes: [

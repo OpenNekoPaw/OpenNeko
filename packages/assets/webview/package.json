@@ -2,7 +2,6 @@
   "name": "@neko/assets-webview",
   "description": "Browser-only Assets global library and resource browser roots",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     "./asset-management/root": "./src/global-library/root.tsx",

@@ -29,7 +29,6 @@ describe('NodeProjectEntityInspectorRuntime', () => {
 
     const document = await repository(root).load();
     expect(document).toMatchObject({
-      revision: 1,
       entities: [
         {
           entityId: 'entity-rin',
@@ -44,7 +43,7 @@ describe('NodeProjectEntityInspectorRuntime', () => {
         candidateId: 'candidate-rin',
         kinds: ['entity-candidate'],
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ records: [], diagnostics: [] });
     await expect(
       readFile(path.join(root, 'neko', 'entity-operation-journal.json'), 'utf8'),
     ).rejects.toMatchObject({ code: 'ENOENT' });
@@ -57,20 +56,20 @@ describe('NodeProjectEntityInspectorRuntime', () => {
     const runtime = createRuntime(root, projections);
 
     await expect(runtime.execute(confirmIntent())).rejects.toThrow('projection interruption');
-    await expect(repository(root).load()).resolves.toMatchObject({ revision: 1 });
+    await expect(repository(root).load()).resolves.toMatchObject({
+      entities: [{ entityId: 'entity-rin' }],
+    });
     await expect(
       readFile(path.join(root, 'neko', 'entity-operation-journal.json'), 'utf8'),
     ).resolves.toContain('candidate-rin');
 
     await runtime.execute({
       type: 'edit',
-      expectedRevision: 1,
       entityId: 'entity-rin',
       changes: { facts: { role: 'protagonist' } },
     });
 
     await expect(repository(root).load()).resolves.toMatchObject({
-      revision: 2,
       entities: [{ facts: { role: 'protagonist' } }],
     });
     await expect(
@@ -79,7 +78,7 @@ describe('NodeProjectEntityInspectorRuntime', () => {
         candidateId: 'candidate-rin',
         kinds: ['entity-candidate'],
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ records: [], diagnostics: [] });
   });
 
   it('fails before a canonical commit when the candidate owner is absent', async () => {
@@ -89,7 +88,7 @@ describe('NodeProjectEntityInspectorRuntime', () => {
     await expect(runtime.execute(confirmIntent())).rejects.toMatchObject({
       diagnostics: [{ code: 'project-entity-candidate-not-found' }],
     });
-    await expect(repository(root).load()).resolves.toMatchObject({ revision: 0, entities: [] });
+    await expect(repository(root).load()).resolves.toMatchObject({ entities: [] });
   });
 
   it('fails visibly on a corrupt recovery journal before applying another operation', async () => {
@@ -101,14 +100,13 @@ describe('NodeProjectEntityInspectorRuntime', () => {
     await expect(
       runtime.execute({
         type: 'edit',
-        expectedRevision: 0,
         entityId: 'entity-rin',
         changes: { facts: { role: 'lead' } },
       }),
     ).rejects.toMatchObject({
       diagnostics: [{ code: 'project-entity-io-failed' }],
     });
-    await expect(repository(root).load()).resolves.toMatchObject({ revision: 0, entities: [] });
+    await expect(repository(root).load()).resolves.toMatchObject({ entities: [] });
   });
 });
 
@@ -124,12 +122,15 @@ class MemoryProjectionRepository implements Pick<
   }
 
   async list(query: Parameters<EntityAssetProjectionRepository['list']>[0]) {
-    return this.records.filter(
-      (record) =>
-        (!query.sourceId || record.sourceId === query.sourceId) &&
-        (!query.candidateId || record.candidateId === query.candidateId) &&
-        (!query.kinds || query.kinds.includes(record.kind)),
-    );
+    return {
+      records: this.records.filter(
+        (record) =>
+          (!query.sourceId || record.sourceId === query.sourceId) &&
+          (!query.candidateId || record.candidateId === query.candidateId) &&
+          (!query.kinds || query.kinds.includes(record.kind)),
+      ),
+      diagnostics: [],
+    };
   }
 
   async replaceSource(request: EntityAssetProjectionReplaceSourceRequest): Promise<void> {
@@ -161,7 +162,6 @@ function repository(root: string) {
 function confirmIntent() {
   return {
     type: 'confirm' as const,
-    expectedRevision: 0,
     candidateId: 'candidate-rin',
     accepted: {
       kind: 'character' as const,

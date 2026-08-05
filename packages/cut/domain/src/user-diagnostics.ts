@@ -10,7 +10,6 @@ export const CUT_USER_DIAGNOSTIC_CODES = [
   'locked',
   'document-mismatch',
   'session-mismatch',
-  'stale-revision',
   'external-change-conflict',
   'invalid-document',
   'media-runtime-unavailable',

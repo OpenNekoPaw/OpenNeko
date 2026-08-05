@@ -4,6 +4,7 @@ import { EpubViewer } from './EpubViewer';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
+import { PersistedStateProvider } from '../shared/usePersistedState';
 import '../styles/player.css';
 
 const root = document.getElementById('root');
@@ -12,7 +13,9 @@ if (root) {
     <React.StrictMode>
       <I18nProvider service={i18nService}>
         <ErrorBoundary>
-          <EpubViewer />
+          <PersistedStateProvider>
+            <EpubViewer />
+          </PersistedStateProvider>
         </ErrorBoundary>
       </I18nProvider>
     </React.StrictMode>,

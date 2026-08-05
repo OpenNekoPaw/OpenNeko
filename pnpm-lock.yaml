@@ -1101,12 +1101,6 @@ importers:
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:../local-metadata
-      '@neko/media':
-        specifier: workspace:*
-        version: link:../media
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1262,15 +1256,9 @@ importers:
       '@neko/local-metadata':
         specifier: workspace:*
         version: link:../../local-metadata
-      '@neko/media':
-        specifier: workspace:*
-        version: link:../../media
       '@neko/search-domain':
         specifier: workspace:*
         version: link:../domain
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:../../shared
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

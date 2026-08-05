@@ -35,7 +35,9 @@ describe('Preview Root architecture boundary', () => {
     const source = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
 
     expect(source).toContain('const sourceUrl = descriptor.url;');
-    expect(source).toContain('viewer.render({ descriptor, sourceUrl: descriptor.url, locale })');
+    expect(source).toContain('sourceUrl: descriptor.url,');
+    expect(source).toContain('snapshotStore.read(descriptor.descriptorId)');
+    expect(source).toContain('onSnapshotChange: updateSnapshot');
     expect(source.match(/<PreviewPresentation/gu)).toHaveLength(2);
     expect(source).not.toContain('neko-media:');
     expect(source).not.toContain('file:');

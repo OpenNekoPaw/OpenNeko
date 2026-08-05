@@ -78,11 +78,6 @@ function validateRoot(
   errors: ValidationError[],
   _warnings: ValidationError[],
 ): void {
-  // version — required string
-  if (!isString(data['version'])) {
-    errors.push({ field: 'version', message: 'must be a string', severity: 'error' });
-  }
-
   // name — required string
   if (!isString(data['name'])) {
     errors.push({ field: 'name', message: 'must be a string', severity: 'error' });
@@ -117,7 +112,7 @@ function validateRoot(
     if (data[field] !== undefined) {
       errors.push({
         field,
-        message: 'legacy Canvas subsystem state is not allowed in the canonical format',
+        message: 'Canvas subsystem state is not allowed in the canonical format',
         severity: 'error',
       });
     }
@@ -333,10 +328,10 @@ function validateJobNodeData(value: unknown, path: string, errors: ValidationErr
       severity: 'error',
     });
   }
-  if (!isNonNegativeInteger(value['revision'])) {
+  if ('revision' in value) {
     errors.push({
       field: `${path}.revision`,
-      message: 'Job revision must be a non-negative integer',
+      message: 'Job node data rejects removed internal revision fields',
       severity: 'error',
     });
   }
@@ -430,10 +425,6 @@ function isCanvasJobStatus(value: unknown): boolean {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function validatePort(

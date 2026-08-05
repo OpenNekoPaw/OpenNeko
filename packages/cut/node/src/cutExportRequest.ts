@@ -5,13 +5,13 @@ import type { CutExportSettings, TimelineView } from '@neko/cut-domain';
 export interface CutExportIdentity {
   readonly documentUri: string;
   readonly sessionId: string;
-  readonly expectedRevision: number;
+  readonly snapshotId: string;
 }
 
 export interface FrozenCutExportRequest {
   readonly documentUri: string;
   readonly sessionId: string;
-  readonly sourceRevision: number;
+  readonly sourceSnapshotId: string;
   readonly timeline: TimelineView;
   readonly settings: CutExportSettings;
 }
@@ -28,7 +28,7 @@ export function freezeCutExportRequest(
   return Object.freeze({
     documentUri: timeline.documentUri,
     sessionId: timeline.sessionId,
-    sourceRevision: timeline.revision,
+    sourceSnapshotId: identity.snapshotId,
     timeline,
     settings: frozenSettings,
   });
@@ -79,11 +79,6 @@ function assertIdentity(view: TimelineView, identity: CutExportIdentity): void {
   }
   if (view.sessionId !== identity.sessionId) {
     throw new Error('Cut export session identity does not match the current Host session.');
-  }
-  if (view.revision !== identity.expectedRevision) {
-    throw new Error(
-      `Cut export revision is stale: expected ${identity.expectedRevision}, current ${view.revision}.`,
-    );
   }
 }
 

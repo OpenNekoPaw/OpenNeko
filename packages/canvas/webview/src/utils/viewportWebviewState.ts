@@ -1,4 +1,4 @@
-import type { CanvasData, CanvasViewport } from '@neko/canvas-domain';
+import type { CanvasViewport } from '@neko/canvas-domain';
 
 export interface CanvasWebviewState {
   readonly canvasViewportSnapshots?: Record<string, CanvasViewport>;
@@ -7,10 +7,20 @@ export interface CanvasWebviewState {
 export interface CanvasWebviewStateApi {
   readonly getState: () => unknown;
   readonly setState: (state: unknown) => void;
+  readonly reportStateDiagnostic?: (diagnostic: CanvasWebviewStateDiagnostic) => void;
 }
 
-export function createCanvasViewportSnapshotKey(canvasData: CanvasData): string {
-  return `${canvasData.name}:${canvasData.version}`;
+export interface CanvasWebviewStateDiagnostic {
+  readonly code: 'invalid-webview-state' | 'invalid-viewport-map' | 'invalid-viewport-snapshot';
+  readonly message: string;
+  readonly documentId?: string;
+}
+
+export function createCanvasViewportSnapshotKey(documentId: string): string {
+  if (documentId.length === 0) {
+    throw new Error('Canvas viewport snapshot requires a document identity.');
+  }
+  return documentId;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,26 +41,42 @@ function isCanvasViewport(value: unknown): value is CanvasViewport {
   );
 }
 
-function readSnapshotMap(state: unknown): Record<string, CanvasViewport> {
-  if (!isRecord(state) || !isRecord(state['canvasViewportSnapshots'])) {
-    return {};
-  }
-
-  const snapshots: Record<string, CanvasViewport> = {};
-  for (const [key, value] of Object.entries(state['canvasViewportSnapshots'])) {
-    if (isCanvasViewport(value)) {
-      snapshots[key] = value;
-    }
-  }
-  return snapshots;
-}
-
 export function readCanvasViewportSnapshot(
   api: CanvasWebviewStateApi | null,
   documentKey: string,
 ): CanvasViewport | undefined {
   if (!api) return undefined;
-  return readSnapshotMap(api.getState())[documentKey];
+  const state = api.getState();
+  if (state === undefined) return undefined;
+  if (!isRecord(state)) {
+    reportDiagnostic(api, {
+      code: 'invalid-webview-state',
+      message: 'Canvas Webview state must be an object.',
+      documentId: documentKey,
+    });
+    return undefined;
+  }
+  const snapshots = state['canvasViewportSnapshots'];
+  if (snapshots === undefined) return undefined;
+  if (!isRecord(snapshots)) {
+    reportDiagnostic(api, {
+      code: 'invalid-viewport-map',
+      message: 'Canvas viewport snapshot map must be an object.',
+      documentId: documentKey,
+    });
+    return undefined;
+  }
+  const snapshot = snapshots[documentKey];
+  if (snapshot === undefined) return undefined;
+  if (!isCanvasViewport(snapshot)) {
+    reportDiagnostic(api, {
+      code: 'invalid-viewport-snapshot',
+      message: `Canvas viewport snapshot '${documentKey}' is invalid.`,
+      documentId: documentKey,
+    });
+    return undefined;
+  }
+  return snapshot;
 }
 
 export function writeCanvasViewportSnapshot(
@@ -60,12 +86,36 @@ export function writeCanvasViewportSnapshot(
 ): void {
   if (!api) return;
   const currentState = api.getState();
-  const baseState = isRecord(currentState) ? currentState : {};
+  if (currentState !== undefined && !isRecord(currentState)) {
+    reportDiagnostic(api, {
+      code: 'invalid-webview-state',
+      message: 'Canvas Webview state must be an object.',
+      documentId: documentKey,
+    });
+    return;
+  }
+  const baseState = currentState ?? {};
+  const currentSnapshots = baseState['canvasViewportSnapshots'];
+  if (currentSnapshots !== undefined && !isRecord(currentSnapshots)) {
+    reportDiagnostic(api, {
+      code: 'invalid-viewport-map',
+      message: 'Canvas viewport snapshot map must be an object.',
+      documentId: documentKey,
+    });
+    return;
+  }
   api.setState({
     ...baseState,
     canvasViewportSnapshots: {
-      ...readSnapshotMap(currentState),
+      ...currentSnapshots,
       [documentKey]: viewport,
     },
   });
+}
+
+function reportDiagnostic(
+  api: CanvasWebviewStateApi,
+  diagnostic: CanvasWebviewStateDiagnostic,
+): void {
+  api.reportStateDiagnostic?.(diagnostic);
 }

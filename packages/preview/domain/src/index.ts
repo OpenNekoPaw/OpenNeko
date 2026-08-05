@@ -1,6 +1,5 @@
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
-  THREE_REFERENCE_STAGING_SCHEMA_VERSION,
   isThreeReferenceStagingSnapshot,
   type ThreeReferenceStagingSnapshot,
   type ThreeReferenceSubject,
@@ -9,8 +8,6 @@ import {
 export * from './engine-preview.js';
 export * from './model-preview.js';
 export * from './three-reference.js';
-
-export const PREVIEW_HOST_RUNTIME_VERSION = 1 as const;
 
 export const PREVIEW_HOST_RUNTIME_ROUTES = {
   snapshotGet: 'snapshot.get',
@@ -34,9 +31,7 @@ export function createSourceModelStaging(
   const staging: ThreeReferenceStagingSnapshot & {
     readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'source-model' }>;
   } = {
-    schemaVersion: THREE_REFERENCE_STAGING_SCHEMA_VERSION,
     sessionId,
-    revision: 0,
     subject,
     selectedPurposes: ['appearance', 'camera'],
     camera: {
@@ -145,16 +140,15 @@ export interface PreviewRuntimeIdentity {
   readonly workspaceId: string;
   readonly windowId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
   readonly documentId: string;
   readonly sessionId: string;
-  readonly endpointEpoch: string;
-  readonly revision: number;
+  readonly rendererSessionId: string;
 }
 
 export interface PreviewMediaDescriptor {
   readonly descriptorId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly contentLocator: ContentLocator;
   readonly url: string;
   readonly resourceUris?: Readonly<Record<string, string>>;
@@ -166,14 +160,12 @@ export interface PreviewMediaDescriptor {
 
 export type PreviewProjection =
   | {
-      readonly schemaVersion: typeof PREVIEW_HOST_RUNTIME_VERSION;
       readonly identity: PreviewRuntimeIdentity;
       readonly presentation: PreviewViewPresentation;
       readonly status: 'ready';
       readonly descriptor: PreviewMediaDescriptor;
     }
   | {
-      readonly schemaVersion: typeof PREVIEW_HOST_RUNTIME_VERSION;
       readonly identity: PreviewRuntimeIdentity;
       readonly presentation: PreviewViewPresentation;
       readonly status: 'unsupported' | 'unavailable';
@@ -190,7 +182,6 @@ export interface PreviewDiagnostic {
 }
 
 export interface PreviewRuntimeRequest {
-  readonly schemaVersion: typeof PREVIEW_HOST_RUNTIME_VERSION;
   readonly requestId: string;
   readonly route: PreviewHostRuntimeRoute;
   readonly identity: PreviewRuntimeIdentity;
@@ -202,7 +193,6 @@ export interface PreviewMediaRange {
 }
 
 export interface PreviewProjectionEvent {
-  readonly schemaVersion: typeof PREVIEW_HOST_RUNTIME_VERSION;
   readonly sequence: number;
   readonly projection: PreviewProjection;
 }
@@ -215,8 +205,7 @@ export interface PreviewHostRuntime {
 }
 
 export class PreviewContractError extends Error {
-  readonly code:
-    'invalid-preview-payload' | 'unsupported-preview-version' | 'preview-stale-identity';
+  readonly code: 'invalid-preview-payload' | 'preview-stale-identity';
 
   constructor(code: PreviewContractError['code'], message: string) {
     super(message);
@@ -227,6 +216,9 @@ export class PreviewContractError extends Error {
 
 export function parsePreviewRuntimeIdentity(value: unknown): PreviewRuntimeIdentity {
   const record = requireRecord(value, 'Preview identity must be an object.');
+  if (Object.keys(record).length !== 8) {
+    throw invalidPayload('Preview identity contains an unknown field.');
+  }
   return {
     projectId: requireOpaqueIdentity(record['projectId'], 'Preview Project identity is required.'),
     workspaceId: requireOpaqueIdentity(
@@ -235,22 +227,18 @@ export function parsePreviewRuntimeIdentity(value: unknown): PreviewRuntimeIdent
     ),
     windowId: requireOpaqueIdentity(record['windowId'], 'Preview Window identity is required.'),
     viewId: requireOpaqueIdentity(record['viewId'], 'Preview View identity is required.'),
-    viewEpoch: requireNonNegativeInteger(
-      record['viewEpoch'],
-      'Preview View epoch must be a non-negative integer.',
+    viewInstanceId: requireOpaqueIdentity(
+      record['viewInstanceId'],
+      'Preview View instance identity is required.',
     ),
     documentId: requireOpaqueIdentity(
       record['documentId'],
       'Preview document identity is required.',
     ),
     sessionId: requireOpaqueIdentity(record['sessionId'], 'Preview session identity is required.'),
-    endpointEpoch: requireOpaqueIdentity(
-      record['endpointEpoch'],
-      'Preview endpoint epoch is required.',
-    ),
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Preview revision must be a non-negative integer.',
+    rendererSessionId: requireOpaqueIdentity(
+      record['rendererSessionId'],
+      'Preview renderer session identity is required.',
     ),
   };
 }
@@ -270,7 +258,10 @@ export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescrip
       record['descriptorId'],
       'Preview descriptor identity is required.',
     ),
-    revision: requireOpaqueIdentity(record['revision'], 'Preview descriptor revision is required.'),
+    sourceFingerprint: requireOpaqueIdentity(
+      record['sourceFingerprint'],
+      'Preview descriptor source fingerprint is required.',
+    ),
     contentLocator: contentLocator.locator,
     url: requireOpenNekoResourceUrl(record['url']),
     ...(record['resourceUris'] === undefined
@@ -289,12 +280,11 @@ export function parsePreviewMediaDescriptor(value: unknown): PreviewMediaDescrip
 
 export function parsePreviewProjection(value: unknown): PreviewProjection {
   const record = requireRecord(value, 'Preview projection must be an object.');
-  requireVersion(record['schemaVersion']);
   const identity = parsePreviewRuntimeIdentity(record['identity']);
   const presentation = requirePresentation(record['presentation']);
   if (record['status'] === 'ready') {
+    requireExactKeys(record, ['identity', 'presentation', 'status', 'descriptor']);
     return {
-      schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
       identity,
       presentation,
       status: 'ready',
@@ -304,6 +294,7 @@ export function parsePreviewProjection(value: unknown): PreviewProjection {
   if (record['status'] !== 'unsupported' && record['status'] !== 'unavailable') {
     throw invalidPayload('Preview projection status is invalid.');
   }
+  requireExactKeys(record, ['identity', 'presentation', 'status', 'diagnostic']);
   const diagnostic = requireRecord(
     record['diagnostic'],
     'Preview unavailable projection requires a diagnostic.',
@@ -318,7 +309,6 @@ export function parsePreviewProjection(value: unknown): PreviewProjection {
     throw invalidPayload('Preview diagnostic code is invalid.');
   }
   return {
-    schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
     identity,
     presentation,
     status: record['status'],
@@ -334,13 +324,12 @@ export function parsePreviewProjection(value: unknown): PreviewProjection {
 
 export function parsePreviewRuntimeRequest(value: unknown): PreviewRuntimeRequest {
   const record = requireRecord(value, 'Preview runtime request must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId', 'route', 'identity']);
   const route = Object.values(PREVIEW_HOST_RUNTIME_ROUTES).find(
     (candidate) => candidate === record['route'],
   );
   if (!route) throw invalidPayload('Preview runtime route is invalid.');
   const request = {
-    schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
     requestId: requireNonEmptyString(record['requestId'], 'Preview request identity is required.'),
     route,
     identity: parsePreviewRuntimeIdentity(record['identity']),
@@ -377,11 +366,10 @@ export function assertPreviewRuntimeIdentity(
     'workspaceId',
     'windowId',
     'viewId',
-    'viewEpoch',
+    'viewInstanceId',
     'documentId',
     'sessionId',
-    'endpointEpoch',
-    'revision',
+    'rendererSessionId',
   ] as const) {
     if (expected[key] !== actual[key]) {
       throw new PreviewContractError(
@@ -521,18 +509,19 @@ function requireNonNegativeInteger(value: unknown, message: string): number {
   return value as number;
 }
 
-function requireVersion(value: unknown): void {
-  if (value !== PREVIEW_HOST_RUNTIME_VERSION) {
-    throw new PreviewContractError(
-      'unsupported-preview-version',
-      `Unsupported Preview contract version '${String(value)}'.`,
-    );
-  }
-}
-
 function requireRecord(value: unknown, message: string): Record<string, unknown> {
   if (!isRecord(value)) throw invalidPayload(message);
   return value;
+}
+
+function requireExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+): void {
+  const actual = Object.keys(record);
+  if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) {
+    throw invalidPayload('Preview payload contains unsupported fields.');
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

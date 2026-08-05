@@ -1165,7 +1165,6 @@ function readPreviewSourceDuration(source: PreviewSourceDescriptor): number {
 function readHtmlVideoDescriptor(value: unknown): HtmlVideoDescriptor | null {
   if (
     !isRecord(value) ||
-    value['version'] !== 1 ||
     typeof value['url'] !== 'string' ||
     !isMediaResourceUrl(value['url']) ||
     typeof value['mimeType'] !== 'string' ||
@@ -1180,7 +1179,6 @@ function readHtmlVideoDescriptor(value: unknown): HtmlVideoDescriptor | null {
     return null;
   }
   return {
-    version: 1,
     url: value['url'],
     mimeType: value['mimeType'],
     durationSeconds: value['durationSeconds'],
@@ -1191,7 +1189,6 @@ function readHtmlVideoDescriptor(value: unknown): HtmlVideoDescriptor | null {
 function readHtmlAudioDescriptor(value: unknown): HtmlAudioDescriptor | null {
   if (
     !isRecord(value) ||
-    value['version'] !== 1 ||
     typeof value['url'] !== 'string' ||
     !isMediaResourceUrl(value['url']) ||
     typeof value['mimeType'] !== 'string' ||
@@ -1200,7 +1197,6 @@ function readHtmlAudioDescriptor(value: unknown): HtmlAudioDescriptor | null {
     return null;
   }
   return {
-    version: 1,
     url: value['url'],
     mimeType: value['mimeType'],
     durationSeconds: value['durationSeconds'],

@@ -2,7 +2,6 @@
   "name": "@neko/quality",
   "description": "Canonical quality Gate, evaluator ports, and model evidence adapters for OpenNeko",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

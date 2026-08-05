@@ -3,20 +3,17 @@ import { AssetCenterContractError, createDefaultAssetCenterFilter } from './cont
 import { AssetCenterSession } from './session';
 
 describe('AssetCenterSession', () => {
-  it('owns empty, catalog and exact selected projections behind revision CAS', () => {
+  it('owns empty, catalog and exact selected projections', () => {
     const session = createSession();
-    expect(session.getSnapshot()).toMatchObject({ revision: 0, catalog: { status: 'loading' } });
+    expect(session.getSnapshot()).toMatchObject({ catalog: { status: 'loading' } });
 
     const ready = session.commitCatalog({
-      expectedRevision: 0,
       owner: 'media-library',
-      catalogRevision: 4,
       entries: [fileEntry()],
     });
-    expect(ready).toMatchObject({ revision: 1, catalog: { status: 'ready' } });
+    expect(ready).toMatchObject({ catalog: { status: 'ready' } });
 
     const selected = session.select({
-      expectedRevision: 1,
       owner: 'media-library',
       itemId: 'media-library:item-1',
     });
@@ -29,49 +26,40 @@ describe('AssetCenterSession', () => {
     expect(JSON.stringify(selected)).not.toContain('/private/');
   });
 
-  it('rejects stale revisions without retrying against current state', () => {
+  it('keeps the session usable after a rejected selection', () => {
     const session = createSession();
     session.commitCatalog({
-      expectedRevision: 0,
       owner: 'media-library',
-      catalogRevision: 1,
       entries: [fileEntry()],
     });
     expect(() =>
       session.select({
-        expectedRevision: 0,
         owner: 'media-library',
-        itemId: 'media-library:item-1',
+        itemId: 'missing',
       }),
-    ).toThrowError(
-      expect.objectContaining<Partial<AssetCenterContractError>>({
-        code: 'asset-center-stale-revision',
-      }),
-    );
-    expect(session.getSnapshot()).not.toHaveProperty('selection');
+    ).toThrow('unavailable');
+    expect(
+      session.select({ owner: 'media-library', itemId: 'media-library:item-1' }).selection?.itemId,
+    ).toBe('media-library:item-1');
   });
 
   it('rejects unknown, owner-mismatched and locator-less selections', () => {
     const session = createSession();
     session.commitCatalog({
-      expectedRevision: 0,
       owner: 'media-library',
-      catalogRevision: 1,
       entries: [fileEntry(), { item: directoryItem() }],
     });
-    expect(() =>
-      session.select({ expectedRevision: 1, owner: 'media-library', itemId: 'unknown' }),
-    ).toThrow('unavailable');
+    expect(() => session.select({ owner: 'media-library', itemId: 'unknown' })).toThrow(
+      'unavailable',
+    );
     expect(() =>
       session.select({
-        expectedRevision: 1,
         owner: 'global-asset-library',
         itemId: 'media-library:item-1',
       }),
     ).toThrow('unavailable');
     expect(() =>
       session.select({
-        expectedRevision: 1,
         owner: 'media-library',
         itemId: 'media-library:directory-1',
       }),
@@ -86,7 +74,7 @@ describe('AssetCenterSession', () => {
         code: 'asset-center-session-disposed',
       }),
     );
-    expect(() => session.updateFilter(0, createDefaultAssetCenterFilter())).toThrow('disposed');
+    expect(() => session.updateFilter(createDefaultAssetCenterFilter())).toThrow('disposed');
   });
 });
 

@@ -6,17 +6,22 @@ import {
   ProjectEntityContractError,
   assertProjectEntityDocument,
   createEmptyProjectEntityDocument,
+  decodeProjectEntityDocument,
   encodeProjectEntityDocument,
-  validateProjectEntityCommitRequest,
-  type ProjectEntityCommitRequest,
   type ProjectEntityDiagnostic,
   type ProjectEntityDocument,
+  type ProjectEntityDocumentMutation,
+  type ProjectEntityDocumentReadResult,
   type ProjectEntityDocumentRepository,
 } from '@neko/entity-domain';
 
 export interface NodeProjectEntityRepositoryOptions {
   readonly workspacePath: string;
   readonly projectId: string;
+}
+
+export interface ProjectEntityAvailableDocumentReader {
+  readonly readAvailable: (signal?: AbortSignal) => Promise<ProjectEntityDocumentReadResult>;
 }
 
 export class NodeProjectEntityRepositoryError extends Error {
@@ -45,6 +50,14 @@ export class NodeProjectEntityRepository implements ProjectEntityDocumentReposit
   }
 
   async load(signal?: AbortSignal): Promise<ProjectEntityDocument> {
+    const result = await this.readAvailable(signal);
+    if (result.diagnostics.length > 0) {
+      throw new ProjectEntityContractError(result.diagnostics);
+    }
+    return result.document;
+  }
+
+  async readAvailable(signal?: AbortSignal): Promise<ProjectEntityDocumentReadResult> {
     throwIfAborted(signal);
     await this.authorizeOwnedPath(false);
     let source: string;
@@ -52,7 +65,10 @@ export class NodeProjectEntityRepository implements ProjectEntityDocumentReposit
       source = await readFile(this.entityPath, 'utf8');
     } catch (error: unknown) {
       if (hasNodeErrorCode(error, 'ENOENT')) {
-        return createEmptyProjectEntityDocument(this.options.projectId);
+        return {
+          document: createEmptyProjectEntityDocument(this.options.projectId),
+          diagnostics: [],
+        };
       }
       throw repositoryError(
         'project-entity-io-failed',
@@ -71,40 +87,34 @@ export class NodeProjectEntityRepository implements ProjectEntityDocumentReposit
         error,
       );
     }
-    const document = assertProjectEntityDocument(parsed);
-    if (document.projectId !== this.options.projectId) {
+    const decoded = decodeProjectEntityDocument(parsed);
+    if (!decoded.ok) throw new ProjectEntityContractError(decoded.diagnostics);
+    if (decoded.document.projectId !== this.options.projectId) {
       throw repositoryError(
         'project-entity-path-unauthorized',
         'Project Entity document belongs to another Project identity.',
       );
     }
-    return document;
+    return { document: decoded.document, diagnostics: decoded.diagnostics };
   }
 
-  commit(
-    request: ProjectEntityCommitRequest,
+  mutate(
+    mutation: ProjectEntityDocumentMutation,
     signal?: AbortSignal,
   ): Promise<ProjectEntityDocument> {
     return withProjectEntityPathLock(this.entityPath, async () => {
       throwIfAborted(signal);
-      const validated = validateProjectEntityCommitRequest(request);
-      if (validated.next.projectId !== this.options.projectId) {
+      const current = await this.load(signal);
+      const next = assertProjectEntityDocument(await mutation(current));
+      if (next.projectId !== this.options.projectId) {
         throw repositoryError(
           'project-entity-path-unauthorized',
-          'Project Entity commit belongs to another Project identity.',
+          'Project Entity mutation belongs to another Project identity.',
         );
       }
-      const current = await this.load(signal);
-      if (current.revision !== validated.expectedRevision) {
-        throw new ProjectEntityContractError([
-          {
-            code: 'project-entity-revision-conflict',
-            message: `Project Entity revision conflict: expected ${String(validated.expectedRevision)}, received ${String(current.revision)}.`,
-          },
-        ]);
-      }
-      await this.writeAtomically(validated.next, signal);
-      return validated.next;
+      if (next === current) return current;
+      await this.writeAtomically(next, signal);
+      return next;
     });
   }
 

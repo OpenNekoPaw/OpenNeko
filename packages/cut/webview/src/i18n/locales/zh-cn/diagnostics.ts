@@ -12,7 +12,6 @@ export const diagnostics = {
   'diagnostic.locked': '请先解锁片段或轨道再进行编辑。',
   'diagnostic.document-mismatch': '此编辑属于另一个 Cut 文档。',
   'diagnostic.session-mismatch': 'Cut 编辑会话已变化，请重试。',
-  'diagnostic.stale-revision': '编辑完成前 Cut 已发生变化，请重试。',
   'diagnostic.external-change-conflict': 'Cut 已在磁盘上发生变化，无法覆盖。',
   'diagnostic.invalid-document': 'Cut 文档无效，无法编辑。',
   'diagnostic.media-runtime-unavailable': '本地媒体运行时不可用。',

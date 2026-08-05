@@ -7,7 +7,7 @@ import type {
 import { GlobalLibraryController } from './controller';
 
 describe('GlobalLibraryController', () => {
-  it('uses the current catalog and thumbnail revisions for exact resolution', async () => {
+  it('uses the current item and source fingerprint for exact thumbnail resolution', async () => {
     const item: GlobalAssetItem = {
       id: 'global-asset-library:abc123',
       owner: 'global-asset-library',
@@ -17,12 +17,12 @@ describe('GlobalLibraryController', () => {
       availability: 'available',
       thumbnail: {
         descriptorId: 'global-asset-library:def456',
-        revision: '2026-07-31T00:00:00.000Z:120',
+        sourceFingerprint: '2026-07-31T00:00:00.000Z:120',
         mediaType: 'image',
       },
     };
     const runtime = createRuntime();
-    runtime.searchAssets = vi.fn(async () => ({ revision: 7, items: [item] }));
+    runtime.searchAssets = vi.fn(async () => ({ items: [item] }));
     const controller = new GlobalLibraryController(runtime);
 
     await controller.searchAssets(searchInput);
@@ -31,9 +31,8 @@ describe('GlobalLibraryController', () => {
     expect(runtime.resolveThumbnail).toHaveBeenCalledWith({
       owner: 'global-asset-library',
       itemId: item.id,
-      expectedCatalogRevision: 7,
       descriptorId: item.thumbnail?.descriptorId,
-      thumbnailRevision: item.thumbnail?.revision,
+      sourceFingerprint: item.thumbnail?.sourceFingerprint,
       variant: 'hover',
     });
   });
@@ -51,13 +50,13 @@ describe('GlobalLibraryController', () => {
       availability: 'available',
     };
     const runtime = createRuntime();
-    runtime.searchMediaLibraries = vi.fn(async () => ({ revision: 3, items: [library] }));
+    runtime.searchMediaLibraries = vi.fn(async () => ({ items: [library] }));
     const controller = new GlobalLibraryController(runtime);
 
     await controller.searchMediaLibraries(searchInput);
     await controller.removeMediaLibrary(library.libraryId);
 
-    expect(runtime.removeMediaLibrary).toHaveBeenCalledWith(library.libraryId, 3);
+    expect(runtime.removeMediaLibrary).toHaveBeenCalledWith(library.libraryId);
     expect(runtime.removeAsset).not.toHaveBeenCalled();
   });
 });
@@ -71,30 +70,27 @@ const searchInput = {
 
 function createRuntime(): GlobalLibraryBrowserRuntime {
   return {
-    searchAssets: vi.fn(async () => ({ revision: 0, items: [] })),
-    searchMediaLibraries: vi.fn(async () => ({ revision: 0, items: [] })),
-    readMediaLibraryChildren: vi.fn(async () => ({ revision: 0, items: [] })),
+    searchAssets: vi.fn(async () => ({ items: [] })),
+    searchMediaLibraries: vi.fn(async () => ({ items: [] })),
+    readMediaLibraryChildren: vi.fn(async () => ({ items: [] })),
     resolveThumbnail: vi.fn(async (request) => ({
       ...request,
       dataUrl: 'data:image/png;base64,AA==',
     })),
-    importAssets: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
+    importAssets: vi.fn(async () => ({ status: 'cancelled' as const })),
     removeAsset: vi.fn(async (assetId: string) => ({
       status: 'removed' as const,
       assetId,
-      revision: 1,
     })),
-    addMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
-    relinkMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
+    addMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),
+    relinkMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),
     removeMediaLibrary: vi.fn(async (libraryId: string) => ({
       status: 'removed' as const,
       libraryId,
-      revision: 1,
     })),
     revealMediaLibrary: vi.fn(async (libraryId: string) => ({
       status: 'revealed' as const,
       libraryId,
-      revision: 0,
     })),
   };
 }

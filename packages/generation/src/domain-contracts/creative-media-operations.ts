@@ -1,7 +1,5 @@
 import { isContentLocator, type ContentLocator } from '@neko/content';
 
-export const CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION = 1 as const;
-
 export const IMAGE_OPERATION_IDS = [
   'generate',
   'edit',
@@ -153,7 +151,6 @@ export interface CreativeMediaOperationDiagnostic {
 }
 
 export interface CreativeMediaOperationSupport {
-  readonly version: typeof CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION;
   readonly mediaKind: CreativeMediaKind;
   readonly operationId: CreativeMediaOperationId;
   readonly level: CreativeMediaSupportLevel;
@@ -173,7 +170,6 @@ export interface CreativeMediaAdapterExtensions {
 }
 
 export interface CreativeMediaOperationRequest {
-  readonly version: typeof CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION;
   readonly requestId: string;
   readonly mediaKind: CreativeMediaKind;
   readonly operationId: CreativeMediaOperationId;
@@ -200,7 +196,6 @@ export interface CreativeMediaOperationRequest {
 }
 
 export interface CreativeMediaOperationResult {
-  readonly version: typeof CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION;
   readonly requestId: string;
   readonly mediaKind: CreativeMediaKind;
   readonly operationId: CreativeMediaOperationId;
@@ -229,12 +224,11 @@ export function validateCreativeMediaOperationSupport(
 ): CreativeMediaOperationValidationResult {
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
   validateOperationIdentity(support.mediaKind, support.operationId, diagnostics);
-  if (support.version !== CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION || !support.adapterId.trim()) {
+  if (Object.hasOwn(support, 'version') || !support.adapterId.trim()) {
     diagnostics.push({
       code: 'invalid-operation-request',
       severity: 'error',
-      message:
-        'Operation support must use the current contract version and a non-empty adapter id.',
+      message: 'Operation support contains a removed field or an empty adapter id.',
     });
   }
   if (!Array.isArray(support.acceptedControls)) {
@@ -299,11 +293,11 @@ export function validateCreativeMediaOperationRequest(
   request: CreativeMediaOperationRequest,
 ): CreativeMediaOperationValidationResult {
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
-  if (request.version !== CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION || !request.requestId.trim()) {
+  if (Object.hasOwn(request, 'version') || !request.requestId.trim()) {
     diagnostics.push({
       code: 'invalid-operation-request',
       severity: 'error',
-      message: 'Operation request has an unsupported version or empty request id.',
+      message: 'Operation request contains a removed field or an empty request id.',
     });
   }
   validateOperationIdentity(request.mediaKind, request.operationId, diagnostics);
@@ -372,11 +366,11 @@ export function validateCreativeMediaOperationResult(
   result: CreativeMediaOperationResult,
 ): CreativeMediaOperationValidationResult {
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
-  if (result.version !== CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION || !result.requestId.trim()) {
+  if (Object.hasOwn(result, 'version') || !result.requestId.trim()) {
     diagnostics.push({
       code: 'invalid-operation-result',
       severity: 'error',
-      message: 'Operation result has an unsupported version or empty request id.',
+      message: 'Operation result contains a removed field or an empty request id.',
     });
   }
   validateOperationIdentity(result.mediaKind, result.operationId, diagnostics);

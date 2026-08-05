@@ -37,7 +37,6 @@ export interface CharacterRecord {
 }
 
 export interface CharacterRegistryFile {
-  readonly version: 1;
   readonly characters: readonly CharacterRecord[];
 }
 
@@ -55,11 +54,8 @@ export interface ResolveCharacterBindingsOptions {
   readonly fallbackLoader?: (names: readonly string[]) => Promise<Record<string, string>>;
 }
 
-const CHARACTER_REGISTRY_VERSION = 1 as const;
-
 export function createEmptyCharacterRegistryFile(): CharacterRegistryFile {
   return {
-    version: CHARACTER_REGISTRY_VERSION,
     characters: [],
   };
 }
@@ -119,7 +115,7 @@ export function isCharacterRegistryFile(value: unknown): value is CharacterRegis
 
   const characters = getObjectField(value, 'characters');
   return (
-    getObjectField(value, 'version') === CHARACTER_REGISTRY_VERSION &&
+    Object.keys(value).every((key) => key === 'characters') &&
     Array.isArray(characters) &&
     characters.every((record) => isCharacterRecord(record))
   );

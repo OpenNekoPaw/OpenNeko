@@ -11,26 +11,9 @@ export interface ProjectFormatSaveContext {
   readonly indent?: number;
 }
 
-export interface ProjectFormatMigrationMetadata {
-  readonly fromVersion?: string;
-  readonly toVersion?: string;
-  readonly appliedMigrations?: readonly string[];
-  readonly warnings?: readonly string[];
-}
-
-export interface ProjectFormatCompatibility {
-  readonly loadedVersion?: string;
-  readonly currentVersion: string;
-  readonly mode: 'current' | 'migrated' | 'future' | 'invalid';
-  readonly readOnly: boolean;
-  readonly warnings: readonly string[];
-}
-
 export interface ProjectFormatLoadResult<TDocument> {
   readonly document: TDocument;
   readonly diagnostics: readonly ProjectFileDiagnostic[];
-  readonly migration?: ProjectFormatMigrationMetadata;
-  readonly compatibility?: ProjectFormatCompatibility;
   readonly raw?: unknown;
 }
 
@@ -42,7 +25,6 @@ export interface ProjectFormatSaveResult {
 export interface ProjectFormatCodec<TDocument> {
   readonly formatId: string;
   readonly fileExtensions: readonly string[];
-  readonly currentVersion: string;
   load(json: string, context: ProjectFormatLoadContext): ProjectFormatLoadResult<TDocument>;
   save(document: TDocument, context: ProjectFormatSaveContext): ProjectFormatSaveResult;
 }

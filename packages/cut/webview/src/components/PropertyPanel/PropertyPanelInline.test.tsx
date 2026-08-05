@@ -154,27 +154,24 @@ describe('PropertyPanelInline OTIO adapter', () => {
     });
 
     click('rename');
-    acknowledgeMutation(controller, store, 8);
+    acknowledgeMutation(controller, store);
     click('speed');
-    acknowledgeMutation(controller, store, 9);
+    acknowledgeMutation(controller, store);
     click('audio');
-    acknowledgeMutation(controller, store, 10);
+    acknowledgeMutation(controller, store);
     click('timeline.contextMenu.separateAudio');
 
     expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
       expect.objectContaining({
         type: 'cut:command',
-        expectedRevision: 7,
         command: { type: 'rename-clip', clipId: 'clip-1', name: 'Renamed' },
       }),
       expect.objectContaining({
         type: 'cut:command',
-        expectedRevision: 8,
         command: { type: 'set-playback-rate', clipId: 'clip-1', playbackRate: 2 },
       }),
       expect.objectContaining({
         type: 'cut:command',
-        expectedRevision: 9,
         command: {
           type: 'set-audio',
           clipId: 'clip-1',
@@ -183,7 +180,6 @@ describe('PropertyPanelInline OTIO adapter', () => {
       }),
       expect.objectContaining({
         type: 'cut:separate',
-        expectedRevision: 10,
         videoClipId: 'clip-1',
       }),
     ]);
@@ -227,7 +223,7 @@ describe('PropertyPanelInline OTIO adapter', () => {
       );
     });
     click('trim-start');
-    acknowledgeMutation(controller, store, 8);
+    acknowledgeMutation(controller, store);
     click('trim-end');
 
     expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
@@ -328,19 +324,18 @@ describe('PropertyPanelInline OTIO adapter', () => {
       name.value = 'Renamed Track';
       name.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     });
-    acknowledgeMutation(controller, store, 8);
+    acknowledgeMutation(controller, store);
     const enabled = host.querySelector<HTMLInputElement>(
       'input[aria-label="propertyPanel.track.enabled"]',
     );
     expect(enabled).not.toBeNull();
     act(() => enabled?.click());
-    acknowledgeMutation(controller, store, 9);
+    acknowledgeMutation(controller, store);
     click('timeline.contextMenu.sendToAgent');
 
     expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
       expect.objectContaining({
         type: 'cut:command',
-        expectedRevision: 7,
         command: {
           type: 'rename-track',
           trackId: 'video-track',
@@ -349,7 +344,6 @@ describe('PropertyPanelInline OTIO adapter', () => {
       }),
       expect.objectContaining({
         type: 'cut:command',
-        expectedRevision: 8,
         command: {
           type: 'set-track-enabled',
           trackId: 'video-track',
@@ -358,7 +352,6 @@ describe('PropertyPanelInline OTIO adapter', () => {
       }),
       expect.objectContaining({
         type: 'cut:send-to-agent',
-        expectedRevision: 9,
         selection: { kind: 'track', trackId: 'video-track' },
       }),
     ]);
@@ -474,23 +467,16 @@ function ControllerCapture(props: {
 function acknowledgeMutation(
   controller: CutOtioController | undefined,
   store: ReturnType<typeof createCutPresentationStore>,
-  revision: number,
 ): void {
   if (!controller) throw new Error('Cut controller is unavailable.');
-  const current = store.getState().view;
-  if (!current) throw new Error('TimelineView fixture is unavailable.');
+  if (!store.getState().view) throw new Error('TimelineView fixture is unavailable.');
   const sent = postMessage.mock.calls[postMessage.mock.calls.length - 1]?.[0] as
     { readonly clientMutationId?: string } | undefined;
   if (!sent?.clientMutationId) throw new Error('Mutation intent is missing its client identity.');
   controller.acceptHostMessage({
-    type: 'cut:view',
-    view: { ...current, revision },
-  });
-  controller.acceptHostMessage({
     type: 'cut:mutation-result',
     clientMutationId: sent.clientMutationId,
     succeeded: true,
-    revision,
   });
 }
 
@@ -498,7 +484,6 @@ function createView(): TimelineView {
   return {
     documentUri: 'file:///workspace/cut.otio',
     sessionId: 'session-1',
-    revision: 7,
     name: 'Cut',
     durationSeconds: 3,
     profile: {

@@ -31,11 +31,9 @@ function contentLocator(path = 'assets/hero.png') {
 
 function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
   return {
-    version: 1,
     targetId: 'quality-target:hero',
     kind: 'image',
     contentLocator: contentLocator(),
-    revision: 'revision-1',
     contentDigest: 'sha256:hero-v1',
     ...overrides,
   };
@@ -54,7 +52,6 @@ describe('creative media shared contracts', () => {
 
   it('fails visibly for unknown cross-family operations and unsupported declarations', () => {
     const request: CreativeMediaOperationRequest = {
-      version: 1,
       requestId: 'request-1',
       mediaKind: 'image',
       operationId: 'transform',
@@ -65,7 +62,6 @@ describe('creative media shared contracts', () => {
     ]);
 
     const support: CreativeMediaOperationSupport = {
-      version: 1,
       mediaKind: 'video',
       operationId: 'generate-from-keyframes',
       level: 'unsupported',
@@ -80,7 +76,6 @@ describe('creative media shared contracts', () => {
 
   it('negotiates required inputs and limits before dispatch', () => {
     const request: CreativeMediaOperationRequest = {
-      version: 1,
       requestId: 'request-keyframes',
       mediaKind: 'video',
       operationId: 'generate-from-keyframes',
@@ -89,7 +84,6 @@ describe('creative media shared contracts', () => {
       requestedDurationSeconds: 12,
     };
     const support: CreativeMediaOperationSupport = {
-      version: 1,
       mediaKind: 'video',
       operationId: 'generate-from-keyframes',
       level: 'supported',
@@ -106,7 +100,6 @@ describe('creative media shared contracts', () => {
 
   it('rejects malformed successful operation results', () => {
     const result: CreativeMediaOperationResult = {
-      version: 1,
       requestId: 'request-1',
       mediaKind: 'image',
       operationId: 'generate',
@@ -119,22 +112,20 @@ describe('creative media shared contracts', () => {
     ]);
   });
 
-  it('requires stable target identity and revision instead of a bare path', () => {
+  it('requires stable target identity and a content digest instead of a bare path', () => {
     const invalid = target({
       contentLocator: undefined,
-      revision: undefined,
-      contentDigest: undefined,
+      contentDigest: '',
     });
     expect(validateQualityTarget(invalid).diagnostics.map((item) => item.code)).toEqual(
       expect.arrayContaining(['invalid-quality-target']),
     );
   });
 
-  it('marks evidence stale when target revision changes', () => {
+  it('marks evidence stale when the target content digest changes', () => {
     const evidence: QualityEvidence = {
-      version: 1,
       evidenceId: 'evidence-1',
-      evaluator: { id: 'visual-consistency', version: '1.0.0', evaluatorClass: 'perception' },
+      evaluator: { id: 'visual-consistency', evaluatorClass: 'perception' },
       target: target(),
       state: 'current',
       metrics: [],
@@ -145,19 +136,15 @@ describe('creative media shared contracts', () => {
       sourceEvidenceLocators: [],
     };
     expect(
-      validateQualityEvidence(
-        evidence,
-        target({ revision: 'revision-2', contentDigest: 'sha256:hero-v2' }),
-      ).diagnostics,
+      validateQualityEvidence(evidence, target({ contentDigest: 'sha256:hero-v2' })).diagnostics,
     ).toEqual([expect.objectContaining({ code: 'stale-quality-evidence' })]);
   });
 
   it('does not allow a passing gate with stale evidence or missing evaluators', () => {
     const result: QualityGateResult = {
-      version: 1,
       gateResultId: 'gate-1',
       target: target(),
-      policy: { policyId: 'asset-gate', policyVersion: '1', requiredProfiles: ['image'] },
+      policy: { policyId: 'asset-gate', requiredProfiles: ['image'] },
       verdict: 'pass',
       evidenceIds: ['evidence-1'],
       staleEvidenceIds: ['evidence-0'],
@@ -170,10 +157,10 @@ describe('creative media shared contracts', () => {
     ]);
   });
 
-  it('rejects unknown contract versions without silently accepting them', () => {
-    const unknownVersionTarget = target();
-    Reflect.set(unknownVersionTarget, 'version', 99);
-    expect(validateQualityTarget(unknownVersionTarget).diagnostics).toEqual([
+  it('rejects removed contract version fields without silently accepting them', () => {
+    const versionedTarget = target();
+    Reflect.set(versionedTarget, 'version', 99);
+    expect(validateQualityTarget(versionedTarget).diagnostics).toEqual([
       expect.objectContaining({ code: 'invalid-quality-target' }),
     ]);
   });
@@ -183,7 +170,7 @@ describe('creative media shared contracts', () => {
       project: {
         domain: 'cut' as const,
         documentUri: 'file:///workspace/edit.otio',
-        projectRevision: 'otio:edit-v1',
+        contentDigest: 'sha256:edit-v1',
       },
       previewLocator: {
         kind: 'content-representation' as const,
@@ -211,7 +198,6 @@ describe('creative media shared contracts', () => {
 
   it('rejects malformed ProjectQuality result envelopes', () => {
     const result: ProjectQualityResult<QualityTarget> = {
-      version: 1,
       requestId: 'project-quality-1',
       operation: 'validate-project',
       ok: true,

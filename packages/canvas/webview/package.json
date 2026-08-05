@@ -1,7 +1,6 @@
 {
   "name": "@neko/canvas-webview",
   "private": true,
-  "version": "0.0.1",
   "description": "NekoCanvas webview UI components",
   "type": "module",
   "main": "dist/index.js",

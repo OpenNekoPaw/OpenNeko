@@ -12,11 +12,7 @@ import { TextLayer } from 'pdfjs-dist';
 import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
-import {
-  usePersistedState,
-  initPersistedStore,
-  notifySubscribers,
-} from '../shared/usePersistedState';
+import { usePersistedState, usePersistedStateRestore } from '../shared/usePersistedState';
 import { useTranslation } from '../i18n/I18nContext';
 import { getLogger } from '../utils/logger';
 
@@ -44,6 +40,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   const [currentPage, setCurrentPage] = usePersistedState('currentPage', 1);
   const [scale, setScale] = usePersistedState('scale', 1.5);
   const [viewMode, setViewMode] = usePersistedState<ViewMode>('viewMode', 'scroll');
+  const restorePersistedState = usePersistedStateRestore();
 
   const [pageViewports, setPageViewports] = useState<PageViewport[]>([]);
 
@@ -58,8 +55,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   const renderedPagesRef = useRef<Set<number>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const pendingPageRef = useRef<number | null>(null);
-  // Monotonic counter to invalidate stale renders after mode switch
-  const modeEpochRef = useRef(0);
+  const modeRenderRequestRef = useRef<object>({});
 
   const { selection, sendTextToAgent, sendFileToAgent } = useDocumentSelection({
     pageNumber: currentPage,
@@ -68,8 +64,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   useHostMessage((msg) => {
     const m = msg as unknown as { type: string; payload: Record<string, unknown> };
     if (m.type === 'document:restoreState') {
-      initPersistedStore(m.payload as Record<string, unknown>);
-      notifySubscribers();
+      restorePersistedState(m.payload);
     } else if (!sourceUrl && msg.type === 'document:data') {
       void loadPdfFromUrl(msg.payload.url);
     } else if (msg.type === 'document:navigate') {
@@ -196,7 +191,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   // =========================================================================
 
   const renderPageIntoEl = useCallback(
-    async (pageNum: number, el: HTMLElement, epoch: number) => {
+    async (pageNum: number, el: HTMLElement, request: object) => {
       const pdf = pdfDocRef.current;
       if (!pdf) return;
       if (renderingPagesRef.current.has(pageNum) || renderedPagesRef.current.has(pageNum)) return;
@@ -207,7 +202,8 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
         const viewport = page.getViewport({ scale });
 
         // Stale check: mode changed or already rendered
-        if (modeEpochRef.current !== epoch || renderedPagesRef.current.has(pageNum)) return;
+        if (modeRenderRequestRef.current !== request || renderedPagesRef.current.has(pageNum))
+          return;
 
         el.innerHTML = '';
 
@@ -244,7 +240,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
         await textLayer.render();
 
         // Final stale check before DOM mutation
-        if (modeEpochRef.current !== epoch) return;
+        if (modeRenderRequestRef.current !== request) return;
 
         el.innerHTML = '';
         el.appendChild(pageDiv);
@@ -271,7 +267,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
       if (!scrollContainer) return;
 
       observerRef.current?.disconnect();
-      const epoch = modeEpochRef.current;
+      const request = modeRenderRequestRef.current;
 
       const observer = new IntersectionObserver(
         (entries) => {
@@ -280,7 +276,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
             if (!pageNum) continue;
 
             if (entry.isIntersecting) {
-              void renderPageIntoEl(pageNum, entry.target as HTMLElement, epoch);
+              void renderPageIntoEl(pageNum, entry.target as HTMLElement, request);
             } else {
               // Clear off-screen pages
               if (renderedPagesRef.current.has(pageNum)) {
@@ -339,13 +335,13 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
 
   useEffect(() => {
     if (viewMode === 'scroll' || pageViewports.length === 0) return;
-    const epoch = modeEpochRef.current;
+    const request = modeRenderRequestRef.current;
 
     // Wait one frame for refs to mount
     const rafId = requestAnimationFrame(() => {
       renderedPagesRef.current.clear();
       const el = pageRefsMap.current.get(currentPage);
-      if (el) void renderPageIntoEl(currentPage, el, epoch);
+      if (el) void renderPageIntoEl(currentPage, el, request);
     });
 
     return () => cancelAnimationFrame(rafId);
@@ -389,8 +385,7 @@ export const PdfViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   const cycleViewMode = useCallback(() => {
     const idx = VIEW_MODES.indexOf(viewMode);
     const next = VIEW_MODES[(idx + 1) % VIEW_MODES.length]!;
-    // Bump epoch to invalidate any in-flight renders from old mode
-    modeEpochRef.current++;
+    modeRenderRequestRef.current = {};
     renderedPagesRef.current.clear();
     renderingPagesRef.current.clear();
     observerRef.current?.disconnect();

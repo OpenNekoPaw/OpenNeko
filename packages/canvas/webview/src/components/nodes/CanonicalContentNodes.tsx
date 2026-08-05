@@ -266,7 +266,6 @@ export function JobNode({ node, isSelected, ...baseProps }: CanonicalNodeProps<J
           <span>
             {node.data.jobRef.kind}:{node.data.jobRef.jobId}
           </span>
-          <span>r{node.data.revision}</span>
         </div>
         {node.data.diagnostic ? (
           <div style={{ color: 'var(--hostPort-errorForeground)' }}>{node.data.diagnostic}</div>

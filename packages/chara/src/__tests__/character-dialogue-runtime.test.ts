@@ -176,7 +176,6 @@ describe('CharacterDialogueRuntimeService', () => {
   it('evaluates transcripts through the injected service in runtime', async () => {
     const artifact = makeArtifact();
     const report: NpcEvaluationReport = {
-      version: 1,
       createdAt: '2026-06-01T00:00:00.000Z',
       entityRef,
       summary: 'Lin stayed in character.',
@@ -222,7 +221,6 @@ function asyncResponder(content: string): () => CharacterDialogueResponder {
 
 function makeArtifact(): NpcTranscriptArtifact {
   return {
-    version: 1,
     createdAt: '2026-06-01T00:00:00.000Z',
     entityRef,
     mode: 'roleplay' as const,

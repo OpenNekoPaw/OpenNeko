@@ -438,7 +438,6 @@ export class NodeMediaRuntime {
     return {
       sessionId,
       video: {
-        version: 1,
         url: registration.url,
         mimeType: profile === 'vp8-webm-direct' ? 'video/webm' : 'video/mp4',
         preparationProfile: profile,
@@ -498,8 +497,6 @@ export class NodeMediaRuntime {
     return {
       sessionId,
       stream: {
-        version: 1,
-        protocol: 'neko-pcm-f32le-v1',
         streamUrl: registration.url,
         sampleRate: PCM_SAMPLE_RATE,
         channels: PCM_CHANNELS,

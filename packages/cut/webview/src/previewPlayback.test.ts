@@ -161,10 +161,10 @@ describe('previewPreparationLeadSeconds', () => {
 });
 
 describe('shouldAcceptPreviewReady', () => {
-  it('rejects stale generations and readiness after transport stops', () => {
-    expect(shouldAcceptPreviewReady(3, 3, true)).toBe(true);
-    expect(shouldAcceptPreviewReady(2, 3, true)).toBe(false);
-    expect(shouldAcceptPreviewReady(3, 3, false)).toBe(false);
+  it('rejects mismatched requests and readiness after transport stops', () => {
+    expect(shouldAcceptPreviewReady('request-3', 'request-3', true)).toBe(true);
+    expect(shouldAcceptPreviewReady('request-2', 'request-3', true)).toBe(false);
+    expect(shouldAcceptPreviewReady('request-3', 'request-3', false)).toBe(false);
   });
 });
 

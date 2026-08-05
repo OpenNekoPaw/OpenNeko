@@ -6,7 +6,6 @@ import type {
   CanvasMaterialAuthoringRequest,
 } from './types/canvas-material-contracts';
 import {
-  CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   assertCanvasHostRuntimeIdentity,
   type CanvasHostIntentRequest,
   type CanvasHostIntentResult,
@@ -406,7 +405,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.revision += 1;
     this.sequence += 1;
     const event: CanvasHostProjectionEvent = {
-      schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       sequence: this.sequence,
       originCommandId,
       snapshot: this.createSnapshot(),
@@ -416,7 +414,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
 
   private accepted(request: CanvasHostIntentRequest): CanvasHostIntentResult {
     return {
-      schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       requestId: request.requestId,
       commandId: request.commandId,
       status: 'accepted',
@@ -428,7 +425,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     const sourceAvailable = this.options.effects.requestSource !== undefined;
     const generationAvailable = this.options.effects.requestGenerationDraft !== undefined;
     return {
-      schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       identity: { ...this.identity },
       revision: this.revision,
       dirty: this.dirty,
@@ -465,7 +461,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     descriptors: readonly CanvasMaterialActionDescriptor[],
   ): CanvasMaterialActionResolution {
     return {
-      schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
       requestId,
       identity: { ...this.identity },
       revision: this.revision,
@@ -494,7 +489,6 @@ function rejected(
   message: string,
 ): CanvasHostIntentResult {
   return {
-    schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
     requestId: request.requestId,
     commandId: request.commandId,
     status: 'rejected',

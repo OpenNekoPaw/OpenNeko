@@ -6,7 +6,6 @@ import type {
 } from '@neko/canvas-domain';
 import {
   CANVAS_CUT_DRAFT_KIND,
-  CANVAS_CUT_DRAFT_SCHEMA_VERSION,
   isCanvasCutDraftPayload,
   projectCanvasPlaybackRouteToCutDraft,
   validateCanvasCutDraftPayload,
@@ -70,7 +69,6 @@ describe('canvas cut draft contract', () => {
     if (!result.ok) throw new Error('Expected draft projection to succeed.');
     expect(result.payload).toMatchObject({
       kind: CANVAS_CUT_DRAFT_KIND,
-      schemaVersion: CANVAS_CUT_DRAFT_SCHEMA_VERSION,
       source: { canvasUri: 'neko://canvas/project.nkc', revision: 7 },
       route: { id: 'scene:scene-1', unitIds: ['shot-a', 'shot-b'] },
       projectName: 'Scene 1 Cut',
@@ -259,7 +257,6 @@ function playbackUnit(id: string, overrides: Partial<CanvasPlaybackUnit> = {}): 
 function createPayload(overrides: Partial<CanvasCutDraftPayload> = {}): CanvasCutDraftPayload {
   return {
     kind: CANVAS_CUT_DRAFT_KIND,
-    schemaVersion: CANVAS_CUT_DRAFT_SCHEMA_VERSION,
     source: { canvasUri: 'neko://canvas/project.nkc', revision: 1 },
     route: {
       id: 'auto-entry:shot-a',

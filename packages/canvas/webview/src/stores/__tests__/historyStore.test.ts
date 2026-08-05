@@ -8,7 +8,6 @@ import type { CanvasData } from '@neko/canvas-domain';
 
 function createCanvasData(overrides: Partial<CanvasData> = {}): CanvasData {
   return {
-    version: '1.0',
     name: 'Test Canvas',
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
     nodes: [],

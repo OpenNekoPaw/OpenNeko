@@ -133,6 +133,7 @@ function createMaterialHost(
   descriptors: readonly CanvasMaterialActionDescriptor[],
 ): CanvasWebviewHostPort {
   return {
+    documentId: 'canvas-document-1',
     postMessage: () => undefined,
     getState: () => undefined,
     setState: () => undefined,

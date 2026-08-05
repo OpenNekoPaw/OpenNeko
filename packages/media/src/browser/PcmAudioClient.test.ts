@@ -50,8 +50,6 @@ describe('parsePcmPackets', () => {
     const audioContext = fakeAudioContext(starts);
     const client = new PcmAudioClient({
       descriptor: {
-        version: 1,
-        protocol: 'neko-pcm-f32le-v1',
         streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         sampleRate: 48_000,
         channels: 2,
@@ -151,7 +149,7 @@ describe('parsePcmPackets', () => {
     expect(stopped).toHaveLength(starts.length);
   });
 
-  it('retires a generation with a gain ramp before scheduled sources stop', async () => {
+  it('retires one playback request with a gain ramp before scheduled sources stop', async () => {
     vi.useFakeTimers();
     const { stream, controller } = controlledStream();
     vi.stubGlobal(
@@ -185,8 +183,6 @@ describe('parsePcmPackets', () => {
     const onPlaybackEnd = vi.fn();
     const client = new PcmAudioClient({
       descriptor: {
-        version: 1,
-        protocol: 'neko-pcm-f32le-v1',
         streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         sampleRate: 48_000,
         channels: 2,
@@ -234,8 +230,6 @@ describe('parsePcmPackets', () => {
     const curves: Float32Array[] = [];
     const client = new PcmAudioClient({
       descriptor: {
-        version: 1,
-        protocol: 'neko-pcm-f32le-v1',
         streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         sampleRate: 48_000,
         channels: 2,
@@ -264,8 +258,6 @@ describe('parsePcmPackets', () => {
 function createClient(volume = 1): PcmAudioClient {
   return new PcmAudioClient({
     descriptor: {
-      version: 1,
-      protocol: 'neko-pcm-f32le-v1',
       streamUrl: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
       sampleRate: 48_000,
       channels: 2,

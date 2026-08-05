@@ -28,7 +28,6 @@ export interface ProjectEntityInspectorOwnerCapabilities {
 }
 
 export function projectEntityInspector(input: {
-  readonly projectRevision: number;
   readonly projection: ProjectEntityManagementProjection;
   readonly capabilities?: ProjectEntityInspectorOwnerCapabilities;
 }): ProjectEntityInspectorProjection {
@@ -36,7 +35,6 @@ export function projectEntityInspector(input: {
   if (input.projection.status === 'candidate') {
     const candidate = input.projection.candidate;
     return {
-      projectRevision: input.projectRevision,
       status: 'candidate',
       kind: candidate.kind,
       names: candidate.proposedNames,
@@ -78,7 +76,6 @@ export function projectEntityInspector(input: {
     operations.push('character-embody');
   }
   return {
-    projectRevision: input.projectRevision,
     status: input.projection.status,
     kind: entity.kind,
     names: entity.names,

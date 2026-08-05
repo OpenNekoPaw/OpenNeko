@@ -3,8 +3,8 @@ import {
   assertInitialJobSnapshot,
   assertJobRef,
   assertJobTransition,
-  createInMemoryVersionedJobStore,
-  createVersionedJobObservationHub,
+  createInMemoryJobStore,
+  createJobObservationHub,
   formatJobRef,
   isTerminalJobPhase,
   JobLifecycleError,
@@ -12,18 +12,17 @@ import {
 import {
   GENERATION_JOB_KIND,
   GenerationJobError,
+  type GenerationJobReadDiagnostic,
   type GenerationJobRef,
   type GenerationJobSnapshot,
   type GenerationJobStore,
 } from './contracts';
 import { decodeGenerationJobSnapshot, encodeGenerationJobSnapshot } from './codec';
 
-export { GENERATION_JOB_MIGRATIONS } from './migrations';
-
-const GENERATION_JOB_SNAPSHOT_VERSION = 2;
+export { initializeGenerationJobTables } from './tables';
 
 export function createInMemoryGenerationJobStore(): GenerationJobStore {
-  const store = createInMemoryVersionedJobStore<GenerationJobSnapshot>();
+  const store = createInMemoryJobStore<GenerationJobSnapshot>();
   const refs: GenerationJobRef[] = [];
   return Object.freeze({
     ...store,
@@ -34,7 +33,10 @@ export function createInMemoryGenerationJobStore(): GenerationJobStore {
     },
     listRecoverable: async () => {
       const snapshots = await Promise.all(refs.map((ref) => store.get(ref)));
-      return snapshots.filter((snapshot) => !isTerminalJobPhase(snapshot.phase));
+      return {
+        snapshots: snapshots.filter((snapshot) => !isTerminalJobPhase(snapshot.phase)),
+        diagnostics: [],
+      };
     },
   });
 }
@@ -53,7 +55,7 @@ export function createPersistentGenerationJobStore(
       'Persistent Generation Job store requires a workspace identity.',
     );
   }
-  const observations = createVersionedJobObservationHub<GenerationJobSnapshot>();
+  const observations = createJobObservationHub<GenerationJobSnapshot>();
 
   const store: GenerationJobStore = {
     create: async (initial) => {
@@ -80,15 +82,12 @@ export function createPersistentGenerationJobStore(
           }
           await sql.run(
             `INSERT INTO generation_jobs (
-              workspace_id, job_id, phase, revision, snapshot_version,
-              snapshot_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              workspace_id, job_id, phase, snapshot_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?)`,
             [
               options.workspaceId,
               stored.ref.jobId,
               stored.phase,
-              stored.revision,
-              GENERATION_JOB_SNAPSHOT_VERSION,
               encodeGenerationJobSnapshot(stored),
               stored.createdAt,
               stored.updatedAt,
@@ -109,8 +108,7 @@ export function createPersistentGenerationJobStore(
         },
         async ({ sql }) => {
           const rows = await sql.all(
-            `SELECT job_id, phase, revision, snapshot_version, snapshot_json,
-                    created_at, updated_at
+            `SELECT job_id, phase, snapshot_json, created_at, updated_at
               FROM generation_jobs
               WHERE workspace_id = ? AND job_id = ?`,
             [options.workspaceId, ref.jobId],
@@ -120,8 +118,8 @@ export function createPersistentGenerationJobStore(
       );
     },
 
-    commit: async (input) => {
-      assertGenerationRef(input.ref);
+    save: async (snapshot) => {
+      assertGenerationRef(snapshot.ref);
       const stored = await options.metadataStore.transaction(
         {
           mode: 'state-write',
@@ -130,36 +128,31 @@ export function createPersistentGenerationJobStore(
         },
         async ({ sql }) => {
           const rows = await sql.all(
-            `SELECT job_id, phase, revision, snapshot_version, snapshot_json,
-                    created_at, updated_at
+            `SELECT job_id, phase, snapshot_json, created_at, updated_at
               FROM generation_jobs
               WHERE workspace_id = ? AND job_id = ?`,
-            [options.workspaceId, input.ref.jobId],
+            [options.workspaceId, snapshot.ref.jobId],
           );
-          const current = decodeRequiredRow(rows, input.ref);
-          assertJobTransition(current, input.next, input.expectedRevision);
-          const next = cloneForStorage(input.next);
+          const current = decodeRequiredRow(rows, snapshot.ref);
+          assertJobTransition(current, snapshot);
+          const next = cloneForStorage(snapshot);
           const result = await sql.run(
             `UPDATE generation_jobs
-              SET phase = ?, revision = ?, snapshot_version = ?,
-                  snapshot_json = ?, created_at = ?, updated_at = ?
-              WHERE workspace_id = ? AND job_id = ? AND revision = ?`,
+              SET phase = ?, snapshot_json = ?, created_at = ?, updated_at = ?
+              WHERE workspace_id = ? AND job_id = ?`,
             [
               next.phase,
-              next.revision,
-              GENERATION_JOB_SNAPSHOT_VERSION,
               encodeGenerationJobSnapshot(next),
               next.createdAt,
               next.updatedAt,
               options.workspaceId,
               next.ref.jobId,
-              input.expectedRevision,
             ],
           );
           if (result.changes !== 1) {
             throw new JobLifecycleError(
-              'stale-revision',
-              `Job ${formatJobRef(input.ref)} changed before revision ${input.expectedRevision} could commit.`,
+              'job-not-found',
+              `Job ${formatJobRef(snapshot.ref)} does not exist.`,
             );
           }
           return next;
@@ -169,8 +162,8 @@ export function createPersistentGenerationJobStore(
       return stored;
     },
 
-    observe: (ref, afterRevision) => {
-      return observations.observe(ref, afterRevision, () => store.get(ref));
+    observe: (ref) => {
+      return observations.observe(ref, () => store.get(ref));
     },
 
     listRecoverable: () => {
@@ -182,17 +175,28 @@ export function createPersistentGenerationJobStore(
         },
         async ({ sql }) => {
           const rows = await sql.all(
-            `SELECT job_id, phase, revision, snapshot_version, snapshot_json,
-                    created_at, updated_at
+            `SELECT job_id, phase, snapshot_json, created_at, updated_at
               FROM generation_jobs
               WHERE workspace_id = ?
                 AND phase IN ('pending', 'running', 'outcome-unknown')
               ORDER BY updated_at ASC, job_id ASC`,
             [options.workspaceId],
           );
-          return rows.map((row) =>
-            decodeRow(row, { kind: GENERATION_JOB_KIND, jobId: readString(row, 'job_id') }),
-          );
+          const snapshots: GenerationJobSnapshot[] = [];
+          const diagnostics: GenerationJobReadDiagnostic[] = [];
+          for (const row of rows) {
+            const ref = readGenerationRef(row);
+            try {
+              snapshots.push(decodeRow(row, ref));
+            } catch (error) {
+              diagnostics.push({
+                code: 'generation-job-persistence-invalid' as const,
+                ref,
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+          return { snapshots, diagnostics };
         },
       );
     },
@@ -216,19 +220,12 @@ function decodeRequiredRow(
 }
 
 function decodeRow(row: LocalMetadataSqlRow, expectedRef: GenerationJobRef): GenerationJobSnapshot {
-  const snapshotVersion = readNumber(row, 'snapshot_version');
-  if (snapshotVersion !== GENERATION_JOB_SNAPSHOT_VERSION) {
-    throw invalidPersistence(
-      `Generation Job ${formatJobRef(expectedRef)} uses unknown snapshot version ${snapshotVersion}.`,
-    );
-  }
   const snapshot = decodeGenerationJobSnapshot(readString(row, 'snapshot_json'));
   if (
     snapshot.ref.kind !== expectedRef.kind ||
     snapshot.ref.jobId !== expectedRef.jobId ||
     snapshot.ref.jobId !== readString(row, 'job_id') ||
     snapshot.phase !== readString(row, 'phase') ||
-    snapshot.revision !== readNumber(row, 'revision') ||
     snapshot.createdAt !== readNumber(row, 'created_at') ||
     snapshot.updatedAt !== readNumber(row, 'updated_at')
   ) {
@@ -237,6 +234,11 @@ function decodeRow(row: LocalMetadataSqlRow, expectedRef: GenerationJobRef): Gen
     );
   }
   return snapshot;
+}
+
+function readGenerationRef(row: LocalMetadataSqlRow): GenerationJobRef {
+  const jobId = readString(row, 'job_id');
+  return { kind: GENERATION_JOB_KIND, jobId };
 }
 
 function cloneForStorage(snapshot: GenerationJobSnapshot): GenerationJobSnapshot {

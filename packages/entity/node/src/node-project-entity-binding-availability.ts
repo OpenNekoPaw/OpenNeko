@@ -1,12 +1,12 @@
 import type {
   EntityAssetProjectionRepository,
   ProjectEntityBindingAvailabilityService,
-  ProjectEntityDocumentRepository,
 } from '@neko/entity-domain';
 import type { EntityAssetProjectionPartition } from '@neko/entity-domain';
+import type { ProjectEntityAvailableDocumentReader } from './node-project-entity-repository';
 
 export interface RefreshProjectEntityBindingAvailabilityOptions {
-  readonly documentRepository: ProjectEntityDocumentRepository;
+  readonly documentRepository: ProjectEntityAvailableDocumentReader;
   readonly availability: Pick<ProjectEntityBindingAvailabilityService, 'project'>;
   readonly projections: EntityAssetProjectionRepository;
   readonly partition: EntityAssetProjectionPartition;
@@ -17,7 +17,7 @@ export async function refreshProjectEntityBindingAvailability(
   updatedAt: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const document = await options.documentRepository.load(signal);
+  const { document } = await options.documentRepository.readAvailable(signal);
   const values = await options.availability.project(document, updatedAt, signal);
   const sourceId = bindingAvailabilitySourceId(document.projectId);
   await options.projections.replaceSource({

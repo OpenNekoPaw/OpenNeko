@@ -15,7 +15,6 @@ vi.mock('../../../i18n/I18nContext', () => ({
 const view: TimelineView = {
   documentUri: 'file:///workspace/project.otio',
   sessionId: 'session-1',
-  revision: 2,
   name: 'Project',
   profile: {
     profile: '1080p30',

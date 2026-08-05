@@ -17,12 +17,15 @@ import type {
   PreviewWaveformMessage,
 } from '../shared/types';
 import { parseLrc, type LrcLine } from './lrc-parser';
+import type { PreviewMediaViewerSnapshot } from '../root/viewer-snapshot';
 
 export interface AudioPlayerProps {
   readonly sourceUrl?: string;
   readonly displayName?: string;
   readonly autoPlay?: boolean;
   readonly compact?: boolean;
+  readonly initialSnapshot?: PreviewMediaViewerSnapshot;
+  readonly onSnapshotChange?: (snapshot: PreviewMediaViewerSnapshot) => void;
 }
 
 export function AudioPlayer({
@@ -30,6 +33,8 @@ export function AudioPlayer({
   displayName,
   autoPlay = false,
   compact = false,
+  initialSnapshot,
+  onSnapshotChange,
 }: AudioPlayerProps = {}) {
   return sourceUrl ? (
     <SourceAudioPlayer
@@ -37,6 +42,8 @@ export function AudioPlayer({
       displayName={displayName ?? ''}
       autoPlay={autoPlay}
       compact={compact}
+      initialSnapshot={initialSnapshot}
+      onSnapshotChange={onSnapshotChange}
     />
   ) : (
     <EngineAudioPlayer />
@@ -48,18 +55,25 @@ function SourceAudioPlayer({
   displayName,
   autoPlay,
   compact,
-}: Required<Pick<AudioPlayerProps, 'sourceUrl' | 'displayName' | 'autoPlay' | 'compact'>>) {
+  initialSnapshot,
+  onSnapshotChange,
+}: Required<Pick<AudioPlayerProps, 'sourceUrl' | 'displayName' | 'autoPlay' | 'compact'>> &
+  Pick<AudioPlayerProps, 'initialSnapshot' | 'onSnapshotChange'>) {
   const { t } = useTranslation();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(initialSnapshot?.currentTime ?? 0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [speed, setSpeed] = useState(1);
+  const [volume, setVolume] = useState(initialSnapshot?.volume ?? 1);
+  const [speed, setSpeed] = useState(initialSnapshot?.playbackRate ?? 1);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     const audio = audioRef.current;
+    if (audio) {
+      audio.playbackRate = initialSnapshot?.playbackRate ?? 1;
+      audio.volume = initialSnapshot?.volume ?? 1;
+    }
     if (audio && autoPlay) {
       setError(undefined);
       void audio.play().catch(() => {
@@ -67,8 +81,24 @@ function SourceAudioPlayer({
         setError(t('preview.audio.playbackFailed'));
       });
     }
-    return () => audio?.pause();
-  }, [autoPlay, sourceUrl, t]);
+    return () => {
+      if (audio) {
+        onSnapshotChange?.({
+          currentTime: audio.currentTime,
+          playbackRate: audio.playbackRate,
+          volume: audio.volume,
+        });
+        audio.pause();
+      }
+    };
+  }, [
+    autoPlay,
+    initialSnapshot?.playbackRate,
+    initialSnapshot?.volume,
+    onSnapshotChange,
+    sourceUrl,
+    t,
+  ]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -117,9 +147,19 @@ function SourceAudioPlayer({
           setDuration(
             Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0,
           );
+          const restoredTime = initialSnapshot?.currentTime ?? 0;
+          event.currentTarget.currentTime = Math.max(
+            0,
+            Math.min(event.currentTarget.duration || restoredTime, restoredTime),
+          );
+          setCurrentTime(event.currentTarget.currentTime);
           setError(undefined);
         }}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onTimeUpdate={(event) => {
+          const nextTime = event.currentTarget.currentTime;
+          setCurrentTime(nextTime);
+          onSnapshotChange?.({ currentTime: nextTime, playbackRate: speed, volume });
+        }}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onEnded={() => setIsPlaying(false)}
@@ -186,13 +226,13 @@ function EngineAudioPlayer() {
   const [audioClient, setAudioClient] = useState<PcmAudioClient>();
   const audioClientRef = useRef<PcmAudioClient>();
   const audioContextRef = useRef<AudioContext>();
-  const generationRef = useRef(0);
+  const playbackRequestRef = useRef<object>({});
   const playbackEndedRef = useRef(false);
   const volumeRef = useRef(volume);
   const statusThrottleRef = useRef(0);
 
   const disposeClient = useCallback(() => {
-    generationRef.current += 1;
+    playbackRequestRef.current = {};
     audioClientRef.current?.dispose();
     audioClientRef.current = undefined;
     setAudioClient(undefined);
@@ -227,7 +267,7 @@ function EngineAudioPlayer() {
   const connectPlayback = useCallback(
     async (message: PreviewPlaybackReadyMessage): Promise<void> => {
       disposeClient();
-      const generation = generationRef.current;
+      const request = playbackRequestRef.current;
       const descriptor = message.payload.audio;
       if (!descriptor) throw new Error('Audio preview produced no PCM descriptor.');
       const context = audioContextRef.current;
@@ -239,7 +279,7 @@ function EngineAudioPlayer() {
           playbackRate: message.payload.playbackRate,
           volume: volumeRef.current,
           onError: (failure) => {
-            if (generation === generationRef.current && audioClientRef.current === client) {
+            if (request === playbackRequestRef.current && audioClientRef.current === client) {
               setError(failure.message);
             }
           },
@@ -248,7 +288,7 @@ function EngineAudioPlayer() {
           },
         });
         await client.connect(context);
-        if (generation !== generationRef.current) {
+        if (request !== playbackRequestRef.current) {
           client.dispose();
           return;
         }
@@ -260,7 +300,7 @@ function EngineAudioPlayer() {
       } catch (error) {
         client?.dispose();
         if (audioClientRef.current === client) audioClientRef.current = undefined;
-        if (generation !== generationRef.current) return;
+        if (request !== playbackRequestRef.current) return;
         throw error;
       }
     },

@@ -4,10 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FfmpegProcessPort, FfmpegRunResult, RunningProcess } from './NodeFfmpegProcess';
-import {
-  MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
-  verifyMediaRuntimeDirectory,
-} from './MediaRuntimeDescriptor';
+import { verifyMediaRuntimeDirectory } from './MediaRuntimeDescriptor';
 
 describe('MediaRuntimeDescriptor', () => {
   const roots: string[] = [];
@@ -43,21 +40,29 @@ describe('MediaRuntimeDescriptor', () => {
     ).rejects.toThrow('checksum mismatch');
   });
 
-  it('rejects the pre-accelerator v1 descriptor schema', async () => {
-    const root = await createRuntimeRoot(roots);
+  it('rejects a removed schema field without affecting another runtime directory', async () => {
+    const [root, siblingRoot] = await Promise.all([
+      createRuntimeRoot(roots),
+      createRuntimeRoot(roots),
+    ]);
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor: unknown = JSON.parse(await readFile(descriptorPath, 'utf8'));
-    if (typeof descriptor !== 'object' || descriptor === null || !('schemaVersion' in descriptor)) {
+    if (typeof descriptor !== 'object' || descriptor === null) {
       throw new Error('Fixture descriptor is invalid.');
     }
-    descriptor.schemaVersion = 'openneko.media-runtime.v1';
+    Object.assign(descriptor, { schemaVersion: 1 });
     await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
 
     await expect(
       verifyMediaRuntimeDirectory(root, 'darwin-arm64', {
         process: new QualifiedProcess(),
       }),
-    ).rejects.toThrow('Media runtime descriptor schema is invalid.');
+    ).rejects.toThrow('unsupported: schemaVersion');
+    await expect(
+      verifyMediaRuntimeDirectory(siblingRoot, 'darwin-arm64', {
+        process: new QualifiedProcess(),
+      }),
+    ).resolves.toMatchObject({ descriptor: { target: 'darwin-arm64' } });
   });
 
   it('fails closed when a declared capability is absent', async () => {
@@ -182,7 +187,6 @@ async function createRuntimeRoot(roots: string[]): Promise<string> {
     join(root, 'descriptor.json'),
     `${JSON.stringify(
       {
-        schemaVersion: MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
         target,
         ffmpegVersion: '8.1.2',
         ffprobeVersion: '8.1.2',

@@ -15,10 +15,10 @@ const identity: CanvasHostRuntimeIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'document-1',
   sessionId: 'session-1',
-  endpointEpoch: 'endpoint-1',
+  rendererSessionId: 'endpoint-1',
 };
 
 describe('CanvasHostRuntimeSession', () => {
@@ -151,7 +151,7 @@ describe('CanvasHostRuntimeSession', () => {
     const stale = await runtime.executeIntent({
       ...command,
       requestId: 'request-stale-command-retry',
-      identity: { ...identity, endpointEpoch: 'endpoint-stale' },
+      identity: { ...identity, rendererSessionId: 'endpoint-stale' },
     });
     expect(stale).toMatchObject({
       requestId: 'request-stale-command-retry',
@@ -243,7 +243,6 @@ describe('CanvasHostRuntimeSession', () => {
     const requestGenerationDraft = vi.fn(async () => ({
       ref: { kind: 'generation' as const, jobId: 'generation-1' },
       phase: 'pending' as const,
-      revision: 1,
       title: 'Generate image',
       inputNodeIds: [],
       mediaKind: 'image' as const,

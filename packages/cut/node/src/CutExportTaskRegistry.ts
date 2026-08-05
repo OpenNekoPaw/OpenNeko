@@ -14,7 +14,7 @@ import {
 export interface StartCutExportTask {
   readonly documentUri: string;
   readonly sessionId: string;
-  readonly sourceRevision: number;
+  readonly sourceSnapshotId: string;
   readonly settings: CutExportSettings;
   readonly outputWorkspaceRelativePath: string;
   readonly run: (signal: AbortSignal) => Promise<void>;
@@ -87,7 +87,7 @@ export class CutExportTaskRegistry {
       executionConfig: {
         executionKey,
         sessionId: input.sessionId,
-        sourceRevision: input.sourceRevision,
+        sourceSnapshotId: input.sourceSnapshotId,
       },
     });
     this.install(snapshot);
@@ -129,15 +129,13 @@ export class CutExportTaskRegistry {
   }
 
   private install(snapshot: ExportJobSnapshot): void {
-    const current = this.snapshots.get(snapshot.ref.jobId);
-    if (current && snapshot.revision < current.revision) return;
     this.snapshots.set(snapshot.ref.jobId, snapshot);
     const task = projectTask(snapshot);
     this.tasks.set(snapshot.ref.jobId, task);
     this.options.onUpdate(task);
     if (isTerminalJobPhase(snapshot.phase) || this.observers.has(snapshot.ref.jobId)) return;
 
-    const observation = this.coordinator.observeExport(snapshot.ref, snapshot.revision);
+    const observation = this.coordinator.observeExport(snapshot.ref);
     const iterator = observation[Symbol.asyncIterator]();
     this.observers.set(snapshot.ref.jobId, iterator);
     void this.consume(snapshot.ref.jobId, iterator);
@@ -247,13 +245,13 @@ class DirectCutExportExecutor implements ExportExecutorPort {
 
 function projectTask(snapshot: ExportJobSnapshot): CutExportTaskSnapshot {
   const sessionId = readString(snapshot.request.executionConfig, 'sessionId');
-  const sourceRevision = readPositiveInteger(snapshot.request.executionConfig, 'sourceRevision');
+  const sourceSnapshotId = readString(snapshot.request.executionConfig, 'sourceSnapshotId');
   const config = snapshot.request.config;
   return {
     jobId: snapshot.ref.jobId,
     documentUri: snapshot.request.documentUri,
     sessionId,
-    sourceRevision,
+    sourceSnapshotId,
     settings: {
       outputName: outputName(config.outputPath),
       container: config.format === 'mov' ? 'mov' : 'mp4',
@@ -291,7 +289,7 @@ function projectStatus(snapshot: ExportJobSnapshot): CutExportTaskSnapshot['stat
 const exportFailureDiagnostic: CutUserDiagnostic = Object.freeze({ code: 'export-failed' });
 
 function commandFor(snapshot: ExportJobSnapshot): ExportJobCommandInput {
-  return { ref: snapshot.ref, expectedRevision: snapshot.revision };
+  return { ref: snapshot.ref };
 }
 
 function readExecutionKey(value: Readonly<Record<string, unknown>>): string {
@@ -302,14 +300,6 @@ function readString(value: Readonly<Record<string, unknown>>, key: string): stri
   const candidate = value[key];
   if (typeof candidate !== 'string' || !candidate.trim()) {
     throw new Error(`Cut Export Job is missing ${key}.`);
-  }
-  return candidate;
-}
-
-function readPositiveInteger(value: Readonly<Record<string, unknown>>, key: string): number {
-  const candidate = value[key];
-  if (typeof candidate !== 'number' || !Number.isSafeInteger(candidate) || candidate < 0) {
-    throw new Error(`Cut Export Job has invalid ${key}.`);
   }
   return candidate;
 }

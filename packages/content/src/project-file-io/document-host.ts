@@ -14,7 +14,6 @@ export interface ProjectDocumentSnapshot<TDocument> {
   readonly formatId: string;
   readonly document: TDocument;
   readonly state: ProjectDocumentState;
-  readonly version: number;
   readonly diagnostics: readonly ProjectFileDiagnostic[];
 }
 
@@ -43,15 +42,13 @@ export class InMemoryProjectDocumentHost<TDocument> implements ProjectDocumentHo
   private current: ProjectDocumentSnapshot<TDocument>;
 
   constructor(
-    snapshot: Omit<ProjectDocumentSnapshot<TDocument>, 'state' | 'version'> & {
+    snapshot: Omit<ProjectDocumentSnapshot<TDocument>, 'state'> & {
       readonly state?: ProjectDocumentState;
-      readonly version?: number;
     },
   ) {
     this.current = {
       ...snapshot,
       state: snapshot.state ?? 'clean',
-      version: snapshot.version ?? 0,
     };
   }
 
@@ -64,7 +61,6 @@ export class InMemoryProjectDocumentHost<TDocument> implements ProjectDocumentHo
       ...this.current,
       document: edit.apply(this.current.document),
       state: this.current.state === 'readonly' ? 'readonly' : 'dirty',
-      version: this.current.version + 1,
     };
     return this.current;
   }

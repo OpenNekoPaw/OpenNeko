@@ -4,7 +4,6 @@ import { projectEntityInspector, type ProjectEntityManagementProjection } from '
 describe('Project Entity Inspector projection', () => {
   it('gates Character interaction operations on exact owner capabilities', () => {
     const projection = projectEntityInspector({
-      projectRevision: 7,
       projection: ENTITY,
       capabilities: {
         publish: true,
@@ -38,7 +37,6 @@ describe('Project Entity Inspector projection', () => {
 
   it('shows evidence decisions for candidates and removes blocked operations', () => {
     const projection = projectEntityInspector({
-      projectRevision: 7,
       projection: CANDIDATE,
       capabilities: {
         blockers: [
@@ -60,7 +58,6 @@ describe('Project Entity Inspector projection', () => {
 
   it('hides Character-only actions for non-Character Entities', () => {
     const projection = projectEntityInspector({
-      projectRevision: 7,
       projection: {
         ...ENTITY,
         entity: { ...ENTITY.entity, kind: 'location' },

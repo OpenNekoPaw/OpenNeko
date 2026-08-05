@@ -6,8 +6,6 @@ import {
 } from '@neko/content';
 import { hashStableValue } from '@neko/shared';
 
-export const GENERATED_ASSET_LIFECYCLE_VERSION = 1 as const;
-
 export interface GeneratedAssetWorkflowStageRef {
   readonly stageId: string;
   readonly workflowId?: string;
@@ -27,7 +25,6 @@ export interface GeneratedAssetGenerationLineage {
  * render URIs are deliberately excluded from this record.
  */
 export interface GeneratedAssetRevisionRef {
-  readonly version: typeof GENERATED_ASSET_LIFECYCLE_VERSION;
   readonly assetId: string;
   readonly revision: string;
   readonly contentDigest: string;
@@ -80,7 +77,6 @@ export function createGeneratedAssetRevisionRef(
     path: contentPath,
   };
   return {
-    version: GENERATED_ASSET_LIFECYCLE_VERSION,
     assetId: input.assetId,
     revision,
     contentDigest: input.contentDigest,
@@ -105,7 +101,6 @@ export function validateGeneratedAssetRevisionRef(
   const generation = readGenerationLineage(value['generation']);
   const contentLocator = validateContentLocator(value['contentLocator']);
   if (
-    value['version'] !== GENERATED_ASSET_LIFECYCLE_VERSION ||
     !assetId ||
     !revision ||
     !contentDigest ||
@@ -130,7 +125,6 @@ export function validateGeneratedAssetRevisionRef(
   return {
     ok: true,
     lifecycle: {
-      version: GENERATED_ASSET_LIFECYCLE_VERSION,
       assetId,
       revision,
       contentDigest,
@@ -229,7 +223,6 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: ReadonlySet<string>):
 }
 
 const LIFECYCLE_KEYS = new Set([
-  'version',
   'assetId',
   'revision',
   'contentDigest',

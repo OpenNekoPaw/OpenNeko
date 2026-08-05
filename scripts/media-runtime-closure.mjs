@@ -3,8 +3,6 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, isAbsolute, join, relative } from 'node:path';
 
-export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v2';
-
 const COMMON_REQUIRED = Object.freeze({
   decoders: Object.freeze(['h264', 'hevc', 'av1', 'vp8', 'vp9', 'aac', 'mp3', 'flac', 'dts']),
   encoders: Object.freeze(['aac']),
@@ -86,7 +84,6 @@ export function createMediaRuntimeDescriptor({
     }
   }
   return Object.freeze({
-    schemaVersion: MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
     target,
     ffmpegVersion: readFfmpegVersion(capabilities.ffmpegVersion),
     ffprobeVersion: readFfprobeVersion(capabilities.ffprobeVersion),
@@ -156,7 +153,14 @@ function requiredCapabilitiesForTarget(target) {
 function assertDescriptor(descriptor, target) {
   if (
     !descriptor ||
-    descriptor.schemaVersion !== MEDIA_RUNTIME_DESCRIPTOR_SCHEMA ||
+    !hasExactKeys(descriptor, [
+      'target',
+      'ffmpegVersion',
+      'ffprobeVersion',
+      'license',
+      'executables',
+      'requiredCapabilities',
+    ]) ||
     descriptor.target !== target ||
     typeof descriptor.ffmpegVersion !== 'string' ||
     typeof descriptor.ffprobeVersion !== 'string' ||
@@ -179,6 +183,11 @@ function assertDescriptor(descriptor, target) {
       }
     }
   }
+}
+
+function hasExactKeys(value, expected) {
+  const keys = Object.keys(value);
+  return keys.length === expected.length && expected.every((key) => Object.hasOwn(value, key));
 }
 
 function assertRuntimeFile(root, entry) {

@@ -37,7 +37,6 @@ const NKC_DURABLE_IDENTITY_FIELDS = new Set([
   'projectPath',
   'referenceImagePath',
   'contentLocator',
-  'legacyGeneratedSourceRef',
   'sourceMediaRefs',
   'generatedMediaRefs',
   'projectionId',

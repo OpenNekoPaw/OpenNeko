@@ -70,10 +70,7 @@ export type ProjectSemanticCoverageAnalysisKind =
   'ocr' | 'asr' | 'subtitle' | 'vision' | 'entity-mention' | 'character-observation' | 'storyboard';
 
 export type ProjectSemanticCoverageStaleReason =
-  | 'provider-version'
-  | 'schema-version'
   | 'source-fingerprint'
-  | 'skill-version'
   | 'missing-provider'
   | 'index-stale'
   | 'range-partial'
@@ -101,13 +98,8 @@ export interface ProjectSearchScope {
 export interface ProjectSemanticProviderMetadata {
   readonly providerId: string;
   readonly model?: string;
-  readonly modelVersion?: string;
-  readonly chunkingVersion?: string;
   readonly sourceIdentity?: string;
-  readonly indexVersion?: string;
-  readonly schemaVersion?: string;
   readonly skillId?: string;
-  readonly skillVersion?: string;
 }
 
 export interface ProjectSearchProviderCapabilities {
@@ -226,7 +218,6 @@ export interface ProjectSearchPartitionStatusSnapshot {
   readonly status: ProjectIndexPartitionStatus;
   readonly freshness: ProjectIndexFreshness;
   readonly itemCount?: number;
-  readonly generation?: number;
   readonly updatedAt?: string;
   readonly error?: string;
   readonly provider?: ProjectSearchProviderCapabilities;
@@ -239,7 +230,6 @@ export interface ProjectSearchResult {
   readonly items: readonly ProjectSearchItem[];
   readonly partitions: readonly ProjectSearchPartitionStatusSnapshot[];
   readonly freshness: ProjectIndexFreshness;
-  readonly generation?: number;
 }
 
 export interface ProjectSemanticCoverageQuery {
@@ -247,9 +237,7 @@ export interface ProjectSemanticCoverageQuery {
   readonly range?: MediaTextRange;
   readonly analysisKind: ProjectSemanticCoverageAnalysisKind;
   readonly skillId?: string;
-  readonly skillVersion?: string;
   readonly providerId?: string;
-  readonly schemaVersion?: string;
   readonly projectRoot?: string;
   readonly contextFilePath?: string;
   readonly contextUri?: string;
@@ -277,7 +265,6 @@ export interface ProjectSemanticCoverageResult {
   readonly diagnostics?: readonly ContributionDiagnostic[];
   readonly provider?: ProjectSemanticProviderMetadata;
   readonly projectRoot?: string;
-  readonly generation?: number;
 }
 
 export interface ProjectIndexChangedRef {
@@ -292,15 +279,12 @@ export interface ProjectIndexChangeEvent {
   readonly partition?: ProjectSearchPartitionKind;
   readonly reason: ProjectIndexUpdateReason;
   readonly changedRefs: readonly ProjectIndexChangedRef[];
-  readonly generation: number;
   readonly freshness: ProjectIndexFreshness;
   readonly updatedAt: string;
 }
 
 export interface ProjectSearchCachePartitionManifest {
   readonly partition: ProjectSearchPartitionKind;
-  readonly version: number;
-  readonly generation: number;
   readonly freshness: ProjectIndexFreshness;
   readonly itemCount: number;
   readonly sourceIdentity?: string;
@@ -308,11 +292,9 @@ export interface ProjectSearchCachePartitionManifest {
 }
 
 export interface ProjectSearchCacheManifest {
-  readonly version: 1;
   readonly projectRoot: string;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly generation: number;
   readonly sourceIdentity?: string;
   readonly partitions: readonly ProjectSearchCachePartitionManifest[];
 }
@@ -406,10 +388,7 @@ export const PROJECT_SEMANTIC_COVERAGE_ANALYSIS_KINDS: readonly ProjectSemanticC
 
 export const PROJECT_SEMANTIC_COVERAGE_STALE_REASONS: readonly ProjectSemanticCoverageStaleReason[] =
   [
-    'provider-version',
-    'schema-version',
     'source-fingerprint',
-    'skill-version',
     'missing-provider',
     'index-stale',
     'range-partial',
@@ -573,14 +552,10 @@ export function isProjectSemanticProviderMetadata(
   if (!isRecord(value) || typeof value['providerId'] !== 'string') return false;
   return (
     isSafeSemanticCoverageValue(value) &&
+    !hasRemovedSearchVersionField(value) &&
     optionalString(value['model']) &&
-    optionalString(value['modelVersion']) &&
-    optionalString(value['chunkingVersion']) &&
     optionalString(value['sourceIdentity']) &&
-    optionalString(value['indexVersion']) &&
-    optionalString(value['schemaVersion']) &&
-    optionalString(value['skillId']) &&
-    optionalString(value['skillVersion'])
+    optionalString(value['skillId'])
   );
 }
 
@@ -593,7 +568,6 @@ export function isProjectSearchPartitionStatusSnapshot(
     isProjectIndexPartitionStatus(value['status']) &&
     isProjectIndexFreshness(value['freshness']) &&
     optionalNumber(value['itemCount']) &&
-    optionalNumber(value['generation']) &&
     optionalString(value['updatedAt']) &&
     optionalString(value['error']) &&
     optionalProjectSearchProviderCapabilities(value['provider']) &&
@@ -674,9 +648,7 @@ export function validateProjectSemanticCoverageQuery(
   }
   for (const field of [
     'skillId',
-    'skillVersion',
     'providerId',
-    'schemaVersion',
     'projectRoot',
     'contextFilePath',
     'contextUri',
@@ -691,6 +663,15 @@ export function validateProjectSemanticCoverageQuery(
         ),
       );
     }
+  }
+  if (hasRemovedSearchVersionField(value)) {
+    diagnostics.push(
+      coverageDiagnostic(
+        'error',
+        'invalid-required-field',
+        'Semantic coverage query contains a removed internal version field.',
+      ),
+    );
   }
   if (!isSafeSemanticCoverageValue(value)) {
     diagnostics.push(
@@ -775,12 +756,12 @@ export function validateProjectSemanticCoverageResult(
       ),
     );
   }
-  if (!optionalString(value['projectRoot']) || !optionalNumber(value['generation'])) {
+  if (!optionalString(value['projectRoot'])) {
     diagnostics.push(
       coverageDiagnostic(
         'error',
         'invalid-required-field',
-        'Semantic coverage projectRoot and generation must use shared DTO shapes.',
+        'Semantic coverage projectRoot must use the shared DTO shape.',
       ),
     );
   }
@@ -878,11 +859,10 @@ export function projectCharacterObservationToSearchItem(
 export function isProjectSearchCacheManifest(value: unknown): value is ProjectSearchCacheManifest {
   if (!isRecord(value)) return false;
   return (
-    value['version'] === 1 &&
+    !Object.hasOwn(value, 'version') &&
     typeof value['projectRoot'] === 'string' &&
     typeof value['createdAt'] === 'string' &&
     typeof value['updatedAt'] === 'string' &&
-    typeof value['generation'] === 'number' &&
     optionalString(value['sourceIdentity']) &&
     Array.isArray(value['partitions']) &&
     value['partitions'].every((partition) => isProjectSearchCachePartitionManifest(partition))
@@ -894,9 +874,8 @@ function isProjectSearchCachePartitionManifest(
 ): value is ProjectSearchCachePartitionManifest {
   if (!isRecord(value)) return false;
   return (
+    !Object.hasOwn(value, 'version') &&
     isProjectSearchPartitionKind(value['partition']) &&
-    typeof value['version'] === 'number' &&
-    typeof value['generation'] === 'number' &&
     isProjectIndexFreshness(value['freshness']) &&
     typeof value['itemCount'] === 'number' &&
     optionalString(value['sourceIdentity']) &&
@@ -1195,4 +1174,10 @@ function isJsonValue(value: unknown): value is JsonValue {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasRemovedSearchVersionField(value: Record<string, unknown>): boolean {
+  return ['modelVersion', 'chunkingVersion', 'indexVersion', 'schemaVersion', 'skillVersion'].some(
+    (field) => Object.hasOwn(value, field),
+  );
 }

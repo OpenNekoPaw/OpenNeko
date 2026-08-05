@@ -24,7 +24,7 @@ import {
 
 describe('storyboard table contract', () => {
   it('defines stable-core required fields as shared constants', () => {
-    expect(STORYBOARD_TABLE_REQUIRED_FIELDS).toEqual(['schemaVersion', 'kind', 'title', 'scenes']);
+    expect(STORYBOARD_TABLE_REQUIRED_FIELDS).toEqual(['kind', 'title', 'scenes']);
     expect(STORYBOARD_SCENE_REQUIRED_FIELDS).toEqual(['sceneId', 'sceneTitle', 'shots']);
     expect(STORYBOARD_SHOT_REQUIRED_FIELDS).toEqual([
       'shotNumber',
@@ -40,7 +40,6 @@ describe('storyboard table contract', () => {
   it('rejects removed puppet representations from active voice cue requests', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Removed representation',
         scenes: [
@@ -85,7 +84,6 @@ describe('storyboard table contract', () => {
   it('accepts a strict semantic storyboard table with layered media refs', () => {
     const profile: StoryboardTableProfile = 'from-comic';
     const table: StoryboardTable = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
       profile,
       sourceProfile: STORYBOARD_FROM_COMIC_SOURCE_PROFILE_ID,
@@ -183,7 +181,6 @@ describe('storyboard table contract', () => {
 
   it('reports stable-core required field errors as projection blockers', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Broken',
       scenes: [
@@ -218,7 +215,6 @@ describe('storyboard table contract', () => {
   it('rejects flat scene rows at the canonical Storyboard handoff boundary', () => {
     const result = normalizeCanonicalStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Flat canonical input',
         scenes: [
@@ -248,7 +244,6 @@ describe('storyboard table contract', () => {
   it('normalizes flat storyboard shot rows mistakenly placed in scenes', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         profile: 'from-comic',
         sourceProfile: STORYBOARD_FROM_COMIC_SOURCE_PROFILE_ID,
@@ -366,7 +361,6 @@ describe('storyboard table contract', () => {
 
   it('keeps profile recommendations non-blocking', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       profile: 'script-breakdown',
       title: 'Profile hints',
@@ -402,7 +396,6 @@ describe('storyboard table contract', () => {
 
   it('treats source-based image strategies without source refs as projection blockers', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Missing source',
       scenes: [
@@ -437,7 +430,6 @@ describe('storyboard table contract', () => {
 
   it('keeps decisionReason as display metadata, not validation input', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Reason only',
       scenes: [
@@ -472,7 +464,6 @@ describe('storyboard table contract', () => {
 
   it('rejects scene-level video prompts duplicated or stored on later shots', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Invalid scene video prompts',
       scenes: [
@@ -522,7 +513,6 @@ describe('storyboard table contract', () => {
 
   it('rejects unsafe media references in structured storyboard payloads', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Unsafe refs',
       scenes: [
@@ -651,7 +641,6 @@ describe('storyboard table contract', () => {
   it('rejects runtime handles and fabricated tool ids as storyboard media identity', () => {
     const result = validateStoryboardTable(
       {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         sourceProfile: 'from-comic',
         title: 'Runtime refs',
@@ -734,7 +723,6 @@ describe('storyboard table contract', () => {
   it('reports ambiguous aliases when validation receives request-scoped alias context', () => {
     const result = validateStoryboardTable(
       {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Ambiguous alias',
         scenes: [
@@ -804,7 +792,6 @@ describe('storyboard table contract', () => {
 
   it('rejects unsafe media refs and layered role drift', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Unsafe refs',
       scenes: [
@@ -882,7 +869,6 @@ describe('storyboard table contract', () => {
   it('splits schema v1 mediaRefs when layered refs are absent', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Mixed',
         scenes: [
@@ -926,7 +912,6 @@ describe('storyboard table contract', () => {
   it('preserves model-authored image alias fields as extension metadata', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Alias',
         scenes: [
@@ -966,7 +951,6 @@ describe('storyboard table contract', () => {
   it('preserves model-authored source page fields as extension metadata', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Source Page',
         scenes: [
@@ -1000,7 +984,6 @@ describe('storyboard table contract', () => {
 
   it('rejects non-serializable or un-namespaced extensions', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Extensions',
       extensions: {
@@ -1045,7 +1028,6 @@ describe('storyboard table contract', () => {
   it('normalizes classified OCR text cues and warns on conflicting speaker ids', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Text Cues',
         scenes: [
@@ -1119,7 +1101,6 @@ describe('storyboard table contract', () => {
 
   it('projects valid semantic tables to Cut payloads', () => {
     const table: StoryboardTable = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Projection',
       scenes: [
@@ -1188,7 +1169,6 @@ describe('storyboard table contract', () => {
               imageStrategy: 'generate-new',
               extensions: {
                 'neko.shotImagePrep': {
-                  schemaVersion: 1,
                   kind: 'shot-image-prep-plan',
                   planId: 'shot-1-image-prep',
                   sceneId: 'scene-1',
@@ -1268,7 +1248,6 @@ describe('storyboard table contract', () => {
   it('normalizes and projects shot character candidate ids without requiring entity refs', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Candidate projection',
         scenes: [
@@ -1391,7 +1370,6 @@ describe('storyboard table contract', () => {
 
   it('routes generate and transform strategies through available tool capabilities', () => {
     const table: StoryboardTable = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Strategies',
       scenes: [
@@ -1453,7 +1431,6 @@ function storyboardTable(
   shot: Partial<StoryboardTable['scenes'][number]['shots'][number]>,
 ): StoryboardTable {
   return {
-    schemaVersion: 1,
     kind: 'storyboard-table',
     title: 'Strategies',
     scenes: [
@@ -1496,9 +1473,7 @@ describe('canonical storyboard contract', () => {
       fingerprint: { strategy: 'sha256', value: 'sha256:script-v1' },
     } as const;
     const table = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
-      contractVersion: 1,
       sourceProfile: 'from-script',
       revision: {
         revisionId: 'storyboard-revision-1',
@@ -1556,9 +1531,7 @@ describe('canonical storyboard contract', () => {
 
   it('rejects unsupported source profiles and runtime-only source refs', () => {
     const table = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
-      contractVersion: 1,
       sourceProfile: 'from-prompt',
       revision: {
         revisionId: 'storyboard-revision-1',

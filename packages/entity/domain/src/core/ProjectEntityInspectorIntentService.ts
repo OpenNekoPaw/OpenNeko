@@ -47,7 +47,6 @@ export class ProjectEntityInspectorIntentService {
         const createdAt = this.options.now();
         await this.options.operations.confirmCandidate(
           {
-            expectedRevision: intent.expectedRevision,
             candidateId: intent.candidateId,
             entityId: this.options.createEntityId(intent.candidateId),
             semantic: {
@@ -69,7 +68,6 @@ export class ProjectEntityInspectorIntentService {
         const acceptedAt = this.options.now();
         await this.options.operations.bind(
           {
-            expectedRevision: intent.expectedRevision,
             entityId: intent.entityId,
             binding: {
               bindingId: this.options.createBindingId(intent.entityId),

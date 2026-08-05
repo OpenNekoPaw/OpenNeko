@@ -211,7 +211,6 @@ function createMergeOperation(): ProjectEntityReferenceOperationRequest {
   return {
     operationId: 'operation-merge-rin',
     projectId: 'project-neko',
-    expectedDocumentRevision: 7,
     operation: 'merge',
     source: { entityId: 'character-old-rin', entityKind: 'character' },
     replacement: { entityId: 'character-rin', entityKind: 'character' },
@@ -230,7 +229,6 @@ function createReadyPlan(
     status: 'ready',
     ownerId,
     operationId: operation.operationId,
-    expectedOwnerRevision: `${ownerId}-revision-4`,
     preparationId: `${ownerId}-preparation-1`,
     occurrences: [
       {

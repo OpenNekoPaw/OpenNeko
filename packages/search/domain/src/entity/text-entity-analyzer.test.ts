@@ -126,7 +126,7 @@ function input(
       modifiedAtMs: 1,
     },
     segments,
-    entities: { revision: 1, entities },
+    entities: { entities },
     analyzedAt: '2026-07-18T00:00:00.000Z',
   };
 }

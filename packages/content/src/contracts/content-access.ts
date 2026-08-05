@@ -1,4 +1,4 @@
-// Stable source identities retained for Agent/tool inputs during locator migration.
+// Stable source identities retained for Agent and tool inputs.
 // Runtime handles are accepted only so boundaries can reject them explicitly; they are not
 // durable identity and must never be persisted or projected as a successful source.
 

@@ -7,9 +7,7 @@ import {
 import { isContentLocator, type ContentLocator } from '@neko/content';
 import { isHostProjectedRuntimeValue } from '@neko/content';
 
-export const STORYBOARD_TABLE_SCHEMA_VERSION = 1 as const;
 export const STORYBOARD_TABLE_KIND = 'storyboard-table' as const;
-export const STORYBOARD_CANONICAL_CONTRACT_VERSION = 1 as const;
 
 export const STORYBOARD_FROM_COMIC_SOURCE_PROFILE_ID = 'from-comic' as const;
 
@@ -70,7 +68,6 @@ export const STORYBOARD_TEXT_CUE_KINDS = [
 ] as const;
 
 export const STORYBOARD_TABLE_REQUIRED_FIELDS = [
-  'schemaVersion',
   'kind',
   'title',
   'scenes',
@@ -170,10 +167,8 @@ export interface StoryboardTableSource {
 }
 
 export interface StoryboardTable {
-  readonly schemaVersion: typeof STORYBOARD_TABLE_SCHEMA_VERSION;
   readonly kind: typeof STORYBOARD_TABLE_KIND;
   readonly profile?: StoryboardTableProfile;
-  readonly contractVersion?: typeof STORYBOARD_CANONICAL_CONTRACT_VERSION;
   readonly revision?: StoryboardRevisionIdentity;
   readonly sourceProfile?: StoryboardSourceProfileId;
   readonly sourceTrace?: readonly StoryboardSourceTrace[];
@@ -347,7 +342,6 @@ export type StoryboardValidationDiagnosticCode =
   | CanonicalStoryboardDiagnosticCode
   | 'invalid-root'
   | 'canonical-scene-shot-hierarchy-required'
-  | 'invalid-schema-version'
   | 'invalid-kind'
   | 'invalid-profile'
   | 'missing-required-field'
@@ -397,7 +391,6 @@ export interface StoryboardValidationResult {
 export interface StoryboardValidationOptions extends StoryboardMediaIdentityClassificationOptions {}
 
 export type CanonicalStoryboardDiagnosticCode =
-  | 'missing-canonical-contract'
   | 'unsupported-source-profile'
   | 'invalid-storyboard-revision'
   | 'invalid-source-trace'
@@ -414,15 +407,6 @@ export function validateCanonicalStoryboardTable(
   const diagnostics: StoryboardValidationDiagnostic[] = [
     ...validateStoryboardTable(table).diagnostics,
   ];
-  if (table.contractVersion !== STORYBOARD_CANONICAL_CONTRACT_VERSION) {
-    diagnostics.push(
-      createCanonicalStoryboardDiagnostic(
-        'missing-canonical-contract',
-        'Canonical Storyboard requires the current contractVersion.',
-        ['contractVersion'],
-      ),
-    );
-  }
   if (!table.revision || !isValidStoryboardRevision(table.revision)) {
     diagnostics.push(
       createCanonicalStoryboardDiagnostic(
@@ -692,7 +676,7 @@ export function normalizeStoryboardTable(
     };
   }
 
-  if (root['schemaVersion'] === 1 || root['scenes'] !== undefined) {
+  if (root['scenes'] !== undefined) {
     const table = normalizeSemanticStoryboardTable(root, diagnostics);
     return {
       ...(table ? { table } : {}),
@@ -702,12 +686,7 @@ export function normalizeStoryboardTable(
 
   return {
     diagnostics: [
-      storyboardDiagnostic(
-        'error',
-        'invalid-root',
-        [],
-        'Storyboard table must use schemaVersion 1 with scenes[].',
-      ),
+      storyboardDiagnostic('error', 'invalid-root', [], 'Storyboard table must contain scenes[].'),
     ],
   };
 }
@@ -1069,14 +1048,9 @@ function normalizeSemanticStoryboardTable(
   root: Record<string, unknown>,
   diagnostics: StoryboardValidationDiagnostic[],
 ): StoryboardTable | undefined {
-  const schemaVersion = root['schemaVersion'];
   const kind = root['kind'];
   const title = readTrimmedString(root['title']);
   const profile = normalizeProfile(root['profile'], diagnostics);
-  const contractVersion =
-    root['contractVersion'] === STORYBOARD_CANONICAL_CONTRACT_VERSION
-      ? STORYBOARD_CANONICAL_CONTRACT_VERSION
-      : undefined;
   const revision = normalizeStoryboardRevision(root['revision']);
   const sourceProfile = normalizeStoryboardSourceProfile(root['sourceProfile']);
   const sourceTrace = normalizeCanonicalSourceTraces(root['sourceTrace']);
@@ -1084,18 +1058,6 @@ function normalizeSemanticStoryboardTable(
   const source = normalizeStoryboardTableSource(root['source'], diagnostics);
   const extensions = normalizeExtensions(root['extensions'], ['extensions'], diagnostics);
   const scenes = normalizeSceneRows(root['scenes'], diagnostics);
-
-  if (schemaVersion !== 1) {
-    diagnostics.push(
-      storyboardDiagnostic(
-        'error',
-        'invalid-schema-version',
-        ['schemaVersion'],
-        'Storyboard table schemaVersion must be 1.',
-        { expected: '1', actual: serializableDiagnosticValue(schemaVersion) },
-      ),
-    );
-  }
 
   if (kind !== 'storyboard-table') {
     diagnostics.push(
@@ -1121,15 +1083,13 @@ function normalizeSemanticStoryboardTable(
     );
   }
 
-  if (schemaVersion !== 1 || kind !== 'storyboard-table' || !title || scenes.length === 0) {
+  if (kind !== 'storyboard-table' || !title || scenes.length === 0) {
     return undefined;
   }
 
   return {
-    schemaVersion: 1,
     kind: 'storyboard-table',
     ...(profile ? { profile } : {}),
-    ...(contractVersion ? { contractVersion } : {}),
     ...(revision ? { revision } : {}),
     ...(sourceProfile ? { sourceProfile } : {}),
     ...(sourceTrace.length > 0 ? { sourceTrace } : {}),

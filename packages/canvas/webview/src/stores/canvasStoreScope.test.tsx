@@ -54,7 +54,6 @@ function CanvasScopeProbe({ id }: { readonly id: string }) {
         data-probe={id}
         onClick={() =>
           setCanvasData({
-            version: '1.0',
             name: `${id}.nkc`,
             nodes: [],
             connections: [],

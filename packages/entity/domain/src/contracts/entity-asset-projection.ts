@@ -192,8 +192,20 @@ export interface EntityAssetProjectionInsertMissingResult {
   readonly preservedProjectionKeys: readonly string[];
 }
 
+export interface EntityAssetProjectionDiagnostic {
+  readonly code: 'invalid-entity-asset-projection';
+  readonly projectionId: string;
+  readonly sourceId: string;
+  readonly message: string;
+}
+
+export interface EntityAssetProjectionQueryResult {
+  readonly records: readonly EntityAssetProjectionRecord[];
+  readonly diagnostics: readonly EntityAssetProjectionDiagnostic[];
+}
+
 export interface EntityAssetProjectionRepository {
-  list(query: EntityAssetProjectionQuery): Promise<readonly EntityAssetProjectionRecord[]>;
+  list(query: EntityAssetProjectionQuery): Promise<EntityAssetProjectionQueryResult>;
   replaceSource(request: EntityAssetProjectionReplaceSourceRequest): Promise<void>;
   insertMissing(
     request: EntityAssetProjectionReplaceSourceRequest,

@@ -10,14 +10,7 @@ class JobObservation<S extends JobSnapshotBase> implements AsyncIterableIterator
   private pending: PendingObservation<S> | undefined;
   private closed = false;
   private closeAfterDrain = false;
-  private lastRevision: number;
-
-  constructor(
-    afterRevision: number,
-    private readonly onClose: () => void,
-  ) {
-    this.lastRevision = afterRevision;
-  }
+  constructor(private readonly onClose: () => void) {}
 
   [Symbol.asyncIterator](): AsyncIterableIterator<S> {
     return this;
@@ -47,8 +40,7 @@ class JobObservation<S extends JobSnapshotBase> implements AsyncIterableIterator
   }
 
   push(snapshot: S): void {
-    if (this.closed || snapshot.revision <= this.lastRevision) return;
-    this.lastRevision = snapshot.revision;
+    if (this.closed) return;
     if (isTerminalJobPhase(snapshot.phase)) this.closeAfterDrain = true;
     const pending = this.pending;
     if (pending) {
@@ -70,30 +62,18 @@ class JobObservation<S extends JobSnapshotBase> implements AsyncIterableIterator
   }
 }
 
-export interface VersionedJobObservationHub<S extends JobSnapshotBase> {
-  observe(ref: S['ref'], afterRevision: number, loadCurrent: () => Promise<S>): AsyncIterable<S>;
+export interface JobObservationHub<S extends JobSnapshotBase> {
+  observe(ref: S['ref'], loadCurrent: () => Promise<S>): AsyncIterable<S>;
   publish(snapshot: S): void;
 }
 
-export function createVersionedJobObservationHub<
-  S extends JobSnapshotBase,
->(): VersionedJobObservationHub<S> {
+export function createJobObservationHub<S extends JobSnapshotBase>(): JobObservationHub<S> {
   const observations = new Map<string, Set<JobObservation<S>>>();
 
   return Object.freeze({
-    observe: (
-      ref: S['ref'],
-      afterRevision: number,
-      loadCurrent: () => Promise<S>,
-    ): AsyncIterable<S> => {
+    observe: (ref: S['ref'], loadCurrent: () => Promise<S>): AsyncIterable<S> => {
       assertJobRef(ref);
-      if (!Number.isInteger(afterRevision) || afterRevision < 0) {
-        throw new JobLifecycleError(
-          'invalid-snapshot',
-          `Observation revision must be a non-negative integer, received ${afterRevision}.`,
-        );
-      }
-      return observe(ref, afterRevision, loadCurrent, observations);
+      return observe(ref, loadCurrent, observations);
     },
     publish: (snapshot: S): void => {
       for (const observation of observations.get(formatJobRef(snapshot.ref)) ?? []) {
@@ -105,12 +85,11 @@ export function createVersionedJobObservationHub<
 
 async function* observe<S extends JobSnapshotBase>(
   ref: S['ref'],
-  afterRevision: number,
   loadCurrent: () => Promise<S>,
   observations: Map<string, Set<JobObservation<S>>>,
 ): AsyncIterable<S> {
   const key = formatJobRef(ref);
-  const observation = new JobObservation<S>(afterRevision, () => {
+  const observation = new JobObservation<S>(() => {
     const current = observations.get(key);
     current?.delete(observation);
     if (current?.size === 0) observations.delete(key);
@@ -121,14 +100,11 @@ async function* observe<S extends JobSnapshotBase>(
 
   try {
     const current = await loadCurrent();
-    if (afterRevision > current.revision) {
-      throw new JobLifecycleError(
-        'revision-gap',
-        `Job ${key} is at revision ${current.revision}, behind observer revision ${afterRevision}.`,
-      );
-    }
     observation.push(current);
-    if (isTerminalJobPhase(current.phase) && current.revision <= afterRevision) return;
+    if (isTerminalJobPhase(current.phase)) {
+      yield current;
+      return;
+    }
     for await (const snapshot of observation) yield snapshot;
   } finally {
     observation.close();

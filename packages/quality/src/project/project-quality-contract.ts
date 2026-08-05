@@ -10,8 +10,6 @@ import {
   type QualityTarget,
 } from '@neko/generation';
 
-export const PROJECT_QUALITY_CONTRACT_VERSION = 1 as const;
-
 export type ProjectQualityOperation =
   | 'validate-project'
   | 'get-project-snapshot'
@@ -20,7 +18,6 @@ export type ProjectQualityOperation =
   | 'check-export-readiness';
 
 export interface ProjectQualityRequest {
-  readonly version: typeof PROJECT_QUALITY_CONTRACT_VERSION;
   readonly requestId: string;
   readonly project: QualityProjectRef;
   readonly target: QualityTarget;
@@ -54,7 +51,6 @@ export interface ProjectExportReadiness {
 }
 
 export interface ProjectQualityResult<TData> {
-  readonly version: typeof PROJECT_QUALITY_CONTRACT_VERSION;
   readonly requestId: string;
   readonly operation: ProjectQualityOperation;
   readonly ok: boolean;
@@ -86,14 +82,15 @@ export function validateProjectQualityResult<TData>(
 ): ProjectQualityContractValidationResult {
   const diagnostics: QualityDiagnostic[] = [];
   if (
-    result.version !== PROJECT_QUALITY_CONTRACT_VERSION ||
+    Object.hasOwn(result, 'version') ||
     !result.requestId.trim() ||
     !isProjectQualityOperation(result.operation)
   ) {
     diagnostics.push({
       code: 'invalid-quality-gate-result',
       severity: 'error',
-      message: 'ProjectQuality result has an unsupported version, operation, or empty request id.',
+      message:
+        'ProjectQuality result has removed fields, an invalid operation, or empty request id.',
     });
   }
   if (result.ok && result.data === undefined) {

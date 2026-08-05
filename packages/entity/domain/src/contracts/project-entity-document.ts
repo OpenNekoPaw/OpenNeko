@@ -5,11 +5,10 @@ import {
   type EntityRepresentationRole,
 } from './entity-representation-binding';
 
-export const PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION = 1 as const;
 export const PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH = 'neko/entities.json' as const;
 
 export const PROJECT_ENTITY_LIFECYCLE_STATES = ['active', 'deprecated'] as const;
-export const PROJECT_ENTITY_BINDING_SOURCES = ['user', 'agent', 'import', 'migration'] as const;
+export const PROJECT_ENTITY_BINDING_SOURCES = ['user', 'agent', 'import'] as const;
 export const PROJECT_ENTITY_CANDIDATE_SOURCE_OWNERS = [
   'workspace',
   'document',
@@ -96,20 +95,20 @@ export interface ProjectEntityRecord extends ProjectEntitySemanticSnapshot {
 }
 
 export interface ProjectEntityDocument {
-  readonly schemaVersion: typeof PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION;
   readonly projectId: string;
-  readonly revision: number;
   readonly entities: readonly ProjectEntityRecord[];
 }
 
-export interface ProjectEntityCommitRequest {
-  readonly expectedRevision: number;
-  readonly next: ProjectEntityDocument;
-}
+export type ProjectEntityDocumentMutation = (
+  current: ProjectEntityDocument,
+) => ProjectEntityDocument | Promise<ProjectEntityDocument>;
 
 export interface ProjectEntityDocumentRepository {
   load(signal?: AbortSignal): Promise<ProjectEntityDocument>;
-  commit(request: ProjectEntityCommitRequest, signal?: AbortSignal): Promise<ProjectEntityDocument>;
+  mutate(
+    mutation: ProjectEntityDocumentMutation,
+    signal?: AbortSignal,
+  ): Promise<ProjectEntityDocument>;
 }
 
 export interface ProjectEntityCandidateEvidence {
@@ -132,11 +131,9 @@ export interface ProjectEntityCandidateProjection {
 }
 
 export type ProjectEntityDiagnosticCode =
-  | 'unsupported-project-entity-version'
   | 'invalid-project-entity-document'
   | 'duplicate-project-entity-id'
   | 'duplicate-project-entity-binding-id'
-  | 'project-entity-revision-conflict'
   | 'project-entity-not-found'
   | 'project-entity-candidate-not-found'
   | 'project-entity-candidate-not-referenceable'
@@ -146,7 +143,6 @@ export type ProjectEntityDiagnosticCode =
   | 'project-entity-asset-not-found'
   | 'invalid-project-entity-asset-snapshot'
   | 'invalid-project-entity-asset-provenance'
-  | 'project-entity-migration-required'
   | 'project-entity-path-unauthorized'
   | 'project-entity-operation-cancelled'
   | 'project-entity-io-failed';
@@ -159,8 +155,13 @@ export interface ProjectEntityDiagnostic {
   readonly candidateId?: string;
 }
 
+export interface ProjectEntityDocumentReadResult {
+  readonly document: ProjectEntityDocument;
+  readonly diagnostics: readonly ProjectEntityDiagnostic[];
+}
+
 export type ProjectEntityDocumentDecodeResult =
-  | { readonly ok: true; readonly document: ProjectEntityDocument }
+  | ({ readonly ok: true } & ProjectEntityDocumentReadResult)
   | { readonly ok: false; readonly diagnostics: readonly ProjectEntityDiagnostic[] };
 
 export class ProjectEntityContractError extends Error {
@@ -174,67 +175,106 @@ export class ProjectEntityContractError extends Error {
 }
 
 export function decodeProjectEntityDocument(value: unknown): ProjectEntityDocumentDecodeResult {
-  if (isRecord(value) && value['schemaVersion'] !== PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION) {
-    return invalidDocument(
-      'unsupported-project-entity-version',
-      'Project Entity document uses an unsupported schema version.',
-    );
-  }
-  const document = parseDocument(value);
-  if (!document) {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, DOCUMENT_KEYS) ||
+    !isStableIdentity(value['projectId']) ||
+    !Array.isArray(value['entities'])
+  ) {
     return invalidDocument(
       'invalid-project-entity-document',
       'Project Entity document violates the canonical fact contract.',
     );
   }
+  const diagnostics: ProjectEntityDiagnostic[] = [];
+  const entities: ProjectEntityRecord[] = [];
   const entityIds = new Set<string>();
   const bindingIds = new Set<string>();
-  for (const entity of document.entities) {
-    if (entityIds.has(entity.entityId)) {
-      return invalidDocument(
-        'duplicate-project-entity-id',
-        `Project Entity identity '${entity.entityId}' is duplicated.`,
-        { entityId: entity.entityId },
-      );
+  for (const [index, candidate] of value['entities'].entries()) {
+    const candidateEntityId = readCandidateEntityId(candidate);
+    const entity = parseEntity(candidate);
+    if (!entity) {
+      diagnostics.push({
+        code: 'invalid-project-entity-document',
+        message: candidateEntityId
+          ? `Project Entity '${candidateEntityId}' violates the canonical fact contract.`
+          : `Project Entity record at index ${String(index)} violates the canonical fact contract.`,
+        ...(candidateEntityId ? { entityId: candidateEntityId } : {}),
+      });
+      continue;
     }
-    entityIds.add(entity.entityId);
+    if (entityIds.has(entity.entityId)) {
+      diagnostics.push({
+        code: 'duplicate-project-entity-id',
+        message: `Project Entity identity '${entity.entityId}' is duplicated.`,
+        entityId: entity.entityId,
+      });
+      continue;
+    }
+    const localBindingIds = new Set<string>();
+    let duplicateBindingId: string | undefined;
     for (const binding of entity.representations) {
-      if (bindingIds.has(binding.bindingId)) {
-        return invalidDocument(
-          'duplicate-project-entity-binding-id',
-          `Project Entity binding identity '${binding.bindingId}' is duplicated.`,
-          { entityId: entity.entityId, bindingId: binding.bindingId },
-        );
+      if (bindingIds.has(binding.bindingId) || localBindingIds.has(binding.bindingId)) {
+        duplicateBindingId = binding.bindingId;
+        break;
       }
-      bindingIds.add(binding.bindingId);
+      localBindingIds.add(binding.bindingId);
+    }
+    if (duplicateBindingId) {
+      diagnostics.push({
+        code: 'duplicate-project-entity-binding-id',
+        message: `Project Entity binding identity '${duplicateBindingId}' is duplicated.`,
+        entityId: entity.entityId,
+        bindingId: duplicateBindingId,
+      });
+      continue;
     }
     if (entity.provenance && !hasValidRepresentationOrigins(entity)) {
-      return invalidDocument(
-        'invalid-project-entity-asset-provenance',
-        `Project Entity '${entity.entityId}' has invalid Asset representation lineage.`,
-        { entityId: entity.entityId },
-      );
+      diagnostics.push({
+        code: 'invalid-project-entity-asset-provenance',
+        message: `Project Entity '${entity.entityId}' has invalid Asset representation lineage.`,
+        entityId: entity.entityId,
+      });
+      continue;
+    }
+    entities.push(entity);
+    entityIds.add(entity.entityId);
+    for (const bindingId of localBindingIds) bindingIds.add(bindingId);
+  }
+
+  let removedInvalidReference = true;
+  while (removedInvalidReference) {
+    removedInvalidReference = false;
+    for (let index = entities.length - 1; index >= 0; index -= 1) {
+      const entity = entities[index];
+      if (
+        !entity ||
+        entity.lifecycle.state !== 'deprecated' ||
+        entity.lifecycle.replacementEntityId === undefined ||
+        entityIds.has(entity.lifecycle.replacementEntityId)
+      ) {
+        continue;
+      }
+      diagnostics.push({
+        code: 'invalid-project-entity-document',
+        message: `Project Entity '${entity.entityId}' references an unknown replacement Entity.`,
+        entityId: entity.entityId,
+      });
+      entities.splice(index, 1);
+      entityIds.delete(entity.entityId);
+      removedInvalidReference = true;
     }
   }
-  for (const entity of document.entities) {
-    if (
-      entity.lifecycle.state === 'deprecated' &&
-      entity.lifecycle.replacementEntityId !== undefined &&
-      !entityIds.has(entity.lifecycle.replacementEntityId)
-    ) {
-      return invalidDocument(
-        'invalid-project-entity-document',
-        `Project Entity '${entity.entityId}' references an unknown replacement Entity.`,
-        { entityId: entity.entityId },
-      );
-    }
-  }
-  return { ok: true, document };
+  return {
+    ok: true,
+    document: { projectId: value['projectId'], entities },
+    diagnostics,
+  };
 }
 
 export function assertProjectEntityDocument(value: unknown): ProjectEntityDocument {
   const decoded = decodeProjectEntityDocument(value);
-  if (decoded.ok) return decoded.document;
+  if (decoded.ok && decoded.diagnostics.length === 0) return decoded.document;
   throw new ProjectEntityContractError(decoded.diagnostics);
 }
 
@@ -252,30 +292,8 @@ export function createEmptyProjectEntityDocument(projectId: string): ProjectEnti
     ]);
   }
   return {
-    schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
     projectId,
-    revision: 0,
     entities: [],
-  };
-}
-
-export function validateProjectEntityCommitRequest(
-  request: ProjectEntityCommitRequest,
-): ProjectEntityCommitRequest {
-  if (
-    !isNonNegativeInteger(request.expectedRevision) ||
-    request.next.revision !== request.expectedRevision + 1
-  ) {
-    throw new ProjectEntityContractError([
-      {
-        code: 'project-entity-revision-conflict',
-        message: 'Project Entity commit must advance the expected revision exactly once.',
-      },
-    ]);
-  }
-  return {
-    expectedRevision: request.expectedRevision,
-    next: assertProjectEntityDocument(request.next),
   };
 }
 
@@ -293,30 +311,6 @@ export function isProjectEntityCandidateProjection(
     value['evidence'].length > 0 &&
     value['evidence'].every(isProjectEntityCandidateEvidence)
   );
-}
-
-function parseDocument(value: unknown): ProjectEntityDocument | undefined {
-  if (!isRecord(value) || !hasOnlyKeys(value, DOCUMENT_KEYS)) return undefined;
-  if (
-    value['schemaVersion'] !== PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION ||
-    !isStableIdentity(value['projectId']) ||
-    !isNonNegativeInteger(value['revision']) ||
-    !Array.isArray(value['entities'])
-  ) {
-    return undefined;
-  }
-  const entities: ProjectEntityRecord[] = [];
-  for (const candidate of value['entities']) {
-    const entity = parseEntity(candidate);
-    if (!entity) return undefined;
-    entities.push(entity);
-  }
-  return {
-    schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
-    projectId: value['projectId'],
-    revision: value['revision'],
-    entities,
-  };
 }
 
 function parseEntity(value: unknown): ProjectEntityRecord | undefined {
@@ -343,6 +337,11 @@ function parseEntity(value: unknown): ProjectEntityRecord | undefined {
     createdAt: value['createdAt'],
     updatedAt: value['updatedAt'],
   };
+}
+
+function readCandidateEntityId(value: unknown): string | undefined {
+  if (!isRecord(value)) return undefined;
+  return isStableIdentity(value['entityId']) ? value['entityId'] : undefined;
 }
 
 function parseSemanticSnapshot(value: unknown): ProjectEntitySemanticSnapshot | undefined {
@@ -592,10 +591,6 @@ function isDigest(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value);
 }
 
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
-}
-
 function isOptionalConfidence(value: unknown): boolean {
   return value === undefined || (typeof value === 'number' && value >= 0 && value <= 1);
 }
@@ -604,7 +599,7 @@ function normalizeName(value: string): string {
   return value.normalize('NFC').trim().toLocaleLowerCase();
 }
 
-const DOCUMENT_KEYS = ['schemaVersion', 'projectId', 'revision', 'entities'] as const;
+const DOCUMENT_KEYS = ['projectId', 'entities'] as const;
 const ENTITY_KEYS = [
   'entityId',
   'kind',

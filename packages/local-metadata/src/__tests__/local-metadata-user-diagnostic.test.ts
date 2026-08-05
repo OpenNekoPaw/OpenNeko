@@ -11,7 +11,6 @@ import {
 describe('local metadata user diagnostics', () => {
   it.each([
     ['metadata-unsupported-runtime', 'local-metadata-unsupported-runtime'],
-    ['metadata-migration-failed', 'local-metadata-migration-failed'],
     ['metadata-backup-failed', 'local-metadata-backup-failed'],
     ['metadata-restore-failed', 'local-metadata-recovery-failed'],
     ['metadata-integrity-failed', 'local-metadata-corrupt'],

@@ -87,30 +87,34 @@ describe('Entity project search projections', () => {
           updatedAt: '2026-07-19T00:00:00.000Z',
         }),
         repository: {
-          list: async () => [
-            {
-              projectionId: 'workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
-              kind: 'entity-candidate' as const,
-              sourceId: 'workspace:cases/test.fountain',
-              candidateId: 'candidate:auto:character:小橘',
-              freshness: 'fresh' as const,
-              updatedAt: '2026-07-19T00:00:00.000Z',
-              value: {
+          list: async () => ({
+            records: [
+              {
+                projectionId:
+                  'workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
+                kind: 'entity-candidate' as const,
+                sourceId: 'workspace:cases/test.fountain',
                 candidateId: 'candidate:auto:character:小橘',
-                kind: 'character' as const,
-                proposedNames: { canonical: '小橘', aliases: ['橘仔'] },
                 freshness: 'fresh' as const,
-                evidence: [
-                  {
-                    evidenceId: 'evidence:小橘',
-                    owner: 'workspace' as const,
-                    sourceId: 'workspace:cases/test.fountain',
-                    locator: { kind: 'workspace-file' as const, path: 'cases/test.fountain' },
-                  },
-                ],
+                updatedAt: '2026-07-19T00:00:00.000Z',
+                value: {
+                  candidateId: 'candidate:auto:character:小橘',
+                  kind: 'character' as const,
+                  proposedNames: { canonical: '小橘', aliases: ['橘仔'] },
+                  freshness: 'fresh' as const,
+                  evidence: [
+                    {
+                      evidenceId: 'evidence:小橘',
+                      owner: 'workspace' as const,
+                      sourceId: 'workspace:cases/test.fountain',
+                      locator: { kind: 'workspace-file' as const, path: 'cases/test.fountain' },
+                    },
+                  ],
+                },
               },
-            },
-          ],
+            ],
+            diagnostics: [],
+          }),
         },
       },
     });
@@ -177,30 +181,33 @@ describe('Entity project search projections', () => {
         partition,
         readRevision: async () => ({ revision: 1 }),
         repository: {
-          list: async () => [
-            {
-              projectionId: 'availability:rin',
-              kind: 'binding-availability' as const,
-              sourceId: 'binding-owner',
-              entityId: 'character-rin',
-              freshness: 'fresh' as const,
-              updatedAt: '2026-07-19T00:00:00.000Z',
-              value: {
-                bindingId: 'binding-rin',
+          list: async () => ({
+            records: [
+              {
+                projectionId: 'availability:rin',
+                kind: 'binding-availability' as const,
+                sourceId: 'binding-owner',
                 entityId: 'character-rin',
-                entityKind: 'character' as const,
-                representation: { kind: 'workspace-file' as const, path: 'rin.png' },
-                role: 'portrait' as const,
-                owner: 'workspace-file' as const,
-                availability: 'needs-attention' as const,
-                attention: {
-                  diagnostic: { code: 'content-missing' as const },
-                  action: 'rebind' as const,
+                freshness: 'fresh' as const,
+                updatedAt: '2026-07-19T00:00:00.000Z',
+                value: {
+                  bindingId: 'binding-rin',
+                  entityId: 'character-rin',
+                  entityKind: 'character' as const,
+                  representation: { kind: 'workspace-file' as const, path: 'rin.png' },
+                  role: 'portrait' as const,
+                  owner: 'workspace-file' as const,
+                  availability: 'needs-attention' as const,
+                  attention: {
+                    diagnostic: { code: 'content-missing' as const },
+                    action: 'rebind' as const,
+                  },
+                  checkedAt: '2026-07-19T00:00:00.000Z',
                 },
-                checkedAt: '2026-07-19T00:00:00.000Z',
               },
-            },
-          ],
+            ],
+            diagnostics: [],
+          }),
         },
       },
     });

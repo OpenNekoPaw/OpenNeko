@@ -1,17 +1,7 @@
-export type {
-  JobFailureSummary,
-  JobPhase,
-  JobRef,
-  JobSnapshotBase,
-  JobStoreCommit,
-  VersionedJobStore,
-} from './contracts';
+export type { JobFailureSummary, JobPhase, JobRef, JobSnapshotBase, JobStore } from './contracts';
 export { isJobRef } from './contracts';
-export { createInMemoryVersionedJobStore } from './in-memory-job-store';
-export {
-  createVersionedJobObservationHub,
-  type VersionedJobObservationHub,
-} from './observation-hub';
+export { createInMemoryJobStore } from './in-memory-job-store';
+export { createJobObservationHub, type JobObservationHub } from './observation-hub';
 export {
   assertInitialJobSnapshot,
   assertJobRef,

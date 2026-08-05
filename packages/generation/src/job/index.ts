@@ -20,8 +20,8 @@ export {
 export { GenerationJobCoordinator, type GenerationJobCoordinatorOptions } from './coordinator';
 export { createPurposeGenerationJobPort } from './purpose-port';
 export {
-  GENERATION_JOB_MIGRATIONS,
   createInMemoryGenerationJobStore,
   createPersistentGenerationJobStore,
+  initializeGenerationJobTables,
   type PersistentGenerationJobStoreOptions,
 } from './store';

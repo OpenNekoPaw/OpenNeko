@@ -1,14 +1,22 @@
 {
   "schemaVersion": 1,
-  "scope": "non-agent",
+  "scope": "all-production",
   "owner": "architecture",
-  "updatedAt": "2026-07-19",
+  "updatedAt": "2026-08-05",
   "scanner": "node scripts/check-legacy-debt-surfaces.mjs --validate-ledger",
   "qualityGate": {
-    "failingProductionSemanticClasses": ["delete-now", "migrate-now", "needs-review"],
+    "failingProductionSemanticClasses": [
+      "current-bridge",
+      "delete-now",
+      "migrate-now",
+      "migration-only",
+      "needs-review"
+    ],
     "targetCounts": {
+      "current-bridge": 0,
       "delete-now": 0,
       "migrate-now": 0,
+      "migration-only": 0,
       "needs-review": 0
     },
     "retainedEntryRequirements": [
@@ -22,12 +30,13 @@
   "semanticClasses": {
     "delete-now": "No current runtime or entrypoint depends on the surface; delete it and keep stale-surface scans.",
     "migrate-now": "Current code still touches an old or deprecated surface; migrate callers to the canonical contract and remove the old path.",
-    "migration-only": "The surface is confined to explicit inspection, migration, rejection, or recovery code and is not registered in normal runtime.",
-    "current-bridge": "A bridge is still part of a current feature path; preserve only with owner, replacement, remove condition, and tests.",
+    "migration-only": "Migration or compatibility code inside product source is blocking; repair is allowed only as an explicit offline script outside product, build, ordinary test, and CI reachability.",
+    "current-bridge": "A legacy, fallback, compatibility, or shim marker inside a current bridge or adapter is blocking unless a separate exact external-boundary allowance proves it is third-party-owned and does not create an internal alternate path.",
     "runtime-resilience": "Fallback handles current provider, model, GPU, media, network, file, cancellation, timeout, or capability absence.",
-    "boundary-canonicalizer": "Compatibility is isolated at an input boundary that converts multiple current inputs into one canonical shape.",
+    "boundary-canonicalizer": "A real external or trust boundary validates one current external input and projects it into the canonical internal shape; it does not read legacy internal data or provide an alternate success path.",
     "presentation-default": "The word fallback describes UI copy, empty state, default dimensions, or placeholders rather than runtime failure handling.",
     "domain-status": "The word deprecated is a current domain state such as market/entity deprecation, not a compatibility branch.",
+    "external-contract": "The exact occurrence is required by a named third-party API, library, protocol, or format boundary and does not select an internal contract or alternate business path.",
     "generated-source": "Generated output contains legacy/deprecated names; cleanup must update source schema/IDL and regenerated artifacts.",
     "test-only": "The surface appears only in tests that protect current migration, guard, or deletion behavior.",
     "false-positive-word": "The word appears in static-analysis notes or unrelated text and is not a code debt surface."

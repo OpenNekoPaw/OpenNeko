@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  RESOURCE_BROWSER_CONTRACT_VERSION,
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserContractError,
   assertResourceBrowserIdentity,
@@ -20,8 +19,8 @@ const identity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'resource-view-1',
-  viewEpoch: 2,
-  endpointEpoch: 'endpoint-1',
+  viewInstanceId: 'view-instance-2',
+  rendererSessionId: 'endpoint-1',
 } as const;
 
 describe('Resource Browser contract', () => {
@@ -34,7 +33,6 @@ describe('Resource Browser contract', () => {
         query: 'cat',
       }),
     ).toEqual({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'request-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.search,
@@ -48,7 +46,6 @@ describe('Resource Browser contract', () => {
         identity,
       }),
     ).toEqual({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'snapshot-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.snapshotGet,
@@ -61,7 +58,6 @@ describe('Resource Browser contract', () => {
         parentResourceId: 'directory-1',
       }),
     ).toEqual({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'children-1',
       identity,
       route: RESOURCE_BROWSER_ROUTES.children,
@@ -85,7 +81,7 @@ describe('Resource Browser contract', () => {
           capabilities: ['preview', 'reveal', 'add-to-canvas', 'add-to-cut'],
           thumbnail: {
             descriptorId: 'thumbnail-1',
-            revision: 'sha256-a',
+            sourceFingerprint: 'sha256-a',
             mediaType: 'image/png',
           },
         },
@@ -135,7 +131,7 @@ describe('Resource Browser contract', () => {
     expect(entities.items[0]?.facet).toBe('entities');
   });
 
-  it('parses hierarchical File projections and revisioned library management', () => {
+  it('parses hierarchical File projections and library management', () => {
     const files = parseResourceBrowserProjection(
       projection('files', [
         {
@@ -167,38 +163,25 @@ describe('Resource Browser contract', () => {
     });
     expect(
       parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'relink-1',
         identity,
         route: RESOURCE_BROWSER_ROUTES.relinkSource,
         resourceId: 'library-1',
-        expectedRevision: 4,
       }),
     ).toMatchObject({
       route: RESOURCE_BROWSER_ROUTES.relinkSource,
-      expectedRevision: 4,
     });
   });
 
-  it('rejects unknown versions, absolute paths and stale owner identity', () => {
+  it('rejects unknown fields, absolute paths and stale owner identity', () => {
     expect(() =>
       parseResourceBrowserProjection({
         ...projection('files', []),
-        schemaVersion: 3,
+        obsoleteField: 3,
       }),
     ).toThrowError(
       expect.objectContaining<Partial<ResourceBrowserContractError>>({
-        code: 'unsupported-resource-browser-version',
-      }),
-    );
-    expect(() =>
-      parseResourceBrowserProjection({
-        ...projection('files', []),
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION + 1,
-      }),
-    ).toThrowError(
-      expect.objectContaining<Partial<ResourceBrowserContractError>>({
-        code: 'unsupported-resource-browser-version',
+        code: 'invalid-resource-browser-payload',
       }),
     );
     expect(() =>
@@ -234,7 +217,7 @@ describe('Resource Browser contract', () => {
       ),
     ).toThrowError(ResourceBrowserContractError);
     expect(() =>
-      assertResourceBrowserIdentity(identity, { ...identity, viewEpoch: 3 }),
+      assertResourceBrowserIdentity(identity, { ...identity, viewInstanceId: 'view-instance-3' }),
     ).toThrowError(
       expect.objectContaining<Partial<ResourceBrowserContractError>>({
         code: 'resource-browser-stale-identity',
@@ -244,14 +227,13 @@ describe('Resource Browser contract', () => {
 
   it('accepts only transient OpenNeko URLs for quick preview display', () => {
     const result = {
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'preview-1',
       identity,
       resourceId: 'media-1',
       previewSessionId: 'preview-session-1',
       descriptor: {
         descriptorId: 'descriptor-1',
-        revision: 'revision-1',
+        sourceFingerprint: 'fingerprint-1',
         contentLocator: { kind: 'workspace-file', path: 'media/clip.mp4' },
         url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         contentKind: 'video',
@@ -282,12 +264,10 @@ describe('Resource Browser contract', () => {
   it('rejects target-bearing recovery requests, plans, and library statuses', () => {
     expect(() =>
       parseResourceBrowserRecoveryPlanRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'recover-1',
         identity,
         route: RESOURCE_BROWSER_ROUTES.recoveryPlan,
         resourceId: 'library-1',
-        expectedRevision: 4,
         expectedOperationRevision: 'sha256:operation',
         candidate: 'select-directory',
         sourceDirectory: '/Users/private/Footage',
@@ -295,13 +275,11 @@ describe('Resource Browser contract', () => {
     ).toThrowError('unsupported fields');
     expect(() =>
       parseResourceBrowserRecoveryPlanResult({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'recover-1',
         identity,
         resourceId: 'library-1',
         status: 'planned',
         plan: {
-          contractVersion: 1,
           planId: 'recovery-plan-1',
           workspaceId: identity.workspaceId,
           libraryName: 'Footage',
@@ -350,6 +328,9 @@ describe('Resource Browser contract', () => {
       [
         'canvas.add',
         'children',
+        'content.create-directory',
+        'content.import-files',
+        'content.trash',
         'cut.add',
         'cut.open',
         'entity.manage',
@@ -372,23 +353,19 @@ describe('Resource Browser contract', () => {
     );
     expect(
       parseResourceBrowserProjectionEvent({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         sequence: 1,
         projection: projection('media', []),
       }).sequence,
     ).toBe(1);
     expect(
       parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'source-1',
         identity,
         route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
-        expectedRevision: 0,
       }),
     ).toMatchObject({
       requestId: 'source-1',
       route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
-      expectedRevision: 0,
     });
   });
 
@@ -410,14 +387,44 @@ describe('Resource Browser contract', () => {
     ]) {
       expect(() =>
         parseResourceBrowserIntentRequest({
-          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
           requestId: 'legacy-source',
           identity,
           route,
-          expectedRevision: 0,
         }),
       ).toThrowError(ResourceBrowserContractError);
     }
+  });
+
+  it('parses Workspace File mutations without accepting paths from Renderer', () => {
+    expect(
+      parseResourceBrowserIntentRequest({
+        requestId: 'create-directory-1',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.createDirectory,
+        directoryName: 'References',
+      }),
+    ).toEqual({
+      requestId: 'create-directory-1',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.createDirectory,
+      directoryName: 'References',
+    });
+    expect(() =>
+      parseResourceBrowserIntentRequest({
+        requestId: 'create-directory-invalid',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.createDirectory,
+        directoryName: '../outside',
+      }),
+    ).toThrow('portable visible entry name');
+    expect(() =>
+      parseResourceBrowserIntentRequest({
+        requestId: 'import-path-forbidden',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.importFiles,
+        sourcePaths: ['/private/source.mov'],
+      }),
+    ).toThrow('unsupported fields');
   });
 
   it('parses candidates without promoting them to stable Entity identity', () => {
@@ -446,28 +453,25 @@ describe('Resource Browser contract', () => {
     expect(result.items[0]).not.toHaveProperty('entityRef');
   });
 
-  it('parses Entity management only through the versioned Resource Browser route', () => {
+  it('parses Entity management only through the canonical Resource Browser route', () => {
     expect(
       parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'entity-edit',
         identity,
         route: RESOURCE_BROWSER_ROUTES.manageEntity,
         resourceId: 'entity-nova',
         entityIntent: {
           type: 'edit',
-          expectedRevision: 3,
           entityId: 'entity-nova',
           changes: { facts: { role: 'lead' } },
         },
       }),
     ).toMatchObject({
       route: 'entity.manage',
-      entityIntent: { type: 'edit', entityId: 'entity-nova', expectedRevision: 3 },
+      entityIntent: { type: 'edit', entityId: 'entity-nova' },
     });
     expect(() =>
       parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'entity-missing-intent',
         identity,
         route: RESOURCE_BROWSER_ROUTES.manageEntity,
@@ -479,7 +483,6 @@ describe('Resource Browser contract', () => {
   it('requires explicit Preview and Cut handoff targets', () => {
     expect(
       parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'preview-1',
         identity,
         route: RESOURCE_BROWSER_ROUTES.preview,
@@ -487,27 +490,24 @@ describe('Resource Browser contract', () => {
         targetPreview: {
           viewId: 'preview:project-view-1:temporary',
           presentation: 'temporary',
-          expectedWorkbenchRevision: 4,
         },
       }),
     ).toMatchObject({
       targetPreview: {
         viewId: 'preview:project-view-1:temporary',
-        expectedWorkbenchRevision: 4,
       },
     });
     expect(
       parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'cut-1',
         identity,
         route: RESOURCE_BROWSER_ROUTES.addToCut,
         resourceId: 'content:clip',
         targetCut: {
           viewId: 'cut:view-1',
-          viewEpoch: 3,
+          viewInstanceId: 'view-instance-3',
           documentId: 'cuts/story.otio',
-          sessionId: 'cut-session:cut:view-1:3',
+          sessionId: 'cut-session:cut:view-1:view-instance-3',
           expectedRevision: 8,
         },
       }),
@@ -520,7 +520,6 @@ describe('Resource Browser contract', () => {
     });
     expect(() =>
       parseResourceBrowserIntentRequest({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: 'cut-without-target',
         identity,
         route: RESOURCE_BROWSER_ROUTES.addToCut,
@@ -532,9 +531,7 @@ describe('Resource Browser contract', () => {
 
 function projection(facet: 'files' | 'media' | 'assets' | 'entities', items: readonly unknown[]) {
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     identity,
-    revision: 1,
     facet,
     query: '',
     items,
@@ -547,7 +544,6 @@ function inspector(
     | { readonly status: 'candidate'; readonly candidateId: string },
 ) {
   return {
-    projectRevision: 3,
     status: identity.status,
     kind: 'character',
     names: { canonical: 'Nova', aliases: [] },

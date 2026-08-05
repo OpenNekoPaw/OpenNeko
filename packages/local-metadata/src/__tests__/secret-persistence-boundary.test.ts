@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveGlobalStorageLayout } from '../storage';
 import { createNodeSqliteLocalMetadataStore } from '../node-sqlite-local-metadata-store';
-import { AGENT_STATE_MIGRATIONS, M1_LOCAL_METADATA_MIGRATIONS } from '../sqlite';
+import { initializeAgentStateTables, initializeCoreLocalMetadataTables } from '../sqlite';
 
 const temporaryDirectories: string[] = [];
 const WORKSPACE_ID = '98be868a-9f3b-41fa-bbee-f0db317f3468';
@@ -22,8 +22,8 @@ describe('Local metadata secret persistence boundary', () => {
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const store = createNodeSqliteLocalMetadataStore({ homedir });
     await store.open({ databasePath, busyTimeoutMs: 1_000 });
-    await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(store);
+    await initializeAgentStateTables(store);
     await store.repositories.workspaces.bind({
       identity: { version: 1, workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },

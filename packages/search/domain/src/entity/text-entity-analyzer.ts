@@ -77,9 +77,7 @@ export class TextEntityAnalyzer implements SemanticSourceAnalyzer {
     return {
       sourceId: input.source.sourceId,
       sourceFingerprint: input.source.fingerprint,
-      entityRevision: input.entities.revision,
       index: {
-        version: 1,
         indexId: input.source.sourceId,
         assetId: input.source.sourceId,
         sourceRef,
@@ -87,7 +85,6 @@ export class TextEntityAnalyzer implements SemanticSourceAnalyzer {
         updatedAt: input.analyzedAt,
         metadata: {
           analyzerId: ANALYZER_ID,
-          entityRevision: input.entities.revision,
           analysisMode: input.source.analysisMode,
           format: input.source.format,
         },

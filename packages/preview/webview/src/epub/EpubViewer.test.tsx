@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
+import { PersistedStateProvider } from '../shared/usePersistedState';
 import {
   EPUB_PAGINATED_THEME,
   EpubViewer,
@@ -83,7 +84,9 @@ describe('fetchForEpub', () => {
       await act(async () => {
         root.render(
           <I18nProvider service={i18nService}>
-            <EpubViewer sourceUrl="http://127.0.0.1:43125/v1/resources/book" />
+            <PersistedStateProvider>
+              <EpubViewer sourceUrl="http://127.0.0.1:43125/v1/resources/book" />
+            </PersistedStateProvider>
           </I18nProvider>,
         );
       });

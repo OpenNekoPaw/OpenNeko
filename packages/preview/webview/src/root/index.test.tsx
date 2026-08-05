@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  PREVIEW_HOST_RUNTIME_VERSION,
   type PreviewHostRuntime,
   type PreviewProjection,
   type PreviewRuntimeIdentity,
@@ -26,11 +25,10 @@ const identity: PreviewRuntimeIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'preview-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'document-1',
   sessionId: 'session-1',
-  endpointEpoch: 'endpoint-1',
-  revision: 1,
+  rendererSessionId: 'endpoint-1',
 };
 
 const previewContentLocator = {
@@ -67,7 +65,7 @@ describe('PreviewRoot', () => {
   it('uses one package-owned presentation and viewer registry for Workspace and authorized previews', async () => {
     const descriptor = {
       descriptorId: 'descriptor-shared-image',
-      revision: 'revision-1',
+      sourceFingerprint: 'fingerprint-1',
       contentLocator: previewContentLocator,
       url: 'http://127.0.0.1:43125/v1/resources/shared-image-token',
       contentKind: 'image' as const,
@@ -89,12 +87,10 @@ describe('PreviewRoot', () => {
         resourceOwner: 'media-library' as const,
         itemId: 'media-library:item-1',
       },
-      revision: 1,
     };
     const authorizedRuntime: AuthorizedPreviewSessionRuntime = {
       identity: authorizedIdentity,
       getSnapshot: async () => ({
-        schemaVersion: 1,
         identity: authorizedIdentity,
         status: 'ready',
         descriptor,
@@ -108,7 +104,6 @@ describe('PreviewRoot', () => {
           chrome="content-only"
           locale="en"
           runtime={createRuntime({
-            schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
             identity,
             presentation: 'side',
             status: 'ready',
@@ -161,13 +156,12 @@ describe('PreviewRoot', () => {
         <PreviewRoot
           locale="zh-cn"
           runtime={createRuntime({
-            schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
             identity,
             presentation: 'temporary',
             status: 'ready',
             descriptor: {
               descriptorId: 'descriptor-1',
-              revision: 'revision-1',
+              sourceFingerprint: 'fingerprint-1',
               contentLocator: previewContentLocator,
               url: 'http://127.0.0.1:43125/v1/resources/text-token',
               contentKind: 'text',
@@ -188,13 +182,12 @@ describe('PreviewRoot', () => {
 
   it('routes pin and side actions through the injected Preview runtime', async () => {
     const projection: PreviewProjection = {
-      schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
       identity,
       presentation: 'temporary',
       status: 'ready',
       descriptor: {
         descriptorId: 'descriptor-image',
-        revision: 'revision-1',
+        sourceFingerprint: 'fingerprint-1',
         contentLocator: previewContentLocator,
         url: 'http://127.0.0.1:43125/v1/resources/image-token',
         contentKind: 'image',
@@ -243,13 +236,12 @@ describe('PreviewRoot', () => {
         <PreviewRoot
           locale="en"
           runtime={createRuntime({
-            schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
             identity,
             presentation: 'temporary',
             status: 'ready',
             descriptor: {
               descriptorId: 'descriptor-video',
-              revision: 'revision-1',
+              sourceFingerprint: 'fingerprint-1',
               contentLocator: previewContentLocator,
               url: 'http://127.0.0.1:43125/v1/resources/video-token',
               contentKind: 'video',
@@ -269,6 +261,67 @@ describe('PreviewRoot', () => {
     expect(container.querySelector('[aria-label="Play (Space)"]')).toBeTruthy();
   });
 
+  it('releases the media viewer while suspended and restores it from the retained projection', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    const runtime = createRuntime({
+      identity,
+      presentation: 'temporary',
+      status: 'ready',
+      descriptor: {
+        descriptorId: 'descriptor-video-suspend',
+        sourceFingerprint: 'fingerprint-1',
+        contentLocator: previewContentLocator,
+        url: 'http://127.0.0.1:43125/v1/resources/video-suspend-token',
+        contentKind: 'video',
+        mediaType: 'video/mp4',
+        displayName: 'suspend.mp4',
+        byteLength: 42,
+      },
+    });
+
+    await act(async () => {
+      root.render(<PreviewRoot lifecyclePresentation="active" locale="en" runtime={runtime} />);
+    });
+    const presentationRoot = container.querySelector('.neko-preview-root');
+    const initialVideo = container.querySelector('video');
+    expect(initialVideo).not.toBeNull();
+    if (!initialVideo) throw new Error('Initial video viewer is required.');
+    initialVideo.currentTime = 37;
+    initialVideo.playbackRate = 1.5;
+    initialVideo.volume = 0.4;
+
+    await act(async () => {
+      root.render(<PreviewRoot lifecyclePresentation="suspended" locale="en" runtime={runtime} />);
+    });
+    expect(container.querySelector('.neko-preview-root')).toBe(presentationRoot);
+    expect(container.querySelector('video')).toBeNull();
+    expect(container.querySelector('[data-preview-suspended="true"]')).not.toBeNull();
+    expect(pause).toHaveBeenCalled();
+
+    await act(async () => {
+      root.render(<PreviewRoot lifecyclePresentation="active" locale="en" runtime={runtime} />);
+    });
+    expect(container.querySelector('.neko-preview-root')).toBe(presentationRoot);
+    const restoredVideo = container.querySelector('video');
+    expect(restoredVideo).not.toBeNull();
+    if (!restoredVideo) throw new Error('Restored video viewer is required.');
+    restoredVideo.dispatchEvent(new Event('loadedmetadata', { bubbles: true }));
+    expect(restoredVideo.currentTime).toBe(37);
+    expect(restoredVideo.playbackRate).toBe(1.5);
+    expect(restoredVideo.volume).toBe(0.4);
+  });
+
   it('renders image quick preview from the opaque package-owned descriptor', async () => {
     const container = document.createElement('div');
     document.body.append(container);
@@ -279,7 +332,7 @@ describe('PreviewRoot', () => {
           locale="en"
           descriptor={{
             descriptorId: 'descriptor-image-hover',
-            revision: 'revision-1',
+            sourceFingerprint: 'fingerprint-1',
             contentLocator: previewContentLocator,
             url: 'http://127.0.0.1:43125/v1/resources/image-hover-token',
             contentKind: 'image',
@@ -311,7 +364,7 @@ describe('PreviewRoot', () => {
           locale="en"
           descriptor={{
             descriptorId: 'descriptor-video-hover',
-            revision: 'revision-1',
+            sourceFingerprint: 'fingerprint-1',
             contentLocator: previewContentLocator,
             url: 'http://127.0.0.1:43125/v1/resources/video-hover-token',
             contentKind: 'video',
@@ -332,7 +385,7 @@ describe('PreviewRoot', () => {
           locale="en"
           descriptor={{
             descriptorId: 'descriptor-audio-hover',
-            revision: 'revision-1',
+            sourceFingerprint: 'fingerprint-1',
             contentLocator: previewContentLocator,
             url: 'http://127.0.0.1:43125/v1/resources/audio-hover-token',
             contentKind: 'audio',

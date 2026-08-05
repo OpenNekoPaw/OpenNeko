@@ -10,13 +10,10 @@ import {
 } from '@neko/entity-domain';
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 import {
-  WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION,
   validateWorkspaceLinkedMediaLibraryName,
   type WorkspaceMediaLibraryRecoveryPlan,
   type WorkspaceMediaLibraryStatus,
 } from '@neko/assets-domain/contracts';
-
-export const RESOURCE_BROWSER_CONTRACT_VERSION = 11 as const;
 
 export function createResourceBrowserViewId(projectViewId: string): string {
   return `resource-browser:${projectViewId}`;
@@ -37,6 +34,9 @@ export const RESOURCE_BROWSER_ROUTES = {
   addDirectoryLibrary: 'source.add-directory-library',
   relinkSource: 'source.relink',
   removeSource: 'source.remove',
+  createDirectory: 'content.create-directory',
+  importFiles: 'content.import-files',
+  trashContent: 'content.trash',
   preview: 'preview',
   openCut: 'cut.open',
   addToCut: 'cut.add',
@@ -64,13 +64,19 @@ export type ResourceBrowserItemKind =
 export type ResourceBrowserCapability =
   'preview' | 'open-cut' | 'add-to-cut' | 'reveal' | 'add-to-canvas';
 
+export interface ResourceBrowserDiagnostic {
+  readonly code: string;
+  readonly message: string;
+  readonly recordId?: string;
+}
+
 export interface ResourceBrowserIdentity {
   readonly projectId: string;
   readonly workspaceId: string;
   readonly windowId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
-  readonly endpointEpoch: string;
+  readonly viewInstanceId: string;
+  readonly rendererSessionId: string;
 }
 
 export interface ResourceBrowserEntityRef {
@@ -85,7 +91,7 @@ export interface ResourceBrowserCandidateRef {
 
 export interface ResourceBrowserThumbnailDescriptor {
   readonly descriptorId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly mediaType: string;
 }
 
@@ -145,16 +151,14 @@ export type ResourceBrowserItem =
   ResourceBrowserContentItem | ResourceBrowserAssetItem | ResourceBrowserEntityItem;
 
 export interface ResourceBrowserProjection {
-  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
   readonly identity: ResourceBrowserIdentity;
-  readonly revision: number;
   readonly facet: ResourceBrowserFacet;
   readonly query: string;
   readonly items: readonly ResourceBrowserItem[];
+  readonly diagnostics?: readonly ResourceBrowserDiagnostic[];
 }
 
 export interface ResourceBrowserRequest {
-  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
 }
@@ -181,16 +185,15 @@ export interface ResourceBrowserThumbnailRequest extends ResourceBrowserRequest 
   readonly route: typeof RESOURCE_BROWSER_ROUTES.thumbnailResolve;
   readonly resourceId: string;
   readonly descriptorId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
 }
 
 export interface ResourceBrowserThumbnailResult {
-  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly resourceId: string;
   readonly descriptorId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly dataUrl: string;
 }
 
@@ -198,7 +201,7 @@ export type ResourceBrowserQuickPreviewKind = 'image' | 'video' | 'audio';
 
 export interface ResourceBrowserQuickPreviewDescriptor {
   readonly descriptorId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly contentLocator: ContentLocator;
   readonly url: string;
   readonly contentKind: ResourceBrowserQuickPreviewKind;
@@ -213,7 +216,6 @@ export interface ResourceBrowserQuickPreviewRequest extends ResourceBrowserReque
 }
 
 export interface ResourceBrowserQuickPreviewResult {
-  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly resourceId: string;
@@ -227,7 +229,6 @@ export interface ResourceBrowserQuickPreviewReleaseRequest extends ResourceBrows
 }
 
 export interface ResourceBrowserQuickPreviewReleaseResult {
-  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly previewSessionId: string;
@@ -237,14 +238,12 @@ export interface ResourceBrowserQuickPreviewReleaseResult {
 export interface ResourceBrowserRecoveryPlanRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.recoveryPlan;
   readonly resourceId: string;
-  readonly expectedRevision: number;
   readonly expectedOperationRevision: string;
   readonly candidate: 'existing-global' | 'select-directory';
 }
 
 export type ResourceBrowserRecoveryPlanResult =
   | {
-      readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
       readonly requestId: string;
       readonly identity: ResourceBrowserIdentity;
       readonly resourceId: string;
@@ -252,7 +251,6 @@ export type ResourceBrowserRecoveryPlanResult =
       readonly plan: WorkspaceMediaLibraryRecoveryPlan;
     }
   | {
-      readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
       readonly requestId: string;
       readonly identity: ResourceBrowserIdentity;
       readonly resourceId: string;
@@ -262,7 +260,6 @@ export type ResourceBrowserRecoveryPlanResult =
 export interface ResourceBrowserRecoveryApplyRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.recoveryApply;
   readonly planId: string;
-  readonly expectedRevision: number;
   readonly expectedOperationRevision: string;
 }
 
@@ -272,7 +269,6 @@ export interface ResourceBrowserRecoveryCancelRequest extends ResourceBrowserReq
 }
 
 export interface ResourceBrowserRecoveryCancelResult {
-  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly planId: string;
@@ -286,6 +282,9 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     | typeof RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
     | typeof RESOURCE_BROWSER_ROUTES.relinkSource
     | typeof RESOURCE_BROWSER_ROUTES.removeSource
+    | typeof RESOURCE_BROWSER_ROUTES.createDirectory
+    | typeof RESOURCE_BROWSER_ROUTES.importFiles
+    | typeof RESOURCE_BROWSER_ROUTES.trashContent
     | typeof RESOURCE_BROWSER_ROUTES.preview
     | typeof RESOURCE_BROWSER_ROUTES.openCut
     | typeof RESOURCE_BROWSER_ROUTES.addToCut
@@ -293,15 +292,14 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     | typeof RESOURCE_BROWSER_ROUTES.addToCanvas
     | typeof RESOURCE_BROWSER_ROUTES.manageEntity;
   readonly resourceId?: string;
-  readonly expectedRevision?: number;
+  readonly directoryName?: string;
   readonly targetPreview?: {
     readonly viewId: string;
     readonly presentation: 'temporary' | 'side';
-    readonly expectedWorkbenchRevision: number;
   };
   readonly targetCut?: {
     readonly viewId: string;
-    readonly viewEpoch: number;
+    readonly viewInstanceId: string;
     readonly documentId: string;
     readonly sessionId: string;
     readonly expectedRevision: number;
@@ -315,7 +313,6 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
 }
 
 export interface ResourceBrowserProjectionEvent {
-  readonly schemaVersion: typeof RESOURCE_BROWSER_CONTRACT_VERSION;
   readonly sequence: number;
   readonly projection: ResourceBrowserProjection;
 }
@@ -346,10 +343,7 @@ export interface ResourceBrowserHostRuntime {
 }
 
 export class ResourceBrowserContractError extends Error {
-  readonly code:
-    | 'invalid-resource-browser-payload'
-    | 'unsupported-resource-browser-version'
-    | 'resource-browser-stale-identity';
+  readonly code: 'invalid-resource-browser-payload' | 'resource-browser-stale-identity';
 
   constructor(code: ResourceBrowserContractError['code'], message: string, options?: ErrorOptions) {
     super(message, options);
@@ -366,7 +360,6 @@ export function createResourceBrowserSearchRequest(input: {
   readonly limit?: number;
 }): ResourceBrowserSearchRequest {
   return parseResourceBrowserSearchRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.search,
@@ -384,7 +377,6 @@ export function createResourceBrowserChildrenRequest(input: {
   readonly limit?: number;
 }): ResourceBrowserChildrenRequest {
   return parseResourceBrowserChildrenRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.children,
@@ -399,7 +391,6 @@ export function createResourceBrowserSnapshotRequest(input: {
   readonly identity: ResourceBrowserIdentity;
 }): ResourceBrowserSnapshotRequest {
   return parseResourceBrowserSnapshotRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.snapshotGet,
@@ -413,13 +404,12 @@ export function createResourceBrowserThumbnailRequest(input: {
   readonly descriptor: ResourceBrowserThumbnailDescriptor;
 }): ResourceBrowserThumbnailRequest {
   return parseResourceBrowserThumbnailRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.thumbnailResolve,
     resourceId: input.resourceId,
     descriptorId: input.descriptor.descriptorId,
-    revision: input.descriptor.revision,
+    sourceFingerprint: input.descriptor.sourceFingerprint,
   });
 }
 
@@ -429,7 +419,6 @@ export function createResourceBrowserQuickPreviewRequest(input: {
   readonly resourceId: string;
 }): ResourceBrowserQuickPreviewRequest {
   return parseResourceBrowserQuickPreviewRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.quickPreviewResolve,
@@ -443,7 +432,6 @@ export function createResourceBrowserQuickPreviewReleaseRequest(input: {
   readonly previewSessionId: string;
 }): ResourceBrowserQuickPreviewReleaseRequest {
   return parseResourceBrowserQuickPreviewReleaseRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.quickPreviewRelease,
@@ -455,17 +443,14 @@ export function createResourceBrowserRecoveryPlanRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly resourceId: string;
-  readonly expectedRevision: number;
   readonly expectedOperationRevision: string;
   readonly candidate: ResourceBrowserRecoveryPlanRequest['candidate'];
 }): ResourceBrowserRecoveryPlanRequest {
   return parseResourceBrowserRecoveryPlanRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.recoveryPlan,
     resourceId: input.resourceId,
-    expectedRevision: input.expectedRevision,
     expectedOperationRevision: input.expectedOperationRevision,
     candidate: input.candidate,
   });
@@ -475,16 +460,13 @@ export function createResourceBrowserRecoveryApplyRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly planId: string;
-  readonly expectedRevision: number;
   readonly expectedOperationRevision: string;
 }): ResourceBrowserRecoveryApplyRequest {
   return parseResourceBrowserRecoveryApplyRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.recoveryApply,
     planId: input.planId,
-    expectedRevision: input.expectedRevision,
     expectedOperationRevision: input.expectedOperationRevision,
   });
 }
@@ -495,7 +477,6 @@ export function createResourceBrowserRecoveryCancelRequest(input: {
   readonly planId: string;
 }): ResourceBrowserRecoveryCancelRequest {
   return parseResourceBrowserRecoveryCancelRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.recoveryCancel,
@@ -510,7 +491,6 @@ export function createResourceBrowserEntityIntentRequest(input: {
   readonly intent: ProjectEntityInspectorIntent;
 }): ResourceBrowserIntentRequest {
   return parseResourceBrowserIntentRequest({
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.manageEntity,
@@ -523,12 +503,10 @@ export function parseResourceBrowserSnapshotRequest(
   value: unknown,
 ): ResourceBrowserSnapshotRequest {
   const record = requireRecord(value, 'Resource Browser snapshot request must be an object.');
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.snapshotGet) {
     throw invalidPayload('Resource Browser snapshot route is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -542,7 +520,6 @@ export function parseResourceBrowserThumbnailRequest(
   value: unknown,
 ): ResourceBrowserThumbnailRequest {
   const record = requireRecord(value, 'Resource Browser thumbnail request must be an object.');
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.thumbnailResolve) {
     throw invalidPayload('Resource Browser thumbnail route is invalid.');
   }
@@ -552,7 +529,6 @@ export function parseResourceBrowserThumbnailRequest(
   );
   assertNoPathLikeValue(descriptorId, 'Resource Browser thumbnail descriptor');
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -564,9 +540,9 @@ export function parseResourceBrowserThumbnailRequest(
       'Resource Browser thumbnail resource identity is required.',
     ),
     descriptorId,
-    revision: requireOpaqueIdentity(
-      record['revision'],
-      'Resource Browser thumbnail revision is required.',
+    sourceFingerprint: requireOpaqueIdentity(
+      record['sourceFingerprint'],
+      'Resource Browser thumbnail source fingerprint is required.',
     ),
   };
 }
@@ -575,7 +551,6 @@ export function parseResourceBrowserThumbnailResult(
   value: unknown,
 ): ResourceBrowserThumbnailResult {
   const record = requireRecord(value, 'Resource Browser thumbnail result must be an object.');
-  requireVersion(record['schemaVersion']);
   const dataUrl = requireNonEmptyString(
     record['dataUrl'],
     'Resource Browser thumbnail data URL is required.',
@@ -587,7 +562,6 @@ export function parseResourceBrowserThumbnailResult(
     throw invalidPayload('Resource Browser thumbnail result exceeds the 4 MiB transport limit.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -601,9 +575,9 @@ export function parseResourceBrowserThumbnailResult(
       record['descriptorId'],
       'Resource Browser thumbnail descriptor identity is required.',
     ),
-    revision: requireOpaqueIdentity(
-      record['revision'],
-      'Resource Browser thumbnail revision is required.',
+    sourceFingerprint: requireOpaqueIdentity(
+      record['sourceFingerprint'],
+      'Resource Browser thumbnail source fingerprint is required.',
     ),
     dataUrl,
   };
@@ -613,12 +587,10 @@ export function parseResourceBrowserQuickPreviewRequest(
   value: unknown,
 ): ResourceBrowserQuickPreviewRequest {
   const record = requireRecord(value, 'Resource Browser quick preview request must be an object.');
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.quickPreviewResolve) {
     throw invalidPayload('Resource Browser quick preview route is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -639,12 +611,10 @@ export function parseResourceBrowserQuickPreviewReleaseRequest(
     value,
     'Resource Browser quick preview release request must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.quickPreviewRelease) {
     throw invalidPayload('Resource Browser quick preview release route is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -662,7 +632,6 @@ export function parseResourceBrowserQuickPreviewResult(
   value: unknown,
 ): ResourceBrowserQuickPreviewResult {
   const record = requireRecord(value, 'Resource Browser quick preview result must be an object.');
-  requireVersion(record['schemaVersion']);
   const descriptor = requireRecord(
     record['descriptor'],
     'Resource Browser quick preview descriptor is required.',
@@ -672,7 +641,6 @@ export function parseResourceBrowserQuickPreviewResult(
     throw invalidPayload('Resource Browser quick preview kind is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -691,9 +659,9 @@ export function parseResourceBrowserQuickPreviewResult(
         descriptor['descriptorId'],
         'Resource Browser quick preview descriptor identity is required.',
       ),
-      revision: requireOpaqueIdentity(
-        descriptor['revision'],
-        'Resource Browser quick preview revision is required.',
+      sourceFingerprint: requireOpaqueIdentity(
+        descriptor['sourceFingerprint'],
+        'Resource Browser quick preview source fingerprint is required.',
       ),
       contentLocator: requireContentLocator(descriptor['contentLocator'], 'contentLocator'),
       url: requireOpenNekoResourceUrl(descriptor['url']),
@@ -747,12 +715,10 @@ export function parseResourceBrowserQuickPreviewReleaseResult(
     value,
     'Resource Browser quick preview release result must be an object.',
   );
-  requireVersion(record['schemaVersion']);
   if (record['status'] !== 'released') {
     throw invalidPayload('Resource Browser quick preview release status is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -771,16 +737,13 @@ export function parseResourceBrowserRecoveryPlanRequest(
 ): ResourceBrowserRecoveryPlanRequest {
   const record = requireRecord(value, 'Resource Browser recovery plan request must be an object.');
   requireOnlyKeys(record, [
-    'schemaVersion',
     'requestId',
     'identity',
     'route',
     'resourceId',
-    'expectedRevision',
     'expectedOperationRevision',
     'candidate',
   ]);
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.recoveryPlan) {
     throw invalidPayload('Resource Browser recovery plan route is invalid.');
   }
@@ -789,7 +752,6 @@ export function parseResourceBrowserRecoveryPlanRequest(
     throw invalidPayload('Resource Browser recovery candidate choice is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -799,10 +761,6 @@ export function parseResourceBrowserRecoveryPlanRequest(
     resourceId: requireOpaqueIdentity(
       record['resourceId'],
       'Resource Browser recovery resource identity is required.',
-    ),
-    expectedRevision: requireNonNegativeInteger(
-      record['expectedRevision'],
-      'Resource Browser recovery projection revision is invalid.',
     ),
     expectedOperationRevision: requireOpaqueIdentity(
       record['expectedOperationRevision'],
@@ -816,18 +774,9 @@ export function parseResourceBrowserRecoveryPlanResult(
   value: unknown,
 ): ResourceBrowserRecoveryPlanResult {
   const record = requireRecord(value, 'Resource Browser recovery plan result must be an object.');
-  requireOnlyKeys(record, [
-    'schemaVersion',
-    'requestId',
-    'identity',
-    'resourceId',
-    'status',
-    'plan',
-  ]);
-  requireVersion(record['schemaVersion']);
+  requireOnlyKeys(record, ['requestId', 'identity', 'resourceId', 'status', 'plan']);
   const status = record['status'];
   const base = {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -854,20 +803,16 @@ export function parseResourceBrowserRecoveryApplyRequest(
 ): ResourceBrowserRecoveryApplyRequest {
   const record = requireRecord(value, 'Resource Browser recovery apply request must be an object.');
   requireOnlyKeys(record, [
-    'schemaVersion',
     'requestId',
     'identity',
     'route',
     'planId',
-    'expectedRevision',
     'expectedOperationRevision',
   ]);
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.recoveryApply) {
     throw invalidPayload('Resource Browser recovery apply route is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -877,10 +822,6 @@ export function parseResourceBrowserRecoveryApplyRequest(
     planId: requireOpaqueIdentity(
       record['planId'],
       'Resource Browser recovery plan identity is required.',
-    ),
-    expectedRevision: requireNonNegativeInteger(
-      record['expectedRevision'],
-      'Resource Browser recovery projection revision is invalid.',
     ),
     expectedOperationRevision: requireOpaqueIdentity(
       record['expectedOperationRevision'],
@@ -896,13 +837,11 @@ export function parseResourceBrowserRecoveryCancelRequest(
     value,
     'Resource Browser recovery cancel request must be an object.',
   );
-  requireOnlyKeys(record, ['schemaVersion', 'requestId', 'identity', 'route', 'planId']);
-  requireVersion(record['schemaVersion']);
+  requireOnlyKeys(record, ['requestId', 'identity', 'route', 'planId']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.recoveryCancel) {
     throw invalidPayload('Resource Browser recovery cancel route is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -920,13 +859,11 @@ export function parseResourceBrowserRecoveryCancelResult(
   value: unknown,
 ): ResourceBrowserRecoveryCancelResult {
   const record = requireRecord(value, 'Resource Browser recovery cancel result must be an object.');
-  requireOnlyKeys(record, ['schemaVersion', 'requestId', 'identity', 'planId', 'status']);
-  requireVersion(record['schemaVersion']);
+  requireOnlyKeys(record, ['requestId', 'identity', 'planId', 'status']);
   if (record['status'] !== 'cancelled') {
     throw invalidPayload('Resource Browser recovery cancel status is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -942,12 +879,10 @@ export function parseResourceBrowserRecoveryCancelResult(
 
 export function parseResourceBrowserSearchRequest(value: unknown): ResourceBrowserSearchRequest {
   const record = requireRecord(value, 'Resource Browser search request must be an object.');
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.search) {
     throw invalidPayload('Resource Browser search route is invalid.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -969,7 +904,6 @@ export function parseResourceBrowserChildrenRequest(
   value: unknown,
 ): ResourceBrowserChildrenRequest {
   const record = requireRecord(value, 'Resource Browser children request must be an object.');
-  requireVersion(record['schemaVersion']);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.children) {
     throw invalidPayload('Resource Browser children route is invalid.');
   }
@@ -978,7 +912,6 @@ export function parseResourceBrowserChildrenRequest(
     throw invalidPayload('Resource Browser children facet must be Directory or Media.');
   }
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -1001,7 +934,17 @@ export function parseResourceBrowserChildrenRequest(
 
 export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrowserIntentRequest {
   const record = requireRecord(value, 'Resource Browser intent request must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireOnlyKeys(record, [
+    'requestId',
+    'identity',
+    'route',
+    'resourceId',
+    'directoryName',
+    'targetPreview',
+    'targetCut',
+    'targetCanvas',
+    'entityIntent',
+  ]);
   const route = record['route'];
   if (
     route !== RESOURCE_BROWSER_ROUTES.refresh &&
@@ -1009,6 +952,9 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route !== RESOURCE_BROWSER_ROUTES.addDirectoryLibrary &&
     route !== RESOURCE_BROWSER_ROUTES.relinkSource &&
     route !== RESOURCE_BROWSER_ROUTES.removeSource &&
+    route !== RESOURCE_BROWSER_ROUTES.createDirectory &&
+    route !== RESOURCE_BROWSER_ROUTES.importFiles &&
+    route !== RESOURCE_BROWSER_ROUTES.trashContent &&
     route !== RESOURCE_BROWSER_ROUTES.preview &&
     route !== RESOURCE_BROWSER_ROUTES.openCut &&
     route !== RESOURCE_BROWSER_ROUTES.addToCut &&
@@ -1019,7 +965,6 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     throw invalidPayload('Resource Browser intent route is invalid.');
   }
   const request = {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     requestId: requireNonEmptyString(
       record['requestId'],
       'Resource Browser request identity is required.',
@@ -1030,21 +975,31 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
   if (route === RESOURCE_BROWSER_ROUTES.refresh) {
     return request;
   }
-  const expectedRevision =
-    route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
-    route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary ||
-    route === RESOURCE_BROWSER_ROUTES.relinkSource ||
-    route === RESOURCE_BROWSER_ROUTES.removeSource
-      ? requireNonNegativeInteger(
-          record['expectedRevision'],
-          'Resource Browser source mutation revision must be a non-negative integer.',
-        )
-      : undefined;
   if (
     route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
     route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary
   ) {
-    return { ...request, expectedRevision };
+    return request;
+  }
+  if (
+    route === RESOURCE_BROWSER_ROUTES.createDirectory ||
+    route === RESOURCE_BROWSER_ROUTES.importFiles
+  ) {
+    const resourceId =
+      record['resourceId'] === undefined
+        ? undefined
+        : requireOpaqueIdentity(
+            record['resourceId'],
+            'Resource Browser parent identity is invalid.',
+          );
+    if (route === RESOURCE_BROWSER_ROUTES.importFiles) {
+      return { ...request, ...(resourceId ? { resourceId } : {}) };
+    }
+    return {
+      ...request,
+      ...(resourceId ? { resourceId } : {}),
+      directoryName: requirePortableEntryName(record['directoryName']),
+    };
   }
   const resourceId = requireOpaqueIdentity(
     record['resourceId'],
@@ -1059,9 +1014,10 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
   }
   if (
     route === RESOURCE_BROWSER_ROUTES.relinkSource ||
-    route === RESOURCE_BROWSER_ROUTES.removeSource
+    route === RESOURCE_BROWSER_ROUTES.removeSource ||
+    route === RESOURCE_BROWSER_ROUTES.trashContent
   ) {
-    return { ...request, resourceId, expectedRevision };
+    return { ...request, resourceId };
   }
   if (route === RESOURCE_BROWSER_ROUTES.preview) {
     const target = requireRecord(
@@ -1081,10 +1037,6 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
           'Resource Browser target Preview View identity is required.',
         ),
         presentation,
-        expectedWorkbenchRevision: requireNonNegativeInteger(
-          target['expectedWorkbenchRevision'],
-          'Resource Browser target Preview workbench revision must be a non-negative integer.',
-        ),
       },
     };
   }
@@ -1101,9 +1053,9 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
           target['viewId'],
           'Resource Browser target Cut View identity is required.',
         ),
-        viewEpoch: requireNonNegativeInteger(
-          target['viewEpoch'],
-          'Resource Browser target Cut View epoch must be a non-negative integer.',
+        viewInstanceId: requireNonEmptyString(
+          target['viewInstanceId'],
+          'Resource Browser target Cut View instance identity is required.',
         ),
         documentId: requireOpaqueIdentity(
           target['documentId'],
@@ -1147,9 +1099,17 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
   };
 }
 
+function requirePortableEntryName(value: unknown): string {
+  const name = requireNonEmptyString(value, 'Resource Browser directory name is required.').trim();
+  if (name === '.' || name === '..' || name.startsWith('.') || /[\\/\0]/u.test(name)) {
+    throw invalidPayload('Resource Browser directory name is not a portable visible entry name.');
+  }
+  return name;
+}
+
 export function parseResourceBrowserProjection(value: unknown): ResourceBrowserProjection {
   const record = requireRecord(value, 'Resource Browser projection must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireOnlyKeys(record, ['identity', 'facet', 'query', 'items', 'diagnostics']);
   const facet = requireFacet(record['facet']);
   const items = requireArray(
     record['items'],
@@ -1162,16 +1122,38 @@ export function parseResourceBrowserProjection(value: unknown): ResourceBrowserP
   if (resourceIds.size !== items.length) {
     throw invalidPayload('Resource Browser item identities must be unique.');
   }
+  const diagnostics =
+    record['diagnostics'] === undefined
+      ? undefined
+      : requireArray(record['diagnostics'], 'Resource Browser diagnostics must be an array.').map(
+          parseResourceBrowserDiagnostic,
+        );
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     identity: parseResourceBrowserIdentity(record['identity']),
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Resource Browser revision must be a non-negative integer.',
-    ),
     facet,
     query: requireString(record['query'], 'Resource Browser query is invalid.'),
     items,
+    ...(diagnostics && diagnostics.length > 0 ? { diagnostics } : {}),
+  };
+}
+
+function parseResourceBrowserDiagnostic(value: unknown): ResourceBrowserDiagnostic {
+  const record = requireRecord(value, 'Resource Browser diagnostic must be an object.');
+  requireOnlyKeys(record, ['code', 'message', 'recordId']);
+  return {
+    code: requireOpaqueIdentity(record['code'], 'Resource Browser diagnostic code is required.'),
+    message: requireNonEmptyString(
+      record['message'],
+      'Resource Browser diagnostic message is required.',
+    ),
+    ...(record['recordId'] === undefined
+      ? {}
+      : {
+          recordId: requireOpaqueIdentity(
+            record['recordId'],
+            'Resource Browser diagnostic record identity is invalid.',
+          ),
+        }),
   };
 }
 
@@ -1179,9 +1161,7 @@ export function parseResourceBrowserProjectionEvent(
   value: unknown,
 ): ResourceBrowserProjectionEvent {
   const record = requireRecord(value, 'Resource Browser event must be an object.');
-  requireVersion(record['schemaVersion']);
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     sequence: requirePositiveInteger(
       record['sequence'],
       'Resource Browser event sequence must be a positive integer.',
@@ -1199,8 +1179,8 @@ export function assertResourceBrowserIdentity(
     expected.workspaceId === actual.workspaceId &&
     expected.windowId === actual.windowId &&
     expected.viewId === actual.viewId &&
-    expected.viewEpoch === actual.viewEpoch &&
-    expected.endpointEpoch === actual.endpointEpoch;
+    expected.viewInstanceId === actual.viewInstanceId &&
+    expected.rendererSessionId === actual.rendererSessionId;
   if (!matches) {
     throw new ResourceBrowserContractError(
       'resource-browser-stale-identity',
@@ -1225,13 +1205,13 @@ function parseResourceBrowserIdentity(value: unknown): ResourceBrowserIdentity {
       'Resource Browser Window identity is required.',
     ),
     viewId: requireOpaqueIdentity(record['viewId'], 'Resource Browser View identity is required.'),
-    viewEpoch: requireNonNegativeInteger(
-      record['viewEpoch'],
-      'Resource Browser View epoch must be a non-negative integer.',
+    viewInstanceId: requireNonEmptyString(
+      record['viewInstanceId'],
+      'Resource Browser View instance identity is required.',
     ),
-    endpointEpoch: requireOpaqueIdentity(
-      record['endpointEpoch'],
-      'Resource Browser endpoint epoch is required.',
+    rendererSessionId: requireOpaqueIdentity(
+      record['rendererSessionId'],
+      'Resource Browser renderer session identity is required.',
     ),
   };
 }
@@ -1472,9 +1452,9 @@ function readOptionalThumbnail(value: unknown): {
   return {
     thumbnail: {
       descriptorId,
-      revision: requireNonEmptyString(
-        record['revision'],
-        'Resource Browser thumbnail revision is required.',
+      sourceFingerprint: requireNonEmptyString(
+        record['sourceFingerprint'],
+        'Resource Browser thumbnail source fingerprint is required.',
       ),
       mediaType: requireNonEmptyString(
         record['mediaType'],
@@ -1590,7 +1570,6 @@ function parseWorkspaceMediaLibraryDiagnostic(
 function parseWorkspaceMediaLibraryRecoveryPlan(value: unknown): WorkspaceMediaLibraryRecoveryPlan {
   const record = requireRecord(value, 'Resource Browser Media Library recovery plan is invalid.');
   requireOnlyKeys(record, [
-    'contractVersion',
     'planId',
     'workspaceId',
     'libraryName',
@@ -1600,9 +1579,6 @@ function parseWorkspaceMediaLibraryRecoveryPlan(value: unknown): WorkspaceMediaL
     'referencedCount',
     'validatedCount',
   ]);
-  if (record['contractVersion'] !== WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION) {
-    throw invalidPayload('Resource Browser Media Library recovery plan version is unsupported.');
-  }
   const candidateRecord = requireRecord(
     record['candidate'],
     'Resource Browser Media Library recovery candidate is invalid.',
@@ -1630,7 +1606,6 @@ function parseWorkspaceMediaLibraryRecoveryPlan(value: unknown): WorkspaceMediaL
     throw invalidPayload('Resource Browser Media Library recovery candidate kind is invalid.');
   }
   return {
-    contractVersion: WORKSPACE_MEDIA_LIBRARY_SYNC_CONTRACT_VERSION,
     planId: requireOpaqueIdentity(
       record['planId'],
       'Resource Browser Media Library recovery plan identity is required.',
@@ -1797,15 +1772,6 @@ function requireCapability(value: unknown): ResourceBrowserCapability {
     throw invalidPayload('Resource Browser item capability is invalid.');
   }
   return match;
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== RESOURCE_BROWSER_CONTRACT_VERSION) {
-    throw new ResourceBrowserContractError(
-      'unsupported-resource-browser-version',
-      `Unsupported Resource Browser contract version: ${String(value)}.`,
-    );
-  }
 }
 
 function assertNoPathLikeValue(value: string, label: string): void {

@@ -2,11 +2,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
-  ProjectEntityContractError,
-  type ProjectEntityDocument,
-} from '@neko/entity-domain';
+import { ProjectEntityContractError, type ProjectEntityDocument } from '@neko/entity-domain';
 import {
   NodeProjectEntityRepository,
   NodeProjectEntityRepositoryError,
@@ -25,9 +21,7 @@ describe('NodeProjectEntityRepository', () => {
     const repository = createRepository(workspacePath);
 
     await expect(repository.load()).resolves.toEqual({
-      schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
       projectId: 'project-neko',
-      revision: 0,
       entities: [],
     });
     await expect(readdir(workspacePath)).resolves.toEqual([]);
@@ -36,9 +30,9 @@ describe('NodeProjectEntityRepository', () => {
   it('commits one canonical document through an atomic sibling file', async () => {
     const workspacePath = await createWorkspace();
     const repository = createRepository(workspacePath);
-    const next = createDocument(1, 'Rin');
+    const next = createDocument('Rin');
 
-    await expect(repository.commit({ expectedRevision: 0, next })).resolves.toEqual(next);
+    await expect(repository.mutate(() => next)).resolves.toEqual(next);
     await expect(repository.load()).resolves.toEqual(next);
     expect(await readFile(resolveProjectEntityDocumentPath(workspacePath), 'utf8')).toBe(
       `${JSON.stringify(next, null, 2)}\n`,
@@ -46,59 +40,89 @@ describe('NodeProjectEntityRepository', () => {
     expect((await readdir(path.join(workspacePath, 'neko'))).sort()).toEqual(['entities.json']);
   });
 
-  it('rejects stale concurrent revisions without overwriting the committed document', async () => {
+  it('serializes concurrent mutations from independent repository instances without losing facts', async () => {
     const workspacePath = await createWorkspace();
     const repository = createRepository(workspacePath);
     const secondRepository = createRepository(workspacePath);
-    const rin = createDocument(1, 'Rin');
-    const mio = createDocument(1, 'Mio');
-
-    const results = await Promise.allSettled([
-      repository.commit({ expectedRevision: 0, next: rin }),
-      secondRepository.commit({ expectedRevision: 0, next: mio }),
+    const results = await Promise.all([
+      repository.mutate((current) => ({
+        ...current,
+        entities: [...current.entities, createRecord('Rin')],
+      })),
+      secondRepository.mutate((current) => ({
+        ...current,
+        entities: [...current.entities, createRecord('Mio')],
+      })),
     ]);
 
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    const rejected = results.find((result) => result.status === 'rejected');
-    expect(rejected).toMatchObject({
-      status: 'rejected',
-      reason: {
-        diagnostics: [{ code: 'project-entity-revision-conflict' }],
-      },
-    });
-    expect((await repository.load()).revision).toBe(1);
+    expect(results).toHaveLength(2);
+    expect((await repository.load()).entities.map((entity) => entity.names.canonical)).toEqual([
+      'Rin',
+      'Mio',
+    ]);
   });
 
   it('rejects invalid or foreign documents before replacing current facts', async () => {
     const workspacePath = await createWorkspace();
     const repository = createRepository(workspacePath);
-    const current = createDocument(1, 'Rin');
-    await repository.commit({ expectedRevision: 0, next: current });
+    const current = createDocument('Rin');
+    await repository.mutate(() => current);
 
     const foreign: ProjectEntityDocument = {
-      ...createDocument(2, 'Mio'),
+      ...createDocument('Mio'),
       projectId: 'project-other',
     };
-    await expect(repository.commit({ expectedRevision: 1, next: foreign })).rejects.toMatchObject({
+    await expect(repository.mutate(() => foreign)).rejects.toMatchObject({
       diagnostic: { code: 'project-entity-path-unauthorized' },
     });
     await expect(repository.load()).resolves.toEqual(current);
   });
 
-  it('fails visibly for malformed JSON and unsupported schema versions', async () => {
+  it('rejects removed fields locally without rewriting bytes or disabling a sibling Workspace', async () => {
     const workspacePath = await createWorkspace();
+    const siblingWorkspacePath = await createWorkspace();
     const entityPath = resolveProjectEntityDocumentPath(workspacePath);
     await mkdir(path.dirname(entityPath), { recursive: true });
-    await writeFile(entityPath, '{', 'utf8');
+    const invalidBytes = JSON.stringify({ ...createDocument('Rin'), schemaVersion: 1 });
+    await writeFile(entityPath, invalidBytes, 'utf8');
 
-    await expect(createRepository(workspacePath).load()).rejects.toMatchObject({
-      diagnostic: { code: 'project-entity-io-failed' },
-    });
-
-    await writeFile(entityPath, JSON.stringify({ ...createDocument(1, 'Rin'), schemaVersion: 2 }));
     await expect(createRepository(workspacePath).load()).rejects.toBeInstanceOf(
       ProjectEntityContractError,
     );
+    await expect(readFile(entityPath, 'utf8')).resolves.toBe(invalidBytes);
+    await expect(createRepository(siblingWorkspacePath).load()).resolves.toEqual({
+      projectId: 'project-neko',
+      entities: [],
+    });
+  });
+
+  it('reads valid sibling Entities but blocks mutation while preserving an invalid record', async () => {
+    const workspacePath = await createWorkspace();
+    const entityPath = resolveProjectEntityDocumentPath(workspacePath);
+    await mkdir(path.dirname(entityPath), { recursive: true });
+    const valid = createRecord('Rin');
+    const invalid = { ...createRecord('Mio'), names: { canonical: '', aliases: [] } };
+    const invalidBytes = `${JSON.stringify({
+      projectId: 'project-neko',
+      entities: [valid, invalid],
+    })}\n`;
+    await writeFile(entityPath, invalidBytes, 'utf8');
+    const repository = createRepository(workspacePath);
+
+    await expect(repository.readAvailable()).resolves.toEqual({
+      document: { projectId: 'project-neko', entities: [valid] },
+      diagnostics: [
+        expect.objectContaining({
+          code: 'invalid-project-entity-document',
+          entityId: invalid.entityId,
+        }),
+      ],
+    });
+    await expect(repository.load()).rejects.toBeInstanceOf(ProjectEntityContractError);
+    await expect(repository.mutate((current) => current)).rejects.toBeInstanceOf(
+      ProjectEntityContractError,
+    );
+    await expect(readFile(entityPath, 'utf8')).resolves.toBe(invalidBytes);
   });
 
   it('cancels before publication and leaves no partial document', async () => {
@@ -107,10 +131,7 @@ describe('NodeProjectEntityRepository', () => {
     controller.abort('test cancellation');
 
     await expect(
-      createRepository(workspacePath).commit(
-        { expectedRevision: 0, next: createDocument(1, 'Rin') },
-        controller.signal,
-      ),
+      createRepository(workspacePath).mutate(() => createDocument('Rin'), controller.signal),
     ).rejects.toMatchObject({
       diagnostic: { code: 'project-entity-operation-cancelled' },
     });
@@ -155,23 +176,23 @@ async function createWorkspace(): Promise<string> {
   return root;
 }
 
-function createDocument(revision: number, name: string): ProjectEntityDocument {
+function createDocument(name: string): ProjectEntityDocument {
+  return {
+    projectId: 'project-neko',
+    entities: [createRecord(name)],
+  };
+}
+
+function createRecord(name: string): ProjectEntityDocument['entities'][number] {
   const slug = name.toLocaleLowerCase();
   return {
-    schemaVersion: PROJECT_ENTITY_DOCUMENT_SCHEMA_VERSION,
-    projectId: 'project-neko',
-    revision,
-    entities: [
-      {
-        entityId: `character-${slug}`,
-        kind: 'character',
-        names: { canonical: name, aliases: [] },
-        facts: {},
-        representations: [],
-        lifecycle: { state: 'active' },
-        createdAt: '2026-08-05T00:00:00.000Z',
-        updatedAt: '2026-08-05T00:00:00.000Z',
-      },
-    ],
+    entityId: `character-${slug}`,
+    kind: 'character',
+    names: { canonical: name, aliases: [] },
+    facts: {},
+    representations: [],
+    lifecycle: { state: 'active' },
+    createdAt: '2026-08-05T00:00:00.000Z',
+    updatedAt: '2026-08-05T00:00:00.000Z',
   };
 }

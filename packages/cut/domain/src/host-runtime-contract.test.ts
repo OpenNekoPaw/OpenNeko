@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   CUT_HOST_RUNTIME_ROUTES,
-  CUT_HOST_RUNTIME_VERSION,
   CutHostRuntimeContractError,
   DEFAULT_CUT_HOST_PRESENTATION,
   assertCutHostRuntimeIdentity,
@@ -16,10 +15,10 @@ const identity: CutHostRuntimeIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'cut-view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'cut-document-1',
   sessionId: 'cut-session-1',
-  endpointEpoch: 'endpoint-1',
+  rendererSessionId: 'endpoint-1',
 };
 
 describe('Cut Host runtime contract', () => {
@@ -48,26 +47,23 @@ describe('Cut Host runtime contract', () => {
     ]);
   });
 
-  it('parses versioned requests with command and revision fencing', () => {
+  it('parses canonical requests with exact command ownership', () => {
     expect(
       parseCutHostRuntimeRequest({
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         requestId: 'request-1',
         commandId: 'command-1',
         route: 'command.execute',
         identity,
-        expectedRevision: 7,
         payload: { type: 'split' },
       }),
     ).toMatchObject({
       route: 'command.execute',
       commandId: 'command-1',
-      expectedRevision: 7,
       identity,
     });
   });
 
-  it('rejects unknown versions, routes and stale owners', () => {
+  it('rejects removed fields, routes and stale owners', () => {
     expect(() =>
       parseCutHostRuntimeRequest({
         schemaVersion: 2,
@@ -80,12 +76,10 @@ describe('Cut Host runtime contract', () => {
     ).toThrow(CutHostRuntimeContractError);
     expect(() =>
       parseCutHostRuntimeRequest({
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         requestId: 'request-1',
         commandId: 'command-1',
         route: 'legacy.post-message',
         identity,
-        expectedRevision: 7,
       }),
     ).toThrow('route is invalid');
     expect(() =>
@@ -98,9 +92,7 @@ describe('Cut Host runtime contract', () => {
 
   it('parses bounded representation output together with its authoritative snapshot', () => {
     const snapshot = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       identity,
-      revision: 3,
       dirty: false,
       document: { name: 'Fixture' },
       playback: null,
@@ -109,11 +101,10 @@ describe('Cut Host runtime contract', () => {
     };
     expect(
       parseCutHostRuntimeResult({
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         snapshot,
         output: {
           type: 'representations',
-          revision: 3,
+          requestId: 'representation-request-1',
           results: [
             {
               clipId: 'clip-1',
@@ -132,7 +123,7 @@ describe('Cut Host runtime contract', () => {
         snapshot,
         output: expect.objectContaining({
           type: 'representations',
-          revision: 3,
+          requestId: 'representation-request-1',
         }),
       }),
     );
@@ -140,9 +131,7 @@ describe('Cut Host runtime contract', () => {
 
   it('parses Desktop HTTP preview output without accepting arbitrary URLs', () => {
     const snapshot = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       identity,
-      revision: 0,
       dirty: false,
       document: { name: 'Fixture' },
       playback: null,
@@ -150,13 +139,12 @@ describe('Cut Host runtime contract', () => {
       presentation: DEFAULT_CUT_HOST_PRESENTATION,
     };
     const result = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       snapshot,
       output: {
         type: 'preview',
         message: {
           type: 'cut:preview-ready',
-          generation: 1,
+          previewRequestId: 'session-1:preview:1',
           timelineTimeSeconds: 0,
           segmentEndSeconds: 5,
           playbackEndSeconds: 5,
@@ -164,7 +152,6 @@ describe('Cut Host runtime contract', () => {
           height: 1080,
           framesPerSecond: 30,
           video: {
-            version: 1,
             url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
             mimeType: 'video/mp4',
             preparationProfile: 'h264-mp4-direct',

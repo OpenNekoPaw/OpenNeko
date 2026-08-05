@@ -8,7 +8,6 @@ import type {
 } from '@neko/canvas-domain';
 import { isContentLocator } from '@neko/content';
 import {
-  isCanvasMaterialGenerationContext,
   isCanvasMaterialMediaKind,
   isCanvasNodeType,
   parseDocumentResourceStatus,
@@ -96,9 +95,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
           mediaType,
           title: optionalString(data.title),
           provenance: asSerializableRecord(data.provenance),
-          generationContext: isCanvasMaterialGenerationContext(data.generationContext)
-            ? data.generationContext
-            : undefined,
           duration: optionalFiniteNumber(data.duration),
         },
       };
@@ -123,12 +119,14 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       if (!isJobRef(data.jobRef)) {
         throw new Error('Canvas jobRef must contain a non-empty owner kind and Job identity');
       }
+      if ('revision' in data) {
+        throw new Error('Canvas Job data rejects removed internal revision fields');
+      }
       return {
         ...base,
         type,
         data: {
           jobRef: data.jobRef,
-          revision: readRequiredRevision(data.revision),
           title: requiredString(data.title, 'title'),
           objective: optionalString(data.objective),
           status: readRequiredJobStatus(data.status),
@@ -207,13 +205,6 @@ function requiredString(value: unknown, field: string): string {
 
 function optionalFiniteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function readRequiredRevision(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new Error('Canvas Job revision must be a non-negative integer');
-  }
-  return value;
 }
 
 function readMediaType(value: unknown): 'image' | 'video' | 'audio' {

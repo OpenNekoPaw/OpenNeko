@@ -242,8 +242,19 @@ export interface SemanticProjectionInsertMissingResult {
   readonly preservedSourceIds: readonly string[];
 }
 
+export interface SemanticProjectionReadDiagnostic {
+  readonly code: 'invalid-semantic-projection-record';
+  readonly sourceId: string;
+  readonly message: string;
+}
+
+export interface SemanticProjectionListResult {
+  readonly records: readonly SemanticProjectionRecord[];
+  readonly diagnostics: readonly SemanticProjectionReadDiagnostic[];
+}
+
 export interface SemanticProjectionRepository {
-  list(partition: LocalMetadataPartition): Promise<readonly SemanticProjectionRecord[]>;
+  list(partition: LocalMetadataPartition): Promise<SemanticProjectionListResult>;
   get(
     partition: LocalMetadataPartition,
     sourceId: string,
@@ -255,10 +266,6 @@ export interface SemanticProjectionRepository {
     sourceId: string,
     updatedAt: string,
   ): Promise<boolean>;
-  clearBodyBearingSources(
-    partition: LocalMetadataPartition,
-    updatedAt: string,
-  ): Promise<readonly string[]>;
   insertMissing(
     request: SemanticProjectionReplaceRequest,
   ): Promise<SemanticProjectionInsertMissingResult>;

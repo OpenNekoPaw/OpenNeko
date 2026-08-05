@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ASSET_CENTER_SESSION_CONTRACT_VERSION,
   createAssetCenterSessionId,
   createDefaultAssetCenterFilter,
   parseAssetCenterSessionProjection,
@@ -10,14 +9,12 @@ describe('Asset Center session contract', () => {
   it('parses an exact empty session projection', () => {
     expect(
       parseAssetCenterSessionProjection({
-        schemaVersion: ASSET_CENTER_SESSION_CONTRACT_VERSION,
         identity: { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
-        revision: 0,
         filter: createDefaultAssetCenterFilter(),
         catalog: { status: 'loading' },
         preview: { status: 'empty' },
       }),
-    ).toMatchObject({ revision: 0, catalog: { status: 'loading' } });
+    ).toMatchObject({ catalog: { status: 'loading' } });
     expect(createAssetCenterSessionId('window-1')).toBe('asset-center:window-1');
   });
 
@@ -51,14 +48,11 @@ describe('Asset Center session contract', () => {
 
 function readyProjection() {
   return {
-    schemaVersion: ASSET_CENTER_SESSION_CONTRACT_VERSION,
     identity: { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
-    revision: 1,
     filter: createDefaultAssetCenterFilter(),
     catalog: {
       status: 'ready' as const,
       owner: 'media-library' as const,
-      catalogRevision: 3,
       entries: [
         {
           item: {

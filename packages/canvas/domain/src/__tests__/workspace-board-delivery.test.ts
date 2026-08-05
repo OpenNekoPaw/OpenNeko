@@ -11,7 +11,10 @@ import {
 } from '@neko/canvas-domain';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
-import { AGENT_STATE_MIGRATIONS, M1_LOCAL_METADATA_MIGRATIONS } from '@neko/local-metadata/sqlite';
+import {
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+} from '@neko/local-metadata/sqlite';
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
@@ -23,6 +26,9 @@ import {
 const WORKSPACE_ID = 'workspace-board-domain-test';
 const stores: LocalMetadataStore[] = [];
 const directories: string[] = [];
+let identitySequence = 0;
+
+const createIdentity = (): string => `writer-lease-${(identitySequence += 1)}`;
 
 afterEach(async () => {
   await Promise.all(stores.splice(0).map((store) => store.dispose()));
@@ -118,19 +124,20 @@ describe('Workspace Board delivery coordinator', () => {
     await editorOwner.releaseWriterOwnership();
   });
 
-  it('rejects a stale epoch after lease takeover', async () => {
+  it('rejects a stale lease identity after takeover', async () => {
     let now = 1_000;
     const store = await createStore();
     const ledger = new WorkspaceBoardDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
+      createIdentity,
       now: () => now,
     });
     const first = await ledger.acquireWriter({ holderId: 'host-a', leaseDurationMs: 10 });
     expect(first).toBeDefined();
     now = 2_000;
     const second = await ledger.acquireWriter({ holderId: 'host-b', leaseDurationMs: 10 });
-    expect(second?.epoch).toBeGreaterThan(first?.epoch ?? 0);
+    expect(second?.leaseId).not.toBe(first?.leaseId);
     await expect(ledger.assertWriter(first!)).rejects.toThrow('stale-writer');
   });
 
@@ -141,6 +148,7 @@ describe('Workspace Board delivery coordinator', () => {
     const ledger = new WorkspaceBoardDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
+      createIdentity,
       now: () => now,
     });
     const request = delivery('delivery:crash-window');
@@ -298,6 +306,7 @@ function createCoordinator(
     ledger: new WorkspaceBoardDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
+      createIdentity,
       ...(now ? { now } : {}),
     }),
     mutation,
@@ -315,8 +324,8 @@ async function createStore(): Promise<LocalMetadataStore> {
     databasePath: resolveGlobalStorageLayout(homedir).database,
     busyTimeoutMs: 1_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
   await store.repositories.workspaces.bind({
     identity: { version: 1, workspaceId: WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },
@@ -327,7 +336,6 @@ async function createStore(): Promise<LocalMetadataStore> {
 
 function delivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
   return {
-    version: 2,
     target: { workspaceId: WORKSPACE_ID, workspaceUri: 'file:///workspace/project/' },
     process: { deliveryId, sourceHost: 'headless', createdAt: '2026-07-15T00:00:00.000Z' },
     artifacts: [
@@ -336,7 +344,6 @@ function delivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
         title: 'Analysis',
         markdown: '# Analysis\n\nA durable finding.',
         provenance: {
-          version: 2,
           deliveryId,
           artifactId: `${deliveryId}:analysis`,
           revision: `${deliveryId}:revision-1`,
@@ -355,7 +362,6 @@ function generatedBatchDelivery(
   count: number,
 ): CanvasWorkspaceProjectionRequest {
   return {
-    version: 2,
     target: { workspaceId: WORKSPACE_ID, workspaceUri: 'file:///workspace/project/' },
     process: {
       deliveryId,
@@ -386,7 +392,6 @@ function generatedBatchDelivery(
           },
         },
         provenance: {
-          version: 2 as const,
           deliveryId,
           artifactId: outputId,
           revision: digest,

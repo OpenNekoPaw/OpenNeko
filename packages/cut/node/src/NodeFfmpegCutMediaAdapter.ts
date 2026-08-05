@@ -485,7 +485,6 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
       return {
         sessionId,
         video: {
-          version: 1 as const,
           url: registration.url,
           mimeType: webm
             ? 'video/webm; codecs="vp8"'
@@ -568,8 +567,6 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     return {
       sessionId,
       stream: {
-        version: 1 as const,
-        protocol: 'neko-pcm-f32le-v1' as const,
         streamUrl: registration.url,
         sampleRate: PCM_SAMPLE_RATE,
         channels: PCM_CHANNELS,

@@ -97,7 +97,6 @@ export type ProjectFileSaveReason =
   | 'manual'
   | 'autosave'
   | 'import'
-  | 'migration'
   | 'add-source'
   | 'backup'
   | 'save-as'
@@ -169,14 +168,12 @@ export class ProjectFileStore {
         ).diagnostics
       : [];
     const diagnostics = [...loadResult.diagnostics, ...sourceDiagnostics];
-    const readOnly = loadResult.compatibility?.readOnly ?? false;
-
     return {
       ok: !hasProjectFileErrors(loadResult.diagnostics),
       filePath: request.filePath,
       formatId: codec.formatId,
       document: loadResult.document,
-      readOnly,
+      readOnly: false,
       diagnostics,
       loadResult,
     };

@@ -57,7 +57,7 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
   );
   const [draft, setDraft] = useState<CutClipPropertyDraft | null>(projected);
 
-  useEffect(() => setDraft(projected), [projected, view?.revision]);
+  useEffect(() => setDraft(projected), [projected]);
 
   const previewChange = useCallback((elementId: string, changes: Partial<CutClipPropertyDraft>) => {
     setDraft((current) =>
@@ -173,7 +173,7 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
                 aria-label={t('propertyPanel.basic.name')}
                 className="cut-shared-text-input"
                 defaultValue={selectedTrack.name}
-                key={`${selectedTrack.trackId}:${view?.revision ?? 0}`}
+                key={selectedTrack.trackId}
                 onBlur={(event) =>
                   controller.command({
                     type: 'rename-track',

@@ -26,7 +26,6 @@ export interface InspectProjectEntityAssetUpdateRequest {
 }
 
 export interface ApplyProjectEntityAssetUpdateRequest extends InspectProjectEntityAssetUpdateRequest {
-  readonly expectedRevision: number;
   readonly selected: readonly ProjectEntitySemanticField[];
   readonly conflicts: readonly ProjectEntityAssetConflictResolution[];
   readonly updatedAt: string;
@@ -62,82 +61,76 @@ export class ProjectEntityAssetUpdateService {
     request: ApplyProjectEntityAssetUpdateRequest,
     signal?: AbortSignal,
   ): Promise<ProjectEntityRecord> {
-    const document = await this.options.repository.load(signal);
-    if (document.revision !== request.expectedRevision) {
-      throw updateError(
-        'project-entity-revision-conflict',
-        `Project Entity revision conflict: expected ${String(request.expectedRevision)}, received ${String(document.revision)}.`,
+    const committed = await this.options.commits.commit(async (document) => {
+      const entity = requireImportedEntity(document, request.entityId, request.available);
+      const asset = await this.requireSnapshot(request.available, signal);
+      const diff = createDiff(entity, asset);
+      const selections = new Set(request.selected);
+      const resolutions = new Map(
+        request.conflicts.map((resolution) => [resolution.field, resolution.resolution]),
       );
-    }
-    const entity = requireImportedEntity(document, request.entityId, request.available);
-    const asset = await this.requireSnapshot(request.available, signal);
-    const diff = createDiff(entity, asset);
-    const selections = new Set(request.selected);
-    const resolutions = new Map(
-      request.conflicts.map((resolution) => [resolution.field, resolution.resolution]),
-    );
-    if (
-      selections.size !== request.selected.length ||
-      resolutions.size !== request.conflicts.length ||
-      request.selected.some(
-        (field) => diff.entries.find((entry) => entry.field === field)?.status !== 'applicable',
-      ) ||
-      request.conflicts.some(
-        (resolution) =>
-          diff.entries.find((entry) => entry.field === resolution.field)?.status !== 'conflict',
-      ) ||
-      diff.entries.some((entry) => entry.status === 'conflict' && !resolutions.has(entry.field)) ||
-      resolutions.get('kind') === 'incoming'
-    ) {
-      throw updateError(
-        'project-entity-operation-invalid',
-        'Entity Asset update selections or conflict resolutions are incomplete or invalid.',
-      );
-    }
-
-    let semantic = cloneSemantic(entity);
-    let representationOrigins = retainedRepresentationOrigins(entity, asset.semantic);
-    for (const entry of diff.entries) {
-      const takeIncoming =
-        (entry.status === 'applicable' && selections.has(entry.field)) ||
-        (entry.status === 'conflict' && resolutions.get(entry.field) === 'incoming');
-      if (!takeIncoming) continue;
-      if (entry.field === 'representations') {
-        const transformed = instantiateIncomingRepresentations(
-          entity,
-          asset.semantic.representations,
-          this.options.createBindingId,
+      if (
+        selections.size !== request.selected.length ||
+        resolutions.size !== request.conflicts.length ||
+        request.selected.some(
+          (field) => diff.entries.find((entry) => entry.field === field)?.status !== 'applicable',
+        ) ||
+        request.conflicts.some(
+          (resolution) =>
+            diff.entries.find((entry) => entry.field === resolution.field)?.status !== 'conflict',
+        ) ||
+        diff.entries.some(
+          (entry) => entry.status === 'conflict' && !resolutions.has(entry.field),
+        ) ||
+        resolutions.get('kind') === 'incoming'
+      ) {
+        throw updateError(
+          'project-entity-operation-invalid',
+          'Entity Asset update selections or conflict resolutions are incomplete or invalid.',
         );
-        semantic = { ...semantic, representations: transformed.representations };
-        representationOrigins = transformed.origins;
-      } else {
-        semantic = applyField(semantic, entry.field, entry.incoming);
       }
-    }
-    const updated: ProjectEntityRecord = {
-      ...entity,
-      ...semantic,
-      provenance: {
-        origin: entity.provenance.origin,
-        applied: { ...request.available },
-        importBase: cloneSemantic(asset.semantic),
-        representationOrigins,
-      },
-      updatedAt: request.updatedAt,
-    };
-    const next = assertProjectEntityDocument({
-      ...document,
-      revision: document.revision + 1,
-      entities: document.entities.map((candidate) =>
-        candidate.entityId === updated.entityId ? updated : candidate,
-      ),
-    });
-    const committed = await this.options.commits.commit(
-      { expectedRevision: document.revision, next },
-      signal,
-    );
+
+      let semantic = cloneSemantic(entity);
+      let representationOrigins = retainedRepresentationOrigins(entity, asset.semantic);
+      for (const entry of diff.entries) {
+        const takeIncoming =
+          (entry.status === 'applicable' && selections.has(entry.field)) ||
+          (entry.status === 'conflict' && resolutions.get(entry.field) === 'incoming');
+        if (!takeIncoming) continue;
+        if (entry.field === 'representations') {
+          const transformed = instantiateIncomingRepresentations(
+            entity,
+            asset.semantic.representations,
+            this.options.createBindingId,
+          );
+          semantic = { ...semantic, representations: transformed.representations };
+          representationOrigins = transformed.origins;
+        } else {
+          semantic = applyField(semantic, entry.field, entry.incoming);
+        }
+      }
+      const updated: ProjectEntityRecord = {
+        ...entity,
+        ...semantic,
+        provenance: {
+          origin: entity.provenance.origin,
+          applied: { ...request.available },
+          importBase: cloneSemantic(asset.semantic),
+          representationOrigins,
+        },
+        updatedAt: request.updatedAt,
+      };
+      return {
+        next: assertProjectEntityDocument({
+          ...document,
+          entities: document.entities.map((candidate) =>
+            candidate.entityId === updated.entityId ? updated : candidate,
+          ),
+        }),
+      };
+    }, signal);
     const committedEntity = committed.entities.find(
-      (candidate) => candidate.entityId === updated.entityId,
+      (candidate) => candidate.entityId === request.entityId,
     );
     if (!committedEntity) {
       throw updateError(

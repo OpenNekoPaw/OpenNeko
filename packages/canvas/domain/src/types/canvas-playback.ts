@@ -28,7 +28,6 @@ export interface CanvasPlaybackEdgeOverride {
 }
 
 export interface CanvasPlaybackMetadata {
-  readonly version: 1;
   readonly adapterId?: CanvasPlaybackAdapterId;
   readonly mode?: CanvasPlaybackBehaviorMode;
   readonly entryIds?: readonly string[];
@@ -128,7 +127,6 @@ export interface CreateCanvasPlaybackPlanInput {
 }
 
 export interface NormalizedCanvasPlaybackMetadata {
-  readonly version: 1;
   readonly adapterId: CanvasPlaybackAdapterId;
   readonly mode: CanvasPlaybackBehaviorMode;
   readonly entryIds: readonly string[];
@@ -144,7 +142,6 @@ export function normalizeCanvasPlaybackMetadata(
     ? rawPlayback
     : undefined;
   return {
-    version: 1,
     adapterId: readAdapterId(source?.['adapterId']) ?? 'auto',
     mode: readBehaviorMode(source?.['mode']) ?? 'auto',
     entryIds: readStringArray(source?.['entryIds']),
@@ -532,7 +529,7 @@ function projectPlaybackRoutes(input: {
     input.diagnostics.push({
       code: 'playback-route-cycle',
       severity: 'error',
-      message: 'Canvas sequence connections contain a cycle; no fallback route was synthesized.',
+      message: 'Canvas sequence connections contain a cycle; no alternate route was synthesized.',
       adapterId: 'generic',
       nodeId: cyclicUnits[0]?.sourceNodeId,
     });

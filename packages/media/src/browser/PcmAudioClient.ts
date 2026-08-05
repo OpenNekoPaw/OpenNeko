@@ -498,9 +498,6 @@ function parsePacket(
 }
 
 function validateDescriptor(descriptor: PcmStreamDescriptor): void {
-  if (descriptor.version !== 1 || descriptor.protocol !== 'neko-pcm-f32le-v1') {
-    throw new Error('Unsupported PCM descriptor version.');
-  }
   if (!isMediaResourceUrl(descriptor.streamUrl)) {
     throw new Error('PCM descriptor resource URL is invalid.');
   }

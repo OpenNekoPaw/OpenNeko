@@ -171,8 +171,8 @@ describe('Creative Entity representation binding contract', () => {
     ]);
   });
 
-  it('enforces v2 persistence and visible orphan/default state', () => {
-    expect(isEntityRepresentationBindingFile({ version: 2, bindings: [binding] })).toBe(true);
+  it('enforces version-free persistence and visible orphan/default state', () => {
+    expect(isEntityRepresentationBindingFile({ bindings: [binding] })).toBe(true);
     expect(isEntityRepresentationBindingFile({ version: 1, bindings: [binding] })).toBe(false);
     expect(
       isEntityRepresentationBinding({
@@ -197,22 +197,17 @@ describe('Creative Entity representation binding contract', () => {
     ).toBe(false);
   });
 
-  it('decodes only canonical v2 files and fails closed for legacy or unknown versions', () => {
-    const file = { version: 2 as const, bindings: [binding] };
+  it('decodes only the canonical file and rejects removed version fields', () => {
+    const file = { bindings: [binding] };
     expect(decodeEntityRepresentationBindingFile(file)).toMatchObject({ ok: true });
-    expect(decodeEntityRepresentationBindingFile({ version: 1, bindings: [] })).toEqual({
+    expect(decodeEntityRepresentationBindingFile({ version: 1, bindings: [] })).toMatchObject({
       ok: false,
-      code: 'legacy-version',
-      message: 'Legacy Entity Asset bindings require explicit inspection and migration.',
-    });
-    expect(decodeEntityRepresentationBindingFile({ version: 3, bindings: [] })).toMatchObject({
-      ok: false,
-      code: 'unsupported-version',
+      code: 'invalid-file',
     });
     expect(() => assertEntityRepresentationBindingFile({ version: 1, bindings: [] })).toThrow(
-      'explicit inspection and migration',
+      'binding data is invalid',
     );
-    expect(createEmptyEntityRepresentationBindingFile()).toEqual({ version: 2, bindings: [] });
+    expect(createEmptyEntityRepresentationBindingFile()).toEqual({ bindings: [] });
     expect(JSON.parse(encodeEntityRepresentationBindingFile(file))).toEqual(file);
   });
 });

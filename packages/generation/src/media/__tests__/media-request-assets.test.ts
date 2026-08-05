@@ -91,7 +91,7 @@ describe('media request asset materialization', () => {
         fieldOfViewDeg: 45,
         aspectRatio: 1,
       },
-      identity: { sessionId: 'session-camera', revision: 2 },
+      identity: { sessionId: 'session-camera', requestId: 'request-camera' },
     } as const;
     const readAsBase64 = vi.fn(async () => 'base64:appearance');
 

@@ -11,7 +11,7 @@ const identity = {
   projectId: 'project-a',
   workspaceId: 'workspace-a',
   windowId: 'window-a',
-  endpointEpoch: 'endpoint-a',
+  rendererSessionId: 'endpoint-a',
 } as const;
 
 describe('Desktop project portability contract', () => {

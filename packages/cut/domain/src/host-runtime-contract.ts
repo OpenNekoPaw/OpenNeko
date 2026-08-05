@@ -10,8 +10,6 @@ import type {
 import type { CutExportTaskSnapshot } from './export-tasks';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 
-export const CUT_HOST_RUNTIME_VERSION = 1 as const;
-
 export const CUT_HOST_RUNTIME_ROUTES = {
   snapshotGet: 'snapshot.get',
   commandExecute: 'command.execute',
@@ -43,17 +41,17 @@ export interface CutHostRuntimeIdentity {
   readonly workspaceId: string;
   readonly windowId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
   readonly documentId: string;
   readonly sessionId: string;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
 }
 
-export function createCutHostSessionId(viewId: string, viewEpoch: number): string {
-  if (viewId.trim().length === 0 || !Number.isSafeInteger(viewEpoch) || viewEpoch < 1) {
-    throw new Error('Cut Host session identity requires a View identity and positive epoch.');
+export function createCutHostSessionId(viewId: string, viewInstanceId: string): string {
+  if (viewId.trim().length === 0 || viewInstanceId.trim().length === 0) {
+    throw new Error('Cut Host session identity requires View and View instance identities.');
   }
-  return `cut-session:${viewId}:${viewEpoch}`;
+  return `cut-session:${viewId}:${viewInstanceId}`;
 }
 
 export interface CutHostPresentationState {
@@ -77,9 +75,7 @@ export interface CutHostExportState {
 }
 
 export interface CutHostRuntimeSnapshot {
-  readonly schemaVersion: typeof CUT_HOST_RUNTIME_VERSION;
   readonly identity: CutHostRuntimeIdentity;
-  readonly revision: number;
   readonly dirty: boolean;
   readonly document: unknown;
   readonly playback: unknown;
@@ -88,28 +84,24 @@ export interface CutHostRuntimeSnapshot {
 }
 
 export interface CutHostRuntimeRequest {
-  readonly schemaVersion: typeof CUT_HOST_RUNTIME_VERSION;
   readonly requestId: string;
   readonly commandId: string;
   readonly route: CutHostRuntimeRoute;
   readonly identity: CutHostRuntimeIdentity;
-  readonly expectedRevision: number;
   readonly payload?: unknown;
 }
 
 export interface CutHostRuntimeProjectionEvent {
-  readonly schemaVersion: typeof CUT_HOST_RUNTIME_VERSION;
   readonly sequence: number;
   readonly snapshot: CutHostRuntimeSnapshot;
 }
 
 export interface CutHostRuntimeResult {
-  readonly schemaVersion: typeof CUT_HOST_RUNTIME_VERSION;
   readonly snapshot: CutHostRuntimeSnapshot;
   readonly output?:
     | {
         readonly type: 'representations';
-        readonly revision: number;
+        readonly requestId: string;
         readonly results: readonly CutClipRepresentationResult[];
       }
     | {
@@ -134,7 +126,7 @@ export interface CutHostPreviewAudioPlayback {
 export type CutHostPreviewMessage =
   | {
       readonly type: 'cut:preview-ready' | 'cut:preview-prepared';
-      readonly generation: number;
+      readonly previewRequestId: string;
       readonly videoClipId?: string;
       readonly timelineTimeSeconds: number;
       readonly segmentEndSeconds: number;
@@ -152,7 +144,7 @@ export type CutHostPreviewMessage =
     }
   | {
       readonly type: 'cut:preview-activated';
-      readonly generation: number;
+      readonly previewRequestId: string;
     };
 
 export interface CutHostRuntime {
@@ -163,10 +155,7 @@ export interface CutHostRuntime {
 }
 
 export class CutHostRuntimeContractError extends Error {
-  readonly code:
-    | 'invalid-cut-host-runtime-payload'
-    | 'unsupported-cut-host-runtime-version'
-    | 'cut-host-runtime-stale-identity';
+  readonly code: 'invalid-cut-host-runtime-payload' | 'cut-host-runtime-stale-identity';
 
   constructor(code: CutHostRuntimeContractError['code'], message: string) {
     super(message);
@@ -182,50 +171,43 @@ export function parseCutHostRuntimeIdentity(value: unknown): CutHostRuntimeIdent
     workspaceId: requireIdentity(record['workspaceId'], 'Cut Workspace identity is required.'),
     windowId: requireIdentity(record['windowId'], 'Cut Window identity is required.'),
     viewId: requireIdentity(record['viewId'], 'Cut View identity is required.'),
-    viewEpoch: requireNonNegativeInteger(
-      record['viewEpoch'],
-      'Cut View epoch must be a non-negative integer.',
+    viewInstanceId: requireIdentity(
+      record['viewInstanceId'],
+      'Cut View instance identity is required.',
     ),
     documentId: requireIdentity(record['documentId'], 'Cut document identity is required.'),
     sessionId: requireIdentity(record['sessionId'], 'Cut session identity is required.'),
-    endpointEpoch: requireIdentity(record['endpointEpoch'], 'Cut endpoint epoch is required.'),
+    rendererSessionId: requireIdentity(
+      record['rendererSessionId'],
+      'Cut renderer session identity is required.',
+    ),
   };
 }
 
 export function parseCutHostRuntimeRequest(value: unknown): CutHostRuntimeRequest {
   const record = requireRecord(value, 'Cut Host runtime request must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId', 'commandId', 'route', 'identity', 'payload']);
   const route = Object.values(CUT_HOST_RUNTIME_ROUTES).find(
     (candidate) => candidate === record['route'],
   );
   if (!route) throw invalidPayload('Cut Host runtime route is invalid.');
   return {
-    schemaVersion: CUT_HOST_RUNTIME_VERSION,
     requestId: requireIdentity(record['requestId'], 'Cut request identity is required.'),
     commandId: requireIdentity(record['commandId'], 'Cut command identity is required.'),
     route,
     identity: parseCutHostRuntimeIdentity(record['identity']),
-    expectedRevision: requireNonNegativeInteger(
-      record['expectedRevision'],
-      'Cut expected revision must be a non-negative integer.',
-    ),
     ...(record['payload'] === undefined ? {} : { payload: record['payload'] }),
   };
 }
 
 export function parseCutHostRuntimeSnapshot(value: unknown): CutHostRuntimeSnapshot {
   const record = requireRecord(value, 'Cut Host runtime snapshot must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['identity', 'dirty', 'document', 'playback', 'export', 'presentation']);
   if (!('document' in record)) {
     throw invalidPayload('Cut Host runtime snapshot document projection is required.');
   }
   return {
-    schemaVersion: CUT_HOST_RUNTIME_VERSION,
     identity: parseCutHostRuntimeIdentity(record['identity']),
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Cut Host runtime revision must be a non-negative integer.',
-    ),
     dirty: requireBoolean(record['dirty'], 'Cut Host runtime dirty state is required.'),
     document: record['document'],
     playback: record['playback'],
@@ -307,9 +289,9 @@ function parseCutExportTaskSnapshot(value: unknown): CutExportTaskSnapshot {
     jobId: requireIdentity(record['jobId'], 'Cut export Job identity is required.'),
     documentUri: requireIdentity(record['documentUri'], 'Cut export document is required.'),
     sessionId: requireIdentity(record['sessionId'], 'Cut export session is required.'),
-    sourceRevision: requireNonNegativeInteger(
-      record['sourceRevision'],
-      'Cut export source revision is invalid.',
+    sourceSnapshotId: requireIdentity(
+      record['sourceSnapshotId'],
+      'Cut export source snapshot identity is invalid.',
     ),
     settings,
     outputWorkspaceRelativePath,
@@ -364,16 +346,15 @@ function parseCutExportSettings(value: unknown): CutExportSettings {
 
 export function parseCutHostRuntimeResult(value: unknown): CutHostRuntimeResult {
   const record = requireRecord(value, 'Cut Host runtime result must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['snapshot', 'output']);
   const snapshot = parseCutHostRuntimeSnapshot(record['snapshot']);
   const outputValue = record['output'];
   if (outputValue === undefined) {
-    return { schemaVersion: CUT_HOST_RUNTIME_VERSION, snapshot };
+    return { snapshot };
   }
   const output = requireRecord(outputValue, 'Cut Host runtime output must be an object.');
   if (output['type'] === 'preview') {
     return {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       snapshot,
       output: {
         type: 'preview',
@@ -384,22 +365,18 @@ export function parseCutHostRuntimeResult(value: unknown): CutHostRuntimeResult 
   if (output['type'] !== 'representations') {
     throw invalidPayload('Cut Host runtime output type is invalid.');
   }
-  const revision = requireNonNegativeInteger(
-    output['revision'],
-    'Cut representation output revision must be a non-negative integer.',
+  const requestId = requireIdentity(
+    output['requestId'],
+    'Cut representation request identity is required.',
   );
-  if (revision !== snapshot.revision) {
-    throw invalidPayload('Cut representation output revision does not match its snapshot.');
-  }
   if (!Array.isArray(output['results'])) {
     throw invalidPayload('Cut representation output results must be an array.');
   }
   return {
-    schemaVersion: CUT_HOST_RUNTIME_VERSION,
     snapshot,
     output: {
       type: 'representations',
-      revision,
+      requestId,
       results: output['results'].map(parseCutClipRepresentationResult),
     },
   };
@@ -407,12 +384,12 @@ export function parseCutHostRuntimeResult(value: unknown): CutHostRuntimeResult 
 
 export function parseCutHostPreviewMessage(value: unknown): CutHostPreviewMessage {
   const record = requireRecord(value, 'Cut preview output must be an object.');
-  const generation = requirePositiveInteger(
-    record['generation'],
-    'Cut preview generation must be positive.',
+  const previewRequestId = requireIdentity(
+    record['previewRequestId'],
+    'Cut preview request identity is required.',
   );
   if (record['type'] === 'cut:preview-activated') {
-    return { type: 'cut:preview-activated', generation };
+    return { type: 'cut:preview-activated', previewRequestId };
   }
   if (record['type'] !== 'cut:preview-ready' && record['type'] !== 'cut:preview-prepared') {
     throw invalidPayload('Cut preview output type is invalid.');
@@ -434,7 +411,7 @@ export function parseCutHostPreviewMessage(value: unknown): CutHostPreviewMessag
   }
   return {
     type: record['type'],
-    generation,
+    previewRequestId,
     ...(record['videoClipId'] === undefined
       ? {}
       : {
@@ -496,9 +473,8 @@ export function parseCutHostPreviewMessage(value: unknown): CutHostPreviewMessag
 
 export function parseCutHostRuntimeProjectionEvent(value: unknown): CutHostRuntimeProjectionEvent {
   const record = requireRecord(value, 'Cut Host runtime event must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['sequence', 'snapshot']);
   return {
-    schemaVersion: CUT_HOST_RUNTIME_VERSION,
     sequence: requirePositiveInteger(
       record['sequence'],
       'Cut Host runtime event sequence must be a positive integer.',
@@ -516,10 +492,10 @@ export function assertCutHostRuntimeIdentity(
     'workspaceId',
     'windowId',
     'viewId',
-    'viewEpoch',
+    'viewInstanceId',
     'documentId',
     'sessionId',
-    'endpointEpoch',
+    'rendererSessionId',
   ] as const) {
     if (expected[key] !== actual[key]) {
       throw new CutHostRuntimeContractError(
@@ -527,15 +503,6 @@ export function assertCutHostRuntimeIdentity(
         `Cut ${key} does not match its owning runtime.`,
       );
     }
-  }
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== CUT_HOST_RUNTIME_VERSION) {
-    throw new CutHostRuntimeContractError(
-      'unsupported-cut-host-runtime-version',
-      `Unsupported Cut Host runtime version '${String(value)}'.`,
-    );
   }
 }
 
@@ -735,6 +702,13 @@ function requireArray(value: unknown, message: string): readonly unknown[] {
 
 function parseCutHtmlVideoDescriptor(value: unknown): CutHtmlVideoDescriptor {
   const record = requireRecord(value, 'Cut preview Video descriptor must be an object.');
+  requireExactKeys(record, [
+    'url',
+    'mimeType',
+    'preparationProfile',
+    'mediaTimeOriginSeconds',
+    'durationSeconds',
+  ]);
   const url = requireMediaUrl(record['url']);
   const preparationProfile = record['preparationProfile'];
   if (
@@ -745,11 +719,10 @@ function parseCutHtmlVideoDescriptor(value: unknown): CutHtmlVideoDescriptor {
   ) {
     throw invalidPayload('Cut preview preparation profile is invalid.');
   }
-  if (record['version'] !== 1 || typeof record['mimeType'] !== 'string') {
+  if (typeof record['mimeType'] !== 'string') {
     throw invalidPayload('Cut preview Video descriptor is invalid.');
   }
   return {
-    version: 1,
     url,
     mimeType: record['mimeType'],
     preparationProfile,
@@ -766,12 +739,8 @@ function parseCutHtmlVideoDescriptor(value: unknown): CutHtmlVideoDescriptor {
 
 function parseCutPcmStreamDescriptor(value: unknown): CutPcmStreamDescriptor {
   const record = requireRecord(value, 'Cut preview PCM descriptor must be an object.');
-  if (record['version'] !== 1 || record['protocol'] !== 'neko-pcm-f32le-v1') {
-    throw invalidPayload('Cut preview PCM descriptor is invalid.');
-  }
+  requireExactKeys(record, ['streamUrl', 'sampleRate', 'channels']);
   return {
-    version: 1,
-    protocol: 'neko-pcm-f32le-v1',
     streamUrl: requireMediaUrl(record['streamUrl']),
     sampleRate: requirePositiveFinite(
       record['sampleRate'],
@@ -849,6 +818,13 @@ function requireRecord(value: unknown, message: string): Record<string, unknown>
     throw invalidPayload(message);
   }
   return value as Record<string, unknown>;
+}
+
+function requireExactKeys(record: Record<string, unknown>, keys: readonly string[]): void {
+  const unexpected = Object.keys(record).filter((key) => !keys.includes(key));
+  if (unexpected.length > 0) {
+    throw invalidPayload(`Cut Host payload contains unsupported fields: ${unexpected.join(', ')}.`);
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

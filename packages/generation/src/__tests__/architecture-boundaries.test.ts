@@ -3,6 +3,7 @@ import { relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as generation from '../index';
 import * as generationJob from '../job';
+import * as generationMedia from '../media';
 
 const packageRoot = resolve(import.meta.dirname, '../..');
 const workspaceRoot = resolve(packageRoot, '../..');
@@ -41,6 +42,25 @@ describe('@neko/generation architecture boundaries', () => {
         expect(source, `${relative(packageRoot, file)} matches ${pattern}`).not.toMatch(pattern);
       }
     }
+  });
+
+  it('keeps generated output migration paths outside product exports and Canvas startup', () => {
+    expect(generationMedia).not.toHaveProperty('migrateLegacyGeneratedAssetIndex');
+    expect(
+      readFileSync(resolve(packageRoot, 'src/media/generated-asset-index.ts'), 'utf8'),
+    ).not.toContain('GeneratedAssetIndexMigrationReport');
+    const projectionStore = readFileSync(
+      resolve(packageRoot, 'src/media/local-metadata/generated-output-projection-store.ts'),
+      'utf8',
+    );
+    expect(projectionStore).not.toContain('retired-generated-draft-projection');
+    expect(projectionStore).not.toContain('generated-output-projection-migration-required');
+    expect(
+      readFileSync(
+        resolve(workspaceRoot, 'packages/canvas/node/src/canvas-generation-node-runtime.ts'),
+        'utf8',
+      ),
+    ).not.toContain('migrateLegacyGeneratedAssetIndex');
   });
 
   it('keeps the retired Platform package physically absent and unimportable', () => {

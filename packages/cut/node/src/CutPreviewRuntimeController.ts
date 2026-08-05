@@ -36,15 +36,15 @@ export interface CutPreviewStreamProjection {
 export type CutPreviewRuntimeEvent =
   | ({
       readonly type: 'cut:preview-ready' | 'cut:preview-prepared';
-      readonly generation: number;
+      readonly previewRequestId: string;
     } & CutPreviewStreamProjection)
   | {
       readonly type: 'cut:preview-activated';
-      readonly generation: number;
+      readonly previewRequestId: string;
     };
 
 interface CutPreviewRecord {
-  readonly generation: number;
+  readonly previewRequestId: string;
   readonly videoSessionId?: string;
   readonly pcmSessionIds: readonly string[];
   readonly projection: CutPreviewStreamProjection;
@@ -53,7 +53,7 @@ interface CutPreviewRecord {
 export class CutPreviewRuntimeController {
   private active: CutPreviewRecord | undefined;
   private prepared: CutPreviewRecord | undefined;
-  private latestGeneration = 0;
+  private currentRequestId: string | undefined;
   private disposed = false;
 
   constructor(
@@ -68,24 +68,24 @@ export class CutPreviewRuntimeController {
     view: TimelineView,
     input: {
       readonly timelineTimeSeconds: number;
-      readonly generation: number;
+      readonly previewRequestId: string;
       readonly retainedVideoClipId?: string;
       readonly includeAudio?: boolean;
     },
   ): Promise<CutPreviewRuntimeEvent> {
     this.requireActive();
-    this.latestGeneration = Math.max(this.latestGeneration, input.generation);
+    this.currentRequestId = input.previewRequestId;
     const record = await this.build(view, input);
-    if (input.generation !== this.latestGeneration) {
+    if (input.previewRequestId !== this.currentRequestId) {
       await this.stopRecord(record);
-      throw new Error(`Cut preview generation ${input.generation} was superseded.`);
+      throw new Error(`Cut preview request ${input.previewRequestId} was superseded.`);
     }
     const previousPrepared = this.prepared;
     this.prepared = record;
     if (previousPrepared) await this.stopRecord(previousPrepared);
     return {
       type: 'cut:preview-ready',
-      generation: input.generation,
+      previewRequestId: input.previewRequestId,
       ...record.projection,
     };
   }
@@ -94,41 +94,39 @@ export class CutPreviewRuntimeController {
     view: TimelineView,
     input: {
       readonly timelineTimeSeconds: number;
-      readonly generation: number;
+      readonly previewRequestId: string;
     },
   ): Promise<CutPreviewRuntimeEvent> {
     this.requireActive();
-    this.latestGeneration = Math.max(this.latestGeneration, input.generation);
+    this.currentRequestId = input.previewRequestId;
     const record = await this.build(view, {
       ...input,
       ...(this.active?.projection.videoClipId
         ? { retainedVideoClipId: this.active.projection.videoClipId }
         : {}),
     });
-    if (input.generation !== this.latestGeneration) {
+    if (input.previewRequestId !== this.currentRequestId) {
       await this.stopRecord(record);
-      throw new Error(`Cut preview generation ${input.generation} was superseded.`);
+      throw new Error(`Cut preview request ${input.previewRequestId} was superseded.`);
     }
     const previousPrepared = this.prepared;
     this.prepared = record;
     if (previousPrepared) await this.stopRecord(previousPrepared);
     return {
       type: 'cut:preview-prepared',
-      generation: input.generation,
+      previewRequestId: input.previewRequestId,
       ...record.projection,
     };
   }
 
-  async activate(generation: number): Promise<CutPreviewRuntimeEvent> {
+  async activate(previewRequestId: string): Promise<CutPreviewRuntimeEvent> {
     this.requireActive();
-    if (generation !== this.latestGeneration) {
-      throw new Error(
-        `Cut preview generation ${generation} is stale; current generation is ${this.latestGeneration}.`,
-      );
+    if (previewRequestId !== this.currentRequestId) {
+      throw new Error(`Cut preview request ${previewRequestId} is not current.`);
     }
     const prepared = this.prepared;
-    if (!prepared || prepared.generation !== generation) {
-      throw new Error(`Cut preview generation ${generation} is not prepared.`);
+    if (!prepared || prepared.previewRequestId !== previewRequestId) {
+      throw new Error(`Cut preview request ${previewRequestId} is not prepared.`);
     }
     const previousActive = this.active;
     const activated =
@@ -148,19 +146,23 @@ export class CutPreviewRuntimeController {
           : previousActive,
       );
     }
-    return { type: 'cut:preview-activated', generation };
+    return { type: 'cut:preview-activated', previewRequestId };
   }
 
-  async pause(preparedGeneration?: number): Promise<void> {
+  async pause(input: {
+    readonly requestId: string;
+    readonly preparedRequestId?: string;
+  }): Promise<void> {
     this.requireActive();
+    this.currentRequestId = input.requestId;
     const requested =
-      preparedGeneration === undefined
+      input.preparedRequestId === undefined
         ? this.active
-        : this.prepared?.generation === preparedGeneration
+        : this.prepared?.previewRequestId === input.preparedRequestId
           ? this.prepared
           : undefined;
-    if (preparedGeneration !== undefined && !requested) {
-      throw new Error(`Cut paused preview generation ${preparedGeneration} is not prepared.`);
+    if (input.preparedRequestId !== undefined && !requested) {
+      throw new Error(`Cut preview request ${input.preparedRequestId} is not prepared for pause.`);
     }
     const retained =
       requested &&
@@ -191,8 +193,9 @@ export class CutPreviewRuntimeController {
     );
   }
 
-  async stop(): Promise<void> {
+  async stop(requestId: string): Promise<void> {
     this.requireActive();
+    this.currentRequestId = requestId;
     const records = distinctRecords(this.active, this.prepared);
     this.active = undefined;
     this.prepared = undefined;
@@ -200,7 +203,7 @@ export class CutPreviewRuntimeController {
       records,
       (record) => record,
       (record) => this.stopRecord(record),
-      'One or more Cut preview generations could not be stopped.',
+      'One or more Cut preview requests could not be stopped.',
     );
   }
 
@@ -225,7 +228,7 @@ export class CutPreviewRuntimeController {
     view: TimelineView,
     input: {
       readonly timelineTimeSeconds: number;
-      readonly generation: number;
+      readonly previewRequestId: string;
       readonly retainedVideoClipId?: string;
       readonly includeAudio?: boolean;
     },
@@ -332,7 +335,7 @@ export class CutPreviewRuntimeController {
           : undefined;
       const mediaPlaybackRate = hasMixedPcm ? 1 : videoClip?.playbackRate;
       return {
-        generation: input.generation,
+        previewRequestId: input.previewRequestId,
         ...(preview ? { videoSessionId: preview.sessionId } : {}),
         pcmSessionIds: pcmSessions.map((session) => session.sessionId),
         projection: {
@@ -364,7 +367,7 @@ export class CutPreviewRuntimeController {
       };
     } catch (error) {
       await this.stopRecord({
-        generation: input.generation,
+        previewRequestId: input.previewRequestId,
         ...(preview ? { videoSessionId: preview.sessionId } : {}),
         pcmSessionIds: pcmSessions.map((session) => session.sessionId),
         projection: emptyProjection(selection),

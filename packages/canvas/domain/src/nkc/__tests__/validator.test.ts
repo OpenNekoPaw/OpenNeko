@@ -3,7 +3,6 @@ import { validateNkc } from '../index';
 
 function createValidCanvas(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    version: '3.0',
     name: 'Validator Fixture',
     nodes: [],
     connections: [],
@@ -22,7 +21,7 @@ function createCompleteNode(type: string): Record<string, unknown> {
   };
 }
 
-describe('NKC validator v3.0', () => {
+describe('NKC validator', () => {
   it('accepts the optional projected flag', () => {
     const result = validateNkc(createValidCanvas({ projected: true }));
 
@@ -161,7 +160,6 @@ describe('NKC validator v3.0', () => {
             id: 'generation-job-node',
             data: {
               jobRef: { kind: 'generation', jobId: 'generation-job-1' },
-              revision: 3,
               title: 'Generate concept image',
               status: 'completed',
               inputRefs: [{ kind: 'canvas-node', nodeId: 'media-asset' }],
@@ -210,10 +208,6 @@ describe('NKC validator v3.0', () => {
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          field: 'nodes[0].data.generationContext',
-          message: expect.stringContaining('canvas-material-legacy-generation-evidence'),
-        }),
         expect.objectContaining({
           field: 'nodes[1].data.generation',
           message: expect.stringContaining('canvas-material-generation-evidence-required'),
@@ -306,7 +300,7 @@ describe('NKC validator v3.0', () => {
           message: expect.stringContaining('workspace-relative'),
         }),
         expect.objectContaining({ field: 'nodes[1].data.jobRef' }),
-        expect.objectContaining({ field: 'nodes[1].data.revision' }),
+        expect.objectContaining({ field: 'nodes[0].data.revision' }),
         expect.objectContaining({ field: 'nodes[1].data.inputRefs' }),
       ]),
     );

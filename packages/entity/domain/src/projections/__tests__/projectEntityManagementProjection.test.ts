@@ -64,9 +64,7 @@ function candidate(
 }
 
 const DOCUMENT: ProjectEntityDocument = {
-  schemaVersion: 1,
   projectId: 'project-neko',
-  revision: 3,
   entities: [
     {
       entityId: 'character-rin',

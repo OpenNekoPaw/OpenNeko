@@ -86,7 +86,6 @@ export interface SemanticSourceDescriptor {
 
 export interface SemanticCreativeSchemaRef {
   readonly schemaId: string;
-  readonly schemaVersion: string;
 }
 
 export interface SemanticTextSegment {
@@ -135,7 +134,6 @@ export interface SemanticSourceDiagnostic {
 }
 
 export interface SemanticEntitySnapshot {
-  readonly revision: number;
   readonly entities: readonly ProjectEntityRecord[];
 }
 
@@ -150,7 +148,6 @@ export interface SemanticSourceAnalysisInput {
 export interface SemanticSourceAnalysisResult {
   readonly sourceId: string;
   readonly sourceFingerprint: string;
-  readonly entityRevision: number;
   readonly index: CompactMediaSemanticIndex;
   readonly evidence: readonly SemanticEvidenceProjection[];
   readonly mentions: readonly EntityMention[];
@@ -234,9 +231,7 @@ export function isSemanticSourceDescriptor(value: unknown): value is SemanticSou
 
 export function isSemanticCreativeSchemaRef(value: unknown): value is SemanticCreativeSchemaRef {
   return (
-    isRecord(value) &&
-    isNonEmptyString(value['schemaId']) &&
-    isNonEmptyString(value['schemaVersion'])
+    isRecord(value) && isNonEmptyString(value['schemaId']) && !Object.hasOwn(value, 'schemaVersion')
   );
 }
 

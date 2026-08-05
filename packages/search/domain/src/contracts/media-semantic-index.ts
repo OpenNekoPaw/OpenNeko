@@ -24,8 +24,6 @@ import {
 } from '@neko/chara';
 import type { CreativeEntityCandidate, EntityAssetRequirement } from '@neko/entity-domain';
 
-export const MEDIA_SEMANTIC_INDEX_FILE_VERSION = 1 as const;
-
 export const MEDIA_TEXT_SEGMENT_KINDS = [
   'ocr',
   'subtitle',
@@ -61,7 +59,6 @@ export type MediaBoundingBoxUnit = (typeof MEDIA_BOUNDING_BOX_UNITS)[number];
 
 export type MediaSemanticDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-version'
   | 'missing-required-field'
   | 'invalid-required-field'
   | 'invalid-source-ref'
@@ -168,7 +165,6 @@ export interface MediaTextSegment {
 }
 
 export interface MediaSemanticIndex {
-  readonly version: typeof MEDIA_SEMANTIC_INDEX_FILE_VERSION;
   readonly indexId?: string;
   readonly assetId: string;
   readonly sourceRef: MediaSemanticSourceRef;
@@ -229,7 +225,6 @@ export interface SemanticPerceptionEvidenceEntry {
 }
 
 export interface SemanticPerceptionCard {
-  readonly version?: number;
   readonly assetId: string;
   readonly modality: 'image' | 'video' | 'audio' | 'data' | 'text' | 'mixed';
   readonly sourceToolCallId?: string;
@@ -289,7 +284,6 @@ export function projectPerceptionCardToMediaSemanticIndex(
     projectPerceptionEvidenceToTextSegment(input, evidence, index),
   );
   return {
-    version: MEDIA_SEMANTIC_INDEX_FILE_VERSION,
     ...(input.indexId ? { indexId: input.indexId } : {}),
     assetId: input.card.assetId,
     sourceRef: input.sourceRef,
@@ -510,7 +504,7 @@ function validateIndex(
     );
     return;
   }
-  validateVersion(value['version'], [...path, 'version'], diagnostics);
+  rejectRemovedVersionField(value, path, diagnostics);
   requireString(value['assetId'], [...path, 'assetId'], diagnostics);
   validateSerializableValue(value['sourceRef'], [...path, 'sourceRef'], diagnostics);
   validateArray(value['textSegments'], [...path, 'textSegments'], diagnostics, (item, itemPath) =>
@@ -964,17 +958,20 @@ function validateSourceRef(
   validateSerializableValue(value, path, diagnostics);
 }
 
-function validateVersion(
-  value: unknown,
+function rejectRemovedVersionField(
+  value: Record<string, unknown>,
   path: readonly CharacterMemoryPathSegment[],
   diagnostics: MediaSemanticDiagnostic[],
 ): void {
-  if (value !== MEDIA_SEMANTIC_INDEX_FILE_VERSION) {
+  if (Object.hasOwn(value, 'version')) {
     diagnostics.push(
-      diagnostic('error', 'invalid-version', path, 'Media semantic index version must be 1.', {
-        expected: String(MEDIA_SEMANTIC_INDEX_FILE_VERSION),
-        actual: serializableDiagnosticValue(value),
-      }),
+      diagnostic(
+        'error',
+        'invalid-required-field',
+        [...path, 'version'],
+        'Media semantic index contains a removed internal version field.',
+        { actual: serializableDiagnosticValue(value['version']) },
+      ),
     );
   }
 }
@@ -1177,7 +1174,6 @@ function isDiagnosticSeverity(value: unknown): value is MediaSemanticDiagnostic[
 function mapCharacterMemoryDiagnosticCode(code: string): MediaSemanticDiagnosticCode {
   switch (code) {
     case 'invalid-root':
-    case 'invalid-version':
     case 'missing-required-field':
     case 'invalid-source-ref':
     case 'invalid-confidence':

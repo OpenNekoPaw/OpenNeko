@@ -5,23 +5,17 @@ import {
   isThreeReferenceStagingSnapshot,
   isThreeReferencePanoramaRuntimeDescriptor,
   projectThreeReferenceMediaControls,
-  THREE_REFERENCE_CONTEXT_VERSION,
-  THREE_REFERENCE_STAGING_SCHEMA_VERSION,
   type ThreeReferenceContextData,
 } from './three-reference';
 
 const poseImage = packageResource('pose-1');
 
 const contextData: ThreeReferenceContextData = {
-  contractVersion: THREE_REFERENCE_CONTEXT_VERSION,
   staging: {
-    schemaVersion: THREE_REFERENCE_STAGING_SCHEMA_VERSION,
     sessionId: 'session-1',
-    revision: 4,
     subject: {
       kind: 'builtin-preset',
       presetId: 'guide-mannequin-female',
-      presetVersion: 1,
       fingerprint: 'preset-fingerprint',
       presetKind: 'mannequin',
       appearancePolicy: 'guide-only',
@@ -44,7 +38,7 @@ const contextData: ThreeReferenceContextData = {
     {
       kind: 'pose',
       sessionId: 'session-1',
-      revision: 4,
+      requestId: 'request-pose',
       controlImage: poseImage,
       controlMode: 'pose',
       joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
@@ -52,7 +46,7 @@ const contextData: ThreeReferenceContextData = {
     {
       kind: 'camera',
       sessionId: 'session-1',
-      revision: 4,
+      requestId: 'request-camera',
       camera: {
         cameraId: 'camera-front',
         position: { x: 0, y: 1.4, z: 4 },
@@ -90,7 +84,7 @@ describe('3D reference contracts', () => {
 
     const payload = {
       type: '3d-reference',
-      id: '3d-reference:session-1:4',
+      id: '3d-reference:session-1',
       label: 'Neutral mannequin',
       summary: 'Pose and camera reference',
       data: contextData,
@@ -99,7 +93,7 @@ describe('3D reference contracts', () => {
     expect(payload.type).toBe('3d-reference');
   });
 
-  it('rejects output data that does not describe the exact live staging revision', () => {
+  it('rejects output data that does not describe the exact staging content', () => {
     expect(
       isThreeReferenceContextData({
         ...contextData,
@@ -120,7 +114,7 @@ describe('3D reference contracts', () => {
         code: 'purpose-role-violation',
         message: 'Guide presets cannot provide appearance reference.',
         severity: 'error',
-        identity: { sessionId: 'session-1', revision: 4 },
+        identity: { sessionId: 'session-1', requestId: 'request-pose' },
         purpose: 'appearance',
       }),
     ).toBe(true);
@@ -133,17 +127,16 @@ describe('3D reference contracts', () => {
     ).toBe(false);
   });
 
-  it('rejects incompatible context and staging versions without legacy shape migration', () => {
-    expect(isThreeReferenceContextData({ ...contextData, contractVersion: 2 })).toBe(false);
-    expect(isThreeReferenceStagingSnapshot({ ...contextData.staging, schemaVersion: 2 })).toBe(
+  it('rejects unknown fields without conversion', () => {
+    expect(isThreeReferenceContextData({ ...contextData, obsoleteField: 2 })).toBe(false);
+    expect(isThreeReferenceStagingSnapshot({ ...contextData.staging, obsoleteField: 2 })).toBe(
       false,
     );
     expect(
       isThreeReferenceStagingSnapshot({
-        schemaVersion: 3,
-        sessionId: 'legacy-session',
-        sourceFingerprint: 'legacy-source',
-        revision: 9,
+        obsoleteField: 3,
+        sessionId: 'obsolete-session',
+        sourceFingerprint: 'obsolete-source',
         transformPatches: [],
         cameraPresets: [],
         activeCameraId: 'camera-front',
@@ -165,7 +158,7 @@ describe('3D reference contracts', () => {
         {
           kind: 'appearance',
           sessionId: 'session-appearance',
-          revision: 1,
+          requestId: 'request-appearance',
           image: appearance,
           source,
         },
@@ -174,7 +167,7 @@ describe('3D reference contracts', () => {
         {
           kind: 'panorama-scene',
           sessionId: 'session-panorama',
-          revision: 1,
+          requestId: 'request-panorama',
           panorama,
           orientation: { yawDeg: 20, pitchDeg: -5, fieldOfViewDeg: 70 },
         },
@@ -185,19 +178,19 @@ describe('3D reference contracts', () => {
       {
         imageRef: appearance,
         sourceRef: source,
-        identity: { sessionId: 'session-appearance', revision: 1 },
+        identity: { sessionId: 'session-appearance', requestId: 'request-appearance' },
       },
     ]);
     expect(controls.controlImage).toEqual({
       imageRef: poseImage,
       mode: 'pose',
-      identity: { sessionId: 'session-1', revision: 4 },
+      identity: { sessionId: 'session-1', requestId: 'request-pose' },
     });
     expect(controls.camera?.value.cameraId).toBe('camera-front');
     expect(controls.panorama).toEqual({
       imageRef: panorama,
       orientation: { yawDeg: 20, pitchDeg: -5, fieldOfViewDeg: 70 },
-      identity: { sessionId: 'session-panorama', revision: 1 },
+      identity: { sessionId: 'session-panorama', requestId: 'request-panorama' },
     });
   });
 
@@ -237,7 +230,6 @@ function withOutputs(
     staging: {
       ...source.staging,
       sessionId: first.sessionId,
-      revision: first.revision,
       selectedPurposes: [first.kind],
       ...(first.kind === 'appearance'
         ? {

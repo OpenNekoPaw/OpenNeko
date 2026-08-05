@@ -49,7 +49,7 @@ describe('GenerationJobCoordinator', () => {
     expect(resultCommitter.commit).not.toHaveBeenCalled();
   });
 
-  it('commits monotonic progress and durable ResourceRefs before terminal success', async () => {
+  it('serializes progress and durable ResourceRefs before terminal success', async () => {
     const execution = createExecution();
     let release: ((result: MediaGenerationResult) => void) | undefined;
     execution.generateImage.mockImplementation(
@@ -68,11 +68,14 @@ describe('GenerationJobCoordinator', () => {
     const coordinator = createCoordinator(execution, committer);
 
     const initial = await coordinator.submitGeneration(createInput());
-    const running = await waitForRevision(coordinator, initial.ref, 4);
+    const running = await waitForSnapshot(
+      coordinator,
+      initial.ref,
+      (snapshot) => snapshot.providerTask !== undefined && snapshot.progress.percent === 35,
+    );
 
     expect(running).toMatchObject({
       phase: 'running',
-      revision: 4,
       providerTask: { providerId: 'provider-1', externalTaskId: 'external-1' },
       progress: { stage: 'waiting-provider', percent: 35 },
     });
@@ -91,26 +94,25 @@ describe('GenerationJobCoordinator', () => {
     });
   });
 
-  it('rejects stale cancel before calling the provider and uses exact identity', async () => {
+  it('uses exact identity and refuses cancellation without a provider task', async () => {
     const execution = createExecution();
     execution.generateImage.mockImplementation(() => new Promise(() => undefined));
     const coordinator = createCoordinator(execution, {
       commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
     const initial = await coordinator.submitGeneration(createInput());
-    const running = await waitForRevision(coordinator, initial.ref, 2);
-
-    await expect(
-      coordinator.cancelGeneration({ ref: initial.ref, expectedRevision: 1 }),
-    ).rejects.toMatchObject({ code: 'stale-revision' });
-    expect(execution.cancelExternalTask).not.toHaveBeenCalled();
+    await waitForPhase(coordinator, initial.ref, 'running');
 
     await expect(
       coordinator.cancelGeneration({
-        ref: initial.ref,
-        expectedRevision: running.revision,
+        ref: { kind: 'generation', jobId: 'unknown-generation' },
       }),
-    ).rejects.toMatchObject({ code: 'generation-job-cancel-unsupported' });
+    ).rejects.toMatchObject({ code: 'job-not-found' });
+    expect(execution.cancelExternalTask).not.toHaveBeenCalled();
+
+    await expect(coordinator.cancelGeneration({ ref: initial.ref })).rejects.toMatchObject({
+      code: 'generation-job-cancel-unsupported',
+    });
   });
 
   it('reconciles only a stored provider task and preserves outcome-unknown without resubmission', async () => {
@@ -130,15 +132,16 @@ describe('GenerationJobCoordinator', () => {
       commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
     const initial = await coordinator.submitGeneration(createInput());
-    await waitForRevision(coordinator, initial.ref, 3);
+    await waitForSnapshot(
+      coordinator,
+      initial.ref,
+      (snapshot) => snapshot.providerTask !== undefined,
+    );
     rejectGeneration?.(new Error('connection lost after submit'));
-    const unknown = await waitForPhase(coordinator, initial.ref, 'outcome-unknown');
+    await waitForPhase(coordinator, initial.ref, 'outcome-unknown');
 
     execution.describeExternalTask.mockResolvedValueOnce({ status: 'processing', progress: 61 });
-    const reconciled = await coordinator.reconcileGeneration({
-      ref: initial.ref,
-      expectedRevision: unknown.revision,
-    });
+    const reconciled = await coordinator.reconcileGeneration({ ref: initial.ref });
 
     expect(reconciled).toMatchObject({
       phase: 'running',
@@ -159,10 +162,7 @@ describe('GenerationJobCoordinator', () => {
     });
     const failed = await waitForPhase(coordinator, original.ref, 'failed');
 
-    const retry = await coordinator.retryGeneration({
-      ref: original.ref,
-      expectedRevision: failed.revision,
-    });
+    const retry = await coordinator.retryGeneration({ ref: original.ref });
 
     expect(retry.ref.jobId).not.toBe(original.ref.jobId);
     expect(retry.lifecycleMode).toBe('detached');
@@ -182,10 +182,7 @@ describe('GenerationJobCoordinator', () => {
     });
     const succeeded = await waitForPhase(coordinator, original.ref, 'succeeded');
 
-    const regenerated = await coordinator.regenerateGeneration({
-      ref: original.ref,
-      expectedRevision: succeeded.revision,
-    });
+    const regenerated = await coordinator.regenerateGeneration({ ref: original.ref });
 
     expect(regenerated.ref.jobId).not.toBe(original.ref.jobId);
     expect(regenerated.regenerateOf).toEqual(original.ref);
@@ -200,12 +197,11 @@ describe('GenerationJobCoordinator', () => {
       commit: vi.fn(async () => [createResultLocator('unused')]),
     });
     const original = await coordinator.submitGeneration(createInput());
-    const failed = await waitForPhase(coordinator, original.ref, 'failed');
+    await waitForPhase(coordinator, original.ref, 'failed');
 
     await expect(
       coordinator.regenerateGeneration({
         ref: original.ref,
-        expectedRevision: failed.revision,
       }),
     ).rejects.toMatchObject({ code: 'generation-job-regenerate-unavailable' });
   });
@@ -219,7 +215,7 @@ describe('GenerationJobCoordinator', () => {
       commit: vi.fn(async () => [createResultLocator('generated-linked')]),
     });
     const linkedInitial = await linked.submitGeneration(createInput());
-    await waitForRevision(linked, linkedInitial.ref, 2);
+    await waitForPhase(linked, linkedInitial.ref, 'running');
 
     await linked.dispose();
 
@@ -239,7 +235,7 @@ describe('GenerationJobCoordinator', () => {
       ...createInput(),
       lifecycleMode: 'detached',
     });
-    const detachedRunning = await waitForRevision(detached, detachedInitial.ref, 2);
+    const detachedRunning = await waitForPhase(detached, detachedInitial.ref, 'running');
 
     await detached.dispose();
 
@@ -266,14 +262,15 @@ describe('GenerationJobCoordinator', () => {
       commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
     const initial = await coordinator.submitGeneration(createInput());
-    const running = await waitForRevision(coordinator, initial.ref, 3);
+    await waitForSnapshot(
+      coordinator,
+      initial.ref,
+      (snapshot) => snapshot.providerTask !== undefined,
+    );
 
-    await expect(
-      coordinator.cancelGeneration({
-        ref: initial.ref,
-        expectedRevision: running.revision,
-      }),
-    ).rejects.toMatchObject({ code: 'media-task-cancel-unsupported' });
+    await expect(coordinator.cancelGeneration({ ref: initial.ref })).rejects.toMatchObject({
+      code: 'media-task-cancel-unsupported',
+    });
     expect((await coordinator.describeGeneration(initial.ref)).phase).toBe('running');
   });
 
@@ -288,17 +285,12 @@ describe('GenerationJobCoordinator', () => {
       });
     const store = createInMemoryGenerationJobStore();
     const initial = await store.create(snapshot());
-    const running = await store.commit({
-      ref: initial.ref,
-      expectedRevision: 1,
-      next: {
-        ...initial,
-        phase: 'running',
-        revision: 2,
-        updatedAt: 102,
-        providerTask: { providerId: 'provider-1', externalTaskId: 'external-1' },
-        progress: { stage: 'waiting-provider', percent: 35 },
-      },
+    const running = await store.save({
+      ...initial,
+      phase: 'running',
+      updatedAt: 102,
+      providerTask: { providerId: 'provider-1', externalTaskId: 'external-1' },
+      progress: { stage: 'waiting-provider', percent: 35 },
     });
     const coordinator = new GenerationJobCoordinator({
       store,
@@ -320,16 +312,11 @@ describe('GenerationJobCoordinator', () => {
     const execution = createExecution();
     const store = createInMemoryGenerationJobStore();
     const initial = await store.create(snapshot());
-    const running = await store.commit({
-      ref: initial.ref,
-      expectedRevision: 1,
-      next: {
-        ...initial,
-        phase: 'running',
-        revision: 2,
-        updatedAt: 102,
-        progress: { stage: 'submitting', percent: 0 },
-      },
+    const running = await store.save({
+      ...initial,
+      phase: 'running',
+      updatedAt: 102,
+      progress: { stage: 'submitting', percent: 0 },
     });
     const coordinator = new GenerationJobCoordinator({
       store,
@@ -340,13 +327,16 @@ describe('GenerationJobCoordinator', () => {
 
     const recovered = await coordinator.recoverPersistedGenerationJobs();
 
-    expect(recovered).toEqual([
-      expect.objectContaining({
-        ref: running.ref,
-        phase: 'outcome-unknown',
-        failure: expect.objectContaining({ code: 'generation-outcome-unknown-after-restart' }),
-      }),
-    ]);
+    expect(recovered).toEqual({
+      snapshots: [
+        expect.objectContaining({
+          ref: running.ref,
+          phase: 'outcome-unknown',
+          failure: expect.objectContaining({ code: 'generation-outcome-unknown-after-restart' }),
+        }),
+      ],
+      diagnostics: [],
+    });
     expect(execution.generateImage).not.toHaveBeenCalled();
     expect(execution.describeExternalTask).not.toHaveBeenCalled();
   });
@@ -419,7 +409,6 @@ function snapshot(): import('../contracts').GenerationJobSnapshot {
     ref: { kind: 'generation', jobId: 'recovered-generation-1' },
     lifecycleMode: 'detached',
     phase: 'pending',
-    revision: 1,
     createdAt: 101,
     updatedAt: 101,
     request: {
@@ -468,22 +457,22 @@ function rejectOnAbort(signal: AbortSignal | undefined): Promise<never> {
   });
 }
 
-async function waitForRevision(
+async function waitForSnapshot(
   coordinator: GenerationJobCoordinator,
   ref: import('../contracts').GenerationJobRef,
-  revision: number,
+  predicate: (snapshot: import('../contracts').GenerationJobSnapshot) => boolean,
 ) {
-  for await (const snapshot of coordinator.observeGeneration(ref, 1)) {
-    if (snapshot.revision >= revision) return snapshot;
+  for await (const snapshot of coordinator.observeGeneration(ref)) {
+    if (predicate(snapshot)) return snapshot;
   }
-  throw new Error(`Generation Job did not reach revision ${revision}.`);
+  throw new Error('Generation Job observation ended before the expected state.');
 }
 
 async function waitForTerminal(
   coordinator: GenerationJobCoordinator,
   ref: import('../contracts').GenerationJobRef,
 ) {
-  for await (const snapshot of coordinator.observeGeneration(ref, 1)) {
+  for await (const snapshot of coordinator.observeGeneration(ref)) {
     if (snapshot.phase === 'succeeded' || snapshot.phase === 'failed') return snapshot;
   }
   throw new Error('Generation Job did not reach a terminal phase.');
@@ -494,7 +483,7 @@ async function waitForPhase(
   ref: import('../contracts').GenerationJobRef,
   phase: import('@neko/shared/job-lifecycle').JobPhase,
 ) {
-  for await (const snapshot of coordinator.observeGeneration(ref, 1)) {
+  for await (const snapshot of coordinator.observeGeneration(ref)) {
     if (snapshot.phase === phase) return snapshot;
   }
   throw new Error(`Generation Job did not reach phase ${phase}.`);

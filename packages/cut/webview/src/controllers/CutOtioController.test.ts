@@ -23,7 +23,7 @@ describe('CutOtioController', () => {
     ).toThrow('invalid Cut error diagnostic');
   });
 
-  it('keeps TimelineView immutable until the Host returns a new revision', () => {
+  it('keeps TimelineView immutable until the Host returns an updated view', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
     const controller = new CutOtioController(store, { postMessage });
@@ -39,7 +39,6 @@ describe('CutOtioController', () => {
       clientMutationId: expect.any(String),
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
       command: { type: 'rename-clip', clipId: 'clip-1', name: 'Renamed' },
     });
   });
@@ -81,7 +80,6 @@ describe('CutOtioController', () => {
       clientMutationId: 'session-1:1',
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: view.revision,
       presentation: nextPresentation,
     });
 
@@ -95,14 +93,12 @@ describe('CutOtioController', () => {
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:1',
       succeeded: true,
-      revision: view.revision,
     });
     expect(postMessage).toHaveBeenNthCalledWith(2, {
       type: 'cut:save',
       clientMutationId: 'session-1:2',
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: view.revision,
     });
 
     controller.acceptHostMessage({
@@ -130,7 +126,6 @@ describe('CutOtioController', () => {
       clientMutationId: 'session-1:1',
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: view.revision,
       command: { type: 'trim-trailing-gaps' },
     });
 
@@ -154,7 +149,7 @@ describe('CutOtioController', () => {
     expect(postMessage).not.toHaveBeenCalled();
   });
 
-  it('keeps sequence mode after the Host accepts the trailing-Gap trim revision', () => {
+  it('keeps sequence mode after the Host accepts the trailing-Gap trim', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
     const controller = new CutOtioController(store, { postMessage });
@@ -164,13 +159,12 @@ describe('CutOtioController', () => {
     controller.setPlacementMode('sequence');
     controller.acceptHostMessage({
       type: 'cut:view',
-      view: { ...createView(), revision: 5 },
+      view: createView(),
     });
     controller.acceptHostMessage({
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:1',
       succeeded: true,
-      revision: 5,
     });
 
     expect(store.getState().placementMode).toBe('sequence');
@@ -179,13 +173,12 @@ describe('CutOtioController', () => {
     controller.undo();
     controller.acceptHostMessage({
       type: 'cut:view',
-      view: { ...view, revision: 6 },
+      view,
     });
     controller.acceptHostMessage({
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:2',
       succeeded: true,
-      revision: 6,
     });
 
     expect(store.getState().placementMode).toBe('position');
@@ -204,7 +197,7 @@ describe('CutOtioController', () => {
 
     controller.acceptHostMessage({
       type: 'cut:view',
-      view: { ...view, revision: 5 },
+      view,
     });
     expect(store.getState().placementMode).toBe('sequence');
 
@@ -212,14 +205,12 @@ describe('CutOtioController', () => {
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:1',
       succeeded: true,
-      revision: 5,
     });
     expect(postMessage).toHaveBeenNthCalledWith(2, {
       type: 'cut:command',
       clientMutationId: 'session-1:2',
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: 5,
       command: { type: 'trim-trailing-gaps' },
     });
 
@@ -227,12 +218,11 @@ describe('CutOtioController', () => {
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:2',
       succeeded: false,
-      revision: 5,
     });
     expect(store.getState().placementMode).toBe('position');
   });
 
-  it('serializes rapid durable edits across Host revisions', () => {
+  it('serializes rapid durable edits by exact mutation identity', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
     const controller = new CutOtioController(store, { postMessage });
@@ -264,7 +254,6 @@ describe('CutOtioController', () => {
       clientMutationId: 'session-1:1',
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: 4,
       command: {
         type: 'place-clip',
         clipId: 'clip-1',
@@ -278,13 +267,12 @@ describe('CutOtioController', () => {
 
     controller.acceptHostMessage({
       type: 'cut:view',
-      view: { ...view, revision: 5 },
+      view,
     });
     controller.acceptHostMessage({
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:1',
       succeeded: true,
-      revision: 5,
     });
 
     expect(postMessage).toHaveBeenCalledTimes(2);
@@ -293,7 +281,6 @@ describe('CutOtioController', () => {
       clientMutationId: 'session-1:2',
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: 5,
       command: {
         type: 'place-clip',
         clipId: 'clip-1',
@@ -326,7 +313,6 @@ describe('CutOtioController', () => {
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:1',
       succeeded: false,
-      revision: 4,
       diagnostic: { code: 'internal-failure' },
     });
     controller.dropLinkMedia('track-video', ['file:///workspace/a.mp4'], 90, 'insert');
@@ -341,7 +327,7 @@ describe('CutOtioController', () => {
     );
   });
 
-  it('defers playback until the preceding edit revision is accepted', () => {
+  it('defers playback until the preceding edit is accepted', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
     const controller = new CutOtioController(store, { postMessage });
@@ -356,39 +342,40 @@ describe('CutOtioController', () => {
 
     controller.acceptHostMessage({
       type: 'cut:view',
-      view: { ...view, revision: 5 },
+      view,
     });
     controller.acceptHostMessage({
       type: 'cut:mutation-result',
       clientMutationId: 'session-1:1',
       succeeded: true,
-      revision: 5,
     });
 
     expect(postMessage).toHaveBeenNthCalledWith(2, {
       type: 'cut:preview-start',
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: 5,
       timelineTimeSeconds: 1.5,
-      generation: 1,
+      previewRequestId: 'session-1:preview:1',
       playbackMode: 'playing',
     });
     expect(store.getState().isPlaying).toBe(true);
   });
 
-  it('assigns a monotonically increasing generation to rapid preview requests', () => {
+  it('assigns one exact identity to each rapid preview request', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
     const controller = new CutOtioController(store, { postMessage });
     controller.acceptHostMessage({ type: 'cut:view', view: createView() });
 
-    expect(controller.startPreview(1)).toBe(1);
-    expect(controller.startPreview(2)).toBe(2);
+    expect(controller.startPreview(1)).toBe('session-1:preview:1');
+    expect(controller.startPreview(2)).toBe('session-1:preview:2');
 
     expect(postMessage).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ type: 'cut:preview-start', generation: 2 }),
+      expect.objectContaining({
+        type: 'cut:preview-start',
+        previewRequestId: 'session-1:preview:2',
+      }),
     );
   });
 
@@ -409,7 +396,7 @@ describe('CutOtioController', () => {
     );
   });
 
-  it('requests a paused preview generation without changing transport to playing', () => {
+  it('requests a paused preview previewRequestId without changing transport to playing', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
     const controller = new CutOtioController(store, { postMessage });
@@ -433,64 +420,61 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage });
     controller.acceptHostMessage({ type: 'cut:view', view: createView() });
 
-    const preparedGeneration = controller.startPreview(3, undefined, 'paused');
-    controller.pausePreview(preparedGeneration);
+    const preparedRequestId = controller.startPreview(3, undefined, 'paused');
+    controller.pausePreview(preparedRequestId);
     controller.stopPreview();
 
     expect(postMessage).toHaveBeenNthCalledWith(2, {
       type: 'cut:preview-pause',
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
-      generation: 2,
-      preparedGeneration,
+      previewRequestId: 'session-1:preview:2',
+      preparedRequestId,
     });
     expect(postMessage).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
         type: 'cut:preview-stop',
-        generation: 3,
+        previewRequestId: 'session-1:preview:3',
       }),
     );
   });
 
-  it('prepares and activates one exact preview generation at a Clip boundary', () => {
+  it('prepares and activates one exact preview previewRequestId at a Clip boundary', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
     const controller = new CutOtioController(store, { postMessage });
     controller.acceptHostMessage({ type: 'cut:view', view: createView() });
 
     controller.startPreview(0);
-    const preparedGeneration = controller.preparePreview(4);
-    controller.activatePreview(preparedGeneration);
+    const preparedRequestId = controller.preparePreview(4);
+    controller.activatePreview(preparedRequestId);
 
     expect(postMessage).toHaveBeenNthCalledWith(2, {
       type: 'cut:preview-prepare',
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
       timelineTimeSeconds: 4,
-      generation: 2,
+      previewRequestId: 'session-1:preview:2',
     });
     expect(postMessage).toHaveBeenNthCalledWith(3, {
       type: 'cut:preview-activate',
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
-      generation: 2,
+      previewRequestId: 'session-1:preview:2',
     });
-    expect(() => controller.activatePreview(1)).toThrow(
-      'Cannot activate stale Cut preview generation',
+    expect(() => controller.activatePreview('session-1:preview:1')).toThrow(
+      'Cannot activate non-current Cut preview request',
     );
   });
 
-  it('stores only presentation state and clears selection removed by a Host revision', () => {
+  it('stores only presentation state and clears selection removed by a Host snapshot', () => {
     const store = createCutPresentationStore();
     const controller = new CutOtioController(store, { postMessage: vi.fn() });
     controller.acceptHostMessage({ type: 'cut:view', view: createView() });
     store.getState().actions.select({ kind: 'clip', trackId: 'track-video', clipId: 'clip-1' });
 
-    const next = { ...createView(), revision: 5, tracks: [createView().tracks[0]!] };
+    const next = { ...createView(), tracks: [createView().tracks[0]!] };
     controller.acceptHostMessage({
       type: 'cut:view',
       view: { ...next, tracks: [{ ...next.tracks[0]!, items: [] }] },
@@ -512,7 +496,6 @@ describe('CutOtioController', () => {
       type: 'cut:representations',
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      revision: 3,
       results: [
         {
           clipId: 'clip-1',
@@ -527,16 +510,19 @@ describe('CutOtioController', () => {
     expect(store.getState().representations.size).toBe(0);
   });
 
-  it('retains unchanged Clip representations across structural Host revisions', () => {
+  it('retains unchanged Clip representations across structural Host snapshots', () => {
     const store = createCutPresentationStore();
     const controller = new CutOtioController(store, { postMessage: vi.fn() });
     const current = createView();
     controller.acceptHostMessage({ type: 'cut:view', view: current });
+    controller.requestRepresentations([
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 },
+    ]);
     controller.acceptHostMessage({
       type: 'cut:representations',
       documentUri: current.documentUri,
       sessionId: current.sessionId,
-      revision: current.revision,
+      requestId: 'session-1:representation:1',
       results: [
         {
           clipId: 'clip-1',
@@ -555,7 +541,6 @@ describe('CutOtioController', () => {
       type: 'cut:view',
       view: {
         ...createView(),
-        revision: 5,
         tracks: [
           ...createView().tracks,
           { trackId: 'track-audio', name: 'Audio 1', kind: 'Audio', items: [] },
@@ -563,7 +548,7 @@ describe('CutOtioController', () => {
       },
     });
 
-    expect(store.getState().representations.get('5:clip-1:thumbnail:64:0')).toMatchObject({
+    expect(store.getState().representations.get('clip-1:thumbnail:64:0')).toMatchObject({
       clipId: 'clip-1',
       status: 'ready',
     });
@@ -575,12 +560,16 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage: vi.fn() });
     const current = createView();
     controller.acceptHostMessage({ type: 'cut:view', view: current });
+    controller.requestRepresentations([
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 },
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 1 },
+    ]);
 
     controller.acceptHostMessage({
       type: 'cut:representations',
       documentUri: current.documentUri,
       sessionId: current.sessionId,
-      revision: current.revision,
+      requestId: 'session-1:representation:1',
       results: [
         {
           clipId: 'clip-1',
@@ -604,15 +593,15 @@ describe('CutOtioController', () => {
     });
 
     expect([...store.getState().representations.keys()]).toEqual([
-      '4:clip-1:thumbnail:64:0',
-      '4:clip-1:thumbnail:64:1',
+      'clip-1:thumbnail:64:0',
+      'clip-1:thumbnail:64:1',
     ]);
     expect(() =>
       controller.acceptHostMessage({
         type: 'cut:representations',
         documentUri: current.documentUri,
         sessionId: current.sessionId,
-        revision: current.revision,
+        requestId: 'session-1:representation:1',
         results: [
           {
             clipId: 'clip-1',
@@ -630,12 +619,15 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage: vi.fn() });
     const current = createView();
     controller.acceptHostMessage({ type: 'cut:view', view: current });
+    controller.requestRepresentations([
+      { clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 },
+    ]);
 
     controller.acceptHostMessage({
       type: 'cut:representations',
       documentUri: current.documentUri,
       sessionId: current.sessionId,
-      revision: current.revision,
+      requestId: 'session-1:representation:1',
       results: Array.from({ length: 257 }, (_, tileIndex) => ({
         clipId: 'clip-1',
         kind: 'thumbnail',
@@ -648,8 +640,8 @@ describe('CutOtioController', () => {
     });
 
     expect(store.getState().representations.size).toBe(256);
-    expect(store.getState().representations.has('4:clip-1:thumbnail:64:0')).toBe(false);
-    expect(store.getState().representations.has('4:clip-1:thumbnail:64:256')).toBe(true);
+    expect(store.getState().representations.has('clip-1:thumbnail:64:0')).toBe(false);
+    expect(store.getState().representations.has('clip-1:thumbnail:64:256')).toBe(true);
   });
 
   it('does not reuse stale Track or Clip projections when edit state changes', () => {
@@ -665,7 +657,6 @@ describe('CutOtioController', () => {
       type: 'cut:view',
       view: {
         ...current,
-        revision: 5,
         tracks: [
           {
             ...track,
@@ -690,7 +681,7 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage: vi.fn() }, { onPreviewReady });
     const message = {
       type: 'cut:preview-ready',
-      generation: 1,
+      previewRequestId: 'session-1:preview:1',
       timelineTimeSeconds: 2,
       segmentEndSeconds: 4,
       playbackEndSeconds: 4,
@@ -699,8 +690,6 @@ describe('CutOtioController', () => {
       framesPerSecond: 30,
       audioStreams: [
         {
-          version: 1,
-          protocol: 'neko-pcm-f32le-v1',
           streamUrl: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           sampleRate: 48_000,
           channels: 2,
@@ -729,7 +718,7 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage: vi.fn() }, { onPreviewReady });
     const message = {
       type: 'cut:preview-ready',
-      generation: 1,
+      previewRequestId: 'session-1:preview:1',
       videoClipId: 'clip-1',
       timelineTimeSeconds: 2,
       segmentEndSeconds: 4,
@@ -738,7 +727,6 @@ describe('CutOtioController', () => {
       height: 1080,
       framesPerSecond: 30,
       video: {
-        version: 1,
         url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         mimeType: 'video/mp4; codecs="avc1.640029"',
         preparationProfile: 'h264-mp4-direct',
@@ -754,7 +742,7 @@ describe('CutOtioController', () => {
     expect(
       controller.acceptHostMessage({
         ...message,
-        generation: 2,
+        previewRequestId: 'session-1:preview:2',
         video: { ...message.video, url: 'https://example.com/video.mp4' },
       }),
     ).toBe(false);
@@ -784,7 +772,7 @@ describe('CutOtioController', () => {
         jobId: 'job-1',
         documentUri: 'file:///workspace/project.otio',
         sessionId: 'session-1',
-        sourceRevision: 4,
+        sourceSnapshotId: 'export-request-1',
         settings: {
           outputName: 'Project',
           container: 'mp4',
@@ -808,7 +796,6 @@ describe('CutOtioController', () => {
       type: 'cut:export-start',
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
       settings: {
         outputName: 'Project',
         container: 'mp4',
@@ -825,7 +812,6 @@ describe('CutOtioController', () => {
       type: 'cut:export-cancel',
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
       jobId: 'job-1',
     });
   });
@@ -871,7 +857,6 @@ describe('CutOtioController', () => {
       clientMutationId: expect.any(String),
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
       source: clipboard,
       timelineStartSeconds: 8,
     });
@@ -893,7 +878,6 @@ describe('CutOtioController', () => {
       clientMutationId: expect.any(String),
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
       commands: [
         { type: 'ripple-delete', clipId: 'clip-1' },
         { type: 'ripple-delete', clipId: 'clip-2' },
@@ -933,7 +917,6 @@ describe('CutOtioController', () => {
       type: 'cut:send-to-agent',
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
-      expectedRevision: 4,
       selection: {
         kind: 'clip',
         trackId: 'track-video',
@@ -947,7 +930,6 @@ function createView(): TimelineView {
   return {
     documentUri: 'file:///workspace/project.otio',
     sessionId: 'session-1',
-    revision: 4,
     name: 'Project',
     durationSeconds: 3,
     profile: {

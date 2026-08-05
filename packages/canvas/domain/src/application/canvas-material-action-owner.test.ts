@@ -19,10 +19,10 @@ const identity: CanvasHostRuntimeIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'canvas:view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'neko/boards/workspace.nkc',
-  sessionId: 'canvas-session:canvas:view-1:1',
-  endpointEpoch: 'app-1:window-1:1',
+  sessionId: 'canvas-session:canvas:view-1:view-instance-1',
+  rendererSessionId: 'app-1:window-1:1',
 };
 
 const target: CanvasMaterialActionTarget = {
@@ -274,7 +274,6 @@ function generationProjection(jobId: string): CanvasGenerationProjectionSnapshot
     ref: { kind: 'generation', jobId },
     regenerateOf: { kind: 'generation', jobId: 'generation-job-1' },
     phase: 'running',
-    revision: 0,
     title: 'Regenerate image',
     inputNodeIds: [generatedTarget.nodeId],
     mediaKind: 'image',

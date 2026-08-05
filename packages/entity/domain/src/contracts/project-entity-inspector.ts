@@ -53,7 +53,6 @@ export interface ProjectEntityInspectorInteractionContext {
 }
 
 export interface ProjectEntityInspectorProjection {
-  readonly projectRevision: number;
   readonly status: 'confirmed' | 'candidate' | 'needs-attention' | 'deprecated';
   readonly kind: CreativeEntityKind;
   readonly names: ProjectEntityNames;
@@ -83,7 +82,6 @@ export interface ProjectEntityInspectorProjection {
 export type ProjectEntityInspectorIntent =
   | {
       readonly type: 'confirm';
-      readonly expectedRevision: number;
       readonly candidateId: string;
       readonly accepted: {
         readonly kind: CreativeEntityKind;
@@ -93,7 +91,6 @@ export type ProjectEntityInspectorIntent =
     }
   | {
       readonly type: 'edit';
-      readonly expectedRevision: number;
       readonly entityId: string;
       readonly changes: {
         readonly names?: ProjectEntityNames;
@@ -102,42 +99,35 @@ export type ProjectEntityInspectorIntent =
     }
   | {
       readonly type: 'bind';
-      readonly expectedRevision: number;
       readonly entityId: string;
       readonly binding: Pick<ProjectEntityRepresentationBinding, 'role' | 'target' | 'isDefault'>;
     }
   | {
       readonly type: 'unbind';
-      readonly expectedRevision: number;
       readonly entityId: string;
       readonly bindingId: string;
     }
   | {
       readonly type: 'merge';
-      readonly expectedRevision: number;
       readonly sourceEntityId: string;
       readonly targetEntityId: string;
     }
   | {
       readonly type: 'merge';
-      readonly expectedRevision: number;
       readonly candidateId: string;
       readonly targetEntityId: string;
     }
   | {
       readonly type: 'deprecate';
-      readonly expectedRevision: number;
       readonly entityId: string;
       readonly replacementEntityId?: string;
     }
   | {
       readonly type: 'instantiate';
-      readonly expectedRevision: number;
       readonly asset: ProjectEntityAssetRevisionRef;
     }
   | {
       readonly type: 'publish';
-      readonly expectedRevision: number;
       readonly entityId: string;
     }
   | {
@@ -147,7 +137,6 @@ export type ProjectEntityInspectorIntent =
     }
   | {
       readonly type: 'apply-update';
-      readonly expectedRevision: number;
       readonly entityId: string;
       readonly available: ProjectEntityAssetRevisionRef;
       readonly selectedFields: readonly ProjectEntitySemanticField[];
@@ -184,34 +173,30 @@ export function assertProjectEntityInspectorIntent(value: unknown): ProjectEntit
   }
   switch (type) {
     case 'confirm':
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'candidateId', 'accepted']);
+      requireOnlyKeys(record, ['type', 'candidateId', 'accepted']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         candidateId: requireIdentity(record['candidateId']),
         accepted: parseAccepted(record['accepted']),
       };
     case 'edit':
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'entityId', 'changes']);
+      requireOnlyKeys(record, ['type', 'entityId', 'changes']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         entityId: requireIdentity(record['entityId']),
         changes: parseChanges(record['changes']),
       };
     case 'bind':
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'entityId', 'binding']);
+      requireOnlyKeys(record, ['type', 'entityId', 'binding']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         entityId: requireIdentity(record['entityId']),
         binding: parseBinding(record['binding']),
       };
     case 'unbind':
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'entityId', 'bindingId']);
+      requireOnlyKeys(record, ['type', 'entityId', 'bindingId']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         entityId: requireIdentity(record['entityId']),
         bindingId: requireIdentity(record['bindingId']),
       };
@@ -221,16 +206,9 @@ export function assertProjectEntityInspectorIntent(value: unknown): ProjectEntit
       if ((candidateId === undefined) === (sourceEntityId === undefined)) {
         throw new Error('Project Entity merge requires exactly one source identity.');
       }
-      requireOnlyKeys(record, [
-        'type',
-        'expectedRevision',
-        'candidateId',
-        'sourceEntityId',
-        'targetEntityId',
-      ]);
+      requireOnlyKeys(record, ['type', 'candidateId', 'sourceEntityId', 'targetEntityId']);
       const base = {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         targetEntityId: requireIdentity(record['targetEntityId']),
       } as const;
       if (candidateId) return { ...base, candidateId };
@@ -238,27 +216,24 @@ export function assertProjectEntityInspectorIntent(value: unknown): ProjectEntit
       throw new Error('Project Entity merge source identity is invalid.');
     }
     case 'deprecate': {
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'entityId', 'replacementEntityId']);
+      requireOnlyKeys(record, ['type', 'entityId', 'replacementEntityId']);
       const replacementEntityId = optionalIdentity(record['replacementEntityId']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         entityId: requireIdentity(record['entityId']),
         ...(replacementEntityId ? { replacementEntityId } : {}),
       };
     }
     case 'instantiate':
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'asset']);
+      requireOnlyKeys(record, ['type', 'asset']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         asset: parseAssetRevision(record['asset']),
       };
     case 'publish':
-      requireOnlyKeys(record, ['type', 'expectedRevision', 'entityId']);
+      requireOnlyKeys(record, ['type', 'entityId']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         entityId: requireIdentity(record['entityId']),
       };
     case 'diff':
@@ -269,17 +244,9 @@ export function assertProjectEntityInspectorIntent(value: unknown): ProjectEntit
         available: parseAssetRevision(record['available']),
       };
     case 'apply-update':
-      requireOnlyKeys(record, [
-        'type',
-        'expectedRevision',
-        'entityId',
-        'available',
-        'selectedFields',
-        'resolutions',
-      ]);
+      requireOnlyKeys(record, ['type', 'entityId', 'available', 'selectedFields', 'resolutions']);
       return {
         type,
-        expectedRevision: requireRevision(record['expectedRevision']),
         entityId: requireIdentity(record['entityId']),
         available: parseAssetRevision(record['available']),
         selectedFields: requireArray(record['selectedFields']).map(requireSemanticField),
@@ -338,9 +305,6 @@ function isProjectEntityInspectorProjection(
   const candidateId = value['candidateId'];
   return (
     hasOnlyAllowedKeys(value, INSPECTOR_PROJECTION_KEYS) &&
-    typeof value['projectRevision'] === 'number' &&
-    Number.isInteger(value['projectRevision']) &&
-    value['projectRevision'] >= 0 &&
     (status === 'confirmed' ||
       status === 'candidate' ||
       status === 'needs-attention' ||
@@ -635,13 +599,6 @@ function requireArray(value: unknown): readonly unknown[] {
   return value;
 }
 
-function requireRevision(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new Error('Project Entity expected revision is invalid.');
-  }
-  return value;
-}
-
 function requireIdentity(value: unknown): string {
   if (typeof value !== 'string' || !value.trim() || /[\\/\0]/u.test(value)) {
     throw new Error('Project Entity identity is invalid.');
@@ -669,7 +626,6 @@ function optionalNonEmptyString(value: unknown): string | undefined {
 }
 
 const INSPECTOR_PROJECTION_KEYS = [
-  'projectRevision',
   'status',
   'kind',
   'names',

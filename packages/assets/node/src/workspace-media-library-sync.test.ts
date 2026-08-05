@@ -339,9 +339,7 @@ async function writeBindings(
     path.join(nekoDirectory, 'entities.json'),
     `${JSON.stringify(
       {
-        schemaVersion: 1,
         projectId: 'workspace-a',
-        revision: 1,
         entities: [
           {
             entityId: 'character-a',

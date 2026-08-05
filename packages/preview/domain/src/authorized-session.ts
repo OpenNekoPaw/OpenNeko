@@ -1,7 +1,5 @@
 import { parsePreviewMediaDescriptor, type PreviewMediaDescriptor } from './index.js';
 
-export const AUTHORIZED_PREVIEW_SESSION_VERSION = 1 as const;
-
 export interface AuthorizedPreviewSessionIdentity {
   readonly previewSessionId: string;
   readonly windowId: string;
@@ -18,18 +16,15 @@ export interface AuthorizedPreviewSessionIdentity {
         readonly conversationId: string;
         readonly scratchArtifactId: string;
       };
-  readonly revision: number;
 }
 
 export type AuthorizedPreviewSessionProjection =
   | {
-      readonly schemaVersion: typeof AUTHORIZED_PREVIEW_SESSION_VERSION;
       readonly identity: AuthorizedPreviewSessionIdentity;
       readonly status: 'ready';
       readonly descriptor: PreviewMediaDescriptor;
     }
   | {
-      readonly schemaVersion: typeof AUTHORIZED_PREVIEW_SESSION_VERSION;
       readonly identity: AuthorizedPreviewSessionIdentity;
       readonly status: 'unavailable';
       readonly diagnostic: AuthorizedPreviewDiagnostic;
@@ -50,19 +45,9 @@ export function parseAuthorizedPreviewSessionProjection(
   value: unknown,
 ): AuthorizedPreviewSessionProjection {
   const record = requireRecord(value, 'Authorized Preview projection must be an object.');
-  requireExactKeys(
-    record,
-    ['schemaVersion', 'identity', 'status', 'descriptor', 'diagnostic'],
-    'Authorized Preview projection',
-  );
-  if (record['schemaVersion'] !== AUTHORIZED_PREVIEW_SESSION_VERSION) {
-    throw new Error(`Unsupported Authorized Preview version '${String(record['schemaVersion'])}'.`);
-  }
   const identity = parseAuthorizedPreviewSessionIdentity(record['identity']);
   if (record['status'] === 'ready') {
-    if (record['diagnostic'] !== undefined) {
-      throw new Error('Ready Authorized Preview cannot include a diagnostic.');
-    }
+    requireExactKeys(record, ['identity', 'status', 'descriptor'], 'Authorized Preview projection');
     const descriptorRecord = requireRecord(
       record['descriptor'],
       'Authorized Preview descriptor must be an object.',
@@ -71,7 +56,7 @@ export function parseAuthorizedPreviewSessionProjection(
       descriptorRecord,
       [
         'descriptorId',
-        'revision',
+        'sourceFingerprint',
         'contentLocator',
         'url',
         'resourceUris',
@@ -83,15 +68,15 @@ export function parseAuthorizedPreviewSessionProjection(
       'Authorized Preview descriptor',
     );
     return {
-      schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
       identity,
       status: 'ready',
       descriptor: parsePreviewMediaDescriptor(descriptorRecord),
     };
   }
-  if (record['status'] !== 'unavailable' || record['descriptor'] !== undefined) {
+  if (record['status'] !== 'unavailable') {
     throw new Error(`Unknown Authorized Preview status '${String(record['status'])}'.`);
   }
+  requireExactKeys(record, ['identity', 'status', 'diagnostic'], 'Authorized Preview projection');
   const diagnostic = requireRecord(
     record['diagnostic'],
     'Authorized Preview unavailable diagnostic must be an object.',
@@ -104,7 +89,6 @@ export function parseAuthorizedPreviewSessionProjection(
     throw new Error('Authorized Preview diagnostic code is invalid.');
   }
   return {
-    schemaVersion: AUTHORIZED_PREVIEW_SESSION_VERSION,
     identity,
     status: 'unavailable',
     diagnostic: {
@@ -120,7 +104,7 @@ export function parseAuthorizedPreviewSessionIdentity(
   const record = requireRecord(value, 'Authorized Preview identity must be an object.');
   requireExactKeys(
     record,
-    ['previewSessionId', 'windowId', 'owner', 'revision'],
+    ['previewSessionId', 'windowId', 'owner'],
     'Authorized Preview identity',
   );
   const owner = requireRecord(valueOf(record, 'owner'), 'Authorized Preview owner is required.');
@@ -165,7 +149,6 @@ export function parseAuthorizedPreviewSessionIdentity(
     previewSessionId: requireIdentity(record['previewSessionId'], 'Authorized Preview session'),
     windowId: requireIdentity(record['windowId'], 'Authorized Preview Window'),
     owner: parsedOwner,
-    revision: requireRevision(record['revision']),
   };
 }
 
@@ -190,12 +173,5 @@ function requireExactKeys(
 
 function requireIdentity(value: unknown, owner: string): string {
   if (typeof value !== 'string' || value.length === 0) throw new Error(`${owner} is required.`);
-  return value;
-}
-
-function requireRevision(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw new Error('Authorized Preview revision must be a non-negative integer.');
-  }
   return value;
 }

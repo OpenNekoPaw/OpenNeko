@@ -106,7 +106,6 @@ function createFourTrackView(): TimelineView {
   return {
     documentUri: '.functional/cut-second.otio',
     sessionId: 'cut-session-2',
-    revision: 0,
     name: 'Cut second',
     profile: {
       profile: 'tv-1080p',

@@ -54,12 +54,10 @@ export function presentResourceBrowserEntityItem(
   projection: ProjectEntityManagementProjection,
   options: {
     readonly canvasAvailable?: boolean;
-    readonly projectRevision: number;
     readonly capabilities?: ProjectEntityInspectorOwnerCapabilities;
   },
 ): ResourceBrowserEntityItem {
   const inspector = projectEntityInspector({
-    projectRevision: options.projectRevision,
     projection,
     capabilities: options.capabilities,
   });
@@ -123,7 +121,7 @@ export function presentResourceBrowserEntityItem(
       ? {
           thumbnail: {
             descriptorId: stableResourceId('thumbnail', contentLocatorKey(representationLocator)),
-            revision: binding?.acceptedAt ?? 'unknown',
+            sourceFingerprint: binding?.acceptedAt ?? 'unknown',
             mediaType: 'entity-representation',
           },
         }
@@ -150,7 +148,7 @@ export function presentResourceBrowserAssetItem(asset: GlobalAssetItem): Resourc
       ? {
           thumbnail: {
             descriptorId: asset.thumbnail.descriptorId,
-            revision: asset.thumbnail.revision,
+            sourceFingerprint: asset.thumbnail.sourceFingerprint,
             mediaType: asset.thumbnail.mediaType,
           },
         }
@@ -169,7 +167,7 @@ function presentThumbnail(
   return {
     thumbnail: {
       descriptorId: stableResourceId('thumbnail', locatorKey),
-      revision: `${modifiedAt ?? 'unknown'}:${byteLength ?? 0}`,
+      sourceFingerprint: `${modifiedAt ?? 'unknown'}:${byteLength ?? 0}`,
       mediaType,
     },
   };

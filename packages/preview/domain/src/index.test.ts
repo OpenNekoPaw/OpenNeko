@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PREVIEW_HOST_RUNTIME_VERSION,
   PreviewContractError,
   assertNoForbiddenTransportValue,
   assertPreviewRuntimeIdentity,
@@ -19,11 +18,10 @@ const identity: PreviewRuntimeIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'preview-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'document-1',
   sessionId: 'session-1',
-  endpointEpoch: 'endpoint-1',
-  revision: 2,
+  rendererSessionId: 'endpoint-1',
 };
 
 describe('Preview Host runtime contract', () => {
@@ -52,13 +50,12 @@ describe('Preview Host runtime contract', () => {
   it('parses a path-free ready projection and runtime request', () => {
     expect(
       parsePreviewProjection({
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
         identity,
         presentation: 'temporary',
         status: 'ready',
         descriptor: {
           descriptorId: 'descriptor-1',
-          revision: 'content-2',
+          sourceFingerprint: 'content-2',
           contentLocator: { kind: 'workspace-file', path: 'models/cat.glb' },
           url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
           contentKind: 'model',
@@ -70,7 +67,6 @@ describe('Preview Host runtime contract', () => {
     ).toMatchObject({ status: 'ready', descriptor: { contentKind: 'model' } });
     expect(
       parsePreviewRuntimeRequest({
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
         requestId: 'request-1',
         route: 'snapshot.get',
         identity,
@@ -78,18 +74,17 @@ describe('Preview Host runtime contract', () => {
     ).toMatchObject({ route: 'snapshot.get', identity });
   });
 
-  it('rejects unknown versions, routes and unsupported viewer kinds', () => {
+  it('rejects unknown fields, routes and unsupported viewer kinds', () => {
     expect(() =>
       parsePreviewRuntimeRequest({
-        schemaVersion: 99,
         requestId: 'request-1',
         route: 'snapshot.get',
         identity,
+        removedTechnicalField: true,
       }),
     ).toThrow(PreviewContractError);
     expect(() =>
       parsePreviewRuntimeRequest({
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
         requestId: 'request-1',
         route: 'file.open',
         identity,
@@ -98,7 +93,7 @@ describe('Preview Host runtime contract', () => {
     expect(() =>
       parsePreviewMediaDescriptor({
         descriptorId: 'descriptor-1',
-        revision: 'content-2',
+        sourceFingerprint: 'content-2',
         contentLocator: { kind: 'workspace-file', path: 'scenes/scene.nkc' },
         url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         contentKind: 'canvas',
@@ -122,7 +117,7 @@ describe('Preview Host runtime contract', () => {
     expect(
       parsePreviewMediaDescriptor({
         descriptorId: 'descriptor-1',
-        revision: 'content-2',
+        sourceFingerprint: 'content-2',
         contentLocator: { kind: 'workspace-file', path: 'models/cat.gltf' },
         url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.gltf',
         resourceUris: {
@@ -153,7 +148,7 @@ describe('Preview Host runtime contract', () => {
       expect(() =>
         parsePreviewMediaDescriptor({
           descriptorId: 'descriptor-1',
-          revision: 'content-2',
+          sourceFingerprint: 'content-2',
           contentLocator: { kind: 'workspace-file', path: 'models/cat.gltf' },
           url,
           contentKind: 'model',

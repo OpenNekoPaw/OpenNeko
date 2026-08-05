@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveGlobalStorageLayout } from '../storage';
 import { createNodeSqliteLocalMetadataStore } from '../node-sqlite-local-metadata-store';
-import { ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS, M1_LOCAL_METADATA_MIGRATIONS } from '../sqlite';
+import {
+  initializeAssetLibraryMembershipTables,
+  initializeCoreLocalMetadataTables,
+} from '../sqlite';
 
 const temporaryDirectories: string[] = [];
 
@@ -21,8 +24,8 @@ describe('Asset Library membership repository', () => {
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const first = createNodeSqliteLocalMetadataStore({ homedir });
     await first.open({ databasePath, busyTimeoutMs: 1_000 });
-    await first.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await first.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(first);
+    await initializeAssetLibraryMembershipTables(first);
     const registration = {
       membershipId: 'membership-hero',
       sourceRelativePath: 'hero.png',
@@ -47,8 +50,8 @@ describe('Asset Library membership repository', () => {
 
     const reopened = createNodeSqliteLocalMetadataStore({ homedir });
     await reopened.open({ databasePath, busyTimeoutMs: 1_000 });
-    await reopened.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await reopened.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(reopened);
+    await initializeAssetLibraryMembershipTables(reopened);
     await expect(
       reopened.repositories.assetLibraryMemberships.initializeExistingInventory(
         [{ ...registration, membershipId: 'new-scanner-id' }],
@@ -68,8 +71,8 @@ describe('Asset Library membership repository', () => {
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const store = createNodeSqliteLocalMetadataStore({ homedir });
     await store.open({ databasePath, busyTimeoutMs: 1_000 });
-    await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await store.migrateNamespace(ASSET_LIBRARY_MEMBERSHIP_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(store);
+    await initializeAssetLibraryMembershipTables(store);
     const first = {
       membershipId: 'membership-original',
       sourceRelativePath: 'hero.png',

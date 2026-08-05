@@ -1,25 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { PROJECT_QUALITY_CONTRACT_VERSION, type ProjectQualityFacade } from '@neko/quality/project';
-import {
-  MEDIA_QUALITY_CONTRACT_VERSION,
-  type QualityProjectRef,
-  type QualityTarget,
-} from '@neko/generation';
+import { type ProjectQualityFacade } from '@neko/quality/project';
+import { type QualityProjectRef, type QualityTarget } from '@neko/generation';
 import { collectProjectQualityEvidence } from '../project/index';
 
 const project: QualityProjectRef = {
   domain: 'cut',
   documentUri: 'file:///workspace/edit.otio',
-  projectRevision: 'otio:digest',
   contentDigest: 'digest',
 };
 const target: QualityTarget = {
-  version: MEDIA_QUALITY_CONTRACT_VERSION,
   targetId: 'cut-project',
   kind: 'project-artifact',
   projectRef: project,
-  revision: project.projectRevision,
   contentDigest: project.contentDigest,
 };
 const snapshotLocator = {
@@ -128,7 +121,6 @@ function createFacade(
   const readinessOk = options.readinessOk ?? true;
   const facade = {
     validateProject: vi.fn(async (request) => ({
-      version: PROJECT_QUALITY_CONTRACT_VERSION,
       requestId: request.requestId,
       operation: 'validate-project' as const,
       ok: validationOk,
@@ -144,7 +136,6 @@ function createFacade(
           ],
     })),
     getProjectSnapshot: vi.fn(async (request) => ({
-      version: PROJECT_QUALITY_CONTRACT_VERSION,
       requestId: request.requestId,
       operation: 'get-project-snapshot' as const,
       ok: true,
@@ -152,7 +143,6 @@ function createFacade(
       diagnostics: [],
     })),
     renderPreview: vi.fn(async (request) => ({
-      version: PROJECT_QUALITY_CONTRACT_VERSION,
       requestId: request.requestId,
       operation: 'render-preview' as const,
       ok: false,
@@ -165,7 +155,6 @@ function createFacade(
       ],
     })),
     probeRuntime: vi.fn(async (request) => ({
-      version: PROJECT_QUALITY_CONTRACT_VERSION,
       requestId: request.requestId,
       operation: 'probe-runtime' as const,
       ok: runtimeOk,
@@ -183,7 +172,6 @@ function createFacade(
           ],
     })),
     checkExportReadiness: vi.fn(async (request) => ({
-      version: PROJECT_QUALITY_CONTRACT_VERSION,
       requestId: request.requestId,
       operation: 'check-export-readiness' as const,
       ok: readinessOk,

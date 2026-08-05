@@ -20,9 +20,9 @@ import {
 import { createWorkspaceMediaLibrarySyncMetadataBinding } from '@neko/assets-node';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
-  AGENT_STATE_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+  initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
 import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -103,7 +103,7 @@ describe('Desktop portable Media Library snapshot', () => {
     expect(
       JSON.parse(await readFile(path.join(destination, 'neko/entities.json'), 'utf8')),
     ).toMatchObject({
-      revision: 2,
+      projectId: 'workspace-a',
       entities: [
         {
           representations: [
@@ -448,9 +448,9 @@ async function createFixture(): Promise<{
     databasePath: path.join(home, '.neko', 'neko.db'),
     busyTimeoutMs: 2_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
-  await store.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
+  await initializeMediaMetadataTables(store);
   const workspace: AssetWorkspaceResolution = {
     workspaceId: 'workspace-a',
     workspacePath,
@@ -493,9 +493,7 @@ async function writeBinding(
     path.join(workspacePath, 'neko/entities.json'),
     `${JSON.stringify(
       {
-        schemaVersion: 1,
         projectId: 'workspace-a',
-        revision: 1,
         entities: [
           {
             entityId: 'character-a',

@@ -130,7 +130,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     await act(async () => root.render(<VideoPlayer />));
     expect(readyMessages).toHaveBeenCalledWith({
       type: 'ready',
-      nativeVideoCapabilities: { version: 1, av1Mp4: false, vp9Mp4: true },
+      nativeVideoCapabilities: { av1Mp4: false, vp9Mp4: true },
     });
     await emit({
       type: 'preview:init',
@@ -151,7 +151,6 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       type: 'preview:playbackReady',
       payload: {
         video: {
-          version: 1,
           url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'h264-mp4-direct',
@@ -300,7 +299,6 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       type: 'preview:playbackReady',
       payload: {
         video: {
-          version: 1,
           url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'h264-mp4-direct',
@@ -326,7 +324,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     ).toHaveLength(1);
   });
 
-  it('replaces a spent PCM generation after EOF without reloading the video source', async () => {
+  it('replaces a spent PCM request after EOF without reloading the video source', async () => {
     await act(async () => root.render(<VideoPlayer />));
     await emit({
       type: 'preview:init',
@@ -349,15 +347,12 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       type: 'preview:playbackReady',
       payload: {
         video: {
-          version: 1,
           url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'av1-mp4-direct',
           durationSeconds: 100,
         },
         audio: {
-          version: 1,
-          protocol: 'neko-pcm-f32le-v1',
           streamUrl: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           sampleRate: 48_000,
           channels: 2,
@@ -412,7 +407,6 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     await act(async () => videoControls.onTogglePlay?.());
     const video = host.querySelector('video');
     const descriptor = {
-      version: 1 as const,
       url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       mimeType: 'video/mp4',
       preparationProfile: 'av1-mp4-direct' as const,
@@ -422,7 +416,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       type: 'preview:playbackReady',
       payload: {
         video: descriptor,
-        audio: pcmDescriptor('generation-1'),
+        audio: pcmDescriptor('request-1'),
         startTime: 0,
         playbackRate: 1,
       },
@@ -432,7 +426,7 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       type: 'preview:playbackReady',
       payload: {
         video: descriptor,
-        audio: pcmDescriptor('generation-2'),
+        audio: pcmDescriptor('request-2'),
         startTime: 20,
         playbackRate: 1,
       },
@@ -456,12 +450,10 @@ async function emit(message: unknown): Promise<void> {
   });
 }
 
-function pcmDescriptor(generation: string) {
+function pcmDescriptor(requestId: string) {
   return {
-    version: 1 as const,
-    protocol: 'neko-pcm-f32le-v1' as const,
     streamUrl:
-      generation === 'generation-1'
+      requestId === 'request-1'
         ? 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
         : 'openneko://resource/cccccccccccccccccccccccccccccccc',
     sampleRate: 48_000,
