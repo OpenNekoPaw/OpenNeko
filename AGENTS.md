@@ -27,7 +27,7 @@
 - 简单改动可直接实现，但仍需保持与现有架构一致。
 - 本项目是本地 Electron Desktop + Node/FFmpeg 媒体运行时，不是云端多租户或分布式后端；设计必须按本地产品边界控制复杂度，避免为了假想远程规模、租户隔离、服务治理或未知未来需求引入过度抽象、过度配置、过度防御或多层 indirection。
 - 防御性代码只保护真实边界：Electron Main/preload/renderer 隔离、CSP、typed IPC、本地文件与路径、媒体 codec/Range、异步取消与资源释放、外部 AI/market provider、用户数据和安全/信任边界；不要用宽泛 try/catch、静默默认值、fallback、重复校验或 no-op guard 掩盖本应暴露的开发错误。
-- 默认采用 fail-visible：契约违背、不可达状态、未实现路径、缺失依赖、非法 message、未知 schema/version 或开发期路径错误应直接抛错、返回明确 diagnostic 或让测试失败；除非保护用户数据、外部 provider、发布兼容或安全/信任边界，不要用兜底值、兼容分支或静默降级把代码问题伪装成成功。
+- 默认采用 fail-visible 且 fail-local：契约违背、不可达状态、未实现路径、缺失依赖、非法 message、无法解析的 schema 或开发期路径错误应在最小 owning boundary 直接抛错、返回明确 diagnostic 或让测试失败，同时保持无关记录、实例、能力和工作区可用；除非保护用户数据、外部 provider 或安全/信任边界，不要用兜底值、兼容分支或静默降级把代码问题伪装成成功。安全或信任边界必须拒绝当前请求或资源，不得因此默认停用整个应用。
 - 新增功能或非平凡代码修改后，按本文“测试与质量门禁”章节和 `CONTRIBUTING_CN.md` 做自审；可使用项目 skill `.codex/skills/neko-quality-review/SKILL.md`，并在交付说明中列出验证命令与剩余风险。
 
 ## 语言与沟通
@@ -89,6 +89,10 @@
 ## 架构硬约束
 
 - TypeScript 不要放松以下编译约束：`strict`、`noUncheckedIndexedAccess`、`noImplicitOverride`。
+- 禁止内部无意义的版本化。生产代码、内部 contract、DTO、message/event/command、IPC、schema、codec、配置、索引、缓存和内部元数据不得为了未来兼容、升级预留、数据迁移、缓存失效、调试便利或“行业惯例”新增 `version`、`schemaVersion`、`formatVersion`、`contractVersion`、用于表达内部数据代际的 `revision`/`generation`/`epoch`、migration marker、数字版本后缀或语义等价别名，也不得据此切换内部 shape、路由新旧路径或判定数据有效性。
+- 必须保留用户需要管理的领域版本数据。Character、素材以及其他用户创作对象只要存在用户可见的创建版本、历史、引用、比较、恢复、发布或删除语义，就应由 owning domain 定义明确的版本 identity、不可变内容和生命周期，并允许对应 contract/UI 原样传递和管理；此类版本是业务事实，不是 schema、component、contract 或迁移版本，不得被解释为内部 format dispatch。
+- 必须保留第三方版本。第三方服务、库、API、协议、模型、文件格式和工具链要求或公开提供的版本号、依赖约束、版本化 endpoint/参数及原始标识应保留在 lockfile、manifest、provider-specific config/contract 和边界 adapter 中，不得为了内部“无版本”规则删除、伪造或丢失；它们可以参与对应第三方调用和兼容性判断，但不得扩展为无关领域数据的 identity、内部 schema 代际或全局版本路由。
+- 除用户管理的领域版本和第三方版本外，内部版本字段只有在存在可验证的真实正确性消费者时才允许，例如不可替代的并发控制/CAS token；引入前必须在 OpenSpec、PR 或交付说明中写明 owner、消费者、正确性不变量、为何无版本设计不可行和移除条件。没有明确消费者，或仅服务迁移、兼容、预留和调试时，一律禁止。
 - Renderer 沙箱限制必须遵守：
   - Renderer/Webview 包不能直接访问 Node.js 或 Electron API。
   - 宿主能力只能通过 preload 暴露的最小 typed Desktop port 使用。
@@ -99,6 +103,9 @@
   application service 负责，不得堆入应用组合根。
 - Node/FFmpeg 媒体运行时负责宿主侧媒体探测、转码与流式读取；TypeScript owning packages 负责领域模型与编排，Renderer 不得重复实现宿主媒体逻辑。
 - 当前没有 Proto package；跨层 contract 由 owning package 的 L0 contract 或真实项目 codec 拥有。未来只有存在真实序列化 producer/consumer 时才可通过 OpenSpec 重新引入 Proto。
+- 禁止内部 contract 版本化。用户管理的领域版本可以作为业务 identity/ref 在 owning domain contract 中原样传递，第三方版本可以保留在 provider-specific contract 和边界 adapter 中，但两者都不得作为内部 contract、schema 或 codec shape 的判别字段。package-owned internal contract、public port、IPC/message、DTO、codec、schema、event 和 command 不得声明 contract/schema generation，不得建立内部 `v1`/`v2` 类型、版本化 channel/handler、按版本分发的 registry 或新旧 contract 并行路径。内部 Contract 必须保持单一 canonical shape；变更时必须一次性更新本次边界内全部 producer、consumer、fixture 和测试，并删除旧 shape 与旧路径。
+- Contract 失效必须隔离在最小可判定范围，优先为单次 message/event/command 或单条记录，其次为单个实例、sender、session 或能力；只能拒绝受影响的输入或操作并返回明确 diagnostic，不得因一个 contract decode、validation、registration 或 handler 失败而使其他 contract、组件、项目、工作区或整个应用不可用。Contract registry、组合根和批量加载路径必须支持逐项隔离失败，不得用全局初始化失败、清空共享状态或统一 disable 传播局部 contract 错误。
+- Contract 测试必须覆盖生产者与消费者使用同一 canonical shape、代码中不存在内部 contract 版本字段和版本分发路径、合法的用户领域版本与第三方版本不会被删除或改写，以及单个非法 contract 输入被拒绝时无关 contract、实例、能力、工作区和应用仍可正常使用；涉及 Electron trust boundary 时必须额外断言仅当前请求、sender 或授权资源 fail-closed。
 - 路径系统只保存相对路径或 `${VAR}/path` 形式，避免写入绝对路径；优先复用 `PathResolver` 与现有设置机制。
 - 遵守共享层级隔离：
   - L0：零依赖基础能力
@@ -136,7 +143,7 @@
   生命周期、安全/CSP/protocol/fuse、Main/preload/renderer 入口、sender-bound typed IPC、原生资源
   授权 adapter、产品 shell/presentation composition、package public port wiring、打包和真实 Electron
   fixture。
-- 领域实体、业务状态机、业务 revision/CAS、业务错误 taxonomy、配置解析、业务校验、数据变换、
+- 领域实体、业务状态机、业务并发控制/CAS、业务错误 taxonomy、配置解析、业务校验、数据变换、
   同步/恢复/authoring/portability workflow、Prompt/Skill/Tool/Agent workflow 策略必须进入对应一级
   `packages/*` owning package。当前只有一个 Desktop consumer 不构成留在 `apps/*` 的理由，也不要求
   为此建立 TUI、VS Code 或通用 multi-host framework。
@@ -231,20 +238,25 @@
   - `TODO(P2)`：可延期增强项
 - TODO 应与完整接口或骨架实现一起出现，不要边写边发明接口。
 
-## Prelaunch 兼容策略
+## Prelaunch 数据与替换策略
 
 - 项目尚未发布时，可以对未发布的内部 API、DTO、Webview message、Agent workflow payload、测试 fixture 和 nk\* 草稿格式做显式破坏性调整，用于清理 legacy debt 或收敛到更清晰的架构。
-- “未发布”不等于忽略版本兼容性。破坏性变更必须说明影响范围，以及旧数据是迁移、重建、重新导入、忽略还是有意丢弃。
-- 预发布重构的默认顺序是：先限定本次替换的最小目标边界并定义目标设计/契约，再清理或 poison 该边界内旧 compatibility shim、legacy adapter、fallback branch、dual-read/dual-write、旧字段映射和旧命令入口，确认旧路径不能继续返回成功后，再开发新 canonical path 并接入验证。不要在旧路径仍可兜底成功时继续修补旧路径问题，也不要用并行接口、双实现或多路条件分发长期维持新旧多种代码路径。
+- “未发布”不等于可以牺牲既有用户数据。破坏性变更必须说明影响范围和旧数据处理方式；所有持久化数据必须遵守禁止生产迁移代码和局部失效规则，内部组件格式还必须禁止无意义版本化。失效数据只能通过用户明确执行的手动操作或独立离线脚本修复，不得由产品自动迁移、重建或重新导入。
+- 禁止内部组件和存储格式版本化。组件内部持久化 namespace、目录、key、identity、索引和查询条件不得依赖应用、包、组件、Skill、Prompt、provider、model、build、release、schema version、format revision 或 migration marker，也不得按这些内部版本切换读写路径或判定数据有效性。用户显式管理的 Character、素材等领域版本必须保留为 owning domain 的业务数据；第三方服务、库、API、协议、模型和文件格式版本必须保留在对应外部集成边界，两者均不属于内部组件格式版本。
+- 禁止在应用、workspace package、runtime、启动流程、读写路径或产品构建产物中编写、注册或调用任何持久化数据迁移或兼容代码，包括 migrator、upgrade handler、旧格式转换、版本探测、legacy reader/writer、旧字段 alias/mapping、为旧数据补默认值、dual-read、dual-write、自动重建、兼容 codec/handler、迁移期 compatibility path 和按旧数据 shape 分支。组件数据契约必须长期稳定；演进只能增加具有明确缺省语义的可选字段，并保持所有既有数据原样可读，不得删除、重命名或改变已有字段语义。
+- 持久化数据失效后，只允许用户明确执行手动修复或独立离线数据修复脚本。脚本必须位于产品运行路径之外，不得被应用、package public entry、构建、安装、启动、读取、写入、通用测试或 CI 自动导入或调用，不得包含版本探测或形成长期兼容路径；脚本必须要求显式目标和确认，修改前备份原数据，只处理指定的失效记录或组件实例，并在写回前后验证结果。离线修复脚本属于显式运维工具，不得演变为产品迁移机制。
+- 组件数据失效必须隔离在最小可判定范围，优先为单条记录，其次为单个组件实例；不得因一个组件、实例或记录的数据损坏、缺失或不可读而使其他组件、项目、工作区或整个应用不可用。系统必须保留其余数据的读取和操作能力，并对失效范围返回明确 diagnostic；不得通过全局加载失败、清空全局状态或统一判定全部数据失效来简化错误处理。
+- 数据测试必须覆盖：升级后既有数据仍原样可读；产品代码和运行路径中不存在数据迁移、兼容或自动修复路径，内部组件格式不存在版本判断；用户管理的领域版本以及第三方版本字段仍被原样保留；单条记录或单个组件实例失效时，其余组件、项目、工作区和应用仍可正常使用。离线修复脚本必须使用隔离 fixture 验证目标限定、备份、写回校验和失败不覆盖原数据。
+- 预发布重构的默认顺序是：先限定本次替换的最小目标边界并定义目标设计/契约，再直接删除该边界内旧 compatibility shim、legacy adapter、fallback branch、dual-read/dual-write、旧字段映射、旧命令入口及其注册和引用，确认旧路径不存在且不可触发后，再开发新 canonical path 并接入验证。不得用 poison、fail-closed 占位、并行接口、双实现或多路条件分发保留旧数据路径。
 - 当现有设计无法满足正确性、扩展性或测试性要求时，应修改目标设计和契约，并一次性迁移本次边界内的调用方；不要保留错误设计，再通过 fallback、adapter 套 adapter、版本分支或双写路径绕开设计问题。
-- 只有为保护有价值本地数据、已发布契约或外部信任边界时，才允许临时保留兼容逻辑；必须有 owner、replacement、验证命令、移除条件和到期任务。
-- 开发和测试新路径时默认禁用兼容 fallback；若执行流命中旧路径，必须立即抛错、返回 fail-closed diagnostic 或触发可断言的 telemetry/log failure，不得继续返回旧路径成功结果；仅在明确标记为迁移、拒绝或诊断测试时可观测旧路径。
+- 生产代码中的数据迁移和数据兼容逻辑没有临时例外；保护有价值本地数据、已发布契约或外部信任边界也不得成为保留旧数据读取、转换、fallback 或双路径的理由。数据保护只能通过备份、局部 fail-visible，以及用户显式执行的手工或独立离线脚本实现。
+- 开发和测试新路径时必须删除旧数据路径及其注册、入口和引用；不得保留即使默认关闭或只返回 diagnostic 的 compatibility shim、legacy adapter、migration-only handler、feature flag 或隐藏命令。旧数据只能由当前 canonical contract 局部拒绝，不得进入产品内迁移或兼容流程。
 - 不得用过度兜底或兼容逻辑隐藏代码缺陷：缺失新实现、contract mismatch、非法状态、未知消息、错误配置、未注册 handler/renderer/adapter 时，应 fail-visible 并暴露问题；不能回退旧实现、默认空数据、默认成功状态或 no-op。
-- 新路径验收必须是路径级验收，不得只断言最终结果成功；测试必须断言 canonical path、new handler、new renderer、new adapter 或新 contract 被命中，并通过 spy/counter/log assertion 或将 legacy path poison 成抛错来证明旧路径未参与。
-- 新路径验证必须证明旧路径不会被默认命中；若旧路径仍可被触发，必须有显式 feature flag、migration-only 入口、fail-closed diagnostic、telemetry/log assertion 或迁移测试覆盖，并断言旧路径不会为新路径请求返回成功结果。
-- 测试不得通过 legacy fixture、旧字段 fallback、旧 message handler、旧 renderer 或旧 command alias 让新路径“看似通过”；需要 legacy 覆盖时必须拆成迁移/拒绝/诊断测试。
+- 新路径验收必须是路径级验收，不得只断言最终结果成功；测试必须断言 canonical path、new handler、new renderer、new adapter 或新 contract 被命中，并通过 registry/import/export 断言以及 spy/counter/log assertion 证明旧路径不存在、未注册且未参与，不得为测试保留或 poison legacy path。
+- 新路径验证必须证明旧数据路径已被删除且不可触发；不得用 feature flag、migration-only 入口、fail-closed legacy handler 或 telemetry-only 分支保留旧路径。路径测试必须断言只有 canonical contract、handler、renderer 和 adapter 被注册或调用。
+- 测试不得通过 legacy fixture、旧字段 fallback、旧 message handler、旧 renderer 或旧 command alias 让新路径“看似通过”。Legacy fixture 仅可用于断言当前 canonical contract 会局部拒绝旧数据，且产品代码没有迁移、转换或兼容调用。
 - 不能借 prelaunch cleanup 忽略 Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、Proto、marketplace trust 或安全边界。
-- 不能静默删除或损坏有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录或生成产物；必须提供迁移、重建、确认或 fail-closed diagnostic。
+- 不能静默删除或损坏有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录或生成产物。任何持久化数据都不得由产品迁移或重建，必须按上述规则保持稳定读取或局部 fail-visible；确需修复时只能使用显式手动操作或产品运行路径之外的独立离线脚本，并提供明确的数据保护方案或 fail-closed diagnostic。
 
 ## 测试与质量门禁
 
@@ -263,7 +275,7 @@
 | Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI                                                                      |
 | 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local`，并按领域分别显式本地运行适用的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证；不得把本地专用入口并入 CI 命令                                                                      |
 
-- 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中，并证明 legacy/fallback 路径未参与。
+- 新路径、独立离线数据处理脚本和 bug 修复必须同时验证结果与执行路径：生产路径断言 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中，并证明 legacy/fallback 路径不存在；离线脚本必须额外证明不会被产品代码、构建、启动、通用测试或 CI 调用。
 - 验证应重点发现循环依赖、Layer 0 反向依赖、Renderer/Webview 依赖 Electron/Node、Desktop Main 依赖 React、包到应用反向依赖等架构违规。
 - 验收结论必须列出实际执行的命令、结果和覆盖层级；未执行项需记录不适用原因、阻塞条件和残余风险，不能仅以单元测试通过声明功能完成。
 - Webview 功能场景由 owning package 维护 fixture、用户操作、业务断言和 authoritative side effect；共享 runner 只拥有宿主/CDP/错误策略/报告机制，不得在共享层加入包级业务 shortcut。
