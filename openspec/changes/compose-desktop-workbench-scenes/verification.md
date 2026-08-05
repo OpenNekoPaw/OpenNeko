@@ -344,3 +344,23 @@ Residual risk is limited to real provider/model Assistant first-submit behavior,
 readiness, and Preview types beyond the currently supported authorized descriptors. Cross-scope
 continuation remains intentionally deferred; an active conversation requires a new conversation
 rather than in-place scope rebinding.
+
+## Workspace Region Layout Controls
+
+Task 10.18 replaced the mixed layout Popover and Workspace Main-header actions with four compact
+VS Code Codicon controls in PrimarySidebar top chrome. PrimarySidebar uses its independent sidebar
+CAS; Agent, Main and resource management update only their Workbench presentation state. Agent and
+Main cannot both be hidden, and resource visibility preserves the Agent position preference while
+the renderer resolves the temporary right-dock collision.
+
+Focused renderer/style tests passed `39 / 39`; the complete Desktop suite passed `65 files / 360
+tests`, and `@neko/ui` passed `47 files / 204 tests`. Desktop and UI typechecks, affected ESLint,
+`git diff --check`, strict OpenSpec validation and the renderer production Vite build passed. The
+build retained existing browser-external and chunk-size warnings outside this layout path.
+
+A visible development Electron run exercised Agent-only, Main-only, management-hidden and
+all-regions-visible states through the actual PrimarySidebar buttons. Each toggle changed only its
+owned region, the final business region control became disabled, Workspace Main retained only its
+document tabs, and the user layout was restored to all regions visible after acceptance. Follow-up
+macOS visual evidence found the initial compact `72px` offset overlapping the traffic-light controls;
+the control row now starts at `90px`, with the corrected offset covered by the focused style test.

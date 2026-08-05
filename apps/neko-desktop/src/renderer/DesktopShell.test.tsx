@@ -17,6 +17,7 @@ import {
   resizeTimelineWorkbench,
   resolveAssetCenterPreviewSession,
   setResourceDockPresentationWorkbench,
+  toggleWorkbenchRegion,
 } from './DesktopShell';
 import {
   filterAndSortProjectCatalog,
@@ -78,17 +79,44 @@ describe('Desktop scene Workbench', () => {
     expect(resizeProjectDockWorkbench(workbench, 'resources', 416).resourceDock.width).toBe(416);
   });
 
-  it('keeps Resource management independent from creative Main and Agent placement', () => {
+  it('keeps Resource management state independent from creative Main and Agent placement', () => {
     const initial = {
       ...createDefaultDesktopWorkbenchLayout('window-1'),
       display: { mode: 'chat-main' as const, chatPosition: 'right' as const, chatWidth: 360 },
     };
     const revealed = setResourceDockPresentationWorkbench(initial, 'docked');
     expect(revealed.resourceDock).toEqual({ presentation: 'docked', width: 320 });
-    expect(revealed.display).toMatchObject({ mode: 'chat-main', chatPosition: 'left' });
+    expect(revealed.display).toEqual(initial.display);
     expect(revealed.main).toEqual(initial.main);
     expect(applyWorkbenchDisplayMode(revealed, 'chat-main-right').display.chatPosition).toBe(
-      'left',
+      'right',
+    );
+  });
+
+  it('toggles Agent, Main and management presentation through independent region controls', () => {
+    const initial = workspaceProjection().window.workbench;
+    const withoutAgent = toggleWorkbenchRegion(initial, 'agent');
+    expect(withoutAgent.display.mode).toBe('main-only');
+    expect(withoutAgent.resourceDock).toEqual(initial.resourceDock);
+
+    const restoredAgent = toggleWorkbenchRegion(withoutAgent, 'agent');
+    expect(restoredAgent.display.mode).toBe('chat-main');
+    expect(restoredAgent.main).toEqual(initial.main);
+
+    const withoutMain = toggleWorkbenchRegion(initial, 'main');
+    expect(withoutMain.display.mode).toBe('chat-only');
+    expect(withoutMain.resourceDock).toEqual(initial.resourceDock);
+
+    const withoutManagement = toggleWorkbenchRegion(initial, 'management');
+    expect(withoutManagement.resourceDock.presentation).toBe('hidden');
+    expect(withoutManagement.display).toEqual(initial.display);
+    expect(withoutManagement.main).toEqual(initial.main);
+
+    expect(() => toggleWorkbenchRegion(withoutAgent, 'main')).toThrow(
+      'cannot hide Main while Agent is unavailable',
+    );
+    expect(() => toggleWorkbenchRegion(withoutMain, 'agent')).toThrow(
+      'cannot hide Agent while Main is unavailable',
     );
   });
 
@@ -132,16 +160,33 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('aria-label="Expand sidebar"');
   });
 
-  it('places Workspace layout control beside the top sidebar visibility control', () => {
+  it('places independent Workspace region controls in PrimarySidebar top chrome only', () => {
     const markup = renderShell(<DesktopShellView projection={workspaceProjection()} />);
     const topControls = markup.match(
       /<div class="primary-sidebar-brand__controls">([\s\S]*?)<\/div>/u,
     )?.[1];
 
-    expect(topControls).toContain('data-workbench-display-control="primary-sidebar"');
-    expect(topControls).toContain('primary-sidebar-toggle');
+    expect(topControls).toContain('data-workbench-region-control="primary-sidebar"');
+    expect(topControls).toContain('data-workbench-region-control="agent"');
+    expect(topControls).toContain('data-workbench-region-control="main"');
+    expect(topControls).toContain('data-workbench-region-control="management"');
+    expect(topControls).toContain('codicon-layout-sidebar-left');
+    expect(topControls).toContain('codicon-layout');
+    expect(topControls).toContain('codicon-layout-panel');
+    expect(topControls).toContain('codicon-layout-sidebar-right');
+    expect(topControls?.indexOf('data-workbench-region-control="primary-sidebar"')).toBeLessThan(
+      topControls?.indexOf('data-workbench-region-control="agent"') ?? -1,
+    );
     const footer = markup.match(/<div class="home-navigation-footer">([\s\S]*?)<\/div>/u)?.[1];
-    expect(footer).not.toContain('data-workbench-display-control');
+    expect(footer).not.toContain('data-workbench-region-control');
+    expect(markup).not.toContain('project-main-group__actions');
+    expect(markup).not.toContain('project-main-chat-host__controls');
+  });
+
+  it('keeps non-Workspace scenes limited to the PrimarySidebar presentation control', () => {
+    const markup = renderShell(<DesktopShellView projection={agentProjection()} />);
+    expect(markup.match(/data-workbench-region-control=/gu) ?? []).toHaveLength(1);
+    expect(markup).toContain('data-workbench-region-control="primary-sidebar"');
   });
 
   it('composes Settings navigation and Main inside the same Workbench', () => {

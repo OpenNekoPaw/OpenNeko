@@ -74,7 +74,7 @@ DesktopApplication
 
 PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects` 与 `agentHome.conversations`，因此删除 Home composer/management page 时必须保留最近项目、最近会话、attention 和显式恢复/删除操作。
 
-Sidebar 顶部品牌区同时承载两个窗口级 presentation 控件：PrimarySidebar 显隐和当前 Workspace Workbench 布局。布局控件只在存在 exact Workspace composition 时出现，并紧邻显隐按钮；它不得沉入侧栏 footer、Workspace Main tab header 或领域 Surface。footer 只保留 lifecycle、attention、Settings 等非布局操作。
+Sidebar 顶部品牌区承载一组 VS Code 风格的窗口级 presentation 图标控件。PrimarySidebar 显隐控件始终存在；exact Workspace composition 另外提供 Agent、Main 与管理面板三个独立控件。每个控件只改变其所属区域的 presentation，不能通过一个混合菜单或 Main 内按钮同时管理多个区域；Agent 与 Main 仍必须保证至少一个业务区域可见。控件使用紧凑、无边框、透明默认态和清晰 hover/pressed/focus 状态，并位于一级侧栏顶部 chrome，不随品牌内容或 Main tab 数量移动。它们不得沉入侧栏 footer、Workspace Main tab header 或领域 Surface。footer 只保留 lifecycle、attention、Settings 等非布局操作。
 
 `HomeWorkspace`、`ContentProjectWorkspace` 和 Settings 顶层条件分支被替换为 scene slot builders。Scene 切换只替换 slots；PrimarySidebar 和 ControlledWorkbenchShell 的 React identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/Timeline components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建 Shell 或 sidebar frame。Renderer 必须逐一消费 Host 的 `interaction/main/secondaryMain/leftManager/rightManager` 语义，不能把 Interaction 临时当 Main、把 management Main 当 Dock，或仅复用 Shell JSX 而丢失 Workspace CSS scope。
 

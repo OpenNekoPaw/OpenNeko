@@ -1,16 +1,12 @@
 import {
-  CheckIcon,
   CloseIcon,
   ControlledWorkbenchShell,
   FolderIcon,
   GridIcon,
   IconButton,
   InfoIcon,
-  LeftPanelIcon,
   PackageIcon,
   PlusIcon,
-  Popover,
-  RightPanelIcon,
   SearchIcon,
   SettingsIcon,
   StorylineIcon,
@@ -19,6 +15,7 @@ import {
   TrashIcon,
   WarningIcon,
   WorkbenchEditorTabs,
+  toCodiconClassName,
   type ControlledWorkbenchResizeBinding,
   type ControlledWorkbenchShellProps,
 } from '@neko/ui';
@@ -37,7 +34,6 @@ import {
   reorderMainView,
   resizeMainSplit,
   setWorkbenchDisplayMode,
-  splitMainView,
   type DesktopWorkbenchLayoutProjection,
   type DesktopWorkbenchMainGroup,
 } from '@neko/host/desktop-workbench-contract';
@@ -553,7 +549,11 @@ function DesktopSceneWorkbench({
           projection={projection}
           layoutControl={
             workspaceProject ? (
-              <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
+              <WorkspaceRegionControls
+                actions={actions}
+                disabled={pending}
+                projection={projection}
+              />
             ) : undefined
           }
           lifecycleControl={
@@ -635,7 +635,6 @@ function StaticWorkbenchMainPanelSurface({
 }
 
 function WorkbenchMainPanelSurface({
-  actions,
   active,
   children,
   mainGroupId,
@@ -645,7 +644,6 @@ function WorkbenchMainPanelSurface({
   size = 'full',
   tabs,
 }: {
-  readonly actions?: ReactNode;
   readonly active?: boolean;
   readonly children: ReactNode;
   readonly mainGroupId?: string;
@@ -665,12 +663,7 @@ function WorkbenchMainPanelSurface({
       data-workbench-main-panel={panelId}
       aria-label={label}
     >
-      {tabs || actions ? (
-        <header className="project-main-group__tabs">
-          {tabs}
-          {actions ? <div className="project-main-group__actions">{actions}</div> : null}
-        </header>
-      ) : null}
+      {tabs ? <header className="project-main-group__tabs">{tabs}</header> : null}
       <div className="project-main-group__content">{children}</div>
     </section>
   );
@@ -1044,27 +1037,8 @@ function useContentProjectWorkbenchSlots({
   const leftDock = createAgentDock(workbench, 'left', effectiveAgentPosition, agentDock);
   const rightAgentDock = createAgentDock(workbench, 'right', effectiveAgentPosition, agentDock);
   const rightDock = resourceDock ?? rightAgentDock;
-  const resourceControl = (
-    <WorkbenchIconButton
-      active={workbench.resourceDock.presentation !== 'hidden'}
-      disabled={pending}
-      icon={<RightPanelIcon size={15} />}
-      label={t('workspace.projectResources')}
-      onClick={() =>
-        actions.onUpdateWorkbench(
-          setResourceDockPresentationWorkbench(
-            workbench,
-            workbench.resourceDock.presentation === 'hidden' ? 'docked' : 'hidden',
-          ),
-        )
-      }
-    />
-  );
   const mainSurface = agentMain ? (
-    <div className="project-main-chat-host">
-      {agentDock}
-      <div className="project-main-chat-host__controls">{resourceControl}</div>
-    </div>
+    <div className="project-main-chat-host">{agentDock}</div>
   ) : (
     <MainViewGroupSurface
       actions={actions}
@@ -1072,7 +1046,6 @@ function useContentProjectWorkbenchSlots({
       canvasCapability={canvasCapability}
       cutCapability={cutCapability}
       group={primaryGroup}
-      pending={pending}
       previewCapability={previewCapability}
       project={project}
       projection={projection}
@@ -1081,7 +1054,6 @@ function useContentProjectWorkbenchSlots({
       }
       timelineTarget={cutTimelineTarget ?? undefined}
       workbench={workbench}
-      resourceControl={resourceControl}
     />
   );
   const timelineOwnerRenderedInMain =
@@ -1101,7 +1073,6 @@ function useContentProjectWorkbenchSlots({
           canvasCapability={canvasCapability}
           cutCapability={cutCapability}
           group={secondaryGroup}
-          pending={pending}
           previewCapability={previewCapability}
           project={project}
           projection={projection}
@@ -1211,28 +1182,24 @@ function MainViewGroupSurface({
   canvasCapability,
   cutCapability,
   group,
-  pending,
   previewCapability,
   project,
   projection,
   timelineOwnerViewId,
   timelineTarget,
   workbench,
-  resourceControl,
 }: {
   readonly actions: ShellActions;
   readonly allowCutRuntime: boolean;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly group: DesktopWorkbenchMainGroup;
-  readonly pending: boolean;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly timelineOwnerViewId?: string;
   readonly timelineTarget?: Element;
   readonly workbench: DesktopWorkbenchLayoutProjection;
-  readonly resourceControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
   const views = group.viewIds.map((viewId) => {
@@ -1243,33 +1210,9 @@ function MainViewGroupSurface({
     return view;
   });
   const activeView = views.find((view) => view.viewId === group.activeViewId);
-  const canSplit = Boolean(activeView && activeView.kind !== 'cut' && group.viewIds.length > 1);
   return (
     <WorkbenchMainPanelSurface
       active={workbench.main.activeGroupId === group.groupId}
-      actions={
-        <>
-          {resourceControl}
-          <WorkbenchIconButton
-            disabled={pending || !canSplit}
-            icon={<RightPanelIcon size={15} />}
-            label={t('workspace.mainTabs.splitRight')}
-            onClick={() => {
-              if (!activeView) throw new Error('Desktop Main split requires an active View.');
-              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'columns'));
-            }}
-          />
-          <WorkbenchIconButton
-            disabled={pending || !canSplit}
-            icon={<GridIcon size={15} />}
-            label={t('workspace.mainTabs.splitDown')}
-            onClick={() => {
-              if (!activeView) throw new Error('Desktop Main split requires an active View.');
-              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'rows'));
-            }}
-          />
-        </>
-      }
       mainGroupId={group.groupId}
       panelId={`workspace:${group.groupId}`}
       tabs={
@@ -1384,38 +1327,9 @@ function renderWorkbenchMainView({
   );
 }
 
-function WorkbenchIconButton({
-  active,
-  disabled,
-  icon,
-  label,
-  onClick,
-}: {
-  readonly active?: boolean;
-  readonly disabled: boolean;
-  readonly icon: JSX.Element;
-  readonly label: string;
-  readonly onClick: () => void;
-}): JSX.Element {
-  return (
-    <Tooltip content={label}>
-      <button
-        type="button"
-        className="project-layout-icon-button"
-        disabled={disabled}
-        aria-label={label}
-        aria-pressed={active}
-        onClick={onClick}
-      >
-        {icon}
-      </button>
-    </Tooltip>
-  );
-}
-
 type WorkbenchDisplayMode = 'chat-main-left' | 'chat-main-right' | 'chat-only' | 'main-only';
 
-function WorkbenchDisplayMenu({
+function WorkspaceRegionControls({
   actions,
   disabled,
   projection,
@@ -1425,93 +1339,50 @@ function WorkbenchDisplayMenu({
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
   const workbench = projection.window.workbench;
-  const mode = getWorkbenchDisplayMode(workbench);
-  const hasCreativeMain = workbench.main.views.length > 0;
-  const selectMode = (nextMode: WorkbenchDisplayMode): void => {
-    actions.onUpdateWorkbench(applyWorkbenchDisplayMode(workbench, nextMode));
-    setOpen(false);
-  };
+  const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
+  const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
+  const managementVisible = isWorkbenchRegionVisible(workbench, 'management');
   return (
-    <Popover
-      align="end"
-      open={open}
-      onOpenChange={setOpen}
-      side="right"
-      trigger={
-        <IconButton
-          className="project-display-menu-trigger"
-          data-workbench-display-control="primary-sidebar"
-          disabled={disabled}
-          icon={<RightPanelIcon size={16} />}
-          label={t('workspace.displayMode')}
-          title={t('workspace.displayMode')}
-          aria-expanded={open}
-        />
-      }
+    <div
+      className="workspace-region-controls"
+      role="group"
+      aria-label={t('workspace.layoutControls')}
     >
-      <div className="project-display-menu" role="menu" aria-label={t('workspace.displayMode')}>
-        <strong>{t('workspace.displayMode')}</strong>
-        <DisplayMenuButton
-          checked={mode === 'chat-main-left' || mode === 'chat-main-right'}
-          label={t('workspace.chatAndMain')}
-          onClick={() =>
-            selectMode(mode === 'chat-main-right' ? 'chat-main-right' : 'chat-main-left')
-          }
-        />
-        <div className="project-display-menu__nested">
-          <DisplayMenuButton
-            checked={mode === 'chat-main-left'}
-            label={t('workspace.chatLeft')}
-            onClick={() => selectMode('chat-main-left')}
-          />
-          <DisplayMenuButton
-            checked={mode === 'chat-main-right'}
-            label={t('workspace.chatRight')}
-            onClick={() => selectMode('chat-main-right')}
-          />
-        </div>
-        <DisplayMenuButton
-          checked={mode === 'chat-only'}
-          label={t('workspace.chatOnly')}
-          onClick={() => selectMode('chat-only')}
-        />
-        <DisplayMenuButton
-          checked={mode === 'main-only'}
-          disabled={!hasCreativeMain}
-          label={t('workspace.mainOnly')}
-          onClick={() => selectMode('main-only')}
-        />
-      </div>
-    </Popover>
-  );
-}
-
-function DisplayMenuButton({
-  checked,
-  disabled = false,
-  label,
-  onClick,
-}: {
-  readonly checked: boolean;
-  readonly disabled?: boolean;
-  readonly label: string;
-  readonly onClick: () => void;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      className="project-display-menu__item"
-      role="menuitemradio"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <RightPanelIcon size={16} />
-      <span>{label}</span>
-      {checked ? <CheckIcon size={15} /> : <span aria-hidden="true" />}
-    </button>
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="agent"
+        disabled={disabled || (agentVisible && !mainVisible)}
+        icon={<span className={toCodiconClassName('layout')} aria-hidden="true" />}
+        label={t('workspace.agent')}
+        size="xs"
+        title={t('workspace.agent')}
+        aria-pressed={agentVisible}
+        onClick={() => actions.onUpdateWorkbench(toggleWorkbenchRegion(workbench, 'agent'))}
+      />
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="main"
+        disabled={disabled || workbench.main.views.length === 0 || (mainVisible && !agentVisible)}
+        icon={<span className={toCodiconClassName('layout-panel')} aria-hidden="true" />}
+        label={t('workspace.mainPanel')}
+        size="xs"
+        title={t('workspace.mainPanel')}
+        aria-pressed={mainVisible}
+        onClick={() => actions.onUpdateWorkbench(toggleWorkbenchRegion(workbench, 'main'))}
+      />
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="management"
+        disabled={disabled}
+        icon={<span className={toCodiconClassName('layout-sidebar-right')} aria-hidden="true" />}
+        label={t('workspace.projectResources')}
+        size="xs"
+        title={t('workspace.projectResources')}
+        aria-pressed={managementVisible}
+        onClick={() => actions.onUpdateWorkbench(toggleWorkbenchRegion(workbench, 'management'))}
+      />
+    </div>
   );
 }
 
@@ -1696,15 +1567,6 @@ export function setResourceDockPresentationWorkbench(
       ...workbench.resourceDock,
       presentation,
     },
-    display:
-      presentation !== 'hidden' &&
-      workbench.display.mode === 'chat-main' &&
-      workbench.display.chatPosition === 'right'
-        ? {
-            ...workbench.display,
-            chatPosition: 'left',
-          }
-        : workbench.display,
   };
 }
 
@@ -1715,12 +1577,49 @@ export function activateWorkbenchMainView(
   return openOrFocusMainView(workbench, view);
 }
 
-function getWorkbenchDisplayMode(
+type WorkbenchRegion = 'agent' | 'main' | 'management';
+
+export function isWorkbenchRegionVisible(
   workbench: DesktopWorkbenchLayoutProjection,
-): WorkbenchDisplayMode {
-  if (workbench.display.mode === 'chat-only') return 'chat-only';
-  if (workbench.display.mode === 'main-only') return 'main-only';
-  return workbench.display.chatPosition === 'left' ? 'chat-main-left' : 'chat-main-right';
+  region: WorkbenchRegion,
+): boolean {
+  if (region === 'agent') return workbench.display.mode !== 'main-only';
+  if (region === 'main') {
+    return workbench.main.views.length > 0 && workbench.display.mode !== 'chat-only';
+  }
+  return workbench.resourceDock.presentation !== 'hidden';
+}
+
+export function toggleWorkbenchRegion(
+  workbench: DesktopWorkbenchLayoutProjection,
+  region: WorkbenchRegion,
+): DesktopWorkbenchLayoutProjection {
+  const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
+  const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
+  if (region === 'agent') {
+    if (agentVisible && !mainVisible) {
+      throw new Error('Desktop Workbench cannot hide Agent while Main is unavailable.');
+    }
+    return setWorkbenchDisplayMode(
+      workbench,
+      agentVisible ? 'main-only' : 'chat-main',
+      workbench.display.chatPosition,
+    );
+  }
+  if (region === 'main') {
+    if (mainVisible && !agentVisible) {
+      throw new Error('Desktop Workbench cannot hide Main while Agent is unavailable.');
+    }
+    return setWorkbenchDisplayMode(
+      workbench,
+      mainVisible ? 'chat-only' : 'chat-main',
+      workbench.display.chatPosition,
+    );
+  }
+  return setResourceDockPresentationWorkbench(
+    workbench,
+    isWorkbenchRegionVisible(workbench, 'management') ? 'hidden' : 'docked',
+  );
 }
 
 export function applyWorkbenchDisplayMode(
@@ -1730,9 +1629,7 @@ export function applyWorkbenchDisplayMode(
   if (mode === 'chat-only') return setWorkbenchDisplayMode(workbench, 'chat-only');
   if (mode === 'main-only') return setWorkbenchDisplayMode(workbench, 'main-only');
   const requestedPosition = mode === 'chat-main-left' ? 'left' : 'right';
-  const chatPosition =
-    workbench.resourceDock.presentation === 'hidden' ? requestedPosition : 'left';
-  return setWorkbenchDisplayMode(workbench, 'chat-main', chatPosition);
+  return setWorkbenchDisplayMode(workbench, 'chat-main', requestedPosition);
 }
 
 export function openCanvasDocumentWorkbench(input: {
@@ -2219,15 +2116,18 @@ function PrimarySidebarBrand({
     <div className="primary-sidebar-brand">
       <DesktopApplicationBrand showMark={compact} />
       <div className="primary-sidebar-brand__controls">
-        {layoutControl}
         <IconButton
-          className="primary-sidebar-toggle"
+          className="primary-sidebar-toggle workbench-region-toggle"
+          data-workbench-region-control="primary-sidebar"
           disabled={disabled}
-          icon={<LeftPanelIcon size={17} />}
+          icon={<span className={toCodiconClassName('layout-sidebar-left')} aria-hidden="true" />}
           label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+          size="xs"
           title={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+          aria-pressed={!compact}
           onClick={onToggle}
         />
+        {layoutControl}
       </div>
     </div>
   );

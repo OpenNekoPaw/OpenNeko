@@ -53,8 +53,10 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a versione
 #### Scenario: Workspace layout controls are available
 
 - **WHEN** the active scene owns an exact Workspace Workbench composition
-- **THEN** its layout control is rendered in the PrimarySidebar top brand control group beside the sidebar visibility control
-- **AND** it is not rendered in the sidebar footer, Workspace Main tab header or a domain Surface
+- **THEN** PrimarySidebar, Agent, Main and management presentation each has its own compact VS Code-style icon control in the PrimarySidebar top chrome
+- **AND** each control changes only its owned region while Agent and Main keep at least one business region visible
+- **AND** active, hover and keyboard-focus states do not resize or shift the control row
+- **AND** no layout control is rendered in the sidebar footer, Workspace Main tab header or a domain Surface
 
 ### Requirement: Workbench uses explicit variable scene shapes
 

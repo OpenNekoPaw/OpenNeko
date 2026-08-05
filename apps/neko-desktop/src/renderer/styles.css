@@ -1,4 +1,5 @@
 @import '@neko/ui/workbench/editor-workbench.css';
+@import '@neko/ui/icons/codicon.css';
 
 @tailwind base;
 @tailwind components;
@@ -386,10 +387,47 @@ code {
 }
 
 .primary-sidebar-brand__controls {
+  position: absolute;
+  z-index: 2;
+  top: 6px;
+  right: 8px;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.workspace-region-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.primary-sidebar-brand__controls .workbench-region-toggle {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--neko-desktop-text-muted);
+  background: transparent;
+}
+
+.primary-sidebar-brand__controls .workbench-region-toggle .codicon {
+  font-size: 16px;
+}
+
+.primary-sidebar-brand__controls .workbench-region-toggle:hover:not(:disabled) {
+  color: var(--neko-desktop-text-strong);
+  background: var(--neko-desktop-control-hover);
+}
+
+.primary-sidebar-brand__controls .workbench-region-toggle[aria-pressed='true'] {
+  color: var(--neko-desktop-text-strong);
+}
+
+.primary-sidebar-brand__controls .workbench-region-toggle:active:not(:disabled) {
+  background: var(--neko-desktop-control-pressed);
 }
 
 .home-brand-title {
@@ -439,7 +477,9 @@ code {
 }
 
 .home-navigation--compact .primary-sidebar-brand__controls {
-  flex-direction: column;
+  right: auto;
+  left: 90px;
+  flex-direction: row;
 }
 
 .home-navigation--compact .home-brand strong,
@@ -748,11 +788,6 @@ code {
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.project-display-menu-trigger[aria-expanded='true'] {
-  color: var(--neko-fg);
-  background: var(--neko-desktop-control-pressed);
 }
 
 .attention-summary {
@@ -1658,25 +1693,6 @@ code {
   min-height: 0;
 }
 
-.project-main-chat-host__controls {
-  position: absolute;
-  z-index: 10;
-  top: 5px;
-  right: 5px;
-}
-
-.project-main-chat-host__controls .project-layout-icon-button {
-  display: inline-grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-control);
-  color: var(--neko-fg-secondary);
-  background: var(--neko-desktop-surface);
-  box-shadow: var(--neko-desktop-shadow-surface);
-}
-
 .project-main-group {
   display: flex;
   width: 100%;
@@ -1758,36 +1774,6 @@ code {
   overflow-x: auto;
 }
 
-.project-main-group__actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 2px;
-  padding: 0 4px;
-  border-bottom: 1px solid var(--neko-desktop-border);
-  background: var(--neko-desktop-chrome);
-}
-
-.project-main-group__actions button {
-  display: inline-grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border: 0;
-  border-radius: var(--neko-desktop-radius-control);
-  color: var(--neko-fg-secondary);
-  background: transparent;
-}
-
-.project-main-group__actions button:hover:not(:disabled) {
-  color: var(--neko-fg);
-  background: var(--neko-desktop-control-hover);
-}
-
-.project-main-group__actions button:disabled {
-  opacity: 0.4;
-}
-
 .project-main-group__content {
   min-width: 0;
   min-height: 0;
@@ -1805,61 +1791,6 @@ code {
 
 .project-main-view-stack__item[hidden] {
   display: none;
-}
-
-.project-display-menu {
-  display: grid;
-  min-width: 236px;
-  gap: 3px;
-  padding: 5px;
-}
-
-.project-display-menu > strong {
-  padding: 7px 9px 8px;
-  color: var(--neko-fg-secondary);
-  font-size: 11px;
-}
-
-.project-display-menu__nested {
-  display: grid;
-  padding-left: 26px;
-}
-
-.project-display-menu__item {
-  display: grid;
-  width: 100%;
-  min-height: 38px;
-  grid-template-columns: 18px minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--neko-desktop-radius-control);
-  color: var(--neko-fg);
-  background: transparent;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.project-display-menu__item:hover {
-  background: var(--neko-desktop-control-hover);
-}
-
-.project-display-menu__item:disabled {
-  color: var(--neko-desktop-text-subtle);
-  cursor: not-allowed;
-  opacity: 0.72;
-}
-
-.project-display-menu__item:disabled:hover {
-  background: transparent;
-}
-
-.project-display-menu__separator {
-  height: 1px;
-  margin: 6px 8px 3px;
-  background: var(--neko-desktop-border);
 }
 
 .project-portability-panel {

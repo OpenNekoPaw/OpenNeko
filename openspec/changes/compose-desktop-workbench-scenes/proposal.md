@@ -26,6 +26,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Entry Draft 首次提交完成一次 owner/session/endpoint 交接：lifecycle authority 已提交 initial message/pending intent、正确 scope 的 runtime conversation 可启动、session Scene 和新 projection endpoint 同时可附着；旧 launch attachment 只能经旧 endpoint 释放。崩溃重放可修复缺失的本地 session materialization，但不得重复 provider execution 或忽略 endpoint identity mismatch。
 - **BREAKING**：删除 `HomeStartCreating`、Home 独立 Agent composer、`agentInitialInput` handoff、Home/Project/Settings 顶层分支、场景级 sidebar frame、默认首个/最近/active Project fallback，以及模型意图决定可执行场景的路径；不保留成功 fallback。
 - PrimarySidebar 将“最近会话”定义为恢复精确 interactive session，将“最近打开”定义为打开 Project/Character/Room 容器并进入新的 owner-bound draft；不得把容器选择当作旧会话恢复，也不得把内部角色 AgentSession 作为 Room 最近项暴露。
+- Workspace 顶部布局 chrome 使用 VS Code 风格的紧凑独立图标控件，分别管理一级侧栏、Agent、Main 与管理面板显隐；Main tab header 和领域 Surface 不再重复渲染布局按钮。
 - Renderer view-scoped runtime 的 effect 只拥有 subscription；runtime instance 只在 identity 被替换或组件真正卸载时 dispose。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实 Electron exception/DOM 证据验收。
 - 本变更定义 Character/Chatroom 的 Workbench 形态，但不实现尚不存在的 Character Manager、Interactive Main、World authoring/experience owner；未具备 owner/runtime/Surface 的显式导航请求返回 unavailable，active conversation 不允许原地 rebind。
 

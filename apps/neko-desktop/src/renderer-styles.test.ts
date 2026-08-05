@@ -104,12 +104,28 @@ describe('Desktop renderer styles', () => {
     expect(styles).not.toContain('.home-composer-divider');
   });
 
-  it('keeps project layout controls in the primary-sidebar footer rather than over Main content', () => {
-    expect(styles).toMatch(/\.home-navigation-footer__actions\s*\{[\s\S]*?display\s*:\s*flex/u);
+  it('keeps VS Code-style region controls in PrimarySidebar top chrome rather than Main content', () => {
+    expect(styles).toContain("@import '@neko/ui/icons/codicon.css';");
     expect(styles).toMatch(
-      /\.home-navigation--compact\s+\.home-navigation-footer__actions\s*\{[\s\S]*?flex-direction\s*:\s*column/u,
+      /\.primary-sidebar-brand__controls\s*\{[\s\S]*?position\s*:\s*absolute[\s\S]*?top\s*:\s*6px[\s\S]*?right\s*:\s*8px/u,
+    );
+    expect(styles).toMatch(
+      /\.primary-sidebar-brand__controls \.workbench-region-toggle\s*\{[\s\S]*?width\s*:\s*22px[\s\S]*?height\s*:\s*22px[\s\S]*?border\s*:\s*0[\s\S]*?background\s*:\s*transparent/u,
+    );
+    expect(styles).not.toMatch(
+      /\.workbench-region-toggle\[aria-pressed='true'\]\s*\{[^}]*background/u,
+    );
+    expect(styles).toMatch(
+      /\.workbench-region-toggle:active:not\(:disabled\)\s*\{[^}]*background\s*:\s*var\(--neko-desktop-control-pressed\)/u,
+    );
+    expect(styles).toMatch(/\.workspace-region-controls\s*\{[\s\S]*?display\s*:\s*flex/u);
+    expect(styles).toMatch(
+      /\.home-navigation--compact \.primary-sidebar-brand__controls\s*\{[\s\S]*?left\s*:\s*90px[\s\S]*?flex-direction\s*:\s*row/u,
     );
     expect(styles).not.toMatch(/\.project-workbench-controls\s*\{/u);
+    expect(styles).not.toContain('.project-main-group__actions');
+    expect(styles).not.toContain('.project-main-chat-host__controls');
+    expect(styles).not.toContain('.project-display-menu');
   });
 
   it('projects opaque shared Popover tokens for Desktop portals', () => {
