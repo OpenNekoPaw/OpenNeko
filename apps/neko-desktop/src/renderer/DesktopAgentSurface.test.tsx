@@ -194,7 +194,7 @@ describe('DesktopAgentSurface', () => {
     await act(async () => root.unmount());
   });
 
-  it('mounts Assistant draft through the same Root and detaches its exact launch epoch', async () => {
+  it('mounts Assistant draft through the same Root and detaches its exact launch identity', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi.fn(async () => launchCatalog('assistant:1', 'launch-1'));
     const detach = vi.fn(async () => undefined);
@@ -225,7 +225,7 @@ describe('DesktopAgentSurface', () => {
     expect(detach).toHaveBeenCalledWith(launchCatalog('assistant:1', 'launch-1').connection);
   });
 
-  it('keeps the Root DOM identity while replacing the launch adapter by exact epoch', async () => {
+  it('keeps the Root DOM identity while replacing the adapter by exact launch identity', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi
       .fn()

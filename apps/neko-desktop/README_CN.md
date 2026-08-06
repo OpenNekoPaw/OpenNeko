@@ -8,7 +8,7 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
 - 安全的 main/preload/renderer 边界、Electron Host ports、应用身份和退出生命周期；
 - Home、Content Project Tab、Context Dock、Activity/Attention owner-derived 投影；
 - canonical Workspace/Project identity、Window/Tab/View state、CAS persistence；
-- sender-bound fixed IPC、renderer epoch/revision 检查和 restart recovery；
+- sender-bound fixed IPC、renderer session identity/revision 检查和 restart recovery；
 - 真实 Pi conversation authority、Session/checkpoint、lease、Tool/Skill snapshot 和 Timeline
   projection 的 AppHost composition；
 - 只通过 HostSecretPort 持久化的 credential runtime，以及 macOS 原生受保护认证输入；

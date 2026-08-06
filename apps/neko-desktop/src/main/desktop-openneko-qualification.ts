@@ -290,7 +290,7 @@ async function qualifyPcmCancellation(
     windowId: 'qualification-window-1',
     viewId: 'qualification-view',
     sessionId: `pcm-${mode}`,
-    rendererSessionId: 'qualification-epoch',
+    rendererSessionId: 'qualification-session',
   });
   const pcm = await publisher.registerPcm((signal) => {
     const stdout = new PassThrough();
@@ -348,7 +348,7 @@ function owner(windowId: string, sessionId: string): DesktopResourceOwner {
     windowId,
     viewId: 'qualification-view',
     sessionId,
-    rendererSessionId: 'qualification-epoch',
+    rendererSessionId: 'qualification-session',
   };
 }
 
