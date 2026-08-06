@@ -9,6 +9,7 @@ import {
   listNekoStorageClassifications,
   markWorkspaceIdentityOrphaned,
   parseWorkspaceIdentityJson,
+  resolveManagedLogFile,
   resolveStorageLayout,
   resolveWorkspaceCachePartition,
   serializeWorkspaceIdentityDescriptor,
@@ -170,6 +171,24 @@ describe('canonical storage layout', () => {
       processors: '/Users/feng/.neko/processors',
     });
     expect('config' in layout.project.facts).toBe(false);
+  });
+
+  it('resolves exact owner-partitioned managed log files', () => {
+    expect(resolveManagedLogFile('/Users/feng', { kind: 'desktop' })).toBe(
+      '/Users/feng/.neko/logs/desktop/desktop.ndjson',
+    );
+    expect(resolveManagedLogFile('/Users/feng', { kind: 'agent' })).toBe(
+      '/Users/feng/.neko/logs/agent/agent.ndjson',
+    );
+    expect(
+      resolveManagedLogFile('/Users/feng', {
+        kind: 'workspace',
+        workspaceId: WORKSPACE_ID,
+      }),
+    ).toBe(`/Users/feng/.neko/logs/workspaces/${WORKSPACE_ID}/workspace.ndjson`);
+    expect(() =>
+      resolveManagedLogFile('/Users/feng', { kind: 'workspace', workspaceId: '../escape' }),
+    ).toThrow('valid workspaceId');
   });
 
   it('accepts only the canonical metadata database path', () => {

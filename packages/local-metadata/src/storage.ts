@@ -533,6 +533,11 @@ export interface IStorageLayout {
   readonly project: IProjectStorageLayout;
 }
 
+export type ManagedLogOwner =
+  | { readonly kind: 'desktop' }
+  | { readonly kind: 'agent' }
+  | { readonly kind: 'workspace'; readonly workspaceId: string };
+
 export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayout {
   const root = join(homedir, '.neko');
   return {
@@ -585,6 +590,24 @@ export function resolveWorkspaceCachePartition(homedir: string, workspaceId: str
     });
   }
   return join(resolveGlobalStorageLayout(homedir).workspaceCaches, workspaceId);
+}
+
+export function resolveManagedLogFile(homedir: string, owner: ManagedLogOwner): string {
+  const layout = resolveGlobalStorageLayout(homedir);
+  switch (owner.kind) {
+    case 'desktop':
+      return join(layout.desktopLogs, 'desktop.ndjson');
+    case 'agent':
+      return join(layout.agentLogs, 'agent.ndjson');
+    case 'workspace':
+      if (!isWorkspaceId(owner.workspaceId)) {
+        throw new NekoStorageContractError({
+          code: 'invalid-workspace-identity',
+          message: 'Workspace log partition requires a valid workspaceId.',
+        });
+      }
+      return join(layout.workspaceLogs, owner.workspaceId, 'workspace.ndjson');
+  }
 }
 
 export function assertCanonicalMetadataDatabasePath(path: string, homedir: string): void {

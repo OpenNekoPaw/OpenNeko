@@ -44,7 +44,7 @@
       `.neko/workspace.json` untouched and product-unreachable.
 - [ ] 4.3 Keep machine-local workspace state in `neko.db#state`, rebuildable indexes in
       `neko.db#cache`, and large derived bytes in user-level workspace cache partitions.
-- [ ] 4.4 Keep Desktop/Workspace/Agent logs in owner-partitioned files with rotation, retention,
+- [x] 4.4 Keep Desktop/Workspace/Agent logs in owner-partitioned files with rotation, retention,
       redaction and explicit deletion.
 - [ ] 4.5 Prove retired config/preferences/log/cache paths remain untouched and outside product cleanup.
 - [ ] 4.6 Add workspace copy/move, duplicate identity, unknown-file preservation, database/cache loss,

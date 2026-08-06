@@ -32,6 +32,7 @@ import {
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { AgentExtensionCatalogSnapshot } from '@neko/agent-contracts';
+import { CapturedLogTransport, ConsoleLogger, LogLevel, type ILogger } from '@neko/shared/logger';
 
 const MODEL: Model<'openai-completions'> = {
   id: 'main',
@@ -53,6 +54,26 @@ describe('AgentAppHost', () => {
   afterEach(async () => {
     await Promise.allSettled(compositions.splice(0).map((composition) => composition.dispose()));
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+  });
+
+  it('emits Workspace lifecycle records through the exact injected owner logger', async () => {
+    const transport = new CapturedLogTransport();
+    const fixture = await createFixture(
+      () => new ConsoleLogger('Workspace', LogLevel.Info, [transport]),
+    );
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    await workspace.createConversation('conversation-log-1');
+    await workspace.deleteConversation('conversation-log-1');
+    await fixture.composition.dispose();
+
+    expect(transport.list().map((entry) => entry.message)).toEqual([
+      'Workspace runtime attached.',
+      'Conversation created.',
+      'Conversation deleted.',
+      'Workspace runtime disposed.',
+    ]);
+    expect(transport.list().every((entry) => entry.source === 'Workspace')).toBe(true);
   });
 
   it('runs the canonical Pi Session, Skill, projection and terminal checkpoint path', async () => {
@@ -1245,7 +1266,9 @@ describe('AgentAppHost', () => {
     ).toBe(false);
   });
 
-  async function createFixture() {
+  async function createFixture(
+    createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger,
+  ) {
     const root = await mkdtemp(join(tmpdir(), 'neko-desktop-agent-'));
     roots.push(root);
     const userHome = join(root, 'home');
@@ -1280,6 +1303,7 @@ describe('AgentAppHost', () => {
       credentialRuntime: createTestCredentialRuntime(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       createIdentity: () => `identity-${(identity += 1)}`,
+      ...(createWorkspaceLogger ? { createWorkspaceLogger } : {}),
     });
     compositions.push(composition);
     return { root, userHome, userDataRoot, workspace, composition };

@@ -12,6 +12,7 @@
     "./core": "./src/core/index.ts",
     "./errors": "./src/errors/index.ts",
     "./logger": "./src/logger/index.ts",
+    "./logger/node": "./src/logger/node.ts",
     "./path": "./src/path/index.ts",
     "./job-lifecycle": "./src/job-lifecycle/index.ts"
   },

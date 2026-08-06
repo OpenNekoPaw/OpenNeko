@@ -12,7 +12,8 @@ import {
   shell,
   systemPreferences,
 } from 'electron';
-import { ConsoleLogger } from '@neko/shared/logger';
+import { ConsoleLogger, ConsoleTransport, LogLevel, type ILogger } from '@neko/shared/logger';
+import { ManagedFileLogTransport } from '@neko/shared/logger/node';
 import type { AgentConversationContext } from '@neko/agent-contracts';
 import { DESKTOP_BRIDGE_CHANNELS, type DesktopLifecycleEvent } from '../shared/bridge-contract';
 import {
@@ -49,6 +50,7 @@ import {
   createPersistentAgentConversationLifecycleRepository,
   initializeAgentConversationLifecycleTables,
 } from '@neko/agent-runtime/application';
+import { setRootLogger as setAgentRootLogger } from '@neko/agent-runtime';
 import { NodePiConversationCatalogReader } from '@neko/agent-runtime/pi';
 import { NodeVideoThumbnail } from '@neko/media/node';
 import {
@@ -72,6 +74,7 @@ import { closeDesktopWindows } from './window-lifecycle';
 import {
   DESKTOP_STATE_AUTHORITY_KEYS,
   initializeAssetLibraryMembershipTables,
+  resolveManagedLogFile,
   resolveGlobalStorageLayout,
   SqliteJsonStateRepository,
   type InvalidJsonStateRejection,
@@ -125,7 +128,7 @@ import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-gra
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
-const logger = new ConsoleLogger('Desktop');
+let logger: ILogger = new ConsoleLogger('Desktop');
 
 void bootstrapDesktop().catch((error: unknown) => {
   logger.error('Desktop startup failed.', error);
@@ -144,13 +147,36 @@ async function bootstrapDesktop(): Promise<void> {
 
 async function startDesktop(): Promise<void> {
   await app.whenReady();
-  logger.info('Desktop Electron runtime is ready.');
 
   const homedir = resolveDesktopRuntimeHome({
     systemHome: app.getPath('home'),
     argv: process.argv,
     environment: process.env,
   });
+  const consoleTransport = new ConsoleTransport();
+  const managedLogTransports = new Set<ManagedFileLogTransport>();
+  const createManagedLogTransport = (owner: string, filePath: string) => {
+    const transport = new ManagedFileLogTransport({
+      filePath,
+      onFailure: (error) => {
+        logger.error(`Managed ${owner} log is unavailable.`, error);
+      },
+    });
+    managedLogTransports.add(transport);
+    return transport;
+  };
+  const desktopLogTransport = createManagedLogTransport(
+    'Desktop',
+    resolveManagedLogFile(homedir, { kind: 'desktop' }),
+  );
+  logger = new ConsoleLogger('Desktop', LogLevel.Info, [consoleTransport, desktopLogTransport]);
+  const agentLogger = new ConsoleLogger('Agent', LogLevel.Info, [
+    consoleTransport,
+    createManagedLogTransport('Agent', resolveManagedLogFile(homedir, { kind: 'agent' })),
+  ]);
+  setAgentRootLogger(agentLogger);
+  const workspaceLoggers = new Map<string, ILogger>();
+  logger.info('Desktop Electron runtime is ready.');
   const functionalWorkspace = resolveDesktopFunctionalWorkspace({
     argv: process.argv,
     environment: process.env,
@@ -338,6 +364,23 @@ async function startDesktop(): Promise<void> {
     credentialRuntime,
     catalogReader: agentCatalogReader,
     assistantSpaceIds: [assistantSpaceId],
+    createWorkspaceLogger: (workspace) => {
+      if (workspace.workspaceId === assistantSpaceId) return agentLogger;
+      const existing = workspaceLoggers.get(workspace.workspaceId);
+      if (existing) return existing;
+      const workspaceLogger = new ConsoleLogger('Workspace', LogLevel.Info, [
+        consoleTransport,
+        createManagedLogTransport(
+          `Workspace '${workspace.workspaceId}'`,
+          resolveManagedLogFile(homedir, {
+            kind: 'workspace',
+            workspaceId: workspace.workspaceId,
+          }),
+        ),
+      ]);
+      workspaceLoggers.set(workspace.workspaceId, workspaceLogger);
+      return workspaceLogger;
+    },
     builtinSkillRoot: resolveDesktopBuiltinSkillRoot({
       appPath: app.getAppPath(),
       isPackaged: app.isPackaged,
@@ -1354,6 +1397,9 @@ async function startDesktop(): Promise<void> {
     resourceRegistry.dispose();
     disposeResourceAuthorization();
     disposeProtocol();
+    for (const transport of managedLogTransports) transport.dispose();
+    managedLogTransports.clear();
+    workspaceLoggers.clear();
   }
 }
 

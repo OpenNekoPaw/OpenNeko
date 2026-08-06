@@ -62,6 +62,20 @@ Conversation and accepted-memory authority evidence:
   `pnpm --filter @neko/chara exec vitest run src/contracts/__tests__/character-memory.test.ts`
   passed 11 tests. Agent Contracts, Agent Runtime and Chara typechecks passed.
 
+Owner-partitioned log evidence:
+
+- Desktop, Agent and exact UUID Workspace owners resolve to separate NDJSON files under
+  `~/.neko/logs/`; the Assistant synthetic space remains part of the Agent owner.
+- Managed file transport tests proved structured redaction of credentials, prompts and absolute
+  local paths, bounded size rotation, retention expiry, confirmation-required deletion and
+  initialization/write failure containment to one owner.
+- Agent AppHost tests proved Workspace attach, Conversation create/delete and Workspace disposal
+  records use the exact injected Workspace logger. Desktop disposes file transports only after
+  owned runtimes finish disposal.
+- `pnpm --filter @neko/shared test` passed 60 tests, `pnpm --filter @neko/local-metadata test`
+  passed 70 tests and `pnpm --filter @neko/agent-runtime test` passed 977 tests. Shared and Desktop
+  typechecks, `check:no-internal-versioning` and `check:legacy-debt` passed.
+
 ### Agent Evaluation
 
 - Authoring decision: `reuse` the indexed `agent-runtime.model-binding` suite and its
@@ -91,7 +105,7 @@ Conversation and accepted-memory authority evidence:
   retained the adjacent Resource dock and reported no console error, warning or exception. The
   screenshot was inspected for clipping, overlap, text fit and layering.
 
-Both scenarios used an isolated temporary home. The real `~/.neko/neko.db` was not opened,
+All scenarios used an isolated temporary home. The real `~/.neko/neko.db` was not opened,
 rewritten or migrated.
 
 ### Evaluation disposition

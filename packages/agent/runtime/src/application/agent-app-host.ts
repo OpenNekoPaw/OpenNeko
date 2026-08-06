@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { ILogger } from '@neko/shared/logger';
 
 import {
   NodePiConversationAuthority,
@@ -208,6 +209,7 @@ export interface CreateAgentAppHostOptions {
   readonly builtinSkillRoot?: string;
   readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity?: () => string;
+  readonly createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger;
 }
 
 export function createAgentAppHost(options: CreateAgentAppHostOptions): AgentAppHost {
@@ -432,6 +434,9 @@ class DefaultAgentAppHost implements AgentAppHost {
     const runtime = new DefaultAgentWorkspaceRuntime({
       workspace,
       authority,
+      ...(this.options.createWorkspaceLogger
+        ? { logger: this.options.createWorkspaceLogger(workspace) }
+        : {}),
       userHome: this.options.userHome,
       ...(this.options.builtinSkillRoot === undefined
         ? {}
@@ -444,6 +449,7 @@ class DefaultAgentAppHost implements AgentAppHost {
     });
     if (this.pluginRuntime) runtime.applyPluginRuntime(this.pluginRuntime);
     this.workspaces.set(workspace.workspaceId, runtime);
+    runtime.logAttached();
     this.emitHomeProjectionChanged();
     return runtime;
   }
@@ -461,6 +467,7 @@ class DefaultAgentAppHost implements AgentAppHost {
 interface DefaultAgentWorkspaceRuntimeOptions {
   readonly workspace: AssetWorkspaceResolution;
   readonly authority: NodePiConversationAuthority;
+  readonly logger?: ILogger;
   readonly userHome: string;
   readonly builtinSkillRoot?: string;
   readonly assetLoader?: PiToolResultAssetLoader;
@@ -508,6 +515,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }
   }
 
+  logAttached(): void {
+    this.options.logger?.info('Workspace runtime attached.', { workspaceId: this.workspaceId });
+  }
+
   async createConversation(conversationId: string): Promise<void> {
     this.requireActive();
     requireIdentity(conversationId, 'Conversation');
@@ -523,6 +534,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }
     this.requireProjection(conversationId);
     this.options.onHomeProjectionChanged();
+    this.options.logger?.info('Conversation created.', {
+      workspaceId: this.workspaceId,
+      conversationId,
+    });
   }
 
   async ensureConversation(conversationId: string): Promise<void> {
@@ -562,6 +577,10 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.projections.get(conversationId)?.dispose();
     this.projections.delete(conversationId);
     this.options.onHomeProjectionChanged();
+    this.options.logger?.info('Conversation deleted.', {
+      workspaceId: this.workspaceId,
+      conversationId,
+    });
   }
 
   async clearAllConversations(): Promise<void> {
@@ -889,8 +908,14 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       ...(authorityError === undefined ? [] : [authorityError]),
     ];
     if (errors.length > 0) {
-      throw new AggregateError(errors, `Failed to dispose Agent workspace '${this.workspaceId}'.`);
+      const error = new AggregateError(
+        errors,
+        `Failed to dispose Agent workspace '${this.workspaceId}'.`,
+      );
+      this.options.logger?.error('Workspace runtime disposal failed.', error);
+      throw error;
     }
+    this.options.logger?.info('Workspace runtime disposed.', { workspaceId: this.workspaceId });
   }
 
   private async getOrOpenConversation(
