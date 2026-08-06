@@ -6,6 +6,7 @@ export type AgentConfigDiagnosticCode =
   | 'missingModel'
   | 'missingProviderEndpoint'
   | 'invalidToml'
+  | 'invalidConfigField'
   | 'unsupportedProviderType'
   | 'unsupportedProviderConnectionKind'
   | 'unsupportedProviderProtocolProfile'
@@ -13,12 +14,11 @@ export type AgentConfigDiagnosticCode =
   | 'unsupportedProtocolAuthType'
   | 'unsupportedProtocolStreamFormat'
   | 'unsupportedModelProtocolProfile'
-  | 'unsupportedModelProtocol'
   | 'duplicateProviderId'
   | 'duplicateModelId'
   | 'invalidDefaultMaxTokens'
   | 'invalidModelTokenMetadata'
-  | 'unsupportedConfigField'
+  | 'invalidProviderApiKey'
   | 'unsupportedModelType'
   | 'unsupportedDefaultModelType'
   | 'unsupportedDefaultModelPurpose'
@@ -29,5 +29,6 @@ export type AgentConfigDiagnosticCode =
 export interface AgentConfigDiagnostic {
   code: AgentConfigDiagnosticCode;
   filePath: string;
+  path?: string;
   message: string;
 }

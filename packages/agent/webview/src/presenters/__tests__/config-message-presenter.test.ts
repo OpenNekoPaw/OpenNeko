@@ -12,7 +12,7 @@ import {
   projectSettingsDataMessage,
   projectSettingsMutationError,
 } from '../config-message-presenter';
-import { buildConfigChangedMessage, buildConfigStateMessage } from '@neko/agent-contracts';
+import { buildConfigStateMessage } from '@neko/agent-contracts';
 
 describe('config message presenter', () => {
   beforeEach(() => {
@@ -147,6 +147,26 @@ describe('config message presenter', () => {
       defaultMediaModels: {
         image: 'image-provider:model',
       },
+    });
+  });
+
+  it('preserves a secret-safe local config diagnostic path', () => {
+    expect(
+      projectSettingsDataMessage({
+        type: 'settingsData',
+        conversationId: 'conversation-1',
+        configDiagnostic: {
+          code: 'invalidProviderApiKey',
+          filePath: '/home/user/.neko/config.toml',
+          path: 'providers.deepseek-chat.api_key',
+          message: 'Provider credential field is invalid.',
+        },
+      }).settingsPatch.configDiagnostic,
+    ).toEqual({
+      code: 'invalidProviderApiKey',
+      filePath: '/home/user/.neko/config.toml',
+      path: 'providers.deepseek-chat.api_key',
+      message: 'Provider credential field is invalid.',
     });
   });
 
@@ -713,7 +733,6 @@ describe('config message presenter', () => {
       type: 'configState',
       config: { configuredProviders },
     });
-    expect(buildConfigChangedMessage()).toEqual({ type: 'configChanged' });
 
     expect(
       projectConfigStateMessage({

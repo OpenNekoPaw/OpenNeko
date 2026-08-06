@@ -14,16 +14,6 @@ describe('configHandlers', () => {
     vi.clearAllMocks();
   });
 
-  it('treats configChanged as a deprecated no-op', () => {
-    const context = createContext();
-
-    dispatch({ type: 'configChanged' }, context);
-
-    expect(context.requestConfigSnapshot).not.toHaveBeenCalled();
-    expect(context.setGlobalError).not.toHaveBeenCalled();
-    expect(context.setSettings).not.toHaveBeenCalled();
-  });
-
   it('projects safe settings diagnostics into state and global error', () => {
     const context = createContext();
 

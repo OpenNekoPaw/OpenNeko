@@ -107,7 +107,11 @@ import {
   type DesktopApplicationSettingsProjectionEvent,
 } from '@neko/host/application-settings';
 import { buildConfigFilePath } from '@neko/host/files';
-import { ConfigManager, FileUserConfigManager } from '@neko/host/settings';
+import {
+  ConfigManager,
+  FileProviderCredentialSource,
+  FileUserConfigManager,
+} from '@neko/host/settings';
 import { resolveDesktopBuiltinSkillRoot } from './desktop-builtin-skill-root';
 import { listWorkspaceLinkedMediaLibraries } from '@neko/assets-node';
 import {
@@ -312,6 +316,9 @@ async function startDesktop(): Promise<void> {
   logger.info('Desktop workspace registry initialized.');
   const credentialRuntime = createAgentCredentialRuntime({
     secrets,
+    configCredentials: new FileProviderCredentialSource({
+      filePath: buildConfigFilePath(homedir),
+    }),
     prompt: createMacOSProtectedAuthPrompt({
       openExternal: async (url) => {
         await shell.openExternal(url);

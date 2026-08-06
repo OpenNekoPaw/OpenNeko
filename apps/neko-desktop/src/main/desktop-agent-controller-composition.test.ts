@@ -377,9 +377,7 @@ describe('Agent controller composition', () => {
       {
         type: 'tabState',
         tabState: {
-          openTabs: [
-            { id: 'tab-final', title: 'Final', conversationId: 'conversation-final' },
-          ],
+          openTabs: [{ id: 'tab-final', title: 'Final', conversationId: 'conversation-final' }],
           activeTabId: null,
         },
       },
@@ -421,9 +419,9 @@ describe('Agent controller composition', () => {
         workbenchInstanceId: 'workbench-1',
         agentSurfaceId: 'agent-surface-1',
         projectId: 'project-1',
-          workspaceId: workspace.workspaceId,
-          viewId: 'view-1',
-          connectionId: 'connection-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
       },
     });
     const context = {
@@ -563,9 +561,9 @@ describe('Agent controller composition', () => {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'agent-surface-1',
       projectId: 'project-1',
-        workspaceId: workspace.workspaceId,
-        viewId: 'view-1',
-        connectionId: 'connection-1',
+      workspaceId: workspace.workspaceId,
+      viewId: 'view-1',
+      connectionId: 'connection-1',
     };
     const effects = composition.createEffects({ workspace, identity });
     const posted: AgentHostToWebviewMessage[] = [];
@@ -766,6 +764,7 @@ function createCredentialRuntime() {
       set: async () => undefined,
       delete: async () => undefined,
     },
+    configCredentials: { read: async () => undefined },
     prompt: {
       text: async () => null,
       select: async () => null,

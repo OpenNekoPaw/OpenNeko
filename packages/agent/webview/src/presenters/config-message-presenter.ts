@@ -551,6 +551,7 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
   if (
     code !== 'empty' &&
     code !== 'invalidToml' &&
+    code !== 'invalidConfigField' &&
     code !== 'unsupportedProviderType' &&
     code !== 'unsupportedProviderConnectionKind' &&
     code !== 'unsupportedProviderProtocolProfile' &&
@@ -558,12 +559,11 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
     code !== 'unsupportedProtocolAuthType' &&
     code !== 'unsupportedProtocolStreamFormat' &&
     code !== 'unsupportedModelProtocolProfile' &&
-    code !== 'unsupportedModelProtocol' &&
     code !== 'duplicateProviderId' &&
     code !== 'duplicateModelId' &&
     code !== 'invalidDefaultMaxTokens' &&
     code !== 'invalidModelTokenMetadata' &&
-    code !== 'unsupportedConfigField' &&
+    code !== 'invalidProviderApiKey' &&
     code !== 'unsupportedModelType' &&
     code !== 'unsupportedDefaultModelType' &&
     code !== 'invalidDefaultModelBinding' &&
@@ -578,9 +578,10 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
     return undefined;
   }
   const filePath = readString(record, 'filePath');
+  const path = readString(record, 'path');
   const message = readString(record, 'message');
   if (!filePath || !message) return undefined;
-  return { code, filePath, message };
+  return { code, filePath, ...(path === undefined ? {} : { path }), message };
 }
 
 function projectSelectedChatModel(

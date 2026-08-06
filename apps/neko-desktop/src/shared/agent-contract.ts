@@ -243,10 +243,7 @@ export function parseDesktopAgentBootstrapRequest(value: unknown): DesktopAgentB
       record['workbenchInstanceId'],
       'Desktop Agent Workbench instance identity is required.',
     ),
-    requireNonEmptyString(
-      record['agentSurfaceId'],
-      'Desktop Agent Surface identity is required.',
-    ),
+    requireNonEmptyString(record['agentSurfaceId'], 'Desktop Agent Surface identity is required.'),
     requireNonEmptyString(
       record['projectId'],
       'Desktop Agent bootstrap Project identity is required.',
@@ -380,11 +377,7 @@ export function parseDesktopAgentMessageResult(
 
 export function parseDesktopAgentMessageEvent(value: unknown): DesktopAgentMessageEvent {
   const record = requireRecord(value, 'Desktop Agent message event must be an object.');
-  requireExactKeys(
-    record,
-    ['connection', 'sequence', 'message'],
-    'Desktop Agent message event',
-  );
+  requireExactKeys(record, ['connection', 'sequence', 'message'], 'Desktop Agent message event');
   const message = record['message'];
   if (!isAgentHostToWebviewMessage(message)) {
     throw invalidPayload('Desktop Agent event message type is invalid.');
@@ -593,7 +586,6 @@ const AGENT_HOST_TO_WEBVIEW_MESSAGE_TYPES = [
   'settingsData',
   'projectFiles',
   'configState',
-  'configChanged',
   'settingsUpdated',
   'modelAdded',
   'modelRemoved',

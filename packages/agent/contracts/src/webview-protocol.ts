@@ -740,10 +740,6 @@ export interface ConfigStateMessage {
   };
 }
 
-export interface ConfigChangedMessage {
-  type: 'configChanged';
-}
-
 export interface SettingsUpdatedMessage {
   type: 'settingsUpdated';
   success: boolean;
@@ -907,7 +903,6 @@ export type AgentHostToWebviewMessage =
   | SettingsDataMessage
   | ProjectFilesMessage
   | ConfigStateMessage
-  | ConfigChangedMessage
   | SettingsUpdatedMessage
   | ProviderMutationResultMessage
   | PluginCommandsMessage
@@ -1285,10 +1280,6 @@ export function buildPluginsAvailableMessage(plugins: PluginsAvailable): Plugins
 
 export function buildConfigStateMessage(config: ConfigStateMessage['config']): ConfigStateMessage {
   return { type: 'configState', config };
-}
-
-export function buildConfigChangedMessage(): ConfigChangedMessage {
-  return { type: 'configChanged' };
 }
 
 export function buildTabStateMessage(tabState: TabState): TabStateMessage {

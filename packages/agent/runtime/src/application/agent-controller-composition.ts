@@ -745,7 +745,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       refreshConfig: async (context) => {
         bind(context);
         config.reloadConfig();
-        await context.post({ type: 'configChanged' });
         await context.post(buildConfigStateMessage(safeConfig()));
       },
       openUserConfig: async (context) => {

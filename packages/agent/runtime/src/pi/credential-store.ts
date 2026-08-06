@@ -8,7 +8,7 @@ import type {
   Provider,
 } from '@earendil-works/pi-ai';
 
-export type CredentialProvenance = 'interactive' | 'environment';
+export type CredentialProvenance = 'interactive' | 'config';
 
 export interface PersistedUserCredential {
   readonly credential: Credential;
@@ -25,7 +25,7 @@ export function parsePersistedUserCredential(value: unknown): PersistedUserCrede
   const updatedAt = value['updatedAt'];
   if (
     !isCredential(credential) ||
-    !isCredentialProvenance(provenance) ||
+    provenance !== 'interactive' ||
     typeof updatedAt !== 'string' ||
     !isIsoDate(updatedAt)
   ) {
@@ -117,16 +117,12 @@ export class OpenNekoCredentialStore implements CredentialStore {
     }
   }
 
-  async replace(
-    providerId: string,
-    credential: Credential,
-    provenance: CredentialProvenance,
-  ): Promise<CredentialStatus> {
+  async replace(providerId: string, credential: Credential): Promise<CredentialStatus> {
     try {
       const updated = await this.persistence.modify(providerId, async () =>
         Object.freeze({
           credential: cloneCredential(credential),
-          provenance,
+          provenance: 'interactive',
           updatedAt: new Date(this.now()).toISOString(),
         }),
       );
@@ -186,7 +182,6 @@ export class PiProviderAuthController {
     readonly method: ProviderLoginMethod;
     readonly interaction: AuthInteraction;
     readonly signal?: AbortSignal;
-    readonly provenance?: CredentialProvenance;
   }): Promise<CredentialStatus> {
     const callbacks = {
       ...(input.signal === undefined ? {} : { signal: input.signal }),
@@ -212,11 +207,7 @@ export class PiProviderAuthController {
       }
       credential = await login(callbacks);
     }
-    return this.credentials.replace(
-      input.provider.id,
-      credential,
-      input.provenance ?? 'interactive',
-    );
+    return this.credentials.replace(input.provider.id, credential);
   }
 
   async refresh(provider: Provider): Promise<CredentialStatus> {
@@ -348,10 +339,6 @@ function cloneEntry(
         provenance: entry.provenance,
         updatedAt: entry.updatedAt,
       };
-}
-
-function isCredentialProvenance(value: unknown): value is CredentialProvenance {
-  return value === 'interactive' || value === 'environment';
 }
 
 function isCredential(value: unknown): value is Credential {

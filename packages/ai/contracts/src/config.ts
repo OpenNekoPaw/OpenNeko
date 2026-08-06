@@ -359,11 +359,6 @@ export interface ModelConfig {
    */
   protocolProfile?: ProviderProtocolProfile;
   /**
-   * Adapter type override for older config files.
-   * Prefer protocolProfile for request protocol differences.
-   */
-  protocol?: ProviderType;
-  /**
    * Use Authorization: Bearer instead of x-api-key header.
    * Overrides provider's useBearerAuth if specified.
    * Set to true for proxy services like newapi/one-api that expect Bearer auth.

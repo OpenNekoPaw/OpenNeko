@@ -220,7 +220,6 @@ export {
 
 export {
   buildConfigBridgeGlobalErrorMessage,
-  buildConfigChangedRuntimeMessage,
   runConfigBridgeQueryRuntime,
   type ConfigBridgeRuntimeLogger,
   type ConfigBridgeQueryConfigState,

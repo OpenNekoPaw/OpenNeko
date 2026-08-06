@@ -53,11 +53,7 @@ describe('OpenNeko provider projection to Pi', () => {
 
   it('registers the configured provider and resolves only its stored credential', async () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-    await credentials.replace(
-      'configured-provider',
-      { type: 'api_key', key: 'configured-secret' },
-      'interactive',
-    );
+    await credentials.replace('configured-provider', { type: 'api_key', key: 'configured-secret' });
     const models = createOpenNekoPiModels(credentials);
     const projection = registerOpenNekoPiProvider(models, config());
 
@@ -102,11 +98,10 @@ describe('OpenNeko provider projection to Pi', () => {
     'projects the explicit %s credential profile without GenericAdapter',
     async (type, auth) => {
       const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-      await credentials.replace(
-        'configured-provider',
-        { type: 'api_key', key: 'configured-secret' },
-        'interactive',
-      );
+      await credentials.replace('configured-provider', {
+        type: 'api_key',
+        key: 'configured-secret',
+      });
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
         models,
@@ -148,11 +143,10 @@ describe('OpenNeko provider projection to Pi', () => {
         throw new Error('Expected a TCP test server address.');
       }
       const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-      await credentials.replace(
-        'configured-provider',
-        { type: 'api_key', key: 'configured-secret' },
-        'interactive',
-      );
+      await credentials.replace('configured-provider', {
+        type: 'api_key',
+        key: 'configured-secret',
+      });
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
         models,
@@ -207,11 +201,10 @@ describe('OpenNeko provider projection to Pi', () => {
         throw new Error('Expected a TCP test server address.');
       }
       const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-      await credentials.replace(
-        'configured-provider',
-        { type: 'api_key', key: 'configured-secret' },
-        'interactive',
-      );
+      await credentials.replace('configured-provider', {
+        type: 'api_key',
+        key: 'configured-secret',
+      });
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
         models,

@@ -8,6 +8,7 @@ import {
 } from './credential-store';
 import type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai';
 import type { HostSecretPort } from '@neko/host/ports';
+import type { ProviderCredentialSource, ProviderCredentialSourceEntry } from '@neko/host/settings';
 
 const CREDENTIAL_SECRET_KEY_PREFIX = 'openneko.agent.pi.credential:';
 
@@ -39,10 +40,11 @@ export interface AgentCredentialRuntime {
 
 export function createAgentCredentialRuntime(input: {
   readonly secrets: HostSecretPort;
+  readonly configCredentials: ProviderCredentialSource;
   readonly prompt: ProtectedAuthPromptPort;
 }): AgentCredentialRuntime {
   const credentials = new OpenNekoCredentialStore(
-    new HostSecretUserCredentialPersistence(input.secrets),
+    new HostSecretUserCredentialPersistence(input.secrets, input.configCredentials),
   );
   return Object.freeze({
     credentials,
@@ -55,9 +57,25 @@ export function createAgentCredentialRuntime(input: {
 class HostSecretUserCredentialPersistence implements UserCredentialPersistence {
   private readonly chains = new Map<string, Promise<void>>();
 
-  constructor(private readonly secrets: HostSecretPort) {}
+  constructor(
+    private readonly secrets: HostSecretPort,
+    private readonly configCredentials: ProviderCredentialSource,
+  ) {}
 
   async read(providerId: string): Promise<PersistedUserCredential | undefined> {
+    const configured = await this.configCredentials.read(providerId);
+    if (configured?.status === 'invalid') throw invalidConfigCredential(providerId, configured);
+    if (configured?.status === 'configured') {
+      return {
+        credential: { type: 'api_key', key: configured.apiKey },
+        provenance: 'config',
+        updatedAt: configured.updatedAt,
+      };
+    }
+    return this.readStored(providerId);
+  }
+
+  private async readStored(providerId: string): Promise<PersistedUserCredential | undefined> {
     const stored = await this.secrets.get(credentialSecretKey(providerId));
     if (stored === undefined) return undefined;
     const parsed: unknown = JSON.parse(stored);
@@ -71,7 +89,8 @@ class HostSecretUserCredentialPersistence implements UserCredentialPersistence {
     ) => Promise<PersistedUserCredential | undefined>,
   ): Promise<PersistedUserCredential | undefined> {
     return this.enqueue(providerId, async () => {
-      const current = await this.read(providerId);
+      await this.assertInteractiveOwner(providerId);
+      const current = await this.readStored(providerId);
       const updated = await operation(current);
       if (updated === undefined) return current;
       const validated = parsePersistedUserCredential(updated);
@@ -81,7 +100,19 @@ class HostSecretUserCredentialPersistence implements UserCredentialPersistence {
   }
 
   delete(providerId: string): Promise<void> {
-    return this.enqueue(providerId, () => this.secrets.delete(credentialSecretKey(providerId)));
+    return this.enqueue(providerId, async () => {
+      await this.assertInteractiveOwner(providerId);
+      await this.secrets.delete(credentialSecretKey(providerId));
+    });
+  }
+
+  private async assertInteractiveOwner(providerId: string): Promise<void> {
+    const configured = await this.configCredentials.read(providerId);
+    if (configured === undefined) return;
+    if (configured.status === 'invalid') throw invalidConfigCredential(providerId, configured);
+    throw new Error(
+      `Provider ${providerId} credential is owned by providers.${providerId}.api_key in user config.`,
+    );
   }
 
   private async enqueue<TResult>(
@@ -103,6 +134,13 @@ class HostSecretUserCredentialPersistence implements UserCredentialPersistence {
       if (this.chains.get(providerId) === chain) this.chains.delete(providerId);
     }
   }
+}
+
+function invalidConfigCredential(
+  providerId: string,
+  entry: Extract<ProviderCredentialSourceEntry, { readonly status: 'invalid' }>,
+): Error {
+  return new Error(`Provider ${providerId} credential source is invalid at ${entry.path}.`);
 }
 
 class ProtectedPiAuthInteraction implements AuthInteraction {
