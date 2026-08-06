@@ -186,11 +186,18 @@ describe('Desktop renderer styles', () => {
     const rootRule = styles.match(
       /\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
+    const managementListRule = styles.match(/\.management-surface-list\s*\{(?<body>[\s\S]*?)\n\}/u);
     expect(rootRule?.groups?.body).toMatch(/width\s*:\s*min\(1020px, calc\(100% - 64px\)\)/u);
     expect(rootRule?.groups?.body).toMatch(/margin\s*:\s*0 auto/u);
     expect(rootRule?.groups?.body).toMatch(/padding\s*:\s*clamp\(66px, 10vh, 104px\) 0 52px/u);
     expect(styles).toMatch(/\.management-surface-list\s*\{[\s\S]*?display\s*:\s*grid/u);
+    expect(managementListRule?.groups?.body).toMatch(/padding\s*:\s*0/u);
+    expect(managementListRule?.groups?.body).not.toMatch(/border|background|border-radius/u);
+    expect(styles).toMatch(
+      /\.management-surface-list\[data-empty='true'\]\s*\{[\s\S]*?display\s*:\s*flex[\s\S]*?flex\s*:\s*1/u,
+    );
     expect(styles).toMatch(/\.management-surface-row-actions button\s*\{[\s\S]*?width\s*:\s*28px/u);
+    expect(styles).not.toMatch(/\.management-surface-empty/u);
     expect(styles).not.toMatch(/\.project-management-detail(?:__content)?\s*\{/u);
     expect(styles).not.toMatch(
       /\.home-(?:management|project-(?:selector|list|grid|card)|sort-control|search-field|segmented-control|status-badge)/u,
@@ -230,10 +237,11 @@ describe('Desktop renderer styles', () => {
       /\.global-library-browser__search\s*\{[\s\S]*?width\s*:\s*min\(420px, 55%\)/u,
     );
     expect(packageStyles).toMatch(
-      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?min-height\s*:\s*160px/u,
+      /\.global-library-browser__loading\s*\{[\s\S]*?min-height\s*:\s*160px/u,
     );
+    expect(packageStyles).not.toMatch(/\.global-library-browser__empty/u);
     expect(packageStyles).toMatch(
-      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?place-items\s*:\s*center/u,
+      /\.global-library-browser__loading\s*\{[\s\S]*?place-items\s*:\s*center/u,
     );
     expect(packageStyles).toMatch(
       /\.global-library-browser__toolbar\s*>\s*button\s*\{[\s\S]*?width\s*:\s*36px[\s\S]*?min-width\s*:\s*36px/u,

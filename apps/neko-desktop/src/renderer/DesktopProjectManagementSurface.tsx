@@ -1,5 +1,6 @@
 import { FolderIcon, GridIcon, LayersIcon, OpenIcon, SearchIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { EmptyState } from '@neko/ui/primitives';
 import { useMemo, useState } from 'react';
 import type { DesktopProjectCatalogItem } from '@neko/host/desktop-shell-contract';
 
@@ -63,12 +64,9 @@ export function DesktopProjectCatalogSurface({
           <LayersIcon size={15} />
         </button>
       </div>
-      <div className={`management-surface-list is-${view}`}>
+      <div className={`management-surface-list is-${view}`} data-empty={visible.length === 0}>
         {visible.length === 0 ? (
-          <div className="management-surface-empty">
-            <FolderIcon size={24} />
-            <span>{t('home.projects.noResults')}</span>
-          </div>
+          <EmptyState fill icon={<FolderIcon size={24} />} title={t('home.projects.noResults')} />
         ) : null}
         {visible.map((project) => (
           <div

@@ -57,7 +57,14 @@ describe('Desktop Project Management surfaces', () => {
     );
 
     expect(markup.container.textContent).toContain('No matching projects');
-    expect(markup.container.querySelector('.management-surface-empty')).not.toBeNull();
+    const emptyState = markup.container.querySelector('[data-neko-empty-state="fill"]');
+    expect(emptyState).not.toBeNull();
+    expect(emptyState?.className).toContain('col-span-full');
+    expect(emptyState?.querySelector('svg')).not.toBeNull();
+    expect(emptyState?.closest('.management-surface-list')?.getAttribute('data-empty')).toBe(
+      'true',
+    );
+    expect(markup.container.querySelector('.management-surface-empty')).toBeNull();
     await act(async () => markup.root.unmount());
   });
 });
