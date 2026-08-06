@@ -8,7 +8,11 @@ describe('Storage maintenance report', () => {
       startedAt: '2026-07-13T10:00:00.000Z',
       completedAt: '2026-07-13T10:00:01.000Z',
       entries: [
-        { outcome: 'deleted', subject: 'cache:a', sourcePath: '/workspace/.neko/.cache/a' },
+        {
+          outcome: 'deleted',
+          subject: 'cache:a',
+          sourcePath: '/home/.neko/workspace-cache/workspace-a/resources/a',
+        },
         { outcome: 'rebuilt', subject: 'catalog:conversation' },
         {
           outcome: 'promoted',
@@ -19,13 +23,13 @@ describe('Storage maintenance report', () => {
         {
           outcome: 'quarantined',
           subject: 'cache:truncated',
-          sourcePath: '/home/.neko/index.json.corrupt',
+          sourcePath: '/home/.neko/workspace-cache/workspace-a/index.json.corrupt',
           reason: 'malformed-json',
         },
         {
           outcome: 'user-action-required',
           subject: 'recording:unknown-retention',
-          sourcePath: '/workspace/.neko/recordings/take.webm',
+          sourcePath: '/workspace/media/take.webm',
           reason: 'retention-decision-required',
         },
       ],

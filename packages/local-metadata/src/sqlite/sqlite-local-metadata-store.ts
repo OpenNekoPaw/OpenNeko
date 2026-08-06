@@ -2051,8 +2051,7 @@ function isPortableCatalogPath(value: string): boolean {
     normalized !== '..' &&
     !normalized.startsWith('../') &&
     !normalized.includes('/../') &&
-    !normalized.startsWith('.neko/.cache/') &&
-    !normalized.includes('/.neko/.cache/')
+    !hasHiddenPathSegment(normalized)
   );
 }
 
@@ -2210,8 +2209,7 @@ function assertPortableProjectionPath(value: string, field: string): void {
     normalized === '..' ||
     normalized.startsWith('../') ||
     normalized.includes('/../') ||
-    normalized.includes('/.neko/.cache/') ||
-    normalized.startsWith('.neko/.cache/')
+    hasHiddenPathSegment(normalized)
   ) {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
@@ -2584,11 +2582,7 @@ function optionalPortableAssetRef(value: unknown): boolean {
   if (value === undefined) return true;
   if (typeof value !== 'string' || !value.trim()) return false;
   const normalized = value.replace(/\\/gu, '/');
-  return (
-    !/^([A-Za-z]:\/|\/)/u.test(normalized) &&
-    !normalized.includes('/.neko/.cache/') &&
-    !normalized.startsWith('.neko/.cache/')
-  );
+  return !/^([A-Za-z]:\/|\/)/u.test(normalized) && !hasHiddenPathSegment(normalized);
 }
 
 function optionalPortableProjectionRef(value: unknown): boolean {
@@ -2598,11 +2592,11 @@ function optionalPortableProjectionRef(value: unknown): boolean {
 function isPortableProjectionRef(value: string): boolean {
   if (!value.trim()) return false;
   const normalized = value.replace(/\\/gu, '/');
-  return (
-    !/^([A-Za-z]:\/|\/)/u.test(normalized) &&
-    !normalized.includes('/.neko/.cache/') &&
-    !normalized.startsWith('.neko/.cache/')
-  );
+  return !/^([A-Za-z]:\/|\/)/u.test(normalized) && !hasHiddenPathSegment(normalized);
+}
+
+function hasHiddenPathSegment(value: string): boolean {
+  return value.split('/').some((segment) => segment.startsWith('.'));
 }
 
 function isMediaFileMetadata(value: unknown): value is MediaFileMetadata {

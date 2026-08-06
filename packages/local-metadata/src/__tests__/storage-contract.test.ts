@@ -3,7 +3,6 @@ import {
   assertCanonicalMetadataDatabasePath,
   createWorkspacePortableLocator,
   diagnoseDuplicateWorkspaceIdentity,
-  diagnoseWorkspaceContentPlacement,
   decideNekoStorageAuthority,
   ensureWorkspaceIdentityDescriptor,
   getNekoStorageClassification,
@@ -11,6 +10,7 @@ import {
   markWorkspaceIdentityOrphaned,
   parseWorkspaceIdentityJson,
   resolveStorageLayout,
+  resolveWorkspaceCachePartition,
   serializeWorkspaceIdentityDescriptor,
   updateWorkspaceIdentityBinding,
   type WorkspaceIdentityBinding,
@@ -146,46 +146,16 @@ describe('canonical storage layout', () => {
 
     expect(layout.global.database).toBe('/Users/feng/.neko/neko.db');
     expect(layout.global.assets).toBe('/Users/feng/.neko/assets');
-    expect(layout.project.local.workspaceIdentity).toBe('/workspace/demo/.neko/workspace.json');
-    expect('database' in layout.project.local.cache).toBe(false);
-  });
-
-  it('diagnoses deprecated hooks and explicitly personal workspace content', () => {
-    expect(
-      diagnoseWorkspaceContentPlacement([
-        {
-          relativePath: '.neko/hooks/preflight.md',
-          kind: 'hook',
-          intendedScope: 'project',
-        },
-        {
-          relativePath: '.neko/prompts/reviewer.md',
-          kind: 'prompt',
-          intendedScope: 'personal',
-        },
-        {
-          relativePath: '.neko/prompts/project-review.md',
-          kind: 'prompt',
-          intendedScope: 'project',
-        },
-      ]),
-    ).toEqual([
-      {
-        code: 'deprecated-hook-catalog',
-        kind: 'hook',
-        relativePath: '.neko/hooks/preflight.md',
-        suggestedTarget: '.neko/settings.local.json',
-        message:
-          'Deprecated .neko/hooks content must be converted to settings-based hook configuration.',
-      },
-      {
-        code: 'misplaced-personal-content',
-        kind: 'prompt',
-        relativePath: '.neko/prompts/reviewer.md',
-        suggestedTarget: '~/.neko/prompts',
-        message: 'Personal prompt content is misplaced in workspace-local storage.',
-      },
-    ]);
+    expect(layout.project.facts.identity).toBe('/workspace/demo/neko/project.json');
+    expect(layout.global.workspaceCaches).toBe('/Users/feng/.neko/workspace-cache');
+    expect(resolveWorkspaceCachePartition('/Users/feng', WORKSPACE_ID)).toBe(
+      `/Users/feng/.neko/workspace-cache/${WORKSPACE_ID}`,
+    );
+    expect(layout.global).toMatchObject({
+      desktopLogs: '/Users/feng/.neko/logs/desktop',
+      workspaceLogs: '/Users/feng/.neko/logs/workspaces',
+      agentLogs: '/Users/feng/.neko/logs/agent',
+    });
   });
 
   it('routes user-authored Agent content to canonical editable file roots', () => {
@@ -199,23 +169,12 @@ describe('canonical storage layout', () => {
       config: '/Users/feng/.neko/config.toml',
       processors: '/Users/feng/.neko/processors',
     });
-    expect(layout.project.local).toMatchObject({
-      skills: '/workspace/demo/.agents/skills',
-      commands: '/workspace/demo/.neko/commands',
-      prompts: '/workspace/demo/.neko/prompts',
-      agentsMd: '/workspace/demo/.neko/AGENTS.md',
-      config: '/workspace/demo/.neko/config.toml',
-      processors: '/workspace/demo/.neko/processors',
-    });
     expect('config' in layout.project.facts).toBe(false);
   });
 
   it('accepts only the canonical metadata database path', () => {
     expect(() =>
-      assertCanonicalMetadataDatabasePath(
-        '/workspace/demo/.neko/.cache/neko-cache.db',
-        '/Users/feng',
-      ),
+      assertCanonicalMetadataDatabasePath('/workspace/demo/neko/neko-cache.db', '/Users/feng'),
     ).toThrowError(expect.objectContaining({ code: 'unknown-managed-storage' }));
     expect(() =>
       assertCanonicalMetadataDatabasePath('/Users/feng/.neko/neko.db', '/Users/feng'),
@@ -226,7 +185,7 @@ describe('canonical storage layout', () => {
 describe('workspace identity', () => {
   it('atomically creates and then reuses the workspace identity descriptor', async () => {
     const workspaceRoot = '/workspace/demo';
-    const descriptorPath = '/workspace/demo/.neko/workspace.json';
+    const descriptorPath = '/workspace/demo/neko/project.json';
     const files = new Map<string, string>();
     let nextWorkspaceId = WORKSPACE_ID;
     const filePort = {

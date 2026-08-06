@@ -12,7 +12,6 @@ import type { ResourceCacheMetadataRepository } from './repositories';
 export interface LocalMetadataResourceCacheManifestStoreOptions {
   readonly metadataStore: LocalMetadataStore;
   readonly partition: LocalMetadataPartition;
-  readonly projectRoot?: string;
   readonly now?: () => string;
 }
 
@@ -77,7 +76,6 @@ export class LocalMetadataResourceCacheManifestStore implements ResourceCacheMan
     const entries = await repository.list(this.options.partition);
     const now = this.now();
     return {
-      ...(this.options.projectRoot ? { projectRoot: this.options.projectRoot } : {}),
       createdAt: earliestTimestamp(entries, 'createdAt') ?? now,
       updatedAt: latestTimestamp(entries, 'updatedAt') ?? now,
       entries: Object.fromEntries(entries.map((entry) => [entry.descriptor.id, entry])),

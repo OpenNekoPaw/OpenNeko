@@ -65,7 +65,7 @@ export function ensureNodeWorkspaceIdentityDescriptor(
 }
 
 export interface NodeWorkspaceIdentityResolution {
-  readonly kind: 'created' | 'moved' | 'registered' | 'restored' | 'seen';
+  readonly kind: 'created' | 'moved' | 'registered' | 'seen';
   readonly identity: WorkspaceIdentityDescriptor;
   readonly locator: WorkspacePortableLocator;
   readonly workspace: WorkspaceRegistryRecord;
@@ -153,6 +153,12 @@ export async function resolveNodeWorkspaceIdentity(options: {
       message: `Workspace locator ${locator.value} has ${matches.length} registered identities.`,
     });
   }
+  if (matches.length === 1) {
+    throw new NekoStorageContractError({
+      code: 'invalid-workspace-identity',
+      message: `Project identity is missing at ${locator.value}; the registered Workspace remains visible for explicit user handling.`,
+    });
+  }
   if (matches.length === 0) {
     const identity = parseWorkspaceIdentityJson(
       serializeWorkspaceIdentityDescriptor({
@@ -192,32 +198,10 @@ export async function resolveNodeWorkspaceIdentity(options: {
       throw error;
     }
   }
-  const workspace = matches[0]!;
-  const identity = parseWorkspaceIdentityJson(
-    serializeWorkspaceIdentityDescriptor({ workspaceId: workspace.workspaceId }),
-  );
-  await filePort.ensureParentDirectory(descriptorPath);
-  const writeResult = await filePort.writeFileExclusive(
-    descriptorPath,
-    serializeWorkspaceIdentityDescriptor(identity),
-  );
-  if (writeResult === 'exists') {
-    const winner = await filePort.readFileIfExists(descriptorPath);
-    if (
-      winner === null ||
-      parseWorkspaceIdentityJson(winner).workspaceId !== identity.workspaceId
-    ) {
-      throw new NekoStorageContractError({
-        code: 'duplicate-workspace-identity',
-        message: `Workspace identity recovery raced at ${locator.value}.`,
-      });
-    }
-  }
-  const seenWorkspace = await options.metadataStore.repositories.workspaces.markSeen(
-    identity.workspaceId,
-    options.now ? options.now() : new Date().toISOString(),
-  );
-  return { kind: 'restored', identity, locator, workspace: seenWorkspace };
+  throw new NekoStorageContractError({
+    code: 'invalid-workspace-identity',
+    message: `Workspace identity resolution reached an invalid state at ${locator.value}.`,
+  });
 }
 
 export function createNodeWorkspacePortableLocator(

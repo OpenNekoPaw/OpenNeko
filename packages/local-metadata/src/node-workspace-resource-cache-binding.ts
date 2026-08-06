@@ -73,7 +73,6 @@ export async function createNodeWorkspaceResourceCacheMetadataBinding(options: {
         workspaceId: identity.workspaceId,
         domain: 'resource-cache',
       },
-      projectRoot: options.workDir,
     });
     return {
       workspaceId: identity.workspaceId,

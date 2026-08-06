@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   areResourceCacheEntryDescriptorsContentCompatible,
-  asProjectCachePath,
+  asWorkspaceCachePath,
   asProjectFactPath,
   compareResourceCacheDescriptorObservationStrength,
   createResourceCacheContentIdentity,
@@ -12,7 +12,7 @@ import {
   createResourceVariantKey,
   getResourcePathCategory,
   isManagedCachePathCategory,
-  isProjectCachePath,
+  isWorkspaceCachePath,
   isProjectFactPath,
   isResourceCacheManifest,
   isResourceCacheStatus,
@@ -176,7 +176,6 @@ describe('resource cache contracts', () => {
     });
     const now = '2026-06-05T00:00:00.000Z';
     const manifest: ResourceCacheManifest = {
-      projectRoot: '/workspace',
       createdAt: now,
       updatedAt: now,
       entries: {
@@ -230,13 +229,16 @@ describe('resource cache contracts', () => {
 
   it('classifies cache and project fact paths conservatively', () => {
     const projectRoot = '/workspace/demo';
+    const workspaceCacheRoot = '/Users/feng/.neko/workspace-cache/workspace-id';
     const globalRoot = '/Users/feng/.neko';
     const extensionPrivateRoot =
       '/Users/feng/Library/Application Support/Code/User/globalStorage/neko.neko-agent';
 
     expect(
-      getResourcePathCategory('/workspace/demo/.neko/.cache/resources/a.jpg', { projectRoot }),
-    ).toBe('project-cache');
+      getResourcePathCategory('/Users/feng/.neko/workspace-cache/workspace-id/resources/a.jpg', {
+        workspaceCacheRoot,
+      }),
+    ).toBe('workspace-cache');
     expect(
       getResourcePathCategory('/workspace/demo/neko/assets/library.json', { projectRoot }),
     ).toBe('project-fact');
@@ -251,18 +253,22 @@ describe('resource cache contracts', () => {
     ).toBe('extension-private-cache');
     expect(getResourcePathCategory('/media/source/a.jpg', { projectRoot })).toBe('source-asset');
     expect(
-      isProjectCachePath('/workspace/demo/.neko/.cache/resources/a.jpg', { projectRoot }),
+      isWorkspaceCachePath('/Users/feng/.neko/workspace-cache/workspace-id/resources/a.jpg', {
+        workspaceCacheRoot,
+      }),
     ).toBe(true);
     expect(isProjectFactPath('/workspace/demo/neko/assets/library.json', { projectRoot })).toBe(
       true,
     );
     expect(
-      asProjectCachePath('/workspace/demo/neko/assets/library.json', { projectRoot }),
+      asWorkspaceCachePath('/workspace/demo/neko/assets/library.json', { workspaceCacheRoot }),
     ).toBeUndefined();
     expect(
-      asProjectFactPath('/workspace/demo/.neko/.cache/resources/a.jpg', { projectRoot }),
+      asProjectFactPath('/Users/feng/.neko/workspace-cache/workspace-id/resources/a.jpg', {
+        projectRoot,
+      }),
     ).toBeUndefined();
-    expect(isManagedCachePathCategory('project-cache')).toBe(true);
+    expect(isManagedCachePathCategory('workspace-cache')).toBe(true);
     expect(isManagedCachePathCategory('project-fact')).toBe(false);
   });
 
@@ -270,10 +276,7 @@ describe('resource cache contracts', () => {
     const layout = resolveStorageLayout('/workspace/demo', '/Users/feng');
 
     expect(layout.global.database).toBe('/Users/feng/.neko/neko.db');
-    expect(layout.project.local.cache.resources).toBe('/workspace/demo/.neko/.cache/resources');
-    expect(layout.project.local.cache.resourceManifest).toBe(
-      '/workspace/demo/.neko/.cache/resources/manifest.json',
-    );
-    expect('database' in layout.project.local.cache).toBe(false);
+    expect(layout.global.workspaceCaches).toBe('/Users/feng/.neko/workspace-cache');
+    expect(layout.project.facts.identity).toBe('/workspace/demo/neko/project.json');
   });
 });
