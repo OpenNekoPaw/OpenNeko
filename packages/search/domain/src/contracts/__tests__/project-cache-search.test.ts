@@ -463,7 +463,7 @@ describe('project cache/search contracts', () => {
       sourceRef: {
         kind: 'runtime',
         runtimeKind: 'cache-path',
-        value: '${PROJECT}/.neko/.cache/semantic/pages.json',
+        value: 'scratch://semantic/pages.json',
       },
     };
     const badResult = {
@@ -472,7 +472,7 @@ describe('project cache/search contracts', () => {
       freshness: 'fresh',
       provider: {
         providerId: 'semantic-index.local',
-        sourceIdentity: '${PROJECT}/.neko/semantic-index/comic/page-1.json',
+        sourceIdentity: 'sqlite://semantic-index/comic/page-1.json',
       },
     };
 

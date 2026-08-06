@@ -247,8 +247,7 @@ export function stripGeneratedAssetPath(asset: GeneratedAsset): PathlessGenerate
 export function isPublicGeneratedAssetResultUri(value: string): boolean {
   if (value.length === 0) return false;
   const normalized = value.replace(/\\/g, '/');
-  if (normalized.includes('/.neko/.cache/')) return false;
-  if (normalized.startsWith('.neko/.cache/')) return false;
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) return false;
   if (normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized)) return false;
   if (/^file:/i.test(value)) return false;
   return true;

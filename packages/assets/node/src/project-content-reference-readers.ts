@@ -19,7 +19,6 @@ import { loadNkc, saveNkc } from '@neko/canvas-domain';
 const PROJECT_DOCUMENT_EXTENSIONS = new Set(['.nkc', '.otio']);
 const EXCLUDED_DIRECTORIES = new Set([
   '.git',
-  '.neko',
   '.turbo',
   '.vite',
   'coverage',

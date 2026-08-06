@@ -59,7 +59,7 @@ class ProjectSearchHeadlessCapabilityProvider implements AgentCapabilityProvider
       {
         name: TOOL_NAMES_SEARCH.QUERY_PROJECT_SEARCH,
         description:
-          'Query the project search runtime and return sanitized search hits. Does not expose search index files, cache manifests, Webview URIs, or managed .neko backing paths.',
+          'Query the project search runtime and return sanitized search hits. Does not expose search index files, cache manifests, Webview URIs, or managed storage paths.',
         category: 'file',
         isReadOnly: true,
         isConcurrencySafe: true,
@@ -260,7 +260,10 @@ function isSafeVisibleUri(value: string | undefined): value is string {
 }
 
 function containsManagedStorage(value: string): boolean {
-  return /(^|[\\/])\.neko([\\/]|$)/i.test(value);
+  return value
+    .replaceAll('\\', '/')
+    .split('/')
+    .some((segment) => segment.startsWith('.'));
 }
 
 function isRuntimeMediaUri(value: string): boolean {

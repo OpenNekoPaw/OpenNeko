@@ -54,8 +54,6 @@ describe('semantic coverage coordinator', () => {
         staleReasons: ['range-partial'],
       }),
     );
-    expect(JSON.stringify(result)).not.toContain('.neko/.cache');
-    expect(JSON.stringify(result)).not.toContain('.neko/semantic-index');
   });
 
   it('preserves stale metadata and isolates provider failures', async () => {
@@ -88,7 +86,7 @@ describe('semantic coverage coordinator', () => {
     coordinator.registerSemanticCoverageProvider({
       providerId: 'semantic.failing',
       querySemanticCoverage: vi.fn(async () => {
-        throw new Error('/mock/workspace/.neko/.cache/private.db');
+        throw new Error('/mock/workspace/.private/cache/private.db');
       }),
     });
 
@@ -106,7 +104,7 @@ describe('semantic coverage coordinator', () => {
       ]),
     );
     expect(JSON.stringify(result)).not.toContain('private.db');
-    expect(JSON.stringify(result)).not.toContain('.neko/.cache');
+    expect(JSON.stringify(result)).not.toContain('.private/cache');
   });
 
   it('reports missing coverage when no provider is registered', async () => {

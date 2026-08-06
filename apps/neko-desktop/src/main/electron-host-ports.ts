@@ -66,7 +66,7 @@ export function createElectronNekoHostPorts(
     }),
     files: createDesktopFileSystemPort(),
     paths,
-    accessPolicy: createDesktopAccessPolicyPort({ workspaceRoot, paths }),
+    accessPolicy: createDesktopAccessPolicyPort({ workspaceRoot }),
     contentPolicy: {
       getSnapshot: () => ({
         ...(workspaceRoot ? { workspaceRoot } : {}),
@@ -251,7 +251,6 @@ function createDesktopFileSystemPort(): HostFileSystemPort {
 
 function createDesktopAccessPolicyPort(input: {
   readonly workspaceRoot?: string;
-  readonly paths: HostPathPort;
 }): HostAccessPolicyPort {
   return {
     decide(request): HostAccessDecision {
@@ -323,7 +322,6 @@ function isManagedStorageRequest(
   targetPath: string | undefined,
   input: {
     readonly workspaceRoot?: string;
-    readonly paths: HostPathPort;
   },
 ): boolean {
   if (scope === 'workspace-local' || scope === 'workspace-cache' || scope === 'temporary') {
@@ -331,10 +329,9 @@ function isManagedStorageRequest(
   }
   if (!targetPath || !input.workspaceRoot) return false;
   if (!['read', 'write', 'delete', 'list', 'execute', 'project'].includes(operation)) return false;
-  return input.paths.isInside({
-    path: targetPath,
-    root: path.join(input.workspaceRoot, '.neko'),
-  });
+  const relativePath = path.relative(input.workspaceRoot, path.resolve(targetPath));
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) return false;
+  return relativePath.split(path.sep).some((segment) => segment.startsWith('.'));
 }
 
 function expandHomeMarker(value: string, homedir: string): string {

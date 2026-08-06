@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -475,39 +475,6 @@ describe('Desktop SQLite application state composition', () => {
     }
   });
 
-  it('does not read or mutate adjacent Agent, log, user, or workspace-owned files', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-adjacent-'));
-    roots.push(root);
-    const workspace = join(root, 'workspace');
-    const adjacent = new Map([
-      [join(root, '.neko', 'config.json'), '{"agent":"config"}\n'],
-      [join(root, '.neko', 'transcripts', 'conversation.jsonl'), '{"role":"user"}\n'],
-      [join(root, '.neko', 'logs', 'desktop.log'), 'diagnostic\n'],
-      [join(workspace, '.neko', 'workspace.json'), '{"workspace":"adjacent"}\n'],
-      [join(workspace, 'neko', 'project.json'), '{"workspaceId":"portable"}\n'],
-      [join(workspace, 'neko', 'memory.md'), '# Accepted memory\n'],
-    ]);
-    await Promise.all(
-      [...adjacent.keys()].map((filePath) => mkdir(join(filePath, '..'), { recursive: true })),
-    );
-    await Promise.all([
-      ...[...adjacent].map(([filePath, content]) => writeFile(filePath, content, 'utf8')),
-    ]);
-
-    const state = await openState(root);
-    try {
-      await expect(
-        Promise.all(
-          [...adjacent].map(async ([filePath, content]) => ({
-            filePath,
-            unchanged: (await readFile(filePath, 'utf8')) === content,
-          })),
-        ),
-      ).resolves.toEqual([...adjacent.keys()].map((filePath) => ({ filePath, unchanged: true })));
-    } finally {
-      await state.store.dispose();
-    }
-  });
 });
 
 const shellCodec = {

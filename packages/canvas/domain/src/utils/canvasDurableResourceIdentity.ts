@@ -18,7 +18,7 @@ const RUNTIME_IDENTITY_VALUE_PATTERNS: readonly RegExp[] = [
   /^blob:/i,
   /^data:/i,
   /^https?:\/\/(?:127\.0\.0\.1|0\.0\.0\.0|localhost|\[::1\])(?::|\/)/i,
-  /(?:^|[\\/])\.neko[\\/](?:\.cache|cache)(?:[\\/]|$)/i,
+  /(?:^|[\\/])\.[^\\/]+(?:[\\/]|$)/,
   /(?:^|[\\/])cachePath(?:[\\/]|$)/i,
   /^\/tmp(?:\/|$)/i,
   /^\/private\/tmp(?:\/|$)/i,

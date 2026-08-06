@@ -92,25 +92,6 @@ export interface MediaSemanticValidationOptions {
   readonly warnOnUnrelatedRangeFields?: boolean;
 }
 
-export interface MediaSemanticIndexSidecarRef {
-  readonly rootDir: '${PROJECT}/.neko/semantic-index';
-  readonly relativePath: string;
-  readonly indexId: string;
-  readonly assetId: string;
-  readonly sourceRef: MediaSemanticSourceRef;
-}
-
-export interface MediaSemanticIndexSidecarRecord {
-  readonly ref: MediaSemanticIndexSidecarRef;
-  readonly index: MediaSemanticIndex;
-  readonly searchItemsCachePath?: `${'${PROJECT}'}/.neko/.cache/${string}`;
-}
-
-export interface MediaSemanticIndexParseResult {
-  readonly record?: MediaSemanticIndexSidecarRecord;
-  readonly diagnostics: readonly MediaSemanticDiagnostic[];
-}
-
 export interface MediaBoundingBox {
   readonly x: number;
   readonly y: number;
@@ -298,77 +279,6 @@ export function projectPerceptionCardToMediaSemanticIndex(
       },
     ],
     ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),
-  };
-}
-
-export function createMediaSemanticIndexSidecarRef(
-  index: MediaSemanticIndex,
-): MediaSemanticIndexSidecarRef {
-  const indexId = index.indexId ?? `asset-${sanitizeSidecarPathPart(index.assetId)}`;
-  return {
-    rootDir: '${PROJECT}/.neko/semantic-index',
-    relativePath: `${sanitizeSidecarPathPart(index.assetId)}/${sanitizeSidecarPathPart(indexId)}.json`,
-    indexId,
-    assetId: index.assetId,
-    sourceRef: index.sourceRef,
-  };
-}
-
-export function createMediaSemanticIndexSidecarRecord(
-  index: MediaSemanticIndex,
-): MediaSemanticIndexSidecarRecord {
-  return {
-    ref: createMediaSemanticIndexSidecarRef(index),
-    index,
-  };
-}
-
-export function validateMediaSemanticIndexSidecarRecord(
-  record: MediaSemanticIndexSidecarRecord,
-  options: MediaSemanticValidationOptions = {},
-): MediaSemanticValidationResult {
-  const diagnostics = [
-    ...validateMediaSemanticIndex(record.index, options).diagnostics,
-    ...validateMediaSemanticIndexSidecarRef(record.ref),
-    ...validateSidecarRecordConsistency(record),
-    ...validateMediaSemanticIndexCachePath(record.searchItemsCachePath),
-  ];
-  return validationResult(diagnostics, options);
-}
-
-export function serializeMediaSemanticIndexSidecar(
-  record: MediaSemanticIndexSidecarRecord,
-  options: MediaSemanticValidationOptions = {},
-): MediaSemanticValidationResult & { readonly content?: string } {
-  const result = validateMediaSemanticIndexSidecarRecord(record, options);
-  if (!result.ok) return result;
-  return {
-    ...result,
-    content: `${JSON.stringify(record.index, null, 2)}\n`,
-  };
-}
-
-export function parseMediaSemanticIndexSidecar(
-  content: string,
-  options: MediaSemanticValidationOptions = {},
-): MediaSemanticIndexParseResult {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    return {
-      diagnostics: [
-        diagnostic('error', 'invalid-root', [], 'Media semantic index sidecar must be valid JSON.'),
-      ],
-    };
-  }
-  const validation = validateMediaSemanticIndex(parsed, options);
-  if (!validation.ok || !isMediaSemanticIndex(parsed, options)) {
-    return { diagnostics: validation.diagnostics };
-  }
-  return {
-    record: createMediaSemanticIndexSidecarRecord(parsed),
-    diagnostics: validation.diagnostics,
   };
 }
 
@@ -841,114 +751,6 @@ function validateContributionDiagnostic(
   validateSerializableValue(value['details'], [...path, 'details'], diagnostics);
 }
 
-function validateMediaSemanticIndexSidecarRef(
-  ref: MediaSemanticIndexSidecarRef,
-): readonly MediaSemanticDiagnostic[] {
-  const diagnostics: MediaSemanticDiagnostic[] = [];
-  if (ref.rootDir !== '${PROJECT}/.neko/semantic-index') {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'invalid-source-ref',
-        ['ref', 'rootDir'],
-        'Media semantic sidecars must stay under the project semantic-index directory.',
-        {
-          expected: '${PROJECT}/.neko/semantic-index',
-          actual: ref.rootDir,
-        },
-      ),
-    );
-  }
-  if (
-    ref.relativePath.trim().length === 0 ||
-    ref.relativePath.startsWith('/') ||
-    ref.relativePath.includes('..') ||
-    isUnsafeRuntimeHandle(ref.relativePath)
-  ) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'invalid-source-ref',
-        ['ref', 'relativePath'],
-        'Media semantic sidecar path must be project-relative and durable.',
-        { actual: ref.relativePath },
-      ),
-    );
-  }
-  validateSerializableValue(ref, ['ref'], diagnostics);
-  return diagnostics;
-}
-
-function validateSidecarRecordConsistency(
-  record: MediaSemanticIndexSidecarRecord,
-): readonly MediaSemanticDiagnostic[] {
-  const diagnostics: MediaSemanticDiagnostic[] = [];
-  if (record.ref.assetId !== record.index.assetId) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'invalid-source-ref',
-        ['ref', 'assetId'],
-        'Media semantic sidecar ref assetId must match the indexed asset.',
-        {
-          expected: record.index.assetId,
-          actual: record.ref.assetId,
-        },
-      ),
-    );
-  }
-  if (record.index.indexId !== undefined && record.ref.indexId !== record.index.indexId) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'invalid-source-ref',
-        ['ref', 'indexId'],
-        'Media semantic sidecar ref indexId must match the semantic index id.',
-        {
-          expected: record.index.indexId,
-          actual: record.ref.indexId,
-        },
-      ),
-    );
-  }
-  if (JSON.stringify(record.ref.sourceRef) !== JSON.stringify(record.index.sourceRef)) {
-    diagnostics.push(
-      diagnostic(
-        'warning',
-        'invalid-source-ref',
-        ['ref', 'sourceRef'],
-        'Media semantic sidecar ref sourceRef should match the semantic index sourceRef.',
-      ),
-    );
-  }
-  return diagnostics;
-}
-
-function validateMediaSemanticIndexCachePath(
-  path: MediaSemanticIndexSidecarRecord['searchItemsCachePath'],
-): readonly MediaSemanticDiagnostic[] {
-  if (path === undefined) return [];
-  if (
-    !path.startsWith('${PROJECT}/.neko/.cache/') ||
-    path.includes('..') ||
-    isUnsafeRuntimeHandle(path)
-  ) {
-    return [
-      diagnostic(
-        'error',
-        'invalid-source-ref',
-        ['searchItemsCachePath'],
-        'Media semantic cache projections must stay under the rebuildable project cache directory.',
-        {
-          expected: '${PROJECT}/.neko/.cache/<partition>',
-          actual: path,
-        },
-      ),
-    ];
-  }
-  return [];
-}
-
 function validateEntityMention(
   value: unknown,
   path: readonly CharacterMemoryPathSegment[],
@@ -1318,14 +1120,6 @@ function isRangeFieldCompatible(kind: CharacterMemorySourceRefKind, field: strin
     case 'tool-result':
       return true;
   }
-}
-
-function sanitizeSidecarPathPart(value: string): string {
-  const sanitized = value
-    .trim()
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return sanitized.length > 0 ? sanitized : 'semantic-index';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

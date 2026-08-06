@@ -42,7 +42,6 @@ import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
   '.git',
-  '.neko',
   '.turbo',
   '.vite',
   'coverage',

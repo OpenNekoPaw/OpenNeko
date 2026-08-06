@@ -252,7 +252,7 @@ describe('Canvas Workspace Board delivery contract', () => {
       ...request(),
       token: 'secret',
       renderUri: 'neko-media://preview/shot-1',
-      cachePath: '.neko/.cache/generated/shot-1.png',
+      cachePath: '.cache/generated/shot-1.png',
     } as unknown as CanvasWorkspaceProjectionRequest;
     const invalidRef = request({
       artifacts: [

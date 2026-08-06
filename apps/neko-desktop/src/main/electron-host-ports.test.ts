@@ -59,7 +59,16 @@ describe('ElectronNekoHostPorts', () => {
         actor: 'agent',
         operation: 'write',
         scope: 'workspace-local',
-        path: path.join(workspaceRoot, '.neko', 'state.json'),
+      }),
+    ).toMatchObject({
+      allowed: false,
+      diagnostic: { code: 'desktop-host-access-denied-managed-storage' },
+    });
+    expect(
+      await host.accessPolicy?.decide({
+        actor: 'agent',
+        operation: 'read',
+        path: path.join(workspaceRoot, '.private', 'state.json'),
       }),
     ).toMatchObject({
       allowed: false,

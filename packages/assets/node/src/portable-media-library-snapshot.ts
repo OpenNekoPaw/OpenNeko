@@ -29,7 +29,6 @@ import {
 const COPY_CHUNK_BYTE_LENGTH = 8 * 1024 * 1024;
 const EXCLUDED_PROJECT_DIRECTORIES = new Set([
   '.git',
-  '.neko',
   '.turbo',
   '.vite',
   'build',

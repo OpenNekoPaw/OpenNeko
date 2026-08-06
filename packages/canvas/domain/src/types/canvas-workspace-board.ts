@@ -925,8 +925,7 @@ function uriPathname(value: string): string | undefined {
 function isRuntimeValue(value: string): boolean {
   const normalized = value.trim().replace(/\\/g, '/');
   return (
-    normalized.includes('/.neko/.cache/') ||
-    normalized.startsWith('.neko/.cache/') ||
+    normalized.split('/').some((segment) => segment.startsWith('.')) ||
     isHostProjectedRuntimeValue(normalized) ||
     /^(?:render|preview):/i.test(normalized)
   );

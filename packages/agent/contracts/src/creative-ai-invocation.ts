@@ -383,8 +383,6 @@ const RUNTIME_ONLY_IDENTITY_PATTERNS: readonly RegExp[] = [
   /^engine-token:/i,
   /^https?:\/\/127\.0\.0\.1(?::|\/)/i,
   /^https?:\/\/localhost(?::|\/)/i,
-  /(?:^|\/)\.neko\/\.cache(?:\/|$)/i,
-  /(?:^|\\)\.neko\\\.cache(?:\\|$)/i,
   /^\/tmp(?:\/|$)/i,
   /^\/var\/folders(?:\/|$)/i,
   /^\/private\/var\/folders(?:\/|$)/i,

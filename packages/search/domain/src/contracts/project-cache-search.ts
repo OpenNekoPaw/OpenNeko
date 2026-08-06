@@ -1122,10 +1122,6 @@ function isUnsafeSemanticCoverageString(value: string): boolean {
     trimmed.startsWith('vector://') ||
     trimmed.startsWith('scratch://') ||
     trimmed.startsWith('data:') ||
-    trimmed.includes('/.neko/.cache') ||
-    trimmed.includes('\\.neko\\.cache') ||
-    trimmed.includes('/.neko/semantic-index') ||
-    trimmed.includes('\\.neko\\semantic-index') ||
     trimmed.includes('.sqlite') ||
     trimmed.includes('.db') ||
     trimmed.includes('vector-store') ||

@@ -41,7 +41,7 @@ function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
 
 describe('creative media shared contracts', () => {
   it('rejects cache paths, absolute paths, and runtime URLs as ContentLocator identity', () => {
-    expect(validateContentLocator(contentLocator('.neko/.cache/render/hero.png')).ok).toBe(false);
+    expect(validateContentLocator(contentLocator('.cache/render/hero.png')).ok).toBe(false);
     expect(validateContentLocator(contentLocator('/workspace/assets/hero.png')).ok).toBe(false);
     expect(validateContentLocator(contentLocator('neko-media://panel/hero.png')).ok).toBe(false);
     expect(

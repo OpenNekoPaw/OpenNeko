@@ -299,7 +299,7 @@ function makeOccurrence(): VisualOccurrence {
       role: 'derived',
       locator: {
         type: 'workspace-path',
-        path: '${PROJECT}/.neko/semantic-index/asset-page-1/crops/rin.png',
+        path: '${PROJECT}/neko/generated/image/crops/rin.png',
       },
       mimeType: 'image/png',
     },

@@ -130,7 +130,7 @@ describe('storyboard table contract', () => {
                   locator: {
                     type: 'asset',
                     assetId: 'asset-keyframe-1',
-                    uri: '${WORKSPACE}/.neko/generated/image/keyframe-1.png',
+                    uri: '${WORKSPACE}/neko/generated/image/keyframe-1.png',
                   },
                   metadata: { provider: 'test-provider', selected: true },
                 },
@@ -452,7 +452,7 @@ describe('storyboard table contract', () => {
         role: 'source',
         locator: {
           type: 'workspace-path',
-          path: '${WORKSPACE}/.neko/.cache/resources/documents/doc_1/page.jpg',
+          path: '${WORKSPACE}/.cache/resources/documents/doc_1/page.jpg',
         },
       }),
     ).toMatchObject({ kind: 'unsafe-cache-path' });
@@ -893,7 +893,7 @@ describe('storyboard table contract', () => {
                   role: 'generated',
                   locator: {
                     type: 'workspace-path',
-                    path: '${WORKSPACE}/.neko/generated/image/shot-1.png',
+                    path: '${WORKSPACE}/neko/generated/image/shot-1.png',
                   },
                   mimeType: 'image/png',
                 },
@@ -947,7 +947,7 @@ describe('storyboard table contract', () => {
           voiceOver: 'The signal returns.',
           soundCue: 'Radio static.',
           label: '#001 Scene',
-          imagePath: '${WORKSPACE}/.neko/generated/image/shot-1.png',
+          imagePath: '${WORKSPACE}/neko/generated/image/shot-1.png',
         },
       ],
     });

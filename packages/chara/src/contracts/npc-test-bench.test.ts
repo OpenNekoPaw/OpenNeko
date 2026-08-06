@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CHARACTER_ROLE_TEST_ARTIFACT_DIR,
   NEKO_AGENT_CHARACTER_DIALOGUE_COMMAND,
   NEKO_AGENT_EMBODY_CHARACTER_COMMAND,
   NPC_TEST_BENCH_AS_SLASH_COMMAND,
@@ -155,7 +154,6 @@ describe('character role workflow contracts', () => {
     expect(NPC_TEST_BENCH_EXIT_AS_SLASH_COMMAND).toBe('/exit-as');
     expect(NEKO_AGENT_CHARACTER_DIALOGUE_COMMAND).toBe('neko.agent.characterDialogue');
     expect(NEKO_AGENT_EMBODY_CHARACTER_COMMAND).toBe('neko.agent.embodyCharacter');
-    expect(CHARACTER_ROLE_TEST_ARTIFACT_DIR).toBe('.neko/character-tests');
   });
 
   it('rejects unknown transcript and evaluation fields locally', () => {

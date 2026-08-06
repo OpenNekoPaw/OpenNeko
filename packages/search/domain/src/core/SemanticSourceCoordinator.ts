@@ -383,7 +383,6 @@ export function isExcludedSemanticPath(relativePath: string): boolean {
   const segments = normalizeRelativePath(relativePath).toLocaleLowerCase().split('/');
   const excludedSegments = new Set([
     '.git',
-    '.neko',
     'node_modules',
     'dist',
     'build',
@@ -393,7 +392,9 @@ export function isExcludedSemanticPath(relativePath: string): boolean {
     'logs',
     'cache',
   ]);
-  if (segments.some((segment) => excludedSegments.has(segment))) return true;
+  if (segments.some((segment) => segment.startsWith('.') || excludedSegments.has(segment))) {
+    return true;
+  }
   const fileName = segments[segments.length - 1] ?? '';
   return (
     fileName.startsWith('.env') ||

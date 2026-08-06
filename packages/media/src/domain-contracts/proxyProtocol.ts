@@ -19,7 +19,7 @@
 export type ProxyStatus = 'pending' | 'generating' | 'ready' | 'failed' | 'stale';
 
 // =============================================================================
-// Proxy Manifest (persisted in .neko/proxies/manifest.json)
+// Proxy Manifest
 // =============================================================================
 
 /** Single proxy entry in the manifest */

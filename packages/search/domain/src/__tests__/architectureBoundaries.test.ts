@@ -49,8 +49,6 @@ describe('neko-search architecture boundaries', () => {
 
     for (const file of files) {
       const source = stripTypeScriptComments(readFileSync(file, 'utf8'));
-      expect(source, relative(packageRoot, file)).not.toContain('.neko/semantic-index');
-      expect(source, relative(packageRoot, file)).not.toMatch(/semantic.*\.neko\/\.cache/i);
       expect(source, relative(packageRoot, file)).not.toMatch(
         /semantic.*(sqlite|vector-store|fts-index)/i,
       );

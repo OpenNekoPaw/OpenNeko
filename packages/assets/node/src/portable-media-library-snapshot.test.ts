@@ -96,7 +96,7 @@ describe('Desktop portable Media Library snapshot', () => {
       code: 'ENOENT',
     });
     await expect(
-      readFile(path.join(destination, '.neko', 'workspace.json'), 'utf8'),
+      readFile(path.join(destination, '.private', 'workspace.json'), 'utf8'),
     ).rejects.toMatchObject({
       code: 'ENOENT',
     });
@@ -427,13 +427,13 @@ async function createFixture(): Promise<{
     mkdir(globalRoot, { recursive: true }),
     mkdir(path.join(workspacePath, 'notes'), { recursive: true }),
     mkdir(path.join(workspacePath, 'dist'), { recursive: true }),
-    mkdir(path.join(workspacePath, '.neko'), { recursive: true }),
+    mkdir(path.join(workspacePath, '.private'), { recursive: true }),
   ]);
   await Promise.all([
     writeFile(mediaPath, 'linked-media'),
     writeFile(path.join(workspacePath, 'notes', 'project.txt'), 'project note'),
     writeFile(path.join(workspacePath, 'dist', 'generated.txt'), 'generated'),
-    writeFile(path.join(workspacePath, '.neko', 'workspace.json'), '{"workspaceId":"local"}'),
+    writeFile(path.join(workspacePath, '.private', 'workspace.json'), '{"private":true}'),
     writeBinding(workspacePath, '2026-08-01T00:00:00.000Z'),
   ]);
   await createWorkspaceLinkedMediaLibrary({

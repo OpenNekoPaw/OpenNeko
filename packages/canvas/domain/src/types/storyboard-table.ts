@@ -2576,7 +2576,7 @@ function isManagedOrAbsoluteCachePath(value: string): boolean {
   if (isAbsoluteLocalPath(value)) return true;
   const normalized = value.replace(/\\/g, '/').toLowerCase();
   return (
-    normalized.includes('/.neko/.cache/') ||
+    normalized.split('/').some((segment) => segment.startsWith('.')) ||
     normalized.includes('/globalstorage/') ||
     normalized.includes('/library/application support/code/user/globalstorage/')
   );

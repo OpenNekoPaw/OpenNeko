@@ -12,7 +12,6 @@ export const NPC_TEST_BENCH_EXIT_AS_SLASH_COMMAND_NAME = 'exit-as';
 export const NPC_TEST_BENCH_EXIT_AS_SLASH_COMMAND = '/exit-as';
 export const NEKO_AGENT_CHARACTER_DIALOGUE_COMMAND = 'neko.agent.characterDialogue';
 export const NEKO_AGENT_EMBODY_CHARACTER_COMMAND = 'neko.agent.embodyCharacter';
-export const CHARACTER_ROLE_TEST_ARTIFACT_DIR = '.neko/character-tests';
 
 export type NpcTestMode = 'roleplay' | 'consult';
 export type NpcProfileSparsity = 'thin' | 'partial' | 'rich';

@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createMediaSemanticIndexSidecarRecord,
-  parseMediaSemanticIndexSidecar,
   mapMediaTextSourceKindToCharacterObservationSource,
   mediaTextSegmentToCharacterObservationProvenance,
   projectPerceptionCardToMediaSemanticIndex,
-  serializeMediaSemanticIndexSidecar,
-  validateMediaSemanticIndexSidecarRecord,
   validateEntityMemoryContribution,
   validateMediaSemanticIndex,
   validateMediaTextSegment,
@@ -193,44 +189,6 @@ describe('media semantic index contracts', () => {
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
       expect.arrayContaining(['unsafe-runtime-handle', 'oversized-payload']),
-    );
-  });
-
-  it('serializes semantic sidecars as SSOT records separate from cache projections', () => {
-    const record = {
-      ...createMediaSemanticIndexSidecarRecord(makeIndex()),
-      searchItemsCachePath:
-        '${PROJECT}/.neko/.cache/project-search/semantic-evidence.json' as const,
-    };
-    const serialized = serializeMediaSemanticIndexSidecar(record);
-    const parsed = parseMediaSemanticIndexSidecar(serialized.content ?? '');
-
-    expect(validateMediaSemanticIndexSidecarRecord(record)).toEqual({ ok: true, diagnostics: [] });
-    expect(record.ref).toMatchObject({
-      rootDir: '${PROJECT}/.neko/semantic-index',
-      relativePath: 'asset-page-1/index-page-1.json',
-      assetId: 'asset-page-1',
-    });
-    expect(serialized.ok).toBe(true);
-    expect(serialized.content).toContain('"assetId": "asset-page-1"');
-    expect(parsed.record?.index.assetId).toBe('asset-page-1');
-  });
-
-  it('diagnoses unsafe semantic sidecar refs and cache paths', () => {
-    const record = createMediaSemanticIndexSidecarRecord(makeIndex());
-    const result = validateMediaSemanticIndexSidecarRecord({
-      ...record,
-      ref: {
-        ...record.ref,
-        assetId: 'different-asset',
-        relativePath: '../escape.json',
-      },
-      searchItemsCachePath: '${PROJECT}/.neko/semantic-index/cache.json' as never,
-    });
-
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining(['invalid-source-ref']),
     );
   });
 });

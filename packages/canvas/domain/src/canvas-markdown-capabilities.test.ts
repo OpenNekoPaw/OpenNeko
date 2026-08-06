@@ -65,7 +65,7 @@ describe('canonical Canvas Markdown capability contracts', () => {
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('blob:neko-media/preview')).toBe(true);
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('/tmp/neko/page.png')).toBe(true);
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('/var/folders/neko/page.png')).toBe(true);
-    expect(isRuntimeOnlyCanvasMarkdownResourceValue('/workspace/.neko/.cache/page.png')).toBe(true);
+    expect(isRuntimeOnlyCanvasMarkdownResourceValue('/workspace/.cache/page.png')).toBe(true);
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('assets/cover.png')).toBe(false);
     expect(isRuntimeOnlyCanvasMarkdownResourceValue('${MEDIA}/cover.png')).toBe(false);
   });
