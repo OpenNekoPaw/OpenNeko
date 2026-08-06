@@ -35,11 +35,10 @@ describe('Host projection attachment contract', () => {
         ownerId: 'project-1',
       },
       sequence: 0,
-      projectionVersion: 3,
       projection: { value: 'ready' },
     };
 
     expect(frame.key.ownerId).toBe('project-1');
-    expect(frame.projectionVersion).toBe(3);
+    expect(frame.projection).toEqual({ value: 'ready' });
   });
 });

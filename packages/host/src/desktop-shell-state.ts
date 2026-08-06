@@ -52,10 +52,16 @@ interface DesktopRetainedInvalidWindow {
   readonly diagnostic: DesktopShellStateDiagnostic;
 }
 
+type DesktopRetainedRootMetadataEntry = readonly [fieldName: string, value: unknown];
+
 const RETAINED_INVALID_WINDOWS: unique symbol = Symbol('desktop-retained-invalid-windows');
+const RETAINED_ROOT_METADATA: unique symbol = Symbol('desktop-retained-root-metadata');
+const DESKTOP_SHELL_ROOT_FIELDS = ['primaryWindowId', 'projects', 'windows'] as const;
+const DESKTOP_SHELL_ROOT_FIELD_SET = new Set<string>(DESKTOP_SHELL_ROOT_FIELDS);
 
 type DesktopShellStateWithRetainedInvalidWindows = DesktopShellStoredState & {
   readonly [RETAINED_INVALID_WINDOWS]: readonly DesktopRetainedInvalidWindow[];
+  readonly [RETAINED_ROOT_METADATA]: readonly DesktopRetainedRootMetadataEntry[];
 };
 
 export interface DesktopShellStateRepositoryPort {
@@ -83,7 +89,7 @@ export function createEmptyDesktopShellState(): DesktopShellStoredState {
 
 export function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
   const record = requireRecord(value, 'Desktop Shell state must be an object.');
-  requireExactKeys(record, ['primaryWindowId', 'projects', 'windows'], 'Desktop Shell state');
+  const retainedRootMetadata = collectRetainedRootMetadata(value, record);
   const projects = requireArray(record['projects'], 'Desktop Shell projects must be an array.').map(
     parseStoredProject,
   );
@@ -157,6 +163,7 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
     projects,
     windows,
     [RETAINED_INVALID_WINDOWS]: invalidWindows,
+    [RETAINED_ROOT_METADATA]: retainedRootMetadata,
   };
   return parsed;
 }
@@ -164,12 +171,30 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
 export function readDesktopShellStateDiagnostics(
   state: DesktopShellStoredState,
 ): readonly DesktopShellStateDiagnostic[] {
-  return readRetainedInvalidWindows(state).map((invalid) => invalid.diagnostic);
+  const invalidWindowDiagnostics = readRetainedInvalidWindows(state).map(
+    (invalid) => invalid.diagnostic,
+  );
+  const retainedRootMetadata = readRetainedRootMetadata(state);
+  if (retainedRootMetadata.length === 0) return invalidWindowDiagnostics;
+  const fieldNames = retainedRootMetadata.map(([fieldName]) => fieldName);
+  return [
+    ...invalidWindowDiagnostics,
+    {
+      code: 'desktop-stored-state-metadata-retained',
+      severity: 'warning',
+      authorityKey: 'desktop.shell',
+      fieldNames,
+      message: `Desktop Shell root metadata was preserved without interpretation: ${fieldNames
+        .map((fieldName) => JSON.stringify(fieldName))
+        .join(', ')}.`,
+    },
+  ];
 }
 
 export function serializeDesktopShellStoredState(state: DesktopShellStoredState): unknown {
   const parsed = parseDesktopShellStoredState(state);
   return {
+    ...Object.fromEntries(readRetainedRootMetadata(parsed)),
     primaryWindowId: parsed.primaryWindowId,
     projects: parsed.projects,
     windows: [
@@ -318,6 +343,44 @@ function readRetainedInvalidWindows(value: unknown): readonly DesktopRetainedInv
     }
     return candidate;
   });
+}
+
+function collectRetainedRootMetadata(
+  value: unknown,
+  record: Readonly<Record<string, unknown>>,
+): readonly DesktopRetainedRootMetadataEntry[] {
+  return validateRetainedRootMetadata([
+    ...readRetainedRootMetadata(value),
+    ...Object.entries(record).filter(([fieldName]) => !DESKTOP_SHELL_ROOT_FIELD_SET.has(fieldName)),
+  ]);
+}
+
+function readRetainedRootMetadata(value: unknown): readonly DesktopRetainedRootMetadataEntry[] {
+  if (!isUnknownRecord(value) || !(RETAINED_ROOT_METADATA in value)) return [];
+  const retained = value[RETAINED_ROOT_METADATA];
+  if (!Array.isArray(retained)) {
+    throw invalidState('Desktop retained root metadata must be an array.');
+  }
+  return validateRetainedRootMetadata(retained);
+}
+
+function validateRetainedRootMetadata(
+  entries: readonly unknown[],
+): readonly DesktopRetainedRootMetadataEntry[] {
+  const fieldNames = new Set<string>();
+  const retained: DesktopRetainedRootMetadataEntry[] = [];
+  for (const entry of entries) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') {
+      throw invalidState('Desktop retained root metadata entry is invalid.');
+    }
+    const fieldName = entry[0];
+    if (DESKTOP_SHELL_ROOT_FIELD_SET.has(fieldName) || fieldNames.has(fieldName)) {
+      throw invalidState(`Desktop retained root metadata field '${fieldName}' is duplicated.`);
+    }
+    fieldNames.add(fieldName);
+    retained.push([fieldName, entry[1]]);
+  }
+  return retained;
 }
 
 function isRetainedInvalidWindow(value: unknown): value is DesktopRetainedInvalidWindow {

@@ -18,7 +18,7 @@ describe('NewAPIImageModel', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const model = new NewAPIImageModel('gpt-image-2', {
-      apiUrl: 'https://www.nekoapi.com/v1',
+      apiUrl: 'https://www.nekoapi.com',
       apiKey: 'test-key',
     });
 
@@ -58,7 +58,7 @@ describe('NewAPIImageModel', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const model = new NewAPIImageModel('gpt-image-2', {
-      apiUrl: 'https://www.nekoapi.com/v1',
+      apiUrl: 'https://www.nekoapi.com',
       apiKey: 'test-key',
     });
 
@@ -116,7 +116,7 @@ describe('NewAPIImageModel', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const model = new NewAPIImageModel('gpt-image-2', {
-      apiUrl: 'https://93.184.216.34/v1',
+      apiUrl: 'https://93.184.216.34',
       apiKey: 'test-key',
     });
 

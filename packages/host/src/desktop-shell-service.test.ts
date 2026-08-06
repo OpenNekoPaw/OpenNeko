@@ -1785,7 +1785,7 @@ describe('DesktopShellService', () => {
     });
   });
 
-  it('rejects legacy Workbench updates while no Project is active', async () => {
+  it('rejects Workbench updates while no Project is active', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');

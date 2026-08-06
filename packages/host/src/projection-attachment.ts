@@ -17,7 +17,6 @@ export interface HostProjectionSnapshotFrame<
   readonly type: 'projectionSnapshot';
   readonly key: TKey;
   readonly sequence: 0;
-  readonly projectionVersion: number;
   readonly projection: Readonly<TProjection>;
 }
 
@@ -27,15 +26,12 @@ export interface HostProjectionSnapshotAcknowledgement<
   readonly type: 'projectionSnapshotAck';
   readonly key: TKey;
   readonly sequence: 0;
-  readonly projectionVersion: number;
 }
 
 export interface HostProjectionPatchFrame<TKey extends HostProjectionAttachmentIdentity, TPatch> {
   readonly type: 'projectionPatch';
   readonly key: TKey;
   readonly sequence: number;
-  readonly baseProjectionVersion: number;
-  readonly projectionVersion: number;
   readonly patch: Readonly<TPatch>;
 }
 
@@ -53,7 +49,7 @@ export type HostProjectionAttachmentProtocolDiagnosticCode =
   | 'attachment-snapshot-required'
   | 'attachment-stale-ack'
   | 'attachment-frame-gap'
-  | 'attachment-patch-base-mismatch';
+  | 'attachment-patch-rejected';
 
 export interface HostProjectionAttachmentProtocolDiagnostic<
   TKey extends HostProjectionAttachmentIdentity = HostProjectionAttachmentIdentity,

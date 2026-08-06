@@ -176,6 +176,34 @@ describe('Desktop Shell contract', () => {
     ).toThrowError(DesktopShellContractError);
   });
 
+  it('isolates an invalid Project catalog while preserving sibling Shell components', () => {
+    const canonical = validProjection();
+    const parsedCanonical = parseDesktopShellProjection(canonical);
+    const parsed = parseDesktopShellProjection({
+      ...canonical,
+      catalog: {
+        ...canonical.catalog,
+        unexpectedField: 1,
+      },
+    });
+
+    expect(parsed.catalog.projects).toEqual([]);
+    expect(parsed.window).toEqual(parsedCanonical.window);
+    expect(parsed.agentHome).toEqual(parsedCanonical.agentHome);
+    expect(parsed.domains).toEqual(parsedCanonical.domains);
+    expect(parsed.stateDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'desktop-shell-component-invalid',
+        component: 'project-catalog',
+        severity: 'error',
+      }),
+    ]);
+    expect(parsed.stateDiagnostics?.[0]?.message).toContain(
+      "contains unknown field 'unexpectedField'",
+    );
+    expect(parsedCanonical.catalog.projects).toHaveLength(1);
+  });
+
   it('rejects absolute path leakage by projecting only known Project fields', () => {
     const projection = parseDesktopShellProjection({
       ...validProjection(),
@@ -277,6 +305,34 @@ describe('Desktop Shell contract', () => {
         ],
       }),
     ).toThrowError(DesktopShellContractError);
+  });
+
+  it('parses exact retained Shell metadata without changing sibling projections', () => {
+    const canonical = validProjection();
+    const parsed = parseDesktopShellProjection({
+      ...canonical,
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-state-metadata-retained',
+          severity: 'warning',
+          authorityKey: 'desktop.shell',
+          fieldNames: ['opaqueSourceMarker'],
+          message: 'Desktop Shell root metadata was preserved without interpretation.',
+        },
+      ],
+    });
+
+    expect(parsed.catalog).toEqual(canonical.catalog);
+    expect(parsed.window).toEqual(canonical.window);
+    expect(parsed.stateDiagnostics).toEqual([
+      {
+        code: 'desktop-stored-state-metadata-retained',
+        severity: 'warning',
+        authorityKey: 'desktop.shell',
+        fieldNames: ['opaqueSourceMarker'],
+        message: 'Desktop Shell root metadata was preserved without interpretation.',
+      },
+    ]);
   });
 
   it('accepts ready domains only in their owning Phase 1 slices', () => {

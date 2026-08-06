@@ -254,7 +254,7 @@ describe('Desktop Scene contract', () => {
     });
     expect(() =>
       parseDesktopSceneTransitionRequest({
-        requestId: 'request-legacy-conversation',
+        requestId: 'request-invalid-conversation-shape',
         rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
         sceneId: 'scene-2',
@@ -377,11 +377,11 @@ describe('Desktop Scene contract', () => {
         requestId: 'request-1',
         rendererSessionId: 'endpoint-1',
         windowId: 'window-1',
-        [['revi', 'sion'].join('')]: 1,
+        unexpectedField: 1,
         visible: true,
         width: 240,
       }),
-    ).toThrow("Desktop Sidebar mutation request contains unknown field 'revision'");
+    ).toThrow("Desktop Sidebar mutation request contains unknown field 'unexpectedField'");
   });
 });
 

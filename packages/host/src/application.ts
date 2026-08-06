@@ -45,45 +45,6 @@ export interface NekoApplicationHandoffPort {
   handoff(request: NekoApplicationHandoffRequest): Promise<NekoApplicationHandoffResult>;
 }
 
-export type NekoApplicationStorageCategory =
-  | 'settings'
-  | 'conversations'
-  | 'project-registry'
-  | 'credentials'
-  | 'trust-state'
-  | 'installed-packages'
-  | 'generated-artifacts'
-  | 'rebuildable-cache';
-
-export const NEKO_APPLICATION_STORAGE_CATEGORIES: readonly NekoApplicationStorageCategory[] = [
-  'settings',
-  'conversations',
-  'project-registry',
-  'credentials',
-  'trust-state',
-  'installed-packages',
-  'generated-artifacts',
-  'rebuildable-cache',
-] as const;
-
-export type NekoApplicationStorageMigrationDisposition =
-  'reuse' | 'migrate' | 'rebuild' | 'reject-with-diagnostic';
-
-export interface NekoApplicationStorageMigrationEntry {
-  readonly category: NekoApplicationStorageCategory;
-  readonly owner: string;
-  readonly disposition: NekoApplicationStorageMigrationDisposition;
-  readonly sourceIdentity: string;
-  readonly targetIdentity: string;
-  readonly diagnosticCode?: string;
-}
-
-export interface NekoApplicationStorageMigrationPlan {
-  readonly sourceApplicationId: string;
-  readonly targetApplicationId: NekoApplicationId;
-  readonly entries: readonly NekoApplicationStorageMigrationEntry[];
-}
-
 export class NekoApplicationContractError extends Error {
   readonly diagnostic: NekoApplicationDiagnostic;
 
@@ -132,7 +93,7 @@ export function parseNekoApplicationHandoffRequest(
       toolId: requireNonEmptyString(target['toolId'], 'Handoff target toolId is required.'),
       workspaceId: requireNonEmptyString(
         target['workspaceId'],
-        'Handoff target workspaceId is required; active-workspace fallback is forbidden.',
+        'Handoff target workspaceId is required.',
       ),
       ...readOptionalIdentityFields(target),
     },
@@ -149,36 +110,6 @@ export function requireNekoApplicationHandoffPort(
     );
   }
   return port;
-}
-
-export function validateNekoApplicationStorageMigrationPlan(
-  plan: NekoApplicationStorageMigrationPlan,
-): readonly NekoApplicationDiagnostic[] {
-  const diagnostics: NekoApplicationDiagnostic[] = [];
-  const counts = new Map<NekoApplicationStorageCategory, number>();
-  for (const entry of plan.entries) {
-    counts.set(entry.category, (counts.get(entry.category) ?? 0) + 1);
-    if (entry.disposition === 'reject-with-diagnostic' && !entry.diagnosticCode) {
-      diagnostics.push(
-        diagnostic(
-          'invalid-application-contract',
-          `Storage category '${entry.category}' rejects migration without a diagnostic code.`,
-        ),
-      );
-    }
-  }
-  for (const category of NEKO_APPLICATION_STORAGE_CATEGORIES) {
-    const count = counts.get(category) ?? 0;
-    if (count !== 1) {
-      diagnostics.push(
-        diagnostic(
-          'invalid-application-contract',
-          `Storage migration plan must contain exactly one '${category}' entry; received ${count}.`,
-        ),
-      );
-    }
-  }
-  return diagnostics;
 }
 
 function sameApplicationInstance(

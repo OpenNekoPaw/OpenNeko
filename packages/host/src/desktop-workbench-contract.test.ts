@@ -29,11 +29,10 @@ describe('Desktop Workbench contract', () => {
     });
   });
 
-  it('rejects the removed technical counter without affecting canonical layouts', () => {
+  it('rejects an unknown field without affecting canonical layouts', () => {
     const current = createDefaultDesktopWorkbenchLayout('window-1');
-    const removedKey = ['revi', 'sion'].join('');
 
-    expect(() => parseDesktopWorkbenchLayout({ ...current, [removedKey]: 0 })).toThrow(
+    expect(() => parseDesktopWorkbenchLayout({ ...current, unexpectedField: 0 })).toThrow(
       'Desktop Workbench layout has unexpected fields',
     );
     expect(parseDesktopWorkbenchLayout(current)).toEqual(current);
@@ -45,16 +44,6 @@ describe('Desktop Workbench contract', () => {
       'suspendable',
     );
     expect(resolveDesktopWorkbenchViewLifecycle(viewRef('cut-1', 'cut'))).toBe('suspendable');
-  });
-
-  it('rejects the legacy primarySidebar field on the canonical Workbench contract', () => {
-    const current = createDefaultDesktopWorkbenchLayout('window-1');
-    expect(() =>
-      parseDesktopWorkbenchLayout({
-        ...current,
-        primarySidebar: { visible: true, width: 240 },
-      }),
-    ).toThrow('Desktop Workbench layout has unexpected fields');
   });
 
   it('opens, focuses and splits Main Views without changing Chat presentation', () => {
@@ -84,31 +73,6 @@ describe('Desktop Workbench contract', () => {
     expect(preview.main.split).toEqual({ axis: 'columns', ratio: 0.5 });
     expect(focused.main.activeGroupId).toBe('main:primary');
     expect(focused.main.views).toHaveLength(2);
-  });
-
-  it('rejects Resource Browser as a v3 Main View', () => {
-    const initial = createDefaultDesktopWorkbenchLayout('window-1');
-    const resourceBrowser = legacyResourceViewRef('resources-1');
-
-    expect(() => Reflect.apply(openOrFocusMainView, undefined, [initial, resourceBrowser])).toThrow(
-      'Desktop Workbench Main View kind is invalid.',
-    );
-    expect(() =>
-      parseDesktopWorkbenchLayout({
-        ...initial,
-        main: {
-          ...initial.main,
-          views: [resourceBrowser],
-          groups: [
-            {
-              groupId: 'main:primary',
-              viewIds: ['resources-1'],
-              activeViewId: 'resources-1',
-            },
-          ],
-        },
-      }),
-    ).toThrow('Desktop Workbench Main View kind is invalid.');
   });
 
   it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
@@ -266,18 +230,5 @@ function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
           previewContentKind: 'model' as const,
         }
       : {}),
-  } as const;
-}
-
-function legacyResourceViewRef(viewId: string) {
-  return {
-    viewId,
-    viewInstanceId: 'view-instance-1',
-    projectId: 'project-1',
-    workspaceId: 'workspace-1',
-    kind: 'resource-browser',
-    ownerId: 'resource-browser-owner-1',
-    displayLabel: `${viewId}.document`,
-    documentId: `documents/${viewId}`,
   } as const;
 }

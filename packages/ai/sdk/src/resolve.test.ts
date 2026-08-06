@@ -4,12 +4,12 @@ import { resolveProvider } from './resolve';
 describe('resolveProvider', () => {
   it('does not synthesize unsupported media providers', () => {
     expect(
-      resolveProvider('fal', { apiUrl: 'https://api.example.test/v1', apiKey: 'test-key' }),
+      resolveProvider('fal', { apiUrl: 'https://api.example.test', apiKey: 'test-key' }),
     ).toBeNull();
   });
 
   it('resolves native OpenAI-compatible paths without requiring a package media adapter', () => {
-    const config = { apiUrl: 'https://api.example.test/v1', apiKey: 'test-key' };
+    const config = { apiUrl: 'https://api.example.test', apiKey: 'test-key' };
 
     expect(resolveProvider('openai', config)).toMatchObject({ type: 'openai', source: 'native' });
     expect(resolveProvider('newapi', config)).toMatchObject({ type: 'newapi', source: 'native' });
@@ -23,7 +23,7 @@ describe('resolveProvider', () => {
 
   it('resolves Kling through the compatible native path', () => {
     const resolved = resolveProvider('kling', {
-      apiUrl: 'https://api.example.test/v1',
+      apiUrl: 'https://api.example.test',
       apiKey: 'test-key',
     });
 

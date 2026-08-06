@@ -59,6 +59,7 @@ export class DesktopApplicationSettingsService {
       this.requireActive();
       this.requireState();
       const committed = await this.repository.commit({
+        ...this.state,
         preferences: parseDesktopApplicationPreferences(preferences),
       });
       this.state = committed;

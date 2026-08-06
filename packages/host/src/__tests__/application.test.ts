@@ -1,13 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  NEKO_APPLICATION_STORAGE_CATEGORIES,
   NekoApplicationContractError,
   parseNekoApplicationHandoffRequest,
   parseNekoApplicationIdentity,
   requireNekoApplicationHandoffPort,
-  validateNekoApplicationStorageMigrationPlan,
   type NekoApplicationIdentity,
-  type NekoApplicationStorageMigrationEntry,
 } from '../application';
 
 const desktopIdentity: NekoApplicationIdentity = {
@@ -19,7 +16,11 @@ describe('Neko application contracts', () => {
   it('parses known application identity and rejects unknown application identity', () => {
     expect(parseNekoApplicationIdentity(desktopIdentity)).toEqual(desktopIdentity);
     expectContractError(
-      () => parseNekoApplicationIdentity({ ...desktopIdentity, version: '0.0.1' }),
+      () =>
+        parseNekoApplicationIdentity({
+          ...desktopIdentity,
+          unexpectedField: 'invalid',
+        }),
       'invalid-application-contract',
     );
     for (const applicationId of ['neko-vscode', 'neko-tui', 'neko-studio', 'neko-home']) {
@@ -87,37 +88,6 @@ describe('Neko application contracts', () => {
     await expect(
       requireNekoApplicationHandoffPort({ handoff }).handoff(validHandoff()),
     ).resolves.toEqual({ accepted: true, requestId: 'handoff-1' });
-  });
-
-  it('requires a complete, unique storage migration disposition for every category', () => {
-    const entries: NekoApplicationStorageMigrationEntry[] = NEKO_APPLICATION_STORAGE_CATEGORIES.map(
-      (category) => ({
-        category,
-        owner: `owner:${category}`,
-        disposition: category === 'rebuildable-cache' ? 'rebuild' : 'reuse',
-        sourceIdentity: `standalone-v0:${category}`,
-        targetIdentity: `desktop:${category}`,
-      }),
-    );
-    expect(
-      validateNekoApplicationStorageMigrationPlan({
-        sourceApplicationId: 'standalone-v0',
-        targetApplicationId: 'neko-desktop',
-        entries,
-      }),
-    ).toEqual([]);
-
-    const diagnostics = validateNekoApplicationStorageMigrationPlan({
-      sourceApplicationId: 'standalone-v0',
-      targetApplicationId: 'neko-desktop',
-      entries: entries.filter((entry) => entry.category !== 'credentials'),
-    });
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'invalid-application-contract',
-        message: expect.stringContaining("exactly one 'credentials'"),
-      }),
-    ]);
   });
 });
 

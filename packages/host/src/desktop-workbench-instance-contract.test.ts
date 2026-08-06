@@ -398,6 +398,54 @@ describe('Desktop Window Workbench instance catalog', () => {
     ]);
   });
 
+  it('retains the exact active instance when an earlier sibling has the same owner', () => {
+    const inactive = workspaceInstance('workbench:workspace:inactive', 'workspace:1');
+    const active = workspaceInstance('workbench:workspace:active', 'workspace:1');
+
+    const parsed = parseDesktopWindowWorkbenchCatalog({
+      windowId: 'window:1',
+      activeWorkbenchInstanceId: active.workbenchInstanceId,
+      instances: [inactive, active],
+    });
+
+    expect(resolveActiveDesktopWorkbenchInstance(parsed)).toEqual(active);
+    expect(parsed.instances).toEqual([active]);
+    expect(parsed.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'desktop-workbench-instance-owner-duplicate',
+        workbenchInstanceId: inactive.workbenchInstanceId,
+      }),
+    ]);
+    expect(serializeDesktopWindowWorkbenchCatalog(parsed)).toMatchObject({
+      activeWorkbenchInstanceId: active.workbenchInstanceId,
+      instances: [active, inactive],
+    });
+  });
+
+  it('rejects every duplicate owner when none is the exact active instance', () => {
+    const active = assistantInstance('workbench:assistant:active', 'assistant-space:local-user');
+    const first = workspaceInstance('workbench:workspace:1', 'workspace:1');
+    const second = workspaceInstance('workbench:workspace:2', 'workspace:1');
+
+    const parsed = parseDesktopWindowWorkbenchCatalog({
+      windowId: 'window:1',
+      activeWorkbenchInstanceId: active.workbenchInstanceId,
+      instances: [first, active, second],
+    });
+
+    expect(parsed.instances).toEqual([active]);
+    expect(parsed.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'desktop-workbench-instance-owner-duplicate',
+        workbenchInstanceId: first.workbenchInstanceId,
+      }),
+      expect.objectContaining({
+        code: 'desktop-workbench-instance-owner-duplicate',
+        workbenchInstanceId: second.workbenchInstanceId,
+      }),
+    ]);
+  });
+
   it('isolates an invalid instance while retaining valid siblings', () => {
     const workspace = workspaceInstance('workbench:workspace:1', 'workspace:1');
     const invalid = {

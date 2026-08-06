@@ -87,6 +87,32 @@ describe('Desktop Shell state codec', () => {
     });
   });
 
+  it('restores a Window when its exact active Workbench follows a duplicate owner sibling', () => {
+    const initial = createEmptyDesktopShellState();
+    const inactive = draftWorkbench('window:1', 'workbench:inactive', 'draft:shared-owner');
+    const active = draftWorkbench('window:1', 'workbench:active', 'draft:shared-owner');
+    const state = withCatalog(initial, {
+      windowId: 'window:1',
+      activeWorkbenchInstanceId: active.workbenchInstanceId,
+      instances: [inactive, active],
+    });
+
+    const parsed = parseDesktopShellStoredState(state);
+
+    expect(parsed.windows).toHaveLength(1);
+    expect(parsed.windows[0]?.workbenches.activeWorkbenchInstanceId).toBe(
+      active.workbenchInstanceId,
+    );
+    expect(parsed.windows[0]?.workbenches.instances).toEqual([active]);
+    expect(parsed.windows[0]?.workbenches.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'desktop-workbench-instance-owner-duplicate',
+        workbenchInstanceId: inactive.workbenchInstanceId,
+      }),
+    ]);
+    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([]);
+  });
+
   it('isolates a Window whose active Workbench identity names an invalid child', () => {
     const initial = withPrimaryWindow(createEmptyDesktopShellState(), 'window:1');
     const valid = draftWorkbench('window:1', 'workbench:valid', 'draft:valid');
@@ -117,17 +143,42 @@ describe('Desktop Shell state codec', () => {
     expect(serializeDesktopShellStoredState(parsed)).toMatchObject({ windows: state.windows });
   });
 
-  it('rejects a non-canonical root record without conversion or input mutation', () => {
-    const invalidState = {
+  it('restores valid root collections while retaining unknown metadata unchanged', () => {
+    const state = {
       primaryWindowId: null,
       projects: [],
       windows: [],
-      removedTechnicalField: true,
+      opaqueSourceMarker: {
+        source: 'desktop-shell-fixture',
+        values: [1, null, false],
+      },
     };
-    const before = JSON.stringify(invalidState);
+    const before = JSON.stringify(state);
 
-    expect(() => parseDesktopShellStoredState(invalidState)).toThrow(DesktopShellStateError);
-    expect(JSON.stringify(invalidState)).toBe(before);
+    const parsed = parseDesktopShellStoredState(state);
+
+    expect(parsed).toMatchObject({ primaryWindowId: null, projects: [], windows: [] });
+    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([
+      {
+        code: 'desktop-stored-state-metadata-retained',
+        severity: 'warning',
+        authorityKey: 'desktop.shell',
+        fieldNames: ['opaqueSourceMarker'],
+        message: expect.stringContaining('opaqueSourceMarker'),
+      },
+    ]);
+    expect(serializeDesktopShellStoredState(parsed)).toEqual(state);
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it('rejects a root whose required collections cannot identify smaller owners', () => {
+    expect(() => parseDesktopShellStoredState(null)).toThrow(DesktopShellStateError);
+    expect(() => parseDesktopShellStoredState({ primaryWindowId: null, windows: [] })).toThrow(
+      DesktopShellStateError,
+    );
+    expect(() =>
+      parseDesktopShellStoredState({ primaryWindowId: null, projects: {}, windows: [] }),
+    ).toThrow(DesktopShellStateError);
   });
 
   it('isolates a Window whose Project Tab references an absent Project', () => {

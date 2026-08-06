@@ -56,6 +56,11 @@ interface DesktopRetainedInvalidWorkbenchInstance {
   readonly diagnostic: DesktopWorkbenchInstanceDiagnostic;
 }
 
+interface DesktopParsedWorkbenchInstanceCandidate {
+  readonly instance: DesktopWorkbenchInstanceProjection;
+  readonly record: unknown;
+}
+
 const RETAINED_INVALID_WORKBENCH_INSTANCES: unique symbol = Symbol(
   'desktop-retained-invalid-workbench-instances',
 );
@@ -489,7 +494,7 @@ export function parseDesktopWindowWorkbenchCatalog(
     record['activeWorkbenchInstanceId'],
     'Active Desktop Workbench instance',
   );
-  const instances: DesktopWorkbenchInstanceProjection[] = [];
+  const parsedInstances: DesktopParsedWorkbenchInstanceCandidate[] = [];
   const diagnostics = Object.hasOwn(record, 'diagnostics')
     ? requireArray(
         record['diagnostics'],
@@ -497,7 +502,6 @@ export function parseDesktopWindowWorkbenchCatalog(
       ).map(parseWorkbenchInstanceDiagnostic)
     : [];
   const instanceIds = new Set<string>();
-  const ownerKeys = new Set<string>();
   const retainedInvalidInstances = [...readRetainedInvalidWorkbenchInstances(value)];
 
   for (const candidate of requireArray(
@@ -541,8 +545,35 @@ export function parseDesktopWindowWorkbenchCatalog(
       retainedInvalidInstances.push({ record: candidate, diagnostic });
       continue;
     }
+    instanceIds.add(instance.workbenchInstanceId);
+    parsedInstances.push({ instance, record: candidate });
+  }
+
+  const instances: DesktopWorkbenchInstanceProjection[] = [];
+  const instancesByOwner = new Map<string, DesktopParsedWorkbenchInstanceCandidate[]>();
+  for (const candidate of parsedInstances) {
+    const key = ownerKey(candidate.instance.owner);
+    const ownerInstances = instancesByOwner.get(key);
+    if (ownerInstances) ownerInstances.push(candidate);
+    else instancesByOwner.set(key, [candidate]);
+  }
+  for (const candidate of parsedInstances) {
+    const instance = candidate.instance;
     const key = ownerKey(instance.owner);
-    if (ownerKeys.has(key)) {
+    const ownerInstances = instancesByOwner.get(key);
+    if (!ownerInstances) {
+      throw new DesktopWorkbenchInstanceContractError(
+        `Desktop Workbench owner '${key}' has no parsed instances.`,
+      );
+    }
+    const retainedOwnerInstance =
+      ownerInstances.length === 1
+        ? ownerInstances[0]
+        : ownerInstances.find(
+            (ownerInstance) =>
+              ownerInstance.instance.workbenchInstanceId === activeWorkbenchInstanceId,
+          );
+    if (candidate !== retainedOwnerInstance) {
       const diagnostic: DesktopWorkbenchInstanceDiagnostic = {
         code: 'desktop-workbench-instance-owner-duplicate',
         severity: 'error',
@@ -550,15 +581,13 @@ export function parseDesktopWindowWorkbenchCatalog(
         message: `Desktop Workbench owner '${key}' already has an open instance in Window '${windowId}'.`,
       };
       diagnostics.push(diagnostic);
-      retainedInvalidInstances.push({ record: candidate, diagnostic });
+      retainedInvalidInstances.push({ record: candidate.record, diagnostic });
       continue;
     }
-    instanceIds.add(instance.workbenchInstanceId);
-    ownerKeys.add(key);
     instances.push(instance);
   }
 
-  if (!instanceIds.has(activeWorkbenchInstanceId)) {
+  if (!instances.some((instance) => instance.workbenchInstanceId === activeWorkbenchInstanceId)) {
     throw new DesktopWorkbenchInstanceContractError(
       `Desktop Window active Workbench instance '${activeWorkbenchInstanceId}' is unavailable.`,
     );

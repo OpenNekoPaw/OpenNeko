@@ -229,8 +229,26 @@ export interface DesktopStoredStateInvalidDiagnosticProjection {
   readonly message: string;
 }
 
+export interface DesktopShellComponentInvalidDiagnosticProjection {
+  readonly code: 'desktop-shell-component-invalid';
+  readonly severity: 'error';
+  readonly component: 'project-catalog';
+  readonly message: string;
+}
+
+export interface DesktopStoredStateMetadataRetainedDiagnosticProjection {
+  readonly code: 'desktop-stored-state-metadata-retained';
+  readonly severity: 'warning';
+  readonly authorityKey: 'desktop.shell' | 'desktop.application-settings';
+  readonly fieldNames: readonly string[];
+  readonly message: string;
+}
+
 export type DesktopShellStateDiagnosticProjection =
-  DesktopStoredWindowInvalidDiagnosticProjection | DesktopStoredStateInvalidDiagnosticProjection;
+  | DesktopStoredWindowInvalidDiagnosticProjection
+  | DesktopStoredStateInvalidDiagnosticProjection
+  | DesktopShellComponentInvalidDiagnosticProjection
+  | DesktopStoredStateMetadataRetainedDiagnosticProjection;
 
 export interface DesktopShellProjection {
   readonly applicationInstanceId: string;
@@ -760,12 +778,7 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
         ],
     'Desktop Shell projection',
   );
-  const catalogRecord = requireRecord(
-    record['catalog'],
-    'Desktop Project catalog projection is required.',
-  );
   const windowRecord = requireRecord(record['window'], 'Desktop Window projection is required.');
-  requireExactKeys(catalogRecord, ['projects'], 'Desktop Project catalog projection');
   requireExactKeys(
     windowRecord,
     ['windowId', 'activeTarget', 'tabs', 'workbenches', 'applicationSidebar'],
@@ -779,13 +792,9 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   const conversationNavigation = parseDesktopConversationNavigationProjection(
     record['conversationNavigation'],
   );
-  const projects = requireArray(
-    catalogRecord['projects'],
-    'Desktop Project catalog items must be an array.',
-  ).map(parseProjectCatalogItem);
-  const catalog: DesktopProjectCatalogProjection = {
-    projects,
-  };
+  const catalogResult = parseProjectCatalogProjection(record['catalog']);
+  const catalog = catalogResult.catalog;
+  const projects = catalog.projects;
   const tabs = requireArray(windowRecord['tabs'], 'Desktop Project Tabs must be an array.').map(
     parseProjectTab,
   );
@@ -808,10 +817,11 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     throw invalidPayload('Desktop active Project Tab is not present in the Window projection.');
   }
   const projectIds = new Set(projects.map((project) => project.projectId));
-  if (tabs.some((tab) => !projectIds.has(tab.projectId))) {
+  if (!catalogResult.diagnostic && tabs.some((tab) => !projectIds.has(tab.projectId))) {
     throw invalidPayload('Desktop Project Tab references an unknown Project.');
   }
   if (
+    !catalogResult.diagnostic &&
     workbenches.instances.some((instance) =>
       instance.layout.main.views.some((view) => !projectIds.has(view.projectId)),
     )
@@ -850,29 +860,113 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
       applicationSidebar,
     },
     agentHome,
-    conversationNavigation: assertConversationNavigationProjection(
-      conversationNavigation,
-      catalog,
-      agentHome,
-    ),
+    conversationNavigation: catalogResult.diagnostic
+      ? conversationNavigation
+      : assertConversationNavigationProjection(conversationNavigation, catalog, agentHome),
     domains: requireArray(
       record['domains'],
       'Desktop domain capability projection must be an array.',
     ).map(parseDesktopDomainCapabilityProjection),
-    stateDiagnostics:
-      record['stateDiagnostics'] === undefined
+    stateDiagnostics: [
+      ...(catalogResult.diagnostic ? [catalogResult.diagnostic] : []),
+      ...(record['stateDiagnostics'] === undefined
         ? []
         : requireArray(
             record['stateDiagnostics'],
             'Desktop Shell state diagnostics must be an array.',
-          ).map(parseDesktopShellStateDiagnosticProjection),
+          ).map(parseDesktopShellStateDiagnosticProjection)),
+    ],
   };
+}
+
+function parseProjectCatalogProjection(value: unknown): {
+  readonly catalog: DesktopProjectCatalogProjection;
+  readonly diagnostic?: DesktopShellComponentInvalidDiagnosticProjection;
+} {
+  try {
+    const record = requireRecord(value, 'Desktop Project catalog projection is required.');
+    requireExactKeys(record, ['projects'], 'Desktop Project catalog projection');
+    return {
+      catalog: {
+        projects: requireArray(
+          record['projects'],
+          'Desktop Project catalog items must be an array.',
+        ).map(parseProjectCatalogItem),
+      },
+    };
+  } catch (error) {
+    return {
+      catalog: { projects: [] },
+      diagnostic: {
+        code: 'desktop-shell-component-invalid',
+        severity: 'error',
+        component: 'project-catalog',
+        message: `Desktop Project catalog projection was rejected without reading or rewriting it: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      },
+    };
+  }
 }
 
 function parseDesktopShellStateDiagnosticProjection(
   value: unknown,
 ): DesktopShellStateDiagnosticProjection {
   const record = requireRecord(value, 'Desktop Shell state diagnostic must be an object.');
+  if (record['code'] === 'desktop-stored-state-metadata-retained') {
+    requireExactKeys(
+      record,
+      ['code', 'severity', 'authorityKey', 'fieldNames', 'message'],
+      'Desktop Shell state diagnostic',
+    );
+    if (
+      record['severity'] !== 'warning' ||
+      (record['authorityKey'] !== 'desktop.shell' &&
+        record['authorityKey'] !== 'desktop.application-settings')
+    ) {
+      throw invalidPayload('Desktop stored state metadata diagnostic identity is invalid.');
+    }
+    const fieldNames = requireArray(
+      record['fieldNames'],
+      'Desktop Shell metadata diagnostic fields must be an array.',
+    ).map((fieldName) =>
+      requireNonEmptyString(fieldName, 'Desktop Shell metadata diagnostic field name is required.'),
+    );
+    if (fieldNames.length === 0 || new Set(fieldNames).size !== fieldNames.length) {
+      throw invalidPayload(
+        'Desktop Shell metadata diagnostic fields must be unique and non-empty.',
+      );
+    }
+    return {
+      code: 'desktop-stored-state-metadata-retained',
+      severity: 'warning',
+      authorityKey: record['authorityKey'],
+      fieldNames,
+      message: requireNonEmptyString(
+        record['message'],
+        'Desktop Shell metadata diagnostic message is required.',
+      ),
+    };
+  }
+  if (record['code'] === 'desktop-shell-component-invalid') {
+    requireExactKeys(
+      record,
+      ['code', 'severity', 'component', 'message'],
+      'Desktop Shell state diagnostic',
+    );
+    if (record['severity'] !== 'error' || record['component'] !== 'project-catalog') {
+      throw invalidPayload('Desktop Shell component diagnostic identity is invalid.');
+    }
+    return {
+      code: 'desktop-shell-component-invalid',
+      severity: 'error',
+      component: 'project-catalog',
+      message: requireNonEmptyString(
+        record['message'],
+        'Desktop Shell component diagnostic message is required.',
+      ),
+    };
+  }
   if (record['code'] === 'desktop-stored-state-invalid') {
     requireExactKeys(
       record,
@@ -933,11 +1027,7 @@ export function parseDesktopConversationNavigationProjection(
     value,
     'Desktop Conversation navigation projection must be an object.',
   );
-  requireExactKeys(
-    record,
-    ['groups'],
-    'Desktop Conversation navigation projection',
-  );
+  requireExactKeys(record, ['groups'], 'Desktop Conversation navigation projection');
   const groups = requireArray(
     record['groups'],
     'Desktop Conversation navigation groups must be an array.',
