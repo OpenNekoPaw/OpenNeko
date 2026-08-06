@@ -1,6 +1,5 @@
 export const STORAGE_MAINTENANCE_OUTCOMES = [
   'deleted',
-  'migrated',
   'rebuilt',
   'promoted',
   'skipped',
@@ -9,8 +8,7 @@ export const STORAGE_MAINTENANCE_OUTCOMES = [
 ] as const;
 
 export type StorageMaintenanceOutcome = (typeof STORAGE_MAINTENANCE_OUTCOMES)[number];
-export type StorageMaintenanceOperation =
-  'cleanup' | 'migration' | 'rebuild' | 'promotion' | 'repair';
+export type StorageMaintenanceOperation = 'cleanup' | 'rebuild' | 'promotion' | 'repair';
 
 export interface StorageMaintenanceReportEntry {
   readonly outcome: StorageMaintenanceOutcome;
@@ -62,7 +60,6 @@ export function createStorageMaintenanceReport(input: {
 function createEmptyCounts(): Record<StorageMaintenanceOutcome, number> {
   return {
     deleted: 0,
-    migrated: 0,
     rebuilt: 0,
     promoted: 0,
     skipped: 0,

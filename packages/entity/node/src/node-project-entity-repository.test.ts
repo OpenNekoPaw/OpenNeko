@@ -83,7 +83,10 @@ describe('NodeProjectEntityRepository', () => {
     const siblingWorkspacePath = await createWorkspace();
     const entityPath = resolveProjectEntityDocumentPath(workspacePath);
     await mkdir(path.dirname(entityPath), { recursive: true });
-    const invalidBytes = JSON.stringify({ ...createDocument('Rin'), schemaVersion: 1 });
+    const invalidBytes = JSON.stringify({
+      ...createDocument('Rin'),
+      unexpectedField: 1,
+    });
     await writeFile(entityPath, invalidBytes, 'utf8');
 
     await expect(createRepository(workspacePath).load()).rejects.toBeInstanceOf(

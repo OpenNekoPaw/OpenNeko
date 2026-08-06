@@ -23,9 +23,6 @@ export interface ValidationResult {
   readonly warnings: ValidationError[];
 }
 
-const LEGACY_RUNTIME_GENERATED_GROUP_ID_PREFIX = 'runtime:canvas-generated-group:';
-const LEGACY_RUNTIME_GENERATED_CANDIDATE_ID_PREFIX = 'runtime:canvas-generated-candidate:';
-
 // =============================================================================
 // Type Guards (internal helpers)
 // =============================================================================
@@ -160,15 +157,6 @@ function validateNode(
   // id — required string
   if (!isString(node['id'])) {
     structuralErrors.push({ field: `${path}.id`, message: 'must be a string', severity: 'error' });
-  } else if (
-    node['id'].startsWith(LEGACY_RUNTIME_GENERATED_GROUP_ID_PREFIX) ||
-    node['id'].startsWith(LEGACY_RUNTIME_GENERATED_CANDIDATE_ID_PREFIX)
-  ) {
-    structuralErrors.push({
-      field: `${path}.id`,
-      message: 'runtime generated Group identities cannot be persisted',
-      severity: 'error',
-    });
   }
 
   // type — required, must be in allowed set
@@ -328,10 +316,19 @@ function validateJobNodeData(value: unknown, path: string, errors: ValidationErr
       severity: 'error',
     });
   }
-  if ('revision' in value) {
+  const allowedFields = new Set([
+    'jobRef',
+    'title',
+    'objective',
+    'status',
+    'inputRefs',
+    'outputRefs',
+    'diagnostic',
+  ]);
+  for (const field of Object.keys(value).filter((candidate) => !allowedFields.has(candidate))) {
     errors.push({
-      field: `${path}.revision`,
-      message: 'Job node data rejects removed internal revision fields',
+      field: `${path}.${field}`,
+      message: 'Job node data contains an unknown field',
       severity: 'error',
     });
   }

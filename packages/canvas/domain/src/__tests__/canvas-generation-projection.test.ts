@@ -213,7 +213,6 @@ function resultLocator(outputId: string): GeneratedOutputContentLocator {
   return {
     kind: 'generated-output',
     outputId,
-    revision: '1',
     digest: `sha256:${outputId}`,
     path: `neko/generated/${outputId}.png`,
   };

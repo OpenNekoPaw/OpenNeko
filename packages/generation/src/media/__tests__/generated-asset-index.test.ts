@@ -74,7 +74,7 @@ describe('GeneratedAssetIndex', () => {
     expect(restored.get(asset.id)).toEqual(asset);
   });
 
-  it('rejects legacy generated lifecycle fields before updating the index store', async () => {
+  it('rejects unsupported generated lifecycle fields before updating the index store', async () => {
     const workspaceRoot = await createTempDir();
     const manifest = createManifestStore();
     const index = new GeneratedAssetIndex(
@@ -92,20 +92,20 @@ describe('GeneratedAssetIndex', () => {
       mimeType: 'image/png',
       generation: { operationId: 'operation-1' },
     });
-    const legacyAsset = imageAsset({
+    const unsupportedAsset = imageAsset({
       path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'a.png'),
       lifecycle: {
         ...lifecycle,
-        // @ts-expect-error Runtime poison fixture for the removed lifecycle field.
-        resourceRef: { id: 'legacy-resource' },
+        // @ts-expect-error Runtime decoder fixture for an unsupported lifecycle field.
+        resourceRef: { id: 'unsupported-resource' },
       },
     });
 
-    await expect(index.add(legacyAsset)).rejects.toThrow('invalid-generated-asset');
+    await expect(index.add(unsupportedAsset)).rejects.toThrow('invalid-generated-asset');
     expect(manifest.current().entries).toEqual({});
   });
 
-  it('fails visibly when persisted projection lifecycle contains a legacy field', async () => {
+  it('fails visibly when persisted projection lifecycle contains an unsupported field', async () => {
     const workspaceRoot = await createTempDir();
     const manifest = createManifestStore();
     const store = new LocalMetadataGeneratedOutputProjectionStore({
@@ -140,7 +140,7 @@ describe('GeneratedAssetIndex', () => {
     if (typeof persistedLifecycle !== 'object' || persistedLifecycle === null) {
       throw new Error('Expected persisted generated asset lifecycle fixture.');
     }
-    Reflect.set(persistedLifecycle, 'resourceRef', { id: 'legacy-resource' });
+    Reflect.set(persistedLifecycle, 'resourceRef', { id: 'unsupported-resource' });
 
     await expect(store.load()).rejects.toThrow('invalid-generated-output-projection');
   });
@@ -183,7 +183,7 @@ describe('GeneratedAssetIndex', () => {
     if (!rejectedEntry || typeof persistedLifecycle !== 'object' || persistedLifecycle === null) {
       throw new Error('Expected persisted generated output projection fixture.');
     }
-    Reflect.set(persistedLifecycle, 'resourceRef', { id: 'legacy-resource' });
+    Reflect.set(persistedLifecycle, 'resourceRef', { id: 'unsupported-resource' });
     const rejectedSnapshot = structuredClone(rejectedEntry);
     Reflect.deleteProperty(manifest.current().entries, 'generated-output:asset-1');
     Reflect.set(manifest.current().entries, 'projection-storage-key', rejectedEntry);
@@ -229,7 +229,7 @@ describe('GeneratedAssetIndex', () => {
     if (!rejectedEntry || typeof projection !== 'object' || projection === null) {
       throw new Error('Expected persisted generated output projection fixture.');
     }
-    Reflect.set(projection, 'version', 0);
+    Reflect.set(projection, 'unexpectedField', 0);
     const rejections: GeneratedOutputProjectionRejection[] = [];
     const isolatedStore = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
@@ -334,7 +334,6 @@ function createManifestStore(initial?: ResourceCacheManifest): {
   readonly current: () => ResourceCacheManifest;
 } {
   let manifest: ResourceCacheManifest = initial ?? {
-    version: 2,
     createdAt: '2026-07-13T00:00:00.000Z',
     updatedAt: '2026-07-13T00:00:00.000Z',
     entries: {},

@@ -17,7 +17,6 @@ const locators = [
   {
     kind: 'generated-output',
     outputId: 'image-1',
-    revision: 'revision-1',
     digest: 'sha256:image-1',
     path: 'neko/generated/image-1.png',
   },

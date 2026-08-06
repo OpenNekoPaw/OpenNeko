@@ -209,7 +209,7 @@ export class PcmAudioClient {
     }
     assertNonNegativeFinite(fadeDurationSeconds, 'PCM retirement fade duration');
     this.disposed = true;
-    const stopped = new Error('PCM audio client was retired.');
+    const stopped = new Error('PCM audio client was stopped.');
     this.rejectPendingPreparation(stopped);
     this.rejectPendingStart(stopped);
     this.rejectPendingFirstScheduled(stopped);

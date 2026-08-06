@@ -27,7 +27,7 @@ describe('Canvas Host runtime architecture boundary', () => {
     expect(app).not.toContain('getGlobalHostApi');
 
     const webviewRoot = path.resolve(hostRuntimeRoot, '..');
-    const legacyGlobalViolations = walkTypeScript(webviewRoot)
+    const implicitGlobalViolations = walkTypeScript(webviewRoot)
       .filter(
         (file) =>
           !file.endsWith('.test.ts') &&
@@ -40,7 +40,7 @@ describe('Canvas Host runtime architecture boundary', () => {
           .filter((token) => content.includes(token))
           .map((token) => `${path.relative(webviewRoot, file)} -> ${token}`);
       });
-    expect(legacyGlobalViolations).toEqual([]);
+    expect(implicitGlobalViolations).toEqual([]);
   });
 });
 

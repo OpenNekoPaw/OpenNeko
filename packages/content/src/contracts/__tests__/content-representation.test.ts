@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CONTENT_REPRESENTATION_KINDS,
+  isContentRepresentationLocator,
   isContentRepresentationSpec,
   type ContentRepresentationResult,
 } from '../content-representation';
@@ -23,7 +24,7 @@ describe('content representation contracts', () => {
         width: 1920,
         height: 1080,
       },
-      { kind: 'semantic-sidecar', modality: 'ocr', profile: 'document-v1' },
+      { kind: 'semantic-sidecar', modality: 'ocr', profile: 'document-default' },
     ];
 
     expect(specs.every(isContentRepresentationSpec)).toBe(true);
@@ -49,9 +50,11 @@ describe('content representation contracts', () => {
         kind: 'content-representation',
         id: 'representation-1',
         representationKind: 'thumbnail',
+        source: { kind: 'workspace-file', path: 'media/source.png' },
+        spec: { kind: 'thumbnail', maxWidth: 320, maxHeight: 180, format: 'webp' },
+        generatorId: 'thumbnail-generator',
         sourceFingerprint: 'sha256:source',
         specFingerprint: 'sha256:spec',
-        revision: 'thumbnail-generator-v1',
       },
       metadata: {
         mimeType: 'image/webp',
@@ -67,5 +70,21 @@ describe('content representation contracts', () => {
     expect(serialized).not.toContain('manifest');
     expect(serialized).not.toContain('absolutePath');
     expect(serialized).not.toContain('localPath');
+  });
+
+  it('rejects unknown representation fields at the exact locator boundary', () => {
+    expect(
+      isContentRepresentationLocator({
+        kind: 'content-representation',
+        id: 'representation-1',
+        representationKind: 'thumbnail',
+        source: { kind: 'workspace-file', path: 'media/source.png' },
+        spec: { kind: 'thumbnail' },
+        generatorId: 'thumbnail-generator',
+        sourceFingerprint: 'sha256:source',
+        specFingerprint: 'sha256:spec',
+        unexpectedField: 'invalid',
+      }),
+    ).toBe(false);
   });
 });

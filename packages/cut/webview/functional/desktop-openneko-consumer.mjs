@@ -47,7 +47,6 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       `(projection, current, tab, project) => ({
         ...current,
-        revision: current.revision + 1,
         display: { ...current.display, mode: 'main-only' },
         main: {
           views: [
@@ -192,7 +191,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       viewInstanceId: tab.viewInstanceId,
       documentId: ${JSON.stringify(prepared.newDocumentId)},
       sessionId: 'cut-session:cut:new-target:' + tab.viewInstanceId,
-      endpointEpoch: projection.endpointEpoch,
+      rendererSessionId: projection.rendererSessionId,
     };
     const created = await execute(newIdentity, 'document.create', {
       type: 'cut:document-create',
@@ -213,10 +212,14 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         rate: 30,
       }],
     });
-    const currentWorkbench = projection.window.workbench;
+    const workbenchInstance = projection.window.workbenches.instances.find(
+      (candidate) => candidate.workbenchInstanceId ===
+        projection.window.workbenches.activeWorkbenchInstanceId,
+    );
+    if (!workbenchInstance) throw new Error('Cut functional active Workbench is unavailable.');
+    const currentWorkbench = workbenchInstance.layout;
     const nextWorkbench = {
       ...currentWorkbench,
-      revision: currentWorkbench.revision + 1,
       main: {
         ...currentWorkbench.main,
         views: [
@@ -249,12 +252,17 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       },
     };
     projection = await window.openNekoDesktop.workbench.update(
+      workbenchInstance.workbenchInstanceId,
       nextWorkbench,
-      projection.window.revision,
-      currentWorkbench.revision,
     );
+    const updatedWorkbenchInstance = projection.window.workbenches.instances.find(
+      (candidate) => candidate.workbenchInstanceId === workbenchInstance.workbenchInstanceId,
+    );
+    if (!updatedWorkbenchInstance) throw new Error('Updated Cut Workbench is unavailable.');
     const identityFor = (viewId) => {
-      const view = projection.window.workbench.main.views.find((candidate) => candidate.viewId === viewId);
+      const view = updatedWorkbenchInstance.layout.main.views.find(
+        (candidate) => candidate.viewId === viewId,
+      );
       if (!view?.documentId) throw new Error('Cut functional View is missing: ' + viewId);
       return {
         projectId: view.projectId,
@@ -264,7 +272,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         viewInstanceId: view.viewInstanceId,
         documentId: view.documentId,
         sessionId: 'cut-session:' + view.viewId + ':' + view.viewInstanceId,
-        endpointEpoch: projection.endpointEpoch,
+        rendererSessionId: projection.rendererSessionId,
       };
     };
     const playbackIdentity = identityFor('cut:functional');
@@ -370,7 +378,6 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     evaluate,
     `(projection, current) => ({
       ...current,
-      revision: current.revision + 1,
       main: {
         ...current.main,
         views: current.main.views.filter((view) => view.viewId !== 'cut:authoring'),
@@ -387,7 +394,6 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     evaluate,
     `(projection, current, tab, project) => ({
       ...current,
-      revision: current.revision + 1,
       main: {
         ...current.main,
         views: [...current.main.views, {
@@ -409,7 +415,12 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
   );
   const reopened = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    const view = projection.window.workbench.main.views.find(
+    const workbenchInstance = projection.window.workbenches.instances.find(
+      (candidate) => candidate.workbenchInstanceId ===
+        projection.window.workbenches.activeWorkbenchInstanceId,
+    );
+    if (!workbenchInstance) throw new Error('Reopened Cut Workbench is unavailable.');
+    const view = workbenchInstance.layout.main.views.find(
       (candidate) => candidate.viewId === 'cut:authoring-reopened',
     );
     if (!view?.documentId) throw new Error('Reopened Cut View is missing.');
@@ -421,7 +432,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       viewInstanceId: view.viewInstanceId,
       documentId: view.documentId,
       sessionId: 'cut-session:' + view.viewId + ':' + view.viewInstanceId,
-      endpointEpoch: projection.endpointEpoch,
+      rendererSessionId: projection.rendererSessionId,
     };
     const snapshot = await window.openNekoDesktop.cut.getSnapshot(identity);
     const clips = snapshot.document.tracks.flatMap((track) => track.items)
@@ -439,8 +450,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     newTargetCreated: firstPass.newTargetCreated,
     explicitTargetAppended: firstPass.explicitTargetAppended,
     manualMutePreserved: firstPass.manualMutePreserved,
-    multiDocumentIsolated:
-      firstPass.playbackDocumentBefore === firstPass.playbackDocumentAfter,
+    multiDocumentIsolated: firstPass.playbackDocumentBefore === firstPass.playbackDocumentAfter,
     exportAcceptedDirty: firstPass.exportAcceptedDirty,
     reopenedFromSavedState: reopened.sessionChanged && reopened.renamedClip && reopened.laterEdit,
   };

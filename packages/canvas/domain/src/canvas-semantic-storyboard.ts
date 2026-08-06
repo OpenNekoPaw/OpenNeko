@@ -74,7 +74,6 @@ export type CanvasStoryboardAdvancedParameterId =
 export interface CanvasStoryboardSemanticPromptDocument extends CanvasAuthoringSemanticPromptDocument {
   readonly documentId: string;
   readonly blockKind: CanvasStoryboardPromptBlockKind;
-  readonly baseRevision?: string;
   readonly updatedAt?: number;
 }
 
@@ -165,7 +164,6 @@ export interface CanvasStoryboardPromptDocumentRef {
   readonly blockKind: CanvasStoryboardPromptBlockKind;
   readonly documentId: string;
   readonly text?: string;
-  readonly baseRevision?: string;
 }
 
 export interface CanvasStoryboardActionIntent {
@@ -434,9 +432,14 @@ export function validateCanvasStoryboardNextCreativeState(
       }),
     );
   }
-  if (record['taskRef'] !== undefined) {
-    diagnostics.push(retiredTaskContractDiagnostic('taskRef', record['taskRef']));
-  }
+  diagnostics.push(
+    ...validateKnownFields(
+      record,
+      ['id', 'label', 'severity', 'target', 'nextActionId', 'blocker', 'resultRef', 'diagnostics'],
+      'malformed-storyboard-next-state',
+      'nextCreativeState',
+    ),
+  );
   if (record['resultRef'] !== undefined) {
     diagnostics.push(...validateResultRef(record['resultRef'], 'resultRef'));
   }
@@ -486,9 +489,24 @@ export function validateCanvasStoryboardActionIntent(
   if (record['generationParams'] !== undefined) {
     diagnostics.push(...validateGenerationParams(record['generationParams'], options));
   }
-  if (record['taskRef'] !== undefined) {
-    diagnostics.push(retiredTaskContractDiagnostic('taskRef', record['taskRef']));
-  }
+  diagnostics.push(
+    ...validateKnownFields(
+      record,
+      [
+        'actionId',
+        'requestId',
+        'target',
+        'promptDocuments',
+        'referenceMedia',
+        'generationParams',
+        'expectedNextStateId',
+        'resultRef',
+        'createdAt',
+      ],
+      'malformed-storyboard-action-intent',
+      'actionIntent',
+    ),
+  );
   if (record['resultRef'] !== undefined) {
     diagnostics.push(...validateResultRef(record['resultRef'], 'resultRef'));
   }
@@ -1100,9 +1118,13 @@ function validateResultRef(value: unknown, target: string): readonly CanvasAutho
 
   const hasCanvas = record['canvasRef'] !== undefined;
   const hasMedia = record['mediaRef'] !== undefined;
-  if (record['agentResult'] !== undefined) {
-    return [retiredTaskContractDiagnostic(`${target}.agentResult`, record['agentResult'])];
-  }
+  const unknownFieldDiagnostics = validateKnownFields(
+    record,
+    ['canvasRef', 'mediaRef'],
+    'malformed-storyboard-result-ref',
+    target,
+  );
+  if (unknownFieldDiagnostics.length > 0) return unknownFieldDiagnostics;
   if (!hasCanvas && !hasMedia) {
     return [
       diagnostic(
@@ -1162,9 +1184,14 @@ function validateExecutionRefs(
     ];
   }
   const diagnostics: CanvasAuthoringDiagnostic[] = [];
-  if (record['taskRefs'] !== undefined) {
-    diagnostics.push(retiredTaskContractDiagnostic(`${target}.taskRefs`, record['taskRefs']));
-  }
+  diagnostics.push(
+    ...validateKnownFields(
+      record,
+      ['resultRefs', 'historyRefs'],
+      'malformed-storyboard-execution-refs',
+      target,
+    ),
+  );
   if (record['resultRefs'] !== undefined) {
     if (!Array.isArray(record['resultRefs'])) {
       diagnostics.push(
@@ -1184,16 +1211,21 @@ function validateExecutionRefs(
   return diagnostics;
 }
 
-function retiredTaskContractDiagnostic(
+function validateKnownFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+  code: string,
   target: string,
-  received: unknown,
-): CanvasAuthoringDiagnostic {
-  return diagnostic(
-    'error',
-    'retired-storyboard-task-contract',
-    'Generic Task references are retired; use Canvas resultRefs with durable canvasRef or mediaRef identity.',
-    { target, received },
-  );
+): readonly CanvasAuthoringDiagnostic[] {
+  const knownFields = new Set(fields);
+  return Object.keys(record)
+    .filter((field) => !knownFields.has(field))
+    .map((field) =>
+      diagnostic('error', code, `${target} contains an unsupported field.`, {
+        target: `${target}.${field}`,
+        received: record[field],
+      }),
+    );
 }
 
 function validateOptionalDiagnostics(

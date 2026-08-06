@@ -36,7 +36,7 @@ describe('keyboard editable and IME guards', () => {
     expect(isEditableTarget(document.getElementById('button'))).toBe(false);
   });
 
-  it('covers Agent and Sketch legacy editable target selectors', () => {
+  it('handles nested editable target selectors', () => {
     document.body.innerHTML = `
       <div id="contenteditable-empty" contenteditable=""><span id="empty-child"></span></div>
       <div id="contenteditable-true" contenteditable="true"><span id="true-child"></span></div>

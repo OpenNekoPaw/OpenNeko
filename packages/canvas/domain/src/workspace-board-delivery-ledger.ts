@@ -97,7 +97,6 @@ export class WorkspaceBoardDeliveryLedger {
           payload,
           updatedAt: now,
         });
-        await incrementTaskRevision(repositories, this.options.workspaceId, now);
         return toDeliveryTask(payload);
       },
     );
@@ -162,7 +161,6 @@ export class WorkspaceBoardDeliveryLedger {
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         });
-        await incrementTaskRevision(repositories, this.options.workspaceId, now);
         return claim;
       },
     );
@@ -177,7 +175,6 @@ export class WorkspaceBoardDeliveryLedger {
           this.options.workspaceId,
           writerTaskKey(this.options.workspaceId),
         );
-        await incrementTaskRevision(repositories, this.options.workspaceId, this.now());
       },
     );
   }
@@ -230,7 +227,6 @@ export class WorkspaceBoardDeliveryLedger {
           payload,
           updatedAt: now,
         });
-        await incrementTaskRevision(repositories, this.options.workspaceId, now);
         return toDeliveryTask(payload);
       },
     );
@@ -270,7 +266,6 @@ export class WorkspaceBoardDeliveryLedger {
           updatedAt: now,
         });
         await repositories.taskCheckpoints.delete(this.options.workspaceId, taskKey);
-        await incrementTaskRevision(repositories, this.options.workspaceId, now);
       },
     );
   }
@@ -310,7 +305,6 @@ export class WorkspaceBoardDeliveryLedger {
           payload,
           updatedAt: now,
         });
-        await incrementTaskRevision(repositories, this.options.workspaceId, now);
       },
     );
   }
@@ -338,7 +332,6 @@ export class WorkspaceBoardDeliveryLedger {
           payload,
           updatedAt: now,
         });
-        await incrementTaskRevision(repositories, this.options.workspaceId, now);
       },
     );
   }
@@ -359,7 +352,6 @@ export class WorkspaceBoardDeliveryLedger {
           updatedAt: now,
         });
         await repositories.taskCheckpoints.delete(this.options.workspaceId, taskKey);
-        await incrementTaskRevision(repositories, this.options.workspaceId, now);
       },
     );
   }
@@ -551,17 +543,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function requireNonEmptyIdentity(value: string, label: string): string {
   if (value.trim().length === 0) throw new Error(`${label} is required.`);
   return value;
-}
-
-async function incrementTaskRevision(
-  repositories: LocalMetadataStore['repositories'],
-  workspaceId: string,
-  updatedAt: number,
-): Promise<void> {
-  await repositories.projectionVersions.increment({
-    partition: { scope: 'workspace', workspaceId, domain: 'tasks' },
-    freshness: 'fresh',
-    diagnostic: null,
-    updatedAt: new Date(updatedAt).toISOString(),
-  });
 }

@@ -73,6 +73,55 @@ describe('SqliteJsonStateRepository', () => {
     await store.dispose();
   });
 
+  it('updates an existing authority without rewriting unknown required columns', async () => {
+    const root = await createRoot('openneko-state-additive-table-');
+    const store = await openStore(root);
+    await store.transaction(
+      { mode: 'state-write', ownership: 'state', operation: 'seed-additive-state-table' },
+      async ({ sql }) => {
+        await sql.run(`CREATE TABLE desktop_application_state (
+          authority_key TEXT PRIMARY KEY,
+          opaque_required_marker INTEGER NOT NULL,
+          document_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT`);
+        await sql.run(
+          `INSERT INTO desktop_application_state(
+             authority_key, opaque_required_marker, document_json, updated_at
+           ) VALUES (?, ?, ?, ?)`,
+          [
+            DESKTOP_STATE_AUTHORITY_KEYS.shell,
+            41,
+            JSON.stringify({ value: 'before' }),
+            '2026-08-02T00:00:00.000Z',
+          ],
+        );
+      },
+    );
+    const shell = repository(store, DESKTOP_STATE_AUTHORITY_KEYS.shell);
+    await shell.prepare();
+
+    await shell.commit({ value: 'after' });
+
+    const rows = await store.transaction(
+      { mode: 'read', ownership: 'state', operation: 'verify-additive-state-table' },
+      ({ sql }) =>
+        sql.all(
+          `SELECT opaque_required_marker, document_json
+             FROM desktop_application_state
+            WHERE authority_key = ?`,
+          [DESKTOP_STATE_AUTHORITY_KEYS.shell],
+        ),
+    );
+    expect(rows).toEqual([
+      {
+        opaque_required_marker: 41,
+        document_json: JSON.stringify({ value: 'after' }),
+      },
+    ]);
+    await store.dispose();
+  });
+
   it('leaves an invalid authority unchanged while valid siblings remain available', async () => {
     const { store, shell, settings } = await fixture('openneko-state-rejection-');
     const invalidDocument = '{"value":7}';

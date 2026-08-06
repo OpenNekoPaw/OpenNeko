@@ -927,22 +927,22 @@ describe('Cut Core commands', () => {
     });
   });
 
-  it('preserves a legacy Clip source range when its first trim creates available range metadata', () => {
+  it('preserves a range-less Clip source when its first trim creates available range metadata', () => {
     let document = applyCutCommand(emptyTimeline(), {
       type: 'append-route',
       items: [
         {
           kind: 'media',
-          clipId: 'legacy-clip',
-          name: 'Legacy',
-          targetUrl: 'legacy.mp4',
+          clipId: 'range-less-clip',
+          name: 'Range-less',
+          targetUrl: 'range-less.mp4',
           durationFrames: 90,
           rate: 30,
         },
       ],
     });
     const clip = document.tracks.children[0]?.children[0];
-    if (!clip || clip.OTIO_SCHEMA !== 'Clip.2') throw new Error('Legacy Clip fixture missing.');
+    if (!clip || clip.OTIO_SCHEMA !== 'Clip.2') throw new Error('OTIO Clip fixture missing.');
     document = {
       ...document,
       tracks: {
@@ -967,7 +967,7 @@ describe('Cut Core commands', () => {
 
     document = applyCutCommand(document, {
       type: 'trim',
-      clipId: 'legacy-clip',
+      clipId: 'range-less-clip',
       startDeltaFrames: 0,
       endDeltaFrames: 15,
     });
@@ -984,7 +984,7 @@ describe('Cut Core commands', () => {
 
     document = applyCutCommand(document, {
       type: 'trim',
-      clipId: 'legacy-clip',
+      clipId: 'range-less-clip',
       startDeltaFrames: 0,
       endDeltaFrames: -15,
     });
@@ -1228,7 +1228,7 @@ describe('CutDocumentSession', () => {
     ).toThrowError(expect.objectContaining({ code: 'session-mismatch' }));
 
     session.apply({ ...identity(session), command: linkCommand() });
-    await expect(session.acceptExternalChange('external-v2')).rejects.toBeInstanceOf(
+    await expect(session.acceptExternalChange('external-change-b')).rejects.toBeInstanceOf(
       CutDocumentSessionError,
     );
     expect(session.view().tracks[0]?.items).toHaveLength(1);

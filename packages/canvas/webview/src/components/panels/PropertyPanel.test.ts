@@ -13,7 +13,7 @@ describe('PropertyPanel canonical node registry', () => {
     expect(Object.keys(registry).sort()).toEqual(['group', 'markdown']);
   });
 
-  it('does not infer legacy composable fields for canonical media nodes', () => {
+  it('does not infer composable fields for canonical media nodes', () => {
     const node = {
       ...buildCanvasNode({
         type: 'media',

@@ -69,9 +69,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
     case 'media': {
       const mediaType = readMediaType(data.mediaType);
       const assetPath = asString(data.assetPath);
-      if (data.resourceRef !== undefined || data.documentResourceRef !== undefined) {
-        throw new Error('Canvas Media creation rejects retired resource-reference fields');
-      }
       const contentLocator = isContentLocator(data.contentLocator)
         ? data.contentLocator
         : undefined;
@@ -119,9 +116,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       if (!isJobRef(data.jobRef)) {
         throw new Error('Canvas jobRef must contain a non-empty owner kind and Job identity');
       }
-      if ('revision' in data) {
-        throw new Error('Canvas Job data rejects removed internal revision fields');
-      }
       return {
         ...base,
         type,
@@ -137,9 +131,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       };
     case 'file': {
       const path = asString(data.path);
-      if (data.resourceRef !== undefined || data.documentResourceRef !== undefined) {
-        throw new Error('Canvas File creation rejects retired resource-reference fields');
-      }
       const contentLocator = isContentLocator(data.contentLocator)
         ? data.contentLocator
         : undefined;

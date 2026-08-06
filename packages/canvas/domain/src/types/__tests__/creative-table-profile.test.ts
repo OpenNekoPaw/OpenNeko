@@ -51,32 +51,13 @@ describe('creative table profile descriptor', () => {
     expect(result.unknownHeaders).toEqual(['自定义审阅列']);
   });
 
-  it('keeps canonical prompt fields limited to image and video prompts', () => {
+  it('defines image and video prompt production mappings', () => {
     const imagePrompt = STORYBOARD_CREATIVE_TABLE_PROFILE.fields.find(
       (field) => field.id === 'imagePrompt',
     );
     const videoPrompt = STORYBOARD_CREATIVE_TABLE_PROFILE.fields.find(
       (field) => field.id === 'videoPrompt',
     );
-    const splitPromptFieldIds = [
-      'imageEditPrompt',
-      'shotVideoPrompt',
-      'videoEditPrompt',
-      'sceneStylePrompt',
-      'sceneVideoPrompt',
-      'sceneVideoEditPrompt',
-    ];
-
-    expect(
-      splitPromptFieldIds.filter((fieldId) =>
-        STORYBOARD_CREATIVE_TABLE_PROFILE.fields.some((field) => field.id === fieldId),
-      ),
-    ).toEqual([]);
-    expect(
-      STORYBOARD_CREATIVE_TABLE_PROFILE.recommendedHeaders.filter((fieldId) =>
-        splitPromptFieldIds.includes(fieldId),
-      ),
-    ).toEqual([]);
     expect(
       STORYBOARD_CREATIVE_TABLE_PROFILE.fields
         .filter((field) => field.promptSlot && field.id !== 'prompt')
@@ -95,11 +76,6 @@ describe('creative table profile descriptor', () => {
     });
     expect(imagePrompt?.productionMapping?.target).toBe('storyboardPrompt.imagePromptDocument');
     expect(videoPrompt?.productionMapping?.target).toBe('storyboardPrompt.videoPromptDocument');
-    expect(JSON.stringify(STORYBOARD_CREATIVE_TABLE_PROFILE)).not.toContain(
-      'shot.generationPrompt',
-    );
-    expect(JSON.stringify(STORYBOARD_CREATIVE_TABLE_PROFILE)).not.toContain('shot.promptSlots');
-    expect(JSON.stringify(STORYBOARD_CREATIVE_TABLE_PROFILE)).not.toContain('scene.promptSlots');
   });
 
   it('maps split prompt headers to canonical prompt fields without making video shot-scoped', () => {
@@ -216,16 +192,5 @@ describe('creative table profile descriptor', () => {
         expect(field?.promptSlot?.mediaType).toBe(mediaType);
       }
     }
-  });
-
-  it('keeps imagePrompt localized label out of legacy prompt aliases', () => {
-    const promptField = STORYBOARD_CREATIVE_TABLE_PROFILE.fields.find(
-      (field) => field.id === 'prompt',
-    );
-
-    expect(resolveCreativeTableField(STORYBOARD_CREATIVE_TABLE_PROFILE, '图像提示词')?.id).toBe(
-      'imagePrompt',
-    );
-    expect(promptField?.aliases).not.toContain('图像提示词');
   });
 });

@@ -223,13 +223,9 @@ function readWorkflowStage(
     readMetadataString(metadata, 'workflowStageId') ?? readMetadataString(metadata, 'stageId');
   if (!stageId) return undefined;
   const workflowId = readMetadataString(metadata, 'workflowId');
-  const stageRevision =
-    readMetadataString(metadata, 'workflowStageRevision') ??
-    readMetadataString(metadata, 'stageRevision');
   return {
     stageId,
     ...(workflowId ? { workflowId } : {}),
-    ...(stageRevision ? { stageRevision } : {}),
   };
 }
 

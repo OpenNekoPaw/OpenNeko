@@ -224,11 +224,29 @@ export function validateCreativeMediaOperationSupport(
 ): CreativeMediaOperationValidationResult {
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
   validateOperationIdentity(support.mediaKind, support.operationId, diagnostics);
-  if (Object.hasOwn(support, 'version') || !support.adapterId.trim()) {
+  if (
+    !hasOnlyFields(
+      support,
+      new Set([
+        'mediaKind',
+        'operationId',
+        'level',
+        'adapterId',
+        'acceptedControls',
+        'degradedControls',
+        'supportedSplitProfiles',
+        'extensionFields',
+        'requirements',
+        'limits',
+        'diagnostics',
+      ]),
+    ) ||
+    !support.adapterId.trim()
+  ) {
     diagnostics.push({
       code: 'invalid-operation-request',
       severity: 'error',
-      message: 'Operation support contains a removed field or an empty adapter id.',
+      message: 'Operation support contains an unknown field or an empty adapter id.',
     });
   }
   if (!Array.isArray(support.acceptedControls)) {
@@ -293,11 +311,41 @@ export function validateCreativeMediaOperationRequest(
   request: CreativeMediaOperationRequest,
 ): CreativeMediaOperationValidationResult {
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
-  if (Object.hasOwn(request, 'version') || !request.requestId.trim()) {
+  if (
+    !hasOnlyFields(
+      request,
+      new Set([
+        'requestId',
+        'mediaKind',
+        'operationId',
+        'inputLocators',
+        'prompt',
+        'maskLocator',
+        'startFrameLocator',
+        'endFrameLocator',
+        'referenceVideoLocator',
+        'editInstruction',
+        'motion',
+        'camera',
+        'shotScale',
+        'requestedAspectRatio',
+        'outpaintExpansion',
+        'splitProfile',
+        'splitOptions',
+        'requestedOutputCount',
+        'requestedWidth',
+        'requestedHeight',
+        'requestedDurationSeconds',
+        'adapterExtensions',
+        'intent',
+      ]),
+    ) ||
+    !request.requestId.trim()
+  ) {
     diagnostics.push({
       code: 'invalid-operation-request',
       severity: 'error',
-      message: 'Operation request contains a removed field or an empty request id.',
+      message: 'Operation request contains an unknown field or an empty request id.',
     });
   }
   validateOperationIdentity(request.mediaKind, request.operationId, diagnostics);
@@ -366,11 +414,26 @@ export function validateCreativeMediaOperationResult(
   result: CreativeMediaOperationResult,
 ): CreativeMediaOperationValidationResult {
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
-  if (Object.hasOwn(result, 'version') || !result.requestId.trim()) {
+  if (
+    !hasOnlyFields(
+      result,
+      new Set([
+        'requestId',
+        'mediaKind',
+        'operationId',
+        'status',
+        'outputLocators',
+        'diagnostics',
+        'provider',
+        'provenance',
+      ]),
+    ) ||
+    !result.requestId.trim()
+  ) {
     diagnostics.push({
       code: 'invalid-operation-result',
       severity: 'error',
-      message: 'Operation result contains a removed field or an empty request id.',
+      message: 'Operation result contains an unknown field or an empty request id.',
     });
   }
   validateOperationIdentity(result.mediaKind, result.operationId, diagnostics);
@@ -745,4 +808,8 @@ function hasDiagnostic(
   code: CreativeMediaOperationDiagnostic['code'],
 ): boolean {
   return diagnostics.some((item) => item.code === code);
+}
+
+function hasOnlyFields(value: object, allowedFields: ReadonlySet<string>): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

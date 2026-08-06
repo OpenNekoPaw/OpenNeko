@@ -87,6 +87,48 @@ export const STORYBOARD_SHOT_REQUIRED_FIELDS = [
   'imageStrategy',
 ] as const satisfies readonly (keyof StoryboardShotRow)[];
 
+const STORYBOARD_SCENE_FIELDS = new Set<string>([
+  'sceneId',
+  'sceneTitle',
+  'sceneNumber',
+  'location',
+  'timeOfDay',
+  'summary',
+  'shots',
+  'sourceTrace',
+  'extensions',
+] satisfies readonly (keyof StoryboardSceneRow)[]);
+
+const STORYBOARD_SHOT_FIELDS = new Set<string>([
+  'shotId',
+  'shotNumber',
+  'duration',
+  'visualDescription',
+  'characters',
+  'shotScale',
+  'cameraMovement',
+  'cameraAngle',
+  'characterAction',
+  'emotion',
+  'sceneTags',
+  'dialogue',
+  'voiceOver',
+  'soundCue',
+  'textCues',
+  'voiceCues',
+  'imagePrompt',
+  'videoPrompt',
+  'visualStyle',
+  'referenceImagePath',
+  'vfx',
+  'imageStrategy',
+  'sourceMediaRefs',
+  'generatedMediaRefs',
+  'decisionReason',
+  'sourceTrace',
+  'extensions',
+] satisfies readonly (keyof StoryboardShotRow)[]);
+
 export type StoryboardTableProfile = (typeof STORYBOARD_TABLE_PROFILES)[number];
 
 export type StoryboardShotImageStrategy = (typeof STORYBOARD_SHOT_IMAGE_STRATEGIES)[number];
@@ -119,14 +161,6 @@ export type StoryboardSourceProfileId = (typeof STORYBOARD_SOURCE_PROFILE_IDS)[n
 
 export type StoryboardProjectionTarget = (typeof STORYBOARD_PROJECTION_TARGETS)[number];
 
-export interface StoryboardRevisionIdentity {
-  readonly revisionId: string;
-  readonly sequence: number;
-  readonly contentDigest: string;
-  readonly parentRevisionId?: string;
-  readonly createdAt: string;
-}
-
 export interface StoryboardSourceRegion {
   readonly page?: number;
   readonly startOffset?: number;
@@ -150,7 +184,7 @@ export interface StoryboardSourceTrace {
 
 export interface StoryboardProjectionHandoff {
   readonly target: StoryboardProjectionTarget;
-  readonly storyboardRevisionId: string;
+  readonly storyboardFingerprint: string;
   readonly mode: 'read-only-projection' | 'one-way-handoff';
   readonly artifactLocator?: ContentLocator;
   readonly createdAt: string;
@@ -169,7 +203,7 @@ export interface StoryboardTableSource {
 export interface StoryboardTable {
   readonly kind: typeof STORYBOARD_TABLE_KIND;
   readonly profile?: StoryboardTableProfile;
-  readonly revision?: StoryboardRevisionIdentity;
+  readonly contentFingerprint?: string;
   readonly sourceProfile?: StoryboardSourceProfileId;
   readonly sourceTrace?: readonly StoryboardSourceTrace[];
   readonly projections?: readonly StoryboardProjectionHandoff[];
@@ -212,15 +246,12 @@ export interface StoryboardShotRow {
   readonly imagePrompt?: string;
   /** Scene-level video intent, stored on the first shot of the scene for table projection. */
   readonly videoPrompt?: string;
-  /** @deprecated Use imagePrompt for canonical Storyboard generation intent. */
-  readonly generationPrompt?: string;
   readonly visualStyle?: string;
   readonly referenceImagePath?: string;
   readonly vfx?: readonly string[];
   readonly imageStrategy: StoryboardShotImageStrategy;
   readonly sourceMediaRefs?: readonly StoryboardMediaRef[];
   readonly generatedMediaRefs?: readonly StoryboardMediaRef[];
-  readonly mediaRefs?: readonly StoryboardMediaRef[];
   readonly decisionReason?: string;
   readonly sourceTrace?: readonly StoryboardSourceTrace[];
   readonly extensions?: StoryboardExtensionMap;
@@ -346,6 +377,7 @@ export type StoryboardValidationDiagnosticCode =
   | 'invalid-profile'
   | 'missing-required-field'
   | 'invalid-required-field'
+  | 'unsupported-field'
   | 'empty-scenes'
   | 'empty-shots'
   | 'invalid-shot-duration'
@@ -392,7 +424,7 @@ export interface StoryboardValidationOptions extends StoryboardMediaIdentityClas
 
 export type CanonicalStoryboardDiagnosticCode =
   | 'unsupported-source-profile'
-  | 'invalid-storyboard-revision'
+  | 'invalid-storyboard-content'
   | 'invalid-source-trace'
   | 'invalid-projection-handoff';
 
@@ -407,12 +439,12 @@ export function validateCanonicalStoryboardTable(
   const diagnostics: StoryboardValidationDiagnostic[] = [
     ...validateStoryboardTable(table).diagnostics,
   ];
-  if (!table.revision || !isValidStoryboardRevision(table.revision)) {
+  if (!table.contentFingerprint?.trim()) {
     diagnostics.push(
       createCanonicalStoryboardDiagnostic(
-        'invalid-storyboard-revision',
-        'Canonical Storyboard requires a stable revision id, positive sequence, content digest, and timestamp.',
-        ['revision'],
+        'invalid-storyboard-content',
+        'Canonical Storyboard requires a stable content fingerprint.',
+        ['contentFingerprint'],
       ),
     );
   }
@@ -460,14 +492,14 @@ export function validateCanonicalStoryboardTable(
   table.projections?.forEach((projection, index) => {
     if (
       !STORYBOARD_PROJECTION_TARGETS.some((target) => target === projection.target) ||
-      !projection.storyboardRevisionId.trim() ||
-      projection.storyboardRevisionId !== table.revision?.revisionId ||
+      !projection.storyboardFingerprint.trim() ||
+      projection.storyboardFingerprint !== table.contentFingerprint ||
       !Number.isFinite(Date.parse(projection.createdAt))
     ) {
       diagnostics.push(
         createCanonicalStoryboardDiagnostic(
           'invalid-projection-handoff',
-          'Storyboard projection must bind to the current revision and a supported projection target.',
+          'Storyboard projection must bind to the current content fingerprint and a supported projection target.',
           ['projections', index],
         ),
       );
@@ -612,9 +644,6 @@ export interface NormalizeStoryboardTableResult {
 }
 
 const MAX_STORYBOARD_DIAGNOSTICS = 64;
-const STORYBOARD_IMAGE_ALIAS_EXTENSION = 'neko.storyboardImageAlias' as const;
-const STORYBOARD_SOURCE_IMAGE_EXTENSION = 'neko.storyboardSourceImage' as const;
-const FLAT_STORYBOARD_SCENE_ID = 'scene-1' as const;
 
 export function validateStoryboardTable(
   value: unknown,
@@ -791,45 +820,6 @@ export function classifyStoryboardMediaIdentity(
   }
 }
 
-export function splitStoryboardMediaRefsByRole(
-  mediaRefs: readonly StoryboardMediaRef[] | undefined,
-  path: readonly StoryboardValidationDiagnosticPathSegment[] = [],
-): {
-  readonly sourceMediaRefs: readonly StoryboardMediaRef[];
-  readonly generatedMediaRefs: readonly StoryboardMediaRef[];
-  readonly diagnostics: readonly StoryboardValidationDiagnostic[];
-} {
-  const sourceMediaRefs: StoryboardMediaRef[] = [];
-  const generatedMediaRefs: StoryboardMediaRef[] = [];
-  const diagnostics: StoryboardValidationDiagnostic[] = [];
-
-  for (const [index, mediaRef] of (mediaRefs ?? []).entries()) {
-    const refPath = [...path, index];
-    if (isSourceStoryboardMediaRole(mediaRef.role)) {
-      sourceMediaRefs.push(mediaRef);
-      continue;
-    }
-    if (isGeneratedStoryboardMediaRole(mediaRef.role)) {
-      generatedMediaRefs.push(mediaRef);
-      continue;
-    }
-    diagnostics.push(
-      storyboardDiagnostic(
-        'warning',
-        'ambiguous-media-ref',
-        refPath,
-        `Media ref ${mediaRef.refId} has ambiguous role ${mediaRef.role}.`,
-        {
-          expected: 'source/reference/generated/derived/thumbnail/mask',
-          actual: mediaRef.role,
-        },
-      ),
-    );
-  }
-
-  return { sourceMediaRefs, generatedMediaRefs, diagnostics };
-}
-
 export function projectStoryboardTableToCutPayload(
   table: StoryboardTable,
   options: ProjectStoryboardTableToCutOptions = {},
@@ -874,7 +864,7 @@ export function projectCanonicalStoryboardTableToCutHandoff(
   } = {},
 ): CanonicalStoryboardCutHandoffResult {
   const validation = validateCanonicalStoryboardTable(table);
-  if (!validation.ok || !table.revision) {
+  if (!validation.ok || !table.contentFingerprint) {
     return { diagnostics: validation.diagnostics };
   }
   if (handoffOptions.artifactLocator && !isContentLocator(handoffOptions.artifactLocator)) {
@@ -897,7 +887,7 @@ export function projectCanonicalStoryboardTableToCutHandoff(
     payload,
     handoff: {
       target: 'cut',
-      storyboardRevisionId: table.revision.revisionId,
+      storyboardFingerprint: table.contentFingerprint,
       mode: 'one-way-handoff',
       ...(handoffOptions.artifactLocator
         ? { artifactLocator: handoffOptions.artifactLocator }
@@ -909,7 +899,7 @@ export function projectCanonicalStoryboardTableToCutHandoff(
 }
 
 function resolveStoryboardImagePrompt(shot: StoryboardShotRow): string | undefined {
-  return shot.imagePrompt?.trim() || shot.generationPrompt?.trim() || undefined;
+  return shot.imagePrompt?.trim() || undefined;
 }
 
 export function interpretStoryboardImageStrategies(
@@ -1051,7 +1041,7 @@ function normalizeSemanticStoryboardTable(
   const kind = root['kind'];
   const title = readTrimmedString(root['title']);
   const profile = normalizeProfile(root['profile'], diagnostics);
-  const revision = normalizeStoryboardRevision(root['revision']);
+  const contentFingerprint = readTrimmedString(root['contentFingerprint']);
   const sourceProfile = normalizeStoryboardSourceProfile(root['sourceProfile']);
   const sourceTrace = normalizeCanonicalSourceTraces(root['sourceTrace']);
   const projections = normalizeStoryboardProjectionHandoffs(root['projections']);
@@ -1090,7 +1080,7 @@ function normalizeSemanticStoryboardTable(
   return {
     kind: 'storyboard-table',
     ...(profile ? { profile } : {}),
-    ...(revision ? { revision } : {}),
+    ...(contentFingerprint ? { contentFingerprint } : {}),
     ...(sourceProfile ? { sourceProfile } : {}),
     ...(sourceTrace.length > 0 ? { sourceTrace } : {}),
     ...(projections ? { projections } : {}),
@@ -1107,95 +1097,10 @@ function normalizeSceneRows(
 ): readonly StoryboardSceneRow[] {
   if (!Array.isArray(value)) return [];
 
-  if (value.some(isFlatStoryboardShotRecord)) {
-    const flatScenes = normalizeFlatStoryboardShotSceneRows(value, diagnostics);
-    if (flatScenes.length > 0) return flatScenes;
-  }
-
   return value.flatMap((scene, sceneIndex) => {
     const normalized = normalizeSceneRow(scene, sceneIndex, diagnostics);
     return normalized ? [normalized] : [];
   });
-}
-
-function normalizeFlatStoryboardShotSceneRows(
-  value: readonly unknown[],
-  diagnostics: StoryboardValidationDiagnostic[],
-): readonly StoryboardSceneRow[] {
-  const groups: StoryboardSceneRow[] = [];
-  const groupIndexes = new Map<string, number>();
-  let defaultShotIndex = 0;
-
-  for (const [rowIndex, row] of value.entries()) {
-    if (!isFlatStoryboardShotRecord(row)) continue;
-
-    const sceneId =
-      readTrimmedString(row['sceneId']) ??
-      readFlatStoryboardSceneIdFromSource(row) ??
-      FLAT_STORYBOARD_SCENE_ID;
-    const sceneTitle =
-      readTrimmedString(row['sceneTitle']) ??
-      readTrimmedString(row['sceneName']) ??
-      readTrimmedString(row['page']) ??
-      readTrimmedString(row['sourcePage']) ??
-      readTrimmedString(row['sourceImage']) ??
-      'Storyboard';
-    const groupKey = sceneId;
-    const existingIndex = groupIndexes.get(groupKey);
-    const sceneIndex = existingIndex ?? groups.length;
-    if (existingIndex === undefined) {
-      groupIndexes.set(groupKey, sceneIndex);
-      groups.push({
-        sceneId,
-        sceneTitle,
-        sceneNumber: groups.length + 1,
-        shots: [],
-      });
-    }
-
-    const shot = normalizeShotRow(row, sceneIndex, defaultShotIndex, diagnostics, {
-      diagnosticPath: ['scenes', rowIndex],
-      defaultShotNumber: defaultShotIndex + 1,
-    });
-    defaultShotIndex += 1;
-    if (!shot) continue;
-
-    const current = groups[sceneIndex];
-    if (!current) continue;
-    groups[sceneIndex] = {
-      ...current,
-      shots: [...current.shots, shot],
-    };
-  }
-
-  return groups.filter((scene) => scene.shots.length > 0);
-}
-
-function isFlatStoryboardShotRecord(value: unknown): value is Record<string, unknown> {
-  const record = readStoryboardRecord(value);
-  if (!record) return false;
-  if (Array.isArray(record['shots'])) return false;
-  return (
-    record['shotNumber'] !== undefined ||
-    record['duration'] !== undefined ||
-    record['visualDescription'] !== undefined ||
-    record['characterAction'] !== undefined ||
-    record['imageStrategy'] !== undefined ||
-    record['sourceMediaRefs'] !== undefined ||
-    record['mediaRefs'] !== undefined
-  );
-}
-
-function readFlatStoryboardSceneIdFromSource(record: Record<string, unknown>): string | undefined {
-  const source =
-    readTrimmedString(record['sourcePage']) ??
-    readTrimmedString(record['sourceImage']) ??
-    readTrimmedString(record['page']);
-  if (!source) return undefined;
-  return `scene-${source
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')}`;
 }
 
 function normalizeSceneRow(
@@ -1209,6 +1114,9 @@ function normalizeSceneRow(
     diagnostics.push(
       storyboardDiagnostic('error', 'invalid-required-field', path, 'Scene must be an object.'),
     );
+    return undefined;
+  }
+  if (!validateStoryboardFields(record, STORYBOARD_SCENE_FIELDS, path, diagnostics)) {
     return undefined;
   }
 
@@ -1275,12 +1183,8 @@ function normalizeShotRow(
   sceneIndex: number,
   shotIndex: number,
   diagnostics: StoryboardValidationDiagnostic[],
-  options: {
-    readonly diagnosticPath?: readonly StoryboardValidationDiagnosticPathSegment[];
-    readonly defaultShotNumber?: number;
-  } = {},
 ): StoryboardShotRow | undefined {
-  const path = options.diagnosticPath ?? (['scenes', sceneIndex, 'shots', shotIndex] as const);
+  const path = ['scenes', sceneIndex, 'shots', shotIndex] as const;
   const record = readStoryboardRecord(value);
   if (!record) {
     diagnostics.push(
@@ -1288,9 +1192,12 @@ function normalizeShotRow(
     );
     return undefined;
   }
+  if (!validateStoryboardFields(record, STORYBOARD_SHOT_FIELDS, path, diagnostics)) {
+    return undefined;
+  }
 
   const shotId = readTrimmedString(record['shotId']);
-  const shotNumber = readOptionalPositiveNumber(record['shotNumber']) ?? options.defaultShotNumber;
+  const shotNumber = readOptionalPositiveNumber(record['shotNumber']);
   const duration = readOptionalPositiveNumber(record['duration']);
   const visualDescription = readTrimmedString(record['visualDescription']);
   const characterAction = readTrimmedString(record['characterAction']);
@@ -1305,25 +1212,6 @@ function normalizeShotRow(
     [...path, 'generatedMediaRefs'],
     diagnostics,
   );
-  const mediaRefs = normalizeMediaRefs(record['mediaRefs'], [...path, 'mediaRefs'], diagnostics);
-  const inferredImageAlias = normalizeStoryboardImageAlias(record);
-  const inferredSourceImage = normalizeStoryboardSourceImage(record);
-  const splitRefs =
-    sourceMediaRefs.length === 0 && generatedMediaRefs.length === 0 && mediaRefs.length > 0
-      ? splitStoryboardMediaRefsByRole(mediaRefs, [...path, 'mediaRefs'])
-      : undefined;
-  if (splitRefs) {
-    diagnostics.push(...splitRefs.diagnostics);
-  }
-  const normalizedSourceRefs =
-    sourceMediaRefs.length > 0 ? sourceMediaRefs : (splitRefs?.sourceMediaRefs ?? []);
-  const normalizedGeneratedRefs =
-    generatedMediaRefs.length > 0 ? generatedMediaRefs : (splitRefs?.generatedMediaRefs ?? []);
-  const normalizedMediaRefs = dedupeStoryboardMediaRefs([
-    ...mediaRefs,
-    ...normalizedSourceRefs,
-    ...normalizedGeneratedRefs,
-  ]);
   const characters = normalizeCharacters(
     record['characters'],
     [...path, 'characters'],
@@ -1337,10 +1225,6 @@ function normalizeShotRow(
     [...path, 'extensions'],
     diagnostics,
   );
-  const normalizedExtensions = mergeStoryboardSourceImageExtension(
-    mergeStoryboardImageAliasExtension(extensions, inferredImageAlias),
-    inferredSourceImage,
-  );
   const shotScale = normalizeShotScale(record['shotScale']);
   const cameraMovement = normalizeCameraMovement(record['cameraMovement']);
   const cameraAngle = normalizeCameraAngle(record['cameraAngle']);
@@ -1351,7 +1235,6 @@ function normalizeShotRow(
   const voiceCues = normalizeVoiceCues(record['voiceCues'], [...path, 'voiceCues'], diagnostics);
   const imagePrompt = readTrimmedString(record['imagePrompt']);
   const videoPrompt = readTrimmedString(record['videoPrompt']);
-  const generationPrompt = readTrimmedString(record['generationPrompt']);
   const visualStyle = readTrimmedString(record['visualStyle']);
   const referenceImagePath = readTrimmedString(record['referenceImagePath']);
   const decisionReason = readTrimmedString(record['decisionReason']);
@@ -1415,222 +1298,15 @@ function normalizeShotRow(
     ...(voiceCues.length > 0 ? { voiceCues } : {}),
     ...(imagePrompt ? { imagePrompt } : {}),
     ...(videoPrompt ? { videoPrompt } : {}),
-    ...(generationPrompt ? { generationPrompt } : {}),
     ...(visualStyle ? { visualStyle } : {}),
     ...(referenceImagePath ? { referenceImagePath } : {}),
     ...(vfx.length > 0 ? { vfx } : {}),
     imageStrategy,
-    ...(normalizedSourceRefs.length > 0 ? { sourceMediaRefs: normalizedSourceRefs } : {}),
-    ...(normalizedGeneratedRefs.length > 0 ? { generatedMediaRefs: normalizedGeneratedRefs } : {}),
-    ...(normalizedMediaRefs.length > 0 ? { mediaRefs: normalizedMediaRefs } : {}),
+    ...(sourceMediaRefs.length > 0 ? { sourceMediaRefs } : {}),
+    ...(generatedMediaRefs.length > 0 ? { generatedMediaRefs } : {}),
     ...(decisionReason ? { decisionReason } : {}),
     ...(sourceTrace.length > 0 ? { sourceTrace } : {}),
-    ...(normalizedExtensions ? { extensions: normalizedExtensions } : {}),
-  };
-}
-
-function normalizeStoryboardImageAlias(
-  record: Record<string, unknown>,
-): StoryboardSerializableRecord | undefined {
-  const aliases = Object.entries(record).flatMap(([key, value]) => {
-    const locator = parseStoryboardImageAliasKey(key);
-    if (!locator || !isEnabledStoryboardImageAliasValue(value)) return [];
-    return [
-      {
-        kind: locator.kind,
-        number: locator.number,
-        key,
-      },
-    ];
-  });
-  if (aliases.length === 0) return undefined;
-  const preferred = aliases[0];
-  if (!preferred) return undefined;
-  return {
-    kind: preferred.kind,
-    number: preferred.number,
-    key: preferred.key,
-    aliases,
-  };
-}
-
-function parseStoryboardImageAliasKey(
-  key: string,
-): { readonly kind: 'page' | 'image' | 'panel'; readonly number: number } | undefined {
-  const match = /^(page|image|panel)[_-]?(\d{1,4})$/i.exec(key.trim());
-  if (!match) return undefined;
-  const kind = normalizeStoryboardImageAliasKind(match[1]);
-  const number = parsePositiveInteger(match[2]);
-  return kind && number !== undefined ? { kind, number } : undefined;
-}
-
-function normalizeStoryboardImageAliasKind(
-  value: string | undefined,
-): 'page' | 'image' | 'panel' | undefined {
-  const normalized = value?.toLowerCase();
-  return normalized === 'page' || normalized === 'image' || normalized === 'panel'
-    ? normalized
-    : undefined;
-}
-
-function isEnabledStoryboardImageAliasValue(value: unknown): boolean {
-  if (value === true) return true;
-  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized.length > 0 && !['false', 'no', 'off', '0', 'none', 'null'].includes(normalized);
-}
-
-function mergeStoryboardImageAliasExtension(
-  extensions: StoryboardExtensionMap | undefined,
-  alias: StoryboardSerializableRecord | undefined,
-): StoryboardExtensionMap | undefined {
-  if (!alias) return extensions;
-  return {
-    ...(extensions ?? {}),
-    [STORYBOARD_IMAGE_ALIAS_EXTENSION]: alias,
-  };
-}
-
-function normalizeStoryboardSourceImage(
-  record: Record<string, unknown>,
-): StoryboardSerializableRecord | undefined {
-  for (const [key, value] of Object.entries(record)) {
-    const source = parseStoryboardSourceImageValue(key, value);
-    if (source) return source;
-  }
-  return undefined;
-}
-
-function parseStoryboardSourceImageValue(
-  key: string,
-  value: unknown,
-): StoryboardSerializableRecord | undefined {
-  const normalizedKey = normalizeSourceImageKey(key);
-  if (!normalizedKey) return undefined;
-
-  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
-    return {
-      kind: normalizedKey.kind,
-      number: value,
-      key,
-    };
-  }
-
-  const text = readTrimmedString(value);
-  if (!text) return undefined;
-  const alias = parseStoryboardImageAliasKey(text);
-  const number = parsePositiveInteger(text);
-  const parsed =
-    (alias ? { ...alias, key: text } : undefined) ??
-    parseSourceImageText(text) ??
-    (number !== undefined ? { kind: normalizedKey.kind, number, key: text } : undefined);
-  if (!parsed) return undefined;
-  return {
-    kind: parsed.kind,
-    number: parsed.number,
-    key: parsed.key ?? text,
-    sourceField: key,
-  };
-}
-
-function parseSourceImageText(
-  value: string,
-):
-  | { readonly kind: 'page' | 'image' | 'panel'; readonly number: number; readonly key: string }
-  | undefined {
-  const match =
-    /(?:^|[\s/:：#_.\\-])(?:p|page|pg|页|原页|image|img|图|图片|panel|分格)[\s_#_.:-]*(\d{1,4})(?:\b|$)/i.exec(
-      value.trim(),
-    );
-  const number = parsePositiveInteger(match?.[1]);
-  if (number === undefined) return undefined;
-  const lower = value.toLowerCase();
-  const kind = /panel|分格/.test(lower)
-    ? 'panel'
-    : /image|img|图|图片/.test(lower)
-      ? 'image'
-      : 'page';
-  return { kind, number, key: value };
-}
-
-function normalizeSourceImageKey(
-  key: string,
-): { readonly kind: 'page' | 'image' | 'panel' } | undefined {
-  const normalized = key.toLowerCase().replace(/[\s_-]+/g, '');
-  if (
-    [
-      'sourcepage',
-      'sourcepagenumber',
-      'originalpage',
-      'originpage',
-      'page',
-      'p',
-      '原页',
-      '来源页',
-      '源页',
-    ].includes(normalized)
-  ) {
-    return { kind: 'page' };
-  }
-  if (
-    [
-      'sourceimage',
-      'sourceimagenumber',
-      'originalimage',
-      'originimage',
-      'image',
-      'img',
-      '参考图',
-      '来源图',
-      '源图',
-      '图片',
-    ].includes(normalized)
-  ) {
-    return { kind: 'image' };
-  }
-  if (
-    [
-      'sourcepanel',
-      'sourcepanelnumber',
-      'originalpanel',
-      'originpanel',
-      'panel',
-      '分格',
-      '格',
-    ].includes(normalized)
-  ) {
-    return { kind: 'panel' };
-  }
-  return undefined;
-}
-
-function mergeStoryboardSourceImageExtension(
-  extensions: StoryboardExtensionMap | undefined,
-  sourceImage: StoryboardSerializableRecord | undefined,
-): StoryboardExtensionMap | undefined {
-  if (!sourceImage) return extensions;
-  return {
-    ...(extensions ?? {}),
-    [STORYBOARD_SOURCE_IMAGE_EXTENSION]: sourceImage,
-  };
-}
-
-function normalizeStoryboardRevision(value: unknown): StoryboardRevisionIdentity | undefined {
-  const record = readStoryboardRecord(value);
-  if (!record) return undefined;
-  const revisionId = readTrimmedString(record['revisionId']);
-  const sequence = readOptionalPositiveNumber(record['sequence']);
-  const contentDigest = readTrimmedString(record['contentDigest']);
-  const parentRevisionId = readTrimmedString(record['parentRevisionId']);
-  const createdAt = readTrimmedString(record['createdAt']);
-  if (!revisionId || sequence === undefined || !contentDigest || !createdAt) return undefined;
-  return {
-    revisionId,
-    sequence,
-    contentDigest,
-    ...(parentRevisionId ? { parentRevisionId } : {}),
-    createdAt,
+    ...(extensions ? { extensions } : {}),
   };
 }
 
@@ -1694,7 +1370,7 @@ function normalizeStoryboardProjectionHandoffs(
     const record = readStoryboardRecord(item);
     if (!record) return [];
     const target = record['target'];
-    const storyboardRevisionId = readTrimmedString(record['storyboardRevisionId']);
+    const storyboardFingerprint = readTrimmedString(record['storyboardFingerprint']);
     const mode = record['mode'];
     const createdAt = readTrimmedString(record['createdAt']);
     const artifactLocator = isContentLocator(record['artifactLocator'])
@@ -1702,7 +1378,7 @@ function normalizeStoryboardProjectionHandoffs(
       : undefined;
     if (
       !STORYBOARD_PROJECTION_TARGETS.some((candidate) => candidate === target) ||
-      !storyboardRevisionId ||
+      !storyboardFingerprint ||
       (mode !== 'read-only-projection' && mode !== 'one-way-handoff') ||
       !createdAt
     ) {
@@ -1711,23 +1387,13 @@ function normalizeStoryboardProjectionHandoffs(
     return [
       {
         target: target as StoryboardProjectionTarget,
-        storyboardRevisionId,
+        storyboardFingerprint,
         mode,
         ...(artifactLocator ? { artifactLocator } : {}),
         createdAt,
       },
     ];
   });
-}
-
-function isValidStoryboardRevision(revision: StoryboardRevisionIdentity): boolean {
-  return (
-    revision.revisionId.trim().length > 0 &&
-    Number.isInteger(revision.sequence) &&
-    revision.sequence > 0 &&
-    revision.contentDigest.trim().length > 0 &&
-    Number.isFinite(Date.parse(revision.createdAt))
-  );
 }
 
 function validateCanonicalSourceTrace(
@@ -1794,7 +1460,6 @@ function validateNormalizedStoryboardTable(
         diagnostics,
         options,
       );
-      validateMediaRefs(shot.mediaRefs, [...path, 'mediaRefs'], diagnostics, options);
       validateCueSpeakerBindings(shot.textCues, [...path, 'textCues'], diagnostics);
       validateCueSpeakerBindings(shot.voiceCues, [...path, 'voiceCues'], diagnostics);
       validateCueSpeakerEntityKinds(shot.textCues, [...path, 'textCues'], diagnostics);
@@ -1907,11 +1572,7 @@ function validateShotStrategy(
     );
   }
 
-  if (
-    shot.imageStrategy === 'generate-new' &&
-    !shot.imagePrompt?.trim() &&
-    !shot.generationPrompt?.trim()
-  ) {
+  if (shot.imageStrategy === 'generate-new' && !shot.imagePrompt?.trim()) {
     diagnostics.push(
       storyboardDiagnostic(
         'error',
@@ -2142,11 +1803,7 @@ function validateMediaLocator(
 }
 
 function selectStoryboardShotImageRef(shot: StoryboardShotRow): StoryboardMediaRef | undefined {
-  const preferred = [
-    ...(shot.generatedMediaRefs ?? []),
-    ...(shot.sourceMediaRefs ?? []),
-    ...(shot.mediaRefs ?? []),
-  ];
+  const preferred = [...(shot.generatedMediaRefs ?? []), ...(shot.sourceMediaRefs ?? [])];
   return preferred.find(
     (ref) =>
       Boolean(ref.contentLocator) ||
@@ -2805,7 +2462,7 @@ function normalizeProfile(
       'warning',
       'invalid-profile',
       ['profile'],
-      'Storyboard profile is not a built-in v1 profile.',
+      'Storyboard profile is not supported.',
       {
         expected: STORYBOARD_TABLE_PROFILES.join(', '),
         actual: serializableDiagnosticValue(value),
@@ -2982,17 +2639,24 @@ function isStoryboardSerializableValue(
   );
 }
 
-function dedupeStoryboardMediaRefs(
-  mediaRefs: readonly StoryboardMediaRef[],
-): readonly StoryboardMediaRef[] {
-  const seen = new Set<string>();
-  const result: StoryboardMediaRef[] = [];
-  for (const ref of mediaRefs) {
-    if (seen.has(ref.refId)) continue;
-    seen.add(ref.refId);
-    result.push(ref);
+function validateStoryboardFields(
+  record: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+  path: readonly StoryboardValidationDiagnosticPathSegment[],
+  diagnostics: StoryboardValidationDiagnostic[],
+): boolean {
+  const unsupportedFields = Object.keys(record).filter((field) => !allowedFields.has(field));
+  for (const field of unsupportedFields) {
+    diagnostics.push(
+      storyboardDiagnostic(
+        'error',
+        'unsupported-field',
+        [...path, field],
+        `Storyboard field ${field} is not supported.`,
+      ),
+    );
   }
-  return result;
+  return unsupportedFields.length === 0;
 }
 
 function readStoryboardRecord(value: unknown): Record<string, unknown> | undefined {
@@ -3028,12 +2692,6 @@ function readOptionalConfidence(
     ),
   );
   return undefined;
-}
-
-function parsePositiveInteger(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function readNonNegativeInteger(value: unknown): number | undefined {

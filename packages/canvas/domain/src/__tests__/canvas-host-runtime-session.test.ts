@@ -22,7 +22,7 @@ const identity: CanvasHostRuntimeIdentity = {
 };
 
 describe('CanvasHostRuntimeSession', () => {
-  it('owns revisioned replace, undo, redo and atomic save effects', async () => {
+  it('owns serialized replace, undo, redo and atomic save effects', async () => {
     const saveDocument = vi.fn(async () => undefined);
     const runtime = new CanvasHostRuntimeSession({
       identity,
@@ -33,7 +33,7 @@ describe('CanvasHostRuntimeSession', () => {
     runtime.subscribe((event) => events.push(event.sequence));
 
     const replaced = await runtime.executeIntent(
-      request('replace-1', 0, {
+      request('replace-1', {
         type: 'replace-document',
         canvas: createEmptyCanvasData('Changed'),
       }),
@@ -41,34 +41,32 @@ describe('CanvasHostRuntimeSession', () => {
     expect(replaced.status).toBe('accepted');
     if (replaced.status !== 'accepted') throw new Error('Expected replace to succeed.');
     expect(replaced.snapshot).toMatchObject({
-      revision: 1,
       dirty: true,
       canvas: { name: 'Changed' },
     });
 
-    const undone = await runtime.executeIntent(request('undo-1', 1, { type: 'undo' }));
+    const undone = await runtime.executeIntent(request('undo-1', { type: 'undo' }));
     expect(undone.status).toBe('accepted');
     if (undone.status !== 'accepted') throw new Error('Expected undo to succeed.');
     expect(undone.snapshot.canvas.name).toBe('Initial');
 
-    const redone = await runtime.executeIntent(request('redo-1', 2, { type: 'redo' }));
+    const redone = await runtime.executeIntent(request('redo-1', { type: 'redo' }));
     expect(redone.status).toBe('accepted');
     if (redone.status !== 'accepted') throw new Error('Expected redo to succeed.');
     expect(redone.snapshot.canvas.name).toBe('Changed');
 
-    const saved = await runtime.executeIntent(request('save-1', 3, { type: 'save' }));
+    const saved = await runtime.executeIntent(request('save-1', { type: 'save' }));
     expect(saved.status).toBe('accepted');
     if (saved.status !== 'accepted') throw new Error('Expected save to succeed.');
-    expect(saved.snapshot).toMatchObject({ revision: 4, dirty: false });
+    expect(saved.snapshot).toMatchObject({ dirty: false });
     expect(saveDocument).toHaveBeenCalledWith({
       canvas: expect.objectContaining({ name: 'Changed' }),
       identity,
-      expectedRevision: 3,
     });
     expect(events).toEqual([1, 2, 3, 4]);
   });
 
-  it('rejects stale identity and revision without mutating state', async () => {
+  it('rejects another session identity without mutating state', async () => {
     const runtime = new CanvasHostRuntimeSession({
       identity,
       initialCanvas: createEmptyCanvasData('Initial'),
@@ -76,7 +74,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
 
     const staleIdentity = await runtime.executeIntent({
-      ...request('replace-stale-identity', 0, {
+      ...request('replace-stale-identity', {
         type: 'replace-document',
         canvas: createEmptyCanvasData('Wrong'),
       }),
@@ -87,18 +85,7 @@ describe('CanvasHostRuntimeSession', () => {
       diagnostic: { code: 'canvas-runtime-stale-identity' },
     });
 
-    const staleRevision = await runtime.executeIntent(
-      request('replace-stale-revision', 7, {
-        type: 'replace-document',
-        canvas: createEmptyCanvasData('Wrong'),
-      }),
-    );
-    expect(staleRevision).toMatchObject({
-      status: 'rejected',
-      diagnostic: { code: 'canvas-runtime-stale-revision' },
-    });
     expect(await runtime.getSnapshot()).toMatchObject({
-      revision: 0,
       dirty: false,
       canvas: { name: 'Initial' },
     });
@@ -114,7 +101,7 @@ describe('CanvasHostRuntimeSession', () => {
       initialCanvas: createEmptyCanvasData('Initial'),
       effects: { authorMaterial },
     });
-    const intent = request('project-command', 0, {
+    const intent = request('project-command', {
       type: 'author-material',
       request: directReference('media/cat.png', 'image'),
     });
@@ -123,7 +110,6 @@ describe('CanvasHostRuntimeSession', () => {
     const duplicate = await runtime.executeIntent({
       ...intent,
       requestId: 'request-project-command-retry',
-      expectedRevision: 1,
     });
 
     expect(first.status).toBe('accepted');
@@ -131,9 +117,58 @@ describe('CanvasHostRuntimeSession', () => {
     expect(duplicate.requestId).toBe('request-project-command-retry');
     expect(authorMaterial).toHaveBeenCalledTimes(1);
     expect(await runtime.getSnapshot()).toMatchObject({
-      revision: 1,
       canvas: { name: 'Projected once' },
     });
+  });
+
+  it('serializes overlapping authoring intents within the owning session', async () => {
+    let releaseFirst = (): void => {};
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let firstStarted = (): void => {};
+    const firstStartedPromise = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    const authorMaterial = vi.fn(async ({ canvas, request }) => {
+      if (authorMaterial.mock.calls.length === 1) {
+        firstStarted();
+        await firstGate;
+      }
+      return {
+        ...canvas,
+        name: request.locator.kind === 'workspace-file' ? request.locator.path : 'projected',
+      };
+    });
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: createEmptyCanvasData('Initial'),
+      effects: { authorMaterial },
+    });
+
+    const first = runtime.executeIntent(
+      request('serialize-first', {
+        type: 'author-material',
+        request: directReference('media/first.png', 'image'),
+      }),
+    );
+    await firstStartedPromise;
+    const second = runtime.executeIntent(
+      request('serialize-second', {
+        type: 'author-material',
+        request: directReference('media/second.png', 'image'),
+      }),
+    );
+    await Promise.resolve();
+    expect(authorMaterial).toHaveBeenCalledTimes(1);
+
+    releaseFirst();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ status: 'accepted' }),
+      expect.objectContaining({ status: 'accepted' }),
+    ]);
+    expect(authorMaterial).toHaveBeenCalledTimes(2);
+    expect((await runtime.getSnapshot()).canvas.name).toBe('media/second.png');
   });
 
   it('never replays a completed command across a stale session identity', async () => {
@@ -142,7 +177,7 @@ describe('CanvasHostRuntimeSession', () => {
       initialCanvas: createEmptyCanvasData('Initial'),
       effects: {},
     });
-    const command = request('identity-fenced-command', 0, {
+    const command = request('identity-fenced-command', {
       type: 'replace-document',
       canvas: createEmptyCanvasData('Changed'),
     });
@@ -173,7 +208,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
 
     const cancelled = await runtime.executeIntent(
-      request('source-cancelled', 0, {
+      request('source-cancelled', {
         type: 'request-source',
         sourceKind: 'video',
         sourceMode: 'import',
@@ -185,7 +220,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
 
     const accepted = await runtime.executeIntent(
-      request('source-accepted', 0, {
+      request('source-accepted', {
         type: 'request-source',
         sourceKind: 'video',
         sourceMode: 'reference',
@@ -219,7 +254,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
 
     const result = await runtime.executeIntent(
-      request('source-model', 0, {
+      request('source-model', {
         type: 'request-source',
         sourceKind: 'model',
         sourceMode: 'reference',
@@ -255,7 +290,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
 
     const result = await runtime.executeIntent(
-      request('generation-draft', 0, {
+      request('generation-draft', {
         type: 'request-generation-draft',
         mediaKind: 'image',
         position: { x: 240, y: 180 },
@@ -332,7 +367,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
 
     const result = await runtime.executeIntent(
-      request('preview-image', 0, {
+      request('preview-image', {
         type: 'execute-material-action',
         action: {
           identity: {
@@ -341,7 +376,6 @@ describe('CanvasHostRuntimeSession', () => {
             canvasSessionId: identity.sessionId,
           },
           actionId: descriptor.id,
-          expectedCanvasRevision: 0,
           selectedNodeIds: [node.id],
           payload: {},
         },
@@ -352,7 +386,6 @@ describe('CanvasHostRuntimeSession', () => {
     expect(resolveMaterialActions).toHaveBeenCalledWith({
       canvas: expect.objectContaining({ nodes: [node] }),
       identity,
-      revision: 0,
       targets: [
         {
           nodeId: node.id,
@@ -400,14 +433,13 @@ describe('CanvasHostRuntimeSession', () => {
         canvasSessionId: identity.sessionId,
       },
       actionId: 'preview:open',
-      expectedCanvasRevision: 0,
       selectedNodeIds: [node.id],
       payload: {},
     } as const;
 
     await expect(
       runtime.executeIntent(
-        request('stale-action-identity', 0, {
+        request('stale-action-identity', {
           type: 'execute-material-action',
           action: {
             ...action,
@@ -421,7 +453,7 @@ describe('CanvasHostRuntimeSession', () => {
     });
     await expect(
       runtime.executeIntent(
-        request('unavailable-action', 0, {
+        request('unavailable-action', {
           type: 'execute-material-action',
           action,
         }),
@@ -444,7 +476,7 @@ describe('CanvasHostRuntimeSession', () => {
     runtime.subscribe(listener);
 
     const result = await runtime.executeIntent(
-      request('presentation-1', 0, {
+      request('presentation-1', {
         type: 'update-presentation',
         presentation: {
           viewport: { pan: { x: 12, y: -4 }, zoom: 1.25 },
@@ -466,13 +498,11 @@ describe('CanvasHostRuntimeSession', () => {
 
 function request(
   commandId: string,
-  expectedRevision: number,
   intent: Parameters<typeof createCanvasHostIntentRequest>[0]['intent'],
 ) {
   return createCanvasHostIntentRequest({
     requestId: `request-${commandId}`,
     commandId,
-    expectedRevision,
     identity,
     intent,
   });

@@ -145,16 +145,29 @@ export class SqliteJsonStateRepository<TState> implements JsonStateRepository<TS
           this.isolatedState = { value: parsed };
           return parsed;
         }
-        if (row) this.parseRawRow(row);
-        await sql.run(
-          `INSERT INTO desktop_application_state(
-             authority_key, document_json, updated_at
-           ) VALUES (?, ?, ?)
-           ON CONFLICT(authority_key) DO UPDATE SET
-             document_json = excluded.document_json,
-             updated_at = excluded.updated_at`,
-          [this.options.authorityKey, serialized, this.now()],
-        );
+        const updatedAt = this.now();
+        if (row) {
+          this.parseRawRow(row);
+          const updated = await sql.run(
+            `UPDATE desktop_application_state
+                SET document_json = ?, updated_at = ?
+              WHERE authority_key = ?`,
+            [serialized, updatedAt, this.options.authorityKey],
+          );
+          if (updated.changes !== 1) {
+            throw stateError(
+              `commit-${this.options.authorityKey}`,
+              'Existing state authority update did not affect exactly one row.',
+            );
+          }
+        } else {
+          await sql.run(
+            `INSERT INTO desktop_application_state(
+               authority_key, document_json, updated_at
+             ) VALUES (?, ?, ?)`,
+            [this.options.authorityKey, serialized, updatedAt],
+          );
+        }
         this.rejectedState = undefined;
         this.isolatedState = undefined;
         return parsed;

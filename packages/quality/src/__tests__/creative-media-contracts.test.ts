@@ -25,7 +25,7 @@ function contentLocator(path = 'assets/hero.png') {
   return {
     kind: 'workspace-file' as const,
     path,
-    fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-v1' },
+    fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-content' },
   };
 }
 
@@ -34,7 +34,7 @@ function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
     targetId: 'quality-target:hero',
     kind: 'image',
     contentLocator: contentLocator(),
-    contentDigest: 'sha256:hero-v1',
+    contentDigest: 'sha256:hero-content',
     ...overrides,
   };
 }
@@ -136,7 +136,8 @@ describe('creative media shared contracts', () => {
       sourceEvidenceLocators: [],
     };
     expect(
-      validateQualityEvidence(evidence, target({ contentDigest: 'sha256:hero-v2' })).diagnostics,
+      validateQualityEvidence(evidence, target({ contentDigest: 'sha256:hero-changed' }))
+        .diagnostics,
     ).toEqual([expect.objectContaining({ code: 'stale-quality-evidence' })]);
   });
 
@@ -157,10 +158,10 @@ describe('creative media shared contracts', () => {
     ]);
   });
 
-  it('rejects removed contract version fields without silently accepting them', () => {
-    const versionedTarget = target();
-    Reflect.set(versionedTarget, 'version', 99);
-    expect(validateQualityTarget(versionedTarget).diagnostics).toEqual([
+  it('rejects unknown contract fields without silently accepting them', () => {
+    const invalidTarget = target();
+    Reflect.set(invalidTarget, 'unexpectedField', 99);
+    expect(validateQualityTarget(invalidTarget).diagnostics).toEqual([
       expect.objectContaining({ code: 'invalid-quality-target' }),
     ]);
   });
@@ -170,7 +171,7 @@ describe('creative media shared contracts', () => {
       project: {
         domain: 'cut' as const,
         documentUri: 'file:///workspace/edit.otio',
-        contentDigest: 'sha256:edit-v1',
+        contentDigest: 'sha256:edit-current',
       },
       previewLocator: {
         kind: 'content-representation' as const,
@@ -179,9 +180,8 @@ describe('creative media shared contracts', () => {
         source: contentLocator(),
         spec: { kind: 'preview' as const },
         generatorId: 'cut-preview',
-        sourceFingerprint: 'source-v1',
-        specFingerprint: 'preview-v1',
-        revision: '1',
+        sourceFingerprint: 'source-content',
+        specFingerprint: 'preview-spec',
       },
       sessionRenderUri: 'file:///workspace/render.png',
       createdAt: '2026-07-12T00:00:00.000Z',

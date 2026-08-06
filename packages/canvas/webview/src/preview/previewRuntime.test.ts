@@ -6,8 +6,16 @@ describe('PreviewRuntime', () => {
     const runtime = new PreviewRuntime();
     const cleanup = vi.fn();
 
-    runtime.setVariant('preview-1', { id: 'v1', role: 'image', runtimeUrl: 'blob:old' }, cleanup);
-    runtime.setVariant('preview-1', { id: 'v2', role: 'image', runtimeUrl: 'blob:new' });
+    runtime.setVariant(
+      'preview-1',
+      { id: 'first-variant', role: 'image', runtimeUrl: 'blob:old' },
+      cleanup,
+    );
+    runtime.setVariant('preview-1', {
+      id: 'replacement-variant',
+      role: 'image',
+      runtimeUrl: 'blob:new',
+    });
 
     expect(cleanup).toHaveBeenCalledTimes(1);
     expect(runtime.getVariant('preview-1')?.runtimeUrl).toBe('blob:new');

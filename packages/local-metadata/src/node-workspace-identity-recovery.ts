@@ -89,7 +89,6 @@ export async function executeNodeWorkspaceIdentityRecoveryAction(options: {
 
   assertDescriptorOwner(currentDescriptor, action.sourceWorkspaceId);
   const nextDescriptor = parseWorkspaceIdentityDescriptor({
-    version: 1,
     workspaceId: action.newWorkspaceId,
   });
   if (nextDescriptor.workspaceId === currentDescriptor.workspaceId) {

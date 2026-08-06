@@ -277,7 +277,7 @@ function createArtifactContentIdentity(artifact: CanvasWorkspaceProjectionArtifa
   return artifact.kind === 'markdown'
     ? createPortableArtifactContentIdentity(
         artifact.provenance.artifactId,
-        artifact.provenance.revision,
+        artifact.provenance.contentFingerprint,
       )
     : hashStableValue({
         kind: 'content-locator',
@@ -296,14 +296,17 @@ function readNodeContentIdentity(node: CanvasNode): string | undefined {
   const provenance = 'provenance' in node.data ? node.data.provenance : undefined;
   if (!isSerializableRecord(provenance)) return undefined;
   const artifactId = provenance['artifactId'];
-  const revision = provenance['revision'];
-  return typeof artifactId === 'string' && typeof revision === 'string'
-    ? createPortableArtifactContentIdentity(artifactId, revision)
+  const contentFingerprint = provenance['contentFingerprint'];
+  return typeof artifactId === 'string' && typeof contentFingerprint === 'string'
+    ? createPortableArtifactContentIdentity(artifactId, contentFingerprint)
     : undefined;
 }
 
-function createPortableArtifactContentIdentity(artifactId: string, revision: string): string {
-  return hashStableValue({ kind: 'artifact', artifactId, revision });
+function createPortableArtifactContentIdentity(
+  artifactId: string,
+  contentFingerprint: string,
+): string {
+  return hashStableValue({ kind: 'artifact', artifactId, contentFingerprint });
 }
 
 function createContentNodeId(contentIdentity: string): string {
@@ -583,7 +586,7 @@ function createSerializableProvenance(
   return {
     deliveryId: provenance.deliveryId,
     artifactId: provenance.artifactId,
-    revision: provenance.revision,
+    contentFingerprint: provenance.contentFingerprint,
     kind: provenance.kind,
     role: provenance.role,
     sourceId: provenance.sourceId,

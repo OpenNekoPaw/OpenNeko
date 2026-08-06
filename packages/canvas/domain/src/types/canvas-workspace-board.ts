@@ -37,7 +37,7 @@ export interface CanvasWorkspaceDeliveryProcess {
 export interface CanvasWorkspaceProjectionProvenance {
   readonly deliveryId: string;
   readonly artifactId: string;
-  readonly revision: string;
+  readonly contentFingerprint: string;
   readonly kind: CanvasWorkspaceProjectionKind;
   readonly role: CanvasWorkspaceArtifactRole;
   readonly sourceId: string;
@@ -105,7 +105,6 @@ export type CanvasWorkspaceProjectionDiagnosticCode =
   | 'delivery-ledger-unavailable'
   | 'delivery-claim-conflict'
   | 'stale-writer'
-  | 'stale-revision'
   | 'projection-conflict'
   | 'projection-write-failed';
 
@@ -135,7 +134,6 @@ export function createSafeCanvasWorkspaceProjectionDiagnostic(
     'delivery-ledger-unavailable': 'Workspace Board delivery state is unavailable.',
     'delivery-claim-conflict': 'Workspace Board delivery is queued behind another writer.',
     'stale-writer': 'Workspace Board writer ownership changed before the delivery completed.',
-    'stale-revision': 'Workspace Board changed before the delivery could be saved.',
     'projection-conflict': 'Workspace Board has user changes that cannot be overwritten safely.',
     'projection-write-failed':
       'Workspace Board could not be updated; durable artifacts remain available.',
@@ -147,7 +145,6 @@ export interface CanvasWorkspaceProjectionResult {
   readonly deliveryId?: string;
   readonly status: Exclude<CanvasWorkspaceDeliveryState, 'discarded'>;
   readonly target?: CanvasWorkspaceProjectionResolvedTarget;
-  readonly revision?: string;
   readonly nodeIds?: readonly string[];
   readonly connectionIds?: readonly string[];
   readonly artifactRoleCounts?: Readonly<Record<CanvasWorkspaceArtifactRole, number>>;
@@ -169,11 +166,10 @@ export interface CanvasWorkspaceDeliveryReceipt {
   >;
   readonly artifactIdentities: readonly {
     readonly artifactId: string;
-    readonly revision: string;
+    readonly contentFingerprint: string;
     readonly role: CanvasWorkspaceArtifactRole;
   }[];
   readonly target?: CanvasWorkspaceProjectionResolvedTarget;
-  readonly revision?: string;
   readonly nodeIds?: readonly string[];
   readonly connectionIds?: readonly string[];
   readonly writerLeaseId: string;
@@ -229,7 +225,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
   }
   const identities = assets.map((asset) => ({
     assetId: asset.id,
-    revision: requireGeneratedAssetLifecycle(asset).revision,
+    contentFingerprint: requireGeneratedAssetLifecycle(asset).revision,
   }));
   const deliveryId = `generated-output-batch:${hashGeneratedAssetIdentities(identities)}`;
   const operationId = sharedString(
@@ -265,7 +261,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
         provenance: {
           deliveryId,
           artifactId: asset.id,
-          revision: lifecycle.revision,
+          contentFingerprint: lifecycle.revision,
           kind: lifecycle.mediaKind,
           role: 'output' as const,
           sourceId: lifecycle.contentLocator.outputId,
@@ -279,13 +275,15 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
 }
 
 function hashGeneratedAssetIdentities(
-  identities: readonly { readonly assetId: string; readonly revision: string }[],
+  identities: readonly { readonly assetId: string; readonly contentFingerprint: string }[],
 ): string {
   return hashStableValue(
     identities
-      .map(({ assetId, revision }) => ({ assetId, revision }))
+      .map(({ assetId, contentFingerprint }) => ({ assetId, contentFingerprint }))
       .sort((left, right) =>
-        `${left.assetId}:${left.revision}`.localeCompare(`${right.assetId}:${right.revision}`),
+        `${left.assetId}:${left.contentFingerprint}`.localeCompare(
+          `${right.assetId}:${right.contentFingerprint}`,
+        ),
       ),
   ).slice(0, 32);
 }
@@ -426,7 +424,7 @@ export function isCanvasWorkspaceProjectionRequest(
           artifact['localPath'] === undefined) &&
       typeof provenance['deliveryId'] === 'string' &&
       typeof provenance['artifactId'] === 'string' &&
-      typeof provenance['revision'] === 'string' &&
+      typeof provenance['contentFingerprint'] === 'string' &&
       typeof provenance['kind'] === 'string' &&
       typeof provenance['role'] === 'string' &&
       typeof provenance['sourceId'] === 'string' &&
@@ -676,7 +674,13 @@ function validateArtifact(
 ): void {
   const path = ['artifacts', index] as const;
   const provenance = artifact.provenance;
-  for (const key of ['deliveryId', 'artifactId', 'revision', 'sourceId', 'createdAt'] as const) {
+  for (const key of [
+    'deliveryId',
+    'artifactId',
+    'contentFingerprint',
+    'sourceId',
+    'createdAt',
+  ] as const) {
     if (!isNonEmptyString(provenance[key])) {
       diagnostics.push(
         diagnostic('missing-projection-identity', `Canvas artifact ${key} is required.`, [
@@ -719,9 +723,9 @@ function validateArtifact(
     );
   }
   const artifactId = provenance['artifactId'];
-  const revision = provenance['revision'];
-  if (typeof artifactId === 'string' && typeof revision === 'string') {
-    const identity = `${artifactId}:${revision}`;
+  const contentFingerprint = provenance['contentFingerprint'];
+  if (typeof artifactId === 'string' && typeof contentFingerprint === 'string') {
+    const identity = `${artifactId}:${contentFingerprint}`;
     if (identities.has(identity)) {
       diagnostics.push(
         diagnostic(

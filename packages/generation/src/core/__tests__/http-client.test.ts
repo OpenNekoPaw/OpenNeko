@@ -16,7 +16,7 @@ describe('HttpClient', () => {
     await expect(
       client.request({
         method: 'POST',
-        url: 'https://user:secret@gateway.example.test/v1/chat/completions?token=secret',
+        url: 'https://user:secret@gateway.example.test/api/chat/completions?token=secret',
         headers: { Authorization: 'Bearer secret' },
         body: { model: 'gpt-5.5' },
       }),
@@ -24,7 +24,7 @@ describe('HttpClient', () => {
       name: 'HttpClientError',
       code: 'NETWORK_ERROR',
       retryable: true,
-      url: 'https://gateway.example.test/v1/chat/completions?<redacted>',
+      url: 'https://gateway.example.test/api/chat/completions?<redacted>',
       message: expect.stringContaining('cause=ECONNRESET: socket hang up'),
     } satisfies Partial<HttpClientError>);
   });

@@ -42,8 +42,8 @@ describe('Asset Library membership repository', () => {
         registration.registeredAt,
       ),
     ).resolves.toEqual({ status: 'initialized', importedCount: 1 });
-    await first.repositories.assetLibraryMemberships.remove(
-      registration.membershipId,
+    await first.repositories.assetLibraryMemberships.removeMany(
+      [registration.membershipId],
       '2026-08-05T08:02:00.000Z',
     );
     await first.dispose();
@@ -86,8 +86,8 @@ describe('Asset Library membership repository', () => {
       [first],
       first.registeredAt,
     );
-    await store.repositories.assetLibraryMemberships.remove(
-      first.membershipId,
+    await store.repositories.assetLibraryMemberships.removeMany(
+      [first.membershipId],
       '2026-08-05T08:01:00.000Z',
     );
 
@@ -100,4 +100,90 @@ describe('Asset Library membership repository', () => {
     ).resolves.toMatchObject({ membershipId: first.membershipId, state: 'active' });
     await store.dispose();
   });
+
+  it('relocates and removes complete batches atomically', async () => {
+    const homedir = await mkdtemp(join(tmpdir(), 'neko-asset-membership-'));
+    temporaryDirectories.push(homedir);
+    const databasePath = resolveGlobalStorageLayout(homedir).database;
+    const store = createNodeSqliteLocalMetadataStore({ homedir });
+    await store.open({ databasePath, busyTimeoutMs: 1_000 });
+    await initializeCoreLocalMetadataTables(store);
+    await initializeAssetLibraryMembershipTables(store);
+    const registeredAt = '2026-08-05T08:00:00.000Z';
+    await store.repositories.assetLibraryMemberships.initializeExistingInventory(
+      [
+        registration('membership-a', 'a.png', registeredAt),
+        registration('membership-b', 'b.png', registeredAt),
+        registration('membership-conflict', 'folder/conflict.png', registeredAt),
+      ],
+      registeredAt,
+    );
+
+    await expect(
+      store.repositories.assetLibraryMemberships.relocateMany([
+        relocation('membership-a', 'a.png', 'folder/a.png'),
+        relocation('membership-b', 'b.png', 'folder/b.png'),
+      ]),
+    ).resolves.toMatchObject([
+      { membershipId: 'membership-a', sourceRelativePath: 'folder/a.png' },
+      { membershipId: 'membership-b', sourceRelativePath: 'folder/b.png' },
+    ]);
+
+    await expect(
+      store.repositories.assetLibraryMemberships.relocateMany([
+        relocation('membership-a', 'folder/a.png', 'next/a.png'),
+        relocation('membership-b', 'folder/b.png', 'folder/conflict.png'),
+      ]),
+    ).rejects.toThrow('Asset membership target already exists');
+    await expect(
+      store.repositories.assetLibraryMemberships.get('membership-a'),
+    ).resolves.toMatchObject({ sourceRelativePath: 'folder/a.png', state: 'active' });
+
+    await expect(
+      store.repositories.assetLibraryMemberships.removeMany(
+        ['membership-a', 'missing-membership'],
+        '2026-08-05T08:03:00.000Z',
+      ),
+    ).rejects.toThrow('Active Asset membership does not exist');
+    await expect(
+      store.repositories.assetLibraryMemberships.get('membership-a'),
+    ).resolves.toMatchObject({ state: 'active' });
+
+    await expect(
+      store.repositories.assetLibraryMemberships.removeMany(
+        ['membership-a', 'membership-b'],
+        '2026-08-05T08:04:00.000Z',
+      ),
+    ).resolves.toMatchObject([
+      { membershipId: 'membership-a', state: 'removed' },
+      { membershipId: 'membership-b', state: 'removed' },
+    ]);
+    await store.dispose();
+  });
 });
+
+function registration(membershipId: string, sourceRelativePath: string, registeredAt: string) {
+  return {
+    membershipId,
+    sourceRelativePath,
+    label: sourceRelativePath.split('/').at(-1) ?? sourceRelativePath,
+    mediaType: 'image',
+    byteLength: 4,
+    modifiedAt: registeredAt,
+    registeredAt,
+  } as const;
+}
+
+function relocation(
+  membershipId: string,
+  expectedSourceRelativePath: string,
+  sourceRelativePath: string,
+) {
+  return {
+    membershipId,
+    expectedSourceRelativePath,
+    sourceRelativePath,
+    label: sourceRelativePath.split('/').at(-1) ?? sourceRelativePath,
+    relocatedAt: '2026-08-05T08:02:00.000Z',
+  } as const;
+}

@@ -504,7 +504,22 @@ function validateIndex(
     );
     return;
   }
-  rejectRemovedVersionField(value, path, diagnostics);
+  rejectUnknownFields(
+    value,
+    new Set([
+      'indexId',
+      'assetId',
+      'sourceRef',
+      'textSegments',
+      'entityMentions',
+      'perceptionRefs',
+      'semanticTags',
+      'updatedAt',
+      'metadata',
+    ]),
+    path,
+    diagnostics,
+  );
   requireString(value['assetId'], [...path, 'assetId'], diagnostics);
   validateSerializableValue(value['sourceRef'], [...path, 'sourceRef'], diagnostics);
   validateArray(value['textSegments'], [...path, 'textSegments'], diagnostics, (item, itemPath) =>
@@ -958,19 +973,21 @@ function validateSourceRef(
   validateSerializableValue(value, path, diagnostics);
 }
 
-function rejectRemovedVersionField(
+function rejectUnknownFields(
   value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
   path: readonly CharacterMemoryPathSegment[],
   diagnostics: MediaSemanticDiagnostic[],
 ): void {
-  if (Object.hasOwn(value, 'version')) {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
     diagnostics.push(
       diagnostic(
         'error',
         'invalid-required-field',
-        [...path, 'version'],
-        'Media semantic index contains a removed internal version field.',
-        { actual: serializableDiagnosticValue(value['version']) },
+        [...path, field],
+        `Media semantic index contains unsupported field ${field}.`,
+        { actual: serializableDiagnosticValue(value[field]) },
       ),
     );
   }

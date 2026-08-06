@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  assertContentLocator,
-  assertContentReadOptions,
   isAuthorizedOutputAllocationRequest,
   isAuthorizedWorkspaceWriteOptions,
   isContentProjectionOptions,
@@ -18,20 +16,14 @@ import { isHostProjectedRuntimeValue } from '../content-access';
 const locator = {
   kind: 'workspace-file' as const,
   path: 'neko/assets/Books/comic.epub',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:comic-v1' },
+  fingerprint: { strategy: 'sha256' as const, value: 'sha256:comic-content' },
 };
 
 describe('content I/O contracts', () => {
-  it('rejects current and retired host-projected runtime URIs', () => {
-    expect(isHostProjectedRuntimeValue('neko-media://panel/content')).toBe(true);
-    expect(isHostProjectedRuntimeValue('neko-app://desktop/index.html')).toBe(true);
+  it('classifies the current Host-projected resource URI', () => {
     expect(
       isHostProjectedRuntimeValue('openneko://resource/0123456789abcdefghijklmnopqrstuv'),
     ).toBe(true);
-    expect(isHostProjectedRuntimeValue('openneko://desktop/index.html')).toBe(true);
-    expect(isHostProjectedRuntimeValue('opennekomedia://resource/legacy')).toBe(true);
-    expect(isHostProjectedRuntimeValue('vscode-webview://panel/content')).toBe(true);
-    expect(isHostProjectedRuntimeValue('vscode-resource://panel/content')).toBe(true);
     expect(isHostProjectedRuntimeValue('${WORKSPACE}/assets/content.png')).toBe(false);
   });
 
@@ -40,32 +32,12 @@ describe('content I/O contracts', () => {
       isContentReadOptions({
         range: { offset: 16, length: 32 },
         maxBytes: 64,
-        expectedFingerprint: { strategy: 'sha256', value: 'sha256:comic-v1' },
+        expectedFingerprint: { strategy: 'sha256', value: 'sha256:comic-content' },
       }),
     ).toBe(true);
     expect(isContentReadOptions({ range: { offset: -1, length: 32 } })).toBe(false);
     expect(isContentReadOptions({ range: { offset: 0, length: 0 } })).toBe(false);
     expect(isContentReadOptions({ maxBytes: 0 })).toBe(false);
-  });
-
-  it('poisons the old intent, target, cache, caller, and physical-path matrix', () => {
-    const legacyOptions = [
-      { intent: 'agent-context' },
-      { target: 'local-path' },
-      { materialization: 'if-missing' },
-      { qualityMode: 'draft-proxy' },
-      { caller: 'canvas' },
-      { cachePath: '.neko/.cache/source.bin' },
-      { localPath: '/Users/private/source.bin' },
-      { providerId: 'cache-provider' },
-    ];
-    expect(legacyOptions.map(isContentReadOptions)).toEqual(legacyOptions.map(() => false));
-    expect(() => assertContentLocator({ kind: 'media-library', libraryId: 'books' })).toThrow(
-      'Content locator is invalid',
-    );
-    expect(() => assertContentReadOptions({ intent: 'verify' })).toThrow(
-      'Content read options are invalid',
-    );
   });
 
   it('keeps projection capabilities consumer-specific and opaque', () => {

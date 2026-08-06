@@ -2,19 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createStorageMaintenanceReport } from '../maintenance-report';
 
 describe('Storage maintenance report', () => {
-  it('counts every cleanup and migration outcome without collapsing user action into skipped', () => {
+  it('counts every cleanup outcome without collapsing user action into skipped', () => {
     const report = createStorageMaintenanceReport({
-      operation: 'migration',
+      operation: 'cleanup',
       startedAt: '2026-07-13T10:00:00.000Z',
       completedAt: '2026-07-13T10:00:01.000Z',
       entries: [
         { outcome: 'deleted', subject: 'cache:a', sourcePath: '/workspace/.neko/.cache/a' },
-        {
-          outcome: 'migrated',
-          subject: 'legacy:index',
-          sourcePath: '/home/.neko/index.json',
-          targetPath: '/home/.neko/neko.db',
-        },
         { outcome: 'rebuilt', subject: 'catalog:conversation' },
         {
           outcome: 'promoted',
@@ -24,7 +18,7 @@ describe('Storage maintenance report', () => {
         { outcome: 'skipped', subject: 'cache:pinned', reason: 'pinned' },
         {
           outcome: 'quarantined',
-          subject: 'legacy:truncated',
+          subject: 'cache:truncated',
           sourcePath: '/home/.neko/index.json.corrupt',
           reason: 'malformed-json',
         },
@@ -39,13 +33,12 @@ describe('Storage maintenance report', () => {
 
     expect(report.counts).toEqual({
       deleted: 1,
-      migrated: 1,
       rebuilt: 1,
       promoted: 1,
       skipped: 1,
       quarantined: 1,
       'user-action-required': 1,
     });
-    expect(report.entries).toHaveLength(7);
+    expect(report.entries).toHaveLength(6);
   });
 });

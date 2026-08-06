@@ -165,7 +165,7 @@ export interface QualityGateResult {
 export interface QualityDiagnostic {
   readonly code:
     | 'invalid-quality-target'
-    | 'legacy-path-target-rejected'
+    | 'noncanonical-path-target-rejected'
     | 'invalid-quality-evidence'
     | 'stale-quality-evidence'
     | 'invalid-quality-gate-result'
@@ -191,15 +191,26 @@ export interface QualityValidationResult {
 export function validateQualityTarget(target: QualityTarget): QualityValidationResult {
   const diagnostics: QualityDiagnostic[] = [];
   if (
-    Object.hasOwn(target, 'version') ||
-    Object.hasOwn(target, 'revision') ||
+    !hasOnlyFields(
+      target,
+      new Set([
+        'targetId',
+        'kind',
+        'contentLocator',
+        'projectRef',
+        'contentDigest',
+        'mediaRange',
+        'expectedIntent',
+        'lineage',
+      ]),
+    ) ||
     !target.targetId.trim() ||
     !QUALITY_TARGET_KINDS.some((kind) => kind === target.kind)
   ) {
     diagnostics.push({
       code: 'invalid-quality-target',
       severity: 'error',
-      message: 'QualityTarget has removed fields, an invalid kind, or an empty target id.',
+      message: 'QualityTarget has unknown fields, an invalid kind, or an empty target id.',
     });
   }
   if ((target.contentLocator ? 1 : 0) + (target.projectRef ? 1 : 0) !== 1) {
@@ -257,8 +268,26 @@ export function validateQualityEvidence(
 ): QualityValidationResult {
   const diagnostics: QualityDiagnostic[] = [...validateQualityTarget(evidence.target).diagnostics];
   if (
-    Object.hasOwn(evidence, 'version') ||
-    Object.hasOwn(evidence.evaluator, 'version') ||
+    !hasOnlyFields(
+      evidence,
+      new Set([
+        'evidenceId',
+        'evaluator',
+        'target',
+        'state',
+        'metrics',
+        'issues',
+        'coverage',
+        'confidence',
+        'createdAt',
+        'sourceEvidenceLocators',
+        'evidenceLineage',
+      ]),
+    ) ||
+    !hasOnlyFields(
+      evidence.evaluator,
+      new Set(['id', 'evaluatorClass', 'providerId', 'modelId']),
+    ) ||
     !evidence.evidenceId.trim() ||
     !evidence.evaluator.id.trim() ||
     !QUALITY_EVALUATOR_CLASSES.some((kind) => kind === evidence.evaluator.evaluatorClass) ||
@@ -268,7 +297,7 @@ export function validateQualityEvidence(
       code: 'invalid-quality-evidence',
       severity: 'error',
       message:
-        'QualityEvidence has removed fields or invalid identity, evaluator, or creation time.',
+        'QualityEvidence has unknown fields or invalid identity, evaluator, or creation time.',
     });
   }
   if (evidence.confidence !== undefined && !isProbability(evidence.confidence)) {
@@ -342,8 +371,22 @@ export function validateQualityEvidence(
 export function validateQualityGateResult(result: QualityGateResult): QualityValidationResult {
   const diagnostics: QualityDiagnostic[] = [...validateQualityTarget(result.target).diagnostics];
   if (
-    Object.hasOwn(result, 'version') ||
-    Object.hasOwn(result.policy, 'policyVersion') ||
+    !hasOnlyFields(
+      result,
+      new Set([
+        'gateResultId',
+        'target',
+        'policy',
+        'verdict',
+        'evidenceIds',
+        'staleEvidenceIds',
+        'missingEvaluatorClasses',
+        'diagnostics',
+        'repairPlan',
+        'createdAt',
+      ]),
+    ) ||
+    !hasOnlyFields(result.policy, new Set(['policyId', 'requiredProfiles'])) ||
     !result.gateResultId.trim() ||
     !result.policy.policyId.trim() ||
     !isIsoTimestamp(result.createdAt)
@@ -352,7 +395,7 @@ export function validateQualityGateResult(result: QualityGateResult): QualityVal
       code: 'invalid-quality-gate-result',
       severity: 'error',
       message:
-        'QualityGateResult has removed fields or invalid identity, policy, or creation time.',
+        'QualityGateResult has unknown fields or invalid identity, policy, or creation time.',
     });
   }
   if (
@@ -438,4 +481,8 @@ function isProbability(value: number): boolean {
 
 function isIsoTimestamp(value: string): boolean {
   return value.trim().length > 0 && Number.isFinite(Date.parse(value));
+}
+
+function hasOnlyFields(value: object, allowedFields: ReadonlySet<string>): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

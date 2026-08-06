@@ -13,11 +13,9 @@ afterEach(async () => {
 });
 
 describe('Workspace storage inspection', () => {
-  it('inventories legacy metadata, misplaced facts, managed files, and explicit personal content', async () => {
+  it('inventories misplaced facts, managed files, and explicit personal content', async () => {
     const workDir = await mkdtemp(join(tmpdir(), 'neko-workspace-storage-inspection-'));
     temporaryDirectories.push(workDir);
-    await writeWorkspaceFile(workDir, '.neko/neko-local.db', 'legacy database');
-    await writeWorkspaceFile(workDir, '.neko/.cache/resources/manifest.json', '{}');
     await writeWorkspaceFile(workDir, '.neko/.cache/blob.bin', 'large cache bytes');
     await writeWorkspaceFile(workDir, '.neko/entity-bindings.json', '{}');
     await writeWorkspaceFile(workDir, '.neko/logs/events.jsonl', '{"event":"test"}\n');
@@ -48,16 +46,6 @@ describe('Workspace storage inspection', () => {
     expect(report.totalCacheBytes).toBeGreaterThanOrEqual(10);
     expect(report.entries).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          code: 'retired-workspace-database',
-          relativePath: '.neko/neko-local.db',
-          kind: 'legacy-database',
-        }),
-        expect.objectContaining({
-          code: 'legacy-workspace-metadata',
-          relativePath: '.neko/.cache/resources/manifest.json',
-          kind: 'legacy-manifest',
-        }),
         expect.objectContaining({
           code: 'misplaced-project-fact',
           relativePath: '.neko/entity-bindings.json',

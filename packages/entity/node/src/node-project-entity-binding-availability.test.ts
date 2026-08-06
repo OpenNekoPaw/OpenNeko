@@ -195,7 +195,6 @@ function documentWithBindings(): ProjectEntityDocument {
           binding('binding-generated', {
             kind: 'generated-output',
             outputId: 'output-rin',
-            revision: '1',
             digest: 'a'.repeat(64),
             path: 'neko/generated/rin.png',
           }),

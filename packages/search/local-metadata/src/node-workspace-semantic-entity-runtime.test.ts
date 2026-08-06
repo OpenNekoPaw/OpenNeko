@@ -32,7 +32,7 @@ describe('Node Workspace Semantic Entity runtime', () => {
     const runtime = await createNodeWorkspaceSemanticEntityRuntime({
       workspace: { workspaceId: WORKSPACE_ID, workspacePath },
       projection: binding,
-      getEntitySnapshot: async () => ({ revision: 0, entities: [] }),
+      getEntitySnapshot: async () => ({ entities: [] }),
       now: () => NOW,
     });
 

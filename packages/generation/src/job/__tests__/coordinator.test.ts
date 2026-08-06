@@ -444,7 +444,6 @@ function createResultLocator(id: string) {
   return {
     kind: 'generated-output' as const,
     outputId: id,
-    revision: `revision-${id}`,
     digest: `sha256:${id}`,
     path: `neko/generated/image/${id}.png`,
   };

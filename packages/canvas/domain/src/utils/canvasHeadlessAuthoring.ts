@@ -563,13 +563,17 @@ function createNodeFromSpec(
           ...readProvenance(input),
         },
       };
-    case 'job':
+    case 'job': {
+      assertOnlyFields(
+        input,
+        ['jobRef', 'title', 'objective', 'status', 'inputRefs', 'outputRefs', 'diagnostic'],
+        'Canvas Job',
+      );
       return {
         ...base,
         type,
         data: {
           jobRef: readRequiredJobRef(input['jobRef']),
-          ...rejectRemovedJobRevision(input),
           title: readRequiredString(input, 'title', 'Canvas Job'),
           ...readOptionalStringField(input, 'objective'),
           status: readRequiredJobStatus(input['status']),
@@ -578,6 +582,7 @@ function createNodeFromSpec(
           ...readOptionalStringField(input, 'diagnostic'),
         },
       };
+    }
     case 'file': {
       const path = readString(input, 'path');
       const contentLocator = validateContentLocator(input['contentLocator']);
@@ -796,11 +801,16 @@ function readOptionalPositiveNumberField(
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? { [key]: value } : {};
 }
 
-function rejectRemovedJobRevision(record: Record<string, unknown>): Record<string, never> {
-  if ('revision' in record) {
-    throw new Error('Canvas Job data rejects removed internal revision fields');
+function assertOnlyFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+  owner: string,
+): void {
+  const allowed = new Set(fields);
+  const unknown = Object.keys(record).filter((field) => !allowed.has(field));
+  if (unknown.length > 0) {
+    throw new Error(`${owner} contains unknown field "${unknown[0]}"`);
   }
-  return {};
 }
 
 function readMediaType(record: Record<string, unknown>): {

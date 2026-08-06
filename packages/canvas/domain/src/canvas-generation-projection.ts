@@ -326,7 +326,7 @@ function jobNodeId(ref: CanvasGenerationJobRef): string {
 }
 
 function outputNodeId(ref: CanvasGenerationJobRef, locator: GeneratedOutputContentLocator): string {
-  return `generation-output:${encodeURIComponent(ref.jobId)}:${encodeURIComponent(locator.outputId)}:${encodeURIComponent(locator.revision)}`;
+  return `generation-output:${encodeURIComponent(ref.jobId)}:${encodeURIComponent(locator.outputId)}:${encodeURIComponent(locator.digest)}`;
 }
 
 function jobPosition(canvas: CanvasData): { readonly x: number; readonly y: number } {

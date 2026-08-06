@@ -31,13 +31,11 @@ export interface CanvasHostRuntimeSessionEffects {
   readonly resolveMaterialActions?: (input: {
     readonly canvas: CanvasData;
     readonly identity: CanvasHostRuntimeIdentity;
-    readonly revision: number;
     readonly targets: readonly CanvasMaterialActionTarget[];
   }) => Promise<readonly CanvasMaterialActionDescriptor[]>;
   readonly saveDocument?: (input: {
     readonly canvas: CanvasData;
     readonly identity: CanvasHostRuntimeIdentity;
-    readonly expectedRevision: number;
   }) => Promise<void>;
   readonly authorMaterial?: (input: {
     readonly canvas: CanvasData;
@@ -75,7 +73,6 @@ export interface CanvasHostRuntimeSessionEffects {
 export interface CanvasHostRuntimeSessionOptions {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly initialCanvas: CanvasData;
-  readonly initialRevision?: number;
   readonly initialDirty?: boolean;
   readonly initialPresentation?: CanvasHostPresentationState;
   readonly effects: CanvasHostRuntimeSessionEffects;
@@ -103,7 +100,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   readonly identity: CanvasHostRuntimeIdentity;
 
   private canvas: CanvasData;
-  private revision: number;
   private dirty: boolean;
   private presentation: CanvasHostPresentationState;
   private sequence = 0;
@@ -113,20 +109,17 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   private readonly redoStack: CanvasData[] = [];
   private readonly completedCommands = new Map<string, CanvasHostIntentResult>();
   private readonly commandOrder: string[] = [];
+  private operationTail: Promise<void> = Promise.resolve();
   private readonly commandHistoryLimit: number;
   private readonly documentHistoryLimit: number;
 
   constructor(private readonly options: CanvasHostRuntimeSessionOptions) {
     this.identity = { ...options.identity };
     this.canvas = cloneCanvas(options.initialCanvas);
-    this.revision = options.initialRevision ?? 0;
     this.dirty = options.initialDirty ?? false;
     this.presentation = clonePresentation(options.initialPresentation ?? DEFAULT_PRESENTATION);
     this.commandHistoryLimit = options.commandHistoryLimit ?? 200;
     this.documentHistoryLimit = options.documentHistoryLimit ?? 50;
-    if (!Number.isSafeInteger(this.revision) || this.revision < 0) {
-      throw new Error('Canvas Host initial revision must be a non-negative safe integer.');
-    }
     if (!Number.isSafeInteger(this.commandHistoryLimit) || this.commandHistoryLimit < 1) {
       throw new Error('Canvas Host command history limit must be a positive safe integer.');
     }
@@ -136,18 +129,23 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   }
 
   async getSnapshot(): Promise<CanvasHostSnapshot> {
-    this.assertActive();
-    return this.createSnapshot();
+    return this.enqueueOperation(() => {
+      this.assertActive();
+      return this.createSnapshot();
+    });
   }
 
   async resolveMaterialActions(
     request: CanvasMaterialActionResolutionRequest,
   ): Promise<CanvasMaterialActionResolution> {
+    return this.enqueueOperation(() => this.resolveMaterialActionsSerial(request));
+  }
+
+  private async resolveMaterialActionsSerial(
+    request: CanvasMaterialActionResolutionRequest,
+  ): Promise<CanvasMaterialActionResolution> {
     this.assertActive();
     assertCanvasHostRuntimeIdentity(this.identity, request.identity);
-    if (request.expectedRevision !== this.revision) {
-      throw new Error(`Canvas material action revision is stale; expected ${this.revision}.`);
-    }
     const selectedNodeIds = [...request.selectedNodeIds];
     if (selectedNodeIds.length === 0) {
       return this.createMaterialActionResolution(request.requestId, selectedNodeIds, []);
@@ -166,6 +164,12 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
   }
 
   async executeIntent(request: CanvasHostIntentRequest): Promise<CanvasHostIntentResult> {
+    return this.enqueueOperation(() => this.executeIntentSerial(request));
+  }
+
+  private async executeIntentSerial(
+    request: CanvasHostIntentRequest,
+  ): Promise<CanvasHostIntentResult> {
     if (this.disposed) {
       return rejected(request, 'canvas-runtime-effect-failed', 'Canvas Host session is disposed.');
     }
@@ -183,15 +187,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     }
     const completed = this.completedCommands.get(request.commandId);
     if (completed) return replayResult(completed, request.requestId);
-    if (request.expectedRevision !== this.revision) {
-      result = rejected(
-        request,
-        'canvas-runtime-stale-revision',
-        `Canvas Host revision is stale; expected ${this.revision}.`,
-      );
-      this.remember(request.commandId, result);
-      return cloneResult(result);
-    }
 
     try {
       result = await this.applyIntent(request);
@@ -248,7 +243,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       await saveDocument({
         canvas: cloneCanvas(this.canvas),
         identity: { ...this.identity },
-        expectedRevision: this.revision,
       });
       this.commitStateChange(false, request.commandId);
       return this.accepted(request);
@@ -332,13 +326,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
           'Canvas material action belongs to another Canvas session.',
         );
       }
-      if (intent.action.expectedCanvasRevision !== this.revision) {
-        return rejected(
-          request,
-          'canvas-runtime-stale-revision',
-          `Canvas material action revision is stale; expected ${this.revision}.`,
-        );
-      }
       const targets = resolveCanvasMaterialActionTargets(
         this.canvas.nodes,
         intent.action.selectedNodeIds,
@@ -402,7 +389,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
 
   private commitStateChange(dirty: boolean, originCommandId: string): void {
     this.dirty = dirty;
-    this.revision += 1;
     this.sequence += 1;
     const event: CanvasHostProjectionEvent = {
       sequence: this.sequence,
@@ -426,7 +412,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     const generationAvailable = this.options.effects.requestGenerationDraft !== undefined;
     return {
       identity: { ...this.identity },
-      revision: this.revision,
       dirty: this.dirty,
       canvas: cloneCanvas(this.canvas),
       presentation: clonePresentation(this.presentation),
@@ -448,7 +433,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
       descriptors: await resolveMaterialActions({
         canvas: cloneCanvas(this.canvas),
         identity: { ...this.identity },
-        revision: this.revision,
         targets: structuredClone(targets),
       }),
       targets,
@@ -463,7 +447,6 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     return {
       requestId,
       identity: { ...this.identity },
-      revision: this.revision,
       selectedNodeIds: [...selectedNodeIds],
       descriptors: structuredClone(descriptors),
     };
@@ -480,6 +463,15 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
 
   private assertActive(): void {
     if (this.disposed) throw new Error('Canvas Host session is disposed.');
+  }
+
+  private enqueueOperation<TResult>(operation: () => Promise<TResult> | TResult): Promise<TResult> {
+    const result = this.operationTail.then(operation);
+    this.operationTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 }
 

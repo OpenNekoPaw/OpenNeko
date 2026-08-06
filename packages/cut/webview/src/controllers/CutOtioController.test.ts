@@ -607,7 +607,7 @@ describe('CutOtioController', () => {
             clipId: 'clip-1',
             kind: 'thumbnail',
             status: 'ready',
-            thumbnails: [{ sourceTimeSeconds: 0, dataUrl: 'data:image/jpeg;base64,legacy' }],
+            thumbnails: [{ sourceTimeSeconds: 0, dataUrl: 'data:image/jpeg;base64,invalid' }],
           },
         ],
       }),

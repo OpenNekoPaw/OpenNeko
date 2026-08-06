@@ -93,14 +93,14 @@ describe('Canvas ContentLocator authoring', () => {
   it('changes an Entity representation only through an explicit non-stale replacement', () => {
     const originalEntity = {
       entityId: 'character-neko',
-      bindingId: 'binding-neko-portrait-v1',
+      bindingId: 'binding-neko-portrait-original',
       role: 'portrait',
     } as const;
     const original = projectResolvedCanvasMaterialToCanvas({
       canvas: createEmptyCanvasData('Fixture'),
       material: {
-        locator: { kind: 'workspace-file', path: 'characters/neko-v1.png' },
-        title: 'neko-v1.png',
+        locator: { kind: 'workspace-file', path: 'characters/neko-original.png' },
+        title: 'neko-original.png',
         mediaKind: 'image',
         entity: originalEntity,
         position: { x: 320, y: 180 },
@@ -110,7 +110,7 @@ describe('Canvas ContentLocator authoring', () => {
     const originalSnapshot = structuredClone(original);
     const nextEntity = {
       entityId: 'character-neko',
-      bindingId: 'binding-neko-portrait-v2',
+      bindingId: 'binding-neko-portrait-replacement',
       role: 'portrait',
     } as const;
 
@@ -121,8 +121,8 @@ describe('Canvas ContentLocator authoring', () => {
         nodeId: 'entity-node',
         expectedEntity: { ...originalEntity, bindingId: 'stale-binding' },
         material: {
-          locator: { kind: 'workspace-file', path: 'characters/neko-v2.png' },
-          title: 'neko-v2.png',
+          locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+          title: 'neko-replacement.png',
           mediaKind: 'image',
           entity: nextEntity,
         },
@@ -134,8 +134,8 @@ describe('Canvas ContentLocator authoring', () => {
       nodeId: 'entity-node',
       expectedEntity: originalEntity,
       material: {
-        locator: { kind: 'workspace-file', path: 'characters/neko-v2.png' },
-        title: 'neko-v2.png',
+        locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
+        title: 'neko-replacement.png',
         mediaKind: 'image',
         entity: nextEntity,
       },
@@ -147,7 +147,7 @@ describe('Canvas ContentLocator authoring', () => {
       id: 'entity-node',
       position: { x: 320, y: 180 },
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'characters/neko-v2.png' },
+        contentLocator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
         entityRepresentation: nextEntity,
       },
     });
@@ -220,7 +220,6 @@ describe('Canvas ContentLocator authoring', () => {
     const locator = {
       kind: 'generated-output',
       outputId: 'image-1',
-      revision: 'revision-1',
       digest: 'sha256:image-1',
       path: 'neko/generated/image-1.png',
     } as const;
@@ -246,7 +245,7 @@ describe('Canvas ContentLocator authoring', () => {
     ).toThrow('requires canonical Generation evidence');
   });
 
-  it('poisons Generation evidence on referenced locators', () => {
+  it('rejects Generation evidence on referenced locators', () => {
     expect(() =>
       projectResolvedCanvasMaterialToCanvas({
         canvas: createEmptyCanvasData('Fixture'),
@@ -323,7 +322,6 @@ describe('Canvas ContentLocator authoring', () => {
     const generatedLocator = {
       kind: 'generated-output',
       outputId: 'generated-derivative-1',
-      revision: 'revision-1',
       digest: 'sha256:generated-derivative-1',
       path: 'neko/generated/generated-derivative-1.png',
     } as const;

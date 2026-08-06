@@ -126,7 +126,9 @@ describe('creative entity asset composition contracts', () => {
       false,
     );
     expect(isCreativeEntityCandidateFile({ candidates: [candidate] })).toBe(true);
-    expect(isCreativeEntityCandidateFile({ version: 1, candidates: [candidate] })).toBe(false);
+    expect(isCreativeEntityCandidateFile({ unexpectedField: 1, candidates: [candidate] })).toBe(
+      false,
+    );
     expect(
       isProjectCreativeEntityFile({
         kind: 'location',
@@ -246,8 +248,8 @@ describe('creative entity asset composition contracts', () => {
     expect(custom).toBe('tattoo_style');
   });
 
-  it('applies candidate defaults without accepting legacy binding fallback', () => {
-    const oldCandidate = {
+  it('applies permanent candidate defaults', () => {
+    const minimalCandidate = {
       id: 'candidate:story:character:xiaoju',
       kind: 'character',
       name: '小橘',
@@ -260,16 +262,16 @@ describe('creative entity asset composition contracts', () => {
       ],
       sourceRefs: [],
     };
-    expect(isCreativeEntityCandidate(oldCandidate)).toBe(true);
-    expect(isCreativeEntityCandidateFile({ candidates: [oldCandidate] })).toBe(true);
+    expect(isCreativeEntityCandidate(minimalCandidate)).toBe(true);
+    expect(isCreativeEntityCandidateFile({ candidates: [minimalCandidate] })).toBe(true);
 
-    if (!isCreativeEntityCandidate(oldCandidate)) {
+    if (!isCreativeEntityCandidate(minimalCandidate)) {
       throw new Error('Candidate fixture should pass the guard.');
     }
 
-    expect(withCreativeEntityCandidateDefaults(oldCandidate).identityBasis).toBe('user-named');
+    expect(withCreativeEntityCandidateDefaults(minimalCandidate).identityBasis).toBe('user-named');
     expect(
-      withCreativeEntityCandidateFileDefaults({ candidates: [oldCandidate] }).candidates[0]
+      withCreativeEntityCandidateFileDefaults({ candidates: [minimalCandidate] }).candidates[0]
         ?.identityBasis,
     ).toBe('user-named');
   });

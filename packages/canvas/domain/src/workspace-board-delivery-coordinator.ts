@@ -1,4 +1,3 @@
-import { hashStableValue } from '@neko/shared';
 import {
   createSafeCanvasWorkspaceProjectionDiagnostic,
   resolveCanvasWorkspaceBoardDocumentUri,
@@ -18,7 +17,6 @@ import {
 export interface CanvasWorkspaceBoardLoadedDocument {
   readonly documentUri: string;
   readonly canvasData: CanvasData;
-  readonly revision: string;
   readonly exists: boolean;
 }
 
@@ -29,10 +27,9 @@ export interface CanvasWorkspaceBoardMutationPort {
   }): Promise<CanvasWorkspaceBoardLoadedDocument>;
   saveAtomic(input: {
     readonly documentUri: string;
-    readonly expectedRevision: string;
     readonly canvasData: CanvasData;
     readonly assertWriter?: () => Promise<void>;
-  }): Promise<{ readonly revision: string }>;
+  }): Promise<void>;
 }
 
 export interface WorkspaceBoardDeliveryCoordinatorOptions {
@@ -151,7 +148,6 @@ export class WorkspaceBoardDeliveryCoordinator {
         deliveryId: request.process.deliveryId,
         status: projection.status,
         target: { kind: explicit ? 'explicit' : 'workspace', documentUri },
-        revision: projection.revision,
         nodeIds: projection.nodeIds,
         connectionIds: projection.connectionIds,
         artifactRoleCounts: countArtifactRoles(request),
@@ -186,43 +182,28 @@ export class WorkspaceBoardDeliveryCoordinator {
     writer: CanvasWorkspaceDeliveryClaim,
   ): Promise<{
     readonly status: 'projected' | 'noop';
-    readonly revision: string;
     readonly nodeIds: readonly string[];
     readonly connectionIds: readonly string[];
   }> {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const loaded = await this.options.mutation.loadLatest({ documentUri, createIfMissing });
-      const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
-      if (plan.status === 'noop') {
-        return {
-          status: 'noop',
-          revision: loaded.revision,
-          nodeIds: plan.nodeIds,
-          connectionIds: plan.connectionIds,
-        };
-      }
-      try {
-        const saved = await this.options.mutation.saveAtomic({
-          documentUri,
-          expectedRevision: loaded.revision,
-          canvasData: plan.canvasData,
-          assertWriter: () => this.options.ledger.assertWriter(writer),
-        });
-        return {
-          status: 'projected',
-          revision: saved.revision,
-          nodeIds: plan.nodeIds,
-          connectionIds: plan.connectionIds,
-        };
-      } catch (error) {
-        if (attempt === 0 && isStaleRevisionError(error)) {
-          await this.options.ledger.assertWriter(writer);
-          continue;
-        }
-        throw error;
-      }
+    const loaded = await this.options.mutation.loadLatest({ documentUri, createIfMissing });
+    const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
+    if (plan.status === 'noop') {
+      return {
+        status: 'noop',
+        nodeIds: plan.nodeIds,
+        connectionIds: plan.connectionIds,
+      };
     }
-    throw new Error('stale-revision: Canvas Board changed during both projection attempts.');
+    await this.options.mutation.saveAtomic({
+      documentUri,
+      canvasData: plan.canvasData,
+      assertWriter: () => this.options.ledger.assertWriter(writer),
+    });
+    return {
+      status: 'projected',
+      nodeIds: plan.nodeIds,
+      connectionIds: plan.connectionIds,
+    };
   }
 
   private now(): number {
@@ -246,11 +227,10 @@ function createReceipt(
     state: result.status,
     artifactIdentities: request.artifacts.map((artifact) => ({
       artifactId: artifact.provenance.artifactId,
-      revision: artifact.provenance.revision,
+      contentFingerprint: artifact.provenance.contentFingerprint,
       role: artifact.provenance.role,
     })),
     target: result.target,
-    revision: result.revision,
     nodeIds: result.nodeIds,
     connectionIds: result.connectionIds,
     writerLeaseId: result.writerLeaseId,
@@ -264,7 +244,6 @@ function receiptToResult(receipt: CanvasWorkspaceDeliveryReceipt): CanvasWorkspa
     deliveryId: receipt.deliveryId,
     status: receipt.state,
     ...(receipt.target ? { target: receipt.target } : {}),
-    ...(receipt.revision ? { revision: receipt.revision } : {}),
     ...(receipt.nodeIds ? { nodeIds: receipt.nodeIds } : {}),
     ...(receipt.connectionIds ? { connectionIds: receipt.connectionIds } : {}),
     artifactRoleCounts: countReceiptArtifactRoles(receipt),
@@ -302,28 +281,12 @@ function toDiagnostic(error: unknown): CanvasWorkspaceProjectionDiagnostic {
   const message = error instanceof Error ? error.message : String(error);
   const code = /stale-writer/iu.test(message)
     ? 'stale-writer'
-    : /stale-board-target|stale-revision/iu.test(message)
-      ? 'stale-revision'
-      : /projection-conflict/iu.test(message)
-        ? 'projection-conflict'
-        : 'projection-write-failed';
+    : /projection-conflict/iu.test(message)
+      ? 'projection-conflict'
+      : 'projection-write-failed';
   return createSafeCanvasWorkspaceProjectionDiagnostic(code);
 }
 
 function isConflictDiagnostic(diagnostic: CanvasWorkspaceProjectionDiagnostic): boolean {
-  return (
-    diagnostic.code === 'stale-writer' ||
-    diagnostic.code === 'stale-revision' ||
-    diagnostic.code === 'projection-conflict'
-  );
-}
-
-function isStaleRevisionError(error: unknown): boolean {
-  return /stale-board-target|stale-revision/iu.test(
-    error instanceof Error ? error.message : String(error),
-  );
-}
-
-export function createCanvasWorkspaceBoardRevision(canvasData: CanvasData): string {
-  return `nkc:${hashStableValue(canvasData)}`;
+  return diagnostic.code === 'stale-writer' || diagnostic.code === 'projection-conflict';
 }

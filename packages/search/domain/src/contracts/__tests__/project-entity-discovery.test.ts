@@ -57,7 +57,7 @@ function batch() {
     source: {
       sourceId: 'workspace:story.fountain',
       owner: 'workspace' as const,
-      fingerprint: 'sha256:story-v1',
+      fingerprint: 'sha256:story-content',
     },
     candidates: [
       {
@@ -86,7 +86,7 @@ function batch() {
         },
         role: 'definition' as const,
         location: '${WORKSPACE}/story.fountain:1',
-        sourceFingerprint: 'sha256:story-v1',
+        sourceFingerprint: 'sha256:story-content',
       },
     ],
     updatedAt: '2026-08-05T05:00:00.000Z',

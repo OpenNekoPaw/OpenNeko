@@ -231,7 +231,9 @@ export function isSemanticSourceDescriptor(value: unknown): value is SemanticSou
 
 export function isSemanticCreativeSchemaRef(value: unknown): value is SemanticCreativeSchemaRef {
   return (
-    isRecord(value) && isNonEmptyString(value['schemaId']) && !Object.hasOwn(value, 'schemaVersion')
+    isRecord(value) &&
+    isNonEmptyString(value['schemaId']) &&
+    Object.keys(value).every((field) => field === 'schemaId')
   );
 }
 

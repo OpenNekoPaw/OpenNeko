@@ -79,7 +79,8 @@ describe('createCanvasWebviewHost', () => {
         }),
       }),
     );
-    expect(dragged.revision).toBe(snapshot.revision + 1);
+    expect(dragged.canvas.name).toBe('Projected source');
+    expect(authorMaterial).toHaveBeenCalledTimes(2);
     host.dispose();
     runtime.dispose();
   });
@@ -131,7 +132,7 @@ describe('createCanvasWebviewHost', () => {
     runtime.dispose();
   });
 
-  it('projects owner descriptors and dispatches the exact revisioned material action', async () => {
+  it('projects owner descriptors and dispatches the exact identity-bound material action', async () => {
     const identity = {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
@@ -181,7 +182,7 @@ describe('createCanvasWebviewHost', () => {
     });
     const snapshot = await host.executeMaterialAction(descriptor.id, [node.id]);
 
-    expect(snapshot).toMatchObject({ revision: 0 });
+    expect(snapshot.identity).toEqual(identity);
     expect(executeMaterialAction).toHaveBeenCalledWith(
       expect.objectContaining({
         identity,
@@ -193,7 +194,6 @@ describe('createCanvasWebviewHost', () => {
             canvasSessionId: identity.sessionId,
           },
           actionId: descriptor.id,
-          expectedCanvasRevision: 0,
           selectedNodeIds: [node.id],
           payload: {},
         },
@@ -339,12 +339,12 @@ describe('createCanvasWebviewHost', () => {
         resolveMaterialActions: vi.fn(async () => [descriptor]),
       },
     });
-    const requestedRevisions: number[] = [];
+    const requestIds: string[] = [];
     const runtime: CanvasHostRuntime = {
       identity,
       getSnapshot: () => session.getSnapshot(),
       resolveMaterialActions(request) {
-        requestedRevisions.push(request.expectedRevision);
+        requestIds.push(request.requestId);
         return session.resolveMaterialActions(request);
       },
       subscribe: (listener) => session.subscribe(listener),
@@ -372,13 +372,13 @@ describe('createCanvasWebviewHost', () => {
     });
 
     await expect(resolution).resolves.toEqual([descriptor]);
-    expect(requestedRevisions).toEqual([1]);
+    expect(requestIds).toEqual(['canvas-webview-material-actions:1']);
     host.dispose();
     session.dispose();
   });
 
-  it.each(['stale rejection', 'stale response'] as const)(
-    'keeps a content-unavailable node open after a concurrent move returns a %s',
+  it.each(['delayed request', 'delayed response'] as const)(
+    'keeps a content-unavailable node open when a concurrent move overlaps a %s',
     async (concurrencyResult) => {
       const identity = {
         projectId: 'project-1',
@@ -414,18 +414,18 @@ describe('createCanvasWebviewHost', () => {
       const firstResolutionGate = new Promise<void>((resolve) => {
         releaseFirstResolution = resolve;
       });
-      const requestedRevisions: number[] = [];
+      const requestIds: string[] = [];
       const runtime: CanvasHostRuntime = {
         identity,
         getSnapshot: () => session.getSnapshot(),
         async resolveMaterialActions(request) {
-          requestedRevisions.push(request.expectedRevision);
-          if (requestedRevisions.length === 1 && concurrencyResult === 'stale response') {
+          requestIds.push(request.requestId);
+          if (requestIds.length === 1 && concurrencyResult === 'delayed response') {
             const resolution = await session.resolveMaterialActions(request);
             await firstResolutionGate;
             return resolution;
           }
-          if (requestedRevisions.length === 1) await firstResolutionGate;
+          if (requestIds.length === 1) await firstResolutionGate;
           return session.resolveMaterialActions(request);
         },
         subscribe: (listener) => session.subscribe(listener),
@@ -444,7 +444,7 @@ describe('createCanvasWebviewHost', () => {
 
       const resolution = host.resolveMaterialActions([node.id]);
       await vi.waitFor(() => {
-        expect(requestedRevisions).toEqual([0]);
+        expect(requestIds).toEqual(['canvas-webview-material-actions:1']);
       });
       host.postMessage({
         type: 'canvasStatus',
@@ -455,12 +455,12 @@ describe('createCanvasWebviewHost', () => {
         },
       });
       await vi.waitFor(async () => {
-        expect((await session.getSnapshot()).revision).toBe(1);
+        expect((await session.getSnapshot()).canvas.nodes[0]?.position).toEqual({ x: 160, y: 90 });
       });
       releaseFirstResolution();
 
       await expect(resolution).resolves.toEqual([]);
-      expect(requestedRevisions).toEqual([0, 1]);
+      expect(requestIds).toEqual(['canvas-webview-material-actions:1']);
       expect(messages).not.toContainEqual(
         expect.objectContaining({
           type: 'canvas.loadFailed',
@@ -471,7 +471,7 @@ describe('createCanvasWebviewHost', () => {
     },
   );
 
-  it('does not let a delayed startup snapshot regress the material action revision', async () => {
+  it('does not let a delayed startup snapshot replace a newer session projection', async () => {
     const identity = {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
@@ -540,7 +540,7 @@ describe('createCanvasWebviewHost', () => {
       },
     });
     await vi.waitFor(async () => {
-      expect((await session.getSnapshot()).revision).toBe(1);
+      expect((await session.getSnapshot()).presentation.selectedNodeIds).toEqual([node.id]);
     });
 
     releaseStartupSnapshot();
@@ -549,9 +549,6 @@ describe('createCanvasWebviewHost', () => {
     expect(messages).not.toContainEqual(
       expect.objectContaining({
         type: 'canvas.loadFailed',
-        diagnostic: expect.objectContaining({
-          message: expect.stringContaining('revision is stale'),
-        }),
       }),
     );
     host.dispose();
@@ -739,7 +736,6 @@ describe('createCanvasWebviewHost', () => {
       createCanvasHostIntentRequest({
         requestId: 'external-request',
         commandId: 'external-agent-command',
-        expectedRevision: current.revision,
         identity: runtime.identity,
         intent: {
           type: 'update-presentation',

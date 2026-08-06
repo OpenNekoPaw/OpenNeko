@@ -40,7 +40,7 @@ describe('MediaRuntimeDescriptor', () => {
     ).rejects.toThrow('checksum mismatch');
   });
 
-  it('rejects a removed schema field without affecting another runtime directory', async () => {
+  it('rejects an unknown field without affecting another runtime directory', async () => {
     const [root, siblingRoot] = await Promise.all([
       createRuntimeRoot(roots),
       createRuntimeRoot(roots),
@@ -50,14 +50,14 @@ describe('MediaRuntimeDescriptor', () => {
     if (typeof descriptor !== 'object' || descriptor === null) {
       throw new Error('Fixture descriptor is invalid.');
     }
-    Object.assign(descriptor, { schemaVersion: 1 });
+    Object.assign(descriptor, { unexpectedField: 1 });
     await writeFile(descriptorPath, JSON.stringify(descriptor), 'utf8');
 
     await expect(
       verifyMediaRuntimeDirectory(root, 'darwin-arm64', {
         process: new QualifiedProcess(),
       }),
-    ).rejects.toThrow('unsupported: schemaVersion');
+    ).rejects.toThrow('unsupported: unexpectedField');
     await expect(
       verifyMediaRuntimeDirectory(siblingRoot, 'darwin-arm64', {
         process: new QualifiedProcess(),

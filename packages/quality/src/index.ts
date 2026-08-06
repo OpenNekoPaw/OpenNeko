@@ -4,7 +4,6 @@ export {
   aggregateQualityGate,
   assertExternalPerceptionTarget,
   createQualityGateRuntime,
-  rejectLegacyMediaPathRequest,
   selectQualityProfile,
 } from './core/index';
 export type {

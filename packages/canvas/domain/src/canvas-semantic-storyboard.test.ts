@@ -145,16 +145,16 @@ describe('canvas semantic storyboard contracts', () => {
     );
   });
 
-  it('rejects retired generic Task references instead of accepting a fallback path', () => {
+  it('rejects unsupported fields in current storyboard contracts', () => {
     const stateValidation = validateCanvasStoryboardPromptState({
       executionRefs: {
-        taskRefs: [{ source: 'agent', sourceTaskId: 'task-1' }],
+        unexpectedField: 'unexpected',
       },
     });
     const intentValidation = validateCanvasStoryboardActionIntent({
       actionId: 'generate-image',
       target: { nodeId: 'shot-1' },
-      taskRef: { source: 'agent', sourceTaskId: 'task-1' },
+      unexpectedField: 'unexpected',
     });
 
     expect(stateValidation.valid).toBe(false);
@@ -162,35 +162,35 @@ describe('canvas semantic storyboard contracts', () => {
     expect(stateValidation.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'retired-storyboard-task-contract',
-          target: 'executionRefs.taskRefs',
+          code: 'malformed-storyboard-execution-refs',
+          target: 'executionRefs.unexpectedField',
         }),
       ]),
     );
     expect(intentValidation.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'retired-storyboard-task-contract',
-          target: 'taskRef',
+          code: 'malformed-storyboard-action-intent',
+          target: 'actionIntent.unexpectedField',
         }),
       ]),
     );
   });
 
   it('projects storyboard review rows from semantic prompt documents only', () => {
-    const legacyRow = projectCanvasStoryboardReviewRow({
-      nodeId: 'shot-legacy',
+    const unsupportedRow = projectCanvasStoryboardReviewRow({
+      nodeId: 'shot-unsupported',
       data: {
         shotNumber: 2,
         duration: 5,
-        generationPrompt: 'legacy plain prompt',
+        unexpectedField: 'unsupported plain prompt',
       },
     });
 
-    expect(legacyRow.source).toBe('empty');
-    expect(legacyRow.imagePrompt).toBe('');
-    expect(legacyRow.videoPrompt).toBe('');
-    expect(legacyRow.diagnostics).toEqual(
+    expect(unsupportedRow.source).toBe('empty');
+    expect(unsupportedRow.imagePrompt).toBe('');
+    expect(unsupportedRow.videoPrompt).toBe('');
+    expect(unsupportedRow.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'missing-semantic-storyboard-prompt' }),
       ]),
@@ -212,7 +212,6 @@ describe('canvas semantic storyboard contracts', () => {
       data: {
         shotNumber: 2,
         storyboardPrompt: promptState,
-        generationPrompt: 'legacy prompt must not be read',
       },
     });
 

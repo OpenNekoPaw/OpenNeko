@@ -121,7 +121,7 @@ function input(
       portablePath: `${'${WORKSPACE}'}/story.fountain`,
       format: 'fountain',
       analysisMode,
-      fingerprint: 'sha256:story-v1',
+      fingerprint: 'sha256:story-content',
       sizeBytes: 100,
       modifiedAtMs: 1,
     },

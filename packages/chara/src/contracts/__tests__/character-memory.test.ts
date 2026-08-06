@@ -32,15 +32,16 @@ describe('progressive character memory contracts', () => {
     expect(validateCharacterMemoryFile(result.memory)).toEqual({ ok: true, diagnostics: [] });
   });
 
-  it('rejects removed memory version fields without invalidating a canonical sibling file', () => {
+  it('rejects unknown memory fields without invalidating a canonical sibling file', () => {
     const canonical = createEmptyCharacterMemoryFile('${WORKSPACE}');
-    const versionedRoot: Record<string, unknown> = { ...canonical };
-    const versionedLedger: Record<string, unknown> = { ...canonical.ledger };
-    Reflect.set(versionedRoot, 'version', 1);
-    Reflect.set(versionedLedger, 'version', 1);
+    const invalidRoot: Record<string, unknown> = { ...canonical, unexpectedField: 1 };
+    const invalidLedger: Record<string, unknown> = {
+      ...canonical.ledger,
+      unexpectedField: 1,
+    };
 
-    expect(validateCharacterMemoryFile(versionedRoot).ok).toBe(false);
-    expect(validateCharacterMemoryFile({ ...canonical, ledger: versionedLedger }).ok).toBe(false);
+    expect(validateCharacterMemoryFile(invalidRoot).ok).toBe(false);
+    expect(validateCharacterMemoryFile({ ...canonical, ledger: invalidLedger }).ok).toBe(false);
     expect(validateCharacterMemoryFile(canonical)).toEqual({ ok: true, diagnostics: [] });
   });
 

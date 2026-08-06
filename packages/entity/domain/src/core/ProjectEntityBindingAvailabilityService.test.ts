@@ -144,7 +144,6 @@ const GENERATED: ProjectEntityDocument['entities'][number]['representations'][nu
   target: {
     kind: 'generated-output',
     outputId: 'output-rin',
-    revision: '1',
     digest: 'b'.repeat(64),
     path: 'neko/generated/rin.png',
   },

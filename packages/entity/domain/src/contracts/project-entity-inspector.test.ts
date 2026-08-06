@@ -48,9 +48,13 @@ describe('Project Entity Inspector intents', () => {
     ).toThrow('identity is invalid');
   });
 
-  it('rejects removed concurrency fields, renderer-owned paths, and malformed Asset revisions', () => {
+  it('rejects unknown fields, renderer-owned paths, and malformed Asset revisions', () => {
     for (const intent of [
-      { type: 'publish', expectedRevision: 1, entityId: 'character-nova' },
+      {
+        type: 'publish',
+        unexpectedField: 1,
+        entityId: 'character-nova',
+      },
       {
         type: 'reference',
         entityId: 'character-nova',

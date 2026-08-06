@@ -52,7 +52,6 @@ export interface CanvasHostAuthoringCapabilities {
 
 export interface CanvasHostSnapshot {
   readonly identity: CanvasHostRuntimeIdentity;
-  readonly revision: number;
   readonly dirty: boolean;
   readonly canvas: CanvasData;
   readonly presentation: CanvasHostPresentationState;
@@ -62,7 +61,6 @@ export interface CanvasHostSnapshot {
 
 export interface CanvasMaterialActionResolutionRequest {
   readonly requestId: string;
-  readonly expectedRevision: number;
   readonly identity: CanvasHostRuntimeIdentity;
   readonly selectedNodeIds: readonly string[];
 }
@@ -70,7 +68,6 @@ export interface CanvasMaterialActionResolutionRequest {
 export interface CanvasMaterialActionResolution {
   readonly requestId: string;
   readonly identity: CanvasHostRuntimeIdentity;
-  readonly revision: number;
   readonly selectedNodeIds: readonly string[];
   readonly descriptors: readonly CanvasMaterialActionDescriptor[];
 }
@@ -115,7 +112,6 @@ export type CanvasHostIntent =
 export interface CanvasHostIntentRequest {
   readonly requestId: string;
   readonly commandId: string;
-  readonly expectedRevision: number;
   readonly identity: CanvasHostRuntimeIdentity;
   readonly intent: CanvasHostIntent;
 }
@@ -134,7 +130,6 @@ export type CanvasHostIntentResult =
       readonly diagnostic: {
         readonly code:
           | 'canvas-runtime-stale-identity'
-          | 'canvas-runtime-stale-revision'
           | 'canvas-runtime-unsupported-intent'
           | 'canvas-runtime-source-cancelled'
           | 'canvas-runtime-effect-failed';
@@ -163,7 +158,6 @@ export interface CanvasHostRuntime {
 
 export function createCanvasMaterialActionResolutionRequest(input: {
   readonly requestId: string;
-  readonly expectedRevision: number;
   readonly identity: CanvasHostRuntimeIdentity;
   readonly selectedNodeIds: readonly string[];
 }): CanvasMaterialActionResolutionRequest {
@@ -177,15 +171,11 @@ export function parseCanvasMaterialActionResolutionRequest(
     value,
     'Canvas material action resolution request must be an object.',
   );
-  requireExactKeys(record, ['requestId', 'expectedRevision', 'identity', 'selectedNodeIds']);
+  requireExactKeys(record, ['requestId', 'identity', 'selectedNodeIds']);
   return {
     requestId: requireOpaqueIdentity(
       record['requestId'],
       'Canvas material action resolution request identity is required.',
-    ),
-    expectedRevision: requireNonNegativeInteger(
-      record['expectedRevision'],
-      'Canvas material action resolution revision must be a non-negative integer.',
     ),
     identity: parseCanvasHostRuntimeIdentity(record['identity']),
     selectedNodeIds: parseSelectedNodeIds(record['selectedNodeIds']),
@@ -197,7 +187,7 @@ export function parseCanvasMaterialActionResolution(
   expectedRequestId: string,
 ): CanvasMaterialActionResolution {
   const record = requireRecord(value, 'Canvas material action resolution must be an object.');
-  requireExactKeys(record, ['requestId', 'identity', 'revision', 'selectedNodeIds', 'descriptors']);
+  requireExactKeys(record, ['requestId', 'identity', 'selectedNodeIds', 'descriptors']);
   return {
     requestId: requireMatchingIdentity(
       record['requestId'],
@@ -205,10 +195,6 @@ export function parseCanvasMaterialActionResolution(
       'Canvas material action resolution request identity does not match.',
     ),
     identity: parseCanvasHostRuntimeIdentity(record['identity']),
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Canvas material action resolution revision must be a non-negative integer.',
-    ),
     selectedNodeIds: parseSelectedNodeIds(record['selectedNodeIds']),
     descriptors: parseCanvasMaterialActionDescriptors(record['descriptors']),
   };
@@ -227,7 +213,6 @@ export class CanvasHostRuntimeContractError extends Error {
 export function createCanvasHostIntentRequest(input: {
   readonly requestId: string;
   readonly commandId: string;
-  readonly expectedRevision: number;
   readonly identity: CanvasHostRuntimeIdentity;
   readonly intent: CanvasHostIntent;
 }): CanvasHostIntentRequest {
@@ -236,7 +221,7 @@ export function createCanvasHostIntentRequest(input: {
 
 export function parseCanvasHostIntentRequest(value: unknown): CanvasHostIntentRequest {
   const record = requireRecord(value, 'Canvas Host intent request must be an object.');
-  requireExactKeys(record, ['requestId', 'commandId', 'expectedRevision', 'identity', 'intent']);
+  requireExactKeys(record, ['requestId', 'commandId', 'identity', 'intent']);
   return {
     requestId: requireNonEmptyString(
       record['requestId'],
@@ -245,10 +230,6 @@ export function parseCanvasHostIntentRequest(value: unknown): CanvasHostIntentRe
     commandId: requireOpaqueIdentity(
       record['commandId'],
       'Canvas Host command identity is required.',
-    ),
-    expectedRevision: requireNonNegativeInteger(
-      record['expectedRevision'],
-      'Canvas Host expected revision must be a non-negative integer.',
     ),
     identity: parseCanvasHostRuntimeIdentity(record['identity']),
     intent: parseCanvasHostIntent(record['intent']),
@@ -259,7 +240,6 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
   const record = requireRecord(value, 'Canvas Host snapshot must be an object.');
   requireExactKeys(record, [
     'identity',
-    'revision',
     'dirty',
     'canvas',
     'presentation',
@@ -271,10 +251,6 @@ export function parseCanvasHostSnapshot(value: unknown): CanvasHostSnapshot {
   }
   return {
     identity: parseCanvasHostRuntimeIdentity(record['identity']),
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Canvas Host snapshot revision must be a non-negative integer.',
-    ),
     dirty: requireBoolean(record['dirty'], 'Canvas Host dirty state is invalid.'),
     canvas,
     presentation: parseCanvasHostPresentationState(record['presentation']),
@@ -610,7 +586,6 @@ function requireDiagnosticCode(
 ): Extract<CanvasHostIntentResult, { readonly status: 'rejected' }>['diagnostic']['code'] {
   const allowed = [
     'canvas-runtime-stale-identity',
-    'canvas-runtime-stale-revision',
     'canvas-runtime-unsupported-intent',
     'canvas-runtime-source-cancelled',
     'canvas-runtime-effect-failed',
@@ -671,13 +646,6 @@ function requireMatchingIdentity(value: unknown, expected: string, message: stri
     throw invalidPayload(message);
   }
   return actual;
-}
-
-function requireNonNegativeInteger(value: unknown, message: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw invalidPayload(message);
-  }
-  return value;
 }
 
 function requirePositiveInteger(value: unknown, message: string): number {

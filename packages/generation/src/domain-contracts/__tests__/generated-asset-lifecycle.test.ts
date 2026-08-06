@@ -8,33 +8,33 @@ describe('generated asset lifecycle', () => {
     expect(lifecycle.contentLocator).toEqual({
       kind: 'generated-output',
       outputId: 'draft-1',
-      revision: lifecycle.revision,
       digest: 'sha256:same',
       path: 'neko/generated/image/draft-1.png',
     });
-    expect(lifecycle).not.toHaveProperty('resourceRef');
-    expect(lifecycle.generation).not.toHaveProperty('sourceRefs');
     expect(JSON.stringify(lifecycle)).not.toContain('/.neko/.cache/');
   });
 
-  it('rejects retired lifecycle fields and mismatched locator identity', () => {
+  it('rejects unsupported fields and mismatched locator identity', () => {
     const lifecycle = createLifecycle('draft-1', 'sha256:same', 'operation-1');
 
     expect(
       validateGeneratedAssetRevisionRef({
         ...lifecycle,
-        resourceRef: { id: 'legacy-resource' },
+        unexpectedField: 'unsupported',
       }),
     ).toEqual({
       ok: false,
-      diagnostic: 'Generated asset lifecycle contains unsupported or legacy fields.',
+      diagnostic: 'Generated asset lifecycle contains unsupported fields.',
     });
     expect(
       validateGeneratedAssetRevisionRef({
         ...lifecycle,
         generation: {
           ...lifecycle.generation,
-          sourceRefs: [],
+          workflowStage: {
+            ...lifecycle.generation.workflowStage,
+            unexpectedField: 'unsupported-stage-field',
+          },
         },
       }),
     ).toEqual({

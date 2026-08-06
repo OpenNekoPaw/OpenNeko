@@ -165,7 +165,7 @@ async function createMetadata(): Promise<LocalMetadataStore> {
   await initializeCoreLocalMetadataTables(metadata);
   await initializeGenerationJobTables(metadata);
   await metadata.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: WORKSPACE_ID },
+    identity: { workspaceId: WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },
     seenAt: '2026-07-24T00:00:00.000Z',
   });
@@ -197,7 +197,6 @@ function resultLocator() {
   return {
     kind: 'generated-output' as const,
     outputId: 'generated-1',
-    revision: 'revision-generated-1',
     digest: 'sha256:generated-1',
     path: 'neko/generated/image/generated-1.png',
   };

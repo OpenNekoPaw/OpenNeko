@@ -4,7 +4,6 @@ import {
   aggregateQualityGate,
   assertExternalPerceptionTarget,
   createQualityGateRuntime,
-  rejectLegacyMediaPathRequest,
   selectQualityProfile,
   type QualityEvaluator,
   type QualityTargetMaterializer,
@@ -14,7 +13,7 @@ import { createMultimodalPerceptionEvaluator } from '../model/index';
 const contentLocator = {
   kind: 'workspace-file' as const,
   path: 'assets/hero.png',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-v1' },
+  fingerprint: { strategy: 'sha256' as const, value: 'sha256:hero-content' },
 };
 
 function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
@@ -22,7 +21,7 @@ function target(overrides: Partial<QualityTarget> = {}): QualityTarget {
     targetId: 'hero-shot',
     kind: 'image',
     contentLocator,
-    contentDigest: 'sha256:v1',
+    contentDigest: 'sha256:hero-content',
     expectedIntent: { prompt: 'cinematic hero' },
     ...overrides,
   };
@@ -166,7 +165,7 @@ describe('canonical quality gate runtime', () => {
 
   it('marks content digest mismatches stale', () => {
     const result = aggregateQualityGate({
-      target: target({ contentDigest: 'sha256:v2' }),
+      target: target({ contentDigest: 'sha256:changed' }),
       profile: selectQualityProfile(target()),
       policy: policy(),
       evidence: [evidence({ id: 'old', evaluatorClass: 'technical' })],
@@ -175,15 +174,6 @@ describe('canonical quality gate runtime', () => {
     });
     expect(result.verdict).toBe('fail');
     expect(result.staleEvidenceIds).toEqual(['old']);
-  });
-
-  it('poisons legacy mediaPath requests on the canonical path', () => {
-    expect(() => rejectLegacyMediaPathRequest({ mediaPath: '/tmp/hero.png' })).toThrow(
-      'legacy-path-target-rejected',
-    );
-    expect(() =>
-      rejectLegacyMediaPathRequest({ scenes: [{ mediaPath: '/tmp/hero.png' }] }),
-    ).toThrow('legacy-path-target-rejected');
   });
 
   it('rejects project archives from external perception materialization', () => {

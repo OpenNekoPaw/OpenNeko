@@ -67,7 +67,7 @@ describe('Canvas PropertyPanel shared UI migration', () => {
     expect(onDeleteNode).toHaveBeenCalledWith('node-1');
   });
 
-  it('renders canonical Markdown content without legacy reference projections', () => {
+  it('renders canonical Markdown content', () => {
     act(() => {
       root.render(
         <PropertyPanel

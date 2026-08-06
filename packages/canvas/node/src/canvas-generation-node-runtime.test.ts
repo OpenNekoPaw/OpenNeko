@@ -15,7 +15,6 @@ const workspace: CanvasGenerationWorkspace = {
 const resultLocator = {
   kind: 'generated-output' as const,
   outputId: 'generated-output-1',
-  revision: 'revision-1',
   digest: 'sha256:generated-output-1',
   path: 'neko/generated/image/generated-output-1.png',
 };
@@ -102,7 +101,7 @@ describe('CanvasGenerationNodeRuntime', () => {
       phase: 'running',
       regenerateOf: current.ref,
       prompt: 'Authoritative regenerated prompt',
-      modelId: 'image-model-v2',
+      modelId: 'image-model-regenerated',
       width: 1536,
       height: 1024,
     });
@@ -111,14 +110,13 @@ describe('CanvasGenerationNodeRuntime', () => {
       phase: 'succeeded',
       regenerateOf: current.ref,
       prompt: 'Authoritative regenerated prompt',
-      modelId: 'image-model-v2',
+      modelId: 'image-model-regenerated',
       width: 1536,
       height: 1024,
       resultLocators: [
         {
           ...resultLocator,
           outputId: 'generated-output-2',
-          revision: 'revision-2',
           digest: 'sha256:generated-output-2',
           path: 'neko/generated/image/generated-output-2.png',
         },
@@ -140,7 +138,7 @@ describe('CanvasGenerationNodeRuntime', () => {
       mediaKind: 'image',
       summary: {
         prompt: 'Authoritative regenerated prompt',
-        model: 'image-model-v2',
+        model: 'image-model-regenerated',
         width: 1536,
         height: 1024,
       },
@@ -259,11 +257,11 @@ function generationSnapshot(options: {
     request: {
       generationType: 'text-to-image',
       providerId: 'provider-1',
-      modelId: options.modelId ?? 'image-model-v1',
+      modelId: options.modelId ?? 'image-model-default',
       request: {
         prompt: options.prompt ?? 'Authoritative original prompt',
         providerId: 'provider-1',
-        modelId: options.modelId ?? 'image-model-v1',
+        modelId: options.modelId ?? 'image-model-default',
         ...(options.width !== undefined ? { width: options.width } : {}),
         ...(options.height !== undefined ? { height: options.height } : {}),
       },

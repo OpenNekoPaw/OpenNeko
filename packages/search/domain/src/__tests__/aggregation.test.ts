@@ -10,9 +10,9 @@ import { createProjectSearchItem } from '../testing/testAdapters';
 
 describe('project search aggregation policy', () => {
   it('prefers unified entity projections when deduping same creative entity identity', () => {
-    const legacy = {
+    const duplicate = {
       ...createProjectSearchItem({
-        id: 'legacy:mentor',
+        id: 'story:mentor',
         kind: 'creative-entity',
         label: '猫妈妈',
         partition: 'creative-entities',
@@ -20,7 +20,7 @@ describe('project search aggregation policy', () => {
       }),
       source: {
         partition: 'creative-entities',
-        sourceId: 'legacy-story',
+        sourceId: 'story-projection',
         sourceKind: 'character',
         metadata: { entityKind: 'character' },
       },
@@ -28,7 +28,7 @@ describe('project search aggregation policy', () => {
       metadata: { entityType: 'character' },
     } satisfies ProjectSearchItem;
     const unified = {
-      ...legacy,
+      ...duplicate,
       id: 'entity:character:mentor',
       source: {
         partition: 'creative-entities',
@@ -39,7 +39,7 @@ describe('project search aggregation policy', () => {
       navigationData: { source: 'neko-entity' },
     } satisfies ProjectSearchItem;
 
-    expect(dedupeCreativeEntityProjectSearchItems([legacy, unified])).toEqual([unified]);
+    expect(dedupeCreativeEntityProjectSearchItems([duplicate, unified])).toEqual([unified]);
   });
 
   it('keeps same-name entity candidates distinct', () => {

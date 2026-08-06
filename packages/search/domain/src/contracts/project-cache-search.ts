@@ -552,7 +552,7 @@ export function isProjectSemanticProviderMetadata(
   if (!isRecord(value) || typeof value['providerId'] !== 'string') return false;
   return (
     isSafeSemanticCoverageValue(value) &&
-    !hasRemovedSearchVersionField(value) &&
+    hasOnlyFields(value, new Set(['providerId', 'model', 'sourceIdentity', 'skillId'])) &&
     optionalString(value['model']) &&
     optionalString(value['sourceIdentity']) &&
     optionalString(value['skillId'])
@@ -664,15 +664,7 @@ export function validateProjectSemanticCoverageQuery(
       );
     }
   }
-  if (hasRemovedSearchVersionField(value)) {
-    diagnostics.push(
-      coverageDiagnostic(
-        'error',
-        'invalid-required-field',
-        'Semantic coverage query contains a removed internal version field.',
-      ),
-    );
-  }
+  rejectUnknownCoverageFields(value, diagnostics);
   if (!isSafeSemanticCoverageValue(value)) {
     diagnostics.push(
       coverageDiagnostic(
@@ -859,7 +851,10 @@ export function projectCharacterObservationToSearchItem(
 export function isProjectSearchCacheManifest(value: unknown): value is ProjectSearchCacheManifest {
   if (!isRecord(value)) return false;
   return (
-    !Object.hasOwn(value, 'version') &&
+    hasOnlyFields(
+      value,
+      new Set(['projectRoot', 'createdAt', 'updatedAt', 'sourceIdentity', 'partitions']),
+    ) &&
     typeof value['projectRoot'] === 'string' &&
     typeof value['createdAt'] === 'string' &&
     typeof value['updatedAt'] === 'string' &&
@@ -874,7 +869,10 @@ function isProjectSearchCachePartitionManifest(
 ): value is ProjectSearchCachePartitionManifest {
   if (!isRecord(value)) return false;
   return (
-    !Object.hasOwn(value, 'version') &&
+    hasOnlyFields(
+      value,
+      new Set(['partition', 'freshness', 'itemCount', 'sourceIdentity', 'updatedAt']),
+    ) &&
     isProjectSearchPartitionKind(value['partition']) &&
     isProjectIndexFreshness(value['freshness']) &&
     typeof value['itemCount'] === 'number' &&
@@ -1176,8 +1174,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function hasRemovedSearchVersionField(value: Record<string, unknown>): boolean {
-  return ['modelVersion', 'chunkingVersion', 'indexVersion', 'schemaVersion', 'skillVersion'].some(
-    (field) => Object.hasOwn(value, field),
-  );
+function hasOnlyFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
+}
+
+function rejectUnknownCoverageFields(
+  value: Record<string, unknown>,
+  diagnostics: ContributionDiagnostic[],
+): void {
+  const allowedFields = new Set([
+    'sourceRef',
+    'analysisKind',
+    'range',
+    'skillId',
+    'providerId',
+    'projectRoot',
+    'contextFilePath',
+    'contextUri',
+  ]);
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
+    diagnostics.push(
+      coverageDiagnostic(
+        'error',
+        'invalid-required-field',
+        `Semantic coverage query contains unsupported field ${field}.`,
+        [field],
+      ),
+    );
+  }
 }

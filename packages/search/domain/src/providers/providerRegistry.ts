@@ -16,18 +16,10 @@ export interface ProjectSearchProviderContribution {
   readonly adapters: readonly ProjectSearchAdapter[];
   readonly partitions?: readonly ProjectSearchPartitionKind[];
   readonly capabilities?: ProjectSearchProviderCapabilities;
-  readonly replacesCompatibilityPartitions?: readonly ProjectSearchPartitionKind[];
 }
 
 export interface ProjectSearchProviderRegistry {
   registerProvider(contribution: ProjectSearchProviderContribution): ProjectSearchDisposable;
-}
-
-export interface ProjectSearchProviderRegistryOptions {
-  readonly onCompatibilityPartitionReplaced?: (
-    partitions: readonly ProjectSearchPartitionKind[],
-    contribution: ProjectSearchProviderContribution,
-  ) => void;
 }
 
 export interface StorySearchProjection {
@@ -90,16 +82,9 @@ export interface SearchProjectionAdapterOptions<TProjection> {
 
 export function createProviderRegistration(
   registerAdapter: (adapter: ProjectSearchAdapter) => ProjectSearchDisposable,
-  options: ProjectSearchProviderRegistryOptions = {},
 ): ProjectSearchProviderRegistry {
   return {
     registerProvider(contribution) {
-      if (contribution.replacesCompatibilityPartitions?.length) {
-        options.onCompatibilityPartitionReplaced?.(
-          contribution.replacesCompatibilityPartitions,
-          contribution,
-        );
-      }
       const disposables = contribution.adapters.map((adapter) => registerAdapter(adapter));
       return {
         dispose() {
@@ -116,7 +101,6 @@ export function createStorySearchProviderContribution(input: {
   readonly providerId: string;
   readonly displayName?: string;
   readonly adapters: readonly ProjectSearchAdapter[];
-  readonly replacesCompatibility?: boolean;
 }): ProjectSearchProviderContribution {
   return {
     providerId: input.providerId,
@@ -135,9 +119,6 @@ export function createStorySearchProviderContribution(input: {
       ],
       partitions: ['story-symbols', 'creative-entities'],
     },
-    ...(input.replacesCompatibility
-      ? { replacesCompatibilityPartitions: ['story-symbols', 'creative-entities'] }
-      : {}),
   };
 }
 
@@ -145,7 +126,6 @@ export function createAssetSearchProviderContribution(input: {
   readonly providerId: string;
   readonly displayName?: string;
   readonly adapters: readonly ProjectSearchAdapter[];
-  readonly replacesCompatibility?: boolean;
 }): ProjectSearchProviderContribution {
   return {
     providerId: input.providerId,
@@ -158,9 +138,6 @@ export function createAssetSearchProviderContribution(input: {
       itemKinds: ['media', 'document', 'generated-asset'],
       partitions: ['media-library', 'generated-assets'],
     },
-    ...(input.replacesCompatibility
-      ? { replacesCompatibilityPartitions: ['media-library', 'generated-assets'] }
-      : {}),
   };
 }
 
@@ -169,7 +146,6 @@ export function createDocumentSearchProviderContribution(input: {
   readonly displayName?: string;
   readonly adapters: readonly ProjectSearchAdapter[];
   readonly semantic?: boolean;
-  readonly replacesCompatibility?: boolean;
 }): ProjectSearchProviderContribution {
   return {
     providerId: input.providerId,
@@ -183,7 +159,6 @@ export function createDocumentSearchProviderContribution(input: {
       itemKinds: ['document'],
       partitions: ['documents'],
     },
-    ...(input.replacesCompatibility ? { replacesCompatibilityPartitions: ['documents'] } : {}),
   };
 }
 

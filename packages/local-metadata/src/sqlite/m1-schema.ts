@@ -10,20 +10,6 @@ const CORE_TABLES = [
     last_seen_at TEXT NOT NULL,
     orphaned_at TEXT
   ) STRICT`,
-  `CREATE TABLE IF NOT EXISTS projection_versions (
-    partition_key TEXT PRIMARY KEY NOT NULL,
-    partition_scope TEXT NOT NULL CHECK (partition_scope IN ('global', 'workspace')),
-    workspace_id TEXT,
-    domain TEXT NOT NULL,
-    revision INTEGER NOT NULL CHECK (revision >= 0),
-    freshness TEXT NOT NULL CHECK (freshness IN ('fresh', 'stale', 'rebuilding')),
-    diagnostic TEXT,
-    updated_at TEXT NOT NULL,
-    CHECK (
-      (partition_scope = 'global' AND workspace_id IS NULL) OR
-      (partition_scope = 'workspace' AND workspace_id IS NOT NULL)
-    )
-  ) STRICT`,
   `CREATE TABLE IF NOT EXISTS conversations (
     conversation_id TEXT PRIMARY KEY NOT NULL,
     workspace_id TEXT,

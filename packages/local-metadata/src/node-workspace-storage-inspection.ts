@@ -27,30 +27,6 @@ export interface WorkspaceStorageInspectionOptions {
   readonly contentObservations?: readonly WorkspaceContentPlacementObservation[];
 }
 
-const LEGACY_METADATA_PATHS: readonly KnownWorkspacePath[] = [
-  legacyDatabase('.neko/neko-local.db'),
-  legacyDatabase('.neko/neko.db'),
-  legacyDatabase('.neko/.cache/neko-cache.db'),
-  legacyDatabase('.neko/.cache/neko.db'),
-  legacyManifest('.neko/tasks.json'),
-  legacyManifest('.neko/.cache/resources/manifest.json'),
-  legacyManifest('.neko/.cache/proxies/manifest.json'),
-  legacyManifest('.neko/.cache/media-metadata.json'),
-  legacyManifest('.neko/.cache/generated/index.json'),
-  legacyManifest('.neko/.cache/artifact-index.json'),
-  legacyManifest('.neko/.cache/asset-graph.json'),
-  legacyManifest('.neko/.cache/search-index.json'),
-  {
-    relativePath: '.neko/semantic-index',
-    code: 'legacy-workspace-metadata',
-    kind: 'legacy-projection',
-    severity: 'warning',
-    message: 'Legacy semantic projection must be migrated or rebuilt in the user metadata store.',
-    suggestedTarget: '~/.neko/neko.db#cache',
-    requiresExplicitAction: false,
-  },
-];
-
 const MISPLACED_PROJECT_FACT_PATHS: readonly KnownWorkspacePath[] = [
   misplacedProjectFact('.neko/assets/library.json', 'neko/assets/library.json'),
   misplacedProjectFact('.neko/entity-bindings.json', 'neko/entity-bindings.json'),
@@ -109,11 +85,7 @@ export async function inspectWorkspaceStorage(
   }
 
   const entries = new Map<string, WorkspaceStorageInspectionEntry>();
-  for (const knownPath of [
-    ...LEGACY_METADATA_PATHS,
-    ...MISPLACED_PROJECT_FACT_PATHS,
-    ...MANAGED_WORKSPACE_PATHS,
-  ]) {
+  for (const knownPath of [...MISPLACED_PROJECT_FACT_PATHS, ...MANAGED_WORKSPACE_PATHS]) {
     const sizeBytes = await readPathSize(join(options.workDir, knownPath.relativePath));
     if (sizeBytes === null) continue;
     addEntry(entries, { ...knownPath, sizeBytes });
@@ -188,31 +160,6 @@ async function readPathSize(path: string): Promise<number | null> {
     total += (await readPathSize(join(path, child))) ?? 0;
   }
   return total;
-}
-
-function legacyDatabase(relativePath: string): KnownWorkspacePath {
-  return {
-    relativePath,
-    code: 'retired-workspace-database',
-    kind: 'legacy-database',
-    severity: 'error',
-    message: 'Workspace SQLite metadata is retired and must use the user-level metadata store.',
-    suggestedTarget: '~/.neko/neko.db',
-    requiresExplicitAction: false,
-  };
-}
-
-function legacyManifest(relativePath: string): KnownWorkspacePath {
-  return {
-    relativePath,
-    code: 'legacy-workspace-metadata',
-    kind: 'legacy-manifest',
-    severity: 'warning',
-    message:
-      'Legacy workspace metadata is a migration or rebuild input, not a normal success path.',
-    suggestedTarget: '~/.neko/neko.db',
-    requiresExplicitAction: false,
-  };
 }
 
 function misplacedProjectFact(relativePath: string, suggestedTarget: string): KnownWorkspacePath {

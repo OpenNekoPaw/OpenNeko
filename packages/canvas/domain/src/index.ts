@@ -16,7 +16,6 @@ export {
 } from './workspace-board-delivery-ledger';
 export {
   WorkspaceBoardDeliveryCoordinator,
-  createCanvasWorkspaceBoardRevision,
   type CanvasWorkspaceBoardLoadedDocument,
   type CanvasWorkspaceBoardMutationPort,
   type WorkspaceBoardDeliveryCoordinatorOptions,

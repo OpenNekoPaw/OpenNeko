@@ -149,7 +149,7 @@ const BASE = {
   kind: 'character' as const,
   names: { canonical: 'Rin', aliases: [] },
   facts: { role: 'support', 'local-note': 'base', already: 'base', skipped: 'old' },
-  representations: [assetBinding('asset-binding-rin', 'portrait-v1.png')],
+  representations: [assetBinding('asset-binding-rin', 'portrait-original.png')],
 };
 const AVAILABLE: ProjectEntityAssetSnapshot = {
   revision: AVAILABLE_REF,
@@ -158,7 +158,7 @@ const AVAILABLE: ProjectEntityAssetSnapshot = {
     names: { canonical: 'Rin v2', aliases: [] },
     facts: { role: 'lead', 'local-note': 'base', already: 'new', skipped: 'new' },
     representations: [
-      assetBinding('asset-binding-rin', 'portrait-v2.png'),
+      assetBinding('asset-binding-rin', 'portrait-original.png'),
       assetBinding('asset-binding-extra', 'reference.png'),
     ],
   },
@@ -171,7 +171,7 @@ const DOCUMENT: ProjectEntityDocument = {
       kind: 'character',
       names: { canonical: 'Rin', aliases: [] },
       facts: { role: 'local-lead', 'local-note': 'kept', already: 'new', skipped: 'old' },
-      representations: [projectBinding('project-binding-rin', 'portrait-v1.png')],
+      representations: [projectBinding('project-binding-rin', 'portrait-original.png')],
       lifecycle: { state: 'active' },
       provenance: {
         origin: ORIGIN_REF,

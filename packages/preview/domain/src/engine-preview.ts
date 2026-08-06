@@ -122,7 +122,6 @@ export interface PanoramaViewState {
 }
 
 export interface PreviewManifest {
-  readonly manifestVersion: 1;
   readonly assetId: string;
   readonly token: string;
   readonly kind: PreviewAssetKind;

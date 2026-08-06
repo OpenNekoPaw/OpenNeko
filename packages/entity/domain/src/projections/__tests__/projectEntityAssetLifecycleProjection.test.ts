@@ -10,7 +10,7 @@ describe('Project Entity Asset lifecycle projection', () => {
     const event = lifecycleEvent('uninstalled');
     expect(assertProjectEntityAssetLifecycleEvent(event)).toEqual(event);
     for (const forbidden of [
-      { projectDocument: { schemaVersion: 1 } },
+      { projectDocument: { unsupportedRoot: true } },
       { entities: [ENTITY] },
       { workspacePath: '/private/project' },
     ]) {

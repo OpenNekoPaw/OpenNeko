@@ -15,11 +15,7 @@ import type {
 import type { DocumentLocator } from '@neko/content';
 import { isSemanticSourceDescriptor } from '@neko/search-domain';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
-import type {
-  LocalMetadataPartition,
-  LocalMetadataPartitionRevision,
-  LocalMetadataStore,
-} from '@neko/local-metadata';
+import type { LocalMetadataPartition, LocalMetadataStore } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import type { SemanticProjectionRecord } from '@neko/local-metadata';
@@ -52,8 +48,6 @@ export interface NodeWorkspaceSemanticEntityMetadataBinding extends ProjectEntit
     sourceId: string,
     locator: DocumentLocator,
   ): Promise<readonly SemanticOccurrenceEntityLinks[]>;
-  readSemanticRevision(): Promise<LocalMetadataPartitionRevision | null>;
-  readEntityRevision(): Promise<LocalMetadataPartitionRevision | null>;
   dispose(): Promise<void>;
 }
 
@@ -227,15 +221,7 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
           },
           async ({ repositories }) => {
             const current = await repositories.semanticProjections.get(semanticPartition, sourceId);
-            if (!current) {
-              await repositories.projectionVersions.markStale({
-                partition: semanticPartition,
-                freshness: 'stale',
-                diagnostic,
-                updatedAt,
-              });
-              return;
-            }
+            if (!current) return;
             await repositories.semanticProjections.replaceSource({
               partition: semanticPartition,
               source: {
@@ -315,8 +301,6 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
           .filter((record) => sameDocumentLocator(record.occurrence.locator, locator))
           .map(occurrenceLinks);
       },
-      readSemanticRevision: () => metadataStore.readPartitionRevision(semanticPartition),
-      readEntityRevision: () => metadataStore.readPartitionRevision(entityPartition),
       dispose: () => (ownsMetadataStore ? metadataStore.dispose() : Promise.resolve()),
     };
   } catch (error) {

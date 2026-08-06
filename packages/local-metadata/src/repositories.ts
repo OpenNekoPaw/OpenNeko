@@ -11,7 +11,7 @@ import type {
   ProjectSearchPartitionKind,
   ProjectSearchSourceRef,
 } from '@neko/search-domain';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from './model';
+import type { LocalMetadataPartition } from './model';
 import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 
 export interface WorkspaceRegistryRecord {
@@ -69,7 +69,6 @@ export interface ConversationCatalogQuery {
 export interface ConversationProjectionReplaceRequest {
   readonly workspaceId: string | null;
   readonly conversations: readonly ConversationCatalogRecord[];
-  readonly authorityRevision: string;
 }
 
 export interface ConversationCatalogRepository {
@@ -79,19 +78,6 @@ export interface ConversationCatalogRepository {
   delete(conversationId: string): Promise<boolean>;
   replaceProjection(request: ConversationProjectionReplaceRequest): Promise<void>;
   deleteWorkspaceProjection(workspaceId: string): Promise<void>;
-}
-
-export interface ProjectionVersionUpdate {
-  readonly partition: LocalMetadataPartition;
-  readonly freshness: LocalMetadataPartitionRevision['freshness'];
-  readonly diagnostic: string | null;
-  readonly updatedAt: string;
-}
-
-export interface ProjectionVersionRepository {
-  get(partition: LocalMetadataPartition): Promise<LocalMetadataPartitionRevision | null>;
-  increment(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision>;
-  markStale(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision>;
 }
 
 export interface TaskStateRecord {
@@ -392,7 +378,6 @@ export function evaluateLocalMetadataCacheQuota(
 export interface LocalMetadataRepositories {
   readonly assetLibraryMemberships: AssetLibraryMembershipRepository;
   readonly workspaces: WorkspaceRegistryRepository;
-  readonly projectionVersions: ProjectionVersionRepository;
   readonly conversations: ConversationCatalogRepository;
   readonly tasks: TaskStateRepository;
   readonly taskCheckpoints: TaskCheckpointRepository;

@@ -41,7 +41,7 @@ describe('ContentLocator drag contract', () => {
     ).toThrow('unsupported fields');
     expect(() =>
       parseContentLocatorDragData({
-        schemaVersion: 1,
+        unexpectedField: 1,
         type: 'content-locator',
         locator: { kind: 'workspace-file', path: 'media/cat.png' },
         name: 'cat.png',

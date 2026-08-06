@@ -56,7 +56,7 @@ describe('MediaRoutingManager', () => {
       name: 'OpenAI',
       displayName: 'OpenAI',
       type: 'openai',
-      apiUrl: 'https://api.openai.com/v1',
+      apiUrl: 'https://openai.example.test/api',
       apiKey: 'sk-test',
       enabled: true,
     });
@@ -66,7 +66,7 @@ describe('MediaRoutingManager', () => {
       name: 'Stability AI',
       displayName: 'Stability AI',
       type: 'openai', // Use openai type for testing
-      apiUrl: 'https://api.stability.ai/v1',
+      apiUrl: 'https://stability.example.test/api',
       apiKey: 'sk-test',
       enabled: true,
     });

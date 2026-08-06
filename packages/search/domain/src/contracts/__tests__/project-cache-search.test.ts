@@ -87,7 +87,6 @@ describe('project cache/search contracts', () => {
       generatorId: 'media-thumbnail',
       sourceFingerprint: 'hero.png',
       specFingerprint: 'thumbnail-256',
-      revision: '1',
     };
     const item: ProjectSearchItem = {
       id: 'script-role:/workspace/cases/test.fountain:小橘',
@@ -257,7 +256,7 @@ describe('project cache/search contracts', () => {
     ).toBe(false);
     expect(
       isProjectSearchCacheManifest({
-        version: 1,
+        unexpectedField: 1,
         projectRoot: '/workspace',
         createdAt: '2026-05-18T00:00:00.000Z',
         updatedAt: '2026-05-18T00:00:00.000Z',
@@ -272,7 +271,7 @@ describe('project cache/search contracts', () => {
         partitions: [
           {
             partition: 'documents',
-            version: 1,
+            unexpectedField: 1,
             freshness: 'fresh',
             itemCount: 1,
             updatedAt: '2026-05-18T00:00:00.000Z',

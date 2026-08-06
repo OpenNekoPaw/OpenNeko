@@ -29,7 +29,6 @@ export interface EntitySearchAdapterOptions {
   readonly derivedProjection?: {
     readonly repository: Pick<EntityAssetProjectionRepository, 'list'>;
     readonly partition: EntityAssetProjectionPartition;
-    readonly readRevision: () => Promise<unknown | null>;
   };
   readonly providerId?: string;
 }
@@ -87,7 +86,7 @@ class EntitySearchAdapter implements ProjectSearchAdapter {
     readonly bindingAvailability: readonly EntityBindingAvailabilityProjectionValue[];
   }> {
     const projection = this.options.derivedProjection;
-    if (!projection || !(await projection.readRevision())) {
+    if (!projection) {
       return { candidates: [], bindingAvailability: [] };
     }
     const result = await projection.repository.list({

@@ -17,7 +17,7 @@ const generation: CanvasGenerationEvidence = {
   jobRef: { kind: 'generation', jobId: 'generation-job-1' },
   summary: {
     prompt: 'Cold industrial corridor',
-    model: 'image-model-v2',
+    model: 'image-model-current',
     aspectRatio: '16:9',
   },
 };
@@ -33,7 +33,6 @@ describe('SelectionMaterialGenerationBar', () => {
       contentLocator: {
         kind: 'generated-output',
         outputId: 'output-1',
-        revision: '1',
         digest: 'sha256:generated-output-1',
         path: 'neko/generated/generation-job-1/result.png',
       },
@@ -45,7 +44,7 @@ describe('SelectionMaterialGenerationBar', () => {
 
     expect(markup).toContain('data-material-generation-context="true"');
     expect(markup).toContain('Cold industrial corridor');
-    expect(markup).toContain('image-model-v2 · 16:9');
+    expect(markup).toContain('image-model-current · 16:9');
     expect(markup).not.toContain('data-material-generation-action');
   });
 
@@ -66,7 +65,6 @@ describe('SelectionMaterialGenerationBar', () => {
       contentLocator: {
         kind: 'generated-output',
         outputId: 'output-1',
-        revision: '1',
         digest: 'sha256:generated-output-1',
         path: 'neko/generated/generation-job-1/result.png',
       },
@@ -96,7 +94,6 @@ describe('SelectionMaterialGenerationBar', () => {
         contentLocator: {
           kind: 'generated-output',
           outputId: 'generated-document-1',
-          revision: '1',
           digest: 'sha256:generated-document-1',
           path: 'neko/generated/document/storyboard.md',
         },
@@ -104,7 +101,7 @@ describe('SelectionMaterialGenerationBar', () => {
           ...generation,
           summary: {
             prompt: 'Create a six-shot storyboard',
-            model: 'document-model-v1',
+            model: 'document-model-current',
           },
         },
       },
@@ -114,7 +111,7 @@ describe('SelectionMaterialGenerationBar', () => {
 
     expect(markup).toContain('data-material-generation-context="true"');
     expect(markup).toContain('Create a six-shot storyboard');
-    expect(markup).toContain('document-model-v1');
+    expect(markup).toContain('document-model-current');
   });
 });
 

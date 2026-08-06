@@ -185,13 +185,6 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(addActionCatalogSource).not.toContain("'job-card'");
   });
 
-  it('does not retain legacy generation and content overlay entry points', () => {
-    expect(appSource).not.toContain('handlePanelGenerate');
-    expect(appSource).not.toContain('canvasCreativeAiAction');
-    expect(appSource).not.toContain('GenerationPromptPanel');
-    expect(appSource).not.toContain('ContentOverlay');
-  });
-
   it('does not duplicate the document title as a canvas scope chip', () => {
     expect(appSource).toMatch(/function CanvasBoardNavigationBar/);
     expect(appSource).toMatch(/if \(relatedBoards\.length === 0\) return null/);

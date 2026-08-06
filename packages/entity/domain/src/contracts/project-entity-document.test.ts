@@ -121,12 +121,10 @@ describe('Project Entity document contract', () => {
     });
   });
 
-  it('rejects removed version fields and projection or workflow authority fields', () => {
-    expect(decodeProjectEntityDocument({ ...createDocument([]), schemaVersion: 1 })).toMatchObject({
-      ok: false,
-      diagnostics: [{ code: 'invalid-project-entity-document' }],
-    });
-    expect(decodeProjectEntityDocument({ ...createDocument([]), revision: 3 })).toMatchObject({
+  it('rejects unknown fields and projection or workflow authority fields', () => {
+    expect(
+      decodeProjectEntityDocument({ ...createDocument([]), unexpectedField: 1 }),
+    ).toMatchObject({
       ok: false,
       diagnostics: [{ code: 'invalid-project-entity-document' }],
     });

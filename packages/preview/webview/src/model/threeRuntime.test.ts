@@ -30,17 +30,17 @@ describe('Three model runtime helpers', () => {
       source: { kind: 'workspace-file', path: 'model/scene.gltf' },
       sourceFingerprint: 'source',
       format: 'gltf',
-      entryUri: 'http://127.0.0.1:43125/v1/resource-sets/token/scene.gltf',
+      entryUri: 'http://127.0.0.1:43125/resource-sets/token/scene.gltf',
       uriMap: {
-        'scene.gltf': 'http://127.0.0.1:43125/v1/resource-sets/token/scene.gltf',
-        'scene.bin': 'http://127.0.0.1:43125/v1/resource-sets/token/scene.bin',
-        'textures/base.png': 'http://127.0.0.1:43125/v1/resource-sets/token/textures/base.png',
+        'scene.gltf': 'http://127.0.0.1:43125/resource-sets/token/scene.gltf',
+        'scene.bin': 'http://127.0.0.1:43125/resource-sets/token/scene.bin',
+        'textures/base.png': 'http://127.0.0.1:43125/resource-sets/token/textures/base.png',
       },
       sizeBytes: 100,
     });
-    expect(resolve('scene.bin')).toBe('http://127.0.0.1:43125/v1/resource-sets/token/scene.bin');
-    expect(resolve('http://127.0.0.1:43125/v1/resource-sets/token/textures/base.png')).toBe(
-      'http://127.0.0.1:43125/v1/resource-sets/token/textures/base.png',
+    expect(resolve('scene.bin')).toBe('http://127.0.0.1:43125/resource-sets/token/scene.bin');
+    expect(resolve('http://127.0.0.1:43125/resource-sets/token/textures/base.png')).toBe(
+      'http://127.0.0.1:43125/resource-sets/token/textures/base.png',
     );
     expect(resolve('data:image/png;base64,AA==')).toBe('data:image/png;base64,AA==');
     const embeddedTexture = 'blob:http://127.0.0.1:43125/2f3dbd0d-11ad-4d4c-96ac-71d0f9db8f4e';

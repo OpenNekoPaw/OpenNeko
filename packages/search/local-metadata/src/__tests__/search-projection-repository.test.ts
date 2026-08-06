@@ -60,7 +60,7 @@ describe('Search projection repository', () => {
     await initializeCoreLocalMetadataTables(first);
     await initializeSearchProjectionTables(first);
     await first.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });
@@ -118,12 +118,6 @@ describe('Search projection repository', () => {
         freshness: 'stale',
       }),
     ]);
-    await expect(second.readPartitionRevision(partition)).resolves.toMatchObject({
-      revision: 1,
-      freshness: 'stale',
-      diagnostic: 'search-documents-not-fresh',
-    });
-
     await second.repositories.searchDocuments.insertMissingSearchPartition({
       partition,
       searchPartition: 'media-library',
@@ -145,11 +139,6 @@ describe('Search projection repository', () => {
         },
       ],
       updatedAt: '2026-07-13T01:30:00.000Z',
-    });
-    await expect(second.readPartitionRevision(partition)).resolves.toMatchObject({
-      revision: 2,
-      freshness: 'stale',
-      diagnostic: 'search-documents-not-fresh',
     });
     await expect(
       second.repositories.searchDocuments.query({
@@ -176,7 +165,7 @@ describe('Search projection repository', () => {
     await initializeCoreLocalMetadataTables(first);
     await initializeSearchProjectionTables(first);
     await first.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });
@@ -185,7 +174,7 @@ describe('Search projection repository', () => {
       sources: [
         {
           sourceId: 'semantic:asset-page-1',
-          sourceFingerprint: 'sha256:source-v1',
+          sourceFingerprint: 'sha256:source-content',
           provider: {
             providerId: 'ocr.local',
             model: 'ocr-model',
@@ -241,7 +230,7 @@ describe('Search projection repository', () => {
       records: [
         expect.objectContaining({
           sourceId: 'semantic:asset-page-1',
-          sourceFingerprint: 'sha256:source-v1',
+          sourceFingerprint: 'sha256:source-content',
           provider: expect.objectContaining({ providerId: 'ocr.local', model: 'ocr-model' }),
           coverage: ['ocr', 'vision'],
           freshness: 'fresh',
@@ -254,11 +243,6 @@ describe('Search projection repository', () => {
       ],
       diagnostics: [],
     });
-    await expect(second.readPartitionRevision(partition)).resolves.toMatchObject({
-      revision: 1,
-      freshness: 'fresh',
-    });
-
     await second.dispose();
 
     const database = new DatabaseSync(databasePath, { readOnly: true });
@@ -288,7 +272,7 @@ describe('Search projection repository', () => {
     await initializeCoreLocalMetadataTables(first);
     await initializeSearchProjectionTables(first);
     await first.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });
@@ -297,9 +281,8 @@ describe('Search projection repository', () => {
     const partitionKey = `workspace:${WORKSPACE_ID}:semantic-projection`;
     const sourceRef = { kind: 'file', path: '${WORKSPACE}/story.md' };
     const invalidIndex = {
-      version: 1,
-      indexId: 'semantic:legacy-body',
-      assetId: 'legacy-body',
+      indexId: 'semantic:rejected-body',
+      assetId: 'rejected-body',
       sourceRef,
       updatedAt: '2026-07-13T02:00:00.000Z',
     };
@@ -314,15 +297,11 @@ describe('Search projection repository', () => {
     insertSource.run(
       partitionKey,
       WORKSPACE_ID,
-      'semantic:legacy-body',
-      'legacy-body',
+      'semantic:rejected-body',
+      'rejected-body',
       JSON.stringify(sourceRef),
-      'sha256:legacy',
-      JSON.stringify({
-        providerId: 'legacy.text',
-        indexVersion: 'text-v1',
-        schemaVersion: '1',
-      }),
+      'sha256:rejected-source',
+      JSON.stringify({ providerId: '' }),
       JSON.stringify(['entity-mention']),
       JSON.stringify(invalidIndex),
       '2026-07-13T02:00:00.000Z',
@@ -354,16 +333,16 @@ describe('Search projection repository', () => {
       .run(
         partitionKey,
         WORKSPACE_ID,
-        'semantic:legacy-body',
+        'semantic:rejected-body',
         JSON.stringify({
           segmentId: 'segment-1',
           kind: 'manual',
-          text: 'Complete legacy source body.',
+          text: 'Complete rejected source body.',
           sourceRef: {
             kind: 'document',
             source: { filePath: '${WORKSPACE}/story.md', format: 'markdown' },
           },
-          provenance: { providerId: 'legacy.text', sourceKind: 'document' },
+          provenance: { providerId: 'rejected.text', sourceKind: 'document' },
         }),
       );
     database.close();
@@ -377,7 +356,7 @@ describe('Search projection repository', () => {
       diagnostics: [
         expect.objectContaining({
           code: 'invalid-semantic-projection-record',
-          sourceId: 'semantic:legacy-body',
+          sourceId: 'semantic:rejected-body',
         }),
       ],
     });
@@ -389,14 +368,10 @@ describe('Search projection repository', () => {
         `SELECT provider_json, index_json FROM semantic_sources
           WHERE partition_key = ? AND source_id = ?`,
       )
-      .get(partitionKey, 'semantic:legacy-body');
+      .get(partitionKey, 'semantic:rejected-body');
     preserved.close();
     expect(invalidRow).toMatchObject({
-      provider_json: JSON.stringify({
-        providerId: 'legacy.text',
-        indexVersion: 'text-v1',
-        schemaVersion: '1',
-      }),
+      provider_json: JSON.stringify({ providerId: '' }),
       index_json: JSON.stringify(invalidIndex),
     });
   });
@@ -415,7 +390,7 @@ describe('Search projection repository', () => {
     await initializeCoreLocalMetadataTables(first);
     await initializeSearchProjectionTables(first);
     await first.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });
@@ -465,8 +440,6 @@ describe('Search projection repository', () => {
       records: [expect.objectContaining({ sourceId: source.sourceId })],
       diagnostics: [],
     });
-    await expect(first.readPartitionRevision(partition)).resolves.toMatchObject({ revision: 1 });
-
     await Promise.all([first.dispose(), second.dispose()]);
   });
 });

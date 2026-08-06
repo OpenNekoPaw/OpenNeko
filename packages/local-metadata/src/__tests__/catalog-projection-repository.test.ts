@@ -34,7 +34,7 @@ describe('Catalog projection repository', () => {
       version: null,
       rootId: 'project-agent-skills',
       relativePath: 'storyboard',
-      fingerprint: 'sha256:storyboard-v1',
+      fingerprint: 'sha256:storyboard-initial',
       enabled: true,
       diagnosticCodes: [],
       updatedAt: '2026-07-13T08:00:00.000Z',
@@ -51,10 +51,6 @@ describe('Catalog projection repository', () => {
     await expect(store.repositories.catalogItems.list({ partition })).resolves.toEqual([
       descriptor,
     ]);
-    await expect(store.readPartitionRevision(partition)).resolves.toMatchObject({
-      revision: 1,
-      freshness: 'fresh',
-    });
     await store.dispose();
   });
 
@@ -81,7 +77,7 @@ describe('Catalog projection repository', () => {
           version: null,
           rootId: 'project-agent-skills',
           relativePath: 'storyboard',
-          fingerprint: 'sha256:storyboard-v1',
+          fingerprint: 'sha256:storyboard-initial',
           enabled: true,
           diagnosticCodes: [],
           updatedAt,
@@ -104,7 +100,7 @@ describe('Catalog projection repository', () => {
           version: null,
           rootId: 'project-neko-commands',
           relativePath: 'review.md',
-          fingerprint: 'sha256:review-v1',
+          fingerprint: 'sha256:review-initial',
           enabled: true,
           diagnosticCodes: [],
           updatedAt,
@@ -194,7 +190,7 @@ describe('Catalog projection repository', () => {
           version: '1.0.0',
           rootId: 'personal-processors',
           relativePath: 'waveform.neko-processor.json',
-          fingerprint: 'sha256:waveform-v1',
+          fingerprint: 'sha256:waveform-initial',
           enabled: true,
           diagnosticCodes: [],
           updatedAt,
@@ -212,10 +208,6 @@ describe('Catalog projection repository', () => {
       }),
     ).resolves.toEqual({ deletedRows: 1 });
     await expect(store.repositories.catalogItems.list({ partition })).resolves.toEqual([]);
-    await expect(store.readPartitionRevision(partition)).resolves.toMatchObject({
-      freshness: 'stale',
-      diagnostic: 'cache-cleared:rebuild',
-    });
     await store.dispose();
   });
 });
@@ -229,7 +221,7 @@ async function openCatalogStore() {
   await initializeCoreLocalMetadataTables(store);
   await initializeCatalogProjectionTables(store);
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: WORKSPACE_ID },
+    identity: { workspaceId: WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },
     seenAt: '2026-07-13T00:00:00.000Z',
   });

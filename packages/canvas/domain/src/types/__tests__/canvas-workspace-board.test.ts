@@ -17,7 +17,6 @@ import type { GeneratedOutputContentLocator } from '@neko/content';
 const generatedLocator: GeneratedOutputContentLocator = {
   kind: 'generated-output',
   outputId: 'shot-1',
-  revision: 'rev-shot-1',
   digest: 'sha256:shot-1',
   path: 'neko/generated/image/shot-1.png',
 };
@@ -148,7 +147,7 @@ describe('Canvas Workspace Board delivery contract', () => {
           ...sourceArtifact(),
           provenance: {
             ...sourceArtifact().provenance,
-            revision: 'source:sha256:shot-2',
+            contentFingerprint: 'sha256:shot-2',
           },
         },
       ],
@@ -184,8 +183,8 @@ describe('Canvas Workspace Board delivery contract', () => {
     const second = request();
 
     expect(first.process.deliveryId).toBe(second.process.deliveryId);
-    expect(first.artifacts.map(({ provenance }) => provenance.revision)).toEqual(
-      second.artifacts.map(({ provenance }) => provenance.revision),
+    expect(first.artifacts.map(({ provenance }) => provenance.contentFingerprint)).toEqual(
+      second.artifacts.map(({ provenance }) => provenance.contentFingerprint),
     );
     expect(JSON.stringify(first)).not.toMatch(/activeCanvas|recentCanvas|conversationId|binding/iu);
   });
@@ -212,7 +211,7 @@ describe('Canvas Workspace Board delivery contract', () => {
             jobRef: { kind: 'generation', jobId: 'operation-1' },
             summary: {
               prompt: 'A silent megastructure under hard light',
-              model: 'image-model-v2',
+              model: 'image-model',
               sourceNodeId: 'shot-node-1',
               aspectRatio: '16:9',
               width: 2048,
@@ -255,7 +254,7 @@ describe('Canvas Workspace Board delivery contract', () => {
       renderUri: 'neko-media://preview/shot-1',
       cachePath: '.neko/.cache/generated/shot-1.png',
     } as unknown as CanvasWorkspaceProjectionRequest;
-    const legacyRef = request({
+    const invalidRef = request({
       artifacts: [
         {
           ...outputArtifact(),
@@ -266,7 +265,7 @@ describe('Canvas Workspace Board delivery contract', () => {
 
     const invalidCodes = validateCanvasWorkspaceProjectionRequest(invalid).map(({ code }) => code);
     expect(invalidCodes.filter((code) => code === 'runtime-value-forbidden')).toHaveLength(3);
-    expect(validateCanvasWorkspaceProjectionRequest(legacyRef).map(({ code }) => code)).toContain(
+    expect(validateCanvasWorkspaceProjectionRequest(invalidRef).map(({ code }) => code)).toContain(
       'invalid-content-locator',
     );
   });
@@ -339,7 +338,7 @@ function outputArtifact(): CanvasWorkspaceResourceProjectionArtifact {
       jobRef: { kind: 'generation', jobId: 'operation-1' },
       summary: {
         prompt: 'A silent megastructure under hard light',
-        model: 'image-model-v2',
+        model: 'image-model',
         sourceNodeId: 'shot-node-1',
         aspectRatio: '16:9',
       },
@@ -350,14 +349,14 @@ function outputArtifact(): CanvasWorkspaceResourceProjectionArtifact {
 
 function provenance(
   artifactId: string,
-  revision: string,
+  contentFingerprint: string,
   kind: CanvasWorkspaceProjectionArtifact['kind'],
   role: 'source' | 'analysis' | 'output',
 ) {
   return {
     deliveryId: 'delivery:material-analysis:1',
     artifactId,
-    revision,
+    contentFingerprint,
     kind,
     role,
     sourceId: `artifact:${artifactId}`,
@@ -375,7 +374,7 @@ function generatedImage(): GeneratedImage {
     mimeType: 'image/png',
     generatedAt: '2026-07-15T00:00:00.000Z',
     prompt: 'A silent megastructure under hard light',
-    model: 'image-model-v2',
+    model: 'image-model',
     sourceNodeId: 'shot-node-1',
     width: 2048,
     height: 1152,
@@ -390,7 +389,7 @@ function generatedImage(): GeneratedImage {
         operationId: 'operation-1',
         runId: 'run-1',
         providerId: 'image-provider',
-        modelId: 'image-model-v2',
+        modelId: 'image-model',
       },
     }),
   };

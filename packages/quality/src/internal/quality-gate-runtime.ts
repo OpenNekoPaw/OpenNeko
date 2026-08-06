@@ -150,15 +150,6 @@ export function selectQualityProfile(
   return profile;
 }
 
-export function rejectLegacyMediaPathRequest(value: unknown): never {
-  if (isRecord(value) && ('mediaPath' in value || hasSceneMediaPath(value['scenes']))) {
-    throw new Error(
-      'legacy-path-target-rejected: Quality review requires QualityTarget.contentLocator or projectRef.',
-    );
-  }
-  throw new Error('invalid-quality-target: Quality review requires a canonical QualityTarget.');
-}
-
 export function assertExternalPerceptionTarget(target: QualityTarget): ContentLocator {
   const validation = validateQualityTarget(target);
   if (!validation.ok) throw new Error(validation.diagnostics.map((item) => item.code).join(', '));
@@ -568,9 +559,6 @@ function parsePerceptionResponse(content: string | unknown[]): {
       ],
     };
   }
-}
-function hasSceneMediaPath(value: unknown): boolean {
-  return Array.isArray(value) && value.some((item) => isRecord(item) && 'mediaPath' in item);
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

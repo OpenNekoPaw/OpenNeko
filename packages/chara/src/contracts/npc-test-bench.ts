@@ -536,7 +536,18 @@ export function isNpcEvaluationSuggestion(value: unknown): value is NpcEvaluatio
 export function isNpcEvaluationReport(value: unknown): value is NpcEvaluationReport {
   if (!isRecord(value)) return false;
   return (
-    !Object.hasOwn(value, 'version') &&
+    hasOnlyFields(
+      value,
+      new Set([
+        'createdAt',
+        'entityRef',
+        'summary',
+        'scores',
+        'findings',
+        'suggestions',
+        'evaluatorModelId',
+      ]),
+    ) &&
     isNonEmptyString(value['createdAt']) &&
     isCreativeEntityRef(value['entityRef']) &&
     isNonEmptyString(value['summary']) &&
@@ -553,7 +564,19 @@ export function isNpcEvaluationReport(value: unknown): value is NpcEvaluationRep
 export function isNpcTranscriptArtifact(value: unknown): value is NpcTranscriptArtifact {
   if (!isRecord(value)) return false;
   return (
-    !Object.hasOwn(value, 'version') &&
+    hasOnlyFields(
+      value,
+      new Set([
+        'createdAt',
+        'entityRef',
+        'mode',
+        'profileSnapshot',
+        'transcript',
+        'evaluation',
+        'profileHash',
+        'sessionId',
+      ]),
+    ) &&
     isNonEmptyString(value['createdAt']) &&
     isCreativeEntityRef(value['entityRef']) &&
     isNpcTestMode(value['mode']) &&
@@ -629,4 +652,11 @@ function includesString<T extends string>(values: readonly T[], value: unknown):
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

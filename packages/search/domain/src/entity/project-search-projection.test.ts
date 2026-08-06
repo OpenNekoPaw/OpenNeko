@@ -71,21 +71,12 @@ describe('Entity project search projections', () => {
       projectRoot: '/workspace',
       entities: {
         load: async () => ({
-          schemaVersion: 1,
           projectId: 'project-neko',
-          revision: 1,
           entities: [],
         }),
       },
       derivedProjection: {
         partition,
-        readRevision: async () => ({
-          partition,
-          revision: 1,
-          freshness: 'fresh',
-          diagnostic: null,
-          updatedAt: '2026-07-19T00:00:00.000Z',
-        }),
         repository: {
           list: async () => ({
             records: [
@@ -155,7 +146,7 @@ describe('Entity project search projections', () => {
     ).resolves.toEqual(projected);
   });
 
-  it('projects canonical lifecycle and binding attention without legacy Entity readers', async () => {
+  it('projects canonical lifecycle and binding attention from the Entity repository', async () => {
     const partition = {
       scope: 'workspace' as const,
       workspaceId: 'workspace-1',
@@ -165,9 +156,7 @@ describe('Entity project search projections', () => {
       projectRoot: '/workspace',
       entities: {
         load: async () => ({
-          schemaVersion: 1,
           projectId: 'project-neko',
-          revision: 2,
           entities: [
             projectEntity('character-rin', 'Rin', { state: 'active' }, true),
             projectEntity('location-school', 'School', {
@@ -179,7 +168,6 @@ describe('Entity project search projections', () => {
       },
       derivedProjection: {
         partition,
-        readRevision: async () => ({ revision: 1 }),
         repository: {
           list: async () => ({
             records: [

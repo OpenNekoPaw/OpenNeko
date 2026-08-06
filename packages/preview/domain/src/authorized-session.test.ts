@@ -30,7 +30,7 @@ describe('Authorized Preview session contract', () => {
     ).toThrow('unsupported fields');
     expect(() =>
       parseAuthorizedPreviewSessionProjection({
-        identity: { ...identity(), revision: 1 },
+        identity: { ...identity(), unexpectedField: 1 },
         status: 'ready',
         descriptor: descriptor(),
       }),

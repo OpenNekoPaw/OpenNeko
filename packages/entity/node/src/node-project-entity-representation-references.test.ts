@@ -21,7 +21,7 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
     expect(before).toMatchObject({
       references: [
         { kind: 'workspace-file', path: 'neko/assets/Library/rin.png' },
-        { kind: 'generated-output', outputId: 'output-rin', revision: '1', digest: 'a'.repeat(64) },
+        { kind: 'generated-output', outputId: 'output-rin', digest: 'a'.repeat(64) },
       ],
     });
 
@@ -37,34 +37,6 @@ describe('NodeProjectEntityRepresentationReferenceService', () => {
     expect(after.fingerprint).not.toBe(before.fingerprint);
     await expect(createRepository(workspacePath).load()).resolves.toMatchObject({
       entities: [{ representations: [{ target: { path: 'media/rin.png' } }, expect.anything()] }],
-    });
-  });
-
-  it('never consults or rewrites a retained non-canonical binding file', async () => {
-    const workspacePath = await createWorkspace();
-    await writeCanonicalDocument(workspacePath);
-    await writeJson(workspacePath, 'neko/entity-representation-bindings.json', {
-      version: 2,
-      bindings: [
-        {
-          id: 'legacy-binding',
-          entityId: 'legacy',
-          entityKind: 'character',
-          representation: { kind: 'workspace-file', path: 'legacy.png' },
-          role: 'portrait',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          updatedAt: '2026-08-05T00:00:00.000Z',
-        },
-      ],
-    });
-    const service = createService(workspacePath);
-
-    expect(JSON.stringify(await service.inspect())).not.toContain('legacy.png');
-    await service.rewriteWorkspacePaths({ replacements: new Map() });
-    await expect(createRepository(workspacePath).load()).resolves.toMatchObject({
-      entities: [{ entityId: 'character-rin' }],
     });
   });
 
@@ -152,7 +124,6 @@ async function writeCanonicalDocument(workspacePath: string): Promise<void> {
             target: {
               kind: 'generated-output',
               outputId: 'output-rin',
-              revision: '1',
               digest: 'a'.repeat(64),
               path: 'generated/rin.png',
             },

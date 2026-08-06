@@ -7,7 +7,6 @@ export {
   type AssetSearchProjection,
   type DocumentSearchProjection,
   type ProjectSearchProviderContribution,
-  type ProjectSearchProviderRegistryOptions,
   type ProjectSearchProviderRegistry,
   type SearchProjectionAdapterOptions,
   type StorySearchProjection,

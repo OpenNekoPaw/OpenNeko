@@ -23,11 +23,10 @@ const identity = {
 } as const;
 
 describe('Canvas Host runtime contract', () => {
-  it('builds revision-bound intents and parses authoritative snapshots', () => {
+  it('builds identity-bound intents and parses authoritative snapshots', () => {
     const request = createCanvasHostIntentRequest({
       requestId: 'request-1',
       commandId: 'command-1',
-      expectedRevision: 4,
       identity,
       intent: {
         type: 'author-material',
@@ -45,7 +44,6 @@ describe('Canvas Host runtime contract', () => {
     });
     const snapshot = parseCanvasHostSnapshot(validSnapshot());
 
-    expect(request.expectedRevision).toBe(4);
     expect(request.identity.documentId).toBe('canvas-document-1');
     expect(snapshot.canvas.name).toBe(DEFAULT_CANVAS_DATA.name);
   });
@@ -54,7 +52,6 @@ describe('Canvas Host runtime contract', () => {
     const source = createCanvasHostIntentRequest({
       requestId: 'request-source',
       commandId: 'command-source',
-      expectedRevision: 4,
       identity,
       intent: {
         type: 'request-source',
@@ -65,7 +62,6 @@ describe('Canvas Host runtime contract', () => {
     const draft = createCanvasHostIntentRequest({
       requestId: 'request-generation-draft',
       commandId: 'command-generation-draft',
-      expectedRevision: 4,
       identity,
       intent: {
         type: 'request-generation-draft',
@@ -98,7 +94,7 @@ describe('Canvas Host runtime contract', () => {
     expect(() =>
       parseCanvasHostSnapshot({
         ...validSnapshot(),
-        schemaVersion: 5,
+        unexpectedField: 5,
       }),
     ).toThrowError(
       expect.objectContaining<Partial<CanvasHostRuntimeContractError>>({
@@ -170,7 +166,6 @@ describe('Canvas Host runtime contract', () => {
 function validSnapshot() {
   return {
     identity,
-    revision: 4,
     dirty: false,
     canvas: DEFAULT_CANVAS_DATA,
     presentation: {

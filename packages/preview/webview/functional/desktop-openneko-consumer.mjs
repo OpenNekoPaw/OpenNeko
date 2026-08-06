@@ -40,7 +40,9 @@ export const previewOpenNekoConsumerScenario = Object.freeze({
       if (sessionUrls.length === 0) {
         throw new Error(`Preview ${definition.key} did not expose an OpenNeko resource request.`);
       }
-      await click('.neko-preview-root__actions button:last-child');
+      await click(
+        '.desktop-workbench-slot-deck__item:not([hidden]) [data-workbench-main-panel][data-active="true"] .neko-workbench-editor-tab[data-active="true"] .neko-workbench-editor-tab__close',
+      );
       await waitForPreviewClosed(evaluate);
       const releasedStatuses = [];
       for (const url of sessionUrls) {
@@ -165,7 +167,7 @@ async function waitForPreviewClosed(evaluate) {
     if (!(await evaluate(`Boolean(document.querySelector('.neko-preview-root'))`))) return;
     await delay(100);
   }
-  throw new Error('Preview Root remained mounted after its package-owned close action.');
+  throw new Error('Preview Root remained mounted after its Desktop Workbench tab was closed.');
 }
 
 async function waitForReleasedUrl(evaluate, url) {

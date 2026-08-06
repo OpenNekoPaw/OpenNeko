@@ -9,9 +9,9 @@ describe('source Model Viewer host', () => {
         source: { kind: 'workspace-file', path: 'models/descriptor-1.glb' },
         sourceFingerprint: 'fingerprint-1',
         format: 'glb',
-        entryUri: 'http://127.0.0.1:43125/v1/resources/descriptor-1',
+        entryUri: 'http://127.0.0.1:43125/resources/descriptor-1',
         uriMap: {
-          'model.glb': 'http://127.0.0.1:43125/v1/resources/descriptor-1',
+          'model.glb': 'http://127.0.0.1:43125/resources/descriptor-1',
         },
         sizeBytes: 100,
       },
@@ -47,9 +47,9 @@ describe('source Model Viewer host', () => {
         source: { kind: 'workspace-file', path: 'models/descriptor-strict.glb' },
         sourceFingerprint: 'fingerprint-strict',
         format: 'glb',
-        entryUri: 'http://127.0.0.1:43125/v1/resources/descriptor-strict',
+        entryUri: 'http://127.0.0.1:43125/resources/descriptor-strict',
         uriMap: {
-          'model.glb': 'http://127.0.0.1:43125/v1/resources/descriptor-strict',
+          'model.glb': 'http://127.0.0.1:43125/resources/descriptor-strict',
         },
         sizeBytes: 100,
       },

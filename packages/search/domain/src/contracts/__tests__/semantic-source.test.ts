@@ -28,7 +28,7 @@ describe('semantic source contracts', () => {
         portablePath: '${WORKSPACE}/docs/story.md',
         format: 'markdown',
         analysisMode: 'link-existing',
-        fingerprint: 'sha256:source-v1',
+        fingerprint: 'sha256:source-content',
         sizeBytes: 120,
         modifiedAtMs: 10,
       }),
@@ -68,7 +68,7 @@ describe('semantic source contracts', () => {
         portablePath: '${WORKSPACE}/config.json',
         format: 'json',
         analysisMode: 'link-existing',
-        fingerprint: 'sha256:source-v1',
+        fingerprint: 'sha256:source-content',
         sizeBytes: 120,
         modifiedAtMs: 10,
       }),
@@ -107,7 +107,7 @@ describe('semantic source contracts', () => {
     expect(isCompactMediaSemanticIndex({ ...index, textSegments: [] })).toBe(false);
   });
 
-  it('rejects removed creative schema and semantic index version fields', () => {
+  it('rejects unknown creative schema and semantic index fields', () => {
     expect(
       isSemanticSourceDescriptor({
         sourceId: 'workspace:story.json',
@@ -121,12 +121,15 @@ describe('semantic source contracts', () => {
         fingerprint: 'sha256:story',
         sizeBytes: 120,
         modifiedAtMs: 10,
-        creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+        creativeSchema: {
+          schemaId: 'openneko.story',
+          unexpectedField: 'value',
+        },
       }),
     ).toBe(false);
     expect(
       isCompactMediaSemanticIndex({
-        version: 1,
+        unexpectedField: 1,
         assetId: 'story',
         sourceRef: { kind: 'file', path: '${WORKSPACE}/story.json' },
       }),

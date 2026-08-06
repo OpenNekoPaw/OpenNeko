@@ -23,7 +23,7 @@ const scope: SemanticSourceRuntimeScope = {
 
 describe('SemanticSourceCoordinator', () => {
   it('deduplicates event and reconciliation work by fingerprint', async () => {
-    const fixture = createFixture([file('story.md', 'sha256:v1')]);
+    const fixture = createFixture([file('story.md', 'sha256:story-content')]);
     const coordinator = fixture.coordinator;
     coordinator.setScopes([scope]);
     await coordinator.reconcile('workspace');
@@ -33,7 +33,7 @@ describe('SemanticSourceCoordinator', () => {
   });
 
   it('reconciliation discovers missed copies and deletes disappeared sources', async () => {
-    const fixture = createFixture([file('copied.fountain', 'sha256:v1')]);
+    const fixture = createFixture([file('copied.fountain', 'sha256:copied-content')]);
     fixture.stored.set('workspace:old.md', descriptor('old.md', 'sha256:old'));
     fixture.storedFingerprints.set('workspace:old.md', 'sha256:old');
     fixture.coordinator.setScopes([scope]);
@@ -54,8 +54,8 @@ describe('SemanticSourceCoordinator', () => {
   });
 
   it('suppresses overlapping roots and rejects stale analyzer output', async () => {
-    const fixture = createFixture([file('story.md', 'sha256:v1')]);
-    fixture.currentFingerprint = 'sha256:v2';
+    const fixture = createFixture([file('story.md', 'sha256:original-content')]);
+    fixture.currentFingerprint = 'sha256:changed-content';
     const diagnostics = fixture.coordinator.setScopes([
       scope,
       {

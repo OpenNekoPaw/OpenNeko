@@ -66,8 +66,6 @@ describe('workspace semantic/entity metadata binding', () => {
         endLine: 1,
       }),
     ).resolves.toHaveLength(2);
-    await expect(binding.readSemanticRevision()).resolves.toMatchObject({ freshness: 'fresh' });
-    await expect(binding.readEntityRevision()).resolves.toMatchObject({ freshness: 'fresh' });
 
     await binding.markSourceStale(
       request.source.sourceId,
@@ -167,7 +165,7 @@ function commitRequest(): SemanticEntitySourceCommitRequest {
     portablePath: `${'${WORKSPACE}'}/story.fountain`,
     format: 'fountain' as const,
     analysisMode: 'discover-candidates' as const,
-    fingerprint: 'sha256:story-v1',
+    fingerprint: 'sha256:story-content',
     sizeBytes: 100,
     modifiedAtMs: 1,
   };
@@ -233,7 +231,7 @@ function occurrence(input: {
   const {
     sourceId = 'workspace:story.fountain',
     sourceKind = 'workspace',
-    sourceFingerprint = 'sha256:story-v1',
+    sourceFingerprint = 'sha256:story-content',
     ...occurrenceInput
   } = input;
   return {

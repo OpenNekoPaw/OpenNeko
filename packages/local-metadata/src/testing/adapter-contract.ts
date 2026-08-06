@@ -30,16 +30,11 @@ export async function runLocalMetadataAdapterContract(
   await initializeMediaMetadataTables(source);
 
   await source.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: CONTRACT_WORKSPACE_ID },
+    identity: { workspaceId: CONTRACT_WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/contract-workspace' },
     seenAt: '2026-07-13T00:00:00.000Z',
   });
 
-  const partition = {
-    scope: 'workspace' as const,
-    workspaceId: CONTRACT_WORKSPACE_ID,
-    domain: 'contract',
-  };
   await source.transaction(
     { mode: 'cache-write', ownership: 'cache', operation: 'adapter-contract-commit' },
     async ({ repositories }) => {
@@ -51,12 +46,6 @@ export async function runLocalMetadataAdapterContract(
         source: 'import',
         model: null,
         createdAt: '2026-07-13T00:00:00.000Z',
-        updatedAt: '2026-07-13T01:00:00.000Z',
-      });
-      await repositories.projectionVersions.increment({
-        partition,
-        freshness: 'fresh',
-        diagnostic: null,
         updatedAt: '2026-07-13T01:00:00.000Z',
       });
     },
@@ -101,10 +90,6 @@ export async function runLocalMetadataAdapterContract(
     conversations[0]?.conversationId === 'contract-conversation',
     'conversation query returned the wrong record',
   );
-  assert(
-    (await source.readPartitionRevision(partition))?.revision === 1,
-    'partition revision must commit with the projection',
-  );
   const resourceCachePartition = {
     scope: 'workspace' as const,
     workspaceId: CONTRACT_WORKSPACE_ID,
@@ -119,10 +104,6 @@ export async function runLocalMetadataAdapterContract(
     (await source.repositories.resourceCache.list(resourceCachePartition))[0]?.variants[0]
       ?.relativePath === 'contract/thumbnail.jpg',
     'ResourceCache entry and variant must round-trip through the adapter',
-  );
-  assert(
-    (await source.readPartitionRevision(resourceCachePartition))?.revision === 1,
-    'ResourceCache replacement must increment its partition revision',
   );
   const mediaMetadataPartition = {
     scope: 'workspace' as const,
@@ -149,10 +130,6 @@ export async function runLocalMetadataAdapterContract(
     (await source.repositories.mediaMetadata.get(mediaMetadataPartition, 'media/contract.mp4'))
       ?.metadata.codec === 'h264',
     'Media probe metadata must round-trip through the adapter',
-  );
-  assert(
-    (await source.readPartitionRevision(mediaMetadataPartition))?.revision === 1,
-    'Media metadata upsert must increment its partition revision',
   );
   assert((await source.integrityCheck()).ok, 'integrity_check must return ok');
   await initializeCoreLocalMetadataTables(source);

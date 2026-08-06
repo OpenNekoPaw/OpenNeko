@@ -82,7 +82,7 @@ export function validateProjectQualityResult<TData>(
 ): ProjectQualityContractValidationResult {
   const diagnostics: QualityDiagnostic[] = [];
   if (
-    Object.hasOwn(result, 'version') ||
+    !hasOnlyFields(result, new Set(['requestId', 'operation', 'ok', 'data', 'diagnostics'])) ||
     !result.requestId.trim() ||
     !isProjectQualityOperation(result.operation)
   ) {
@@ -90,7 +90,7 @@ export function validateProjectQualityResult<TData>(
       code: 'invalid-quality-gate-result',
       severity: 'error',
       message:
-        'ProjectQuality result has removed fields, an invalid operation, or empty request id.',
+        'ProjectQuality result has unknown fields, an invalid operation, or empty request id.',
     });
   }
   if (result.ok && result.data === undefined) {
@@ -151,4 +151,8 @@ function isProjectQualityOperation(value: unknown): value is ProjectQualityOpera
     value === 'probe-runtime' ||
     value === 'check-export-readiness'
   );
+}
+
+function hasOnlyFields(value: object, allowedFields: ReadonlySet<string>): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

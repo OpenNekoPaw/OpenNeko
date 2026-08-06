@@ -4,8 +4,8 @@ import {
   assertMarkdownResolutionAssociation,
   assertMarkdownSourceRange,
   createMarkdownAnnotationId,
+  createMarkdownDocumentId,
   createMarkdownNodeId,
-  createMarkdownRevision,
   createMarkdownSessionId,
   createMarkdownSourceRange,
   parseNormalizedMarkdown,
@@ -151,7 +151,7 @@ describe('normalized Markdown contracts', () => {
 
     const snapshot: MarkdownResolutionSnapshot = {
       sessionId: document.sessionId,
-      revision: document.revision,
+      documentId: document.documentId,
       resolutions: [
         {
           kind: 'node',
@@ -178,7 +178,7 @@ describe('normalized Markdown contracts', () => {
       assertMarkdownResolutionAssociation(
         snapshot,
         createMarkdownSessionId('other'),
-        document.revision,
+        document.documentId,
       ),
     ).toThrow(/cannot be associated/u);
 
@@ -199,10 +199,9 @@ describe('normalized Markdown contracts', () => {
 
   it('validates branded identity constructors', () => {
     expect(createMarkdownSessionId('test')).toMatch(/^md-session:/u);
-    expect(createMarkdownRevision(1)).toBe(1);
+    expect(createMarkdownDocumentId('test')).toBe('md-document:test');
     expect(createMarkdownNodeId('md-node:test')).toBe('md-node:test');
     expect(createMarkdownAnnotationId('md-annotation:test')).toBe('md-annotation:test');
-    expect(() => createMarkdownRevision(0)).toThrow();
     expect(() => createMarkdownNodeId('test')).toThrow();
     expect(() => createMarkdownAnnotationId('test')).toThrow();
   });
@@ -237,7 +236,7 @@ describe('Markdown resolution orchestration', () => {
     expect(ready.status).toBe('ready');
     if (ready.status === 'ready') {
       expect(ready.snapshot.sessionId).toBe(document.sessionId);
-      expect(ready.snapshot.revision).toBe(document.revision);
+      expect(ready.snapshot.documentId).toBe(document.documentId);
       expect(Object.isFrozen(ready.snapshot)).toBe(true);
     }
 

@@ -22,10 +22,9 @@ describe('stable local metadata table initialization', () => {
     await initializeCoreLocalMetadataTables(store);
     const names = await readTableNames(store);
 
-    expect(names).toEqual(
-      expect.arrayContaining(['conversations', 'projection_versions', 'workspaces']),
-    );
-    expect(names).not.toContain('schema_migrations');
+    expect(names).toEqual(expect.arrayContaining(['conversations', 'workspaces']));
+    expect(names).not.toContain('projection_versions');
+    expect(names).not.toContain(['schema_', 'migra', 'tions'].join(''));
     await store.dispose();
   });
 

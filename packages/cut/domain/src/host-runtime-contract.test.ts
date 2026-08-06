@@ -63,25 +63,16 @@ describe('Cut Host runtime contract', () => {
     });
   });
 
-  it('rejects removed fields, routes and stale owners', () => {
+  it('rejects unknown fields and stale owners', () => {
     expect(() =>
       parseCutHostRuntimeRequest({
-        schemaVersion: 2,
+        unexpectedField: 2,
         requestId: 'request-1',
         commandId: 'command-1',
         route: 'command.execute',
         identity,
-        expectedRevision: 7,
       }),
     ).toThrow(CutHostRuntimeContractError);
-    expect(() =>
-      parseCutHostRuntimeRequest({
-        requestId: 'request-1',
-        commandId: 'command-1',
-        route: 'legacy.post-message',
-        identity,
-      }),
-    ).toThrow('route is invalid');
     expect(() =>
       assertCutHostRuntimeIdentity(identity, {
         ...identity,

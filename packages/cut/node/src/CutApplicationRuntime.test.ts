@@ -1,5 +1,6 @@
 import {
   CUT_HOST_RUNTIME_ROUTES,
+  DEFAULT_CUT_HOST_PRESENTATION,
   createOtioTimeline,
   serializeOtio,
   type CutDocumentStorage,
@@ -58,6 +59,67 @@ describe('CutApplicationRuntime', () => {
       },
     });
     expect(authorizeSession).toHaveBeenCalledOnce();
+    await runtime.dispose();
+  });
+
+  it('opens one session for concurrent first commands and serializes both operations', async () => {
+    const identity = fixtureIdentity();
+    const baseStorage = inMemoryStorage();
+    let notifyReadStarted: () => void = () => undefined;
+    let releaseRead: () => void = () => undefined;
+    const readStarted = new Promise<void>((resolve) => {
+      notifyReadStarted = resolve;
+    });
+    const readGate = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const storage: CutDocumentStorage = {
+      ...baseStorage,
+      read: vi.fn(async () => {
+        notifyReadStarted();
+        await readGate;
+        return baseStorage.read(identity.documentId);
+      }),
+    };
+    const authorizeSession = vi.fn(async () => ({
+      documentPath: '/fixture/cuts/story.otio',
+      workspacePath: '/fixture',
+      storage,
+    }));
+    const runtime = new CutApplicationRuntime({
+      authorizeSession,
+      authorizeNewSession: authorizeSession,
+      resolveResourcePath: async () => {
+        throw new Error('Resource resolution is not part of this scenario.');
+      },
+      readText: async () => {
+        throw new Error('Text reading is not part of this scenario.');
+      },
+      createPreviewMediaAdapter: () => mediaAdapter(),
+    });
+
+    const first = runtime.execute(identity.windowId, {
+      requestId: 'presentation-request-1',
+      commandId: 'presentation-command-1',
+      route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
+      identity,
+      payload: { ...DEFAULT_CUT_HOST_PRESENTATION, previewVolume: 0.5 },
+    });
+    await readStarted;
+    const second = runtime.execute(identity.windowId, {
+      requestId: 'presentation-request-2',
+      commandId: 'presentation-command-2',
+      route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
+      identity,
+      payload: { ...DEFAULT_CUT_HOST_PRESENTATION, previewVolume: 0.25 },
+    });
+    releaseRead();
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(storage.read).toHaveBeenCalledOnce();
+    await expect(runtime.getSnapshot(identity.windowId, identity)).resolves.toMatchObject({
+      presentation: { previewVolume: 0.25 },
+    });
     await runtime.dispose();
   });
 
@@ -241,6 +303,7 @@ describe('CutApplicationRuntime', () => {
   });
 
   it('rejects removed request fields without affecting independent sessions', async () => {
+    const unexpectedField = 'unexpectedField';
     const firstIdentity = fixtureIdentity();
     const secondIdentity: CutHostRuntimeIdentity = {
       ...firstIdentity,
@@ -276,13 +339,13 @@ describe('CutApplicationRuntime', () => {
 
     await expect(
       runtime.execute(firstIdentity.windowId, {
-        schemaVersion: 1,
+        [unexpectedField]: 1,
         requestId: 'invalid-request',
         commandId: 'invalid-command',
         route: CUT_HOST_RUNTIME_ROUTES.snapshotGet,
         identity: firstIdentity,
       }),
-    ).rejects.toThrow('unsupported fields: schemaVersion');
+    ).rejects.toThrow('unsupported fields: unexpectedField');
 
     const secondResult = await runtime.execute(secondIdentity.windowId, {
       requestId: 'second-request',

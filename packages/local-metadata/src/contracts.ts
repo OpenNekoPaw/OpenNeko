@@ -1,5 +1,4 @@
 import type { NekoMetadataOwnership } from './storage';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from './model';
 import type { LocalMetadataRepositories } from './repositories';
 
 export type LocalMetadataStoreState = 'closed' | 'open' | 'disposed';
@@ -115,10 +114,6 @@ export interface LocalMetadataStore {
     options: LocalMetadataTransactionOptions,
     operation: (context: LocalMetadataTransactionContext) => Promise<T>,
   ): Promise<T>;
-
-  readPartitionRevision(
-    partition: LocalMetadataPartition,
-  ): Promise<LocalMetadataPartitionRevision | null>;
 
   backup(request: LocalMetadataBackupRequest): Promise<LocalMetadataBackupResult>;
 

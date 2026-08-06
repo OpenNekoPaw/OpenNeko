@@ -45,8 +45,8 @@ describe('Entity/Asset projection repository', () => {
     expect(names).toEqual(['entity_asset_projections']);
   });
 
-  it('reinitializes stable tables without deleting candidate or binding projections', async () => {
-    const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-candidate-v2-'));
+  it('reinitializes stable tables and isolates an invalid projection row', async () => {
+    const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-stable-projections-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const store = createNodeSqliteLocalMetadataStore({ homedir });
@@ -54,7 +54,7 @@ describe('Entity/Asset projection repository', () => {
     await initializeCoreLocalMetadataTables(store);
     await initializeEntityAssetProjectionTables(store);
     await store.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });
@@ -80,7 +80,7 @@ describe('Entity/Asset projection repository', () => {
       updatedAt,
     });
     await store.transaction(
-      { mode: 'cache-write', ownership: 'cache', operation: 'seed-retired-candidate-row' },
+      { mode: 'cache-write', ownership: 'cache', operation: 'seed-invalid-projection-row' },
       async ({ sql }) => {
         const rows = await sql.all(
           `SELECT partition_key, partition_scope, workspace_id
@@ -89,21 +89,12 @@ describe('Entity/Asset projection repository', () => {
           ['node:asset-rin'],
         );
         const row = rows[0]!;
-        const retiredValue = {
-          projectionId: 'candidate:retired',
-          kind: 'entity-candidate',
-          sourceId: 'retired-candidate-runtime',
-          candidateId: 'candidate:retired',
+        const invalidValue = {
+          projectionId: 'projection:invalid',
+          kind: 'asset-graph-node',
+          sourceId: 'invalid-source',
           freshness: 'fresh',
-          value: {
-            id: 'candidate:retired',
-            kind: 'character',
-            name: 'Retired',
-            status: 'open',
-            identityBasis: 'user-named',
-            provenance: [],
-            sourceRefs: [],
-          },
+          value: { unexpectedField: true },
           updatedAt,
         };
         await sql.run(
@@ -111,49 +102,14 @@ describe('Entity/Asset projection repository', () => {
              partition_key, partition_scope, workspace_id, projection_kind, projection_id,
              source_id, entity_id, related_entity_id, candidate_id, asset_ref, freshness,
              projection_json, updated_at
-           ) VALUES (?, ?, ?, 'entity-candidate', ?, ?, NULL, NULL, ?, NULL, 'fresh', ?, ?)`,
+           ) VALUES (?, ?, ?, 'asset-graph-node', ?, ?, NULL, NULL, NULL, NULL, 'fresh', ?, ?)`,
           [
             String(row['partition_key']),
             String(row['partition_scope']),
             String(row['workspace_id']),
-            retiredValue.projectionId,
-            retiredValue.sourceId,
-            retiredValue.candidateId,
-            JSON.stringify(retiredValue),
-            updatedAt,
-          ],
-        );
-        const retiredBinding = {
-          projectionId: 'binding:retired',
-          kind: 'binding-availability',
-          sourceId: 'retired-binding-runtime',
-          entityId: 'character-retired',
-          freshness: 'fresh',
-          value: {
-            bindingId: 'binding:retired',
-            entityId: 'character-retired',
-            entityKind: 'character',
-            representation: { kind: 'workspace-file', path: 'retired.png' },
-            role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
-          },
-          updatedAt,
-        };
-        await sql.run(
-          `INSERT INTO entity_asset_projections (
-             partition_key, partition_scope, workspace_id, projection_kind, projection_id,
-             source_id, entity_id, related_entity_id, candidate_id, asset_ref, freshness,
-             projection_json, updated_at
-           ) VALUES (?, ?, ?, 'binding-availability', ?, ?, ?, NULL, NULL, NULL, 'fresh', ?, ?)`,
-          [
-            String(row['partition_key']),
-            String(row['partition_scope']),
-            String(row['workspace_id']),
-            retiredBinding.projectionId,
-            retiredBinding.sourceId,
-            retiredBinding.entityId,
-            JSON.stringify(retiredBinding),
+            invalidValue.projectionId,
+            invalidValue.sourceId,
+            JSON.stringify(invalidValue),
             updatedAt,
           ],
         );
@@ -169,11 +125,7 @@ describe('Entity/Asset projection repository', () => {
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
           code: 'invalid-entity-asset-projection',
-          projectionId: 'candidate:retired',
-        }),
-        expect.objectContaining({
-          code: 'invalid-entity-asset-projection',
-          projectionId: 'binding:retired',
+          projectionId: 'projection:invalid',
         }),
       ]),
     });
@@ -189,7 +141,7 @@ describe('Entity/Asset projection repository', () => {
     await initializeCoreLocalMetadataTables(store);
     await initializeEntityAssetProjectionTables(store);
     await store.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });
@@ -333,10 +285,6 @@ describe('Entity/Asset projection repository', () => {
       ],
       diagnostics: [],
     });
-    await expect(store.readPartitionRevision(partition)).resolves.toMatchObject({
-      revision: 1,
-      freshness: 'fresh',
-    });
     await expect(
       store.repositories.entityAssetProjections.replaceSource({
         partition,
@@ -376,11 +324,6 @@ describe('Entity/Asset projection repository', () => {
       records: [],
       diagnostics: [],
     });
-    await expect(store.readPartitionRevision(partition)).resolves.toMatchObject({
-      freshness: 'stale',
-      diagnostic: 'cache-cleared:rebuild',
-    });
-
     await store.dispose();
   });
 });

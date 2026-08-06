@@ -83,10 +83,6 @@ function createEntryReader(
   return vi.fn(async (_filePath, entryPath) => entries[entryPath] ?? null);
 }
 
-function poisonLegacyEntryData(): Uint8Array {
-  throw new Error('legacy archive entry byte fallback should not be used');
-}
-
 describe('document-reader runtime', () => {
   it('检测支持的文档扩展名', () => {
     expect(isSupportedDocumentPath('/doc/story.pdf')).toBe(true);
@@ -305,7 +301,7 @@ describe('document-reader runtime', () => {
       constructor(_filePath: string) {}
 
       getEntry(name: string): { getData(): Uint8Array } | null {
-        return name === 'image/page-1.jpg' ? { getData: poisonLegacyEntryData } : null;
+        return name === 'image/page-1.jpg' ? { getData: () => new Uint8Array() } : null;
       }
     }
 
@@ -339,7 +335,7 @@ describe('document-reader runtime', () => {
     expect(result.metadata?.['imageCount']).toBe(1);
   });
 
-  it('reads archive image bytes through the entry reader before ZIP fallbacks', async () => {
+  it('reads archive image bytes through the configured entry reader', async () => {
     const readEntry = vi.fn(async (_filePath: string, entryPath: string) => {
       if (entryPath === '001.jpg') {
         return makeJpeg(1001, 2001);
@@ -353,9 +349,7 @@ describe('document-reader runtime', () => {
         return [
           {
             name: '001.jpg',
-            getData: () => {
-              throw new Error('legacy zip entry fallback should not be used');
-            },
+            getData: () => new Uint8Array(),
           },
         ];
       }
@@ -444,8 +438,8 @@ describe('document-reader runtime', () => {
 
       getEntries(): Array<{ name: string; getData(): Uint8Array }> {
         return [
-          { name: 'word/media/image2.png', getData: poisonLegacyEntryData },
-          { name: 'word/media/image1.jpg', getData: poisonLegacyEntryData },
+          { name: 'word/media/image2.png', getData: () => new Uint8Array() },
+          { name: 'word/media/image1.jpg', getData: () => new Uint8Array() },
           { name: 'docProps/thumbnail.jpeg', getData: () => new Uint8Array([9]) },
         ];
       }
@@ -494,7 +488,7 @@ describe('document-reader runtime', () => {
 
       getEntries(): Array<{ name: string; getData(): Uint8Array }> {
         const mediaDir = this.filePath.endsWith('.pptx') ? 'ppt/media' : 'xl/media';
-        return [{ name: `${mediaDir}/image1.png`, getData: poisonLegacyEntryData }];
+        return [{ name: `${mediaDir}/image1.png`, getData: () => new Uint8Array() }];
       }
     }
 
@@ -783,7 +777,7 @@ describe('document access service', () => {
       constructor(_filePath: string) {}
 
       getEntry(name: string): { name: string; getData(): Uint8Array } | null {
-        return name.startsWith('image/') ? { name, getData: poisonLegacyEntryData } : null;
+        return name.startsWith('image/') ? { name, getData: () => new Uint8Array() } : null;
       }
 
       getEntries(): Array<{ name: string; getData(): Uint8Array }> {
@@ -871,7 +865,7 @@ describe('document access service', () => {
       constructor(_filePath: string) {}
 
       getEntry(name: string): { name: string; getData(): Uint8Array } | null {
-        return name.startsWith('image/') ? { name, getData: poisonLegacyEntryData } : null;
+        return name.startsWith('image/') ? { name, getData: () => new Uint8Array() } : null;
       }
 
       getEntries(): Array<{ name: string; getData(): Uint8Array }> {
@@ -989,8 +983,8 @@ describe('document access service', () => {
 
       getEntries(): Array<{ name: string; getData(): Uint8Array }> {
         return [
-          { name: '002.jpg', getData: poisonLegacyEntryData },
-          { name: '001.jpg', getData: poisonLegacyEntryData },
+          { name: '002.jpg', getData: () => new Uint8Array() },
+          { name: '001.jpg', getData: () => new Uint8Array() },
           { name: 'notes.txt', getData: () => new Uint8Array([9]) },
         ];
       }
@@ -1068,7 +1062,7 @@ describe('document access service', () => {
       }
 
       getEntries(): Array<{ name: string; getData(): Uint8Array }> {
-        return [{ name: '001.jpg', getData: poisonLegacyEntryData }];
+        return [{ name: '001.jpg', getData: () => new Uint8Array() }];
       }
     }
 

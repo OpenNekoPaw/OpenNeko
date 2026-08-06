@@ -63,7 +63,7 @@ describe('loadNkc', () => {
           {
             ...VALID_CANVAS.nodes[0],
             data: {
-              assetPath: 'media/legacy.mp4',
+              assetPath: 'media/path-only.mp4',
               mediaType: 'video',
             },
           },
@@ -75,7 +75,7 @@ describe('loadNkc', () => {
     expect(result.data.nodes[0]).toMatchObject({
       type: 'media',
       data: {
-        assetPath: 'media/legacy.mp4',
+        assetPath: 'media/path-only.mp4',
         mediaType: 'video',
       },
     });
@@ -100,8 +100,8 @@ describe('loadNkc', () => {
             size: { width: 260, height: 180 },
             zIndex: 2,
             data: {
-              path: 'documents/legacy.md',
-              title: 'Legacy notes',
+              path: 'documents/path-only.md',
+              title: 'Path-only notes',
               mediaKind: 'document',
               mediaType: 'text/markdown',
             },
@@ -110,7 +110,7 @@ describe('loadNkc', () => {
         ],
         connections: [
           {
-            id: 'legacy-connection',
+            id: 'path-only-connection',
             sourceId: 'file-1',
             targetId: 'node-1',
             sourceEndpoint: { nodeId: 'file-1', scope: 'node' },
@@ -124,7 +124,7 @@ describe('loadNkc', () => {
     expect(result.validation.valid).toBe(true);
     expect(result.data.nodes[0]).toMatchObject({
       id: 'file-1',
-      data: { path: 'documents/legacy.md' },
+      data: { path: 'documents/path-only.md' },
     });
     expect(result.data.nodes[0]?.data).not.toHaveProperty('contentLocator');
     expect(result.data.connections).toHaveLength(1);
@@ -138,7 +138,7 @@ describe('loadNkc', () => {
           {
             ...VALID_CANVAS.nodes[0],
             data: {
-              assetPath: 'https://example.test/legacy.mp4',
+              assetPath: 'https://example.test/runtime-only.mp4',
               mediaType: 'video',
             },
           },
@@ -163,7 +163,7 @@ describe('loadNkc', () => {
             ...VALID_CANVAS.nodes[0],
             data: {
               ...VALID_CANVAS.nodes[0]!.data,
-              assetPath: 'http://127.0.0.1:43125/v1/resources/runtime-token',
+              assetPath: 'http://127.0.0.1:43125/resources/runtime-token',
             },
           },
         ],

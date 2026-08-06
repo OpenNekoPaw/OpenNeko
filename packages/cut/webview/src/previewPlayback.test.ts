@@ -169,7 +169,7 @@ describe('shouldAcceptPreviewReady', () => {
 });
 
 describe('applyPreviewPlaybackAdvance', () => {
-  it('activates the prepared segment without starting the legacy boundary path', () => {
+  it('activates the prepared segment at its timeline boundary', () => {
     const seek = vi.fn();
     const prepareNextSegment = vi.fn();
     const activateNextSegment = vi.fn();

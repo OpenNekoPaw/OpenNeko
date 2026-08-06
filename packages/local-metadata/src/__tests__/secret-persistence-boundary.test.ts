@@ -25,7 +25,7 @@ describe('Local metadata secret persistence boundary', () => {
     await initializeCoreLocalMetadataTables(store);
     await initializeAgentStateTables(store);
     await store.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });

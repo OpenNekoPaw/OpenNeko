@@ -9,7 +9,6 @@ import { hashStableValue } from '@neko/shared';
 export interface GeneratedAssetWorkflowStageRef {
   readonly stageId: string;
   readonly workflowId?: string;
-  readonly stageRevision?: string;
 }
 
 export interface GeneratedAssetGenerationLineage {
@@ -72,7 +71,6 @@ export function createGeneratedAssetRevisionRef(
   const contentLocator: GeneratedOutputContentLocator = {
     kind: 'generated-output',
     outputId: input.assetId,
-    revision,
     digest: input.contentDigest,
     path: contentPath,
   };
@@ -91,7 +89,7 @@ export function validateGeneratedAssetRevisionRef(
   value: unknown,
 ): GeneratedAssetRevisionRefValidationResult {
   if (!isRecord(value) || !hasOnlyKeys(value, LIFECYCLE_KEYS)) {
-    return invalidLifecycle('Generated asset lifecycle contains unsupported or legacy fields.');
+    return invalidLifecycle('Generated asset lifecycle contains unsupported fields.');
   }
   const assetId = readNonEmptyString(value['assetId']);
   const revision = readNonEmptyString(value['revision']);
@@ -115,7 +113,6 @@ export function validateGeneratedAssetRevisionRef(
   if (
     revision !== createGeneratedAssetRevision(assetId, contentDigest) ||
     contentLocator.locator.outputId !== assetId ||
-    contentLocator.locator.revision !== revision ||
     contentLocator.locator.digest !== contentDigest
   ) {
     return invalidLifecycle(
@@ -180,12 +177,10 @@ function readWorkflowStage(value: unknown): GeneratedAssetWorkflowStageRef | und
   if (!isRecord(value) || !hasOnlyKeys(value, WORKFLOW_STAGE_KEYS)) return null;
   const stageId = readNonEmptyString(value['stageId']);
   const workflowId = readOptionalNonEmptyString(value['workflowId']);
-  const stageRevision = readOptionalNonEmptyString(value['stageRevision']);
-  if (!stageId || workflowId === null || stageRevision === null) return null;
+  if (!stageId || workflowId === null) return null;
   return {
     stageId,
     ...(workflowId ? { workflowId } : {}),
-    ...(stageRevision ? { stageRevision } : {}),
   };
 }
 
@@ -232,4 +227,4 @@ const LIFECYCLE_KEYS = new Set([
   'generation',
 ]);
 const GENERATION_KEYS = new Set(['operationId', 'runId', 'providerId', 'modelId', 'workflowStage']);
-const WORKFLOW_STAGE_KEYS = new Set(['stageId', 'workflowId', 'stageRevision']);
+const WORKFLOW_STAGE_KEYS = new Set(['stageId', 'workflowId']);

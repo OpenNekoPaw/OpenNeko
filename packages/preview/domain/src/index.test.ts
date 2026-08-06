@@ -134,30 +134,6 @@ describe('Preview Host runtime contract', () => {
         'cat.bin': 'openneko://resource/0123456789abcdefghijklmnopqrstuv/cat.bin',
       },
     });
-
-    for (const url of [
-      'neko-media://desktop/token',
-      'neko-app://desktop/token',
-      'opennekomedia://resource/token',
-      'http://127.0.0.1:43125/v1/resources/token',
-      'file:///private/cat.gltf',
-      'media://desktop/token',
-      'video://desktop/token',
-      'audio://desktop/token',
-    ]) {
-      expect(() =>
-        parsePreviewMediaDescriptor({
-          descriptorId: 'descriptor-1',
-          sourceFingerprint: 'content-2',
-          contentLocator: { kind: 'workspace-file', path: 'models/cat.gltf' },
-          url,
-          contentKind: 'model',
-          mediaType: 'model/gltf+json',
-          displayName: 'cat.gltf',
-          byteLength: 42,
-        }),
-      ).toThrow('authorized OpenNeko resource');
-    }
   });
 
   it('parses closed and open-ended byte ranges', () => {

@@ -1,16 +1,17 @@
 import { MarkdownContractError } from './source-range';
 
 declare const markdownSessionIdBrand: unique symbol;
-declare const markdownRevisionBrand: unique symbol;
+declare const markdownDocumentIdBrand: unique symbol;
 declare const markdownNodeIdBrand: unique symbol;
 declare const markdownAnnotationIdBrand: unique symbol;
 
 export type MarkdownSessionId = string & { readonly [markdownSessionIdBrand]: true };
-export type MarkdownRevision = number & { readonly [markdownRevisionBrand]: true };
+export type MarkdownDocumentId = string & { readonly [markdownDocumentIdBrand]: true };
 export type MarkdownNodeId = string & { readonly [markdownNodeIdBrand]: true };
 export type MarkdownAnnotationId = string & { readonly [markdownAnnotationIdBrand]: true };
 
 let sessionSequence = 0;
+let documentSequence = 0;
 
 export function createMarkdownSessionId(seed?: string): MarkdownSessionId {
   const value = seed?.trim() || `${Date.now().toString(36)}-${(++sessionSequence).toString(36)}`;
@@ -18,11 +19,10 @@ export function createMarkdownSessionId(seed?: string): MarkdownSessionId {
   return `md-session:${value}` as MarkdownSessionId;
 }
 
-export function createMarkdownRevision(value: number): MarkdownRevision {
-  if (!Number.isInteger(value) || value < 1) {
-    throw new MarkdownContractError(`Markdown revision must be a positive integer: ${value}`);
-  }
-  return value as MarkdownRevision;
+export function createMarkdownDocumentId(seed?: string): MarkdownDocumentId {
+  const value = seed?.trim() || `${Date.now().toString(36)}-${(++documentSequence).toString(36)}`;
+  if (!value) throw new MarkdownContractError('Markdown document ID seed must not be empty.');
+  return `md-document:${value}` as MarkdownDocumentId;
 }
 
 export function createMarkdownNodeId(value: string): MarkdownNodeId {

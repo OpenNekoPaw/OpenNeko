@@ -124,7 +124,7 @@ describe('media semantic index contracts', () => {
       sourceToolCallId: 'tool-1',
       contextPacketId: 'packet-1',
       createdAt: 1_800_000_000,
-      cacheKey: 'perception-v1',
+      cacheKey: 'perception-card',
       layerStatus: {
         layer0: 'complete',
         layer1: 'complete',
@@ -163,7 +163,7 @@ describe('media semantic index contracts', () => {
     expect(index.perceptionRefs).toEqual([
       {
         assetId: 'asset-page-1',
-        cacheKey: 'perception-v1',
+        cacheKey: 'perception-card',
         sourceToolCallId: 'tool-1',
         contextPacketId: 'packet-1',
         createdAt: 1_800_000_000,
@@ -248,7 +248,7 @@ function makeIndex(): MediaSemanticIndex {
     perceptionRefs: [
       {
         assetId: 'asset-page-1',
-        cacheKey: 'perception-v1',
+        cacheKey: 'perception-card',
         sourceToolCallId: 'tool-1',
       },
     ],

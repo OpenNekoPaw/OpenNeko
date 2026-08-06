@@ -1,5 +1,5 @@
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '@neko/local-metadata';
+import type { LocalMetadataPartition } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import type { SearchDocumentRepository, SemanticProjectionRepository } from '@neko/local-metadata';
@@ -14,7 +14,6 @@ export interface NodeWorkspaceSearchMetadataBinding {
   readonly semanticPartition: LocalMetadataPartition;
   readonly searchDocuments: SearchDocumentRepository;
   readonly semanticProjections: SemanticProjectionRepository;
-  readSearchRevision(): Promise<LocalMetadataPartitionRevision | null>;
   dispose(): Promise<void>;
 }
 
@@ -56,7 +55,6 @@ export async function createNodeWorkspaceSearchMetadataBinding(options: {
       semanticPartition,
       searchDocuments: metadataStore.repositories.searchDocuments,
       semanticProjections: metadataStore.repositories.semanticProjections,
-      readSearchRevision: () => metadataStore.readPartitionRevision(searchPartition),
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {

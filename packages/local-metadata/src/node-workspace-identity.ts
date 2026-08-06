@@ -156,7 +156,6 @@ export async function resolveNodeWorkspaceIdentity(options: {
   if (matches.length === 0) {
     const identity = parseWorkspaceIdentityJson(
       serializeWorkspaceIdentityDescriptor({
-        version: 1,
         workspaceId: options.createWorkspaceId ? options.createWorkspaceId() : randomUUID(),
       }),
     );
@@ -195,7 +194,7 @@ export async function resolveNodeWorkspaceIdentity(options: {
   }
   const workspace = matches[0]!;
   const identity = parseWorkspaceIdentityJson(
-    serializeWorkspaceIdentityDescriptor({ version: 1, workspaceId: workspace.workspaceId }),
+    serializeWorkspaceIdentityDescriptor({ workspaceId: workspace.workspaceId }),
   );
   await filePort.ensureParentDirectory(descriptorPath);
   const writeResult = await filePort.writeFileExclusive(

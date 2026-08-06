@@ -14,26 +14,8 @@ afterEach(async () => {
 });
 
 describe('readProjectEntityResources', () => {
-  it('reads only active canonical records and never succeeds through legacy files', async () => {
+  it('reads active canonical records', async () => {
     const workspacePath = await createWorkspace();
-    await writeJson(workspacePath, 'characters.json', {
-      version: 1,
-      characters: [
-        {
-          id: 'legacy-character',
-          canonicalName: 'Legacy',
-          aliases: [],
-          status: 'confirmed',
-        },
-      ],
-    });
-
-    await expect(
-      readProjectEntityResources({
-        workspace: { workspaceId: 'project-neko', workspacePath },
-      }),
-    ).resolves.toEqual({ entities: [], diagnostics: [] });
-
     await writeJson(workspacePath, 'neko/entities.json', {
       projectId: 'project-neko',
       entities: [
@@ -49,7 +31,6 @@ describe('readProjectEntityResources', () => {
       workspace: { workspaceId: 'project-neko', workspacePath },
     });
     expect(result.entities.map((record) => record.entityId)).toEqual(['canonical-character']);
-    expect(JSON.stringify(result)).not.toContain('legacy-character');
   });
 
   it('projects valid sibling records with an exact diagnostic for an invalid Entity', async () => {

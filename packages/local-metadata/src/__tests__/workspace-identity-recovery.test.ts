@@ -156,7 +156,7 @@ describe('workspace identity recovery', () => {
     await mkdir(join(copiedWorkspaceRoot, '.neko'), { recursive: true });
     await writeFile(
       join(copiedWorkspaceRoot, WORKSPACE_IDENTITY_RELATIVE_PATH),
-      serializeWorkspaceIdentityDescriptor({ version: 1, workspaceId: SOURCE_WORKSPACE_ID }),
+      serializeWorkspaceIdentityDescriptor({ workspaceId: SOURCE_WORKSPACE_ID }),
       'utf8',
     );
 
@@ -188,7 +188,7 @@ describe('workspace identity recovery', () => {
 
     await expect(
       fixture.store.repositories.workspaces.bind({
-        identity: { version: 1, workspaceId: CLONE_WORKSPACE_ID },
+        identity: { workspaceId: CLONE_WORKSPACE_ID },
         locator: { kind: 'variable', value: '${HOME}/workspace' },
         seenAt: OCCURRED_AT,
       }),
@@ -213,7 +213,7 @@ describe('workspace identity recovery', () => {
     await mkdir(join(workspaceRoot, '.neko'), { recursive: true });
     await writeFile(
       join(workspaceRoot, WORKSPACE_IDENTITY_RELATIVE_PATH),
-      serializeWorkspaceIdentityDescriptor({ version: 1, workspaceId: SOURCE_WORKSPACE_ID }),
+      serializeWorkspaceIdentityDescriptor({ workspaceId: SOURCE_WORKSPACE_ID }),
       'utf8',
     );
     const store = await createStore(homedir);
@@ -239,7 +239,7 @@ describe('workspace identity recovery', () => {
     await store.dispose();
   });
 
-  it('fails visibly when legacy rows make a descriptor-less locator ambiguous', async () => {
+  it('fails visibly when duplicate registrations make a descriptor-less locator ambiguous', async () => {
     const fixture = await createFixture();
     const database = new DatabaseSync(resolveGlobalStorageLayout(fixture.homedir).database);
     try {
@@ -544,12 +544,12 @@ async function createFixture(): Promise<{
   await mkdir(join(workspaceRoot, '.neko'), { recursive: true });
   await writeFile(
     descriptorPath,
-    serializeWorkspaceIdentityDescriptor({ version: 1, workspaceId: SOURCE_WORKSPACE_ID }),
+    serializeWorkspaceIdentityDescriptor({ workspaceId: SOURCE_WORKSPACE_ID }),
     'utf8',
   );
   const store = await createStore(homedir);
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: SOURCE_WORKSPACE_ID },
+    identity: { workspaceId: SOURCE_WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },
     seenAt: '2026-07-12T00:00:00.000Z',
   });
@@ -587,7 +587,6 @@ function failCloneRegistration(store: LocalMetadataStore): LocalMetadataStore {
         }
         return result;
       }),
-    readPartitionRevision: (partition) => store.readPartitionRevision(partition),
     backup: (request) => store.backup(request),
     restore: (request) => store.restore(request),
     integrityCheck: () => store.integrityCheck(),

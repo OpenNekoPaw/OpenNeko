@@ -1,5 +1,5 @@
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '@neko/local-metadata';
+import type { LocalMetadataPartition } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
@@ -12,8 +12,6 @@ export interface NodeWorkspaceEntityAssetMetadataBinding {
   readonly workspaceId: string;
   readonly partition: LocalMetadataPartition;
   readonly repository: EntityAssetProjectionRepository;
-  readRevision(): Promise<LocalMetadataPartitionRevision | null>;
-  markStale(diagnostic: string, updatedAt: string): Promise<LocalMetadataPartitionRevision>;
   dispose(): Promise<void>;
 }
 
@@ -49,14 +47,6 @@ export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
       workspaceId: identity.workspaceId,
       partition,
       repository: metadataStore.repositories.entityAssetProjections,
-      readRevision: () => metadataStore.readPartitionRevision(partition),
-      markStale: (diagnostic, updatedAt) =>
-        metadataStore.repositories.projectionVersions.markStale({
-          partition,
-          freshness: 'stale',
-          diagnostic,
-          updatedAt,
-        }),
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {

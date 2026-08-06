@@ -448,7 +448,12 @@ export function validateCharacterMemoryFile(
     };
   }
 
-  rejectRemovedVersionField(value, [], diagnostics);
+  rejectUnknownFields(
+    value,
+    new Set(['ledger', 'drafts', 'snapshots', 'changes', 'updatedAt']),
+    [],
+    diagnostics,
+  );
   validateLedger(value['ledger'], ['ledger'], diagnostics, options);
   validateArray(value['drafts'], ['drafts'], diagnostics, (draft, path) =>
     validateProfileDraft(draft, path, diagnostics, options),
@@ -776,7 +781,12 @@ function validateLedger(
     );
     return;
   }
-  rejectRemovedVersionField(value, path, diagnostics);
+  rejectUnknownFields(
+    value,
+    new Set(['projectRoot', 'observations', 'updatedAt', 'diagnostics']),
+    path,
+    diagnostics,
+  );
   validateArray(
     value['observations'],
     [...path, 'observations'],
@@ -1229,19 +1239,21 @@ function isAllowedCharacterMemoryDimension(value: string): boolean {
   return isCharacterMemoryDimension(value) || value.startsWith('neko.');
 }
 
-function rejectRemovedVersionField(
+function rejectUnknownFields(
   value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
   path: readonly CharacterMemoryPathSegment[],
   diagnostics: CharacterMemoryDiagnostic[],
 ): void {
-  if (Object.hasOwn(value, 'version')) {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
     diagnostics.push(
       characterMemoryDiagnostic(
         'error',
         'invalid-required-field',
-        [...path, 'version'],
-        'Character memory contains a removed internal version field.',
-        { actual: serializableDiagnosticValue(value['version']) },
+        [...path, field],
+        `Character memory contains unsupported field ${field}.`,
+        { actual: serializableDiagnosticValue(value[field]) },
       ),
     );
   }

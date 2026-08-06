@@ -49,7 +49,6 @@ interface CutApplicationRuntimeEntry {
   preview: CutPreviewRuntimeController;
   presentation: CutHostPresentationState;
   sequence: number;
-  operationTail: Promise<void>;
 }
 
 type CutAgentContextOutput = Extract<
@@ -114,6 +113,8 @@ export interface CutApplicationRuntimeOptions {
 
 export class CutApplicationRuntime {
   private readonly sessions = new Map<string, CutApplicationRuntimeEntry>();
+  private readonly sessionOpenings = new Map<string, Promise<CutApplicationRuntimeEntry>>();
+  private readonly operationTails = new Map<string, Promise<void>>();
   private readonly pendingDisposals = new Set<Promise<void>>();
   private readonly exportTasks: CutExportTaskRegistry;
   private disposed = false;
@@ -258,11 +259,14 @@ export class CutApplicationRuntime {
     value: CutHostRuntimeRequest | unknown,
   ): Promise<CutHostRuntimeResult> {
     const request = parseCutHostRuntimeRequest(value);
-    if (request.route === CUT_HOST_RUNTIME_ROUTES.documentCreate) {
-      return this.createDocument(windowId, request);
-    }
-    const entry = await this.requireSession(windowId, request.identity);
-    return this.enqueueSessionOperation(entry, () => this.executeOwned(entry, request));
+    const key = cutSessionKey(request.identity);
+    return this.enqueueSessionOperation(key, async () => {
+      if (request.route === CUT_HOST_RUNTIME_ROUTES.documentCreate) {
+        return this.createDocument(windowId, request);
+      }
+      const entry = await this.requireSession(windowId, request.identity);
+      return this.executeOwned(entry, request);
+    });
   }
 
   private async executeOwned(
@@ -533,7 +537,6 @@ export class CutApplicationRuntime {
       ),
       presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
       sequence: 0,
-      operationTail: Promise.resolve(),
     };
     const result: CutHostRuntimeResult = {
       snapshot: this.projectSnapshot(entry),
@@ -599,6 +602,24 @@ export class CutApplicationRuntime {
     const key = cutSessionKey(identity);
     const current = this.sessions.get(key);
     if (current) return current;
+    const pending = this.sessionOpenings.get(key);
+    if (pending) return pending;
+    const opening = this.openSession(key, identity, grant);
+    this.sessionOpenings.set(key, opening);
+    try {
+      return await opening;
+    } finally {
+      if (this.sessionOpenings.get(key) === opening) {
+        this.sessionOpenings.delete(key);
+      }
+    }
+  }
+
+  private async openSession(
+    key: string,
+    identity: CutHostRuntimeIdentity,
+    grant: Awaited<ReturnType<CutApplicationRuntimeOptions['authorizeSession']>>,
+  ): Promise<CutApplicationRuntimeEntry> {
     const rebound = [...this.sessions.entries()].find(
       ([, candidate]) =>
         candidate.identity.projectId === identity.projectId &&
@@ -613,6 +634,7 @@ export class CutApplicationRuntime {
       const [previousKey, entry] = rebound;
       this.sessions.delete(previousKey);
       await entry.preview.dispose();
+      this.requireActive();
       entry.identity = { ...identity };
       entry.preview = this.createPreviewController(
         entry.documentPath,
@@ -631,6 +653,7 @@ export class CutApplicationRuntime {
       createTrackId: () => `track-${randomUUID()}`,
       createSessionId: () => identity.sessionId,
     });
+    this.requireActive();
     const entry: CutApplicationRuntimeEntry = {
       identity: { ...identity },
       session,
@@ -646,7 +669,6 @@ export class CutApplicationRuntime {
       ),
       presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
       sequence: 0,
-      operationTail: Promise.resolve(),
     };
     this.sessions.set(key, entry);
     return entry;
@@ -818,16 +840,20 @@ export class CutApplicationRuntime {
     if (this.disposed) throw new Error('Cut runtime is disposed.');
   }
 
-  private enqueueSessionOperation<T>(
-    entry: CutApplicationRuntimeEntry,
-    operation: () => Promise<T>,
-  ): Promise<T> {
-    const result = entry.operationTail.then(operation);
+  private enqueueSessionOperation<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.operationTails.get(key) ?? Promise.resolve();
+    const result = previous.then(() => {
+      this.requireActive();
+      return operation();
+    });
     const tail = result.then(
       () => undefined,
       () => undefined,
     );
-    entry.operationTail = tail;
+    this.operationTails.set(key, tail);
+    void tail.then(() => {
+      if (this.operationTails.get(key) === tail) this.operationTails.delete(key);
+    });
     return result;
   }
 }

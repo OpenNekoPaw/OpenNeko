@@ -67,7 +67,7 @@ describe('PreviewRoot', () => {
       descriptorId: 'descriptor-shared-image',
       sourceFingerprint: 'fingerprint-1',
       contentLocator: previewContentLocator,
-      url: 'http://127.0.0.1:43125/v1/resources/shared-image-token',
+      url: 'http://127.0.0.1:43125/resources/shared-image-token',
       contentKind: 'image' as const,
       mediaType: 'image/png',
       displayName: 'shared.png',
@@ -163,7 +163,7 @@ describe('PreviewRoot', () => {
               descriptorId: 'descriptor-1',
               sourceFingerprint: 'fingerprint-1',
               contentLocator: previewContentLocator,
-              url: 'http://127.0.0.1:43125/v1/resources/text-token',
+              url: 'http://127.0.0.1:43125/resources/text-token',
               contentKind: 'text',
               mediaType: 'application/json',
               displayName: 'candidates.json',
@@ -189,7 +189,7 @@ describe('PreviewRoot', () => {
         descriptorId: 'descriptor-image',
         sourceFingerprint: 'fingerprint-1',
         contentLocator: previewContentLocator,
-        url: 'http://127.0.0.1:43125/v1/resources/image-token',
+        url: 'http://127.0.0.1:43125/resources/image-token',
         contentKind: 'image',
         mediaType: 'image/png',
         displayName: 'reference.png',
@@ -243,7 +243,7 @@ describe('PreviewRoot', () => {
               descriptorId: 'descriptor-video',
               sourceFingerprint: 'fingerprint-1',
               contentLocator: previewContentLocator,
-              url: 'http://127.0.0.1:43125/v1/resources/video-token',
+              url: 'http://127.0.0.1:43125/resources/video-token',
               contentKind: 'video',
               mediaType: 'video/mp4',
               displayName: 'clip.mp4',
@@ -255,7 +255,7 @@ describe('PreviewRoot', () => {
     });
 
     expect(container.querySelector('video')?.getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/video-token',
+      'http://127.0.0.1:43125/resources/video-token',
     );
     expect(container.querySelector('.absolute.inset-0.bg-black')).toBeTruthy();
     expect(container.querySelector('[aria-label="Play (Space)"]')).toBeTruthy();
@@ -282,7 +282,7 @@ describe('PreviewRoot', () => {
         descriptorId: 'descriptor-video-suspend',
         sourceFingerprint: 'fingerprint-1',
         contentLocator: previewContentLocator,
-        url: 'http://127.0.0.1:43125/v1/resources/video-suspend-token',
+        url: 'http://127.0.0.1:43125/resources/video-suspend-token',
         contentKind: 'video',
         mediaType: 'video/mp4',
         displayName: 'suspend.mp4',
@@ -334,7 +334,7 @@ describe('PreviewRoot', () => {
             descriptorId: 'descriptor-image-hover',
             sourceFingerprint: 'fingerprint-1',
             contentLocator: previewContentLocator,
-            url: 'http://127.0.0.1:43125/v1/resources/image-hover-token',
+            url: 'http://127.0.0.1:43125/resources/image-hover-token',
             contentKind: 'image',
             mediaType: 'image/png',
             displayName: 'hover.png',
@@ -345,7 +345,7 @@ describe('PreviewRoot', () => {
     });
 
     expect(container.querySelector('img')?.getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/image-hover-token',
+      'http://127.0.0.1:43125/resources/image-hover-token',
     );
     expect(container.querySelector('.neko-preview-quick')).toBeTruthy();
   });
@@ -366,7 +366,7 @@ describe('PreviewRoot', () => {
             descriptorId: 'descriptor-video-hover',
             sourceFingerprint: 'fingerprint-1',
             contentLocator: previewContentLocator,
-            url: 'http://127.0.0.1:43125/v1/resources/video-hover-token',
+            url: 'http://127.0.0.1:43125/resources/video-hover-token',
             contentKind: 'video',
             mediaType: 'video/mp4',
             displayName: 'hover.mp4',
@@ -387,7 +387,7 @@ describe('PreviewRoot', () => {
             descriptorId: 'descriptor-audio-hover',
             sourceFingerprint: 'fingerprint-1',
             contentLocator: previewContentLocator,
-            url: 'http://127.0.0.1:43125/v1/resources/audio-hover-token',
+            url: 'http://127.0.0.1:43125/resources/audio-hover-token',
             contentKind: 'audio',
             mediaType: 'audio/aac',
             displayName: 'hover.aac',

@@ -12,7 +12,7 @@ import {
   type LocalMetadataTransactionMode,
   type LocalMetadataTransactionOptions,
 } from '../contracts';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '../model';
+import type { LocalMetadataPartition } from '../model';
 import type {
   CatalogItemKind,
   CatalogItemQuery,
@@ -33,8 +33,6 @@ import type {
   MediaMetadataRecord,
   MediaMetadataRepository,
   MediaMetadataUpsertRequest,
-  ProjectionVersionRepository,
-  ProjectionVersionUpdate,
   ResourceCacheMetadataRepository,
   ResourceCacheProjectionReplaceRequest,
   SearchDocumentInsertMissingResult,
@@ -104,8 +102,10 @@ import type {
 } from './driver';
 import { serializeLocalMetadataJson } from '../secret-boundary';
 import {
+  assertAssetLibraryMembershipRelocations,
   assertAssetLibraryMembershipRegistration,
   type AssetLibraryInventoryInitializationResult,
+  type AssetLibraryMembershipRelocation,
   type AssetLibraryMembershipRecord,
   type AssetLibraryMembershipRegistration,
   type AssetLibraryMembershipRepository,
@@ -177,15 +177,6 @@ function readFiniteNumber(row: SqliteRow, column: string): number {
     });
   }
   return result;
-}
-
-function requireRow(row: SqliteRow | undefined, operation: string): SqliteRow {
-  if (row) return row;
-  throw new LocalMetadataError({
-    code: 'metadata-integrity-failed',
-    operation,
-    message: `Expected ${operation} to return a row`,
-  });
 }
 
 function parseLocator(kind: string, value: string): WorkspacePortableLocator {
@@ -537,36 +528,6 @@ function parseMetadataTimestamp(value: string | null, operation: string): number
   return timestamp;
 }
 
-function decodeProjectionVersion(row: SqliteRow): LocalMetadataPartitionRevision {
-  const scope = readString(row, 'partition_scope');
-  const freshness = readString(row, 'freshness');
-  if (scope !== 'global' && scope !== 'workspace') {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-projection-version',
-      message: `Unknown partition scope: ${scope}`,
-    });
-  }
-  if (freshness !== 'fresh' && freshness !== 'stale' && freshness !== 'rebuilding') {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-projection-version',
-      message: `Unknown projection freshness: ${freshness}`,
-    });
-  }
-  return {
-    partition: {
-      scope,
-      workspaceId: readNullableString(row, 'workspace_id'),
-      domain: readString(row, 'domain'),
-    },
-    revision: readNumber(row, 'revision'),
-    freshness,
-    diagnostic: readNullableString(row, 'diagnostic'),
-    updatedAt: readString(row, 'updated_at'),
-  };
-}
-
 class ExclusiveCoordinator {
   private tail: Promise<void> = Promise.resolve();
 
@@ -901,29 +862,116 @@ class RawAssetLibraryMembershipRepository implements AssetLibraryMembershipRepos
     return membership;
   }
 
-  async remove(membershipId: string, removedAt: string): Promise<AssetLibraryMembershipRecord> {
-    const result = await this.connection().run(
-      `UPDATE asset_library_memberships
-       SET membership_state = 'removed', updated_at = ?
-       WHERE membership_id = ? AND membership_state = 'active'`,
-      [removedAt, membershipId],
+  async removeMany(
+    membershipIds: readonly string[],
+    removedAt: string,
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
+    assertUniqueMembershipIds(membershipIds, 'remove');
+    parseMetadataTimestamp(removedAt, 'remove-asset-library-memberships');
+    const memberships = await Promise.all(
+      membershipIds.map((membershipId) => this.get(membershipId)),
     );
-    if (result.changes !== 1) {
+    const staleIndex = memberships.findIndex((membership) => membership?.state !== 'active');
+    if (staleIndex >= 0) {
       throw new LocalMetadataError({
         code: 'metadata-transaction-failed',
-        operation: 'remove-asset-library-membership',
-        message: `Active Asset membership does not exist: ${membershipId}`,
+        operation: 'remove-asset-library-memberships',
+        message: `Active Asset membership does not exist: ${membershipIds[staleIndex]}`,
       });
     }
-    const membership = await this.get(membershipId);
-    if (!membership) {
-      throw new LocalMetadataError({
-        code: 'metadata-integrity-failed',
-        operation: 'remove-asset-library-membership',
-        message: `Removed Asset membership disappeared: ${membershipId}`,
-      });
+    for (const membershipId of membershipIds) {
+      const result = await this.connection().run(
+        `UPDATE asset_library_memberships
+         SET membership_state = 'removed', updated_at = ?
+         WHERE membership_id = ? AND membership_state = 'active'`,
+        [removedAt, membershipId],
+      );
+      if (result.changes !== 1) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'remove-asset-library-memberships',
+          message: `Asset membership changed during removal: ${membershipId}`,
+        });
+      }
     }
-    return membership;
+    return Promise.all(
+      membershipIds.map(async (membershipId) => {
+        const membership = await this.get(membershipId);
+        if (!membership) {
+          throw new LocalMetadataError({
+            code: 'metadata-integrity-failed',
+            operation: 'remove-asset-library-memberships',
+            message: `Removed Asset membership disappeared: ${membershipId}`,
+          });
+        }
+        return membership;
+      }),
+    );
+  }
+
+  async relocateMany(
+    relocations: readonly AssetLibraryMembershipRelocation[],
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
+    assertAssetLibraryMembershipRelocations(relocations);
+    const current = await Promise.all(
+      relocations.map((relocation) => this.get(relocation.membershipId)),
+    );
+    for (const [index, relocation] of relocations.entries()) {
+      const membership = current[index];
+      if (
+        !membership ||
+        membership.state !== 'active' ||
+        membership.sourceRelativePath !== relocation.expectedSourceRelativePath
+      ) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'relocate-asset-library-memberships',
+          message: `Asset membership changed before relocation: ${relocation.membershipId}`,
+        });
+      }
+      const target = await this.findBySourceRelativePath(relocation.sourceRelativePath);
+      if (target && target.membershipId !== relocation.membershipId) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'relocate-asset-library-memberships',
+          message: `Asset membership target already exists: ${relocation.sourceRelativePath}`,
+        });
+      }
+    }
+    for (const relocation of relocations) {
+      const result = await this.connection().run(
+        `UPDATE asset_library_memberships
+         SET source_relative_path = ?, label = ?, updated_at = ?
+         WHERE membership_id = ? AND source_relative_path = ? AND membership_state = 'active'`,
+        [
+          relocation.sourceRelativePath,
+          relocation.label,
+          relocation.relocatedAt,
+          relocation.membershipId,
+          relocation.expectedSourceRelativePath,
+        ],
+      );
+      if (result.changes !== 1) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'relocate-asset-library-memberships',
+          message: `Asset membership changed during relocation: ${relocation.membershipId}`,
+        });
+      }
+    }
+    return Promise.all(
+      relocations.map(async ({ membershipId }) => {
+        const membership = await this.get(membershipId);
+        if (!membership) {
+          throw new LocalMetadataError({
+            code: 'metadata-integrity-failed',
+            operation: 'relocate-asset-library-memberships',
+            message: `Relocated Asset membership disappeared: ${membershipId}`,
+          });
+        }
+        return membership;
+      }),
+    );
   }
 
   private async writeActive(registration: AssetLibraryMembershipRegistration): Promise<void> {
@@ -958,6 +1006,22 @@ const ASSET_LIBRARY_MEMBERSHIP_SELECT = `SELECT
   membership_id, source_relative_path, label, media_type, byte_length, modified_at,
   membership_state, created_at, updated_at
   FROM asset_library_memberships`;
+
+function assertUniqueMembershipIds(membershipIds: readonly string[], operation: string): void {
+  if (membershipIds.length === 0) {
+    throw new Error(`Asset membership ${operation} requires at least one item.`);
+  }
+  const unique = new Set<string>();
+  for (const membershipId of membershipIds) {
+    if (membershipId.trim().length === 0) {
+      throw new Error(`Asset membership ${operation} identity is required.`);
+    }
+    if (unique.has(membershipId)) {
+      throw new Error(`Duplicate Asset membership ${operation}: ${membershipId}`);
+    }
+    unique.add(membershipId);
+  }
+}
 
 class RawTaskStateRepository implements TaskStateRepository {
   constructor(private readonly connection: () => SqliteConnection) {}
@@ -1098,10 +1162,7 @@ class RawTaskCheckpointRepository implements TaskCheckpointRepository {
 }
 
 class RawResourceCacheMetadataRepository implements ResourceCacheMetadataRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async get(
     partition: LocalMetadataPartition,
@@ -1195,20 +1256,11 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
         );
       }
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      freshness: 'fresh',
-      diagnostic: null,
-      updatedAt: request.updatedAt,
-    });
   }
 }
 
 class RawMediaMetadataRepository implements MediaMetadataRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async get(
     partition: LocalMetadataPartition,
@@ -1259,12 +1311,6 @@ class RawMediaMetadataRepository implements MediaMetadataRepository {
         request.record.updatedAt,
       ],
     );
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      freshness: 'fresh',
-      diagnostic: null,
-      updatedAt: request.record.updatedAt,
-    });
   }
 
   async delete(partition: LocalMetadataPartition, sourceKey: string): Promise<boolean> {
@@ -1274,23 +1320,12 @@ class RawMediaMetadataRepository implements MediaMetadataRepository {
       'DELETE FROM media_metadata WHERE partition_key = ? AND source_key = ?',
       [partitionKey(partition), sourceKey],
     );
-    if (result.changes > 0) {
-      await this.projectionVersions.increment({
-        partition,
-        freshness: 'fresh',
-        diagnostic: null,
-        updatedAt: new Date().toISOString(),
-      });
-    }
     return result.changes === 1;
   }
 }
 
 class RawSearchDocumentRepository implements SearchDocumentRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async list(partition: LocalMetadataPartition): Promise<readonly SearchDocumentRecord[]> {
     assertSearchDocumentPartition(partition);
@@ -1359,11 +1394,6 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
         ],
       );
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(request.documents, 'search-documents-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async replaceSearchPartition(request: SearchDocumentPartitionReplaceRequest): Promise<void> {
@@ -1388,11 +1418,6 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
     for (const document of request.documents) {
       await this.insertDocument(request.partition, document);
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(request.documents, 'search-documents-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async insertMissingSearchPartition(
@@ -1416,14 +1441,6 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
     for (const document of request.documents) {
       const inserted = await this.insertDocument(request.partition, document, true);
       (inserted ? insertedDocumentIds : preservedDocumentIds).push(document.documentId);
-    }
-    if (insertedDocumentIds.length > 0) {
-      const currentDocuments = await this.list(request.partition);
-      await this.projectionVersions.increment({
-        partition: request.partition,
-        ...projectionFreshnessUpdate(currentDocuments, 'search-documents-not-fresh'),
-        updatedAt: request.updatedAt,
-      });
     }
     return { insertedDocumentIds, preservedDocumentIds };
   }
@@ -1459,10 +1476,7 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
 }
 
 class RawSemanticProjectionRepository implements SemanticProjectionRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async list(partition: LocalMetadataPartition): Promise<SemanticProjectionListResult> {
     assertSemanticProjectionPartition(partition);
@@ -1546,11 +1560,6 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     for (const item of prepared) {
       await this.insertSource(request.partition, item);
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(request.sources, 'semantic-sources-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async replaceSource(request: SemanticProjectionReplaceSourceRequest): Promise<void> {
@@ -1573,12 +1582,6 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
       [partitionKey(request.partition), request.source.sourceId],
     );
     await this.insertSource(request.partition, prepared);
-    const { records: currentSources } = await this.list(request.partition);
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async deleteSource(
@@ -1594,12 +1597,6 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
       [partitionKey(partition), sourceId],
     );
     if (result.changes === 0) return false;
-    const { records: currentSources } = await this.list(partition);
-    await this.projectionVersions.increment({
-      partition,
-      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
-      updatedAt,
-    });
     return true;
   }
 
@@ -1621,14 +1618,6 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         continue;
       }
       insertedSourceIds.push(item.source.sourceId);
-    }
-    if (insertedSourceIds.length > 0) {
-      const { records: currentSources } = await this.list(request.partition);
-      await this.projectionVersions.increment({
-        partition: request.partition,
-        ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
-        updatedAt: request.updatedAt,
-      });
     }
     return { insertedSourceIds, preservedSourceIds };
   }
@@ -1687,10 +1676,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
 }
 
 class RawEntityAssetProjectionRepository implements EntityAssetProjectionRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async list(query: EntityAssetProjectionQuery): Promise<EntityAssetProjectionQueryResult> {
     assertEntityAssetProjectionPartition(query.partition);
@@ -1787,12 +1773,6 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
         ],
       );
     }
-    const current = await this.list({ partition: request.partition });
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(current.records, 'entity-asset-projections-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async insertMissing(
@@ -1842,23 +1822,12 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
       const projectionKey = `${record.kind}:${record.projectionId}`;
       (result.changes === 0 ? preservedProjectionKeys : insertedProjectionKeys).push(projectionKey);
     }
-    if (insertedProjectionKeys.length > 0) {
-      const current = await this.list({ partition: request.partition });
-      await this.projectionVersions.increment({
-        partition: request.partition,
-        ...projectionFreshnessUpdate(current.records, 'entity-asset-projections-not-fresh'),
-        updatedAt: request.updatedAt,
-      });
-    }
     return { insertedProjectionKeys, preservedProjectionKeys };
   }
 }
 
 class RawCatalogProjectionRepository implements CatalogProjectionRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async list(query: CatalogItemQuery): Promise<readonly CatalogItemRecord[]> {
     assertCatalogPartition(query.partition);
@@ -1927,12 +1896,6 @@ class RawCatalogProjectionRepository implements CatalogProjectionRepository {
         ],
       );
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      freshness: 'fresh',
-      diagnostic: null,
-      updatedAt: request.updatedAt,
-    });
   }
 }
 
@@ -2257,18 +2220,6 @@ function createFtsMatchQuery(text: string): string | null {
     .filter(Boolean)
     .map((term) => `"${term.replace(/"/gu, '""')}"*`);
   return terms.length > 0 ? terms.join(' AND ') : null;
-}
-
-function projectionFreshnessUpdate(
-  records: readonly { readonly freshness: string }[],
-  staleDiagnostic: string,
-): {
-  readonly freshness: 'fresh' | 'stale';
-  readonly diagnostic: string | null;
-} {
-  return records.every((record) => record.freshness === 'fresh')
-    ? { freshness: 'fresh', diagnostic: null }
-    : { freshness: 'stale', diagnostic: staleDiagnostic };
 }
 
 function assertSemanticProjectionPartition(partition: LocalMetadataPartition): void {
@@ -2726,65 +2677,10 @@ function assertResourceCacheVariant(
   variantKeys.add(variant.key);
 }
 
-class RawProjectionVersionRepository implements ProjectionVersionRepository {
-  constructor(private readonly connection: () => SqliteConnection) {}
-
-  async get(partition: LocalMetadataPartition): Promise<LocalMetadataPartitionRevision | null> {
-    const rows = await this.connection().all(
-      `SELECT partition_scope, workspace_id, domain, revision, freshness, diagnostic, updated_at
-         FROM projection_versions WHERE partition_key = ?`,
-      [partitionKey(partition)],
-    );
-    const row = rows[0];
-    return row ? decodeProjectionVersion(row) : null;
-  }
-
-  async increment(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    return this.write(update);
-  }
-
-  async markStale(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    if (update.freshness !== 'stale') {
-      throw new LocalMetadataError({
-        code: 'metadata-transaction-failed',
-        operation: 'mark-projection-stale',
-        message: 'markStale requires stale freshness',
-      });
-    }
-    return this.write(update);
-  }
-
-  private async write(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    const rows = await this.connection().all(
-      `INSERT INTO projection_versions (
-        partition_key, partition_scope, workspace_id, domain,
-        revision, freshness, diagnostic, updated_at
-      ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-      ON CONFLICT(partition_key) DO UPDATE SET
-        revision = projection_versions.revision + 1,
-        freshness = excluded.freshness,
-        diagnostic = excluded.diagnostic,
-        updated_at = excluded.updated_at
-      RETURNING partition_scope, workspace_id, domain, revision, freshness, diagnostic, updated_at`,
-      [
-        partitionKey(update.partition),
-        update.partition.scope,
-        update.partition.workspaceId,
-        update.partition.domain,
-        update.freshness,
-        update.diagnostic,
-        update.updatedAt,
-      ],
-    );
-    return decodeProjectionVersion(requireRow(rows[0], 'write-projection-version'));
-  }
-}
-
 class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepository {
   constructor(
     private readonly connection: () => SqliteConnection,
     private readonly workspaces: WorkspaceRegistryRepository,
-    private readonly projectionVersions: ProjectionVersionRepository,
   ) {}
 
   async clearPartition(
@@ -2840,12 +2736,6 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
                       'DELETE FROM catalog_items WHERE partition_key = ?',
                       [partitionKey(request.partition)],
                     );
-    await this.projectionVersions.markStale({
-      partition: request.partition,
-      freshness: 'stale',
-      diagnostic: `cache-cleared:${request.reason}`,
-      updatedAt: request.updatedAt,
-    });
     return { deletedRows: result.changes };
   }
 
@@ -3019,9 +2909,20 @@ class ExclusiveAssetLibraryMembershipRepository implements AssetLibraryMembershi
     );
   }
 
-  remove(membershipId: string, removedAt: string): Promise<AssetLibraryMembershipRecord> {
+  removeMany(
+    membershipIds: readonly string[],
+    removedAt: string,
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
     return this.exclusive.run(() =>
-      this.transaction('state-write', () => this.raw.remove(membershipId, removedAt)),
+      this.transaction('state-write', () => this.raw.removeMany(membershipIds, removedAt)),
+    );
+  }
+
+  relocateMany(
+    relocations: readonly AssetLibraryMembershipRelocation[],
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () => this.raw.relocateMany(relocations)),
     );
   }
 }
@@ -3285,23 +3186,6 @@ class ExclusiveCatalogProjectionRepository implements CatalogProjectionRepositor
   }
 }
 
-class ExclusiveProjectionVersionRepository implements ProjectionVersionRepository {
-  constructor(
-    private readonly raw: ProjectionVersionRepository,
-    private readonly exclusive: ExclusiveCoordinator,
-  ) {}
-
-  get(partition: LocalMetadataPartition): Promise<LocalMetadataPartitionRevision | null> {
-    return this.exclusive.run(() => this.raw.get(partition));
-  }
-  increment(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    return this.exclusive.run(() => this.raw.increment(update));
-  }
-  markStale(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    return this.exclusive.run(() => this.raw.markStale(update));
-  }
-}
-
 class ExclusiveCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepository {
   constructor(
     private readonly raw: LocalMetadataCacheMaintenanceRepository,
@@ -3347,24 +3231,13 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
     const conversations = new RawConversationCatalogRepository(getConnection);
     const tasks = new RawTaskStateRepository(getConnection);
     const taskCheckpoints = new RawTaskCheckpointRepository(getConnection);
-    const projectionVersions = new RawProjectionVersionRepository(getConnection);
-    const resourceCache = new RawResourceCacheMetadataRepository(getConnection, projectionVersions);
-    const mediaMetadata = new RawMediaMetadataRepository(getConnection, projectionVersions);
-    const searchDocuments = new RawSearchDocumentRepository(getConnection, projectionVersions);
-    const semanticProjections = new RawSemanticProjectionRepository(
-      getConnection,
-      projectionVersions,
-    );
-    const entityAssetProjections = new RawEntityAssetProjectionRepository(
-      getConnection,
-      projectionVersions,
-    );
-    const catalogItems = new RawCatalogProjectionRepository(getConnection, projectionVersions);
-    const cacheMaintenance = new RawCacheMaintenanceRepository(
-      getConnection,
-      workspaces,
-      projectionVersions,
-    );
+    const resourceCache = new RawResourceCacheMetadataRepository(getConnection);
+    const mediaMetadata = new RawMediaMetadataRepository(getConnection);
+    const searchDocuments = new RawSearchDocumentRepository(getConnection);
+    const semanticProjections = new RawSemanticProjectionRepository(getConnection);
+    const entityAssetProjections = new RawEntityAssetProjectionRepository(getConnection);
+    const catalogItems = new RawCatalogProjectionRepository(getConnection);
+    const cacheMaintenance = new RawCacheMaintenanceRepository(getConnection, workspaces);
     this.rawRepositories = {
       assetLibraryMemberships,
       workspaces,
@@ -3377,7 +3250,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       semanticProjections,
       entityAssetProjections,
       catalogItems,
-      projectionVersions,
       cacheMaintenance,
     };
     this.repositories = {
@@ -3430,10 +3302,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
         this.exclusive,
         (mode, operation) => this.executeTransaction(mode, operation),
       ),
-      projectionVersions: new ExclusiveProjectionVersionRepository(
-        projectionVersions,
-        this.exclusive,
-      ),
       cacheMaintenance: new ExclusiveCacheMaintenanceRepository(
         cacheMaintenance,
         this.exclusive,
@@ -3458,8 +3326,9 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       });
     }
     if (options.databasePath !== this.options.expectedDatabasePath) {
-      throw new NekoStorageContractError({
-        code: 'retired-workspace-database',
+      throw new LocalMetadataError({
+        code: 'metadata-store-open-failed',
+        operation: 'open',
         message: `Local metadata database must use ${this.options.expectedDatabasePath}`,
       });
     }
@@ -3504,12 +3373,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
         }),
       ),
     );
-  }
-
-  readPartitionRevision(
-    partition: LocalMetadataPartition,
-  ): Promise<LocalMetadataPartitionRevision | null> {
-    return this.repositories.projectionVersions.get(partition);
   }
 
   backup(request: LocalMetadataBackupRequest): Promise<LocalMetadataBackupResult> {

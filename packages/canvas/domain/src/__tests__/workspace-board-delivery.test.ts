@@ -18,7 +18,6 @@ import {
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
-  createCanvasWorkspaceBoardRevision,
   type CanvasWorkspaceBoardLoadedDocument,
   type CanvasWorkspaceBoardMutationPort,
 } from '../index';
@@ -164,7 +163,6 @@ describe('Workspace Board delivery coordinator', () => {
     const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
     await mutation.saveAtomic({
       documentUri: loaded.documentUri,
-      expectedRevision: loaded.revision,
       canvasData: plan.canvasData,
     });
     await ledger.releaseWriter(claim!);
@@ -195,20 +193,6 @@ describe('Workspace Board delivery coordinator', () => {
       { status: 'projected', deliveryId: request.process.deliveryId },
     ]);
     expect(mutation.saveCount).toBe(1);
-  });
-
-  it('reloads and re-plans once when the Canvas revision changes before save', async () => {
-    const store = await createStore();
-    const mutation = new MemoryMutationPort();
-    mutation.changeRevisionBeforeNextSave = true;
-    const coordinator = createCoordinator(store, mutation, 'host-a');
-
-    await expect(coordinator.enqueue(delivery('delivery:replan'))).resolves.toMatchObject([
-      { status: 'projected' },
-    ]);
-    expect(mutation.saveAttempts).toBe(2);
-    expect(mutation.saveCount).toBe(1);
-    expect(mutation.canvasData.nodes.some((node) => node.id === 'user-edit')).toBe(true);
   });
 
   it('returns a conflict without writing when a deterministic delivery node is occupied', async () => {
@@ -247,7 +231,6 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
   saveCount = 0;
   saveAttempts = 0;
   failBeforeSave?: Error;
-  changeRevisionBeforeNextSave = false;
 
   async loadLatest(input: {
     readonly documentUri: string;
@@ -256,43 +239,20 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
     return {
       documentUri: input.documentUri,
       canvasData: this.canvasData,
-      revision: createCanvasWorkspaceBoardRevision(this.canvasData),
       exists: this.canvasData.nodes.length > 0,
     };
   }
 
   async saveAtomic(input: {
     readonly documentUri: string;
-    readonly expectedRevision: string;
     readonly canvasData: CanvasData;
     readonly assertWriter?: () => Promise<void>;
-  }): Promise<{ readonly revision: string }> {
+  }): Promise<void> {
     this.saveAttempts += 1;
     if (this.failBeforeSave) throw this.failBeforeSave;
-    if (this.changeRevisionBeforeNextSave) {
-      this.changeRevisionBeforeNextSave = false;
-      this.canvasData = {
-        ...this.canvasData,
-        nodes: [
-          ...this.canvasData.nodes,
-          {
-            id: 'user-edit',
-            type: 'markdown',
-            position: { x: 8, y: 8 },
-            size: { width: 320, height: 180 },
-            zIndex: 1,
-            data: { content: 'edit' },
-          },
-        ],
-      };
-    }
-    const current = createCanvasWorkspaceBoardRevision(this.canvasData);
-    if (current !== input.expectedRevision)
-      throw new Error('stale-revision: memory document changed.');
     await input.assertWriter?.();
     this.canvasData = input.canvasData;
     this.saveCount += 1;
-    return { revision: createCanvasWorkspaceBoardRevision(this.canvasData) };
   }
 }
 
@@ -327,7 +287,7 @@ async function createStore(): Promise<LocalMetadataStore> {
   await initializeCoreLocalMetadataTables(store);
   await initializeAgentStateTables(store);
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: WORKSPACE_ID },
+    identity: { workspaceId: WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },
     seenAt: '2026-07-15T00:00:00.000Z',
   });
@@ -346,7 +306,7 @@ function delivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
         provenance: {
           deliveryId,
           artifactId: `${deliveryId}:analysis`,
-          revision: `${deliveryId}:revision-1`,
+          contentFingerprint: `sha256:${deliveryId}:analysis`,
           kind: 'markdown',
           role: 'analysis',
           sourceId: `artifact:${deliveryId}`,
@@ -377,7 +337,6 @@ function generatedBatchDelivery(
         contentLocator: {
           kind: 'generated-output' as const,
           outputId,
-          revision: `revision:${outputId}`,
           digest,
           path: `neko/generated/image/${outputId}.png`,
         },
@@ -394,7 +353,7 @@ function generatedBatchDelivery(
         provenance: {
           deliveryId,
           artifactId: outputId,
-          revision: digest,
+          contentFingerprint: digest,
           kind: 'image' as const,
           role: 'output' as const,
           sourceId: `artifact:${outputId}`,

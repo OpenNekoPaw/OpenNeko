@@ -31,27 +31,6 @@ describe('canonical Canvas Markdown capability contracts', () => {
     },
   );
 
-  it.each([
-    'canvas.createTableFromMarkdown',
-    'canvas.createStoryboardFromMarkdown',
-    'canvas.attachResource',
-    'canvas.validateMarkdownStoryboard',
-  ])('rejects retired capability %s at the shared contract boundary', (capabilityId) => {
-    const diagnostics = validateCanvasMarkdownCapabilityInput({
-      capabilityId,
-      markdown: '# Legacy request',
-    });
-
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        severity: 'error',
-        code: 'canvas-markdown-unknown-capability',
-        fieldKey: 'capabilityId',
-      }),
-    ]);
-    expect(isCanvasMarkdownCapabilityInput({ capabilityId, markdown: '# Legacy' })).toBe(false);
-  });
-
   it('diagnoses invalid Markdown, source format, target, and provenance', () => {
     const diagnostics = validateCanvasMarkdownCapabilityInput({
       capabilityId: 'canvas.createMarkdownNote',
@@ -117,6 +96,6 @@ function createTestContentLocator() {
   return {
     kind: 'workspace-file' as const,
     path: 'assets/cover.png',
-    fingerprint: { strategy: 'provider' as const, value: 'cover-v1' },
+    fingerprint: { strategy: 'provider' as const, value: 'cover-fingerprint' },
   };
 }

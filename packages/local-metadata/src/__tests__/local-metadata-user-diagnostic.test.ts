@@ -4,7 +4,6 @@ import { createStorageMaintenanceReport } from '../maintenance-report';
 import {
   formatLocalMetadataUserDiagnostic,
   projectLocalMetadataUserDiagnostic,
-  projectStorageMigrationPlanUserDiagnostic,
   projectStorageMaintenanceUserDiagnostic,
 } from '../user-diagnostic';
 
@@ -45,32 +44,6 @@ describe('local metadata user diagnostics', () => {
     ).toMatchObject({
       code: 'local-metadata-workspace-locator-ambiguous',
       actions: ['choose-workspace-identity'],
-    });
-  });
-
-  it('presents a pending migration plan as review-required rather than failed', () => {
-    expect(
-      projectStorageMigrationPlanUserDiagnostic({
-        planId: 'plan-1',
-        createdAt: '2026-07-13T00:00:00.000Z',
-        status: 'approval-required',
-        items: [
-          {
-            sourceId: 'task:memento',
-            sourcePath: 'vscode-globalState:neko.agent.tasks',
-            authority: 'valuable-local-state',
-            rebuildability: 'not-rebuildable',
-            proposedAction: 'migrate',
-            requiresApproval: true,
-            approvedAt: null,
-            mutationAllowed: false,
-          },
-        ],
-      }),
-    ).toMatchObject({
-      code: 'local-metadata-migration-approval-required',
-      severity: 'warning',
-      actions: ['review-migration-plan'],
     });
   });
 

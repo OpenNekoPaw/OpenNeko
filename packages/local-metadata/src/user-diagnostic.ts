@@ -1,12 +1,9 @@
 import type { StorageMaintenanceReport } from './maintenance-report';
-import type { StorageMigrationPlan } from './migration-planner';
 
 export type LocalMetadataUserAction =
   | 'update-runtime'
   | 'choose-clone-or-rebind'
   | 'choose-workspace-identity'
-  | 'review-migration-plan'
-  | 'retry-migration'
   | 'inspect-backup'
   | 'restore-backup'
   | 'run-integrity-check'
@@ -18,8 +15,6 @@ export interface LocalMetadataUserDiagnostic {
     | 'local-metadata-unsupported-runtime'
     | 'local-metadata-workspace-identity-conflict'
     | 'local-metadata-workspace-locator-ambiguous'
-    | 'local-metadata-migration-approval-required'
-    | 'local-metadata-migration-failed'
     | 'local-metadata-backup-failed'
     | 'local-metadata-recovery-failed'
     | 'local-metadata-corrupt'
@@ -61,31 +56,13 @@ export function projectLocalMetadataUserDiagnostic(
         'Choose the canonical identity for this checkout. Other identity partitions will remain recoverable as orphaned data.',
         ['choose-workspace-identity'],
       );
-    case 'storage-migration-approval-required':
-      return diagnostic(
-        'local-metadata-migration-approval-required',
-        'warning',
-        'Legacy local metadata requires explicit migration approval.',
-        'Review and approve the affected source separately before retrying migration.',
-        ['review-migration-plan'],
-      );
-    case 'metadata-migration-failed':
-    case 'metadata-migration-checksum-mismatch':
-    case 'agent-task-state-migration-failed':
-      return diagnostic(
-        'local-metadata-migration-failed',
-        'error',
-        'Local metadata migration did not complete.',
-        'The legacy source was preserved. Review the migration report and retry after resolving its diagnostic.',
-        ['inspect-backup', 'retry-migration'],
-      );
     case 'metadata-backup-failed':
       return diagnostic(
         'local-metadata-backup-failed',
         'error',
         'The safety backup could not be created.',
-        'No destructive migration was applied. Fix the backup destination and retry.',
-        ['inspect-backup', 'retry-migration'],
+        'No destructive maintenance was applied. Fix the backup destination before continuing.',
+        ['inspect-backup'],
       );
     case 'metadata-restore-failed':
       return diagnostic(
@@ -127,28 +104,11 @@ export function projectLocalMetadataUserDiagnostic(
   }
 }
 
-export function projectStorageMigrationPlanUserDiagnostic(
-  plan: StorageMigrationPlan,
-): LocalMetadataUserDiagnostic | null {
-  const pendingCount = plan.items.filter(
-    (item) => item.requiresApproval && !item.mutationAllowed,
-  ).length;
-  if (pendingCount === 0) return null;
-  return diagnostic(
-    'local-metadata-migration-approval-required',
-    'warning',
-    `${pendingCount} legacy local metadata source(s) require migration approval.`,
-    'Review each source separately. No backup, import, rename, or deletion occurs before approval.',
-    ['review-migration-plan'],
-  );
-}
-
 export function projectStorageMaintenanceUserDiagnostic(
   report: StorageMaintenanceReport,
 ): LocalMetadataUserDiagnostic {
   const changed =
     report.counts.deleted +
-    report.counts.migrated +
     report.counts.rebuilt +
     report.counts.promoted +
     report.counts.quarantined;

@@ -46,9 +46,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const unifiedWorkbench = await evaluate(`(() => ({
       shellCount: document.querySelectorAll('[data-neko-controlled-workbench="true"]').length,
       primarySidebarCount: document.querySelectorAll('[data-primary-sidebar="application"]').length,
-      legacyHomeCount: document.querySelectorAll(
-        '[data-home-composition="task-launchpad"], .home-main, .home-launchpad-heading',
-      ).length,
     }))()`);
     checkpoint('unified-workbench-entry', unifiedWorkbench);
     const unifiedWorkbenchScreenshot = await screenshot('unified-workbench-entry');
@@ -57,7 +54,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       `(projection, current, tab, project) => ({
         ...current,
-        revision: current.revision + 1,
         display: { ...current.display, mode: 'main-only' },
         main: {
           views: [
@@ -232,7 +228,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       `(projection, current) => ({
         ...current,
-        revision: current.revision + 1,
         main: {
           views: [],
           groups: [{ groupId: 'main:primary', viewIds: [] }],
@@ -264,7 +259,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await evaluate(`window.openNekoDesktop.settings.update({
       ...${JSON.stringify(settings.preferences)},
       startupTarget: 'restore',
-    }, ${String(settings.revision)})`);
+    })`);
     await restartApplication();
     await waitForSelector('[data-owner-root="canvas"]');
     const restoredDefault = await evaluate(`(async () => {
@@ -305,7 +300,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       evaluate,
       `(projection, current) => ({
         ...current,
-        revision: current.revision + 1,
         resourceDock: { ...current.resourceDock, presentation: 'docked' },
       })`,
     );
@@ -385,8 +379,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
   assertObservation(observation, evidence) {
     if (
       evidence.unifiedWorkbench.shellCount !== 1 ||
-      evidence.unifiedWorkbench.primarySidebarCount !== 1 ||
-      evidence.unifiedWorkbench.legacyHomeCount !== 0
+      evidence.unifiedWorkbench.primarySidebarCount !== 1
     ) {
       throw new Error(
         `Desktop did not use the canonical unified Workbench entry: ${JSON.stringify(evidence.unifiedWorkbench)}`,

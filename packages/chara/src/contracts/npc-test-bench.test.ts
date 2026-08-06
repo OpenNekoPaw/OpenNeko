@@ -158,14 +158,12 @@ describe('character role workflow contracts', () => {
     expect(CHARACTER_ROLE_TEST_ARTIFACT_DIR).toBe('.neko/character-tests');
   });
 
-  it('rejects removed transcript and evaluation version fields locally', () => {
-    const versionedArtifact: Record<string, unknown> = { ...artifact };
-    const versionedEvaluation: Record<string, unknown> = { ...evaluation };
-    Reflect.set(versionedArtifact, 'version', 1);
-    Reflect.set(versionedEvaluation, 'version', 1);
+  it('rejects unknown transcript and evaluation fields locally', () => {
+    const invalidArtifact: Record<string, unknown> = { ...artifact, unexpectedField: 1 };
+    const invalidEvaluation: Record<string, unknown> = { ...evaluation, unexpectedField: 1 };
 
-    expect(isNpcTranscriptArtifact(versionedArtifact)).toBe(false);
-    expect(isNpcEvaluationReport(versionedEvaluation)).toBe(false);
+    expect(isNpcTranscriptArtifact(invalidArtifact)).toBe(false);
+    expect(isNpcEvaluationReport(invalidEvaluation)).toBe(false);
     expect(isNpcTranscriptArtifact(artifact)).toBe(true);
   });
 

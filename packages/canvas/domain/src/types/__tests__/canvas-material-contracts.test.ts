@@ -32,7 +32,6 @@ const generation: CanvasGenerationEvidence = {
 const generatedLocator = {
   kind: 'generated-output',
   outputId: 'output-1',
-  revision: 'revision-1',
   digest: 'sha256:generated-output-1',
   path: 'neko/generated/image/output-1.png',
 } as const;
@@ -185,15 +184,15 @@ describe('Canvas material contracts', () => {
       nodeId: 'entity-node',
       expectedEntity: {
         entityId: 'character-1',
-        bindingId: 'binding-portrait-v1',
+        bindingId: 'binding-portrait-original',
         role: 'portrait',
       },
-      locator: { kind: 'workspace-file', path: 'characters/portrait-v2.png' },
+      locator: { kind: 'workspace-file', path: 'characters/portrait-replacement.png' },
       mediaKind: 'image',
-      title: 'portrait-v2.png',
+      title: 'portrait-replacement.png',
       entity: {
         entityId: 'character-1',
-        bindingId: 'binding-portrait-v2',
+        bindingId: 'binding-portrait-replacement',
         role: 'portrait',
       },
     } as const;
@@ -226,7 +225,6 @@ describe('Canvas material contracts', () => {
     const intent: CanvasMaterialActionIntent = {
       identity,
       actionId: descriptor.id,
-      expectedCanvasRevision: 4,
       selectedNodeIds: ['media-1'],
       payload: {},
     };

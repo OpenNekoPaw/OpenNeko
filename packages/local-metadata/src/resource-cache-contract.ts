@@ -130,7 +130,6 @@ export interface ResourceCacheLifecycleMetadata {
 }
 
 export interface ResourceCacheManifest {
-  readonly version: 2;
   readonly projectRoot?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -508,7 +507,7 @@ export function isResourceCacheVariantDescriptor(
 }
 
 export function isResourceCacheManifest(value: unknown): value is ResourceCacheManifest {
-  if (!isRecord(value) || value['version'] !== 2 || !isRecord(value['entries'])) return false;
+  if (!isRecord(value) || !isRecord(value['entries'])) return false;
   return (
     optionalString(value['projectRoot']) &&
     typeof value['createdAt'] === 'string' &&

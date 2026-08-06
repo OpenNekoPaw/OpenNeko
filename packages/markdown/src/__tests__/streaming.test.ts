@@ -26,7 +26,7 @@ function findNode(root: MarkdownNode, type: MarkdownNode['type']): MarkdownNode 
 }
 
 describe('MarkdownStreamingSession', () => {
-  it('keeps one session, monotonic revisions, and stable-prefix node identities', () => {
+  it('keeps one session, exact document identities, and stable-prefix node identities', () => {
     const session = new MarkdownStreamingSession({ sessionId: createMarkdownSessionId('stable') });
     const first = snapshot(session.append('First paragraph.\n\n'));
     const firstParagraph = findNode(first.document.root, 'paragraph');
@@ -38,7 +38,7 @@ describe('MarkdownStreamingSession', () => {
     const second = snapshot(session.append('Second paragraph'));
     const secondFirstParagraph = second.document.root.children[0];
     expect(second.sessionId).toBe(first.sessionId);
-    expect(second.revision).toBeGreaterThan(first.revision);
+    expect(second.documentId).not.toBe(first.documentId);
     expect(second.stableEndOffset).toBe(first.source.length);
     expect(secondFirstParagraph?.id).toBe(firstParagraph.id);
     expect(second.mutableRange).toEqual({
@@ -79,7 +79,7 @@ describe('MarkdownStreamingSession', () => {
     const result = session.finalize('**bold**');
     if (result.status !== 'ready') throw new Error('Expected final snapshot.');
     expect(result.snapshot.sessionId).toBe(streaming.sessionId);
-    expect(result.snapshot.revision).toBeGreaterThan(streaming.revision);
+    expect(result.snapshot.documentId).not.toBe(streaming.documentId);
     expect(result.snapshot.isFinal).toBe(true);
     expect(result.snapshot.stableEndOffset).toBe(result.snapshot.source.length);
     expect(result.snapshot.mutableRange).toEqual({
@@ -99,13 +99,13 @@ describe('MarkdownStreamingSession', () => {
       assertMarkdownResolutionAssociation(
         {
           sessionId: current.sessionId,
-          revision: current.revision,
+          documentId: current.documentId,
           resolutions: [],
           handoffRefs: [],
           diagnostics: [],
         },
         createMarkdownSessionId('b'),
-        current.revision,
+        current.documentId,
       ),
     ).toThrow(/cannot be associated/u);
   });

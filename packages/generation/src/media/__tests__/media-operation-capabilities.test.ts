@@ -162,7 +162,7 @@ describe('media provider capability negotiation', () => {
     expect(
       validateProviderImageRequest('newapi', request, [
         'chat',
-        'image_generation',
+        'text_to_image',
         'image.control.pose',
       ]),
     ).toEqual([

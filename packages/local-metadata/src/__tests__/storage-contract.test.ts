@@ -210,13 +210,13 @@ describe('canonical storage layout', () => {
     expect('config' in layout.project.facts).toBe(false);
   });
 
-  it('poisons retired workspace and package-local database paths', () => {
+  it('accepts only the canonical metadata database path', () => {
     expect(() =>
       assertCanonicalMetadataDatabasePath(
         '/workspace/demo/.neko/.cache/neko-cache.db',
         '/Users/feng',
       ),
-    ).toThrowError(expect.objectContaining({ code: 'retired-workspace-database' }));
+    ).toThrowError(expect.objectContaining({ code: 'unknown-managed-storage' }));
     expect(() =>
       assertCanonicalMetadataDatabasePath('/Users/feng/.neko/neko.db', '/Users/feng'),
     ).not.toThrow();
@@ -241,43 +241,37 @@ describe('workspace identity', () => {
     };
 
     await expect(ensureWorkspaceIdentityDescriptor(workspaceRoot, filePort)).resolves.toEqual({
-      version: 1,
       workspaceId: WORKSPACE_ID,
     });
     nextWorkspaceId = 'bd82b3ee-b9d9-4aa0-a635-23fa356e67df';
     await expect(ensureWorkspaceIdentityDescriptor(workspaceRoot, filePort)).resolves.toEqual({
-      version: 1,
       workspaceId: WORKSPACE_ID,
     });
     expect(files.get(descriptorPath)).toBe(
       `{
-  "version": 1,
   "workspaceId": "${WORKSPACE_ID}"
 }
 `,
     );
   });
 
-  it('parses and serializes the versioned UUID descriptor', () => {
+  it('parses the UUID descriptor and preserves unknown root metadata', () => {
     const descriptor = parseWorkspaceIdentityJson(
-      JSON.stringify({ version: 1, workspaceId: WORKSPACE_ID }),
+      JSON.stringify({ unexpectedField: 2, workspaceId: WORKSPACE_ID }),
     );
 
-    expect(descriptor).toEqual({ version: 1, workspaceId: WORKSPACE_ID });
+    expect(descriptor).toEqual({ unexpectedField: 2, workspaceId: WORKSPACE_ID });
     expect(serializeWorkspaceIdentityDescriptor(descriptor)).toBe(
-      `{\n  "version": 1,\n  "workspaceId": "${WORKSPACE_ID}"\n}\n`,
+      `{\n  "unexpectedField": 2,\n  "workspaceId": "${WORKSPACE_ID}"\n}\n`,
     );
   });
 
-  it('rejects malformed, unknown-version, and invalid UUID descriptors', () => {
+  it('rejects malformed JSON and invalid UUID descriptors', () => {
     expect(() => parseWorkspaceIdentityJson('')).toThrowError(
       expect.objectContaining({ code: 'invalid-workspace-identity' }),
     );
     expect(() =>
-      parseWorkspaceIdentityJson(JSON.stringify({ version: 2, workspaceId: WORKSPACE_ID })),
-    ).toThrowError(expect.objectContaining({ code: 'workspace-identity-version-mismatch' }));
-    expect(() =>
-      parseWorkspaceIdentityJson(JSON.stringify({ version: 1, workspaceId: 'current' })),
+      parseWorkspaceIdentityJson(JSON.stringify({ workspaceId: 'current' })),
     ).toThrowError(expect.objectContaining({ code: 'invalid-workspace-identity' }));
   });
 
