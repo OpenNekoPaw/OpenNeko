@@ -43,6 +43,25 @@ Agent configuration authority evidence:
   option or old diagnostic code under Agent, Host or Desktop production entries.
 - Existing retired config bytes were not read, imported, rewritten or deleted.
 
+Conversation and accepted-memory authority evidence:
+
+- The canonical portable Conversation manifest has no `version`, schema, Session path or SQLite
+  operational fields. Its strict codec rejects unknown fields and invalid branch/entry topology.
+- Export holds an exact temporary Conversation lease, reads every branch transcript from Pi Session,
+  and rejects active leases or non-durable turns. Import creates new Pi Sessions and rebuilds only the
+  stable catalog/branch mapping; lease, checkpoint and database bytes are never exported.
+- Focused branch export/import tests restored active/historical topology and both transcript branches
+  after a full authority dispose/reopen. Source checkpoint identity was absent after import.
+- Chara remains the durable accepted-memory owner through `neko/character-memory.json`. Its focused
+  test moves a draft observation to `accepted`, persists it through the Chara codec/store, and proves
+  an absent owning fact file returns no accepted memory without reading another source.
+- The unused Agent `.neko/memory.md` manager, recall implementation, public contract and self-contained
+  tests were deleted. `MemoryWrite` is registered only with an owning-domain proposal sink and always
+  reports `committed: false`; Agent has no durable memory writer or log-replay path.
+- `pnpm --filter @neko/agent-runtime exec vitest run ...` passed 50 focused Agent tests;
+  `pnpm --filter @neko/chara exec vitest run src/contracts/__tests__/character-memory.test.ts`
+  passed 11 tests. Agent Contracts, Agent Runtime and Chara typechecks passed.
+
 ### Agent Evaluation
 
 - Authoring decision: `reuse` the indexed `agent-runtime.model-binding` suite and its

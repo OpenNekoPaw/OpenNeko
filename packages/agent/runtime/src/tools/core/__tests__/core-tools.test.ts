@@ -1,7 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IProjectMemoryManager } from '@neko/agent-contracts';
 import type { Tool } from '@neko/agent-contracts';
 import { createCoreTools } from '../core-tools';
 
@@ -25,7 +24,6 @@ describe('createCoreTools', () => {
     await fs.mkdir(path.join(workspaceRoot, 'ignored'), { recursive: true });
     await fs.mkdir(outsideRoot, { recursive: true });
     await fs.writeFile(path.join(workspaceRoot, 'src', 'story.txt'), 'hello neko\n', 'utf-8');
-    await fs.writeFile(path.join(workspaceRoot, '.neko', 'memory.md'), '# Memory\n', 'utf-8');
     await fs.writeFile(
       path.join(workspaceRoot, '.neko', '.cache', 'resources', 'page.txt'),
       'cache\n',
@@ -263,19 +261,13 @@ describe('createCoreTools', () => {
     expect(JSON.stringify(grep.data)).not.toContain('page.txt');
   });
 
-  it('blocks generic Agent reads from project memory backing files', async () => {
-    const read = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Read');
-
-    await expect(read.execute({ file_path: '.neko/memory.md' })).resolves.toMatchObject({
-      success: false,
-      error: expect.stringContaining('managed workspace runtime or cache directory'),
-    });
-  });
-
-  it('exposes project memory updates as proposals instead of direct .neko writes', async () => {
-    const projectMemoryManager = createMockProjectMemoryManager();
+  it('sends memory proposals to the owning domain without committing a fact', async () => {
+    const proposeProjectMemoryMutation = vi.fn(async () => ({ proposalId: 'proposal-1' }));
     const memoryWrite = getTool(
-      createCoreTools({ defaultCwd: workspaceRoot, projectMemoryManager }),
+      createCoreTools({
+        defaultCwd: workspaceRoot,
+        projectMemoryProposalSink: { proposeProjectMemoryMutation },
+      }),
       'MemoryWrite',
     );
 
@@ -289,6 +281,7 @@ describe('createCoreTools', () => {
       success: true,
       data: {
         committed: false,
+        proposalId: 'proposal-1',
         proposal: {
           kind: 'project-memory-mutation',
           action: 'upsert',
@@ -297,8 +290,7 @@ describe('createCoreTools', () => {
         },
       },
     });
-    expect(projectMemoryManager.upsertEntry).not.toHaveBeenCalled();
-    expect(projectMemoryManager.removeEntry).not.toHaveBeenCalled();
+    expect(proposeProjectMemoryMutation).toHaveBeenCalledOnce();
   });
 
   it('blocks generic file tools from workspace .gitignore matches', async () => {
@@ -330,18 +322,4 @@ function getTool(tools: readonly Tool[], name: string): Tool {
     throw new Error(`Missing tool: ${name}`);
   }
   return tool;
-}
-
-function createMockProjectMemoryManager(): IProjectMemoryManager & {
-  readonly upsertEntry: ReturnType<typeof vi.fn>;
-  readonly removeEntry: ReturnType<typeof vi.fn>;
-} {
-  return {
-    load: vi.fn(async () => undefined),
-    getContent: vi.fn(() => null),
-    upsertEntry: vi.fn(async () => undefined),
-    removeEntry: vi.fn(async () => undefined),
-    on: vi.fn(),
-    off: vi.fn(),
-  };
 }

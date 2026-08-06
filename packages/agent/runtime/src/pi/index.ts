@@ -63,6 +63,13 @@ export {
   type PiTurnDurabilityState,
 } from './node-conversation-authority';
 export {
+  parsePortablePiConversationManifest,
+  parsePortablePiConversationManifestJson,
+  serializePortablePiConversationManifest,
+  type PortablePiConversationBranch,
+  type PortablePiConversationManifest,
+} from './conversation-portability';
+export {
   NodePiConversationCatalogReader,
   type CreateNodePiConversationCatalogReaderOptions,
   type PiConversationCatalogSnapshot,

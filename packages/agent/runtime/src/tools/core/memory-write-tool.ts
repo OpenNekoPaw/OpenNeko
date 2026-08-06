@@ -1,9 +1,8 @@
 /**
  * MemoryWrite Tool
  *
- * Allows the Agent to propose facts, decisions, and preferences for the
- * project-level memory file. The Agent does not commit `.neko/memory.md`
- * directly; clients or domain runtimes validate and persist accepted proposals.
+ * Allows the Agent to propose facts, decisions, and preferences. The owning
+ * project or character runtime validates and persists only accepted proposals.
  */
 
 import type {
@@ -37,7 +36,7 @@ export interface MemoryWriteToolOptions {
 export class MemoryWriteTool extends BuiltinTool {
   readonly name = 'MemoryWrite';
   readonly description =
-    'Propose a fact, decision, or preference update for project memory. The Agent does not write .neko/memory.md directly; the client or entity/runtime owner validates and commits accepted proposals. ' +
+    'Propose a fact, decision, or preference update for project memory. The Agent never commits durable memory; the project or character owner validates and commits accepted proposals. ' +
     'Use `upsert` to propose creating or updating a named section; use `remove` to propose deleting one. ' +
     'Good sections: "User Preferences", "Project Architecture", "Recent Decisions", "Key Conventions".';
 
@@ -51,8 +50,7 @@ export class MemoryWriteTool extends BuiltinTool {
       },
       key: {
         type: 'string',
-        description:
-          'Section heading (e.g. "User Preferences"). Used as the ## heading in memory.md.',
+        description: 'Stable project-memory subject (e.g. "User Preferences").',
       },
       content: {
         type: 'string',

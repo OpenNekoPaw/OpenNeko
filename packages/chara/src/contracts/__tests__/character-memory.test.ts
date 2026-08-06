@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -224,15 +224,38 @@ describe('progressive character memory contracts', () => {
       },
       mkdir: (targetPath) => fs.mkdir(targetPath, { recursive: true }).then(() => undefined),
     });
-    const memory = addCharacterObservation(
+    const draftMemory = addCharacterObservation(
       createEmptyCharacterMemoryFile('${WORKSPACE}'),
       makeObservation(),
+    ).memory;
+    const memory = updateCharacterObservationReviewStatus(
+      draftMemory,
+      'obs-rin-shot-1',
+      'accepted',
+      { reviewer: 'user', updatedAt: '2026-08-06T00:00:00.000Z' },
     ).memory;
 
     expect(await store.load(memoryPath)).toBeNull();
     await store.save(memoryPath, memory);
 
     expect(await store.load(memoryPath)).toEqual(memory);
+    expect((await store.load(memoryPath))?.ledger.observations[0]).toMatchObject({
+      reviewStatus: 'accepted',
+      reviewer: 'user',
+    });
+  });
+
+  it('does not rebuild accepted memory when the owning fact file is absent', async () => {
+    const readFile = vi.fn(async () => '{"event":"observation"}');
+    const store = createCharacterEvidenceLedgerStore({
+      exists: vi.fn(async () => false),
+      readFile,
+      writeFile: vi.fn(async () => undefined),
+      mkdir: vi.fn(async () => undefined),
+    });
+
+    await expect(store.load('/workspace/neko/character-memory.json')).resolves.toBeNull();
+    expect(readFile).not.toHaveBeenCalled();
   });
 });
 

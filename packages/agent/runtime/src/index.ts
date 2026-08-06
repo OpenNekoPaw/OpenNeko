@@ -138,10 +138,6 @@ export { AgentError, type AgentErrorCategory, type AgentErrorInfo } from './erro
 
 // Export executor
 
-// Export memory
-export { FileProjectMemoryManager, createFileProjectMemoryManager, MemoryRecall } from './memory';
-export type { MemoryRecallOptions, RecalledMemory } from './memory';
-
 // Export MCP
 export {
   StdioMCPClient,

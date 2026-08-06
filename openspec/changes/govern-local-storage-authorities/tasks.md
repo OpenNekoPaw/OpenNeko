@@ -26,15 +26,15 @@
 
 ## 3. Agent Conversation And Memory Authorities
 
-- [ ] 3.1 Define one canonical portable conversation manifest only where user-visible export requires
+- [x] 3.1 Define one canonical portable conversation manifest only where user-visible export requires
       it; do not add an internal version discriminator.
 - [x] 3.2 Keep conversation leases, checkpoints and task state in Agent-owned stable repositories using
       exact session/request identity instead of writer epochs.
 - [x] 3.3 Delete product reachability to retired Agent metadata databases; preserve their bytes.
-- [ ] 3.4 Implement database-free conversation export/import from canonical Pi Session facts while
+- [x] 3.4 Implement database-free conversation export/import from canonical Pi Session facts while
       keeping in-flight operational state fail-visible.
-- [ ] 3.5 Keep accepted memory with owning Chara/project files and only rebuildable indexes in cache.
-- [ ] 3.6 Add producer/consumer, branch/restart/export/import, cache-loss, retired-database absence,
+- [x] 3.5 Keep accepted memory with owning Chara/project files and only rebuildable indexes in cache.
+- [x] 3.6 Add producer/consumer, branch/restart/export/import, cache-loss, retired-database absence,
       explicit-memory and no-log-replay tests.
 
 ## 4. Workspace And Log Enforcement

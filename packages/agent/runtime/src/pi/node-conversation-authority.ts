@@ -11,6 +11,11 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import {
+  parsePortablePiConversationManifest,
+  type PortablePiConversationBranch,
+  type PortablePiConversationManifest,
+} from './conversation-portability';
 import { openNodePiConversationStorage } from './node-conversation-storage';
 
 export interface ConversationExecutionLease {
@@ -71,6 +76,7 @@ export type PiConversationAuthorityErrorCode =
   | 'branch-exists'
   | 'lease-held'
   | 'lease-stale'
+  | 'portability-blocked'
   | 'workspace-mismatch'
   | 'invalid-identity';
 
@@ -709,6 +715,114 @@ export class NodePiConversationAuthority {
       .map((row) => requireParsed(readBranchRow(row), 'branch'));
   }
 
+  async exportConversationManifest(
+    conversationId: string,
+  ): Promise<PortablePiConversationManifest> {
+    validateIdentity('conversationId', conversationId);
+    const conversation = this.readConversation(conversationId);
+    if (conversation === undefined) {
+      throw new PiConversationAuthorityError(
+        'conversation-not-found',
+        `Conversation ${conversationId} does not exist.`,
+      );
+    }
+    this.assertConversationPortabilityIdle(conversationId);
+    const lease = this.acquireLease(conversationId);
+    try {
+      const branches = await Promise.all(
+        this.listBranches(conversationId).map(async (branch) => ({
+          branchId: branch.branchId,
+          ...(branch.parentBranchId === undefined ? {} : { parentBranchId: branch.parentBranchId }),
+          state: branch.state,
+          createdAt: branch.createdAt,
+          updatedAt: branch.updatedAt,
+          entries: await this.readBranchEntries(conversationId, branch.branchId),
+        })),
+      );
+      return parsePortablePiConversationManifest({ ...conversation, branches });
+    } finally {
+      this.releaseLease(lease);
+    }
+  }
+
+  async importConversationManifest(value: unknown): Promise<PiConversationCatalogRecord> {
+    const manifest = parsePortablePiConversationManifest(value);
+    if (manifest.workspaceId !== this.workspaceId) {
+      throw new PiConversationAuthorityError(
+        'workspace-mismatch',
+        `Conversation ${manifest.conversationId} belongs to workspace ${manifest.workspaceId}.`,
+      );
+    }
+    if (this.readConversation(manifest.conversationId) !== undefined) {
+      throw new PiConversationAuthorityError(
+        'conversation-exists',
+        `Conversation ${manifest.conversationId} already exists.`,
+      );
+    }
+    this.assertConversationPortabilityIdle(manifest.conversationId);
+    const lease = this.acquireLease(manifest.conversationId);
+    let imported: readonly {
+      readonly branch: PortablePiConversationBranch;
+      readonly metadata: JsonlSessionMetadata;
+      readonly leafId: string | null;
+    }[] = [];
+    try {
+      imported = await this.createImportedSessions(manifest);
+      this.database.exec('BEGIN IMMEDIATE');
+      try {
+        this.assertLease(lease, this.now());
+        this.database
+          .prepare(
+            `INSERT INTO pi_conversations
+              (workspace_id, conversation_id, title, active_branch_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            manifest.workspaceId,
+            manifest.conversationId,
+            manifest.title,
+            manifest.activeBranchId,
+            manifest.createdAt,
+            manifest.updatedAt,
+          );
+        for (const item of imported) {
+          insertBranch(this.database, {
+            conversationId: manifest.conversationId,
+            branchId: item.branch.branchId,
+            ...(item.branch.parentBranchId === undefined
+              ? {}
+              : { parentBranchId: item.branch.parentBranchId }),
+            state: item.branch.state,
+            session: item.metadata,
+            leafId: item.leafId,
+            createdAt: item.branch.createdAt,
+            updatedAt: item.branch.updatedAt,
+          });
+        }
+        this.database.exec('COMMIT');
+      } catch (error) {
+        this.database.exec('ROLLBACK');
+        throw error;
+      }
+    } catch (error) {
+      const cleanupFailures = await this.deleteImportedSessions(imported);
+      try {
+        this.releaseLease(lease);
+      } catch (releaseError) {
+        cleanupFailures.push(releaseError);
+      }
+      if (cleanupFailures.length > 0) {
+        throw new AggregateError(
+          [error, ...cleanupFailures],
+          `Conversation ${manifest.conversationId} import failed and cleanup was incomplete.`,
+        );
+      }
+      throw error;
+    }
+    this.releaseLease(lease);
+    return requireParsed(this.readConversation(manifest.conversationId), 'imported conversation');
+  }
+
   async projectCatalog(projector: PiConversationCatalogProjector): Promise<void> {
     const conversations = this.listConversations();
     const branches = conversations.flatMap((record) => this.listBranches(record.conversationId));
@@ -746,6 +860,95 @@ export class NodePiConversationAuthority {
       );
     }
     this.assertLease(lease, this.now());
+  }
+
+  private assertConversationPortabilityIdle(conversationId: string): void {
+    const currentLease = readLeaseRow(
+      this.database
+        .prepare('SELECT * FROM pi_execution_leases WHERE conversation_id = ?')
+        .get(conversationId),
+    );
+    if (currentLease !== undefined && currentLease.expiresAt > this.now()) {
+      throw new PiConversationAuthorityError(
+        'portability-blocked',
+        `Conversation ${conversationId} has an active execution lease.`,
+      );
+    }
+    for (const [key, state] of this.durability) {
+      if (key.startsWith(`${conversationId}\u0000`) && state !== 'durable') {
+        throw new PiConversationAuthorityError(
+          'portability-blocked',
+          `Conversation ${conversationId} has turn state '${state}' that is not durable.`,
+        );
+      }
+    }
+  }
+
+  private async createImportedSessions(manifest: PortablePiConversationManifest): Promise<
+    readonly {
+      readonly branch: PortablePiConversationBranch;
+      readonly metadata: JsonlSessionMetadata;
+      readonly leafId: string | null;
+    }[]
+  > {
+    const imported: {
+      readonly branch: PortablePiConversationBranch;
+      readonly metadata: JsonlSessionMetadata;
+      leafId: string | null;
+    }[] = [];
+    const metadataByBranchId = new Map<string, JsonlSessionMetadata>();
+    try {
+      for (const branch of orderPortableBranches(manifest.branches)) {
+        const parentSessionPath =
+          branch.parentBranchId === undefined
+            ? undefined
+            : metadataByBranchId.get(branch.parentBranchId)?.path;
+        if (branch.parentBranchId !== undefined && parentSessionPath === undefined) {
+          throw new TypeError(
+            `Conversation branch '${branch.branchId}' parent Session is unavailable.`,
+          );
+        }
+        const session = await this.sessions.create({
+          cwd: this.virtualWorkspaceCwd(),
+          id: uuidv7(),
+          ...(parentSessionPath === undefined ? {} : { parentSessionPath }),
+          metadata: {
+            workspaceId: manifest.workspaceId,
+            conversationId: manifest.conversationId,
+            branchId: branch.branchId,
+          },
+        });
+        const metadata = await session.getMetadata();
+        const importedBranch: {
+          readonly branch: PortablePiConversationBranch;
+          readonly metadata: JsonlSessionMetadata;
+          leafId: string | null;
+        } = { branch, metadata, leafId: null };
+        imported.push(importedBranch);
+        for (const entry of branch.entries) await session.getStorage().appendEntry(entry);
+        metadataByBranchId.set(branch.branchId, metadata);
+        importedBranch.leafId = await session.getLeafId();
+      }
+      return imported;
+    } catch (error) {
+      const cleanupFailures = await this.deleteImportedSessions(imported);
+      if (cleanupFailures.length > 0) {
+        throw new AggregateError(
+          [error, ...cleanupFailures],
+          `Conversation ${manifest.conversationId} Session import cleanup was incomplete.`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async deleteImportedSessions(
+    imported: readonly { readonly metadata: JsonlSessionMetadata }[],
+  ): Promise<unknown[]> {
+    const results = await Promise.allSettled(
+      imported.map((item) => this.sessions.delete(item.metadata)),
+    );
+    return results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []));
   }
 
   private assertLease(
@@ -792,6 +995,25 @@ export class NodePiConversationAuthority {
       throw error;
     }
   }
+}
+
+function orderPortableBranches(
+  branches: readonly PortablePiConversationBranch[],
+): readonly PortablePiConversationBranch[] {
+  const pending = [...branches];
+  const ordered: PortablePiConversationBranch[] = [];
+  const emitted = new Set<string>();
+  while (pending.length > 0) {
+    const index = pending.findIndex(
+      (branch) => branch.parentBranchId === undefined || emitted.has(branch.parentBranchId),
+    );
+    if (index < 0) throw new TypeError('Conversation branch topology cannot be ordered.');
+    const [branch] = pending.splice(index, 1);
+    if (branch === undefined) throw new TypeError('Conversation branch ordering failed.');
+    ordered.push(branch);
+    emitted.add(branch.branchId);
+  }
+  return ordered;
 }
 
 function insertBranch(database: DatabaseSync, branch: PiConversationBranchRecord): void {

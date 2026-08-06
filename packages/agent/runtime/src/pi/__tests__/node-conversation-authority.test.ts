@@ -368,6 +368,123 @@ describe('NodePiConversationAuthority', () => {
     );
   });
 
+  it('exports and imports branch facts without copying SQLite operational state', async () => {
+    const sourceRoot = join(root, 'source');
+    const targetRoot = join(root, 'target');
+    const source = await NodePiConversationAuthority.create({
+      userDataRoot: sourceRoot,
+      workspaceId: 'workspace-portable',
+      hostId: 'source-host',
+      now: () => now,
+    });
+    authorities.push(source);
+    const sourceLease = source.acquireLease('conversation-portable');
+    const main = await source.createConversation({
+      lease: sourceLease,
+      conversationId: 'conversation-portable',
+      branchId: 'main',
+      title: 'Portable fixture',
+    });
+    const firstEntry = await main.appendMessage({
+      role: 'user',
+      content: 'source message',
+      timestamp: now,
+    });
+    await source.checkpointTurn({
+      lease: sourceLease,
+      conversationId: 'conversation-portable',
+      branchId: 'main',
+      turnId: 'source-turn',
+      terminalState: 'completed',
+    });
+    const alternate = await source.forkBranch({
+      lease: sourceLease,
+      conversationId: 'conversation-portable',
+      sourceBranchId: 'main',
+      branchId: 'alternate',
+      entryId: firstEntry,
+      position: 'at',
+    });
+    await alternate.appendMessage({
+      role: 'user',
+      content: 'alternate message',
+      timestamp: now + 1,
+    });
+    source.activateBranch(sourceLease, 'conversation-portable', 'alternate');
+    source.releaseLease(sourceLease);
+
+    const manifest = await source.exportConversationManifest('conversation-portable');
+    const portableJson = JSON.stringify(manifest);
+    expect(portableJson).not.toContain('version');
+    expect(portableJson).not.toContain('sessionPath');
+    expect(portableJson).not.toContain('writerLeaseId');
+    expect(portableJson).not.toContain(sourceRoot);
+
+    const target = await NodePiConversationAuthority.create({
+      userDataRoot: targetRoot,
+      workspaceId: 'workspace-portable',
+      hostId: 'target-host',
+      now: () => now,
+    });
+    authorities.push(target);
+    await expect(target.importConversationManifest(manifest)).resolves.toMatchObject({
+      conversationId: 'conversation-portable',
+      activeBranchId: 'alternate',
+      title: 'Portable fixture',
+    });
+    expect(target.readCheckpoint('conversation-portable', 'source-turn')).toBeUndefined();
+    expect(target.listBranches('conversation-portable')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ branchId: 'main', state: 'historical' }),
+        expect.objectContaining({
+          branchId: 'alternate',
+          parentBranchId: 'main',
+          state: 'active',
+        }),
+      ]),
+    );
+
+    await target.dispose();
+    authorities.splice(authorities.indexOf(target), 1);
+    const reopened = await NodePiConversationAuthority.create({
+      userDataRoot: targetRoot,
+      workspaceId: 'workspace-portable',
+      hostId: 'target-reopened',
+      now: () => now,
+    });
+    authorities.push(reopened);
+    await expect(
+      reopened.buildContext('conversation-portable', 'alternate'),
+    ).resolves.toMatchObject({
+      messages: [
+        expect.objectContaining({ content: 'source message' }),
+        expect.objectContaining({ content: 'alternate message' }),
+      ],
+    });
+    const restoredLease = reopened.acquireLease('conversation-portable');
+    expect(restoredLease.holderId).toBe('target-reopened');
+    reopened.releaseLease(restoredLease);
+  });
+
+  it('fails visibly instead of exporting an in-flight Conversation', async () => {
+    const authority = await createAuthority('desktop-export');
+    const lease = authority.acquireLease('conversation-busy');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-busy',
+      branchId: 'main',
+    });
+
+    await expect(authority.exportConversationManifest('conversation-busy')).rejects.toMatchObject({
+      code: 'portability-blocked',
+    });
+    authority.releaseLease(lease);
+    authority.startTurnDurability('conversation-busy', 'turn-volatile');
+    await expect(authority.exportConversationManifest('conversation-busy')).rejects.toThrow(
+      "turn state 'volatile' that is not durable",
+    );
+  });
+
   async function createAuthority(hostId: string, leaseTtlMs = 30_000, workspaceId = 'workspace-1') {
     const authority = await NodePiConversationAuthority.create({
       userDataRoot: root,

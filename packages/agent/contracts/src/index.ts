@@ -30,7 +30,6 @@ export * from './message-attachment';
 export * from './mcp';
 export * from './multimodal-context';
 export * from './perception-tool';
-export * from './project-memory';
 export * from './recovery-guidance';
 export * from './resource-display-projection';
 export * from './tool-group';
