@@ -238,3 +238,24 @@ Functional Electron acceptance owns a single temporary fixture root. The runtime
 fixture argument without an explicit safe fixture HOME is invalid. Isolation is checked before local metadata or Pi
 storage opens, so a test launch cannot accidentally use the user's `~/.neko/neko.db`. Unit tests continue to use
 per-test temporary roots and never use the process home as a fixture.
+
+## Follow-up decisions: startup notice and unavailable-owner cleanup
+
+`desktop-stored-state-metadata-retained` 表示 Host 已保留未知字段且当前 canonical 数据仍可使用，
+不是持续阻塞用户的错误。Renderer 只从本次启动收到的第一个 authoritative Shell projection 捕获
+第一条 retained-metadata warning，并把它作为 viewport overlay 展示；用户可立即关闭，未操作时在
+8 秒后自动移除。后续 Scene transition、Shell projection event 和 snapshot refresh 不重新武装该
+通知。`desktop-stored-state-invalid`、invalid Window、component failure、conversation diagnostic 和
+命令错误仍按现有 fail-visible 生命周期展示，不共享启动通知超时。
+
+Workspace registry 的 Project catalog 在列出记录时只读 `neko/project.json`，使用 Local Metadata
+拥有的 canonical identity codec 校验文件和 registry `workspaceId`。目录存在但 identity 缺失、损坏
+或冲突时，Project 继续展示并带 item-local `unavailable`；Host 将该 unavailable 合并到同 identity
+的 persisted Project projection，并在 Workspace grant restore 前拒绝打开。不得等 restore 抛错后
+再隐藏 Project，也不得创建或修复 identity 作为列表读取副作用。
+
+Agent Home 的显式 conversation 删除先由 Desktop 验证 exact navigation 仍存在，再调用 Agent
+application host 的全局删除入口。该入口从 Pi catalog 解析 conversation 的持久 `workspaceId`：若
+对应 Workspace runtime 已存在则复用它完成精确停止和删除；否则只创建短生命周期 Pi conversation
+authority 执行删除并立即释放，不解析 Project path、不 attach Workspace、不加载 tools/provider。
+未知 conversation 继续 fail-visible，且不以 active/recent owner 替代。

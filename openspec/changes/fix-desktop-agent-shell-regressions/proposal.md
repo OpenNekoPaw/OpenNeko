@@ -33,6 +33,12 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
   Workspace 或写入 Scene 前拒绝。删除会话和移除最近 Project 仍作为显式人工清理操作保留。
 - Desktop 功能验收必须把 HOME、全局 SQLite、Electron userData 和 Workspace 全部放在同一个
   临时 fixture root 内；隔离条件不成立时在打开任何数据库前失败，不得读取或写入用户数据库。
+- 将“未知 Shell/Application Settings 元数据已原样保留”收敛为每次 Renderer 启动只出现一次的
+  非阻塞通知；通知自动消失并可手动关闭，Scene/Project 切换不得让它重新出现。数据拒绝、运行错误
+  和失效记录诊断继续保持 fail-visible，不得被同一超时隐藏。
+- Project catalog 在开放导航前读取并校验 canonical `neko/project.json` identity；缺失、损坏或与
+  registry identity 冲突时保留 Project 并投影为不可用。失效会话的显式删除通过 Agent 全局
+  conversation authority 完成，不得为清理操作解析或 attach 已失效的 Workspace。
 
 ## Capabilities
 
@@ -57,3 +63,5 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - Desktop Workbench Main View contract、Canvas/Assets 组合、聚焦测试、真实 Electron 验收和相关架构/状态文档。
 - Agent Home unavailable contract、Desktop Primary Sidebar 禁用态、Scene transition 拒绝路径和
   功能验收数据库隔离门禁。
+- Desktop 启动通知生命周期、Workspace identity catalog inspection，以及不依赖 Workspace runtime
+  的 Agent conversation 清理入口。

@@ -71,6 +71,7 @@ export const zhCN = {
     '未识别的工作区元数据已原样保留（{fields}），项目和窗口仍可使用。',
   'shell.settingsMetadataRetained':
     '未识别的应用设置元数据已原样保留（{fields}），当前设置仍可使用。',
+  'shell.dismissStartupNotification': '关闭启动通知',
   'shell.conversationRecordInvalid':
     '旧会话“{conversationId}”的数据已失效并隔离，已打开新的草稿。其他会话、项目和文件均未修改。',
   'shell.conversationRecordInvalidUnknown':

@@ -432,3 +432,60 @@ fail before opening application storage.
   outside that root
 - **THEN** startup fails before local metadata, conversation catalog or Agent storage opens
 - **AND** it MUST NOT fall back to the system home or user database
+
+### Requirement: Retained metadata is a one-time startup notice
+
+Desktop SHALL present retained unknown Shell or Application Settings metadata as a non-blocking notice captured
+only from the first authoritative Shell projection of the current Renderer startup. The notice SHALL be manually
+dismissible and SHALL automatically disappear without reserving Workbench layout space. Error diagnostics SHALL
+retain their existing fail-visible lifecycle.
+
+#### Scenario: Startup projection contains retained metadata
+
+- **WHEN** the first Shell projection reports `desktop-stored-state-metadata-retained`
+- **THEN** Desktop displays the exact localized retained-field notice above the Workbench
+- **AND** the user can dismiss it immediately
+- **AND** it automatically disappears after the bounded startup interval
+
+#### Scenario: Scene changes after the startup notice disappears
+
+- **WHEN** the retained-metadata diagnostic remains in later Shell projections after the startup notice was dismissed
+- **THEN** Scene, Project, Asset Center and Extensions navigation do not display the notice again
+- **AND** the Workbench remains fully usable without a persistent notification layer
+
+#### Scenario: Stored state is rejected
+
+- **WHEN** Desktop reports a stored-state, Window, component or operation error instead of a retained-metadata warning
+- **THEN** the error remains fail-visible according to its owning lifecycle
+- **AND** the startup notice timeout does not hide it
+
+### Requirement: Unavailable Project identity is rejected before restore
+
+Desktop SHALL inspect the canonical Project identity while building the Project catalog. A registered Workspace
+whose directory exists but whose identity is missing, invalid or conflicts with the registry SHALL remain visible
+as an unavailable Project and SHALL be rejected before Workspace restore.
+
+#### Scenario: Registered Workspace loses its Project identity
+
+- **WHEN** a registered Workspace directory remains present but `neko/project.json` is missing or invalid
+- **THEN** the Project catalog retains that exact Project with an item-local unavailable diagnostic
+- **AND** its primary open action is disabled
+- **AND** a forged open request is rejected before Workspace grant restore or Scene mutation
+
+#### Scenario: Persisted Project and unavailable registry record share an identity
+
+- **WHEN** Shell state contains a persisted Project and the current registry projection marks the same Project unavailable
+- **THEN** the projected catalog preserves the current unavailable state instead of overwriting it with stored display data
+- **AND** Host navigation uses that same unavailable fact
+
+### Requirement: Unavailable conversation cleanup does not require Workspace restore
+
+Desktop SHALL allow explicit deletion of a visible unavailable conversation through its exact Pi catalog identity.
+Cleanup SHALL NOT require the conversation's Project to remain registered or its Workspace runtime to be attached.
+
+#### Scenario: Unavailable Workspace conversation is explicitly deleted
+
+- **WHEN** a visible unavailable conversation belongs to a Workspace absent from the Project catalog
+- **THEN** Desktop deletes the exact persisted conversation through Agent conversation authority
+- **AND** it does not resolve a Project path, restore a Workspace grant, attach a Workspace runtime or execute a domain tool
+- **AND** valid sibling conversations remain unchanged

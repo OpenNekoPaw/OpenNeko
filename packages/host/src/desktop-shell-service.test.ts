@@ -706,6 +706,55 @@ describe('DesktopShellService', () => {
     expect(await fixture.service.getProjection(windowId)).toEqual(before);
   });
 
+  it('preserves current retained unavailability over a persisted Project with the same identity', async () => {
+    const repository = createInMemoryDesktopShellStateRepository();
+    const first = createFixture(repository);
+    const firstWindowId = await first.service.claimWindowId();
+    first.service.setRendererSessionId(firstWindowId, 'renderer-session-1');
+    const initial = await first.service.getProjection(firstWindowId);
+    const opened = await openContent(
+      first,
+      firstWindowId,
+      '/workspace/demo',
+      initial.rendererSessionId,
+    );
+    const persistedProject = opened.projection.catalog.projects[0]!;
+    first.service.releaseWindow(firstWindowId);
+    await first.service.dispose();
+
+    const retainedProject: DesktopProjectCatalogItem = {
+      ...persistedProject,
+      unavailable: {
+        fieldNames: ['identity'],
+        message: 'Project identity is missing.',
+      },
+    };
+    const restored = createFixture(repository, 'restore', undefined, true, [], [retainedProject]);
+    const windowId = await restored.service.claimWindowId();
+    restored.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const before = await restored.service.getProjection(windowId);
+    expect(before.catalog.projects).toContainEqual(retainedProject);
+
+    await expect(
+      restored.service.transitionScene(
+        createDesktopSceneTransitionRequest({
+          requestId: 'open-persisted-unavailable-project',
+          rendererSessionId: before.rendererSessionId,
+          windowId,
+          sceneId: activeScene(before.window).sceneId,
+          intent: {
+            kind: 'open-project-workspace',
+            projectId: retainedProject.projectId,
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { message: expect.stringContaining('Project identity is missing.') },
+    });
+    expect(restored.registry.restore).not.toHaveBeenCalled();
+  });
+
   it('rejects an unavailable Conversation before Scene mutation while a valid sibling remains', async () => {
     const fixture = createFixture();
     const workspaceId = '11111111-1111-4111-8111-111111111111';

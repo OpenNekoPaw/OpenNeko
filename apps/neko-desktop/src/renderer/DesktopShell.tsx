@@ -92,9 +92,14 @@ type ShellState =
 
 type HomeSection = 'create' | 'assets' | 'extensions' | 'projects';
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
+type RetainedMetadataDiagnostic = Extract<
+  NonNullable<DesktopShellProjection['stateDiagnostics']>[number],
+  { readonly code: 'desktop-stored-state-metadata-retained' }
+>;
 
 export const MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO = 0.5;
 export const MANAGEMENT_MAIN_SPLIT_MIN_RATIO = 0.5;
+const STARTUP_METADATA_NOTICE_DURATION_MS = 8_000;
 
 interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
@@ -115,9 +120,23 @@ export function DesktopApplication(): JSX.Element {
   const [state, setState] = useState<ShellState>({ kind: 'loading' });
   const [pending, setPending] = useState(false);
   const [diagnostic, setDiagnostic] = useState<string>();
+  const [startupMetadataDiagnostic, setStartupMetadataDiagnostic] =
+    useState<RetainedMetadataDiagnostic>();
   const lastSequence = useRef<number | null>(null);
   const rendererSessionId = useRef<string>();
   const pendingProjectionRequest = useRef<object>();
+  const startupProjectionCaptured = useRef(false);
+
+  const captureStartupMetadataDiagnostic = useCallback((projection: DesktopShellProjection) => {
+    if (startupProjectionCaptured.current) return;
+    startupProjectionCaptured.current = true;
+    setStartupMetadataDiagnostic(
+      projection.stateDiagnostics?.find(
+        (candidate): candidate is RetainedMetadataDiagnostic =>
+          candidate.code === 'desktop-stored-state-metadata-retained',
+      ),
+    );
+  }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
     const request = {};
@@ -127,8 +146,9 @@ export function DesktopApplication(): JSX.Element {
     rendererSessionId.current = projection.rendererSessionId;
     pendingProjectionRequest.current = undefined;
     lastSequence.current = null;
+    captureStartupMetadataDiagnostic(projection);
     setState({ kind: 'ready', projection });
-  }, []);
+  }, [captureStartupMetadataDiagnostic]);
 
   useEffect(() => {
     let active = true;
@@ -155,6 +175,7 @@ export function DesktopApplication(): JSX.Element {
       }
       rendererSessionId.current = event.projection.rendererSessionId;
       lastSequence.current = event.sequence;
+      captureStartupMetadataDiagnostic(event.projection);
       setState({ kind: 'ready', projection: event.projection });
     });
     void refresh().catch((error: unknown) => {
@@ -164,7 +185,16 @@ export function DesktopApplication(): JSX.Element {
       active = false;
       unsubscribe();
     };
-  }, [refresh, t]);
+  }, [captureStartupMetadataDiagnostic, refresh, t]);
+
+  useEffect(() => {
+    if (!startupMetadataDiagnostic) return;
+    const timeout = window.setTimeout(
+      () => setStartupMetadataDiagnostic(undefined),
+      STARTUP_METADATA_NOTICE_DURATION_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [startupMetadataDiagnostic]);
 
   const runMutation = useCallback(
     async (operation: () => Promise<DesktopShellProjection>): Promise<void> => {
@@ -199,7 +229,9 @@ export function DesktopApplication(): JSX.Element {
   }
 
   const projection = state.projection;
-  const persistedStateDiagnostic = projection.stateDiagnostics?.[0];
+  const persistedStateDiagnostic = projection.stateDiagnostics?.find(
+    (candidate) => candidate.severity === 'error',
+  );
   const persistedConversationDiagnostic = projection.agentHome.diagnostics?.[0];
   const persistedConversationMessage = persistedConversationDiagnostic
     ? persistedConversationDiagnostic.conversationId
@@ -208,26 +240,30 @@ export function DesktopApplication(): JSX.Element {
         })
       : t('shell.conversationRecordInvalidUnknown')
     : undefined;
+  const persistedStateMessage = persistedStateDiagnostic
+    ? persistedStateDiagnostic.code === 'desktop-shell-component-invalid'
+      ? t('shell.projectCatalogInvalid')
+      : persistedStateDiagnostic.code === 'desktop-stored-window-invalid'
+        ? t('shell.storedWindowInvalid', { windowId: persistedStateDiagnostic.windowId })
+        : persistedStateDiagnostic.authorityKey === 'desktop.application-settings'
+          ? t('shell.storedSettingsInvalid')
+          : t('shell.storedStateInvalid')
+    : undefined;
+  const startupMetadataMessage = startupMetadataDiagnostic
+    ? t(
+        startupMetadataDiagnostic.authorityKey === 'desktop.application-settings'
+          ? 'shell.settingsMetadataRetained'
+          : 'shell.workspaceMetadataRetained',
+        { fields: startupMetadataDiagnostic.fieldNames.join(', ') },
+      )
+    : undefined;
   const visibleDiagnostic =
-    diagnostic ??
-    (persistedStateDiagnostic
-      ? persistedStateDiagnostic.code === 'desktop-shell-component-invalid'
-        ? t('shell.projectCatalogInvalid')
-        : persistedStateDiagnostic.code === 'desktop-stored-state-metadata-retained'
-          ? t(
-              persistedStateDiagnostic.authorityKey === 'desktop.application-settings'
-                ? 'shell.settingsMetadataRetained'
-                : 'shell.workspaceMetadataRetained',
-              {
-                fields: persistedStateDiagnostic.fieldNames.join(', '),
-              },
-            )
-          : persistedStateDiagnostic.code === 'desktop-stored-window-invalid'
-            ? t('shell.storedWindowInvalid', { windowId: persistedStateDiagnostic.windowId })
-            : persistedStateDiagnostic.authorityKey === 'desktop.application-settings'
-              ? t('shell.storedSettingsInvalid')
-              : t('shell.storedStateInvalid')
-      : persistedConversationMessage);
+    diagnostic ?? persistedStateMessage ?? persistedConversationMessage ?? startupMetadataMessage;
+  const showingStartupMetadataDiagnostic =
+    diagnostic === undefined &&
+    persistedStateMessage === undefined &&
+    persistedConversationMessage === undefined &&
+    startupMetadataMessage !== undefined;
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
   const transitionScene = (intent: DesktopSceneTransitionIntent): void => {
     setPending(true);
@@ -327,12 +363,23 @@ export function DesktopApplication(): JSX.Element {
             role="alert"
             title={
               diagnostic === undefined
-                ? (persistedStateDiagnostic?.message ?? persistedConversationDiagnostic?.message)
+                ? (persistedStateDiagnostic?.message ??
+                  persistedConversationDiagnostic?.message ??
+                  startupMetadataDiagnostic?.message)
                 : undefined
             }
           >
             <WarningIcon size={15} />
             <span>{visibleDiagnostic}</span>
+            {showingStartupMetadataDiagnostic ? (
+              <IconButton
+                className="shell-diagnostic__dismiss"
+                icon={<CloseIcon size={14} />}
+                label={t('shell.dismissStartupNotification')}
+                title={t('shell.dismissStartupNotification')}
+                onClick={() => setStartupMetadataDiagnostic(undefined)}
+              />
+            ) : null}
           </div>
         ) : null}
         <DesktopSceneWorkbench

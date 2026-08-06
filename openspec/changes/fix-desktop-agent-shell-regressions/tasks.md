@@ -16,6 +16,7 @@
 - [x] 1.14 Add red Main/Bridge/preload tests proving exact retired projection cleanup succeeds, ordinary or forged retired operations fail, and queued retired events cannot mutate the current connection.
 - [x] 1.15 Add red Agent Webview tests proving global/session diagnostics portal to the renderer body, remain viewport-bounded, and retained hidden Tabs do not project alerts.
 - [x] 1.16 Add contract, renderer and Host red tests proving unavailable Conversations/Projects remain visible, their primary actions are disabled, forged requests execute no domain call, and valid siblings remain operable.
+- [x] 1.17 Add red Renderer, Workspace registry, Host and Agent/AppHost tests for one-time retained-metadata startup notice, missing Project identity projection, stored/unavailable Project convergence and unavailable conversation deletion without Workspace attach.
 
 ## 2. Persistent Agent Home catalog
 
@@ -34,6 +35,7 @@
 - [x] 3.7 Preserve the owning user message across Host/Timeline completion and render user, assistant, process and execution records through the canonical transcript rail.
 - [x] 3.8 Split active-Scene Agent routing from sender-bound connection cleanup, retain bounded retired identity tombstones, and replace the preload global cursor with exact connection-scoped lifecycle tracking.
 - [x] 3.9 Remove missing-context owner inference, project item-local unavailable diagnostics, and reject unavailable Conversation/Project transitions before context, Workspace or Scene effects.
+- [x] 3.10 Capture retained-metadata warnings only from the first Renderer projection with bounded dismissal; inspect Project identity during catalog listing, preserve unavailable state over stored Project display facts, and route exact conversation cleanup through Agent authority without Workspace resolution.
 
 ## 4. Desktop portal and Workbench layout
 
@@ -65,3 +67,5 @@
 - [x] 5.11 Run focused Agent Webview tests/typecheck, package Desktop, and inspect the diagnostic portal in a real Electron Workbench with a narrow Agent pane; record residual risk and repeat quality review.
 - [x] 5.12 Enforce functional fixture HOME/database/userData containment before storage startup and run its focused tests without accessing the user database.
       Evidence: the `no-active-project-catalogs` development Electron scenario passed at `1200x800` with an isolated fixture HOME, `${FIXTURE_HOME}/.neko/neko.db`, contained Electron userData and Workspace; unavailable Conversation/Project open controls were disabled, forced DOM clicks left the Scene unchanged, cleanup controls remained enabled, and runtime observation recorded no console errors, warnings or exceptions.
+- [x] 5.13 Run focused Renderer/Desktop/Host/Agent tests and typechecks, strict OpenSpec validation, visible Electron notice/navigation acceptance, and the affected quality gates.
+      Evidence: the isolated `no-active-project-catalogs` development Electron scenario passed with a one-time non-blocking retained-metadata notice, unavailable Conversation cleanup without Workspace attach, missing-identity Project open disabled, list-mode Asset display, and no console errors, warnings or exceptions. Report: `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T19-30-13.100Z-no-active-project-catalogs-development/report.json`.

@@ -916,28 +916,7 @@ export class DesktopAppHost {
       request.rendererSessionId,
       request.navigation,
     );
-    const owner = request.navigation.owner;
-    let workspace: AgentWorkspaceRuntime;
-    if (owner.kind === 'workspace') {
-      workspace =
-        this.agent.getWorkspace(owner.workspaceId) ??
-        (await this.agent.attachWorkspace(
-          await this.shell.resolveAgentWorkspace(owner.workspaceId),
-        ));
-    } else if (owner.kind === 'assistant') {
-      const assistant = this.agent.getWorkspace(owner.assistantSpaceId);
-      if (!assistant) {
-        throw new Error(
-          `Desktop Assistant Space '${owner.assistantSpaceId}' has no attached Agent runtime.`,
-        );
-      }
-      workspace = assistant;
-    } else {
-      throw new Error(
-        `Desktop ${owner.kind} Conversation deletion requires its qualified owner runtime.`,
-      );
-    }
-    await workspace.deleteConversation(request.navigation.conversationId);
+    await this.agent.deleteConversation(request.navigation.conversationId);
     this.agentBridge.detachConversation(window.windowId, request.navigation.conversationId);
     return {
       requestId: request.requestId,

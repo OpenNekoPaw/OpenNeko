@@ -2,7 +2,10 @@ import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { LocalMetadataRepositories, LocalMetadataStore } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
-import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
+import {
+  createNodeWorkspaceIdentityFilePort,
+  resolveNodeWorkspaceIdentity,
+} from '@neko/local-metadata/node-workspace-identity';
 import {
   initializeAgentStateTables,
   initializeCoreLocalMetadataTables,
@@ -10,7 +13,11 @@ import {
   initializeMediaMetadataTables,
   initializeSearchProjectionTables,
 } from '@neko/local-metadata/sqlite';
-import { resolveGlobalStorageLayout } from '@neko/local-metadata';
+import {
+  parseWorkspaceIdentityJson,
+  resolveGlobalStorageLayout,
+  WORKSPACE_IDENTITY_RELATIVE_PATH,
+} from '@neko/local-metadata';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { DesktopProjectCatalogItem } from '@neko/host/desktop-shell-contract';
 import { PathResolver } from '@neko/shared/path';
@@ -108,6 +115,25 @@ class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
           } catch (error: unknown) {
             unavailableFieldNames.push('currentLocator');
             unavailableMessages.push(error instanceof Error ? error.message : String(error));
+          }
+          if (workspacePath && unavailableFieldNames.length === 0) {
+            try {
+              const identitySource = await createNodeWorkspaceIdentityFilePort().readFileIfExists(
+                path.join(workspacePath, WORKSPACE_IDENTITY_RELATIVE_PATH),
+              );
+              if (identitySource === null) {
+                throw new Error(`Project identity is missing at ${record.currentLocator.value}.`);
+              }
+              const identity = parseWorkspaceIdentityJson(identitySource);
+              if (identity.workspaceId !== record.workspaceId) {
+                throw new Error(
+                  `Project identity '${identity.workspaceId}' does not match registered Workspace '${record.workspaceId}'.`,
+                );
+              }
+            } catch (error: unknown) {
+              unavailableFieldNames.push('identity');
+              unavailableMessages.push(error instanceof Error ? error.message : String(error));
+            }
           }
           if (record.orphanedAt !== null) {
             unavailableFieldNames.push('orphanedAt');

@@ -1553,17 +1553,13 @@ describe('DesktopAppHost', () => {
       ],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     });
-    const runtime = createAgentWorkspaceRuntime(project.workspaceId);
     const deleteConversation = vi.fn(async () => {
       fixture.agent.readHomeProjection.mockReturnValue({
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       });
     });
-    fixture.agent.getWorkspace.mockReturnValue({
-      ...runtime,
-      deleteConversation,
-    });
+    fixture.agent.deleteConversation.mockImplementation(deleteConversation);
     const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
 
     const result = await fixture.appHost.deleteHomeConversation(
@@ -1611,11 +1607,7 @@ describe('DesktopAppHost', () => {
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       });
     });
-    fixture.agent.getWorkspace.mockImplementation((workspaceId) =>
-      workspaceId === navigation.owner.assistantSpaceId
-        ? { ...createAgentWorkspaceRuntime(workspaceId), deleteConversation }
-        : undefined,
-    );
+    fixture.agent.deleteConversation.mockImplementation(deleteConversation);
     const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
 
     const result = await fixture.appHost.deleteHomeConversation(
@@ -1628,6 +1620,43 @@ describe('DesktopAppHost', () => {
     );
 
     expect(deleteConversation).toHaveBeenCalledWith(navigation.conversationId);
+    expect(result.projection.agentHome.conversations).toEqual([]);
+  });
+
+  it('deletes an unavailable Workspace conversation without resolving or attaching its Project', async () => {
+    const fixture = await createShellAppHost();
+    const navigation = {
+      conversationId: 'conversation-unavailable-workspace',
+      owner: {
+        kind: 'workspace' as const,
+        workspaceId: 'e3693443-338c-4b44-956c-fe8db0c077fa',
+      },
+    };
+    setAgentHomeConversation(fixture.agent, navigation, {
+      fieldNames: ['context'],
+      message: 'Conversation context is unavailable.',
+    });
+    fixture.agent.deleteConversation.mockImplementation(async () => {
+      fixture.agent.readHomeProjection.mockReturnValue({
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      });
+    });
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+
+    const result = await fixture.appHost.deleteHomeConversation(
+      fixture.sender,
+      createDesktopConversationDeleteRequest(
+        'delete-unavailable-conversation',
+        navigation,
+        projection.rendererSessionId,
+      ),
+    );
+
+    expect(fixture.agent.deleteConversation).toHaveBeenCalledWith(navigation.conversationId);
+    expect(fixture.agent.getWorkspace).not.toHaveBeenCalled();
+    expect(fixture.agent.attachWorkspace).not.toHaveBeenCalled();
+    expect(fixture.registry.resolve).not.toHaveBeenCalled();
     expect(result.projection.agentHome.conversations).toEqual([]);
   });
 
@@ -2392,6 +2421,7 @@ function createSettingsService(): DesktopApplicationSettingsService {
 function createAgentComposition(): AgentAppHost & {
   readonly attachWorkspace: ReturnType<typeof vi.fn>;
   readonly getWorkspace: ReturnType<typeof vi.fn>;
+  readonly deleteConversation: ReturnType<typeof vi.fn>;
   readonly readGlobalSkillCatalog: ReturnType<typeof vi.fn>;
   readonly readHomeProjection: ReturnType<typeof vi.fn>;
   readonly dispose: ReturnType<typeof vi.fn>;
@@ -2415,6 +2445,7 @@ function createAgentComposition(): AgentAppHost & {
       createAgentWorkspaceRuntime(workspace.workspaceId),
     ),
     getWorkspace: vi.fn(() => undefined),
+    deleteConversation: vi.fn(async () => undefined),
     findConversation: vi.fn(() => undefined),
     readGlobalSkillCatalog: vi.fn(async () => ({
       records: [],

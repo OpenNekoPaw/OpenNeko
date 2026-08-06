@@ -339,6 +339,81 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('dismisses retained metadata after startup and does not show it again after a Scene change', async () => {
+    vi.useFakeTimers();
+    try {
+      const projection: DesktopShellProjection = {
+        ...createProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-state-metadata-retained',
+            severity: 'warning',
+            authorityKey: 'desktop.application-settings',
+            fieldNames: ['unrecognizedSettingForNotice'],
+            message: 'Desktop application settings metadata was preserved without interpretation.',
+          },
+        ],
+      };
+      let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+      installBridge({
+        projection,
+        subscribe: vi.fn((next) => {
+          listener = next;
+          return () => undefined;
+        }),
+      });
+      const { container, root } = await renderApplication();
+
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+        'unrecognizedSettingForNotice',
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(8_000);
+      });
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+
+      await act(async () => {
+        listener?.({
+          applicationInstanceId: projection.applicationInstanceId,
+          windowId: projection.window.windowId,
+          rendererSessionId: projection.rendererSessionId,
+          sequence: 1,
+          projection: withActiveScene(projection, settingsScene()),
+        });
+      });
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+      await act(async () => root.unmount());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets the user dismiss retained metadata immediately', async () => {
+    const projection: DesktopShellProjection = {
+      ...createProjection(),
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-state-metadata-retained',
+          severity: 'warning',
+          authorityKey: 'desktop.shell',
+          fieldNames: ['opaqueSourceMarker'],
+          message: 'Desktop Shell root metadata was preserved without interpretation.',
+        },
+      ],
+    };
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+
+    const dismiss = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Dismiss startup notification"]',
+    );
+    if (!dismiss) throw new Error('Desktop startup notice requires a dismiss action.');
+    await act(async () => dismiss.click());
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it('shows a rejected Application Settings diagnostic while keeping the Workbench usable', async () => {
     const projection: DesktopShellProjection = {
       ...createProjection(),

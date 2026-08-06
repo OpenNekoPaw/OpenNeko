@@ -7,6 +7,7 @@ import {
   createRestoringDesktopWorkspaceResolver,
   type DesktopWorkspaceRegistry,
 } from './desktop-workspace-registry';
+import { WORKSPACE_IDENTITY_RELATIVE_PATH } from '@neko/local-metadata';
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -85,6 +86,13 @@ describe('Desktop workspace registry', () => {
         projectId: `content:${workspace.workspaceId}`,
         workspaceId: workspace.workspaceId,
         displayName: 'workspace',
+      }),
+    ]);
+    await rm(path.join(workspacePath, WORKSPACE_IDENTITY_RELATIVE_PATH));
+    await expect(registry.listProjects()).resolves.toEqual([
+      expect.objectContaining({
+        projectId: `content:${workspace.workspaceId}`,
+        unavailable: expect.objectContaining({ fieldNames: ['identity'] }),
       }),
     ]);
     await rm(workspacePath, { recursive: true });

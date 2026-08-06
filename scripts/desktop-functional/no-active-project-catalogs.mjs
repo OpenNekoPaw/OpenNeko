@@ -10,9 +10,11 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
   owner: '@neko/app-desktop',
   async prepare({ fixtureHome }) {
     const workspacePath = join(fixtureHome, 'workspace');
+    const missingProjectPath = join(fixtureHome, 'missing-project');
     const nekoRoot = join(fixtureHome, '.neko');
     await Promise.all([
       mkdir(workspacePath, { recursive: true }),
+      mkdir(missingProjectPath, { recursive: true }),
       mkdir(join(nekoRoot, 'assets'), { recursive: true }),
     ]);
     const sqlite = await import('node:sqlite');
@@ -44,6 +46,11 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
           modified_at TEXT,
           membership_state TEXT NOT NULL CHECK (membership_state IN ('active', 'removed')),
           created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        ) STRICT;
+        CREATE TABLE desktop_application_state (
+          authority_key TEXT PRIMARY KEY,
+          document_json TEXT NOT NULL,
           updated_at TEXT NOT NULL
         ) STRICT;
       `);
@@ -84,12 +91,65 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
            ) VALUES (?, ?, ?, 'image', 42, ?, 'active', ?, ?)`,
         )
         .run('membership-retained', ASSET_LABEL, ASSET_LABEL, timestamp, timestamp, timestamp);
+      database
+        .prepare(
+          `INSERT INTO desktop_application_state(authority_key, document_json, updated_at)
+           VALUES ('desktop.application-settings', ?, ?)`,
+        )
+        .run(
+          JSON.stringify({
+            unrecognizedSettingForNotice: true,
+            preferences: {
+              theme: 'light',
+              locale: 'system',
+              startupTarget: 'home',
+              resourceBrowserView: 'list',
+            },
+          }),
+          timestamp,
+        );
     } finally {
       database.close();
     }
     return { workspacePath };
   },
   async run({ checkpoint, evaluate, screenshot, waitForSelector }) {
+    await waitForSelector('.shell-diagnostic');
+    const startupNotice = await evaluate(`(() => {
+      const notice = document.querySelector('.shell-diagnostic');
+      const workbench = document.querySelector('[data-neko-controlled-workbench="true"]');
+      if (!(notice instanceof HTMLElement) || !(workbench instanceof HTMLElement)) return null;
+      const noticeStyle = getComputedStyle(notice);
+      const workbenchRect = workbench.getBoundingClientRect();
+      return {
+        text: notice.textContent?.trim() ?? '',
+        position: noticeStyle.position,
+        dismissEnabled:
+          notice.querySelector('button[aria-label]') instanceof HTMLButtonElement &&
+          !notice.querySelector('button[aria-label]').disabled,
+        workbenchTop: workbenchRect.top,
+        workbenchHeight: workbenchRect.height,
+        viewportHeight: window.innerHeight,
+      };
+    })()`);
+    if (
+      !startupNotice ||
+      !startupNotice.text.includes('unrecognizedSettingForNotice') ||
+      startupNotice.position !== 'fixed' ||
+      !startupNotice.dismissEnabled ||
+      startupNotice.workbenchTop !== 0 ||
+      startupNotice.workbenchHeight !== startupNotice.viewportHeight
+    ) {
+      throw new Error('Retained metadata startup notice is not a non-blocking overlay.');
+    }
+    checkpoint('retained-metadata-startup-notice-visible', startupNotice);
+    const startupNoticeScreenshot = await screenshot('retained-metadata-startup-notice-visible');
+    await waitForCondition(
+      evaluate,
+      `(() => document.querySelector('.shell-diagnostic') === null)()`,
+      'Retained metadata startup notice did not automatically disappear.',
+      12_000,
+    );
     await evaluate(`(() => {
       window.resizeTo(1200, 800);
       return { width: window.innerWidth, height: window.innerHeight };
@@ -136,6 +196,25 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     checkpoint('historical-conversation-visible', conversation);
     const unavailableNavigationScreenshot = await screenshot('unavailable-navigation-visible');
 
+    await evaluate(`(() => {
+      window.confirm = () => true;
+      const group = document.querySelector('.primary-conversation-group[data-group-kind="workspace"]');
+      const row = group?.querySelector('.primary-recent-conversation-row');
+      const cleanup = row?.querySelector('button[aria-label*="${CONVERSATION_TITLE}"]');
+      if (!(cleanup instanceof HTMLButtonElement) || cleanup.disabled) {
+        throw new Error('Unavailable Conversation cleanup is unavailable.');
+      }
+      cleanup.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `(() => ![...document.querySelectorAll('.home-conversation-link span')]
+        .some((element) => element.textContent?.trim() === ${JSON.stringify(CONVERSATION_TITLE)}))()`,
+      'Unavailable Conversation cleanup did not remove the persisted entry.',
+    );
+    checkpoint('unavailable-conversation-cleanup-complete', { removed: true });
+
     const primaryProject = await evaluate(`(async () => {
       const group = [...document.querySelectorAll('.primary-conversation-group[data-group-kind="project"]')]
         .find((candidate) => candidate.querySelector('.primary-conversation-group__header')
@@ -177,9 +256,9 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         const row = [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-row`)})]
           .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'missing-project');
         const diagnostic = row?.querySelector('.management-surface-row__diagnostic')?.textContent ?? '';
-        return diagnostic.includes('currentLocator') && diagnostic.includes('orphanedAt');
+        return diagnostic.includes('identity') && diagnostic.includes('orphanedAt');
       })()`,
-      'Retained Workspace did not expose currentLocator and orphanedAt.',
+      'Retained Workspace did not expose identity and orphanedAt.',
     );
     const project = await evaluate(`(() => {
       const row = [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-row`)})]
@@ -192,6 +271,9 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     })()`);
     if (!project.openDisabled || !project.listMode) {
       throw new Error('Unavailable Workspace actions or default list mode are incorrect.');
+    }
+    if (await evaluate(`(() => document.querySelector('.shell-diagnostic') !== null)()`)) {
+      throw new Error('Startup notice reappeared after Project navigation.');
     }
     checkpoint('retained-workspace-visible', project);
 
@@ -234,7 +316,8 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       primaryProject,
       project,
       asset,
-      screenshots: [unavailableNavigationScreenshot, catalogScreenshot],
+      startupNotice,
+      screenshots: [startupNoticeScreenshot, unavailableNavigationScreenshot, catalogScreenshot],
     };
   },
 });

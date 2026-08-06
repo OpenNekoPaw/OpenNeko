@@ -106,6 +106,13 @@ code {
   transform: translateX(-50%);
 }
 
+.shell-diagnostic__dismiss {
+  width: 24px;
+  height: 24px;
+  margin: -5px -7px -5px 2px;
+  color: currentcolor;
+}
+
 .desktop-settings {
   color: var(--neko-fg);
   background: var(--neko-desktop-main);

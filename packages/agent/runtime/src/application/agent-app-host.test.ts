@@ -76,6 +76,25 @@ describe('AgentAppHost', () => {
     expect(transport.list().every((entry) => entry.source === 'Workspace')).toBe(true);
   });
 
+  it('deletes a persisted catalog conversation without attaching its Workspace runtime', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.createConversation('conversation-unavailable-workspace');
+    await workspace.createConversation('conversation-valid-sibling');
+    await fixture.composition.dispose();
+
+    const replacement = await createComposition(fixture, 'desktop-host-cleanup');
+    compositions.push(replacement);
+    expect(replacement.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(replacement.findConversation('conversation-unavailable-workspace')).toBeDefined();
+
+    await replacement.deleteConversation('conversation-unavailable-workspace');
+
+    expect(replacement.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(replacement.findConversation('conversation-unavailable-workspace')).toBeUndefined();
+    expect(replacement.findConversation('conversation-valid-sibling')).toBeDefined();
+  });
+
   it('runs the canonical Pi Session, Skill, projection and terminal checkpoint path', async () => {
     const fixture = await createFixture();
     const prompts: string[] = [];

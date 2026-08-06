@@ -188,6 +188,7 @@ export interface AgentAppHost {
   readonly credentialRuntime: AgentCredentialRuntime;
   attachWorkspace(workspace: AssetWorkspaceResolution): Promise<AgentWorkspaceRuntime>;
   getWorkspace(workspaceId: string): AgentWorkspaceRuntime | undefined;
+  deleteConversation(conversationId: string): Promise<void>;
   findConversation(conversationId: string): PiConversationCatalogRecord | undefined;
   readGlobalSkillCatalog(): Promise<AgentSkillCatalog>;
   hasActiveTurns(): boolean;
@@ -259,6 +260,32 @@ class DefaultAgentAppHost implements AgentAppHost {
   getWorkspace(workspaceId: string): AgentWorkspaceRuntime | undefined {
     this.requireActive();
     return this.workspaces.get(workspaceId);
+  }
+
+  async deleteConversation(conversationId: string): Promise<void> {
+    this.requireActive();
+    requireIdentity(conversationId, 'Conversation');
+    const record = this.options.catalogReader.findConversation(conversationId);
+    if (!record) {
+      throw new Error(`Agent conversation '${conversationId}' does not exist.`);
+    }
+    const workspace =
+      this.workspaces.get(record.workspaceId) ?? (await this.opening.get(record.workspaceId));
+    if (workspace) {
+      await workspace.deleteConversation(conversationId);
+      return;
+    }
+    const authority = await NodePiConversationAuthority.create({
+      userDataRoot: this.options.userDataRoot,
+      workspaceId: record.workspaceId,
+      hostId: `${this.options.hostId}:conversation-cleanup:${record.workspaceId}`,
+    });
+    try {
+      await deletePersistedConversation(authority, conversationId);
+    } finally {
+      await authority.dispose();
+    }
+    this.emitHomeProjectionChanged();
   }
 
   findConversation(conversationId: string): PiConversationCatalogRecord | undefined {
@@ -591,14 +618,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       await owner.stop();
       this.conversations.delete(conversationId);
     }
-    const lease = this.options.authority.acquireLease(conversationId);
-    let deleted = false;
-    try {
-      await this.options.authority.deleteConversation(lease, conversationId);
-      deleted = true;
-    } finally {
-      if (!deleted) this.options.authority.releaseLease(lease);
-    }
+    await deletePersistedConversation(this.options.authority, conversationId);
     this.projections.get(conversationId)?.dispose();
     this.projections.delete(conversationId);
     this.options.onHomeProjectionChanged();
@@ -1638,6 +1658,20 @@ function isMissingPath(error: unknown): boolean {
 
 function hasErrorCode(error: unknown): error is Error & { readonly code: unknown } {
   return error instanceof Error && 'code' in error;
+}
+
+async function deletePersistedConversation(
+  authority: NodePiConversationAuthority,
+  conversationId: string,
+): Promise<void> {
+  const lease = authority.acquireLease(conversationId);
+  let deleted = false;
+  try {
+    await authority.deleteConversation(lease, conversationId);
+    deleted = true;
+  } finally {
+    if (!deleted) authority.releaseLease(lease);
+  }
 }
 
 function requireIdentity(value: string, label: string): void {

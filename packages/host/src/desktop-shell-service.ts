@@ -405,9 +405,12 @@ export class DesktopShellService {
         const targetStoredProject = targetProjectId
           ? state.projects.find((project) => project.projectId === targetProjectId)
           : undefined;
+        const targetRetainedProject = targetProjectId
+          ? this.retainedProjects.get(targetProjectId)
+          : undefined;
         const targetProject =
           targetProjectId !== undefined
-            ? (targetStoredProject ?? this.retainedProjects.get(targetProjectId))
+            ? (targetStoredProject ?? targetRetainedProject)
             : undefined;
         if (request.intent.kind === 'open-project-workspace' && !targetProject) {
           throw new DesktopShellContractError(
@@ -415,10 +418,16 @@ export class DesktopShellService {
             `Desktop Project '${request.intent.projectId}' is not present in the stable catalog.`,
           );
         }
-        if (targetProject && 'unavailable' in targetProject && targetProject.unavailable) {
+        const targetUnavailable =
+          targetRetainedProject &&
+          targetProject &&
+          targetRetainedProject.workspaceId === targetProject.workspaceId
+            ? targetRetainedProject.unavailable
+            : undefined;
+        if (targetProject && targetUnavailable) {
           return unavailableWorkspaceSceneTransition(
             request,
-            `Desktop Project '${targetProject.projectId}' is unavailable: ${targetProject.unavailable.fieldNames.join(', ')}: ${targetProject.unavailable.message}`,
+            `Desktop Project '${targetProject.projectId}' is unavailable: ${targetUnavailable.fieldNames.join(', ')}: ${targetUnavailable.message}`,
           );
         }
         const activeScene = activeDesktopWorkbench(window).scene;
@@ -958,6 +967,13 @@ export class DesktopShellService {
       throw new DesktopShellAgentIdentityError(
         'desktop-agent-identity-mismatch',
         `Desktop Agent Workspace '${workspaceId}' is not present in the Project catalog.`,
+      );
+    }
+    const retainedProject = this.retainedProjects.get(project.projectId);
+    if (retainedProject?.workspaceId === project.workspaceId && retainedProject.unavailable) {
+      throw new DesktopShellAgentIdentityError(
+        'desktop-agent-identity-mismatch',
+        `Desktop Agent Workspace '${workspaceId}' is unavailable: ${retainedProject.unavailable.message}`,
       );
     }
     const workspace = await this.options.workspaceRegistry.resolve(project.workspacePath);
@@ -1799,6 +1815,11 @@ function projectShellState(
   const window = requireStoredWindow(state, windowId);
   const projectsById = new Map(retainedProjects.map((project) => [project.projectId, project]));
   for (const project of state.projects) {
+    const retainedProject = projectsById.get(project.projectId);
+    const unavailable =
+      retainedProject?.workspaceId === project.workspaceId
+        ? retainedProject.unavailable
+        : undefined;
     projectsById.set(project.projectId, {
       projectId: project.projectId,
       workspaceId: project.workspaceId,
@@ -1806,6 +1827,7 @@ function projectShellState(
       displayName: project.displayName,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
+      ...(unavailable ? { unavailable } : {}),
     });
   }
   const projects = [...projectsById.values()].sort((left, right) =>
