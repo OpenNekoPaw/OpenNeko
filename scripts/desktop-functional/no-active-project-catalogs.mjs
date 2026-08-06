@@ -90,24 +90,84 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     return { workspacePath };
   },
   async run({ checkpoint, evaluate, screenshot, waitForSelector }) {
+    await evaluate(`(() => {
+      window.resizeTo(1200, 800);
+      return { width: window.innerWidth, height: window.innerHeight };
+    })()`);
     await waitForSelector('.desktop-scene-workbench--agent-only');
     await waitForSelector('.primary-conversation-group[data-group-kind="workspace"]');
-    const conversation = await evaluate(`(() => {
+    const conversation = await evaluate(`(async () => {
       const group = document.querySelector('.primary-conversation-group[data-group-kind="workspace"]');
+      const row = group?.querySelector('.primary-recent-conversation-row');
+      const open = row?.querySelector('.home-conversation-link');
+      const cleanup = row?.querySelector('button[aria-label*="${CONVERSATION_TITLE}"]');
+      const before = await window.openNekoDesktop.shell.getSnapshot();
+      if (open instanceof HTMLButtonElement) open.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const after = await window.openNekoDesktop.shell.getSnapshot();
       return {
         noActiveProject: document.querySelector('.desktop-scene-workbench--workspace') === null,
         titleVisible: [...(group?.querySelectorAll('.home-conversation-link span') ?? [])]
           .some((element) => element.textContent?.trim() === ${JSON.stringify(CONVERSATION_TITLE)}),
         diagnostic: group?.querySelector('.primary-conversation-group__diagnostic')?.textContent?.trim() ?? '',
+        itemDiagnostic: row?.querySelector('.primary-navigation-unavailable')?.textContent?.trim() ?? '',
+        openDisabled: open instanceof HTMLButtonElement && open.disabled,
+        cleanupEnabled: cleanup instanceof HTMLButtonElement && !cleanup.disabled,
+        sceneUnchanged:
+          before.window.workbenches.activeWorkbenchInstanceId ===
+            after.window.workbenches.activeWorkbenchInstanceId &&
+          JSON.stringify(before.window.workbenches.instances) ===
+            JSON.stringify(after.window.workbenches.instances),
       };
     })()`);
-    if (!conversation.noActiveProject || !conversation.titleVisible) {
-      throw new Error('Historical Conversation was not visible without an active Project.');
+    if (
+      !conversation.noActiveProject ||
+      !conversation.titleVisible ||
+      !conversation.openDisabled ||
+      !conversation.cleanupEnabled ||
+      !conversation.sceneUnchanged ||
+      !conversation.itemDiagnostic
+    ) {
+      throw new Error('Historical Conversation visibility or inert navigation is incorrect.');
     }
     if (!conversation.diagnostic.includes('workspaceId')) {
       throw new Error('Unavailable Conversation Workspace did not expose workspaceId.');
     }
     checkpoint('historical-conversation-visible', conversation);
+    const unavailableNavigationScreenshot = await screenshot('unavailable-navigation-visible');
+
+    const primaryProject = await evaluate(`(async () => {
+      const group = [...document.querySelectorAll('.primary-conversation-group[data-group-kind="project"]')]
+        .find((candidate) => candidate.querySelector('.primary-conversation-group__header')
+          ?.textContent?.includes('missing-project'));
+      const open = group?.querySelector('.primary-conversation-group__header .home-project-link');
+      const cleanup = group?.querySelector('.primary-conversation-group__header button[aria-label]');
+      const before = await window.openNekoDesktop.shell.getSnapshot();
+      if (open instanceof HTMLButtonElement) open.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const after = await window.openNekoDesktop.shell.getSnapshot();
+      return {
+        visible: group instanceof HTMLElement,
+        itemDiagnostic: group?.querySelector('.primary-navigation-unavailable')?.textContent?.trim() ?? '',
+        openDisabled: open instanceof HTMLButtonElement && open.disabled,
+        cleanupEnabled: cleanup instanceof HTMLButtonElement && !cleanup.disabled,
+        sceneUnchanged:
+          before.window.workbenches.activeWorkbenchInstanceId ===
+            after.window.workbenches.activeWorkbenchInstanceId &&
+          JSON.stringify(before.window.workbenches.instances) ===
+            JSON.stringify(after.window.workbenches.instances),
+      };
+    })()`);
+    if (
+      !primaryProject.visible ||
+      !primaryProject.openDisabled ||
+      !primaryProject.cleanupEnabled ||
+      !primaryProject.sceneUnchanged ||
+      !primaryProject.itemDiagnostic
+    ) {
+      throw new Error('Unavailable Project primary navigation is not visible and inert.');
+    }
+    checkpoint('unavailable-project-primary-navigation-visible', primaryProject);
 
     await clickNavigation(evaluate, 3);
     await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
@@ -169,7 +229,13 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     if (!asset.listMode) throw new Error('Asset Library did not default to list mode.');
     const catalogScreenshot = await screenshot('no-active-project-catalogs-visible');
     checkpoint('retained-asset-membership-visible', asset);
-    return { conversation, project, asset, screenshots: [catalogScreenshot] };
+    return {
+      conversation,
+      primaryProject,
+      project,
+      asset,
+      screenshots: [unavailableNavigationScreenshot, catalogScreenshot],
+    };
   },
 });
 

@@ -70,6 +70,16 @@ describe('Desktop functional fixture home', () => {
     }
   });
 
+  it('rejects a fixture launch before storage can fall back to the system home', () => {
+    expect(() =>
+      resolveDesktopRuntimeHome({
+        systemHome: '/Users/example',
+        argv: ['--openneko-functional-fixture'],
+        environment: {},
+      }),
+    ).toThrow('explicit isolated fixture home');
+  });
+
   it('rejects an environment override without the explicit fixture argument', () => {
     expect(() =>
       resolveDesktopRuntimeHome({

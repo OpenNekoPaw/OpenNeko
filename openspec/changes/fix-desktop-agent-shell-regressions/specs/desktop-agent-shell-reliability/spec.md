@@ -386,3 +386,49 @@ known retired connection and SHALL NOT project them as errors or transcript reco
 
 - **WHEN** preload receives an event for an unknown or identity-conflicting connection
 - **THEN** it exposes a fail-visible protocol diagnostic and does not advance any valid connection cursor
+
+### Requirement: Unavailable conversations and Projects remain visible but inert
+
+Desktop SHALL retain unavailable Agent conversations and Projects in their owning catalog projections with a
+local diagnostic. Their primary navigation actions SHALL be disabled, and Host boundaries SHALL reject forged
+open requests before any conversation context read, Workspace restore, Scene mutation or domain runtime action.
+Explicit delete/remove cleanup MAY remain available.
+
+#### Scenario: Persisted conversation has no canonical context
+
+- **WHEN** Pi catalog contains a conversation without canonical conversation context
+- **THEN** Agent Home and the Desktop sidebar still display that exact conversation with an unavailable diagnostic
+- **AND** Desktop does not infer its owner from `workspaceId`
+- **AND** its open action is disabled while its explicit delete action remains available
+
+#### Scenario: Unavailable item receives a forged open request
+
+- **WHEN** renderer or IPC sends an open request for an unavailable Conversation or Project
+- **THEN** Main and package service return an owner-qualified unavailable result or fail-visible rejection
+- **AND** they do not read conversation context, restore a Workspace grant, attach a runtime or mutate Scene state
+- **AND** no active or recent sibling is opened as fallback
+
+#### Scenario: Valid sibling shares the same catalog
+
+- **WHEN** one Conversation or Project is unavailable and another has valid canonical ownership
+- **THEN** only the invalid item is inert
+- **AND** the valid sibling remains openable through the canonical path
+
+### Requirement: Functional acceptance never uses the user database
+
+Desktop functional acceptance SHALL place its runtime HOME, global SQLite database, Electron userData and
+Workspace under one explicit temporary fixture root. A fixture launch that cannot prove this containment SHALL
+fail before opening application storage.
+
+#### Scenario: Isolated fixture starts
+
+- **WHEN** the functional runner launches Desktop with an explicit temporary fixture HOME and contained userData
+- **THEN** the global database resolves to `${FIXTURE_HOME}/.neko/neko.db`
+- **AND** no read or write targets the user's normal OpenNeko database
+
+#### Scenario: Fixture argument lacks an isolated HOME
+
+- **WHEN** Desktop receives the functional fixture argument without an explicit safe fixture HOME, or with storage
+  outside that root
+- **THEN** startup fails before local metadata, conversation catalog or Agent storage opens
+- **AND** it MUST NOT fall back to the system home or user database

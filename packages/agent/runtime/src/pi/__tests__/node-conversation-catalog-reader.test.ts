@@ -107,12 +107,15 @@ describe('NodePiConversationCatalogReader', () => {
       context: { workspaceGrantId: 'grant-valid' },
     });
     expect(reader.listConversations()).toEqual({
-      records: [
+      records: expect.arrayContaining([
+        expect.objectContaining({
+          conversationId: 'conversation-invalid',
+        }),
         expect.objectContaining({
           conversationId: 'conversation-valid',
           context: expect.objectContaining({ workspaceGrantId: 'grant-valid' }),
         }),
-      ],
+      ]),
       diagnostics: [
         expect.objectContaining({
           code: 'invalid-conversation-record',
@@ -122,6 +125,11 @@ describe('NodePiConversationCatalogReader', () => {
         }),
       ],
     });
+    expect(
+      reader
+        .listConversations()
+        .records.find((record) => record.conversationId === 'conversation-invalid'),
+    ).not.toHaveProperty('context');
   });
 
   async function createConversation(

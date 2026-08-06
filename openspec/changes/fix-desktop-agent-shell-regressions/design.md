@@ -216,3 +216,25 @@ replacement retires that cursor.
 Queued events for a known retired connection are discarded as lifecycle races and MUST NOT be rewritten as a
 `globalError` for the current connection. Events for the active exact connection still require contiguous
 sequence, while an unknown or identity-conflicting connection remains a visible protocol failure.
+
+## Follow-up decisions: unavailable catalog items and fixture storage isolation
+
+Cold Pi catalog records without canonical conversation context no longer infer an operable owner from
+`workspaceId`. Agent Home projects the record with its catalog identity and an owner-qualified `unavailable`
+diagnostic so the user can see and explicitly delete it. Only a conversation projection already materialized by
+the exact live Workspace runtime can qualify its current in-memory owner; that qualification is not used for cold
+restore. Owner conflicts use the same local unavailable state. A valid sibling remains fully operable; the
+diagnostic does not become a global Agent failure.
+
+Desktop Primary Sidebar disables only the unavailable Project or Conversation navigation button and exposes the
+diagnostic beside that item. Explicit cleanup remains available: deleting the unavailable Conversation or removing
+the unavailable recent Project does not attach an Agent runtime or Workspace. `DesktopAppHost` and
+`DesktopShellService` independently reject forged restore/open requests before context reads, Workspace grant
+restore, Scene mutation or runtime attachment. No recent-conversation fallback or active-Project substitution is
+allowed.
+
+Functional Electron acceptance owns a single temporary fixture root. The runtime HOME (and therefore
+`${FIXTURE_HOME}/.neko/neko.db`), Electron userData and Workspace must all be contained by that root. The explicit
+fixture argument without an explicit safe fixture HOME is invalid. Isolation is checked before local metadata or Pi
+storage opens, so a test launch cannot accidentally use the user's `~/.neko/neko.db`. Unit tests continue to use
+per-test temporary roots and never use the process home as a fixture.

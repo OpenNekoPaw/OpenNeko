@@ -58,6 +58,10 @@ export interface AgentHomeConversationSummary {
   readonly updatedAt: string;
   readonly attention: AgentHomeAttentionStatus;
   readonly lastActivity: AgentHomeActivitySummary;
+  readonly unavailable?: {
+    readonly fieldNames: readonly string[];
+    readonly message: string;
+  };
 }
 
 export interface AgentHomeDiagnostic {
@@ -136,11 +140,23 @@ export function parseAgentHomeConversationSummary(value: unknown): AgentHomeConv
   const record = requireRecord(value, 'Agent Home conversation summary must be an object.');
   requireAllowedKeys(
     record,
-    ['navigation', 'groupedProjectId', 'title', 'updatedAt', 'attention', 'lastActivity'],
+    [
+      'navigation',
+      'groupedProjectId',
+      'title',
+      'updatedAt',
+      'attention',
+      'lastActivity',
+      'unavailable',
+    ],
     ['navigation', 'title', 'updatedAt', 'attention', 'lastActivity'],
     'Agent Home conversation summary',
   );
   const groupedProjectId = record['groupedProjectId'];
+  const unavailable =
+    record['unavailable'] === undefined
+      ? undefined
+      : parseAgentHomeUnavailable(record['unavailable']);
   return Object.freeze({
     navigation: parseAgentHomeNavigationIdentity(record['navigation']),
     ...(groupedProjectId === undefined
@@ -150,6 +166,25 @@ export function parseAgentHomeConversationSummary(value: unknown): AgentHomeConv
     updatedAt: requireIsoDateString(record['updatedAt'], 'Agent Conversation updatedAt'),
     attention: parseAttention(record['attention']),
     lastActivity: parseActivity(record['lastActivity']),
+    ...(unavailable === undefined ? {} : { unavailable }),
+  });
+}
+
+function parseAgentHomeUnavailable(
+  value: unknown,
+): NonNullable<AgentHomeConversationSummary['unavailable']> {
+  const record = requireRecord(value, 'Agent Home unavailable diagnostic must be an object.');
+  requireExactKeys(record, ['fieldNames', 'message'], 'Agent Home unavailable diagnostic');
+  const fieldNames = requireArray(
+    record['fieldNames'],
+    'Agent Home unavailable fields must be an array.',
+  ).map((fieldName) => requireIdentity(fieldName, 'Agent Home unavailable field'));
+  if (fieldNames.length === 0 || new Set(fieldNames).size !== fieldNames.length) {
+    throw invalid('Agent Home unavailable fields must be unique and non-empty.');
+  }
+  return Object.freeze({
+    fieldNames: Object.freeze(fieldNames),
+    message: requireIdentity(record['message'], 'Agent Home unavailable message'),
   });
 }
 

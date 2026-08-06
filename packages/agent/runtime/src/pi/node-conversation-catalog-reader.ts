@@ -72,7 +72,11 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
       const diagnostics: AgentHomeDiagnostic[] = [];
       for (const row of rows) {
         try {
-          records.push(parseConversationRecord(row));
+          records.push(
+            parseConversationRecord(row, (error) => {
+              diagnostics.push(createInvalidConversationDiagnostic(row, error));
+            }),
+          );
         } catch (error) {
           diagnostics.push(createInvalidConversationDiagnostic(row, error));
         }
@@ -137,13 +141,23 @@ function readDiagnosticIdentity(value: unknown, key: string): string | undefined
   return typeof field === 'string' && field.trim().length > 0 ? field : undefined;
 }
 
-function parseConversationRecord(value: unknown): PiConversationCatalogRecord {
+function parseConversationRecord(
+  value: unknown,
+  onInvalidContext?: (error: unknown) => void,
+): PiConversationCatalogRecord {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError('Pi conversation catalog row must be an object.');
   }
   const contextJson = readOptionalString(value, 'context_json');
-  const context =
-    contextJson === undefined ? undefined : parseAgentConversationContext(JSON.parse(contextJson));
+  let context: ReturnType<typeof parseAgentConversationContext> | undefined;
+  if (contextJson !== undefined) {
+    try {
+      context = parseAgentConversationContext(JSON.parse(contextJson));
+    } catch (error) {
+      if (onInvalidContext === undefined) throw error;
+      onInvalidContext(error);
+    }
+  }
   return Object.freeze({
     workspaceId: readRequiredString(value, 'workspace_id'),
     conversationId: readRequiredString(value, 'conversation_id'),

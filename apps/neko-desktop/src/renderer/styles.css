@@ -758,6 +758,16 @@ code {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+.primary-navigation-unavailable {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--neko-desktop-warning);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .home-conversation-attention {
   width: 7px;
   height: 7px;

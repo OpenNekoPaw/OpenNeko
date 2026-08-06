@@ -28,6 +28,11 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - 收敛 Agent connection replacement 生命周期：业务消息继续要求 exact active Scene，旧 connection
   仅可释放自己创建的 projection attachment；preload 丢弃已退休 connection 的迟到事件且不污染
   当前会话，未知 connection 仍 fail-visible。
+- 保留缺失 canonical context、owner 冲突或所属 Project 失效的历史会话与 Project 展示，但将其
+  投影为明确不可用项；主导航不得打开它们，Main/package service 也必须在读取会话 context、恢复
+  Workspace 或写入 Scene 前拒绝。删除会话和移除最近 Project 仍作为显式人工清理操作保留。
+- Desktop 功能验收必须把 HOME、全局 SQLite、Electron userData 和 Workspace 全部放在同一个
+  临时 fixture root 内；隔离条件不成立时在打开任何数据库前失败，不得读取或写入用户数据库。
 
 ## Capabilities
 
@@ -50,3 +55,5 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - `packages/ui` 的 Popover surface contract、共享 resize lifecycle 与样式测试。
 - Desktop theme scope 对 Agent/Assets package Root 的 surface token 投影与 production computed-style 验收。
 - Desktop Workbench Main View contract、Canvas/Assets 组合、聚焦测试、真实 Electron 验收和相关架构/状态文档。
+- Agent Home unavailable contract、Desktop Primary Sidebar 禁用态、Scene transition 拒绝路径和
+  功能验收数据库隔离门禁。

@@ -114,6 +114,25 @@ describe('Agent Home contract', () => {
     ]);
   });
 
+  it('preserves an item-local unavailable diagnostic without invalidating a sibling', () => {
+    const unavailable = {
+      ...summary('unavailable', { kind: 'workspace', workspaceId: 'workspace:1' }),
+      unavailable: {
+        fieldNames: ['context'],
+        message: "Agent Conversation 'unavailable' context is not present.",
+      },
+    };
+    const valid = summary('valid', { kind: 'workspace', workspaceId: 'workspace:1' });
+
+    const projection = parseAgentHomeProjection({
+      conversations: [unavailable, valid],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    });
+
+    expect(projection.conversations).toEqual([unavailable, valid]);
+    expect(projection.diagnostics).toBeUndefined();
+  });
+
   it('compares exact owner identity', () => {
     expect(
       isSameAgentConversationOwner(

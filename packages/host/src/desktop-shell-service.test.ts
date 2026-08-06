@@ -657,6 +657,139 @@ describe('DesktopShellService', () => {
     expect(await fixture.service.getProjection(windowId)).toEqual(projection);
   });
 
+  it('rejects an unavailable retained Project before Workspace restore', async () => {
+    const retainedProject: DesktopProjectCatalogItem = {
+      projectId: 'content:unavailable-workspace',
+      workspaceId: 'unavailable-workspace',
+      profile: 'content',
+      displayName: 'Unavailable Project',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-06T00:00:00.000Z',
+      unavailable: {
+        fieldNames: ['workspacePath'],
+        message: 'The Project workspace is missing.',
+      },
+    };
+    const fixture = createFixture(
+      createMemoryFile(),
+      'home',
+      undefined,
+      true,
+      [],
+      [retainedProject],
+    );
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const before = await fixture.service.getProjection(windowId);
+
+    await expect(
+      fixture.service.transitionScene(
+        createDesktopSceneTransitionRequest({
+          requestId: 'open-unavailable-project',
+          rendererSessionId: before.rendererSessionId,
+          windowId,
+          sceneId: activeScene(before.window).sceneId,
+          intent: {
+            kind: 'open-project-workspace',
+            projectId: retainedProject.projectId,
+          },
+        }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: {
+        message: expect.stringContaining('The Project workspace is missing.'),
+        metadata: { owner: 'workspace-authority', intentKind: 'open-project-workspace' },
+      },
+    });
+    expect(fixture.registry.restore).not.toHaveBeenCalled();
+    expect(await fixture.service.getProjection(windowId)).toEqual(before);
+  });
+
+  it('rejects an unavailable Conversation before Scene mutation while a valid sibling remains', async () => {
+    const fixture = createFixture();
+    const workspaceId = '11111111-1111-4111-8111-111111111111';
+    fixture.service.setAgentHomeProjectionSource({
+      readHomeProjection: () => ({
+        conversations: [
+          {
+            navigation: {
+              conversationId: 'conversation-unavailable',
+              owner: { kind: 'workspace', workspaceId },
+            },
+            title: 'Unavailable conversation',
+            updatedAt: '2026-08-06T00:01:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-08-06T00:01:00.000Z',
+            },
+            unavailable: {
+              fieldNames: ['context'],
+              message: 'Conversation context is missing.',
+            },
+          },
+          {
+            navigation: {
+              conversationId: 'conversation-valid',
+              owner: { kind: 'workspace', workspaceId },
+            },
+            title: 'Valid conversation',
+            updatedAt: '2026-08-06T00:00:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-08-06T00:00:00.000Z',
+            },
+          },
+        ],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const before = await fixture.service.getProjection(windowId);
+    const request = createDesktopSceneTransitionRequest({
+      requestId: 'restore-unavailable-conversation',
+      rendererSessionId: before.rendererSessionId,
+      windowId,
+      sceneId: activeScene(before.window).sceneId,
+      intent: {
+        kind: 'restore-conversation',
+        navigation: {
+          conversationId: 'conversation-unavailable',
+          owner: { kind: 'workspace', workspaceId },
+        },
+      },
+    });
+
+    await expect(
+      fixture.service.restoreAgentConversation({
+        request,
+        context: {
+          kind: 'workspace',
+          workspaceId,
+          workspaceGrantId: 'workspace-grant:unused',
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: {
+        message: 'Conversation context is missing.',
+        metadata: { conversationOwnerKind: 'workspace' },
+      },
+    });
+    expect(await fixture.service.getProjection(windowId)).toEqual(before);
+    expect(before.agentHome.conversations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          navigation: expect.objectContaining({ conversationId: 'conversation-valid' }),
+        }),
+      ]),
+    );
+  });
+
   it('resolves an opaque Workspace grant into an exact draft Scene without duplicating Project facts', async () => {
     const repository = createInMemoryDesktopShellStateRepository();
     const authorityResolution: AssetWorkspaceResolution = {

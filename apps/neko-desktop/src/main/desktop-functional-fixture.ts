@@ -16,8 +16,14 @@ export function resolveDesktopRuntimeHome(input: {
   readonly environment: Readonly<Record<string, string | undefined>>;
 }): string {
   const fixtureHome = input.environment[FUNCTIONAL_FIXTURE_ENVIRONMENT];
-  if (fixtureHome === undefined) return input.systemHome;
-  if (!input.argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT)) {
+  const fixtureLaunch = input.argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT);
+  if (fixtureHome === undefined) {
+    if (fixtureLaunch) {
+      throw new Error('Desktop functional fixture requires an explicit isolated fixture home.');
+    }
+    return input.systemHome;
+  }
+  if (!fixtureLaunch) {
     throw new Error('Desktop functional fixture home requires the explicit fixture argument.');
   }
   if (!path.isAbsolute(fixtureHome)) {

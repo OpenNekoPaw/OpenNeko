@@ -1263,6 +1263,13 @@ export class DesktopAppHost {
           `Desktop Conversation '${navigation.conversationId}' does not match its authoritative navigation owner.`,
         );
       }
+      if (conversation.unavailable) {
+        return unavailableConversationOwner(
+          request.requestId,
+          navigation.owner,
+          conversation.unavailable.message,
+        );
+      }
       if (navigation.owner.kind === 'character' || navigation.owner.kind === 'room') {
         return unavailableConversationOwner(request.requestId, navigation.owner);
       }
@@ -1961,7 +1968,8 @@ function conversationOwnerFromContext(
 
 function unavailableConversationOwner(
   requestId: string,
-  owner: Extract<AgentConversationOwnerRef, { readonly kind: 'character' | 'room' }>,
+  owner: AgentConversationOwnerRef,
+  message = `Desktop ${owner.kind} Conversation requires its qualified owner runtime.`,
 ): DesktopSceneTransitionResult {
   return {
     status: 'unavailable',
@@ -1969,7 +1977,7 @@ function unavailableConversationOwner(
     diagnostic: {
       code: 'desktop-scene-owner-unavailable',
       severity: 'error',
-      message: `Desktop ${owner.kind} Conversation requires its qualified owner runtime.`,
+      message,
       metadata: {
         owner: 'agent-conversation-authority',
         intentKind: 'restore-conversation',

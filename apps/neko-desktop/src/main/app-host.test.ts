@@ -1180,7 +1180,7 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
-  it('rejects a Pi-only Workspace conversation without canonical lifecycle context', async () => {
+  it('returns unavailable for a missing-context Conversation before reading lifecycle state', async () => {
     const workspace = createWorkspaceResolution();
     const conversationId = 'pi-only-conversation';
     const workspaceGrantId = 'workspace-grant:grant-1';
@@ -1206,6 +1206,7 @@ describe('DesktopAppHost', () => {
       now: () => '2026-08-05T00:00:00.000Z',
     });
     const fixture = await createShellAppHost({ conversationLifecycle });
+    const readConversationContext = vi.spyOn(conversationLifecycle, 'readConversationContext');
     fixture.registry.resolve.mockResolvedValue(workspace);
     const selected = await fixture.appHost.chooseWorkspaceGrant(
       fixture.sender,
@@ -1229,10 +1230,17 @@ describe('DesktopAppHost', () => {
       }),
     );
     if (opened.status !== 'transitioned') throw new Error('Expected Workspace Scene.');
-    setAgentHomeConversation(fixture.agent, {
-      conversationId,
-      owner: { kind: 'workspace', workspaceId: workspace.workspaceId },
-    });
+    setAgentHomeConversation(
+      fixture.agent,
+      {
+        conversationId,
+        owner: { kind: 'workspace', workspaceId: workspace.workspaceId },
+      },
+      {
+        fieldNames: ['context'],
+        message: `Agent Conversation '${conversationId}' context is not present.`,
+      },
+    );
     const beforeRestore = await fixture.appHost.shell.getProjection(fixture.windowId);
     await expect(
       fixture.appHost.transitionScene(
@@ -1251,7 +1259,18 @@ describe('DesktopAppHost', () => {
           },
         }),
       ),
-    ).rejects.toThrow(`Agent Conversation '${conversationId}' context is not present.`);
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: {
+        message: `Agent Conversation '${conversationId}' context is not present.`,
+        metadata: {
+          owner: 'agent-conversation-authority',
+          intentKind: 'restore-conversation',
+          conversationOwnerKind: 'workspace',
+        },
+      },
+    });
+    expect(readConversationContext).not.toHaveBeenCalled();
     expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(
       activeScene(beforeRestore),
     );
@@ -2383,6 +2402,7 @@ function createAgentComposition(): AgentAppHost & {
       set: async () => undefined,
       delete: async () => undefined,
     },
+    configCredentials: { read: async () => undefined },
     prompt: {
       text: async () => null,
       select: async () => null,
@@ -2415,6 +2435,10 @@ function createAgentComposition(): AgentAppHost & {
 function setAgentHomeConversation(
   agent: ReturnType<typeof createAgentComposition>,
   navigation: AgentHomeNavigationIdentity,
+  unavailable?: {
+    readonly fieldNames: readonly string[];
+    readonly message: string;
+  },
 ): void {
   agent.readHomeProjection.mockReturnValue({
     conversations: [
@@ -2427,6 +2451,7 @@ function setAgentHomeConversation(
           kind: 'conversation-updated',
           occurredAt: '2026-08-04T00:00:00.000Z',
         },
+        ...(unavailable === undefined ? {} : { unavailable }),
       },
     ],
     attention: { needsInput: 0, needsReview: 0, running: 0 },

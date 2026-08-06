@@ -661,6 +661,126 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('keeps unavailable items visible and cleanup-capable without opening them', async () => {
+    const base = createProjection();
+    const project = {
+      projectId: 'content:workspace-unavailable',
+      workspaceId: 'workspace-unavailable',
+      profile: 'content' as const,
+      displayName: 'Unavailable Project',
+      createdAt: '2026-07-28T00:00:00.000Z',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+      unavailable: {
+        fieldNames: ['workspacePath'],
+        message: 'The Project workspace is missing.',
+      },
+    };
+    const unavailableConversation = {
+      navigation: {
+        conversationId: 'conversation-unavailable',
+        owner: { kind: 'workspace' as const, workspaceId: project.workspaceId },
+      },
+      title: 'Unavailable conversation',
+      updatedAt: '2026-07-29T00:00:00.000Z',
+      attention: 'none' as const,
+      lastActivity: {
+        kind: 'conversation-updated' as const,
+        occurredAt: '2026-07-29T00:00:00.000Z',
+      },
+      unavailable: {
+        fieldNames: ['context'],
+        message: 'Conversation context is missing.',
+      },
+    };
+    const validConversation = {
+      navigation: {
+        conversationId: 'conversation-valid',
+        owner: {
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant-space:local-user',
+        },
+      },
+      title: 'Valid conversation',
+      updatedAt: '2026-07-28T00:00:00.000Z',
+      attention: 'none' as const,
+      lastActivity: {
+        kind: 'conversation-updated' as const,
+        occurredAt: '2026-07-28T00:00:00.000Z',
+      },
+    };
+    const catalog = { projects: [project] };
+    const agentHome = {
+      conversations: [unavailableConversation, validConversation],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    };
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'valid-transition',
+      scene: activeScene(projection),
+    }));
+    const deleteConversation = vi.fn(async () => projection);
+    const removeRecentProject = vi.fn(async () => projection);
+    installBridge({ projection, transition, deleteConversation, removeRecentProject });
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const { container, root } = await renderApplication();
+
+    const projectButton = [
+      ...container.querySelectorAll<HTMLButtonElement>('.home-project-link'),
+    ].find((button) => button.textContent?.includes(project.displayName));
+    const unavailableButton = [
+      ...container.querySelectorAll<HTMLButtonElement>('.home-conversation-link'),
+    ].find((button) => button.textContent?.includes(unavailableConversation.title));
+    const validButton = [
+      ...container.querySelectorAll<HTMLButtonElement>('.home-conversation-link'),
+    ].find((button) => button.textContent?.includes(validConversation.title));
+    if (!projectButton || !unavailableButton || !validButton) {
+      throw new Error('Desktop fixture requires unavailable and valid navigation items.');
+    }
+    expect(projectButton.disabled).toBe(true);
+    expect(projectButton.title).toBe(project.unavailable.message);
+    expect(unavailableButton.disabled).toBe(true);
+    expect(unavailableButton.title).toBe(unavailableConversation.unavailable.message);
+
+    await act(async () => {
+      projectButton.click();
+      unavailableButton.click();
+    });
+    expect(transition).not.toHaveBeenCalled();
+
+    await act(async () => validButton.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenCalledWith(
+      projection.window.windowId,
+      { kind: 'restore-conversation', navigation: validConversation.navigation },
+      activeScene(projection).sceneId,
+    );
+
+    const removeButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove Unavailable Project from recent projects"]',
+    );
+    const deleteButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete conversation Unavailable conversation"]',
+    );
+    if (!removeButton || !deleteButton) {
+      throw new Error('Desktop fixture requires unavailable cleanup actions.');
+    }
+    expect(removeButton.disabled).toBe(false);
+    expect(deleteButton.disabled).toBe(false);
+    await act(async () => removeButton.click());
+    await waitFor(() => removeRecentProject.mock.calls.length === 1);
+    await act(async () => deleteButton.click());
+    await waitFor(() => deleteConversation.mock.calls.length === 1);
+    expect(removeRecentProject).toHaveBeenCalledWith(project.projectId);
+    expect(deleteConversation).toHaveBeenCalledWith(unavailableConversation.navigation);
+    await act(async () => root.unmount());
+  });
+
   it('groups standalone Assistant conversations and expands beyond the bounded initial list', async () => {
     const base = createProjection();
     const conversations = Array.from({ length: 6 }, (_, index) => ({

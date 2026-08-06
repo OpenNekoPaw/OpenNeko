@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { HostDiagnostic } from './ports';
-import { isSameAgentConversationOwner, type DesktopAgentViewIdentity } from '@neko/agent-contracts';
+import {
+  isSameAgentConversationOwner,
+  type AgentConversationOwnerRef,
+  type DesktopAgentViewIdentity,
+} from '@neko/agent-contracts';
 import {
   DesktopShellContractError,
   projectDesktopConversationNavigation,
@@ -412,8 +416,8 @@ export class DesktopShellService {
           );
         }
         if (targetProject && 'unavailable' in targetProject && targetProject.unavailable) {
-          throw new DesktopShellContractError(
-            'desktop-shell-project-not-found',
+          return unavailableWorkspaceSceneTransition(
+            request,
             `Desktop Project '${targetProject.projectId}' is unavailable: ${targetProject.unavailable.fieldNames.join(', ')}: ${targetProject.unavailable.message}`,
           );
         }
@@ -669,6 +673,13 @@ export class DesktopShellService {
         throw new DesktopSceneContractError(
           'desktop-scene-stale-identity',
           `Agent Conversation '${conversationId}' does not match the authoritative navigation owner.`,
+        );
+      }
+      if (homeConversation.unavailable) {
+        return unavailableConversationSceneTransition(
+          request,
+          homeConversation.navigation.owner.kind,
+          homeConversation.unavailable.message,
         );
       }
       const contextOwner =
@@ -2154,6 +2165,7 @@ function unavailableSceneTransition(
 
 function unavailableWorkspaceSceneTransition(
   request: DesktopSceneTransitionRequest,
+  message = 'Workspace scene requires a validated Workspace authority grant.',
 ): DesktopSceneTransitionResult {
   if (
     request.intent.kind !== 'open-workspace' &&
@@ -2170,10 +2182,37 @@ function unavailableWorkspaceSceneTransition(
     diagnostic: {
       code: 'desktop-scene-owner-unavailable',
       severity: 'error',
-      message: 'Workspace scene requires a validated Workspace authority grant.',
+      message,
       metadata: {
         owner: 'workspace-authority',
         intentKind: request.intent.kind,
+      },
+    },
+  };
+}
+
+function unavailableConversationSceneTransition(
+  request: DesktopSceneTransitionRequest,
+  conversationOwnerKind: AgentConversationOwnerRef['kind'],
+  message: string,
+): DesktopSceneTransitionResult {
+  if (request.intent.kind !== 'restore-conversation') {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      'Conversation unavailable projection requires a restore-conversation intent.',
+    );
+  }
+  return {
+    status: 'unavailable',
+    requestId: request.requestId,
+    diagnostic: {
+      code: 'desktop-scene-owner-unavailable',
+      severity: 'error',
+      message,
+      metadata: {
+        owner: 'agent-conversation-authority',
+        intentKind: 'restore-conversation',
+        conversationOwnerKind,
       },
     },
   };

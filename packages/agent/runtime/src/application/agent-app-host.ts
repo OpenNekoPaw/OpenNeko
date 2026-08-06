@@ -334,14 +334,34 @@ class DefaultAgentAppHost implements AgentAppHost {
     this.requireActive();
     const catalog = this.options.catalogReader.listConversations();
     const conversations: AgentHomeConversationSummary[] = [];
-    const diagnostics: AgentHomeDiagnostic[] = [...catalog.diagnostics];
+    const localizedDiagnosticConversationIds = new Set<string>();
     for (const record of catalog.records) {
-      const ownerProjection = projectAgentConversationOwner(record, this.assistantSpaceIds);
+      const workspace = this.workspaces.get(record.workspaceId);
+      const catalogDiagnostic = catalog.diagnostics.find(
+        (diagnostic) => diagnostic.conversationId === record.conversationId,
+      );
+      const ownerProjection = projectAgentConversationOwner(
+        record,
+        this.assistantSpaceIds,
+        workspace?.hasLocalConversationProjection(record.conversationId) ?? false,
+        catalogDiagnostic,
+      );
       if (ownerProjection.kind === 'invalid') {
-        diagnostics.push(ownerProjection.diagnostic);
+        if (catalogDiagnostic) localizedDiagnosticConversationIds.add(record.conversationId);
+        conversations.push(
+          projectAgentHomeConversationSummary(
+            record,
+            ownerProjection.displayOwner,
+            undefined,
+            undefined,
+            {
+              fieldNames: ownerProjection.fieldNames,
+              message: ownerProjection.message,
+            },
+          ),
+        );
         continue;
       }
-      const workspace = this.workspaces.get(record.workspaceId);
       conversations.push(
         workspace
           ? workspace.projectHomeConversation(record, ownerProjection.owner)
@@ -359,6 +379,11 @@ class DefaultAgentAppHost implements AgentAppHost {
       needsReview: countAttention(conversations, 'needs-review'),
       running: countAttention(conversations, 'running'),
     };
+    const diagnostics = catalog.diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.conversationId === undefined ||
+        !localizedDiagnosticConversationIds.has(diagnostic.conversationId),
+    );
     return freezeClone({
       conversations,
       attention,
@@ -876,6 +901,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     );
   }
 
+  hasLocalConversationProjection(conversationId: string): boolean {
+    this.requireActive();
+    return this.projections.has(conversationId);
+  }
+
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
@@ -1252,6 +1282,7 @@ export function projectAgentHomeConversationSummary(
   owner: AgentConversationOwnerRef,
   projection: ReturnType<ConversationProjectionStore['snapshot']> | undefined,
   active: Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined,
+  unavailable?: NonNullable<AgentHomeConversationSummary['unavailable']>,
 ): AgentHomeConversationSummary {
   const latestTurn = projection?.turns.at(-1);
   const pendingConfirmation = latestTurn?.items
@@ -1325,6 +1356,7 @@ export function projectAgentHomeConversationSummary(
     updatedAt: record.updatedAt,
     attention,
     lastActivity,
+    ...(unavailable === undefined ? {} : { unavailable }),
   };
 }
 
@@ -1335,17 +1367,31 @@ type AgentConversationOwnerProjection =
     }
   | {
       readonly kind: 'invalid';
-      readonly diagnostic: AgentHomeDiagnostic;
+      readonly displayOwner: AgentConversationOwnerRef;
+      readonly fieldNames: readonly string[];
+      readonly message: string;
     };
 
 function projectAgentConversationOwner(
   record: PiConversationCatalogRecord,
   assistantSpaceIds: readonly string[],
+  hasLocalConversationProjection: boolean,
+  catalogDiagnostic: AgentHomeDiagnostic | undefined,
 ): AgentConversationOwnerProjection {
+  if (catalogDiagnostic) {
+    return invalidAgentConversationOwner(
+      record,
+      assistantSpaceIds,
+      ['context'],
+      catalogDiagnostic.message,
+    );
+  }
   if (record.context?.kind === 'assistant') {
     if (record.context.assistantSpaceId !== record.workspaceId) {
       return invalidAgentConversationOwner(
         record,
+        assistantSpaceIds,
+        ['context', 'workspaceId'],
         `Agent catalog Conversation '${record.conversationId}' Assistant Space does not match its Pi runtime scope.`,
       );
     }
@@ -1358,12 +1404,16 @@ function projectAgentConversationOwner(
     if (record.context.workspaceId !== record.workspaceId) {
       return invalidAgentConversationOwner(
         record,
+        assistantSpaceIds,
+        ['context', 'workspaceId'],
         `Agent catalog Conversation '${record.conversationId}' Workspace context does not match its Pi runtime scope.`,
       );
     }
     if (assistantSpaceIds.includes(record.context.workspaceId)) {
       return invalidAgentConversationOwner(
         record,
+        assistantSpaceIds,
+        ['context'],
         `Agent catalog Conversation '${record.conversationId}' Workspace context resolves to an Assistant Space.`,
       );
     }
@@ -1372,26 +1422,40 @@ function projectAgentConversationOwner(
       owner: { kind: 'workspace', workspaceId: record.context.workspaceId },
     };
   }
-  return {
-    kind: 'valid',
-    owner: assistantSpaceIds.includes(record.workspaceId)
-      ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
-      : { kind: 'workspace', workspaceId: record.workspaceId },
-  };
+  if (hasLocalConversationProjection) {
+    return {
+      kind: 'valid',
+      owner: assistantSpaceIds.includes(record.workspaceId)
+        ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
+        : { kind: 'workspace', workspaceId: record.workspaceId },
+    };
+  }
+  return invalidAgentConversationOwner(
+    record,
+    assistantSpaceIds,
+    ['context'],
+    `Agent catalog Conversation '${record.conversationId}' context is not present.`,
+  );
 }
 
 function invalidAgentConversationOwner(
   record: PiConversationCatalogRecord,
+  assistantSpaceIds: readonly string[],
+  fieldNames: readonly string[],
   message: string,
 ): AgentConversationOwnerProjection {
   return {
     kind: 'invalid',
-    diagnostic: {
-      code: 'invalid-conversation-record',
-      workspaceId: record.workspaceId,
-      conversationId: record.conversationId,
-      message,
-    },
+    displayOwner:
+      record.context?.kind === 'assistant'
+        ? { kind: 'assistant', assistantSpaceId: record.context.assistantSpaceId }
+        : record.context?.kind === 'workspace'
+          ? { kind: 'workspace', workspaceId: record.context.workspaceId }
+          : assistantSpaceIds.includes(record.workspaceId)
+            ? { kind: 'assistant', assistantSpaceId: record.workspaceId }
+            : { kind: 'workspace', workspaceId: record.workspaceId },
+    fieldNames,
+    message,
   };
 }
 

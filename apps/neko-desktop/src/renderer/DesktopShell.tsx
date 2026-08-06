@@ -2255,6 +2255,7 @@ function PrimaryRecentNavigation({
                 (candidate) => candidate.projectId === group.projectId,
               )
             : undefined;
+        const projectUnavailable = project?.unavailable;
         if (group.kind === 'project' && !project) {
           throw new Error(
             `Conversation navigation references missing Project '${group.projectId}'.`,
@@ -2270,11 +2271,22 @@ function PrimaryRecentNavigation({
                 <button
                   type="button"
                   className="home-project-link"
-                  disabled={disabled}
+                  disabled={disabled || projectUnavailable !== undefined}
+                  title={projectUnavailable?.message}
                   onClick={() => onOpenRecent(project.projectId)}
                 >
                   <FolderIcon size={15} />
                   <span>{project.displayName}</span>
+                  {projectUnavailable ? (
+                    <span
+                      className="primary-navigation-unavailable"
+                      role="status"
+                      aria-label={projectUnavailable.message}
+                    >
+                      <WarningIcon size={12} />
+                      {t('home.unavailable')}
+                    </span>
+                  ) : null}
                 </button>
                 <IconButton
                   disabled={disabled}
@@ -2302,8 +2314,11 @@ function PrimaryRecentNavigation({
                 <ConversationNavigationRow
                   active={conversation.navigation.conversationId === activeConversationId}
                   conversation={conversation}
-                  disabled={disabled || group.kind === 'workspace'}
+                  disabled={disabled}
                   key={conversation.navigation.conversationId}
+                  navigationDisabled={
+                    disabled || group.kind === 'workspace' || projectUnavailable !== undefined
+                  }
                   onDelete={onDeleteConversation}
                   onOpen={onOpenConversation}
                 />
@@ -2332,12 +2347,14 @@ function ConversationNavigationRow({
   active,
   conversation,
   disabled,
+  navigationDisabled,
   onDelete,
   onOpen,
 }: {
   readonly active: boolean;
   readonly conversation: DesktopAgentHomeConversationSummary;
   readonly disabled: boolean;
+  readonly navigationDisabled: boolean;
   readonly onDelete: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpen: (conversation: DesktopAgentHomeConversationSummary) => void;
 }): JSX.Element {
@@ -2350,12 +2367,22 @@ function ConversationNavigationRow({
       <button
         type="button"
         className="home-project-link home-conversation-link"
-        disabled={disabled}
+        disabled={navigationDisabled || conversation.unavailable !== undefined}
+        title={conversation.unavailable?.message}
         onClick={() => onOpen(conversation)}
       >
         <StorylineIcon size={13} />
         <span>{conversation.title}</span>
-        {conversation.attention !== 'none' ? (
+        {conversation.unavailable ? (
+          <span
+            className="primary-navigation-unavailable"
+            role="status"
+            aria-label={conversation.unavailable.message}
+          >
+            <WarningIcon size={12} />
+            {t('home.unavailable')}
+          </span>
+        ) : conversation.attention !== 'none' ? (
           <span
             className={`home-conversation-attention is-${conversation.attention}`}
             aria-label={formatAttention(conversation.attention, t)}

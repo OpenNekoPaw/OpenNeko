@@ -86,11 +86,10 @@ describe('AgentAppHost', () => {
     const policy = fixturePolicy();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
     const protectedSecret = 'must-not-enter-pi-storage';
-    await fixture.composition.credentialRuntime.credentials.replace(
-      'fixture',
-      { type: 'api_key', key: protectedSecret },
-      'interactive',
-    );
+    await fixture.composition.credentialRuntime.credentials.replace('fixture', {
+      type: 'api_key',
+      key: protectedSecret,
+    });
     workspace.tools.register(fixtureTool());
     expect(await fixture.composition.attachWorkspace(fixture.workspace)).toBe(workspace);
     expect(workspace.tools.list().map((tool) => tool.name)).toEqual([
@@ -541,6 +540,14 @@ describe('AgentAppHost', () => {
         workspaceGrantId: 'grant-valid',
       },
     };
+    const invalidRecord = {
+      workspaceId: validRecord.workspaceId,
+      conversationId: 'conversation-invalid',
+      title: 'Invalid conversation',
+      activeBranchId: validRecord.activeBranchId,
+      createdAt: validRecord.createdAt,
+      updatedAt: '2026-08-05T00:02:00.000Z',
+    };
     const composition = createAgentAppHost({
       userDataRoot: fixture.userDataRoot,
       userHome: fixture.userHome,
@@ -548,7 +555,7 @@ describe('AgentAppHost', () => {
       credentialRuntime: createTestCredentialRuntime(),
       catalogReader: {
         listConversations: () => ({
-          records: [validRecord],
+          records: [invalidRecord, validRecord],
           diagnostics: [
             {
               code: 'invalid-conversation-record',
@@ -568,19 +575,21 @@ describe('AgentAppHost', () => {
     expect(composition.readHomeProjection()).toMatchObject({
       conversations: [
         {
+          navigation: { conversationId: 'conversation-invalid' },
+          unavailable: {
+            fieldNames: ['context'],
+            message: expect.stringContaining("unknown field 'unexpectedField'"),
+          },
+        },
+        {
           navigation: { conversationId: 'conversation-valid' },
         },
       ],
-      diagnostics: [
-        {
-          code: 'invalid-conversation-record',
-          conversationId: 'conversation-invalid',
-        },
-      ],
+      diagnostics: [],
     });
   });
 
-  it('isolates a Workspace context that resolves to an Assistant Space from valid siblings', async () => {
+  it('retains an unavailable Workspace context beside valid siblings without global failure', async () => {
     const fixture = await createFixture();
     const assistantSpaceId = 'assistant-space:local-user';
     const records = [
@@ -643,6 +652,16 @@ describe('AgentAppHost', () => {
       conversations: [
         {
           navigation: {
+            conversationId: 'conversation-invalid-workspace-owner',
+            owner: { kind: 'workspace', workspaceId: assistantSpaceId },
+          },
+          unavailable: {
+            fieldNames: ['context'],
+            message: expect.stringContaining('Workspace context resolves to an Assistant Space'),
+          },
+        },
+        {
+          navigation: {
             conversationId: 'conversation-valid-assistant',
             owner: { kind: 'assistant', assistantSpaceId },
           },
@@ -654,15 +673,63 @@ describe('AgentAppHost', () => {
           },
         },
       ],
-      diagnostics: [
+      diagnostics: [],
+    });
+  });
+
+  it('retains a missing-context Conversation as unavailable without opening a runtime', async () => {
+    const fixture = await createFixture();
+    const missingContext = {
+      workspaceId: fixture.workspace.workspaceId,
+      conversationId: 'conversation-missing-context',
+      title: 'Missing context',
+      activeBranchId: 'main',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:02:00.000Z',
+    };
+    const valid = {
+      ...missingContext,
+      conversationId: 'conversation-valid-context',
+      title: 'Valid context',
+      updatedAt: '2026-08-05T00:01:00.000Z',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: fixture.workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant:valid',
+      },
+    };
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-missing-context',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: () => ({ records: [missingContext, valid], diagnostics: [] }),
+        findConversation: (conversationId) =>
+          [missingContext, valid].find((record) => record.conversationId === conversationId),
+        dispose: () => undefined,
+      },
+    });
+    compositions.push(composition);
+
+    expect(composition.readHomeProjection()).toMatchObject({
+      conversations: [
         {
-          code: 'invalid-conversation-record',
-          workspaceId: assistantSpaceId,
-          conversationId: 'conversation-invalid-workspace-owner',
-          message: expect.stringContaining('Workspace context resolves to an Assistant Space'),
+          navigation: { conversationId: missingContext.conversationId },
+          attention: 'none',
+          unavailable: {
+            fieldNames: ['context'],
+            message: expect.stringContaining('context is not present'),
+          },
+        },
+        {
+          navigation: { conversationId: valid.conversationId },
         },
       ],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+      diagnostics: [],
     });
+    expect(composition.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
   });
 
   it('reports no active turn for a durable conversation that has not opened a Pi runtime', async () => {
@@ -1341,6 +1408,7 @@ function createTestCredentialRuntime() {
         secrets.delete(key);
       },
     },
+    configCredentials: { read: async () => undefined },
     prompt: {
       text: async () => null,
       select: async () => null,
