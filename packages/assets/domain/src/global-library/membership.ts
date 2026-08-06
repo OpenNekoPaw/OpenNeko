@@ -24,6 +24,14 @@ export interface AssetLibraryMembershipRegistration {
   readonly registeredAt: string;
 }
 
+export interface AssetLibraryMembershipRelocation {
+  readonly membershipId: string;
+  readonly expectedSourceRelativePath: string;
+  readonly sourceRelativePath: string;
+  readonly label: string;
+  readonly relocatedAt: string;
+}
+
 export type AssetLibraryInventoryInitializationResult =
   | { readonly status: 'initialized'; readonly importedCount: number }
   | { readonly status: 'already-initialized' };
@@ -39,7 +47,13 @@ export interface AssetLibraryMembershipRepository {
     completedAt: string,
   ): Promise<AssetLibraryInventoryInitializationResult>;
   activate(registration: AssetLibraryMembershipRegistration): Promise<AssetLibraryMembershipRecord>;
-  remove(membershipId: string, removedAt: string): Promise<AssetLibraryMembershipRecord>;
+  removeMany(
+    membershipIds: readonly string[],
+    removedAt: string,
+  ): Promise<readonly AssetLibraryMembershipRecord[]>;
+  relocateMany(
+    relocations: readonly AssetLibraryMembershipRelocation[],
+  ): Promise<readonly AssetLibraryMembershipRecord[]>;
 }
 
 export function assertAssetLibraryMembershipRegistration(
@@ -56,6 +70,31 @@ export function assertAssetLibraryMembershipRegistration(
   }
   requireIsoDate(value.modifiedAt, 'Asset membership modifiedAt is invalid.');
   requireIsoDate(value.registeredAt, 'Asset membership registeredAt is invalid.');
+}
+
+export function assertAssetLibraryMembershipRelocations(
+  relocations: readonly AssetLibraryMembershipRelocation[],
+): void {
+  if (relocations.length === 0) {
+    throw new Error('Asset membership relocation requires at least one item.');
+  }
+  const membershipIds = new Set<string>();
+  const sourcePaths = new Set<string>();
+  for (const relocation of relocations) {
+    requireNonEmpty(relocation.membershipId, 'Asset membershipId is required.');
+    assertAssetLibrarySourceRelativePath(relocation.expectedSourceRelativePath);
+    assertAssetLibrarySourceRelativePath(relocation.sourceRelativePath);
+    requireNonEmpty(relocation.label, 'Asset membership label is required.');
+    requireIsoDate(relocation.relocatedAt, 'Asset membership relocatedAt is invalid.');
+    if (membershipIds.has(relocation.membershipId)) {
+      throw new Error(`Duplicate Asset membership relocation: ${relocation.membershipId}`);
+    }
+    if (sourcePaths.has(relocation.sourceRelativePath)) {
+      throw new Error(`Duplicate Asset membership target: ${relocation.sourceRelativePath}`);
+    }
+    membershipIds.add(relocation.membershipId);
+    sourcePaths.add(relocation.sourceRelativePath);
+  }
 }
 
 export function assertAssetLibrarySourceRelativePath(value: string): void {

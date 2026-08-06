@@ -1012,8 +1012,11 @@ export class DesktopAppHost {
       case 'asset.import':
         projection = await runtime.importAssets(request);
         break;
-      case 'asset.remove':
-        projection = await runtime.removeAsset(request);
+      case 'assets.remove':
+        projection = await runtime.removeAssets(request);
+        break;
+      case 'items.move':
+        projection = await runtime.moveItems(request);
         break;
       case 'media-library.add':
         projection = await runtime.addMediaLibrary(request);
@@ -1030,7 +1033,8 @@ export class DesktopAppHost {
     }
     if (
       request.route === 'selection.select' ||
-      request.route === 'asset.remove' ||
+      request.route === 'assets.remove' ||
+      request.route === 'items.move' ||
       request.route === 'preview.detach'
     ) {
       const currentScene = await this.shell.getSceneProjection(window.windowId);

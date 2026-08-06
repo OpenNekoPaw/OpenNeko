@@ -42,7 +42,8 @@ export interface AssetCenterManagementRuntime {
     variant: GlobalLibraryThumbnailVariant,
   ): Promise<GlobalLibraryThumbnailResult>;
   importAssets(): Promise<void>;
-  removeAsset(item: GlobalAssetItem): Promise<void>;
+  removeAssets(items: readonly GlobalAssetItem[]): Promise<void>;
+  moveItems(items: readonly GlobalLibraryItem[]): Promise<void>;
   addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind): Promise<void>;
   relinkMediaLibrary(libraryId: string): Promise<void>;
   removeMediaLibrary(libraryId: string): Promise<void>;
@@ -222,10 +223,27 @@ export class AssetCenterController implements AssetCenterManagementRuntime {
     await this.library.importAssets();
   }
 
-  async removeAsset(item: GlobalAssetItem): Promise<void> {
+  async removeAssets(items: readonly GlobalAssetItem[]): Promise<void> {
     const current = this.getSnapshot();
-    await this.library.removeAsset(item);
-    if (current.selection?.itemId !== item.id) return;
+    await this.library.removeAssets(items);
+    if (!current.selection || !items.some((item) => item.id === current.selection?.itemId)) return;
+    if (current.preview.status === 'ready') {
+      if (!this.previewPorts) {
+        throw new Error('Asset Center Preview lifecycle port is unavailable.');
+      }
+      await this.previewPorts.previewSessions.release({
+        identity: this.identity,
+        previewSessionId: current.preview.previewSessionId,
+      });
+    }
+    this.publish(this.session.clearSelection());
+  }
+
+  async moveItems(items: readonly GlobalLibraryItem[]): Promise<void> {
+    const current = this.getSnapshot();
+    const result = await this.library.moveItems(items);
+    if (result.status === 'cancelled' || !current.selection) return;
+    if (!items.some((item) => item.id === current.selection?.itemId)) return;
     if (current.preview.status === 'ready') {
       if (!this.previewPorts) {
         throw new Error('Asset Center Preview lifecycle port is unavailable.');

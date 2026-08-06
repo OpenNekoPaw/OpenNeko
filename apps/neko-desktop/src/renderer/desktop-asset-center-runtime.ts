@@ -84,8 +84,12 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
     await this.execute({ route: 'asset.import' });
   }
 
-  async removeAsset(item: GlobalAssetItem): Promise<void> {
-    await this.execute({ route: 'asset.remove', itemId: item.id });
+  async removeAssets(items: readonly GlobalAssetItem[]): Promise<void> {
+    await this.execute({ route: 'assets.remove', itemIds: items.map((item) => item.id) });
+  }
+
+  async moveItems(items: readonly GlobalLibraryItem[]): Promise<void> {
+    await this.execute({ route: 'items.move', itemIds: items.map((item) => item.id) });
   }
 
   async addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind): Promise<void> {
@@ -135,8 +139,8 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
         }
       | { readonly route: 'asset.import' }
       | {
-          readonly route: 'asset.remove';
-          readonly itemId: string;
+          readonly route: 'assets.remove' | 'items.move';
+          readonly itemIds: readonly string[];
         }
       | {
           readonly route: 'media-library.add';

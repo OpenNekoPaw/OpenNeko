@@ -49,6 +49,7 @@ import type {
   GlobalAssetRemoveResult,
   GlobalLibraryItem,
   GlobalLibraryCatalogSort,
+  GlobalLibraryMoveResult,
   GlobalLibrarySortDirection,
   GlobalLibraryThumbnailRequest,
   GlobalLibraryThumbnailResult,
@@ -75,6 +76,7 @@ import {
   type ResourceBrowserNodeSourceOptions,
 } from './resource-browser-node-source';
 import { importGlobalAssetFiles } from './global-asset-files';
+import { moveGlobalLibraryFiles } from './global-library-file-mutations';
 import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createResourceBrowserViewId } from '@neko/assets-domain/resource-browser/contract';
@@ -120,6 +122,11 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly selectConfiguredGlobalMediaLibrary: ResourceBrowserNodeSourceOptions['selectGlobalLibrary'];
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
   readonly selectGlobalAssetSources: (windowId: string) => Promise<readonly string[] | undefined>;
+  readonly selectGlobalLibraryMoveDestination: (input: {
+    readonly windowId: string;
+    readonly owner: GlobalLibraryItem['owner'];
+    readonly defaultPath: string;
+  }) => Promise<string | undefined>;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
   readonly createGlobalLibraryThumbnail: (input: {
     readonly absolutePath: string;
@@ -518,22 +525,40 @@ export class ResourceBrowserNodeRuntime {
     });
   }
 
-  async removeHomeAsset(input: {
+  async removeHomeAssets(input: {
     readonly windowId: string;
-    readonly assetId: string;
+    readonly assetIds: readonly string[];
   }): Promise<GlobalAssetRemoveResult> {
     await this.requireHomeWindow(input.windowId);
     return this.withGlobalAssetMutation(async () => {
-      const item = this.requireHomeItem(input.windowId, input.assetId, 'global-asset-library');
-      if (item.owner !== 'global-asset-library') {
-        throw new Error('Desktop global Asset identity has the wrong owner.');
+      const items = this.requireHomeItems(input.windowId, input.assetIds);
+      if (items.some((item) => item.owner !== 'global-asset-library')) {
+        throw new Error('Desktop global Asset removal requires Asset items.');
       }
-      await this.requireAssetLibraryMemberships().remove(item.id, new Date().toISOString());
+      await this.requireAssetLibraryMemberships().removeMany(
+        items.map((item) => item.id),
+        new Date().toISOString(),
+      );
       return {
         status: 'removed',
-        assetId: item.id,
+        assetIds: items.map((item) => item.id),
       };
     });
+  }
+
+  async moveHomeItems(input: {
+    readonly windowId: string;
+    readonly itemIds: readonly string[];
+  }): Promise<GlobalLibraryMoveResult> {
+    await this.requireHomeWindow(input.windowId);
+    const items = this.requireHomeItems(input.windowId, input.itemIds);
+    const owner = items[0]?.owner;
+    if (!owner || items.some((item) => item.owner !== owner)) {
+      throw new Error('Desktop global Library move requires one resource owner.');
+    }
+    return owner === 'global-asset-library'
+      ? this.withGlobalAssetMutation(() => this.moveHomeAssetItems(input.windowId, items))
+      : this.withGlobalMediaLibraryMutation(() => this.moveHomeMediaItems(input.windowId, items));
   }
 
   async resolveHomeLibraryThumbnail(input: {
@@ -674,6 +699,120 @@ export class ResourceBrowserNodeRuntime {
       throw new Error('Desktop global Library item identity is stale or has the wrong owner.');
     }
     return item;
+  }
+
+  private requireHomeItems(
+    windowId: string,
+    itemIds: readonly string[],
+  ): readonly GlobalLibraryItem[] {
+    if (itemIds.length === 0 || new Set(itemIds).size !== itemIds.length) {
+      throw new Error('Desktop global Library batch item identities are invalid.');
+    }
+    return itemIds.map((itemId) => {
+      const item = this.homeItemsByWindow.get(windowId)?.get(itemId);
+      if (!item) throw new Error(`Desktop global Library item '${itemId}' is stale.`);
+      return item;
+    });
+  }
+
+  private async moveHomeAssetItems(
+    windowId: string,
+    items: readonly GlobalLibraryItem[],
+  ): Promise<GlobalLibraryMoveResult> {
+    if (items.some((item) => item.owner !== 'global-asset-library')) {
+      throw new Error('Desktop global Asset move received another resource owner.');
+    }
+    const memberships = this.requireAssetLibraryMemberships();
+    const allowedRoot = await realpath(this.options.globalAssetRoot);
+    const records = await Promise.all(items.map((item) => memberships.get(item.id)));
+    if (records.some((record) => record?.state !== 'active')) {
+      throw new Error('Desktop global Asset move contains a stale membership.');
+    }
+    const destinationDirectory = await this.options.selectGlobalLibraryMoveDestination({
+      windowId,
+      owner: 'global-asset-library',
+      defaultPath: allowedRoot,
+    });
+    if (!destinationDirectory) return { status: 'cancelled' };
+    const sources = await Promise.all(
+      items.map(async (item) => ({
+        itemId: item.id,
+        absolutePath: await resolveGlobalAssetItemPath({
+          globalAssetRoot: this.options.globalAssetRoot,
+          memberships,
+          itemId: item.id,
+        }),
+      })),
+    );
+    await moveGlobalLibraryFiles({
+      allowedRoot,
+      destinationDirectory,
+      sources,
+      commit: async (entries) => {
+        const relocatedAt = new Date().toISOString();
+        await memberships.relocateMany(
+          entries.map((entry, index) => {
+            const record = records[index];
+            if (!record) throw new Error('Desktop global Asset membership became stale.');
+            return {
+              membershipId: entry.itemId,
+              expectedSourceRelativePath: record.sourceRelativePath,
+              sourceRelativePath: path
+                .relative(allowedRoot, entry.destinationPath)
+                .split(path.sep)
+                .join('/'),
+              label: path.basename(entry.destinationPath),
+              relocatedAt,
+            };
+          }),
+        );
+      },
+    });
+    return { status: 'moved', itemIds: items.map((item) => item.id) };
+  }
+
+  private async moveHomeMediaItems(
+    windowId: string,
+    items: readonly GlobalLibraryItem[],
+  ): Promise<GlobalLibraryMoveResult> {
+    const first = items[0];
+    if (
+      !first ||
+      first.owner !== 'media-library' ||
+      first.kind !== 'file' ||
+      items.some(
+        (item) =>
+          item.owner !== 'media-library' ||
+          item.kind !== 'file' ||
+          item.libraryId !== first.libraryId,
+      )
+    ) {
+      throw new Error('Desktop Media Library move requires files from one connection.');
+    }
+    const allowedRoot = await resolveGlobalMediaLibraryTarget({
+      mediaLibraryRoot: this.options.globalMediaLibraryRoot,
+      libraryId: first.libraryId,
+    });
+    const destinationDirectory = await this.options.selectGlobalLibraryMoveDestination({
+      windowId,
+      owner: 'media-library',
+      defaultPath: allowedRoot,
+    });
+    if (!destinationDirectory) return { status: 'cancelled' };
+    await moveGlobalLibraryFiles({
+      allowedRoot,
+      destinationDirectory,
+      sources: items.map((item) => {
+        if (item.owner !== 'media-library') {
+          throw new Error('Desktop Media Library move received another resource owner.');
+        }
+        return {
+          itemId: item.id,
+          absolutePath: path.resolve(allowedRoot, ...item.relativePath.split('/')),
+        };
+      }),
+    });
+    return { status: 'moved', itemIds: items.map((item) => item.id) };
   }
 
   private async resolveHomeItemPath(

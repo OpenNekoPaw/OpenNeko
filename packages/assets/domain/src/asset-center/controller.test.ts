@@ -189,9 +189,9 @@ describe('AssetCenterController', () => {
       itemId: asset.id,
     });
 
-    await controller.removeAsset(asset);
+    await controller.removeAssets([asset]);
 
-    expect(source.removeAsset).toHaveBeenCalledWith(asset.id);
+    expect(source.removeAssets).toHaveBeenCalledWith([asset.id]);
     expect(release).toHaveBeenCalledWith({
       identity: controller.identity,
       previewSessionId: 'preview:asset-center:asset-1',
@@ -240,7 +240,8 @@ function libraryRuntime(): GlobalLibraryBrowserRuntime {
     readMediaLibraryChildren: vi.fn(async () => ({ items: [] })),
     resolveThumbnail: vi.fn(),
     importAssets: vi.fn(),
-    removeAsset: vi.fn(),
+    removeAssets: vi.fn(),
+    moveItems: vi.fn(),
     addMediaLibrary: vi.fn(),
     relinkMediaLibrary: vi.fn(),
     removeMediaLibrary: vi.fn(),

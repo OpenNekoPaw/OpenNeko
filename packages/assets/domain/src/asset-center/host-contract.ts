@@ -58,8 +58,8 @@ export type AssetCenterHostRequest =
       readonly route: 'asset.import';
     })
   | (AssetCenterHostRequestBase & {
-      readonly route: 'asset.remove';
-      readonly itemId: string;
+      readonly route: 'assets.remove' | 'items.move';
+      readonly itemIds: readonly string[];
     })
   | (AssetCenterHostRequestBase & {
       readonly route: 'media-library.add';
@@ -163,12 +163,13 @@ export function parseAssetCenterHostRequest(value: unknown): AssetCenterHostRequ
         itemId: requireIdentity(record['itemId'], 'Asset Center thumbnail item'),
         variant: requireThumbnailVariant(record['variant']),
       };
-    case 'asset.remove':
-      requireExactKeys(record, [...BASE_KEYS, 'itemId'], 'Asset Center asset removal request');
+    case 'assets.remove':
+    case 'items.move':
+      requireExactKeys(record, [...BASE_KEYS, 'itemIds'], 'Asset Center batch request');
       return {
         ...base,
-        route: 'asset.remove',
-        itemId: requireIdentity(record['itemId'], 'Asset Center asset item'),
+        route: record['route'],
+        itemIds: requireItemIds(record['itemIds']),
       };
     case 'media-library.add':
       requireExactKeys(
@@ -271,4 +272,15 @@ function requireLocationKind(value: unknown): GlobalMediaLibraryLocationKind {
     throw new Error('Asset Center Media Library location kind is invalid.');
   }
   return value;
+}
+
+function requireItemIds(value: unknown): readonly string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('Asset Center batch itemIds are required.');
+  }
+  const itemIds = value.map((itemId) => requireIdentity(itemId, 'Asset Center batch item'));
+  if (new Set(itemIds).size !== itemIds.length) {
+    throw new Error('Asset Center batch itemIds must be unique.');
+  }
+  return itemIds;
 }

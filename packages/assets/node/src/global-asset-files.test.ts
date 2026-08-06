@@ -92,7 +92,7 @@ describe('Desktop global Asset files', () => {
       createMembershipId: () => 'membership-original',
     });
     expect(first).toMatchObject([{ status: 'added', assetId: 'membership-original' }]);
-    await memberships.remove('membership-original', '2026-08-05T08:01:00.000Z');
+    await memberships.removeMany(['membership-original'], '2026-08-05T08:01:00.000Z');
 
     const second = await importGlobalAssetFiles({
       globalAssetRoot: assets,
@@ -160,12 +160,40 @@ function createMembershipRepository(): AssetLibraryMembershipRepository {
       records.set(record.membershipId, record);
       return record;
     },
-    async remove(membershipId, removedAt) {
-      const existing = records.get(membershipId);
-      if (!existing || existing.state !== 'active') throw new Error('missing active membership');
-      const removed = { ...existing, state: 'removed' as const, updatedAt: removedAt };
-      records.set(membershipId, removed);
-      return removed;
+    async removeMany(membershipIds, removedAt) {
+      const active = membershipIds.map((membershipId) => {
+        const existing = records.get(membershipId);
+        if (!existing || existing.state !== 'active') throw new Error('missing active membership');
+        return existing;
+      });
+      return active.map((existing) => {
+        const removed = { ...existing, state: 'removed' as const, updatedAt: removedAt };
+        records.set(existing.membershipId, removed);
+        return removed;
+      });
+    },
+    async relocateMany(relocations) {
+      const active = relocations.map((relocation) => {
+        const existing = records.get(relocation.membershipId);
+        if (
+          !existing ||
+          existing.state !== 'active' ||
+          existing.sourceRelativePath !== relocation.expectedSourceRelativePath
+        ) {
+          throw new Error('missing active membership');
+        }
+        return { existing, relocation };
+      });
+      return active.map(({ existing, relocation }) => {
+        const relocated = {
+          ...existing,
+          sourceRelativePath: relocation.sourceRelativePath,
+          label: relocation.label,
+          updatedAt: relocation.relocatedAt,
+        };
+        records.set(existing.membershipId, relocated);
+        return relocated;
+      });
     },
   };
 }

@@ -16,10 +16,19 @@ describe('Asset Center Host contract', () => {
       createAssetCenterHostRequest({
         requestId: 'request-1',
         identity,
-        route: 'asset.remove',
-        itemId: 'global-asset-library:item-1',
+        route: 'assets.remove',
+        itemIds: ['global-asset-library:item-1'],
       }),
-    ).toMatchObject({ route: 'asset.remove', identity });
+    ).toMatchObject({ route: 'assets.remove', identity });
+
+    expect(
+      createAssetCenterHostRequest({
+        requestId: 'request-move',
+        identity,
+        route: 'items.move',
+        itemIds: ['global-asset-library:item-1'],
+      }),
+    ).toMatchObject({ route: 'items.move', identity });
 
     const request = createAssetCenterHostRequest({
       requestId: 'request-2',

@@ -1918,6 +1918,82 @@ describe('DesktopAppHost', () => {
     expect(assetCenter.getSnapshot(identity).preview).toEqual({ status: 'empty' });
   });
 
+  it('delegates canonical Asset Center batch routes only for the bound sender and session', async () => {
+    const assetCenter = createAssetCenterRuntime();
+    const fixture = await createShellAppHost({ assetCenter });
+    const opened = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'open-asset-center-batch',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        sceneId: activeScene(fixture.projection).sceneId,
+        intent: { kind: 'open-asset-center' },
+      }),
+    );
+    if (opened.status !== 'transitioned' || opened.scene.context.kind !== 'asset-center') {
+      throw new Error('Expected an Asset Center scene.');
+    }
+    const identity = {
+      windowId: fixture.windowId,
+      assetCenterSessionId: opened.scene.context.assetCenterSessionId,
+    };
+    await fixture.appHost.executeAssetCenter(
+      fixture.sender,
+      createAssetCenterHostRequest({
+        route: 'attach',
+        requestId: 'asset-center-batch-attach',
+        identity,
+        initialViewMode: 'grid',
+      }),
+    );
+    const removeAssets = vi
+      .spyOn(assetCenter, 'removeAssets')
+      .mockImplementation(async () => assetCenter.getSnapshot(identity));
+    const moveItems = vi
+      .spyOn(assetCenter, 'moveItems')
+      .mockImplementation(async () => assetCenter.getSnapshot(identity));
+    const itemIds = ['global-asset-library:item-1', 'global-asset-library:item-2'];
+
+    await expect(
+      fixture.appHost.executeAssetCenter(
+        fixture.sender,
+        createAssetCenterHostRequest({
+          route: 'assets.remove',
+          requestId: 'asset-center-remove-many',
+          identity,
+          itemIds,
+        }),
+      ),
+    ).resolves.toMatchObject({ route: 'assets.remove', projection: { identity } });
+    await expect(
+      fixture.appHost.executeAssetCenter(
+        fixture.sender,
+        createAssetCenterHostRequest({
+          route: 'items.move',
+          requestId: 'asset-center-move-many',
+          identity,
+          itemIds,
+        }),
+      ),
+    ).resolves.toMatchObject({ route: 'items.move', projection: { identity } });
+    expect(removeAssets).toHaveBeenCalledWith(expect.objectContaining({ identity, itemIds }));
+    expect(moveItems).toHaveBeenCalledWith(expect.objectContaining({ identity, itemIds }));
+
+    await expect(
+      fixture.appHost.executeAssetCenter(
+        { webContentsId: 11, frameUrl: fixture.sender.frameUrl },
+        createAssetCenterHostRequest({
+          route: 'items.move',
+          requestId: 'asset-center-move-forged-sender',
+          identity,
+          itemIds,
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(moveItems).toHaveBeenCalledTimes(1);
+  });
+
   it('derives the Agent View grant from Shell and keeps incomplete startup unavailable', async () => {
     const fixture = await createShellAppHost();
     const resolution = createWorkspaceResolution();
@@ -2214,7 +2290,8 @@ function createAssetCenterRuntime(): AssetCenterNodeRuntime {
     readHomeMediaLibraryChildren: vi.fn(),
     resolveHomeLibraryThumbnail: vi.fn(),
     importHomeAssets: vi.fn(),
-    removeHomeAsset: vi.fn(),
+    removeHomeAssets: vi.fn(),
+    moveHomeItems: vi.fn(),
     addHomeMediaLibrary: vi.fn(),
     relinkHomeMediaLibrary: vi.fn(),
     removeHomeMediaLibrary: vi.fn(),

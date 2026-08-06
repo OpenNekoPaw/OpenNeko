@@ -5,6 +5,7 @@ import {
   type GlobalAssetRemoveResult,
   type GlobalLibraryBrowserRuntime,
   type GlobalLibraryItem,
+  type GlobalLibraryMoveResult,
   type GlobalLibraryOwner,
   type GlobalLibrarySearchInput,
   type GlobalLibraryThumbnailResult,
@@ -82,9 +83,29 @@ export class GlobalLibraryController {
     return this.runtime.importAssets();
   }
 
-  removeAsset(item: GlobalAssetItem): Promise<GlobalAssetRemoveResult> {
-    this.requireProjection('global-asset-library');
-    return this.runtime.removeAsset(item.id);
+  removeAssets(items: readonly GlobalAssetItem[]): Promise<GlobalAssetRemoveResult> {
+    this.requireBatchItems(items, 'global-asset-library');
+    return this.runtime.removeAssets(items.map((item) => item.id));
+  }
+
+  moveItems(items: readonly GlobalLibraryItem[]): Promise<GlobalLibraryMoveResult> {
+    const owner = items[0]?.owner;
+    if (!owner) throw new Error('Global Library move requires at least one item.');
+    this.requireBatchItems(items, owner);
+    if (owner === 'media-library') {
+      const first = items[0];
+      const libraryId = first?.owner === 'media-library' ? first.libraryId : undefined;
+      if (
+        !libraryId ||
+        items.some(
+          (item) =>
+            item.owner !== 'media-library' || item.kind !== 'file' || item.libraryId !== libraryId,
+        )
+      ) {
+        throw new Error('Global Library move requires files from one Media Library.');
+      }
+    }
+    return this.runtime.moveItems(items.map((item) => item.id));
   }
 
   addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind) {
@@ -146,6 +167,22 @@ export class GlobalLibraryController {
       throw new Error(`Global Library ${owner} projection is unavailable.`);
     }
     return projection;
+  }
+
+  private requireBatchItems(items: readonly GlobalLibraryItem[], owner: GlobalLibraryOwner): void {
+    if (items.length === 0) throw new Error('Global Library batch requires at least one item.');
+    const itemIds = new Set<string>();
+    const projection = this.requireProjection(owner);
+    for (const item of items) {
+      if (item.owner !== owner || itemIds.has(item.id)) {
+        throw new Error('Global Library batch item identity is invalid.');
+      }
+      const current = projection.items.find((candidate) => candidate.id === item.id);
+      if (!current || current.owner !== item.owner) {
+        throw new Error(`Global Library batch item '${item.id}' is stale.`);
+      }
+      itemIds.add(item.id);
+    }
   }
 
   private requireActive(): void {

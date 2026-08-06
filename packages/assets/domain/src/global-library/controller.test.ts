@@ -57,7 +57,7 @@ describe('GlobalLibraryController', () => {
     await controller.removeMediaLibrary(library.libraryId);
 
     expect(runtime.removeMediaLibrary).toHaveBeenCalledWith(library.libraryId);
-    expect(runtime.removeAsset).not.toHaveBeenCalled();
+    expect(runtime.removeAssets).not.toHaveBeenCalled();
   });
 });
 
@@ -78,9 +78,13 @@ function createRuntime(): GlobalLibraryBrowserRuntime {
       dataUrl: 'data:image/png;base64,AA==',
     })),
     importAssets: vi.fn(async () => ({ status: 'cancelled' as const })),
-    removeAsset: vi.fn(async (assetId: string) => ({
+    removeAssets: vi.fn(async (assetIds: readonly string[]) => ({
       status: 'removed' as const,
-      assetId,
+      assetIds,
+    })),
+    moveItems: vi.fn(async (itemIds: readonly string[]) => ({
+      status: 'moved' as const,
+      itemIds,
     })),
     addMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),
     relinkMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),

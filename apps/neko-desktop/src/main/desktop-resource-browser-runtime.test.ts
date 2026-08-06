@@ -352,6 +352,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       selectConfiguredGlobalMediaLibrary: async () => undefined,
       selectGlobalMediaLibrarySource: async () => undefined,
       selectGlobalAssetSources: async () => undefined,
+      selectGlobalLibraryMoveDestination: async () => undefined,
       createThumbnail: async () => 'data:image/png;base64,AA==',
       createGlobalLibraryThumbnail: async () => 'data:image/png;base64,AA==',
       openQuickPreview: async () => {
@@ -517,11 +518,11 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     const mediaItem = media.items[0];
     if (!mediaItem) throw new Error('Fixture Media Library item is required.');
     await expect(
-      fixture.runtime.removeHomeAsset({
+      fixture.runtime.removeHomeAssets({
         windowId: fixture.windowId,
-        assetId: mediaItem.id,
+        assetIds: [mediaItem.id],
       }),
-    ).rejects.toThrow('wrong owner');
+    ).rejects.toThrow('requires Asset items');
   });
 
   it('removes only the membership record and preserves source bytes across metadata reopen', async () => {
@@ -540,11 +541,11 @@ describe('ResourceBrowserNodeRuntime global libraries', () => {
     if (!asset) throw new Error('Fixture Asset is required.');
 
     await expect(
-      fixture.runtime.removeHomeAsset({
+      fixture.runtime.removeHomeAssets({
         windowId: fixture.windowId,
-        assetId: asset.id,
+        assetIds: [asset.id],
       }),
-    ).resolves.toMatchObject({ status: 'removed', assetId: asset.id });
+    ).resolves.toMatchObject({ status: 'removed', assetIds: [asset.id] });
     await expect(readFile(assetPath, 'utf8')).resolves.toBe('preserved-source');
     await expect(
       fixture.runtime.searchHomeAssets({
@@ -790,6 +791,7 @@ async function createGlobalLibraryRuntimeFixture(
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,
     selectGlobalAssetSources,
+    selectGlobalLibraryMoveDestination: async () => undefined,
     createThumbnail: async () => 'data:image/png;base64,AA==',
     createGlobalLibraryThumbnail,
     openQuickPreview: async () => {

@@ -1,16 +1,19 @@
 import {
   ChevronRightIcon,
+  CloseIcon,
   FileIcon,
   FolderIcon,
   GridIcon,
   LayersIcon,
   MoreHorizontalIcon,
+  MoveIcon,
   PlusIcon,
   RefreshIcon,
   SearchIcon,
   TrashIcon,
   UploadIcon,
 } from '@neko/ui/icons';
+import { ContextMenu, EmptyState, type ContextMenuItem } from '@neko/ui/primitives';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import React, {
   useCallback,
@@ -18,6 +21,7 @@ import React, {
   useRef,
   useState,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactElement,
 } from 'react';
 import {
@@ -34,6 +38,16 @@ import type {
 } from '@neko/assets-domain/asset-center/contract';
 import type { AssetCenterManagementRuntime } from '@neko/assets-domain/asset-center/controller';
 import { getGlobalLibraryLabels } from './labels';
+import {
+  applyItemSelection,
+  createSelectionRectangle,
+  getSelectionCapabilities,
+  isActionableLibraryItem,
+  reconcileSelection,
+  rectanglesIntersect,
+  selectAllItems,
+  type SelectionRectangle,
+} from './selection';
 import './style.css';
 
 export interface AssetManagementRootProps {
@@ -45,6 +59,21 @@ export interface AssetManagementRootProps {
 
 type Catalog = 'media-library' | 'global-asset-library';
 type Sort = 'name-ascending' | 'name-descending' | 'modified-descending';
+
+interface MarqueeGesture {
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startY: number;
+  readonly additive: boolean;
+  readonly initialSelection: ReadonlySet<string>;
+  moved: boolean;
+}
+
+interface SelectionModifiers {
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+}
 
 export function AssetManagementRoot({
   confirmAction,
@@ -58,6 +87,10 @@ export function AssetManagementRoot({
   const [pendingMutation, setPendingMutation] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [mutationError, setMutationError] = useState<string>();
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string>();
+  const [marqueeRectangle, setMarqueeRectangle] = useState<SelectionRectangle>();
+  const marqueeGesture = useRef<MarqueeGesture>();
   const collectionRef = useRef<HTMLDivElement>(null);
   const focusCollectionAfterRead = useRef(false);
   const hoverRequest = useRef<object>({});
@@ -66,6 +99,12 @@ export function AssetManagementRoot({
     readonly itemId: string;
     readonly dataUrl: string;
   }>();
+  const items =
+    projection?.catalog.status === 'ready'
+      ? projection.catalog.entries.map((entry) => entry.item)
+      : [];
+  const selectedItems = items.filter((item) => selectedIds.has(item.id));
+  const selectionCapabilities = getSelectionCapabilities(selectedItems);
 
   const cancelHoverPreview = useCallback((): void => {
     hoverRequest.current = {};
@@ -111,6 +150,14 @@ export function AssetManagementRoot({
       clearTimeout(timeout);
     };
   }, [cancelHoverPreview, interactive, projection, runtime]);
+
+  useEffect(() => {
+    const reconciled = reconcileSelection(selectedIds, items);
+    if (!sameSelection(selectedIds, reconciled)) setSelectedIds(reconciled);
+    if (selectionAnchorId && !items.some((item) => item.id === selectionAnchorId)) {
+      setSelectionAnchorId(undefined);
+    }
+  }, [items, selectedIds, selectionAnchorId]);
 
   const refresh = (): void => {
     if (!projection) return;
@@ -191,6 +238,8 @@ export function AssetManagementRoot({
       const nextNotice = await operation();
       cancelHoverPreview();
       await runtime.refresh();
+      setSelectedIds(new Set());
+      setSelectionAnchorId(undefined);
       if (nextNotice) setNotice(nextNotice);
     } catch (error: unknown) {
       const message = describeError(error);
@@ -204,6 +253,154 @@ export function AssetManagementRoot({
     if (projection) updateFilter({ ...projection.filter, viewMode: mode });
   };
 
+  const selectItem = (item: GlobalLibraryItem, event: SelectionModifiers): void => {
+    if (!isActionableLibraryItem(item)) return;
+    const update = applyItemSelection({
+      items,
+      selectedIds,
+      anchorId: selectionAnchorId,
+      itemId: item.id,
+      toggle: event.metaKey || event.ctrlKey,
+      range: event.shiftKey,
+    });
+    setSelectedIds(update.selectedIds);
+    setSelectionAnchorId(update.anchorId);
+    if (update.selectedIds.size === 1 && update.selectedIds.has(item.id)) {
+      void runtime
+        .select({ owner: item.owner, itemId: item.id })
+        .catch((error: unknown) => setMutationError(describeError(error)));
+    }
+  };
+
+  const selectItemForContextMenu = (item: GlobalLibraryItem): void => {
+    if (!isActionableLibraryItem(item) || selectedIds.has(item.id)) return;
+    setSelectedIds(new Set([item.id]));
+    setSelectionAnchorId(item.id);
+    void runtime
+      .select({ owner: item.owner, itemId: item.id })
+      .catch((error: unknown) => setMutationError(describeError(error)));
+  };
+
+  const clearSelection = (): void => {
+    setSelectedIds(new Set());
+    setSelectionAnchorId(undefined);
+  };
+
+  const moveSelected = (): void => {
+    if (!selectionCapabilities.canMove) return;
+    void runMutation(async () => {
+      await runtime.moveItems(selectedItems);
+      return labels.moved;
+    });
+  };
+
+  const removeSelected = (): void => {
+    if (!selectionCapabilities.canRemoveAssets) return;
+    void (async () => {
+      const confirmed = await confirmAction(
+        labels.removeSelectedConfirm.replace('{count}', String(selectedItems.length)),
+      );
+      if (!confirmed) {
+        setNotice(labels.cancelled);
+        return;
+      }
+      await runMutation(async () => {
+        await runtime.removeAssets(
+          selectedItems.filter(
+            (item): item is GlobalAssetItem => item.owner === 'global-asset-library',
+          ),
+        );
+        return labels.removed;
+      });
+    })();
+  };
+
+  const handleCollectionKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'a') {
+      event.preventDefault();
+      setSelectedIds(selectAllItems(items));
+      setSelectionAnchorId(items.find(isActionableLibraryItem)?.id);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearSelection();
+      return;
+    }
+    if (
+      (event.key === 'Delete' || event.key === 'Backspace') &&
+      selectionCapabilities.canRemoveAssets
+    ) {
+      event.preventDefault();
+      removeSelected();
+    }
+  };
+
+  const handleMarqueePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.button !== 0 || event.target !== event.currentTarget) return;
+    const additive = event.metaKey || event.ctrlKey || event.shiftKey;
+    marqueeGesture.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      additive,
+      initialSelection: additive ? selectedIds : new Set(),
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleMarqueePointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    const gesture = marqueeGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (
+      !gesture.moved &&
+      Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) < 5
+    ) {
+      return;
+    }
+    gesture.moved = true;
+    const rectangle = createSelectionRectangle(
+      gesture.startX,
+      gesture.startY,
+      event.clientX,
+      event.clientY,
+    );
+    const intersecting = new Set<string>();
+    for (const element of event.currentTarget.querySelectorAll<HTMLElement>(
+      '[data-library-item-id]',
+    )) {
+      const itemId = element.dataset['libraryItemId'];
+      const item = itemId ? items.find((candidate) => candidate.id === itemId) : undefined;
+      if (!item || !isActionableLibraryItem(item)) continue;
+      const bounds = element.getBoundingClientRect();
+      if (
+        rectanglesIntersect(rectangle, {
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+        })
+      ) {
+        intersecting.add(item.id);
+      }
+    }
+    setSelectedIds(new Set([...gesture.initialSelection, ...intersecting]));
+    setMarqueeRectangle(rectangle);
+  };
+
+  const finishMarquee = (event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean): void => {
+    const gesture = marqueeGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (cancelled) setSelectedIds(gesture.initialSelection);
+    else if (!gesture.moved && !gesture.additive) clearSelection();
+    marqueeGesture.current = undefined;
+    setMarqueeRectangle(undefined);
+  };
+
   if (!projection) {
     return (
       <section className="global-library-browser" data-owner-root="asset-management">
@@ -215,10 +412,6 @@ export function AssetManagementRoot({
   }
   const { catalog, directory, query, viewMode } = projection.filter;
   const sort = toSort(projection.filter);
-  const items =
-    projection.catalog.status === 'ready'
-      ? projection.catalog.entries.map((entry) => entry.item)
-      : [];
   const title = catalog === 'media-library' ? labels.titleMedia : labels.titleAssets;
   const description =
     catalog === 'media-library' ? labels.descriptionMedia : labels.descriptionAssets;
@@ -358,6 +551,42 @@ export function AssetManagementRoot({
         </div>
       </div>
 
+      {selectedItems.length > 0 ? (
+        <div
+          className="global-library-browser__batch-toolbar"
+          role="toolbar"
+          aria-label={labels.selectedCount.replace('{count}', String(selectedItems.length))}
+        >
+          <strong>{labels.selectedCount.replace('{count}', String(selectedItems.length))}</strong>
+          <span className="global-library-browser__batch-spacer" />
+          <button
+            type="button"
+            disabled={pendingMutation || !selectionCapabilities.canMove}
+            onClick={moveSelected}
+          >
+            <MoveIcon size={14} />
+            <span>{labels.moveTo}</span>
+          </button>
+          <button
+            type="button"
+            disabled={pendingMutation || !selectionCapabilities.canRemoveAssets}
+            onClick={removeSelected}
+          >
+            <TrashIcon size={14} />
+            <span>{labels.removeSelected}</span>
+          </button>
+          <button
+            type="button"
+            title={labels.clearSelection}
+            aria-label={labels.clearSelection}
+            disabled={pendingMutation}
+            onClick={clearSelection}
+          >
+            <CloseIcon size={14} />
+          </button>
+        </div>
+      ) : null}
+
       {catalog === 'media-library' && directory && query.length === 0 ? (
         <Breadcrumbs
           directory={directory}
@@ -392,13 +621,18 @@ export function AssetManagementRoot({
           {labels.loading}
         </div>
       ) : items.length === 0 ? (
-        <div className="global-library-browser__empty">{labels.empty}</div>
+        <EmptyState fill icon={<LayersIcon size={24} />} title={labels.empty} />
       ) : (
         <div
           ref={collectionRef}
           className="global-library-browser__collection"
           data-view-mode={viewMode}
-          tabIndex={-1}
+          tabIndex={0}
+          onKeyDown={handleCollectionKeyDown}
+          onPointerCancel={(event) => finishMarquee(event, true)}
+          onPointerDown={handleMarqueePointerDown}
+          onPointerMove={handleMarqueePointerMove}
+          onPointerUp={(event) => finishMarquee(event, false)}
         >
           {items.map((item) => (
             <GlobalLibraryEntry
@@ -408,7 +642,8 @@ export function AssetManagementRoot({
               labels={labels}
               locale={locale}
               pendingMutation={pendingMutation}
-              selected={projection.selection?.itemId === item.id}
+              selected={selectedIds.has(item.id)}
+              selectionCapabilities={selectionCapabilities}
               viewMode={viewMode}
               hoverPreview={hoverPreview?.itemId === item.id ? hoverPreview.dataUrl : undefined}
               onActivate={() => {
@@ -416,31 +651,15 @@ export function AssetManagementRoot({
               }}
               onHoverStart={() => beginHoverPreview(item)}
               onHoverEnd={cancelHoverPreview}
-              onSelect={() => {
-                if (
-                  item.owner === 'media-library' &&
-                  (item.kind === 'library' || item.kind === 'directory')
-                ) {
-                  return;
-                }
-                void runtime
-                  .select({
-                    owner: item.owner,
-                    itemId: item.id,
-                  })
-                  .catch((error: unknown) => setMutationError(describeError(error)));
+              onSelect={(event) => selectItem(item, event)}
+              onContextMenu={() => selectItemForContextMenu(item)}
+              onMoveSelected={moveSelected}
+              onRemoveSelected={removeSelected}
+              onClearSelection={clearSelection}
+              onSelectAll={() => {
+                setSelectedIds(selectAllItems(items));
+                setSelectionAnchorId(items.find(isActionableLibraryItem)?.id);
               }}
-              onRemoveAsset={(asset) =>
-                void runMutation(async () => {
-                  if (
-                    !(await confirmAction(labels.removeAssetConfirm.replace('{name}', asset.label)))
-                  ) {
-                    return labels.cancelled;
-                  }
-                  await runtime.removeAsset(asset);
-                  return labels.removed;
-                })
-              }
               onRelinkLibrary={(library) =>
                 void runMutation(async () => {
                   await runtime.relinkMediaLibrary(library.libraryId);
@@ -468,6 +687,18 @@ export function AssetManagementRoot({
               }
             />
           ))}
+          {marqueeRectangle ? (
+            <span
+              className="global-library-browser__marquee"
+              aria-hidden="true"
+              style={{
+                left: marqueeRectangle.left,
+                top: marqueeRectangle.top,
+                width: marqueeRectangle.right - marqueeRectangle.left,
+                height: marqueeRectangle.bottom - marqueeRectangle.top,
+              }}
+            />
+          ) : null}
         </div>
       )}
     </section>
@@ -481,15 +712,20 @@ function GlobalLibraryEntry({
   labels,
   locale,
   onActivate,
+  onClearSelection,
+  onContextMenu,
   onHoverEnd,
   onHoverStart,
+  onMoveSelected,
   onRelinkLibrary,
-  onRemoveAsset,
+  onRemoveSelected,
   onRemoveLibrary,
   onRevealLibrary,
+  onSelectAll,
   onSelect,
   pendingMutation,
   selected,
+  selectionCapabilities,
   viewMode,
 }: {
   readonly controller: Pick<AssetCenterManagementRuntime, 'resolveThumbnail'>;
@@ -498,15 +734,20 @@ function GlobalLibraryEntry({
   readonly labels: ReturnType<typeof getGlobalLibraryLabels>;
   readonly locale: SupportedLocale;
   readonly onActivate: () => void;
+  readonly onClearSelection: () => void;
+  readonly onContextMenu: () => void;
   readonly onHoverEnd: () => void;
   readonly onHoverStart: () => void;
+  readonly onMoveSelected: () => void;
   readonly onRelinkLibrary: (item: GlobalMediaLibraryItem) => void;
-  readonly onRemoveAsset: (item: GlobalAssetItem) => void;
+  readonly onRemoveSelected: () => void;
   readonly onRemoveLibrary: (item: GlobalMediaLibraryItem) => void;
   readonly onRevealLibrary: (item: GlobalMediaLibraryItem) => void;
-  readonly onSelect: () => void;
+  readonly onSelect: (modifiers: SelectionModifiers) => void;
+  readonly onSelectAll: () => void;
   readonly pendingMutation: boolean;
   readonly selected: boolean;
+  readonly selectionCapabilities: ReturnType<typeof getSelectionCapabilities>;
   readonly viewMode: GlobalLibraryViewMode;
 }): ReactElement {
   const activate = (): void => {
@@ -515,13 +756,63 @@ function GlobalLibraryEntry({
     }
   };
   const keyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    activate();
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      activate();
+    } else if (event.key === ' ' && isActionableLibraryItem(item)) {
+      event.preventDefault();
+      onSelect(event);
+    }
   };
-  return (
+  const contextMenuItems: readonly ContextMenuItem[] = isActionableLibraryItem(item)
+    ? [
+        {
+          id: 'move',
+          label: <MenuLabel icon={<MoveIcon size={14} />} text={labels.moveTo} />,
+          disabled: pendingMutation || !selectionCapabilities.canMove,
+          onSelect: onMoveSelected,
+        },
+        ...(item.owner === 'global-asset-library'
+          ? [
+              {
+                id: 'remove',
+                label: <MenuLabel icon={<TrashIcon size={14} />} text={labels.removeSelected} />,
+                danger: true,
+                disabled: pendingMutation || !selectionCapabilities.canRemoveAssets,
+                onSelect: onRemoveSelected,
+              } as const,
+            ]
+          : []),
+        { id: 'selection-separator', type: 'separator' as const },
+        {
+          id: 'select-all',
+          label: labels.selectAll,
+          shortcut: '⌘A',
+          onSelect: onSelectAll,
+        },
+        {
+          id: 'clear-selection',
+          label: labels.clearSelection,
+          shortcut: 'Esc',
+          onSelect: onClearSelection,
+        },
+      ]
+    : item.owner === 'media-library' && item.kind === 'library'
+      ? [
+          { id: 'reveal', label: labels.reveal, onSelect: () => onRevealLibrary(item) },
+          { id: 'relink', label: labels.relink, onSelect: () => onRelinkLibrary(item) },
+          {
+            id: 'remove-connection',
+            label: labels.removeConnection,
+            danger: true,
+            onSelect: () => onRemoveLibrary(item),
+          },
+        ]
+      : [];
+  const entry = (
     <article
       className="global-library-browser__entry"
+      data-library-item-id={isActionableLibraryItem(item) ? item.id : undefined}
       data-selected={selected ? 'true' : 'false'}
       tabIndex={0}
       onBlur={onHoverEnd}
@@ -530,7 +821,8 @@ function GlobalLibraryEntry({
       onKeyDown={keyDown}
       onPointerEnter={onHoverStart}
       onPointerLeave={onHoverEnd}
-      onClick={onSelect}
+      onClick={(event) => onSelect(event)}
+      onContextMenu={onContextMenu}
     >
       <GlobalLibraryIcon controller={controller} item={item} />
       <span className="global-library-browser__entry-copy">
@@ -543,21 +835,7 @@ function GlobalLibraryEntry({
       {viewMode === 'list' && item.byteLength !== undefined ? (
         <small className="global-library-browser__size">{formatBytes(item.byteLength)}</small>
       ) : null}
-      {item.owner === 'global-asset-library' ? (
-        <button
-          type="button"
-          className="global-library-browser__entry-action"
-          title={labels.removeAsset}
-          aria-label={`${labels.removeAsset}: ${item.label}`}
-          disabled={pendingMutation}
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemoveAsset(item);
-          }}
-        >
-          <TrashIcon size={14} />
-        </button>
-      ) : item.kind === 'library' ? (
+      {item.owner === 'media-library' && item.kind === 'library' ? (
         <details
           className="global-library-browser__menu"
           onClick={(event) => event.stopPropagation()}
@@ -584,6 +862,26 @@ function GlobalLibraryEntry({
         </div>
       ) : null}
     </article>
+  );
+  return contextMenuItems.length > 0 ? (
+    <ContextMenu trigger={entry} items={contextMenuItems} />
+  ) : (
+    entry
+  );
+}
+
+function MenuLabel({
+  icon,
+  text,
+}: {
+  readonly icon: ReactElement;
+  readonly text: string;
+}): ReactElement {
+  return (
+    <span className="global-library-browser__menu-label">
+      {icon}
+      <span>{text}</span>
+    </span>
   );
 }
 
@@ -737,4 +1035,8 @@ function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function sameSelection(first: ReadonlySet<string>, second: ReadonlySet<string>): boolean {
+  return first.size === second.size && [...first].every((itemId) => second.has(itemId));
 }

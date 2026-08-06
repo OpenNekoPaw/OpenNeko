@@ -730,6 +730,30 @@ async function startDesktop(): Promise<void> {
       }
       return result.filePaths;
     },
+    selectGlobalLibraryMoveDestination: async ({ windowId, owner, defaultPath }) => {
+      const desktopWindow = requireOwnerWindow(windowId);
+      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      const result = await dialog.showOpenDialog(desktopWindow, {
+        title: chinese ? '选择移动目标目录' : 'Choose Move Destination',
+        buttonLabel: chinese ? '移动到这里' : 'Move Here',
+        defaultPath,
+        properties: ['openDirectory', 'createDirectory'],
+        message:
+          owner === 'global-asset-library'
+            ? chinese
+              ? '目标目录必须位于资产库内。'
+              : 'The destination must remain inside the Asset Library.'
+            : chinese
+              ? '目标目录必须位于当前媒体库内。'
+              : 'The destination must remain inside the current Media Library.',
+      });
+      if (result.canceled) return undefined;
+      const selectedPath = result.filePaths[0];
+      if (!selectedPath) {
+        throw new Error('Desktop Asset Center move picker returned no directory.');
+      }
+      return selectedPath;
+    },
   });
   const assetCenter = new AssetCenterNodeRuntime({
     resourceBrowser,

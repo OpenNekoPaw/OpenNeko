@@ -68,13 +68,17 @@ describe('DesktopAssetCenterRuntime', () => {
     if (!item) throw new Error('Asset fixture is unavailable.');
 
     await runtime.resolveThumbnail(item, 'hover');
-    await runtime.removeAsset(item);
+    await runtime.removeAssets([item]);
+    await runtime.moveItems([item]);
 
     expect(execute.mock.calls.map(([request]) => request.route)).toEqual([
       'attach',
       'thumbnail.resolve',
-      'asset.remove',
+      'assets.remove',
+      'items.move',
     ]);
+    expect(execute.mock.calls.at(-2)?.[0]).toMatchObject({ itemIds: [item.id] });
+    expect(execute.mock.calls.at(-1)?.[0]).toMatchObject({ itemIds: [item.id] });
     expect(JSON.stringify(execute.mock.calls)).not.toMatch(
       /absolutePath|selectedId|previewKind|"extension"/u,
     );

@@ -434,6 +434,23 @@ describe('Desktop architecture boundaries', () => {
     );
   });
 
+  it('keeps the Asset Center move picker as a sender-owned native adapter', () => {
+    const application = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
+    const appHost = readFileSync(path.join(sourceRoot, 'main', 'app-host.ts'), 'utf8');
+    const pickerStart = application.indexOf('selectGlobalLibraryMoveDestination: async');
+    const pickerEnd = application.indexOf('\n    },\n  });', pickerStart);
+    const picker = application.slice(pickerStart, pickerEnd);
+
+    expect(pickerStart).toBeGreaterThan(-1);
+    expect(picker).toContain('requireOwnerWindow(windowId)');
+    expect(picker).toContain('dialog.showOpenDialog(desktopWindow');
+    expect(picker).toContain("properties: ['openDirectory', 'createDirectory']");
+    expect(picker).toContain('defaultPath');
+    expect(appHost).toContain("case 'assets.remove':");
+    expect(appHost).toContain("case 'items.move':");
+    expect(appHost).not.toContain("case 'asset.remove':");
+  });
+
   it('keeps Workspace Board delivery and candidate acceptance out of renderer ownership', () => {
     const rendererRoot = path.join(sourceRoot, 'renderer');
     const forbiddenOwnerTokens = [

@@ -31,7 +31,8 @@ type AssetCenterResourceBrowserPort = Pick<
   | 'readHomeMediaLibraryChildren'
   | 'resolveHomeLibraryThumbnail'
   | 'importHomeAssets'
-  | 'removeHomeAsset'
+  | 'removeHomeAssets'
+  | 'moveHomeItems'
   | 'addHomeMediaLibrary'
   | 'relinkHomeMediaLibrary'
   | 'removeHomeMediaLibrary'
@@ -299,17 +300,30 @@ export class AssetCenterNodeRuntime {
     });
   }
 
-  removeAsset(input: {
+  removeAssets(input: {
     readonly identity: AssetCenterSessionIdentity;
-    readonly itemId: string;
+    readonly itemIds: readonly string[];
   }): Promise<AssetCenterSessionProjection> {
     const entry = this.requireSession(input.identity);
     return this.enqueue(entry, async () => {
-      const item = this.requireCatalogItem(entry, input.itemId);
-      if (item.owner !== 'global-asset-library') {
-        throw new Error(`Asset Center item '${input.itemId}' is not a global Asset.`);
+      const items = this.requireCatalogItems(entry, input.itemIds);
+      if (items.some((item) => item.owner !== 'global-asset-library')) {
+        throw new Error('Asset Center removal requires global Asset items.');
       }
-      await entry.controller.removeAsset(item satisfies GlobalAssetItem);
+      await entry.controller.removeAssets(
+        items.filter((item): item is GlobalAssetItem => item.owner === 'global-asset-library'),
+      );
+      return entry.controller.getSnapshot();
+    });
+  }
+
+  moveItems(input: {
+    readonly identity: AssetCenterSessionIdentity;
+    readonly itemIds: readonly string[];
+  }): Promise<AssetCenterSessionProjection> {
+    const entry = this.requireSession(input.identity);
+    return this.enqueue(entry, async () => {
+      await entry.controller.moveItems(this.requireCatalogItems(entry, input.itemIds));
       return entry.controller.getSnapshot();
     });
   }
@@ -433,11 +447,12 @@ export class AssetCenterNodeRuntime {
         resources.importHomeAssets({
           windowId: identity.windowId,
         }),
-      removeAsset: (assetId) =>
-        resources.removeHomeAsset({
+      removeAssets: (assetIds) =>
+        resources.removeHomeAssets({
           windowId: identity.windowId,
-          assetId,
+          assetIds,
         }),
+      moveItems: (itemIds) => resources.moveHomeItems({ windowId: identity.windowId, itemIds }),
       addMediaLibrary: (locationKind) =>
         resources.addHomeMediaLibrary({
           windowId: identity.windowId,
@@ -488,6 +503,16 @@ export class AssetCenterNodeRuntime {
     const item = projection.catalog.entries.find((entry) => entry.item.id === itemId)?.item;
     if (!item) throw new Error(`Asset Center item '${itemId}' is unavailable.`);
     return item;
+  }
+
+  private requireCatalogItems(
+    entry: SessionEntry,
+    itemIds: readonly string[],
+  ): readonly GlobalLibraryItem[] {
+    if (itemIds.length === 0 || new Set(itemIds).size !== itemIds.length) {
+      throw new Error('Asset Center batch item identities are invalid.');
+    }
+    return itemIds.map((itemId) => this.requireCatalogItem(entry, itemId));
   }
 
   private enqueue<Result>(

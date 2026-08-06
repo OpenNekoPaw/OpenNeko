@@ -26,6 +26,12 @@ export interface GlobalLibraryLabels {
   readonly removeAsset: string;
   readonly removeConnectionConfirm: string;
   readonly removeAssetConfirm: string;
+  readonly selectedCount: string;
+  readonly moveTo: string;
+  readonly removeSelected: string;
+  readonly clearSelection: string;
+  readonly selectAll: string;
+  readonly removeSelectedConfirm: string;
   readonly nameAscending: string;
   readonly nameDescending: string;
   readonly newest: string;
@@ -37,6 +43,7 @@ export interface GlobalLibraryLabels {
   readonly removed: string;
   readonly relinked: string;
   readonly revealed: string;
+  readonly moved: string;
 }
 
 const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
@@ -68,6 +75,13 @@ const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
     removeConnectionConfirm: 'Remove the connection to "{name}"? External files are preserved.',
     removeAssetConfirm:
       'Remove "{name}" from the Asset Library? The source file will be preserved.',
+    selectedCount: '{count} selected',
+    moveTo: 'Move to',
+    removeSelected: 'Remove selected records',
+    clearSelection: 'Clear selection',
+    selectAll: 'Select all',
+    removeSelectedConfirm:
+      'Remove {count} selected records from the Asset Library? Source files will be preserved.',
     nameAscending: 'Name A-Z',
     nameDescending: 'Name Z-A',
     newest: 'Newest',
@@ -79,6 +93,7 @@ const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
     removed: 'Removed.',
     relinked: 'Library relinked.',
     revealed: 'Shown in file manager.',
+    moved: 'Files moved.',
   },
   'zh-cn': {
     eyebrow: '全局目录',
@@ -106,6 +121,12 @@ const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
     removeAsset: '移除素材记录',
     removeConnectionConfirm: '确定移除“{name}”的连接吗？外部文件会保留。',
     removeAssetConfirm: '确定从资产库移除“{name}”的素材记录吗？源文件会保留。',
+    selectedCount: '已选择 {count} 项',
+    moveTo: '移动到',
+    removeSelected: '移除所选记录',
+    clearSelection: '清除选择',
+    selectAll: '全选',
+    removeSelectedConfirm: '确定从资产库移除所选的 {count} 条记录吗？源文件会保留。',
     nameAscending: '名称 A-Z',
     nameDescending: '名称 Z-A',
     newest: '最近修改',
@@ -117,6 +138,7 @@ const labels: Record<'en' | 'zh-cn', GlobalLibraryLabels> = {
     removed: '已移除。',
     relinked: '媒体库已重新定位。',
     revealed: '已在文件管理器中显示。',
+    moved: '文件已移动。',
   },
 };
 

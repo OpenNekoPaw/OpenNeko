@@ -93,8 +93,12 @@ export type GlobalAssetImportResult =
 
 export interface GlobalAssetRemoveResult {
   readonly status: 'removed';
-  readonly assetId: string;
+  readonly assetIds: readonly string[];
 }
+
+export type GlobalLibraryMoveResult =
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'moved'; readonly itemIds: readonly string[] };
 
 export type GlobalMediaLibraryAddResult =
   | {
@@ -130,7 +134,8 @@ export interface GlobalLibraryBrowserRuntime {
   ): Promise<GlobalMediaLibraryProjection>;
   resolveThumbnail(request: GlobalLibraryThumbnailRequest): Promise<GlobalLibraryThumbnailResult>;
   importAssets(): Promise<GlobalAssetImportResult>;
-  removeAsset(assetId: string): Promise<GlobalAssetRemoveResult>;
+  removeAssets(assetIds: readonly string[]): Promise<GlobalAssetRemoveResult>;
+  moveItems(itemIds: readonly string[]): Promise<GlobalLibraryMoveResult>;
   addMediaLibrary(
     locationKind: GlobalMediaLibraryLocationKind,
   ): Promise<GlobalMediaLibraryAddResult>;
