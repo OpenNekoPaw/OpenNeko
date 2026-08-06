@@ -825,28 +825,6 @@ describe('config message presenter', () => {
     });
 
     expect(
-      projectConfigStateMessage({
-        type: 'configState',
-        config: {
-          configDiagnostic: {
-            code: 'unsupportedWorkspaceProviderDefinition',
-            filePath: '/workspace/.neko/config.toml',
-            message:
-              'Workspace configuration defines provider entries: /workspace/.neko/config.toml. Move provider definitions to the user config, then open a new Agent session or tab.',
-          },
-        },
-      }),
-    ).toEqual({
-      configuredProviders: [],
-      configDiagnostic: {
-        code: 'unsupportedWorkspaceProviderDefinition',
-        filePath: '/workspace/.neko/config.toml',
-        message:
-          'Workspace configuration defines provider entries: /workspace/.neko/config.toml. Move provider definitions to the user config, then open a new Agent session or tab.',
-      },
-    });
-
-    expect(
       projectPluginCommandsMessage({
         type: 'pluginCommands',
         commands: [

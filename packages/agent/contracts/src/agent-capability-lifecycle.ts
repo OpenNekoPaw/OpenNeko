@@ -501,6 +501,10 @@ export function isRuntimeOnlyAgentCapabilityResourceValue(value: string): boolea
   const normalized = value.trim();
   return (
     isHostProjectedRuntimeValue(normalized) ||
+    normalized
+      .replaceAll('\\', '/')
+      .split('/')
+      .some((segment) => segment.startsWith('.')) ||
     RUNTIME_ONLY_RESOURCE_PATTERNS.some((pattern) => pattern.test(normalized))
   );
 }

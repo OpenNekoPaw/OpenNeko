@@ -2310,7 +2310,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
   }
   if (/^[a-z]:\\/i.test(value)) return true;
   if (value.startsWith('/') && !value.startsWith('${')) return true;
-  if (normalized.includes('/.neko/.cache/')) return true;
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) return true;
   return false;
 }
 

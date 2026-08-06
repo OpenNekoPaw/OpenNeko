@@ -273,7 +273,7 @@ describe('InputProcessor', () => {
 
     it('should exclude workspace runtime and cache directories by default', async () => {
       const mockReader = createMockFileReader({
-        '.neko/runtime.bin': 'managed runtime data',
+        '.runtime/internal.bin': 'managed runtime data',
         '.cache/generated.json': 'cache payload',
         'src/cacheable.ts': 'source code',
       });
@@ -285,11 +285,11 @@ describe('InputProcessor', () => {
       });
 
       const result = await processor.process(
-        'Check @.neko/runtime.bin @.cache/generated.json @src/cacheable.ts',
+        'Check @.runtime/internal.bin @.cache/generated.json @src/cacheable.ts',
       );
 
       expect(result.errors.map((error) => error.reference)).toEqual([
-        '@.neko/runtime.bin',
+        '@.runtime/internal.bin',
         '@.cache/generated.json',
       ]);
       expect(result.fileReferences.find((r) => r.path === 'src/cacheable.ts')?.content).toBe(

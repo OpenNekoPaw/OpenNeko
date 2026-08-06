@@ -16,27 +16,39 @@ describe('createCoreTools', () => {
   beforeEach(async () => {
     await fs.rm(fixtureRoot, { recursive: true, force: true });
     await fs.mkdir(path.join(workspaceRoot, 'src'), { recursive: true });
-    await fs.mkdir(path.join(workspaceRoot, '.neko', '.cache', 'resources'), { recursive: true });
-    await fs.mkdir(path.join(workspaceRoot, '.neko', 'logs'), { recursive: true });
-    await fs.mkdir(path.join(workspaceRoot, '.neko', 'tmp'), { recursive: true });
-    await fs.mkdir(path.join(workspaceRoot, '.neko', 'entities'), { recursive: true });
-    await fs.mkdir(path.join(workspaceRoot, '.neko', 'search'), { recursive: true });
+    await fs.mkdir(path.join(workspaceRoot, '.runtime', 'cache', 'resources'), { recursive: true });
+    await fs.mkdir(path.join(workspaceRoot, '.runtime', 'logs'), { recursive: true });
+    await fs.mkdir(path.join(workspaceRoot, '.runtime', 'tmp'), { recursive: true });
+    await fs.mkdir(path.join(workspaceRoot, '.runtime', 'entities'), { recursive: true });
+    await fs.mkdir(path.join(workspaceRoot, '.runtime', 'search'), { recursive: true });
     await fs.mkdir(path.join(workspaceRoot, 'ignored'), { recursive: true });
     await fs.mkdir(outsideRoot, { recursive: true });
     await fs.writeFile(path.join(workspaceRoot, 'src', 'story.txt'), 'hello neko\n', 'utf-8');
     await fs.writeFile(
-      path.join(workspaceRoot, '.neko', '.cache', 'resources', 'page.txt'),
+      path.join(workspaceRoot, '.runtime', 'cache', 'resources', 'page.txt'),
       'cache\n',
       'utf-8',
     );
-    await fs.writeFile(path.join(workspaceRoot, '.neko', 'logs', 'events.jsonl'), '{}\n', 'utf-8');
-    await fs.writeFile(path.join(workspaceRoot, '.neko', 'tmp', 'scratch.txt'), 'tmp\n', 'utf-8');
     await fs.writeFile(
-      path.join(workspaceRoot, '.neko', 'entities', 'store.json'),
+      path.join(workspaceRoot, '.runtime', 'logs', 'events.jsonl'),
       '{}\n',
       'utf-8',
     );
-    await fs.writeFile(path.join(workspaceRoot, '.neko', 'search', 'index.json'), '{}\n', 'utf-8');
+    await fs.writeFile(
+      path.join(workspaceRoot, '.runtime', 'tmp', 'scratch.txt'),
+      'tmp\n',
+      'utf-8',
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, '.runtime', 'entities', 'store.json'),
+      '{}\n',
+      'utf-8',
+    );
+    await fs.writeFile(
+      path.join(workspaceRoot, '.runtime', 'search', 'index.json'),
+      '{}\n',
+      'utf-8',
+    );
     await fs.writeFile(path.join(workspaceRoot, 'ignored', 'secret.txt'), 'ignored\n', 'utf-8');
     await fs.writeFile(path.join(outsideRoot, 'secret.txt'), 'outside\n', 'utf-8');
   });
@@ -197,43 +209,43 @@ describe('createCoreTools', () => {
     const tools = createCoreTools({ defaultCwd: workspaceRoot });
 
     await expect(
-      getTool(tools, 'Read').execute({ file_path: '.neko/.cache/resources/page.txt' }),
+      getTool(tools, 'Read').execute({ file_path: '.runtime/cache/resources/page.txt' }),
     ).resolves.toMatchObject({
       success: false,
       error: expect.stringContaining('managed workspace runtime or cache directory'),
     });
     await expect(
-      getTool(tools, 'ListDirectory').execute({ path: '.neko/logs' }),
+      getTool(tools, 'ListDirectory').execute({ path: '.runtime/logs' }),
     ).resolves.toMatchObject({
       success: false,
       error: expect.stringContaining('managed workspace runtime or cache directory'),
     });
     await expect(
-      getTool(tools, 'Grep').execute({ pattern: 'cache', path: '.neko/.cache' }),
+      getTool(tools, 'Grep').execute({ pattern: 'cache', path: '.runtime/cache' }),
     ).resolves.toMatchObject({
       success: false,
       error: expect.stringContaining('managed workspace runtime or cache directory'),
     });
     await expect(
-      getTool(tools, 'Write').execute({ file_path: '.neko/logs/new.jsonl', content: '{}\n' }),
+      getTool(tools, 'Write').execute({ file_path: '.runtime/logs/new.jsonl', content: '{}\n' }),
     ).resolves.toMatchObject({
       success: false,
       error: expect.stringContaining('managed workspace runtime or cache directory'),
     });
     await expect(
-      getTool(tools, 'Read').execute({ file_path: '.neko/tmp/scratch.txt' }),
+      getTool(tools, 'Read').execute({ file_path: '.runtime/tmp/scratch.txt' }),
     ).resolves.toMatchObject({
       success: false,
       error: expect.stringContaining('managed workspace runtime or cache directory'),
     });
     await expect(
-      getTool(tools, 'Read').execute({ file_path: '.neko/entities/store.json' }),
+      getTool(tools, 'Read').execute({ file_path: '.runtime/entities/store.json' }),
     ).resolves.toMatchObject({
       success: false,
       error: expect.stringContaining('managed workspace runtime or cache directory'),
     });
     await expect(
-      getTool(tools, 'Read').execute({ file_path: '.neko/search/index.json' }),
+      getTool(tools, 'Read').execute({ file_path: '.runtime/search/index.json' }),
     ).resolves.toMatchObject({
       success: false,
       error: expect.stringContaining('managed workspace runtime or cache directory'),
@@ -249,7 +261,7 @@ describe('createCoreTools', () => {
     });
     expect(listing.success).toBe(true);
     expect(JSON.stringify(listing.data)).toContain('src/story.txt');
-    expect(JSON.stringify(listing.data)).not.toContain('.neko/.cache');
+    expect(JSON.stringify(listing.data)).not.toContain('.runtime/cache');
     expect(JSON.stringify(listing.data)).not.toContain('page.txt');
 
     const grep = await getTool(tools, 'Grep').execute({
@@ -257,7 +269,7 @@ describe('createCoreTools', () => {
       path: '.',
     });
     expect(grep.success).toBe(true);
-    expect(JSON.stringify(grep.data)).not.toContain('.neko/.cache');
+    expect(JSON.stringify(grep.data)).not.toContain('.runtime/cache');
     expect(JSON.stringify(grep.data)).not.toContain('page.txt');
   });
 

@@ -649,7 +649,7 @@ function isUnsafePersistentString(value: string): boolean {
     /^file:\/\//i.test(trimmed) ||
     /^[A-Za-z]:[\\/]/.test(trimmed) ||
     trimmed.startsWith('/') ||
-    trimmed.includes('/.neko/.cache/')
+    trimmed.split('/').some((segment) => segment.startsWith('.'))
   );
 }
 

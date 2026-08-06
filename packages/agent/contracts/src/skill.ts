@@ -10,7 +10,7 @@
  *    - File structure: skill-name/SKILL.md + support files
  *
  * 2. **Slash Command** - Explicit trigger with /command
- *    - Located in: `.neko/commands/` (project) or `~/.neko/commands/` (personal)
+ *    - Located in: `neko/commands/` (project) or `~/.neko/commands/` (personal)
  *    - Triggered by: User typing /command
  *    - Arguments: Supported ($ARGUMENTS, $1, $2, etc.)
  *    - File structure: Single .md file (command-name.md)
@@ -105,8 +105,8 @@ export const SKILL_DIRECTORIES = {
  * Slash command directory locations (separate from skills)
  */
 export const COMMAND_DIRECTORIES = {
-  /** Project-level commands: .neko/commands/ in project root */
-  project: '.neko/commands',
+  /** Project-level commands: neko/commands/ in project root */
+  project: 'neko/commands',
   /** Personal commands: ~/.neko/commands/ */
   personal: '~/.neko/commands',
 } as const;
@@ -395,7 +395,7 @@ export interface Skill {
   // ===========================================================================
 
   /**
-   * Distinguishes ordinary Skills from `.neko/commands/*.md` prompt artifacts
+   * Distinguishes ordinary Skills from `neko/commands/*.md` prompt artifacts
    * that intentionally live in the `/` command namespace.
    * @default "skill"
    */

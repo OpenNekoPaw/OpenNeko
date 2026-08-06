@@ -111,7 +111,7 @@ export const settings = {
   'settings.prompts.fileContentHint':
     'Prompt content will be saved to a file that you can edit in Desktop editor.',
   'settings.prompts.personalFilePath': 'User location: ~/.neko/prompts/<name>.md',
-  'settings.prompts.projectFilePath': 'Workspace location: .neko/prompts/<name>.md',
+  'settings.prompts.projectFilePath': 'Workspace location: neko/prompts/<name>.md',
   'settings.prompts.openInEditor': 'Open in Desktop editor',
   'settings.prompts.editHelp':
     'User and workspace prompts can be edited in Desktop editor. Built-in prompts can only be enabled or disabled.',
@@ -119,7 +119,7 @@ export const settings = {
   'settings.prompts.agentsDescription':
     'Global instructions are injected as an environment overlay in all conversations. They do not replace the built-in system prompt.',
   'settings.prompts.agentsPriorityHint':
-    'Priority: Project (.neko/AGENTS.md) > User (~/.neko/AGENTS.md)',
+    'Priority: Project (neko/AGENTS.md) > User (~/.neko/AGENTS.md)',
   'settings.prompts.skillsHintTitle': 'Use Skills to Customize AI Behavior',
   'settings.prompts.skillsHintDescription':
     'Skills are a more powerful way to customize AI behavior. Create portable Skill packages in .agents/skills/ (project) or ~/.agents/skills/ (personal), then invoke them explicitly or let the Agent activate one after it explains why the Skill is needed.',
@@ -171,11 +171,11 @@ export const settings = {
   'settings.skills.skillPersonalPath': 'User location: ~/.agents/skills/<name>/SKILL.md',
   'settings.skills.skillProjectPath': 'Workspace location: .agents/skills/<name>/SKILL.md',
   'settings.skills.commandPersonalPath': 'User location: ~/.neko/commands/<name>.md',
-  'settings.skills.commandProjectPath': 'Workspace location: .neko/commands/<name>.md',
+  'settings.skills.commandProjectPath': 'Workspace location: neko/commands/<name>.md',
   'settings.skills.scriptPersonalPath': 'User location: ~/.neko/script/<name>.md',
-  'settings.skills.scriptProjectPath': 'Workspace location: .neko/script/<name>.md',
+  'settings.skills.scriptProjectPath': 'Workspace location: neko/script/<name>.md',
   'settings.skills.hookPersonalPath': 'User location: ~/.neko/hook/<name>.md',
-  'settings.skills.hookProjectPath': 'Workspace location: .neko/hook/<name>.md',
+  'settings.skills.hookProjectPath': 'Workspace location: neko/hook/<name>.md',
   'settings.skills.openInEditor': 'Open in Desktop editor',
   'settings.skills.viewDetail': 'View Details',
   'settings.skills.builtinNoEdit': 'Built-in skill content cannot be edited',

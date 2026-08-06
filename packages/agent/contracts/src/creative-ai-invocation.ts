@@ -1147,6 +1147,10 @@ export function isRuntimeOnlyCreativeAiIdentityValue(value: string): boolean {
   const normalized = value.trim();
   return (
     isHostProjectedRuntimeValue(normalized) ||
+    normalized
+      .replaceAll('\\', '/')
+      .split('/')
+      .some((segment) => segment.startsWith('.')) ||
     RUNTIME_ONLY_IDENTITY_PATTERNS.some((pattern) => pattern.test(normalized))
   );
 }

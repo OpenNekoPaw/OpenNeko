@@ -31,7 +31,7 @@ describe('composite content presenter', () => {
             type: 'image',
             src: 'http://127.0.0.1:43125/resources/asset-1.png',
             assetId: 'asset-1',
-            stableUri: '${WORKSPACE}/.neko/generated/image/out.png',
+            stableUri: '${WORKSPACE}/neko/generated/image/out.png',
             caption: 'Wide',
             role: 'shot',
           },
@@ -1056,7 +1056,7 @@ describe('composite content presenter', () => {
                 {
                   id: 'model-1',
                   type: 'generated-model',
-                  path: '/repo/.neko/generated/model/character.glb',
+                  path: '/repo/neko/generated/model/character.glb',
                   mimeType: 'model/gltf-binary',
                 },
               ],
@@ -1250,7 +1250,7 @@ function makeImageToolCall(
           {
             id: assetId,
             type: 'generated-image',
-            path: '/repo/.neko/generated/image/out.png',
+            path: '/repo/neko/generated/image/out.png',
             renderUri,
             mimeType: 'image/png',
             generatedAt: '2026-01-01T00:00:00.000Z',
@@ -1259,14 +1259,14 @@ function makeImageToolCall(
             ratio: '1:1',
             assetRef: {
               assetId,
-              uri: '${WORKSPACE}/.neko/generated/image/out.png',
+              uri: '${WORKSPACE}/neko/generated/image/out.png',
               mimeType: 'image/png',
             },
           },
           {
             id: 'asset-2',
             type: 'generated-image',
-            path: '/repo/.neko/generated/image/out-2.png',
+            path: '/repo/neko/generated/image/out-2.png',
             renderUri: 'http://127.0.0.1:43125/resources/asset-2.png',
             mimeType: 'image/png',
             generatedAt: '2026-01-01T00:00:00.000Z',

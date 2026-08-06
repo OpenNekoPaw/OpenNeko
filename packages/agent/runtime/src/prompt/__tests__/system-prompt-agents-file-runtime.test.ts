@@ -6,7 +6,7 @@ describe('system-prompt-agents-file-runtime', () => {
     const loadAgentsFile = vi.fn().mockResolvedValue({
       content: 'project instructions',
       source: 'project',
-      path: '/repo/.neko/AGENTS.md',
+      path: '/repo/neko/AGENTS.md',
     });
 
     await expect(
@@ -17,7 +17,7 @@ describe('system-prompt-agents-file-runtime', () => {
     ).resolves.toEqual({
       content: 'project instructions',
       source: 'project',
-      path: '/repo/.neko/AGENTS.md',
+      path: '/repo/neko/AGENTS.md',
     });
 
     expect(loadAgentsFile).toHaveBeenCalledWith('/repo', '/home/user/.neko');

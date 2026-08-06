@@ -455,7 +455,7 @@ capabilities: [image.generate]
   });
 
   it('loads provider cards from project directories as project overrides', async () => {
-    const root = '/workspace/.neko/providers';
+    const root = '/workspace/neko/providers';
     const registry = createProviderCardRegistry([
       parseProviderCardMarkdown(readCard('sdxl.card.md'), { sourceLayer: 'builtin' }),
     ]);
@@ -495,11 +495,11 @@ capabilities: [image.generate]
       root,
       sourceLayer: 'project',
       fs,
-      sourceRefPrefix: '.neko/providers',
+      sourceRefPrefix: 'neko/providers',
     });
 
     expect(cards).toHaveLength(1);
-    expect(cards[0]?.sourceRef).toBe('.neko/providers/sdxl.card.md');
+    expect(cards[0]?.sourceRef).toBe('neko/providers/sdxl.card.md');
     expect(registry.get('sdxl')?.displayName).toBe('SDXL Project Card');
     expect(registry.get('sdxl')?.trainingProfile.styleAffinities['pixel-art']).toBe(3);
   });

@@ -1402,7 +1402,7 @@ function readPortableSourcePath(value: string | undefined): string | undefined {
   if (!value) return undefined;
   if (value.startsWith('blob:') || value.startsWith('file:')) return undefined;
   const normalized = value.replace(/\\/g, '/').toLowerCase();
-  if (normalized.includes('/.neko/.cache/')) return undefined;
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) return undefined;
   if (isAbsolutePath(value)) return undefined;
   return value;
 }

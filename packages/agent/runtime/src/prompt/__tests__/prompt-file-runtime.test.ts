@@ -21,14 +21,14 @@ describe('PromptFileRuntime', () => {
     });
 
     expect(runtime.getUserPromptDir()).toBe('/home/neko/.neko/prompts');
-    expect(runtime.getWorkspacePromptDir()).toBe('/repo/.neko/prompts');
+    expect(runtime.getWorkspacePromptDir()).toBe('/repo/neko/prompts');
     expect(runtime.getUserAgentsFilePath()).toBe('/home/neko/.neko/AGENTS.md');
-    expect(runtime.getWorkspaceAgentsFilePath()).toBe('/repo/.neko/AGENTS.md');
+    expect(runtime.getWorkspaceAgentsFilePath()).toBe('/repo/neko/AGENTS.md');
     expect(runtime.getPromptWatchDirs()).toEqual([
       '/home/neko/.neko/prompts',
-      '/repo/.neko/prompts',
+      '/repo/neko/prompts',
     ]);
-    expect(runtime.getPromptFilePath('project', 'story')).toBe('/repo/.neko/prompts/story.md');
+    expect(runtime.getPromptFilePath('project', 'story')).toBe('/repo/neko/prompts/story.md');
     expect(runtime.getPromptFilePath('builtin', 'story')).toBeNull();
   });
 
@@ -37,7 +37,7 @@ describe('PromptFileRuntime', () => {
       fs: createFs({
         '/home/neko/.neko/prompts/personal.md': '# Personal Prompt\nbody',
         '/home/neko/.neko/prompts/ignore.txt': 'ignored',
-        '/repo/.neko/prompts/project.md': 'No heading',
+        '/repo/neko/prompts/project.md': 'No heading',
       }),
       path: pathAdapter,
       homeDir: '/home/neko',
@@ -83,7 +83,7 @@ describe('PromptFileRuntime', () => {
   it('loads AGENTS.md with project priority and creates missing files on ensure', async () => {
     const fs = createFs({
       '/home/neko/.neko/AGENTS.md': 'personal agents',
-      '/repo/.neko/AGENTS.md': 'project agents',
+      '/repo/neko/AGENTS.md': 'project agents',
     });
     const runtime = createPromptFileRuntime({
       fs,
@@ -98,10 +98,10 @@ describe('PromptFileRuntime', () => {
     });
     expect(await runtime.agentsFileExists('personal')).toBe(true);
 
-    await runtime.deletePromptFile('/repo/.neko/AGENTS.md');
+    await runtime.deletePromptFile('/repo/neko/AGENTS.md');
     const ensuredPath = await runtime.ensureAgentsFile('project');
 
-    expect(ensuredPath).toBe('/repo/.neko/AGENTS.md');
+    expect(ensuredPath).toBe('/repo/neko/AGENTS.md');
     expect(fs.readText(ensuredPath)).toBe(DEFAULT_AGENTS_FILE_CONTENT);
   });
 

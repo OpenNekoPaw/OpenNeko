@@ -38,7 +38,7 @@ describe('perception card contracts', () => {
       perceptual: {
         thumbnailRef: {
           assetId: 'asset-1-thumb',
-          uri: '${WORKSPACE}/.neko/generated/image/thumb.png',
+          uri: '${WORKSPACE}/neko/generated/image/thumb.png',
           mimeType: 'image/png',
         },
       },
@@ -67,7 +67,7 @@ describe('perception card contracts', () => {
         status: 'completed',
         thumbnailAssetRef: {
           assetId: 'asset-1',
-          uri: '${WORKSPACE}/.neko/generated/image/out.png',
+          uri: '${WORKSPACE}/neko/generated/image/out.png',
           mimeType: 'image/png',
         },
       },

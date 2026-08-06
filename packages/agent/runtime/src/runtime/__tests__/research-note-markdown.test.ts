@@ -69,7 +69,7 @@ describe('ResearchNote Markdown persistence', () => {
     await expect(
       saveResearchNoteMarkdown({
         note: createNote(),
-        path: '.neko/internal.md',
+        path: '.runtime/internal.md',
         fs: { writeFile },
       }),
     ).rejects.toThrow('ResearchNote must not be saved into managed project-local storage.');

@@ -44,7 +44,7 @@ describe('storyboard transfer presenter', () => {
         shots: [
           {
             url: 'webview://shot-1.png',
-            localPath: '/repo/.neko/.cache/generated/shot-1.png',
+            localPath: '/repo/.runtime/cache/generated/shot-1.png',
             shotIndex: 1,
           },
           {

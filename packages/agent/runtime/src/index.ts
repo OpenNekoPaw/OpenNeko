@@ -353,7 +353,8 @@ export {
 // Export workspace/content layout helpers
 export {
   NEKO_AGENTS_FILE_NAME,
-  NEKO_CONTENT_DIR,
+  PERSONAL_NEKO_CONTENT_DIR,
+  PROJECT_NEKO_CONTENT_DIR,
   NEKO_CONTENT_SUBDIRS,
   resolveAgentsFile,
   resolveNekoContentDir,

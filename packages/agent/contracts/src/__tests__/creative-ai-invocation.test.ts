@@ -180,7 +180,7 @@ describe('creative AI invocation contracts', () => {
 
   it('rejects runtime handles and cache paths as durable invocation identity', () => {
     expect(isRuntimeOnlyCreativeAiIdentityValue('blob:neko-media/preview')).toBe(true);
-    expect(isRuntimeOnlyCreativeAiIdentityValue('.neko/.cache/generated/image.png')).toBe(true);
+    expect(isRuntimeOnlyCreativeAiIdentityValue('.runtime/generated/image.png')).toBe(true);
     expect(isRuntimeOnlyCreativeAiIdentityValue('boards/intro.nkc')).toBe(false);
 
     const runtimeSource = validateExternalCreativeAiInvocation({
@@ -205,7 +205,7 @@ describe('creative AI invocation contracts', () => {
       documentRef: {
         ...documentRef,
         documentId: undefined,
-        projectRelativePath: '.neko/.cache/generated/image.png',
+        projectRelativePath: '.runtime/generated/image.png',
       },
     });
 

@@ -153,7 +153,7 @@ describe('external processor registry', () => {
         sourceScope: 'project',
         agentCapabilitySource: 'local',
         sourceId: 'workspace',
-        locationRef: '.neko/processors/upscale.neko-processor.json',
+        locationRef: 'neko/processors/upscale.neko-processor.json',
       },
       validManifest,
     );
@@ -299,14 +299,14 @@ describe('external processor registry', () => {
     );
   });
 
-  it('projects project manifests from .neko/processors files', () => {
+  it('projects project manifests from canonical processor files', () => {
     const registry = createExternalProcessorRegistry();
     const result = registerProjectExternalProcessorManifests({
       registry,
       workspaceSourceId: 'workspace-1',
       files: [
         {
-          path: '.neko/processors/upscale.neko-processor.json',
+          path: 'neko/processors/upscale.neko-processor.json',
           contents: JSON.stringify(validManifest),
         },
       ],
@@ -319,7 +319,7 @@ describe('external processor registry', () => {
         sourceScope: 'project',
         agentCapabilitySource: 'local',
         trustLevel: 'untrusted',
-        locationRef: '.neko/processors/upscale.neko-processor.json',
+        locationRef: 'neko/processors/upscale.neko-processor.json',
       }),
     );
   });
@@ -329,7 +329,7 @@ describe('external processor registry', () => {
     const result = registerProjectExternalProcessorManifests({
       registry,
       workspaceSourceId: 'workspace-1',
-      files: [{ path: '.neko/processors/bad.neko-processor.json', contents: '{' }],
+      files: [{ path: 'neko/processors/bad.neko-processor.json', contents: '{' }],
     });
 
     expect(result.registrations).toEqual([]);
@@ -337,7 +337,7 @@ describe('external processor registry', () => {
       expect.objectContaining({
         code: 'invalid-manifest',
         details: expect.objectContaining({
-          locationRef: '.neko/processors/bad.neko-processor.json',
+          locationRef: 'neko/processors/bad.neko-processor.json',
         }),
       }),
     ]);

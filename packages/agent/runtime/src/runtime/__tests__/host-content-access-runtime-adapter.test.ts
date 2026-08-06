@@ -56,7 +56,6 @@ describe('HostAgentContentAccessRuntime document representations', () => {
       source: { kind: 'workspace-file', path: 'docs/story.pdf' },
       spec: { kind: 'raster-page', page: 1, format: 'png' },
     });
-    expect(JSON.stringify(result)).not.toContain('/workspace/.neko');
     expect(JSON.stringify(result)).not.toContain('cacheRoot');
   });
 

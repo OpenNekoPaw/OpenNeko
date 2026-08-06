@@ -53,7 +53,7 @@ describe('Agent external processor runtime', () => {
         sourceScope: 'project',
         agentCapabilitySource: 'local',
         sourceId: 'workspace-1',
-        locationRef: '.neko/processors/upscale.neko-processor.json',
+        locationRef: 'neko/processors/upscale.neko-processor.json',
       },
       manifest,
     );

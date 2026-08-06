@@ -71,7 +71,7 @@ describe('registerRuntimeProviderCardDirectories', () => {
     const logger = { warn: vi.fn() };
     const registerDirectory = vi.fn(async (options) => {
       options.onError?.({
-        path: '/workspace/project/.neko/providers/demo.card.md',
+        path: '/workspace/project/neko/providers/demo.card.md',
         reason: 'parse-failed',
         cause: new Error('bad card'),
       });

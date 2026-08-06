@@ -118,7 +118,7 @@ export function buildSafeConfigDiagnosticMessage(
     case 'unsupportedWorkspaceModelDefinition':
       return `Workspace configuration defines model entries: ${filePath}. Move model definitions to the user config or account catalog, then open a new Agent session or tab.`;
     case 'unsupportedSkillSource':
-      return `Configuration references a non-standard Skill source: ${filePath}. Register an explicit Skill source provider or use .agents/skills and .neko/commands.`;
+      return `Configuration references a non-standard Skill source: ${filePath}. Register an explicit Skill source provider or use .agents/skills and neko/commands.`;
     case 'readError':
       return `Unable to read configuration file: ${filePath}. Check file permissions, then open a new Agent session or tab.`;
     case 'missingConfig':

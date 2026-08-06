@@ -15,7 +15,7 @@ describe('neko-content-layout', () => {
   });
 
   it('resolves project content directories only when a workspace root exists', () => {
-    expect(resolveProjectNekoContentDir('/repo', 'commands')).toBe('/repo/.neko/commands');
+    expect(resolveProjectNekoContentDir('/repo', 'commands')).toBe('/repo/neko/commands');
     expect(resolveProjectNekoContentDir(undefined, 'commands')).toBeNull();
   });
 
@@ -34,12 +34,12 @@ describe('neko-content-layout', () => {
         homeDir: '/home/user',
         workspaceRoot: '/repo',
       }),
-    ).toBe('/repo/.neko/commands');
+    ).toBe('/repo/neko/commands');
   });
 
   it('resolves AGENTS.md paths for personal and project scopes', () => {
     expect(resolvePersonalAgentsFile('/home/user')).toBe('/home/user/.neko/AGENTS.md');
-    expect(resolveProjectAgentsFile('/repo')).toBe('/repo/.neko/AGENTS.md');
+    expect(resolveProjectAgentsFile('/repo')).toBe('/repo/neko/AGENTS.md');
     expect(resolveProjectAgentsFile(null)).toBeNull();
     expect(resolveAgentsFile({ source: 'personal', homeDir: '/home/user' })).toBe(
       '/home/user/.neko/AGENTS.md',
@@ -50,6 +50,6 @@ describe('neko-content-layout', () => {
         homeDir: '/home/user',
         workspaceRoot: '/repo',
       }),
-    ).toBe('/repo/.neko/AGENTS.md');
+    ).toBe('/repo/neko/AGENTS.md');
   });
 });

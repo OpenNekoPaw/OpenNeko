@@ -404,7 +404,7 @@ describe('tool-call-presenter', () => {
     );
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('renderUri');
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('neko-media://');
-    expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('.neko/.cache');
+    expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('.runtime/cache');
   });
 
   it('keeps locator-only ReadImage selections visible and aligns their attachment previews', () => {

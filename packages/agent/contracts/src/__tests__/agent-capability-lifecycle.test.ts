@@ -181,9 +181,7 @@ describe('agent capability lifecycle contracts', () => {
     expect(isRuntimeOnlyAgentCapabilityResourceValue('blob:neko-media/preview')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('/tmp/neko/page.png')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('/var/folders/neko/page.png')).toBe(true);
-    expect(isRuntimeOnlyAgentCapabilityResourceValue('/workspace/.neko/.cache/page.png')).toBe(
-      true,
-    );
+    expect(isRuntimeOnlyAgentCapabilityResourceValue('/workspace/.runtime/page.png')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('assets/cover.png')).toBe(false);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('${MEDIA}/cover.png')).toBe(false);
   });

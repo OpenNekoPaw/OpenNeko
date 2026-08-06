@@ -109,7 +109,7 @@ export const settings = {
   'settings.prompts.promptSource': '保存位置',
   'settings.prompts.fileContentHint': '提示词内容将保存到文件中，您可以在 Desktop 编辑器中编辑。',
   'settings.prompts.personalFilePath': '用户位置: ~/.neko/prompts/<名称>.md',
-  'settings.prompts.projectFilePath': '工作区位置: .neko/prompts/<名称>.md',
+  'settings.prompts.projectFilePath': '工作区位置: neko/prompts/<名称>.md',
   'settings.prompts.openInEditor': '在 Desktop 编辑器中打开',
   'settings.prompts.editHelp':
     '用户和工作区提示词可在 Desktop 编辑器中编辑。内置提示词只能启用或禁用。',
@@ -117,7 +117,7 @@ export const settings = {
   'settings.prompts.agentsDescription':
     '全局指令会作为环境层 overlay 注入到所有对话中，不会替代内置 system prompt。支持项目级和用户级配置。',
   'settings.prompts.agentsPriorityHint':
-    '优先级：项目级 (.neko/AGENTS.md) > 用户级 (~/.neko/AGENTS.md)',
+    '优先级：项目级 (neko/AGENTS.md) > 用户级 (~/.neko/AGENTS.md)',
   'settings.prompts.skillsHintTitle': '使用 Skills 自定义 AI 行为',
   'settings.prompts.skillsHintDescription':
     'Skills 是更强大的方式来定制 AI 行为。在 .agents/skills/（项目）或 ~/.agents/skills/（个人）下创建 portable Skill package 后，可以显式调用，或由 Agent 先说明原因后再激活需要的 Skill。',
@@ -167,11 +167,11 @@ export const settings = {
   'settings.skills.skillPersonalPath': '用户位置: ~/.agents/skills/<名称>/SKILL.md',
   'settings.skills.skillProjectPath': '工作区位置: .agents/skills/<名称>/SKILL.md',
   'settings.skills.commandPersonalPath': '用户位置: ~/.neko/commands/<名称>.md',
-  'settings.skills.commandProjectPath': '工作区位置: .neko/commands/<名称>.md',
+  'settings.skills.commandProjectPath': '工作区位置: neko/commands/<名称>.md',
   'settings.skills.scriptPersonalPath': '用户位置: ~/.neko/script/<名称>.md',
-  'settings.skills.scriptProjectPath': '工作区位置: .neko/script/<名称>.md',
+  'settings.skills.scriptProjectPath': '工作区位置: neko/script/<名称>.md',
   'settings.skills.hookPersonalPath': '用户位置: ~/.neko/hook/<名称>.md',
-  'settings.skills.hookProjectPath': '工作区位置: .neko/hook/<名称>.md',
+  'settings.skills.hookProjectPath': '工作区位置: neko/hook/<名称>.md',
   'settings.skills.openInEditor': '在 Desktop 编辑器中打开',
   'settings.skills.viewDetail': '查看详情',
   'settings.skills.builtinNoEdit': '内置 Skill 内容不可编辑',
