@@ -30,8 +30,6 @@ import { parse, stringify } from 'smol-toml';
 import type { ProviderDefinition, UnifiedConfig } from './types';
 
 export interface NekoTomlConfig {
-  readonly ui_locale?: unknown;
-  readonly prompt_locale?: unknown;
   readonly default_models?: Partial<Record<ModelType, TomlModelRefConfig>>;
   readonly default_model_purposes?: Record<string, TomlModelRefConfig>;
   readonly defaults?: TomlDefaultsConfig;
@@ -48,9 +46,6 @@ export interface NekoTomlConfig {
   readonly models?: readonly TomlModelConfig[];
   readonly mcp_servers?: readonly TomlMcpServerConfig[];
   readonly external_research?: TomlExternalResearchConfig;
-  readonly provider_overrides?: Record<string, Partial<TomlProviderConfig>>;
-  readonly model_overrides?: Record<string, Partial<TomlModelConfig>>;
-  readonly mcp_server_overrides?: Record<string, Partial<TomlMcpServerConfig>>;
 }
 
 export interface TomlDefaultsConfig {
@@ -69,7 +64,7 @@ export interface TomlProviderConfig {
   readonly display_name?: string;
   readonly type: ProviderConfig['type'];
   readonly api_url?: string;
-  readonly base_url?: string;
+  readonly api_key?: unknown;
   readonly enabled?: boolean;
   readonly connection_kind?: ProviderConfig['connectionKind'];
   readonly protocol_profile?: ProviderConfig['protocolProfile'];
@@ -105,7 +100,6 @@ export interface TomlModelConfig {
   readonly display_name?: string;
   readonly provider_id: string;
   readonly protocol_profile?: ModelConfig['protocolProfile'];
-  readonly protocol?: ModelConfig['protocol'];
   readonly use_bearer_auth?: boolean;
   readonly supports_beta?: boolean;
   readonly type?: ModelConfig['type'];
@@ -128,7 +122,10 @@ export interface TomlMcpServerConfig {
   readonly command?: string;
   readonly args?: readonly string[];
   readonly env?: Record<string, string>;
+  readonly cwd?: string;
+  readonly inherit_process_env?: boolean;
   readonly url?: string;
+  readonly headers?: Record<string, string>;
   readonly enabled?: boolean;
   readonly builtin?: boolean;
   readonly homepage?: string;
@@ -175,6 +172,7 @@ export interface TomlExternalResearchMcpFetchToolBinding {
 
 export interface TomlConfigValidationIssue {
   readonly code:
+    | 'invalidConfigField'
     | 'unsupportedProviderType'
     | 'unsupportedProviderConnectionKind'
     | 'unsupportedProviderProtocolProfile'
@@ -182,12 +180,11 @@ export interface TomlConfigValidationIssue {
     | 'unsupportedProtocolAuthType'
     | 'unsupportedProtocolStreamFormat'
     | 'unsupportedModelProtocolProfile'
-    | 'unsupportedModelProtocol'
     | 'duplicateProviderId'
     | 'duplicateModelId'
     | 'invalidDefaultMaxTokens'
     | 'invalidModelTokenMetadata'
-    | 'unsupportedConfigField'
+    | 'invalidProviderApiKey'
     | 'unsupportedModelType'
     | 'unsupportedDefaultModelType'
     | 'unsupportedDefaultModelPurpose';
@@ -195,74 +192,78 @@ export interface TomlConfigValidationIssue {
   readonly message: string;
 }
 
-export class TomlConfigValidationError extends Error {
-  constructor(readonly issues: readonly TomlConfigValidationIssue[]) {
-    super(issues.map((issue) => issue.message).join('\n'));
-    this.name = 'TomlConfigValidationError';
-  }
+export type ProviderCredentialDeclaration =
+  | {
+      readonly status: 'configured';
+      readonly apiKey: string;
+    }
+  | {
+      readonly status: 'invalid';
+    };
+
+export interface TomlConfigProjection {
+  readonly config: UnifiedConfig;
+  readonly diagnostics: readonly TomlConfigValidationIssue[];
+  readonly providerCredentials: Readonly<Record<string, ProviderCredentialDeclaration>>;
 }
 
-export function tomlToUnifiedConfig(config: NekoTomlConfig): UnifiedConfig {
-  validateTomlConfig(config);
-  return {
-    ...(config.default_models !== undefined
-      ? { defaultModels: tomlDefaultModelsToRuntime(config.default_models) }
+export function tomlToUnifiedConfig(config: unknown): UnifiedConfig {
+  return projectTomlConfig(config).config;
+}
+
+export function projectTomlConfig(value: unknown): TomlConfigProjection {
+  const diagnostics: TomlConfigValidationIssue[] = [];
+  const root = readRecord(value);
+  if (!root) {
+    diagnostics.push(invalidField('', 'Configuration root must be a table.'));
+    return { config: {}, diagnostics, providerCredentials: {} };
+  }
+
+  const providerCredentials: Record<string, ProviderCredentialDeclaration> = {};
+  const providers = decodeProviders(root['providers'], diagnostics, providerCredentials);
+  const models = decodeModels(root['models'], diagnostics);
+  const mcpServers = decodeMcpServers(root['mcp_servers'], diagnostics);
+  const defaultModels = decodeModelRefs(
+    root['default_models'],
+    'default_models',
+    diagnostics,
+    true,
+  );
+  const defaultModelPurposes = decodeModelRefs(
+    root['default_model_purposes'],
+    'default_model_purposes',
+    diagnostics,
+    false,
+  );
+  const defaults = decodeDefaults(root['defaults'], diagnostics);
+
+  const config: UnifiedConfig = {
+    ...(defaultModels ? { defaultModels: tomlDefaultModelsToRuntime(defaultModels) } : {}),
+    ...(defaultModelPurposes
+      ? { defaultModelPurposes: tomlDefaultModelPurposesToRuntime(defaultModelPurposes) }
       : {}),
-    ...(config.default_model_purposes !== undefined
-      ? {
-          defaultModelPurposes: tomlDefaultModelPurposesToRuntime(config.default_model_purposes),
-        }
+    ...defaults,
+    ...decodeTopLevelScalars(root, diagnostics),
+    ...(Array.isArray(root['providers'])
+      ? { providers: providers.map(tomlProviderToRuntime) }
       : {}),
-    ...(config.defaults?.max_tokens !== undefined ? { maxTokens: config.defaults.max_tokens } : {}),
-    ...(config.defaults?.temperature !== undefined
-      ? { temperature: config.defaults.temperature }
+    ...(Array.isArray(root['models']) ? { models: models.map(tomlModelToRuntime) } : {}),
+    ...(Array.isArray(root['mcp_servers'])
+      ? { mcpServers: mcpServers.map(tomlMcpServerToRuntime) }
       : {}),
-    ...(config.skills_dir !== undefined ? { skillsDir: config.skills_dir } : {}),
-    ...(config.verbose !== undefined ? { verbose: config.verbose } : {}),
-    ...(config.output_format !== undefined ? { outputFormat: config.output_format } : {}),
-    ...(config.thinking_budget !== undefined ? { thinkingBudget: config.thinking_budget } : {}),
-    ...(config.custom_system_prompt !== undefined
-      ? { customSystemPrompt: config.custom_system_prompt }
-      : {}),
-    ...(config.auto_execute_tools !== undefined
-      ? { autoExecuteTools: config.auto_execute_tools }
-      : {}),
-    ...(config.stream_responses !== undefined ? { streamResponses: config.stream_responses } : {}),
-    ...(config.show_tool_calls !== undefined ? { showToolCalls: config.show_tool_calls } : {}),
-    ...(config.execution_mode !== undefined ? { executionMode: config.execution_mode } : {}),
-    ...(config.providers ? { providers: config.providers.map(tomlProviderToRuntime) } : {}),
-    ...(config.models ? { models: config.models.map(tomlModelToRuntime) } : {}),
-    ...(config.mcp_servers ? { mcpServers: config.mcp_servers.map(tomlMcpServerToRuntime) } : {}),
-    ...(config.external_research !== undefined
-      ? { externalResearch: tomlExternalResearchToRuntime(config.external_research) }
-      : {}),
-    ...(config.provider_overrides
-      ? {
-          providerOverrides: mapRecordValues(
-            config.provider_overrides,
-            tomlProviderOverrideToRuntime,
-          ),
-        }
-      : {}),
-    ...(config.model_overrides
-      ? { modelOverrides: mapRecordValues(config.model_overrides, tomlModelOverrideToRuntime) }
-      : {}),
-    ...(config.mcp_server_overrides
-      ? {
-          mcpServerOverrides: mapRecordValues(
-            config.mcp_server_overrides,
-            tomlMcpServerOverrideToRuntime,
-          ),
-        }
-      : {}),
+    ...decodeExternalResearch(root['external_research'], diagnostics),
   };
+  return { config, diagnostics, providerCredentials: Object.freeze(providerCredentials) };
 }
 
 export function parseTomlConfigText(source: string): UnifiedConfig {
-  return tomlToUnifiedConfig(parse(source) as NekoTomlConfig);
+  return tomlToUnifiedConfig(parse(source));
 }
 
-export function unifiedConfigToToml(config: UnifiedConfig): NekoTomlConfig {
+export function unifiedConfigToToml(
+  config: UnifiedConfig,
+  providerCredentials: Readonly<Record<string, ProviderCredentialDeclaration>> = {},
+): NekoTomlConfig {
   return {
     ...(config.defaultModels !== undefined
       ? { default_models: runtimeDefaultModelsToToml(config.defaultModels) }
@@ -293,30 +294,17 @@ export function unifiedConfigToToml(config: UnifiedConfig): NekoTomlConfig {
     ...(config.streamResponses !== undefined ? { stream_responses: config.streamResponses } : {}),
     ...(config.showToolCalls !== undefined ? { show_tool_calls: config.showToolCalls } : {}),
     ...(config.executionMode !== undefined ? { execution_mode: config.executionMode } : {}),
-    ...(config.providers ? { providers: config.providers.map(runtimeProviderToToml) } : {}),
+    ...(config.providers
+      ? {
+          providers: config.providers.map((provider) =>
+            runtimeProviderToToml(provider, providerCredentials[provider.id]),
+          ),
+        }
+      : {}),
     ...(config.models ? { models: config.models.map(runtimeModelToToml) } : {}),
     ...(config.mcpServers ? { mcp_servers: config.mcpServers.map(runtimeMcpServerToToml) } : {}),
     ...(config.externalResearch !== undefined
       ? { external_research: runtimeExternalResearchToToml(config.externalResearch) }
-      : {}),
-    ...(config.providerOverrides
-      ? {
-          provider_overrides: mapRecordValues(
-            config.providerOverrides,
-            runtimeProviderOverrideToToml,
-          ),
-        }
-      : {}),
-    ...(config.modelOverrides
-      ? { model_overrides: mapRecordValues(config.modelOverrides, runtimeModelOverrideToToml) }
-      : {}),
-    ...(config.mcpServerOverrides
-      ? {
-          mcp_server_overrides: mapRecordValues(
-            config.mcpServerOverrides,
-            runtimeMcpServerOverrideToToml,
-          ),
-        }
       : {}),
   };
 }
@@ -325,29 +313,868 @@ export function serializeUnifiedConfigToToml(config: UnifiedConfig): string {
   return stringify(unifiedConfigToToml(config));
 }
 
-export function validateTomlConfig(config: NekoTomlConfig): void {
-  const issues: TomlConfigValidationIssue[] = [];
-  collectUnsupportedConfigFieldIssues(config, issues);
-  collectUnsupportedProviderFieldIssues(config.providers, 'providers', issues);
-  collectUnsupportedProviderOverrideFieldIssues(config.provider_overrides, issues);
-  collectDuplicateIdIssues(config.providers, 'providers', 'duplicateProviderId', issues);
-  collectDuplicateIdIssues(config.models, 'models', 'duplicateModelId', issues);
-  collectUnsupportedProviderIssues(config.providers, 'providers', issues);
-  collectUnsupportedProviderOverrideIssues(config.provider_overrides, issues);
-  collectUnsupportedModelTypeIssues(config.models, 'models', issues);
-  collectUnsupportedModelProtocolProfileIssues(config.models, 'models', issues);
-  collectUnsupportedModelProtocolIssues(config.models, 'models', issues);
-  collectUnsupportedModelOverrideTypeIssues(config.model_overrides, issues);
-  collectUnsupportedModelOverrideProtocolProfileIssues(config.model_overrides, issues);
-  collectUnsupportedModelOverrideProtocolIssues(config.model_overrides, issues);
-  collectDefaultModelIssues(config.default_models, issues);
-  collectDefaultModelPurposeIssues(config.default_model_purposes, issues);
-  collectDefaultTokenIssues(config.defaults, issues);
-  collectModelTokenIssues(config.models, 'models', issues);
-  collectModelOverrideTokenIssues(config.model_overrides, issues);
-  if (issues.length > 0) {
-    throw new TomlConfigValidationError(issues);
+export function validateTomlConfig(config: unknown): readonly TomlConfigValidationIssue[] {
+  return projectTomlConfig(config).diagnostics;
+}
+
+function decodeProviders(
+  value: unknown,
+  issues: TomlConfigValidationIssue[],
+  credentials: Record<string, ProviderCredentialDeclaration>,
+): TomlProviderConfig[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    issues.push(invalidField('providers', 'providers must be an array of tables.'));
+    return [];
   }
+  const decoded: TomlProviderConfig[] = [];
+  for (const [index, entry] of value.entries()) {
+    const record = readRecord(entry);
+    const indexPath = `providers[${index}]`;
+    if (!record) {
+      issues.push(invalidField(indexPath, 'Provider entry must be a table.'));
+      continue;
+    }
+    const id = readRequiredString(record, 'id', indexPath, issues);
+    const path = id ? `providers.${id}` : indexPath;
+    const startIssueCount = issues.length;
+    const name = readRequiredString(record, 'name', path, issues);
+    const type = readAllowedString(
+      record,
+      'type',
+      path,
+      PROVIDER_TYPES,
+      'unsupportedProviderType',
+      issues,
+    );
+    const apiUrl = readOptionalString(record, 'api_url', path, issues);
+    const displayName = readOptionalString(record, 'display_name', path, issues);
+    const enabled = readOptionalBoolean(record, 'enabled', path, issues);
+    const connectionKind = readAllowedString(
+      record,
+      'connection_kind',
+      path,
+      PROVIDER_CONNECTION_KINDS,
+      'unsupportedProviderConnectionKind',
+      issues,
+    );
+    const protocolProfile = readAllowedString(
+      record,
+      'protocol_profile',
+      path,
+      PROVIDER_PROTOCOL_PROFILES,
+      'unsupportedProviderProtocolProfile',
+      issues,
+    );
+    const supportLevel = readAllowedString(
+      record,
+      'support_level',
+      path,
+      PROVIDER_SUPPORT_LEVELS,
+      'unsupportedProviderSupportLevel',
+      issues,
+    );
+    const requiresApiKey = readOptionalBoolean(record, 'requires_api_key', path, issues);
+    const builtin = readOptionalBoolean(record, 'builtin', path, issues);
+    const supportsBeta = readOptionalBoolean(record, 'supports_beta', path, issues);
+    const useBearerAuth = readOptionalBoolean(record, 'use_bearer_auth', path, issues);
+    const options = readOptionalRecord(record, 'options', path, issues);
+    const protocolVariant = decodeProtocolVariant(
+      record['protocol_variant'],
+      `${path}.protocol_variant`,
+      issues,
+    );
+
+    if (id && Object.hasOwn(record, 'api_key')) {
+      const apiKey = record['api_key'];
+      if (typeof apiKey === 'string' && apiKey.trim().length > 0) {
+        credentials[id] = { status: 'configured', apiKey };
+      } else {
+        credentials[id] = { status: 'invalid' };
+        issues.push({
+          code: 'invalidProviderApiKey',
+          path: `${path}.api_key`,
+          message: `${path}.api_key must be a non-empty string.`,
+        });
+      }
+    }
+    const hasRecordIssue = issues
+      .slice(startIssueCount)
+      .some((issue) => issue.code !== 'invalidProviderApiKey');
+    if (!id || !name || !type || hasRecordIssue) continue;
+    decoded.push({
+      id,
+      name,
+      type,
+      ...(displayName === undefined ? {} : { display_name: displayName }),
+      ...(apiUrl === undefined ? {} : { api_url: apiUrl }),
+      ...(enabled === undefined ? {} : { enabled }),
+      ...(connectionKind === undefined ? {} : { connection_kind: connectionKind }),
+      ...(protocolProfile === undefined ? {} : { protocol_profile: protocolProfile }),
+      ...(supportLevel === undefined ? {} : { support_level: supportLevel }),
+      ...(requiresApiKey === undefined ? {} : { requires_api_key: requiresApiKey }),
+      ...(builtin === undefined ? {} : { builtin }),
+      ...(supportsBeta === undefined ? {} : { supports_beta: supportsBeta }),
+      ...(useBearerAuth === undefined ? {} : { use_bearer_auth: useBearerAuth }),
+      ...(options === undefined ? {} : { options }),
+      ...(protocolVariant === undefined ? {} : { protocol_variant: protocolVariant }),
+    });
+  }
+  const duplicateIds = collectDuplicateIds(decoded, 'providers', 'duplicateProviderId', issues);
+  for (const id of duplicateIds) delete credentials[id];
+  return decoded.filter((provider) => !duplicateIds.has(provider.id));
+}
+
+function decodeModels(value: unknown, issues: TomlConfigValidationIssue[]): TomlModelConfig[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    issues.push(invalidField('models', 'models must be an array of tables.'));
+    return [];
+  }
+  const decoded: TomlModelConfig[] = [];
+  for (const [index, entry] of value.entries()) {
+    const record = readRecord(entry);
+    const indexPath = `models[${index}]`;
+    if (!record) {
+      issues.push(invalidField(indexPath, 'Model entry must be a table.'));
+      continue;
+    }
+    const id = readRequiredString(record, 'id', indexPath, issues);
+    const path = id ? `models.${id}` : indexPath;
+    const startIssueCount = issues.length;
+    const name = readRequiredString(record, 'name', path, issues);
+    const providerId = readRequiredString(record, 'provider_id', path, issues);
+    const capabilities = readRequiredStringArray(record, 'capabilities', path, issues);
+    const displayName = readOptionalString(record, 'display_name', path, issues);
+    const protocolProfile = readAllowedString(
+      record,
+      'protocol_profile',
+      path,
+      PROVIDER_PROTOCOL_PROFILES,
+      'unsupportedModelProtocolProfile',
+      issues,
+    );
+    const type = readAllowedString(
+      record,
+      'type',
+      path,
+      MODEL_TYPES,
+      'unsupportedModelType',
+      issues,
+    );
+    const useBearerAuth = readOptionalBoolean(record, 'use_bearer_auth', path, issues);
+    const supportsBeta = readOptionalBoolean(record, 'supports_beta', path, issues);
+    const contextWindow = readOptionalPositiveInteger(
+      record,
+      'context_window',
+      path,
+      'invalidModelTokenMetadata',
+      issues,
+    );
+    const maxOutputTokens = readOptionalPositiveInteger(
+      record,
+      'max_output_tokens',
+      path,
+      'invalidModelTokenMetadata',
+      issues,
+    );
+    const inputCost = readOptionalFiniteNumber(record, 'input_cost_per_1k', path, issues);
+    const outputCost = readOptionalFiniteNumber(record, 'output_cost_per_1k', path, issues);
+    const enabled = readOptionalBoolean(record, 'enabled', path, issues);
+    const options = readOptionalRecord(record, 'options', path, issues);
+    const expressionProfileId = readOptionalString(
+      record,
+      'provider_expression_profile_id',
+      path,
+      issues,
+    );
+    if (!id || !name || !providerId || !capabilities || issues.length > startIssueCount) continue;
+    decoded.push({
+      id,
+      name,
+      provider_id: providerId,
+      capabilities,
+      ...(displayName === undefined ? {} : { display_name: displayName }),
+      ...(protocolProfile === undefined ? {} : { protocol_profile: protocolProfile }),
+      ...(type === undefined ? {} : { type }),
+      ...(useBearerAuth === undefined ? {} : { use_bearer_auth: useBearerAuth }),
+      ...(supportsBeta === undefined ? {} : { supports_beta: supportsBeta }),
+      ...(contextWindow === undefined ? {} : { context_window: contextWindow }),
+      ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens }),
+      ...(inputCost === undefined ? {} : { input_cost_per_1k: inputCost }),
+      ...(outputCost === undefined ? {} : { output_cost_per_1k: outputCost }),
+      ...(enabled === undefined ? {} : { enabled }),
+      ...(options === undefined ? {} : { options }),
+      ...(expressionProfileId === undefined
+        ? {}
+        : { provider_expression_profile_id: expressionProfileId }),
+    });
+  }
+  const duplicateIds = collectDuplicateIds(decoded, 'models', 'duplicateModelId', issues);
+  return decoded.filter((model) => !duplicateIds.has(model.id));
+}
+
+function decodeMcpServers(
+  value: unknown,
+  issues: TomlConfigValidationIssue[],
+): TomlMcpServerConfig[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    issues.push(invalidField('mcp_servers', 'mcp_servers must be an array of tables.'));
+    return [];
+  }
+  const decoded: TomlMcpServerConfig[] = [];
+  for (const [index, entry] of value.entries()) {
+    const record = readRecord(entry);
+    const indexPath = `mcp_servers[${index}]`;
+    if (!record) {
+      issues.push(invalidField(indexPath, 'MCP server entry must be a table.'));
+      continue;
+    }
+    const id = readRequiredString(record, 'id', indexPath, issues);
+    const path = id ? `mcp_servers.${id}` : indexPath;
+    const startIssueCount = issues.length;
+    const name = readRequiredString(record, 'name', path, issues);
+    const description = readRequiredString(record, 'description', path, issues);
+    const category = readAllowedString(
+      record,
+      'category',
+      path,
+      ['filesystem', 'database', 'api', 'development', 'productivity', 'ai', 'other'] as const,
+      'invalidConfigField',
+      issues,
+    );
+    const transport = readAllowedString(
+      record,
+      'transport',
+      path,
+      ['stdio', 'http'] as const,
+      'invalidConfigField',
+      issues,
+    );
+    const command = readOptionalString(record, 'command', path, issues);
+    const args = readOptionalStringArray(record, 'args', path, issues);
+    const env = readOptionalStringRecord(record, 'env', path, issues);
+    const cwd = readOptionalString(record, 'cwd', path, issues);
+    const inheritProcessEnv = readOptionalBoolean(record, 'inherit_process_env', path, issues);
+    const url = readOptionalString(record, 'url', path, issues);
+    const headers = readOptionalStringRecord(record, 'headers', path, issues);
+    const enabled = readOptionalBoolean(record, 'enabled', path, issues);
+    const builtin = readOptionalBoolean(record, 'builtin', path, issues);
+    const homepage = readOptionalString(record, 'homepage', path, issues);
+    const tools = decodeMcpTools(record['tools'], `${path}.tools`, issues);
+    const requestTimeout = readOptionalPositiveInteger(
+      record,
+      'request_timeout',
+      path,
+      'invalidConfigField',
+      issues,
+    );
+    if (
+      !id ||
+      !name ||
+      description === undefined ||
+      !category ||
+      !transport ||
+      issues.length > startIssueCount
+    ) {
+      continue;
+    }
+    decoded.push({
+      id,
+      name,
+      description,
+      category,
+      transport,
+      ...(command === undefined ? {} : { command }),
+      ...(args === undefined ? {} : { args }),
+      ...(env === undefined ? {} : { env }),
+      ...(cwd === undefined ? {} : { cwd }),
+      ...(inheritProcessEnv === undefined ? {} : { inherit_process_env: inheritProcessEnv }),
+      ...(url === undefined ? {} : { url }),
+      ...(headers === undefined ? {} : { headers }),
+      ...(enabled === undefined ? {} : { enabled }),
+      ...(builtin === undefined ? {} : { builtin }),
+      ...(homepage === undefined ? {} : { homepage }),
+      ...(tools === undefined ? {} : { tools }),
+      ...(requestTimeout === undefined ? {} : { request_timeout: requestTimeout }),
+    });
+  }
+  const duplicateIds = collectDuplicateIds(decoded, 'mcp_servers', 'invalidConfigField', issues);
+  return decoded.filter((server) => !duplicateIds.has(server.id));
+}
+
+function decodeMcpTools(
+  value: unknown,
+  path: string,
+  issues: TomlConfigValidationIssue[],
+): readonly NonNullable<MCPServerConfig['tools']>[number][] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    issues.push(invalidField(path, `${path} must be an array of tables.`));
+    return undefined;
+  }
+  const tools: NonNullable<MCPServerConfig['tools']>[number][] = [];
+  for (const [index, entry] of value.entries()) {
+    const record = readRecord(entry);
+    const entryPath = `${path}[${index}]`;
+    if (!record) {
+      issues.push(invalidField(entryPath, `${entryPath} must be a table.`));
+      continue;
+    }
+    const name = readRequiredString(record, 'name', entryPath, issues);
+    const description = readRequiredString(record, 'description', entryPath, issues);
+    if (name && description) tools.push({ name, description });
+  }
+  return tools;
+}
+
+function decodeModelRefs(
+  value: unknown,
+  section: 'default_models' | 'default_model_purposes',
+  issues: TomlConfigValidationIssue[],
+  restrictKeys: boolean,
+): Record<string, TomlModelRefConfig> | undefined {
+  if (value === undefined) return undefined;
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField(section, `${section} must be a table.`));
+    return undefined;
+  }
+  const result: Record<string, TomlModelRefConfig> = {};
+  for (const [key, entry] of Object.entries(record)) {
+    const path = `${section}.${key}`;
+    if (restrictKeys && !isModelType(key)) {
+      issues.push({
+        code: 'unsupportedDefaultModelType',
+        path,
+        message: `Unsupported default_models key: ${key}. Use llm, image, video, or audio.`,
+      });
+      continue;
+    }
+    const ref = readRecord(entry);
+    if (!ref) {
+      issues.push({
+        code: restrictKeys ? 'unsupportedDefaultModelType' : 'unsupportedDefaultModelPurpose',
+        path,
+        message: `${path} must contain provider_id and model_id strings.`,
+      });
+      continue;
+    }
+    const providerId = ref['provider_id'];
+    const modelId = ref['model_id'];
+    if (
+      typeof providerId !== 'string' ||
+      providerId.trim().length === 0 ||
+      typeof modelId !== 'string' ||
+      modelId.trim().length === 0
+    ) {
+      issues.push({
+        code: restrictKeys ? 'unsupportedDefaultModelType' : 'unsupportedDefaultModelPurpose',
+        path,
+        message: `${path} must contain provider_id and model_id strings.`,
+      });
+      continue;
+    }
+    result[key] = { provider_id: providerId, model_id: modelId };
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function decodeDefaults(
+  value: unknown,
+  issues: TomlConfigValidationIssue[],
+): Pick<UnifiedConfig, 'maxTokens' | 'temperature'> {
+  if (value === undefined) return {};
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField('defaults', 'defaults must be a table.'));
+    return {};
+  }
+  const maxTokens = readOptionalPositiveInteger(
+    record,
+    'max_tokens',
+    'defaults',
+    'invalidDefaultMaxTokens',
+    issues,
+  );
+  const temperature = readOptionalFiniteNumber(record, 'temperature', 'defaults', issues);
+  return {
+    ...(maxTokens === undefined ? {} : { maxTokens }),
+    ...(temperature === undefined ? {} : { temperature }),
+  };
+}
+
+function decodeTopLevelScalars(
+  root: Record<string, unknown>,
+  issues: TomlConfigValidationIssue[],
+): UnifiedConfig {
+  const outputFormat = readAllowedString(
+    root,
+    'output_format',
+    '',
+    ['text', 'json', 'markdown'] as const,
+    'invalidConfigField',
+    issues,
+  );
+  const executionMode = readAllowedString(
+    root,
+    'execution_mode',
+    '',
+    ['plan', 'ask', 'auto'] as const,
+    'invalidConfigField',
+    issues,
+  );
+  const skillsDir = readOptionalString(root, 'skills_dir', '', issues);
+  const verbose = readOptionalBoolean(root, 'verbose', '', issues);
+  const thinkingBudget = readOptionalNonNegativeInteger(root, 'thinking_budget', '', issues);
+  const customSystemPrompt = readOptionalString(root, 'custom_system_prompt', '', issues);
+  const autoExecuteTools = readOptionalBoolean(root, 'auto_execute_tools', '', issues);
+  const streamResponses = readOptionalBoolean(root, 'stream_responses', '', issues);
+  const showToolCalls = readOptionalBoolean(root, 'show_tool_calls', '', issues);
+  return {
+    ...(skillsDir === undefined ? {} : { skillsDir }),
+    ...(verbose === undefined ? {} : { verbose }),
+    ...(outputFormat === undefined ? {} : { outputFormat }),
+    ...(thinkingBudget === undefined ? {} : { thinkingBudget }),
+    ...(customSystemPrompt === undefined ? {} : { customSystemPrompt }),
+    ...(autoExecuteTools === undefined ? {} : { autoExecuteTools }),
+    ...(streamResponses === undefined ? {} : { streamResponses }),
+    ...(showToolCalls === undefined ? {} : { showToolCalls }),
+    ...(executionMode === undefined ? {} : { executionMode }),
+  };
+}
+
+function decodeProtocolVariant(
+  value: unknown,
+  path: string,
+  issues: TomlConfigValidationIssue[],
+): TomlProtocolVariant | undefined {
+  if (value === undefined) return undefined;
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField(path, `${path} must be a table.`));
+    return undefined;
+  }
+  const basePath = readOptionalString(record, 'base_path', path, issues);
+  const authType = readAllowedString(
+    record,
+    'auth_type',
+    path,
+    AUTH_TYPES,
+    'unsupportedProtocolAuthType',
+    issues,
+  );
+  const authHeader = readOptionalString(record, 'auth_header', path, issues);
+  const streamFormat = readAllowedString(
+    record,
+    'stream_format',
+    path,
+    STREAM_FORMATS,
+    'unsupportedProtocolStreamFormat',
+    issues,
+  );
+  const streamDoneMarker = readOptionalString(record, 'stream_done_marker', path, issues);
+  const extraHeaders = readOptionalStringRecord(record, 'extra_headers', path, issues);
+  const mediaEndpoints = decodeMediaEndpoints(
+    record['media_endpoints'],
+    `${path}.media_endpoints`,
+    issues,
+  );
+  return {
+    ...(basePath === undefined ? {} : { base_path: basePath }),
+    ...(authType === undefined ? {} : { auth_type: authType }),
+    ...(authHeader === undefined ? {} : { auth_header: authHeader }),
+    ...(streamFormat === undefined ? {} : { stream_format: streamFormat }),
+    ...(streamDoneMarker === undefined ? {} : { stream_done_marker: streamDoneMarker }),
+    ...(extraHeaders === undefined ? {} : { extra_headers: extraHeaders }),
+    ...(mediaEndpoints === undefined ? {} : { media_endpoints: mediaEndpoints }),
+  };
+}
+
+function decodeMediaEndpoints(
+  value: unknown,
+  path: string,
+  issues: TomlConfigValidationIssue[],
+): TomlMediaEndpoints | undefined {
+  if (value === undefined) return undefined;
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField(path, `${path} must be a table.`));
+    return undefined;
+  }
+  const imageGenerations = readOptionalString(record, 'image_generations', path, issues);
+  const videoGenerations = readOptionalString(record, 'video_generations', path, issues);
+  const videoStatus = readOptionalString(record, 'video_status', path, issues);
+  const videoCancel = readOptionalString(record, 'video_cancel', path, issues);
+  return {
+    ...(imageGenerations === undefined ? {} : { image_generations: imageGenerations }),
+    ...(videoGenerations === undefined ? {} : { video_generations: videoGenerations }),
+    ...(videoStatus === undefined ? {} : { video_status: videoStatus }),
+    ...(videoCancel === undefined ? {} : { video_cancel: videoCancel }),
+  };
+}
+
+function decodeExternalResearch(
+  value: unknown,
+  issues: TomlConfigValidationIssue[],
+): Pick<UnifiedConfig, 'externalResearch'> {
+  if (value === undefined) return {};
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField('external_research', 'external_research must be a table.'));
+    return {};
+  }
+  const startIssueCount = issues.length;
+  const mode = readAllowedString(
+    record,
+    'mode',
+    'external_research',
+    ['disabled', 'indexed', 'live'] as const,
+    'invalidConfigField',
+    issues,
+  );
+  const providerId = readOptionalString(record, 'provider_id', 'external_research', issues);
+  const requireApproval = readOptionalBoolean(
+    record,
+    'require_approval_for_live',
+    'external_research',
+    issues,
+  );
+  const allowProjectContext = readOptionalBoolean(
+    record,
+    'allow_project_context_in_query',
+    'external_research',
+    issues,
+  );
+  const maxResults = readOptionalPositiveInteger(
+    record,
+    'max_results',
+    'external_research',
+    'invalidConfigField',
+    issues,
+  );
+  const maxFetchTokens = readOptionalPositiveInteger(
+    record,
+    'max_fetch_content_tokens',
+    'external_research',
+    'invalidConfigField',
+    issues,
+  );
+  const allowedDomains = readOptionalStringArray(
+    record,
+    'allowed_domains',
+    'external_research',
+    issues,
+  );
+  const blockedDomains = readOptionalStringArray(
+    record,
+    'blocked_domains',
+    'external_research',
+    issues,
+  );
+  const mcp = decodeExternalResearchMcp(record['mcp'], 'external_research.mcp', issues);
+  if (issues.length > startIssueCount) return {};
+  const tomlConfig: TomlExternalResearchConfig = {
+    ...(mode === undefined ? {} : { mode }),
+    ...(providerId === undefined ? {} : { provider_id: providerId }),
+    ...(requireApproval === undefined ? {} : { require_approval_for_live: requireApproval }),
+    ...(allowProjectContext === undefined
+      ? {}
+      : { allow_project_context_in_query: allowProjectContext }),
+    ...(maxResults === undefined ? {} : { max_results: maxResults }),
+    ...(maxFetchTokens === undefined ? {} : { max_fetch_content_tokens: maxFetchTokens }),
+    ...(allowedDomains === undefined ? {} : { allowed_domains: allowedDomains }),
+    ...(blockedDomains === undefined ? {} : { blocked_domains: blockedDomains }),
+    ...(mcp === undefined ? {} : { mcp }),
+  };
+  return { externalResearch: tomlExternalResearchToRuntime(tomlConfig) };
+}
+
+function decodeExternalResearchMcp(
+  value: unknown,
+  path: string,
+  issues: TomlConfigValidationIssue[],
+): TomlExternalResearchMcpProviderConfig | undefined {
+  if (value === undefined) return undefined;
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField(path, `${path} must be a table.`));
+    return undefined;
+  }
+  const serverId = readRequiredString(record, 'server_id', path, issues);
+  const searchTool = decodeExternalResearchSearchTool(
+    record['search_tool'],
+    `${path}.search_tool`,
+    issues,
+  );
+  const fetchTool = decodeExternalResearchFetchTool(
+    record['fetch_tool'],
+    `${path}.fetch_tool`,
+    issues,
+  );
+  const exposeRaw = readOptionalBoolean(record, 'expose_bound_tools_as_raw_mcp', path, issues);
+  if (!serverId || !searchTool) return undefined;
+  return {
+    server_id: serverId,
+    search_tool: searchTool,
+    ...(fetchTool === undefined ? {} : { fetch_tool: fetchTool }),
+    ...(exposeRaw === undefined ? {} : { expose_bound_tools_as_raw_mcp: exposeRaw }),
+  };
+}
+
+function decodeExternalResearchSearchTool(
+  value: unknown,
+  path: string,
+  issues: TomlConfigValidationIssue[],
+): TomlExternalResearchMcpSearchToolBinding | undefined {
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField(path, `${path} must be a table.`));
+    return undefined;
+  }
+  const name = readRequiredString(record, 'name', path, issues);
+  const queryArg = readRequiredString(record, 'query_arg', path, issues);
+  const outputSchema = readAllowedString(
+    record,
+    'output_schema',
+    path,
+    ['neko.externalResearch.search'] as const,
+    'invalidConfigField',
+    issues,
+  );
+  const maxResultsArg = readOptionalString(record, 'max_results_arg', path, issues);
+  const allowedDomainsArg = readOptionalString(record, 'allowed_domains_arg', path, issues);
+  const blockedDomainsArg = readOptionalString(record, 'blocked_domains_arg', path, issues);
+  if (!name || !queryArg || !outputSchema) return undefined;
+  return {
+    name,
+    query_arg: queryArg,
+    output_schema: outputSchema,
+    ...(maxResultsArg === undefined ? {} : { max_results_arg: maxResultsArg }),
+    ...(allowedDomainsArg === undefined ? {} : { allowed_domains_arg: allowedDomainsArg }),
+    ...(blockedDomainsArg === undefined ? {} : { blocked_domains_arg: blockedDomainsArg }),
+  };
+}
+
+function decodeExternalResearchFetchTool(
+  value: unknown,
+  path: string,
+  issues: TomlConfigValidationIssue[],
+): TomlExternalResearchMcpFetchToolBinding | undefined {
+  if (value === undefined) return undefined;
+  const record = readRecord(value);
+  if (!record) {
+    issues.push(invalidField(path, `${path} must be a table.`));
+    return undefined;
+  }
+  const name = readRequiredString(record, 'name', path, issues);
+  const urlArg = readRequiredString(record, 'url_arg', path, issues);
+  const outputSchema = readAllowedString(
+    record,
+    'output_schema',
+    path,
+    ['neko.externalResearch.fetch'] as const,
+    'invalidConfigField',
+    issues,
+  );
+  const maxTokensArg = readOptionalString(record, 'max_content_tokens_arg', path, issues);
+  const allowedDomainsArg = readOptionalString(record, 'allowed_domains_arg', path, issues);
+  const blockedDomainsArg = readOptionalString(record, 'blocked_domains_arg', path, issues);
+  if (!name || !urlArg || !outputSchema) return undefined;
+  return {
+    name,
+    url_arg: urlArg,
+    output_schema: outputSchema,
+    ...(maxTokensArg === undefined ? {} : { max_content_tokens_arg: maxTokensArg }),
+    ...(allowedDomainsArg === undefined ? {} : { allowed_domains_arg: allowedDomainsArg }),
+    ...(blockedDomainsArg === undefined ? {} : { blocked_domains_arg: blockedDomainsArg }),
+  };
+}
+
+function collectDuplicateIds<T extends { readonly id: string }>(
+  entries: readonly T[],
+  section: string,
+  code: TomlConfigValidationIssue['code'],
+  issues: TomlConfigValidationIssue[],
+): ReadonlySet<string> {
+  const counts = new Map<string, number>();
+  for (const entry of entries) counts.set(entry.id, (counts.get(entry.id) ?? 0) + 1);
+  const duplicates = new Set(
+    [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id),
+  );
+  for (const id of duplicates) {
+    issues.push({ code, path: `${section}.${id}`, message: `Duplicate ${section} id: ${id}.` });
+  }
+  return duplicates;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value))
+    : undefined;
+}
+
+function invalidField(path: string, message: string): TomlConfigValidationIssue {
+  return { code: 'invalidConfigField', path: path || '<root>', message };
+}
+
+function fieldPath(owner: string, key: string): string {
+  return owner ? `${owner}.${key}` : key;
+}
+
+function readRequiredString(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): string | undefined {
+  const value = record[key];
+  if (typeof value === 'string' && value.trim().length > 0) return value;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be a non-empty string.`));
+  return undefined;
+}
+
+function readOptionalString(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): string | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value === 'string') return value;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be a string.`));
+  return undefined;
+}
+
+function readOptionalBoolean(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): boolean | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be a boolean.`));
+  return undefined;
+}
+
+function readAllowedString<T extends string>(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  allowed: readonly T[],
+  code: TomlConfigValidationIssue['code'],
+  issues: TomlConfigValidationIssue[],
+): T | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (isAllowedString(value, allowed)) return value;
+  const path = fieldPath(owner, key);
+  issues.push({ code, path, message: `${path} must be one of ${formatAllowedValues(allowed)}.` });
+  return undefined;
+}
+
+function readRequiredStringArray(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): readonly string[] | undefined {
+  const value = record[key];
+  if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) return value;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be an array of strings.`));
+  return undefined;
+}
+
+function readOptionalStringArray(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): readonly string[] | undefined {
+  if (record[key] === undefined) return undefined;
+  return readRequiredStringArray(record, key, owner, issues);
+}
+
+function readOptionalRecord(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): Record<string, unknown> | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  const decoded = readRecord(value);
+  if (decoded) return decoded;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be a table.`));
+  return undefined;
+}
+
+function readOptionalStringRecord(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): Record<string, string> | undefined {
+  const value = readOptionalRecord(record, key, owner, issues);
+  if (value === undefined) return undefined;
+  if (Object.values(value).every((entry) => typeof entry === 'string')) {
+    return Object.fromEntries(Object.entries(value).map(([name, entry]) => [name, String(entry)]));
+  }
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} values must be strings.`));
+  return undefined;
+}
+
+function readOptionalFiniteNumber(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): number | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be a finite number.`));
+  return undefined;
+}
+
+function readOptionalPositiveInteger(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  code: TomlConfigValidationIssue['code'],
+  issues: TomlConfigValidationIssue[],
+): number | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (isPositiveInteger(value)) return value;
+  const path = fieldPath(owner, key);
+  issues.push({ code, path, message: `${path} must be a positive integer.` });
+  return undefined;
+}
+
+function readOptionalNonNegativeInteger(
+  record: Record<string, unknown>,
+  key: string,
+  owner: string,
+  issues: TomlConfigValidationIssue[],
+): number | undefined {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value;
+  const path = fieldPath(owner, key);
+  issues.push(invalidField(path, `${path} must be a non-negative integer.`));
+  return undefined;
 }
 
 function tomlProviderToRuntime(provider: TomlProviderConfig): ProviderDefinition {
@@ -356,7 +1183,7 @@ function tomlProviderToRuntime(provider: TomlProviderConfig): ProviderDefinition
     name: provider.name,
     displayName: provider.display_name ?? provider.name,
     type: provider.type,
-    apiUrl: provider.api_url ?? provider.base_url ?? '',
+    apiUrl: provider.api_url ?? '',
     enabled: provider.enabled ?? true,
     ...(provider.connection_kind === undefined ? {} : { connectionKind: provider.connection_kind }),
     ...(provider.protocol_profile === undefined
@@ -376,13 +1203,17 @@ function tomlProviderToRuntime(provider: TomlProviderConfig): ProviderDefinition
   };
 }
 
-function runtimeProviderToToml(provider: ProviderDefinition): TomlProviderConfig {
+function runtimeProviderToToml(
+  provider: ProviderDefinition,
+  credential: ProviderCredentialDeclaration | undefined,
+): TomlProviderConfig {
   return removeUndefined({
     id: provider.id,
     name: provider.name,
     display_name: provider.displayName,
     type: provider.type,
     api_url: provider.apiUrl,
+    api_key: credential?.status === 'configured' ? credential.apiKey : undefined,
     enabled: provider.enabled,
     connection_kind: provider.connectionKind,
     protocol_profile: provider.protocolProfile,
@@ -396,54 +1227,6 @@ function runtimeProviderToToml(provider: ProviderDefinition): TomlProviderConfig
       ? runtimeProtocolVariantToToml(provider.protocolVariant)
       : undefined,
   }) as TomlProviderConfig;
-}
-
-function tomlProviderOverrideToRuntime(
-  provider: Partial<TomlProviderConfig>,
-): Partial<ProviderDefinition> {
-  return removeUndefined({
-    id: provider.id,
-    name: provider.name,
-    displayName: provider.display_name,
-    type: provider.type,
-    apiUrl: provider.api_url ?? provider.base_url,
-    enabled: provider.enabled,
-    connectionKind: provider.connection_kind,
-    protocolProfile: provider.protocol_profile,
-    supportLevel: provider.support_level,
-    requiresApiKey: provider.requires_api_key,
-    builtin: provider.builtin,
-    supportsBeta: provider.supports_beta,
-    useBearerAuth: provider.use_bearer_auth,
-    options: provider.options,
-    protocolVariant: provider.protocol_variant
-      ? tomlProtocolVariantToRuntime(provider.protocol_variant)
-      : undefined,
-  });
-}
-
-function runtimeProviderOverrideToToml(
-  provider: Partial<ProviderDefinition>,
-): Partial<TomlProviderConfig> {
-  return removeUndefined({
-    id: provider.id,
-    name: provider.name,
-    display_name: provider.displayName,
-    type: provider.type,
-    api_url: provider.apiUrl,
-    enabled: provider.enabled,
-    connection_kind: provider.connectionKind,
-    protocol_profile: provider.protocolProfile,
-    support_level: provider.supportLevel,
-    requires_api_key: provider.requiresApiKey,
-    builtin: provider.builtin,
-    supports_beta: provider.supportsBeta,
-    use_bearer_auth: provider.useBearerAuth,
-    options: provider.options,
-    protocol_variant: provider.protocolVariant
-      ? runtimeProtocolVariantToToml(provider.protocolVariant)
-      : undefined,
-  });
 }
 
 function tomlProtocolVariantToRuntime(variant: TomlProtocolVariant): ProtocolVariant {
@@ -491,7 +1274,6 @@ function tomlModelToRuntime(model: TomlModelConfig): ModelConfig {
     displayName: model.display_name,
     providerId: model.provider_id,
     protocolProfile: model.protocol_profile,
-    protocol: model.protocol,
     useBearerAuth: model.use_bearer_auth,
     supportsBeta: model.supports_beta,
     type: model.type,
@@ -513,7 +1295,6 @@ function runtimeModelToToml(model: ModelConfig): TomlModelConfig {
     display_name: model.displayName,
     provider_id: model.providerId,
     protocol_profile: model.protocolProfile,
-    protocol: model.protocol,
     use_bearer_auth: model.useBearerAuth,
     supports_beta: model.supportsBeta,
     type: model.type,
@@ -585,50 +1366,6 @@ function runtimeModelRefToToml(ref: ModelRefConfig): TomlModelRefConfig {
   };
 }
 
-function tomlModelOverrideToRuntime(model: Partial<TomlModelConfig>): Partial<ModelConfig> {
-  return removeUndefined({
-    id: model.id,
-    name: model.name,
-    displayName: model.display_name,
-    providerId: model.provider_id,
-    protocolProfile: model.protocol_profile,
-    protocol: model.protocol,
-    useBearerAuth: model.use_bearer_auth,
-    supportsBeta: model.supports_beta,
-    type: model.type,
-    capabilities: model.capabilities ? [...model.capabilities] : undefined,
-    contextWindow: model.context_window,
-    maxOutputTokens: model.max_output_tokens,
-    inputCostPer1k: model.input_cost_per_1k,
-    outputCostPer1k: model.output_cost_per_1k,
-    providerExpressionProfileId: model.provider_expression_profile_id,
-    enabled: model.enabled,
-    options: model.options,
-  });
-}
-
-function runtimeModelOverrideToToml(model: Partial<ModelConfig>): Partial<TomlModelConfig> {
-  return removeUndefined({
-    id: model.id,
-    name: model.name,
-    display_name: model.displayName,
-    provider_id: model.providerId,
-    protocol_profile: model.protocolProfile,
-    protocol: model.protocol,
-    use_bearer_auth: model.useBearerAuth,
-    supports_beta: model.supportsBeta,
-    type: model.type,
-    capabilities: model.capabilities,
-    context_window: model.contextWindow,
-    max_output_tokens: model.maxOutputTokens,
-    input_cost_per_1k: model.inputCostPer1k,
-    output_cost_per_1k: model.outputCostPer1k,
-    provider_expression_profile_id: model.providerExpressionProfileId,
-    enabled: model.enabled,
-    options: model.options,
-  });
-}
-
 function tomlMcpServerToRuntime(server: TomlMcpServerConfig): MCPServerConfig {
   return removeUndefined({
     id: server.id,
@@ -639,7 +1376,10 @@ function tomlMcpServerToRuntime(server: TomlMcpServerConfig): MCPServerConfig {
     command: server.command,
     args: server.args ? [...server.args] : undefined,
     env: server.env,
+    cwd: server.cwd,
+    inheritProcessEnv: server.inherit_process_env,
     url: server.url,
+    headers: server.headers,
     enabled: server.enabled ?? true,
     builtin: server.builtin,
     homepage: server.homepage,
@@ -648,427 +1388,8 @@ function tomlMcpServerToRuntime(server: TomlMcpServerConfig): MCPServerConfig {
   }) as MCPServerConfig;
 }
 
-const NEKO_TOML_CONFIG_FIELDS = new Set([
-  'ui_locale',
-  'prompt_locale',
-  'default_models',
-  'default_model_purposes',
-  'defaults',
-  'skills_dir',
-  'verbose',
-  'output_format',
-  'thinking_budget',
-  'custom_system_prompt',
-  'auto_execute_tools',
-  'stream_responses',
-  'show_tool_calls',
-  'execution_mode',
-  'providers',
-  'models',
-  'mcp_servers',
-  'external_research',
-  'provider_overrides',
-  'model_overrides',
-  'mcp_server_overrides',
-]);
-
-const TOML_PROVIDER_FIELDS = new Set([
-  'id',
-  'name',
-  'display_name',
-  'type',
-  'api_url',
-  'base_url',
-  'enabled',
-  'connection_kind',
-  'protocol_profile',
-  'support_level',
-  'requires_api_key',
-  'builtin',
-  'supports_beta',
-  'use_bearer_auth',
-  'options',
-  'protocol_variant',
-]);
-
-function collectUnsupportedConfigFieldIssues(
-  config: NekoTomlConfig,
-  issues: TomlConfigValidationIssue[],
-): void {
-  for (const field of Object.keys(config)) {
-    if (NEKO_TOML_CONFIG_FIELDS.has(field)) continue;
-    issues.push({
-      code: 'unsupportedConfigField',
-      path: field,
-      message: `Unsupported configuration field: ${field}.`,
-    });
-  }
-}
-
-function collectUnsupportedProviderFieldIssues(
-  providers: readonly TomlProviderConfig[] | undefined,
-  section: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!providers) return;
-  for (const provider of providers) {
-    collectUnsupportedRecordFieldIssues(
-      provider,
-      `${section}.${provider.id}`,
-      TOML_PROVIDER_FIELDS,
-      issues,
-    );
-  }
-}
-
-function collectUnsupportedProviderOverrideFieldIssues(
-  overrides: Record<string, Partial<TomlProviderConfig>> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!overrides) return;
-  for (const [providerId, provider] of Object.entries(overrides)) {
-    collectUnsupportedRecordFieldIssues(
-      provider,
-      `provider_overrides.${providerId}`,
-      TOML_PROVIDER_FIELDS,
-      issues,
-    );
-  }
-}
-
-function collectUnsupportedRecordFieldIssues(
-  record: object,
-  path: string,
-  allowed: ReadonlySet<string>,
-  issues: TomlConfigValidationIssue[],
-): void {
-  for (const field of Object.keys(record)) {
-    if (allowed.has(field)) continue;
-    issues.push({
-      code: 'unsupportedConfigField',
-      path: `${path}.${field}`,
-      message: `Unsupported configuration field: ${path}.${field}.`,
-    });
-  }
-}
-
-function collectUnsupportedModelTypeIssues(
-  models: readonly TomlModelConfig[] | undefined,
-  section: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!models) return;
-  for (const model of models) {
-    if (model.type !== undefined && !isModelType(model.type)) {
-      issues.push({
-        code: 'unsupportedModelType',
-        path: `${section}.${model.id}.type`,
-        message:
-          model.type === 'music'
-            ? `Unsupported model type "music" for model ${model.id}. Configure music models as type "audio" with capability "text_to_music".`
-            : `Unsupported model type "${String(model.type)}" for model ${model.id}.`,
-      });
-    }
-  }
-}
-
-function collectUnsupportedProviderIssues(
-  providers: readonly TomlProviderConfig[] | undefined,
-  section: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!providers) return;
-  for (const provider of providers) {
-    collectProviderValueIssues(provider, `${section}.${provider.id}`, issues);
-  }
-}
-
-function collectUnsupportedProviderOverrideIssues(
-  overrides: Record<string, Partial<TomlProviderConfig>> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!overrides) return;
-  for (const [providerId, override] of Object.entries(overrides)) {
-    collectProviderValueIssues(override, `provider_overrides.${providerId}`, issues);
-  }
-}
-
-function collectProviderValueIssues(
-  provider: Partial<TomlProviderConfig>,
-  path: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (provider.type !== undefined && !isProviderType(provider.type)) {
-    issues.push({
-      code: 'unsupportedProviderType',
-      path: `${path}.type`,
-      message: `Unsupported provider type "${String(provider.type)}" at ${path}.type. Supported values: ${formatAllowedValues(PROVIDER_TYPES)}.`,
-    });
-  }
-  if (
-    provider.connection_kind !== undefined &&
-    !isProviderConnectionKind(provider.connection_kind)
-  ) {
-    issues.push({
-      code: 'unsupportedProviderConnectionKind',
-      path: `${path}.connection_kind`,
-      message: `Unsupported provider connection_kind "${String(provider.connection_kind)}" at ${path}.connection_kind. Supported values: ${formatAllowedValues(PROVIDER_CONNECTION_KINDS)}.`,
-    });
-  }
-  if (
-    provider.protocol_profile !== undefined &&
-    !isProviderProtocolProfile(provider.protocol_profile)
-  ) {
-    issues.push({
-      code: 'unsupportedProviderProtocolProfile',
-      path: `${path}.protocol_profile`,
-      message: `Unsupported provider protocol_profile "${String(provider.protocol_profile)}" at ${path}.protocol_profile. Supported values: ${formatAllowedValues(PROVIDER_PROTOCOL_PROFILES)}. DeepSeek direct endpoints use "openai-chat".`,
-    });
-  }
-  if (provider.support_level !== undefined && !isProviderSupportLevel(provider.support_level)) {
-    issues.push({
-      code: 'unsupportedProviderSupportLevel',
-      path: `${path}.support_level`,
-      message: `Unsupported provider support_level "${String(provider.support_level)}" at ${path}.support_level. Supported values: ${formatAllowedValues(PROVIDER_SUPPORT_LEVELS)}.`,
-    });
-  }
-  collectProtocolVariantIssues(provider.protocol_variant, `${path}.protocol_variant`, issues);
-}
-
-function collectProtocolVariantIssues(
-  variant: TomlProtocolVariant | undefined,
-  path: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!variant) return;
-  if (variant.auth_type !== undefined && !isAuthType(variant.auth_type)) {
-    issues.push({
-      code: 'unsupportedProtocolAuthType',
-      path: `${path}.auth_type`,
-      message: `Unsupported protocol_variant auth_type "${String(variant.auth_type)}" at ${path}.auth_type. Supported values: ${formatAllowedValues(AUTH_TYPES)}.`,
-    });
-  }
-  if (variant.stream_format !== undefined && !isStreamFormat(variant.stream_format)) {
-    issues.push({
-      code: 'unsupportedProtocolStreamFormat',
-      path: `${path}.stream_format`,
-      message: `Unsupported protocol_variant stream_format "${String(variant.stream_format)}" at ${path}.stream_format. Supported values: ${formatAllowedValues(STREAM_FORMATS)}.`,
-    });
-  }
-}
-
-function collectUnsupportedModelOverrideTypeIssues(
-  overrides: Record<string, Partial<TomlModelConfig>> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!overrides) return;
-  for (const [modelId, override] of Object.entries(overrides)) {
-    if (override.type !== undefined && !isModelType(override.type)) {
-      issues.push({
-        code: 'unsupportedModelType',
-        path: `model_overrides.${modelId}.type`,
-        message:
-          override.type === 'music'
-            ? `Unsupported model override type "music" for model ${modelId}. Configure music models as type "audio" with capability "text_to_music".`
-            : `Unsupported model override type "${String(override.type)}" for model ${modelId}.`,
-      });
-    }
-  }
-}
-
-function collectUnsupportedModelProtocolProfileIssues(
-  models: readonly TomlModelConfig[] | undefined,
-  section: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!models) return;
-  for (const model of models) {
-    if (
-      model.protocol_profile !== undefined &&
-      !isProviderProtocolProfile(model.protocol_profile)
-    ) {
-      issues.push({
-        code: 'unsupportedModelProtocolProfile',
-        path: `${section}.${model.id}.protocol_profile`,
-        message: `Unsupported model protocol_profile "${String(model.protocol_profile)}" for model ${model.id}. Supported values: ${formatAllowedValues(PROVIDER_PROTOCOL_PROFILES)}.`,
-      });
-    }
-  }
-}
-
-function collectUnsupportedModelProtocolIssues(
-  models: readonly TomlModelConfig[] | undefined,
-  section: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!models) return;
-  for (const model of models) {
-    if (model.protocol !== undefined && !isProviderType(model.protocol)) {
-      issues.push({
-        code: 'unsupportedModelProtocol',
-        path: `${section}.${model.id}.protocol`,
-        message: `Unsupported model protocol "${String(model.protocol)}" for model ${model.id}. Supported values: ${formatAllowedValues(PROVIDER_TYPES)}.`,
-      });
-    }
-  }
-}
-
-function collectDefaultTokenIssues(
-  defaults: TomlDefaultsConfig | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (defaults?.max_tokens !== undefined && !isPositiveInteger(defaults.max_tokens)) {
-    issues.push({
-      code: 'invalidDefaultMaxTokens',
-      path: 'defaults.max_tokens',
-      message: `[defaults].max_tokens must be a positive integer output-token cap, got ${String(defaults.max_tokens)}.`,
-    });
-  }
-}
-
-function collectModelTokenIssues(
-  models: readonly TomlModelConfig[] | undefined,
-  section: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!models) return;
-  for (const model of models) {
-    collectModelTokenValueIssues(model, `${section}.${model.id}`, issues);
-  }
-}
-
-function collectModelOverrideTokenIssues(
-  overrides: Record<string, Partial<TomlModelConfig>> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!overrides) return;
-  for (const [modelId, override] of Object.entries(overrides)) {
-    collectModelTokenValueIssues(override, `model_overrides.${modelId}`, issues);
-  }
-}
-
-function collectModelTokenValueIssues(
-  model: Pick<Partial<TomlModelConfig>, 'context_window' | 'max_output_tokens'>,
-  path: string,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (model.context_window !== undefined && !isPositiveInteger(model.context_window)) {
-    issues.push({
-      code: 'invalidModelTokenMetadata',
-      path: `${path}.context_window`,
-      message: `${path}.context_window must be a positive integer input context window, got ${String(model.context_window)}.`,
-    });
-  }
-  if (model.max_output_tokens !== undefined && !isPositiveInteger(model.max_output_tokens)) {
-    issues.push({
-      code: 'invalidModelTokenMetadata',
-      path: `${path}.max_output_tokens`,
-      message: `${path}.max_output_tokens must be a positive integer model output cap, got ${String(model.max_output_tokens)}.`,
-    });
-  }
-}
-
-function collectUnsupportedModelOverrideProtocolProfileIssues(
-  overrides: Record<string, Partial<TomlModelConfig>> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!overrides) return;
-  for (const [modelId, override] of Object.entries(overrides)) {
-    if (
-      override.protocol_profile !== undefined &&
-      !isProviderProtocolProfile(override.protocol_profile)
-    ) {
-      issues.push({
-        code: 'unsupportedModelProtocolProfile',
-        path: `model_overrides.${modelId}.protocol_profile`,
-        message: `Unsupported model override protocol_profile "${String(override.protocol_profile)}" for model ${modelId}. Supported values: ${formatAllowedValues(PROVIDER_PROTOCOL_PROFILES)}.`,
-      });
-    }
-  }
-}
-
-function collectUnsupportedModelOverrideProtocolIssues(
-  overrides: Record<string, Partial<TomlModelConfig>> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!overrides) return;
-  for (const [modelId, override] of Object.entries(overrides)) {
-    if (override.protocol !== undefined && !isProviderType(override.protocol)) {
-      issues.push({
-        code: 'unsupportedModelProtocol',
-        path: `model_overrides.${modelId}.protocol`,
-        message: `Unsupported model override protocol "${String(override.protocol)}" for model ${modelId}. Supported values: ${formatAllowedValues(PROVIDER_TYPES)}.`,
-      });
-    }
-  }
-}
-
-function collectDefaultModelIssues(
-  defaults: Partial<Record<ModelType, TomlModelRefConfig>> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!defaults) return;
-  for (const [key, ref] of Object.entries(defaults)) {
-    if (!isModelType(key)) {
-      issues.push({
-        code: 'unsupportedDefaultModelType',
-        path: `default_models.${key}`,
-        message: `Unsupported default_models key: ${key}. Use llm, image, video, or audio.`,
-      });
-      continue;
-    }
-    if (!isTomlModelRefConfig(ref)) {
-      issues.push({
-        code: 'unsupportedDefaultModelType',
-        path: `default_models.${key}`,
-        message: `Invalid default_models.${key}. Expected provider_id and model_id strings.`,
-      });
-    }
-  }
-}
-
-function collectDefaultModelPurposeIssues(
-  defaults: Record<string, TomlModelRefConfig> | undefined,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!defaults) return;
-  for (const [key, ref] of Object.entries(defaults)) {
-    if (!isTomlModelRefConfig(ref)) {
-      issues.push({
-        code: 'unsupportedDefaultModelPurpose',
-        path: `default_model_purposes.${key}`,
-        message: `Invalid default_model_purposes.${key}. Expected provider_id and model_id strings.`,
-      });
-    }
-  }
-}
-
 function isModelType(value: unknown): value is ModelType {
   return isAllowedString(value, MODEL_TYPES);
-}
-
-function isProviderType(value: unknown): value is ProviderConfig['type'] {
-  return isAllowedString(value, PROVIDER_TYPES);
-}
-
-function isProviderConnectionKind(value: unknown): value is ProviderConfig['connectionKind'] {
-  return isAllowedString(value, PROVIDER_CONNECTION_KINDS);
-}
-
-function isProviderProtocolProfile(value: unknown): value is ProviderConfig['protocolProfile'] {
-  return isAllowedString(value, PROVIDER_PROTOCOL_PROFILES);
-}
-
-function isProviderSupportLevel(value: unknown): value is ProviderConfig['supportLevel'] {
-  return isAllowedString(value, PROVIDER_SUPPORT_LEVELS);
-}
-
-function isAuthType(value: unknown): value is ProtocolVariant['authType'] {
-  return isAllowedString(value, AUTH_TYPES);
-}
-
-function isStreamFormat(value: unknown): value is ProtocolVariant['streamFormat'] {
-  return isAllowedString(value, STREAM_FORMATS);
 }
 
 function isAllowedString<T extends string>(value: unknown, allowed: readonly T[]): value is T {
@@ -1083,16 +1404,6 @@ function formatAllowedValues(values: readonly string[]): string {
   return values.map((value) => `"${value}"`).join(', ');
 }
 
-function isTomlModelRefConfig(value: unknown): value is TomlModelRefConfig {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    typeof (value as Partial<TomlModelRefConfig>).provider_id === 'string' &&
-    typeof (value as Partial<TomlModelRefConfig>).model_id === 'string'
-  );
-}
-
 function runtimeMcpServerToToml(server: MCPServerConfig): TomlMcpServerConfig {
   return removeUndefined({
     id: server.id,
@@ -1103,7 +1414,10 @@ function runtimeMcpServerToToml(server: MCPServerConfig): TomlMcpServerConfig {
     command: server.command,
     args: server.args,
     env: server.env,
+    cwd: server.cwd,
+    inherit_process_env: server.inheritProcessEnv,
     url: server.url,
+    headers: server.headers,
     enabled: server.enabled,
     builtin: server.builtin,
     homepage: server.homepage,
@@ -1220,69 +1534,6 @@ function runtimeExternalResearchFetchToolToToml(
     blocked_domains_arg: binding.blockedDomainsArg,
     output_schema: binding.outputSchema,
   }) as TomlExternalResearchMcpFetchToolBinding;
-}
-
-function tomlMcpServerOverrideToRuntime(
-  server: Partial<TomlMcpServerConfig>,
-): Partial<MCPServerConfig> {
-  return removeUndefined({
-    id: server.id,
-    name: server.name,
-    description: server.description,
-    category: server.category,
-    transport: server.transport,
-    command: server.command,
-    args: server.args ? [...server.args] : undefined,
-    env: server.env,
-    url: server.url,
-    enabled: server.enabled,
-    builtin: server.builtin,
-    homepage: server.homepage,
-    tools: server.tools ? [...server.tools] : undefined,
-    requestTimeout: server.request_timeout,
-  });
-}
-
-function runtimeMcpServerOverrideToToml(
-  server: Partial<MCPServerConfig>,
-): Partial<TomlMcpServerConfig> {
-  return removeUndefined({
-    id: server.id,
-    name: server.name,
-    description: server.description,
-    category: server.category,
-    transport: server.transport,
-    command: server.command,
-    args: server.args,
-    env: server.env,
-    url: server.url,
-    enabled: server.enabled,
-    builtin: server.builtin,
-    homepage: server.homepage,
-    tools: server.tools,
-    request_timeout: server.requestTimeout,
-  });
-}
-
-function collectDuplicateIdIssues(
-  entries: readonly { readonly id: string }[] | undefined,
-  section: string,
-  code: TomlConfigValidationIssue['code'],
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (!entries) return;
-  const seen = new Set<string>();
-  for (const entry of entries) {
-    if (seen.has(entry.id)) {
-      issues.push({
-        code,
-        path: `${section}.${entry.id}`,
-        message: `Duplicate ${section} id: ${entry.id}`,
-      });
-      continue;
-    }
-    seen.add(entry.id);
-  }
 }
 
 function mapRecordValues<TInput, TOutput>(

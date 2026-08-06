@@ -156,9 +156,6 @@ export class ConfigManager {
         providers: [],
         models: [],
         mcpServers: [],
-        providerOverrides: {},
-        modelOverrides: {},
-        mcpServerOverrides: {},
       }
     );
   }
@@ -191,23 +188,6 @@ export class ConfigManager {
   async removeProvider(providerId: string): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.removeProvider(providerId);
-    this.reloadConfig();
-  }
-
-  async updateProviderOverride(
-    providerId: string,
-    override: Partial<ProviderDefinition>,
-  ): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.updateProviderOverride(providerId, override);
-    this.reloadConfig();
-  }
-
-  async removeProviderOverride(providerId: string): Promise<void> {
-    this.ensureUserConfigManager();
-    const config = this.getUserConfig();
-    delete config.providerOverrides[providerId];
-    await this.userConfigManager!.save(config);
     this.reloadConfig();
   }
 
@@ -385,8 +365,12 @@ export class ConfigManager {
     const providerSourceProjection = this.resolveProviderSources();
     const chatModelOptions = [...providerSourceProjection.chatModelOptions];
     const explicitState = buildAssistantConfigState(config);
+    const localReadDiagnostic = this.userConfigReadResult
+      ? projectAssistantConfigReadResultDiagnostic(this.userConfigReadResult)
+      : undefined;
     const settingsDiagnostic =
       providerSourceProjection.explicitAiConfig.invalidDiagnostic ??
+      localReadDiagnostic ??
       (this.isBlockingConfigReadDiagnostic(this.configDiagnostic)
         ? this.configDiagnostic
         : undefined);
@@ -414,17 +398,6 @@ export class ConfigManager {
   async removeModel(modelId: string): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.removeModel(modelId);
-    this.reloadConfig();
-  }
-
-  async updateModelOverride(modelId: string, override: Partial<Model>): Promise<void> {
-    this.ensureUserConfigManager();
-    const config = this.getUserConfig();
-    config.modelOverrides[modelId] = {
-      ...config.modelOverrides[modelId],
-      ...override,
-    };
-    await this.userConfigManager!.save(config);
     this.reloadConfig();
   }
 
@@ -456,15 +429,6 @@ export class ConfigManager {
   async removeMCPServer(serverId: string): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.removeMCPServer(serverId);
-    this.reloadConfig();
-  }
-
-  async updateMCPServerOverride(
-    serverId: string,
-    override: Partial<MCPServerPreset>,
-  ): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.updateMCPServerOverride(serverId, override);
     this.reloadConfig();
   }
 
@@ -659,8 +623,19 @@ export class ConfigManager {
   }
 
   assertConfigAvailable(): void {
-    if (this.configDiagnostic) {
-      throw new Error(buildConfigUnavailableMessage(this.configDiagnostic));
+    const readDiagnostic = this.userConfigReadResult
+      ? projectAssistantConfigReadResultDiagnostic(this.userConfigReadResult)
+      : undefined;
+    if (readDiagnostic && this.isBlockingConfigReadDiagnostic(readDiagnostic)) {
+      throw new Error(buildConfigUnavailableMessage(readDiagnostic));
+    }
+    const availabilityDiagnostic = this.buildAssistantAvailabilityDiagnostic();
+    if (availabilityDiagnostic) {
+      throw new Error(buildConfigUnavailableMessage(availabilityDiagnostic));
+    }
+    const effectiveDiagnostic = this.getEffectiveAgentWorkspaceConfigSnapshot().blockingDiagnostic;
+    if (effectiveDiagnostic) {
+      throw new Error(buildConfigUnavailableMessage(effectiveDiagnostic));
     }
   }
 
@@ -771,14 +746,6 @@ export class ConfigManager {
     return (
       diagnostic?.code === 'empty' ||
       diagnostic?.code === 'invalidToml' ||
-      diagnostic?.code === 'duplicateProviderId' ||
-      diagnostic?.code === 'duplicateModelId' ||
-      diagnostic?.code === 'invalidDefaultMaxTokens' ||
-      diagnostic?.code === 'invalidModelTokenMetadata' ||
-      diagnostic?.code === 'unsupportedConfigField' ||
-      diagnostic?.code === 'unsupportedModelType' ||
-      diagnostic?.code === 'unsupportedDefaultModelType' ||
-      diagnostic?.code === 'unsupportedDefaultModelPurpose' ||
       diagnostic?.code === 'invalidDefaultProvider' ||
       diagnostic?.code === 'invalidDefaultModel' ||
       diagnostic?.code === 'invalidDefaultModelBinding' ||
@@ -794,6 +761,9 @@ export class ConfigManager {
 
     const availabilityDiagnostic = this.buildAssistantAvailabilityDiagnostic();
     if (availabilityDiagnostic) return availabilityDiagnostic;
+
+    const bindingDiagnostic = this.validateDefaultModelBindings();
+    if (bindingDiagnostic) return bindingDiagnostic;
 
     return this.getEffectiveAgentWorkspaceConfigSnapshot().blockingDiagnostic;
   }
@@ -821,14 +791,6 @@ export class ConfigManager {
       return buildAssistantConfigAvailabilityDiagnostic('missingModel', filePath);
     }
 
-    const defaultModelBindingDiagnostic = this.validateDefaultModelBindings(
-      filePath,
-      userConfigResult.config,
-    );
-    if (defaultModelBindingDiagnostic) {
-      return defaultModelBindingDiagnostic;
-    }
-
     const configuredProviders = new Set(
       enabledProviders
         .filter((provider) => isProviderConfigured(provider))
@@ -842,14 +804,13 @@ export class ConfigManager {
       : buildAssistantConfigAvailabilityDiagnostic('missingProviderEndpoint', filePath);
   }
 
-  private validateDefaultModelBindings(
-    filePath: string,
-    config: UnifiedConfig,
-  ): AssistantConfigDiagnostic | undefined {
-    const defaults = config.defaultModels ?? {};
+  private validateDefaultModelBindings(): AssistantConfigDiagnostic | undefined {
+    const result = this.userConfigReadResult ?? this.readUserConfigSnapshot();
+    if (result.status !== 'ok') return undefined;
+
+    const defaults = result.config.defaultModels ?? {};
     for (const [type, ref] of Object.entries(defaults)) {
       if (!ref) continue;
-      const modelType = type as ModelType;
       const provider = this.providers.get(ref.providerId);
       const model = this.models.get(ref.modelId);
       if (
@@ -859,12 +820,17 @@ export class ConfigManager {
         !model ||
         model.enabled === false ||
         model.providerId !== provider.id ||
-        (model.type ?? 'llm') !== modelType
+        (model.type ?? 'llm') !== type
       ) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModelBinding', filePath);
+        return buildAssistantConfigAvailabilityDiagnostic(
+          'invalidDefaultModelBinding',
+          result.filePath,
+          `default_models.${type}`,
+        );
       }
     }
-    const purposeDefaults = config.defaultModelPurposes ?? {};
+
+    const purposeDefaults = result.config.defaultModelPurposes ?? {};
     for (const [purpose, ref] of Object.entries(purposeDefaults)) {
       if (!ref) continue;
       const provider = this.providers.get(ref.providerId);
@@ -872,12 +838,17 @@ export class ConfigManager {
       if (
         !provider ||
         provider.enabled === false ||
+        !isProviderConfigured(provider) ||
         !model ||
         model.enabled === false ||
         model.providerId !== provider.id ||
         !modelSupportsPurpose(model, purpose)
       ) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModelBinding', filePath);
+        return buildAssistantConfigAvailabilityDiagnostic(
+          'invalidDefaultModelBinding',
+          result.filePath,
+          `default_model_purposes.${purpose}`,
+        );
       }
     }
     return undefined;
@@ -914,20 +885,12 @@ export class ConfigManager {
     this.providers.clear();
     if (userConfigResult.status === 'ok') {
       this.mergeArrayToMap(this.providers, userConfig?.providers as Provider[] | undefined);
-      this.applyOverrides(
-        this.providers,
-        userConfig?.providerOverrides as Record<string, Partial<Provider>> | undefined,
-      );
     }
 
     // --- Models (user only) ---
     this.models.clear();
     if (userConfigResult.status === 'ok') {
       this.mergeArrayToMap(this.models, userConfig?.models as Model[] | undefined);
-      this.applyOverrides(
-        this.models,
-        userConfig?.modelOverrides as Record<string, Partial<Model>> | undefined,
-      );
     }
 
     // --- MCP Servers (user only) ---
@@ -936,10 +899,6 @@ export class ConfigManager {
       this.mergeArrayToMap(
         this.mcpServers,
         userConfig?.mcpServers as MCPServerPreset[] | undefined,
-      );
-      this.applyOverrides(
-        this.mcpServers,
-        userConfig?.mcpServerOverrides as Record<string, Partial<MCPServerPreset>> | undefined,
       );
     }
     // Substitute workspace path in MCP server configurations
@@ -956,23 +915,6 @@ export class ConfigManager {
     if (!items) return;
     for (const item of items) {
       target.set(item.id, { ...item });
-    }
-  }
-
-  /**
-   * Apply overrides to existing items in the Map.
-   * Only modifies items that already exist.
-   */
-  private applyOverrides<T extends { id: string }>(
-    target: Map<string, T>,
-    overrides?: Record<string, Partial<T>>,
-  ): void {
-    if (!overrides) return;
-    for (const [id, override] of Object.entries(overrides)) {
-      const existing = target.get(id);
-      if (existing) {
-        target.set(id, { ...existing, ...override });
-      }
     }
   }
 

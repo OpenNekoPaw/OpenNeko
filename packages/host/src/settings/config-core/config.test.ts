@@ -58,31 +58,6 @@ describe('normalizeConfig', () => {
     expect(normalized.models.size).toBe(1);
     expect(normalized.models.get('claude-sonnet-4')?.name).toBe('claude-sonnet-4-20250514');
   });
-
-  it('should apply overrides to items', () => {
-    const config: UnifiedConfig = {
-      providers: [
-        {
-          id: 'anthropic',
-          name: 'anthropic',
-          displayName: 'Anthropic',
-          type: 'anthropic',
-          apiUrl: 'https://api.anthropic.com',
-          enabled: true,
-        },
-      ],
-      providerOverrides: {
-        anthropic: {
-          enabled: false,
-        },
-      },
-    };
-
-    const normalized = normalizeConfig(config);
-
-    const anthropic = normalized.providers.get('anthropic');
-    expect(anthropic?.enabled).toBe(false);
-  });
 });
 
 // =============================================================================

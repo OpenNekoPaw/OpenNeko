@@ -50,11 +50,13 @@ export type {
   TomlExternalResearchMcpSearchToolBinding,
   TomlExternalResearchMcpFetchToolBinding,
   TomlConfigValidationIssue,
+  TomlConfigProjection,
+  ProviderCredentialDeclaration,
 } from './toml-config';
 
 export {
-  TomlConfigValidationError,
   parseTomlConfigText,
+  projectTomlConfig,
   serializeUnifiedConfigToToml,
   tomlToUnifiedConfig,
   unifiedConfigToToml,

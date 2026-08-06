@@ -12,8 +12,14 @@ import type { Model, Provider } from '../types/provider';
 
 const USER_CONFIG_PATH = '/home/.neko/config.toml';
 
-function okConfig(config: UnifiedConfig): ConfigReadResult {
-  return { status: 'ok', filePath: USER_CONFIG_PATH, config };
+function okConfig(config: UnifiedConfig): Extract<ConfigReadResult, { readonly status: 'ok' }> {
+  return {
+    status: 'ok',
+    filePath: USER_CONFIG_PATH,
+    config,
+    diagnostics: [],
+    providerCredentials: {},
+  };
 }
 
 function createUserConfig(): UnifiedConfig {
@@ -217,6 +223,34 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
     expect(snapshot.sources.provider).toBe('default');
     expect(snapshot.sources.model).toBe('default');
     expect(snapshot.diagnostics).toEqual([]);
+  });
+
+  it('keeps recoverable sibling diagnostics visible without blocking a valid selection', () => {
+    const config = createUserConfig();
+    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
+      userConfigReadResult: {
+        ...okConfig(config),
+        diagnostics: [
+          {
+            code: 'invalidProviderApiKey',
+            filePath: USER_CONFIG_PATH,
+            path: 'providers.unused.api_key',
+            message: 'secret-safe local diagnostic',
+          },
+        ],
+      },
+      providers: providers(config),
+      models: models(config),
+      mcpServers: mcpServers(config),
+    });
+
+    expect(snapshot.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'invalidProviderApiKey',
+        path: 'providers.unused.api_key',
+      }),
+    ]);
+    expect(snapshot.blockingDiagnostic).toBeUndefined();
   });
 
   it('projects canonical user config read failures as blocking diagnostics', () => {

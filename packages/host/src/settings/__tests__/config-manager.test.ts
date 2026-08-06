@@ -20,24 +20,13 @@ import { RETRY_TIMEOUT_PRESETS } from '../retry-timeout-presets';
 
 function createMockUserConfigManager(
   initial?: Partial<UserConfig>,
-  rawScalars: Omit<
-    UnifiedConfig,
-    | 'providers'
-    | 'models'
-    | 'mcpServers'
-    | 'providerOverrides'
-    | 'modelOverrides'
-    | 'mcpServerOverrides'
-  > = {},
+  rawScalars: Omit<UnifiedConfig, 'providers' | 'models' | 'mcpServers'> = {},
 ): IUserConfigManager {
   let scalars = { ...rawScalars };
   let config: UserConfig = {
     providers: [],
     models: [],
     mcpServers: [],
-    providerOverrides: {},
-    modelOverrides: {},
-    mcpServerOverrides: {},
     ...initial,
   };
 
@@ -51,9 +40,6 @@ function createMockUserConfigManager(
     save: async (c: UserConfig) => {
       config = { ...c };
     },
-    updateProviderOverride: async (id, override) => {
-      config.providerOverrides[id] = { ...config.providerOverrides[id], ...override };
-    },
     addProvider: async (p: Provider) => {
       const i = config.providers.findIndex((x) => x.id === p.id);
       if (i >= 0) config.providers[i] = p;
@@ -61,7 +47,6 @@ function createMockUserConfigManager(
     },
     removeProvider: async (id: string) => {
       config.providers = config.providers.filter((p) => p.id !== id);
-      delete config.providerOverrides[id];
     },
     addModel: async (m: Model) => {
       const i = config.models.findIndex((x) => x.id === m.id);
@@ -70,10 +55,6 @@ function createMockUserConfigManager(
     },
     removeModel: async (id: string) => {
       config.models = config.models.filter((m) => m.id !== id);
-      delete config.modelOverrides[id];
-    },
-    updateMCPServerOverride: async (id, override) => {
-      config.mcpServerOverrides[id] = { ...config.mcpServerOverrides[id], ...override };
     },
     addMCPServer: async (s: MCPServerPreset) => {
       const i = config.mcpServers.findIndex((x) => x.id === s.id);
@@ -82,16 +63,12 @@ function createMockUserConfigManager(
     },
     removeMCPServer: async (id: string) => {
       config.mcpServers = config.mcpServers.filter((s) => s.id !== id);
-      delete config.mcpServerOverrides[id];
     },
     clear: async () => {
       config = {
         providers: [],
         models: [],
         mcpServers: [],
-        providerOverrides: {},
-        modelOverrides: {},
-        mcpServerOverrides: {},
       };
     },
     loadRaw: () => ({
@@ -99,9 +76,6 @@ function createMockUserConfigManager(
       providers: config.providers,
       models: config.models,
       mcpServers: config.mcpServers,
-      providerOverrides: config.providerOverrides,
-      modelOverrides: config.modelOverrides,
-      mcpServerOverrides: config.mcpServerOverrides,
     }),
     loadRawResult: () => ({
       status: 'ok',
@@ -111,10 +85,9 @@ function createMockUserConfigManager(
         providers: config.providers,
         models: config.models,
         mcpServers: config.mcpServers,
-        providerOverrides: config.providerOverrides,
-        modelOverrides: config.modelOverrides,
-        mcpServerOverrides: config.mcpServerOverrides,
       } satisfies UnifiedConfig,
+      diagnostics: [],
+      providerCredentials: {},
     }),
     updateScalar: async (key, value) => {
       scalars = { ...scalars, [key]: value };
@@ -144,18 +117,37 @@ function createMemoryAssistantRuntimeSettings(): AssistantRuntimeSettingsPort {
   };
 }
 
+type TestConfigReadResult =
+  | ConfigReadResult
+  | {
+      readonly status: 'ok';
+      readonly filePath: string;
+      readonly config: UnifiedConfig;
+      readonly diagnostics?: Extract<ConfigReadResult, { readonly status: 'ok' }>['diagnostics'];
+      readonly providerCredentials?: Extract<
+        ConfigReadResult,
+        { readonly status: 'ok' }
+      >['providerCredentials'];
+    };
+
 function createReadResultUserConfigManager(
-  result: ConfigReadResult | (() => ConfigReadResult),
+  result: TestConfigReadResult | (() => TestConfigReadResult),
 ): IUserConfigManager {
-  const readResult = () => (typeof result === 'function' ? result() : result);
+  const readResult = (): ConfigReadResult => {
+    const current = typeof result === 'function' ? result() : result;
+    return current.status === 'ok'
+      ? {
+          ...current,
+          diagnostics: current.diagnostics ?? [],
+          providerCredentials: current.providerCredentials ?? {},
+        }
+      : current;
+  };
   return {
     load: () => ({
       providers: [],
       models: [],
       mcpServers: [],
-      providerOverrides: {},
-      modelOverrides: {},
-      mcpServerOverrides: {},
     }),
     loadRaw: () => {
       const current = readResult();
@@ -163,9 +155,6 @@ function createReadResultUserConfigManager(
     },
     loadRawResult: readResult,
     save: async () => {
-      throw new Error('write path should not be used');
-    },
-    updateProviderOverride: async () => {
       throw new Error('write path should not be used');
     },
     addProvider: async () => {
@@ -178,9 +167,6 @@ function createReadResultUserConfigManager(
       throw new Error('write path should not be used');
     },
     removeModel: async () => {
-      throw new Error('write path should not be used');
-    },
-    updateMCPServerOverride: async () => {
       throw new Error('write path should not be used');
     },
     addMCPServer: async () => {
@@ -258,28 +244,6 @@ describe('ConfigManager', () => {
       expect(manager.getProvider('anthropic')).toBeDefined();
       expect(manager.getProvider('anthropic')?.displayName).toBe('Anthropic');
       expect(manager.getModel('anthropic-claude-sonnet-4')).toBeDefined();
-    });
-
-    it('should apply provider overrides', () => {
-      const ucm = createMockUserConfigManager({
-        providers: [SAMPLE_PROVIDER],
-        providerOverrides: { anthropic: { supportLevel: 'verified' } },
-      });
-      const manager = new ConfigManager({ userConfigManager: ucm });
-      const provider = manager.getProvider('anthropic');
-
-      expect(provider?.supportLevel).toBe('verified');
-    });
-
-    it('should apply model overrides', () => {
-      const ucm = createMockUserConfigManager({
-        models: [SAMPLE_MODEL],
-        modelOverrides: { 'anthropic-claude-sonnet-4': { enabled: false } },
-      });
-      const manager = new ConfigManager({ userConfigManager: ucm });
-      const model = manager.getModel('anthropic-claude-sonnet-4');
-
-      expect(model?.enabled).toBe(false);
     });
   });
 
@@ -369,30 +333,35 @@ describe('ConfigManager', () => {
       );
     });
 
-    it('surfaces unsupported provider protocol profile diagnostics', () => {
+    it('surfaces a local provider diagnostic without blocking valid siblings', () => {
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
-          status: 'unsupportedProviderProtocolProfile',
+          status: 'ok',
           filePath: '/tmp/neko/config.toml',
-          diagnostic: {
-            code: 'unsupportedProviderProtocolProfile',
-            filePath: '/tmp/neko/config.toml',
-            message: 'unsupported protocol_profile detail',
-            detail: 'Unsupported provider protocol_profile "deepseek"',
+          config: {
+            providers: [SAMPLE_PROVIDER],
+            models: [SAMPLE_MODEL],
           },
+          diagnostics: [
+            {
+              code: 'unsupportedProviderProtocolProfile',
+              filePath: '/tmp/neko/config.toml',
+              path: 'providers.invalid.protocol_profile',
+              message: 'invalid provider protocol profile',
+            },
+          ],
+          providerCredentials: {},
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'unsupportedProviderProtocolProfile',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Configuration file contains an unsupported provider protocol_profile: /tmp/neko/config.toml. Use newapi, openai-chat, openai-responses, anthropic, google, or ollama, then open a new Agent session or tab.',
-      });
-      expect(manager.getConfig().providers.size).toBe(0);
-      expect(() => manager.assertConfigAvailable()).toThrow(
-        'unsupported provider protocol_profile',
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'unsupportedProviderProtocolProfile',
+          path: 'providers.invalid.protocol_profile',
+        }),
       );
+      expect(manager.getConfig().providers.has('anthropic')).toBe(true);
+      expect(() => manager.assertConfigAvailable()).not.toThrow();
     });
 
     it('keeps missing config out of settings data until account-aware projection runs', () => {
@@ -685,15 +654,13 @@ describe('ConfigManager', () => {
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultModelBinding',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: /tmp/neko/config.toml. Fix the default binding, then open a new Agent session or tab.',
-      });
-      expect(() => manager.assertConfigAvailable()).toThrow(
-        'Configuration file contains a default model binding',
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'invalidDefaultModelBinding',
+          path: 'default_models.video',
+        }),
       );
+      expect(() => manager.assertConfigAvailable()).not.toThrow();
     });
 
     it('resolves purpose-specific model bindings before capability fallback', () => {
@@ -1021,6 +988,8 @@ describe('ConfigManager', () => {
         status: 'ok',
         filePath: '<test-config>',
         config: { providers: [SAMPLE_PROVIDER], models: [SAMPLE_MODEL] },
+        diagnostics: [],
+        providerCredentials: {},
       };
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager(() => current),
@@ -1214,14 +1183,14 @@ describe('ConfigManager', () => {
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultModelBinding',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: /tmp/neko/config.toml. Fix the default binding, then open a new Agent session or tab.',
-      });
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'invalidDefaultModelBinding',
+          path: 'default_models.llm',
+        }),
+      );
       expect(() => manager.assertConfigAvailable()).toThrow(
-        'Configuration file contains a default model binding',
+        'Agent configuration selects an unavailable default provider',
       );
     });
 
@@ -1252,12 +1221,12 @@ describe('ConfigManager', () => {
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultModelBinding',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: /tmp/neko/config.toml. Fix the default binding, then open a new Agent session or tab.',
-      });
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'invalidDefaultModelBinding',
+          path: 'default_models.llm',
+        }),
+      );
       expect(() => manager.assertConfigAvailable()).toThrow(
         'Configuration file contains a default model binding',
       );
@@ -1439,10 +1408,11 @@ describe('ConfigManager', () => {
         userConfigManager: createMockUserConfigManager({ providers: [SAMPLE_PROVIDER] }),
       });
       const config1 = manager.getConfig();
-      await manager.updateProviderOverride('anthropic', { enabled: false });
+      await manager.setProvider({ ...SAMPLE_PROVIDER, enabled: false });
       const config2 = manager.getConfig();
 
       expect(config1).not.toBe(config2);
+      expect(config2.providers.get('anthropic')?.enabled).toBe(false);
     });
   });
 

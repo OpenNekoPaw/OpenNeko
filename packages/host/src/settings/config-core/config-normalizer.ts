@@ -13,26 +13,6 @@ import { normalizeExternalResearchConfig } from '@neko/agent-contracts';
 // =============================================================================
 
 /**
- * Apply overrides to items
- */
-function applyOverrides<T extends { id: string }>(
-  items: T[],
-  overrides?: Record<string, Partial<T>>,
-): T[] {
-  if (!overrides) {
-    return items;
-  }
-
-  return items.map((item) => {
-    const override = overrides[item.id];
-    if (override) {
-      return { ...item, ...override };
-    }
-    return item;
-  });
-}
-
-/**
  * Convert array to Map by ID
  */
 function arrayToMap<T extends { id: string }>(items?: T[]): Map<string, T> {
@@ -52,20 +32,15 @@ function arrayToMap<T extends { id: string }>(items?: T[]): Map<string, T> {
  * @returns Normalized configuration
  */
 export function normalizeConfig(config: UnifiedConfig): NormalizedConfig {
-  // Apply overrides to items
-  const providers = applyOverrides(config.providers ?? [], config.providerOverrides);
-  const models = applyOverrides(config.models ?? [], config.modelOverrides);
-  const mcpServers = applyOverrides(config.mcpServers ?? [], config.mcpServerOverrides);
-
   return {
     maxTokens: config.maxTokens ?? DEFAULT_CONFIG.maxTokens,
     temperature: config.temperature ?? DEFAULT_CONFIG.temperature,
     skillsDir: config.skillsDir,
     verbose: config.verbose ?? DEFAULT_CONFIG.verbose,
     outputFormat: config.outputFormat ?? DEFAULT_CONFIG.outputFormat,
-    providers: arrayToMap(providers),
-    models: arrayToMap(models),
-    mcpServers: arrayToMap(mcpServers),
+    providers: arrayToMap(config.providers),
+    models: arrayToMap(config.models),
+    mcpServers: arrayToMap(config.mcpServers),
     externalResearch: normalizeExternalResearchConfig(config.externalResearch),
   };
 }

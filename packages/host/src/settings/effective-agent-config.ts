@@ -19,6 +19,7 @@ import type { MCPServerPreset } from './types/config';
 import type { Model, Provider } from './types/provider';
 import {
   buildAssistantConfigAvailabilityDiagnostic,
+  projectAssistantConfigDiagnostic,
   projectAssistantConfigReadResultDiagnostic,
   type AssistantConfigDiagnostic,
 } from './config-diagnostic';
@@ -126,19 +127,19 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
     ? input.models.find((candidate) => candidate.id === modelSelection.value)
     : undefined;
 
-  diagnostics.push(
-    ...validateProviderModelSelection({
-      userConfigReadResult: input.userConfigReadResult,
-      providerSelection,
-      modelSelection,
-      provider,
-      model,
-      hasProviders: input.providers.some(isEnabledProvider),
-      hasChatModels: input.models.some(isEnabledChatModel),
-    }),
-  );
+  const selectionDiagnostics = validateProviderModelSelection({
+    userConfigReadResult: input.userConfigReadResult,
+    providerSelection,
+    modelSelection,
+    provider,
+    model,
+    hasProviders: input.providers.some(isEnabledProvider),
+    hasChatModels: input.models.some(isEnabledChatModel),
+  });
+  diagnostics.push(...selectionDiagnostics);
 
-  const blockingDiagnostic = diagnostics[0];
+  const blockingDiagnostic =
+    projectBlockingReadDiagnostic(input.userConfigReadResult) ?? selectionDiagnostics[0];
 
   return {
     providerId: providerSelection.value,
@@ -272,12 +273,19 @@ function assertNonNegativeInteger(value: number, label: string): void {
 function collectReadDiagnostics(
   input: ResolveEffectiveAgentWorkspaceConfigInput,
 ): AssistantConfigDiagnostic[] {
-  const diagnostics: AssistantConfigDiagnostic[] = [];
-  const userDiagnostic = input.userConfigReadResult
-    ? projectAssistantConfigReadResultDiagnostic(input.userConfigReadResult)
-    : undefined;
-  if (userDiagnostic) diagnostics.push(userDiagnostic);
-  return diagnostics;
+  const result = input.userConfigReadResult;
+  if (!result || result.status === 'missing') return [];
+  if (result.status === 'ok') {
+    return result.diagnostics.map(projectAssistantConfigDiagnostic);
+  }
+  return [projectAssistantConfigDiagnostic(result.diagnostic)];
+}
+
+function projectBlockingReadDiagnostic(
+  result: ConfigReadResult | null | undefined,
+): AssistantConfigDiagnostic | undefined {
+  if (!result || result.status === 'ok' || result.status === 'missing') return undefined;
+  return projectAssistantConfigReadResultDiagnostic(result);
 }
 
 function readOkConfig(result: ConfigReadResult | null | undefined): UnifiedConfig {

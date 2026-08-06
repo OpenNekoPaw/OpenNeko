@@ -94,19 +94,6 @@ export interface UnifiedConfig {
 
   /** Opt-in external research configuration. */
   externalResearch?: ExternalResearchConfigInput;
-
-  // ==========================================================================
-  // Override Configuration
-  // ==========================================================================
-
-  /** Provider overrides (keyed by provider ID) */
-  providerOverrides?: Record<string, Partial<ProviderDefinition>>;
-
-  /** Model overrides (keyed by model ID) */
-  modelOverrides?: Record<string, Partial<ModelConfig>>;
-
-  /** MCP server overrides (keyed by server ID) */
-  mcpServerOverrides?: Record<string, Partial<MCPServerConfig>>;
 }
 
 // =============================================================================

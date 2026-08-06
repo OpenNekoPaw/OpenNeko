@@ -1,13 +1,13 @@
 ## 1. Canonical Host document contract
 
-- [ ] 1.1 Add Host-owned secret credential and local diagnostic result types with tests proving ordinary `UnifiedConfig` remains secret-free.
-- [ ] 1.2 Replace cast-and-throw TOML semantic validation with independent canonical field/record decoding; keep only unreadable or malformed TOML document-blocking.
-- [ ] 1.3 Delete `unsupportedConfigField`, `base_url`, model `protocol`, inert locale fields, override maps and their production/test paths; prove removed paths cannot select runtime behavior.
-- [ ] 1.4 Preserve valid inline provider API keys only through the Host document writer during explicit canonical writes while dropping unknown and removed fields.
+- [x] 1.1 Add Host-owned secret credential and local diagnostic result types with tests proving ordinary `UnifiedConfig` remains secret-free.
+- [x] 1.2 Replace cast-and-throw TOML semantic validation with independent canonical field/record decoding; keep only unreadable or malformed TOML document-blocking.
+- [x] 1.3 Delete `unsupportedConfigField`, `base_url`, model `protocol`, inert locale fields, override maps and their production/test paths; prove removed paths cannot select runtime behavior.
+- [x] 1.4 Preserve valid inline provider API keys only through the Host document writer during explicit canonical writes while dropping unknown and removed fields.
 
 ## 2. Local diagnostics and credential consumption
 
-- [ ] 2.1 Project owner-qualified recoverable diagnostics without blocking valid sibling providers, models, MCP servers or bindings.
+- [x] 2.1 Project owner-qualified recoverable diagnostics without blocking valid sibling providers, models, MCP servers or bindings.
 - [ ] 2.2 Add exact per-provider credential owner selection in Agent runtime: valid inline keys use the config source, absent keys use SecretStorage, and invalid declared keys fail closed without fallback.
 - [ ] 2.3 Wire Host credential snapshots to Agent runtime through package public contracts and keep Desktop Main limited to Electron/SecretStorage composition.
 - [ ] 2.4 Add producer, consumer and secret-redaction tests proving no API key reaches ordinary DTOs, diagnostics, logs, Renderer messages or portable exports.

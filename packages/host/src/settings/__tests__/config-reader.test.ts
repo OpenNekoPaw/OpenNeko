@@ -64,7 +64,6 @@ describe('config-reader typed results', () => {
       expect.objectContaining({
         code: 'invalidToml',
         filePath,
-        detail: expect.any(String),
       }),
     );
   });
@@ -80,7 +79,6 @@ describe('config-reader typed results', () => {
       expect.objectContaining({
         code: 'readError',
         filePath,
-        detail: expect.any(String),
       }),
     );
   });
@@ -98,7 +96,7 @@ describe('config-reader typed results', () => {
         'id = "custom-newapi"',
         'name = "Custom NewAPI"',
         'type = "newapi"',
-        'base_url = "https://api.example.com/api"',
+        'api_url = "https://api.example.com/api"',
         'connection_kind = "gateway"',
         'protocol_profile = "newapi"',
       ].join('\n'),
@@ -125,7 +123,74 @@ describe('config-reader typed results', () => {
     );
   });
 
-  it('rejects the removed newapi-compatible protocol profile alias', () => {
+  it('projects provider api_key only through the Host credential channel', () => {
+    const filePath = path.join(createTempRoot(), 'config.toml');
+    const sentinel = 'sentinel-config-secret';
+    fs.writeFileSync(
+      filePath,
+      [
+        'version = 4',
+        '',
+        '[[providers]]',
+        'id = "deepseek-chat"',
+        'name = "deepseek-chat"',
+        'type = "generic"',
+        'api_url = "https://api.deepseek.com"',
+        'protocol_profile = "openai-chat"',
+        `api_key = "${sentinel}"`,
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const result = readConfigFileResult(filePath);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.providerCredentials).toEqual({
+      'deepseek-chat': { status: 'configured', apiKey: sentinel },
+    });
+    expect(result.diagnostics).toEqual([]);
+    expect(JSON.stringify(result.config)).not.toContain(sentinel);
+    expect(result.config.providers?.[0]).not.toHaveProperty('apiKey');
+
+    writeConfigFile(filePath, { ...result.config, verbose: true }, result.providerCredentials);
+    const written = fs.readFileSync(filePath, 'utf-8');
+    expect(written).toContain(`api_key = "${sentinel}"`);
+    expect(written).not.toContain('version =');
+  });
+
+  it('keeps an invalid declared api_key local and secret-safe', () => {
+    const filePath = path.join(createTempRoot(), 'config.toml');
+    fs.writeFileSync(
+      filePath,
+      [
+        '[[providers]]',
+        'id = "deepseek-chat"',
+        'name = "deepseek-chat"',
+        'type = "generic"',
+        'api_url = "https://api.deepseek.com"',
+        'protocol_profile = "openai-chat"',
+        'api_key = ""',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const result = readConfigFileResult(filePath);
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.providers?.[0]?.id).toBe('deepseek-chat');
+    expect(result.providerCredentials).toEqual({ 'deepseek-chat': { status: 'invalid' } });
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'invalidProviderApiKey',
+        path: 'providers.deepseek-chat.api_key',
+      }),
+    ]);
+    expect(JSON.stringify(result.diagnostics)).not.toContain('api_key =');
+  });
+
+  it('isolates an invalid provider protocol profile', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     fs.writeFileSync(
       filePath,
@@ -134,19 +199,32 @@ describe('config-reader typed results', () => {
         'id = "custom-newapi"',
         'name = "Custom NewAPI"',
         'type = "newapi"',
-        'base_url = "https://api.example.com/v1"',
+        'api_url = "https://api.example.com/v1"',
         'connection_kind = "gateway"',
         'protocol_profile = "newapi-compatible"',
+        '',
+        '[[providers]]',
+        'id = "valid-local"',
+        'name = "Valid Local"',
+        'type = "ollama"',
+        'api_url = "http://localhost:11434/api"',
+        'connection_kind = "local"',
+        'protocol_profile = "ollama"',
       ].join('\n'),
       'utf-8',
     );
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedProviderProtocolProfile');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain(
-      'Unsupported provider protocol_profile "newapi-compatible"',
-    );
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.providers?.map((provider) => provider.id)).toEqual(['valid-local']);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedProviderProtocolProfile',
+        path: 'providers.custom-newapi.protocol_profile',
+      }),
+    ]);
   });
 
   it('preserves type defaults and model capability metadata from TOML', () => {
@@ -322,16 +400,22 @@ describe('config-reader typed results', () => {
     );
   });
 
-  it('rejects unsupported top-level configuration fields', () => {
+  it('ignores unsupported fields including internal version metadata', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
-    fs.writeFileSync(filePath, ['[unsupported_section]', 'enabled = true'].join('\n'), 'utf-8');
+    fs.writeFileSync(
+      filePath,
+      ['version = 7', 'verbose = true', '', '[unsupported_section]', 'enabled = true'].join('\n'),
+      'utf-8',
+    );
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedConfigField');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain(
-      'Unsupported configuration field: unsupported_section',
-    );
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.verbose).toBe(true);
+    expect(result.diagnostics).toEqual([]);
+    expect(JSON.stringify(result.config)).not.toContain('version');
+    expect(JSON.stringify(result.config)).not.toContain('unsupported_section');
   });
 
   it('keeps default output tokens separate from model context and output metadata', () => {
@@ -389,9 +473,14 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('invalidModelTokenMetadata');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain('context_window');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain('max_output_tokens');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.maxTokens).toBe(8192);
+    expect(result.config.models).toEqual([]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.path)).toEqual([
+      'models.broken-model.context_window',
+      'models.broken-model.max_output_tokens',
+    ]);
   });
 
   it('diagnoses non-positive default max_tokens as an output-token config error', () => {
@@ -400,8 +489,12 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('invalidDefaultMaxTokens');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain('[defaults].max_tokens');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.maxTokens).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: 'invalidDefaultMaxTokens', path: 'defaults.max_tokens' }),
+    ]);
   });
 
   it('accepts existing capability metadata fields for type defaults', () => {
@@ -515,8 +608,12 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('duplicateProviderId');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain('Duplicate providers id');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.providers).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: 'duplicateProviderId', path: 'providers.dupe' }),
+    ]);
   });
 
   it('rejects unsupported provider protocol profile values', () => {
@@ -542,10 +639,15 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedProviderProtocolProfile');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain(
-      'DeepSeek direct endpoints use "openai-chat"',
-    );
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.providers).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedProviderProtocolProfile',
+        path: 'providers.deepseek.protocol_profile',
+      }),
+    ]);
   });
 
   it('rejects unsupported provider and protocol variant enum values', () => {
@@ -570,13 +672,16 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedProviderType');
-    const detail = getConfigReadDiagnostic(result)?.detail ?? '';
-    expect(detail).toContain('Unsupported provider type "deepseek"');
-    expect(detail).toContain('Unsupported provider connection_kind "remote"');
-    expect(detail).toContain('Unsupported provider support_level "stable"');
-    expect(detail).toContain('Unsupported protocol_variant auth_type "token"');
-    expect(detail).toContain('Unsupported protocol_variant stream_format "jsonl"');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.providers).toEqual([]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'unsupportedProviderType',
+      'unsupportedProviderConnectionKind',
+      'unsupportedProviderSupportLevel',
+      'unsupportedProtocolAuthType',
+      'unsupportedProtocolStreamFormat',
+    ]);
   });
 
   it('rejects music as a top-level model type', () => {
@@ -596,34 +701,12 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedModelType');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain(
-      'Configure music models as type "audio"',
-    );
-  });
-
-  it('rejects unsupported model protocol overrides', () => {
-    const filePath = path.join(createTempRoot(), 'config.toml');
-    fs.writeFileSync(
-      filePath,
-      [
-        '[[models]]',
-        'id = "custom-model"',
-        'name = "custom-model"',
-        'provider_id = "custom-provider"',
-        'protocol = "deepseek"',
-        'type = "llm"',
-        'capabilities = ["chat"]',
-      ].join('\n'),
-      'utf-8',
-    );
-
-    const result = readConfigFileResult(filePath);
-
-    expect(result.status).toBe('unsupportedModelProtocol');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain(
-      'Unsupported model protocol "deepseek"',
-    );
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.models).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: 'unsupportedModelType', path: 'models.music-model.type' }),
+    ]);
   });
 
   it('rejects unsupported model protocol profile overrides', () => {
@@ -644,10 +727,15 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedModelProtocolProfile');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain(
-      'Unsupported model protocol_profile "deepseek"',
-    );
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.models).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedModelProtocolProfile',
+        path: 'models.custom-model.protocol_profile',
+      }),
+    ]);
   });
 
   it('rejects unsupported type defaults', () => {
@@ -671,8 +759,16 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedDefaultModelType');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain('Unsupported default_models key');
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.defaultModels).toBeUndefined();
+    expect(result.config.models?.[0]?.id).toBe('music-model');
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedDefaultModelType',
+        path: 'default_models.audio_music_generate',
+      }),
+    ]);
   });
 
   it('rejects malformed purpose defaults', () => {
@@ -685,10 +781,15 @@ describe('config-reader typed results', () => {
 
     const result = readConfigFileResult(filePath);
 
-    expect(result.status).toBe('unsupportedDefaultModelPurpose');
-    expect(getConfigReadDiagnostic(result)?.detail).toContain(
-      'Invalid default_model_purposes.video_understand',
-    );
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected ok result');
+    expect(result.config.defaultModelPurposes).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'unsupportedDefaultModelPurpose',
+        path: 'default_model_purposes.video_understand',
+      }),
+    ]);
   });
 });
 
