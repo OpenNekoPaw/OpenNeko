@@ -134,11 +134,17 @@ function createReadResultUserConfigManager(
 ): IUserConfigManager {
   const readResult = () => (typeof result === 'function' ? result() : result);
   return {
-    load: () => {
-      throw new Error('legacy load fallback should not be used');
-    },
+    load: () => ({
+      providers: [],
+      models: [],
+      mcpServers: [],
+      providerOverrides: {},
+      modelOverrides: {},
+      mcpServerOverrides: {},
+    }),
     loadRaw: () => {
-      throw new Error('legacy raw fallback should not be used');
+      const current = readResult();
+      return current.status === 'ok' ? current.config : {};
     },
     loadRawResult: readResult,
     save: async () => {
@@ -332,7 +338,7 @@ describe('ConfigManager', () => {
               name: 'openai',
               displayName: 'OpenAI',
               type: 'openai',
-              apiUrl: 'https://api.openai.com/v1',
+              apiUrl: 'https://api.openai.com/api',
               apiKey: 'sk-openai',
               enabled: true,
             },
@@ -375,7 +381,7 @@ describe('ConfigManager', () => {
               name: 'openai',
               displayName: 'OpenAI',
               type: 'openai',
-              apiUrl: 'https://api.openai.com/v1',
+              apiUrl: 'https://api.openai.com/api',
               apiKey: 'sk-openai',
               enabled: true,
             },
@@ -721,55 +727,6 @@ describe('ConfigManager', () => {
         }),
       );
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
-        expect.objectContaining({
-          selectedProviderId: 'ollama-local',
-          selectedModelId: 'ollama-local-chat',
-        }),
-      );
-    });
-
-    it('lets valid type default llm binding supersede invalid legacy chat scalars', () => {
-      const localProvider: Provider = {
-        id: 'ollama-local',
-        name: 'ollama',
-        displayName: 'Ollama Local',
-        type: 'ollama',
-        apiUrl: 'http://localhost:11434/api',
-        enabled: true,
-        connectionKind: 'local',
-        protocolProfile: 'ollama',
-        requiresApiKey: false,
-      };
-      const localModel: Model = {
-        id: 'ollama-local-chat',
-        name: 'llama3.2',
-        providerId: 'ollama-local',
-        type: 'llm',
-        capabilities: ['chat'],
-        enabled: true,
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            defaultProvider: 'missing-provider',
-            defaultModel: 'missing-model',
-            providers: [localProvider],
-            models: [localModel],
-            defaultModels: {
-              llm: {
-                providerId: 'ollama-local',
-                modelId: 'ollama-local-chat',
-              },
-            },
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()).toBeUndefined();
-      expect(() => manager.assertConfigAvailable()).not.toThrow();
-      expect(manager.getAssistantSettingsData()).toEqual(
         expect.objectContaining({
           selectedProviderId: 'ollama-local',
           selectedModelId: 'ollama-local-chat',
@@ -1219,16 +1176,16 @@ describe('ConfigManager', () => {
         name: 'deepseek',
         displayName: 'DeepSeek',
         type: 'generic',
-        apiUrl: 'https://api.deepseek.com/v1',
+        apiUrl: 'https://api.deepseek.com/api',
         enabled: true,
         connectionKind: 'direct',
         protocolProfile: 'openai-chat',
         requiresApiKey: false,
       };
       const deepseekModel: Model = {
-        id: 'deepseek-v4-pro',
+        id: 'deepseek-pro',
         name: 'deepseek-chat',
-        displayName: 'DeepSeek V4 Pro',
+        displayName: 'DeepSeek Pro',
         providerId: 'deepseek-chat',
         type: 'llm',
         capabilities: ['chat'],
@@ -1244,7 +1201,7 @@ describe('ConfigManager', () => {
             defaultModels: {
               llm: {
                 providerId: 'deepseek-chat',
-                modelId: 'deepseek-v4-pro',
+                modelId: 'deepseek-pro',
               },
             },
           },
@@ -1269,7 +1226,7 @@ describe('ConfigManager', () => {
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
         expect.objectContaining({
           selectedProviderId: 'deepseek-chat',
-          selectedModelId: 'deepseek-v4-pro',
+          selectedModelId: 'deepseek-pro',
           executionMode: 'auto',
         }),
       );
@@ -1281,16 +1238,16 @@ describe('ConfigManager', () => {
         name: 'deepseek',
         displayName: 'DeepSeek',
         type: 'generic',
-        apiUrl: 'https://api.deepseek.com/v1',
+        apiUrl: 'https://api.deepseek.com/api',
         enabled: true,
         connectionKind: 'direct',
         protocolProfile: 'openai-chat',
         requiresApiKey: false,
       };
       const deepseekModel: Model = {
-        id: 'deepseek-v4-pro',
+        id: 'deepseek-pro',
         name: 'deepseek-chat',
-        displayName: 'DeepSeek V4 Pro',
+        displayName: 'DeepSeek Pro',
         providerId: 'deepseek-chat',
         type: 'llm',
         capabilities: ['chat'],
@@ -1306,7 +1263,7 @@ describe('ConfigManager', () => {
             defaultModels: {
               llm: {
                 providerId: 'deepseek-chat',
-                modelId: 'deepseek-v4-pro',
+                modelId: 'deepseek-pro',
               },
             },
           },
@@ -1325,12 +1282,12 @@ describe('ConfigManager', () => {
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
         expect.objectContaining({
           selectedProviderId: 'deepseek-chat',
-          selectedModelId: 'deepseek-v4-pro',
+          selectedModelId: 'deepseek-pro',
         }),
       );
     });
 
-    it('blocks conversation when selected default provider is unavailable', () => {
+    it('blocks conversation when the default chat binding provider is unavailable', () => {
       const validProvider: Provider = {
         ...SAMPLE_PROVIDER,
         apiKey: 'sk-valid',
@@ -1340,8 +1297,9 @@ describe('ConfigManager', () => {
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
           config: {
-            defaultProvider: 'missing-provider',
-            defaultModel: SAMPLE_MODEL.id,
+            defaultModels: {
+              llm: { providerId: 'missing-provider', modelId: SAMPLE_MODEL.id },
+            },
             providers: [validProvider],
             models: [SAMPLE_MODEL],
           },
@@ -1349,17 +1307,17 @@ describe('ConfigManager', () => {
       });
 
       expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultProvider',
+        code: 'invalidDefaultModelBinding',
         filePath: '/tmp/neko/config.toml',
         message:
-          'Agent configuration selects an unavailable default provider: /tmp/neko/config.toml. Fix default_provider, then open a new Agent session or tab.',
+          'Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: /tmp/neko/config.toml. Fix the default binding, then open a new Agent session or tab.',
       });
       expect(() => manager.assertConfigAvailable()).toThrow(
-        'Agent configuration selects an unavailable default provider',
+        'Configuration file contains a default model binding',
       );
     });
 
-    it('blocks conversation when selected default model is not a chat model for the selected provider', () => {
+    it('blocks conversation when the default chat binding references a non-chat model', () => {
       const validProvider: Provider = {
         ...SAMPLE_PROVIDER,
         apiKey: 'sk-valid',
@@ -1378,8 +1336,9 @@ describe('ConfigManager', () => {
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
           config: {
-            defaultProvider: 'anthropic',
-            defaultModel: imageModel.id,
+            defaultModels: {
+              llm: { providerId: 'anthropic', modelId: imageModel.id },
+            },
             providers: [validProvider],
             models: [SAMPLE_MODEL, imageModel],
           },
@@ -1387,13 +1346,13 @@ describe('ConfigManager', () => {
       });
 
       expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultModel',
+        code: 'invalidDefaultModelBinding',
         filePath: '/tmp/neko/config.toml',
         message:
-          'Agent configuration selects an unavailable default chat model: /tmp/neko/config.toml. Fix default_model, then open a new Agent session or tab.',
+          'Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: /tmp/neko/config.toml. Fix the default binding, then open a new Agent session or tab.',
       });
       expect(() => manager.assertConfigAvailable()).toThrow(
-        'Agent configuration selects an unavailable default chat model',
+        'Configuration file contains a default model binding',
       );
     });
 
@@ -1440,8 +1399,9 @@ describe('ConfigManager', () => {
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
           config: {
-            defaultProvider: localProvider.id,
-            defaultModel: localModel.id,
+            defaultModels: {
+              llm: { providerId: localProvider.id, modelId: localModel.id },
+            },
             providers: [localProvider, invalidProvider],
             models: [localModel, brokenModel],
           },
@@ -1479,7 +1439,7 @@ describe('ConfigManager', () => {
               name: 'openai',
               displayName: 'OpenAI',
               type: 'openai',
-              apiUrl: 'https://api.openai.com/v1',
+              apiUrl: 'https://api.openai.com/api',
               enabled: false,
             },
           ],

@@ -47,7 +47,6 @@ export function projectAssistantConfigReadResultDiagnostic(
   if (
     result.status === 'empty' ||
     result.status === 'invalidToml' ||
-    result.status === 'unsupportedVersion' ||
     result.status === 'unsupportedProviderType' ||
     result.status === 'unsupportedProviderConnectionKind' ||
     result.status === 'unsupportedProviderProtocolProfile' ||
@@ -60,9 +59,8 @@ export function projectAssistantConfigReadResultDiagnostic(
     result.status === 'duplicateModelId' ||
     result.status === 'invalidDefaultMaxTokens' ||
     result.status === 'invalidModelTokenMetadata' ||
-    result.status === 'unsupportedProfileSchemaSection' ||
+    result.status === 'unsupportedConfigField' ||
     result.status === 'unsupportedModelType' ||
-    result.status === 'unsupportedDefaultMediaModelType' ||
     result.status === 'unsupportedDefaultModelType' ||
     result.status === 'unsupportedDefaultModelPurpose' ||
     result.status === 'readError'
@@ -81,8 +79,6 @@ export function buildSafeConfigDiagnosticMessage(
       return `Configuration file is empty: ${filePath}. Fix the file, then open a new Agent session or tab.`;
     case 'invalidToml':
       return `Configuration file contains invalid TOML: ${filePath}. Fix the file, then open a new Agent session or tab.`;
-    case 'unsupportedVersion':
-      return `Configuration file uses an unsupported version: ${filePath}. Update OpenNeko or migrate the file, then open a new Agent session or tab.`;
     case 'unsupportedProviderType':
       return `Configuration file contains an unsupported provider type: ${filePath}. Use a supported type such as generic, newapi, openai, anthropic, google, or ollama, then open a new Agent session or tab.`;
     case 'unsupportedProviderConnectionKind':
@@ -107,12 +103,10 @@ export function buildSafeConfigDiagnosticMessage(
       return `Configuration file contains an invalid [defaults].max_tokens output-token cap: ${filePath}. Use a positive integer for max output tokens, then open a new Agent session or tab.`;
     case 'invalidModelTokenMetadata':
       return `Configuration file contains invalid model token metadata: ${filePath}. Use positive integers for models[].context_window and models[].max_output_tokens, then open a new Agent session or tab.`;
-    case 'unsupportedProfileSchemaSection':
-      return `Configuration file contains unsupported Agent profile schema sections: ${filePath}. Install or contribute Agent profile packages instead of defining profile schemas in TOML, then open a new Agent session or tab.`;
+    case 'unsupportedConfigField':
+      return `Configuration file contains an unsupported field: ${filePath}. Remove the field, then open a new Agent session or tab.`;
     case 'unsupportedModelType':
       return `Configuration file contains an unsupported model type: ${filePath}. Use llm, image, video, or audio, then open a new Agent session or tab.`;
-    case 'unsupportedDefaultMediaModelType':
-      return `Configuration file contains retired default_media_models: ${filePath}. Move defaults to [default_models.llm], [default_models.image], [default_models.video], or [default_models.audio], then open a new Agent session or tab.`;
     case 'unsupportedDefaultModelType':
       return `Configuration file contains an unsupported default_models key: ${filePath}. Use llm, image, video, or audio, then open a new Agent session or tab.`;
     case 'unsupportedDefaultModelPurpose':
@@ -136,9 +130,9 @@ export function buildSafeConfigDiagnosticMessage(
     case 'missingApiKey':
       return `Agent configuration has no configured enabled chat provider: ${filePath}. Add the required provider endpoint and credentials, then open a new Agent session or tab.`;
     case 'invalidDefaultProvider':
-      return `Agent configuration selects an unavailable default provider: ${filePath}. Fix default_provider, then open a new Agent session or tab.`;
+      return `Agent configuration selects an unavailable default provider: ${filePath}. Fix default_models.llm, then open a new Agent session or tab.`;
     case 'invalidDefaultModel':
-      return `Agent configuration selects an unavailable default chat model: ${filePath}. Fix default_model, then open a new Agent session or tab.`;
+      return `Agent configuration selects an unavailable default chat model: ${filePath}. Fix default_models.llm, then open a new Agent session or tab.`;
   }
 }
 

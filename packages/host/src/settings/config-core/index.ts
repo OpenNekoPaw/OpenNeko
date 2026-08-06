@@ -61,7 +61,6 @@ export type {
 } from './toml-config';
 
 export {
-  SUPPORTED_TOML_CONFIG_VERSION,
   TomlConfigValidationError,
   parseTomlConfigText,
   serializeUnifiedConfigToToml,

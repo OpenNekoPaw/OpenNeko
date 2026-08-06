@@ -45,7 +45,7 @@ function createUserConfig(): UnifiedConfig {
         name: 'explicit-user',
         displayName: 'Explicit User',
         type: 'generic',
-        apiUrl: 'https://ai.example.test/v1',
+        apiUrl: 'https://ai.example.test/api',
         apiKey: 'sk-test',
         enabled: true,
         requiresApiKey: true,
@@ -296,8 +296,6 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
 
   it('keeps provider and model unset when no explicit default exists', () => {
     const userConfig = createUserConfig();
-    delete userConfig.defaultProvider;
-    delete userConfig.defaultModel;
     delete userConfig.defaultModels;
 
     const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
@@ -345,7 +343,7 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
           name: 'Workspace Provider',
           displayName: 'Workspace Provider',
           type: 'generic',
-          apiUrl: 'https://workspace.example.test/v1',
+          apiUrl: 'https://workspace.example.test/api',
           apiKey: 'sk-workspace',
           enabled: true,
         },

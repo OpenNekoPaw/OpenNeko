@@ -38,7 +38,7 @@ import {
   buildAssistantRuntimeSettingsSnapshot,
   buildAssistantSettingsSnapshot,
   buildDefaultMediaModelOptionIds,
-  mapWebviewSettingsToUnifiedScalars,
+  mapWebviewSettingsToAssistantSettings,
   selectAssistantDefaultProvider,
   selectAssistantProvider,
   type AssistantConfigState,
@@ -348,8 +348,8 @@ export class ConfigManager {
     const effective = this.getEffectiveAgentWorkspaceConfigSnapshot();
     return {
       ...buildAssistantSettingsSnapshot({
-        defaultProvider: this.getAssistantDefaultProviderScalarForSettings(),
-        defaultModel: this.getAssistantDefaultModelScalarForSettings(),
+        selectedProviderId: effective.providerId,
+        selectedModelId: effective.modelId,
         customSystemPrompt: this.getCustomSystemPrompt(),
         autoExecuteTools: this.getAutoExecuteTools(),
         streamResponses: this.getStreamResponses(),
@@ -371,8 +371,8 @@ export class ConfigManager {
     const effective = this.getEffectiveAgentWorkspaceConfigSnapshot();
     return {
       ...buildAssistantRuntimeSettingsSnapshot({
-        defaultProvider: this.getAssistantDefaultProviderScalarForSettings(),
-        defaultModel: this.getAssistantDefaultModelScalarForSettings(),
+        selectedProviderId: effective.providerId,
+        selectedModelId: effective.modelId,
         customSystemPrompt: this.getCustomSystemPrompt(),
         autoExecuteTools: this.getAutoExecuteTools(),
         streamResponses: this.getStreamResponses(),
@@ -507,14 +507,6 @@ export class ConfigManager {
     return (raw?.[key] as NonNullable<UnifiedConfig[K]>) ?? undefined;
   }
 
-  getDefaultProviderScalar(): string {
-    return this.getScalar('defaultProvider') ?? DEFAULT_CONFIG.defaultProvider;
-  }
-
-  getDefaultModelScalar(): string {
-    return this.getScalar('defaultModel') ?? DEFAULT_CONFIG.defaultModel;
-  }
-
   getDefaultMediaModels(): Partial<Record<MediaModelType, string>> {
     const fromConfig = this.getMediaDefaultModelOptionIdsFromConfig();
     // Runtime overrides take priority over config-file defaults (not persisted)
@@ -523,13 +515,6 @@ export class ConfigManager {
 
   getDefaultModelRef(type: ModelType): ModelRefConfig | undefined {
     const defaults = this.getScalar('defaultModels') ?? {};
-    if (type === 'llm') {
-      const configured = defaults.llm;
-      if (configured) return configured;
-      const providerId = this.getExplicitDefaultProviderScalar();
-      const modelId = this.getExplicitDefaultModelScalar();
-      return providerId && modelId ? { providerId, modelId } : undefined;
-    }
     return defaults[type];
   }
 
@@ -647,9 +632,7 @@ export class ConfigManager {
   }
 
   async applyRuntimeAssistantSettingsFromWebview(settings: Record<string, unknown>): Promise<void> {
-    const updates = this.mapUnifiedScalarsToAssistantSettings(
-      mapWebviewSettingsToUnifiedScalars(settings),
-    );
+    const updates = mapWebviewSettingsToAssistantSettings(settings);
     if (isClearingRuntimeModelSelection(settings)) {
       const updatesWithoutModelSelection = { ...updates };
       delete updatesWithoutModelSelection.selectedProviderId;
@@ -783,17 +766,8 @@ export class ConfigManager {
   }
 
   private readUserConfigSnapshot(): ConfigReadResult {
-    if (this.userConfigManager?.loadRawResult) {
-      return this.userConfigManager.loadRawResult();
-    }
-    if (this.userConfigManager) {
-      return {
-        status: 'ok',
-        filePath: '<in-memory-user-config>',
-        config: this.userConfigManager.loadRaw(),
-      };
-    }
-    throw new Error('User config storage not available');
+    if (!this.userConfigManager) throw new Error('User config storage not available');
+    return this.userConfigManager.loadRawResult();
   }
 
   private getRawUserConfigSnapshot(): UnifiedConfig | undefined {
@@ -883,37 +857,18 @@ export class ConfigManager {
     return (
       diagnostic?.code === 'empty' ||
       diagnostic?.code === 'invalidToml' ||
-      diagnostic?.code === 'unsupportedVersion' ||
       diagnostic?.code === 'duplicateProviderId' ||
       diagnostic?.code === 'duplicateModelId' ||
       diagnostic?.code === 'invalidDefaultMaxTokens' ||
       diagnostic?.code === 'invalidModelTokenMetadata' ||
+      diagnostic?.code === 'unsupportedConfigField' ||
       diagnostic?.code === 'unsupportedModelType' ||
-      diagnostic?.code === 'unsupportedDefaultMediaModelType' ||
       diagnostic?.code === 'unsupportedDefaultModelType' ||
       diagnostic?.code === 'unsupportedDefaultModelPurpose' ||
       diagnostic?.code === 'invalidDefaultProvider' ||
       diagnostic?.code === 'invalidDefaultModel' ||
       diagnostic?.code === 'invalidDefaultModelBinding' ||
       diagnostic?.code === 'readError'
-    );
-  }
-
-  private getAssistantDefaultProviderScalarForSettings(): string | null {
-    if (this.userConfigReadResult?.status !== 'ok') return null;
-    return (
-      this.getExplicitDefaultModelRef('llm')?.providerId ??
-      this.getExplicitDefaultProviderScalar() ??
-      null
-    );
-  }
-
-  private getAssistantDefaultModelScalarForSettings(): string | null {
-    if (this.userConfigReadResult?.status !== 'ok') return null;
-    return (
-      this.getExplicitDefaultModelRef('llm')?.modelId ??
-      this.getExplicitDefaultModelScalar() ??
-      null
     );
   }
 
@@ -957,27 +912,12 @@ export class ConfigManager {
       return buildAssistantConfigAvailabilityDiagnostic('missingModel', filePath);
     }
 
-    const explicitDefaultLlmModelRef = this.getExplicitDefaultModelRef('llm');
-    const explicitDefaultProvider =
-      explicitDefaultLlmModelRef?.providerId ?? this.getExplicitDefaultProviderScalar();
-    const explicitDefaultModel =
-      explicitDefaultLlmModelRef?.modelId ?? this.getExplicitDefaultModelScalar();
     const defaultModelBindingDiagnostic = this.validateDefaultModelBindings(
       filePath,
       userConfigResult.config,
     );
     if (defaultModelBindingDiagnostic) {
       return defaultModelBindingDiagnostic;
-    }
-
-    const defaultSelectionDiagnostic = this.validateExplicitChatDefaults({
-      filePath,
-      explicitDefaultProvider,
-      explicitDefaultModel,
-      enabledChatModels,
-    });
-    if (defaultSelectionDiagnostic) {
-      return defaultSelectionDiagnostic;
     }
 
     const configuredProviders = new Set(
@@ -991,52 +931,6 @@ export class ConfigManager {
     return hasConfiguredChatModel
       ? undefined
       : buildAssistantConfigAvailabilityDiagnostic('missingApiKey', filePath);
-  }
-
-  private validateExplicitChatDefaults(input: {
-    filePath: string;
-    explicitDefaultProvider?: string;
-    explicitDefaultModel?: string;
-    enabledChatModels: readonly Model[];
-  }): AssistantConfigDiagnostic | undefined {
-    const provider = input.explicitDefaultProvider
-      ? this.providers.get(input.explicitDefaultProvider)
-      : undefined;
-    if (input.explicitDefaultProvider) {
-      if (!provider || provider.enabled === false || !isProviderConfigured(provider)) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultProvider', input.filePath);
-      }
-    }
-
-    if (!input.explicitDefaultModel) {
-      return undefined;
-    }
-
-    const model = this.models.get(input.explicitDefaultModel);
-    if (
-      !model ||
-      model.enabled === false ||
-      !modelSupportsPurpose(model, 'llm.chat') ||
-      (provider && model.providerId !== provider.id)
-    ) {
-      return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModel', input.filePath);
-    }
-
-    if (!provider) {
-      const modelProvider = this.providers.get(model.providerId);
-      if (
-        !modelProvider ||
-        modelProvider.enabled === false ||
-        !isProviderConfigured(modelProvider)
-      ) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultProvider', input.filePath);
-      }
-    }
-
-    const enabledModelIds = new Set(input.enabledChatModels.map((candidate) => candidate.id));
-    return enabledModelIds.has(model.id)
-      ? undefined
-      : buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModel', input.filePath);
   }
 
   private validateDefaultModelBindings(
@@ -1080,24 +974,6 @@ export class ConfigManager {
     return undefined;
   }
 
-  private getExplicitDefaultProviderScalar(): string | undefined {
-    const raw = this.getRawUserConfigSnapshot();
-    return typeof raw?.defaultProvider === 'string' && raw.defaultProvider.length > 0
-      ? raw.defaultProvider
-      : undefined;
-  }
-
-  private getExplicitDefaultModelScalar(): string | undefined {
-    const raw = this.getRawUserConfigSnapshot();
-    return typeof raw?.defaultModel === 'string' && raw.defaultModel.length > 0
-      ? raw.defaultModel
-      : undefined;
-  }
-
-  private getExplicitDefaultModelRef(type: ModelType): ModelRefConfig | undefined {
-    return this.getRawUserConfigSnapshot()?.defaultModels?.[type];
-  }
-
   private setRuntimeAssistantSettings(updates: Partial<AssistantSettingsSnapshot>): void {
     this.runtimeAssistantSettings = {
       ...this.runtimeAssistantSettings,
@@ -1117,40 +993,6 @@ export class ConfigManager {
     delete nextSettings.selectedProviderId;
     delete nextSettings.selectedModelId;
     this.runtimeAssistantSettings = nextSettings;
-  }
-
-  private mapUnifiedScalarsToAssistantSettings(
-    updates: Partial<UnifiedConfig>,
-  ): Partial<AssistantSettingsSnapshot> {
-    const settings: Partial<AssistantSettingsSnapshot> = {};
-    if ('defaultProvider' in updates) {
-      settings.selectedProviderId = updates.defaultProvider ?? null;
-    }
-    if ('defaultModel' in updates) {
-      settings.selectedModelId = updates.defaultModel ?? null;
-    }
-    if (updates.customSystemPrompt !== undefined) {
-      settings.customSystemPrompt = updates.customSystemPrompt;
-    }
-    if (updates.autoExecuteTools !== undefined) {
-      settings.autoExecuteTools = updates.autoExecuteTools;
-    }
-    if (updates.streamResponses !== undefined) {
-      settings.streamResponses = updates.streamResponses;
-    }
-    if (updates.showToolCalls !== undefined) {
-      settings.showToolCalls = updates.showToolCalls;
-    }
-    if (updates.temperature !== undefined) {
-      settings.temperature = updates.temperature;
-    }
-    if (updates.maxTokens !== undefined) {
-      settings.maxTokens = updates.maxTokens;
-    }
-    if (updates.executionMode !== undefined) {
-      settings.executionMode = updates.executionMode;
-    }
-    return settings;
   }
 
   /**

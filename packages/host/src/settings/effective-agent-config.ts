@@ -366,12 +366,6 @@ function resolveProviderSelection(
   if (userDefaultModel?.providerId) {
     return { value: userDefaultModel.providerId, source: 'user' };
   }
-  if (workspaceConfig.defaultProvider) {
-    return { value: workspaceConfig.defaultProvider, source: 'workspace' };
-  }
-  if (userConfig.defaultProvider) {
-    return { value: userConfig.defaultProvider, source: 'user' };
-  }
   return { value: null, source: 'default' };
 }
 
@@ -397,12 +391,6 @@ function resolveModelSelection(
     (!providerSelection.value || userDefaultModel.providerId === providerSelection.value)
   ) {
     return { value: userDefaultModel.modelId, source: 'user' };
-  }
-  if (workspaceConfig.defaultModel) {
-    return { value: workspaceConfig.defaultModel, source: 'workspace' };
-  }
-  if (userConfig.defaultModel) {
-    return { value: userConfig.defaultModel, source: 'user' };
   }
   return { value: null, source: 'default' };
 }

@@ -29,15 +29,9 @@ import {
 import { parse, stringify } from 'smol-toml';
 import type { AuthConfigJson, CredentialsConfig, MarketConfig, UnifiedConfig } from './types';
 
-export const SUPPORTED_TOML_CONFIG_VERSION = 1;
-
 export interface NekoTomlConfig {
   readonly ui_locale?: unknown;
   readonly prompt_locale?: unknown;
-  readonly version?: number;
-  readonly default_provider?: string;
-  readonly default_model?: string;
-  readonly default_media_models?: unknown;
   readonly default_models?: Partial<Record<ModelType, TomlModelRefConfig>>;
   readonly default_model_purposes?: Record<string, TomlModelRefConfig>;
   readonly defaults?: TomlDefaultsConfig;
@@ -54,9 +48,6 @@ export interface NekoTomlConfig {
   readonly models?: readonly TomlModelConfig[];
   readonly mcp_servers?: readonly TomlMcpServerConfig[];
   readonly external_research?: TomlExternalResearchConfig;
-  readonly artifact_profiles?: unknown;
-  readonly creation_profiles?: unknown;
-  readonly provider_expression_profiles?: unknown;
   readonly provider_overrides?: Record<string, Partial<TomlProviderConfig>>;
   readonly model_overrides?: Record<string, Partial<TomlModelConfig>>;
   readonly mcp_server_overrides?: Record<string, Partial<TomlMcpServerConfig>>;
@@ -188,7 +179,6 @@ export interface TomlExternalResearchMcpFetchToolBinding {
 
 export interface TomlConfigValidationIssue {
   readonly code:
-    | 'unsupportedVersion'
     | 'unsupportedProviderType'
     | 'unsupportedProviderConnectionKind'
     | 'unsupportedProviderProtocolProfile'
@@ -201,9 +191,8 @@ export interface TomlConfigValidationIssue {
     | 'duplicateModelId'
     | 'invalidDefaultMaxTokens'
     | 'invalidModelTokenMetadata'
-    | 'unsupportedProfileSchemaSection'
+    | 'unsupportedConfigField'
     | 'unsupportedModelType'
-    | 'unsupportedDefaultMediaModelType'
     | 'unsupportedDefaultModelType'
     | 'unsupportedDefaultModelPurpose';
   readonly path: string;
@@ -220,8 +209,6 @@ export class TomlConfigValidationError extends Error {
 export function tomlToUnifiedConfig(config: NekoTomlConfig): UnifiedConfig {
   validateTomlConfig(config);
   return {
-    ...(config.default_provider !== undefined ? { defaultProvider: config.default_provider } : {}),
-    ...(config.default_model !== undefined ? { defaultModel: config.default_model } : {}),
     ...(config.default_models !== undefined
       ? { defaultModels: tomlDefaultModelsToRuntime(config.default_models) }
       : {}),
@@ -284,9 +271,6 @@ export function parseTomlConfigText(source: string): UnifiedConfig {
 
 export function unifiedConfigToToml(config: UnifiedConfig): NekoTomlConfig {
   return {
-    version: SUPPORTED_TOML_CONFIG_VERSION,
-    ...(config.defaultProvider !== undefined ? { default_provider: config.defaultProvider } : {}),
-    ...(config.defaultModel !== undefined ? { default_model: config.defaultModel } : {}),
     ...(config.defaultModels !== undefined
       ? { default_models: runtimeDefaultModelsToToml(config.defaultModels) }
       : {}),
@@ -353,20 +337,11 @@ export function serializeUnifiedConfigToToml(config: UnifiedConfig): string {
 
 export function validateTomlConfig(config: NekoTomlConfig): void {
   const issues: TomlConfigValidationIssue[] = [];
-  const version = config.version ?? SUPPORTED_TOML_CONFIG_VERSION;
-  if (!Number.isInteger(version) || version > SUPPORTED_TOML_CONFIG_VERSION) {
-    issues.push({
-      code: 'unsupportedVersion',
-      path: 'version',
-      message: `Unsupported Agent config version ${String(version)}. Supported version is ${SUPPORTED_TOML_CONFIG_VERSION}.`,
-    });
-  }
+  collectUnsupportedConfigFieldIssues(config, issues);
   collectDuplicateIdIssues(config.providers, 'providers', 'duplicateProviderId', issues);
   collectDuplicateIdIssues(config.models, 'models', 'duplicateModelId', issues);
   collectUnsupportedProviderIssues(config.providers, 'providers', issues);
   collectUnsupportedProviderOverrideIssues(config.provider_overrides, issues);
-  collectUnsupportedDefaultMediaModelIssues(config.default_media_models, issues);
-  collectUnsupportedProfileSchemaIssues(config, issues);
   collectUnsupportedModelTypeIssues(config.models, 'models', issues);
   collectUnsupportedModelProtocolProfileIssues(config.models, 'models', issues);
   collectUnsupportedModelProtocolIssues(config.models, 'models', issues);
@@ -681,39 +656,43 @@ function tomlMcpServerToRuntime(server: TomlMcpServerConfig): MCPServerConfig {
   }) as MCPServerConfig;
 }
 
-function collectUnsupportedDefaultMediaModelIssues(
-  defaults: unknown,
-  issues: TomlConfigValidationIssue[],
-): void {
-  if (defaults === undefined) return;
-  issues.push({
-    code: 'unsupportedDefaultMediaModelType',
-    path: 'default_media_models',
-    message:
-      'Unsupported default_media_models section. Configure default models under [default_models.llm], [default_models.image], [default_models.video], and [default_models.audio].',
-  });
-}
+const NEKO_TOML_CONFIG_FIELDS = new Set([
+  'ui_locale',
+  'prompt_locale',
+  'default_models',
+  'default_model_purposes',
+  'defaults',
+  'skills_dir',
+  'verbose',
+  'output_format',
+  'thinking_budget',
+  'custom_system_prompt',
+  'auto_execute_tools',
+  'stream_responses',
+  'show_tool_calls',
+  'execution_mode',
+  'providers',
+  'models',
+  'mcp_servers',
+  'external_research',
+  'provider_overrides',
+  'model_overrides',
+  'mcp_server_overrides',
+  'auth',
+  'credentials',
+  'market',
+]);
 
-function collectUnsupportedProfileSchemaIssues(
-  config: Pick<
-    NekoTomlConfig,
-    'artifact_profiles' | 'creation_profiles' | 'provider_expression_profiles'
-  >,
+function collectUnsupportedConfigFieldIssues(
+  config: NekoTomlConfig,
   issues: TomlConfigValidationIssue[],
 ): void {
-  const sectionNames = [
-    'artifact_profiles',
-    'creation_profiles',
-    'provider_expression_profiles',
-  ] as const;
-  for (const sectionName of sectionNames) {
-    if (config[sectionName] === undefined) continue;
+  for (const field of Object.keys(config)) {
+    if (NEKO_TOML_CONFIG_FIELDS.has(field)) continue;
     issues.push({
-      code: 'unsupportedProfileSchemaSection',
-      path: sectionName,
-      message:
-        `${sectionName} is not a supported TOML profile schema section. ` +
-        'Install or contribute Agent profile packages and reference provider_expression_profile_id from model metadata instead.',
+      code: 'unsupportedConfigField',
+      path: field,
+      message: `Unsupported configuration field: ${field}.`,
     });
   }
 }

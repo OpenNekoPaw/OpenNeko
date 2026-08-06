@@ -11,7 +11,7 @@ describe('assistant status bar presenter', () => {
   it('shows a warning presentation when no chat model is enabled', () => {
     expect(
       buildAssistantStatusBarPresentation({
-        enabledModels: [{ name: 'dall-e-3', capabilities: ['image_generation'] }],
+        enabledModels: [{ name: 'dall-e-3', capabilities: ['text_to_image'] }],
       }),
     ).toEqual({
       text: '$(hubot) OpenNeko AI',

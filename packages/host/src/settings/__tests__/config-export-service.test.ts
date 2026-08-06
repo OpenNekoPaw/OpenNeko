@@ -12,7 +12,19 @@ function createOperations(): IConfigOperations & {
   } as IConfigOperations & { setProvider: ReturnType<typeof vi.fn> };
 }
 
-describe('ConfigExportService.addCustomProvider', () => {
+describe('ConfigExportService', () => {
+  it('exports one stable configuration shape without a technical version field', () => {
+    const service = new ConfigExportService();
+
+    const result = service.exportConfig(new Map(), new Map());
+
+    expect(result).toEqual({
+      exportedAt: expect.any(String),
+      models: [],
+    });
+    expect(result).not.toHaveProperty('version');
+  });
+
   it('keeps generic custom providers on direct OpenAI-compatible routing by default', async () => {
     const service = new ConfigExportService();
     const operations = createOperations();
@@ -23,7 +35,7 @@ describe('ConfigExportService.addCustomProvider', () => {
         name: 'deepseek',
         displayName: 'DeepSeek Direct',
         type: 'generic',
-        baseUrl: 'https://api.deepseek.com/v1',
+        baseUrl: 'https://api.deepseek.com/api',
         apiKey: 'sk-test',
       },
       operations,
@@ -34,7 +46,7 @@ describe('ConfigExportService.addCustomProvider', () => {
       expect.objectContaining({
         id: 'deepseek-direct',
         type: 'generic',
-        apiUrl: 'https://api.deepseek.com/v1',
+        apiUrl: 'https://api.deepseek.com/api',
         connectionKind: 'direct',
         protocolProfile: 'openai-chat',
         requiresApiKey: true,
@@ -53,7 +65,7 @@ describe('ConfigExportService.addCustomProvider', () => {
         type: 'newapi',
         connectionKind: 'gateway',
         protocolProfile: 'newapi',
-        baseUrl: 'https://www.nekoapi.com/v1',
+        baseUrl: 'https://www.nekoapi.com/api',
       },
       operations,
     );

@@ -21,7 +21,7 @@ describe('model-purpose-registry', () => {
   it('treats existing catalog capability fields as satisfying internal purposes', () => {
     expect(
       modelSupportsPurpose(
-        createModel({ id: 'suno-v4', type: 'audio', capabilities: ['text_to_music'] }),
+        createModel({ id: 'music-model', type: 'audio', capabilities: ['text_to_music'] }),
         'audio.music.generate',
       ),
     ).toBe(true);
@@ -99,7 +99,7 @@ describe('model-purpose-registry', () => {
     ).toBe(true);
   });
 
-  it('maps media understanding purposes to canonical current capabilities while reading legacy aliases', () => {
+  it('maps media understanding purposes to canonical current and alternate capability names', () => {
     expect(MEDIA_UNDERSTANDING_PURPOSE_CAPABILITIES).toEqual({
       'image.understand': 'vision',
       'audio.understand': 'audio',
@@ -121,7 +121,7 @@ describe('model-purpose-registry', () => {
     expect(
       modelSupportsPurpose(
         createModel({
-          id: 'legacy-video',
+          id: 'alternate-video-capability',
           type: 'llm',
           capabilities: ['chat', 'video.understand'],
         }),

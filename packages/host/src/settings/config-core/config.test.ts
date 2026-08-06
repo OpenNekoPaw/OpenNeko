@@ -16,7 +16,6 @@ import { DEFAULT_CONFIG, CONFIG_DIR_NAME, CONFIG_FILE_NAME, type UnifiedConfig }
 describe('mergeConfigs', () => {
   it('should merge scalar fields with override taking precedence', () => {
     const base: UnifiedConfig = {
-      defaultProvider: 'anthropic',
       maxTokens: 4096,
       temperature: 0.5,
     };
@@ -28,7 +27,6 @@ describe('mergeConfigs', () => {
 
     const merged = mergeConfigs(base, override);
 
-    expect(merged.defaultProvider).toBe('anthropic');
     expect(merged.maxTokens).toBe(8192);
     expect(merged.temperature).toBe(0.5);
     expect(merged.verbose).toBe(true);
@@ -64,7 +62,7 @@ describe('mergeConfigs', () => {
           name: 'openai',
           displayName: 'OpenAI',
           type: 'openai',
-          apiUrl: 'https://api.openai.com/v1',
+          apiUrl: 'https://api.openai.com/api',
           enabled: true,
         },
       ],
@@ -114,8 +112,6 @@ describe('normalizeConfig', () => {
 
     const normalized = normalizeConfig(config);
 
-    expect(normalized.defaultProvider).toBe(DEFAULT_CONFIG.defaultProvider);
-    expect(normalized.defaultModel).toBe(DEFAULT_CONFIG.defaultModel);
     expect(normalized.maxTokens).toBe(DEFAULT_CONFIG.maxTokens);
     expect(normalized.temperature).toBe(DEFAULT_CONFIG.temperature);
     expect(normalized.verbose).toBe(DEFAULT_CONFIG.verbose);
@@ -192,13 +188,11 @@ describe('processConfig', () => {
   it('should process null configs', () => {
     const normalized = processConfig(null, null);
 
-    expect(normalized.defaultProvider).toBe(DEFAULT_CONFIG.defaultProvider);
     expect(normalized.providers.size).toBe(0);
   });
 
   it('should merge user and workspace configs with workspace taking precedence', () => {
     const userConfig: UnifiedConfig = {
-      defaultProvider: 'anthropic',
       maxTokens: 4096,
       providers: [
         {
@@ -224,48 +218,10 @@ describe('processConfig', () => {
 
     const normalized = processConfig(userConfig, workspaceConfig);
 
-    expect(normalized.defaultProvider).toBe('anthropic');
     expect(normalized.maxTokens).toBe(8192);
 
     const anthropic = normalized.providers.get('anthropic');
     expect(anthropic?.apiKey).toBe('workspace-key');
-  });
-
-  it('should merge canonical provider and model selections before normalizing', () => {
-    const userConfig: UnifiedConfig = {
-      defaultProvider: 'openai',
-      providers: [
-        {
-          id: 'openai',
-          name: 'openai',
-          displayName: 'OpenAI',
-          type: 'openai',
-          apiUrl: 'https://api.openai.com/v1',
-          apiKey: 'user-api-key',
-          enabled: true,
-        },
-      ],
-    };
-
-    const workspaceConfig: UnifiedConfig = {
-      defaultModel: 'gpt-4o',
-      models: [
-        {
-          id: 'gpt-4o',
-          name: 'gpt-4o',
-          providerId: 'openai',
-          capabilities: ['chat'],
-          enabled: true,
-        },
-      ],
-    };
-
-    const normalized = processConfig(userConfig, workspaceConfig);
-
-    expect(normalized.defaultProvider).toBe('openai');
-    expect(normalized.defaultModel).toBe('gpt-4o');
-    expect(normalized.providers.get('openai')?.apiKey).toBe('user-api-key');
-    expect(normalized.models.get('gpt-4o')?.providerId).toBe('openai');
   });
 });
 
@@ -346,7 +302,7 @@ describe('mergeConfigs — auth & credentials', () => {
   it('should merge market config', () => {
     const base: UnifiedConfig = {
       market: {
-        registryUrl: 'https://market.example.com/api/v1',
+        registryUrl: 'https://market.example.com/api/catalog',
       },
     };
 
@@ -354,7 +310,7 @@ describe('mergeConfigs — auth & credentials', () => {
 
     const merged = mergeConfigs(base, override);
 
-    expect(merged.market?.registryUrl).toBe('https://market.example.com/api/v1');
+    expect(merged.market?.registryUrl).toBe('https://market.example.com/api/catalog');
   });
 
   it('should handle missing auth/credentials gracefully', () => {
@@ -482,7 +438,6 @@ describe('config constants', () => {
   });
 
   it('should have sensible default values', () => {
-    expect(DEFAULT_CONFIG.defaultProvider).toBe('ollama-local');
     expect(DEFAULT_CONFIG.maxTokens).toBeGreaterThan(0);
     expect(DEFAULT_CONFIG.temperature).toBeGreaterThanOrEqual(0);
     expect(DEFAULT_CONFIG.temperature).toBeLessThanOrEqual(2);

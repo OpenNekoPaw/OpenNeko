@@ -70,7 +70,7 @@ function unifiedToUserConfig(unified: UnifiedConfig | null): UserConfig {
 
 /**
  * Convert user config to unified config for saving.
- * Preserves scalar fields (defaultProvider, maxTokens, etc.) from the existing file.
+ * Preserves settings fields not managed by UserConfig from the existing file.
  */
 function userToUnifiedConfig(user: UserConfig, configPath?: string): UnifiedConfig {
   // Read existing file to preserve scalar fields not managed by UserConfig
@@ -114,7 +114,7 @@ export interface IUserConfigManager {
 
   /** Load raw UnifiedConfig (includes scalar fields like temperature, maxTokens, etc.) */
   loadRaw(): UnifiedConfig;
-  loadRawResult?(): ConfigReadResult;
+  loadRawResult(): ConfigReadResult;
   /** Update a single scalar field in the config file */
   updateScalar<K extends keyof UnifiedConfig>(key: K, value: UnifiedConfig[K]): Promise<void>;
   /** Update multiple scalar fields in the config file */

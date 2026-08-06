@@ -8,7 +8,7 @@ const provider: Provider = {
   name: 'user-newapi',
   displayName: 'User NewAPI',
   type: 'newapi',
-  apiUrl: 'https://gateway.example.com/v1',
+  apiUrl: 'https://gateway.example.com/api',
   apiKey: 'sk-user',
   enabled: true,
   connectionKind: 'gateway',
@@ -61,7 +61,9 @@ describe('resolveAiProviderSources', () => {
     const projection = resolveAiProviderSources({
       providers: [],
       models: [],
-      userConfigReadResult: createReadResult({ defaultProvider: 'missing' }),
+      userConfigReadResult: createReadResult({
+        defaultModels: { llm: { providerId: 'missing', modelId: 'missing' } },
+      }),
       configDiagnostic: diagnostic,
     });
 

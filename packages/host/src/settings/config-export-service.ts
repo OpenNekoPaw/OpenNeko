@@ -10,7 +10,6 @@ import type { Model, Provider } from './types/provider';
  * Config export data structure
  */
 export interface ConfigExportData {
-  version: string;
   exportedAt: string;
   providers?: Array<{
     id: string;
@@ -125,7 +124,6 @@ export class ConfigExportService implements IConfigExportService {
     options: ExportOptions = {},
   ): ConfigExportData {
     const exportData: ConfigExportData = {
-      version: '2.0',
       exportedAt: new Date().toISOString(),
       models: Array.from(models.values()).map((m) => ({
         id: m.id,
@@ -163,7 +161,7 @@ export class ConfigExportService implements IConfigExportService {
     options: ImportOptions = {},
   ): Promise<ConfigImportResult> {
     // Validate format
-    if (!data.version || !data.exportedAt) {
+    if (!data.exportedAt) {
       return { success: false, message: 'Invalid configuration format', importedCount: 0 };
     }
 

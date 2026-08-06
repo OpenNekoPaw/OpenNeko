@@ -56,8 +56,6 @@ function detectExplicitAiConfig(input: AiProviderSourceInput): ExplicitAiConfigS
   const isExplicit =
     hasNonEmptyArray(raw.providers) ||
     hasNonEmptyArray(raw.models) ||
-    isNonEmptyString(raw.defaultProvider) ||
-    isNonEmptyString(raw.defaultModel) ||
     hasNonEmptyRecord(raw.defaultModels) ||
     hasNonEmptyRecord(raw.defaultModelPurposes) ||
     hasNonEmptyRecord(raw.providerOverrides) ||
@@ -158,10 +156,6 @@ function hasNonEmptyArray(value: unknown): boolean {
 
 function hasNonEmptyRecord(value: unknown): boolean {
   return !!value && typeof value === 'object' && Object.keys(value).length > 0;
-}
-
-function isNonEmptyString(value: unknown): boolean {
-  return typeof value === 'string' && value.length > 0;
 }
 
 function isPositiveInteger(value: unknown): value is number {

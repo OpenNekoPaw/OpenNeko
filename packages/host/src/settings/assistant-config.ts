@@ -1,5 +1,5 @@
 import { type ChatModelOption, type MediaModelType } from '@neko/ai-contracts';
-import { DEFAULT_CONFIG, DEFAULT_EXTENSION_CONFIG, type UnifiedConfig } from './config-core/index';
+import { DEFAULT_CONFIG, DEFAULT_EXTENSION_CONFIG } from './config-core/index';
 import type { ModelSourceGroup } from '@neko/agent-contracts';
 import type { Model, Provider } from './types/provider';
 import type { MergedConfig } from './config-manager';
@@ -73,11 +73,7 @@ export interface AssistantProviderSelection {
 export interface AssistantSettingsSnapshot {
   selectedProviderId: string | null;
   selectedModelId: string | null;
-  /**
-   * Persisted legacy field name. Runtime consumers must treat this as
-   * user custom instructions layered over the built-in base prompt, not as
-   * a replacement system prompt.
-   */
+  /** User custom instructions layered over the built-in base prompt. */
   customSystemPrompt: string;
   autoExecuteTools: boolean;
   streamResponses: boolean;
@@ -227,8 +223,8 @@ export function selectAssistantProvider(
 }
 
 export function buildAssistantSettingsSnapshot(input: {
-  defaultProvider?: string | null;
-  defaultModel?: string | null;
+  selectedProviderId?: string | null;
+  selectedModelId?: string | null;
   customSystemPrompt?: string;
   autoExecuteTools?: boolean;
   streamResponses?: boolean;
@@ -238,8 +234,8 @@ export function buildAssistantSettingsSnapshot(input: {
   executionMode?: AssistantExecutionMode;
 }): AssistantSettingsSnapshot {
   return {
-    selectedProviderId: input.defaultProvider ?? null,
-    selectedModelId: input.defaultModel ?? null,
+    selectedProviderId: input.selectedProviderId ?? null,
+    selectedModelId: input.selectedModelId ?? null,
     customSystemPrompt: input.customSystemPrompt ?? DEFAULT_EXTENSION_CONFIG.customSystemPrompt,
     autoExecuteTools: input.autoExecuteTools ?? DEFAULT_EXTENSION_CONFIG.autoExecuteTools,
     streamResponses: input.streamResponses ?? DEFAULT_EXTENSION_CONFIG.streamResponses,
@@ -285,49 +281,15 @@ export function buildDefaultMediaModelOptionIds(input: {
   return result;
 }
 
-export function mapAssistantSettingsToUnifiedScalars(
-  updates: Partial<AssistantSettingsSnapshot>,
-): Partial<UnifiedConfig> {
-  const mapped: Partial<UnifiedConfig> = {};
-  if ('selectedProviderId' in updates) {
-    mapped.defaultProvider = updates.selectedProviderId ?? undefined;
-  }
-  if ('selectedModelId' in updates) {
-    mapped.defaultModel = updates.selectedModelId ?? undefined;
-  }
-  if (updates.customSystemPrompt !== undefined) {
-    mapped.customSystemPrompt = updates.customSystemPrompt;
-  }
-  if (updates.autoExecuteTools !== undefined) {
-    mapped.autoExecuteTools = updates.autoExecuteTools;
-  }
-  if (updates.streamResponses !== undefined) {
-    mapped.streamResponses = updates.streamResponses;
-  }
-  if (updates.showToolCalls !== undefined) {
-    mapped.showToolCalls = updates.showToolCalls;
-  }
-  if (updates.temperature !== undefined) {
-    mapped.temperature = updates.temperature;
-  }
-  if (updates.maxTokens !== undefined) {
-    mapped.maxTokens = updates.maxTokens;
-  }
-  if (updates.executionMode !== undefined) {
-    mapped.executionMode = updates.executionMode;
-  }
-  return mapped;
-}
-
-export function mapWebviewSettingsToUnifiedScalars(
+export function mapWebviewSettingsToAssistantSettings(
   settings: Record<string, unknown>,
-): Partial<UnifiedConfig> {
-  const mapped: Partial<UnifiedConfig> = {};
+): Partial<AssistantSettingsSnapshot> {
+  const mapped: Partial<AssistantSettingsSnapshot> = {};
   if ('providerId' in settings) {
-    mapped.defaultProvider = nullableString(settings.providerId);
+    mapped.selectedProviderId = nullableString(settings.providerId);
   }
   if ('modelId' in settings) {
-    mapped.defaultModel = nullableString(settings.modelId);
+    mapped.selectedModelId = nullableString(settings.modelId);
   }
   if (typeof settings.systemPrompt === 'string') {
     mapped.customSystemPrompt = settings.systemPrompt;
@@ -347,29 +309,11 @@ export function mapWebviewSettingsToUnifiedScalars(
   if (typeof settings.maxTokens === 'number' && Number.isFinite(settings.maxTokens)) {
     mapped.maxTokens = settings.maxTokens;
   }
-  if (typeof settings.thinkingBudget === 'number' && Number.isFinite(settings.thinkingBudget)) {
-    mapped.thinkingBudget = settings.thinkingBudget;
-  }
   const executionMode = parseExecutionMode(settings.executionMode);
   if (executionMode) {
     mapped.executionMode = executionMode;
   }
   return mapped;
-}
-
-export function buildAssistantSettingsResetScalars(): Partial<UnifiedConfig> {
-  return {
-    defaultProvider: undefined,
-    defaultModel: undefined,
-    customSystemPrompt: undefined,
-    autoExecuteTools: undefined,
-    streamResponses: undefined,
-    showToolCalls: undefined,
-    temperature: undefined,
-    maxTokens: undefined,
-    executionMode: undefined,
-    thinkingBudget: undefined,
-  };
 }
 
 export function buildAssistantProviderMutationSettingsUpdate(input: {

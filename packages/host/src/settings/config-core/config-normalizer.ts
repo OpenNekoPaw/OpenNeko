@@ -27,12 +27,6 @@ export function mergeConfigs(base: UnifiedConfig, override: UnifiedConfig): Unif
   const merged: UnifiedConfig = { ...base };
 
   // Merge scalar fields (override takes precedence)
-  if (override.defaultProvider !== undefined) {
-    merged.defaultProvider = override.defaultProvider;
-  }
-  if (override.defaultModel !== undefined) {
-    merged.defaultModel = override.defaultModel;
-  }
   if (base.defaultModels || override.defaultModels) {
     merged.defaultModels = {
       ...base.defaultModels,
@@ -303,8 +297,6 @@ export function normalizeConfig(config: UnifiedConfig): NormalizedConfig {
   const mcpServers = applyOverrides(config.mcpServers ?? [], config.mcpServerOverrides);
 
   return {
-    defaultProvider: config.defaultProvider ?? DEFAULT_CONFIG.defaultProvider,
-    defaultModel: config.defaultModel ?? DEFAULT_CONFIG.defaultModel,
     maxTokens: config.maxTokens ?? DEFAULT_CONFIG.maxTokens,
     temperature: config.temperature ?? DEFAULT_CONFIG.temperature,
     skillsDir: config.skillsDir,

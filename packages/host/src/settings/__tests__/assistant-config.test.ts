@@ -11,8 +11,7 @@ import {
   buildAssistantSettingsDataMessage,
   buildAssistantSettingsUpdatedMessage,
   buildDefaultMediaModelOptionIds,
-  mapAssistantSettingsToUnifiedScalars,
-  mapWebviewSettingsToUnifiedScalars,
+  mapWebviewSettingsToAssistantSettings,
   selectAssistantDefaultProvider,
   selectAssistantProvider,
 } from '../assistant-config';
@@ -32,7 +31,7 @@ const openaiProvider: Provider = {
   name: 'openai',
   displayName: 'OpenAI',
   type: 'openai',
-  apiUrl: 'https://api.openai.com/v1',
+  apiUrl: 'https://api.openai.com/api',
   enabled: true,
 };
 
@@ -66,7 +65,7 @@ const imageModel: Model = {
   providerId: 'openai',
   type: 'image',
   enabled: true,
-  capabilities: ['image_generation'],
+  capabilities: ['text_to_image'],
 };
 
 const localChatModel: Model = {
@@ -238,35 +237,9 @@ describe('assistant config presenter', () => {
     });
   });
 
-  it('maps assistant settings to UnifiedConfig scalar keys', () => {
+  it('sanitizes webview settings into runtime assistant state', () => {
     expect(
-      mapAssistantSettingsToUnifiedScalars({
-        selectedProviderId: 'anthropic',
-        selectedModelId: 'anthropic-claude-sonnet-4',
-        customSystemPrompt: 'system',
-        autoExecuteTools: false,
-        streamResponses: true,
-        showToolCalls: false,
-        temperature: 0.4,
-        maxTokens: 2048,
-        executionMode: 'ask',
-      }),
-    ).toEqual({
-      defaultProvider: 'anthropic',
-      defaultModel: 'anthropic-claude-sonnet-4',
-      customSystemPrompt: 'system',
-      autoExecuteTools: false,
-      streamResponses: true,
-      showToolCalls: false,
-      temperature: 0.4,
-      maxTokens: 2048,
-      executionMode: 'ask',
-    });
-  });
-
-  it('sanitizes webview settings before writing UnifiedConfig scalars', () => {
-    expect(
-      mapWebviewSettingsToUnifiedScalars({
+      mapWebviewSettingsToAssistantSettings({
         providerId: 'openai',
         modelId: 'openai-gpt-4o',
         systemPrompt: 'system',
@@ -279,8 +252,8 @@ describe('assistant config presenter', () => {
         ignored: 'value',
       }),
     ).toEqual({
-      defaultProvider: 'openai',
-      defaultModel: 'openai-gpt-4o',
+      selectedProviderId: 'openai',
+      selectedModelId: 'openai-gpt-4o',
       customSystemPrompt: 'system',
       autoExecuteTools: true,
       streamResponses: false,
@@ -409,8 +382,8 @@ describe('assistant config presenter', () => {
   it('builds runtime settings snapshot including agent-only thinking budget', () => {
     expect(
       buildAssistantRuntimeSettingsSnapshot({
-        defaultProvider: null,
-        defaultModel: null,
+        selectedProviderId: null,
+        selectedModelId: null,
       }),
     ).toEqual({
       selectedProviderId: null,

@@ -132,7 +132,7 @@ describe('ChatModelService', () => {
       name: 'mixed-gateway',
       displayName: 'Mixed Gateway',
       type: 'newapi',
-      apiUrl: 'https://gateway.example.com/v1',
+      apiUrl: 'https://gateway.example.com/api',
       apiKey: 'sk-gateway',
       enabled: true,
       connectionKind: 'gateway',

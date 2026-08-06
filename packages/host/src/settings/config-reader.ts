@@ -23,7 +23,6 @@ const logger = new ConsoleLogger('ConfigReader', LogLevel.Debug);
 export type ConfigReadErrorCode =
   | 'empty'
   | 'invalidToml'
-  | 'unsupportedVersion'
   | 'unsupportedProviderType'
   | 'unsupportedProviderConnectionKind'
   | 'unsupportedProviderProtocolProfile'
@@ -36,9 +35,8 @@ export type ConfigReadErrorCode =
   | 'duplicateModelId'
   | 'invalidDefaultMaxTokens'
   | 'invalidModelTokenMetadata'
-  | 'unsupportedProfileSchemaSection'
+  | 'unsupportedConfigField'
   | 'unsupportedModelType'
-  | 'unsupportedDefaultMediaModelType'
   | 'unsupportedDefaultModelType'
   | 'unsupportedDefaultModelPurpose'
   | 'readError';
@@ -236,7 +234,6 @@ export function writeWorkspaceConfig(workDir: string, config: UnifiedConfig): vo
 }
 
 function getConfigReadErrorCode(error: unknown): ConfigReadErrorCode {
-  if (isTomlValidationError(error, 'unsupportedVersion')) return 'unsupportedVersion';
   if (isTomlValidationError(error, 'unsupportedProviderType')) return 'unsupportedProviderType';
   if (isTomlValidationError(error, 'unsupportedProviderConnectionKind')) {
     return 'unsupportedProviderConnectionKind';
@@ -267,13 +264,10 @@ function getConfigReadErrorCode(error: unknown): ConfigReadErrorCode {
   if (isTomlValidationError(error, 'invalidModelTokenMetadata')) {
     return 'invalidModelTokenMetadata';
   }
-  if (isTomlValidationError(error, 'unsupportedProfileSchemaSection')) {
-    return 'unsupportedProfileSchemaSection';
+  if (isTomlValidationError(error, 'unsupportedConfigField')) {
+    return 'unsupportedConfigField';
   }
   if (isTomlValidationError(error, 'unsupportedModelType')) return 'unsupportedModelType';
-  if (isTomlValidationError(error, 'unsupportedDefaultMediaModelType')) {
-    return 'unsupportedDefaultMediaModelType';
-  }
   if (isTomlValidationError(error, 'unsupportedDefaultModelType')) {
     return 'unsupportedDefaultModelType';
   }
@@ -313,13 +307,6 @@ function buildConfigReadDiagnostic(
         code,
         filePath,
         message: `Configuration file contains invalid TOML: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedVersion':
-      return {
-        code,
-        filePath,
-        message: `Configuration file uses an unsupported version: ${filePath}`,
         ...(detail !== undefined ? { detail } : {}),
       };
     case 'unsupportedProviderType':
@@ -406,11 +393,11 @@ function buildConfigReadDiagnostic(
         message: `Configuration file contains invalid model token metadata: ${filePath}`,
         ...(detail !== undefined ? { detail } : {}),
       };
-    case 'unsupportedProfileSchemaSection':
+    case 'unsupportedConfigField':
       return {
         code,
         filePath,
-        message: `Configuration file contains unsupported Agent profile schema sections: ${filePath}`,
+        message: `Configuration file contains an unsupported field: ${filePath}`,
         ...(detail !== undefined ? { detail } : {}),
       };
     case 'unsupportedModelType':
@@ -418,13 +405,6 @@ function buildConfigReadDiagnostic(
         code,
         filePath,
         message: `Configuration file contains an unsupported model type: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedDefaultMediaModelType':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported default media model category: ${filePath}`,
         ...(detail !== undefined ? { detail } : {}),
       };
     case 'unsupportedDefaultModelType':

@@ -69,7 +69,7 @@ describe('config normalizer merge', () => {
             searchTool: {
               name: 'web_search',
               queryArg: 'query',
-              outputSchema: 'neko.externalResearch.search.v1',
+              outputSchema: 'neko.externalResearch.search',
             },
           },
         },
@@ -83,12 +83,12 @@ describe('config normalizer merge', () => {
               name: 'web_search',
               queryArg: 'q',
               maxResultsArg: 'limit',
-              outputSchema: 'neko.externalResearch.search.v1',
+              outputSchema: 'neko.externalResearch.search',
             },
             fetchTool: {
               name: 'fetch_url',
               urlArg: 'url',
-              outputSchema: 'neko.externalResearch.fetch.v1',
+              outputSchema: 'neko.externalResearch.fetch',
             },
           },
         },
@@ -104,12 +104,12 @@ describe('config normalizer merge', () => {
           name: 'web_search',
           queryArg: 'q',
           maxResultsArg: 'limit',
-          outputSchema: 'neko.externalResearch.search.v1',
+          outputSchema: 'neko.externalResearch.search',
         },
         fetchTool: {
           name: 'fetch_url',
           urlArg: 'url',
-          outputSchema: 'neko.externalResearch.fetch.v1',
+          outputSchema: 'neko.externalResearch.fetch',
         },
       },
     });

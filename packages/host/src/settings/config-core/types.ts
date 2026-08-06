@@ -35,12 +35,6 @@ export interface UnifiedConfig {
   // Basic Configuration
   // ==========================================================================
 
-  /** Default provider ID */
-  defaultProvider?: string;
-
-  /** Default model ID */
-  defaultModel?: string;
-
   /** Default models by broad model type */
   defaultModels?: TypeDefaultModels;
 
@@ -151,12 +145,6 @@ export interface UnifiedConfig {
  * user and workspace configurations.
  */
 export interface NormalizedConfig {
-  /** Default provider ID */
-  defaultProvider: string;
-
-  /** Default model ID */
-  defaultModel: string;
-
   /** Global default max output tokens */
   maxTokens: number;
 
@@ -193,8 +181,6 @@ export interface NormalizedConfig {
  * Default configuration values
  */
 export const DEFAULT_CONFIG: Omit<NormalizedConfig, 'providers' | 'models' | 'mcpServers'> = {
-  defaultProvider: 'ollama-local',
-  defaultModel: 'ollama-local-default-chat',
   maxTokens: 8192,
   temperature: 0.7,
   verbose: false,
