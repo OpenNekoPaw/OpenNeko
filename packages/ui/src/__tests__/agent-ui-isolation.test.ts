@@ -22,7 +22,7 @@ const agentCriticalFiles = [
 ];
 
 describe('Agent UI isolation guardrail', () => {
-  it('keeps Agent Header/Input and selector architecture out of the shared UI migration', () => {
+  it('keeps Agent Header/Input and selector architecture out of shared UI ownership', () => {
     expect(
       agentCriticalFiles.every((relativePath) => existsSync(join(repoRoot, relativePath))),
     ).toBe(true);

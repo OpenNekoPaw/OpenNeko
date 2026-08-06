@@ -37,7 +37,7 @@ describe('fetchForEpub', () => {
       vi.fn(async () => new Response(archive, { status: 200 })),
     );
 
-    const result = await fetchForEpub('http://127.0.0.1:43125/v1/resources/book', 'binary');
+    const result = await fetchForEpub('http://127.0.0.1:43125/resources/book', 'binary');
 
     expect(result).toBeInstanceOf(ArrayBuffer);
     expect(Array.from(new Uint8Array(result as ArrayBuffer))).toEqual(Array.from(archive));
@@ -49,7 +49,7 @@ describe('fetchForEpub', () => {
       vi.fn(async () => new Response('chapter image', { status: 200 })),
     );
 
-    const result = await fetchForEpub('http://127.0.0.1:43125/v1/resources/image', 'blob');
+    const result = await fetchForEpub('http://127.0.0.1:43125/resources/image', 'blob');
 
     expect(result).toBeInstanceOf(Blob);
   });
@@ -86,7 +86,7 @@ describe('fetchForEpub', () => {
         root.render(
           <I18nProvider service={i18nService}>
             <PersistedStateProvider>
-              <EpubViewer sourceUrl="http://127.0.0.1:43125/v1/resources/book" />
+              <EpubViewer sourceUrl="http://127.0.0.1:43125/resources/book" />
             </PersistedStateProvider>
           </I18nProvider>,
         );

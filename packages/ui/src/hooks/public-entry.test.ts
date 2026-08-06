@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as hooks from './index';
 import * as primitives from '../primitives';
 
-describe('@neko/ui hooks compatibility', () => {
+describe('@neko/ui hooks public entry', () => {
   it('exposes resize and drag hooks through the canonical UI surface', () => {
     expect(hooks.useResizable).toBeTypeOf('function');
     expect(hooks.usePersistedResize).toBeTypeOf('function');

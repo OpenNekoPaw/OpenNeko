@@ -9,7 +9,7 @@ import { PropertyPanel } from './PropertyPanel';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 (globalThis as { React?: typeof React }).React = React;
 
-describe('Canvas PropertyPanel shared UI migration', () => {
+describe('Canvas PropertyPanel shared UI composition', () => {
   let host: HTMLDivElement;
   let root: Root;
 
