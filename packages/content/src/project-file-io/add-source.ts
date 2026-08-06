@@ -147,8 +147,7 @@ function validateDurableStoredPath(
     segments.some((segment) => !segment || segment === '.' || segment === '..') ||
     segments.some(
       (segment) => segment === 'cache' || segment === 'proxy' || segment === 'thumbnail',
-    ) ||
-    segments.some((segment, index) => segment === '.neko' && segments[index + 1] === '.cache')
+    )
   ) {
     return undefined;
   }

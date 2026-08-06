@@ -151,15 +151,15 @@ export function normalizeWorkspaceContentPath(value: string): string | undefined
   if (normalized.includes('${')) return undefined;
   if (normalized.startsWith('/') || /^[A-Za-z]:(?:\/|$)/.test(normalized)) return undefined;
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(normalized)) return undefined;
-  if (normalized.startsWith('.neko/.cache/') || normalized.startsWith('neko/.cache/')) {
-    return undefined;
-  }
-
   const segments = normalized.split('/');
   if (
     segments.some(
       (segment) =>
-        segment.length === 0 || segment === '.' || segment === '..' || segment.includes(':'),
+        segment.length === 0 ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.startsWith('.') ||
+        segment.includes(':'),
     )
   ) {
     return undefined;

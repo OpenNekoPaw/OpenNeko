@@ -301,7 +301,7 @@ describe('Project source add Extension Host adapter', () => {
         requestId: 'cache-1',
         kind: 'drag-drop',
         formatId: 'nkc',
-        sourcePath: '/workspace/project/.neko/.cache/proxy/clip.mp4',
+        sourcePath: '/home/user/.neko/workspace-cache/workspace-id/proxy/clip.mp4',
         assetDirectory: 'media',
       },
       { postMessage: vi.fn(), storagePort: { store } },

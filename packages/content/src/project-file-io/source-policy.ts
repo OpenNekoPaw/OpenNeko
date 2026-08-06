@@ -201,7 +201,6 @@ export function detectRuntimeOrCacheSourceHandle(
   }
 
   if (
-    hasPathSegmentSequence(lower, ['.neko', '.cache']) ||
     hasPathSegment(lower, 'cache') ||
     hasPathSegment(lower, 'proxy') ||
     hasPathSegment(lower, 'thumbnail') ||
@@ -259,13 +258,6 @@ function hasParentTraversal(value: string): boolean {
 
 function hasPathSegment(value: string, segment: string): boolean {
   return normalizePathForSegmentChecks(value).split('/').includes(segment);
-}
-
-function hasPathSegmentSequence(value: string, sequence: readonly string[]): boolean {
-  const segments = normalizePathForSegmentChecks(value).split('/');
-  return segments.some((_, index) =>
-    sequence.every((segment, offset) => segments[index + offset] === segment),
-  );
 }
 
 function normalizePathForSegmentChecks(value: string): string {

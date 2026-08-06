@@ -74,7 +74,7 @@ describe('content locator contracts', () => {
       'https://example.com/image.png',
       '${MEDIA}/image.png',
       'neko/assets/../private.png',
-      '.neko/.cache/resources/image.png',
+      '.runtime/resources/image.png',
       'neko-media://panel/image.png',
     ];
 
