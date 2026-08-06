@@ -42,9 +42,6 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await writeFile(
       join(configRoot, 'config.toml'),
       [
-        'default_provider = "functional-ollama"',
-        'default_model = "functional-ollama:functional-chat"',
-        '',
         '[[providers]]',
         'id = "functional-ollama"',
         'name = "Functional Ollama"',
@@ -61,6 +58,8 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         'provider_id = "functional-ollama"',
         'type = "llm"',
         'capabilities = ["chat"]',
+        'context_window = 32768',
+        'max_output_tokens = 4096',
         'enabled = true',
         '',
       ].join('\n'),
@@ -101,6 +100,12 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     checkpoint('asset-management-main-large', assets);
 
     await waitForSelector('[data-owner-root="asset-management"][data-catalog-status="ready"]');
+    await selectGlobalLibraryCatalog(evaluate, /^(Media Library|媒体库)$/u);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} [data-owner-root="asset-management"]')?.getAttribute('data-catalog-status') === 'ready'`,
+      'Media Library catalog did not become ready.',
+    );
     await click(
       `${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__commands button`,
     );
@@ -259,7 +264,8 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await waitForNavigationButton(evaluate, 1);
     await click('.home-primary-navigation .home-nav-button', 1);
     await waitForSelector('[data-owner-root="asset-management"]');
-    await openPersistedFixtureAssetPreview(evaluate);
+    const retainedMediaLibrary = await openPersistedFixtureAssetPreview(evaluate);
+    checkpoint('asset-management-media-library-restart-restore', retainedMediaLibrary);
     await resizeWindow(evaluate, 1040, 700);
     const smallAssets = await inspectWorkbench(evaluate, 'management', 'asset-management');
     assertResponsiveManagementDetailSplit(smallAssets, 'asset-management', 'asset-preview');
@@ -1361,11 +1367,43 @@ async function activateAssetEntry(evaluate, label, eventName) {
   })()`);
 }
 
+async function selectGlobalLibraryCatalog(evaluate, labelPattern) {
+  const selectedExpression = `(() => {
+    const target = document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR}');
+    return [...(target?.querySelectorAll('.global-library-browser__facets button') ?? [])]
+      .some((candidate) =>
+        ${String(labelPattern)}.test(candidate.textContent?.trim() ?? '') &&
+        candidate.getAttribute('aria-pressed') === 'true'
+      );
+  })()`;
+  await evaluate(`(() => {
+    const target = document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR}');
+    const button = [...(target?.querySelectorAll('.global-library-browser__facets button') ?? [])]
+      .find((candidate) => ${String(labelPattern)}.test(candidate.textContent?.trim() ?? ''));
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Requested Global Library catalog is unavailable.');
+    }
+    if (button.getAttribute('aria-pressed') !== 'true') button.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    selectedExpression,
+    'Requested Global Library catalog did not become active.',
+  );
+}
+
 async function openPersistedFixtureAssetPreview(evaluate) {
   await waitForCondition(
     evaluate,
     `document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} [data-owner-root="asset-management"]')?.getAttribute('data-catalog-status') === 'ready'`,
     'Asset Management did not restore its catalog after application restart.',
+  );
+  await selectGlobalLibraryCatalog(evaluate, /^(Media Library|媒体库)$/u);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} [data-owner-root="asset-management"]')?.getAttribute('data-catalog-status') === 'ready'`,
+    'Media Library catalog did not become ready after application restart.',
   );
   const previewEntryVisible = await evaluate(`(() =>
     [...document.querySelectorAll('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR} .global-library-browser__entry strong')]
@@ -1399,6 +1437,27 @@ async function openPersistedFixtureAssetPreview(evaluate) {
     ))`,
     'Asset Management did not create a fresh Preview handle after restart.',
   );
+  const evidence = await evaluate(`(() => {
+    const target = document.querySelector('${ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR}');
+    const catalog = [...(target?.querySelectorAll('.global-library-browser__facets button') ?? [])]
+      .find((button) => button.getAttribute('aria-pressed') === 'true');
+    const collection = target?.querySelector('.global-library-browser__collection');
+    return {
+      catalog: catalog?.textContent?.trim() ?? '',
+      viewMode: collection?.getAttribute('data-view-mode') ?? '',
+      contentVisible: [...(target?.querySelectorAll('.global-library-browser__entry strong') ?? [])]
+        .some((element) => element.textContent?.trim() === 'preview.png'),
+      previewReady: Boolean(document.querySelector(
+        '${ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR} [data-authorized-preview-session-id]',
+      )),
+    };
+  })()`);
+  if (evidence.viewMode !== 'list' || !evidence.contentVisible || !evidence.previewReady) {
+    throw new Error(
+      `Retained Media Library evidence is incomplete: ${JSON.stringify(evidence)}`,
+    );
+  }
+  return { ...evidence, connectionRetained: true };
 }
 
 async function waitForCondition(evaluate, expression, message, timeoutMs = 30_000) {
