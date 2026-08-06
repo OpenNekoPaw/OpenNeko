@@ -574,7 +574,7 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
     code !== 'missingConfig' &&
     code !== 'missingProvider' &&
     code !== 'missingModel' &&
-    code !== 'missingApiKey' &&
+    code !== 'missingProviderEndpoint' &&
     code !== 'invalidDefaultProvider' &&
     code !== 'invalidDefaultModel'
   ) {

@@ -43,6 +43,8 @@ import {
 import {
   createAgentAppHost,
   createAgentConversationLifecycleService,
+  createAgentRuntimeSettingsAuthority,
+  createAgentRuntimeSettingsRepository,
   createAssistantResourceService,
   createPersistentAgentConversationLifecycleRepository,
   initializeAgentConversationLifecycleTables,
@@ -171,6 +173,7 @@ async function startDesktop(): Promise<void> {
     workspace: functionalWorkspace,
   });
   const globalStorage = resolveGlobalStorageLayout(homedir);
+  const assistantSpaceId = 'assistant-space:local-user';
   const localMetadataStore = createNodeSqliteLocalMetadataStore({ homedir });
   await localMetadataStore.open({
     databasePath: globalStorage.database,
@@ -196,6 +199,11 @@ async function startDesktop(): Promise<void> {
     authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
     codec: applicationSettingsCodec,
   });
+  const agentRuntimeSettingsRepository = createAgentRuntimeSettingsRepository({
+    metadataStore: localMetadataStore,
+    scopeId: assistantSpaceId,
+  });
+  let agentRuntimeSettings;
   let stateRejections: readonly InvalidJsonStateRejection[] = [];
   try {
     await shellStateRepository.prepare();
@@ -208,6 +216,10 @@ async function startDesktop(): Promise<void> {
     );
     await initializeAssetLibraryMembershipTables(localMetadataStore);
     await initializeAgentConversationLifecycleTables(localMetadataStore);
+    agentRuntimeSettings = await createAgentRuntimeSettingsAuthority({
+      scopeId: assistantSpaceId,
+      repository: agentRuntimeSettingsRepository,
+    });
   } catch (error) {
     await localMetadataStore.dispose();
     throw error;
@@ -217,6 +229,7 @@ async function startDesktop(): Promise<void> {
   const applicationSettingsStateDiagnostics = readDesktopApplicationSettingsStateDiagnostics(
     await applicationSettingsRepository.read(),
   );
+  const agentRuntimeSettingsDiagnostic = agentRuntimeSettings.diagnostic();
   nativeTheme.themeSource = initialApplicationSettings.preferences.theme;
   const applicationInstanceId = randomUUID();
   const secrets = createEncryptedDesktopSecretPort({
@@ -286,7 +299,6 @@ async function startDesktop(): Promise<void> {
       },
     }),
   });
-  const assistantSpaceId = 'assistant-space:local-user';
   const retainedProjects = await workspaceRegistry.listProjects([assistantSpaceId]);
   const shellService = new DesktopShellService({
     applicationInstanceId,
@@ -304,6 +316,16 @@ async function startDesktop(): Promise<void> {
         message: `Stored Desktop state '${rejection.authorityKey}' was rejected: ${rejection.diagnostic}`,
       })),
       ...applicationSettingsStateDiagnostics,
+      ...(agentRuntimeSettingsDiagnostic
+        ? [
+            {
+              code: 'desktop-shell-component-invalid' as const,
+              severity: 'error' as const,
+              component: 'agent-runtime-settings' as const,
+              message: agentRuntimeSettingsDiagnostic.message,
+            },
+          ]
+        : []),
     ],
   });
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
@@ -813,6 +835,7 @@ async function startDesktop(): Promise<void> {
     host,
     userHome: homedir,
     credentialRuntime,
+    runtimeSettings: agentRuntimeSettings,
     resources: {
       registerFile: (owner, source) =>
         resourceRegistry.registerFile(
@@ -896,6 +919,7 @@ async function startDesktop(): Promise<void> {
       userConfigManager: new FileUserConfigManager({
         filePath: buildConfigFilePath(homedir),
       }),
+      assistantRuntimeSettings: agentRuntimeSettings,
     }),
     readTextResource: (hostResource) => host.files.readText(hostResource),
     selectResource: async ({ windowId, resourceKind }) => {

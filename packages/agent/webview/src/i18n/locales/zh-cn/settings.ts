@@ -20,9 +20,6 @@ export const settings = {
   'settings.providers.displayName': '显示名称',
   'settings.providers.displayNamePlaceholder': '例如：My Claude',
   'settings.providers.apiUrl': 'API URL (可选)',
-  'settings.providers.apiKey': 'API 密钥',
-  'settings.providers.apiKeyOptional': '(本地运行可选)',
-  'settings.providers.apiKeyKeepCurrent': '(留空保持当前值)',
   'settings.providers.models': '模型',
   'settings.providers.modelsSelected': '已选择 {count} 个模型',
   'settings.providers.selectModels': '选择或添加要启用的模型',
@@ -59,10 +56,6 @@ export const settings = {
   'settings.providers.protocolAuto': '自动（根据模型名推断）',
   'settings.providers.protocolHint':
     '指定 API 协议类型。"自动" 会根据模型名称（如 claude、gpt）自动推断。',
-  'settings.providers.validateApiKey': '验证 API Key',
-  'settings.providers.validating': '验证中...',
-  'settings.providers.apiKeyValid': 'API Key 有效',
-  'settings.providers.apiKeyInvalid': 'API Key 无效',
 
   'settings.prompts.title': '已配置的提示词',
   'settings.prompts.description':
@@ -128,23 +121,6 @@ export const settings = {
   'settings.prompts.skillsHintTitle': '使用 Skills 自定义 AI 行为',
   'settings.prompts.skillsHintDescription':
     'Skills 是更强大的方式来定制 AI 行为。在 .agents/skills/（项目）或 ~/.agents/skills/（个人）下创建 portable Skill package 后，可以显式调用，或由 Agent 先说明原因后再激活需要的 Skill。',
-
-  'settings.hooks.title': 'Hooks 配置',
-  'settings.hooks.description':
-    'Hooks 允许在 Agent 执行的特定时机运行自定义命令。配置保存在 settings.json 中。',
-  'settings.hooks.projectSettings': '项目配置',
-  'settings.hooks.personalSettings': '用户配置',
-  'settings.hooks.localSettings': '本地配置',
-  'settings.hooks.projectPath': 'neko/settings.json',
-  'settings.hooks.personalPath': '~/.neko/settings.json',
-  'settings.hooks.localPath': '.neko/settings.local.json (不提交到 Git)',
-  'settings.hooks.priorityHint': '优先级：本地 > 项目 > 用户',
-  'settings.hooks.events.PreToolUse': '工具调用前 (可阻止)',
-  'settings.hooks.events.PostToolUse': '工具调用后',
-  'settings.hooks.events.UserPromptSubmit': '用户提交提示 (可阻止)',
-  'settings.hooks.events.Stop': 'AI 完成响应 (可阻止)',
-  'settings.hooks.events.SessionStart': '会话开始',
-  'settings.hooks.events.SessionEnd': '会话结束',
 
   'settings.mcp.title': '已配置的 MCP 服务器',
   'settings.mcp.description': 'Model Context Protocol 服务器为 AI 提供外部工具扩展能力。',
@@ -232,8 +208,7 @@ export const settings = {
     '字幕和标题助手：添加字幕、转录、翻译、时间轴、SRT/VTT。',
 
   'settings.models.title': '模型预设',
-  'settings.models.description':
-    '配置用于图像、视频和音频生成的 AI 模型。添加 API 密钥以启用模型。',
+  'settings.models.description': '配置用于图像、视频和音频生成的 AI 模型。',
   'settings.models.search': '搜索模型...',
   'settings.models.searchPlaceholder': '搜索模型...',
   'settings.models.all': '全部',
@@ -253,9 +228,6 @@ export const settings = {
   'settings.models.editConfig': '编辑配置',
   'settings.models.configured_badge': '已配置',
   'settings.models.notConfigured': '未配置',
-  'settings.models.apiKey': 'API 密钥',
-  'settings.models.apiKeyPlaceholder': '输入您的 API 密钥',
-  'settings.models.leaveEmptyToKeep': '留空保持当前值',
   'settings.models.baseUrl': 'Base URL',
   'settings.models.baseUrlPlaceholder': '自定义 API 端点',
   'settings.models.capabilities': '能力',
@@ -271,12 +243,10 @@ export const settings = {
   'settings.models.importExportTitle': '导入/导出配置',
   'settings.models.export': '导出',
   'settings.models.exportDesc': '导出模型配置用于备份或分享。',
-  'settings.models.exportWithoutSecrets': '导出（不含 API 密钥）',
-  'settings.models.exportWithSecrets': '导出（含 API 密钥）',
+  'settings.models.exportWithoutSecrets': '导出定义',
   'settings.models.import': '导入',
   'settings.models.importDesc': '从 JSON 文件导入模型配置。',
   'settings.models.importPlaceholder': '在此粘贴配置 JSON...',
   'settings.models.importOverwrite': '覆盖已有配置',
-  'settings.models.importIncludeSecrets': '包含 API 密钥',
   'settings.models.importConfig': '导入配置',
 } as const satisfies MessageBundle;

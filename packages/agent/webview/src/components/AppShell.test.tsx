@@ -111,8 +111,7 @@ vi.mock('./ConversationController', () => ({
                 name: 'OpenAI',
                 enabled: true,
                 requiresApiKey: true,
-                apiKey: 'configured',
-                models: [],
+                models: [{ id: 'gpt-5', name: 'GPT-5', enabled: true }],
               },
             ],
           }));

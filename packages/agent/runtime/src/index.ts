@@ -294,18 +294,6 @@ export {
   type PromptCompositionFragmentProjection,
 } from './prompt';
 
-// Export settings hook execution
-export {
-  type HookExecutionResult,
-  type ISettingsFileSystem,
-  type IShellExecutor,
-  type LoadedSettingsHook,
-  type SettingsHookLoadResult,
-  type SettingsHookLoaderOptions,
-  SettingsHookLoader,
-  createSettingsHookLoader,
-} from './hook-loader';
-
 // Export session management
 export {
   buildConversationHistoryClearedMessage,

@@ -4,7 +4,7 @@ export type AssistantConfigAvailabilityCode =
   | 'missingConfig'
   | 'missingProvider'
   | 'missingModel'
-  | 'missingApiKey'
+  | 'missingProviderEndpoint'
   | 'invalidDefaultProvider'
   | 'invalidDefaultModel'
   | 'invalidDefaultModelBinding'
@@ -114,7 +114,7 @@ export function buildSafeConfigDiagnosticMessage(
     case 'invalidDefaultModelBinding':
       return `Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: ${filePath}. Fix the default binding, then open a new Agent session or tab.`;
     case 'unsupportedWorkspaceProviderDefinition':
-      return `Workspace configuration defines provider entries: ${filePath}. Move provider definitions and credentials to the user config, then open a new Agent session or tab.`;
+      return `Workspace configuration defines provider entries: ${filePath}. Move provider definitions to the user config, then open a new Agent session or tab.`;
     case 'unsupportedWorkspaceModelDefinition':
       return `Workspace configuration defines model entries: ${filePath}. Move model definitions to the user config or account catalog, then open a new Agent session or tab.`;
     case 'unsupportedSkillSource':
@@ -122,13 +122,13 @@ export function buildSafeConfigDiagnosticMessage(
     case 'readError':
       return `Unable to read configuration file: ${filePath}. Check file permissions, then open a new Agent session or tab.`;
     case 'missingConfig':
-      return `Agent configuration file is missing: ${filePath}. Create the config file with at least one enabled provider, chat model, and required provider credentials, then open a new Agent session or tab.`;
+      return `Agent configuration file is missing: ${filePath}. Create the config file with at least one enabled provider and chat model, then open a new Agent session or tab.`;
     case 'missingProvider':
-      return `Agent configuration has no enabled providers: ${filePath}. Add at least one enabled provider with its required endpoint and credentials, then open a new Agent session or tab.`;
+      return `Agent configuration has no enabled providers: ${filePath}. Add at least one enabled provider with its endpoint, then open a new Agent session or tab.`;
     case 'missingModel':
       return `Agent configuration has no enabled chat models: ${filePath}. Add at least one enabled chat model, then open a new Agent session or tab.`;
-    case 'missingApiKey':
-      return `Agent configuration has no configured enabled chat provider: ${filePath}. Add the required provider endpoint and credentials, then open a new Agent session or tab.`;
+    case 'missingProviderEndpoint':
+      return `Agent configuration has no enabled chat provider with an endpoint: ${filePath}. Add the provider endpoint, then open a new Agent session or tab.`;
     case 'invalidDefaultProvider':
       return `Agent configuration selects an unavailable default provider: ${filePath}. Fix default_models.llm, then open a new Agent session or tab.`;
     case 'invalidDefaultModel':

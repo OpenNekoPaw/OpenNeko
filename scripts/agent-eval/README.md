@@ -154,8 +154,8 @@ node scripts/agent-eval/local-run.mjs --mode focused --suite skill.storyboard
 
 Real API entrypoints read their user-authorized source only from `~/.neko/config.toml`; CLI
 environment cannot redirect this path. Provider/model identity and cost authorization remain
-explicit; credentials are resolved by the product configuration owner from that TOML. The Desktop Evaluation boundary validates the native TOML and
-copies it unchanged into the isolated fixture home; it does not compile another format, merge
+explicit. The Desktop Evaluation boundary validates the native non-secret TOML and copies it
+unchanged into the isolated fixture home; it does not compile another format, merge
 defaults, infer providers or write back to the user directory. Any readable source mode, including
 `0644`, is accepted; Evaluation neither requires an exact POSIX mode nor changes the source file's
 permissions. Missing authorization, an unavailable
@@ -163,8 +163,10 @@ source/provider, or a case requiring an unsupported operation/evidence contract 
 `infrastructure-blocked` with exit code 2 and never triggers JSON/YAML/mock fallback execution.
 
 Provider-backed runs require the developer to provide explicit provider/model identity and cost
-authorization for each invocation. The runner reports the exact missing authorization before
-Desktop launch or API use; configuration availability alone does not imply cost authorization.
+authorization for each invocation. The TOML contains only non-secret provider/model definitions;
+the product resolves credentials through its SecretStorage owner. Evaluation never reads or copies
+secret bytes. The runner reports the exact missing authorization before Desktop launch or API use;
+configuration availability alone does not imply cost authorization.
 
 Run a hidden packaged matrix with stable build identity and two Desktop workers:
 

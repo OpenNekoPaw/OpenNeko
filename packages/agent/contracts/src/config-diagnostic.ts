@@ -4,7 +4,7 @@ export type AgentConfigDiagnosticCode =
   | 'missingConfig'
   | 'missingProvider'
   | 'missingModel'
-  | 'missingApiKey'
+  | 'missingProviderEndpoint'
   | 'invalidToml'
   | 'unsupportedProviderType'
   | 'unsupportedProviderConnectionKind'

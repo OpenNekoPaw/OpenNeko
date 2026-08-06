@@ -22,7 +22,6 @@ const anthropicProvider: Provider = {
   displayName: 'Anthropic',
   type: 'anthropic',
   apiUrl: 'https://api.anthropic.com',
-  apiKey: 'sk-ant',
   enabled: true,
 };
 
@@ -143,15 +142,19 @@ describe('assistant config presenter', () => {
     });
   });
 
-  it('projects only configured providers with credentials', () => {
+  it('projects providers with complete endpoint definitions', () => {
     const providers = buildAssistantConfiguredProviderViews(createConfig());
 
-    expect(providers).toHaveLength(1);
-    expect(providers[0]).toMatchObject({
-      id: 'anthropic',
-      apiKey: 'sk-ant',
-      baseUrl: 'https://api.anthropic.com',
-    });
+    expect(providers).toEqual([
+      expect.objectContaining({
+        id: 'anthropic',
+        baseUrl: 'https://api.anthropic.com',
+      }),
+      expect.objectContaining({
+        id: 'openai',
+        baseUrl: 'https://api.openai.com/api',
+      }),
+    ]);
   });
 
   it('treats no-key local providers as configured', () => {
@@ -171,8 +174,10 @@ describe('assistant config presenter', () => {
     const state = buildAssistantConfigState(createConfig());
 
     expect(state.providers).toHaveLength(2);
-    expect(state.configuredProviders).toHaveLength(1);
-    expect(state.configuredProviders[0]?.id).toBe('anthropic');
+    expect(state.configuredProviders.map((provider) => provider.id)).toEqual([
+      'anthropic',
+      'openai',
+    ]);
   });
 
   it('selects configured providers and exposes canonical model IDs', () => {
@@ -184,7 +189,7 @@ describe('assistant config presenter', () => {
     });
     expect(selectAssistantProvider(createConfig(), 'openai')).toEqual({
       id: 'openai',
-      isConfigured: false,
+      isConfigured: true,
       defaultModel: 'openai-dall-e-3',
       modelIds: ['openai-dall-e-3'],
     });

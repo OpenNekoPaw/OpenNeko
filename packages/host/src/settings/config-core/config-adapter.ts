@@ -20,7 +20,7 @@ import type { UnifiedConfig } from './types';
  * Validation error for a specific field
  */
 export interface ValidationError {
-  /** Field path (e.g., 'providers[0].apiKey') */
+  /** Field path (e.g., 'providers[0].apiUrl') */
   field: string;
   /** Error message */
   message: string;

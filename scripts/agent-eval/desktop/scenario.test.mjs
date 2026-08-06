@@ -44,7 +44,6 @@ default_model = "model-1"
 
 [[providers]]
 id = "provider-1"
-api_key = "fixture-secret"
 
 [[models]]
 id = "model-1"

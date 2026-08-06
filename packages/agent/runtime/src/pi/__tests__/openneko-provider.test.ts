@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { InMemoryUserCredentialPersistence, OpenNekoCredentialStore } from '../credential-store';
 import {
@@ -56,7 +56,7 @@ describe('OpenNeko provider projection to Pi', () => {
     await credentials.replace(
       'configured-provider',
       { type: 'api_key', key: 'configured-secret' },
-      'user-config-import',
+      'interactive',
     );
     const models = createOpenNekoPiModels(credentials);
     const projection = registerOpenNekoPiProvider(models, config());
@@ -68,40 +68,6 @@ describe('OpenNeko provider projection to Pi', () => {
       auth: { apiKey: 'configured-secret' },
       source: 'OpenNeko CredentialStore',
     });
-  });
-
-  it('keeps config-owned API keys scoped to one models instance without durable credential IO', async () => {
-    const durable = {
-      read: vi.fn(async () => {
-        throw new Error('Durable credential read must not run for a config-owned API key.');
-      }),
-      modify: vi.fn(async () => {
-        throw new Error('Durable credential write must not run for a config-owned API key.');
-      }),
-      delete: vi.fn(async () => undefined),
-    };
-    const models = createOpenNekoPiModels(durable);
-    models.setConfiguredApiKey('configured-provider', 'configured-secret');
-    const projection = registerOpenNekoPiProvider(models, config());
-    const model = projection.models[0];
-    if (!model) throw new Error('Expected projected model.');
-
-    await expect(models.getAuth(model)).resolves.toEqual({
-      auth: { apiKey: 'configured-secret' },
-      source: 'OpenNeko CredentialStore',
-    });
-    expect(durable.read).not.toHaveBeenCalled();
-    expect(durable.modify).not.toHaveBeenCalled();
-
-    const sibling = createOpenNekoPiModels({
-      read: async () => undefined,
-      modify: async (_providerId, operation) => operation(undefined),
-      delete: async () => undefined,
-    });
-    const siblingProjection = registerOpenNekoPiProvider(sibling, config());
-    const siblingModel = siblingProjection.models[0];
-    if (!siblingModel) throw new Error('Expected sibling projected model.');
-    await expect(sibling.getAuth(siblingModel)).resolves.toBeUndefined();
   });
 
   it('allows keyless local providers but never falls back for a required key', async () => {
@@ -139,7 +105,7 @@ describe('OpenNeko provider projection to Pi', () => {
       await credentials.replace(
         'configured-provider',
         { type: 'api_key', key: 'configured-secret' },
-        'user-config-import',
+        'interactive',
       );
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
@@ -185,7 +151,7 @@ describe('OpenNeko provider projection to Pi', () => {
       await credentials.replace(
         'configured-provider',
         { type: 'api_key', key: 'configured-secret' },
-        'user-config-import',
+        'interactive',
       );
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
@@ -244,7 +210,7 @@ describe('OpenNeko provider projection to Pi', () => {
       await credentials.replace(
         'configured-provider',
         { type: 'api_key', key: 'configured-secret' },
-        'user-config-import',
+        'interactive',
       );
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(

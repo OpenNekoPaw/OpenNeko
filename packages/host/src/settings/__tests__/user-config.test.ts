@@ -40,7 +40,6 @@ describe('FileUserConfigManager', () => {
           displayName: 'Profile Provider',
           type: 'newapi',
           apiUrl: 'https://example.invalid/api',
-          apiKey: '${PROFILE_API_KEY}',
           enabled: true,
           connectionKind: 'gateway',
           protocolProfile: 'newapi',

@@ -16,8 +16,6 @@
  *     .cache/          Program-produced .json (indices, derivable)
  *     state/           Program-produced concurrency + lock files
  *     preferences.md   Project-level user preferences
- *     settings.json    Media-library variables (already used by PathResolver)
- *     settings.local.json  Local overrides (already used)
  *
  * Everything else (assets, media) lives in the media library — neko-assets
  * owns that root. This module does **not** attempt to span both.

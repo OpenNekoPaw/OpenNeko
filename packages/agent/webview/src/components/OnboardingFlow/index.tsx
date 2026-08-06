@@ -1,7 +1,7 @@
 /**
  * OnboardingFlow — full-screen overlay for first-time AI service setup.
  *
- * Opens the local user config file where providers and API keys are configured.
+ * Opens the local user config file where provider and model definitions are configured.
  *
  * Closes when onComplete() is called or when isAiConfigured becomes true (auto-dismiss
  * handled by the parent via onComplete).

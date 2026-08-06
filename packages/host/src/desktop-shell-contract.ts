@@ -243,7 +243,7 @@ export interface DesktopStoredStateInvalidDiagnosticProjection {
 export interface DesktopShellComponentInvalidDiagnosticProjection {
   readonly code: 'desktop-shell-component-invalid';
   readonly severity: 'error';
-  readonly component: 'project-catalog';
+  readonly component: 'project-catalog' | 'agent-runtime-settings';
   readonly message: string;
 }
 
@@ -982,13 +982,17 @@ function parseDesktopShellStateDiagnosticProjection(
       ['code', 'severity', 'component', 'message'],
       'Desktop Shell state diagnostic',
     );
-    if (record['severity'] !== 'error' || record['component'] !== 'project-catalog') {
+    if (
+      record['severity'] !== 'error' ||
+      (record['component'] !== 'project-catalog' &&
+        record['component'] !== 'agent-runtime-settings')
+    ) {
       throw invalidPayload('Desktop Shell component diagnostic identity is invalid.');
     }
     return {
       code: 'desktop-shell-component-invalid',
       severity: 'error',
-      component: 'project-catalog',
+      component: record['component'],
       message: requireNonEmptyString(
         record['message'],
         'Desktop Shell component diagnostic message is required.',

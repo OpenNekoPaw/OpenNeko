@@ -8,7 +8,7 @@ import type {
   Provider,
 } from '@earendil-works/pi-ai';
 
-export type CredentialProvenance = 'interactive' | 'user-config-import' | 'environment';
+export type CredentialProvenance = 'interactive' | 'environment';
 
 export interface PersistedUserCredential {
   readonly credential: Credential;
@@ -351,7 +351,7 @@ function cloneEntry(
 }
 
 function isCredentialProvenance(value: unknown): value is CredentialProvenance {
-  return value === 'interactive' || value === 'user-config-import' || value === 'environment';
+  return value === 'interactive' || value === 'environment';
 }
 
 function isCredential(value: unknown): value is Credential {

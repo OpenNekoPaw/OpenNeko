@@ -20,7 +20,6 @@ To initialize your project, you can:
 1. Create a \`.neko/\` directory in your project root
 2. Add project skills in \`.agents/skills/\` or personal skills in \`~/.agents/skills/\`
 3. Add commands in \`.neko/commands/\` directory
-4. Configure hooks in \`.neko/settings.json\`
 
 Or use the Settings panel to configure providers and models.`;
 

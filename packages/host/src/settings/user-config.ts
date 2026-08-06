@@ -5,9 +5,9 @@
  * Uses shared configuration module from @neko/shared for unified format.
  */
 
-import type { Provider, Model } from './types/provider';
+import type { Model } from './types/provider';
 import type { MCPServerPreset } from './types/config';
-import type { UnifiedConfig } from './config-core/index';
+import type { ProviderDefinition, UnifiedConfig } from './config-core/index';
 // Node.js config reader - direct import
 import {
   readConfigFileResult,
@@ -23,13 +23,13 @@ import {
  */
 export interface UserConfig {
   /** Custom providers */
-  providers: Provider[];
+  providers: ProviderDefinition[];
   /** Custom models */
   models: Model[];
   /** Custom MCP servers */
   mcpServers: MCPServerPreset[];
-  /** Provider overrides (e.g., API keys) */
-  providerOverrides: Record<string, Partial<Provider>>;
+  /** Provider definition overrides */
+  providerOverrides: Record<string, Partial<ProviderDefinition>>;
   /** Model overrides */
   modelOverrides: Record<string, Partial<Model>>;
   /** MCP server overrides */
@@ -58,13 +58,12 @@ function unifiedToUserConfig(unified: UnifiedConfig | null): UserConfig {
   }
 
   return {
-    providers: (unified.providers as Provider[]) ?? [],
-    models: (unified.models as Model[]) ?? [],
-    mcpServers: (unified.mcpServers as MCPServerPreset[]) ?? [],
-    providerOverrides: (unified.providerOverrides as Record<string, Partial<Provider>>) ?? {},
-    modelOverrides: (unified.modelOverrides as Record<string, Partial<Model>>) ?? {},
-    mcpServerOverrides:
-      (unified.mcpServerOverrides as Record<string, Partial<MCPServerPreset>>) ?? {},
+    providers: unified.providers ?? [],
+    models: unified.models ?? [],
+    mcpServers: unified.mcpServers ?? [],
+    providerOverrides: unified.providerOverrides ?? {},
+    modelOverrides: unified.modelOverrides ?? {},
+    mcpServerOverrides: unified.mcpServerOverrides ?? {},
   };
 }
 
@@ -102,8 +101,8 @@ export interface IUserConfigManager {
   load(): UserConfig;
   loadResult?(): UserConfigReadResult;
   save(config: UserConfig): Promise<void>;
-  updateProviderOverride(providerId: string, override: Partial<Provider>): Promise<void>;
-  addProvider(provider: Provider): Promise<void>;
+  updateProviderOverride(providerId: string, override: Partial<ProviderDefinition>): Promise<void>;
+  addProvider(provider: ProviderDefinition): Promise<void>;
   removeProvider(providerId: string): Promise<void>;
   addModel(model: Model): Promise<void>;
   removeModel(modelId: string): Promise<void>;
@@ -201,7 +200,10 @@ export class FileUserConfigManager implements IUserConfigManager {
   // Provider Methods
   // ==========================================================================
 
-  async updateProviderOverride(providerId: string, override: Partial<Provider>): Promise<void> {
+  async updateProviderOverride(
+    providerId: string,
+    override: Partial<ProviderDefinition>,
+  ): Promise<void> {
     const config = this.load();
     config.providerOverrides[providerId] = {
       ...config.providerOverrides[providerId],
@@ -210,7 +212,7 @@ export class FileUserConfigManager implements IUserConfigManager {
     await this.save(config);
   }
 
-  async addProvider(provider: Provider): Promise<void> {
+  async addProvider(provider: ProviderDefinition): Promise<void> {
     const config = this.load();
     const existing = config.providers.findIndex((p) => p.id === provider.id);
     if (existing >= 0) {

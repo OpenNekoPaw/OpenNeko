@@ -17,6 +17,8 @@ import type {
   TypeDefaultModels,
 } from '@neko/ai-contracts';
 
+export type ProviderDefinition = Omit<ProviderConfig, 'apiKey'>;
+
 // =============================================================================
 // Unified Configuration Format
 // =============================================================================
@@ -83,7 +85,7 @@ export interface UnifiedConfig {
   // ==========================================================================
 
   /** Provider configurations */
-  providers?: ProviderConfig[];
+  providers?: ProviderDefinition[];
 
   /** Model configurations */
   models?: ModelConfig[];
@@ -99,39 +101,13 @@ export interface UnifiedConfig {
   // ==========================================================================
 
   /** Provider overrides (keyed by provider ID) */
-  providerOverrides?: Record<string, Partial<ProviderConfig>>;
+  providerOverrides?: Record<string, Partial<ProviderDefinition>>;
 
   /** Model overrides (keyed by model ID) */
   modelOverrides?: Record<string, Partial<ModelConfig>>;
 
   /** MCP server overrides (keyed by server ID) */
   mcpServerOverrides?: Record<string, Partial<MCPServerConfig>>;
-
-  // ==========================================================================
-  // Preserved removed-product settings & current credentials
-  // ==========================================================================
-
-  /**
-   * Preservation-only settings left by the removed Auth product.
-   * Current provider OAuth is owned by provider-specific credential services.
-   */
-  auth?: AuthConfigJson;
-
-  /**
-   * API key credentials.
-   *
-   * WARNING: Stored in PLAINTEXT in config.toml.
-   * Prefer environment variables for sensitive keys.
-   *
-   * Priority: env vars > credentials.apiKeys > providers[].apiKey
-   */
-  credentials?: CredentialsConfig;
-
-  /**
-   * Preservation-only settings left by the removed Market product.
-   * No retained runtime reads this section as an active registry.
-   */
-  market?: MarketConfig;
 }
 
 // =============================================================================
@@ -161,7 +137,7 @@ export interface NormalizedConfig {
   outputFormat: 'text' | 'json' | 'markdown';
 
   /** Provider configurations (keyed by ID) */
-  providers: Map<string, ProviderConfig>;
+  providers: Map<string, ProviderDefinition>;
 
   /** Model configurations (keyed by ID) */
   models: Map<string, ModelConfig>;
@@ -210,41 +186,3 @@ export const CONFIG_DIR_NAME = '.neko';
 
 /** Config file name */
 export const CONFIG_FILE_NAME = 'config.toml';
-
-// =============================================================================
-// Auth & Credentials Types
-// =============================================================================
-
-/**
- * User-managed Auth product configuration stored in config.toml.
- * Fields remain round-trippable during layered config merges.
- */
-export interface AuthConfigJson {
-  clientId?: string;
-  /** Authorization endpoint. Empty string = not configured. */
-  authUrl?: string;
-  /** Token endpoint. */
-  tokenUrl?: string;
-  /** Neko official account AI catalog endpoint. */
-  aiCatalogUrl?: string;
-  scopes?: string[];
-  /** Localhost redirect port for OAuth callback. Default: 6419 */
-  redirectPort?: number;
-}
-
-/**
- * API key credentials section.
- * Maps provider ID to API key string.
- */
-export interface CredentialsConfig {
-  /** Provider ID -> API key mapping (e.g. { "anthropic": "sk-ant-xxx" }) */
-  apiKeys?: Record<string, string>;
-}
-
-/**
- * Preservation-only Market product configuration.
- */
-export interface MarketConfig {
-  /** Former registry API base URL; not consumed by the retained runtime. */
-  registryUrl?: string;
-}

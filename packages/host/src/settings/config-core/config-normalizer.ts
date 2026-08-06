@@ -70,32 +70,6 @@ export function mergeConfigs(base: UnifiedConfig, override: UnifiedConfig): Unif
   merged.modelOverrides = mergeOverrides(base.modelOverrides, override.modelOverrides);
   merged.mcpServerOverrides = mergeOverrides(base.mcpServerOverrides, override.mcpServerOverrides);
 
-  // Keep user-managed Auth fields round-trippable during layered config merges.
-  if (base.auth || override.auth) {
-    merged.auth = {
-      ...base.auth,
-      ...override.auth,
-    };
-  }
-
-  // Merge credentials (deep-merge apiKeys)
-  if (base.credentials || override.credentials) {
-    merged.credentials = {
-      apiKeys: {
-        ...base.credentials?.apiKeys,
-        ...override.credentials?.apiKeys,
-      },
-    };
-  }
-
-  // Keep user-managed Market fields round-trippable during layered config merges.
-  if (base.market || override.market) {
-    merged.market = {
-      ...base.market,
-      ...override.market,
-    };
-  }
-
   return merged;
 }
 

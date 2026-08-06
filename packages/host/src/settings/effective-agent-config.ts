@@ -476,7 +476,7 @@ function validateProviderModelSelection(input: {
     return [buildAssistantConfigAvailabilityDiagnostic('invalidDefaultProvider', filePath)];
   }
   if (!isProviderConfigured(input.provider)) {
-    return [buildAssistantConfigAvailabilityDiagnostic('missingApiKey', filePath)];
+    return [buildAssistantConfigAvailabilityDiagnostic('missingProviderEndpoint', filePath)];
   }
   if (!input.modelSelection.value) {
     return [];

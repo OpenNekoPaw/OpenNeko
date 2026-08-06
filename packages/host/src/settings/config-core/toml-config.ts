@@ -27,7 +27,7 @@ import {
   STREAM_FORMATS,
 } from '@neko/ai-contracts';
 import { parse, stringify } from 'smol-toml';
-import type { AuthConfigJson, CredentialsConfig, MarketConfig, UnifiedConfig } from './types';
+import type { ProviderDefinition, UnifiedConfig } from './types';
 
 export interface NekoTomlConfig {
   readonly ui_locale?: unknown;
@@ -51,9 +51,6 @@ export interface NekoTomlConfig {
   readonly provider_overrides?: Record<string, Partial<TomlProviderConfig>>;
   readonly model_overrides?: Record<string, Partial<TomlModelConfig>>;
   readonly mcp_server_overrides?: Record<string, Partial<TomlMcpServerConfig>>;
-  readonly auth?: AuthConfigJson;
-  readonly credentials?: CredentialsConfig;
-  readonly market?: MarketConfig;
 }
 
 export interface TomlDefaultsConfig {
@@ -73,7 +70,6 @@ export interface TomlProviderConfig {
   readonly type: ProviderConfig['type'];
   readonly api_url?: string;
   readonly base_url?: string;
-  readonly api_key?: string;
   readonly enabled?: boolean;
   readonly connection_kind?: ProviderConfig['connectionKind'];
   readonly protocol_profile?: ProviderConfig['protocolProfile'];
@@ -259,9 +255,6 @@ export function tomlToUnifiedConfig(config: NekoTomlConfig): UnifiedConfig {
           ),
         }
       : {}),
-    ...(config.auth !== undefined ? { auth: config.auth } : {}),
-    ...(config.credentials !== undefined ? { credentials: config.credentials } : {}),
-    ...(config.market !== undefined ? { market: config.market } : {}),
   };
 }
 
@@ -325,9 +318,6 @@ export function unifiedConfigToToml(config: UnifiedConfig): NekoTomlConfig {
           ),
         }
       : {}),
-    ...(config.auth !== undefined ? { auth: config.auth } : {}),
-    ...(config.credentials !== undefined ? { credentials: config.credentials } : {}),
-    ...(config.market !== undefined ? { market: config.market } : {}),
   };
 }
 
@@ -338,6 +328,8 @@ export function serializeUnifiedConfigToToml(config: UnifiedConfig): string {
 export function validateTomlConfig(config: NekoTomlConfig): void {
   const issues: TomlConfigValidationIssue[] = [];
   collectUnsupportedConfigFieldIssues(config, issues);
+  collectUnsupportedProviderFieldIssues(config.providers, 'providers', issues);
+  collectUnsupportedProviderOverrideFieldIssues(config.provider_overrides, issues);
   collectDuplicateIdIssues(config.providers, 'providers', 'duplicateProviderId', issues);
   collectDuplicateIdIssues(config.models, 'models', 'duplicateModelId', issues);
   collectUnsupportedProviderIssues(config.providers, 'providers', issues);
@@ -358,37 +350,39 @@ export function validateTomlConfig(config: NekoTomlConfig): void {
   }
 }
 
-function tomlProviderToRuntime(provider: TomlProviderConfig): ProviderConfig {
-  return removeUndefined({
+function tomlProviderToRuntime(provider: TomlProviderConfig): ProviderDefinition {
+  return {
     id: provider.id,
     name: provider.name,
     displayName: provider.display_name ?? provider.name,
     type: provider.type,
     apiUrl: provider.api_url ?? provider.base_url ?? '',
-    apiKey: provider.api_key,
     enabled: provider.enabled ?? true,
-    connectionKind: provider.connection_kind,
-    protocolProfile: provider.protocol_profile,
-    supportLevel: provider.support_level,
-    requiresApiKey: provider.requires_api_key,
-    builtin: provider.builtin,
-    supportsBeta: provider.supports_beta,
-    useBearerAuth: provider.use_bearer_auth,
-    options: provider.options,
-    protocolVariant: provider.protocol_variant
-      ? tomlProtocolVariantToRuntime(provider.protocol_variant)
-      : undefined,
-  }) as ProviderConfig;
+    ...(provider.connection_kind === undefined ? {} : { connectionKind: provider.connection_kind }),
+    ...(provider.protocol_profile === undefined
+      ? {}
+      : { protocolProfile: provider.protocol_profile }),
+    ...(provider.support_level === undefined ? {} : { supportLevel: provider.support_level }),
+    ...(provider.requires_api_key === undefined
+      ? {}
+      : { requiresApiKey: provider.requires_api_key }),
+    ...(provider.builtin === undefined ? {} : { builtin: provider.builtin }),
+    ...(provider.supports_beta === undefined ? {} : { supportsBeta: provider.supports_beta }),
+    ...(provider.use_bearer_auth === undefined ? {} : { useBearerAuth: provider.use_bearer_auth }),
+    ...(provider.options === undefined ? {} : { options: provider.options }),
+    ...(provider.protocol_variant === undefined
+      ? {}
+      : { protocolVariant: tomlProtocolVariantToRuntime(provider.protocol_variant) }),
+  };
 }
 
-function runtimeProviderToToml(provider: ProviderConfig): TomlProviderConfig {
+function runtimeProviderToToml(provider: ProviderDefinition): TomlProviderConfig {
   return removeUndefined({
     id: provider.id,
     name: provider.name,
     display_name: provider.displayName,
     type: provider.type,
     api_url: provider.apiUrl,
-    api_key: provider.apiKey,
     enabled: provider.enabled,
     connection_kind: provider.connectionKind,
     protocol_profile: provider.protocolProfile,
@@ -406,14 +400,13 @@ function runtimeProviderToToml(provider: ProviderConfig): TomlProviderConfig {
 
 function tomlProviderOverrideToRuntime(
   provider: Partial<TomlProviderConfig>,
-): Partial<ProviderConfig> {
+): Partial<ProviderDefinition> {
   return removeUndefined({
     id: provider.id,
     name: provider.name,
     displayName: provider.display_name,
     type: provider.type,
     apiUrl: provider.api_url ?? provider.base_url,
-    apiKey: provider.api_key,
     enabled: provider.enabled,
     connectionKind: provider.connection_kind,
     protocolProfile: provider.protocol_profile,
@@ -430,7 +423,7 @@ function tomlProviderOverrideToRuntime(
 }
 
 function runtimeProviderOverrideToToml(
-  provider: Partial<ProviderConfig>,
+  provider: Partial<ProviderDefinition>,
 ): Partial<TomlProviderConfig> {
   return removeUndefined({
     id: provider.id,
@@ -438,7 +431,6 @@ function runtimeProviderOverrideToToml(
     display_name: provider.displayName,
     type: provider.type,
     api_url: provider.apiUrl,
-    api_key: provider.apiKey,
     enabled: provider.enabled,
     connection_kind: provider.connectionKind,
     protocol_profile: provider.protocolProfile,
@@ -678,9 +670,25 @@ const NEKO_TOML_CONFIG_FIELDS = new Set([
   'provider_overrides',
   'model_overrides',
   'mcp_server_overrides',
-  'auth',
-  'credentials',
-  'market',
+]);
+
+const TOML_PROVIDER_FIELDS = new Set([
+  'id',
+  'name',
+  'display_name',
+  'type',
+  'api_url',
+  'base_url',
+  'enabled',
+  'connection_kind',
+  'protocol_profile',
+  'support_level',
+  'requires_api_key',
+  'builtin',
+  'supports_beta',
+  'use_bearer_auth',
+  'options',
+  'protocol_variant',
 ]);
 
 function collectUnsupportedConfigFieldIssues(
@@ -693,6 +701,53 @@ function collectUnsupportedConfigFieldIssues(
       code: 'unsupportedConfigField',
       path: field,
       message: `Unsupported configuration field: ${field}.`,
+    });
+  }
+}
+
+function collectUnsupportedProviderFieldIssues(
+  providers: readonly TomlProviderConfig[] | undefined,
+  section: string,
+  issues: TomlConfigValidationIssue[],
+): void {
+  if (!providers) return;
+  for (const provider of providers) {
+    collectUnsupportedRecordFieldIssues(
+      provider,
+      `${section}.${provider.id}`,
+      TOML_PROVIDER_FIELDS,
+      issues,
+    );
+  }
+}
+
+function collectUnsupportedProviderOverrideFieldIssues(
+  overrides: Record<string, Partial<TomlProviderConfig>> | undefined,
+  issues: TomlConfigValidationIssue[],
+): void {
+  if (!overrides) return;
+  for (const [providerId, provider] of Object.entries(overrides)) {
+    collectUnsupportedRecordFieldIssues(
+      provider,
+      `provider_overrides.${providerId}`,
+      TOML_PROVIDER_FIELDS,
+      issues,
+    );
+  }
+}
+
+function collectUnsupportedRecordFieldIssues(
+  record: object,
+  path: string,
+  allowed: ReadonlySet<string>,
+  issues: TomlConfigValidationIssue[],
+): void {
+  for (const field of Object.keys(record)) {
+    if (allowed.has(field)) continue;
+    issues.push({
+      code: 'unsupportedConfigField',
+      path: `${path}.${field}`,
+      message: `Unsupported configuration field: ${path}.${field}.`,
     });
   }
 }

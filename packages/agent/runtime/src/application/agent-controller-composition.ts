@@ -53,6 +53,7 @@ import {
   buildAssistantSettingsDataMessage,
   buildAssistantSettingsUpdatedMessage,
   type AssistantConfigState,
+  type AssistantRuntimeSettingsPort,
   type AssistantSettingsData,
 } from '@neko/host/settings';
 import { projectLlmParameters } from '@neko/host/settings';
@@ -160,6 +161,7 @@ export interface CreateAgentControllerCompositionOptions {
   readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy' | 'external'>;
   readonly userHome: string;
   readonly credentialRuntime: AgentCredentialRuntime;
+  readonly runtimeSettings: AssistantRuntimeSettingsPort;
   readonly contentInteraction: AgentContentInteractionPort;
   readonly configInteraction: AgentConfigInteractionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
@@ -1081,7 +1083,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     validateModelSelection(provider, model, selected.providerId, selected.modelId);
     if (!provider || !model)
       throw new Error('Validated Desktop Agent model selection disappeared.');
-    workspace.models.setConfiguredApiKey(provider.id, provider.apiKey);
     const projection = registerOpenNekoPiProvider(workspace.models, {
       id: provider.id,
       name: provider.displayName,
@@ -1091,11 +1092,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       auth: resolveAuth(provider, model),
       models: [projectPiModel(model)],
     });
-    let credentialConfigured = provider.apiKey !== undefined;
-    if (!credentialConfigured) {
-      credentialConfigured =
-        (await this.options.credentialRuntime.credentials.read(provider.id)) !== undefined;
-    }
+    let credentialConfigured =
+      (await this.options.credentialRuntime.credentials.status(provider.id)) !== undefined;
     if (provider.requiresApiKey !== false && !credentialConfigured) {
       await this.options.credentialRuntime.auth.login({
         provider: projection.provider,
@@ -1103,7 +1101,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         interaction: this.options.credentialRuntime.interaction,
       });
       credentialConfigured =
-        (await this.options.credentialRuntime.credentials.read(provider.id)) !== undefined;
+        (await this.options.credentialRuntime.credentials.status(provider.id)) !== undefined;
     }
     const projectedModel = projection.models.find((candidate) => candidate.id === model.name);
     if (!projectedModel) {
@@ -1251,6 +1249,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         filePath: join(this.options.userHome, '.neko', 'config.toml'),
       }),
       workspacePath: workspace.workspace.workspacePath,
+      assistantRuntimeSettings: this.options.runtimeSettings,
     });
     this.configs.set(workspace.workspaceId, config);
     return config;
@@ -1382,22 +1381,31 @@ function enqueueTabOperation<T>(state: ConnectionState, operation: () => Promise
 
 export function projectAgentSecretSafeConfig(config: AssistantConfigState): AssistantConfigState {
   return {
-    ...config,
-    providers: config.providers.map((provider) => ({ ...provider })),
-    configuredProviders: config.configuredProviders.map(({ apiKey: _apiKey, ...provider }) => ({
-      ...provider,
-    })),
+    providers: config.providers.map(projectAssistantProviderView),
+    configuredProviders: config.configuredProviders.map(projectAssistantConfiguredProviderView),
+    selectedProviderId: config.selectedProviderId,
+    selectedModelId: config.selectedModelId,
+    customSystemPrompt: config.customSystemPrompt,
+    autoExecuteTools: config.autoExecuteTools,
+    streamResponses: config.streamResponses,
+    showToolCalls: config.showToolCalls,
+    temperature: config.temperature,
+    maxTokens: config.maxTokens,
+    executionMode: config.executionMode,
+    chatModelOptions: structuredClone(config.chatModelOptions),
+    modelGroups: structuredClone(config.modelGroups),
+    defaultMediaModels: { ...config.defaultMediaModels },
+    ...(config.mediaUnderstandingModels === undefined
+      ? {}
+      : { mediaUnderstandingModels: structuredClone(config.mediaUnderstandingModels) }),
+    ...(config.configDiagnostic === undefined
+      ? {}
+      : { configDiagnostic: { ...config.configDiagnostic } }),
   };
 }
 
 function projectAgentSecretSafeSettings(settings: AssistantSettingsData): AssistantSettingsData {
-  return {
-    ...settings,
-    providers: settings.providers.map((provider) => ({ ...provider })),
-    configuredProviders: settings.configuredProviders.map(({ apiKey: _apiKey, ...provider }) => ({
-      ...provider,
-    })),
-  };
+  return projectAgentSecretSafeConfig(settings);
 }
 
 function projectSettingsMessage(
@@ -1421,9 +1429,38 @@ function projectSettingsMessage(
         description: '',
       })),
     })),
-    configuredProviders: settings.configuredProviders.map(({ apiKey: _apiKey, ...provider }) => ({
-      ...provider,
+    configuredProviders: settings.configuredProviders.map(projectAssistantConfiguredProviderView),
+  };
+}
+
+function projectAssistantProviderView(
+  provider: AssistantConfigState['providers'][number],
+): AssistantConfigState['providers'][number] {
+  return {
+    id: provider.id,
+    name: provider.name,
+    type: provider.type,
+    enabled: provider.enabled,
+    models: provider.models.map((model) => ({
+      id: model.id,
+      name: model.name,
+      enabled: model.enabled,
     })),
+    ...(provider.connectionKind === undefined ? {} : { connectionKind: provider.connectionKind }),
+    ...(provider.protocolProfile === undefined
+      ? {}
+      : { protocolProfile: provider.protocolProfile }),
+    ...(provider.supportLevel === undefined ? {} : { supportLevel: provider.supportLevel }),
+    ...(provider.requiresApiKey === undefined ? {} : { requiresApiKey: provider.requiresApiKey }),
+  };
+}
+
+function projectAssistantConfiguredProviderView(
+  provider: AssistantConfigState['configuredProviders'][number],
+): AssistantConfigState['configuredProviders'][number] {
+  return {
+    ...projectAssistantProviderView(provider),
+    ...(provider.baseUrl === undefined ? {} : { baseUrl: provider.baseUrl }),
   };
 }
 

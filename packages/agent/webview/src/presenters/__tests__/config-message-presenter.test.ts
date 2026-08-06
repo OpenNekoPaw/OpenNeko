@@ -832,7 +832,7 @@ describe('config message presenter', () => {
             code: 'unsupportedWorkspaceProviderDefinition',
             filePath: '/workspace/.neko/config.toml',
             message:
-              'Workspace configuration defines provider entries: /workspace/.neko/config.toml. Move provider definitions and credentials to the user config, then open a new Agent session or tab.',
+              'Workspace configuration defines provider entries: /workspace/.neko/config.toml. Move provider definitions to the user config, then open a new Agent session or tab.',
           },
         },
       }),
@@ -842,7 +842,7 @@ describe('config message presenter', () => {
         code: 'unsupportedWorkspaceProviderDefinition',
         filePath: '/workspace/.neko/config.toml',
         message:
-          'Workspace configuration defines provider entries: /workspace/.neko/config.toml. Move provider definitions and credentials to the user config, then open a new Agent session or tab.',
+          'Workspace configuration defines provider entries: /workspace/.neko/config.toml. Move provider definitions to the user config, then open a new Agent session or tab.',
       },
     });
 

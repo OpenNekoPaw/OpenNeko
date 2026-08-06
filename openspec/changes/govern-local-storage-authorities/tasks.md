@@ -15,13 +15,13 @@
 
 ## 2. Agent Configuration Authorities
 
-- [ ] 2.1 Define separate Agent-owned repositories for runtime settings, portable definitions,
+- [x] 2.1 Define separate Agent-owned repositories for runtime settings, portable definitions,
       project capability configuration and credential presence/provenance.
-- [ ] 2.2 Add stable SQLite state repositories only for eligible machine-local runtime settings; keep
+- [x] 2.2 Add stable SQLite state repositories only for eligible machine-local runtime settings; keep
       portable definitions and credentials in their owning authorities.
-- [ ] 2.3 Remove product reachability to mixed/retired configuration sources without importing or
+- [x] 2.3 Remove product reachability to mixed/retired configuration sources without importing or
       rewriting their bytes.
-- [ ] 2.4 Add producer/consumer, config export, corrupt-input, secret-redaction and retired-path absence
+- [x] 2.4 Add producer/consumer, config export, corrupt-input, secret-redaction and retired-path absence
       tests.
 
 ## 3. Agent Conversation And Memory Authorities

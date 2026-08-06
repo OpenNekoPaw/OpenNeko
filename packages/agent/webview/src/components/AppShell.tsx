@@ -61,9 +61,7 @@ export function AppShell({
   const isAiConfigured = !!settings.configuredProviders.find(
     (provider) =>
       provider.enabled !== false &&
-      ((provider.models?.length ?? 0) > 0 ||
-        !!provider.apiKey ||
-        provider.requiresApiKey === false),
+      ((provider.models?.length ?? 0) > 0 || provider.requiresApiKey === false),
   );
   useEffect(() => {
     if (presentation === 'default' && hasConfigSnapshot && !isAiConfigured) {

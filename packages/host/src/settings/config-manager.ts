@@ -14,13 +14,9 @@ import type {
   ModelRefConfig,
   ModelType,
 } from '@neko/ai-contracts';
-import type { UnifiedConfig } from './config-core/index';
+import type { ProviderDefinition, UnifiedConfig } from './config-core/index';
 import { DEFAULT_CONFIG, DEFAULT_EXTENSION_CONFIG } from './config-core/index';
-import {
-  readUserConfigResult,
-  readWorkspaceConfigResult,
-  type ConfigReadResult,
-} from './config-reader';
+import { type ConfigReadResult } from './config-reader';
 import { type UserConfig, type IUserConfigManager } from './user-config';
 import { loadWorkspaceConfigResult, type WorkspaceConfig } from './workspace-config';
 import { RETRY_TIMEOUT_PRESETS } from './retry-timeout-presets';
@@ -74,16 +70,12 @@ import {
   type EffectiveAgentRuntimeOverrides,
   type EffectiveAgentWorkspaceConfigSnapshot,
 } from './effective-agent-config';
-import {
-  buildProviderCredentialImports,
-  type ProviderCredentialImportApplyResult,
-  type ProviderCredentialImport,
-} from './config-file-import';
 import { isProviderConfigured } from './provider-configuration';
 import {
   resolveAiProviderSources,
   type AiProviderSourceProjection,
 } from './ai-provider-source-resolver';
+import type { AssistantRuntimeSettingsPort } from './assistant-runtime-settings-port';
 
 /**
  * Merged configuration
@@ -101,6 +93,7 @@ export interface MergedConfig {
 export interface ConfigManagerOptions {
   userConfigManager?: IUserConfigManager;
   workspacePath?: string;
+  assistantRuntimeSettings?: AssistantRuntimeSettingsPort;
 }
 
 /**
@@ -118,10 +111,7 @@ export class ConfigManager {
   private workspacePath: string | null = null;
   private configMerged = false;
   private cachedConfig: MergedConfig | null = null;
-  /** Runtime-only media model overrides (not persisted to disk) */
-  private runtimeMediaDefaults: Partial<Record<MediaModelType, string>> = {};
-  /** Runtime-only assistant settings from Webview controls (not persisted to disk). */
-  private runtimeAssistantSettings: Partial<AssistantSettingsSnapshot> = {};
+  private readonly assistantRuntimeSettings: AssistantRuntimeSettingsPort | undefined;
 
   // Merged data
   private providers: Map<string, Provider> = new Map();
@@ -134,6 +124,7 @@ export class ConfigManager {
 
   constructor(options: ConfigManagerOptions = {}) {
     this.userConfigManager = options.userConfigManager ?? null;
+    this.assistantRuntimeSettings = options.assistantRuntimeSettings;
 
     if (options.workspacePath) {
       this.workspacePath = options.workspacePath;
@@ -194,7 +185,7 @@ export class ConfigManager {
     return Array.from(this.providers.values()).filter((p) => p.enabled !== false);
   }
 
-  async setProvider(provider: Provider): Promise<void> {
+  async setProvider(provider: ProviderDefinition): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.addProvider(provider);
     this.reloadConfig();
@@ -206,32 +197,13 @@ export class ConfigManager {
     this.reloadConfig();
   }
 
-  async setProviderApiKey(providerId: string, apiKey: string): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.updateProviderOverride(providerId, {
-      apiKey,
-    } as Partial<Provider>);
-    this.reloadConfig();
-  }
-
-  async updateProviderOverride(providerId: string, override: Partial<Provider>): Promise<void> {
+  async updateProviderOverride(
+    providerId: string,
+    override: Partial<ProviderDefinition>,
+  ): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.updateProviderOverride(providerId, override);
     this.reloadConfig();
-  }
-
-  /**
-   * Apply a runtime-only override to a provider (not persisted to disk).
-   * Useful for injecting env var API keys without modifying config files.
-   */
-  setRuntimeProviderOverride(providerId: string, override: Partial<Provider>): void {
-    this.ensureMerged();
-    const existing = this.providers.get(providerId);
-    if (existing) {
-      this.providers.set(providerId, { ...existing, ...override });
-      this.cachedConfig = null; // invalidate cached snapshot only
-      this.configDiagnostic = this.buildConfigDiagnostic();
-    }
   }
 
   async removeProviderOverride(providerId: string): Promise<void> {
@@ -346,6 +318,7 @@ export class ConfigManager {
 
   getAssistantSettingsSnapshot(): AssistantSettingsSnapshot {
     const effective = this.getEffectiveAgentWorkspaceConfigSnapshot();
+    const runtimeSettings = this.getRuntimeAssistantSettings();
     return {
       ...buildAssistantSettingsSnapshot({
         selectedProviderId: effective.providerId,
@@ -358,7 +331,7 @@ export class ConfigManager {
         maxTokens: this.getMaxTokens(),
         executionMode: this.getExecutionMode(),
       }),
-      ...this.runtimeAssistantSettings,
+      ...runtimeSettings,
       selectedProviderId: effective.providerId,
       selectedModelId: effective.modelId,
       temperature: effective.temperature,
@@ -369,6 +342,7 @@ export class ConfigManager {
 
   getAssistantRuntimeSettingsSnapshot(): AssistantRuntimeSettingsSnapshot {
     const effective = this.getEffectiveAgentWorkspaceConfigSnapshot();
+    const runtimeSettings = this.getRuntimeAssistantSettings();
     return {
       ...buildAssistantRuntimeSettingsSnapshot({
         selectedProviderId: effective.providerId,
@@ -382,7 +356,7 @@ export class ConfigManager {
         executionMode: this.getExecutionMode(),
         thinkingBudget: this.getThinkingBudget(),
       }),
-      ...this.runtimeAssistantSettings,
+      ...runtimeSettings,
       selectedProviderId: effective.providerId,
       selectedModelId: effective.modelId,
       temperature: effective.temperature,
@@ -396,6 +370,7 @@ export class ConfigManager {
     runtimeOverrides: EffectiveAgentRuntimeOverrides = {},
   ): EffectiveAgentWorkspaceConfigSnapshot {
     const config = this.getConfig();
+    const runtimeSettings = this.getRuntimeAssistantSettings();
     return resolveEffectiveAgentWorkspaceConfigSnapshot({
       userConfigReadResult: this.userConfigReadResult,
       workspaceConfigReadResult: this.workspaceConfigReadResult,
@@ -403,7 +378,7 @@ export class ConfigManager {
       models: [...config.models.values()],
       mcpServers: [...config.mcpServers.values()],
       runtimeOverrides: {
-        ...projectRuntimeAssistantSettingsOverrides(this.runtimeAssistantSettings),
+        ...projectRuntimeAssistantSettingsOverrides(runtimeSettings),
         ...runtimeOverrides,
       },
     });
@@ -508,9 +483,7 @@ export class ConfigManager {
   }
 
   getDefaultMediaModels(): Partial<Record<MediaModelType, string>> {
-    const fromConfig = this.getMediaDefaultModelOptionIdsFromConfig();
-    // Runtime overrides take priority over config-file defaults (not persisted)
-    return { ...fromConfig, ...this.runtimeMediaDefaults };
+    return this.getMediaDefaultModelOptionIdsFromConfig();
   }
 
   getDefaultModelRef(type: ModelType): ModelRefConfig | undefined {
@@ -572,15 +545,6 @@ export class ConfigManager {
     this.reloadConfig();
   }
 
-  /**
-   * Apply runtime-only media model defaults for the current session.
-   * These override config-file defaults but are never written to disk.
-   * Pass empty overrides to clear all per-category session overrides.
-   */
-  setRuntimeMediaDefaults(overrides: Partial<Record<MediaModelType, string>>): void {
-    this.runtimeMediaDefaults = { ...overrides };
-  }
-
   getTemperature(): number {
     return this.getScalar('temperature') ?? DEFAULT_CONFIG.temperature;
   }
@@ -628,24 +592,29 @@ export class ConfigManager {
   }
 
   async setAssistantSettings(updates: Partial<AssistantSettingsSnapshot>): Promise<void> {
-    this.setRuntimeAssistantSettings(updates);
+    const authority = this.requireAssistantRuntimeSettings();
+    await authority.commit({ ...authority.snapshot(), ...updates });
   }
 
   async applyRuntimeAssistantSettingsFromWebview(settings: Record<string, unknown>): Promise<void> {
     const updates = mapWebviewSettingsToAssistantSettings(settings);
+    const authority = this.requireAssistantRuntimeSettings();
+    const current = authority.snapshot();
     if (isClearingRuntimeModelSelection(settings)) {
-      const updatesWithoutModelSelection = { ...updates };
-      delete updatesWithoutModelSelection.selectedProviderId;
-      delete updatesWithoutModelSelection.selectedModelId;
-      this.clearRuntimeAssistantModelSelection();
-      this.setRuntimeAssistantSettings(updatesWithoutModelSelection);
+      const next = { ...current, ...updates };
+      delete next.selectedProviderId;
+      delete next.selectedModelId;
+      await authority.commit(next);
       return;
     }
-    this.setRuntimeAssistantSettings(updates);
+    await authority.commit({ ...current, ...updates });
   }
 
   async resetAssistantSettings(): Promise<void> {
-    this.runtimeAssistantSettings = {};
+    if (!this.assistantRuntimeSettings) {
+      throw new Error('Agent runtime settings authority is unavailable.');
+    }
+    await this.assistantRuntimeSettings.reset();
   }
 
   // ==========================================================================
@@ -660,58 +629,13 @@ export class ConfigManager {
   // Import/Export Methods
   // ==========================================================================
 
-  exportConfig(options: { includeSecrets?: boolean } = {}): ConfigExportData {
+  exportConfig(): ConfigExportData {
     const config = this.getConfig();
-    return this.configExportService.exportConfig(config.providers, config.models, options);
+    return this.configExportService.exportConfig(config.providers, config.models);
   }
 
-  async importConfig(
-    data: ConfigExportData,
-    options: { overwrite?: boolean; includeSecrets?: boolean } = {},
-  ): Promise<ConfigImportResult> {
-    return this.configExportService.importConfig(data, this, options);
-  }
-
-  async importProviderCredentialsFromUnifiedConfigs(
-    configs: readonly UnifiedConfig[],
-  ): Promise<ProviderCredentialImportApplyResult> {
-    const imports = buildProviderCredentialImports(configs);
-    const imported: ProviderCredentialImport[] = [];
-    const failed: ProviderCredentialImportApplyResult['failed'] = [];
-
-    for (const item of imports) {
-      try {
-        this.applyRuntimeProviderCredential(item);
-        imported.push(item);
-      } catch (error) {
-        failed.push({ id: item.id, error });
-      }
-    }
-
-    return { imported, failed };
-  }
-
-  async importProviderCredentialsFromConfigFiles(
-    options: {
-      readonly workspacePath?: string;
-    } = {},
-  ): Promise<ProviderCredentialImportApplyResult> {
-    const configs: UnifiedConfig[] = [];
-    const userConfig = this.userConfigReadResult ?? readUserConfigResult();
-    if (userConfig.status === 'ok') {
-      configs.push(userConfig.config);
-    }
-
-    const workspacePath = options.workspacePath ?? this.workspacePath ?? undefined;
-    if (workspacePath) {
-      const workspaceConfig =
-        this.workspaceConfigReadResult ?? readWorkspaceConfigResult(workspacePath);
-      if (workspaceConfig.status === 'ok') {
-        configs.push(workspaceConfig.config);
-      }
-    }
-
-    return this.importProviderCredentialsFromUnifiedConfigs(configs);
+  async importConfig(data: ConfigExportData): Promise<ConfigImportResult> {
+    return this.configExportService.importConfig(data, this);
   }
 
   async addCustomProvider(config: CustomProviderConfig): Promise<ConfigImportResult> {
@@ -730,7 +654,6 @@ export class ConfigManager {
       : undefined;
     this.workspaceConfigReadResult = workspaceResult?.raw ?? null;
     this.workspaceConfig = workspaceResult?.config ?? null;
-    this.clearRuntimeAssistantModelSelection();
     this.invalidateCache();
     this.configDiagnostic = this.buildConfigDiagnostic();
   }
@@ -930,7 +853,7 @@ export class ConfigManager {
     );
     return hasConfiguredChatModel
       ? undefined
-      : buildAssistantConfigAvailabilityDiagnostic('missingApiKey', filePath);
+      : buildAssistantConfigAvailabilityDiagnostic('missingProviderEndpoint', filePath);
   }
 
   private validateDefaultModelBindings(
@@ -974,25 +897,17 @@ export class ConfigManager {
     return undefined;
   }
 
-  private setRuntimeAssistantSettings(updates: Partial<AssistantSettingsSnapshot>): void {
-    this.runtimeAssistantSettings = {
-      ...this.runtimeAssistantSettings,
-      ...updates,
-    };
+  private getRuntimeAssistantSettings(): Readonly<Partial<AssistantSettingsSnapshot>> {
+    return this.assistantRuntimeSettings?.snapshot() ?? {};
   }
 
-  private clearRuntimeAssistantModelSelection(): void {
-    if (
-      !('selectedProviderId' in this.runtimeAssistantSettings) &&
-      !('selectedModelId' in this.runtimeAssistantSettings)
-    ) {
-      return;
+  private requireAssistantRuntimeSettings(): AssistantRuntimeSettingsPort {
+    if (!this.assistantRuntimeSettings) {
+      throw new Error('Agent runtime settings authority is unavailable.');
     }
-
-    const nextSettings = { ...this.runtimeAssistantSettings };
-    delete nextSettings.selectedProviderId;
-    delete nextSettings.selectedModelId;
-    this.runtimeAssistantSettings = nextSettings;
+    const diagnostic = this.assistantRuntimeSettings.diagnostic();
+    if (diagnostic) throw new Error(diagnostic.message);
+    return this.assistantRuntimeSettings;
   }
 
   /**
@@ -1018,17 +933,6 @@ export class ConfigManager {
         this.providers,
         userConfig?.providerOverrides as Record<string, Partial<Provider>> | undefined,
       );
-    }
-
-    // Apply credentials.apiKeys to providers missing an apiKey
-    const credentialKeys = userConfig?.credentials?.apiKeys;
-    if (credentialKeys) {
-      for (const [providerId, apiKey] of Object.entries(credentialKeys)) {
-        const provider = this.providers.get(providerId);
-        if (provider && !provider.apiKey) {
-          this.providers.set(providerId, { ...provider, apiKey });
-        }
-      }
     }
 
     // --- Models (user only) ---
@@ -1060,17 +964,6 @@ export class ConfigManager {
     this.substituteMCPWorkspacePath();
 
     this.configMerged = true;
-  }
-
-  private applyRuntimeProviderCredential(item: ProviderCredentialImport): void {
-    this.ensureMerged();
-    const existing = this.providers.get(item.id);
-    this.providers.set(item.id, {
-      ...(existing ?? item.provider),
-      apiKey: item.apiKey,
-    });
-    this.cachedConfig = null;
-    this.configDiagnostic = this.buildConfigDiagnostic();
   }
 
   /**

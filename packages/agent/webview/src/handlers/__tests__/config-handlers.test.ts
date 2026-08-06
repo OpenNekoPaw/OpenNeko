@@ -239,7 +239,7 @@ describe('configHandlers', () => {
             code: 'missingConfig',
             filePath: '/home/user/.neko/config.toml',
             message:
-              'Agent configuration file is missing: /home/user/.neko/config.toml. Create the config file with at least one enabled provider, chat model, and required provider credentials, then open a new Agent session or tab.',
+              'Agent configuration file is missing: /home/user/.neko/config.toml. Create the config file with at least one enabled provider and chat model, then open a new Agent session or tab.',
           },
         },
       },

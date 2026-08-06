@@ -143,7 +143,7 @@ function isExplicitAiAvailabilityDiagnostic(
   return (
     diagnostic?.code === 'missingProvider' ||
     diagnostic?.code === 'missingModel' ||
-    diagnostic?.code === 'missingApiKey' ||
+    diagnostic?.code === 'missingProviderEndpoint' ||
     diagnostic?.code === 'invalidDefaultProvider' ||
     diagnostic?.code === 'invalidDefaultModel' ||
     diagnostic?.code === 'invalidDefaultModelBinding'

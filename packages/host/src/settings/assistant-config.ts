@@ -58,7 +58,6 @@ export interface AssistantProviderView {
 }
 
 export interface AssistantConfiguredProviderView extends AssistantProviderView {
-  apiKey?: string;
   baseUrl?: string;
 }
 
@@ -197,7 +196,6 @@ export function buildAssistantConfiguredProviderViews(
     .filter((provider) => isProviderConfigured(provider))
     .map((provider) => ({
       ...toProviderView(provider, models),
-      ...(provider.apiKey ? { apiKey: provider.apiKey } : {}),
       ...(provider.apiUrl ? { baseUrl: provider.apiUrl } : {}),
     }));
 }

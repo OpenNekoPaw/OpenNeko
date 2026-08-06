@@ -11,6 +11,7 @@ import type { Provider, Model } from '../types/provider';
 import type { MCPServerPreset } from '../types/config';
 import type { UnifiedConfig } from '../config-core/index';
 import type { ConfigReadResult } from '../config-reader';
+import type { AssistantRuntimeSettingsPort } from '../assistant-runtime-settings-port';
 import { RETRY_TIMEOUT_PRESETS } from '../retry-timeout-presets';
 
 // =============================================================================
@@ -127,6 +128,20 @@ function createMockUserConfigManager(
 
 function createEmptyConfigManager(): ConfigManager {
   return new ConfigManager({ userConfigManager: createMockUserConfigManager() });
+}
+
+function createMemoryAssistantRuntimeSettings(): AssistantRuntimeSettingsPort {
+  let state: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = {};
+  return {
+    snapshot: () => state,
+    commit: async (next) => {
+      state = { ...next };
+    },
+    reset: async () => {
+      state = {};
+    },
+    diagnostic: () => undefined,
+  };
 }
 
 function createReadResultUserConfigManager(
@@ -248,12 +263,12 @@ describe('ConfigManager', () => {
     it('should apply provider overrides', () => {
       const ucm = createMockUserConfigManager({
         providers: [SAMPLE_PROVIDER],
-        providerOverrides: { anthropic: { apiKey: 'sk-test-123' } },
+        providerOverrides: { anthropic: { supportLevel: 'verified' } },
       });
       const manager = new ConfigManager({ userConfigManager: ucm });
       const provider = manager.getProvider('anthropic');
 
-      expect(provider?.apiKey).toBe('sk-test-123');
+      expect(provider?.supportLevel).toBe('verified');
     });
 
     it('should apply model overrides', () => {
@@ -300,12 +315,6 @@ describe('ConfigManager', () => {
       expect(manager.getProvider('anthropic')).toBeUndefined();
     });
 
-    it('should set provider API key', async () => {
-      await manager.setProviderApiKey('anthropic', 'sk-new-key');
-      const provider = manager.getProvider('anthropic');
-      expect(provider?.apiKey).toBe('sk-new-key');
-    });
-
     it('should add custom model', async () => {
       const model: Model = {
         id: 'custom-model',
@@ -323,76 +332,6 @@ describe('ConfigManager', () => {
       expect(manager.getModel('anthropic-claude-sonnet-4')).toBeDefined();
       await manager.removeModel('anthropic-claude-sonnet-4');
       expect(manager.getModel('anthropic-claude-sonnet-4')).toBeUndefined();
-    });
-
-    it('should import provider credentials from unified config files with later configs winning', async () => {
-      const result = await manager.importProviderCredentialsFromUnifiedConfigs([
-        {
-          providers: [
-            {
-              ...SAMPLE_PROVIDER,
-              apiKey: 'sk-user',
-            },
-            {
-              id: 'openai',
-              name: 'openai',
-              displayName: 'OpenAI',
-              type: 'openai',
-              apiUrl: 'https://api.openai.com/api',
-              apiKey: 'sk-openai',
-              enabled: true,
-            },
-          ],
-        },
-        {
-          providers: [
-            {
-              ...SAMPLE_PROVIDER,
-              apiKey: 'sk-workspace',
-            },
-          ],
-        },
-      ]);
-
-      expect(manager.getProvider('anthropic')?.apiKey).toBe('sk-workspace');
-      expect(manager.getProvider('openai')?.apiKey).toBe('sk-openai');
-      expect(result.imported.map((item) => item.id)).toEqual(['anthropic', 'openai']);
-      expect(result.failed).toEqual([]);
-    });
-
-    it('should project provider credentials in memory without writing config files', async () => {
-      const ucm = createMockUserConfigManager({
-        providers: [SAMPLE_PROVIDER],
-      });
-      ucm.updateProviderOverride = async () => {
-        throw new Error('write path should not be used');
-      };
-      ucm.addProvider = async () => {
-        throw new Error('write path should not be used');
-      };
-      const failingManager = new ConfigManager({ userConfigManager: ucm });
-
-      const result = await failingManager.importProviderCredentialsFromUnifiedConfigs([
-        {
-          providers: [
-            { ...SAMPLE_PROVIDER, apiKey: 'sk-user' },
-            {
-              id: 'openai',
-              name: 'openai',
-              displayName: 'OpenAI',
-              type: 'openai',
-              apiUrl: 'https://api.openai.com/api',
-              apiKey: 'sk-openai',
-              enabled: true,
-            },
-          ],
-        },
-      ]);
-
-      expect(result.imported.map((item) => item.id)).toEqual(['anthropic', 'openai']);
-      expect(result.failed).toEqual([]);
-      expect(failingManager.getProvider('anthropic')?.apiKey).toBe('sk-user');
-      expect(failingManager.getProvider('openai')?.apiKey).toBe('sk-openai');
     });
   });
 
@@ -468,7 +407,7 @@ describe('ConfigManager', () => {
         code: 'missingConfig',
         filePath: '/tmp/neko/config.toml',
         message:
-          'Agent configuration file is missing: /tmp/neko/config.toml. Create the config file with at least one enabled provider, chat model, and required provider credentials, then open a new Agent session or tab.',
+          'Agent configuration file is missing: /tmp/neko/config.toml. Create the config file with at least one enabled provider and chat model, then open a new Agent session or tab.',
       });
       expect(manager.getConfig().providers.size).toBe(0);
       expect(manager.getAssistantSettingsData().selectedProviderId).toBeNull();
@@ -506,7 +445,7 @@ describe('ConfigManager', () => {
         code: 'missingProvider',
         filePath: '/tmp/neko/config.toml',
         message:
-          'Agent configuration has no enabled providers: /tmp/neko/config.toml. Add at least one enabled provider with its required endpoint and credentials, then open a new Agent session or tab.',
+          'Agent configuration has no enabled providers: /tmp/neko/config.toml. Add at least one enabled provider with its endpoint, then open a new Agent session or tab.',
       });
       expect(manager.getAssistantSettingsData()).toEqual(
         expect.objectContaining({
@@ -573,31 +512,6 @@ describe('ConfigManager', () => {
             image: `${provider.id}:${imageModel.id}`,
           },
         }),
-      );
-    });
-
-    it('reports missing API keys for enabled chat models before model resolution', () => {
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [SAMPLE_PROVIDER],
-            models: [SAMPLE_MODEL],
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'missingApiKey',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Agent configuration has no configured enabled chat provider: /tmp/neko/config.toml. Add the required provider endpoint and credentials, then open a new Agent session or tab.',
-      });
-      expect(manager.getAssistantSettingsData().selectedProviderId).toBeNull();
-      expect(manager.getAssistantSettingsData().selectedModelId).toBeNull();
-      expect(() => manager.assertConfigAvailable()).toThrow(
-        'Agent configuration has no configured enabled chat provider',
       );
     });
 
@@ -793,7 +707,6 @@ describe('ConfigManager', () => {
         connectionKind: 'direct',
         protocolProfile: 'google',
         requiresApiKey: true,
-        apiKey: 'test-key',
       };
       const fastModel: Model = {
         id: 'gemini-flash',
@@ -954,7 +867,6 @@ describe('ConfigManager', () => {
         connectionKind: 'direct',
         protocolProfile: 'google',
         requiresApiKey: true,
-        apiKey: 'test-key',
       };
       const flashModel: Model = {
         id: 'gemini-flash',
@@ -1072,7 +984,6 @@ describe('ConfigManager', () => {
         connectionKind: 'direct',
         protocolProfile: 'google',
         requiresApiKey: true,
-        apiKey: 'test-key',
       };
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
@@ -1105,43 +1016,6 @@ describe('ConfigManager', () => {
       expect(manager.resolveModelRefForPurpose('video.understand')).toBeUndefined();
     });
 
-    it('clears availability diagnostics after runtime credential projection', async () => {
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [SAMPLE_PROVIDER],
-            models: [SAMPLE_MODEL],
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()?.code).toBe('missingApiKey');
-
-      await manager.importProviderCredentialsFromUnifiedConfigs([
-        {
-          providers: [{ ...SAMPLE_PROVIDER, apiKey: 'sk-runtime' }],
-        },
-      ]);
-
-      expect(manager.getConfigDiagnostic()).toBeUndefined();
-      expect(manager.getAssistantDefaultProvider()).toEqual(
-        expect.objectContaining({
-          id: 'anthropic',
-          defaultModel: 'anthropic-claude-sonnet-4',
-          modelIds: ['anthropic-claude-sonnet-4'],
-        }),
-      );
-      expect(manager.getAssistantSettingsData()).toEqual(
-        expect.objectContaining({
-          selectedProviderId: null,
-          selectedModelId: null,
-        }),
-      );
-      expect(() => manager.assertConfigAvailable()).not.toThrow();
-    });
-
     it('refreshes only through explicit reloadConfig snapshots', () => {
       let current: ConfigReadResult = {
         status: 'ok',
@@ -1170,7 +1044,7 @@ describe('ConfigManager', () => {
       expect(manager.getConfigDiagnostic()?.code).toBe('invalidToml');
     });
 
-    it('drops runtime provider/model selection on config reload so file defaults route agent turns', async () => {
+    it('retains runtime provider/model selection across config reload', async () => {
       const deepseekProvider: Provider = {
         id: 'deepseek-chat',
         name: 'deepseek',
@@ -1192,6 +1066,7 @@ describe('ConfigManager', () => {
         enabled: true,
       };
       const manager = new ConfigManager({
+        assistantRuntimeSettings: createMemoryAssistantRuntimeSettings(),
         userConfigManager: createReadResultUserConfigManager({
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
@@ -1225,8 +1100,8 @@ describe('ConfigManager', () => {
 
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
         expect.objectContaining({
-          selectedProviderId: 'deepseek-chat',
-          selectedModelId: 'deepseek-pro',
+          selectedProviderId: 'nekoapi-chat',
+          selectedModelId: 'gateway-chat',
           executionMode: 'auto',
         }),
       );
@@ -1254,6 +1129,7 @@ describe('ConfigManager', () => {
         enabled: true,
       };
       const manager = new ConfigManager({
+        assistantRuntimeSettings: createMemoryAssistantRuntimeSettings(),
         userConfigManager: createReadResultUserConfigManager({
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
@@ -1287,10 +1163,42 @@ describe('ConfigManager', () => {
       );
     });
 
+    it('allows explicit reset when the runtime settings authority rejected its stored record', async () => {
+      let rejected = true;
+      const reset = vi.fn(async () => {
+        rejected = false;
+      });
+      const runtimeSettings: AssistantRuntimeSettingsPort = {
+        snapshot: () => ({}),
+        commit: async () => {
+          throw new Error('commit must remain unavailable while the stored record is invalid');
+        },
+        reset,
+        diagnostic: () =>
+          rejected
+            ? {
+                authority: 'neko.db#agent.runtime-settings:assistant-space:local-user',
+                message: 'Stored Agent runtime settings are invalid.',
+              }
+            : undefined,
+      };
+      const manager = new ConfigManager({
+        assistantRuntimeSettings: runtimeSettings,
+        userConfigManager: createMockUserConfigManager(),
+      });
+
+      await expect(manager.setAssistantSettings({ executionMode: 'plan' })).rejects.toThrow(
+        'Stored Agent runtime settings are invalid.',
+      );
+      await manager.resetAssistantSettings();
+
+      expect(reset).toHaveBeenCalledOnce();
+      expect(runtimeSettings.diagnostic()).toBeUndefined();
+    });
+
     it('blocks conversation when the default chat binding provider is unavailable', () => {
       const validProvider: Provider = {
         ...SAMPLE_PROVIDER,
-        apiKey: 'sk-valid',
       };
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
@@ -1320,7 +1228,6 @@ describe('ConfigManager', () => {
     it('blocks conversation when the default chat binding references a non-chat model', () => {
       const validProvider: Provider = {
         ...SAMPLE_PROVIDER,
-        apiKey: 'sk-valid',
       };
       const imageModel: Model = {
         id: 'anthropic-image',
@@ -1532,7 +1439,7 @@ describe('ConfigManager', () => {
         userConfigManager: createMockUserConfigManager({ providers: [SAMPLE_PROVIDER] }),
       });
       const config1 = manager.getConfig();
-      await manager.setProviderApiKey('anthropic', 'new-key');
+      await manager.updateProviderOverride('anthropic', { enabled: false });
       const config2 = manager.getConfig();
 
       expect(config1).not.toBe(config2);

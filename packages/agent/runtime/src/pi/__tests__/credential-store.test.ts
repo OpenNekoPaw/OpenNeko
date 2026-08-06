@@ -57,7 +57,7 @@ describe('OpenNekoCredentialStore', () => {
     const status = await tuiConsumer.replace(
       'newapi',
       { type: 'api_key', key: 'secret-value' },
-      'user-config-import',
+      'environment',
     );
 
     expect(await vscodeConsumer.read('newapi')).toEqual({
@@ -67,7 +67,7 @@ describe('OpenNekoCredentialStore', () => {
     expect(status).toEqual({
       providerId: 'newapi',
       type: 'api_key',
-      provenance: 'user-config-import',
+      provenance: 'environment',
       fingerprint: expect.stringMatching(/^[0-9a-f]{16}$/),
       updatedAt: '2027-01-15T08:00:00.000Z',
     });
