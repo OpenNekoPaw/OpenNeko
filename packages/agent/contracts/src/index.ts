@@ -573,14 +573,6 @@ export { DEFAULT_SETTINGS } from './settings';
 // Agent phase
 export type { AgentPhase, AgentState } from './phase';
 
-// UserPreferences — approval governance input (ADR §9.3)
-export type {
-  UserPreferences,
-  MergedPreferences,
-  PreferenceSubjectRule,
-  PreferenceCostThresholds,
-} from './preferences';
-
 // CapabilityKind — flat capability pool discriminant (ADR §5.1, §5.3)
 export type {
   CapabilityKind,
