@@ -11,6 +11,7 @@ import { initializeCoreLocalMetadataTables } from '../sqlite';
 import {
   parseWorkspaceIdentityJson,
   resolveGlobalStorageLayout,
+  resolveWorkspaceCachePartition,
   WORKSPACE_IDENTITY_RELATIVE_PATH,
 } from '../storage';
 import type { LocalMetadataStore } from '../contracts';
@@ -110,6 +111,31 @@ describe('canonical Workspace identity', () => {
       identity: { workspaceId: WORKSPACE_ID },
     });
     await rebuiltStore.dispose();
+  });
+
+  it('contains cache loss to the user-level Workspace partition', async () => {
+    const fixture = await createFixture('cache-loss');
+    await resolve(fixture);
+    const cachePartition = resolveWorkspaceCachePartition(fixture.homedir, WORKSPACE_ID);
+    const cachePath = join(cachePartition, 'resources', 'thumbnail.jpg');
+    const projectFactPath = join(fixture.workspaceRoot, 'neko', 'scene.json');
+    const retainedMediaPath = join(fixture.workspaceRoot, 'media', 'final.png');
+    await Promise.all([
+      mkdir(join(cachePartition, 'resources'), { recursive: true }),
+      mkdir(join(fixture.workspaceRoot, 'media'), { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(cachePath, 'derived-cache', 'utf8'),
+      writeFile(projectFactPath, '{"title":"Scene"}\n', 'utf8'),
+      writeFile(retainedMediaPath, 'retained-media', 'utf8'),
+    ]);
+
+    await rm(cachePartition, { recursive: true });
+
+    await expect(readFile(cachePath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(projectFactPath, 'utf8')).resolves.toBe('{"title":"Scene"}\n');
+    await expect(readFile(retainedMediaPath, 'utf8')).resolves.toBe('retained-media');
+    await fixture.store.dispose();
   });
 
   it('keeps a missing project identity visible as an exact failure without regenerating it', async () => {

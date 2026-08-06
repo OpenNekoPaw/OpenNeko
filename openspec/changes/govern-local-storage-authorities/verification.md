@@ -76,6 +76,38 @@ Owner-partitioned log evidence:
   passed 70 tests and `pnpm --filter @neko/agent-runtime test` passed 977 tests. Shared and Desktop
   typechecks, `check:no-internal-versioning` and `check:legacy-debt` passed.
 
+Workspace authority and retired-path evidence:
+
+| Retired project-local bytes                                                               | Authority classification                         | Canonical product authority                                                         |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| identity and project facts (`workspace.json`, settings, providers, entity/Asset bindings) | project facts                                    | `neko/project.json` and owning `neko/` facts                                        |
+| project Agent content (AGENTS, prompts, commands, processors, Skills/hooks/preferences)   | user-editable project content                    | owning `neko/` files or `.agents/skills`; unsupported content has no product reader |
+| sessions, locks and runtime state                                                         | valuable local state / Agent journals            | Pi Conversation files and stable `neko.db#state` repositories                       |
+| logs and audit streams                                                                    | raw logs                                         | owner-partitioned `~/.neko/logs/` files                                             |
+| cache, semantic indexes and test output                                                   | rebuildable metadata / workspace cache artifacts | `neko.db#cache` or `~/.neko/workspace-cache/<workspaceId>/`                         |
+| accepted memory                                                                           | project-domain fact                              | owning Chara/project fact file                                                      |
+| recordings, imports, temporary data and archives                                          | retained media or scratch                        | explicit media promotion/export or bounded scratch owner                            |
+| every other `.neko/**` entry                                                              | unknown retired data                             | no product authority; bytes remain untouched                                        |
+
+- Production scans found no Workspace/Project-root `.neko` join, retired identity/preferences/memory
+  filename, storage inspector, old Agent event sink or recovery symbol. Every production `.neko/`
+  text match was an explicit user-level `~/.neko` authority.
+- `neko/project.json` carries only stable `workspaceId` identity plus opaque unknown top-level facts;
+  it has no schema/table version. Copy, move, duplicate identity, unknown-fact preservation and
+  database-loss tests use only the canonical file and shared database.
+- Workspace state uses the stable `workspaces` table, resource projections use the stable cache
+  repository and large derived bytes resolve only to the user-level UUID cache partition. The empty
+  `ResourceCacheManifestStore.invalidateCache()` contract and its self-test implementation were
+  deleted.
+- Canonical cache-loss coverage deleted one exact user-level Workspace cache partition and proved
+  project facts plus retained media bytes remained unchanged. Existing path-branding tests reject
+  project facts as managed cache; managed log tests require confirmation before deletion.
+- `pnpm --filter @neko/local-metadata test` passed 71 tests and
+  `pnpm --filter @neko/generation test` passed 162 tests; both package typechecks and
+  `check:storage-authorities` passed. `check:unused` passed after deleting the unconsumed Agent
+  EventBus and shared-memory implementations, barrels and self-contained tests. Agent runtime then
+  passed 108 files and 966 tests plus typecheck.
+
 ### Agent Evaluation
 
 - Authoring decision: `reuse` the indexed `agent-runtime.model-binding` suite and its

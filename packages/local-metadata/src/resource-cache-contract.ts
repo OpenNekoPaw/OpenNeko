@@ -148,7 +148,6 @@ export interface ResourceCacheManifestStore {
       manifest: ResourceCacheManifest,
     ) => ResourceCacheManifest | Promise<ResourceCacheManifest>,
   ): Promise<ResourceCacheManifest>;
-  invalidateCache(): void;
 }
 
 export interface ResourceCacheStats {

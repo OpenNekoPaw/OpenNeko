@@ -39,15 +39,15 @@
 
 ## 4. Workspace And Log Enforcement
 
-- [ ] 4.1 Audit every retired `.neko/` entry by authority class without reading it in normal product flow.
-- [ ] 4.2 Define the canonical `neko/project.json` identity codec without a schema version; keep retired
+- [x] 4.1 Audit every retired `.neko/` entry by authority class without reading it in normal product flow.
+- [x] 4.2 Define the canonical `neko/project.json` identity codec without a schema version; keep retired
       `.neko/workspace.json` untouched and product-unreachable.
-- [ ] 4.3 Keep machine-local workspace state in `neko.db#state`, rebuildable indexes in
+- [x] 4.3 Keep machine-local workspace state in `neko.db#state`, rebuildable indexes in
       `neko.db#cache`, and large derived bytes in user-level workspace cache partitions.
 - [x] 4.4 Keep Desktop/Workspace/Agent logs in owner-partitioned files with rotation, retention,
       redaction and explicit deletion.
-- [ ] 4.5 Prove retired config/preferences/log/cache paths remain untouched and outside product cleanup.
-- [ ] 4.6 Add workspace copy/move, duplicate identity, unknown-file preservation, database/cache loss,
+- [x] 4.5 Prove retired config/preferences/log/cache paths remain untouched and outside product cleanup.
+- [x] 4.6 Add workspace copy/move, duplicate identity, unknown-file preservation, database/cache loss,
       project-fact rejection, log deletion and retained artifact safety tests.
 - [x] 4.7 Enumerate the stable `workspaces` authority into Project catalog independently from Shell
       active/open state; retain unavailable records with exact locator fields and identity-scoped actions.

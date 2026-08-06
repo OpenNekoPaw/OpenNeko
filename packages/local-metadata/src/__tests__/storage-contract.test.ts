@@ -42,6 +42,7 @@ describe('storage classification', () => {
       sqliteRole: 'prohibited',
     });
     expect(getNekoStorageClassification('raw-logs')).toMatchObject({
+      owner: 'logger',
       authorityKind: 'log-file',
       sqliteRole: 'prohibited',
       tracking: 'outside-workspace',

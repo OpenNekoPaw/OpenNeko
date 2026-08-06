@@ -68,8 +68,6 @@ export class LocalMetadataResourceCacheManifestStore implements ResourceCacheMan
     );
   }
 
-  invalidateCache(): void {}
-
   private async loadFrom(
     repository: ResourceCacheMetadataRepository,
   ): Promise<ResourceCacheManifest> {

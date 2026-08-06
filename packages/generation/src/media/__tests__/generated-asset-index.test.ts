@@ -349,7 +349,6 @@ function createManifestStore(initial?: ResourceCacheManifest): {
         manifest = await operation(manifest);
         return manifest;
       },
-      invalidateCache() {},
     },
   };
 }

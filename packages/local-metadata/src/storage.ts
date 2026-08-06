@@ -66,6 +66,7 @@ export type NekoStorageOwner =
   | 'host-extension'
   | 'media-library'
   | 'secret-store'
+  | 'logger'
   | 'runtime';
 
 export type NekoTrackingPolicy = 'git-trackable' | 'gitignored' | 'outside-workspace';
@@ -315,7 +316,7 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     storageClass: 'raw-log',
     metadataOwnership: null,
     durability: 'valuable-local-state',
-    owner: 'host-extension',
+    owner: 'logger',
     authorityKind: 'log-file',
     userManagement: 'opaque',
     portability: 'machine-local',
