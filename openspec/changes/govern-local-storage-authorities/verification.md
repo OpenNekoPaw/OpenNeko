@@ -6,10 +6,10 @@ Date: 2026-08-06
 
 - `pnpm build` passed for all build-owning workspaces and Electron Forge packaging on
   `darwin-arm64`.
-- `pnpm test` passed, including Local Metadata 84 tests, Assets Node 65 tests, Agent Runtime 1055
-  tests and Desktop 392 tests.
+- `pnpm test` passed, including Local Metadata 71 tests, Assets Node 65 tests, Agent Runtime 966
+  tests and Desktop 391 tests.
 - `pnpm check` passed: unused analysis completed and dependency-cruiser reported no violations
-  across 1417 modules and 4806 dependencies.
+  across 1393 modules and 4743 dependencies.
 - `pnpm check:no-internal-versioning` passed with 0 baseline internal occurrences and 0 new
   internal occurrences. The gate now rejects versioned table files/names, table-generation
   identifiers, `PRAGMA user_version` and version-suffixed DDL.
@@ -21,7 +21,7 @@ Focused table and local-failure evidence:
 
 - `node --test scripts/check-no-internal-versioning.test.mjs` passed 11 tests.
 - `pnpm --filter @neko/agent-runtime exec vitest run src/pi/__tests__/node-conversation-authority.test.ts`
-  passed 10 tests. Unknown columns remain readable; a missing required column fails explicitly.
+  passed 12 tests. Unknown columns remain readable; a missing required column fails explicitly.
 - Focused Local Metadata, Assets Node and Desktop discovery tests passed after deleting
   `asset_library_inventory_state` and `initializeExistingInventory`.
 
@@ -121,24 +121,47 @@ Workspace authority and retired-path evidence:
 
 ### Real Electron
 
+- `pnpm test:local:ui --scenario desktop-workbench-scenes` passed:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T16-33-07.240Z-desktop-workbench-scenes-development/report.json`.
+  It proved isolated cold start, exact Workspace restart recovery, retained Media Library connection,
+  fresh Preview authorization and list-mode presentation. The restart checkpoint reported
+  `catalog=媒体库`, `viewMode=list`, `connectionRetained=true`, `contentVisible=true` and
+  `previewReady=true`; the report contained no console error, warning, exception or poisoned
+  resource request.
 - `pnpm test:local:ui --scenario asset-library-record-removal` passed:
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T12-32-19.897Z-asset-library-record-removal-development/report.json`.
   It proved an unavailable membership remains visible with `sourceRelativePath`, a valid sibling
   remains usable, identity-scoped removal preserves source bytes and the removal persists after
   restart.
 - `pnpm test:local:ui --scenario no-active-project-catalogs` passed:
-  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T12-51-02.714Z-no-active-project-catalogs-development/report.json`.
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T16-36-09.544Z-no-active-project-catalogs-development/report.json`.
   With no active Project, it proved historical Conversations, retained Workspace rows and retained
   Asset memberships remain visible. Diagnostics exposed `workspaceId`, `currentLocator`,
   `orphanedAt` and `sourceRelativePath`; both management catalogs opened in list mode.
 - `pnpm test:local:ui --scenario desktop-agent-diagnostic-portal` passed:
-  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T14-09-17.722Z-desktop-agent-diagnostic-portal-development/report.json`.
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T16-37-08.866Z-desktop-agent-diagnostic-portal-development/report.json`.
   The isolated real Electron runtime showed the Agent diagnostic in a readable 360px fixed portal,
   retained the adjacent Resource dock and reported no console error, warning or exception. The
   screenshot was inspected for clipping, overlap, text fit and layering.
 
 All scenarios used an isolated temporary home. The real `~/.neko/neko.db` was not opened,
 rewritten or migrated.
+
+### Owning Integration Recovery
+
+- Host config reader/manager/export tests passed 74 assertions. Portable definitions round-tripped,
+  credential-bearing or corrupt imports failed before writes, and secrets stayed outside exported
+  documents.
+- Node Pi Conversation authority passed 12 assertions. Branch facts survived export/import and a
+  full authority reopen without copying lease, checkpoint or SQLite operational state; in-flight
+  export remained fail-visible.
+- Local Metadata Node SQLite backup/restore and user diagnostics passed 9 assertions. Workspace,
+  Conversation, ResourceCache and media metadata survived an integrity-checked restore, while
+  invalid records remained isolated.
+- Desktop encrypted-secret and SQLite state integration passed 7 assertions. Secret failures did not
+  expose plaintext, and invalid Shell/Application Settings rows did not reset valid sibling state.
+- These operations currently have no Desktop UI command. They were therefore verified through their
+  owning integration boundaries rather than adding fixture-only IPC or a second product path.
 
 ### Evaluation disposition
 
@@ -148,8 +171,6 @@ provider/model selection, AgentSession execution, queues or model behavior.
 
 ### Remaining risk
 
-- Task 5.2 remains open: isolated config export/import, conversation export/import, database
-  backup/restore and secret-failure scenarios have not yet run.
 - Real provider/model UI behavior remains blocked by missing explicit provider/model/cost
   authorization; deterministic model-binding and secret-boundary tests passed.
 - The change remains local-only. Cloud synchronization is intentionally absent.

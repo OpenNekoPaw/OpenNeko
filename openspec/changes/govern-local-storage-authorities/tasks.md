@@ -60,8 +60,9 @@
 
 - [x] 5.1 Run focused Local Metadata, Host, Agent runtime and Desktop tests/typechecks, then full build,
       test, check, legacy-debt and unused gates.
-- [ ] 5.2 Run isolated real Electron cold start, restart, config export/import, conversation export/import,
-      database backup/restore, secret failure and record-local rejection scenarios.
+- [x] 5.2 Run isolated real Electron cold start, restart and record-local rejection scenarios; run
+      config export/import, conversation export/import, database backup/restore and secret failure
+      through their owning integration boundaries because they have no Desktop user entry.
 - [x] 5.4 Run a real Electron no-active-Project scenario proving historical Conversations, Workspace
       records and media memberships remain visible and invalid fields do not disable valid siblings.
 - [x] 5.3 Record actual commands/results, canonical/retired path evidence and remaining user-data/security risks.
