@@ -281,7 +281,7 @@ export interface IndexTaskState {
   readonly task: ComicAnimationIndexTask;
   readonly status: IndexTaskStatus;
   readonly providerId?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly sourceHash?: string;
   readonly confidence?: number;
   readonly cacheKey?: string;
@@ -318,7 +318,7 @@ export interface VisualOccurrence {
   readonly candidateIds?: readonly string[];
   readonly appearanceText?: string;
   readonly providerId?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly confidence?: number;
   readonly reviewState?: ComicAnimationReviewState;
   readonly diagnostics?: readonly ComicAnimationDiagnostic[];
@@ -336,8 +336,7 @@ export interface PerceptionCapabilityFacet {
   readonly cachePolicy: PerceptionCachePolicy;
   readonly confidenceKind: PerceptionConfidenceKind;
   readonly approvalRequired?: boolean;
-  readonly providerVersion?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly unavailableReason?: string;
   readonly metadata?: ComicAnimationJsonRecord;
 }
@@ -520,7 +519,7 @@ export interface ProjectVisualOccurrenceFromEvidenceInput {
   readonly candidateIds?: readonly string[];
   readonly appearanceText?: string;
   readonly providerId?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly confidence?: number;
   readonly facet?: PerceptionCapabilityFacet;
   readonly metadata?: ComicAnimationJsonRecord;
@@ -634,8 +633,7 @@ export function createLocalPerceptionCapabilityFacet(input: {
   readonly confidenceKind?: PerceptionConfidenceKind;
   readonly cachePolicy?: PerceptionCachePolicy;
   readonly approvalRequired?: boolean;
-  readonly providerVersion?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
 }): PerceptionCapabilityFacet {
   return {
     providerId: input.providerId,
@@ -648,8 +646,7 @@ export function createLocalPerceptionCapabilityFacet(input: {
     cachePolicy: input.cachePolicy ?? 'recommended',
     confidenceKind: input.confidenceKind ?? 'provider-score',
     ...(input.approvalRequired !== undefined ? { approvalRequired: input.approvalRequired } : {}),
-    ...(input.providerVersion ? { providerVersion: input.providerVersion } : {}),
-    ...(input.modelVersion ? { modelVersion: input.modelVersion } : {}),
+    ...(input.modelId ? { modelId: input.modelId } : {}),
   };
 }
 
@@ -822,7 +819,7 @@ export function projectVisualOccurrenceFromEvidence(
     ...(input.candidateIds ? { candidateIds: input.candidateIds } : {}),
     ...(input.appearanceText ? { appearanceText: input.appearanceText } : {}),
     ...(input.providerId ? { providerId: input.providerId } : {}),
-    ...(input.modelVersion ? { modelVersion: input.modelVersion } : {}),
+    ...(input.modelId ? { modelId: input.modelId } : {}),
     ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
     reviewState,
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
@@ -1054,7 +1051,7 @@ function validateIndexedRangeStateValue(
     );
     return;
   }
-  validateEnvelope(value, path, INDEXED_RANGE_STATE_KIND, diagnostics);
+  validateEnvelope(value, path, INDEXED_RANGE_STATE_KIND, INDEXED_RANGE_STATE_FIELDS, diagnostics);
   requireString(value['rangeId'], [...path, 'rangeId'], diagnostics);
   requireString(value['assetId'], [...path, 'assetId'], diagnostics);
   validateIndexedRangeRef(value['rangeRef'], [...path, 'rangeRef'], diagnostics, options);
@@ -1127,7 +1124,7 @@ function validateVisualOccurrenceValue(
     );
     return;
   }
-  validateEnvelope(value, path, VISUAL_OCCURRENCE_KIND, diagnostics);
+  validateEnvelope(value, path, VISUAL_OCCURRENCE_KIND, VISUAL_OCCURRENCE_FIELDS, diagnostics);
   requireString(value['occurrenceId'], [...path, 'occurrenceId'], diagnostics);
   validateSourceRef(value['sourceRef'], [...path, 'sourceRef'], diagnostics, options);
   validateBoundingBox(value['boundingBox'], [...path, 'boundingBox'], diagnostics);
@@ -1260,7 +1257,7 @@ function validatePlotEventValue(
     diagnostics.push(diagnostic('error', 'invalid-root', path, 'Plot event must be an object.'));
     return;
   }
-  validateEnvelope(value, path, PLOT_EVENT_KIND, diagnostics);
+  validateEnvelope(value, path, PLOT_EVENT_KIND, PLOT_EVENT_FIELDS, diagnostics);
   requireString(value['eventId'], [...path, 'eventId'], diagnostics);
   requireString(value['summary'], [...path, 'summary'], diagnostics);
   validateStoryPosition(value['storyPosition'], [...path, 'storyPosition'], diagnostics);
@@ -1286,7 +1283,13 @@ function validateCharacterStateChangeValue(
     );
     return;
   }
-  validateEnvelope(value, path, CHARACTER_STATE_CHANGE_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    CHARACTER_STATE_CHANGE_KIND,
+    CHARACTER_STATE_CHANGE_FIELDS,
+    diagnostics,
+  );
   requireString(value['changeId'], [...path, 'changeId'], diagnostics);
   validateCreativeEntityRef(
     value['characterRef'],
@@ -1314,7 +1317,13 @@ function validateContinuityConstraintValue(
     );
     return;
   }
-  validateEnvelope(value, path, CONTINUITY_CONSTRAINT_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    CONTINUITY_CONSTRAINT_KIND,
+    CONTINUITY_CONSTRAINT_FIELDS,
+    diagnostics,
+  );
   requireString(value['constraintId'], [...path, 'constraintId'], diagnostics);
   if (!isContinuityConstraintType(value['type'])) {
     diagnostics.push(
@@ -1343,7 +1352,13 @@ function validateStoryContinuitySnapshotValue(
     );
     return;
   }
-  validateEnvelope(value, path, STORY_CONTINUITY_SNAPSHOT_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    STORY_CONTINUITY_SNAPSHOT_KIND,
+    STORY_CONTINUITY_SNAPSHOT_FIELDS,
+    diagnostics,
+  );
   requireString(value['snapshotId'], [...path, 'snapshotId'], diagnostics);
   validateStoryContinuityQuery(value['query'], [...path, 'query'], diagnostics);
   validateRequiredArray(value['events'], [...path, 'events'], diagnostics, (item, itemPath) =>
@@ -1378,7 +1393,13 @@ function validateBatchExecutionPlanValue(
     );
     return;
   }
-  validateEnvelope(value, path, BATCH_EXECUTION_PLAN_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    BATCH_EXECUTION_PLAN_KIND,
+    BATCH_EXECUTION_PLAN_FIELDS,
+    diagnostics,
+  );
   requireString(value['planId'], [...path, 'planId'], diagnostics);
   if (!isBatchExecutionTargetDomain(value['targetDomain'])) {
     diagnostics.push(
@@ -1436,21 +1457,133 @@ function validateBatchExecutionItem(
   validateSerializable(value, path, diagnostics, options);
 }
 
+const INDEXED_RANGE_STATE_FIELDS = new Set([
+  'kind',
+  'rangeId',
+  'assetId',
+  'rangeRef',
+  'status',
+  'tasks',
+  'diagnostics',
+  'updatedAt',
+  'metadata',
+]);
+
+const VISUAL_OCCURRENCE_FIELDS = new Set([
+  'kind',
+  'occurrenceId',
+  'sourceRef',
+  'range',
+  'boundingBox',
+  'cropRef',
+  'maskRefs',
+  'candidateEntityRefs',
+  'candidateIds',
+  'appearanceText',
+  'providerId',
+  'modelId',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const PLOT_EVENT_FIELDS = new Set([
+  'kind',
+  'eventId',
+  'summary',
+  'storyPosition',
+  'orderIndex',
+  'sourceRef',
+  'participantRefs',
+  'evidenceRefs',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const CHARACTER_STATE_CHANGE_FIELDS = new Set([
+  'kind',
+  'changeId',
+  'characterRef',
+  'dimension',
+  'storyPosition',
+  'orderIndex',
+  'before',
+  'after',
+  'note',
+  'sourceRef',
+  'evidenceRefs',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const CONTINUITY_CONSTRAINT_FIELDS = new Set([
+  'kind',
+  'constraintId',
+  'type',
+  'message',
+  'appliesTo',
+  'entityRefs',
+  'sourceRef',
+  'evidenceRefs',
+  'active',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const STORY_CONTINUITY_SNAPSHOT_FIELDS = new Set([
+  'kind',
+  'snapshotId',
+  'query',
+  'events',
+  'characterStates',
+  'constraints',
+  'unresolvedQuestions',
+  'diagnostics',
+  'limitsApplied',
+  'generatedAt',
+  'metadata',
+]);
+
+const BATCH_EXECUTION_PLAN_FIELDS = new Set([
+  'kind',
+  'planId',
+  'sourceArtifactRefs',
+  'targetDomain',
+  'items',
+  'approvalPolicy',
+  'executionPolicy',
+  'costEstimate',
+  'status',
+  'diagnostics',
+  'createdAt',
+  'updatedAt',
+  'metadata',
+]);
+
 function validateEnvelope(
   value: Readonly<Record<string, unknown>>,
   path: readonly ComicAnimationPathSegment[],
   kind: string,
+  allowedFields: ReadonlySet<string>,
   diagnostics: ComicAnimationDiagnostic[],
 ): void {
-  if (Object.hasOwn(value, 'schemaVersion')) {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
     diagnostics.push(
       diagnostic(
         'error',
         'unsupported-field',
-        [...path, 'schemaVersion'],
-        'Comic animation field schemaVersion is not supported.',
+        [...path, field],
+        `Comic animation field ${field} is not supported.`,
         {
-          actual: diagnosticValue(value['schemaVersion']),
+          actual: diagnosticValue(value[field]),
         },
       ),
     );

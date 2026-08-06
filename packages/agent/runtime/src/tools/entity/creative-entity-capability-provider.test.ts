@@ -42,7 +42,6 @@ describe('CreativeEntityHeadlessCapabilityProvider', () => {
     const representation = {
       kind: 'generated-output' as const,
       outputId: 'generated-rin-portrait',
-      revision: 'revision-1',
       digest: 'sha256:generated-rin-portrait',
       path: 'neko/generated/image/rin-portrait.png',
     };

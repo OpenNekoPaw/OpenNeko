@@ -30,15 +30,7 @@ function isAudioRichData(data: unknown): data is AudioRichData {
 // ---------------------------------------------------------------------------
 
 function AudioRendererComponent({ data, className, inline }: RichContentProps<AudioRichData>) {
-  return (
-    <AudioCard
-      src={data.src}
-      title={data.title}
-      localPath={data.localPath}
-      inline={inline}
-      className={className}
-    />
-  );
+  return <AudioCard src={data.src} title={data.title} inline={inline} className={className} />;
 }
 
 // ---------------------------------------------------------------------------

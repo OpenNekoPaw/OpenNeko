@@ -67,7 +67,7 @@ export interface NekoSkillOverlay {
   readonly relationships?: NekoSkillRelationships;
 }
 
-export type SkillValidationArea = 'portable' | 'overlay' | 'compatibility' | 'quality' | 'creation';
+export type SkillValidationArea = 'portable' | 'overlay' | 'host-fit' | 'quality' | 'creation';
 
 export type SkillDiagnosticSeverity = 'error' | 'warning' | 'info';
 
@@ -85,10 +85,10 @@ export interface SkillValidationDimension {
   readonly diagnostics: readonly SkillDiagnostic[];
 }
 
-export type SkillCompatibilityState = 'compatible' | 'incompatible' | 'unknown';
+export type SkillHostFitState = 'supported' | 'unsupported' | 'unknown';
 
-export interface SkillCompatibilityStatus {
-  readonly state: SkillCompatibilityState;
+export interface SkillHostFitStatus {
+  readonly state: SkillHostFitState;
   readonly diagnostics: readonly SkillDiagnostic[];
 }
 
@@ -96,7 +96,7 @@ export interface SkillCompatibilityStatus {
 export interface PortableSkillValidationResult {
   readonly portable: SkillValidationDimension;
   readonly overlay: SkillValidationDimension;
-  readonly compatibility: SkillCompatibilityStatus;
+  readonly hostFit: SkillHostFitStatus;
   readonly quality: SkillValidationDimension;
 }
 
@@ -148,7 +148,7 @@ export interface NekoSkillHostProjection {
   readonly enabled: boolean;
   readonly editable: boolean;
   readonly trusted: boolean;
-  readonly compatibility: SkillCompatibilityStatus;
+  readonly hostFit: SkillHostFitStatus;
   readonly fingerprint: string;
   readonly catalogActions: readonly SkillCatalogAction[];
 }

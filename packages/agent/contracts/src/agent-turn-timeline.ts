@@ -53,8 +53,6 @@ export interface AgentTurnTimelineItemCore {
   readonly messageId: string;
   readonly itemId: string;
   readonly sequence: number;
-  /** Semantic mutation watermark; strictly increases but may skip after projection coalescing. */
-  readonly itemRevision: number;
   readonly status: AgentTurnTimelineItemStatus;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -64,13 +62,11 @@ export interface AgentTurnTimelineAssistantTextPayload {
   readonly content: string;
   readonly format?: 'markdown' | 'plain';
   readonly sourceBlockId?: string;
-  readonly sourceGeneration: number;
 }
 
 export interface AgentTurnTimelineThinkingPayload {
   readonly content: string;
   readonly sourceBlockId?: string;
-  readonly sourceGeneration: number;
 }
 
 export interface AgentTurnTimelineToolCallPayload {
@@ -160,10 +156,7 @@ export interface AgentTurnTimelineUpsertOperation {
 export interface AgentTurnTimelineCompleteOperation {
   readonly operation: 'complete';
   readonly itemId: string;
-  /** Semantic mutation watermark; strictly increases but may skip after projection coalescing. */
-  readonly itemRevision: number;
   readonly kind: AgentTurnTimelineTextItem['kind'];
-  readonly sourceGeneration: number;
   readonly status: 'complete' | 'failed';
   readonly updatedAt: number;
 }

@@ -32,7 +32,7 @@ export interface AgentTraceContext {
 }
 
 export interface CreateAgentTraceContextInput {
-  readonly conversationId?: string | null;
+  readonly conversationId: string;
   readonly runId?: string | null;
   readonly turnId?: string | null;
   readonly iteration?: number | null;
@@ -46,8 +46,6 @@ export type AgentTracePatch = Omit<CreateAgentTraceContextInput, 'conversationId
   readonly conversationId?: string | null;
 };
 
-export const UNKNOWN_AGENT_TRACE_ID = 'unknown';
-
 export function createAgentTurnId(conversationId: string, startedAt = Date.now()): string {
   return `turn-${normalizeTraceId(conversationId)}-${startedAt.toString(36)}`;
 }
@@ -56,12 +54,9 @@ export function createAgentRunId(conversationId: string, startedAt = Date.now())
   return `run-${normalizeTraceId(conversationId)}-${startedAt.toString(36)}`;
 }
 
-export function createAgentTraceContext(
-  input: CreateAgentTraceContextInput = {},
-): AgentTraceContext {
-  const conversationId = normalizeTraceId(input.conversationId ?? UNKNOWN_AGENT_TRACE_ID);
+export function createAgentTraceContext(input: CreateAgentTraceContextInput): AgentTraceContext {
   return buildAgentTraceContext({
-    conversationId,
+    conversationId: normalizeTraceId(input.conversationId),
     runId: normalizeOptionalTraceId(input.runId),
     turnId: normalizeOptionalTraceId(input.turnId),
     iteration: normalizeIteration(input.iteration),
@@ -75,29 +70,33 @@ export function createAgentTraceContext(
 export function deriveAgentTraceContext(
   parent: AgentTraceContext | undefined,
   patch: AgentTracePatch = {},
-): AgentTraceContext {
-  const base = parent ?? createAgentTraceContext();
+): AgentTraceContext | undefined {
+  const patchedConversationId =
+    patch.conversationId !== undefined && patch.conversationId !== null
+      ? normalizeTraceId(patch.conversationId)
+      : undefined;
+  const conversationId = patchedConversationId ?? parent?.conversationId;
+  if (!conversationId) return undefined;
+
   return buildAgentTraceContext({
-    conversationId:
-      patch.conversationId !== undefined && patch.conversationId !== null
-        ? normalizeTraceId(patch.conversationId)
-        : base.conversationId,
-    runId: patch.runId !== undefined ? normalizeOptionalTraceId(patch.runId) : base.runId,
-    turnId: patch.turnId !== undefined ? normalizeOptionalTraceId(patch.turnId) : base.turnId,
-    iteration: patch.iteration !== undefined ? normalizeIteration(patch.iteration) : base.iteration,
-    phase: patch.phase !== undefined ? (patch.phase ?? undefined) : base.phase,
+    conversationId,
+    runId: patch.runId !== undefined ? normalizeOptionalTraceId(patch.runId) : parent?.runId,
+    turnId: patch.turnId !== undefined ? normalizeOptionalTraceId(patch.turnId) : parent?.turnId,
+    iteration:
+      patch.iteration !== undefined ? normalizeIteration(patch.iteration) : parent?.iteration,
+    phase: patch.phase !== undefined ? (patch.phase ?? undefined) : parent?.phase,
     parentRequestId:
       patch.parentRequestId !== undefined
         ? normalizeOptionalTraceId(patch.parentRequestId)
-        : base.parentRequestId,
+        : parent?.parentRequestId,
     llmRequestId:
       patch.llmRequestId !== undefined
         ? normalizeOptionalTraceId(patch.llmRequestId)
-        : base.llmRequestId,
+        : parent?.llmRequestId,
     toolRequestId:
       patch.toolRequestId !== undefined
         ? normalizeOptionalTraceId(patch.toolRequestId)
-        : base.toolRequestId,
+        : parent?.toolRequestId,
   });
 }
 
@@ -105,10 +104,8 @@ export function withAgentTrace(
   trace: AgentTraceContext | undefined,
   data: Record<string, unknown> = {},
 ): Record<string, unknown> {
-  return {
-    ...data,
-    trace: trace ?? createAgentTraceContext(),
-  };
+  const { trace: _untrustedTrace, ...payload } = data;
+  return trace ? { ...payload, trace } : payload;
 }
 
 function buildAgentTraceContext(input: {
@@ -135,7 +132,10 @@ function buildAgentTraceContext(input: {
 
 function normalizeTraceId(value: string): string {
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : UNKNOWN_AGENT_TRACE_ID;
+  if (trimmed.length === 0) {
+    throw new Error('Agent trace requires a non-empty conversationId.');
+  }
+  return trimmed;
 }
 
 function normalizeOptionalTraceId(value: string | null | undefined): string | undefined {

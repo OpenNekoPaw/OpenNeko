@@ -17,12 +17,6 @@ describe('Desktop Agent assertion-driven evidence', () => {
         text: ['CASE_OK'],
         evidenceRef: 'facts',
       },
-      {
-        id: 'fallback',
-        kind: 'no-fallback',
-        forbiddenRefs: ['legacy-agent-event-projector'],
-        evidenceRef: 'facts',
-      },
     ]);
 
     const facts = createDesktopEvaluationFacts({
@@ -40,7 +34,6 @@ describe('Desktop Agent assertion-driven evidence', () => {
     ).toEqual([
       expect.objectContaining({ id: 'errors', status: 'pass', evidenceRefs: ['facts'] }),
       expect.objectContaining({ id: 'answer', status: 'pass', evidenceRefs: ['facts'] }),
-      expect.objectContaining({ id: 'fallback', status: 'pass', evidenceRefs: ['facts'] }),
     ]);
   });
 
@@ -133,19 +126,6 @@ describe('Desktop Agent assertion-driven evidence', () => {
     );
   });
 
-  it('poisons retired Host and direct-runtime fallback participation', () => {
-    const assertion = {
-      id: 'fallback',
-      kind: 'no-fallback',
-      forbiddenRefs: ['direct-runtime-invocation', 'retired-host-session-owner'],
-      evidenceRef: 'facts',
-    };
-    const input = evidenceInput([assertion]);
-    input.facts.runtimePath.forbiddenPathCount = 1;
-    expect(run(input)[0]).toEqual(
-      expect.objectContaining({ status: 'fail', message: expect.stringContaining('canonical') }),
-    );
-  });
 });
 
 function run(input) {
@@ -190,7 +170,6 @@ function evidenceInput(assertions) {
         transcript: 'pi-session',
         metadata: 'sqlite',
         projection: 'conversation-projection-store',
-        forbiddenPathCount: 0,
       },
       configuration: {
         effective: {

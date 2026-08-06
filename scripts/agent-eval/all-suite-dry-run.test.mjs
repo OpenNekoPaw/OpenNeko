@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { parseDryRunArgs, runAllSuiteDryRun } from './all-suite-dry-run.mjs';
 
 describe('all-suite key-free dry-run', () => {
-  it('validates every indexed v2 suite and case', async () => {
+  it('validates every indexed suite and case', async () => {
     await expect(runAllSuiteDryRun()).resolves.toMatchObject({
-      schema: 'neko.agent-eval.all-suite-dry-run.v2',
+      schema: 'neko.agent-eval.all-suite-dry-run',
       ok: true,
       suiteCount: 22,
-      caseCount: 53,
+      caseCount: 52,
     });
   });
 
@@ -20,7 +20,7 @@ describe('all-suite key-free dry-run', () => {
     ]);
 
     await expect(runAllSuiteDryRun(options)).resolves.toEqual({
-      schema: 'neko.agent-eval.all-suite-dry-run.v2',
+      schema: 'neko.agent-eval.all-suite-dry-run',
       ok: true,
       suiteCount: 1,
       caseCount: 1,

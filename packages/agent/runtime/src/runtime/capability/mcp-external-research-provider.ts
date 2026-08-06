@@ -1,14 +1,14 @@
 import {
-  EXTERNAL_RESEARCH_FETCH_SCHEMA_V1,
-  EXTERNAL_RESEARCH_SEARCH_SCHEMA_V1,
-  isExternalResearchMcpFetchV1,
+  EXTERNAL_RESEARCH_FETCH_SCHEMA,
+  EXTERNAL_RESEARCH_SEARCH_SCHEMA,
+  isExternalResearchMcpFetchOutput,
   isExternalResearchMcpProviderConfig,
-  isExternalResearchMcpSearchV1,
+  isExternalResearchMcpSearchOutput,
   type ExternalResearchFetchInput,
   type ExternalResearchFetchResult,
-  type ExternalResearchMcpFetchV1,
+  type ExternalResearchMcpFetchOutput,
   type ExternalResearchMcpProviderConfig,
-  type ExternalResearchMcpSearchV1,
+  type ExternalResearchMcpSearchOutput,
   type ExternalResearchProvider,
   type ExternalResearchSearchInput,
   type ExternalResearchSearchResult,
@@ -47,8 +47,8 @@ export function createMcpExternalResearchProvider(
       if (!raw.success) {
         throw new Error(raw.error ?? 'MCP external research search failed.');
       }
-      const parsed = parseStructuredMcpOutput(raw.data, EXTERNAL_RESEARCH_SEARCH_SCHEMA_V1);
-      if (!isExternalResearchMcpSearchV1(parsed)) {
+      const parsed = parseStructuredMcpOutput(raw.data, EXTERNAL_RESEARCH_SEARCH_SCHEMA);
+      if (!isExternalResearchMcpSearchOutput(parsed)) {
         throw new Error('MCP external research search returned invalid structured output.');
       }
       return normalizeSearchResult(providerId, input, parsed);
@@ -67,8 +67,8 @@ export function createMcpExternalResearchProvider(
       if (!raw.success) {
         throw new Error(raw.error ?? 'MCP external research fetch failed.');
       }
-      const parsed = parseStructuredMcpOutput(raw.data, EXTERNAL_RESEARCH_FETCH_SCHEMA_V1);
-      if (!isExternalResearchMcpFetchV1(parsed)) {
+      const parsed = parseStructuredMcpOutput(raw.data, EXTERNAL_RESEARCH_FETCH_SCHEMA);
+      if (!isExternalResearchMcpFetchOutput(parsed)) {
         throw new Error('MCP external research fetch returned invalid structured output.');
       }
       return normalizeFetchResult(providerId, input, parsed);
@@ -129,7 +129,7 @@ function parseJsonObject(data: string): unknown {
 function normalizeSearchResult(
   providerId: string,
   input: ExternalResearchSearchInput,
-  output: ExternalResearchMcpSearchV1,
+  output: ExternalResearchMcpSearchOutput,
 ): ExternalResearchSearchResult {
   return {
     query: input.query,
@@ -149,7 +149,7 @@ function normalizeSearchResult(
 function normalizeFetchResult(
   providerId: string,
   input: ExternalResearchFetchInput,
-  output: ExternalResearchMcpFetchV1,
+  output: ExternalResearchMcpFetchOutput,
 ): ExternalResearchFetchResult {
   const source: ResearchSource = {
     url: output.url,

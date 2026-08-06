@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "unsupported-field",
   "suiteId": "agent-runtime.model-binding",
   "caseGroup": "failure",

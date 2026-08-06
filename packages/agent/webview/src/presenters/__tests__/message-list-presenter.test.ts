@@ -113,7 +113,7 @@ describe('message-list-presenter', () => {
     expect(projection.showExecutionActivity).toBe(true);
   });
 
-  it('does not infer execution activity from legacy thinking state without AgentState', () => {
+  it('requires AgentState before projecting execution activity', () => {
     const projection = projectMessageList({
       messages: [],
       agentState: null,

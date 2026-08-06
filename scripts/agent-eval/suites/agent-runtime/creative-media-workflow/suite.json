@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.creative-media-workflow",
   "owner": { "kind": "agent-runtime", "id": "creative-media-workflow" },
   "target": {
@@ -7,7 +7,6 @@
     "id": "creative-media-feedback-iteration",
     "contractHash": "sha256:41055e9860200150038a7ef1bb52b5bdd04635217248602b29b4a6f9506523d5"
   },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     {
       "id": "canonical-default",

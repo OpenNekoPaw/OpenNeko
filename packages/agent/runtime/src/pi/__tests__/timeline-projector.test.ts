@@ -107,7 +107,6 @@ describe('Pi Timeline projector', () => {
                 contentLocator: {
                   kind: 'generated-output',
                   outputId: 'generated-image',
-                  revision: 'revision-1',
                   digest: 'a'.repeat(64),
                   path: 'neko/generated/image/generated-image.png',
                 },
@@ -150,7 +149,6 @@ describe('Pi Timeline projector', () => {
                 contentLocator: {
                   kind: 'generated-output',
                   outputId: 'generated-image',
-                  revision: 'revision-1',
                   digest: 'a'.repeat(64),
                   path: 'neko/generated/image/generated-image.png',
                 },
@@ -165,7 +163,7 @@ describe('Pi Timeline projector', () => {
     expect(Object.isFrozen(snapshot.turns[0]?.items[0])).toBe(true);
   });
 
-  it('reconciles provider-final text through a new source generation', () => {
+  it('reconciles provider-final text through an explicit replacement', () => {
     const store = createConversationProjectionStore(identity.conversationId);
     const projector = createPiTimelineProjector({
       conversationId: identity.conversationId,
@@ -183,9 +181,8 @@ describe('Pi Timeline projector', () => {
     );
 
     expect(store.snapshot().turns[0]?.items[0]).toMatchObject({
-      itemRevision: 2,
       status: 'complete',
-      payload: { content: 'final', sourceGeneration: 2 },
+      payload: { content: 'final' },
     });
   });
 

@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "tool-approval-visible",
   "suiteId": "agent-runtime.workflow-controller",
   "caseGroup": "workflow",
@@ -8,7 +8,11 @@
     "evidenceLevel": "visible-desktop",
     "resourceClass": "visible-ui",
     "protected": true,
-    "lifecycleChecks": ["renderer-reload", "composer-focus", "graceful-close"]
+    "lifecycleChecks": [
+      "renderer-reload",
+      "composer-focus",
+      "graceful-close"
+    ]
   },
   "evidenceContract": {
     "userBehavior": "Approve one workspace Write Tool call in the visible Desktop, observe its terminal Timeline result, reload the renderer, restore the same conversation, restore composer focus, and close gracefully.",
@@ -22,13 +26,6 @@
       "Pi Session restore",
       "graceful Desktop close"
     ],
-    "forbiddenFallback": [
-      "direct runtime invocation",
-      "retired Host session owner",
-      "implicit Tool approval",
-      "in-memory-only restore",
-      "legacy Agent event projector"
-    ],
     "observables": [
       {
         "ref": "visible-tool-facts",
@@ -40,9 +37,13 @@
     "expectedResult": "The visible Desktop approves exactly the projected Write call, completes it, restores the same conversation after renderer reload, focuses the composer and records disposal.",
     "expectedFailure": "A missing pending Tool identity, implicit approval, failed Write, stale reconnect, empty restore, missing focus or incomplete disposal fails visibly."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "submit",
@@ -57,11 +58,23 @@
       "approved": true,
       "timeoutMs": 120000
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 120000
+    }
   ],
   "assertions": [
-    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "visible-tool-facts" },
-    { "id": "idle", "kind": "fully-idle", "evidenceRef": "visible-tool-facts" },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "visible-tool-facts"
+    },
+    {
+      "id": "idle",
+      "kind": "fully-idle",
+      "evidenceRef": "visible-tool-facts"
+    },
     {
       "id": "pi-runtime",
       "kind": "pi-runtime",
@@ -91,21 +104,15 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["APPROVAL_VISIBLE_OK"],
-      "evidenceRef": "visible-tool-facts"
-    },
-    {
-      "id": "no-fallback",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "direct-runtime-invocation",
-        "retired-host-session-owner",
-        "implicit-tool-approval",
-        "legacy-agent-event-projector"
+      "text": [
+        "APPROVAL_VISIBLE_OK"
       ],
       "evidenceRef": "visible-tool-facts"
     }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
 }

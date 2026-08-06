@@ -7,7 +7,6 @@ import {
 
 const COMPARABILITY_DIMENSIONS = Object.freeze([
   { id: 'target', key: 'target' },
-  { id: 'repository-revision', key: 'repositoryRevision' },
   { id: 'fixture-digest', key: 'fixtureDigest' },
   { id: 'runtime-profile', key: 'runtimeProfileId' },
   { id: 'model-profiles', key: 'modelProfileIds' },
@@ -21,19 +20,15 @@ const COMPARABILITY_DIMENSIONS = Object.freeze([
 export function createCurrentBaselineDescriptor(input) {
   return {
     target: input.suite.target,
-    repositoryRevision: input.suite.repositoryRevision,
     fixtureDigest: input.fixtureDigest,
     runtimeProfileId: input.scenario.runtimeProfileId,
     modelProfileIds: [...input.scenario.modelProfileIds],
-    samplingPolicy: policyIdentity(
-      'sampling',
-      'v1',
-      { repetitions: input.scenario.budget.repetitions },
-    ),
+    samplingPolicy: policyIdentity('sampling', {
+      repetitions: input.scenario.budget.repetitions,
+    }),
     budget: input.scenario.budget,
     validatorPolicy: policyIdentity(
       'validators',
-      'v1',
       input.scenario.artifactChecks.map((check) => ({
         kind: check.kind,
         validatorId: check.validatorId,
@@ -41,7 +36,6 @@ export function createCurrentBaselineDescriptor(input) {
     ),
     judgePolicy: policyIdentity(
       input.scenario.rubric?.judgeProfileId ?? 'no-judge',
-      'v1',
       input.scenario.rubric ?? { kind: 'none' },
     ),
     hardGateIds: input.scenario.assertions.map((assertion) => assertion.id),
@@ -51,9 +45,6 @@ export function createCurrentBaselineDescriptor(input) {
 }
 
 export function createApprovedBaseline(input) {
-  if (input.current.repositoryRevision === 'working-tree') {
-    throw new Error('approved baseline requires a concrete repository revision');
-  }
   if (input.current.scoreDistribution.samples < 1) {
     throw new Error('approved baseline requires at least one scored sample');
   }
@@ -121,8 +112,8 @@ export function compareWithBaseline(input) {
   });
 }
 
-function policyIdentity(id, version, value) {
-  return { id, version, digest: hash(value) };
+function policyIdentity(id, value) {
+  return { id, digest: hash(value) };
 }
 
 function hash(value) {

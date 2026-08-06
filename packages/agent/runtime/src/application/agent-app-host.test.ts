@@ -38,7 +38,7 @@ const MODEL: Model<'openai-completions'> = {
   name: 'Main',
   api: 'openai-completions',
   provider: 'fixture',
-  baseUrl: 'https://fixture.invalid/v1',
+  baseUrl: 'https://fixture.invalid/api',
   reasoning: false,
   input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -96,12 +96,10 @@ describe('AgentAppHost', () => {
           label: 'Opening shot',
           summary: 'Video Clip “Opening shot” at 0.000s–3.000s.',
           data: {
-            schemaVersion: 1,
             kind: 'cut-clip-selection',
             document: {
               locator: { kind: 'workspace-file', path: 'projects/cut/demo.otio' },
               sessionId: 'cut-session-1',
-              revision: 7,
             },
           },
         },
@@ -553,7 +551,7 @@ describe('AgentAppHost', () => {
               code: 'invalid-conversation-record',
               workspaceId: fixture.workspace.workspaceId,
               conversationId: 'conversation-invalid',
-              message: "Agent Conversation context contains unknown field 'schemaVersion'.",
+              message: "Agent Conversation context contains unknown field 'unexpectedField'.",
             },
           ],
         }),
@@ -759,7 +757,6 @@ describe('AgentAppHost', () => {
                 messageId: 'message-1',
                 itemId: 'tool-generation-1',
                 sequence: 1,
-                itemRevision: 2,
                 kind: 'tool_call',
                 status: 'succeeded',
                 payload: {
@@ -823,7 +820,6 @@ describe('AgentAppHost', () => {
                 messageId: 'message-1',
                 itemId: 'tool-confirmation-1',
                 sequence: 1,
-                itemRevision: 2,
                 kind: 'tool_call',
                 status: 'pending',
                 payload: {
@@ -1179,7 +1175,6 @@ describe('AgentAppHost', () => {
 
     await expect(
       fixture.composition.reconcilePluginRuntime({
-        revision: `sha256:${'c'.repeat(64)}`,
         records: [],
         runtimeDescriptors: [
           {
@@ -1201,7 +1196,7 @@ describe('AgentAppHost', () => {
     );
   });
 
-  it('atomically projects plugin Skill generations into global and workspace Pi discovery', async () => {
+  it('atomically projects plugin Skills into global and workspace Pi discovery', async () => {
     const fixture = await createFixture();
     const pluginRoot = join(fixture.root, 'plugin');
     const skillRoot = join(pluginRoot, 'skills');
@@ -1219,7 +1214,6 @@ describe('AgentAppHost', () => {
       'utf8',
     );
     const installed: AgentExtensionCatalogSnapshot = {
-      revision: `sha256:${'a'.repeat(64)}`,
       records: [],
       runtimeDescriptors: [
         {
@@ -1263,7 +1257,6 @@ describe('AgentAppHost', () => {
     });
 
     await fixture.composition.reconcilePluginRuntime({
-      revision: `sha256:${'b'.repeat(64)}`,
       records: [],
       runtimeDescriptors: [],
       diagnostics: [],

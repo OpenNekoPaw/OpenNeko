@@ -25,7 +25,7 @@ describe('tool-call-presenter', () => {
             {
               type: 'image',
               contentLocator: generatedOutputLocator('generated-1'),
-              renderUri: 'http://127.0.0.1:43125/v1/resources/generated/image.png',
+              renderUri: 'http://127.0.0.1:43125/resources/generated/image.png',
             },
           ],
           boardDelivery: {
@@ -39,7 +39,7 @@ describe('tool-call-presenter', () => {
 
     expect(projection).toMatchObject({
       isImageTool: true,
-      imageUrls: ['http://127.0.0.1:43125/v1/resources/generated/image.png'],
+      imageUrls: ['http://127.0.0.1:43125/resources/generated/image.png'],
       videoUrls: [],
       audioUrls: [],
       isSuccess: true,
@@ -72,7 +72,7 @@ describe('tool-call-presenter', () => {
             {
               type: 'image',
               contentLocator: generatedOutputLocator('generated-1'),
-              renderUri: 'http://127.0.0.1:43125/v1/resources/generated/generated-1.png',
+              renderUri: 'http://127.0.0.1:43125/resources/generated/generated-1.png',
             },
           ],
         },
@@ -80,7 +80,7 @@ describe('tool-call-presenter', () => {
     });
 
     expect(projection).toMatchObject({
-      imageUrls: ['http://127.0.0.1:43125/v1/resources/generated/generated-1.png'],
+      imageUrls: ['http://127.0.0.1:43125/resources/generated/generated-1.png'],
       videoUrls: [],
       audioUrls: [],
       generationJob: {
@@ -104,7 +104,6 @@ describe('tool-call-presenter', () => {
         success: false,
         data: {
           authoringResult: {
-            version: 1,
             status: 'blocked',
             summary: 'Composite needs a supported shot preset.',
             refs: [
@@ -262,7 +261,7 @@ describe('tool-call-presenter', () => {
           images: [
             {
               label: 'Page 1',
-              renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+              renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
               width: 1494,
               height: 2133,
               byteSize: 2048,
@@ -291,7 +290,7 @@ describe('tool-call-presenter', () => {
         height: 2133,
         byteSize: 2048,
         mimeType: 'image/jpeg',
-        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-1.jpg',
         label: 'Page 1',
         locator: {
           kind: 'chapter',
@@ -306,7 +305,6 @@ describe('tool-call-presenter', () => {
     const reference = JSON.parse(projection.documentThumbnails[0]!.referenceJson);
     expect(reference).toEqual({
       kind: 'document-image-reference',
-      protocolVersion: 2,
       document: {
         filePath: '/books/a.epub',
         source: { filePath: '/books/a.epub', format: 'epub' },
@@ -344,7 +342,7 @@ describe('tool-call-presenter', () => {
           {
             label: '第10页',
             path: '/tmp/page-10.jpg',
-            renderUri: 'http://127.0.0.1:43125/v1/resources/page-10.jpg',
+            renderUri: 'http://127.0.0.1:43125/resources/page-10.jpg',
           },
         ],
         mode: 'metadata',
@@ -356,7 +354,7 @@ describe('tool-call-presenter', () => {
       expect.objectContaining({
         filePath: '/tmp/page-10.jpg',
         path: '/tmp/page-10.jpg',
-        src: 'http://127.0.0.1:43125/v1/resources/page-10.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-10.jpg',
         label: '第10页',
       }),
     ]);
@@ -378,7 +376,7 @@ describe('tool-call-presenter', () => {
           images: [
             {
               label: 'Page 1',
-              renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+              renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
               width: 1494,
               height: 2133,
               mimeType: 'image/jpeg',
@@ -396,7 +394,7 @@ describe('tool-call-presenter', () => {
         width: 1494,
         height: 2133,
         mimeType: 'image/jpeg',
-        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-1.jpg',
         label: 'Page 1',
         contentLocator,
       }),
@@ -501,7 +499,7 @@ describe('tool-call-presenter', () => {
     expect(projection.documentThumbnails[0]).not.toHaveProperty('src');
   });
 
-  it('uses a hydrated perception-card preview when legacy history has no attachments', () => {
+  it('uses a hydrated perception-card preview when retained history has no attachments', () => {
     const contentLocator = {
       kind: 'document-entry' as const,
       source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
@@ -518,7 +516,6 @@ describe('tool-call-presenter', () => {
           data: { images: [{ label: 'Page 3', contentLocator }] },
           perceptionCards: [
             {
-              version: 1,
               assetId: 'page-3',
               modality: 'image',
               createdAt: 1,
@@ -560,7 +557,7 @@ describe('tool-call-presenter', () => {
           {
             label: 'Page 2',
             path: '/tmp/page-2.jpg',
-            renderUri: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
+            renderUri: 'http://127.0.0.1:43125/resources/page-2.jpg',
             metadata: {
               locator: {
                 kind: 'chapter',
@@ -582,7 +579,7 @@ describe('tool-call-presenter', () => {
       expect.objectContaining({
         filePath: '/books/a.epub',
         path: '/tmp/page-2.jpg',
-        src: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-2.jpg',
         label: 'Page 2',
         locator: {
           kind: 'chapter',
@@ -626,7 +623,6 @@ function generatedOutputLocator(outputId: string) {
   return {
     kind: 'generated-output' as const,
     outputId,
-    revision: `revision-${outputId}`,
     digest: `sha256:${outputId}`,
     path: `neko/generated/images/${outputId}.png`,
   };

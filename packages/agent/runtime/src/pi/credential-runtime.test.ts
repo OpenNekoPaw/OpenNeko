@@ -32,7 +32,7 @@ describe('AgentCredentialRuntime', () => {
     });
     expect(JSON.stringify(status)).not.toContain('host-only-secret');
     expect(secrets.set).toHaveBeenCalledOnce();
-    expect(secrets.set.mock.calls[0]?.[0]).toBe('openneko.agent.pi.credential.v1:fixture-provider');
+    expect(secrets.set.mock.calls[0]?.[0]).toBe('openneko.agent.pi.credential:fixture-provider');
     expect(await runtime.credentials.read('fixture-provider')).toEqual({
       type: 'api_key',
       key: 'host-only-secret',

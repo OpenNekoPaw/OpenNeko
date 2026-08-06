@@ -407,7 +407,6 @@ function emptyPacket(): MultimodalContextPacket {
 
 function imageCard(): PerceptionCard {
   return {
-    version: 1,
     assetId: 'asset-1',
     modality: 'image',
     createdAt: 1,
@@ -428,7 +427,6 @@ function imageCard(): PerceptionCard {
 
 function videoCard(): PerceptionCard {
   return {
-    version: 1,
     assetId: 'video-1',
     modality: 'video',
     createdAt: 1,
@@ -465,7 +463,6 @@ function videoCard(): PerceptionCard {
 
 function audioCard(): PerceptionCard {
   return {
-    version: 1,
     assetId: 'audio-1',
     modality: 'audio',
     createdAt: 1,

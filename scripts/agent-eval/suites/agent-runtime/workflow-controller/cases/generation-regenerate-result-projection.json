@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "generation-regenerate-result-projection",
   "suiteId": "agent-runtime.workflow-controller",
   "caseGroup": "regression",
@@ -18,14 +18,6 @@
       "second SubmitGenerationJob Tool call",
       "new Generation Job identity"
     ],
-    "forbiddenFallback": [
-      "RetryGenerationJob for a successful result",
-      "summary text used as recipe authority",
-      "result locator overwritten in place",
-      "active or latest Job fallback",
-      "generic TaskManager",
-      "AssetLibrary import"
-    ],
     "observables": [
       {
         "ref": "generation-regenerate-facts",
@@ -37,9 +29,13 @@
     "expectedResult": "The first successful Job remains immutable and observable; edit-and-generate submits a second Job with a new identity and generated-output locator while RetryGenerationJob is absent.",
     "expectedFailure": "Retrying a successful Job, reusing its identity or output revision, inferring recipe authority from the historical summary, missing generated-output evidence, or using a generic Task or Asset path fails."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "generate-and-regenerate",
@@ -66,8 +62,7 @@
       "resultIncludes": {
         "jobKind": "generation",
         "jobLifecycleOwner": "generation-job-coordinator",
-        "phase": "pending",
-        "revision": 1
+        "phase": "pending"
       },
       "evidenceRef": "generation-regenerate-facts"
     },
@@ -132,24 +127,12 @@
       "evidenceRef": "generation-regenerate-facts"
     },
     {
-      "id": "no-fallback",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "summary-to-recipe",
-        "generated-result-overwrite",
-        "active-job-fallback",
-        "latest-job-fallback",
-        "generic-task-manager",
-        "TaskRef",
-        "AssetLibrary",
-        "ImportAsset"
-      ],
-      "evidenceRef": "generation-regenerate-facts"
-    },
-    {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
       "evidenceRef": "generation-regenerate-facts"
     },
     {

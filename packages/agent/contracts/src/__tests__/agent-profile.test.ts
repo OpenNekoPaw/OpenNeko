@@ -52,7 +52,7 @@ describe('Agent profile shared contracts', () => {
       protocol: 'GenericTable',
       source: 'package',
       columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
-      schemaRefs: [{ schemaId: 'studio.shot-review.v1', required: true }],
+      schemaRefs: [{ schemaId: 'studio.shot-review', required: true }],
       resourceConstraints: [{ constraintId: 'source-image', mediaTypes: ['image'] }],
       operationRequirements: [{ operationId: 'review', validatorId: 'shot-review' }],
     };
@@ -172,7 +172,7 @@ describe('Agent profile shared contracts', () => {
           profileKinds: ['artifact', 'provider-expression'],
           profiles: [
             {
-              profileId: 'studio.storyboard.v1',
+              profileId: 'studio.storyboard',
               kind: 'artifact',
               displayName: 'Studio Storyboard',
             },
@@ -192,7 +192,7 @@ describe('Agent profile shared contracts', () => {
       profileKinds: ['artifact', 'provider-expression'],
       profiles: [
         {
-          profileId: 'studio.storyboard.v1',
+          profileId: 'studio.storyboard',
           kind: 'artifact',
           displayName: 'Studio Storyboard',
         },

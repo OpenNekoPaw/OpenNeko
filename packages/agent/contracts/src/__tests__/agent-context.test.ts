@@ -22,8 +22,8 @@ describe('Agent resolved Entity context contract', () => {
     expect(isAgentResolvedEntityContextData(context)).toBe(true);
   });
 
-  it('rejects the removed schemaVersion only for the affected context', () => {
-    expect(isAgentResolvedEntityContextData({ ...context, schemaVersion: 1 })).toBe(false);
+  it('rejects an unknown field only for the affected context', () => {
+    expect(isAgentResolvedEntityContextData({ ...context, unexpectedField: 1 })).toBe(false);
     expect(isAgentResolvedEntityContextData(context)).toBe(true);
   });
 

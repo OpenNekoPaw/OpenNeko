@@ -8,7 +8,6 @@ function createPosterContentLocator(): ContentLocator {
   return {
     kind: 'generated-output',
     outputId: 'asset-shot-1',
-    revision: '1',
     digest: 'sha256:asset-shot-1',
     path: 'generated/asset-shot-1.png',
   };
@@ -73,7 +72,6 @@ function createPlan(): CanvasPlaybackPlan {
     ],
     metadata: {
       sourceCanvasUri: 'file:///project/story.nkc',
-      sourceRevision: 12,
     },
   };
 }

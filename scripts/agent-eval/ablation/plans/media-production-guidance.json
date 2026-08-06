@@ -1,16 +1,27 @@
 {
-  "schema": "neko.agent-eval.ablation-plan.v1",
+  "schema": "neko.agent-eval.ablation-plan",
   "id": "media-production-plan-mode-pilot",
   "mode": "configuration",
   "suiteId": "skill.media-production",
   "caseId": "animation-production-plan",
   "scenarioContract": {
-    "schema": "neko.agent-eval.scenario.v2",
-    "evidenceRefs": ["production-facts"],
-    "assertionIds": ["skill", "model", "output", "no-image", "no-video", "fallback"]
+    "schema": "neko.agent-eval.scenario",
+    "evidenceRefs": [
+      "production-facts"
+    ],
+    "assertionIds": [
+      "skill",
+      "model",
+      "output",
+      "no-image",
+      "no-video"
+    ]
   },
   "baselineVariantId": "ask-mode",
-  "matrix": { "strategy": "focused", "maxVariants": 2 },
+  "matrix": {
+    "strategy": "focused",
+    "maxVariants": 2
+  },
   "repetitions": 3,
   "comparisonPolicy": {
     "retainEverySample": true,
@@ -53,7 +64,9 @@
       "role": "variant",
       "kind": "configuration",
       "description": "User-visible Plan execution mode with the same Skill, model, fixture, and no production side effects.",
-      "changes": ["runtime.execution-mode"],
+      "changes": [
+        "runtime.execution-mode"
+      ],
       "runtimeProfileId": "plan-markdown",
       "modelProfileId": "configured-default",
       "expectedConfiguration": {

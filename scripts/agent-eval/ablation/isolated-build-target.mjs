@@ -50,19 +50,19 @@ export async function prepareIsolatedBuildTarget(targetInput, options = {}) {
   };
 
   try {
-    const revision = (
-      await runCommand('git', ['rev-parse', '--verify', `${target.sourceRevision}^{commit}`], {
+    const commit = (
+      await runCommand('git', ['rev-parse', '--verify', `${target.sourceCommit}^{commit}`], {
         cwd: repositoryRoot,
         timeoutMs: 30_000,
       })
     ).stdout.trim();
-    if (fingerprintGitRevision(revision) !== target.sourceFingerprint) {
-      throw buildError('isolated source revision fingerprint does not match the plan');
+    if (fingerprintGitCommit(commit) !== target.sourceFingerprint) {
+      throw buildError('isolated source commit fingerprint does not match the plan');
     }
     if (fingerprintBuildRecipe(target) !== target.buildRecipeFingerprint) {
       throw buildError('isolated build recipe fingerprint does not match the plan');
     }
-    await runCommand('git', ['worktree', 'add', '--detach', worktree, revision], {
+    await runCommand('git', ['worktree', 'add', '--detach', worktree, commit], {
       cwd: repositoryRoot,
       timeoutMs: options.worktreeTimeoutMs ?? 120_000,
     });
@@ -107,7 +107,7 @@ export async function prepareIsolatedBuildTarget(targetInput, options = {}) {
     };
     return {
       workspace: worktree,
-      revision,
+      commit,
       sourceFingerprint: target.sourceFingerprint,
       buildRecipeFingerprint: target.buildRecipeFingerprint,
       executablePath,
@@ -128,8 +128,8 @@ export async function prepareIsolatedBuildTarget(targetInput, options = {}) {
   }
 }
 
-export function fingerprintGitRevision(revision) {
-  return hashText(`git-revision:${revision}`);
+export function fingerprintGitCommit(commit) {
+  return hashText(`git-commit:${commit}`);
 }
 
 export function fingerprintBuildRecipe(target) {

@@ -18,7 +18,7 @@ function input() {
         path: '/Users/private/project/board.json',
         digest: `sha256:${'b'.repeat(64)}`,
         deliveryStatus: 'delivered',
-        validatorId: 'json-document-v1',
+        validatorId: 'json-document',
         validatorStatus: 'valid',
       },
     ],
@@ -40,7 +40,7 @@ describe('Judge evidence allowlist projection', () => {
   it('projects only public evidence fields and excludes artifact paths/raw data', () => {
     const projection = createJudgeEvidenceProjection(input());
     expect(projection).toMatchObject({
-      schema: 'neko.agent-eval.judge-evidence.v2',
+      schema: 'neko.agent-eval.judge-evidence',
       artifactSummaries: [{ ref: 'artifact:board-1', validatorStatus: 'valid' }],
       qualityEvidence: [{ id: 'quality-1', score: 4 }],
     });

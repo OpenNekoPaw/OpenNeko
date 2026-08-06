@@ -130,7 +130,6 @@ describe('Agent conversation controller', () => {
       activationId: 2,
       conversationId: 'conversation-1',
       tabId: 'tab-1',
-      expectedTabStateRevision: 4,
       tabState: {
         openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conversation-1' }],
         activeTabId: 'tab-1',

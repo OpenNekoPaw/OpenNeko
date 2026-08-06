@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "skill.evaluation-artifact-author",
   "owner": { "kind": "skill", "id": "evaluation-artifact-author" },
   "target": {
@@ -13,7 +13,6 @@
       "fingerprint": "sha256:8b77edb8f93ddcc69f020a92a5c7936cb8ad066fd671a873b53b37534b9e7bb0"
     }
   },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     {
       "id": "canonical-default",

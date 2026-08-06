@@ -9,7 +9,7 @@ import {
 import type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai';
 import type { HostSecretPort } from '@neko/host/ports';
 
-const CREDENTIAL_SECRET_KEY_PREFIX = 'openneko.agent.pi.credential.v1:';
+const CREDENTIAL_SECRET_KEY_PREFIX = 'openneko.agent.pi.credential:';
 
 export interface ProtectedAuthPromptPort {
   text(input: {

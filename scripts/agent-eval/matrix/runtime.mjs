@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { runV2Case } from '../runner/run-v2-case.mjs';
+import { runCase } from '../runner/run-case.mjs';
 import { assertShareableEvidence } from '../schemas/evidence-policy.mjs';
 
 const RESOURCE_CLASSES = Object.freeze(['text', 'external-tool', 'media', 'visible-ui']);
@@ -92,7 +92,7 @@ export async function createMatrixPlan(selections, options = {}) {
   );
   return deepFreeze(
     globalThis.structuredClone({
-      schema: 'neko.agent-eval.matrix-plan.v1',
+      schema: 'neko.agent-eval.matrix-plan',
       matrixId,
       strategy,
       evidenceLevel,
@@ -109,7 +109,7 @@ export async function createMatrixPlan(selections, options = {}) {
 
 export async function executeMatrixPlan(plan, options = {}) {
   validatePlan(plan);
-  const runSample = options.runSample ?? runV2Case;
+  const runSample = options.runSample ?? runCase;
   const startedAt = (options.now ?? Date.now)();
   const ledger = createBudgetLedger(plan.budgets, startedAt, options.now ?? Date.now);
   const desktop = new Semaphore(plan.limits.desktop);
@@ -132,7 +132,7 @@ export async function executeMatrixPlan(plan, options = {}) {
   );
   const outcome = classifyOutcomes(results.map((result) => result.outcome));
   return {
-    schema: 'neko.agent-eval.matrix-shard-result.v1',
+    schema: 'neko.agent-eval.matrix-shard-result',
     matrixId: plan.matrixId,
     policyDigest: plan.policyDigest,
     shard: plan.shard,
@@ -178,7 +178,7 @@ export function aggregateMatrixShards(plan, shards) {
   if (missing.length > 0) diagnostics.push(`missing sample(s): ${missing.join(',')}`);
   if (unexpected.length > 0) diagnostics.push(`unexpected sample(s): ${unexpected.join(',')}`);
   return {
-    schema: 'neko.agent-eval.matrix-aggregate.v1',
+    schema: 'neko.agent-eval.matrix-aggregate',
     matrixId: plan.matrixId,
     policyDigest: plan.policyDigest,
     outcome:
@@ -385,7 +385,7 @@ class Semaphore {
 }
 
 function validatePlan(plan) {
-  if (plan?.schema !== 'neko.agent-eval.matrix-plan.v1' || !Object.isFrozen(plan)) {
+  if (plan?.schema !== 'neko.agent-eval.matrix-plan' || !Object.isFrozen(plan)) {
     throw configurationError('Evaluation matrix plan is invalid or mutable.');
   }
 }
@@ -477,7 +477,7 @@ function validateBudgets(value) {
 
 function validateLimits(value) {
   const result = {
-    capacitySource: value.capacitySource ?? 'conservative-local-defaults-v1',
+    capacitySource: value.capacitySource ?? 'conservative-local-defaults',
     desktop: value.desktop ?? 2,
     provider: value.provider ?? 2,
     text: value.text ?? 2,

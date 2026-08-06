@@ -3,7 +3,7 @@ import type { PendingForegroundConversationActivation } from './types';
 export function shouldActivateForegroundConversation(
   pending: PendingForegroundConversationActivation | null | undefined,
   conversationId: string | undefined,
-  activation?: { readonly activationId: number; readonly tabStateRevision: number },
+  activation?: { readonly activationId: number },
 ): boolean {
   if (!pending || !conversationId) return false;
 
@@ -11,8 +11,7 @@ export function shouldActivateForegroundConversation(
     case 'switch-conversation':
       return (
         pending.conversationId === conversationId &&
-        activation?.activationId === pending.activationId &&
-        activation?.tabStateRevision === pending.tabStateRevision
+        activation?.activationId === pending.activationId
       );
     case 'new-conversation':
       return !pending.previousConversationIds.includes(conversationId);

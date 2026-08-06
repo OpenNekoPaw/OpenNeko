@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   fingerprintBuildRecipe,
-  fingerprintGitRevision,
+  fingerprintGitCommit,
   hashFile,
   prepareIsolatedBuildTarget,
 } from './isolated-build-target.mjs';
@@ -32,14 +32,14 @@ async function repository() {
   await exec('git', ['add', 'source.txt'], { cwd: root });
   await exec('git', ['commit', '-qm', 'base'], { cwd: root });
   const { stdout } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
-  const revision = stdout.trim();
-  return { root, revision };
+  const commit = stdout.trim();
+  return { root, commit };
 }
 
-function target(revision, overrides = {}) {
+function target(commit, overrides = {}) {
   const value = {
-    sourceRevision: revision,
-    sourceFingerprint: fingerprintGitRevision(revision),
+    sourceCommit: commit,
+    sourceFingerprint: fingerprintGitCommit(commit),
     buildRecipeFingerprint: `sha256:${'0'.repeat(64)}`,
     buildCommands: [
       {
@@ -59,8 +59,8 @@ function target(revision, overrides = {}) {
   return value;
 }
 
-describe('isolated revision/worktree/build target', () => {
-  it('builds base and patched Skill revisions without cross-run contamination', async () => {
+describe('isolated commit/worktree/build target', () => {
+  it('builds base and patched Skill commits without cross-run contamination', async () => {
     const repo = await repository();
     const patchFile = join(repo.root, 'variant.patch');
     await fs.writeFile(
@@ -75,10 +75,10 @@ describe('isolated revision/worktree/build target', () => {
         '',
       ].join('\n'),
     );
-    const base = await prepareIsolatedBuildTarget(target(repo.revision), {
+    const base = await prepareIsolatedBuildTarget(target(repo.commit), {
       repositoryRoot: repo.root,
     });
-    const variantTarget = target(repo.revision, {
+    const variantTarget = target(repo.commit, {
       patchFile: 'variant.patch',
       patchFingerprint: await hashFile(patchFile),
     });
@@ -109,7 +109,7 @@ describe('isolated revision/worktree/build target', () => {
     const repo = await repository();
     const workspaceParent = await fs.mkdtemp(join(os.tmpdir(), 'neko-isolated-build-fail-'));
     temporaryDirectories.push(workspaceParent);
-    const failed = target(repo.revision, {
+    const failed = target(repo.commit, {
       buildCommands: [
         { command: process.execPath, args: ['-e', 'process.exit(7)'], timeoutMs: 10_000 },
       ],
@@ -127,7 +127,7 @@ describe('isolated revision/worktree/build target', () => {
     const repo = await repository();
     const workspaceParent = await fs.mkdtemp(join(os.tmpdir(), 'neko-isolated-build-timeout-'));
     temporaryDirectories.push(workspaceParent);
-    const timed = target(repo.revision, {
+    const timed = target(repo.commit, {
       buildCommands: [
         {
           command: process.execPath,
@@ -145,15 +145,15 @@ describe('isolated revision/worktree/build target', () => {
 
   it('rejects source and recipe identity drift before a build can succeed', async () => {
     const repo = await repository();
-    const sourceDrift = target(repo.revision, {
+    const sourceDrift = target(repo.commit, {
       sourceFingerprint: `sha256:${'f'.repeat(64)}`,
     });
     sourceDrift.buildRecipeFingerprint = fingerprintBuildRecipe(sourceDrift);
     await expect(
       prepareIsolatedBuildTarget(sourceDrift, { repositoryRoot: repo.root }),
-    ).rejects.toThrow('source revision fingerprint');
+    ).rejects.toThrow('source commit fingerprint');
 
-    const recipeDrift = target(repo.revision);
+    const recipeDrift = target(repo.commit);
     recipeDrift.buildRecipeFingerprint = `sha256:${'f'.repeat(64)}`;
     await expect(
       prepareIsolatedBuildTarget(recipeDrift, { repositoryRoot: repo.root }),
@@ -164,12 +164,12 @@ describe('isolated revision/worktree/build target', () => {
     const repo = await repository();
     const workspaceParent = await fs.mkdtemp(join(os.tmpdir(), 'neko-isolated-cleanup-fail-'));
     temporaryDirectories.push(workspaceParent);
-    const value = target(repo.revision, {
+    const value = target(repo.commit, {
       sourceFingerprint: `sha256:${'f'.repeat(64)}`,
     });
     value.buildRecipeFingerprint = fingerprintBuildRecipe(value);
     const runCommand = async (_command, args) => {
-      if (args[0] === 'rev-parse') return { code: 0, stdout: `${repo.revision}\n`, stderr: '' };
+      if (args[0] === 'rev-parse') return { code: 0, stdout: `${repo.commit}\n`, stderr: '' };
       if (args[0] === 'worktree' && args[1] === 'prune') {
         return { code: 1, stdout: '', stderr: 'prune failed' };
       }

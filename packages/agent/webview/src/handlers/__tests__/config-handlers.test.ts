@@ -108,13 +108,13 @@ describe('configHandlers', () => {
         conversationId: 'conversation-1',
         providers: [],
         selectedProviderId: 'deepseek-chat',
-        selectedModelId: 'deepseek-v4-pro',
+        selectedModelId: 'deepseek-pro',
         chatModelOptions: [
           {
-            id: 'deepseek-chat:deepseek-v4-pro',
+            id: 'deepseek-chat:deepseek-pro',
             label: 'DeepSeek V4 Pro',
             providerId: 'deepseek-chat',
-            modelId: 'deepseek-v4-pro',
+            modelId: 'deepseek-pro',
             category: 'llm',
           },
           {
@@ -132,13 +132,13 @@ describe('configHandlers', () => {
     expect(context.hydrateConversationSettings).toHaveBeenCalledWith(
       'conversation-1',
       expect.objectContaining({
-        selectedModel: 'deepseek-chat:deepseek-v4-pro',
-        availableModelIds: ['deepseek-chat:deepseek-v4-pro', 'configured-gateway:gpt-5.5'],
+        selectedModel: 'deepseek-chat:deepseek-pro',
+        availableModelIds: ['deepseek-chat:deepseek-pro', 'configured-gateway:gpt-5.5'],
         defaultMediaModels: {},
         executionMode: 'ask',
         settingsPatch: expect.objectContaining({
           selectedProviderId: 'deepseek-chat',
-          selectedModelId: 'deepseek-v4-pro',
+          selectedModelId: 'deepseek-pro',
         }),
       }),
     );

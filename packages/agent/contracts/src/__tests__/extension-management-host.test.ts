@@ -9,7 +9,6 @@ const identity = {
   extensionManagementSessionId: 'extension-management:window-1:1',
   windowId: 'window-1',
 };
-const catalogRevision = `sha256:${'a'.repeat(64)}`;
 
 function createRequest() {
   return createAgentExtensionManagementHostRequest({
@@ -22,7 +21,6 @@ function createRequest() {
 function createProjection() {
   return {
     identity,
-    catalogRevision,
     skills: [
       {
         id: 'personal:personal:story-planner',
@@ -77,7 +75,7 @@ describe('Agent Extension Management Host contract', () => {
         },
         request,
       ),
-    ).toMatchObject({ projection: { identity, catalogRevision } });
+    ).toMatchObject({ projection: { identity } });
   });
 
   it('rejects stale owners, unknown fields and physical paths', () => {

@@ -247,9 +247,9 @@ export function ChatWorkspace({
     [updateTabRenderState],
   );
   const requestInputFocus = useCallback(() => {
-    updateTabRenderState((state) => ({
-      focus: { target: 'input', requestRevision: state.focus.requestRevision + 1 },
-    }));
+    updateTabRenderState({
+      focus: { target: 'input', requestId: crypto.randomUUID() },
+    });
   }, [updateTabRenderState]);
 
   const setViewport = useCallback(
@@ -854,7 +854,7 @@ export function ChatWorkspace({
         focusRequestOwner={tabRenderSnapshot.tabId}
         focusRequestEnabled={tabRenderSnapshot.visibility === 'visible'}
         focusRequestTarget={focus.target}
-        focusRequestRevision={focus.requestRevision}
+        focusRequestId={focus.requestId}
         agentState={agentState}
       />
     </InputAreaProvider>

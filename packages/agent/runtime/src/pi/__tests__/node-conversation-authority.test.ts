@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises';
+import { access, mkdtemp, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,7 +8,6 @@ import {
   NodePiConversationAuthority,
   type ConversationExecutionLease,
 } from '../node-conversation-authority';
-import { initializePiConversationTables } from '../node-conversation-storage';
 
 describe('NodePiConversationAuthority', () => {
   let root: string;
@@ -286,80 +285,6 @@ describe('NodePiConversationAuthority', () => {
     expect(() =>
       authority.updateConversationTitle(lease, 'missing-conversation', 'Missing'),
     ).toThrowError(expect.objectContaining({ code: 'conversation-not-found' }));
-  });
-
-  it('leaves the retired Agent metadata database untouched and unread', async () => {
-    const retiredRoot = join(root, 'agent', 'pi');
-    await mkdir(retiredRoot, { recursive: true });
-    const sqlite = await import('node:sqlite');
-    const retiredPath = join(retiredRoot, 'metadata.sqlite');
-    const retired = new sqlite.DatabaseSync(retiredPath);
-    initializePiConversationTables(retired);
-    retired
-      .prepare(
-        `INSERT INTO pi_conversations
-          (workspace_id, conversation_id, title, active_branch_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        'workspace-1',
-        'retired-conversation',
-        'Retired title',
-        'retired-branch',
-        '2026-08-01T00:00:00.000Z',
-        '2026-08-01T00:00:00.000Z',
-      );
-    retired.close();
-    const before = await stat(retiredPath);
-
-    const authority = await createAuthority('desktop-current');
-
-    expect(authority.readConversation('retired-conversation')).toBeUndefined();
-    await expect(access(retiredPath)).resolves.toBeUndefined();
-    await expect(stat(retiredPath)).resolves.toMatchObject({ size: before.size });
-  });
-
-  it('rejects a retired embedded-context table without rewriting it', async () => {
-    const sqlite = await import('node:sqlite');
-    const databasePath = join(root, 'neko.db');
-    const database = new sqlite.DatabaseSync(databasePath);
-    database.exec(`
-      CREATE TABLE pi_conversations (
-        context_schema_version INTEGER NOT NULL,
-        context_kind TEXT NOT NULL,
-        context_id TEXT NOT NULL,
-        project_id TEXT,
-        workspace_id TEXT,
-        conversation_id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        active_branch_id TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
-    database.close();
-    const before = await stat(databasePath);
-
-    await expect(createAuthority('desktop-retired-shape')).rejects.toThrow(
-      'Pi conversation table contract is unsupported',
-    );
-    await expect(stat(databasePath)).resolves.toMatchObject({ size: before.size });
-    const unchanged = new sqlite.DatabaseSync(databasePath, { readOnly: true });
-    try {
-      expect(
-        unchanged
-          .prepare(`PRAGMA table_info(pi_conversations)`)
-          .all()
-          .map((row) => {
-            if (!('name' in row) || typeof row.name !== 'string') {
-              throw new TypeError('Expected SQLite column name.');
-            }
-            return row.name;
-          }),
-      ).toContain('context_schema_version');
-    } finally {
-      unchanged.close();
-    }
   });
 
   it('rejects an unknown Pi conversation table shape without rewriting it', async () => {

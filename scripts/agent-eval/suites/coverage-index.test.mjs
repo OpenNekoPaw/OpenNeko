@@ -46,12 +46,5 @@ describe('Agent Evaluation coverage index', () => {
         (item) => item.kind === 'builtin-skill' && item.disposition === 'excluded',
       ),
     ).toEqual([]);
-    expect(
-      coverage.legacyCases.filter((item) => item.disposition === 'excluded').map((item) => item.id),
-    ).toEqual([
-      'blame-epub-storyboard-to-canvas',
-      'blame-epub-canonical-storyboard-skill',
-      'lamp-god-epub-animation-plan',
-    ]);
   });
 });

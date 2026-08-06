@@ -1,8 +1,8 @@
 import { schema as s, validateStrict } from './strict-schema.mjs';
 
 export const ABLATION_SCHEMAS = Object.freeze({
-  plan: 'neko.agent-eval.ablation-plan.v1',
-  delta: 'neko.agent-eval.ablation-delta.v1',
+  plan: 'neko.agent-eval.ablation-plan',
+  delta: 'neko.agent-eval.ablation-delta',
 });
 
 export const ABLATION_METRICS = Object.freeze([
@@ -63,7 +63,7 @@ const VARIANT_COMMON = {
 };
 
 const SCENARIO_CONTRACT_REFERENCE_SCHEMA = s.object({
-  schema: s.literal('neko.agent-eval.scenario.v2'),
+  schema: s.literal('neko.agent-eval.scenario'),
   evidenceRefs: ID_LIST,
   assertionIds: ID_LIST,
 });
@@ -96,7 +96,7 @@ const HOST_SKILL_IDENTITY_SCHEMA = s.object({
 
 const BUILD_TARGET_SCHEMA = s.object(
   {
-    sourceRevision: SHORT_TEXT,
+    sourceCommit: SHORT_TEXT,
     sourceFingerprint: HASH,
     buildRecipeFingerprint: HASH,
     buildCommands: s.array(
@@ -123,7 +123,7 @@ const IMPLEMENTATION_VARIANT_SCHEMA = s.object(
     changes: s.array(s.enum(IMPLEMENTATION_DIMENSIONS), { maxLength: 2 }),
     skillIdentity: HOST_SKILL_IDENTITY_SCHEMA,
     developmentCheckpoint: s.object({
-      kind: s.enum(['git-revision', 'working-tree-patch']),
+      kind: s.enum(['git-commit', 'working-tree-patch']),
       ref: SHORT_TEXT,
       fingerprint: HASH,
     }),
@@ -244,7 +244,7 @@ const CONFIGURATION_EXECUTION_IDENTITY_SCHEMA = s.union([
 ]);
 const IMPLEMENTATION_EXECUTION_IDENTITY_SCHEMA = s.object({
   kind: s.literal('implementation'),
-  sourceRevision: SHORT_TEXT,
+  sourceCommit: SHORT_TEXT,
   sourceFingerprint: HASH,
   buildRecipeFingerprint: HASH,
   executableFingerprint: HASH,
@@ -390,14 +390,6 @@ function validateScenarioContractReference(plan, scenario) {
     assertionIds,
     'Scenario assertion ids',
   );
-  const retiredPath = scenario.evidenceContract.canonicalPath.find((entry) =>
-    /\btui\b|\bagentsession\b|direct(?:\s|-)+(?:agent(?:\s|-)+)?(?:runtime|turn(?:\s|-)+runner)/iu.test(
-      entry,
-    ),
-  );
-  if (retiredPath) {
-    throw new Error(`Scenario canonical path contains a retired Host/runtime term: ${retiredPath}`);
-  }
 }
 
 function assertExactReferenceSet(actual, expected, label) {

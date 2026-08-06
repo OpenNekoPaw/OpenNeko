@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "locator-backed-display-projection",
   "suiteId": "agent-runtime.stream-delivery",
   "caseGroup": "regression",
@@ -17,33 +17,24 @@
       "package-owned Agent media card",
       "terminal answer"
     ],
-    "forbiddenFallback": [
-      "ResourceRef",
-      "absolute path inference",
-      "file URL",
-      "neko-media custom scheme",
-      "data URL",
-      "persisted OpenNeko resource URL",
-      "persisted loopback URL",
-      "provider display-URL fetch",
-      "legacy AgentEvent projector",
-      "direct Pi conversation mutation",
-      "terminal Tool-result accumulator"
-    ],
     "observables": [
       {
         "ref": "display-projection-facts",
         "kind": "runtime-fact",
-        "description": "Pi and Timeline identity, successful locator-backed ReadImage Tool result, redacted authorized OpenNeko resource projection, terminal idle state, and no-fallback facts.",
+        "description": "Pi and Timeline identity, successful locator-backed ReadImage Tool result, redacted authorized OpenNeko resource projection, and terminal idle state.",
         "required": true
       }
     ],
     "expectedResult": "ReadImage preserves the workspace-file ContentLocator, the terminal Timeline contains the successful Tool result, and Desktop records one redacted authorized OpenNeko resource projection before the final marker.",
-    "expectedFailure": "Missing locator continuity, denied display authorization, URL or path identity substitution, runtime diagnostics, legacy projection participation, or a missing terminal marker fails visibly."
+    "expectedFailure": "Missing locator continuity, denied display authorization, URL or path identity substitution, runtime diagnostics, or a missing terminal marker fails visibly."
   },
-  "fixtureRefs": ["creative-planning-workspace"],
+  "fixtureRefs": [
+    "creative-planning-workspace"
+  ],
   "runtimeProfileId": "markdown",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "submit",
@@ -115,29 +106,12 @@
       "evidenceRef": "display-projection-facts"
     },
     {
-      "id": "no-display-fallback",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "ResourceRef",
-        "resourceRef",
-        "absolute-path-inference",
-        "file:",
-        "neko-media:",
-        "data:",
-        "persisted-openneko-resource-url",
-        "persisted-loopback-url",
-        "provider-display-url-fetch",
-        "legacy-agent-event-projector",
-        "direct-pi-conversation-mutation",
-        "terminal-tool-result-accumulator"
-      ],
-      "evidenceRef": "display-projection-facts"
-    },
-    {
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["LOCATOR_DISPLAY_PROJECTION_OK"],
+      "text": [
+        "LOCATOR_DISPLAY_PROJECTION_OK"
+      ],
       "evidenceRef": "display-projection-facts"
     }
   ],

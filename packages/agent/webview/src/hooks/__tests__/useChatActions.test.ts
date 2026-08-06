@@ -326,13 +326,13 @@ describe('useChatActions', () => {
       return useChatActions({
         inputValue: '你好',
         isThinking: false,
-        selectedModel: 'deepseek-v4-pro',
+        selectedModel: 'deepseek-pro',
         availableModels: [
           {
-            id: 'deepseek-v4-pro',
+            id: 'deepseek-pro',
             label: 'DeepSeek V4 Pro',
             providerId: 'deepseek-chat',
-            modelId: 'deepseek-v4-pro',
+            modelId: 'deepseek-pro',
             category: 'llm',
           },
         ],
@@ -359,7 +359,7 @@ describe('useChatActions', () => {
         message: '你好',
         chatModel: {
           providerId: 'deepseek-chat',
-          modelId: 'deepseek-v4-pro',
+          modelId: 'deepseek-pro',
           category: 'llm',
         },
       }),
@@ -391,7 +391,7 @@ describe('useChatActions', () => {
             providerId: 'flux',
             modelId: 'flux-pro',
             category: 'image',
-            capabilities: ['image_generation'],
+            capabilities: ['text_to_image'],
           },
         ],
         sessionMode: 'image',
@@ -550,7 +550,7 @@ describe('useChatActions', () => {
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
-  it('uses Agent primary model as the only LLM routing field when legacy selectedModel is stale', () => {
+  it('gives the explicit Agent primary model precedence for LLM routing', () => {
     const setMessages = vi.fn();
     const setIsThinking = vi.fn();
     const setStreamingMessageId = vi.fn();
@@ -560,13 +560,13 @@ describe('useChatActions', () => {
       return useChatActions({
         inputValue: '继续生成',
         isThinking: false,
-        selectedModel: 'deepseek-v4-pro',
+        selectedModel: 'deepseek-pro',
         availableModels: [
           {
-            id: 'deepseek-v4-pro',
+            id: 'deepseek-pro',
             label: 'DeepSeek V4 Pro',
             providerId: 'deepseek-chat',
-            modelId: 'deepseek-v4-pro',
+            modelId: 'deepseek-pro',
             category: 'llm',
           },
           {
@@ -1223,13 +1223,13 @@ describe('useChatActions', () => {
       return useChatActions({
         inputValue: '',
         isThinking: false,
-        selectedModel: 'deepseek-v4-pro',
+        selectedModel: 'deepseek-pro',
         availableModels: [
           {
-            id: 'deepseek-v4-pro',
+            id: 'deepseek-pro',
             label: 'DeepSeek V4 Pro',
             providerId: 'deepseek-chat',
-            modelId: 'deepseek-v4-pro',
+            modelId: 'deepseek-pro',
             category: 'llm',
           },
         ],
@@ -1256,7 +1256,7 @@ describe('useChatActions', () => {
         message: 'Use this selected clip',
         chatModel: {
           providerId: 'deepseek-chat',
-          modelId: 'deepseek-v4-pro',
+          modelId: 'deepseek-pro',
           category: 'llm',
         },
       }),

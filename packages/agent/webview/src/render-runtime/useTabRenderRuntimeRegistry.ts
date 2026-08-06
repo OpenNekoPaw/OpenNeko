@@ -28,7 +28,7 @@ export function useTabRenderRuntimeRegistry(
   const registryRef = useRef<TabRenderRuntimeRegistry>();
   const rootLeaseRef = useRef<RegistryRootLease>();
   const realmStateRef = useRef<TabRenderRealmStateCoordinator>();
-  const [, publishReconciliation] = useReducer((revision: number) => revision + 1, 0);
+  const [, publishReconciliation] = useReducer((value: boolean) => !value, false);
   registryRef.current ??= createTabRenderRuntimeRegistry();
   const registry = registryRef.current;
   realmStateRef.current ??= createTabRenderRealmStateCoordinator(resolvedHost, registry);

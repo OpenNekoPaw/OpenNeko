@@ -46,15 +46,8 @@ export function projectCanvasPlaybackRouteCard(
   const displayedUnits = orderedUnits.slice(0, maxUnits);
   const diagnostics = [...plan.diagnostics, ...(selectedRoute?.diagnostics ?? [])];
   const sourceCanvasUri = readStringMetadata(plan.metadata, 'sourceCanvasUri');
-  const sourceRevision = readStringOrNumberMetadata(plan.metadata, 'sourceRevision');
   const blocks: CompositeArtifactBlock[] = [
-    createSummaryBlock(
-      selectedRoute,
-      unitById,
-      orderedUnits.length,
-      sourceCanvasUri,
-      sourceRevision,
-    ),
+    createSummaryBlock(selectedRoute, unitById, orderedUnits.length, sourceCanvasUri),
     createOrderedUnitsTableBlock(plan, selectedRoute, displayedUnits, orderedUnits.length),
     ...createMediaGalleryBlocks(displayedUnits),
     ...createDiagnosticBlocks(diagnostics),
@@ -114,7 +107,6 @@ export function projectCanvasPlaybackRouteCard(
         'neko.canvas': cleanRecord({
           routeId: selectedRoute?.id,
           sourceCanvasUri,
-          sourceRevision,
           unitCount: orderedUnits.length,
           projectedUnitCount: displayedUnits.length,
           diagnosticsCount: diagnostics.length,
@@ -151,7 +143,6 @@ function createSummaryBlock(
   unitById: ReadonlyMap<string, CanvasPlaybackUnit>,
   unitCount: number,
   sourceCanvasUri: string | undefined,
-  sourceRevision: string | number | undefined,
 ): CompositeArtifactBlock {
   const duration = route?.totalDurationMs ?? sumUnitDurations(route, unitById);
   const lines = [
@@ -160,7 +151,6 @@ function createSummaryBlock(
     `Units: ${unitCount}`,
     duration !== undefined ? `Duration: ${formatDuration(duration)}` : undefined,
     sourceCanvasUri ? `Canvas: ${sourceCanvasUri}` : undefined,
-    sourceRevision !== undefined ? `Revision: ${String(sourceRevision)}` : undefined,
     'Playback stays in Canvas; Agent only displays order and dispatches actions.',
   ].filter((line): line is string => Boolean(line));
 
@@ -346,14 +336,6 @@ function readStringMetadata(
 ): string | undefined {
   const value = record[key];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function readStringOrNumberMetadata(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-): string | number | undefined {
-  const value = record[key];
-  return typeof value === 'string' || typeof value === 'number' ? value : undefined;
 }
 
 function cleanCells(

@@ -130,9 +130,7 @@ function areCompatibleAppends(
   operation: Extract<AgentTurnTimelineOperation, { readonly operation: 'append' }>,
 ): boolean {
   return (
-    previous.item.itemId === operation.item.itemId &&
-    previous.item.kind === operation.item.kind &&
-    previous.item.payload.sourceGeneration === operation.item.payload.sourceGeneration
+    previous.item.itemId === operation.item.itemId && previous.item.kind === operation.item.kind
   );
 }
 

@@ -41,7 +41,7 @@ describe('Agent draft submit contract', () => {
           assistantSpaceId: 'assistant:default',
           baseGrantIds: [],
         },
-        messageText: 'Do not use the old path',
+        messageText: 'Use the canonical route',
         resourceGrantIds: [],
         configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
       }),

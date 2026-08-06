@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.workflow-controller",
   "owner": { "kind": "agent-runtime", "id": "desktop-workflow-controller" },
   "target": {
@@ -7,7 +7,6 @@
     "id": "desktop-workflow-controller",
     "contractHash": "sha256:b7141edb3c222d471fefa4bdb61a4117eeb028c6a2e0f39d9b1e9d62ba0a6a55"
   },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     {
       "id": "canonical-default",

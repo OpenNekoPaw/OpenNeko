@@ -634,7 +634,7 @@ function deriveShotImagePrepPlanFromShot(input: {
     operationPlan,
     ...(referenceBundle ? { referenceBundle } : {}),
     ...(input.shot.visualStyle ? { targetStyle: input.shot.visualStyle } : {}),
-    ...(input.shot.generationPrompt ? { generationPrompt: input.shot.generationPrompt } : {}),
+    ...(input.shot.imagePrompt ? { generationPrompt: input.shot.imagePrompt } : {}),
     ...(input.shot.visualDescription ? { editInstruction: input.shot.visualDescription } : {}),
     ...(maskRefs.length > 0 ? { maskRefs } : {}),
     ...(perceptionCardRefs.length > 0 ? { perceptionCardRefs } : {}),
@@ -988,17 +988,33 @@ function validateShotImagePrepPlanValue(
     );
     return;
   }
-  if (Object.hasOwn(value, 'schemaVersion')) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'unsupported-field',
-        [...path, 'schemaVersion'],
-        'Shot image prep field schemaVersion is not supported.',
-        { actual: diagnosticValue(value['schemaVersion']) },
-      ),
-    );
-  }
+  rejectUnknownFields(
+    value,
+    new Set([
+      'kind',
+      'planId',
+      'storyboardId',
+      'sceneId',
+      'shotId',
+      'sourceMediaRefs',
+      'imageStrategy',
+      'operationPlan',
+      'referenceBundle',
+      'targetAspectRatio',
+      'targetStyle',
+      'editInstruction',
+      'generationPrompt',
+      'negativePrompt',
+      'maskRefs',
+      'perceptionCardRefs',
+      'outputMediaRefs',
+      'status',
+      'diagnostics',
+      'metadata',
+    ]),
+    path,
+    diagnostics,
+  );
   validateLiteral(
     value['kind'],
     SHOT_IMAGE_PREP_KIND,
@@ -1257,6 +1273,26 @@ function validateStatus(
 ): void {
   if (!isShotImagePrepStatus(value)) {
     diagnostics.push(invalid(path, SHOT_IMAGE_PREP_STATUSES.join(', '), value, 'invalid-status'));
+  }
+}
+
+function rejectUnknownFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+  path: readonly ArtifactPathSegment[],
+  diagnostics: ShotImagePrepDiagnostic[],
+): void {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'unsupported-field',
+        [...path, field],
+        `Shot image prep contains unsupported field ${field}.`,
+        { actual: diagnosticValue(value[field]) },
+      ),
+    );
   }
 }
 

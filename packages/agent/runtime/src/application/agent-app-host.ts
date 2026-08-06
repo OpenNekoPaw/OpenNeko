@@ -64,8 +64,9 @@ import type {
   AgentExtensionRuntimeReadiness,
 } from '@neko/agent-contracts';
 import {
-  buildAgentPluginRuntimeGeneration,
-  type AgentPluginRuntimeGeneration,
+  buildAgentPluginRuntime,
+  createPluginRuntimeSourceFingerprint,
+  type AgentPluginRuntime,
 } from '@neko/agent-runtime/extensions';
 
 export interface AgentConversationOpenInput {
@@ -220,7 +221,7 @@ class DefaultAgentAppHost implements AgentAppHost {
   private readonly homeProjectionListeners = new Set<() => void>();
   private readonly homeConversationWorkspaceIds: readonly string[];
   private homeWorkspaceScope: readonly string[];
-  private pluginGeneration: AgentPluginRuntimeGeneration | undefined;
+  private pluginRuntime: AgentPluginRuntime | undefined;
   private pluginRuntimeChanging = false;
   private disposed = false;
 
@@ -295,7 +296,7 @@ class DefaultAgentAppHost implements AgentAppHost {
         isTrusted: () => true,
         isEnabled: () => true,
       },
-    }).discover([...roots, ...(this.pluginGeneration?.skillRoots ?? [])]);
+    }).discover([...roots, ...(this.pluginRuntime?.skillRoots ?? [])]);
     return projectAgentSkillCatalog(snapshot);
   }
 
@@ -308,35 +309,36 @@ class DefaultAgentAppHost implements AgentAppHost {
     snapshot: AgentExtensionCatalogSnapshot,
   ): Promise<ReadonlyMap<string, AgentExtensionRuntimeReadiness>> {
     this.requireActive();
-    if (this.pluginGeneration?.revision === snapshot.revision) {
-      return this.pluginGeneration.readiness;
+    const sourceFingerprint = createPluginRuntimeSourceFingerprint(snapshot);
+    if (this.pluginRuntime?.sourceFingerprint === sourceFingerprint) {
+      return this.pluginRuntime.readiness;
     }
     if (this.pluginRuntimeChanging) {
-      throw new Error('Agent plugin runtime generation is already changing.');
+      throw new Error('Agent plugin runtime is already changing.');
     }
     this.pluginRuntimeChanging = true;
     try {
       if (this.hasActiveTurns()) {
         throw new Error('Agent plugin runtime cannot change while an Agent turn is active.');
       }
-      const next = await buildAgentPluginRuntimeGeneration(snapshot);
+      const next = await buildAgentPluginRuntime(snapshot);
       if (this.hasActiveTurns()) {
         await next.dispose();
         throw new Error('Agent plugin runtime cannot change while an Agent turn is active.');
       }
       try {
         for (const workspace of this.workspaces.values()) {
-          workspace.assertPluginGenerationCompatible(next);
+          workspace.assertPluginRuntimeCompatible(next);
         }
         for (const workspace of this.workspaces.values()) {
-          workspace.applyPluginGeneration(next);
+          workspace.applyPluginRuntime(next);
         }
       } catch (error) {
         await next.dispose();
         throw error;
       }
-      const previous = this.pluginGeneration;
-      this.pluginGeneration = next;
+      const previous = this.pluginRuntime;
+      this.pluginRuntime = next;
       await previous?.dispose();
       return next.readiness;
     } finally {
@@ -409,9 +411,9 @@ class DefaultAgentAppHost implements AgentAppHost {
     this.opening.clear();
     this.homeProjectionListeners.clear();
     const pluginResult = await Promise.allSettled([
-      this.pluginGeneration?.dispose() ?? Promise.resolve(),
+      this.pluginRuntime?.dispose() ?? Promise.resolve(),
     ]);
-    this.pluginGeneration = undefined;
+    this.pluginRuntime = undefined;
     let catalogError: unknown;
     try {
       this.options.catalogReader.dispose();
@@ -461,7 +463,7 @@ class DefaultAgentAppHost implements AgentAppHost {
       onHomeProjectionChanged: this.emitHomeProjectionChanged,
       canStartTurn: () => !this.pluginRuntimeChanging,
     });
-    if (this.pluginGeneration) runtime.applyPluginGeneration(this.pluginGeneration);
+    if (this.pluginRuntime) runtime.applyPluginRuntime(this.pluginRuntime);
     this.workspaces.set(workspace.workspaceId, runtime);
     this.emitHomeProjectionChanged();
     return runtime;
@@ -662,29 +664,29 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     return this.activeTurnOperations.size > 0;
   }
 
-  assertPluginGenerationCompatible(generation: AgentPluginRuntimeGeneration): void {
+  assertPluginRuntimeCompatible(pluginRuntime: AgentPluginRuntime): void {
     this.requireActive();
     if (this.hasActiveTurns()) {
       throw new Error(
         `Agent workspace '${this.workspaceId}' cannot replace plugin Tools during an active turn.`,
       );
     }
-    for (const tool of generation.tools) {
+    for (const tool of pluginRuntime.tools) {
       if (this.tools.has(tool.name) && !this.pluginToolNames.has(tool.name)) {
         throw new Error(`Plugin Tool '${tool.name}' conflicts with a registered Tool.`);
       }
     }
   }
 
-  applyPluginGeneration(generation: AgentPluginRuntimeGeneration): void {
-    this.assertPluginGenerationCompatible(generation);
+  applyPluginRuntime(pluginRuntime: AgentPluginRuntime): void {
+    this.assertPluginRuntimeCompatible(pluginRuntime);
     for (const name of this.pluginToolNames) this.tools.unregister(name);
     this.pluginToolNames.clear();
-    for (const tool of generation.tools) {
+    for (const tool of pluginRuntime.tools) {
       this.tools.register(tool);
       this.pluginToolNames.add(tool.name);
     }
-    this.pluginSkillRoots = generation.skillRoots;
+    this.pluginSkillRoots = pluginRuntime.skillRoots;
   }
 
   private async executeTurnOwned(

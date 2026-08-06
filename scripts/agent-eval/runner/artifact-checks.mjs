@@ -215,7 +215,7 @@ async function runPublicValidator(validatorId, file, injectedRunner) {
     return;
   }
   const args =
-    validatorId === 'canvas-json-v1'
+    validatorId === 'canvas-json'
       ? [CANVAS_VALIDATOR_CLI, '--file', file]
       : [FILE_VALIDATOR_CLI, validatorId, file];
   try {

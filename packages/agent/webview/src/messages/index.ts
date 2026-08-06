@@ -246,13 +246,11 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
     updateTabState: (
       openTabs: Array<import('@neko/agent-contracts').OpenTab>,
       activeTabId: string | null,
-      expectedTabStateRevision: number,
     ) => {
       postWebviewMessage({
         type: 'updateTabState',
         openTabs,
         activeTabId,
-        expectedTabStateRevision,
       });
     },
 

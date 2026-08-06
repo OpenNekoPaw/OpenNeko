@@ -1,5 +1,6 @@
 import { PackageIcon, PlusIcon, SearchIcon, TrashIcon, WarningIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { EmptyState } from '@neko/ui/primitives';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AgentExtensionCatalogItem } from '@neko/agent-contracts';
 import type {
@@ -20,7 +21,7 @@ export function AgentExtensionManagementRoot({
   const { t } = useTranslation();
   const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
   const [query, setQuery] = useState('');
-  const [refreshToken, setRefreshToken] = useState(0);
+  const [refreshRequestId, setRefreshRequestId] = useState('initial');
   const [projection, setProjection] = useState<AgentExtensionManagementProjection>();
   const [error, setError] = useState<string>();
   const [operationKey, setOperationKey] = useState<string>();
@@ -40,7 +41,7 @@ export function AgentExtensionManagementRoot({
     return () => {
       active = false;
     };
-  }, [interactive, refreshToken, runtime]);
+  }, [interactive, refreshRequestId, runtime]);
 
   const skills = useMemo(
     () => searchAndOrderAgentSkills(projection?.skills ?? [], query),
@@ -57,7 +58,7 @@ export function AgentExtensionManagementRoot({
       setError(undefined);
       try {
         await operation();
-        setRefreshToken((value) => value + 1);
+        setRefreshRequestId(crypto.randomUUID());
       } catch (reason: unknown) {
         setError(describeError(reason));
       } finally {
@@ -66,7 +67,6 @@ export function AgentExtensionManagementRoot({
     },
     [operationKey],
   );
-  const expectedRevision = projection?.catalogRevision;
   const issueCount =
     (projection?.skillDiscovery.diagnostics.reduce((total, item) => total + item.count, 0) ?? 0) +
     (projection?.skillDiscovery.duplicateCount ?? 0) +
@@ -87,11 +87,9 @@ export function AgentExtensionManagementRoot({
         <div className="management-surface-actions">
           <button
             type="button"
-            disabled={!interactive || !expectedRevision || operationKey !== undefined}
+            disabled={!interactive || !projection || operationKey !== undefined}
             onClick={() => {
-              if (expectedRevision) {
-                void runMutation('refresh', () => runtime.refreshMarketplaces(expectedRevision));
-              }
+              void runMutation('refresh', () => runtime.refreshMarketplaces());
             }}
           >
             {t('home.capabilities.refresh')}
@@ -99,13 +97,9 @@ export function AgentExtensionManagementRoot({
           {tab === 'skills' ? (
             <button
               type="button"
-              disabled={!interactive || !expectedRevision || operationKey !== undefined}
+              disabled={!interactive || !projection || operationKey !== undefined}
               onClick={() => {
-                if (expectedRevision) {
-                  void runMutation('skill-install', () =>
-                    runtime.installPersonalSkill(expectedRevision),
-                  );
-                }
+                void runMutation('skill-install', () => runtime.installPersonalSkill());
               }}
             >
               <PlusIcon size={14} />
@@ -147,16 +141,18 @@ export function AgentExtensionManagementRoot({
           <span>{t('home.capabilities.discoveryIssues', { count: issueCount })}</span>
         </div>
       ) : null}
-      <div className="management-surface-list">
+      <div
+        className="management-surface-list"
+        data-empty={tab === 'skills' ? skills.length === 0 : extensions.length === 0}
+      >
         {(tab === 'skills' ? skills.length === 0 : extensions.length === 0) ? (
-          <div className="management-surface-empty">
-            <PackageIcon size={24} />
-            <span>
-              {t(
-                tab === 'skills' ? 'home.capabilities.noSkills' : 'home.capabilities.noExtensions',
-              )}
-            </span>
-          </div>
+          <EmptyState
+            fill
+            icon={<PackageIcon size={24} />}
+            title={t(
+              tab === 'skills' ? 'home.capabilities.noSkills' : 'home.capabilities.noExtensions',
+            )}
+          />
         ) : null}
         {(tab === 'skills'
           ? skills.map((item) => ({ kind: 'skill' as const, item }))
@@ -182,9 +178,8 @@ export function AgentExtensionManagementRoot({
                 {extension?.canInstall ? (
                   <button
                     type="button"
-                    disabled={!expectedRevision || operationKey !== undefined}
+                    disabled={!projection || operationKey !== undefined}
                     onClick={() => {
-                      if (!expectedRevision) return;
                       void Promise.resolve(
                         confirmAction(
                           t('home.capabilities.confirmInstallPlugin', {
@@ -194,7 +189,7 @@ export function AgentExtensionManagementRoot({
                       ).then((confirmed) => {
                         if (confirmed) {
                           void runMutation(`install:${extension.id}`, () =>
-                            runtime.installPlugin(extension.id, expectedRevision),
+                            runtime.installPlugin(extension.id),
                           );
                         }
                       });
@@ -206,21 +201,17 @@ export function AgentExtensionManagementRoot({
                 {skill?.canRemove || extension?.canRemove ? (
                   <button
                     type="button"
-                    disabled={!expectedRevision || operationKey !== undefined}
+                    disabled={!projection || operationKey !== undefined}
                     onClick={() => {
-                      if (!expectedRevision) return;
                       const name = skill?.name ?? extension?.displayName ?? item.id;
                       void Promise.resolve(confirmAction(name)).then((confirmed) => {
                         if (!confirmed) return;
                         void runMutation(`remove:${item.id}`, () => {
                           if (skill) {
-                            return runtime.removePersonalSkill(
-                              skill.managementId,
-                              expectedRevision,
-                            );
+                            return runtime.removePersonalSkill(skill.managementId);
                           }
                           if (!extension) throw new Error('Extension management item is invalid.');
-                          return runtime.removePlugin(extension.id, expectedRevision);
+                          return runtime.removePlugin(extension.id);
                         });
                       });
                     }}

@@ -213,7 +213,6 @@ describe('PiSkillHost', () => {
       status: 'succeeded' as const,
       processorId: 'skill-script',
       registrationId: 'skill-script:fixture',
-      registrationRevision: 1,
       run: { processorRunId: 'processor-run-1', stageId: 'main', attempt: 1 },
       outputs: [],
       diagnostics: [],

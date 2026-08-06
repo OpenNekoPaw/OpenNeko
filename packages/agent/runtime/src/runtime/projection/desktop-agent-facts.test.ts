@@ -28,7 +28,6 @@ describe('Desktop Agent neutral facts', () => {
       runtimePath: {
         controller: 'sender-bound-desktop-agent-controller',
         runtime: 'pi-conversation-runtime',
-        forbiddenPathCount: 0,
       },
       projection: { terminalState: 'completed' },
       resourceDisplayProjections: {

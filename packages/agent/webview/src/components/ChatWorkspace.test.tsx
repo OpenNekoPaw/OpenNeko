@@ -105,7 +105,7 @@ vi.mock('./ChatView', () => ({
     onCompositionChange?: (isComposing: boolean) => void;
     focusRequestOwner?: string;
     focusRequestTarget?: 'none' | 'input';
-    focusRequestRevision?: number;
+    focusRequestId?: string;
     viewport?: {
       followMode: 'follow-tail' | 'detached';
       anchorMessageId?: string;
@@ -179,7 +179,7 @@ vi.mock('./ChatView', () => ({
       <span data-testid="composition-state">{String(props.isComposing ?? false)}</span>
       <span data-testid="focus-request">
         {props.focusRequestOwner ?? 'none'}:{props.focusRequestTarget ?? 'none'}:
-        {props.focusRequestRevision ?? 0}
+        {props.focusRequestId ?? 'none'}
       </span>
       <span data-testid="viewport-state">
         {props.viewport?.followMode ?? 'none'}:{props.viewport?.anchorMessageId ?? 'none'}:
@@ -885,22 +885,24 @@ describe('ChatWorkspace pending send', () => {
     expect(runtimeA.store.getSnapshot().state.composition).toEqual({ isComposing: true });
     expect(runtimeA.store.getSnapshot().state.focus).toEqual({
       target: 'input',
-      requestRevision: 1,
+      requestId: expect.any(String),
     });
+    const runtimeAFocusRequestId = runtimeA.store.getSnapshot().state.focus.requestId;
 
     rerender(<ChatWorkspace {...createProps({ tabRenderStore: runtimeB.store })} />);
     expect(screen.getByTestId('composition-state').textContent).toBe('false');
-    expect(screen.getByTestId('focus-request').textContent).toContain('tab-b:none:0');
+    expect(screen.getByTestId('focus-request').textContent).toContain('tab-b:none:none');
 
     fireEvent.click(screen.getByTestId('composition-start'));
     runRegisteredShortcut('focusInput');
     expect(runtimeB.store.getSnapshot().state.composition).toEqual({ isComposing: true });
     expect(runtimeB.store.getSnapshot().state.focus).toEqual({
       target: 'input',
-      requestRevision: 1,
+      requestId: expect.any(String),
     });
+    expect(runtimeB.store.getSnapshot().state.focus.requestId).not.toBe(runtimeAFocusRequestId);
     expect(runtimeA.store.getSnapshot().state.composition).toEqual({ isComposing: true });
-    expect(runtimeA.store.getSnapshot().state.focus.requestRevision).toBe(1);
+    expect(runtimeA.store.getSnapshot().state.focus.requestId).toBe(runtimeAFocusRequestId);
   });
 
   it('does not require a host active-conversation owner to mutate the visible Tab', () => {

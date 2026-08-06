@@ -20,8 +20,6 @@ export const settings = {
   'settings.providers.displayName': 'Display Name',
   'settings.providers.displayNamePlaceholder': 'e.g., My Claude',
   'settings.providers.apiUrl': 'API URL (optional)',
-  'settings.providers.urlMissingV1': 'URL may need /v1 suffix for OpenAI-compatible APIs',
-  'settings.providers.appendV1': 'Add /v1',
   'settings.providers.apiKey': 'API Key',
   'settings.providers.apiKeyOptional': '(optional for local)',
   'settings.providers.apiKeyKeepCurrent': '(leave empty to keep current)',

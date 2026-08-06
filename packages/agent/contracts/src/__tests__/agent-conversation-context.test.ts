@@ -54,15 +54,15 @@ describe('Agent Conversation context contracts', () => {
     ).toThrow(/unknown field 'hostPath'/);
   });
 
-  it('rejects removed version fields at the exact record boundary', () => {
+  it('rejects unknown fields at the exact record boundary', () => {
     expect(() =>
       parseAgentConversationContext({
-        schemaVersion: 1,
+        unexpectedField: true,
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: [],
       }),
-    ).toThrow("unknown field 'schemaVersion'");
+    ).toThrow("unknown field 'unexpectedField'");
     expect(
       parseAgentConversationContext({
         kind: 'assistant',

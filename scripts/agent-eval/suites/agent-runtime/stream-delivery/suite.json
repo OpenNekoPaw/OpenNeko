@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.stream-delivery",
   "owner": { "kind": "agent-runtime", "id": "desktop-stream-delivery" },
   "target": {
@@ -7,7 +7,6 @@
     "id": "stream-delivery",
     "contractHash": "sha256:d28befaeebfecdc85eea8cf5a4c681b7238f71d96ecee667167b0fb8efe529d8"
   },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     {
       "id": "markdown",

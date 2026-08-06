@@ -60,7 +60,7 @@ describe('conversation-host-message', () => {
           updatedAt: 100,
         },
         {
-          resolveContentLocator: async () => 'http://127.0.0.1:43125/v1/resources/image-token',
+          resolveContentLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
         },
       ),
     ).resolves.toEqual({
@@ -85,7 +85,7 @@ describe('conversation-host-message', () => {
                     contentLocator,
                     url: 'images/out.png',
                     mimeType: 'image/png',
-                    renderUri: 'http://127.0.0.1:43125/v1/resources/image-token',
+                    renderUri: 'http://127.0.0.1:43125/resources/image-token',
                   },
                 },
               },

@@ -45,9 +45,6 @@ describe('useTabManager', () => {
           setOpenTabs,
           activeTabId,
           setActiveTabId,
-          revisionOwnerId: 'runtime-1',
-          tabStateRevision: 0,
-          onTabStateRevisionAllocated: vi.fn(),
           conversations: [{ id: 'conv-a', title: 'Chat', messageCount: 1, updatedAt: 1 }],
           setActiveTab,
           onActivateCharacterRoleTab,
@@ -83,9 +80,6 @@ describe('useTabManager', () => {
           setOpenTabs,
           activeTabId,
           setActiveTabId,
-          revisionOwnerId: 'runtime-1',
-          tabStateRevision: 0,
-          onTabStateRevisionAllocated: vi.fn(),
           conversations: [
             { id: 'conv-a', title: 'Chat A', messageCount: 1, updatedAt: 1 },
             { id: 'conv-b', title: 'Chat B', messageCount: 1, updatedAt: 2 },
@@ -106,14 +100,12 @@ describe('useTabManager', () => {
       activationId: 1,
       conversationId: 'conv-b',
       tabId: 'tab-b',
-      expectedTabStateRevision: 0,
     });
     expect(onActivateCharacterRoleTab).not.toHaveBeenCalled();
     expect(hostMocks.activateConversation).toHaveBeenCalledWith({
       activationId: 1,
       conversationId: 'conv-b',
       tabId: 'tab-b',
-      expectedTabStateRevision: 0,
       tabState: {
         openTabs: [
           { id: 'tab-a', title: 'Chat A', conversationId: 'conv-a' },
@@ -140,9 +132,6 @@ describe('useTabManager', () => {
         setOpenTabs,
         activeTabId,
         setActiveTabId,
-        revisionOwnerId: 'runtime-1',
-        tabStateRevision: 0,
-        onTabStateRevisionAllocated: vi.fn(),
         conversations: [
           { id: 'conv-a', title: 'Chat A', messageCount: 1, updatedAt: 1 },
           { id: 'conv-b', title: 'Chat B', messageCount: 1, updatedAt: 2 },
@@ -161,7 +150,6 @@ describe('useTabManager', () => {
       activationId: 1,
       conversationId: 'conv-a',
       tabId: 'tab-a',
-      expectedTabStateRevision: 0,
     });
 
     act(() => {
@@ -172,7 +160,6 @@ describe('useTabManager', () => {
       expect.objectContaining({
         activationId: 2,
         conversationId: 'conv-b',
-        expectedTabStateRevision: 1,
       }),
     );
   });
@@ -190,9 +177,6 @@ describe('useTabManager', () => {
         setOpenTabs,
         activeTabId,
         setActiveTabId,
-        revisionOwnerId: 'runtime-1',
-        tabStateRevision: 0,
-        onTabStateRevisionAllocated: vi.fn(),
         conversations: [],
         setActiveTab: vi.fn(),
       });
@@ -218,9 +202,6 @@ describe('useTabManager', () => {
         setOpenTabs,
         activeTabId,
         setActiveTabId,
-        revisionOwnerId: 'runtime-1',
-        tabStateRevision: 0,
-        onTabStateRevisionAllocated: vi.fn(),
         conversations: [{ id: 'conv-a', title: 'New Chat', messageCount: 0, updatedAt: 1 }],
         setActiveTab: vi.fn(),
         hasLocalConversationActivity: (conversationId) => conversationId === 'conv-a',
@@ -249,9 +230,6 @@ describe('useTabManager', () => {
         setOpenTabs,
         activeTabId,
         setActiveTabId,
-        revisionOwnerId: 'runtime-1',
-        tabStateRevision: 0,
-        onTabStateRevisionAllocated: vi.fn(),
         conversations: [{ id: 'conv-a', title: 'New Chat', messageCount: 0, updatedAt: 1 }],
         setActiveTab: vi.fn(),
         hasLocalConversationActivity,
@@ -279,9 +257,6 @@ describe('useTabManager', () => {
         setOpenTabs,
         activeTabId,
         setActiveTabId,
-        revisionOwnerId: 'runtime-1',
-        tabStateRevision: 0,
-        onTabStateRevisionAllocated: vi.fn(),
         conversations: [{ id: 'conv-a', title: 'New Chat', messageCount: 0, updatedAt: 1 }],
         setActiveTab: vi.fn(),
       });
@@ -313,9 +288,6 @@ describe('useTabManager', () => {
           setOpenTabs,
           activeTabId,
           setActiveTabId,
-          revisionOwnerId: 'runtime-1',
-          tabStateRevision: 0,
-          onTabStateRevisionAllocated: vi.fn(),
           conversations: [{ id: 'conv-a', title: 'New Chat', messageCount: 0, updatedAt: 1 }],
           setActiveTab: vi.fn(),
           onAllTabsClosed,
@@ -334,7 +306,7 @@ describe('useTabManager', () => {
       activateNext: false,
     });
     expect(hostMocks.activateConversation).not.toHaveBeenCalled();
-    expect(hostMocks.updateTabState).toHaveBeenCalledWith([], null, 0);
+    expect(hostMocks.updateTabState).toHaveBeenCalledWith([], null);
   });
 
   it('closes the final roleplay tab into an explicit empty tab state without restoring history', () => {
@@ -359,9 +331,6 @@ describe('useTabManager', () => {
           setOpenTabs,
           activeTabId,
           setActiveTabId,
-          revisionOwnerId: 'runtime-1',
-          tabStateRevision: 0,
-          onTabStateRevisionAllocated: vi.fn(),
           conversations: [{ id: 'conv-old', title: 'Old Chat', messageCount: 3, updatedAt: 1 }],
           setActiveTab: vi.fn(),
           onAllTabsClosed,
@@ -379,7 +348,7 @@ describe('useTabManager', () => {
     expect(hostMocks.exitCharacterDialogueSession).toHaveBeenCalledWith('npc-session-1');
     expect(hostMocks.activateConversation).not.toHaveBeenCalled();
     expect(hostMocks.deleteConversation).not.toHaveBeenCalled();
-    expect(hostMocks.updateTabState).toHaveBeenCalledWith([], null, 0);
+    expect(hostMocks.updateTabState).toHaveBeenCalledWith([], null);
   });
 
   it('records the next ordinary conversation before closing the active tab switches to it', () => {
@@ -397,9 +366,6 @@ describe('useTabManager', () => {
         setOpenTabs,
         activeTabId,
         setActiveTabId,
-        revisionOwnerId: 'runtime-1',
-        tabStateRevision: 0,
-        onTabStateRevisionAllocated: vi.fn(),
         conversations: [
           { id: 'conv-a', title: 'Chat A', messageCount: 1, updatedAt: 1 },
           { id: 'conv-b', title: 'Chat B', messageCount: 1, updatedAt: 2 },
@@ -417,13 +383,11 @@ describe('useTabManager', () => {
       activationId: 1,
       conversationId: 'conv-b',
       tabId: 'tab-b',
-      expectedTabStateRevision: 0,
     });
     expect(hostMocks.activateConversation).toHaveBeenCalledWith({
       activationId: 1,
       conversationId: 'conv-b',
       tabId: 'tab-b',
-      expectedTabStateRevision: 0,
       tabState: {
         openTabs: [{ id: 'tab-b', title: 'Chat B', conversationId: 'conv-b' }],
         activeTabId: 'tab-b',
@@ -432,41 +396,31 @@ describe('useTabManager', () => {
     expect(hostMocks.updateTabState).not.toHaveBeenCalled();
   });
 
-  it('resets optimistic Tab revisions when the runtime owner changes', () => {
-    const { result, rerender } = renderHook(
-      ({ revisionOwnerId }: { readonly revisionOwnerId: string }) => {
-        const [openTabs, setOpenTabs] = useState<OpenTab[]>([
-          { id: 'tab-a', title: 'Chat A', conversationId: 'conv-a' },
-          { id: 'tab-b', title: 'Chat B', conversationId: 'conv-b' },
-        ]);
-        const [activeTabId, setActiveTabId] = useState<string | null>('tab-a');
-        return useTabManager({
-          openTabs,
-          setOpenTabs,
-          activeTabId,
-          setActiveTabId,
-          revisionOwnerId,
-          tabStateRevision: revisionOwnerId === 'runtime-1' ? 7 : 0,
-          onTabStateRevisionAllocated: vi.fn(),
-          conversations: [
-            { id: 'conv-a', title: 'Chat A', messageCount: 1, updatedAt: 1 },
-            { id: 'conv-b', title: 'Chat B', messageCount: 1, updatedAt: 2 },
-          ],
-          setActiveTab: vi.fn(),
-        });
-      },
-      { initialProps: { revisionOwnerId: 'runtime-1' } },
-    );
+  it('allocates an exact activation identity for each ordinary Tab switch', () => {
+    const { result } = renderHook(() => {
+      const [openTabs, setOpenTabs] = useState<OpenTab[]>([
+        { id: 'tab-a', title: 'Chat A', conversationId: 'conv-a' },
+        { id: 'tab-b', title: 'Chat B', conversationId: 'conv-b' },
+      ]);
+      const [activeTabId, setActiveTabId] = useState<string | null>('tab-a');
+      return useTabManager({
+        openTabs,
+        setOpenTabs,
+        activeTabId,
+        setActiveTabId,
+        conversations: [
+          { id: 'conv-a', title: 'Chat A', messageCount: 1, updatedAt: 1 },
+          { id: 'conv-b', title: 'Chat B', messageCount: 1, updatedAt: 2 },
+        ],
+        setActiveTab: vi.fn(),
+      });
+    });
 
     act(() => result.current.handleSwitchTab('tab-b'));
-    expect(hostMocks.activateConversation).toHaveBeenLastCalledWith(
-      expect.objectContaining({ expectedTabStateRevision: 7 }),
-    );
-
-    rerender({ revisionOwnerId: 'runtime-2' });
     act(() => result.current.handleSwitchTab('tab-a'));
-    expect(hostMocks.activateConversation).toHaveBeenLastCalledWith(
-      expect.objectContaining({ expectedTabStateRevision: 0 }),
-    );
+
+    expect(
+      hostMocks.activateConversation.mock.calls.map(([request]) => request.activationId),
+    ).toEqual([1, 2]);
   });
 });

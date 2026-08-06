@@ -219,7 +219,6 @@ describe('conversation-tab-runtime', () => {
     expect(
       buildChatRestorePlan({
         tabState: { openTabs: [tab], activeTabId: 'tab-1' },
-        tabStateRevision: 7,
         hasWebview: true,
         pluginCommands: [
           {
@@ -238,7 +237,6 @@ describe('conversation-tab-runtime', () => {
           type: 'postTabState',
           message: {
             type: 'tabState',
-            revision: 7,
             tabState: { openTabs: [tab], activeTabId: 'tab-1' },
           },
         },
@@ -265,7 +263,6 @@ describe('conversation-tab-runtime', () => {
     expect(
       buildChatRestorePlan({
         tabState: { openTabs: [], activeTabId: null },
-        tabStateRevision: 0,
         hasWebview: false,
       }),
     ).toEqual({
@@ -329,10 +326,9 @@ describe('conversation-tab-runtime', () => {
         },
       ],
     });
-    expect(buildChatTabStateMessage({ openTabs: [tab], activeTabId: 'tab-1' }, 1)).toEqual({
+    expect(buildChatTabStateMessage({ openTabs: [tab], activeTabId: 'tab-1' })).toEqual({
       type: 'tabState',
       tabState: { openTabs: [tab], activeTabId: 'tab-1' },
-      revision: 1,
     });
     expect(buildInvalidWebviewPayloadMessage({ type: 'removedMessage', value: 1 })).toEqual({
       type: 'sessionDiagnostic',

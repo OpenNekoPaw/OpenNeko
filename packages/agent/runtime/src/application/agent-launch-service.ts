@@ -107,7 +107,6 @@ const workspaceCommandNames = new Set(['as', 'exit-as', 'init']);
 interface AgentLaunchState {
   readonly connection: AgentLaunchConnectionIdentity;
   attachmentCount: number;
-  revision: number;
   readonly models: readonly AgentLaunchModelCatalogEntry[];
   readonly commands: readonly AgentLaunchCommandCatalogEntry[];
   readonly skills: readonly AgentLaunchSkillCatalogEntry[];
@@ -165,7 +164,6 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
     const state: AgentLaunchState = {
       connection,
       attachmentCount: 1,
-      revision: 0,
       models: [...catalog.models],
       commands: [...catalog.commands],
       skills: [...catalog.skills],
@@ -192,10 +190,8 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
     if (result.status === 'cancelled') return undefined;
     const parsed = parseAgentLaunchCatalogProjection({
       ...project(state),
-      revision: state.revision + 1,
       resources: [...state.resources, result.resource],
     });
-    state.revision = parsed.revision;
     state.resources = parsed.resources;
     return project(state);
   }
@@ -280,7 +276,6 @@ class DefaultAgentLaunchApplicationService implements AgentLaunchApplicationServ
 function project(state: AgentLaunchState): AgentLaunchCatalogProjection {
   return parseAgentLaunchCatalogProjection({
     connection: state.connection,
-    revision: state.revision,
     models: state.models,
     commands: state.commands,
     skills: state.skills,

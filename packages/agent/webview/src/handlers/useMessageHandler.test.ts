@@ -8,7 +8,7 @@ describe('Agent Webview dedicated message routing', () => {
     'projectionPatch',
     'projectionDetach',
     'projectionProtocolDiagnostic',
-  ])('routes %s outside the legacy handler registry', (type) => {
+  ])('recognizes the projection message %s', (type) => {
     expect(isProjectionHostMessage({ type })).toBe(true);
   });
 

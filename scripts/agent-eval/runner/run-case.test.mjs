@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { resolveExecutionCase, runV2Case, runV2CaseRepeated } from './run-v2-case.mjs';
+import { resolveExecutionCase, runCase, runCaseRepeated } from './run-case.mjs';
 
 describe('Desktop Agent evaluation driver boundary', () => {
   it('requires explicit provider/model/cost authorization before launch', async () => {
-    await expect(runV2Case(selection())).rejects.toMatchObject({
+    await expect(runCase(selection())).rejects.toMatchObject({
       code: 'infrastructure-blocked',
       message: expect.stringContaining('provider, model and cost'),
     });
@@ -12,18 +12,18 @@ describe('Desktop Agent evaluation driver boundary', () => {
   it('launches one isolated Desktop sample through the injected functional boundary', async () => {
     const runDesktop = vi.fn(async (options) => ({
       reportPath: '/reports/sample/desktop-functional.json',
-      report: { evidence: { facts: { schemaVersion: 1 } }, scenario: options.scenario.id },
+      report: { evidence: { facts: { status: 'captured' } }, scenario: options.scenario.id },
     }));
     const createScenario = vi.fn(() => ({ id: 'agent-eval-case-1', owner: 'evaluation' }));
     const runPipeline = vi.fn(async () => ({
       outcome: 'pass',
       reportId: 'sample',
-      result: { schema: 'neko.agent-eval.result.v2' },
+      result: { schema: 'neko.agent-eval.result' },
       files: { result: '/reports/sample/result.json' },
     }));
 
     await expect(
-      runV2Case(selection(), {
+      runCase(selection(), {
         env: {},
         providerAuthorization: {
           providerId: 'provider-1',
@@ -40,14 +40,14 @@ describe('Desktop Agent evaluation driver boundary', () => {
     ).resolves.toEqual({
       outcome: 'pass',
       reportId: 'sample',
-      result: { schema: 'neko.agent-eval.result.v2' },
+      result: { schema: 'neko.agent-eval.result' },
       files: { result: '/reports/sample/result.json' },
       desktopReportPath: '/reports/sample/desktop-functional.json',
       desktopReportLocation: 'sample/desktop-functional.json',
     });
     expect(createScenario).toHaveBeenCalledOnce();
     expect(createScenario.mock.calls[0]?.[0]).toMatchObject({
-      schema: 'neko.agent-eval.execution-case.v1',
+      schema: 'neko.agent-eval.execution-case',
       caseId: 'ordinary-new-case',
     });
     expect(runDesktop).toHaveBeenCalledWith(
@@ -61,7 +61,7 @@ describe('Desktop Agent evaluation driver boundary', () => {
       expect.objectContaining({
         selection: expect.any(Object),
         executionCase: expect.objectContaining({ caseId: 'ordinary-new-case' }),
-        desktopEvidence: { facts: { schemaVersion: 1 } },
+        desktopEvidence: { facts: { status: 'captured' } },
         desktopReportPath: '/reports/sample/desktop-functional.json',
         runId: 'sample',
       }),
@@ -95,9 +95,9 @@ describe('Desktop Agent evaluation driver boundary', () => {
       runId: 'visible',
     };
 
-    await runV2Case(input, options);
+    await runCase(input, options);
     expect(runDesktop).toHaveBeenCalledWith(expect.objectContaining({ windowMode: 'visible' }));
-    await expect(runV2Case(input, { ...options, windowMode: 'hidden' })).rejects.toMatchObject({
+    await expect(runCase(input, { ...options, windowMode: 'hidden' })).rejects.toMatchObject({
       code: 'configuration-invalid',
       message: expect.stringContaining('requires visible window mode'),
     });
@@ -109,7 +109,7 @@ describe('Desktop Agent evaluation driver boundary', () => {
     const runSample = vi.fn(async (_selection, options) => completedSample(options.runId));
     const writeAggregate = vi.fn(async () => '/reports/suite-1/case-1/case-run/aggregate.json');
 
-    const result = await runV2CaseRepeated(input, {
+    const result = await runCaseRepeated(input, {
       runId: 'case-run',
       runSample,
       writeAggregate,
@@ -126,7 +126,7 @@ describe('Desktop Agent evaluation driver boundary', () => {
       reportId: 'case-run',
       repetitions: 3,
       aggregate: {
-        schema: 'neko.agent-eval.aggregate.v2',
+        schema: 'neko.agent-eval.aggregate',
         statistics: { samples: 3, passRate: 1 },
         samples: [{ repetition: 1 }, { repetition: 2 }, { repetition: 3 }],
       },
@@ -208,7 +208,7 @@ function selection() {
       reportPolicy: { rawRetentionDays: 14, trustedCiRetentionDays: 14, committedSummary: true },
     },
     scenario: {
-      schema: 'neko.agent-eval.scenario.v2',
+      schema: 'neko.agent-eval.scenario',
       id: 'ordinary-new-case',
       suiteId: 'suite-1',
       caseGroup: 'regression',
@@ -216,7 +216,6 @@ function selection() {
       evidenceContract: {
         userBehavior: 'Run one Desktop turn.',
         canonicalPath: ['Desktop'],
-        forbiddenFallback: ['direct runtime'],
         observables: [{ ref: 'facts', kind: 'runtime-fact', description: 'facts', required: true }],
         expectedResult: 'turn completes',
         expectedFailure: 'turn fails',
@@ -240,14 +239,13 @@ function completedSample(runId) {
   return {
     outcome: 'pass',
     result: {
-      schema: 'neko.agent-eval.result.v2',
+      schema: 'neko.agent-eval.result',
       reportId: runId,
       suiteId: 'suite-1',
       caseId: 'ordinary-new-case',
       runId,
       outcome: 'pass',
       target: { kind: 'runtime', id: 'runtime-1', contractHash: hash },
-      repositoryRevision: 'revision-1',
       modelIdentity: { providerId: 'provider-1', modelId: 'model-1' },
       effectiveConfiguration: {
         runtimeProfileId: 'runtime-1',

@@ -9,7 +9,7 @@ import {
   isAgentEvaluationRelevantPath,
   selectEvaluationCoverage,
 } from './authoring/change-selector.mjs';
-import { runV2CaseRepeated } from './runner/run-v2-case.mjs';
+import { runCaseRepeated } from './runner/run-case.mjs';
 import { aggregateMatrixShards, createMatrixPlan, executeMatrixPlan } from './matrix/runtime.mjs';
 import {
   classifyEvaluationError,
@@ -62,7 +62,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
           fingerprint: args.desktopFingerprint,
         },
         limits: {
-          capacitySource: args.capacitySource ?? 'conservative-local-defaults-v1',
+          capacitySource: args.capacitySource ?? 'conservative-local-defaults',
           desktop: args.desktopWorkers ?? 2,
           provider: args.providerWorkers ?? 2,
         },
@@ -72,7 +72,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
       });
       const aggregate = plan.shard.count === 1 ? aggregateMatrixShards(plan, [shard]) : undefined;
       summary = {
-        schema: 'neko.agent-eval.local-run-summary.v2',
+        schema: 'neko.agent-eval.local-run-summary',
         mode: 'matrix',
         outcome: aggregate?.outcome ?? shard.outcome,
         repetitions: args.repetitions,
@@ -101,7 +101,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
           budget: { ...selection.scenario.budget, repetitions: args.repetitions },
         },
       };
-      const run = await runV2CaseRepeated(repeatedSelection, {
+      const run = await runCaseRepeated(repeatedSelection, {
         env: withCanonicalUserConfiguration(io.env),
         cwd: io.cwd(),
         outputRoot: reportRoot,
@@ -121,7 +121,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
     }
     const outcome = classifyRuns(runs);
     summary = {
-      schema: 'neko.agent-eval.local-run-summary.v2',
+      schema: 'neko.agent-eval.local-run-summary',
       mode: args.mode,
       outcome,
       repetitions: args.repetitions,
@@ -134,7 +134,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
   } catch (error) {
     const outcome = classifyEvaluationError(error, 'configuration-invalid');
     summary = {
-      schema: 'neko.agent-eval.local-run-summary.v2',
+      schema: 'neko.agent-eval.local-run-summary',
       mode: args.mode ?? 'unknown',
       outcome,
       diagnostic: error instanceof Error ? error.message : String(error),

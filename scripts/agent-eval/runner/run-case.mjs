@@ -7,7 +7,7 @@ import { validateScenarioForExecution } from '../schemas/contracts.mjs';
 import { runEvaluationPipeline } from './evaluation-pipeline.mjs';
 import { annotateEvaluationError } from './outcomes.mjs';
 
-export async function runV2Case(selection, options = {}) {
+export async function runCase(selection, options = {}) {
   if (!selection) throw configurationError('Desktop Agent Evaluation selection is required.');
   const executionCase = resolveExecutionCase(selection);
   assertDesktopEvidenceSupport(executionCase.assertions);
@@ -86,13 +86,13 @@ function resolveWindowMode(executionCase, explicitMode) {
   return requiredMode;
 }
 
-export async function runV2CaseRepeated(selection, options = {}) {
+export async function runCaseRepeated(selection, options = {}) {
   const executionCase = resolveExecutionCase(selection);
   assertDesktopEvidenceSupport(executionCase.assertions);
   const repetitions = executionCase.budget.repetitions;
   const caseRunId = options.runId ?? `${executionCase.caseId}-${Date.now().toString(36)}`;
   const width = String(repetitions).length;
-  const runSample = options.runSample ?? runV2Case;
+  const runSample = options.runSample ?? runCase;
   const samples = [];
   for (let repetition = 1; repetition <= repetitions; repetition += 1) {
     const sampleRunId = `${caseRunId}-r${String(repetition).padStart(width, '0')}`;
@@ -123,12 +123,12 @@ export async function runV2CaseRepeated(selection, options = {}) {
   };
 }
 
-export function createV2DryRun(selection) {
+export function createDryRun(selection) {
   const executionCase = resolveExecutionCase(selection);
   return {
     ok: true,
     dryRun: true,
-    schema: 'neko.agent-eval.dry-run.v2',
+    schema: 'neko.agent-eval.dry-run',
     suiteId: executionCase.suiteId,
     caseId: executionCase.caseId,
     target: executionCase.target,
@@ -172,7 +172,7 @@ export function resolveExecutionCase(selection) {
   );
   return deepFreeze(
     globalThis.structuredClone({
-      schema: 'neko.agent-eval.execution-case.v1',
+      schema: 'neko.agent-eval.execution-case',
       suiteId: selection.suite.id,
       caseId: selection.scenario.id,
       target: selection.suite.target,

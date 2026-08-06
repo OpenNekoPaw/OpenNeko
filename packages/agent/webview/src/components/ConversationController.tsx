@@ -326,12 +326,10 @@ export function ConversationController({
   const isTablessConversationViewRef = useRef(false);
   const pendingForegroundConversationActivationRef =
     useRef<PendingForegroundConversationActivation | null>(null);
-  const tabStateRevisionRef = useRef(0);
   const restoredConversationIdsRef = useRef(new Set<string>());
   const navigationRuntimeOwnerRef = useRef(hostRuntimeAdapter.runtimeId);
   if (navigationRuntimeOwnerRef.current !== hostRuntimeAdapter.runtimeId) {
     navigationRuntimeOwnerRef.current = hostRuntimeAdapter.runtimeId;
-    tabStateRevisionRef.current = 0;
     restoredConversationIdsRef.current.clear();
   }
   const [isForegroundConversationActivationPending, setIsForegroundConversationActivationPending] =
@@ -765,7 +763,6 @@ export function ConversationController({
     activeTabId,
     isTablessConversationViewRef,
     pendingForegroundConversationActivationRef,
-    tabStateRevisionRef,
     restoredConversationIdsRef,
     reconcileTabRenderRuntimes: (bindings, nextActiveTabId) => {
       tabRenderRuntimeRegistry.reconcile(bindings, nextActiveTabId);
@@ -866,7 +863,6 @@ export function ConversationController({
   );
 
   useEffect(() => {
-    tabStateRevisionRef.current = 0;
     restoredConversationIdsRef.current.clear();
     setInitialNavigationHydration({
       runtimeId: hostRuntimeAdapter.runtimeId,
@@ -1215,11 +1211,7 @@ export function ConversationController({
   }, []);
 
   const handleBeforeConversationActivation = useCallback(
-    (request: {
-      conversationId: string;
-      activationId: number;
-      expectedTabStateRevision: number;
-    }) => {
+    (request: { conversationId: string; activationId: number }) => {
       const { conversationId } = request;
       setPendingSendRequest(null);
       setInitialInputRequest(null);
@@ -1229,7 +1221,6 @@ export function ConversationController({
         reason: 'switch-conversation',
         conversationId,
         activationId: request.activationId,
-        tabStateRevision: request.expectedTabStateRevision + 1,
       };
       setIsForegroundConversationActivationPending(true);
       isTablessConversationViewRef.current = false;
@@ -1347,11 +1338,6 @@ export function ConversationController({
     onConversationActivated: requestConversationResourceSnapshot,
     onActivateCharacterRoleTab: activateCharacterRoleTab,
     onConfigSnapshotRequested: requestConfigSnapshot,
-    revisionOwnerId: hostRuntimeAdapter.runtimeId,
-    tabStateRevision: tabStateRevisionRef.current,
-    onTabStateRevisionAllocated: (revision) => {
-      tabStateRevisionRef.current = revision;
-    },
     hasLocalConversationActivity: (conversationId) => {
       const cached = conversationRenderCoordinator.read(conversationId);
       const cachedAgentState = conversationAgentStateRef.current.get(conversationId);
@@ -1396,10 +1382,10 @@ export function ConversationController({
     () => [...new Set(openTabs.map((tab) => tab.conversationId))],
     [openTabs],
   );
-  const subscribeTabRenderRevisions = useCallback(
+  const subscribeTabRenderSnapshots = useCallback(
     (listener: () => void) => {
       const unsubscribe = tabConversationIds.map((conversationId) =>
-        conversationRenderCoordinator.subscribeRevision(conversationId, listener),
+        conversationRenderCoordinator.subscribe(conversationId, listener),
       );
       return () => {
         for (const dispose of unsubscribe) dispose();
@@ -1407,30 +1393,23 @@ export function ConversationController({
     },
     [conversationRenderCoordinator, tabConversationIds],
   );
-  const readTabRenderRevisionSignature = useCallback(
-    () =>
-      tabConversationIds
-        .map(
-          (conversationId) =>
-            `${conversationId}:${conversationRenderCoordinator.revision(conversationId)}`,
-        )
-        .join('|'),
+  const readTabRenderSnapshots = useCallback(
+    () => conversationRenderCoordinator.readMany(tabConversationIds),
     [conversationRenderCoordinator, tabConversationIds],
   );
-  const tabRenderRevisionSignature = useSyncExternalStore(
-    subscribeTabRenderRevisions,
-    readTabRenderRevisionSignature,
-    readTabRenderRevisionSignature,
+  const subscribedTabRenderSnapshots = useSyncExternalStore(
+    subscribeTabRenderSnapshots,
+    readTabRenderSnapshots,
+    readTabRenderSnapshots,
   );
   const tabRenderSnapshots = useMemo(
     () =>
       new Map(
-        tabConversationIds.flatMap((conversationId) => {
-          const snapshot = conversationRenderCoordinator.read(conversationId);
-          return snapshot ? [[conversationId, snapshot] as const] : [];
-        }),
+        subscribedTabRenderSnapshots.map(
+          (snapshot) => [snapshot.conversationId, snapshot] as const,
+        ),
       ),
-    [conversationRenderCoordinator, tabConversationIds, tabRenderRevisionSignature],
+    [subscribedTabRenderSnapshots],
   );
   const historyStreamingByConversation = useMemo(
     () =>

@@ -55,7 +55,7 @@ function matrix() {
     suiteId: 'skill.creation-persona',
     developmentCaseIds: ['draft-rain-station-concept'],
     holdoutPolicy: {
-      id: 'creation-persona-holdout-v1',
+      id: 'creation-persona-holdout',
       selectionDigest: HASH_C,
       minimumCases: 1,
     },

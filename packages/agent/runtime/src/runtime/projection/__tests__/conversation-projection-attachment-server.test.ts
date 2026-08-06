@@ -21,7 +21,7 @@ const keyA: ProjectionAttachmentKey = {
   conversationId: 'conversation-a',
 };
 
-function appendUpdate(content: string, revision: number) {
+function appendUpdate(content: string, updatedAt: number) {
   const item = {
     conversationId: 'conversation-a',
     turnId: 'turn-a',
@@ -29,12 +29,11 @@ function appendUpdate(content: string, revision: number) {
     messageId: 'message-a',
     itemId: 'text-a',
     sequence: 1,
-    itemRevision: revision,
     kind: 'assistant_text',
     status: 'streaming',
-    payload: { content, format: 'markdown', sourceGeneration: 1 },
+    payload: { content, format: 'markdown' },
     createdAt: 1,
-    updatedAt: revision,
+    updatedAt,
   } satisfies AgentTurnTimelineAssistantTextItem;
   return {
     type: 'agentTurnTimelineUpdate' as const,
@@ -46,7 +45,7 @@ function appendUpdate(content: string, revision: number) {
   };
 }
 
-function completeUpdate(revision: number) {
+function completeUpdate(updatedAt: number) {
   return {
     type: 'agentTurnTimelineUpdate' as const,
     conversationId: 'conversation-a',
@@ -57,14 +56,12 @@ function completeUpdate(revision: number) {
       {
         operation: 'complete' as const,
         itemId: 'text-a',
-        itemRevision: revision,
         kind: 'assistant_text' as const,
-        sourceGeneration: 1,
         status: 'complete' as const,
-        updatedAt: revision,
+        updatedAt,
       },
     ],
-    completion: { status: 'completed' as const, completedAt: revision },
+    completion: { status: 'completed' as const, completedAt: updatedAt },
   };
 }
 

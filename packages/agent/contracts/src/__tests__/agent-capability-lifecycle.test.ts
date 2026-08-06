@@ -193,6 +193,6 @@ function createTestContentLocator() {
   return {
     kind: 'workspace-file' as const,
     path: 'assets/cover.png',
-    fingerprint: { strategy: 'provider' as const, value: 'cover-v1' },
+    fingerprint: { strategy: 'provider' as const, value: 'cover-current' },
   };
 }

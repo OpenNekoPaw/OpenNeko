@@ -36,7 +36,6 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
         id: 'model-binding',
         contractHash: `sha256:${'a'.repeat(64)}`,
       },
-      repositoryRevision: 'working-tree',
       fixtureDigest: `sha256:${'b'.repeat(64)}`,
       modelIdentity: { providerId: 'openai', modelId: 'gpt-5' },
       effectiveConfiguration: {
@@ -79,7 +78,6 @@ function configurationEvidence(effectiveDigest) {
     ['outputFormat', 'enum'],
   ];
   const projection = {
-    schemaVersion: 1,
     profileId: 'effective-agent-profile',
     digest: effectiveDigest,
     values: {},
@@ -96,7 +94,7 @@ function configurationEvidence(effectiveDigest) {
 }
 
 describe('configuration ablation runner', () => {
-  it('selects supported profiles, runs every repetition through runV2Case, and writes one delta extension', async () => {
+  it('selects supported profiles, runs every repetition through runCase, and writes one delta extension', async () => {
     const selectedPlan = await plan();
     const runCase = vi.fn(async (selected) => {
       expect(selected.scenario.budget.repetitions).toBe(3);
@@ -119,7 +117,7 @@ describe('configuration ablation runner', () => {
       outcome: 'pass',
       files: { variantDelta: '/tmp/variant-delta.json' },
       delta: {
-        schema: 'neko.agent-eval.ablation-delta.v1',
+        schema: 'neko.agent-eval.ablation-delta',
         baselineVariantId: 'thinking-0',
         variants: [
           { id: 'thinking-0', comparable: true },

@@ -10,11 +10,11 @@ export const EXTERNAL_RESEARCH_PROVIDER_KINDS = ['mcp'] as const;
 
 export type ExternalResearchProviderKind = (typeof EXTERNAL_RESEARCH_PROVIDER_KINDS)[number];
 
-export const EXTERNAL_RESEARCH_SEARCH_SCHEMA_V1 = 'neko.externalResearch.search.v1' as const;
-export const EXTERNAL_RESEARCH_FETCH_SCHEMA_V1 = 'neko.externalResearch.fetch.v1' as const;
+export const EXTERNAL_RESEARCH_SEARCH_SCHEMA = 'neko.externalResearch.search' as const;
+export const EXTERNAL_RESEARCH_FETCH_SCHEMA = 'neko.externalResearch.fetch' as const;
 
-export type ExternalResearchSearchOutputSchema = typeof EXTERNAL_RESEARCH_SEARCH_SCHEMA_V1;
-export type ExternalResearchFetchOutputSchema = typeof EXTERNAL_RESEARCH_FETCH_SCHEMA_V1;
+export type ExternalResearchSearchOutputSchema = typeof EXTERNAL_RESEARCH_SEARCH_SCHEMA;
+export type ExternalResearchFetchOutputSchema = typeof EXTERNAL_RESEARCH_FETCH_SCHEMA;
 
 export interface ExternalResearchMcpSearchToolBinding {
   readonly name: string;
@@ -164,7 +164,7 @@ export interface ExternalResearchDiagnostic {
   readonly providerId?: string;
 }
 
-export interface ExternalResearchMcpSearchV1 {
+export interface ExternalResearchMcpSearchOutput {
   readonly sources: readonly {
     readonly url: string;
     readonly title?: string;
@@ -173,7 +173,7 @@ export interface ExternalResearchMcpSearchV1 {
   }[];
 }
 
-export interface ExternalResearchMcpFetchV1 {
+export interface ExternalResearchMcpFetchOutput {
   readonly url: string;
   readonly finalUrl?: string;
   readonly title?: string;
@@ -335,14 +335,16 @@ export function isExternalResearchMcpProviderConfig(
   );
 }
 
-export function isExternalResearchMcpSearchV1(
+export function isExternalResearchMcpSearchOutput(
   value: unknown,
-): value is ExternalResearchMcpSearchV1 {
+): value is ExternalResearchMcpSearchOutput {
   if (!isRecord(value) || !Array.isArray(value['sources'])) return false;
   return value['sources'].every(isExternalResearchMcpSearchSource);
 }
 
-export function isExternalResearchMcpFetchV1(value: unknown): value is ExternalResearchMcpFetchV1 {
+export function isExternalResearchMcpFetchOutput(
+  value: unknown,
+): value is ExternalResearchMcpFetchOutput {
   return (
     isRecord(value) && typeof value['url'] === 'string' && typeof value['content'] === 'string'
   );
@@ -358,7 +360,7 @@ function isExternalResearchMcpSearchToolBinding(
     isOptionalString(value['maxResultsArg']) &&
     isOptionalString(value['allowedDomainsArg']) &&
     isOptionalString(value['blockedDomainsArg']) &&
-    value['outputSchema'] === EXTERNAL_RESEARCH_SEARCH_SCHEMA_V1
+    value['outputSchema'] === EXTERNAL_RESEARCH_SEARCH_SCHEMA
   );
 }
 
@@ -372,7 +374,7 @@ function isExternalResearchMcpFetchToolBinding(
     isOptionalString(value['maxContentTokensArg']) &&
     isOptionalString(value['allowedDomainsArg']) &&
     isOptionalString(value['blockedDomainsArg']) &&
-    value['outputSchema'] === EXTERNAL_RESEARCH_FETCH_SCHEMA_V1
+    value['outputSchema'] === EXTERNAL_RESEARCH_FETCH_SCHEMA
   );
 }
 

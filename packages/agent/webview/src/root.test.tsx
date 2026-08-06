@@ -184,7 +184,7 @@ function createLoopbackAdapter(
       listener?.({ type: 'conversationList', conversations: [] });
       return;
     }
-    listener?.({ type: 'tabState', revision: 0, tabState: { openTabs: [], activeTabId: null } });
+    listener?.({ type: 'tabState', tabState: { openTabs: [], activeTabId: null } });
   });
   return adapter;
 }

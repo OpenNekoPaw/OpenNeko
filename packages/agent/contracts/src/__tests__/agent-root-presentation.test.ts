@@ -69,10 +69,10 @@ describe('Agent Root presentation contract', () => {
     ).toThrow('requires a bound authority scope');
   });
 
-  it('rejects the removed presentation version field', () => {
+  it('rejects an unknown presentation field', () => {
     expect(() =>
       parseAgentRootPresentation({
-        schemaVersion: 2,
+        unexpectedField: true,
         kind: 'draft',
         draftId: 'draft-1',
         scope: { kind: 'unbound', draftId: 'draft-1' },

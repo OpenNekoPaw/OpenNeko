@@ -255,7 +255,7 @@ describe('shot image prep contracts', () => {
       shotId: 'shot-transform',
       imageStrategy: 'transform-original',
       operationPlan: ['crop-panel', 'remove-text', 'inpaint'],
-      perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-v1' }],
+      perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-current' }],
       metadata: {
         regenerationRecommendation: {
           decision: 'transform-source',
@@ -438,7 +438,7 @@ function makeStoryboard(): StoryboardTable {
             characterAction: 'Rin looks back.',
             imageStrategy: 'transform-original',
             sourceMediaRefs: [sourceRef],
-            generationPrompt: 'clean anime keyframe',
+            imagePrompt: 'clean anime keyframe',
             characters: [
               {
                 name: 'Rin',
@@ -447,7 +447,7 @@ function makeStoryboard(): StoryboardTable {
             ],
             extensions: {
               'neko.perception': {
-                perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-v1' }],
+                perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-current' }],
               },
             },
           },
@@ -458,7 +458,7 @@ function makeStoryboard(): StoryboardTable {
             visualDescription: 'A new establishing shot.',
             characterAction: 'The city appears.',
             imageStrategy: 'generate-new',
-            generationPrompt: 'wide city establishing shot',
+            imagePrompt: 'wide city establishing shot',
           },
         ],
       },

@@ -83,7 +83,7 @@ default_model = "model-1"
 
 function executionCase() {
   return {
-    schema: 'neko.agent-eval.execution-case.v1',
+    schema: 'neko.agent-eval.execution-case',
     caseId: 'ordinary-new-case',
     fixture: { root: 'shared-fixtures/empty-workspace' },
     steps: [

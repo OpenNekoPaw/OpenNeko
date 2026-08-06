@@ -33,7 +33,6 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/runtime/__tests__/message-runtime.test.ts',
     'packages/agent/runtime/src/runtime/__tests__/multimodal-context-packet.test.ts',
     'packages/agent/runtime/src/runtime/__tests__/timeline-context-runtime.test.ts',
-    'packages/agent/webview/src/handlers/legacy-active-content-handlers.ts',
     'packages/agent/webview/src/presenters/conversation-projection-presenter.ts',
     'packages/agent/webview/src/presenters/timeline-projection-presenter.ts',
     'packages/agent/webview/src/render-runtime/',

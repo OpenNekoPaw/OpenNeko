@@ -13,9 +13,9 @@ export const EVIDENCE_ALLOWLISTS = deepFreeze({
     never: ['hidden-prompt-body', 'system-prompt-body', 'skill-injected-body'],
   },
   promptComposition: {
-    rawLocal: ['fragment-id', 'source', 'order', 'version', 'hash'],
+    rawLocal: ['fragment-id', 'source', 'order', 'hash'],
     judge: [],
-    committed: ['fragment-id', 'source', 'order', 'version', 'hash'],
+    committed: ['fragment-id', 'source', 'order', 'hash'],
     never: ['fragment-body'],
   },
   history: {
@@ -105,7 +105,6 @@ export const EVIDENCE_ALLOWLISTS = deepFreeze({
     committed: [
       'target-identity',
       'target-fingerprint',
-      'repository-revision',
       'fixture-digest',
       'runtime-profile-id',
       'model-profile-id',

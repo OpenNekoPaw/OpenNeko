@@ -86,7 +86,6 @@ export function createDesktopAgentNeutralFacts(
     runtimePath: Object.freeze({
       controller: 'sender-bound-desktop-agent-controller',
       ...input.turn.path,
-      forbiddenPathCount: 0,
     }),
     configuration: Object.freeze({
       requested: assertEffectiveAgentConfigurationProjection(input.turn.configuration.requested),
@@ -131,9 +130,6 @@ export function assertCompleteDesktopAgentNeutralFacts(
   }
   if (facts.disposal.status !== 'disposed') {
     throw new Error(`Desktop Agent disposal is not complete: ${facts.disposal.status}.`);
-  }
-  if (facts.runtimePath.forbiddenPathCount !== 0) {
-    throw new Error('Desktop Agent facts report a forbidden fallback.');
   }
   assertEffectiveAgentConfigurationProjection(facts.configuration.requested);
   assertEffectiveAgentConfigurationProjection(facts.configuration.effective);

@@ -166,12 +166,12 @@ describe('connectMCPServersRuntime', () => {
           searchTool: {
             name: 'web_search',
             queryArg: 'query',
-            outputSchema: 'neko.externalResearch.search.v1',
+            outputSchema: 'neko.externalResearch.search',
           },
           fetchTool: {
             name: 'fetch_url',
             urlArg: 'url',
-            outputSchema: 'neko.externalResearch.fetch.v1',
+            outputSchema: 'neko.externalResearch.fetch',
           },
         },
       },
@@ -210,7 +210,7 @@ describe('connectMCPServersRuntime', () => {
           searchTool: {
             name: 'web_search',
             queryArg: 'query',
-            outputSchema: 'neko.externalResearch.search.v1',
+            outputSchema: 'neko.externalResearch.search',
           },
         },
       },

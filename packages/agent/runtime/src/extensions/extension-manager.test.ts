@@ -79,14 +79,13 @@ describe('Desktop extension manager', () => {
           mcpServerIds: ['computer-use'],
         }),
       ]);
-      expect(snapshot.revision).toMatch(/^sha256:[0-9a-f]{64}$/u);
       const serialized = JSON.stringify(snapshot.records);
       expect(serialized).not.toContain(fixture.root);
       expect(serialized).not.toContain('private-launcher');
       expect(serialized).not.toContain('PRIVATE_TOKEN');
 
       manager.setRuntimeReadiness(
-        snapshot.revision,
+        snapshot,
         new Map([['computer-use@openneko', { status: 'ready', diagnosticCode: '' }]]),
       );
       await expect(manager.readCatalog()).resolves.toMatchObject({
@@ -101,7 +100,7 @@ describe('Desktop extension manager', () => {
     });
   });
 
-  it('installs and recoverably removes only revision-fenced OpenNeko packages', async () => {
+  it('serializes install and recoverable removal for OpenNeko packages', async () => {
     await withRepository(async (fixture) => {
       const sourceRoot = join(fixture.marketplaceRoot, 'plugins', 'sample');
       await writePlugin(sourceRoot, {
@@ -114,16 +113,12 @@ describe('Desktop extension manager', () => {
         { name: 'sample', version: '1.0.0', path: 'plugins/sample' },
       ]);
       const manager = createManager(fixture);
-      const snapshot = await manager.readCatalog();
 
-      await expect(
-        manager.installPlugin('sample@openneko', `sha256:${'0'.repeat(64)}`),
-      ).rejects.toThrow('catalog changed');
-      await expect(
-        manager.installPlugin('sample@openai-bundled', snapshot.revision),
-      ).rejects.toThrow('OpenNeko plugin id is invalid');
+      await expect(manager.installPlugin('sample@openai-bundled')).rejects.toThrow(
+        'OpenNeko plugin id is invalid',
+      );
 
-      const installed = await manager.installPlugin('sample@openneko', snapshot.revision);
+      const installed = await manager.installPlugin('sample@openneko');
       expect(installed.records).toEqual([
         expect.objectContaining({
           id: 'sample@openneko',
@@ -132,7 +127,7 @@ describe('Desktop extension manager', () => {
         }),
       ]);
 
-      const removed = await manager.removePlugin('sample@openneko', installed.revision);
+      const removed = await manager.removePlugin('sample@openneko');
       expect(removed.records).toEqual([
         expect.objectContaining({
           id: 'sample@openneko',
@@ -193,7 +188,6 @@ describe('Desktop extension manager', () => {
       await writeFile(
         join(fixture.marketplaceRoot, 'marketplace.json'),
         JSON.stringify({
-          schemaVersion: 1,
           publisher: 'AnotherApplication',
           plugins: [],
         }),
@@ -368,7 +362,6 @@ async function writeMarketplace(
   await writeFile(
     join(marketplaceRoot, 'marketplace.json'),
     JSON.stringify({
-      schemaVersion: 1,
       publisher: 'OpenNeko',
       plugins,
     }),

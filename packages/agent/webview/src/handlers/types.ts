@@ -49,7 +49,6 @@ export type PendingForegroundConversationActivation =
       readonly reason: 'switch-conversation';
       readonly conversationId: string;
       readonly activationId: number;
-      readonly tabStateRevision: number;
     };
 
 /**
@@ -164,8 +163,6 @@ export interface HelperContext {
     updater: ConversationRenderStateUpdater,
   ) => void;
   pendingForegroundConversationActivationRef?: MutableRefObject<PendingForegroundConversationActivation | null>;
-  /** Latest accepted or optimistically allocated Tab-state revision in this Webview realm. */
-  tabStateRevisionRef?: MutableRefObject<number>;
   /** Conversations whose restore snapshots were requested in this Webview realm. */
   restoredConversationIdsRef?: MutableRefObject<Set<string>>;
   reconcileTabRenderRuntimes?: (

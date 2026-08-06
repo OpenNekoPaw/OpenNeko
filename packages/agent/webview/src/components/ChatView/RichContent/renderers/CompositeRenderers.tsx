@@ -485,7 +485,7 @@ function formatShotReferenceMediaLabel(
   shot: StoryboardShotRow,
   t: (key: string, vars?: Record<string, string | number>) => string,
 ): string | undefined {
-  const refs = [...(shot.sourceMediaRefs ?? []), ...(shot.mediaRefs ?? [])];
+  const refs = shot.sourceMediaRefs ?? [];
   if (refs.length === 0) return undefined;
   if (refs.length === 1) {
     const ref = refs[0];
@@ -578,11 +578,7 @@ function hasStoryboardReferenceMedia(
   shot: StoryboardShotRow,
   section: ResolvedCompositeSection | undefined,
 ): boolean {
-  return (
-    (shot.sourceMediaRefs ?? []).length > 0 ||
-    (shot.mediaRefs ?? []).length > 0 ||
-    (section?.media.length ?? 0) > 0
-  );
+  return (shot.sourceMediaRefs ?? []).length > 0 || (section?.media.length ?? 0) > 0;
 }
 
 function formatShotNumber(shotNumber: number): string {

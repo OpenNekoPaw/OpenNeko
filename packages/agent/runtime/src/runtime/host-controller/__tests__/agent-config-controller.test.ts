@@ -54,7 +54,6 @@ describe('Agent config controller', () => {
       type: 'updateTabState' as const,
       openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conversation-1' }],
       activeTabId: 'tab-1',
-      expectedTabStateRevision: 4,
     };
 
     await dispatch({ type: 'getSettings', conversationId: 'conversation-1' }, effects, context);

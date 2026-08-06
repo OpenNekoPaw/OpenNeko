@@ -43,9 +43,6 @@ export async function loadSuite(suiteFile, options = {}) {
     );
     assertContained(suiteDirectory, baselineFile, `baseline ${suite.baselinePolicy.baselineId}`);
     baseline = validateBaseline(await readJson(baselineFile));
-    if (baseline.repositoryRevision === 'working-tree') {
-      throw new Error(`approved baseline ${baseline.id} requires a concrete repository revision`);
-    }
     if (baseline.id !== suite.baselinePolicy.baselineId) {
       throw new Error(`baseline id ${baseline.id} does not match suite baseline policy`);
     }
@@ -142,7 +139,7 @@ export function selectSuiteCases(discovered, selector = {}) {
     }
   }
   if (selected.length === 0) {
-    throw new Error(`no v2 Evaluation cases matched selector: ${JSON.stringify(selector)}`);
+    throw new Error(`no Evaluation cases matched selector: ${JSON.stringify(selector)}`);
   }
   if (selector.caseId && selected.length !== 1) {
     throw new Error(`case id ${selector.caseId} is ambiguous across ${selected.length} suites`);

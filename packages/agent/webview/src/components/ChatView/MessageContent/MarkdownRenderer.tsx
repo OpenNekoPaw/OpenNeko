@@ -1678,7 +1678,7 @@ function MarkdownRendererComponent({
     <div
       className={`markdown-content min-w-0 max-w-full overflow-hidden text-[13px] leading-relaxed break-words ${className || ''}`}
       data-markdown-session-id={snapshot.sessionId}
-      data-markdown-revision={snapshot.revision}
+      data-markdown-document-id={snapshot.documentId}
       data-markdown-final={snapshot.isFinal ? 'true' : 'false'}
     >
       {renderedDocument}
@@ -1712,7 +1712,7 @@ function useCanonicalMarkdownSnapshot(input: {
     if (timelineSnapshot) {
       if (timelineSnapshot.source !== input.content) {
         throw new Error(
-          `Normalized Markdown source mismatch for ${input.sessionKey}: Timeline revision ${timelineSnapshot.revision} exposes ${timelineSnapshot.source.length} characters while rendered content exposes ${input.content.length}.`,
+          `Normalized Markdown source mismatch for ${input.sessionKey}: Timeline document ${timelineSnapshot.documentId} exposes ${timelineSnapshot.source.length} characters while rendered content exposes ${input.content.length}.`,
         );
       }
       return timelineSnapshot;

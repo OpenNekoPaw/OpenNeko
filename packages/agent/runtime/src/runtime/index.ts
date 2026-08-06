@@ -262,6 +262,7 @@ export {
   type AgentExternalProcessorChainTargetChangeInput,
   type DeveloperModeTemporaryProcessorRequest,
   type DeveloperModeTemporaryProcessorRequestInput,
+  type DeveloperModeTemporaryProcessorDefinition,
 } from './capability/external-processor-runtime';
 
 export {

@@ -56,7 +56,7 @@ describe('useTabRenderRuntimeRegistry', () => {
     });
   });
 
-  it('preserves user draft settings while discarding retired runtime-only fields', () => {
+  it('restores and persists current user draft settings', () => {
     const getState = vi.fn(() => ({
       drafts: [
         {
@@ -68,10 +68,6 @@ describe('useTabRenderRuntimeRegistry', () => {
           mediaUnderstandingSelection: { image: 'auto', video: 'auto', audio: 'auto' },
           sessionMode: 'agent',
           executionMode: 'ask',
-          promptMode: 'default',
-          idcRun: { id: 'retired-run' },
-          stagePersona: 'creation-persona',
-          checkpoint: { stage: 'plan' },
           generationCategory: 'image',
           generationParams: {
             ratio: '16:9',
@@ -81,7 +77,6 @@ describe('useTabRenderRuntimeRegistry', () => {
             audioDuration: 'auto',
             audioType: 'sfx',
           },
-          llmConfig: { reasoningPreset: 'deep' },
         },
       ],
     }));
@@ -99,11 +94,6 @@ describe('useTabRenderRuntimeRegistry', () => {
     expect(state.selectedModel).toBe('provider:model');
     expect(state.mediaModelSelection.image).toBe('image:model');
     expect(state.executionMode).toBe('ask');
-    expect(state).not.toHaveProperty('llmConfig');
-    expect(state).not.toHaveProperty('promptMode');
-    expect(state).not.toHaveProperty('idcRun');
-    expect(state).not.toHaveProperty('stagePersona');
-    expect(state).not.toHaveProperty('checkpoint');
     act(() => window.dispatchEvent(new Event('pagehide')));
     expect(host.setState).toHaveBeenCalledWith({
       drafts: [expect.objectContaining({ tabId: 'tab-a', inputValue: 'restored draft' })],

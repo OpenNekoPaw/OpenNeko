@@ -177,7 +177,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-1',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/asset.png',
+                    src: 'http://127.0.0.1:43125/resources/asset.png',
                     caption: 'Wide',
                     role: 'original',
                   },
@@ -282,7 +282,6 @@ describe('composite rich content renderers', () => {
                         'Create a close-up keyframe with a blue pulse while preserving Rin and the manga composition.',
                       videoPrompt:
                         'Animate scene 1 as a slow push-in with a pulsing blue light over four seconds.',
-                      generationPrompt: 'legacy prompt must not render',
                       imageStrategy: 'use-as-reference',
                       decisionReason: 'Keep the manga panel composition as reference.',
                     },
@@ -322,7 +321,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'read-image',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/panel.png',
+                    src: 'http://127.0.0.1:43125/resources/panel.png',
                     caption: 'Original panel',
                     role: 'source',
                   },
@@ -364,7 +363,6 @@ describe('composite rich content renderers', () => {
     expect(document.body.textContent).toContain(
       'Animate scene 1 as a slow push-in with a pulsing blue light over four seconds.',
     );
-    expect(document.body.textContent).not.toContain('legacy prompt must not render');
     expect(document.body.textContent).not.toContain('noir manga');
     expect(document.body.textContent).not.toContain('animated blue pulse under the table');
     expect(document.body.textContent).toContain('Process reference');
@@ -412,7 +410,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'read-image',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/wide-panel.png',
+                    src: 'http://127.0.0.1:43125/resources/wide-panel.png',
                     caption: 'Wide panel',
                   },
                 ],
@@ -488,7 +486,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'read-image',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+                    src: 'http://127.0.0.1:43125/resources/page-1.jpg',
                     localPath: '${WORKSPACE}/page-1.jpg',
                     mimeType: 'image/jpeg',
                   },
@@ -539,7 +537,7 @@ describe('composite rich content renderers', () => {
                       dialogue: '開始吧。',
                       soundCue: '沙',
                       visualStyle: '繁中漫画',
-                      generationPrompt: '漫画分镜',
+                      imagePrompt: '漫画分镜',
                       imageStrategy: 'generate-new',
                     },
                   ],
@@ -571,7 +569,7 @@ describe('composite rich content renderers', () => {
     expect(document.body.textContent).toContain('对白: 開始吧。');
     expect(document.body.textContent).toContain('音效: 沙');
     expect(screen.queryByText(/繁中漫画/)).toBeNull();
-    expect(screen.queryByText(/漫画分镜/)).toBeNull();
+    expect(screen.getByText('漫画分镜')).toBeTruthy();
     expect(screen.getAllByText('优化场景视频提示词').length).toBeGreaterThan(0);
   });
 
@@ -595,7 +593,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-a',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/a.png',
+                    src: 'http://127.0.0.1:43125/resources/a.png',
                     caption: 'A',
                   },
                 ],
@@ -611,7 +609,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-b',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/b.png',
+                    src: 'http://127.0.0.1:43125/resources/b.png',
                     caption: 'B',
                   },
                 ],
@@ -650,7 +648,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-1',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/asset.png',
+                    src: 'http://127.0.0.1:43125/resources/asset.png',
                     caption: 'Final',
                     localPath: '/repo/out.png',
                   },
@@ -728,7 +726,7 @@ describe('composite rich content renderers', () => {
                     toolCallId: 'call-1',
                     assetIndex: 0,
                     type: 'image',
-                    src: 'http://127.0.0.1:43125/v1/resources/missing.png',
+                    src: 'http://127.0.0.1:43125/resources/missing.png',
                     caption: 'Missing preview',
                   },
                 ],

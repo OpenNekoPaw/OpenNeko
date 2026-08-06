@@ -27,7 +27,7 @@ export async function runRubricJudge(input, options = {}) {
     return total + item.uncertainty * criterion.weight;
   }, 0);
   const result = {
-    schema: 'neko.agent-eval.judge.v2',
+    schema: 'neko.agent-eval.judge',
     reportId: input.reportId,
     suiteId: input.suiteId,
     caseId: input.caseId,
@@ -36,7 +36,6 @@ export async function runRubricJudge(input, options = {}) {
     modelId: providerResult.modelId,
     profileId: providerResult.profileId,
     rubricId: input.rubric.id,
-    rubricVersion: input.rubric.version,
     promptHash,
     sampling: { temperature: input.profile.temperature, maxTokens: input.profile.maxTokens },
     criteria,

@@ -84,7 +84,7 @@ describe('NodePiConversationCatalogReader', () => {
     await createConversation('workspace-a', 'conversation-invalid');
     await createConversation('workspace-a', 'conversation-valid');
     await writeConversationContext('conversation-invalid', {
-      schemaVersion: 1,
+      unexpectedField: 1,
       kind: 'workspace',
       workspaceId: 'workspace-a',
       workspaceGrantId: 'grant-a',
@@ -98,7 +98,7 @@ describe('NodePiConversationCatalogReader', () => {
     readers.push(reader);
 
     expect(() => reader.findConversation('conversation-invalid')).toThrow(
-      "unknown field 'schemaVersion'",
+      "unknown field 'unexpectedField'",
     );
     expect(reader.findConversation('conversation-valid')).toMatchObject({
       context: { workspaceGrantId: 'grant-valid' },
@@ -115,20 +115,10 @@ describe('NodePiConversationCatalogReader', () => {
           code: 'invalid-conversation-record',
           workspaceId: 'workspace-a',
           conversationId: 'conversation-invalid',
-          message: expect.stringContaining("unknown field 'schemaVersion'"),
+          message: expect.stringContaining("unknown field 'unexpectedField'"),
         }),
       ],
     });
-  });
-
-  it('does not inspect the retired context table', async () => {
-    await createConversation('workspace-a', 'conversation-retired');
-    await writeRetiredConversationContext('conversation-retired');
-    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
-    readers.push(reader);
-
-    expect(reader.findConversation('conversation-retired')).not.toHaveProperty('context');
-    expect(await countRetiredConversationContexts()).toBe(1);
   });
 
   async function createConversation(
@@ -166,37 +156,6 @@ describe('NodePiConversationCatalogReader', () => {
            VALUES (?, ?)`,
         )
         .run(conversationId, JSON.stringify(context));
-    } finally {
-      database.close();
-    }
-  }
-
-  async function writeRetiredConversationContext(conversationId: string): Promise<void> {
-    const sqlite = await import('node:sqlite');
-    const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
-    try {
-      database.exec(`CREATE TABLE IF NOT EXISTS agent_conversation_context (
-        conversation_id TEXT PRIMARY KEY,
-        context_version INTEGER NOT NULL,
-        context_json TEXT NOT NULL
-      ) STRICT`);
-      database
-        .prepare(`INSERT INTO agent_conversation_context VALUES (?, ?, ?)`)
-        .run(conversationId, 1, JSON.stringify({ schemaVersion: 1, kind: 'workspace' }));
-    } finally {
-      database.close();
-    }
-  }
-
-  async function countRetiredConversationContexts(): Promise<number> {
-    const sqlite = await import('node:sqlite');
-    const database = new sqlite.DatabaseSync(join(root, 'neko.db'), { readOnly: true });
-    try {
-      const row = database
-        .prepare(`SELECT COUNT(*) AS count FROM agent_conversation_context`)
-        .get();
-      if (!row || typeof row.count !== 'number') throw new Error('Expected retired row count.');
-      return row.count;
     } finally {
       database.close();
     }

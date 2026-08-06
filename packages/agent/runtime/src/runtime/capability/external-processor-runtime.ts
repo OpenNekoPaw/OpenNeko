@@ -87,8 +87,10 @@ export interface DeveloperModeTemporaryProcessorRequestInput {
   readonly run?: Partial<ExternalProcessorRunIdentity>;
 }
 
+export type DeveloperModeTemporaryProcessorDefinition = Omit<ExternalProcessorManifest, 'version'>;
+
 export interface DeveloperModeTemporaryProcessorRequest {
-  readonly manifest: ExternalProcessorManifest;
+  readonly processor: DeveloperModeTemporaryProcessorDefinition;
   readonly invocation: ExternalProcessorInvocation;
   readonly diagnostics: readonly ExternalProcessorDiagnostic[];
 }
@@ -97,7 +99,6 @@ export interface AgentExternalProcessorResultProjection {
   readonly status: ExternalProcessorResult['status'];
   readonly processorId: string;
   readonly registrationId: string;
-  readonly registrationRevision: number;
   readonly run: ExternalProcessorRunIdentity;
   readonly outputs: ExternalProcessorResult['outputs'];
   readonly diagnostics: readonly ExternalProcessorDiagnostic[];
@@ -184,7 +185,7 @@ export function createDeveloperModeTemporaryProcessorRequest(
   const command = input.command.trim();
   if (!command) {
     return {
-      manifest: createDeveloperModeManifest({
+      processor: createDeveloperModeProcessorDefinition({
         command: '',
         allowNetwork: input.allowNetwork,
         allowedInputRoots: input.allowedInputRoots,
@@ -209,7 +210,7 @@ export function createDeveloperModeTemporaryProcessorRequest(
   }
   if (containsDisplayTransportUrl(command)) {
     return {
-      manifest: createDeveloperModeManifest({
+      processor: createDeveloperModeProcessorDefinition({
         command,
         allowNetwork: input.allowNetwork,
         allowedInputRoots: input.allowedInputRoots,
@@ -233,7 +234,7 @@ export function createDeveloperModeTemporaryProcessorRequest(
     };
   }
 
-  const manifest = createDeveloperModeManifest({
+  const processor = createDeveloperModeProcessorDefinition({
     command,
     allowNetwork: input.allowNetwork,
     allowedInputRoots: input.allowedInputRoots,
@@ -241,7 +242,7 @@ export function createDeveloperModeTemporaryProcessorRequest(
     timeoutMs: input.timeoutMs,
   });
   return {
-    manifest,
+    processor,
     invocation: createDeveloperModeInvocation(
       command,
       input.run,
@@ -314,7 +315,6 @@ class DefaultAgentExternalProcessorRuntime implements AgentExternalProcessorRunt
       invocation: {
         processorId: resolved.id,
         registrationId: resolved.registrationId,
-        registrationRevision: resolved.revision,
         run,
         inputs: [...input.inputs],
         outputs,
@@ -333,7 +333,6 @@ class DefaultAgentExternalProcessorRuntime implements AgentExternalProcessorRunt
       status: input.result.status,
       processorId: input.result.processorId,
       registrationId: input.result.registrationId,
-      registrationRevision: input.result.registrationRevision,
       run: input.result.run,
       outputs: input.result.outputs.map((output) => ({ ...output })),
       diagnostics,
@@ -722,14 +721,13 @@ function validateResultMatchesInvocation(
   const diagnostics: ExternalProcessorDiagnostic[] = [];
   if (
     result.processorId !== invocation.processorId ||
-    result.registrationId !== invocation.registrationId ||
-    result.registrationRevision !== invocation.registrationRevision
+    result.registrationId !== invocation.registrationId
   ) {
     diagnostics.push(
       diagnostic(
         'invalid-manifest',
         'error',
-        'Processor result does not match the invocation registration snapshot.',
+        'Processor result does not match the invocation registration.',
       ),
     );
   }
@@ -777,20 +775,19 @@ function validateResultMatchesInvocation(
   return diagnostics;
 }
 
-function createDeveloperModeManifest(input: {
+function createDeveloperModeProcessorDefinition(input: {
   readonly command: string;
   readonly cwdRoot?: ExternalProcessorManifest['policy']['cwdRoot'];
   readonly allowedInputRoots?: ExternalProcessorManifest['policy']['allowedInputRoots'];
   readonly timeoutMs?: number;
   readonly allowNetwork?: boolean;
-}): ExternalProcessorManifest {
+}): DeveloperModeTemporaryProcessorDefinition {
   const allowedInputRoots = input.allowedInputRoots ?? ['workspace'];
   return {
     schema: 'neko.externalProcessor',
     id: 'developer-mode.one-shot-command',
     kind: 'external-processor',
     displayName: 'Developer Mode One-shot Command',
-    version: '0.0.0-temporary',
     entry: {
       executable: '${HOST_SHELL}',
       args: ['-c', '${params.command}'],
@@ -829,7 +826,6 @@ function createDeveloperModeInvocation(
   return {
     processorId: 'developer-mode.one-shot-command',
     registrationId: 'temporary:developer-mode:one-shot-command',
-    registrationRevision: 0,
     run: createRunIdentity(
       { processorRunId, stageId, attempt: 1, ...run },
       () => processorRunId,
@@ -857,7 +853,7 @@ function stableCommandHash(command: string): string {
 function containsDisplayTransportUrl(command: string): boolean {
   return (
     /\b(?:neko-media|media|video|audio|file):\/\//iu.test(command) ||
-    /\bhttps?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/v1\/(?:resources|streams|resource-sets)\//iu.test(
+    /\bhttps?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/(?:resources|streams|resource-sets)\//iu.test(
       command,
     )
   );

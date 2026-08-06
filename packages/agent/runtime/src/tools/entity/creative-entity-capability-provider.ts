@@ -319,11 +319,10 @@ function createRepresentationParameter(): ToolParameters['properties'][string] {
         properties: {
           kind: { type: 'string', enum: ['generated-output'] },
           outputId: { type: 'string' },
-          revision: { type: 'string' },
           digest: { type: 'string' },
           path: { type: 'string' },
         },
-        required: ['kind', 'outputId', 'revision', 'digest', 'path'],
+        required: ['kind', 'outputId', 'digest', 'path'],
         additionalProperties: false,
       },
       {

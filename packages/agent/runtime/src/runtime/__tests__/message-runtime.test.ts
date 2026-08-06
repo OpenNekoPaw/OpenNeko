@@ -133,7 +133,10 @@ describe('message runtime helpers', () => {
             id: 'selection-1',
             label: 'Selection',
             summary: 'Selected text',
-            data: { selectedText: 'hello world' },
+            data: {
+              source: { filePath: 'docs/selection.md', format: 'markdown' },
+              excerpt: { contentKind: 'text', text: 'hello world' },
+            },
           },
         ],
         fileContents: [{ path: 'src/app.ts', content: 'export const app = true;' }],
@@ -143,16 +146,6 @@ describe('message runtime helpers', () => {
   });
 
   it('formats structured context payloads inside the agent runtime', () => {
-    expect(
-      formatAgentContextPayload({
-        type: 'document-selection',
-        id: 'selection-1',
-        label: 'Selection',
-        summary: 'Selected text',
-        data: { selectedText: 'hello world' },
-      }),
-    ).toBe('[Content: Selection]\nhello world');
-
     expect(
       formatAgentContextPayload({
         type: 'file',
@@ -253,9 +246,6 @@ describe('message runtime helpers', () => {
         label: 'book.epub · Chapter 1',
         summary: 'Selected text',
         data: {
-          filePath: '/books/book.epub',
-          text: 'selected paragraph',
-          contentKind: 'text',
           source: { filePath: '/books/book.epub', format: 'epub', fileId: 'book-1' },
           locator: { kind: 'chapter', chapterHref: 'chapter-1.xhtml', spineIndex: 0 },
           excerpt: { contentKind: 'text', text: 'selected paragraph', truncated: false },
@@ -296,9 +286,6 @@ describe('message runtime helpers', () => {
         label: 'book.epub · Chapter 1',
         summary: 'Selected text',
         data: {
-          filePath: '/books/book.epub',
-          text: 'selected paragraph',
-          contentKind: 'text',
           source: { filePath: '/books/book.epub', format: 'epub', fileId: 'book-1' },
           locator: { kind: 'chapter', chapterHref: 'chapter-1.xhtml', spineIndex: 0 },
           excerpt: { contentKind: 'text', text: 'selected paragraph', truncated: false },

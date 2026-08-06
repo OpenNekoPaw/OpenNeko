@@ -2,7 +2,6 @@ import type { CompositeBlockData, CompositeSection, MediaRef } from './message';
 import {
   hasBlockingStoryboardDiagnostics,
   normalizeCanonicalStoryboardTable,
-  normalizeStoryboardTable,
   type StoryboardMediaRef,
   type StoryboardTable,
   type StoryboardValidationDiagnostic,
@@ -111,12 +110,12 @@ function normalizeCompositeBlock(value: unknown): CompositeBlockData | null {
     template === 'storyboard-table' && value.scenes !== undefined
       ? normalizeStoryboardCompositePayload(value)
       : undefined;
-  const title = readString(value, 'title') ?? semanticStoryboard?.displayTable?.title;
+  const title = readString(value, 'title') ?? semanticStoryboard?.canonicalTable?.title;
   const sections = normalizeCompositeSections(value.sections);
   const projectedSections =
     template === 'storyboard-table'
       ? createStoryboardDisplaySections(
-          semanticStoryboard?.displayTable,
+          semanticStoryboard?.canonicalTable,
           semanticStoryboard?.diagnostics,
         )
       : [];
@@ -138,41 +137,40 @@ function normalizeCompositeBlock(value: unknown): CompositeBlockData | null {
 }
 
 interface NormalizedStoryboardCompositePayload {
-  readonly displayTable?: StoryboardTable;
   readonly canonicalTable?: StoryboardTable;
   readonly diagnostics: readonly StoryboardValidationDiagnostic[];
 }
 
 function normalizeStoryboardCompositePayload(value: unknown): NormalizedStoryboardCompositePayload {
-  const display = normalizeStoryboardTable({ value });
   const canonical = normalizeCanonicalStoryboardTable({ value });
-  const diagnostics = dedupeStoryboardDiagnostics([
-    ...display.diagnostics,
-    ...canonical.diagnostics,
-  ]);
   return {
-    ...(display.table ? { displayTable: display.table } : {}),
     ...(canonical.table ? { canonicalTable: canonical.table } : {}),
-    diagnostics,
+    diagnostics: canonical.diagnostics,
   };
-}
-
-function dedupeStoryboardDiagnostics(
-  diagnostics: readonly StoryboardValidationDiagnostic[],
-): readonly StoryboardValidationDiagnostic[] {
-  const seen = new Set<string>();
-  return diagnostics.filter((diagnostic) => {
-    const key = `${diagnostic.severity}:${diagnostic.code}:${diagnostic.path.join('.')}:${diagnostic.message}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function normalizeArtifactBackedStoryboardBlock(
   value: Record<string, unknown>,
 ): CompositeBlockData | null {
-  if (value.kind !== 'composite-artifact' || Object.hasOwn(value, 'schemaVersion')) return null;
+  if (
+    value.kind !== 'composite-artifact' ||
+    !hasOnlyFields(
+      value,
+      new Set([
+        'kind',
+        'artifactId',
+        'profile',
+        'title',
+        'blocks',
+        'provenance',
+        'diagnostics',
+        'suggestedActions',
+        'extensions',
+      ]),
+    )
+  ) {
+    return null;
+  }
   const blocks = Array.isArray(value.blocks) ? value.blocks : [];
   const storyboardBlock = blocks.find(isStoryboardDomainBlock);
   const animationPlanBlocks = blocks.filter(isAnimationPlanDomainBlock);
@@ -196,9 +194,9 @@ function normalizeArtifactBackedStoryboardBlock(
   const title =
     readString(storyboardBlock, 'title') ??
     readString(value, 'title') ??
-    semanticStoryboard.displayTable?.title;
+    semanticStoryboard.canonicalTable?.title;
   const sections = createStoryboardDisplaySections(
-    semanticStoryboard.displayTable,
+    semanticStoryboard.canonicalTable,
     semanticStoryboard.diagnostics,
   );
   if (sections.length === 0) return null;
@@ -267,7 +265,20 @@ function normalizeStoryboardPlanBlocks(
 function isStoryboardDomainBlock(value: unknown): value is Record<string, unknown> {
   return (
     isRecord(value) &&
-    !Object.hasOwn(value, 'schemaVersion') &&
+    hasOnlyFields(
+      value,
+      new Set([
+        'blockId',
+        'kind',
+        'title',
+        'role',
+        'diagnostics',
+        'actions',
+        'extensions',
+        'domainKind',
+        'payload',
+      ]),
+    ) &&
     value.kind === 'domain' &&
     value.domainKind === STORYBOARD_DOMAIN_KIND &&
     value.payload !== undefined
@@ -277,7 +288,20 @@ function isStoryboardDomainBlock(value: unknown): value is Record<string, unknow
 function isAnimationPlanDomainBlock(value: unknown): value is Record<string, unknown> {
   return (
     isRecord(value) &&
-    !Object.hasOwn(value, 'schemaVersion') &&
+    hasOnlyFields(
+      value,
+      new Set([
+        'blockId',
+        'kind',
+        'title',
+        'role',
+        'diagnostics',
+        'actions',
+        'extensions',
+        'domainKind',
+        'payload',
+      ]),
+    ) &&
     value.kind === 'domain' &&
     value.domainKind === ANIMATION_PLAN_DOMAIN_KIND &&
     value.payload !== undefined
@@ -330,7 +354,6 @@ function collectStoryboardShotMediaRefs(
   const refs = dedupeStoryboardMediaRefs([
     ...(shot.sourceMediaRefs ?? []),
     ...(shot.generatedMediaRefs ?? []),
-    ...(shot.mediaRefs ?? []),
   ]);
   return refs.length > 0 ? refs : undefined;
 }
@@ -350,7 +373,7 @@ function dedupeStoryboardMediaRefs(
 }
 
 function projectStoryboardMediaRefsToComposite(
-  mediaRefs: StoryboardTable['scenes'][number]['shots'][number]['mediaRefs'],
+  mediaRefs: readonly StoryboardMediaRef[] | undefined,
 ): readonly MediaRef[] | undefined {
   const refs = (mediaRefs ?? []).flatMap((mediaRef) => {
     if (mediaRef.locator.type !== 'tool-result') return [];
@@ -461,4 +484,11 @@ function isArtifactJsonValue(value: unknown): value is ArtifactJsonValue {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

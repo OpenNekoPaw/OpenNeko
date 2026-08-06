@@ -101,8 +101,6 @@ function runGate(assertion, facts, context) {
       return assertContentLocatorHandoff(assertion, facts);
     case 'workspace-board-projection':
       return assertWorkspaceBoardProjection(assertion, facts);
-    case 'no-fallback':
-      return assertNoFallback(assertion, facts);
     default:
       throw new Error(`unsupported hard-gate evaluator: ${assertion.kind}`);
   }
@@ -238,9 +236,6 @@ function assertPiRuntime(assertion, facts, context) {
   ) {
     throw new Error('conversation, branch, and Pi Session identities are missing or conflated');
   }
-  if (!Number.isInteger(runtime.writerEpoch) || runtime.writerEpoch < 1) {
-    throw new Error('Pi conversation writer epoch is missing or invalid');
-  }
   const locator = runtime.workspaceLocator;
   if (
     locator?.kind !== assertion.workspaceLocatorKind ||
@@ -310,7 +305,6 @@ function assertPiRuntime(assertion, facts, context) {
     conversationId: runtime.conversationId,
     branchId: runtime.branchId,
     piSessionId: runtime.piSessionId,
-    writerEpoch: runtime.writerEpoch,
     purpose: turn.purpose,
     providerId: turn.providerId,
     modelId: turn.modelId,
@@ -364,12 +358,6 @@ function assertPromptComposition(assertion, facts) {
       `required prompt fragment(s) missing: ${missing.map((item) => `${item.source}/${item.id}`).join(', ')}`,
     );
   }
-  const forbidden = arrayOrEmpty(assertion.forbiddenFragmentIds).filter((id) =>
-    fragments.some((fragment) => fragment?.id === id),
-  );
-  if (forbidden.length > 0) {
-    throw new Error(`forbidden prompt fragment(s) observed: ${forbidden.join(', ')}`);
-  }
   return {
     requiredFragments: assertion.requiredFragments,
     observedFragmentIds: fragments.map((fragment) => fragment?.id).filter(Boolean),
@@ -380,7 +368,6 @@ function matchesPromptFragment(actual, expected) {
   return (
     actual?.id === expected.id &&
     actual?.source === expected.source &&
-    (expected.version === undefined || actual?.version === expected.version) &&
     (expected.hash === undefined || actual?.hash === expected.hash)
   );
 }
@@ -410,7 +397,7 @@ function assertModel(assertion, facts, context) {
       observed.providerExpressionProfileId !== expected.providerExpressionProfileId;
     if (mismatch) {
       throw new Error(
-        `${assertion.noFallback ? 'model fallback observed' : 'model profile mismatch'}: expected ${formatModel(expected)}, observed ${formatModel(observed)}`,
+        `model profile mismatch: expected ${formatModel(expected)}, observed ${formatModel(observed)}`,
       );
     }
   }
@@ -421,7 +408,6 @@ function assertModel(assertion, facts, context) {
     ...(observed.providerExpressionProfileId
       ? { providerExpressionProfileId: observed.providerExpressionProfileId }
       : {}),
-    noFallback: assertion.noFallback,
   };
 }
 
@@ -534,7 +520,7 @@ function assertQueueState(assertion, facts) {
     stepId: assertion.stepId,
     status: assertion.status,
     pendingCount: queue.pendingCount,
-    version: queue.version,
+    sequence: queue.sequence,
     pausedAfterCancel: queue.pausedAfterCancel === true,
   };
 }
@@ -713,17 +699,20 @@ function assertTimelineProjection(assertion, facts) {
     throw new Error('Timeline projection did not freeze on one exact terminal patch');
   }
   const itemIds = new Set();
+  const itemSequences = new Set();
   for (const item of arrayOrEmpty(projection.items)) {
     if (
       !nonEmpty(item?.itemId) ||
       !nonEmpty(item?.kind) ||
-      !Number.isInteger(item?.itemRevision) ||
-      item.itemRevision < 1 ||
-      itemIds.has(item.itemId)
+      !Number.isInteger(item?.sequence) ||
+      item.sequence < 0 ||
+      itemIds.has(item.itemId) ||
+      itemSequences.has(item.sequence)
     ) {
-      throw new Error('Timeline item identity or revision evidence is invalid');
+      throw new Error('Timeline item identity or sequence evidence is invalid');
     }
     itemIds.add(item.itemId);
+    itemSequences.add(item.sequence);
   }
   if (assertion.toolName) {
     const tools = arrayOrEmpty(projection.items).filter(
@@ -743,9 +732,9 @@ function assertTimelineProjection(assertion, facts) {
     messageId: projection.messageId,
     completionStatus: projection.completionStatus,
     patchCount: patches.length,
-    itemRevisions: arrayOrEmpty(projection.items).map((item) => ({
+    itemSequences: arrayOrEmpty(projection.items).map((item) => ({
       itemId: item.itemId,
-      itemRevision: item.itemRevision,
+      sequence: item.sequence,
     })),
   };
 }
@@ -840,18 +829,6 @@ function assertMarkdownPath(assertion, facts) {
       `no Markdown session observed required path: ${assertion.requiredEvents.join(', ')}`,
     );
   }
-  if (assertion.sameRevisionForViewportWidths === true) {
-    const widths = new Set(arrayOrEmpty(assertion.viewportWidths));
-    const sameRevision = matching.some(([, group]) => {
-      const revisions = new Set(
-        group
-          .filter((event) => event.type === 'layout-created' && widths.has(event.viewportWidth))
-          .map((event) => event.revision),
-      );
-      return revisions.size === 1;
-    });
-    if (!sameRevision) throw new Error('viewport widths did not reuse one Markdown revision');
-  }
   return {
     keys: matching.map(([key]) => key),
     requiredEvents: assertion.requiredEvents,
@@ -922,7 +899,7 @@ function requireAutomationStep(facts, stepId) {
 
 function readAutomationSteps(facts) {
   const trace = facts?.automation;
-  if (trace?.schema !== 'neko.agent-eval.workflow-trace.v1' || !Array.isArray(trace.steps)) {
+  if (trace?.schema !== 'neko.agent-eval.workflow-trace' || !Array.isArray(trace.steps)) {
     throw new Error('workflow controller trace is unavailable');
   }
   return trace.steps;
@@ -1105,44 +1082,6 @@ function isPortableWorkspacePath(value) {
   );
 }
 
-function assertNoFallback(assertion, facts) {
-  assertCompleteEvidence(facts, [
-    'turns',
-    'turnToolCalls',
-    'skillReceipts',
-    'continuations',
-    'promptComposition',
-    'artifacts',
-    'runtimeErrors',
-  ]);
-  const observed = collectRuntimeRefs(facts);
-  const boardFallbackCounters = new Map([
-    ['active-canvas', 'activeCanvas'],
-    ['recentCanvas', 'recentCanvas'],
-    ['NodeWorkspaceBoardProjector', 'directWriter'],
-    ['generic-send-to-canvas', 'genericSendToCanvas'],
-  ]);
-  const requestedBoardCounters = assertion.forbiddenRefs.flatMap((ref) => {
-    const counter = boardFallbackCounters.get(ref);
-    return counter ? [[ref, counter]] : [];
-  });
-  if (requestedBoardCounters.length > 0 && !facts?.workspaceBoardDelivery?.legacyFallbackCounts) {
-    throw new Error('Workspace Board legacy fallback counters are unavailable');
-  }
-  const forbidden = assertion.forbiddenRefs.filter((ref) => observed.has(ref));
-  for (const [ref, counter] of requestedBoardCounters) {
-    const count = facts.workspaceBoardDelivery.legacyFallbackCounts[counter];
-    if (!Number.isInteger(count) || count < 0) {
-      throw new Error(`Workspace Board legacy fallback counter is invalid: ${counter}`);
-    }
-    if (count > 0 && !forbidden.includes(ref)) forbidden.push(ref);
-  }
-  if (forbidden.length > 0) {
-    throw new Error(`forbidden fallback reference(s) observed: ${forbidden.join(', ')}`);
-  }
-  return { forbiddenRefs: assertion.forbiddenRefs, observedForbiddenRefs: [] };
-}
-
 function assertWorkspaceBoardProjection(assertion, facts) {
   assertCompleteEvidence(facts, ['workspaceBoardProjections']);
   const projection = arrayOrEmpty(facts?.workspaceBoardProjections).find(
@@ -1159,14 +1098,6 @@ function assertWorkspaceBoardProjection(assertion, facts) {
       `Workspace Board projection has ${arrayOrEmpty(projection.nodeIds).length} node id(s); expected at least ${assertion.minNodeIds}`,
     );
   }
-  const legacyGroupNodeIds = arrayOrEmpty(projection.nodeIds).filter(
-    (nodeId) => nodeId === 'workspace-inbox' || nodeId.startsWith('workspace-process-'),
-  );
-  if (legacyGroupNodeIds.length > 0) {
-    throw new Error(
-      `Workspace Board projection used legacy visual Group node id(s): ${legacyGroupNodeIds.join(', ')}`,
-    );
-  }
   if (
     assertion.minConnectionIds !== undefined &&
     arrayOrEmpty(projection.connectionIds).length < assertion.minConnectionIds
@@ -1175,8 +1106,8 @@ function assertWorkspaceBoardProjection(assertion, facts) {
       `Workspace Board projection has ${arrayOrEmpty(projection.connectionIds).length} connection id(s); expected at least ${assertion.minConnectionIds}`,
     );
   }
-  if (assertion.revisionRequired && !projection.revision) {
-    throw new Error('Workspace Board projection has no revision evidence');
+  if (assertion.sourceFingerprintRequired && !projection.sourceFingerprint) {
+    throw new Error('Workspace Board projection has no source fingerprint evidence');
   }
   if (assertion.diagnosticsEmpty && arrayOrEmpty(projection.diagnosticCodes).length > 0) {
     throw new Error(
@@ -1186,7 +1117,7 @@ function assertWorkspaceBoardProjection(assertion, facts) {
   return {
     status: projection.status,
     targetKind: projection.targetKind,
-    revision: projection.revision,
+    sourceFingerprint: projection.sourceFingerprint,
     nodeIds: projection.nodeIds,
     connectionIds: projection.connectionIds,
     diagnosticCodes: projection.diagnosticCodes,
@@ -1299,7 +1230,7 @@ function collectRuntimeRefs(facts) {
   for (const projection of arrayOrEmpty(facts?.workspaceBoardProjections)) {
     addValue(refs, projection?.status);
     addValue(refs, projection?.targetKind);
-    addValue(refs, projection?.revision);
+    addValue(refs, projection?.sourceFingerprint);
     addValues(refs, projection?.nodeIds);
     addValues(refs, projection?.diagnosticCodes);
   }

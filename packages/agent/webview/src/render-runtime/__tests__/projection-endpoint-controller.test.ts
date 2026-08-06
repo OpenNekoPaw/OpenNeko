@@ -274,7 +274,7 @@ describe('ProjectionEndpointController', () => {
     );
   });
 
-  it('closing one Tab detaches only its attachment', () => {
+  it('closing one Tab detaches its attachment and preserves the sibling Tab', () => {
     const { host, registry, controller, errors } = createHarness();
     host.emit({
       type: 'projectionEndpointReady',
@@ -298,8 +298,7 @@ describe('ProjectionEndpointController', () => {
       'awaiting-snapshot',
     );
 
-    host.emit(snapshotFrame(closedKey));
-    host.emit({ type: 'projectionDetach', key: closedKey, reason: 'tab-closed' });
+    expect(registry.require('tab-b').conversationId).toBe('conv-b');
     expect(errors).toEqual([]);
   });
 

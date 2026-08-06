@@ -152,12 +152,6 @@ const handleActiveConversation: MessageHandler<'activeConversation'> = (
   context.activeConversationIdRef.current = projection.activeConversationId;
 
   if (conversationId && shouldActivateForeground) {
-    if (message.activation && context.tabStateRevisionRef) {
-      context.tabStateRevisionRef.current = Math.max(
-        context.tabStateRevisionRef.current,
-        message.activation.tabStateRevision,
-      );
-    }
     context.completeForegroundConversationActivation?.(conversationId);
   }
 };

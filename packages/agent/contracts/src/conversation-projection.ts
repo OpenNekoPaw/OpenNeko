@@ -48,7 +48,6 @@ export function applyAgentTurnProjectionOperations(
     }
 
     const item = operation.item;
-    assertPositiveRevision(item.itemId, item.itemRevision);
     const current = items.get(item.itemId);
     if (!current) {
       assertSequenceAvailable(items, item);
@@ -57,7 +56,6 @@ export function applyAgentTurnProjectionOperations(
     }
 
     assertStableItemIdentity(current, item);
-    assertIncreasingRevision(current, item.itemRevision);
     if (operation.operation === 'append') {
       items.set(item.itemId, appendTextItem(current, item));
       continue;
@@ -201,13 +199,8 @@ function applyCompletion(
   if (current.kind !== operation.kind) {
     throw new Error(`Turn projection completion changed item kind: ${operation.itemId}.`);
   }
-  if (current.payload.sourceGeneration !== operation.sourceGeneration) {
-    throw new Error(`Turn projection completion changed source generation: ${operation.itemId}.`);
-  }
-  assertIncreasingRevision(current, operation.itemRevision);
   items.set(operation.itemId, {
     ...current,
-    itemRevision: operation.itemRevision,
     status: operation.status,
     updatedAt: operation.updatedAt,
   });
@@ -218,7 +211,6 @@ function appendTextItem(
   item: AgentTurnTimelineItem,
 ): AgentTurnTimelineItem {
   if (current.kind === 'assistant_text' && item.kind === 'assistant_text') {
-    assertSourceGeneration(current, item);
     return structuredClone({
       ...item,
       createdAt: current.createdAt,
@@ -230,7 +222,6 @@ function appendTextItem(
     });
   }
   if (current.kind === 'thinking' && item.kind === 'thinking') {
-    assertSourceGeneration(current, item);
     return structuredClone({
       ...item,
       createdAt: current.createdAt,
@@ -257,34 +248,6 @@ function assertStableItemIdentity(
     current.sequence !== next.sequence
   ) {
     throw new Error(`Turn projection operation changed item identity: ${next.itemId}.`);
-  }
-}
-
-function assertSourceGeneration(
-  current:
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'assistant_text' }>
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'thinking' }>,
-  next:
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'assistant_text' }>
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'thinking' }>,
-): void {
-  if (current.payload.sourceGeneration !== next.payload.sourceGeneration) {
-    throw new Error(`Turn projection append changed source generation: ${next.itemId}.`);
-  }
-}
-
-function assertPositiveRevision(itemId: string, revision: number): void {
-  if (!Number.isInteger(revision) || revision <= 0) {
-    throw new Error(`Turn projection item ${itemId} has invalid revision ${revision}.`);
-  }
-}
-
-function assertIncreasingRevision(current: AgentTurnTimelineItem, nextRevision: number): void {
-  assertPositiveRevision(current.itemId, nextRevision);
-  if (nextRevision <= current.itemRevision) {
-    throw new Error(
-      `Turn projection item ${current.itemId} revision must increase from ${current.itemRevision}, received ${nextRevision}.`,
-    );
   }
 }
 

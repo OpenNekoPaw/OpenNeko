@@ -22,8 +22,6 @@ import { probeImageMetadata, type ImageMetadata } from '@neko/content/document';
 const DEFAULT_READ_IMAGE_LIMIT = 4;
 const MAX_READ_IMAGE_LIMIT = AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES;
 export const MAX_READ_IMAGE_BYTES = 20 * 1024 * 1024;
-const READ_IMAGE_MODEL_ANALYSIS_UNSUPPORTED =
-  'ReadImage no longer performs model-backed vision analysis. Use metadata mode to expose image resources, then let the selected chat model analyze them through the native multimodal Agent turn. Future external vision-model tools must use a separate tool name.';
 
 export interface ReadImageToolDeps {
   readonly contentAccessRuntime?: ReadImageContentAccessRuntime;
@@ -99,7 +97,7 @@ export interface ReadImageResultData {
   readonly imagesTruncated: boolean;
 }
 
-export type ReadImageMode = 'metadata' | 'vision';
+export type ReadImageMode = 'metadata';
 export type ReadImageAnalysisKind = 'describe' | 'ocr' | 'panels' | 'storyboard' | 'custom';
 
 interface LoadedImage {
@@ -148,11 +146,10 @@ const GENERATED_OUTPUT_CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
   properties: {
     kind: { type: 'string', enum: ['generated-output'] },
     outputId: { type: 'string', minLength: 1 },
-    revision: { type: 'string', minLength: 1 },
     digest: { type: 'string', minLength: 1 },
     path: { type: 'string', minLength: 1 },
   },
-  required: ['kind', 'outputId', 'revision', 'digest', 'path'],
+  required: ['kind', 'outputId', 'digest', 'path'],
   additionalProperties: false,
 };
 
@@ -271,10 +268,13 @@ export async function executeReadImage(
   deps: ReadImageToolDeps,
   args: Record<string, unknown>,
 ): Promise<ToolResult> {
-  const mode = readMode(args['mode']);
-  const analysis = readAnalysisKind(args['analysis']);
-  if (mode === 'vision') {
-    return { success: false, error: READ_IMAGE_MODEL_ANALYSIS_UNSUPPORTED };
+  let mode: ReadImageMode;
+  let analysis: ReadImageAnalysisKind;
+  try {
+    mode = readMode(args['mode']);
+    analysis = readAnalysisKind(args['analysis']);
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
   const maxImages = readBoundedInteger(
     args['max_images'],
@@ -435,11 +435,6 @@ function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
       const height = readPositiveInteger(item['height']);
       const mimeType = readString(item['mimeType']);
       const metadata = isRecord(item['metadata']) ? item['metadata'] : undefined;
-      if ('resourceRef' in item || 'documentResourceRef' in item) {
-        throw new Error(
-          `ReadImage images[${index}] uses a retired content identity; pass contentLocator or representationLocator.`,
-        );
-      }
       const contentLocator = parseContentLocator(item['contentLocator'], index);
       const representationLocator = isContentRepresentationLocator(item['representationLocator'])
         ? item['representationLocator']
@@ -481,13 +476,16 @@ function parseContentLocator(value: unknown, imageIndex: number): ContentLocator
 }
 
 function readMode(value: unknown): ReadImageMode {
-  return value === 'vision' ? 'vision' : 'metadata';
+  if (value === undefined || value === 'metadata') return 'metadata';
+  throw new Error('ReadImage mode must be "metadata".');
 }
 
 function readAnalysisKind(value: unknown): ReadImageAnalysisKind {
-  return value === 'ocr' || value === 'panels' || value === 'storyboard' || value === 'custom'
-    ? value
-    : 'describe';
+  if (value === undefined || value === 'describe') return 'describe';
+  if (value === 'ocr' || value === 'panels' || value === 'storyboard' || value === 'custom') {
+    return value;
+  }
+  throw new Error('ReadImage analysis is invalid.');
 }
 
 function readBoundedInteger(

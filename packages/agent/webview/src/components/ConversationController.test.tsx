@@ -182,7 +182,7 @@ vi.mock('./ChatWorkspace', () => ({
   }) => {
     const tabRenderSnapshot = useTabRenderStore(props.tabRenderStore);
     const [instanceId] = useState(() => crypto.randomUUID());
-    const [localRevision, setLocalRevision] = useState(0);
+    const [localCounter, setLocalCounter] = useState(0);
     const isVisible = props.isVisible ?? true;
     const testId = (name: string) =>
       isVisible ? name : `${name}-${tabRenderSnapshot.snapshot.tabId}`;
@@ -202,11 +202,11 @@ vi.mock('./ChatWorkspace', () => ({
         data-visible={String(isVisible)}
       >
         {isVisible ? <span data-testid="chat-workspace" /> : null}
-        <span data-testid={testId('workspace-local-state')}>{localRevision}</span>
+        <span data-testid={testId('workspace-local-state')}>{localCounter}</span>
         <button
           type="button"
           data-testid={testId('increment-workspace-local-state')}
-          onClick={() => setLocalRevision((current) => current + 1)}
+          onClick={() => setLocalCounter((current) => current + 1)}
         />
         <span data-testid={testId('workspace-conversation')}>
           {tabRenderSnapshot.snapshot.conversationId}
@@ -531,7 +531,6 @@ describe('ConversationController entry state', () => {
   it('submits an unbound Entry Draft through deterministic Assistant targeting', async () => {
     vi.clearAllMocks();
     hostMocks.submitDraft.mockResolvedValue({
-      schemaVersion: 1,
       conversationId: 'conversation-entry-1',
       turnId: 'turn-entry-1',
       turnStatus: 'running',
@@ -651,7 +650,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 1,
             tabState: {
               openTabs: [{ id: 'tab-old', title: 'Old Chat', conversationId: 'conversation-old' }],
               activeTabId: 'tab-old',
@@ -782,7 +780,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 0,
             tabState: { openTabs: [], activeTabId: null },
           },
         }),
@@ -793,7 +790,6 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.activateConversation).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conversation-1',
-        expectedTabStateRevision: 0,
       }),
     );
   });
@@ -829,7 +825,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 0,
             tabState: { openTabs: [], activeTabId: null },
           },
         }),
@@ -867,7 +862,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 0,
             tabState: { openTabs: [], activeTabId: null },
           },
         }),
@@ -878,7 +872,6 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.activateConversation).toHaveBeenLastCalledWith(
       expect.objectContaining({
         conversationId: 'conversation-session',
-        expectedTabStateRevision: 0,
       }),
     );
     hostMocks.runtimeId = 'conversation-controller-test';
@@ -906,7 +899,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 0,
             tabState: { openTabs: [], activeTabId: null },
           },
         }),
@@ -1195,7 +1187,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 1,
             tabState: {
               openTabs: [
                 {
@@ -1428,7 +1419,6 @@ describe('ConversationController entry state', () => {
               conversationId: 'conv-a',
               items: [queuedMessage('conv-a', 'queued for A')],
               pendingCount: 1,
-              version: 1,
             },
           },
         }),
@@ -1489,7 +1479,6 @@ describe('ConversationController entry state', () => {
               conversationId: 'conv-a',
               items: [queuedMessage('conv-a', 'late queued for A')],
               pendingCount: 1,
-              version: 2,
             },
           },
         }),
@@ -2252,7 +2241,6 @@ describe('ConversationController entry state', () => {
             snapshot: {
               conversationId: 'conv-a',
               pendingCount: 0,
-              version: 2,
               items: [],
             },
           },
@@ -2342,7 +2330,6 @@ describe('ConversationController entry state', () => {
     );
     const activationA = hostMocks.activateConversation.mock.calls.at(-1)?.[0] as {
       activationId: number;
-      expectedTabStateRevision: number;
     };
     expect(screen.getByTestId('workspace-availability').textContent).toBe('loading');
 
@@ -2353,7 +2340,6 @@ describe('ConversationController entry state', () => {
             type: 'activeConversation',
             activation: {
               activationId: activationA.activationId,
-              tabStateRevision: activationA.expectedTabStateRevision + 1,
             },
             conversation: {
               id: 'conv-a',
@@ -2376,7 +2362,6 @@ describe('ConversationController entry state', () => {
     );
     const activationB = hostMocks.activateConversation.mock.calls.at(-1)?.[0] as {
       activationId: number;
-      expectedTabStateRevision: number;
     };
     expect(screen.getByTestId('workspace-tab-conversation').textContent).toBe('conv-b');
     expect(screen.getByTestId('workspace-switching').textContent).toBe('idle');
@@ -2389,7 +2374,6 @@ describe('ConversationController entry state', () => {
             type: 'activeConversation',
             activation: {
               activationId: activationB.activationId,
-              tabStateRevision: activationB.expectedTabStateRevision + 1,
             },
             conversation: {
               id: 'conv-b',
@@ -2415,7 +2399,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 1,
             tabState: {
               openTabs: [
                 { id: 'tab-a', title: 'A', conversationId: 'conv-a' },
@@ -2572,10 +2555,9 @@ function projectionSnapshot(conversationId: string, messageId: string, content: 
             messageId,
             itemId: 'text-1',
             sequence: 1,
-            itemRevision: 1,
             kind: 'assistant_text' as const,
             status: 'streaming' as const,
-            payload: { content, format: 'markdown' as const, sourceGeneration: 1 },
+            payload: { content, format: 'markdown' as const },
             createdAt: 1,
             updatedAt: 1,
           },

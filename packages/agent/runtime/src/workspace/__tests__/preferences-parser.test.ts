@@ -12,13 +12,15 @@ describe('parsePreferences', () => {
     expect(warnings).toEqual([]);
   });
 
-  it('reports a removed version field without changing valid preference sections', () => {
+  it('reports an unknown field without changing valid preference sections', () => {
     const { preferences, warnings } = parse(
-      '---\nversion: 2\nscope: project\n---\n## Default mode\nplan\n',
+      '---\nunexpectedField: value\nscope: project\n---\n## Default mode\nplan\n',
     );
-    expect(preferences).not.toHaveProperty('version');
+    expect(preferences).not.toHaveProperty('unexpectedField');
     expect(preferences.defaultMode).toBe('plan');
-    expect(warnings).toEqual(['Unsupported preferences frontmatter field "version"; ignoring']);
+    expect(warnings).toEqual([
+      'Unsupported preferences frontmatter field "unexpectedField"; ignoring',
+    ]);
   });
 
   it('warns when declared scope conflicts with loader scope', () => {

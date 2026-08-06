@@ -31,9 +31,6 @@ export interface UseTabManagerProps {
   onActivateCharacterRoleTab?: (tab: OpenTab) => void;
   hasLocalConversationActivity?: (conversationId: string) => boolean;
   onConfigSnapshotRequested?: () => void;
-  revisionOwnerId: string;
-  tabStateRevision: number;
-  onTabStateRevisionAllocated: (revision: number) => void;
 }
 
 export interface UseTabManagerReturn {
@@ -56,38 +53,15 @@ export function useTabManager({
   onActivateCharacterRoleTab,
   hasLocalConversationActivity,
   onConfigSnapshotRequested,
-  revisionOwnerId,
-  tabStateRevision,
-  onTabStateRevisionAllocated,
 }: UseTabManagerProps): UseTabManagerReturn {
   const agentHostMessages = useAgentHostMessages();
-  const optimisticTabStateRevisionRef = useRef(tabStateRevision);
   const activationIdRef = useRef(0);
-  const revisionOwnerRef = useRef(revisionOwnerId);
-  if (revisionOwnerRef.current !== revisionOwnerId) {
-    revisionOwnerRef.current = revisionOwnerId;
-    optimisticTabStateRevisionRef.current = 0;
-    activationIdRef.current = 0;
-  } else {
-    optimisticTabStateRevisionRef.current = Math.max(
-      optimisticTabStateRevisionRef.current,
-      tabStateRevision,
-    );
-  }
-
-  const beginTabStateMutation = useCallback((): number => {
-    const expectedRevision = optimisticTabStateRevisionRef.current;
-    const nextRevision = expectedRevision + 1;
-    optimisticTabStateRevisionRef.current = nextRevision;
-    onTabStateRevisionAllocated(nextRevision);
-    return expectedRevision;
-  }, [onTabStateRevisionAllocated]);
 
   const persistTabState = useCallback(
     (nextOpenTabs: OpenTab[], nextActiveTabId: string | null): void => {
-      agentHostMessages.updateTabState(nextOpenTabs, nextActiveTabId, beginTabStateMutation());
+      agentHostMessages.updateTabState(nextOpenTabs, nextActiveTabId);
     },
-    [agentHostMessages, beginTabStateMutation],
+    [agentHostMessages],
   );
 
   const activateOrdinaryConversation = useCallback(
@@ -97,7 +71,6 @@ export function useTabManager({
         activationId: activationIdRef.current,
         conversationId: tab.conversationId,
         tabId: tab.id,
-        expectedTabStateRevision: beginTabStateMutation(),
       };
       onBeforeConversationActivation?.(request);
       agentHostMessages.activateConversation({
@@ -106,12 +79,7 @@ export function useTabManager({
       });
       onConversationActivated?.(tab.conversationId);
     },
-    [
-      agentHostMessages,
-      beginTabStateMutation,
-      onBeforeConversationActivation,
-      onConversationActivated,
-    ],
+    [agentHostMessages, onBeforeConversationActivation, onConversationActivated],
   );
 
   const handleOpenTab = useCallback(

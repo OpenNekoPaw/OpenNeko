@@ -16,16 +16,13 @@ export type AgentExtensionManagementHostRequest =
   | (RequestBase & { readonly route: 'snapshot.get' })
   | (RequestBase & {
       readonly route: 'plugin.install' | 'plugin.remove';
-      readonly expectedCatalogRevision: string;
       readonly pluginId: string;
     })
   | (RequestBase & {
       readonly route: 'marketplaces.refresh' | 'skill.install';
-      readonly expectedCatalogRevision: string;
     })
   | (RequestBase & {
       readonly route: 'skill.remove';
-      readonly expectedCatalogRevision: string;
       readonly managementId: string;
     });
 
@@ -65,27 +62,24 @@ export function parseAgentExtensionManagementHostRequest(
       return { ...base, route: 'snapshot.get' };
     case 'plugin.install':
     case 'plugin.remove':
-      requireExactKeys(record, [...BASE_KEYS, 'expectedCatalogRevision', 'pluginId']);
+      requireExactKeys(record, [...BASE_KEYS, 'pluginId']);
       return {
         ...base,
         route: record['route'],
-        expectedCatalogRevision: requireId(record['expectedCatalogRevision'], 'catalog revision'),
         pluginId: requireId(record['pluginId'], 'plugin'),
       };
     case 'marketplaces.refresh':
     case 'skill.install':
-      requireExactKeys(record, [...BASE_KEYS, 'expectedCatalogRevision']);
+      requireExactKeys(record, BASE_KEYS);
       return {
         ...base,
         route: record['route'],
-        expectedCatalogRevision: requireId(record['expectedCatalogRevision'], 'catalog revision'),
       };
     case 'skill.remove':
-      requireExactKeys(record, [...BASE_KEYS, 'expectedCatalogRevision', 'managementId']);
+      requireExactKeys(record, [...BASE_KEYS, 'managementId']);
       return {
         ...base,
         route: 'skill.remove',
-        expectedCatalogRevision: requireId(record['expectedCatalogRevision'], 'catalog revision'),
         managementId: requireId(record['managementId'], 'Skill management'),
       };
     default:

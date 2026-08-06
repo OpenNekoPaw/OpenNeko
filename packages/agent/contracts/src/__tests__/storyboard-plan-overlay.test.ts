@@ -83,7 +83,7 @@ describe('storyboard plan overlay contract', () => {
     );
   });
 
-  it('rejects removed schemaVersion while keeping a valid sibling overlay usable', () => {
+  it('rejects unknown fields while keeping a valid sibling overlay usable', () => {
     const overlay = {
       kind: 'animation-plan-overlay',
       overlayType: 'AnimationPlan',
@@ -91,21 +91,21 @@ describe('storyboard plan overlay contract', () => {
       shotOverlays: [{ shotId: 'scene-1-shot-1' }],
     } as const;
 
-    expect(validateStoryboardPlanOverlay({ ...overlay, schemaVersion: 1 }).diagnostics).toEqual(
+    expect(validateStoryboardPlanOverlay({ ...overlay, unexpectedField: 1 }).diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'unsupported-field', path: ['schemaVersion'] }),
+        expect.objectContaining({ code: 'unsupported-field', path: ['unexpectedField'] }),
       ]),
     );
     expect(
       validateStoryboardPlanOverlay({
         ...overlay,
-        sourceStoryboardRef: { ...overlay.sourceStoryboardRef, version: '1' },
+        sourceStoryboardRef: { ...overlay.sourceStoryboardRef, unexpectedField: 'value' },
       }).diagnostics,
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'unsupported-field',
-          path: ['sourceStoryboardRef', 'version'],
+          path: ['sourceStoryboardRef', 'unexpectedField'],
         }),
       ]),
     );

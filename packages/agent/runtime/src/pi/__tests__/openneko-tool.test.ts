@@ -278,9 +278,8 @@ describe('OpenNeko tool projection to Pi', () => {
   });
 
   it.each([
-    ['renderUri', 'http://127.0.0.1:43125/v1/resources/display-token'],
+    ['renderUri', 'http://127.0.0.1:43125/resources/display-token'],
     ['previewUri', 'https://example.test/preview'],
-    ['source', 'neko-media://desktop/legacy-video'],
     ['source', 'file:///private/tmp/video.mp4'],
   ])('rejects transient display projection in Tool arguments: %s', async (field, value) => {
     const execute = vi.fn();
@@ -296,10 +295,9 @@ describe('OpenNeko tool projection to Pi', () => {
   });
 
   it.each([
-    { renderUri: 'http://127.0.0.1:43125/v1/resources/display-token' },
+    { renderUri: 'http://127.0.0.1:43125/resources/display-token' },
     { previewUri: 'https://example.test/preview' },
-    { source: 'http://localhost:43125/v1/streams/display-token' },
-    { source: 'media://desktop/legacy-video' },
+    { source: 'http://localhost:43125/streams/display-token' },
   ])('rejects transient display projection in Tool results before Pi sees it', async (data) => {
     const projected = projectOpenNekoTool(
       tool({
@@ -371,7 +369,6 @@ describe('OpenNeko tool projection to Pi', () => {
     const contentLocator = {
       kind: 'generated-output' as const,
       outputId: 'generated-cat',
-      revision: 'revision-1',
       digest: `sha256:${'a'.repeat(64)}`,
       path: 'neko/generated/image/generated-cat.png',
     };
@@ -566,7 +563,6 @@ describe('OpenNeko tool projection to Pi', () => {
     const contentLocator = {
       kind: 'generated-output' as const,
       outputId: 'generated-page-1',
-      revision: 'revision-1',
       digest: 'sha256:generated-page-1',
       path: 'generated/generated-page-1.png',
     };
@@ -594,7 +590,6 @@ describe('OpenNeko tool projection to Pi', () => {
     const contentLocator = {
       kind: 'generated-output' as const,
       outputId: 'generated-page-1',
-      revision: 'revision-1',
       digest: 'sha256:generated-page-1',
       path: 'generated/generated-page-1.png',
     };

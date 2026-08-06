@@ -3,7 +3,7 @@
  */
 
 import type { ToolDefinition } from './platform';
-import { UNKNOWN_AGENT_TRACE_ID, type AgentTraceContext } from './agent-trace';
+import type { AgentTraceContext } from './agent-trace';
 import type { ConversationRunScope } from './agent-runtime-scope';
 import type { CreativeDomainMetadata } from './domain-routing';
 import type {
@@ -93,9 +93,9 @@ export interface ToolResultAttachment {
   /** Stable portable content location for creator-visible Tool results. */
   contentLocator?: import('@neko/content').ContentLocator;
   /**
-   * Backward-compatible path/URI reference to the generated asset.
-   * New persisted results should use stable relative paths or ${VAR}/path
-   * values. Host-specific absolute paths are adapter-only compatibility data.
+   * Portable path or adapter-authorized URI for the generated asset.
+   * Persisted results use stable relative paths or ${VAR}/path values;
+   * Host-specific absolute paths remain confined to the Host adapter boundary.
    */
   path?: string;
   /** Optional MIME type hint */
@@ -300,18 +300,15 @@ export function requireToolExecutionRunScope(
     options?.metadata?.conversationId,
     'metadata.conversationId',
   );
-  const traceConversationId = ignoreUnknownTraceOwner(
-    readToolExecutionOwnerId(options?.trace?.conversationId, 'trace.conversationId'),
+  const traceConversationId = readToolExecutionOwnerId(
+    options?.trace?.conversationId,
+    'trace.conversationId',
   );
   const conversationId = requireMatchingToolExecutionOwnerId(
     'conversationId',
     metadataConversationId,
     traceConversationId,
   );
-  if (conversationId === UNKNOWN_AGENT_TRACE_ID) {
-    throw new Error('Tool execution requires a concrete conversationId owner.');
-  }
-
   const runId = requireMatchingToolExecutionOwnerId(
     'runId',
     readToolExecutionOwnerId(options?.metadata?.runId, 'metadata.runId'),
@@ -329,10 +326,6 @@ export function withToolExecutionRunMetadata(
     ...(metadata ?? {}),
     ...requireToolExecutionRunScope(options),
   };
-}
-
-function ignoreUnknownTraceOwner(value: string | undefined): string | undefined {
-  return value === UNKNOWN_AGENT_TRACE_ID ? undefined : value;
 }
 
 function readToolExecutionOwnerId(value: unknown, source: string): string | undefined {

@@ -29,11 +29,9 @@ export function ingestConversationRenderSnapshot(input: {
     input.source === 'host'
       ? reconcilePendingUserMessages(current?.messages ?? [], input.messages)
       : input.messages;
-  const baseRevision = current?.revision ?? 0;
   return input.coordinator.ingest({
     kind: 'host-snapshot',
     conversationId: input.conversationId,
-    baseRevision,
     messages,
     streaming: toConversationStreamingSnapshot(input.streaming),
   });

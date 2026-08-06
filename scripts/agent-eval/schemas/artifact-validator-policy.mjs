@@ -1,7 +1,7 @@
 export const SUPPORTED_FILE_VALIDATOR_IDS = Object.freeze([
-  'json-document-v1',
-  'utf8-text-v1',
-  'canvas-json-v1',
+  'json-document',
+  'utf8-text',
+  'canvas-json',
 ]);
 
 const SUPPORTED_RUNTIME_VALIDATOR_IDS = Object.freeze([

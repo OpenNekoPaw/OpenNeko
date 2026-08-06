@@ -40,7 +40,7 @@ function identity(fingerprint = HASH_A) {
 function holdout() {
   const value = {
     schema: OPTIMIZATION_SCHEMAS.holdoutSelection,
-    policyId: 'creation-persona-holdout-v1',
+    policyId: 'creation-persona-holdout',
     suiteId: 'skill.creation-persona',
     caseIds: ['draft-coastal-radio-concept'],
     selectionDigest: HASH_A,
@@ -157,9 +157,9 @@ function approval() {
   };
 }
 
-function buildTarget(sourceRevision, sourceFingerprint, recipeFingerprint) {
+function buildTarget(sourceCommit, sourceFingerprint, recipeFingerprint) {
   return {
-    sourceRevision,
+    sourceCommit,
     sourceFingerprint,
     buildRecipeFingerprint: recipeFingerprint,
     buildCommands: [
@@ -174,13 +174,13 @@ function targets(overrides = {}) {
   return {
     baseline: {
       skillIdentity: identity(HASH_A),
-      developmentCheckpoint: { kind: 'git-revision', ref: 'base-revision', fingerprint: HASH_A },
+      developmentCheckpoint: { kind: 'git-commit', ref: 'base-revision', fingerprint: HASH_A },
       buildTarget: buildTarget('base-revision', HASH_C, HASH_D),
     },
     candidate: {
       skillIdentity: identity(HASH_B),
       developmentCheckpoint: {
-        kind: 'git-revision',
+        kind: 'git-commit',
         ref: 'candidate-revision',
         fingerprint: HASH_B,
       },
@@ -192,7 +192,7 @@ function targets(overrides = {}) {
 
 function scenario(id, caseGroup, visibility, rubric = true) {
   return {
-    schema: 'neko.agent-eval.scenario.v2',
+    schema: 'neko.agent-eval.scenario',
     id,
     suiteId: 'skill.creation-persona',
     caseGroup,
@@ -242,7 +242,7 @@ function discovered(overrides = {}) {
         judgeProfiles: [
           {
             id: 'content-quality-judge',
-            adapter: 'openai-chat-completions-v1',
+            adapter: 'openai-chat-completions',
             providerId: 'openai',
             modelId: 'gpt-5-mini',
             endpointEnv: 'JUDGE_ENDPOINT',
@@ -256,10 +256,9 @@ function discovered(overrides = {}) {
       cases: overrides.cases ?? cases,
       rubrics: {
         'rubrics/draft-quality.json': {
-          schema: 'neko.agent-eval.rubric.v2',
+          schema: 'neko.agent-eval.rubric',
           id: 'draft-quality',
           domain: 'creation-persona',
-          version: 'v1',
           minimumScore: 3.5,
           maximumUncertainty: 0.35,
           criteria: [],
@@ -431,7 +430,7 @@ describe('approved optimization isolated evaluator', () => {
           targets: targets({
             baseline: {
               ...targets().baseline,
-              buildTarget: { ...targets().baseline.buildTarget, sourceRevision: 'working-tree' },
+              buildTarget: { ...targets().baseline.buildTarget, sourceCommit: 'working-tree' },
             },
           }),
           holdoutSelectionFile: 'unused.json',

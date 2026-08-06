@@ -105,7 +105,6 @@ function previewProjection() {
         conversationId: 'conversation:1',
         scratchArtifactId: 'scratch:1',
       },
-      revision: 0,
     },
     status: 'unavailable' as const,
     diagnostic: { code: 'preview-unsupported-kind' as const, message: 'unsupported' },

@@ -98,8 +98,8 @@ describe('composite artifact contracts', () => {
     expect(result.diagnostics.map((d) => d.code)).toContain('unsafe-runtime-handle');
   });
 
-  it('rejects removed version fields without invalidating a valid sibling artifact', () => {
-    const table = { ...makeTable(), schemaVersion: 1, profileVersion: 2 };
+  it('rejects unknown fields without invalidating a valid sibling artifact', () => {
+    const table = { ...makeTable(), unexpectedField: 1 };
     const persistedProfile: ArtifactProfileDescriptor = { ...profile, source: 'builtin' };
 
     const result = validateGenericTable(table, { profiles: [persistedProfile], persisted: true });
@@ -113,12 +113,7 @@ describe('composite artifact contracts', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'unsupported-field',
-          path: ['schemaVersion'],
-          severity: 'error',
-        }),
-        expect.objectContaining({
-          code: 'unsupported-field',
-          path: ['profileVersion'],
+          path: ['unexpectedField'],
           severity: 'error',
         }),
       ]),
@@ -139,7 +134,7 @@ describe('composite artifact contracts', () => {
     );
   });
 
-  it('allows temporary profiled chat tables without technical version fields', () => {
+  it('allows temporary profiled chat tables with canonical fields', () => {
     const result = validateGenericTable(makeTable(), {
       profiles: [profile],
       persisted: false,
@@ -158,7 +153,7 @@ describe('composite artifact contracts', () => {
             sourcePanel: makeMediaCell(),
             motionPlan: {
               type: 'json',
-              schemaRef: 'neko.motion-plan.v1',
+              schemaRef: 'neko.motion-plan',
               value: { layer: 'fg', durationMs: '1200' },
             },
           },
@@ -195,7 +190,7 @@ describe('composite artifact contracts', () => {
           columnId: 'motionPlan',
           cellType: 'json',
           required: true,
-          schemaRef: 'neko.motion-plan.v1',
+          schemaRef: 'neko.motion-plan',
         },
       ],
       suggestedActions: [{ actionId: 'review.shot.approve', kind: 'review' }],
@@ -209,7 +204,7 @@ describe('composite artifact contracts', () => {
           columnId: 'motionPlan',
           cellType: 'json',
           required: true,
-          schemaRef: 'neko.other-plan.v1',
+          schemaRef: 'neko.other-plan',
         },
       ],
       actions: [{ actionId: 'canvas.ingestMarkdown', kind: 'review' }],
@@ -221,7 +216,7 @@ describe('composite artifact contracts', () => {
             sourcePanel: makeMediaCell({ mediaType: 'video' }),
             motionPlan: {
               type: 'json',
-              schemaRef: 'neko.other-plan.v1',
+              schemaRef: 'neko.other-plan',
               value: { durationMs: 1200 },
             },
           },
@@ -231,7 +226,7 @@ describe('composite artifact contracts', () => {
 
     const result = validateGenericTable(table, {
       profiles: [strictProfile],
-      resolvedSchemaRefs: ['neko.motion-plan.v1'],
+      resolvedSchemaRefs: ['neko.motion-plan'],
     });
 
     expect(result.ok).toBe(false);
@@ -258,7 +253,7 @@ describe('composite artifact contracts', () => {
           columnId: 'characters',
           cellType: 'json',
           required: false,
-          schemaRef: 'neko.characters.v1',
+          schemaRef: 'neko.characters',
           shape: {
             requiredKeys: ['name'],
             fieldTypes: { name: 'string' },
@@ -295,7 +290,7 @@ describe('composite artifact contracts', () => {
             sourcePanel: makeMediaCell(),
             characters: {
               type: 'json',
-              schemaRef: 'neko.characters.v1',
+              schemaRef: 'neko.characters',
               value: { role: 'primary' },
             },
             dialogue: { type: 'string', value: '那一願望實現囉！' },
@@ -306,7 +301,7 @@ describe('composite artifact contracts', () => {
 
     const result = validateGenericTable(table, {
       profiles: [composedProfile],
-      resolvedSchemaRefs: ['neko.characters.v1'],
+      resolvedSchemaRefs: ['neko.characters'],
     });
 
     expect(result.ok).toBe(false);

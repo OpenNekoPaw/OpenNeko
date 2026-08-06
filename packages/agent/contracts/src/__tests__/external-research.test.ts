@@ -4,8 +4,8 @@ import {
   isExternalResearchConfig,
   isExternalResearchFetchInput,
   isExternalResearchFetchResult,
-  isExternalResearchMcpFetchV1,
-  isExternalResearchMcpSearchV1,
+  isExternalResearchMcpFetchOutput,
+  isExternalResearchMcpSearchOutput,
   isExternalResearchProviderCapabilities,
   isExternalResearchSearchInput,
   isExternalResearchSearchResult,
@@ -39,12 +39,12 @@ describe('external research contracts', () => {
           searchTool: {
             name: 'web_search',
             queryArg: 'query',
-            outputSchema: 'neko.externalResearch.search.v1',
+            outputSchema: 'neko.externalResearch.search',
           },
           fetchTool: {
             name: 'fetch_url',
             urlArg: 'url',
-            outputSchema: 'neko.externalResearch.fetch.v1',
+            outputSchema: 'neko.externalResearch.fetch',
           },
         },
       }),
@@ -52,17 +52,17 @@ describe('external research contracts', () => {
   });
 
   it('rejects prose-only MCP search output', () => {
-    expect(isExternalResearchMcpSearchV1({ text: 'Here is what I found.' })).toBe(false);
+    expect(isExternalResearchMcpSearchOutput({ text: 'Here is what I found.' })).toBe(false);
   });
 
   it('accepts structured MCP search and fetch output', () => {
     expect(
-      isExternalResearchMcpSearchV1({
+      isExternalResearchMcpSearchOutput({
         sources: [{ url: 'https://example.com', title: 'Example' }],
       }),
     ).toBe(true);
     expect(
-      isExternalResearchMcpFetchV1({
+      isExternalResearchMcpFetchOutput({
         url: 'https://example.com',
         content: 'Example content',
       }),

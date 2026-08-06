@@ -11,10 +11,6 @@ const forbiddenHostNeutralPatterns = [
     replacement: 'use the injected AgentHostRuntimeAdapter facade',
   },
   {
-    pattern: /\bLegacyHostMessages\b/u,
-    replacement: 'use the Root-bound Agent host runtime context',
-  },
-  {
     pattern: /\bAgentHostMessages\b/u,
     replacement: 'use useAgentHostMessages from the exact Root provider',
   },

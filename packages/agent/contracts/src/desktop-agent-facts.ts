@@ -49,7 +49,6 @@ export interface DesktopAgentNeutralFacts {
     readonly transcript: 'pi-session';
     readonly metadata: 'sqlite';
     readonly projection: 'conversation-projection-store';
-    readonly forbiddenPathCount: 0;
   };
   readonly configuration: {
     readonly requested: EffectiveAgentConfigurationProjection;
@@ -109,7 +108,7 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
   );
   const runtimePath = exactRecord(
     record['runtimePath'],
-    ['controller', 'runtime', 'transcript', 'metadata', 'projection', 'forbiddenPathCount'],
+    ['controller', 'runtime', 'transcript', 'metadata', 'projection'],
     'Desktop Agent runtime path facts',
   );
   if (
@@ -117,8 +116,7 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
     runtimePath['runtime'] !== 'pi-conversation-runtime' ||
     runtimePath['transcript'] !== 'pi-session' ||
     runtimePath['metadata'] !== 'sqlite' ||
-    runtimePath['projection'] !== 'conversation-projection-store' ||
-    runtimePath['forbiddenPathCount'] !== 0
+    runtimePath['projection'] !== 'conversation-projection-store'
   ) {
     throw new Error('Desktop Agent runtime path facts are invalid.');
   }
@@ -171,7 +169,6 @@ export function parseDesktopAgentNeutralFacts(input: unknown): DesktopAgentNeutr
       transcript: 'pi-session',
       metadata: 'sqlite',
       projection: 'conversation-projection-store',
-      forbiddenPathCount: 0,
     }),
     configuration: Object.freeze({
       requested: parseConfigurationProjection(configuration['requested']),

@@ -58,15 +58,15 @@ describe('core tool prompt-locale projection', () => {
     expect(authorize).not.toHaveBeenCalled();
   });
 
-  it('projects semantic access denial and never exposes obsolete policy prose', async () => {
-    const legacyDecision = {
+  it('projects semantic access denial without exposing upstream policy prose', async () => {
+    const upstreamDecision = {
       allowed: false as const,
       path: '/external/原文.txt',
       reason: 'outside-authorized-roots' as const,
-      message: 'POISON LEGACY PROSE',
+      message: 'UNEXPECTED LOCALIZED PROSE',
     };
     const policy: CoreFileAccessPolicy = {
-      authorize: vi.fn(() => legacyDecision),
+      authorize: vi.fn(() => upstreamDecision),
     };
     const read = new ReadTool({ fileAccessPolicy: policy });
 
@@ -127,13 +127,13 @@ describe('core tool prompt-locale projection', () => {
   });
 
   it('returns semantic project-memory success data and localizes external failure wrappers', async () => {
-    const legacySinkResult = {
+    const upstreamSinkResult = {
       proposalId: 'proposal-原文',
-      message: 'POISON LEGACY PROSE',
+      message: 'UNEXPECTED LOCALIZED PROSE',
     };
     const successTool = new MemoryWriteTool({
       proposalSink: {
-        proposeProjectMemoryMutation: vi.fn(async () => legacySinkResult),
+        proposeProjectMemoryMutation: vi.fn(async () => upstreamSinkResult),
       },
     });
     const success = await successTool.execute(
@@ -153,7 +153,7 @@ describe('core tool prompt-locale projection', () => {
         proposalId: 'proposal-原文',
       },
     });
-    expect(JSON.stringify(success)).not.toContain('POISON LEGACY PROSE');
+    expect(JSON.stringify(success)).not.toContain('UNEXPECTED LOCALIZED PROSE');
 
     const failureTool = new MemoryWriteTool({
       proposalSink: {

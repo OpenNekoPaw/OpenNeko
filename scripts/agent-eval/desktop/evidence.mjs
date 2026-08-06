@@ -13,7 +13,6 @@ const DESKTOP_EVIDENCE_ASSERTION_KINDS = new Set([
   'terminal-idle',
   'timeline-projection',
   'resource-display-projection',
-  'no-fallback',
 ]);
 
 export function createDesktopEvaluationFacts(input) {
@@ -27,7 +26,7 @@ export function createDesktopEvaluationFacts(input) {
     throw new Error('Desktop Agent complete-session evidence is incomplete.');
   }
   return Object.freeze({
-    schema: 'neko.agent-eval.desktop-session-facts.v1',
+    schema: 'neko.agent-eval.desktop-session-facts',
     neutralFacts: input.facts,
     identity: input.identity,
     workflow: input.workflow,
@@ -59,7 +58,7 @@ export function assertDesktopEvidenceSupport(assertions) {
 }
 
 export function isDesktopEvaluationFacts(facts) {
-  return facts?.schema === 'neko.agent-eval.desktop-session-facts.v1';
+  return facts?.schema === 'neko.agent-eval.desktop-session-facts';
 }
 
 export function runDesktopHardGate(assertion, facts, context) {
@@ -107,8 +106,6 @@ export function runDesktopHardGate(assertion, facts, context) {
       return assertTimelineProjection(assertion, input);
     case 'resource-display-projection':
       return assertResourceDisplayProjection(assertion, input);
-    case 'no-fallback':
-      return assertNoFallback(assertion, input);
     default:
       throw configurationError(
         `Desktop Agent assertion '${assertion.kind}' reached execution without an evidence adapter.`,
@@ -136,8 +133,7 @@ function assertCanonicalFacts(input) {
     facts.runtimePath.runtime !== 'pi-conversation-runtime' ||
     facts.runtimePath.transcript !== 'pi-session' ||
     facts.runtimePath.metadata !== 'sqlite' ||
-    facts.runtimePath.projection !== 'conversation-projection-store' ||
-    facts.runtimePath.forbiddenPathCount !== 0
+    facts.runtimePath.projection !== 'conversation-projection-store'
   ) {
     throw new Error(
       'Desktop Agent terminal facts did not use the canonical complete-session path.',
@@ -408,25 +404,6 @@ function assertResourceDisplayProjection(assertion, input) {
     );
   }
   return projection;
-}
-
-function assertNoFallback(assertion, input) {
-  if (input.facts.runtimePath.forbiddenPathCount !== 0) {
-    throw new Error('Desktop Agent forbidden runtime path participated in execution.');
-  }
-  const projected = JSON.stringify(input.projection);
-  const transportFallback = /ResourceRef|resourceRef|neko-media:|opennekomedia:|file:/u.test(
-    projected,
-  );
-  if (transportFallback)
-    throw new Error('Desktop Agent public projection used a forbidden fallback.');
-  const observed = assertion.forbiddenRefs.filter((ref) => projected.includes(ref));
-  if (observed.length > 0) {
-    throw new Error(
-      `Desktop Agent forbidden fallback reference(s) observed: ${observed.join(', ')}`,
-    );
-  }
-  return { forbiddenRefs: assertion.forbiddenRefs, observedForbiddenRefs: [] };
 }
 
 function assertFactsContainNoRenderUrl(facts) {

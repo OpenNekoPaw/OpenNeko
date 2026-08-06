@@ -151,17 +151,7 @@ describe('Tab render realm state', () => {
   });
 
   it('leaves an unrelated historical state untouched and reports a realm-local diagnostic', () => {
-    const persistedState = {
-      agentTurnTimelineRecoveries: [
-        {
-          connectionEpoch: 'epoch-1',
-          conversationId: 'conv-a',
-          turnId: 'turn-a',
-          messageId: 'message-a',
-          lastAppliedDeliveryRevision: 1,
-        },
-      ],
-    };
+    const persistedState = { unrelatedState: [{ marker: 'opaque' }] };
     const host = createHost(persistedState);
     const registry = createTabRenderRuntimeRegistry();
 

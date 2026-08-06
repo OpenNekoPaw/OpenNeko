@@ -5,7 +5,7 @@ export function createRandomizedEvidenceComparison(input, options = {}) {
     : [input.leftEvidence, input.rightEvidence];
   return {
     projection: {
-      schema: 'neko.agent-eval.randomized-comparison.v2',
+      schema: 'neko.agent-eval.randomized-comparison',
       publicContract: input.publicContract,
       options: [
         { id: 'option-1', evidence: ordered[0] },

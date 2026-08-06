@@ -61,7 +61,7 @@ function budget() {
 function holdoutSelection() {
   const selection = {
     schema: OPTIMIZATION_SCHEMAS.holdoutSelection,
-    policyId: 'creation-persona-holdout-v1',
+    policyId: 'creation-persona-holdout',
     suiteId: 'skill.creation-persona',
     caseIds: ['draft-coastal-radio-concept'],
     selectionDigest: HASH_A,
@@ -99,7 +99,6 @@ function syntheticReport() {
     runId: 'run-quality-regression',
     outcome: 'case-fail',
     target: { kind: 'skill', identity: identity() },
-    repositoryRevision: 'base-revision',
     modelIdentity: { providerId: 'nekoapi-chat', modelId: 'gpt-5.5' },
     effectiveConfiguration: {
       runtimeProfileId: 'markdown',
@@ -175,7 +174,6 @@ function syntheticReport() {
     modelId: 'gpt-5-mini',
     profileId: 'content-quality-judge',
     rubricId: 'draft-quality',
-    rubricVersion: 'v1',
     promptHash: HASH_A,
     sampling: { temperature: 0, maxTokens: 1_800 },
     criteria: [
@@ -198,7 +196,7 @@ function syntheticReport() {
 
 function scenario(id, caseGroup, visibility, rubric = true) {
   return {
-    schema: 'neko.agent-eval.scenario.v2',
+    schema: 'neko.agent-eval.scenario',
     id,
     caseGroup,
     visibility,
@@ -240,7 +238,7 @@ function discovered() {
         judgeProfiles: [
           {
             id: 'content-quality-judge',
-            adapter: 'openai-chat-completions-v1',
+            adapter: 'openai-chat-completions',
             providerId: 'openai',
             modelId: 'gpt-5-mini',
             endpointEnv: 'JUDGE_ENDPOINT',
@@ -264,9 +262,9 @@ function discovered() {
   ];
 }
 
-function buildTarget(revision, sourceFingerprint, recipeFingerprint) {
+function buildTarget(sourceCommit, sourceFingerprint, recipeFingerprint) {
   return {
-    sourceRevision: revision,
+    sourceCommit,
     sourceFingerprint,
     buildRecipeFingerprint: recipeFingerprint,
     buildCommands: [
@@ -411,13 +409,13 @@ describe('optimization key-free end-to-end state machine', () => {
     const targets = {
       baseline: {
         skillIdentity: identity(HASH_A),
-        developmentCheckpoint: { kind: 'git-revision', ref: 'base-revision', fingerprint: HASH_A },
+        developmentCheckpoint: { kind: 'git-commit', ref: 'base-revision', fingerprint: HASH_A },
         buildTarget: buildTarget('base-revision', HASH_C, HASH_D),
       },
       candidate: {
         skillIdentity: identity(HASH_B),
         developmentCheckpoint: {
-          kind: 'git-revision',
+          kind: 'git-commit',
           ref: 'candidate-revision',
           fingerprint: HASH_B,
         },

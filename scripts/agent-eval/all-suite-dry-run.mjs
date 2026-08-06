@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createV2DryRun } from './runner/run-v2-case.mjs';
+import { createDryRun } from './runner/run-case.mjs';
 import { discoverSuites } from './suites/discovery.mjs';
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -30,12 +30,12 @@ export async function runAllSuiteDryRun(options = {}) {
       `selected case does not exist in ${options.suiteId}: ${options.caseId}`,
     );
   }
-  const results = cases.map((selection) => createV2DryRun(selection));
+  const results = cases.map((selection) => createDryRun(selection));
   if (!results.every((result) => result.ok === true)) {
-    throw new Error('one or more v2 suite cases did not complete dry-run validation');
+    throw new Error('one or more suite cases did not complete dry-run validation');
   }
   return {
-    schema: 'neko.agent-eval.all-suite-dry-run.v2',
+    schema: 'neko.agent-eval.all-suite-dry-run',
     ok: true,
     suiteCount: selectedSuites.length,
     caseCount: results.length,

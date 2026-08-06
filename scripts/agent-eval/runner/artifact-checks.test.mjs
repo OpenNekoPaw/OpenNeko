@@ -19,7 +19,7 @@ afterEach(async () => {
   );
 });
 
-describe('v2 contained artifact checks', () => {
+describe('contained artifact checks', () => {
   it('passes contained absence checks and fails when the path exists', async () => {
     const workspace = await createWorkspace();
     const check = {
@@ -81,7 +81,7 @@ describe('v2 contained artifact checks', () => {
           evidenceRef: 'artifact-facts',
           path: 'output/result.json',
           digest: digest(content),
-          validatorId: 'json-document-v1',
+          validatorId: 'json-document',
         },
       ],
       { workspace, facts: {} },
@@ -93,7 +93,7 @@ describe('v2 contained artifact checks', () => {
         ref: 'output/result.json',
         path: 'output/result.json',
         digest: digest(content),
-        validatorId: 'json-document-v1',
+        validatorId: 'json-document',
         validatorStatus: 'valid',
       },
     });
@@ -126,7 +126,7 @@ describe('v2 contained artifact checks', () => {
           evidenceRef: 'artifact-facts',
           path: 'result.txt',
           digest: digest(content),
-          validatorId: 'utf8-text-v1',
+          validatorId: 'utf8-text',
         },
       ],
       { workspace, facts: {} },
@@ -198,14 +198,14 @@ describe('v2 contained artifact checks', () => {
           evidenceRef: 'artifact-facts',
           path: 'invalid.json',
           digest: digest(content),
-          validatorId: 'json-document-v1',
+          validatorId: 'json-document',
         },
       ],
       { workspace, facts: {} },
     );
     expect(result).toMatchObject({
       status: 'fail',
-      message: 'public artifact validator json-document-v1 rejected artifact',
+      message: 'public artifact validator json-document rejected artifact',
     });
     expect(JSON.stringify(result)).not.toContain(content.trim());
   });

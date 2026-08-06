@@ -75,7 +75,6 @@ export interface UseMessageHandlerProps {
   activeTabId: string | null;
   isTablessConversationViewRef: MutableRefObject<boolean>;
   pendingForegroundConversationActivationRef?: MutableRefObject<PendingForegroundConversationActivation | null>;
-  tabStateRevisionRef: MutableRefObject<number>;
   restoredConversationIdsRef: MutableRefObject<Set<string>>;
   reconcileTabRenderRuntimes: (
     bindings: readonly { readonly tabId: string; readonly conversationId: string }[],
@@ -180,7 +179,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     activeTabId,
     isTablessConversationViewRef,
     pendingForegroundConversationActivationRef,
-    tabStateRevisionRef,
     restoredConversationIdsRef,
     reconcileTabRenderRuntimes,
     completeForegroundConversationActivation,
@@ -283,7 +281,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       conversationRenderCoordinator,
       disposeConversationRendering: renderRuntime.disposeConversation,
       pendingForegroundConversationActivationRef,
-      tabStateRevisionRef,
       restoredConversationIdsRef,
       reconcileTabRenderRuntimes,
       completeForegroundConversationActivation,
@@ -337,7 +334,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
       conversationRenderCoordinator,
       renderRuntime,
       pendingForegroundConversationActivationRef,
-      tabStateRevisionRef,
       reconcileTabRenderRuntimes,
       completeForegroundConversationActivation,
       requestQueuedMessageEdit,
@@ -350,7 +346,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     (event: MessageEvent<AgentHostToWebviewMessage>): void => {
       const message = event.data;
       if (!message || !message.type) return;
-      rejectLegacyActiveContentMessage(message);
       if (isForeignFeatureHostMessage(message) || isProjectionHostMessage(message)) return;
 
       const handled = registry.handle(message, context);
@@ -365,32 +360,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     handleMessage,
     disposeConversationRendering: renderRuntime.disposeConversation,
   };
-}
-
-const LEGACY_ACTIVE_CONTENT_MESSAGE_TYPES = new Set([
-  'thinking',
-  'streamText',
-  'assistantTextReplacement',
-  'streamComplete',
-  'streamThinking',
-  'messageCancelled',
-  'toolCall',
-  'toolResult',
-  'toolResultBackfill',
-  'toolConfirmation',
-]);
-
-export function rejectLegacyActiveContentMessage(message: unknown): void {
-  if (!isRecord(message)) return;
-  const type = message['type'];
-  if (typeof type !== 'string' || !LEGACY_ACTIVE_CONTENT_MESSAGE_TYPES.has(type)) return;
-  const conversationId =
-    typeof message['conversationId'] === 'string'
-      ? message['conversationId']
-      : 'unknown-conversation';
-  throw new Error(
-    `Legacy active-content message ${type} is forbidden for ${conversationId}; install a conversation projection attachment.`,
-  );
 }
 
 export function isProjectionHostMessage(message: unknown): boolean {

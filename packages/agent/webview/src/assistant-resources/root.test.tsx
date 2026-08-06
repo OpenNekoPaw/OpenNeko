@@ -20,7 +20,6 @@ describe('AssistantResourcesRoot', () => {
         windowId: 'window:1',
       },
       getSnapshot: vi.fn(async () => ({
-        schemaVersion: 1 as const,
         identity: {
           assistantSpaceId: 'assistant:1',
           conversationId: 'conversation:1',
@@ -28,7 +27,6 @@ describe('AssistantResourcesRoot', () => {
         },
         baseGrants: [
           {
-            schemaVersion: 1 as const,
             resourceGrantId: 'grant:1',
             assistantSpaceId: 'assistant:1',
             kind: 'file' as const,
@@ -37,7 +35,6 @@ describe('AssistantResourcesRoot', () => {
         ],
         scratchArtifacts: [
           {
-            schemaVersion: 1 as const,
             scratchArtifactId: 'scratch:1',
             assistantSpaceId: 'assistant:1',
             conversationId: 'conversation:1',
@@ -60,7 +57,6 @@ describe('AssistantResourcesRoot', () => {
 
 function previewProjection() {
   return {
-    schemaVersion: 1 as const,
     identity: {
       previewSessionId: 'preview:1',
       windowId: 'window:1',
@@ -70,7 +66,6 @@ function previewProjection() {
         conversationId: 'conversation:1',
         scratchArtifactId: 'scratch:1',
       },
-      revision: 0,
     },
     status: 'unavailable' as const,
     diagnostic: { code: 'preview-unsupported-kind' as const, message: 'unsupported' },

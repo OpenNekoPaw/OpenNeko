@@ -53,7 +53,7 @@ describe('conversation projection presenter', () => {
       messages: [],
       workItems: [],
       isThinking: true,
-      streamingMessageId: 'legacy-message',
+      streamingMessageId: 'unprojected-message',
       projection: projection('exact final content', { completed: true }),
     });
 
@@ -67,7 +67,7 @@ describe('conversation projection presenter', () => {
 
   it('withholds an active shared message through an authoritative empty snapshot', () => {
     const activeMessage: Message = {
-      id: 'legacy-message',
+      id: 'unprojected-message',
       role: 'assistant',
       content: 'non-Timeline partial',
       timestamp: 1,
@@ -86,7 +86,7 @@ describe('conversation projection presenter', () => {
       messages: [activeMessage],
       workItems: [],
       isThinking: true,
-      streamingMessageId: 'legacy-message',
+      streamingMessageId: 'unprojected-message',
       projection: { conversationId: 'conv-1', turns: [] },
     });
 
@@ -211,10 +211,9 @@ function textItem(
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,
-    itemRevision: 1,
     kind: 'assistant_text',
     status,
-    payload: { content, format: 'markdown', sourceGeneration: 1 },
+    payload: { content, format: 'markdown' },
     createdAt,
     updatedAt: createdAt,
   };

@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.skill-runtime",
   "owner": { "kind": "agent-runtime", "id": "skill-runtime" },
   "target": {
@@ -7,7 +7,6 @@
     "id": "skill-trigger-injection-lifecycle",
     "contractHash": "sha256:d92ed1cfd4320727c909d093f39789b835ea65fac21a50f36f5b4c991334b6c0"
   },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     {
       "id": "canonical-default",

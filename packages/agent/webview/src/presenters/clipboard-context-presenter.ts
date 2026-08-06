@@ -17,9 +17,37 @@ export function projectClipboardTextToContextPayload(text: string): AgentContext
 }
 
 function projectDocumentImageReference(value: Record<string, unknown>): AgentContextPayload | null {
+  if (!hasExactKeys(value, ['kind', 'document', 'image', 'display'])) return null;
   const document = asRecord(value.document);
   const image = asRecord(value.image);
   if (!document || !image) return null;
+  if (
+    !hasExactKeys(document, [
+      'filePath',
+      'source',
+      'locator',
+      'contentLocator',
+      'representationLocator',
+    ]) ||
+    !hasExactKeys(image, [
+      'index',
+      'width',
+      'height',
+      'byteSize',
+      'mimeType',
+      'contentLocator',
+      'representationLocator',
+    ])
+  ) {
+    return null;
+  }
+  const display = value.display === undefined ? undefined : asRecord(value.display);
+  if (
+    value.display !== undefined &&
+    (!display || !hasExactKeys(display, ['runtimeOnly', 'path']))
+  ) {
+    return null;
+  }
 
   const source = asRecord(document.source);
   const locator = parseDocumentLocator(document.locator);
@@ -27,8 +55,6 @@ function projectDocumentImageReference(value: Record<string, unknown>): AgentCon
     parseStableContentLocator(image.contentLocator) ??
     parseStableContentLocator(document.contentLocator);
   if (!contentLocator) return null;
-  if (image.resourceRef !== undefined || document.resourceRef !== undefined) return null;
-
   const label = locator
     ? formatDocumentLocator(locator)
     : contentLocator.kind === 'document-entry'
@@ -226,6 +252,11 @@ function basename(value: string): string {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
+}
+
+function hasExactKeys(value: Record<string, unknown>, allowedKeys: readonly string[]): boolean {
+  const allowed = new Set(allowedKeys);
+  return Object.keys(value).every((key) => allowed.has(key));
 }
 
 function readString(value: unknown): string | undefined {

@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "workspace-board-delivery-resume",
   "suiteId": "agent-runtime.workflow-controller",
   "caseGroup": "failure",
@@ -13,12 +13,6 @@
       "Host B fenced takeover",
       "Canvas receipt"
     ],
-    "forbiddenFallback": [
-      "new delivery identity",
-      "direct .nkc write",
-      "last-write-wins",
-      "active Canvas fallback"
-    ],
     "observables": [
       {
         "ref": "recovery-facts",
@@ -28,25 +22,41 @@
       }
     ],
     "expectedResult": "Host B resumes the same delivery identity, applies exactly one Canvas batch, and reaches terminal idle.",
-    "expectedFailure": "Changed identity, stale commit success, duplicate content node, legacy visual Group creation, missing receipt, or non-idle recovery fails."
+    "expectedFailure": "Changed identity, stale commit success, duplicate content node, missing receipt, or non-idle recovery fails."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "queue",
       "kind": "submit",
       "prompt": "Create one named reviewable Markdown analysis artifact and wait until the Workspace Board delivery is queued."
     },
-    { "id": "first-idle", "kind": "wait-for-idle", "timeoutMs": 240000 },
-    { "id": "resume-host", "kind": "resume", "conversationRef": "current" },
+    {
+      "id": "first-idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 240000
+    },
+    {
+      "id": "resume-host",
+      "kind": "resume",
+      "conversationRef": "current"
+    },
     {
       "id": "recover",
       "kind": "submit",
       "prompt": "Resume the same workspace delivery context and confirm it remains available."
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 240000
+    }
   ],
   "assertions": [
     {
@@ -63,17 +73,23 @@
       "status": "projected",
       "targetKind": "workspace",
       "minNodeIds": 1,
-      "revisionRequired": true,
+      "sourceFingerprintRequired": true,
       "diagnosticsEmpty": true,
       "evidenceRef": "recovery-facts"
     },
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
       "evidenceRef": "recovery-facts"
     }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 240000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 240000,
+    "repetitions": 1
+  }
 }

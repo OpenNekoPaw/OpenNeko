@@ -13,7 +13,6 @@ describe('Agent launch contract', () => {
         connectionId: 'launch-connection-1',
         scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
       },
-      revision: 4,
       models: [
         {
           kind: 'model',
@@ -81,7 +80,6 @@ describe('Agent launch contract', () => {
         connectionId: 'launch-connection-1',
         scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
       },
-      revision: 0,
       models: [],
       commands: [],
       skills: [],

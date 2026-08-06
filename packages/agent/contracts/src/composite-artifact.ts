@@ -551,8 +551,22 @@ export function validateCompositeArtifact(
     };
   }
 
-  rejectRemovedField(value, 'schemaVersion', [], diagnostics);
-  rejectRemovedField(value, 'profileVersion', [], diagnostics);
+  rejectUnknownFields(
+    value,
+    new Set([
+      'kind',
+      'artifactId',
+      'profile',
+      'title',
+      'blocks',
+      'provenance',
+      'diagnostics',
+      'suggestedActions',
+      'extensions',
+    ]),
+    [],
+    diagnostics,
+  );
   validateLiteralKind(value['kind'], COMPOSITE_ARTIFACT_KIND, ['kind'], diagnostics);
   requireString(value['artifactId'], ['artifactId'], diagnostics);
   requireString(value['title'], ['title'], diagnostics);
@@ -586,8 +600,22 @@ export function validateGenericTable(
     };
   }
 
-  rejectRemovedField(value, 'schemaVersion', [], diagnostics);
-  rejectRemovedField(value, 'profileVersion', [], diagnostics);
+  rejectUnknownFields(
+    value,
+    new Set([
+      'kind',
+      'tableId',
+      'profile',
+      'title',
+      'columns',
+      'rows',
+      'actions',
+      'diagnostics',
+      'extensions',
+    ]),
+    [],
+    diagnostics,
+  );
   validateLiteralKind(value['kind'], GENERIC_TABLE_KIND, ['kind'], diagnostics);
   requireString(value['tableId'], ['tableId'], diagnostics);
   requireString(value['title'], ['title'], diagnostics);
@@ -833,7 +861,22 @@ function validateCompositeArtifactBlock(
       );
       break;
     case 'domain':
-      rejectRemovedField(value, 'schemaVersion', path, diagnostics);
+      rejectUnknownFields(
+        value,
+        new Set([
+          'blockId',
+          'kind',
+          'title',
+          'role',
+          'diagnostics',
+          'actions',
+          'extensions',
+          'domainKind',
+          'payload',
+        ]),
+        path,
+        diagnostics,
+      );
       requireString(value['domainKind'], [...path, 'domainKind'], diagnostics);
       validateSerializableValue(value['payload'], [...path, 'payload'], diagnostics);
       break;
@@ -1815,19 +1858,20 @@ function validateSerializableValue(
   }
 }
 
-function rejectRemovedField(
+function rejectUnknownFields(
   value: Record<string, unknown>,
-  field: 'schemaVersion' | 'profileVersion',
+  allowedFields: ReadonlySet<string>,
   path: readonly ArtifactPathSegment[],
   diagnostics: ArtifactDiagnostic[],
 ): void {
-  if (Object.hasOwn(value, field)) {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
     diagnostics.push(
       artifactDiagnostic(
         'error',
         'unsupported-field',
         [...path, field],
-        `Artifact field ${field} is not supported.`,
+        `Artifact contains unsupported field ${field}.`,
         {
           actual: serializableDiagnosticValue(value[field]),
         },

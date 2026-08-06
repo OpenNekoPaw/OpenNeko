@@ -30,7 +30,7 @@ const MODEL: Model<'openai-completions'> = {
   name: 'Main',
   api: 'openai-completions',
   provider: 'newapi',
-  baseUrl: 'https://newapi.example.invalid/v1',
+  baseUrl: 'https://newapi.example.invalid/api',
   reasoning: false,
   input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -178,7 +178,6 @@ describe('PiConversationRuntime', () => {
           generationJob: {
             kind: 'generation-job',
             jobId: 'generation-1',
-            revision: 3,
             phase: 'succeeded',
           },
         },

@@ -53,7 +53,7 @@ function matrix() {
     suiteId: 'skill.creation-persona',
     developmentCaseIds: ['draft-rain-station-concept'],
     holdoutPolicy: {
-      id: 'creation-persona-holdout-v1',
+      id: 'creation-persona-holdout',
       selectionDigest: `sha256:${'d'.repeat(64)}`,
       minimumCases: 1,
     },
@@ -245,7 +245,7 @@ describe('optimization approval boundary', () => {
         approval: approval(),
       }),
     ).toEqual({
-      schema: 'neko.agent-eval.openspec-application-handoff.v1',
+      schema: 'neko.agent-eval.openspec-application-handoff',
       kind: 'openspec-apply-required',
       planId: plan().id,
       candidateId: candidate().id,

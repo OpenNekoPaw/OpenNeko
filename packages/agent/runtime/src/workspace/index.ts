@@ -53,18 +53,6 @@ export {
 } from './ndjson-event-sink';
 
 export {
-  StaleJsonFileWriteError,
-  assertJsonFileRevisionCurrent,
-  createJsonFileWriteMetadata,
-  createJsonFileWriterId,
-  parseJsonFileWriteMetadata,
-  readJsonFileRevision,
-  type JsonFileRevisionGuardFsOps,
-  type JsonFileWriteMetadata,
-  type StaleJsonFileWriteDetails,
-} from './json-file-write-guard';
-
-export {
   parsePreferences,
   emptyPreferences,
   mergePreferences,

@@ -6,7 +6,6 @@ describe('clipboard-context-presenter', () => {
     const payload = projectClipboardTextToContextPayload(
       JSON.stringify({
         kind: 'document-image-reference',
-        protocolVersion: 2,
         document: {
           filePath: '/books/a.epub',
           source: { filePath: '/books/a.epub', format: 'epub' },
@@ -27,7 +26,6 @@ describe('clipboard-context-presenter', () => {
         display: {
           runtimeOnly: true,
           path: '/tmp/page-1.jpg',
-          renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
         },
       }),
     );
@@ -67,11 +65,10 @@ describe('clipboard-context-presenter', () => {
     });
   });
 
-  it('rejects document image display paths without stable resource refs', () => {
+  it('requires a stable document image identity', () => {
     const payload = projectClipboardTextToContextPayload(
       JSON.stringify({
         kind: 'document-image-reference',
-        protocolVersion: 2,
         document: {
           filePath: '/books/a.epub',
           source: { filePath: '/books/a.epub', format: 'epub' },
@@ -87,6 +84,27 @@ describe('clipboard-context-presenter', () => {
     );
 
     expect(payload).toBeNull();
+  });
+
+  it('rejects unknown document image reference fields locally', () => {
+    const canonicalReference = {
+      kind: 'document-image-reference',
+      document: {
+        filePath: '/books/a.epub',
+        contentLocator: {
+          kind: 'document-entry',
+          source: { kind: 'workspace-file', path: 'books/a.epub' },
+          entryPath: 'image/Page_1.jpg',
+        },
+      },
+      image: { index: 0 },
+    };
+
+    expect(
+      projectClipboardTextToContextPayload(
+        JSON.stringify({ ...canonicalReference, unexpectedField: 2 }),
+      ),
+    ).toBeNull();
   });
 
   it('projects media library references from Host-issued content locators', () => {
@@ -131,21 +149,6 @@ describe('clipboard-context-presenter', () => {
         }),
       ),
     ).toBeNull();
-  });
-
-  it('rejects legacy Asset reference clipboard payloads', () => {
-    const payload = projectClipboardTextToContextPayload(
-      JSON.stringify({
-        kind: 'asset-reference',
-        assetId: 'asset-1',
-        label: 'Hero portrait',
-        path: '${ASSETS}/hero.png',
-        resolvedPath: '/workspace/assets/hero.png',
-        mediaType: 'image',
-      }),
-    );
-
-    expect(payload).toBeNull();
   });
 
   it('ignores ordinary pasted text', () => {

@@ -77,7 +77,6 @@ export function compareRunPolicies(baseline, current, options = {}) {
   const currentResults = current.samples.map((sample) => sample.result);
   for (const [label, read] of [
     ['target identity', (result) => result.target],
-    ['repository revision', (result) => result.repositoryRevision],
     ['fixture digest', (result) => result.fixtureDigest],
     ['model identity', (result) => result.modelIdentity],
     ['hard-gate policy', (result) => result.assertions.map((item) => item.id)],
@@ -129,7 +128,6 @@ function projectJudgePolicy(sample) {
     modelId: judge.modelId,
     profileId: judge.profileId,
     rubricId: judge.rubricId,
-    rubricVersion: judge.rubricVersion,
     sampling: judge.sampling,
   };
 }

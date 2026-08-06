@@ -112,7 +112,7 @@ interface InputAreaProps {
   focusRequestOwner?: string;
   focusRequestEnabled?: boolean;
   focusRequestTarget?: 'none' | 'input';
-  focusRequestRevision?: number;
+  focusRequestId?: string;
 }
 
 type InputAreaTranslator = (key: string, params?: Record<string, string | number>) => string;
@@ -215,7 +215,7 @@ export function InputArea({
   focusRequestOwner,
   focusRequestEnabled = true,
   focusRequestTarget = 'none',
-  focusRequestRevision = 0,
+  focusRequestId,
 }: InputAreaProps) {
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
@@ -265,11 +265,11 @@ export function InputArea({
   }, [inputValue]);
 
   useEffect(() => {
-    if (!focusRequestEnabled || focusRequestTarget !== 'input' || focusRequestRevision <= 0) {
+    if (!focusRequestEnabled || focusRequestTarget !== 'input' || !focusRequestId) {
       return;
     }
     textareaRef.current?.focus();
-  }, [focusRequestEnabled, focusRequestOwner, focusRequestRevision, focusRequestTarget]);
+  }, [focusRequestEnabled, focusRequestId, focusRequestOwner, focusRequestTarget]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Input history for arrow key navigation

@@ -13,15 +13,6 @@ import { isCharacterRoleTab } from '../presenters/character-role-session-present
  * Handle 'tabState' message - Restore tab state from extension
  */
 const handleTabState: MessageHandler<'tabState'> = (message: TabStateMessage, context) => {
-  const revisionRef = context.tabStateRevisionRef;
-  if (!revisionRef) {
-    throw new Error('Tab state handling requires a Webview-owned revision ref.');
-  }
-  if (message.revision < revisionRef.current) {
-    return;
-  }
-  revisionRef.current = message.revision;
-
   if (message.tabState) {
     const openTabs = message.tabState.openTabs ?? [];
     const { activeTabId } = message.tabState;

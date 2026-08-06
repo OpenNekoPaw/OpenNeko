@@ -58,17 +58,17 @@ describe('comic animation incremental indexing contracts', () => {
     expect(validateIndexedRangeState(state)).toEqual({ ok: true, diagnostics: [] });
   });
 
-  it('rejects removed schemaVersion only for the affected indexing record', () => {
+  it('rejects an unsupported field only for the affected indexing record', () => {
     const valid = projectPerceptionCardToIndexedRangeState({
       card: makePerceptionCard(),
       sourceRef: sourceRef(),
     });
-    const invalid = validateIndexedRangeState({ ...valid, schemaVersion: 1 });
+    const invalid = validateIndexedRangeState({ ...valid, unexpectedField: 1 });
 
     expect(invalid.ok).toBe(false);
     expect(invalid.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'unsupported-field', path: ['schemaVersion'] }),
+        expect.objectContaining({ code: 'unsupported-field', path: ['unexpectedField'] }),
       ]),
     );
     expect(validateIndexedRangeState(valid)).toEqual({ ok: true, diagnostics: [] });

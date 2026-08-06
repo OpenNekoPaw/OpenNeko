@@ -25,7 +25,6 @@ export interface ProviderAdaptationContext {
 
 export interface ModelExecutionContext {
   readonly modelId?: string;
-  readonly modelVersion?: string;
   readonly providerId?: string;
 }
 

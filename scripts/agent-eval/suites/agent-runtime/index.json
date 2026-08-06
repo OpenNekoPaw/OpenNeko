@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite-index.v2",
+  "schema": "neko.agent-eval.suite-index",
   "ownerKind": "agent-runtime",
   "entries": [
     { "suiteId": "agent-runtime.creative-media-workflow", "path": "creative-media-workflow/suite.json", "ownerId": "creative-media-workflow", "targetKind": "workflow" },

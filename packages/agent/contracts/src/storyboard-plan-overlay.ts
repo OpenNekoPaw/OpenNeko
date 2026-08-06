@@ -216,27 +216,37 @@ export function normalizeStoryboardPlanOverlay(
     );
   }
 
-  if (Object.hasOwn(payload, 'schemaVersion')) {
-    diagnostics.push(
-      storyboardPlanDiagnostic(
-        'error',
-        'unsupported-field',
-        ['schemaVersion'],
-        'Storyboard plan overlay field schemaVersion is not supported.',
-        { actual: serializableDiagnosticValue(payload['schemaVersion']) },
-      ),
-    );
-  }
+  rejectUnknownFields(
+    payload,
+    new Set([
+      'kind',
+      'domainKind',
+      'overlayType',
+      'planId',
+      'title',
+      'sourceStoryboardRef',
+      'shotOverlays',
+      'diagnostics',
+      'extensions',
+    ]),
+    [],
+    diagnostics,
+  );
   const sourceStoryboardRefRecord = readRecord(payload['sourceStoryboardRef']);
-  if (sourceStoryboardRefRecord && Object.hasOwn(sourceStoryboardRefRecord, 'version')) {
-    diagnostics.push(
-      storyboardPlanDiagnostic(
-        'error',
-        'unsupported-field',
-        ['sourceStoryboardRef', 'version'],
-        'Storyboard source reference field version is not supported.',
-        { actual: serializableDiagnosticValue(sourceStoryboardRefRecord['version']) },
-      ),
+  if (sourceStoryboardRefRecord) {
+    rejectUnknownFields(
+      sourceStoryboardRefRecord,
+      new Set([
+        'kind',
+        'artifactId',
+        'storyboardId',
+        'title',
+        'contentLocator',
+        'path',
+        'metadata',
+      ]),
+      ['sourceStoryboardRef'],
+      diagnostics,
     );
   }
 
@@ -681,6 +691,26 @@ function isRecordLike(value: unknown): value is Record<string, unknown> {
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function rejectUnknownFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+  path: readonly StoryboardPlanDiagnosticPathSegment[],
+  diagnostics: StoryboardPlanDiagnostic[],
+): void {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
+    diagnostics.push(
+      storyboardPlanDiagnostic(
+        'error',
+        'unsupported-field',
+        [...path, field],
+        `Storyboard plan overlay contains unsupported field ${field}.`,
+        { actual: serializableDiagnosticValue(value[field]) },
+      ),
+    );
+  }
 }
 
 function storyboardPlanDiagnostic(

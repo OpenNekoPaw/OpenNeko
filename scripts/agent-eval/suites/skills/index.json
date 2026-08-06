@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite-index.v2",
+  "schema": "neko.agent-eval.suite-index",
   "ownerKind": "skill",
   "entries": [
     { "suiteId": "skill.audio-mixing", "path": "audio-mixing/suite.json", "ownerId": "audio-mixing", "targetKind": "skill" },

@@ -4,48 +4,47 @@ import { createIdleConversationStreamingSnapshot } from './conversation-render-c
 import { ConversationRenderCoordinator } from './conversation-render-coordinator';
 
 describe('ConversationRenderCoordinator', () => {
-  it('advances revisions monotonically and rejects stale mutations', () => {
+  it('serializes mutations within one conversation owner', () => {
     const coordinator = new ConversationRenderCoordinator();
 
-    expect(coordinator.ingest(hostSnapshot('conv-a', 0, [message('a-1')])).revision).toBe(1);
-    expect(coordinator.ingest(hostSnapshot('conv-a', 1, [message('a-2')])).revision).toBe(2);
+    const first = coordinator.ingest(hostSnapshot('conv-a', [message('a-1')]));
+    const second = coordinator.ingest(hostSnapshot('conv-a', [message('a-2')]));
 
-    expect(() => coordinator.ingest(hostSnapshot('conv-a', 1, [message('stale')]))).toThrowError(
-      expect.objectContaining({
-        diagnostic: expect.objectContaining({ code: 'stale-revision' }),
-      }),
-    );
+    expect(first.messages).toEqual([expect.objectContaining({ id: 'a-1' })]);
+    expect(second.messages).toEqual([expect.objectContaining({ id: 'a-2' })]);
+    expect(second).not.toBe(first);
   });
 
-  it('publishes revision changes only to the owning conversation subscribers', () => {
+  it('publishes snapshot changes only to the owning conversation subscribers', () => {
     const coordinator = new ConversationRenderCoordinator();
     const listenerA = vi.fn();
     const listenerB = vi.fn();
-    const unsubscribeA = coordinator.subscribeRevision('conv-a', listenerA);
-    coordinator.subscribeRevision('conv-b', listenerB);
+    const unsubscribeA = coordinator.subscribe('conv-a', listenerA);
+    coordinator.subscribe('conv-b', listenerB);
 
-    coordinator.ingest(hostSnapshot('conv-a', 0, [message('a-1')]));
+    coordinator.ingest(hostSnapshot('conv-a', [message('a-1')]));
 
-    expect(coordinator.revision('conv-a')).toBe(1);
-    expect(coordinator.revision('conv-b')).toBe(0);
+    const selection = coordinator.readMany(['conv-a', 'conv-b']);
+    expect(selection).toEqual([expect.objectContaining({ conversationId: 'conv-a' })]);
+    expect(coordinator.readMany(['conv-a', 'conv-b'])).toBe(selection);
     expect(listenerA).toHaveBeenCalledTimes(1);
     expect(listenerB).not.toHaveBeenCalled();
 
     unsubscribeA();
-    coordinator.ingest(hostSnapshot('conv-a', 1, [message('a-2')]));
+    coordinator.ingest(hostSnapshot('conv-a', [message('a-2')]));
     expect(listenerA).toHaveBeenCalledTimes(1);
   });
 
   it('rejects mutations after disposal', () => {
     const coordinator = new ConversationRenderCoordinator();
-    coordinator.ingest(hostSnapshot('conv-a', 0, []));
+    coordinator.ingest(hostSnapshot('conv-a', []));
     coordinator.dispose({
       kind: 'disposal',
       conversationId: 'conv-a',
       reason: 'conversation-delete',
     });
 
-    expect(() => coordinator.ingest(hostSnapshot('conv-a', 2, []))).toThrowError(
+    expect(() => coordinator.ingest(hostSnapshot('conv-a', []))).toThrowError(
       expect.objectContaining({
         diagnostic: expect.objectContaining({ code: 'conversation-disposed' }),
       }),
@@ -56,10 +55,10 @@ describe('ConversationRenderCoordinator', () => {
     const coordinator = new ConversationRenderCoordinator();
     const listenerA = vi.fn();
     const listenerB = vi.fn();
-    coordinator.ingest(hostSnapshot('conv-a', 0, [message('a')]));
-    coordinator.ingest(hostSnapshot('conv-b', 0, [message('b')]));
-    coordinator.subscribeRevision('conv-a', listenerA);
-    coordinator.subscribeRevision('conv-b', listenerB);
+    coordinator.ingest(hostSnapshot('conv-a', [message('a')]));
+    coordinator.ingest(hostSnapshot('conv-b', [message('b')]));
+    coordinator.subscribe('conv-a', listenerA);
+    coordinator.subscribe('conv-b', listenerB);
 
     const disposed = coordinator.dispose({
       kind: 'disposal',
@@ -67,10 +66,10 @@ describe('ConversationRenderCoordinator', () => {
       reason: 'conversation-delete',
     });
 
-    expect(disposed).toMatchObject({ retention: 'disposed', revision: 2 });
+    expect(disposed).toMatchObject({ retention: 'disposed' });
     expect(coordinator.read('conv-a')).toBeUndefined();
     expect(coordinator.isDisposed('conv-a')).toBe(true);
-    expect(coordinator.revision('conv-a')).toBe(2);
+    expect(coordinator.readMany(['conv-a'])).toEqual([]);
     expect(coordinator.read('conv-b')).toMatchObject({
       messages: [expect.objectContaining({ id: 'b' })],
     });
@@ -90,11 +89,10 @@ describe('ConversationRenderCoordinator', () => {
   });
 });
 
-function hostSnapshot(conversationId: string, baseRevision: number, messages: readonly Message[]) {
+function hostSnapshot(conversationId: string, messages: readonly Message[]) {
   return {
     kind: 'host-snapshot' as const,
     conversationId,
-    baseRevision,
     messages,
     streaming: createIdleConversationStreamingSnapshot(),
   };

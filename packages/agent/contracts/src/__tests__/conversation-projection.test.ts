@@ -6,7 +6,7 @@ import {
   cloneAgentTurnProjectionItem,
 } from '../conversation-projection';
 
-function textItem(content: string, revision: number): AgentTurnTimelineAssistantTextItem {
+function textItem(content: string, updatedAt: number): AgentTurnTimelineAssistantTextItem {
   return {
     conversationId: 'conversation-a',
     turnId: 'turn-a',
@@ -14,15 +14,11 @@ function textItem(content: string, revision: number): AgentTurnTimelineAssistant
     messageId: 'message-a',
     itemId: 'text-a',
     sequence: 1,
-    itemRevision: revision,
     kind: 'assistant_text',
     status: 'streaming',
     createdAt: 1,
-    updatedAt: revision,
-    payload: {
-      content,
-      sourceGeneration: 1,
-    },
+    updatedAt,
+    payload: { content },
   };
 }
 
@@ -35,20 +31,18 @@ describe('conversation projection contract', () => {
       { operation: 'append', item: textItem('-second', 2) },
     ]);
 
-    expect(items.get('text-a')).toMatchObject({
-      itemRevision: 2,
-      payload: { content: 'first-second' },
-    });
+    expect(items.get('text-a')).toMatchObject({ payload: { content: 'first-second' } });
+    expect(items.get('text-a')).not.toHaveProperty('itemRevision');
   });
 
-  it('fails visibly when a patch reuses a stale item revision', () => {
-    const items = new Map([['text-a', textItem('first', 2)]]);
+  it('applies serialized same-owner appends without an item CAS token', () => {
+    const items = new Map([['text-a', textItem('first', 1)]]);
 
-    expect(() =>
-      applyAgentTurnProjectionOperations(items, [
-        { operation: 'append', item: textItem('-stale', 2) },
-      ]),
-    ).toThrow(/revision must increase/);
+    applyAgentTurnProjectionOperations(items, [
+      { operation: 'append', item: textItem('-second', 2) },
+    ]);
+
+    expect(items.get('text-a')).toMatchObject({ payload: { content: 'first-second' } });
   });
 
   it('returns detached item clones for immutable projection snapshots', () => {

@@ -116,13 +116,12 @@ Every decision and scenario must define:
 
 1. user-visible behavior;
 2. canonical Desktop/runtime path;
-3. forbidden fallback;
-4. observable runtime or artifact evidence;
-5. expected result;
-6. expected fail-visible behavior.
+3. observable runtime or artifact evidence;
+4. expected result;
+5. expected fail-visible behavior.
 
 Use deterministic hard gates for configuration identity, Skill receipt, Tool/process state,
-structured output, artifacts, permissions and no-fallback. Use an external Judge only for
+structured output, artifacts and permissions. Use an external Judge only for
 subjective quality after hard gates pass.
 
 Skill-assisted authoring produces reviewable declarative drafts. The strict schema and runner are

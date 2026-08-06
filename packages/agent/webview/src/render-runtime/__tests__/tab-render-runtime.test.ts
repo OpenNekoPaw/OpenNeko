@@ -20,7 +20,7 @@ describe('TabRenderRuntime', () => {
       selectedModel: 'model-a',
       generationParams: { ...state.generationParams, resolution: '4K' },
       composition: { isComposing: true },
-      focus: { target: 'input', requestRevision: state.focus.requestRevision + 1 },
+      focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
       menus: { ...state.menus, entryPrompt: 'generate-assets' },
       diagnostics: [diagnostic],
@@ -31,7 +31,7 @@ describe('TabRenderRuntime', () => {
       selectedModel: 'model-a',
       generationParams: { resolution: '4K' },
       composition: { isComposing: true },
-      focus: { target: 'input', requestRevision: 1 },
+      focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
       menus: { entryPrompt: 'generate-assets' },
     });
@@ -40,7 +40,7 @@ describe('TabRenderRuntime', () => {
       attachedFiles: [],
       selectedModel: '',
       composition: { isComposing: false },
-      focus: { target: 'none', requestRevision: 0 },
+      focus: { target: 'none' },
       viewport: { followMode: 'follow-tail' },
       menus: {
         entryPrompt: null,
@@ -68,7 +68,6 @@ describe('TabRenderRuntime', () => {
     expect(runtime.store.getRetentionSnapshot()).toEqual({
       isComposing: false,
       hasDirtyInput: false,
-      revision: 0,
     });
 
     runtime.store.updateState({ selectedModel: 'model-a' });
@@ -80,7 +79,6 @@ describe('TabRenderRuntime', () => {
     expect(runtime.store.getRetentionSnapshot()).toEqual({
       isComposing: true,
       hasDirtyInput: true,
-      revision: 2,
     });
 
     runtime.store.updateState({ inputValue: '', composition: { isComposing: false } });
@@ -88,7 +86,6 @@ describe('TabRenderRuntime', () => {
     expect(runtime.store.getRetentionSnapshot()).toEqual({
       isComposing: false,
       hasDirtyInput: false,
-      revision: 3,
     });
   });
 
@@ -106,13 +103,11 @@ describe('TabRenderRuntime', () => {
       tabId: 'tab-a',
       conversationId: 'conv-a',
       visibility: 'visible',
-      revision: 1,
     });
     expect(runtimeB.store.getSnapshot()).toMatchObject({
       tabId: 'tab-b',
       conversationId: 'conv-b',
       visibility: 'hidden',
-      revision: 0,
     });
   });
 
@@ -121,13 +116,13 @@ describe('TabRenderRuntime', () => {
     const listener = vi.fn();
     runtime.subscribeRetention(listener);
 
-    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching', revision: 0 });
+    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching' });
     runtime.markReady();
     runtime.detach();
     runtime.beginAttach();
 
     expect(listener).toHaveBeenCalledTimes(3);
-    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching', revision: 3 });
+    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching' });
   });
 
   it('fails visibly for invalid lifecycle transitions and disposed store mutation', () => {
@@ -196,7 +191,7 @@ describe('TabRenderRuntimeRegistry', () => {
       selectedModel: 'model-a',
       generationParams: { ...state.generationParams, resolution: '4K' },
       composition: { isComposing: true },
-      focus: { target: 'input', requestRevision: 3 },
+      focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
     }));
     runtimeB.store.updateState((state) => ({
@@ -204,7 +199,7 @@ describe('TabRenderRuntimeRegistry', () => {
       attachedFiles: [{ id: 'asset-b', name: 'b.wav', type: 'audio', data: 'data-b' }],
       selectedModel: 'model-b',
       generationParams: { ...state.generationParams, resolution: '1080p' },
-      focus: { target: 'input', requestRevision: 7 },
+      focus: { target: 'input', requestId: 'focus-b' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-b', anchorOffset: 24 },
     }));
     runtimeC.store.updateState({
@@ -444,8 +439,8 @@ describe('TabRenderRuntimeRegistry', () => {
       },
     });
 
-    for (let revision = 1; revision <= 20; revision += 1) {
-      registry.reconcile(bindings, revision % 2 === 0 ? 'tab-b' : 'tab-a');
+    for (let updateIndex = 1; updateIndex <= 20; updateIndex += 1) {
+      registry.reconcile(bindings, updateIndex % 2 === 0 ? 'tab-b' : 'tab-a');
       for (const [runtime, key, prefix] of [
         [runtimeA, keyA, 'A'],
         [runtimeB, keyB, 'B'],
@@ -453,7 +448,7 @@ describe('TabRenderRuntimeRegistry', () => {
         runtime.acceptProjectionFrame({
           type: 'projectionPatch',
           key,
-          sequence: revision,
+          sequence: updateIndex,
           patch: {
             type: 'conversationProjectionPatch',
             conversationId: 'conversation-shared',
@@ -464,7 +459,7 @@ describe('TabRenderRuntimeRegistry', () => {
             operations: [
               {
                 operation: 'append',
-                item: projectionTextItem(` ${prefix}${revision}`, revision + 1),
+                item: projectionTextItem(` ${prefix}${updateIndex}`, updateIndex + 1),
               },
             ],
           },
@@ -592,7 +587,7 @@ describe('TabRenderRuntimeRegistry', () => {
   });
 });
 
-function projectionTextItem(content: string, itemRevision: number) {
+function projectionTextItem(content: string, updatedAt: number) {
   return {
     conversationId: 'conversation-shared',
     turnId: 'turn-1',
@@ -601,11 +596,10 @@ function projectionTextItem(content: string, itemRevision: number) {
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,
-    itemRevision,
     kind: 'assistant_text' as const,
     status: 'streaming' as const,
-    payload: { content, format: 'markdown' as const, sourceGeneration: 1 },
+    payload: { content, format: 'markdown' as const },
     createdAt: 1,
-    updatedAt: itemRevision,
+    updatedAt,
   };
 }

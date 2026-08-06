@@ -60,7 +60,7 @@ capabilities: [image.generate]
     expect(card.modelId).toBe('gpt-image-1');
   });
 
-  it('rejects a removed ProviderCard version without invalidating a canonical sibling', async () => {
+  it('rejects an unknown ProviderCard attribute without invalidating a canonical sibling', async () => {
     const errors: string[] = [];
     const registry = createProviderCardRegistry();
     const cards = await registerProviderCardDirectory({
@@ -79,7 +79,7 @@ capabilities: [image.generate]
           const providerId = path.includes('invalid') ? 'invalid' : 'valid';
           return `---
 providerId: ${providerId}
-${providerId === 'invalid' ? 'version: 1.0.0\n' : ''}displayName: ${providerId}
+${providerId === 'invalid' ? 'unexpectedField: value\n' : ''}displayName: ${providerId}
 capabilities: [image.generate]
 ---
 # ${providerId}
@@ -96,7 +96,7 @@ capabilities: [image.generate]
       source: 'project',
     });
     expect(errors).toEqual([
-      expect.stringContaining('Provider card contains unsupported attribute: version'),
+      expect.stringContaining('Provider card contains unsupported attribute: unexpectedField'),
     ]);
   });
 

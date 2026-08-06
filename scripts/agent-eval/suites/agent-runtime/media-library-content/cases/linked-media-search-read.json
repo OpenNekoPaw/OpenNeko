@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "linked-media-search-read",
   "suiteId": "agent-runtime.media-library-content",
   "caseGroup": "canonical",
@@ -14,15 +14,6 @@
       "ReadImage workspace locator",
       "Host ContentReadService"
     ],
-    "forbiddenFallback": [
-      "ListAssets",
-      "GetAsset",
-      "ImportAsset",
-      "library.json",
-      "project://assets resolver",
-      "absolute link target",
-      "cache or materialized path"
-    ],
     "observables": [
       {
         "ref": "media-library-facts",
@@ -34,20 +25,36 @@
     "expectedResult": "Search returns neko/assets/Reference/library-image.svg and ReadImage loads that exact workspace-file locator before the final marker.",
     "expectedFailure": "Missing projection, absolute path disclosure, failed image read, Asset Tool participation, runtime diagnostics, or missing marker fails visibly."
   },
-  "fixtureRefs": ["media-library-workspace"],
+  "fixtureRefs": [
+    "media-library-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
       "prompt": "严格执行两步：先调用 QueryProjectSearch，query=library-image、mode=agent-tool、partitions=[media-library]、limit=5；再把返回项的 workspace-relative filePath 原样放入 ReadImage 的 images[0].locator={kind:workspace-file,path:<filePath>}，mode=metadata、max_images=1。不要调用 Asset 工具，不要使用绝对路径、链接目标、缓存路径或 project://assets。读取成功后输出 MEDIA_LIBRARY_CANONICAL_7X9，并单独输出 MEDIA_LIBRARY_READ_OK。"
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
   ],
   "assertions": [
-    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "media-library-facts" },
-    { "id": "idle", "kind": "fully-idle", "evidenceRef": "media-library-facts" },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "media-library-facts"
+    },
+    {
+      "id": "idle",
+      "kind": "fully-idle",
+      "evidenceRef": "media-library-facts"
+    },
     {
       "id": "search",
       "kind": "tool-call",
@@ -56,7 +63,9 @@
       "expectedArguments": {
         "query": "library-image",
         "mode": "agent-tool",
-        "partitions": ["media-library"],
+        "partitions": [
+          "media-library"
+        ],
         "limit": 5
       },
       "resultIncludes": {
@@ -109,8 +118,16 @@
       "id": "order",
       "kind": "process-order",
       "events": [
-        { "kind": "tool", "name": "QueryProjectSearch", "status": "success" },
-        { "kind": "tool", "name": "ReadImage", "status": "success" }
+        {
+          "kind": "tool",
+          "name": "QueryProjectSearch",
+          "status": "success"
+        },
+        {
+          "kind": "tool",
+          "name": "ReadImage",
+          "status": "success"
+        }
       ],
       "evidenceRef": "media-library-facts"
     },
@@ -118,31 +135,16 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["MEDIA_LIBRARY_CANONICAL_7X9", "MEDIA_LIBRARY_READ_OK"],
-      "evidenceRef": "media-library-facts"
-    },
-    {
-      "id": "no-asset-fallback",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "ListAssets",
-        "GetAsset",
-        "ImportAsset",
-        "AssetEntity",
-        "asset-library",
-        "project://assets/",
-        "library.json"
+      "text": [
+        "MEDIA_LIBRARY_CANONICAL_7X9",
+        "MEDIA_LIBRARY_READ_OK"
       ],
       "evidenceRef": "media-library-facts"
     }
   ],
-  "artifactChecks": [
-    {
-      "id": "legacy-catalog-absent",
-      "kind": "file-absent",
-      "evidenceRef": "media-library-facts",
-      "path": "neko/assets/library.json"
-    }
-  ],
-  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
 }

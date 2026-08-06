@@ -1,5 +1,5 @@
 export async function callJudgeProvider(profile, request, options = {}) {
-  if (profile.adapter !== 'openai-chat-completions-v1') {
+  if (profile.adapter !== 'openai-chat-completions') {
     throw judgeError('judge-configuration-invalid', `Unsupported Judge adapter: ${profile.adapter}`);
   }
   const env = options.env ?? process.env;

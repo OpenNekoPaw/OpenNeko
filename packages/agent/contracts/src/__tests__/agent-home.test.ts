@@ -74,23 +74,15 @@ describe('Agent Home contract', () => {
     ).toThrowError(AgentHomeContractError);
   });
 
-  it('rejects removed version fields without disabling a valid sibling projection', () => {
-    const removedSchemaField = ['schema', 'Ver', 'sion'].join('');
-    const removedRevisionField = ['revi', 'sion'].join('');
+  it('rejects unknown fields without disabling a valid sibling projection', () => {
+    const unexpectedField = 'unexpectedField';
     expect(() =>
       parseAgentHomeProjection({
-        [removedSchemaField]: 1,
+        [unexpectedField]: 1,
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
-    ).toThrow(`unknown field '${removedSchemaField}'`);
-    expect(() =>
-      parseAgentHomeProjection({
-        [removedRevisionField]: 2,
-        conversations: [],
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-      }),
-    ).toThrow(`unknown field '${removedRevisionField}'`);
+    ).toThrow(`unknown field '${unexpectedField}'`);
     expect(
       parseAgentHomeProjection({
         conversations: [],

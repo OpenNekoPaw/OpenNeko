@@ -5,78 +5,80 @@ import type {
 } from './conversation-render-contract';
 import { ConversationRenderLifecycleError } from './conversation-render-contract';
 
-type RevisionedMutation = Extract<ConversationRenderMutation, { readonly baseRevision: number }>;
+type UpdateMutation = Exclude<ConversationRenderMutation, { readonly kind: 'disposal' }>;
 type DisposalMutation = Extract<ConversationRenderMutation, { readonly kind: 'disposal' }>;
 
 export class ConversationRenderCoordinator {
   private readonly snapshots = new Map<string, ConversationRenderSnapshot>();
-  private readonly disposedRevisions = new Map<string, number>();
-  private readonly revisionListeners = new Map<string, Set<() => void>>();
+  private readonly disposedConversationIds = new Set<string>();
+  private readonly listeners = new Map<string, Set<() => void>>();
+  private readonly selections = new Map<
+    string,
+    { readonly ids: readonly string[]; readonly snapshots: readonly ConversationRenderSnapshot[] }
+  >();
 
   read(conversationId: string): ConversationRenderSnapshot | undefined {
     return this.snapshots.get(conversationId);
   }
 
-  revision(conversationId: string): number {
-    return (
-      this.snapshots.get(conversationId)?.revision ??
-      this.disposedRevisions.get(conversationId) ??
-      0
-    );
+  readMany(conversationIds: readonly string[]): readonly ConversationRenderSnapshot[] {
+    const key = JSON.stringify(conversationIds);
+    const cached = this.selections.get(key);
+    const snapshots = conversationIds.flatMap((conversationId) => {
+      const snapshot = this.snapshots.get(conversationId);
+      return snapshot ? [snapshot] : [];
+    });
+    if (
+      cached &&
+      cached.ids.length === conversationIds.length &&
+      cached.ids.every((id, index) => id === conversationIds[index]) &&
+      cached.snapshots.length === snapshots.length &&
+      cached.snapshots.every((snapshot, index) => snapshot === snapshots[index])
+    ) {
+      return cached.snapshots;
+    }
+    const selection = { ids: [...conversationIds], snapshots };
+    this.selections.set(key, selection);
+    return selection.snapshots;
   }
 
   isDisposed(conversationId: string): boolean {
-    return this.disposedRevisions.has(conversationId);
+    return this.disposedConversationIds.has(conversationId);
   }
 
-  subscribeRevision(conversationId: string, listener: () => void): () => void {
-    const listeners = this.revisionListeners.get(conversationId) ?? new Set<() => void>();
+  subscribe(conversationId: string, listener: () => void): () => void {
+    const listeners = this.listeners.get(conversationId) ?? new Set<() => void>();
     listeners.add(listener);
-    this.revisionListeners.set(conversationId, listeners);
+    this.listeners.set(conversationId, listeners);
     return () => {
       listeners.delete(listener);
-      if (listeners.size === 0) this.revisionListeners.delete(conversationId);
+      if (listeners.size === 0) this.listeners.delete(conversationId);
     };
   }
 
-  ingest(mutation: RevisionedMutation): ConversationRenderSnapshot {
+  ingest(mutation: UpdateMutation): ConversationRenderSnapshot {
     const current = this.snapshots.get(mutation.conversationId);
-    const disposedRevision = this.disposedRevisions.get(mutation.conversationId);
-    if (disposedRevision !== undefined) {
+    if (this.disposedConversationIds.has(mutation.conversationId)) {
       throw lifecycleError({
         code: 'conversation-disposed',
         message: `Conversation ${mutation.conversationId} cannot accept ${mutation.kind} after disposal.`,
         conversationId: mutation.conversationId,
-        currentRevision: disposedRevision,
-        targetRevision: mutation.baseRevision,
-      });
-    }
-    const currentRevision = current?.revision ?? 0;
-    if (mutation.baseRevision !== currentRevision) {
-      throw lifecycleError({
-        code: 'stale-revision',
-        message: `Expected base revision ${currentRevision}, received ${mutation.baseRevision}.`,
-        conversationId: mutation.conversationId,
-        currentRevision,
-        targetRevision: mutation.baseRevision,
       });
     }
 
     const next = createNextSnapshot(current, mutation);
     if (next === current) return current;
     this.snapshots.set(mutation.conversationId, next);
-    this.publishRevisions([mutation.conversationId]);
+    this.publish([mutation.conversationId]);
     return next;
   }
 
   dispose(mutation: DisposalMutation): ConversationRenderSnapshot {
-    const existingDisposedRevision = this.disposedRevisions.get(mutation.conversationId);
-    if (existingDisposedRevision !== undefined) {
+    if (this.disposedConversationIds.has(mutation.conversationId)) {
       throw lifecycleError({
         code: 'conversation-disposed',
         message: `Conversation ${mutation.conversationId} is already disposed.`,
         conversationId: mutation.conversationId,
-        currentRevision: existingDisposedRevision,
       });
     }
     const current = this.snapshots.get(mutation.conversationId);
@@ -90,19 +92,18 @@ export class ConversationRenderCoordinator {
 
     const disposed: ConversationRenderSnapshot = {
       ...current,
-      revision: current.revision + 1,
       retention: 'disposed',
     };
     this.snapshots.delete(mutation.conversationId);
-    this.disposedRevisions.set(mutation.conversationId, disposed.revision);
-    this.publishRevisions([mutation.conversationId]);
-    this.revisionListeners.delete(mutation.conversationId);
+    this.disposedConversationIds.add(mutation.conversationId);
+    this.publish([mutation.conversationId]);
+    this.listeners.delete(mutation.conversationId);
     return disposed;
   }
 
-  private publishRevisions(conversationIds: readonly string[]): void {
+  private publish(conversationIds: readonly string[]): void {
     for (const conversationId of new Set(conversationIds)) {
-      const listeners = this.revisionListeners.get(conversationId);
+      const listeners = this.listeners.get(conversationId);
       if (!listeners) continue;
       for (const listener of [...listeners]) listener();
     }
@@ -111,13 +112,12 @@ export class ConversationRenderCoordinator {
 
 function createNextSnapshot(
   current: ConversationRenderSnapshot | undefined,
-  mutation: RevisionedMutation,
+  mutation: UpdateMutation,
 ): ConversationRenderSnapshot {
   const base: ConversationRenderSnapshot =
     current ??
     ({
       conversationId: mutation.conversationId,
-      revision: 0,
       messages: [],
       streaming: emptyStreamingForMutation(mutation),
       retention: 'retained',
@@ -127,14 +127,12 @@ function createNextSnapshot(
     case 'host-snapshot':
       return {
         ...base,
-        revision: base.revision + 1,
         messages: [...mutation.messages],
         streaming: copyStreaming(mutation.streaming),
       };
     case 'queue-status':
       return {
         ...base,
-        revision: base.revision + 1,
         streaming: {
           ...base.streaming,
           queuedMessageCount: mutation.queuedMessageCount,
@@ -148,7 +146,6 @@ function createNextSnapshot(
     case 'completion':
       return {
         ...base,
-        revision: base.revision + 1,
         messages: [...mutation.messages],
         streaming: {
           ...base.streaming,
@@ -159,7 +156,7 @@ function createNextSnapshot(
   }
 }
 
-function emptyStreamingForMutation(mutation: RevisionedMutation): ConversationStreamingSnapshot {
+function emptyStreamingForMutation(mutation: UpdateMutation): ConversationStreamingSnapshot {
   if (mutation.kind === 'host-snapshot') {
     return copyStreaming(mutation.streaming);
   }

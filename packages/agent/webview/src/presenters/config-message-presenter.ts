@@ -44,8 +44,8 @@ import { t } from '../i18n';
 
 const AGENT_MEDIA_CATEGORIES: readonly AgentMediaModelCategory[] = ['image', 'video', 'audio'];
 const AGENT_GENERATION_PURPOSE_CAPABILITIES = {
-  'image.generate': ['image.generate', 'text_to_image', 'image_generation'],
-  'video.generate': ['video.generate', 'text_to_video', 'video_generation'],
+  'image.generate': ['image.generate', 'text_to_image'],
+  'video.generate': ['video.generate', 'text_to_video'],
   'audio.generate': ['audio.generate', 'text_to_audio', 'audio'],
   'audio.music.generate': ['audio.music.generate', 'text_to_music', 'music_generation'],
 } as const satisfies Readonly<
@@ -551,7 +551,6 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
   if (
     code !== 'empty' &&
     code !== 'invalidToml' &&
-    code !== 'unsupportedVersion' &&
     code !== 'unsupportedProviderType' &&
     code !== 'unsupportedProviderConnectionKind' &&
     code !== 'unsupportedProviderProtocolProfile' &&
@@ -564,8 +563,8 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
     code !== 'duplicateModelId' &&
     code !== 'invalidDefaultMaxTokens' &&
     code !== 'invalidModelTokenMetadata' &&
+    code !== 'unsupportedConfigField' &&
     code !== 'unsupportedModelType' &&
-    code !== 'unsupportedDefaultMediaModelType' &&
     code !== 'unsupportedDefaultModelType' &&
     code !== 'invalidDefaultModelBinding' &&
     code !== 'unsupportedWorkspaceProviderDefinition' &&

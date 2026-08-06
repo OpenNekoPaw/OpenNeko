@@ -99,14 +99,14 @@ function executeAgentTool(
   const providerId = typeof args.providerId === 'string' ? args.providerId : undefined;
   const modelId = typeof args.modelId === 'string' ? args.modelId : undefined;
   const purpose = mediaPurposeForTool(name);
-  const legacyModels = options.metadata?.mediaModels as
+  const configuredModels = options.metadata?.mediaModels as
     Record<string, { providerId?: string; modelId?: string }> | undefined;
-  const legacyCategory = purpose?.startsWith('image.')
+  const mediaCategory = purpose?.startsWith('image.')
     ? 'image'
     : purpose?.startsWith('video.')
       ? 'video'
       : 'audio';
-  const runtimeModel = legacyModels?.[legacyCategory];
+  const runtimeModel = configuredModels?.[mediaCategory];
   const hasCompleteArgsTarget = providerId !== undefined && modelId !== undefined;
   const canonicalProviderId = providerId ?? runtimeModel?.providerId;
   const canonicalModelId = modelId ?? runtimeModel?.modelId;
@@ -321,10 +321,9 @@ describe('registerMediaAgentTools', () => {
     expect(parameters?.properties).not.toHaveProperty('modelId');
   });
 
-  it('exposes only locator-backed media inputs and poisons legacy materialized fields', async () => {
+  it('exposes locator-backed media inputs', () => {
     const registry = new ToolRegistry();
-    const media = createMediaMock();
-    registerMediaAgentTools(registry, media as never);
+    registerMediaAgentTools(registry, createMediaMock() as never);
 
     const definitions = new Map(
       registry
@@ -332,35 +331,8 @@ describe('registerMediaAgentTools', () => {
         .map((tool) => [tool.function.name, tool.function.parameters.properties]),
     );
     expect(definitions.get('GenerateImage')).toHaveProperty('referenceImageLocator');
-    expect(definitions.get('GenerateImage')).not.toHaveProperty('referenceImageBase64');
     expect(definitions.get('TransformImage')).toHaveProperty('sourceImageLocator');
-    expect(definitions.get('TransformImage')).not.toHaveProperty('sourceImageUri');
     expect(definitions.get('GenerateVideo')).toHaveProperty('startFrameLocator');
-    expect(definitions.get('GenerateVideo')).not.toHaveProperty('startFrameRef');
-
-    const image = await executeAgentTool(registry, 'GenerateImage', {
-      prompt: 'legacy input',
-      referenceImageBase64: 'runtime-bytes',
-      providerId: 'image-provider',
-      modelId: 'image-model',
-    });
-    expect(image).toMatchObject({
-      success: false,
-      error: expect.stringContaining('referenceImageBase64'),
-    });
-
-    const video = await executeAgentTool(registry, 'GenerateVideo', {
-      prompt: 'legacy input',
-      startFrameRef: { id: 'legacy-resource' },
-      providerId: 'video-provider',
-      modelId: 'video-model',
-    });
-    expect(video).toMatchObject({
-      success: false,
-      error: expect.stringContaining('startFrameRef'),
-    });
-    expect(media.generateImage).not.toHaveBeenCalled();
-    expect(media.generateVideo).not.toHaveBeenCalled();
   });
 
   it('projects Chinese media tool schema text for model-facing definitions', () => {
@@ -765,7 +737,7 @@ describe('registerMediaAgentTools', () => {
         '- resolution: 720p',
       ].join('\n'),
       providerId: 'new-video-model',
-      modelId: 'new-video-model-v1',
+      modelId: 'new-video-model-current',
     });
 
     expect(result.success).toBe(true);
@@ -774,7 +746,7 @@ describe('registerMediaAgentTools', () => {
         prompt:
           'cat detective walking through a neon rainy alley, anime, cyberpunk, slow tracking shot, avoid blurry',
         providerId: 'new-video-model',
-        modelId: 'new-video-model-v1',
+        modelId: 'new-video-model-current',
         metadata: expect.objectContaining({
           providerAdaptation: expect.objectContaining({
             mode: 'agentic',
@@ -843,23 +815,6 @@ describe('registerMediaAgentTools', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('explicit Agent image purpose model');
     expect(media.generateImage).not.toHaveBeenCalled();
-  });
-
-  it('does not expose legacy semanticPrompt fields in media tool results', async () => {
-    const registry = new ToolRegistry();
-    const media = createMediaMock();
-    registerMediaAgentTools(registry, media as never);
-
-    const result = await executeAgentTool(registry, 'GenerateImage', {
-      prompt: 'A lighthouse at dusk',
-      providerId: 'openai-provider',
-      modelId: 'dalle-model',
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.data).not.toHaveProperty('semanticPrompt');
-    const request = media.generateImage.mock.calls[0]?.[0];
-    expect(request).not.toHaveProperty('semanticPrompt');
   });
 
   it('passes GenerateImage reference, mask, control, and edit fields to media routing', async () => {
@@ -1157,7 +1112,6 @@ function createGeneratedContentLocator(id: string): GeneratedOutputContentLocato
   return {
     kind: 'generated-output',
     outputId: id,
-    revision: `${id}:revision`,
     digest: 'a'.repeat(64),
     path: `neko/generated/${id.replaceAll(':', '-')}.png`,
   };

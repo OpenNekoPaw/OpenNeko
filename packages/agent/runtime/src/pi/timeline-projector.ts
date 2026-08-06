@@ -23,7 +23,6 @@ interface PiTimelineProjectorState {
   identity?: PiToolRunIdentity;
   started: boolean;
   terminal: boolean;
-  assistantGeneration: number;
   sequence: number;
   readonly textItems: Map<string, TimelineTextItem>;
   readonly toolItems: Map<string, AgentTurnTimelineToolCallItem>;
@@ -50,7 +49,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
   private state: PiTimelineProjectorState = {
     started: false,
     terminal: false,
-    assistantGeneration: 1,
     sequence: 0,
     textItems: new Map(),
     toolItems: new Map(),
@@ -156,7 +154,7 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
       kind === 'assistant_text'
         ? completeStreamingItems(state, 'thinking', event.timestamp, 'complete')
         : [];
-    const key = textKey(state.assistantGeneration, sourceIndex, kind);
+    const key = textKey(sourceIndex, kind);
     const current = state.textItems.get(key);
     const item = current
       ? updateTextItem(current, delta, event.timestamp)
@@ -192,7 +190,7 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
       if (content.type === 'text' || content.type === 'thinking') {
         const kind = content.type === 'text' ? 'assistant_text' : 'thinking';
         const finalContent = content.type === 'text' ? content.text : content.thinking;
-        const key = textKey(state.assistantGeneration, sourceIndex, kind);
+        const key = textKey(sourceIndex, kind);
         observedTextKeys.add(key);
         const current = state.textItems.get(key);
         if (!current) {
@@ -229,7 +227,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
         const item: AgentTurnTimelineToolCallItem = current
           ? {
               ...current,
-              itemRevision: current.itemRevision + 1,
               payload: { ...current.payload, toolCall },
               updatedAt: event.timestamp,
             }
@@ -251,15 +248,11 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     }
 
     for (const [key, item] of state.textItems) {
-      if (
-        textItemGeneration(key) === state.assistantGeneration &&
-        !observedTextKeys.has(key) &&
-        item.status === 'streaming'
-      ) {
+      if (!observedTextKeys.has(key) && item.status === 'streaming') {
         throw new Error(`Pi Timeline provider-final content omitted streamed item ${item.itemId}.`);
       }
     }
-    state.assistantGeneration += 1;
+    state.textItems.clear();
     return operations.length === 0 ? null : buildUpdate(state, this.options.messageId, operations);
   }
 
@@ -277,7 +270,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     const item = current
       ? {
           ...current,
-          itemRevision: current.itemRevision + 1,
           status: 'pending' as const,
           payload: { toolCall },
           updatedAt: event.timestamp,
@@ -301,7 +293,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     const current = requireToolItem(state, event.toolCallId, 'update');
     const item: AgentTurnTimelineToolCallItem = {
       ...current,
-      itemRevision: current.itemRevision + 1,
       payload: {
         ...current.payload,
         progress: normalizeToolProgress(event.update),
@@ -319,7 +310,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     const current = requireToolItem(state, event.toolCallId, 'confirmation');
     const item: AgentTurnTimelineToolCallItem = {
       ...current,
-      itemRevision: current.itemRevision + 1,
       payload: {
         ...current.payload,
         toolCall: {
@@ -346,7 +336,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     const result = normalizeToolResult(event.result, event.isError);
     const item: AgentTurnTimelineToolCallItem = {
       ...current,
-      itemRevision: current.itemRevision + 1,
       status: result.success ? 'succeeded' : 'failed',
       payload: {
         ...current.payload,
@@ -378,7 +367,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     }
     const item: AgentTurnTimelineToolCallItem = {
       ...current,
-      itemRevision: current.itemRevision + 1,
       payload: {
         ...current.payload,
         toolCall: {
@@ -415,7 +403,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
     for (const current of pendingTools) {
       const item: AgentTurnTimelineToolCallItem = {
         ...current,
-        itemRevision: current.itemRevision + 1,
         status: 'failed',
         payload: {
           ...current.payload,
@@ -443,7 +430,6 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
         messageId: this.options.messageId,
         itemId: `error-${nextSequence(state)}`,
         sequence: state.sequence,
-        itemRevision: 1,
         kind: 'error',
         status: 'failed',
         payload: {
@@ -535,14 +521,14 @@ function createTextItem(input: {
   readonly timestamp: number;
 }): TimelineTextItem {
   const sequence = nextSequence(input.state);
+  const itemId = `${input.kind === 'assistant_text' ? 'text' : 'thinking'}-${sequence}`;
   const core = {
     conversationId: input.identity.conversationId,
     turnId: input.identity.turnId,
     runId: input.identity.runId,
     messageId: input.messageId,
-    itemId: `${input.kind === 'assistant_text' ? 'text' : 'thinking'}-${input.state.assistantGeneration}-${input.sourceIndex}`,
+    itemId,
     sequence,
-    itemRevision: 1,
     status: 'streaming' as const,
     createdAt: input.timestamp,
     updatedAt: input.timestamp,
@@ -554,8 +540,7 @@ function createTextItem(input: {
         payload: {
           content: input.delta,
           format: 'markdown',
-          sourceBlockId: `assistant-${input.state.assistantGeneration}-${input.sourceIndex}`,
-          sourceGeneration: 1,
+          sourceBlockId: itemId,
         },
       }
     : {
@@ -563,8 +548,7 @@ function createTextItem(input: {
         kind: 'thinking',
         payload: {
           content: input.delta,
-          sourceBlockId: `thinking-${input.state.assistantGeneration}-${input.sourceIndex}`,
-          sourceGeneration: 1,
+          sourceBlockId: itemId,
         },
       };
 }
@@ -592,7 +576,6 @@ function updateTextItem(
 ): TimelineTextItem {
   return {
     ...current,
-    itemRevision: current.itemRevision + 1,
     payload: {
       ...current.payload,
       content: `${current.payload.content}${delta}`,
@@ -608,12 +591,10 @@ function replaceTextItem(
 ): TimelineTextItem {
   return {
     ...current,
-    itemRevision: current.itemRevision + 1,
     status: 'complete',
     payload: {
       ...current.payload,
       content,
-      sourceGeneration: current.payload.sourceGeneration + 1,
     },
     updatedAt: timestamp,
   } as TimelineTextItem;
@@ -642,19 +623,15 @@ function completeTextItem(
   timestamp: number,
   status: 'complete' | 'failed',
 ): AgentTurnTimelineOperation {
-  const itemRevision = current.itemRevision + 1;
   state.textItems.set(key, {
     ...current,
-    itemRevision,
     status,
     updatedAt: timestamp,
   });
   return {
     operation: 'complete',
     itemId: current.itemId,
-    itemRevision,
     kind: current.kind,
-    sourceGeneration: current.payload.sourceGeneration,
     status,
     updatedAt: timestamp,
   };
@@ -675,7 +652,6 @@ function createToolItem(
     messageId,
     itemId: `tool-${toolCall.id}`,
     sequence,
-    itemRevision: 1,
     kind: 'tool_call',
     status: 'pending',
     payload: { toolCall },
@@ -812,17 +788,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function textKey(generation: number, sourceIndex: number, kind: TimelineTextItem['kind']): string {
-  return `${generation}:${sourceIndex}:${kind}`;
-}
-
-function textItemGeneration(key: string): number {
-  const separator = key.indexOf(':');
-  const generation = Number(key.slice(0, separator));
-  if (!Number.isInteger(generation) || generation <= 0) {
-    throw new Error(`Pi Timeline has invalid internal text key ${key}.`);
-  }
-  return generation;
+function textKey(sourceIndex: number, kind: TimelineTextItem['kind']): string {
+  return `${sourceIndex}:${kind}`;
 }
 
 function assertSourceIndex(sourceIndex: number): void {
@@ -841,7 +808,6 @@ function cloneState(state: PiTimelineProjectorState): PiTimelineProjectorState {
     ...(state.identity === undefined ? {} : { identity: structuredClone(state.identity) }),
     started: state.started,
     terminal: state.terminal,
-    assistantGeneration: state.assistantGeneration,
     sequence: state.sequence,
     textItems: new Map([...state.textItems].map(([key, item]) => [key, structuredClone(item)])),
     toolItems: new Map([...state.toolItems].map(([key, item]) => [key, structuredClone(item)])),

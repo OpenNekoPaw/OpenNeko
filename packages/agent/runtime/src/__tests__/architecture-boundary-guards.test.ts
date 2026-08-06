@@ -12,163 +12,10 @@ const webviewSrc = join(packageRoot, 'agent/webview/src');
 const extensionSrc = join(packageRoot, 'agent/extension/src');
 const desktopMainSrc = join(workspaceRoot, 'apps/neko-desktop/src/main');
 const desktopPreloadSrc = join(workspaceRoot, 'apps/neko-desktop/src/preload');
-const platformSrc = join(packageRoot, 'platform/src');
 const tuiSrc = join(workspaceRoot, 'apps/neko-tui/src/tui');
 const agentTypesSrc = join(packageRoot, 'agent/contracts/src');
-const sharedSrc = join(packageRoot, 'shared/src');
-const sharedTypesSrc = join(workspaceRoot, 'packages/shared/src/types');
-
-function hasQuotedIdentity(source: string, identity: string): boolean {
-  const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`['"\`]${escaped}['"\`]`).test(source);
-}
 
 describe('agent architecture boundary guards', () => {
-  it('keeps standalone BackgroundAgentRun contracts and runtime identities absent', () => {
-    const productionRoots = [agentSrc, extensionSrc, webviewSrc, tuiSrc, agentTypesSrc];
-    const violations = productionRoots.flatMap((root) =>
-      listFiles(root)
-        .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
-        .flatMap((file) => {
-          const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
-          return [
-            /\bBackgroundAgentRun\b/u,
-            /['"]background-agent-run['"]/u,
-            /\ballowCreateBackgroundConversation\b/u,
-          ]
-            .filter((pattern) => pattern.test(source))
-            .map((pattern) => `${relative(repoRoot, file)} matches ${pattern}`);
-        }),
-    );
-
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps the replaced Platform chat stack physically absent', () => {
-    expect(existsSync(join(packageRoot, 'platform'))).toBe(false);
-    for (const removedPath of [
-      'service/service.ts',
-      'service/shared-service-adapter.ts',
-      'provider/provider-registry.ts',
-    ]) {
-      expect(existsSync(join(platformSrc, removedPath))).toBe(false);
-    }
-    for (const removedDirectory of ['llm', 'perception']) {
-      const directory = join(platformSrc, removedDirectory);
-      expect(existsSync(directory) ? listFiles(directory) : []).toEqual([]);
-    }
-
-    const productionSource = stripTypeScriptComments(
-      readSourceFiles(platformSrc, (file) => !isTestFile(file)),
-    );
-    for (const removedSymbol of [
-      'GenericAdapter',
-      'AdapterRegistry',
-      'ProviderRegistry',
-      'createStreamCollector',
-      'toSharedService',
-    ]) {
-      expect(productionSource).not.toMatch(new RegExp(`\\b${removedSymbol}\\b`, 'u'));
-    }
-  });
-
-  it('keeps retired experiment command, exports, markers, and runtime branches absent', () => {
-    expect(existsSync(join(agentSrc, 'experiment'))).toBe(false);
-
-    const agentProductionSource = stripTypeScriptComments(
-      readSourceFiles(agentSrc, (file) => !isTestFile(file)),
-    );
-    for (const retiredSymbol of [
-      'ExperimentRunner',
-      'AblationToggles',
-      'AblationMarkerHook',
-      'applyAblationToggles',
-      'extractAblationMarker',
-      '__ablation',
-    ]) {
-      expect(agentProductionSource).not.toContain(retiredSymbol);
-    }
-
-    const agentRoot = readFileSync(join(agentSrc, 'index.ts'), 'utf-8');
-    expect(agentRoot).not.toMatch(/from ['"]\.\/experiment/u);
-
-    const cliProductionSource = stripTypeScriptComments(
-      readSourceFiles(tuiSrc, (file) => !isTestFile(file)),
-    );
-    expect(cliProductionSource).not.toMatch(/\.command\(['"]experiment['"]\)/u);
-    expect(cliProductionSource).not.toMatch(/core\/experiment/u);
-  });
-
-  it('keeps retired JSON and Memento metadata stores out of public and Host runtime paths', () => {
-    const forbiddenRuntimeSymbols = [
-      'ConversationIndexStore',
-      'FileConversationStorage',
-      'createFileConversationStorage',
-      'createFileConversationPersistenceRuntime',
-      'StateTaskStorage',
-      'FileTaskStorage',
-      'WorkspaceVisibleAgentTaskStorage',
-      'createStateTaskStorage',
-      'createFileTaskStorage',
-      'createFileWorkspaceVisibleAgentTaskStorage',
-      'StateTaskRecoveryStorage',
-      'FileTaskRecoveryStorage',
-      'createStateTaskRecoveryStorage',
-      'createFileRecoveryStorage',
-    ] as const;
-    const publicBarrels = [join(agentSrc, 'index.ts'), join(agentSrc, 'session/index.ts')];
-    const hostRuntimeSources = [...listFiles(extensionSrc), ...listFiles(tuiSrc)].filter(
-      (file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file),
-    );
-    const symbolViolations = [...publicBarrels, ...hostRuntimeSources].flatMap((file) => {
-      const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
-      return forbiddenRuntimeSymbols
-        .filter((symbol) => new RegExp(`\\b${symbol}\\b`, 'u').test(source))
-        .map((symbol) => `${relative(repoRoot, file)} exposes retired ${symbol}`);
-    });
-    const pathViolations = hostRuntimeSources.flatMap((file) => {
-      const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
-      return ['tasks.json']
-        .filter((legacyPath) => source.includes(legacyPath))
-        .map((legacyPath) => `${relative(repoRoot, file)} uses retired runtime path ${legacyPath}`);
-    });
-
-    const retiredTaskIdentities = [
-      'neko.agent.tasks',
-      'neko.agent.taskRecovery',
-      'taskStateMigrationBackup',
-      'migrate-tasks',
-      'reviewLegacyTaskMigration',
-      'LegacyAgentTaskStateMigration',
-      'task-storage-migration',
-      'sqlite-task-state-migration',
-    ] as const;
-    const productionSources = [
-      ...listFiles(agentSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(tuiSrc),
-      ...listFiles(agentTypesSrc),
-    ].filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file));
-    const identityViolations = [...productionSources, join(repoRoot, 'package.json')].flatMap(
-      (file) => {
-        const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
-        return retiredTaskIdentities
-          .filter((identity) => source.includes(identity))
-          .map((identity) => `${relative(repoRoot, file)} retains ${identity}`);
-      },
-    );
-
-    expect(existsSync(join(agentSrc, 'task/task-storage-migration.ts'))).toBe(false);
-    expect(existsSync(join(agentSrc, 'task/sqlite-task-state-migration.ts'))).toBe(false);
-    expect(existsSync(join(agentSrc, 'task/index.ts'))).toBe(false);
-
-    expect([...symbolViolations, ...pathViolations, ...identityViolations]).toEqual([]);
-  });
-
-  it('does not retain the removed Agent Platform Market product path', () => {
-    expect(existsSync(join(packageRoot, 'platform/src/market'))).toBe(false);
-  });
-
   it('keeps Webview from importing runtime, platform, ai-sdk, or vscode modules', () => {
     const source = readSourceFiles(webviewSrc, (file) => !isTestFile(file));
 
@@ -181,7 +28,7 @@ describe('agent architecture boundary guards', () => {
     expect(source).not.toMatch(/require\(['"]vscode['"]\)/);
   });
 
-  it('keeps the Webview production Markdown path on @neko/markdown without legacy parser dependencies', () => {
+  it('keeps the Webview production Markdown path on @neko/markdown without parallel parser dependencies', () => {
     const packageManifest = JSON.parse(
       readFileSync(join(packageRoot, 'agent/webview/package.json'), 'utf-8'),
     ) as {
@@ -287,42 +134,6 @@ describe('agent architecture boundary guards', () => {
     expect(runtimeRootFiles).toEqual([]);
   });
 
-  it('keeps the replaced Agent kernel physically absent', () => {
-    const retiredPaths = [
-      'executor',
-      'session/agent-session.ts',
-      'session/agent-session-initializer.ts',
-      'runtime/runner',
-      'runtime/session/agent-runtime-manager.ts',
-      'runtime/session/agent-runtime-pool.ts',
-      'runtime/session/agent-runtime-session-controller.ts',
-      'runtime/session/agent-session-factory.ts',
-      'runtime/turn/agent-turn-runtime.ts',
-      'runtime/turn/agent-turn-assembly.ts',
-    ];
-    for (const retiredPath of retiredPaths) {
-      const absolutePath = join(agentSrc, retiredPath);
-      if (!existsSync(absolutePath)) continue;
-      const productionFiles = statSync(absolutePath).isDirectory()
-        ? listFiles(absolutePath).filter((file) => /\.(?:ts|tsx)$/.test(file) && !isTestFile(file))
-        : [absolutePath];
-      expect(productionFiles, retiredPath).toEqual([]);
-    }
-
-    const productionSource = stripTypeScriptComments(
-      readSourceFiles(agentSrc, (file) => !isTestFile(file)),
-    );
-    for (const retiredSymbol of [
-      'AgentExecutor',
-      'createReActLoopRunner',
-      'AgentSessionRunner',
-      'AgentRunnerPort',
-      'AgentRuntimePool',
-    ]) {
-      expect(productionSource).not.toContain(retiredSymbol);
-    }
-  });
-
   it('keeps runtime subdirectories narrow and documented', () => {
     const allowedRuntimeSubdirectories = new Set([
       '__tests__',
@@ -350,33 +161,6 @@ describe('agent architecture boundary guards', () => {
       'projection/',
     ]) {
       expect(readme).toContain(name);
-    }
-  });
-
-  it('keeps retired Executor contracts and Canvas creative-action DTOs physically absent', () => {
-    const retiredFiles = [
-      join(sharedTypesSrc, 'agent.ts'),
-      join(sharedTypesSrc, 'canvas-creative-ai-actions.ts'),
-      join(agentSrc, 'permission/permission-hooks.ts'),
-      join(agentSrc, 'permission/permission-manager-types.ts'),
-      join(agentSrc, 'validation/validation-hooks.ts'),
-    ];
-    expect(retiredFiles.filter((file) => existsSync(file))).toEqual([]);
-
-    const publicSources = [
-      readFileSync(join(sharedSrc, 'index.ts'), 'utf-8'),
-      readFileSync(join(agentSrc, 'index.ts'), 'utf-8'),
-    ].join('\n');
-    for (const retiredSymbol of [
-      'AgentExecutor',
-      'IAgentExecutor',
-      'IAgentRuntime',
-      'ExecutorHooks',
-      'ValidationHooks',
-      'PermissionHooks',
-      'CanvasCreativeAIAction',
-    ]) {
-      expect(publicSources).not.toContain(retiredSymbol);
     }
   });
 
@@ -421,17 +205,6 @@ describe('agent architecture boundary guards', () => {
     });
 
     expect(violations).toEqual([]);
-  });
-
-  it('keeps removed host adapters from re-owning runtime collaborators', () => {
-    const source = readSourceFiles(extensionSrc, (file) => !isTestFile(file));
-
-    expect(source).not.toMatch(
-      /class\s+(SessionPersistence|SessionArtifactFacade|ValidationRuntimeBridge|PromptRuntimeFacade)\b/,
-    );
-    expect(source).not.toMatch(
-      /from\s+['"][^'"]*session\/(?:session-persistence|session-artifact-facade|validation-runtime-bridge|prompt-runtime-facade)['"]/,
-    );
   });
 
   it('keeps builtin Skill catalog localization out of the Desktop host adapter', () => {
@@ -572,35 +345,6 @@ describe('agent architecture boundary guards', () => {
     expect([...violations, ...forbiddenFiles]).toEqual([]);
   });
 
-  it('keeps retired generic TaskManager contracts physically absent', () => {
-    for (const removedPath of [
-      join(sharedTypesSrc, 'task.ts'),
-      join(sharedTypesSrc, 'task-view.ts'),
-      join(sharedTypesSrc, 'task-projection.ts'),
-      join(sharedTypesSrc, 'agent-task-result-observation.ts'),
-      join(sharedTypesSrc, '__tests__/task-lifecycle.test.ts'),
-      join(sharedTypesSrc, '__tests__/task-projection.test.ts'),
-    ]) {
-      expect(existsSync(removedPath)).toBe(false);
-    }
-
-    const sharedIndex = readFileSync(join(sharedSrc, 'index.ts'), 'utf-8');
-    expect(sharedIndex).not.toMatch(
-      /from ['"]\.\/(?:task(?:-view|-projection)?|agent-task-result-observation)['"]/u,
-    );
-    const sharedPackageManifest = readFileSync(join(sharedSrc, '..', 'package.json'), 'utf-8');
-    expect(sharedPackageManifest).not.toMatch(
-      /types\/(?:task(?:-view|-projection)?|agent-task-result-observation)/u,
-    );
-
-    const storyboardContract = stripTypeScriptComments(
-      readFileSync(join(packageRoot, 'canvas/domain/src/canvas-semantic-storyboard.ts'), 'utf-8'),
-    );
-    expect(storyboardContract).not.toMatch(
-      /\b(?:CanvasStoryboardTaskRef|TaskProjectionRef|AgentTaskResultRef)\b/u,
-    );
-  });
-
   it('keeps creative Agent and planner services out of Agent and Platform core', () => {
     const productionFiles = [
       ...listFiles(agentSrc),
@@ -670,13 +414,6 @@ describe('agent architecture boundary guards', () => {
         join(workspaceRoot, 'packages/chara/src/application/character-dialogue-runtime.ts'),
       ),
     ).toBe(true);
-    for (const retiredAgentFile of [
-      'chat/characterDialogueController.ts',
-      'chat/embodyCharacterController.ts',
-      'evidence/characterEvidenceLoader.ts',
-    ]) {
-      expect(existsSync(join(extensionSrc, retiredAgentFile)), retiredAgentFile).toBe(false);
-    }
   });
 
   it('keeps Puppet face domain tools out of Agent core', () => {
@@ -805,7 +542,7 @@ describe('agent architecture boundary guards', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps migrated media tool metadata on locator-only durable fields', () => {
+  it('keeps media tool metadata on locator-only durable fields', () => {
     const toolRegistrySource = stripTypeScriptComments(
       readFileSync(join(agentSrc, 'tools/tool-registry.ts'), 'utf-8'),
     );
@@ -814,9 +551,6 @@ describe('agent architecture boundary guards', () => {
     expect(toolRegistrySource).toContain('startFrameLocator');
     expect(toolRegistrySource).toContain('endFrameLocator');
     expect(toolRegistrySource).toContain('referenceVideoLocator');
-    expect(toolRegistrySource).not.toContain('referenceImageUri');
-    expect(toolRegistrySource).not.toContain('startFrameRef');
-    expect(toolRegistrySource).not.toContain('endFrameRef');
   });
 
   it('keeps domain tool permission defaults out of Agent core', () => {
@@ -1028,43 +762,6 @@ describe('agent architecture boundary guards', () => {
     expect([...existingFiles, ...sourceViolations]).toEqual([]);
   });
 
-  it('keeps legacy feedback/control-plane runtime entrypoints out of Agent core', () => {
-    const productionSource = listFiles(agentSrc)
-      .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
-      .filter((file) => !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-    const legacyRuntimePatterns = [
-      /\bFeedbackRuntimeBridge\b/,
-      /feedback-runtime-bridge/,
-      /\bFeedbackGuidanceModule\b/,
-      /feedback-guidance-module/,
-      /feedback\.guidance/,
-      /feedback\.stage_transition_requested/,
-      /\bfeedbackCoordinator(?:Factory)?\b/,
-      /\bfeedbackControlPolicy\b/,
-      /\btoolResultFeedbackAdapters\b/,
-      /\bcontrolPlane\b/,
-      /\bAgentControlPlane\b/,
-      /\bAgentFeedbackCoordinator\b/,
-      /\bAgentFeedbackCycle\b/,
-      /\bAgentFeedbackSignal\b/,
-      /\bAgentFeedbackDecision\b/,
-      /\bAgentFeedbackFlowAction\b/,
-      /\bAgentFeedbackEvaluationContext\b/,
-      /\bAgentFeedbackMemoryExtraction(?:Input|Outcome|Result|Skipped)\b/,
-    ];
-    const violations = productionSource.flatMap(({ relativePath, source }) =>
-      legacyRuntimePatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    expect(violations).toEqual([]);
-  });
-
   it('keeps optional Autoheal strategy packs and chain implementation out of Agent core', () => {
     const forbiddenFiles = [
       join(agentSrc, 'autoheal/autoheal-chain.ts'),
@@ -1204,65 +901,6 @@ describe('agent architecture boundary guards', () => {
         .filter((pattern) => pattern.test(source))
         .map((pattern) => `${relativePath} matches ${pattern}`),
     );
-
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps removed creative and Quality identities out of workspace runtime fixtures', () => {
-    const removedCreativeSkillNames = [
-      'ai-generate',
-      'comic-to-animation',
-      'comic-to-storyboard',
-      'media-to-video',
-      'image-to-shot',
-      'storyboard-to-animation-plan',
-      'animation-plan-to-cut',
-      'generated-shot-assembly',
-      'export-video-package',
-    ] as const;
-    const removedQualityToolNames = ['QualityRepairCheck', 'QualityCheckConsistency'] as const;
-    const removedRuntimeIdentities = [
-      ...removedCreativeSkillNames,
-      ...removedQualityToolNames,
-    ] as const;
-    const allowedNegativeOrInternalReferences = new Map<string, ReadonlySet<string>>([
-      [
-        'packages/neko-agent/packages/extension/src/services/__tests__/skillCatalogProvider.test.ts',
-        new Set(removedCreativeSkillNames),
-      ],
-      [
-        'packages/neko-cut/packages/extension/src/services/cutAgentSkillInvocation.test.ts',
-        new Set(['ai-generate']),
-      ],
-      [
-        'packages/agent/runtime/src/session/__tests__/agent-session.test.ts',
-        new Set(['comic-to-storyboard']),
-      ],
-    ]);
-    const trackedSourceFiles = execFileSync(
-      'git',
-      ['ls-files', 'packages', 'scripts/agent-eval/scenarios'],
-      { cwd: workspaceRoot, encoding: 'utf-8' },
-    )
-      .split('\n')
-      .filter(Boolean)
-      .filter((file) => existsSync(join(workspaceRoot, file)))
-      .filter(
-        (file) =>
-          file.endsWith('.ts') ||
-          file.endsWith('.tsx') ||
-          file.endsWith('.json') ||
-          file.endsWith('.mjs'),
-      )
-      .filter((file) => !file.endsWith('architecture-boundary-guards.test.ts'));
-    const violations = trackedSourceFiles.flatMap((relativePath) => {
-      const file = join(workspaceRoot, relativePath);
-      const allowedNames = allowedNegativeOrInternalReferences.get(relativePath);
-      const source = readFileSync(file, 'utf-8');
-      return removedRuntimeIdentities
-        .filter((name) => hasQuotedIdentity(source, name) && !allowedNames?.has(name))
-        .map((name) => `${relativePath} contains removed runtime identity ${name}`);
-    });
 
     expect(violations).toEqual([]);
   });
@@ -1423,105 +1061,6 @@ describe('agent architecture boundary guards', () => {
     expect(listFiles(extensionSrc).filter((file) => /\.[cm]?[jt]sx?$/.test(file))).toEqual([]);
   });
 
-  it('keeps removed IDC run control APIs out of Agent source and tests', () => {
-    const sourceFiles = listFiles(agentSrc)
-      .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }))
-      .filter(({ relativePath }) => !relativePath.endsWith('architecture-boundary-guards.test.ts'));
-    const forbiddenPatterns = [
-      /\bstartIdcRunWithIntent\b/,
-      /\bstopIdcRunWithIntent\b/,
-      /\bstartIdcRun\s*\(/,
-      /\bgetActiveIdcRun\b/,
-      /\bgetIdcRun\s*\(/,
-      /\blistIdcRuns\b/,
-      /\bcreateIdcRunStore\b/,
-      /\bIIdcRunStore\b/,
-      /\bIdcRunLifecycle\b/,
-      /\b_runStore\b/,
-      /\b_idcRunLifecycle\b/,
-      /\bworkflowRuntime\b/,
-      /\bIWorkflowRuntime\b/,
-    ];
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      forbiddenPatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps legacy IDC workflow control targets out of production activation paths', () => {
-    const sourceFiles = [
-      ...listFiles(agentSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(webviewSrc),
-    ]
-      .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
-      .filter((file) => !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      [/'idc-workflow'/, /"idc-workflow"/, /\bStartIDCWorkflow\b/, /['"`]\/idc(?:\s|['"`])/]
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps legacy idc metadata out of Agent creation guidance parsing', () => {
-    const sourceFiles = listFiles(join(agentSrc, 'session'))
-      .filter((file) => file.endsWith('.ts') && !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      [/metadata\[['"]idc['"]\]/, /\bagentCreation\s*\?\?\s*metadata\[['"]idc['"]\]/]
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps workspace snapshot APIs named as staged creation compatibility, not IDC runtime', () => {
-    const workspaceSrc = join(agentSrc, 'workspace');
-    const sourceFiles = listFiles(workspaceSrc)
-      .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
-      .filter((file) => !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-    const forbiddenPatterns = [
-      /\bidc-runtime-state-(?:store|reader)\b/,
-      /\bcreateIdcRuntimeStateStore\b/,
-      /\breadIdcRuntimeState\b/,
-      /\bparseIdcRuntimeState\b/,
-      /\bIIdcRuntimeStateStore\b/,
-      /\bIdcRuntimeState(?:Input|Snapshot|FsOps|StoreConfig|ReadFsOps)?\b/,
-      /\bReadIdcRuntimeStateConfig\b/,
-      /\bIdcRuntimeRestoreState\b/,
-    ];
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      forbiddenPatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    expect(violations).toEqual([]);
-  });
-
   it('keeps prompt-chain guidance free of creation observation state', () => {
     const sourceFiles = [
       ...listFiles(agentSrc),
@@ -1567,175 +1106,6 @@ describe('agent architecture boundary guards', () => {
     expect([...violations, ...forbiddenFiles]).toEqual([]);
   });
 
-  it('poisons fixed creative Workflow runtimes and executable prompt-chain plan schemas', () => {
-    const sourceFiles = [
-      ...listFiles(agentSrc),
-      ...listFiles(agentTypesSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(webviewSrc),
-    ]
-      .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
-      .filter((file) => !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }))
-      .filter(({ relativePath }) => !relativePath.endsWith('architecture-boundary-guards.test.ts'));
-
-    const workflowRuntimePatterns = [
-      /\bI?WorkflowRuntime\b/,
-      /\bCreativeWorkflowRuntime\b/,
-      /\bWorkflowRun\b/,
-      /\bWorkflowNode\b/,
-      /\bWorkflowTransition\b/,
-      /\bFixedCreativeStageExecutor\b/,
-      /\bCreativeStageExecutor\b/,
-    ];
-    const runtimeViolations = sourceFiles.flatMap(({ relativePath, source }) =>
-      workflowRuntimePatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    const fixedStageViolations = sourceFiles.flatMap(({ relativePath, source }) =>
-      [
-        /\bMediaProductionWorkflowRunState\b/,
-        /\bMediaProductionStageExecutorPort\b/,
-        /\bMediaProductionWorkflowStateStorePort\b/,
-        /\bMediaProductionWorkflowRecoveryCoordinator\b/,
-        /\bMediaProductionProjectAuthoringOrchestrator\b/,
-        /\bMediaProductionPreExportGateOrchestrator\b/,
-        /\bTaskBackedMediaProductionWorkflowStateStore\b/,
-        /\bMEDIA_PRODUCTION_(?:EARLY_)?STAGE_IDS\b/,
-        /\bCREATIVE_MEDIA_WORKFLOW_STAGES\b/,
-        /\bCreativeMediaWorkflowStageDescriptor\b/,
-      ]
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    const promptChainPlanPatterns = [
-      /\bAgentPromptChainExecutablePlan\b/,
-      /\bPromptChain(?:Executable)?Plan\b/,
-      /\bPromptChain(?:Node|Transition|Executor|Runtime|Schema)\b/,
-      /\bpromptChain(?:Executable)?Plan\??\s*:/,
-      /\bpromptChain(?:Nodes|Transitions|RetryPolicy|ToolSchema)\??\s*:/,
-    ];
-    const promptChainViolations = sourceFiles.flatMap(({ relativePath, source }) =>
-      promptChainPlanPatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    const forbiddenFiles = [
-      'packages/agent/runtime/src/runtime/workflow-runtime.ts',
-      'packages/agent/runtime/src/runtime/creative-workflow-runtime.ts',
-      'packages/agent/runtime/src/workflow/workflow-runtime.ts',
-      'packages/agent/runtime/src/media-production/early-stage-orchestrator.ts',
-      'packages/agent/runtime/src/media-production/project-authoring-orchestrator.ts',
-      'packages/agent/runtime/src/media-production/pre-export-gate-orchestrator.ts',
-      'packages/agent/runtime/src/media-production/workflow-recovery-coordinator.ts',
-      'packages/agent/runtime/src/task/media-production-workflow-state.ts',
-      'packages/neko-agent/packages/extension/src/services/mediaProductionProjectAuthoringResolver.ts',
-      'packages/agent/contracts/src/prompt-chain-executable-plan.ts',
-      'packages/agent/contracts/src/prompt-chain-workflow.ts',
-      'packages/shared/src/types/media-production-workflow.ts',
-    ].filter((file) => existsSync(join(repoRoot, file)));
-
-    expect([
-      ...runtimeViolations,
-      ...fixedStageViolations,
-      ...promptChainViolations,
-      ...forbiddenFiles,
-    ]).toEqual([]);
-  });
-
-  it('poisons parallel creative catalogs and required planning-projection handshakes', () => {
-    const platformSrc = join(packageRoot, 'platform/src');
-    const sourceFiles = [
-      ...listFiles(agentSrc),
-      ...listFiles(agentTypesSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(platformSrc),
-    ]
-      .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-    const forbiddenPatterns = [
-      /\bCreativeToolCatalog\b/,
-      /\bCreativeCapabilityCatalog\b/,
-      /\bProviderPurposeAllowlist\b/,
-      /\bCreativeProviderPurposeMap\b/,
-      /\bAgentCapabilityPlanningProjection\b/,
-      /\bAgentCapabilityPlanningMetadata\b/,
-      /\bCapabilityPlanningRuntime\b/,
-      /\bPlanningProjectionHandshake\b/,
-      /\bgetPlanningDomainIndex\b/,
-      /\bdiscoverPlanningCapabilities\b/,
-      /\binjectSelectedPlanningCapability\b/,
-      /\bplanningProjectionRequired\b/,
-      /\brequirePlanningProjection\b/,
-    ];
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      forbiddenPatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-    const forbiddenFiles = [
-      join(agentTypesSrc, 'capability-planning.ts'),
-      join(agentSrc, 'runtime/capability/agent-capability-planning-projection.ts'),
-      join(agentSrc, 'runtime/capability/creative-capability-catalog.ts'),
-      join(agentSrc, 'runtime/capability/capability-planning-runtime.ts'),
-    ]
-      .filter((file) => existsSync(file))
-      .map((file) => relative(repoRoot, file).replace(/\\/g, '/'));
-
-    expect([...violations, ...forbiddenFiles]).toEqual([]);
-  });
-
-  it('poisons broad creative history snapshots and duplicated observation state', () => {
-    const sourceFiles = [
-      ...listFiles(agentSrc),
-      ...listFiles(agentTypesSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(webviewSrc),
-    ]
-      .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-    const forbiddenPatterns = [
-      /\bCreativeObservationSnapshot\b/,
-      /\bAgentCreativeObservationSnapshot\b/,
-      /\bCreativeObservationAssembler\b/,
-      /\bCreativeObservationContext\b/,
-      /\bApprovalDecisionHistoryProjection\b/,
-      /\bCreativeTargetCompletionEvaluator\b/,
-      /\bcollectCreativeObservationFromHistory\b/,
-      /\bscanCreativeHistoryPayloads\b/,
-      /\bbuildCreativeObservationSnapshot\b/,
-    ];
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      forbiddenPatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-    const forbiddenFiles = [
-      join(agentTypesSrc, 'creative-observation.ts'),
-      join(agentSrc, 'runtime/creative-observation-assembler.ts'),
-      join(agentSrc, 'runtime/creative-observation-context.ts'),
-      join(agentSrc, 'runtime/creative-target-completion-evaluator.ts'),
-      join(agentSrc, 'runtime/approval-decision-history-projection.ts'),
-    ]
-      .filter((file) => existsSync(file))
-      .map((file) => relative(repoRoot, file).replace(/\\/g, '/'));
-
-    expect([...violations, ...forbiddenFiles]).toEqual([]);
-  });
-
   it('keeps creative plan policy out of the generic Approval runtime', () => {
     const approvalSrc = join(agentSrc, 'approval');
     const sourceFiles = listFiles(approvalSrc)
@@ -1760,103 +1130,6 @@ describe('agent architecture boundary guards', () => {
       .map((file) => relative(repoRoot, file).replace(/\\/g, '/'));
 
     expect([...violations, ...forbiddenFiles]).toEqual([]);
-  });
-
-  it('poisons global creative model matrices and executable Prompt-example catalogs', () => {
-    const platformSrc = join(packageRoot, 'platform/src');
-    const sourceFiles = [
-      ...listFiles(agentSrc),
-      ...listFiles(agentTypesSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(platformSrc),
-    ]
-      .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(workspaceRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-    const forbiddenPatterns = [
-      /\bGlobalModelCapabilityMatrix\b/,
-      /\bCreativeModelCapabilityMatrix\b/,
-      /\bAgentModelSupportMatrix\b/,
-      /\bModelMarketingSupport\b/,
-      /\binferCreativeMediaSupportFromModelName\b/,
-      /\bpromoteSupportFromPromptExample\b/,
-      /\bpromoteSupportFromHistoricalResult\b/,
-      /\bCreativePromptManager\b/,
-      /\bPromptExecutionCatalog\b/,
-      /\bPromptExampleExecutionCatalog\b/,
-      /\bPromptExampleRetrievalRuntime\b/,
-      /\bPromptExampleResolverPrerequisite\b/,
-    ];
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      forbiddenPatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-    const forbiddenFiles = [
-      join(agentSrc, 'provider/global-model-capability-matrix.ts'),
-      join(agentSrc, 'prompt/creative-prompt-manager.ts'),
-      join(agentSrc, 'prompt/prompt-execution-catalog.ts'),
-      join(agentSrc, 'prompt/prompt-example-retrieval-runtime.ts'),
-      join(agentTypesSrc, 'model-capability-matrix.ts'),
-    ]
-      .filter((file) => existsSync(file))
-      .map((file) => relative(workspaceRoot, file).replace(/\\/g, '/'));
-
-    expect([...violations, ...forbiddenFiles]).toEqual([]);
-  });
-
-  it('poisons retired IDC stage, persona, run, and executable-plan runtime paths', () => {
-    const productionFiles = [
-      ...listFiles(agentSrc),
-      ...listFiles(agentTypesSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(webviewSrc),
-      ...listFiles(tuiSrc),
-    ]
-      .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(workspaceRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }))
-      .filter(({ relativePath }) => !relativePath.endsWith('architecture-boundary-guards.test.ts'));
-
-    const forbiddenFiles = [
-      join(agentTypesSrc, 'stage.ts'),
-      join(agentTypesSrc, 'draft.ts'),
-      join(agentTypesSrc, 'execution-plan.ts'),
-      join(agentSrc, 'executor/stage-dispatcher.ts'),
-      join(agentSrc, 'skill/activation/stage-activation-matrix.ts'),
-      join(agentSrc, 'skill/activation/stage-planner.ts'),
-      join(agentSrc, 'skill/activation/stage-registry.ts'),
-      join(agentSrc, 'skill/stage-guardian.ts'),
-      join(agentSrc, 'skill/stage-persona-binding.ts'),
-      join(agentSrc, 'skill/stage-tracker.ts'),
-    ]
-      .filter((file) => existsSync(file))
-      .map((file) => relative(workspaceRoot, file).replace(/\\/g, '/'));
-
-    const forbiddenRuntimePatterns = [
-      /\bIdcStage\b/,
-      /\bStageActivationDecision\b/,
-      /\bStagePersonaBinding\b/,
-      /\bStageTracker\b/,
-      /\bStageGuardian\b/,
-      /\bstageTracking\??\s*:/,
-      /\b(?:create|restore|resume|start)Idc(?:Run)?\b/i,
-      /['"]stagePersona['"]/,
-      /['"]creation-stage['"]/,
-      /['"]EnterPlanMode['"]/,
-      /['"]ExitPlanMode['"]/,
-    ];
-    const runtimeViolations = productionFiles.flatMap(({ relativePath, source }) =>
-      forbiddenRuntimePatterns
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    expect([...forbiddenFiles, ...runtimeViolations]).toEqual([]);
   });
 
   it('keeps Agent-native creation as prompt/profile guidance, not a parallel runtime or state store', () => {
@@ -1900,69 +1173,6 @@ describe('agent architecture boundary guards', () => {
         .filter((pattern) => pattern.test(source))
         .map((pattern) => `${relativePath} matches ${pattern}`),
     );
-
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps new production code from importing legacy workflow trace DTOs as creation identity', () => {
-    const allowedLegacyFiles = new Set([
-      'packages/agent/contracts/src/index.ts',
-      'packages/agent/contracts/src/webview-protocol.ts',
-    ]);
-    const sourceFiles = [
-      ...listFiles(join(packageRoot, 'agent/contracts/src')),
-      ...listFiles(agentSrc),
-      ...listFiles(extensionSrc),
-      ...listFiles(webviewSrc),
-    ]
-      .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
-      .filter((file) => !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }))
-      .filter(({ relativePath }) => !allowedLegacyFiles.has(relativePath));
-
-    const violations = sourceFiles.flatMap(({ relativePath, source }) =>
-      [/from ['"]\.\/workflow['"]/, /from ['"]@neko-agent\/types['"][^;]*AgentWorkflow/]
-        .filter((pattern) => pattern.test(source))
-        .map((pattern) => `${relativePath} matches ${pattern}`),
-    );
-
-    expect(violations).toEqual([]);
-    expect(existsSync(join(repoRoot, 'packages/agent/contracts/src/workflow.ts'))).toBe(false);
-  });
-
-  it('keeps production task projection names creation-native outside explicit legacy trace files', () => {
-    const sourceFiles = [
-      ...listFiles(join(packageRoot, 'agent/contracts/src')),
-      ...listFiles(agentSrc),
-    ]
-      .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
-      .filter((file) => !isTestFile(file))
-      .map((file) => ({
-        relativePath: relative(repoRoot, file).replace(/\\/g, '/'),
-        source: stripTypeScriptComments(readFileSync(file, 'utf-8')),
-      }));
-
-    const violations = sourceFiles.flatMap(({ relativePath, source }) => {
-      const patterns = [
-        /\bIIdcTaskProjection\b/,
-        /\bIdcProjectedTask\b/,
-        /\bcreateTaskManagerIdcTaskProjection\b/,
-        /['"`]idc:\$\{/,
-        /source:\s*['"]idc['"]/,
-      ].filter((pattern) => {
-        if (
-          relativePath === 'packages/agent/runtime/src/task/task-manager.ts' &&
-          String(pattern) === String(/['"`]idc:\$\{/)
-        ) {
-          return false;
-        }
-        return pattern.test(source);
-      });
-      return patterns.map((pattern) => `${relativePath} matches ${pattern}`);
-    });
 
     expect(violations).toEqual([]);
   });

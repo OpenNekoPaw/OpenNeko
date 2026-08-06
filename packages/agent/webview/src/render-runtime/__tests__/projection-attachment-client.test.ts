@@ -25,8 +25,8 @@ function emptySnapshot(): ConversationProjectionSnapshot {
   };
 }
 
-function appendPatch(content: string, itemRevision: number): ConversationProjectionPatch {
-  const item = assistantTextItem(content, itemRevision, 'conversation-a');
+function appendPatch(content: string, nextValue: number): ConversationProjectionPatch {
+  const item = assistantTextItem(content, nextValue, 'conversation-a');
   return {
     type: 'conversationProjectionPatch',
     conversationId: 'conversation-a',
@@ -40,7 +40,7 @@ function appendPatch(content: string, itemRevision: number): ConversationProject
 
 function assistantTextItem(
   content: string,
-  itemRevision: number,
+  updatedAt: number,
   conversationId: string,
 ): AgentTurnTimelineAssistantTextItem {
   return {
@@ -51,12 +51,11 @@ function assistantTextItem(
     messageId: 'message-a',
     itemId: 'text-a',
     sequence: 1,
-    itemRevision,
     kind: 'assistant_text',
     status: 'streaming',
     createdAt: 1,
-    updatedAt: itemRevision,
-    payload: { content, sourceGeneration: 1 },
+    updatedAt,
+    payload: { content },
   };
 }
 

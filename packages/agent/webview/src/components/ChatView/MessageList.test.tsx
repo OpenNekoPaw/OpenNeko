@@ -373,7 +373,7 @@ describe('MessageList auto-scroll lifecycle', () => {
     );
 
     expect(screen.getByAltText('Page 1').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+      'http://127.0.0.1:43125/resources/page-1.jpg',
     );
     expect(screen.queryByText(/no image resource context/)).toBeNull();
     expect(screen.queryByText('P1')).toBeNull();
@@ -613,7 +613,7 @@ function createReadImageContextMessage(): Message {
             attachments: [
               {
                 type: 'image',
-                path: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+                path: 'http://127.0.0.1:43125/resources/page-1.jpg',
                 mimeType: 'image/jpeg',
               },
             ],

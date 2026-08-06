@@ -21,7 +21,6 @@ export interface AgentManagedSkillItem {
 
 export interface AgentExtensionManagementProjection {
   readonly identity: AgentExtensionManagementSessionIdentity;
-  readonly catalogRevision: string;
   readonly skills: readonly AgentManagedSkillItem[];
   readonly skillDiscovery: {
     readonly diagnostics: readonly {
@@ -44,11 +43,11 @@ export interface AgentExtensionManagementProjection {
 export interface AgentExtensionManagementRuntime {
   readonly identity: AgentExtensionManagementSessionIdentity;
   getSnapshot(): Promise<AgentExtensionManagementProjection>;
-  installPlugin(pluginId: string, expectedCatalogRevision: string): Promise<void>;
-  removePlugin(pluginId: string, expectedCatalogRevision: string): Promise<void>;
-  refreshMarketplaces(expectedCatalogRevision: string): Promise<void>;
-  installPersonalSkill(expectedCatalogRevision: string): Promise<void>;
-  removePersonalSkill(managementId: string, expectedCatalogRevision: string): Promise<void>;
+  installPlugin(pluginId: string): Promise<void>;
+  removePlugin(pluginId: string): Promise<void>;
+  refreshMarketplaces(): Promise<void>;
+  installPersonalSkill(): Promise<void>;
+  removePersonalSkill(managementId: string): Promise<void>;
   dispose(): void;
 }
 
@@ -57,7 +56,7 @@ export function parseAgentExtensionManagementProjection(
 ): AgentExtensionManagementProjection {
   const record = requireExactRecord(
     value,
-    ['identity', 'catalogRevision', 'skills', 'skillDiscovery', 'extensions', 'extensionDiscovery'],
+    ['identity', 'skills', 'skillDiscovery', 'extensions', 'extensionDiscovery'],
     'Agent Extension Management projection is invalid.',
   );
   if (!Array.isArray(record['skills']) || !Array.isArray(record['extensions'])) {
@@ -65,7 +64,6 @@ export function parseAgentExtensionManagementProjection(
   }
   return {
     identity: parseAgentExtensionManagementSessionIdentity(record['identity']),
-    catalogRevision: requireCatalogRevision(record['catalogRevision']),
     skills: record['skills'].map(parseManagedSkill),
     skillDiscovery: parseSkillDiscovery(record['skillDiscovery']),
     extensions: record['extensions'].map(parseExtension),
@@ -329,17 +327,6 @@ function requireExactRecord(
     throw new Error(message);
   }
   return record;
-}
-
-function requireCatalogRevision(value: unknown): string {
-  const revision = requireNonEmptyString(
-    value,
-    'Agent Extension Management catalog revision is required.',
-  );
-  if (!/^sha256:[0-9a-f]{64}$/u.test(revision)) {
-    throw new Error('Agent Extension Management catalog revision is invalid.');
-  }
-  return revision;
 }
 
 function requirePluginId(value: unknown): string {

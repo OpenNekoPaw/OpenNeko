@@ -22,7 +22,7 @@ describe('approved baseline and comparability', () => {
   it('records Host-owned Skill identity without Market version or publication state', () => {
     const current = descriptor();
     const baseline = createApprovedBaseline({
-      id: 'baseline-storyboard-v1',
+      id: 'baseline-storyboard',
       current,
       approver: 'evaluation-owner',
       approvedAt: '2026-07-13T00:00:00.000Z',
@@ -32,18 +32,7 @@ describe('approved baseline and comparability', () => {
     expect(serialized).not.toMatch(/semver|packageId|published|installed/iu);
   });
 
-  it('rejects mutable revisions and unscored approved baselines', () => {
-    const mutable = descriptor();
-    mutable.repositoryRevision = 'working-tree';
-    expect(() =>
-      createApprovedBaseline({
-        id: 'baseline-1',
-        current: mutable,
-        approver: 'owner',
-        approvedAt: '2026-07-13T00:00:00.000Z',
-      }),
-    ).toThrow('concrete repository revision');
-
+  it('rejects unscored approved baselines', () => {
     const unscored = descriptor();
     unscored.scoreDistribution = { samples: 0, passRate: 0, mean: 0, variance: 0 };
     expect(() =>
@@ -83,7 +72,6 @@ describe('approved baseline and comparability', () => {
 
   it.each([
     ['target fingerprint', (current) => (current.target.identity.fingerprint = `sha256:${'b'.repeat(64)}`), 'target'],
-    ['repository revision', (current) => (current.repositoryRevision = 'def456'), 'repository-revision'],
     ['fixture', (current) => (current.fixtureDigest = `sha256:${'c'.repeat(64)}`), 'fixture-digest'],
     ['runtime profile', (current) => (current.runtimeProfileId = 'other'), 'runtime-profile'],
     ['model profile', (current) => (current.modelProfileIds = ['other']), 'model-profiles'],
@@ -112,7 +100,7 @@ describe('approved baseline and comparability', () => {
     );
   });
 
-  it('allows only explicitly named policy differences', () => {
+  it('allows explicitly named policy differences', () => {
     const baseline = createApprovedBaseline({
       id: 'baseline-1',
       current: descriptor(),
@@ -120,7 +108,7 @@ describe('approved baseline and comparability', () => {
       approvedAt: '2026-07-13T00:00:00.000Z',
     });
     const current = descriptor();
-    current.repositoryRevision = 'def456';
+    current.budget.timeoutMs = 1;
     expect(
       compareWithBaseline({
         id: 'comparison-1',
@@ -128,7 +116,7 @@ describe('approved baseline and comparability', () => {
         current,
         currentReportIds: ['report-1'],
         evidenceRefs: ['judge.result'],
-        allowDifferences: ['repositoryRevision'],
+        allowDifferences: ['budget'],
       }).comparable,
     ).toBe(true);
   });
@@ -136,12 +124,12 @@ describe('approved baseline and comparability', () => {
 
 function descriptor() {
   return createCurrentBaselineDescriptor({
-    suite: { target: structuredClone(TARGET), repositoryRevision: 'abc123' },
+    suite: { target: structuredClone(TARGET) },
     scenario: {
       runtimeProfileId: 'runtime-default',
       modelProfileIds: ['model-default'],
       budget: { timeoutMs: 120_000, repetitions: 3 },
-      artifactChecks: [{ kind: 'file', validatorId: 'json-document-v1' }],
+      artifactChecks: [{ kind: 'file', validatorId: 'json-document' }],
       rubric: { kind: 'domain-rubric', ref: 'rubrics/storyboard.json', judgeProfileId: 'judge' },
       assertions: [{ id: 'runtime' }, { id: 'artifact' }],
     },

@@ -1,4 +1,4 @@
-import { runV2CaseRepeated } from '../runner/run-v2-case.mjs';
+import { runCaseRepeated } from '../runner/run-case.mjs';
 import { writeAblationDeltaReport } from '../reports/report-writer.mjs';
 import {
   ABLATION_SCHEMAS,
@@ -27,7 +27,7 @@ export async function runConfigurationAblation(planInput, options = {}) {
   const executionOrder = randomize(plan.variants, options.random ?? Math.random);
   for (const variant of executionOrder) {
     const variantSelection = createVariantSelection(selection, plan, variant);
-    const run = await (options.runCase ?? runV2CaseRepeated)(variantSelection, {
+    const run = await (options.runCase ?? runCaseRepeated)(variantSelection, {
       ...(options.caseOptions ?? {}),
       runId: `${runId}-${variant.id}`,
       outputRoot: options.outputRoot,
@@ -58,7 +58,7 @@ export function createConfigurationAblationDryRun(planInput, selection) {
   return {
     ok: true,
     dryRun: true,
-    schema: 'neko.agent-eval.ablation-dry-run.v1',
+    schema: 'neko.agent-eval.ablation-dry-run',
     planId: plan.id,
     suiteId: plan.suiteId,
     caseId: plan.caseId,

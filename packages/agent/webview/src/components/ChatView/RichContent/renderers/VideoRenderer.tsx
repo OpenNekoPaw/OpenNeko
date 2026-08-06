@@ -36,7 +36,6 @@ function VideoRendererComponent({ data, className, inline }: RichContentProps<Vi
       src={data.src}
       poster={data.poster}
       title={data.title}
-      localPath={data.localPath}
       inline={inline}
       className={className}
     />

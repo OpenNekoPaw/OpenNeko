@@ -39,7 +39,7 @@ if (runHarness) {
               name: searchTool,
               queryArg,
               maxResultsArg,
-              outputSchema: 'neko.externalResearch.search.v1',
+              outputSchema: 'neko.externalResearch.search',
             },
           },
           mcpManager: manager,

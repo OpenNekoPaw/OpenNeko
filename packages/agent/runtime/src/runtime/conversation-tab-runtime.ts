@@ -87,7 +87,6 @@ export type ChatRestorePlanAction =
 
 export interface BuildChatRestorePlanInput {
   tabState: TabState;
-  tabStateRevision: number;
   hasWebview: boolean;
   pluginCommands?: NonNullable<PluginCommandsMessage['commands']>;
 }
@@ -199,8 +198,8 @@ export function buildChatPluginCommandsMessage(
   return buildPluginCommandsMessage(commands);
 }
 
-export function buildChatTabStateMessage(tabState: TabState, revision: number): TabStateMessage {
-  return buildTabStateMessage(tabState, revision);
+export function buildChatTabStateMessage(tabState: TabState): TabStateMessage {
+  return buildTabStateMessage(tabState);
 }
 
 export function buildInvalidWebviewPayloadMessage(raw: unknown): AgentSessionDiagnosticMessage {
@@ -240,7 +239,7 @@ export function buildChatRestorePlan(input: BuildChatRestorePlanInput): ChatRest
   }
   actions.push({
     type: 'postTabState',
-    message: buildTabStateMessage(input.tabState, input.tabStateRevision),
+    message: buildTabStateMessage(input.tabState),
   });
 
   actions.push({ type: 'sendAgentStateSnapshot' });

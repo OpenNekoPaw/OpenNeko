@@ -527,43 +527,7 @@ describe('PerceiveTool', () => {
           },
         },
       }),
-    ).rejects.toThrow('legacy-perception-model-override-rejected');
-    expect(pipeline.perceive).not.toHaveBeenCalled();
-  });
-
-  it('rejects legacy runtime metadata understanding model overrides', async () => {
-    const pipeline = {
-      perceive: vi.fn(async () => ({
-        card: {
-          assetId: 'asset-1',
-          modality: 'image' as const,
-          createdAt: 1,
-          layerStatus: {
-            layer0: 'complete' as const,
-            layer1: 'complete' as const,
-            layer2: 'skipped' as const,
-          },
-          structural: { format: 'png', mimeType: 'image/png', byteSize: 10 },
-        },
-      })),
-    };
-    const tool = new PerceiveTool({ pipeline, now: () => 20 });
-
-    await expect(
-      tool.execute(
-        {
-          assetId: 'asset-1',
-          depth: 1,
-        },
-        {
-          metadata: {
-            understandingModels: {
-              image: { providerId: 'google', modelId: 'gemini-image-understand' },
-            },
-          },
-        },
-      ),
-    ).rejects.toThrow('legacy-perception-model-override-rejected');
+    ).rejects.toThrow('perception-model-override-rejected');
     expect(pipeline.perceive).not.toHaveBeenCalled();
   });
 
@@ -586,7 +550,6 @@ describe('PerceiveTool', () => {
     const contentLocator = {
       kind: 'generated-output' as const,
       outputId: 'generated-1',
-      revision: 'revision-1',
       digest: 'sha256:generated-1',
       path: 'neko/generated/image/task_1_0.png',
     };
@@ -611,43 +574,6 @@ describe('PerceiveTool', () => {
         },
       }),
     );
-  });
-
-  it('rejects explicit refs containing a retired resourceRef field', async () => {
-    const pipeline = {
-      perceive: vi.fn(async () => ({
-        card: {
-          assetId: 'generated-1',
-          modality: 'image' as const,
-          createdAt: 1,
-          layerStatus: {
-            layer0: 'complete' as const,
-            layer1: 'complete' as const,
-            layer2: 'skipped' as const,
-          },
-          structural: { format: 'png', mimeType: 'image/png', byteSize: 10 },
-        },
-      })),
-    };
-    const tool = new PerceiveTool({ pipeline, now: () => 20 });
-
-    const result = await tool.execute({
-      assetId: 'generated-1',
-      depth: 1,
-      ref: {
-        assetId: 'generated-1',
-        uri: 'neko/generated/image/task_1_0.png',
-        mimeType: 'image/png',
-        resourceRef: {
-          kind: 'generated',
-          source: { kind: 'generated-asset', generatedAssetId: 'generated-1' },
-          locator: { kind: 'generated-asset', assetId: 'generated-1' },
-        },
-      },
-    });
-
-    expect(result.success).toBe(false);
-    expect(pipeline.perceive).not.toHaveBeenCalled();
   });
 });
 

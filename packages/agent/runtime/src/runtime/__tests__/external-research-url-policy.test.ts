@@ -9,9 +9,6 @@ describe('validateExternalResearchUrl', () => {
     'blob:https://example.com/id',
     'openneko://desktop/index.html',
     'openneko://resource/0123456789abcdefghijklmnopqrstuv',
-    'opennekomedia://resource/legacy',
-    'neko-app://desktop/index.html',
-    'neko-media://panel/id',
     'javascript:alert(1)',
   ])('rejects unsupported or non-public URL %s', (url) => {
     expect(validateExternalResearchUrl({ url }).ok).toBe(false);

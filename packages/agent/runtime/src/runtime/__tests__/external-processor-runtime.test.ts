@@ -103,7 +103,7 @@ describe('Agent external processor runtime', () => {
     expect(listener.mock.calls.map(([event]) => event.kind)).toEqual(['registered', 'disabled']);
   });
 
-  it('plans invocation requests with stable registration revision and run metadata', () => {
+  it('plans invocation requests with exact registration and run identity', () => {
     const registry = createExternalProcessorRegistry();
     const registration = registry.upsert(
       {
@@ -133,7 +133,6 @@ describe('Agent external processor runtime', () => {
         invocation: expect.objectContaining({
           processorId: 'upscale-image',
           registrationId: registration.registrationId,
-          registrationRevision: registration.revision,
           run: { processorRunId: 'processor-run-1', stageId: 'stage-1', attempt: 1 },
           outputs: [{ slot: 'image', ownership: 'candidate', pathHint: 'upscale' }],
         }),
@@ -233,7 +232,6 @@ describe('Agent external processor runtime', () => {
         status: 'succeeded',
         processorId: plan.invocation.processorId,
         registrationId: plan.invocation.registrationId,
-        registrationRevision: plan.invocation.registrationRevision,
         run: plan.invocation.run,
         outputs: [
           {
@@ -298,7 +296,7 @@ describe('Agent external processor runtime', () => {
     });
 
     expect(request.diagnostics).toEqual([]);
-    expect(request.manifest).toEqual(
+    expect(request.processor).toEqual(
       expect.objectContaining({
         id: 'developer-mode.one-shot-command',
         entry: { executable: '${HOST_SHELL}', args: ['-c', '${params.command}'] },
@@ -336,9 +334,8 @@ describe('Agent external processor runtime', () => {
   });
 
   it.each([
-    'ffmpeg -i http://127.0.0.1:43125/v1/resources/display-token output.mp4',
-    'ffprobe http://localhost:43125/v1/streams/pcm-token',
-    'cp neko-media://desktop/legacy-video output.mp4',
+    'ffmpeg -i http://127.0.0.1:43125/resources/display-token output.mp4',
+    'ffprobe http://localhost:43125/streams/pcm-token',
     'cat file:///private/tmp/input.wav',
   ])('rejects display transport URLs at the Developer Mode command boundary: %s', (command) => {
     const request = createDeveloperModeTemporaryProcessorRequest({ command });
@@ -352,39 +349,38 @@ describe('Agent external processor runtime', () => {
     ]);
   });
 
-  it.each([
-    'http://127.0.0.1:43125/v1/resources/display-token',
-    'neko-media://desktop/legacy-video',
-    'file:///private/tmp/input.png',
-  ])('rejects display URLs masquerading as processor input locators: %s', (path) => {
-    const registry = createExternalProcessorRegistry();
-    registry.upsert(
-      { sourceScope: 'builtin', agentCapabilitySource: 'builtin', sourceId: 'builtin' },
-      manifest,
-    );
-    const runtime = createAgentExternalProcessorRuntime({ registry });
+  it.each(['http://127.0.0.1:43125/resources/display-token', 'file:///private/tmp/input.png'])(
+    'rejects display URLs masquerading as processor input locators: %s',
+    (path) => {
+      const registry = createExternalProcessorRegistry();
+      registry.upsert(
+        { sourceScope: 'builtin', agentCapabilitySource: 'builtin', sourceId: 'builtin' },
+        manifest,
+      );
+      const runtime = createAgentExternalProcessorRuntime({ registry });
 
-    const plan = runtime.planInvocation({
-      processorId: 'upscale-image',
-      inputs: [
-        {
-          slot: 'image',
-          locator: { kind: 'workspace-file', path } as never,
-        },
-      ],
-      params: { scale: 2 },
-    });
+      const plan = runtime.planInvocation({
+        processorId: 'upscale-image',
+        inputs: [
+          {
+            slot: 'image',
+            locator: { kind: 'workspace-file', path } as never,
+          },
+        ],
+        params: { scale: 2 },
+      });
 
-    expect(plan.status).toBe('blocked');
-    expect(plan.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'unauthorized-path',
-          path: 'inputs.image.locator',
-        }),
-      ]),
-    );
-  });
+      expect(plan.status).toBe('blocked');
+      expect(plan.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'unauthorized-path',
+            path: 'inputs.image.locator',
+          }),
+        ]),
+      );
+    },
+  );
 });
 
 function createProcessorOutputLocator(id: string): ProcessorOutputLocator {

@@ -719,7 +719,6 @@ function formatDocumentImageReferenceJson(input: {
   return JSON.stringify(
     {
       kind: 'document-image-reference',
-      protocolVersion: 2,
       document: {
         filePath: input.filePath,
         ...(input.source ? { source: input.source } : {}),

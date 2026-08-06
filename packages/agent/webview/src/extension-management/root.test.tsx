@@ -37,7 +37,6 @@ describe('AgentExtensionManagementRoot', () => {
       identity,
       getSnapshot: async () => ({
         identity,
-        catalogRevision: 'revision-1',
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [],
@@ -56,7 +55,13 @@ describe('AgentExtensionManagementRoot', () => {
     );
 
     await waitFor(() => expect(screen.getByText('home.capabilities.noSkills')).toBeTruthy());
-    expect(document.querySelector('.management-surface-empty')).not.toBeNull();
+    const emptyState = document.querySelector('[data-neko-empty-state="fill"]');
+    expect(emptyState).not.toBeNull();
+    expect(emptyState?.querySelector('svg')).not.toBeNull();
+    expect(emptyState?.closest('.management-surface-list')?.getAttribute('data-empty')).toBe(
+      'true',
+    );
+    expect(document.querySelector('.management-surface-empty')).toBeNull();
   });
 });
 

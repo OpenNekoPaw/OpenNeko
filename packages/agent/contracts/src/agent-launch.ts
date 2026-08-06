@@ -50,7 +50,6 @@ export interface AgentLaunchResourceCatalogEntry extends AgentLaunchCatalogEntry
 
 export interface AgentLaunchCatalogProjection {
   readonly connection: AgentLaunchConnectionIdentity;
-  readonly revision: number;
   readonly models: readonly AgentLaunchModelCatalogEntry[];
   readonly commands: readonly AgentLaunchCommandCatalogEntry[];
   readonly skills: readonly AgentLaunchSkillCatalogEntry[];
@@ -81,10 +80,9 @@ export function parseAgentLaunchConnectionIdentity(value: unknown): AgentLaunchC
 
 export function parseAgentLaunchCatalogProjection(value: unknown): AgentLaunchCatalogProjection {
   const record = requireRecord(value, 'Agent launch catalog must be an object.');
-  requireExactKeys(record, ['connection', 'revision', 'models', 'commands', 'skills', 'resources']);
+  requireExactKeys(record, ['connection', 'models', 'commands', 'skills', 'resources']);
   return {
     connection: parseAgentLaunchConnectionIdentity(record['connection']),
-    revision: requireNonNegativeInteger(record['revision'], 'catalog revision'),
     models: parseArray(record['models'], parseModel),
     commands: parseArray(record['commands'], parseCommand),
     skills: parseArray(record['skills'], parseSkill),
@@ -252,12 +250,5 @@ function requireIdentity(value: unknown, label: string): string {
 
 function requireString(value: unknown, label: string): string {
   if (typeof value !== 'string') throw new Error(`Agent launch ${label} is required.`);
-  return value;
-}
-
-function requireNonNegativeInteger(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`Agent launch ${label} must be a non-negative integer.`);
-  }
   return value;
 }

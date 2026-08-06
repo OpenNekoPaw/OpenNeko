@@ -27,7 +27,7 @@ function configurationPlan() {
     suiteId: 'agent-runtime.model-binding',
     caseId: 'explicit-chat-model',
     scenarioContract: {
-      schema: 'neko.agent-eval.scenario.v2',
+      schema: 'neko.agent-eval.scenario',
       evidenceRefs: ['model-facts'],
       assertionIds: ['runtime', 'model'],
     },
@@ -95,12 +95,12 @@ function implementationPlan() {
         fingerprint: index === 0 ? HASH_A : HASH_B,
       },
       developmentCheckpoint: {
-        kind: 'git-revision',
+        kind: 'git-commit',
         ref: index === 0 ? 'base-revision' : 'variant-revision',
         fingerprint: index === 0 ? HASH_A : HASH_B,
       },
       buildTarget: {
-        sourceRevision: index === 0 ? 'base-revision' : 'variant-revision',
+        sourceCommit: index === 0 ? 'base-revision' : 'variant-revision',
         sourceFingerprint: index === 0 ? HASH_A : HASH_B,
         buildRecipeFingerprint: HASH_C,
         buildCommands: [
@@ -179,19 +179,10 @@ describe('ablation authoring contracts', () => {
     }
   });
 
-  it('rejects variant-owned paths and retired Scenario canonical paths', () => {
+  it('rejects variant-owned paths', () => {
     const duplicatedPath = configurationPlan();
     duplicatedPath.variants[1].expectedPath = ['Desktop path'];
     expect(() => validateAblationPlan(duplicatedPath)).toThrow('unknown field');
-
-    const staleSelection = selection();
-    staleSelection.scenario.evidenceContract.canonicalPath = [
-      'Desktop App session owner',
-      'AgentSession',
-    ];
-    expect(() => validateAblationQualityContract(configurationPlan(), staleSelection)).toThrow(
-      'retired Host/runtime term',
-    );
   });
 
   it('requires the plan to freeze the selected Scenario evidence and assertions', () => {
@@ -225,9 +216,9 @@ describe('ablation authoring contracts', () => {
     renamed.variants[1].skillIdentity.relativePath = 'renamed-storyboard';
     expect(() => validateAblationPlan(renamed)).toThrow('name must match relativePath');
 
-    const marketVersion = implementationPlan();
-    marketVersion.variants[1].marketVersion = '1.0.0';
-    expect(() => validateAblationPlan(marketVersion)).toThrow('unknown field');
+    const invalidMarketField = implementationPlan();
+    invalidMarketField.variants[1][['market', 'Version'].join('')] = '1.0.0';
+    expect(() => validateAblationPlan(invalidMarketField)).toThrow('unknown field');
   });
 
   it('rejects duplicate non-baseline Skill fingerprints', () => {

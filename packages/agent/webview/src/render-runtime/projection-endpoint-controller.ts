@@ -47,7 +47,6 @@ export function createProjectionAttachmentId(): string {
 class DefaultProjectionEndpointController implements ProjectionEndpointController {
   private readonly bindings = new Map<string, TabRenderBinding>();
   private readonly ownedKeys = new Map<string, ProjectionAttachmentKey>();
-  private readonly retiredKeys = new Map<string, ProjectionAttachmentKey>();
   private readonly recoveryKeys = new Set<string>();
   private endpointReady = false;
   private subscription: { dispose(): void } | null = null;
@@ -84,7 +83,7 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
       next.set(binding.tabId, binding);
     }
     for (const tabId of this.bindings.keys()) {
-      if (!next.has(tabId)) this.retireOwnedKey(tabId);
+      if (!next.has(tabId)) this.releaseOwnedKey(tabId);
     }
     this.bindings.clear();
     for (const [tabId, binding] of next) this.bindings.set(tabId, binding);
@@ -138,7 +137,6 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     const runtime = this.options.registry.get(frame.key.tabId);
     const binding = this.bindings.get(frame.key.tabId);
     if (!runtime || !binding || binding.conversationId !== frame.key.conversationId) {
-      if (this.acceptRetiredFrame(frame)) return;
       this.options.reportError(
         new Error(`Projection frame targets unknown Tab binding ${frame.key.tabId}.`),
         { operation: 'route-frame', key: frame.key },
@@ -147,7 +145,6 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     }
     const activeKey = runtime.projectionAttachment?.getSnapshot().key;
     if (!activeKey || !isSameProjectionAttachment(activeKey, frame.key)) {
-      if (this.acceptRetiredFrame(frame)) return;
       this.options.reportError(
         new Error(
           `Rejected stale projection frame for Tab ${frame.key.tabId} attachment ${frame.key.attachmentId}.`,
@@ -171,7 +168,7 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
   }
 
   private createBinding(runtime: TabRenderRuntime): TabProjectionAttachmentBinding {
-    this.retireOwnedKey(runtime.tabId);
+    this.releaseOwnedKey(runtime.tabId);
     const key = {
       attachmentId: this.options.createAttachmentId(runtime.tabId),
       tabId: runtime.tabId,
@@ -185,18 +182,8 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     };
   }
 
-  private retireOwnedKey(tabId: string): void {
-    const key = this.ownedKeys.get(tabId);
-    if (!key) return;
+  private releaseOwnedKey(tabId: string): void {
     this.ownedKeys.delete(tabId);
-    this.retiredKeys.set(formatKey(key), key);
-  }
-
-  private acceptRetiredFrame(frame: ConversationProjectionAttachmentHostFrame): boolean {
-    const key = formatKey(frame.key);
-    if (!this.retiredKeys.has(key)) return false;
-    if (frame.type === 'projectionDetach') this.retiredKeys.delete(key);
-    return true;
   }
 
   private handleAttachmentFatal(tabId: string, error: Error, key: ProjectionAttachmentKey): void {

@@ -1,4 +1,4 @@
-import { runV2CaseRepeated } from '../runner/run-v2-case.mjs';
+import { runCaseRepeated } from '../runner/run-case.mjs';
 import { writeAblationDeltaReport } from '../reports/report-writer.mjs';
 import {
   ABLATION_SCHEMAS,
@@ -40,7 +40,7 @@ export async function runImplementationAblation(planInput, options = {}) {
         preparedTargets.set(cacheKey, prepared);
       }
       const variantSelection = createVariantSelection(selection, plan, variant, prepared);
-      const run = await (options.runCase ?? runV2CaseRepeated)(variantSelection, {
+      const run = await (options.runCase ?? runCaseRepeated)(variantSelection, {
         ...(options.caseOptions ?? {}),
         runId: `${runId}-${variant.id}`,
         outputRoot: options.outputRoot,
@@ -54,7 +54,7 @@ export async function runImplementationAblation(planInput, options = {}) {
         variant,
         run,
         buildIdentity: {
-          sourceRevision: prepared.revision,
+          sourceCommit: prepared.commit,
           sourceFingerprint: prepared.sourceFingerprint,
           buildRecipeFingerprint: prepared.buildRecipeFingerprint,
           executableFingerprint: prepared.executableFingerprint,
@@ -87,21 +87,21 @@ export function createImplementationAblationDryRun(planInput, selection) {
   return {
     ok: true,
     dryRun: true,
-    schema: 'neko.agent-eval.ablation-dry-run.v1',
+    schema: 'neko.agent-eval.ablation-dry-run',
     planId: plan.id,
     suiteId: plan.suiteId,
     caseId: plan.caseId,
     quality: plan.comparisonPolicy.quality,
     variants: plan.variants.map((variant) => {
       createVariantSelection(selection, plan, variant, {
-        revision: variant.buildTarget.sourceRevision,
+        commit: variant.buildTarget.sourceCommit,
       });
       return {
         id: variant.id,
         role: variant.role,
         changes: variant.changes,
         skillIdentity: variant.skillIdentity,
-        sourceRevision: variant.buildTarget.sourceRevision,
+        sourceCommit: variant.buildTarget.sourceCommit,
         repetitions: plan.repetitions,
       };
     }),
@@ -117,7 +117,7 @@ function createImplementationDelta(plan, runId, runs) {
     const entry = requireVariantRun(runs, variant.id);
     const summary = summarizeRun(entry, plan.comparisonPolicy.quality);
     const diagnostics = compareRunPolicies(baselineRun.run, entry.run, {
-      allowDifferences: ['target identity', 'repository revision', 'skill policy'],
+      allowDifferences: ['target identity', 'skill policy'],
     });
     const configuration = effectiveConfigurationEvidence(entry.run);
     if (configuration.status === 'missing') {
@@ -185,7 +185,6 @@ function createVariantSelection(selection, plan, variant, prepared) {
     ...selection,
     suite: {
       ...selection.suite,
-      repositoryRevision: prepared.revision,
       target: { kind: 'skill', identity: variant.skillIdentity },
     },
     scenario: {

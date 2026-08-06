@@ -3,16 +3,16 @@ import { assertShareableEvidence } from './evidence-policy.mjs';
 import { schema as s, validateStrict } from './strict-schema.mjs';
 
 export const OPTIMIZATION_SCHEMAS = Object.freeze({
-  plan: 'neko.agent-eval.optimization-plan.v1',
-  candidate: 'neko.agent-eval.optimization-candidate.v1',
-  handoff: 'neko.agent-eval.optimization-handoff.v1',
-  approval: 'neko.agent-eval.optimization-approval.v1',
-  decision: 'neko.agent-eval.optimization-decision.v1',
-  history: 'neko.agent-eval.skill-development-history.v1',
-  checkpoint: 'neko.agent-eval.skill-development-checkpoint.v1',
-  renameLineage: 'neko.agent-eval.skill-rename-lineage.v1',
-  intake: 'neko.agent-eval.optimization-intake.v1',
-  holdoutSelection: 'neko.agent-eval.optimizer-holdout-selection.v1',
+  plan: 'neko.agent-eval.optimization-plan',
+  candidate: 'neko.agent-eval.optimization-candidate',
+  handoff: 'neko.agent-eval.optimization-handoff',
+  approval: 'neko.agent-eval.optimization-approval',
+  decision: 'neko.agent-eval.optimization-decision',
+  history: 'neko.agent-eval.skill-development-history',
+  checkpoint: 'neko.agent-eval.skill-development-checkpoint',
+  renameLineage: 'neko.agent-eval.skill-rename-lineage',
+  intake: 'neko.agent-eval.optimization-intake',
+  holdoutSelection: 'neko.agent-eval.optimizer-holdout-selection',
 });
 
 const OPTIMIZABLE_OWNERS = Object.freeze(['skill-content', 'prompt', 'routing']);

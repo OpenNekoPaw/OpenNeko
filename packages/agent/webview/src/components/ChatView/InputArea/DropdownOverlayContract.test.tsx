@@ -54,26 +54,26 @@ const translations: Record<string, string> = {
 
 const models: ChatModelOption[] = [
   {
-    id: 'deepseek-chat:deepseek-v4-flash',
+    id: 'deepseek-chat:deepseek-flash',
     label: 'DeepSeek Chat / DeepSeek V4 Flash',
     providerLabel: 'DeepSeek Chat',
     source: 'explicit-config',
     connectionKind: 'direct',
     supportLevel: 'verified',
     providerId: 'deepseek-chat',
-    modelId: 'deepseek-v4-flash',
+    modelId: 'deepseek-flash',
     category: 'llm',
     capabilities: ['chat', 'function_calling', 'json_mode', 'streaming', 'code'],
   },
   {
-    id: 'deepseek-chat:deepseek-v4-pro',
+    id: 'deepseek-chat:deepseek-pro',
     label: 'DeepSeek Chat / DeepSeek V4 Pro',
     providerLabel: 'DeepSeek Chat',
     source: 'explicit-config',
     connectionKind: 'direct',
     supportLevel: 'verified',
     providerId: 'deepseek-chat',
-    modelId: 'deepseek-v4-pro',
+    modelId: 'deepseek-pro',
     category: 'llm',
     capabilities: ['chat', 'function_calling', 'json_mode', 'streaming', 'code'],
   },
@@ -117,7 +117,7 @@ describe('dropdown overlay presentation contract', () => {
   it('keeps the chat model menu on the shared model overlay shell', () => {
     render(
       <ModelSelector
-        selectedModel="deepseek-chat:deepseek-v4-pro"
+        selectedModel="deepseek-chat:deepseek-pro"
         models={models}
         onSelect={vi.fn()}
       />,

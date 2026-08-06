@@ -550,7 +550,7 @@ function createMediaToolAttachments(
 }
 
 function readImageReferenceInputs(args: Record<string, unknown>): Partial<ImageGenerationRequest> {
-  rejectLegacyMediaInputFields(args, [
+  rejectUnsupportedMediaInputFields(args, [
     'referenceImageUrl',
     'referenceImageUri',
     'referenceImageBase64',
@@ -577,7 +577,7 @@ function readImageReferenceInputs(args: Record<string, unknown>): Partial<ImageG
 }
 
 function readImageControlInputs(args: Record<string, unknown>): Partial<ImageGenerationRequest> {
-  rejectLegacyMediaInputFields(args, ['controlImageUri', 'controlImageBase64']);
+  rejectUnsupportedMediaInputFields(args, ['controlImageUri', 'controlImageBase64']);
   const controlImageLocator = readOptionalContentLocator(
     args.controlImageLocator,
     'controlImageLocator',
@@ -594,7 +594,7 @@ function readImageControlInputs(args: Record<string, unknown>): Partial<ImageGen
 }
 
 function readVideoReferenceInputs(args: Record<string, unknown>): Partial<VideoGenerationRequest> {
-  rejectLegacyMediaInputFields(args, [
+  rejectUnsupportedMediaInputFields(args, [
     'startFrameRef',
     'endFrameRef',
     'referenceVideoRef',
@@ -734,15 +734,13 @@ function hasResolvedTransformSource(args: Record<string, unknown>): boolean {
   );
 }
 
-function rejectLegacyMediaInputFields(
+function rejectUnsupportedMediaInputFields(
   args: Record<string, unknown>,
   fields: readonly string[],
 ): void {
-  const legacyField = fields.find((field) => Object.hasOwn(args, field));
-  if (legacyField) {
-    throw new Error(
-      `${legacyField} is a runtime-only or legacy media field; pass a ContentLocator instead.`,
-    );
+  const unsupportedField = fields.find((field) => Object.hasOwn(args, field));
+  if (unsupportedField) {
+    throw new Error(`${unsupportedField} is not supported; pass a ContentLocator instead.`);
   }
 }
 
@@ -1384,7 +1382,7 @@ export function registerMediaAgentTools(
           };
         }
         try {
-          rejectLegacyMediaInputFields(args, [
+          rejectUnsupportedMediaInputFields(args, [
             'sourceImageRef',
             'sourceImageUri',
             'referenceImageRef',

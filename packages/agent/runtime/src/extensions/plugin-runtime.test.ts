@@ -9,7 +9,7 @@ import type {
   AgentExtensionRuntimeDescriptor,
 } from '@neko/agent-contracts';
 import {
-  buildAgentPluginRuntimeGeneration,
+  buildAgentPluginRuntime,
   createAgentExtensionSupport,
   parsePluginMcpDocument,
 } from './plugin-runtime';
@@ -185,24 +185,23 @@ describe('Desktop plugin runtime', () => {
         appIds: [],
       };
       const snapshot: AgentExtensionCatalogSnapshot = {
-        revision: `sha256:${'a'.repeat(64)}`,
         records: [],
         runtimeDescriptors: [descriptor],
         diagnostics: [],
       };
 
-      const generation = await buildAgentPluginRuntimeGeneration(snapshot, { processEnv: {} });
-      expect(generation.skillRoots).toEqual([
+      const pluginRuntime = await buildAgentPluginRuntime(snapshot, { processEnv: {} });
+      expect(pluginRuntime.skillRoots).toEqual([
         {
           path: skillRoot,
           source: { kind: 'plugin', pluginId: 'fixture@market' },
         },
       ]);
-      expect(generation.readiness.get('fixture@market')).toEqual({
+      expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
       });
-      await generation.dispose();
+      await pluginRuntime.dispose();
     });
   });
 
@@ -242,30 +241,29 @@ describe('Desktop plugin runtime', () => {
         'utf8',
       );
       const snapshot: AgentExtensionCatalogSnapshot = {
-        revision: `sha256:${'c'.repeat(64)}`,
         records: [],
         runtimeDescriptors: [mcpDescriptor(pluginRoot, ['fixture'])],
         diagnostics: [],
       };
 
-      const generation = await buildAgentPluginRuntimeGeneration(snapshot, {
+      const pluginRuntime = await buildAgentPluginRuntime(snapshot, {
         processEnv: {
           HOME: process.env['HOME'],
           PATH: process.env['PATH'],
           TMPDIR: process.env['TMPDIR'],
         },
       });
-      expect(generation.tools.map((tool) => tool.name)).toEqual(['mcp__fixture__echo']);
-      await expect(generation.tools[0]?.execute({ value: 'hello' })).resolves.toEqual({
+      expect(pluginRuntime.tools.map((tool) => tool.name)).toEqual(['mcp__fixture__echo']);
+      await expect(pluginRuntime.tools[0]?.execute({ value: 'hello' })).resolves.toEqual({
         success: true,
         data: 'echo:hello',
         error: undefined,
       });
-      expect(generation.readiness.get('fixture@market')).toEqual({
+      expect(pluginRuntime.readiness.get('fixture@market')).toEqual({
         status: 'ready',
         diagnosticCode: '',
       });
-      await generation.dispose();
+      await pluginRuntime.dispose();
     });
   });
 });

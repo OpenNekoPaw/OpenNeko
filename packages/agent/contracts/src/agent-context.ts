@@ -28,7 +28,8 @@ export function isAgentResolvedEntityContextData(
   const entity = value['entity'];
   if (!isRecord(entityRef) || !isCreativeEntity(entity)) return false;
   return (
-    !Object.hasOwn(value, 'schemaVersion') &&
+    hasOnlyFields(value, new Set(['kind', 'entityRef', 'entity'])) &&
+    hasOnlyFields(entityRef, new Set(['entityId', 'entityKind'])) &&
     value['kind'] === AGENT_RESOLVED_ENTITY_CONTEXT_KIND &&
     typeof entityRef['entityId'] === 'string' &&
     entityRef['entityId'].length > 0 &&
@@ -107,4 +108,11 @@ export interface CanvasAmbientContext {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

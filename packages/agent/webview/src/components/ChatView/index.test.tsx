@@ -31,11 +31,11 @@ vi.mock('./InputArea', () => ({
     isComposing?: boolean;
     focusRequestOwner?: string;
     focusRequestTarget?: 'none' | 'input';
-    focusRequestRevision?: number;
+    focusRequestId?: string;
   }) => (
     <div data-testid="input-area">
       {String(props.isComposing ?? false)}:{props.focusRequestOwner ?? 'none'}:
-      {props.focusRequestTarget ?? 'none'}:{props.focusRequestRevision ?? 0}
+      {props.focusRequestTarget ?? 'none'}:{props.focusRequestId ?? 'none'}
     </div>
   ),
 }));
@@ -114,10 +114,10 @@ describe('ChatView empty state', () => {
       isComposing: true,
       focusRequestOwner: 'tab-a',
       focusRequestTarget: 'input',
-      focusRequestRevision: 2,
+      focusRequestId: 'focus-a',
     });
 
-    expect(screen.getByTestId('input-area').textContent).toContain('true:tab-a:input:2');
+    expect(screen.getByTestId('input-area').textContent).toContain('true:tab-a:input:focus-a');
   });
 
   it('renders active execution inside the transcript without a composer-adjacent status', () => {

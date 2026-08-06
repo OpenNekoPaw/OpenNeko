@@ -13,7 +13,7 @@ import {
 const workspaceSource = {
   kind: 'workspace-file' as const,
   path: 'books/book.epub',
-  fingerprint: { strategy: 'sha256' as const, value: 'sha256:book-v1' },
+  fingerprint: { strategy: 'sha256' as const, value: 'sha256:book-content' },
 };
 
 const documentEntryLocator = {
@@ -35,7 +35,6 @@ const representationLocator: ContentRepresentationLocator = {
   generatorId: 'neko-content.document-raster',
   sourceFingerprint: '1:100',
   specFingerprint: 'raster-page-1-png',
-  revision: '1',
 };
 
 describe('content access tools', () => {
@@ -58,7 +57,7 @@ describe('content access tools', () => {
     expect(JSON.stringify(tool.parameters)).not.toMatch(/documentResourceRef/u);
   });
 
-  it('advertises metadata-only ReadImage mode and rejects legacy model-backed vision mode', async () => {
+  it('advertises and accepts only the metadata ReadImage mode', async () => {
     const tool = createReadImageTool({ contentAccessRuntime: createRuntime() });
     const mode = tool.parameters.properties['mode'] as {
       readonly enum?: readonly string[];
@@ -67,9 +66,9 @@ describe('content access tools', () => {
 
     expect(mode.enum).toEqual(['metadata']);
     expect(mode.description).toContain('native multimodal Agent turn');
-    await expect(tool.execute({ mode: 'vision' })).resolves.toMatchObject({
+    await expect(tool.execute({ mode: 'unsupported' })).resolves.toEqual({
       success: false,
-      error: expect.stringContaining('no longer performs model-backed vision analysis'),
+      error: 'ReadImage mode must be "metadata".',
     });
   });
 
@@ -215,46 +214,6 @@ describe('content access tools', () => {
       },
     });
     expect(runtime.loadContentAsset).toHaveBeenCalledTimes(5);
-  });
-
-  it('rejects legacy fields, invalid locators, and path-only inputs without fallback', async () => {
-    const runtime = createRuntime();
-    const tool = createReadImageTool({ contentAccessRuntime: runtime });
-
-    await expect(
-      tool.execute({
-        images: [{ resourceRef: { id: 'legacy-resource' } }],
-      }),
-    ).resolves.toMatchObject({
-      success: false,
-      error: expect.stringMatching(
-        /retired content identity|Missing required stable image identity/u,
-      ),
-    });
-    await expect(
-      tool.execute({
-        images: [
-          {
-            contentLocator: {
-              kind: 'document-entry',
-              source: { kind: 'workspace-file' },
-              entryPath: 'pages/001.png',
-            },
-          },
-        ],
-      }),
-    ).resolves.toMatchObject({
-      success: false,
-      error: expect.stringContaining('images[0].contentLocator'),
-    });
-    await expect(
-      tool.execute({ images: [{ path: '/workspace/.neko/.cache/resources/page-1.jpg' }] }),
-    ).resolves.toMatchObject({
-      success: false,
-      error: expect.stringContaining('Missing required stable image identity'),
-    });
-    expect(runtime.loadContentAsset).not.toHaveBeenCalled();
-    expect(runtime.loadRepresentationAsset).not.toHaveBeenCalled();
   });
 });
 

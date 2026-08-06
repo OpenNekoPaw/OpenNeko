@@ -54,7 +54,7 @@ describe('persistent Agent conversation lifecycle repository', () => {
           [
             'conversation:invalid',
             JSON.stringify({
-              schemaVersion: 1,
+              unexpectedField: true,
               kind: 'assistant',
               assistantSpaceId: 'assistant-space:invalid',
               baseGrantIds: [],
@@ -66,48 +66,10 @@ describe('persistent Agent conversation lifecycle repository', () => {
 
     await expect(
       fixture.repository.readConversationContext('conversation:invalid'),
-    ).rejects.toThrow("unknown field 'schemaVersion'");
+    ).rejects.toThrow("unknown field 'unexpectedField'");
     await expect(fixture.repository.readConversationContext(valid.conversationId)).resolves.toEqual(
       valid.context,
     );
-    await fixture.store.dispose();
-  });
-
-  it('does not read or rewrite retired conversation tables', async () => {
-    const fixture = await createFixture();
-    await fixture.store.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'seed-retired-agent-tables' },
-      async ({ sql }) => {
-        await sql.run(`CREATE TABLE agent_conversation_lifecycle (
-          conversation_id TEXT PRIMARY KEY,
-          snapshot_version INTEGER NOT NULL,
-          snapshot_json TEXT NOT NULL
-        ) STRICT`);
-        await sql.run(`CREATE TABLE agent_conversation_context (
-          conversation_id TEXT PRIMARY KEY,
-          context_version INTEGER NOT NULL,
-          context_json TEXT NOT NULL
-        ) STRICT`);
-        await sql.run(`INSERT INTO agent_conversation_lifecycle VALUES (?, ?, ?)`, [
-          'conversation:retired',
-          7,
-          '{"retired":true}',
-        ]);
-        await sql.run(`INSERT INTO agent_conversation_context VALUES (?, ?, ?)`, [
-          'conversation:retired',
-          7,
-          '{"retired":true}',
-        ]);
-      },
-    );
-
-    await expect(
-      fixture.repository.readConversation('conversation:retired'),
-    ).resolves.toBeUndefined();
-    await expect(
-      fixture.repository.readConversationContext('conversation:retired'),
-    ).resolves.toBeUndefined();
-    await expect(readRetiredRows(fixture)).resolves.toEqual({ lifecycle: 1, context: 1 });
     await fixture.store.dispose();
   });
 
@@ -153,19 +115,6 @@ async function createFixture() {
     store,
     repository: createPersistentAgentConversationLifecycleRepository({ metadataStore: store }),
   };
-}
-
-async function readRetiredRows(
-  fixture: Awaited<ReturnType<typeof createFixture>>,
-): Promise<{ readonly lifecycle: number; readonly context: number }> {
-  return fixture.store.transaction(
-    { mode: 'read', ownership: 'state', operation: 'read-retired-agent-tables' },
-    async ({ sql }) => {
-      const lifecycle = await sql.all(`SELECT conversation_id FROM agent_conversation_lifecycle`);
-      const context = await sql.all(`SELECT conversation_id FROM agent_conversation_context`);
-      return { lifecycle: lifecycle.length, context: context.length };
-    },
-  );
 }
 
 function createRecord(

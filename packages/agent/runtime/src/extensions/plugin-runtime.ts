@@ -13,6 +13,9 @@ import type {
   AgentExtensionRuntimeDescriptor,
   AgentExtensionRuntimeReadiness,
 } from './extension-manager';
+import { createPluginRuntimeSourceFingerprint } from './plugin-runtime-source-fingerprint';
+
+export { createPluginRuntimeSourceFingerprint } from './plugin-runtime-source-fingerprint';
 
 const MAX_MCP_DOCUMENT_BYTES = 1_000_000;
 const DEFAULT_MCP_TIMEOUT_MS = 30_000;
@@ -34,20 +37,20 @@ export function createAgentExtensionSupport(
   };
 }
 
-export interface AgentPluginRuntimeGeneration {
-  readonly revision: string;
+export interface AgentPluginRuntime {
+  readonly sourceFingerprint: string;
   readonly skillRoots: readonly SkillSourceRoot[];
   readonly tools: readonly Tool[];
   readonly readiness: ReadonlyMap<string, AgentExtensionRuntimeReadiness>;
   dispose(): Promise<void>;
 }
 
-export async function buildAgentPluginRuntimeGeneration(
+export async function buildAgentPluginRuntime(
   snapshot: AgentExtensionCatalogSnapshot,
   options: {
     readonly processEnv?: Readonly<NodeJS.ProcessEnv>;
   } = {},
-): Promise<AgentPluginRuntimeGeneration> {
+): Promise<AgentPluginRuntime> {
   const processEnv = options.processEnv ?? process.env;
   const mcpManager = new MCPManager();
   try {
@@ -129,7 +132,7 @@ export async function buildAgentPluginRuntimeGeneration(
     }
 
     return Object.freeze({
-      revision: snapshot.revision,
+      sourceFingerprint: createPluginRuntimeSourceFingerprint(snapshot),
       skillRoots: Object.freeze(skillRoots),
       tools: Object.freeze(tools),
       readiness,
@@ -141,7 +144,7 @@ export async function buildAgentPluginRuntimeGeneration(
     } catch (disposeError) {
       throw new AggregateError(
         [error, disposeError],
-        'Failed to build and dispose a Desktop plugin runtime generation.',
+        'Failed to build and dispose a Desktop plugin runtime.',
       );
     }
     throw error;

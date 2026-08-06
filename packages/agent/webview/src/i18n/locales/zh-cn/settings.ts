@@ -20,8 +20,6 @@ export const settings = {
   'settings.providers.displayName': '显示名称',
   'settings.providers.displayNamePlaceholder': '例如：My Claude',
   'settings.providers.apiUrl': 'API URL (可选)',
-  'settings.providers.urlMissingV1': 'OpenAI 兼容 API 通常需要 /v1 后缀',
-  'settings.providers.appendV1': '添加 /v1',
   'settings.providers.apiKey': 'API 密钥',
   'settings.providers.apiKeyOptional': '(本地运行可选)',
   'settings.providers.apiKeyKeepCurrent': '(留空保持当前值)',

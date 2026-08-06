@@ -532,7 +532,6 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           focusRequestOwner="tab-a"
           focusRequestTarget="none"
-          focusRequestRevision={0}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -549,7 +548,7 @@ describe('InputArea composer controls', () => {
           focusRequestOwner="tab-a"
           focusRequestEnabled={false}
           focusRequestTarget="input"
-          focusRequestRevision={1}
+          focusRequestId="focus-a"
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -565,7 +564,7 @@ describe('InputArea composer controls', () => {
           focusRequestOwner="tab-a"
           focusRequestEnabled
           focusRequestTarget="input"
-          focusRequestRevision={1}
+          focusRequestId="focus-a"
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -581,30 +580,13 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           focusRequestOwner="tab-b"
           focusRequestTarget="input"
-          focusRequestRevision={1}
+          focusRequestId="focus-b"
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
       </Harness>,
     );
     expect(document.activeElement).toBe(input);
-  });
-
-  it('does not show creation staged creation controls just because the control callback exists', () => {
-    const legacyControlProps: Record<string, unknown> = { onControlIdcWorkflow: vi.fn() };
-    render(
-      <Harness>
-        <InputArea
-          {...legacyControlProps}
-          inputValue=""
-          isThinking={false}
-          onInputChange={vi.fn()}
-          onSend={vi.fn()}
-        />
-      </Harness>,
-    );
-
-    expect(screen.queryByLabelText('阶段创作控制')).toBeNull();
   });
 
   it('keeps unconfigured conversations on Agent with an empty LLM selector only', () => {
@@ -635,25 +617,19 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByText('全选')).toBeNull();
   });
 
-  it('hides legacy LLM/generation labels and omits Agent parameters', () => {
+  it('renders the current Agent composer controls', () => {
     render(
       <Harness>
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
       </Harness>,
     );
 
-    expect(screen.queryByText('生成')).toBeNull();
     const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
     expect(modeGroup.className).toContain('agent-composer-mode-controls');
     expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
     const modelTrigger = within(modeGroup).getByRole('button', { name: '配置模型' });
     expect(modelTrigger).toBeTruthy();
     expect(modelTrigger.textContent).toBe('gpt-5.5');
-    expect(screen.queryByRole('button', { name: '对话' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '思考' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '详略' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '创意' })).toBeNull();
-    expect(within(modeGroup).queryByRole('button', { name: '配置参数' })).toBeNull();
     expect(screen.getByRole('button', { name: '审批' })).toBeTruthy();
     expect(within(modeGroup).getByTitle(/gpt-5.5/)).toBeTruthy();
     expect(screen.getByTitle('添加附件').className).toContain('agent-composer-tool-button');
@@ -1228,7 +1204,6 @@ describe('InputArea composer controls', () => {
             tags: [],
             source: 'project',
             enabled: true,
-            slashCommand: 'legacy-review',
           },
         ]}
       >
@@ -1239,7 +1214,6 @@ describe('InputArea composer controls', () => {
     const textarea = screen.getByPlaceholderText('输入任何问题...') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: '/' } });
 
-    expect(screen.queryByRole('menuitem', { name: /legacy-review/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /\$quality-review/ })).toBeNull();
 
     fireEvent.change(textarea, { target: { value: '$qual' } });
@@ -2299,7 +2273,7 @@ function Harness({
   readonly conversationKind?: ConversationKind;
   readonly onRemoveContextChip?: (id: string) => void;
   readonly onAddContextChip?: React.ComponentProps<typeof InputAreaProvider>['onAddContextChip'];
-  readonly mentionItems?: readonly LegacyMentionItem[];
+  readonly mentionItems?: readonly MentionItemFixture[];
   readonly onRequestFiles?: React.ComponentProps<typeof InputAreaProvider>['onRequestFiles'];
   readonly onModelSelect?: React.ComponentProps<typeof InputAreaProvider>['onModelSelect'];
   readonly onMediaModelSelect?: React.ComponentProps<
@@ -2324,7 +2298,7 @@ function Harness({
     typeof InputAreaProvider
   >['mediaModelSelection'];
   readonly mediaUnderstandingModels?: MediaUnderstandingModels;
-  readonly selectedFileReferences?: readonly LegacySelectedFileReference[];
+  readonly selectedFileReferences?: readonly SelectedFileReferenceFixture[];
   readonly onSelectedFileReferencesChange?: React.ComponentProps<
     typeof InputArea
   >['onSelectedFileReferencesChange'];
@@ -2378,17 +2352,17 @@ function Harness({
   );
 }
 
-type LegacyMentionItem = Omit<MentionItem, 'contentLocator'> & {
+type MentionItemFixture = Omit<MentionItem, 'contentLocator'> & {
   readonly contentLocator?: MentionItem['contentLocator'];
   readonly filePath?: string;
 };
 
-type LegacySelectedFileReference = Omit<SelectedFileReference, 'contentLocator'> & {
+type SelectedFileReferenceFixture = Omit<SelectedFileReference, 'contentLocator'> & {
   readonly contentLocator?: SelectedFileReference['contentLocator'];
   readonly path?: string;
 };
 
-function normalizeMentionItem(item: LegacyMentionItem): MentionItem {
+function normalizeMentionItem(item: MentionItemFixture): MentionItem {
   const { filePath, ...rest } = item;
   return {
     ...rest,
@@ -2401,7 +2375,7 @@ function normalizeMentionItem(item: LegacyMentionItem): MentionItem {
 }
 
 function normalizeSelectedFileReference(
-  reference: LegacySelectedFileReference,
+  reference: SelectedFileReferenceFixture,
 ): SelectedFileReference {
   const { path, ...rest } = reference;
   if (rest.contentLocator) return { ...rest, contentLocator: rest.contentLocator };

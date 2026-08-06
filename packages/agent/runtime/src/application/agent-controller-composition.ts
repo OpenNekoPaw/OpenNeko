@@ -228,7 +228,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       tabState: initialTab
         ? { openTabs: [initialTab], activeTabId: initialTab.id }
         : { openTabs: [], activeTabId: null },
-      tabStateRevision: 0,
+      tabOperationTail: Promise.resolve(),
     };
     let post: AgentHostRouteEffectContext['post'] | undefined;
     const agentStates = this.getAgentStates(input.workspace.workspaceId);
@@ -482,7 +482,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const postConversation = async (
       conversationId: string | null,
       context: AgentHostRouteEffectContext,
-      activation?: { readonly activationId: number; readonly tabStateRevision: number },
+      activation?: { readonly activationId: number },
     ): Promise<void> => {
       bind(context);
       if (!conversationId) {
@@ -553,87 +553,94 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           throw new Error(`Desktop Agent conversation '${conversationId}' is not running.`);
         workspace.cancelTurn(conversationId, active);
       },
-      createConversation: async (context) => {
+      createConversation: (context) => {
         bind(context);
-        const conversationId = createConversationId(workspace.workspace.workspacePath);
-        await workspace.createConversation(conversationId);
-        state.activeConversationId = conversationId;
-        const tab: OpenTab = {
-          id: `tab-${conversationId}`,
-          title: 'New conversation',
-          conversationId,
-        };
-        state.tabState = {
-          openTabs: [...state.tabState.openTabs, tab],
-          activeTabId: tab.id,
-        };
-        state.tabStateRevision += 1;
-        await postConversationList(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        await postConversation(conversationId, context);
-      },
-      activateConversation: async (message, context) => {
-        bind(context);
-        if (message.expectedTabStateRevision !== state.tabStateRevision) {
-          throw new Error(
-            `Desktop Agent Tab revision ${message.expectedTabStateRevision} is stale; current revision is ${state.tabStateRevision}.`,
-          );
-        }
-        const tab = message.tabState.openTabs.find((candidate) => candidate.id === message.tabId);
-        if (!tab || tab.conversationId !== message.conversationId) {
-          throw new Error('Desktop Agent conversation activation does not match its Tab identity.');
-        }
-        if (
-          !workspace
-            .listConversations()
-            .some((record) => record.conversationId === message.conversationId)
-        ) {
-          throw new Error(`Desktop Agent conversation '${message.conversationId}' does not exist.`);
-        }
-        state.activeConversationId = message.conversationId;
-        state.tabState = cloneTabState(message.tabState);
-        state.tabStateRevision += 1;
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        await postConversation(message.conversationId, context, {
-          activationId: message.activationId,
-          tabStateRevision: state.tabStateRevision,
+        return enqueueTabOperation(state, async () => {
+          const conversationId = createConversationId(workspace.workspace.workspacePath);
+          await workspace.createConversation(conversationId);
+          state.activeConversationId = conversationId;
+          const tab: OpenTab = {
+            id: `tab-${conversationId}`,
+            title: 'New conversation',
+            conversationId,
+          };
+          state.tabState = {
+            openTabs: [...state.tabState.openTabs, tab],
+            activeTabId: tab.id,
+          };
+          await postConversationList(context);
+          await context.post(buildTabStateMessage(state.tabState));
+          await postConversation(conversationId, context);
         });
       },
-      deleteConversation: async ({ conversationId, activateNext }, context) => {
+      activateConversation: (message, context) => {
         bind(context);
-        await workspace.deleteConversation(conversationId);
-        this.getAgentStates(workspace.workspaceId).clear(conversationId);
-        this.queues.delete(ownerKey(workspace.workspaceId, conversationId));
-        this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
-        this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
-        state.tabState = {
-          openTabs: state.tabState.openTabs.filter((tab) => tab.conversationId !== conversationId),
-          activeTabId:
-            state.tabState.openTabs.find((tab) => tab.id === state.tabState.activeTabId)
-              ?.conversationId === conversationId
-              ? null
-              : state.tabState.activeTabId,
-        };
-        if (state.activeConversationId === conversationId) {
-          state.activeConversationId =
-            activateNext === false ? null : (state.tabState.openTabs[0]?.conversationId ?? null);
+        return enqueueTabOperation(state, async () => {
+          const tab = message.tabState.openTabs.find((candidate) => candidate.id === message.tabId);
+          if (!tab || tab.conversationId !== message.conversationId) {
+            throw new Error(
+              'Desktop Agent conversation activation does not match its Tab identity.',
+            );
+          }
+          if (
+            !workspace
+              .listConversations()
+              .some((record) => record.conversationId === message.conversationId)
+          ) {
+            throw new Error(
+              `Desktop Agent conversation '${message.conversationId}' does not exist.`,
+            );
+          }
+          state.activeConversationId = message.conversationId;
+          state.tabState = cloneTabState(message.tabState);
+          await context.post(buildTabStateMessage(state.tabState));
+          await postConversation(message.conversationId, context, {
+            activationId: message.activationId,
+          });
+        });
+      },
+      deleteConversation: ({ conversationId, activateNext }, context) => {
+        bind(context);
+        return enqueueTabOperation(state, async () => {
+          await workspace.deleteConversation(conversationId);
+          this.getAgentStates(workspace.workspaceId).clear(conversationId);
+          this.queues.delete(ownerKey(workspace.workspaceId, conversationId));
+          this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
+          this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
           state.tabState = {
-            ...state.tabState,
+            openTabs: state.tabState.openTabs.filter(
+              (tab) => tab.conversationId !== conversationId,
+            ),
             activeTabId:
-              state.tabState.openTabs.find(
-                (tab) => tab.conversationId === state.activeConversationId,
-              )?.id ?? null,
+              state.tabState.openTabs.find((tab) => tab.id === state.tabState.activeTabId)
+                ?.conversationId === conversationId
+                ? null
+                : state.tabState.activeTabId,
           };
-        }
-        state.tabStateRevision += 1;
-        await postConversationList(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        if (activateNext !== false) {
-          await postConversation(state.activeConversationId, context);
-        }
+          if (state.activeConversationId === conversationId) {
+            state.activeConversationId =
+              activateNext === false ? null : (state.tabState.openTabs[0]?.conversationId ?? null);
+            state.tabState = {
+              ...state.tabState,
+              activeTabId:
+                state.tabState.openTabs.find(
+                  (tab) => tab.conversationId === state.activeConversationId,
+                )?.id ?? null,
+            };
+          }
+          await postConversationList(context);
+          await context.post(buildTabStateMessage(state.tabState));
+          if (activateNext !== false) {
+            await postConversation(state.activeConversationId, context);
+          }
+        });
       },
       listConversations: postConversationList,
-      readActiveConversation: (context) => postConversation(state.activeConversationId, context),
+      readActiveConversation: async (context) => {
+        bind(context);
+        await state.tabOperationTail;
+        await postConversation(state.activeConversationId, context);
+      },
       readAgentStates: async (context) => {
         bind(context);
         await context.post(
@@ -704,15 +711,16 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         this.getQueue(workspace.workspaceId, conversationId).clear();
         await context.post(buildHistoryClearedMessage(conversationId));
       },
-      clearAllConversations: async (context) => {
+      clearAllConversations: (context) => {
         bind(context);
-        await workspace.clearAllConversations();
-        state.activeConversationId = null;
-        state.tabState = { openTabs: [], activeTabId: null };
-        state.tabStateRevision += 1;
-        await postConversationList(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        await postConversation(null, context);
+        return enqueueTabOperation(state, async () => {
+          await workspace.clearAllConversations();
+          state.activeConversationId = null;
+          state.tabState = { openTabs: [], activeTabId: null };
+          await postConversationList(context);
+          await context.post(buildTabStateMessage(state.tabState));
+          await postConversation(null, context);
+        });
       },
     };
   }
@@ -758,7 +766,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
       readTabState: async (context) => {
         bind(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
+        await state.tabOperationTail;
+        await context.post(buildTabStateMessage(state.tabState));
       },
       updateSettings: async ({ conversationId, settings }, context) => {
         bind(context);
@@ -776,27 +785,23 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           throw error;
         }
       },
-      updateTabState: async (message, context) => {
+      updateTabState: (message, context) => {
         bind(context);
-        if (message.expectedTabStateRevision !== state.tabStateRevision) {
-          throw new Error(
-            `Desktop Agent Tab revision ${message.expectedTabStateRevision} is stale; current revision is ${state.tabStateRevision}.`,
-          );
-        }
-        const active = message.activeTabId
-          ? message.openTabs.find((tab) => tab.id === message.activeTabId)
-          : undefined;
-        if (active && active.conversationId !== state.activeConversationId) {
-          throw new Error(
-            'Desktop ordinary conversation activation must use activateConversation.',
-          );
-        }
-        state.tabState = {
-          openTabs: message.openTabs.map(cloneTab),
-          activeTabId: message.activeTabId,
-        };
-        state.tabStateRevision += 1;
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
+        return enqueueTabOperation(state, async () => {
+          const active = message.activeTabId
+            ? message.openTabs.find((tab) => tab.id === message.activeTabId)
+            : undefined;
+          if (active && active.conversationId !== state.activeConversationId) {
+            throw new Error(
+              'Desktop ordinary conversation activation must use activateConversation.',
+            );
+          }
+          state.tabState = {
+            openTabs: message.openTabs.map(cloneTab),
+            activeTabId: message.activeTabId,
+          };
+          await context.post(buildTabStateMessage(state.tabState));
+        });
       },
     };
   }
@@ -1363,7 +1368,16 @@ function sameTurnIdentity(
 interface ConnectionState {
   activeConversationId: string | null;
   tabState: TabState;
-  tabStateRevision: number;
+  tabOperationTail: Promise<void>;
+}
+
+function enqueueTabOperation<T>(state: ConnectionState, operation: () => Promise<T>): Promise<T> {
+  const result = state.tabOperationTail.then(operation);
+  state.tabOperationTail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
 export function projectAgentSecretSafeConfig(config: AssistantConfigState): AssistantConfigState {

@@ -83,7 +83,7 @@ interface ChatViewProps {
   focusRequestOwner?: string;
   focusRequestEnabled?: boolean;
   focusRequestTarget?: 'none' | 'input';
-  focusRequestRevision?: number;
+  focusRequestId?: string;
   /** Current agent execution state (null when idle) */
   agentState?: AgentState | null;
 }
@@ -131,7 +131,7 @@ export function ChatView({
   focusRequestOwner,
   focusRequestEnabled,
   focusRequestTarget,
-  focusRequestRevision,
+  focusRequestId,
   agentState = null,
 }: ChatViewProps) {
   const { t } = useTranslation();
@@ -248,7 +248,7 @@ export function ChatView({
           focusRequestOwner={focusRequestOwner}
           focusRequestEnabled={focusRequestEnabled}
           focusRequestTarget={focusRequestTarget}
-          focusRequestRevision={focusRequestRevision}
+          focusRequestId={focusRequestId}
         />
       </div>
     </DropZone>

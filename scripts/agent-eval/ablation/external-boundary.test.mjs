@@ -14,7 +14,7 @@ describe('ablation Evaluation ownership boundary', () => {
     const source = (
       await Promise.all(files.map((file) => fs.readFile(join(ROOT, file), 'utf8')))
     ).join('\n');
-    expect(source).toContain("from '../runner/run-v2-case.mjs'");
+    expect(source).toContain("from '../runner/run-case.mjs'");
     expect(source).not.toMatch(/from ['"]@neko\/agent/u);
     expect(source).not.toMatch(/\bnew\s+AgentSession\b/u);
     expect(source).not.toContain('ExperimentRunner');

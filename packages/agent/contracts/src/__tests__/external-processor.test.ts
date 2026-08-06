@@ -54,35 +54,16 @@ describe('external processor contract', () => {
     expect(result.manifest).toEqual(validManifest);
   });
 
-  it('rejects an unknown schema and the removed internal schema version', () => {
+  it('rejects an unknown schema and an unknown manifest field', () => {
     const result = validateExternalProcessorManifest({
       ...validManifest,
       schema: 'example.processor',
-      schemaVersion: 99,
+      unexpectedField: 99,
     });
 
     expect(result.manifest).toBeUndefined();
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
       expect.arrayContaining(['unknown-schema', 'invalid-manifest']),
-    );
-  });
-
-  it('rejects legacy resourceCache output policy instead of migrating it implicitly', () => {
-    const result = validateExternalProcessorManifest({
-      ...validManifest,
-      outputs: {
-        image: { produces: ['image/png'], root: 'resourceCache' },
-      },
-      policy: {
-        ...validManifest.policy,
-        allowedInputRoots: ['workspace', 'resourceCache'],
-        allowedOutputRoots: ['resourceCache'],
-      },
-    });
-
-    expect(result.manifest).toBeUndefined();
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining(['invalid-root-alias']),
     );
   });
 
@@ -152,7 +133,6 @@ describe('external processor contract', () => {
   });
 
   it('exposes root alias and secret env helpers', () => {
-    expect(isExternalProcessorRootAlias('resourceCache')).toBe(false);
     expect(isExternalProcessorRootAlias('pluginPrivateResources')).toBe(true);
     expect(isExternalProcessorRootAlias('tmp')).toBe(false);
     expect(matchesExternalProcessorSecretEnvPattern('NPM_TOKEN')).toBe(true);
@@ -161,11 +141,11 @@ describe('external processor contract', () => {
 });
 
 describe('external processor registry', () => {
-  it('upserts registrations and emits revisioned lifecycle events', () => {
+  it('upserts registrations and emits owner-qualified lifecycle events', () => {
     const registry = createExternalProcessorRegistry();
     const events: string[] = [];
     registry.onDidChange((event) => {
-      events.push(`${event.revision}:${event.kind}:${event.registrationId}`);
+      events.push(`${event.kind}:${event.registrationId}`);
     });
 
     const first = registry.upsert(
@@ -186,13 +166,11 @@ describe('external processor registry', () => {
       { ...validManifest, version: '1.0.1' },
     );
 
-    expect(first.revision).toBe(1);
-    expect(updated.revision).toBe(2);
     expect(first.version).toBe('1.0.0');
     expect(updated.version).toBe('1.0.1');
     expect(events).toEqual([
-      '1:registered:project:workspace:upscale-image',
-      '2:updated:project:workspace:upscale-image',
+      'registered:project:workspace:upscale-image',
+      'updated:project:workspace:upscale-image',
     ]);
   });
 
@@ -258,12 +236,14 @@ describe('external processor registry', () => {
 
     registry.upsert(
       { sourceScope: 'project', agentCapabilitySource: 'local', sourceId: 'workspace-1' },
-      { ...validManifest, version: '1.2.0' },
+      { ...validManifest, displayName: 'Updated Upscale Image' },
     );
 
-    expect(runningSnapshot).toEqual(expect.objectContaining({ revision: 1, version: '1.0.0' }));
+    expect(runningSnapshot.manifest.displayName).toBe('Upscale Image');
     expect(registry.resolve('upscale-image')).toEqual(
-      expect.objectContaining({ revision: 2, version: '1.2.0' }),
+      expect.objectContaining({
+        manifest: expect.objectContaining({ displayName: 'Updated Upscale Image' }),
+      }),
     );
   });
 
