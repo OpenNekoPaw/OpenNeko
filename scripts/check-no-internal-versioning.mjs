@@ -51,9 +51,15 @@ const migrationPattern = /(?:compatibility|legacy|migrat(?:e|ed|es|ing|ion|ions|
 const versionFieldPattern = /^(?:[a-z0-9]+_)*version$/iu;
 const camelVersionFieldPattern = /^(?:Version|version|[A-Za-z][A-Za-z0-9]*Version)$/u;
 const dataGenerationAliasPattern = /(?:^|_)(?:epoch|generation|revision)$/iu;
-const camelDataGenerationAliasPattern = /^(?:epoch|generation|revision|[a-z][A-Za-z0-9]*(?:Epoch|Generation|Revision))$/u;
+const camelDataGenerationAliasPattern =
+  /^(?:epoch|generation|revision|[a-z][A-Za-z0-9]*(?:Epoch|Generation|Revision))$/u;
 const numericIdentifierPattern = /(?:^|[_-])v\d+(?:$|[_-])|[A-Za-z0-9]V\d+$/u;
 const numericPathPattern = /(?:^|[./:_-])v\d+(?:$|[./:_-])/iu;
+const tableGenerationIdentifierPattern =
+  /^(?:m\d+_?(?:Schema|Tables?)|schemaGeneration|table(?:Generation|Version))$/iu;
+const tableGenerationPathPattern = /(?:^|[./:_-])m\d+[_-](?:schema|tables?)(?:$|[./:_-])/iu;
+const tableGenerationSqlPattern =
+  /\bPRAGMA\s+user_version\b|\b(?:CREATE|ALTER|DROP)\s+TABLE(?:\s+IF\s+(?:NOT\s+)?EXISTS)?\s+[A-Za-z_][A-Za-z0-9_]*_v\d+\b/iu;
 const automaticRepairPattern = /(?:^|-)(?:auto|automatic)-(?:repair|rebuild)(?:-|$)/u;
 const parallelDataPathPattern =
   /(?:^|-)dual-(?:read|write)(?:-|$)|(?:^|-)(?:cache|projection|raw)-or-(?:cache|projection|raw|source)(?:-|$)/u;
@@ -66,14 +72,7 @@ export function scanSources(sources) {
     const pathFinding = classifyPath(source.path);
     if (pathFinding) {
       findings.push(
-        createFinding(
-          source.path,
-          pathFinding.category,
-          pathFinding.token,
-          1,
-          source.path,
-          0,
-        ),
+        createFinding(source.path, pathFinding.category, pathFinding.token, 1, source.path, 0),
       );
     }
     findings.push(...scanSource(source));
@@ -119,7 +118,10 @@ export function validateAllowanceRegistry(registry, findings) {
         errors.push(`${label}.${key} must be a non-empty string.`);
       }
     }
-    if (typeof allowance.normativeSource === 'string' && !/^https:\/\//u.test(allowance.normativeSource)) {
+    if (
+      typeof allowance.normativeSource === 'string' &&
+      !/^https:\/\//u.test(allowance.normativeSource)
+    ) {
       errors.push(`${label}.normativeSource must be an HTTPS normative source.`);
     }
     if (typeof allowance.id !== 'string') continue;
@@ -178,7 +180,10 @@ export function validateDomainAllowanceRegistry(registry, findings) {
         errors.push(`${label}.${key} must be a non-empty string.`);
       }
     }
-    if (typeof allowance.domainOwner === 'string' && !/^@neko\/[a-z0-9-]+$/u.test(allowance.domainOwner)) {
+    if (
+      typeof allowance.domainOwner === 'string' &&
+      !/^@neko\/[a-z0-9-]+$/u.test(allowance.domainOwner)
+    ) {
       errors.push(`${label}.domainOwner must identify an owning @neko package.`);
     }
     if (typeof allowance.id !== 'string') continue;
@@ -427,6 +432,7 @@ function isAuditedStringLiteral(node) {
   }
   if (ts.isElementAccessExpression(parent) && parent.argumentExpression === node) return true;
   if (numericPathPattern.test(node.text)) return true;
+  if (tableGenerationSqlPattern.test(node.text)) return true;
   return migrationPattern.test(node.text) && /^[A-Za-z0-9_./:@-]+$/u.test(node.text);
 }
 
@@ -453,6 +459,13 @@ function scriptKind(path) {
 }
 
 function classifyToken(token, isStringLiteral, counterLike = false) {
+  if (
+    tableGenerationIdentifierPattern.test(token) ||
+    tableGenerationPathPattern.test(token) ||
+    tableGenerationSqlPattern.test(token)
+  ) {
+    return { category: 'versioned-table-generation', token };
+  }
   if (versionFieldPattern.test(token) || camelVersionFieldPattern.test(token)) {
     return { category: 'internal-version-field', token };
   }
@@ -480,6 +493,10 @@ function classifyToken(token, isStringLiteral, counterLike = false) {
 }
 
 function classifyPath(path) {
+  const tableGenerationMatch = path.match(tableGenerationPathPattern)?.[0];
+  if (tableGenerationMatch) {
+    return { category: 'versioned-table-generation-path', token: tableGenerationMatch };
+  }
   const migrationMatch = path.match(migrationPattern)?.[0];
   if (migrationMatch) {
     return { category: 'product-migration-or-compatibility-path', token: migrationMatch };
@@ -531,15 +548,13 @@ function createFinding(path, category, token, line, context, occurrence) {
 
 function assignStableIds(findings) {
   const duplicateCounts = new Map();
-  return findings
-    .sort(compareFindings)
-    .map(({ occurrence: _occurrence, ...finding }) => {
-      const base = [finding.path, finding.category, finding.token, finding.context].join('\0');
-      const duplicate = duplicateCounts.get(base) ?? 0;
-      duplicateCounts.set(base, duplicate + 1);
-      const id = createHash('sha256').update(`${base}\0${duplicate}`).digest('hex').slice(0, 20);
-      return { id, ...finding };
-    });
+  return findings.sort(compareFindings).map(({ occurrence: _occurrence, ...finding }) => {
+    const base = [finding.path, finding.category, finding.token, finding.context].join('\0');
+    const duplicate = duplicateCounts.get(base) ?? 0;
+    duplicateCounts.set(base, duplicate + 1);
+    const id = createHash('sha256').update(`${base}\0${duplicate}`).digest('hex').slice(0, 20);
+    return { id, ...finding };
+  });
 }
 
 function compareFindings(left, right) {
@@ -592,7 +607,8 @@ function validateBaseline(baseline) {
 
 function groupCounts(findings) {
   const counts = new Map();
-  for (const finding of findings) counts.set(ownerFor(finding.path), (counts.get(ownerFor(finding.path)) ?? 0) + 1);
+  for (const finding of findings)
+    counts.set(ownerFor(finding.path), (counts.get(ownerFor(finding.path)) ?? 0) + 1);
   return [...counts.entries()]
     .map(([owner, count]) => ({ owner, count }))
     .sort((left, right) => right.count - left.count || left.owner.localeCompare(right.owner));
@@ -601,7 +617,8 @@ function groupCounts(findings) {
 function ownerFor(path) {
   const parts = path.split('/');
   if (parts[0] === 'apps' && parts[1]) return `apps/${parts[1]}`;
-  if (parts[0] === 'packages' && parts[1] === 'agent' && parts[2]) return `packages/agent/${parts[2]}`;
+  if (parts[0] === 'packages' && parts[1] === 'agent' && parts[2])
+    return `packages/agent/${parts[2]}`;
   if (parts[0] === 'packages' && parts[2] && ['domain', 'node', 'webview'].includes(parts[2])) {
     return `packages/${parts[1]}/${parts[2]}`;
   }

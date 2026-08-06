@@ -6,6 +6,16 @@ import {
 } from './contract';
 
 describe('Asset Center session contract', () => {
+  it('opens the stable Asset membership catalog in list mode', () => {
+    expect(createDefaultAssetCenterFilter()).toEqual({
+      catalog: 'global-asset-library',
+      query: '',
+      sortBy: 'name',
+      sortDirection: 'ascending',
+      viewMode: 'list',
+    });
+  });
+
   it('parses an exact empty session projection', () => {
     expect(
       parseAssetCenterSessionProjection({
@@ -49,7 +59,7 @@ describe('Asset Center session contract', () => {
 function readyProjection() {
   return {
     identity: { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' },
-    filter: createDefaultAssetCenterFilter(),
+    filter: { ...createDefaultAssetCenterFilter(), catalog: 'media-library' as const },
     catalog: {
       status: 'ready' as const,
       owner: 'media-library' as const,

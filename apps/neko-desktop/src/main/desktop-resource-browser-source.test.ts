@@ -1055,7 +1055,6 @@ function createComposition(
 
 function createMemoryAssetMembershipRepository(): AssetLibraryMembershipRepository {
   const records = new Map<string, AssetLibraryMembershipRecord>();
-  let inventoryInitialized = false;
   return {
     async get(membershipId) {
       return records.get(membershipId) ?? null;
@@ -1069,23 +1068,25 @@ function createMemoryAssetMembershipRepository(): AssetLibraryMembershipReposito
     async listActive() {
       return [...records.values()].filter((record) => record.state === 'active');
     },
-    async initializeExistingInventory(registrations) {
-      if (inventoryInitialized) return { status: 'already-initialized' };
-      inventoryInitialized = true;
+    async registerDiscovered(registrations) {
       for (const registration of registrations) {
-        records.set(registration.membershipId, {
-          membershipId: registration.membershipId,
+        const existing = [...records.values()].find(
+          (record) => record.sourceRelativePath === registration.sourceRelativePath,
+        );
+        if (existing?.state === 'removed') continue;
+        const record: AssetLibraryMembershipRecord = {
+          membershipId: existing?.membershipId ?? registration.membershipId,
           sourceRelativePath: registration.sourceRelativePath,
           label: registration.label,
           mediaType: registration.mediaType,
           byteLength: registration.byteLength,
           modifiedAt: registration.modifiedAt,
           state: 'active',
-          createdAt: registration.registeredAt,
+          createdAt: existing?.createdAt ?? registration.registeredAt,
           updatedAt: registration.registeredAt,
-        });
+        };
+        records.set(record.membershipId, record);
       }
-      return { status: 'initialized', importedCount: registrations.length };
     },
     async activate(registration) {
       const existing = [...records.values()].find(

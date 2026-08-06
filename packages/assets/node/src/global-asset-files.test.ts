@@ -141,9 +141,7 @@ function createMembershipRepository(): AssetLibraryMembershipRepository {
     async listActive() {
       return [...records.values()].filter((record) => record.state === 'active');
     },
-    async initializeExistingInventory() {
-      return { status: 'already-initialized' };
-    },
+    async registerDiscovered() {},
     async activate(registration: AssetLibraryMembershipRegistration) {
       const existing = findByPath(registration.sourceRelativePath);
       const record: AssetLibraryMembershipRecord = {

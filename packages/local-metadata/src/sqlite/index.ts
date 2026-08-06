@@ -1,5 +1,5 @@
 export * from './driver';
-export * from './m1-schema';
+export * from './core-tables';
 export * from './agent-state-schema';
 export * from './resource-cache-schema';
 export * from './media-metadata-schema';

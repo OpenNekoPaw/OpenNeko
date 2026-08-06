@@ -138,6 +138,7 @@ export const en = {
   'home.content': 'Content',
   'home.recentConversations': 'Recent Agent conversations',
   'home.conversationGroups': 'Projects and conversations',
+  'home.unavailableWorkspace': 'Unavailable workspace',
   'home.personalAssistant': 'Personal assistant',
   'home.characterConversations': 'Characters',
   'home.roomConversations': 'Rooms',

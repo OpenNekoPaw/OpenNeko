@@ -216,8 +216,8 @@ export const CONFIG_FILE_NAME = 'config.toml';
 // =============================================================================
 
 /**
- * Preservation-only Auth product configuration stored in config.toml.
- * Fields remain round-trippable until an explicit user-data migration is defined.
+ * User-managed Auth product configuration stored in config.toml.
+ * Fields remain round-trippable during layered config merges.
  */
 export interface AuthConfigJson {
   clientId?: string;

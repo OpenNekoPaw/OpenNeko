@@ -104,7 +104,6 @@ import { serializeLocalMetadataJson } from '../secret-boundary';
 import {
   assertAssetLibraryMembershipRelocations,
   assertAssetLibraryMembershipRegistration,
-  type AssetLibraryInventoryInitializationResult,
   type AssetLibraryMembershipRelocation,
   type AssetLibraryMembershipRecord,
   type AssetLibraryMembershipRegistration,
@@ -555,6 +554,23 @@ class RawWorkspaceRegistryRepository implements WorkspaceRegistryRepository {
     return row ? decodeWorkspace(row) : null;
   }
 
+  async listAll(): Promise<readonly WorkspaceRegistryRecord[]> {
+    const rows = await this.connection().all(
+      `SELECT workspace_id, current_locator_kind, current_locator_value,
+              locator_history_json, last_seen_at, orphaned_at
+         FROM workspaces
+        ORDER BY last_seen_at DESC, workspace_id`,
+    );
+    return rows.map(decodeWorkspace);
+  }
+
+  async remove(workspaceId: string): Promise<boolean> {
+    const result = await this.connection().run('DELETE FROM workspaces WHERE workspace_id = ?', [
+      workspaceId,
+    ]);
+    return result.changes === 1;
+  }
+
   async findByCurrentLocator(
     locator: WorkspacePortableLocator,
   ): Promise<readonly WorkspaceRegistryRecord[]> {
@@ -828,23 +844,15 @@ class RawAssetLibraryMembershipRepository implements AssetLibraryMembershipRepos
     return rows.map(decodeAssetLibraryMembership);
   }
 
-  async initializeExistingInventory(
+  async registerDiscovered(
     registrations: readonly AssetLibraryMembershipRegistration[],
-    completedAt: string,
-  ): Promise<AssetLibraryInventoryInitializationResult> {
-    const state = await this.connection().all(
-      `SELECT completed_at FROM asset_library_inventory_state WHERE inventory_id = 'flat-v1'`,
-    );
-    if (state.length > 0) return { status: 'already-initialized' };
+  ): Promise<void> {
     for (const registration of registrations) {
+      assertAssetLibraryMembershipRegistration(registration);
+      const existing = await this.findBySourceRelativePath(registration.sourceRelativePath);
+      if (existing?.state === 'removed') continue;
       await this.writeActive(registration);
     }
-    await this.connection().run(
-      `INSERT INTO asset_library_inventory_state (inventory_id, completed_at)
-       VALUES ('flat-v1', ?)`,
-      [completedAt],
-    );
-    return { status: 'initialized', importedCount: registrations.length };
   }
 
   async activate(
@@ -2812,6 +2820,12 @@ class ExclusiveWorkspaceRegistryRepository implements WorkspaceRegistryRepositor
   get(workspaceId: string): Promise<WorkspaceRegistryRecord | null> {
     return this.exclusive.run(() => this.raw.get(workspaceId));
   }
+  listAll(): Promise<readonly WorkspaceRegistryRecord[]> {
+    return this.exclusive.run(() => this.raw.listAll());
+  }
+  remove(workspaceId: string): Promise<boolean> {
+    return this.exclusive.run(() => this.raw.remove(workspaceId));
+  }
   findByCurrentLocator(
     locator: WorkspacePortableLocator,
   ): Promise<readonly WorkspaceRegistryRecord[]> {
@@ -2890,14 +2904,9 @@ class ExclusiveAssetLibraryMembershipRepository implements AssetLibraryMembershi
     return this.exclusive.run(() => this.raw.listActive());
   }
 
-  initializeExistingInventory(
-    registrations: readonly AssetLibraryMembershipRegistration[],
-    completedAt: string,
-  ): Promise<AssetLibraryInventoryInitializationResult> {
+  registerDiscovered(registrations: readonly AssetLibraryMembershipRegistration[]): Promise<void> {
     return this.exclusive.run(() =>
-      this.transaction('state-write', () =>
-        this.raw.initializeExistingInventory(registrations, completedAt),
-      ),
+      this.transaction('state-write', () => this.raw.registerDiscovered(registrations)),
     );
   }
 

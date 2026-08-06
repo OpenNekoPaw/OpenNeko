@@ -19,6 +19,10 @@ policy that respects its local Electron boundary without introducing generic mig
   automatic repair and recursive cleanup. Retired bytes remain untouched and product-unreachable.
 - Require record-local diagnostics so one invalid row/file/component does not disable valid siblings,
   another workspace or Desktop.
+- Require each catalog to enumerate its stable authority independently from the active Scene, current
+  Project or selected component. Valid and invalid records remain visible in one catalog; invalid
+  records expose exact fields for explicit relink or removal instead of being hidden behind table/file
+  generations.
 - Keep cloud synchronization out of scope; portability means explicit local export/copy/device transfer.
 
 ## Capabilities

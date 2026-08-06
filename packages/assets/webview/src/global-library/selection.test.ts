@@ -65,6 +65,12 @@ describe('Asset Center collection selection', () => {
       canMove: false,
       canRemoveAssets: false,
     });
+    const unavailableAsset = { ...asset('missing'), availability: 'unavailable' as const };
+    expect([...selectAllItems([unavailableAsset])]).toEqual([unavailableAsset.id]);
+    expect(getSelectionCapabilities([unavailableAsset])).toEqual({
+      canMove: false,
+      canRemoveAssets: true,
+    });
   });
 
   it('normalizes and intersects marquee rectangles', () => {

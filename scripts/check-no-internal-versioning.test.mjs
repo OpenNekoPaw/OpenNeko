@@ -13,6 +13,29 @@ const forbiddenField = ['schema', 'Version'].join('');
 const externalField = ['protocol', 'Version'].join('');
 
 describe('internal versioning audit', () => {
+  it('rejects versioned table generations and SQLite table version pragmas', () => {
+    const generatedSchemaPath = ['packages/example/src/m1', 'schema.ts'].join('-');
+    const generatedTableIdentifier = ['M1', 'TABLES'].join('_');
+    const versionedTableName = ['records', 'v2'].join('_');
+    const generationIdentifier = ['table', 'Generation'].join('');
+    const sqliteTableVersionPragma = ['PRAGMA user', 'version = 2'].join('_');
+    const findings = scanSources([
+      {
+        path: generatedSchemaPath,
+        content: [
+          `const ${generatedTableIdentifier} = [\`CREATE TABLE ${versionedTableName} (id TEXT PRIMARY KEY)\`];`,
+          `const ${generationIdentifier} = 2;`,
+          `database.exec(\`${sqliteTableVersionPragma}\`);`,
+        ].join('\n'),
+      },
+    ]);
+
+    assert.ok(findings.length >= 4);
+    assert.ok(
+      findings.every((finding) => finding.category.startsWith('versioned-table-generation')),
+    );
+  });
+
   it('detects internal fields, aliases, numeric keys and product migration paths', () => {
     const findings = scanSources([
       {
@@ -55,11 +78,7 @@ describe('internal versioning audit', () => {
 
     assert.deepEqual(
       new Set(findings.map((finding) => finding.category)),
-      new Set([
-        'alternate-success-path',
-        'automatic-repair-or-rebuild',
-        'parallel-data-path',
-      ]),
+      new Set(['alternate-success-path', 'automatic-repair-or-rebuild', 'parallel-data-path']),
     );
   });
 
@@ -154,7 +173,9 @@ describe('internal versioning audit', () => {
         content: `const request = { ${externalField}: otherNegotiatedValue };`,
       },
     ]);
-    assert.ok(validateAllowanceRegistry(registry, changed).some((error) => error.includes('stale')));
+    assert.ok(
+      validateAllowanceRegistry(registry, changed).some((error) => error.includes('stale')),
+    );
   });
 
   it('permits deletion from the baseline and rejects any new occurrence', () => {
@@ -171,7 +192,11 @@ describe('internal versioning audit', () => {
     const added = scanSources([
       { path: 'packages/example/src/other.ts', content: 'const rendererEpoch = 1;' },
     ]);
-    const report = buildAuditReport({ findings: added, allowanceRegistry: emptyRegistry, baseline });
+    const report = buildAuditReport({
+      findings: added,
+      allowanceRegistry: emptyRegistry,
+      baseline,
+    });
     assert.equal(report.status, 'failed');
     assert.equal(report.summary.newInternalDebt, 1);
     assert.deepEqual(report.remaining, []);
@@ -222,7 +247,8 @@ describe('internal versioning audit', () => {
       owner: '@neko/example',
       consumer: 'Atomic store compare-and-swap operation.',
       correctnessInvariant: 'A stale concurrent writer cannot overwrite a committed user edit.',
-      versionFreeAnalysis: 'The store accepts writes from independent processes that cannot share an owner queue.',
+      versionFreeAnalysis:
+        'The store accepts writes from independent processes that cannot share an owner queue.',
       fieldScope: 'One store write precondition only.',
       isolationRule: 'A mismatch rejects only the current write.',
       removalCondition: 'Remove when all writers share one serialized owner.',
@@ -234,8 +260,8 @@ describe('internal versioning audit', () => {
     );
     const { consumer: _consumer, ...incomplete } = allowance;
     assert.ok(
-      validateCorrectnessAllowanceRegistry({ allowances: [incomplete] }, [finding]).some(
-        (error) => error.includes('exactly'),
+      validateCorrectnessAllowanceRegistry({ allowances: [incomplete] }, [finding]).some((error) =>
+        error.includes('exactly'),
       ),
     );
   });

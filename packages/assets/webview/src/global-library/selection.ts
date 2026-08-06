@@ -19,8 +19,8 @@ export interface SelectionRectangle {
 
 export function isActionableLibraryItem(item: GlobalLibraryItem): boolean {
   return (
-    item.availability === 'available' &&
-    (item.owner === 'global-asset-library' || item.kind === 'file')
+    item.owner === 'global-asset-library' ||
+    (item.availability === 'available' && item.kind === 'file')
   );
 }
 
@@ -90,7 +90,10 @@ export function getSelectionCapabilities(
           (selectedItems[0]?.owner === 'media-library' ? selectedItems[0].libraryId : undefined),
     );
   return {
-    canMove: oneOwner && oneMediaLibrary,
+    canMove:
+      selectedItems.every((item) => item.availability === 'available') &&
+      oneOwner &&
+      oneMediaLibrary,
     canRemoveAssets: selectedItems.every((item) => item.owner === 'global-asset-library'),
   };
 }

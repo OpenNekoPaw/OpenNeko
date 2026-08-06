@@ -36,6 +36,8 @@ export interface WorkspaceRebindRequest {
 
 export interface WorkspaceRegistryRepository {
   get(workspaceId: string): Promise<WorkspaceRegistryRecord | null>;
+  listAll(): Promise<readonly WorkspaceRegistryRecord[]>;
+  remove(workspaceId: string): Promise<boolean>;
   findByCurrentLocator(
     locator: WorkspacePortableLocator,
   ): Promise<readonly WorkspaceRegistryRecord[]>;

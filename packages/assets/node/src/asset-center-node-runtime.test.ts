@@ -54,6 +54,7 @@ describe('AssetCenterNodeRuntime', () => {
       windowId: 'window-1',
     };
     runtime.attach({ identity });
+    await selectMediaCatalog(runtime, identity);
     await runtime.refresh({ identity });
     const selected = await runtime.select({
       identity,
@@ -114,9 +115,9 @@ describe('AssetCenterNodeRuntime', () => {
     ).rejects.toThrow("Asset Center item 'missing-item' is unavailable");
 
     await expect(runtime.refresh({ identity })).resolves.toMatchObject({
-      catalog: { status: 'ready', owner: 'media-library' },
+      catalog: { status: 'ready', owner: 'global-asset-library' },
     });
-    expect(resources.searchHomeMediaLibraries).toHaveBeenCalledTimes(1);
+    expect(resources.searchHomeAssets).toHaveBeenCalledTimes(1);
   });
 
   it('keeps selection visible when Preview kind is unsupported', async () => {
@@ -132,6 +133,7 @@ describe('AssetCenterNodeRuntime', () => {
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
+    await selectMediaCatalog(runtime, identity);
     await runtime.refresh({ identity });
     const selected = await runtime.select({
       identity,
@@ -162,6 +164,7 @@ describe('AssetCenterNodeRuntime', () => {
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
+    await selectMediaCatalog(runtime, identity);
     await runtime.refresh({ identity });
     const selected = await runtime.select({
       identity,
@@ -196,6 +199,7 @@ describe('AssetCenterNodeRuntime', () => {
     });
     const identity = sessionIdentity();
     runtime.attach({ identity });
+    await selectMediaCatalog(runtime, identity);
     await runtime.refresh({ identity });
     await runtime.select({
       identity,
@@ -227,6 +231,17 @@ function emptyResourceBrowser() {
 
 function sessionIdentity() {
   return { assetCenterSessionId: 'asset-center:window-1', windowId: 'window-1' };
+}
+
+async function selectMediaCatalog(
+  runtime: AssetCenterNodeRuntime,
+  identity: ReturnType<typeof sessionIdentity>,
+): Promise<void> {
+  const projection = runtime.getSnapshot(identity);
+  await runtime.updateFilter({
+    identity,
+    filter: { ...projection.filter, catalog: 'media-library' },
+  });
 }
 
 function mediaItem(label: string) {

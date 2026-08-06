@@ -1373,7 +1373,8 @@ code {
 }
 
 .management-surface-list[data-empty='true'] {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 192px;
   flex: 1;
 }
@@ -1454,6 +1455,18 @@ code {
   margin-top: 3px;
   color: var(--neko-fg-secondary);
   font-size: 10px;
+}
+
+.management-surface-copy .management-surface-row__diagnostic {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: var(--neko-danger);
+  white-space: normal;
+}
+
+.management-surface-row__diagnostic svg {
+  flex: 0 0 auto;
 }
 
 .management-surface-row-actions {

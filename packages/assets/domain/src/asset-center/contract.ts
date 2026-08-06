@@ -92,11 +92,11 @@ export function createAssetCenterSessionId(windowId: string): string {
 
 export function createDefaultAssetCenterFilter(): AssetCenterFilterProjection {
   return {
-    catalog: 'media-library',
+    catalog: 'global-asset-library',
     query: '',
     sortBy: 'name',
     sortDirection: 'ascending',
-    viewMode: 'grid',
+    viewMode: 'list',
   };
 }
 

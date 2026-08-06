@@ -69,6 +69,13 @@ authority rows update only canonical owned columns and preserve unknown columns.
 must have one permanent absence meaning. A non-additive change stops until an explicit user-data and
 offline repair decision is approved.
 
+An owner MUST NOT create version-suffixed, pre/post-release, shadow or replacement tables for the same
+facts. Catalog reads enumerate the one stable authority without a release/table-generation selector.
+`PRAGMA user_version`, table-generation discriminator columns/rows and versioned sentinel keys are
+equally forbidden; hiding a table generation inside a singleton record is still table versioning.
+Active Scene, current Project, open Workspace and selected component are presentation state and never
+filter durable records out of existence.
+
 ### 4. Portable facts are not schema-migration authorities
 
 Portable data survives workspace copy, device transfer or explicit export independently of SQLite.
@@ -108,6 +115,11 @@ Batch readers validate entries independently when identity is available. Invalid
 diagnostics beside valid siblings; they do not return fabricated empty success or disable a workspace.
 Authority roots preserve unknown top-level metadata as opaque values but never interpret it as a schema
 generation.
+
+Catalog projections retain an unavailable entry when its stable identity can be read. The entry reports
+the exact invalid or unavailable fields and only offers actions that target that identity, such as
+relinking a Workspace locator or removing an unavailable membership after confirmation. It is not copied
+to a quarantine/legacy table and no alternate reader participates.
 
 ## Risks / Trade-offs
 

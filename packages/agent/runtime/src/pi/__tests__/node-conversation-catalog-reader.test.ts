@@ -20,21 +20,26 @@ describe('NodePiConversationCatalogReader', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('lists only the requested workspaces without acquiring an execution lease', async () => {
+  it('enumerates every stable Workspace without acquiring an execution lease', async () => {
     const workspaceA = await createConversation('workspace-a', 'conversation-a');
     await createConversation('workspace-b', 'conversation-b');
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
     readers.push(reader);
 
-    expect(reader.listConversations(['workspace-a'])).toEqual({
-      records: [
+    expect(reader.listConversations()).toEqual({
+      records: expect.arrayContaining([
         expect.objectContaining({
           workspaceId: 'workspace-a',
           conversationId: 'conversation-a',
         }),
-      ],
+        expect.objectContaining({
+          workspaceId: 'workspace-b',
+          conversationId: 'conversation-b',
+        }),
+      ]),
       diagnostics: [],
     });
+    expect(reader.listConversations().records).toHaveLength(2);
     expect(reader.findConversation('conversation-a')).toMatchObject({
       workspaceId: 'workspace-a',
       conversationId: 'conversation-a',
@@ -53,12 +58,10 @@ describe('NodePiConversationCatalogReader', () => {
   it('returns an empty cold-start catalog before Pi storage exists and fails after disposal', async () => {
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
 
-    expect(reader.listConversations(['workspace-a'])).toEqual({ records: [], diagnostics: [] });
+    expect(reader.listConversations()).toEqual({ records: [], diagnostics: [] });
     expect(reader.findConversation('conversation-a')).toBeUndefined();
     reader.dispose();
-    expect(() => reader.listConversations(['workspace-a'])).toThrow(
-      'Pi conversation catalog reader is disposed',
-    );
+    expect(() => reader.listConversations()).toThrow('Pi conversation catalog reader is disposed');
   });
 
   it('joins the exact persisted conversation context from the canonical SQLite snapshot', async () => {
@@ -103,7 +106,7 @@ describe('NodePiConversationCatalogReader', () => {
     expect(reader.findConversation('conversation-valid')).toMatchObject({
       context: { workspaceGrantId: 'grant-valid' },
     });
-    expect(reader.listConversations(['workspace-a'])).toEqual({
+    expect(reader.listConversations()).toEqual({
       records: [
         expect.objectContaining({
           conversationId: 'conversation-valid',

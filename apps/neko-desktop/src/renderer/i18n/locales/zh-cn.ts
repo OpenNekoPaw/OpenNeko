@@ -123,6 +123,7 @@ export const zhCN = {
   'home.content': '内容',
   'home.recentConversations': '最近 Agent 会话',
   'home.conversationGroups': '项目与会话',
+  'home.unavailableWorkspace': '工作区不可用',
   'home.personalAssistant': '个人助手',
   'home.characterConversations': '角色',
   'home.roomConversations': '聊天室',

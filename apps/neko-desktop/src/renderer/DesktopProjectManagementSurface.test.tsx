@@ -24,6 +24,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={onOpen}
+        onRemove={vi.fn()}
         onSelect={onSelect}
         projects={[project()]}
         sessionId="project-management:1"
@@ -50,6 +51,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={vi.fn()}
+        onRemove={vi.fn()}
         onSelect={vi.fn()}
         projects={[]}
         sessionId="project-management:empty-catalog"
@@ -65,6 +67,40 @@ describe('Desktop Project Management surfaces', () => {
       'true',
     );
     expect(markup.container.querySelector('.management-surface-empty')).toBeNull();
+    await act(async () => markup.root.unmount());
+  });
+
+  it('defaults to list mode and keeps unavailable Workspace fields visible and removable', async () => {
+    const onOpen = vi.fn();
+    const onRemove = vi.fn();
+    const unavailable = {
+      ...project(),
+      unavailable: {
+        fieldNames: ['currentLocator'],
+        message: 'Workspace directory is unavailable.',
+      },
+    };
+    const markup = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        interactive
+        onOpen={onOpen}
+        onRemove={onRemove}
+        onSelect={vi.fn()}
+        projects={[unavailable]}
+        sessionId="project-management:unavailable"
+      />,
+    );
+
+    expect(markup.container.querySelector('.management-surface-list')?.className).toContain(
+      'is-list',
+    );
+    expect(markup.container.textContent).toContain(
+      'currentLocator: Workspace directory is unavailable.',
+    );
+    expect(findButton(markup.container, 'Open project: Demo').disabled).toBe(true);
+    await act(async () => findButton(markup.container, 'Remove Demo from recent projects').click());
+    expect(onRemove).toHaveBeenCalledWith(unavailable);
+    expect(onOpen).not.toHaveBeenCalled();
     await act(async () => markup.root.unmount());
   });
 });

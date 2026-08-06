@@ -29,7 +29,7 @@ export interface CoreToolsOptions {
   workspaceIgnoreRules?: WorkspaceFileIgnoreRules;
   /** Bash command timeout in ms (default 120000). Ignored unless includeShell is true. */
   bashTimeout?: number;
-  /** Explicit Developer Mode / migration switch. Ordinary creative sessions keep this false. */
+  /** Explicit Developer Mode shell switch. Ordinary creative sessions keep this false. */
   includeShell?: boolean;
   /** Project memory manager — enables MemoryWrite tool when provided */
   projectMemoryManager?: IProjectMemoryManager;

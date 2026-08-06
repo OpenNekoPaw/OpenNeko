@@ -185,7 +185,6 @@ export interface AgentSkillCatalog {
 
 export interface AgentAppHost {
   readonly credentialRuntime: AgentCredentialRuntime;
-  setHomeWorkspaceScope(workspaceIds: readonly string[]): void;
   attachWorkspace(workspace: AssetWorkspaceResolution): Promise<AgentWorkspaceRuntime>;
   getWorkspace(workspaceId: string): AgentWorkspaceRuntime | undefined;
   findConversation(conversationId: string): PiConversationCatalogRecord | undefined;
@@ -205,7 +204,7 @@ export interface CreateAgentAppHostOptions {
   readonly hostId: string;
   readonly credentialRuntime: AgentCredentialRuntime;
   readonly catalogReader: PiConversationCatalogReader;
-  readonly homeConversationWorkspaceIds?: readonly string[];
+  readonly assistantSpaceIds?: readonly string[];
   readonly builtinSkillRoot?: string;
   readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity?: () => string;
@@ -219,35 +218,18 @@ class DefaultAgentAppHost implements AgentAppHost {
   private readonly workspaces = new Map<string, DefaultAgentWorkspaceRuntime>();
   private readonly opening = new Map<string, Promise<DefaultAgentWorkspaceRuntime>>();
   private readonly homeProjectionListeners = new Set<() => void>();
-  private readonly homeConversationWorkspaceIds: readonly string[];
-  private homeWorkspaceScope: readonly string[];
+  private readonly assistantSpaceIds: readonly string[];
   private pluginRuntime: AgentPluginRuntime | undefined;
   private pluginRuntimeChanging = false;
   private disposed = false;
 
   constructor(private readonly options: CreateAgentAppHostOptions) {
     requireIdentity(options.hostId, 'Agent Host');
-    this.homeConversationWorkspaceIds = normalizeWorkspaceScope(
-      options.homeConversationWorkspaceIds ?? [],
-    );
-    this.homeWorkspaceScope = this.homeConversationWorkspaceIds;
+    this.assistantSpaceIds = normalizeIdentities(options.assistantSpaceIds ?? []);
   }
 
   get credentialRuntime(): AgentCredentialRuntime {
     return this.options.credentialRuntime;
-  }
-
-  setHomeWorkspaceScope(workspaceIds: readonly string[]): void {
-    this.requireActive();
-    const next = normalizeWorkspaceScope([...this.homeConversationWorkspaceIds, ...workspaceIds]);
-    if (
-      next.length === this.homeWorkspaceScope.length &&
-      next.every((workspaceId, index) => workspaceId === this.homeWorkspaceScope[index])
-    ) {
-      return;
-    }
-    this.homeWorkspaceScope = next;
-    this.emitHomeProjectionChanged();
   }
 
   async attachWorkspace(workspace: AssetWorkspaceResolution): Promise<AgentWorkspaceRuntime> {
@@ -348,14 +330,11 @@ class DefaultAgentAppHost implements AgentAppHost {
 
   readHomeProjection(): AgentHomeProjection {
     this.requireActive();
-    const catalog = this.options.catalogReader.listConversations(this.homeWorkspaceScope);
+    const catalog = this.options.catalogReader.listConversations();
     const conversations: AgentHomeConversationSummary[] = [];
     const diagnostics: AgentHomeDiagnostic[] = [...catalog.diagnostics];
     for (const record of catalog.records) {
-      const ownerProjection = projectAgentConversationOwner(
-        record,
-        this.homeConversationWorkspaceIds,
-      );
+      const ownerProjection = projectAgentConversationOwner(record, this.assistantSpaceIds);
       if (ownerProjection.kind === 'invalid') {
         diagnostics.push(ownerProjection.diagnostic);
         continue;
@@ -1448,12 +1427,12 @@ function countAttention(
   return conversations.filter((conversation) => conversation.attention === status).length;
 }
 
-function normalizeWorkspaceScope(workspaceIds: readonly string[]): readonly string[] {
+function normalizeIdentities(identities: readonly string[]): readonly string[] {
   return Object.freeze(
-    [...new Set(workspaceIds)]
-      .map((workspaceId) => {
-        requireIdentity(workspaceId, 'Workspace');
-        return workspaceId;
+    [...new Set(identities)]
+      .map((identity) => {
+        requireIdentity(identity, 'Assistant Space');
+        return identity;
       })
       .sort(),
   );

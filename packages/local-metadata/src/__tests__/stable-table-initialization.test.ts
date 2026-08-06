@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createNodeSqliteLocalMetadataStore } from '../node-sqlite-local-metadata-store';
-import { initializeCoreLocalMetadataTables } from '../sqlite/m1-schema';
+import { initializeCoreLocalMetadataTables } from '../sqlite/core-tables';
 import { initializeResourceCacheTables } from '../sqlite/resource-cache-schema';
 
 const roots: string[] = [];

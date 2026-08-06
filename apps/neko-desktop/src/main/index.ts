@@ -93,6 +93,8 @@ import { createDesktopNativeThemeController } from './desktop-native-theme';
 import {
   createDefaultDesktopApplicationSettingsState,
   parseDesktopApplicationSettingsStoredState,
+  readDesktopApplicationSettingsStateDiagnostics,
+  serializeDesktopApplicationSettingsStoredState,
 } from '@neko/host/application-settings-state';
 import { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import {
@@ -182,6 +184,7 @@ async function startDesktop(): Promise<void> {
   const applicationSettingsCodec = {
     createEmpty: createDefaultDesktopApplicationSettingsState,
     parse: parseDesktopApplicationSettingsStoredState,
+    serialize: serializeDesktopApplicationSettingsStoredState,
   };
   const shellStateRepository = new SqliteJsonStateRepository({
     store: localMetadataStore,
@@ -211,6 +214,9 @@ async function startDesktop(): Promise<void> {
   }
   const applicationSettings = new DesktopApplicationSettingsService(applicationSettingsRepository);
   const initialApplicationSettings = await applicationSettings.initialize();
+  const applicationSettingsStateDiagnostics = readDesktopApplicationSettingsStateDiagnostics(
+    await applicationSettingsRepository.read(),
+  );
   nativeTheme.themeSource = initialApplicationSettings.preferences.theme;
   const applicationInstanceId = randomUUID();
   const secrets = createEncryptedDesktopSecretPort({
@@ -280,21 +286,26 @@ async function startDesktop(): Promise<void> {
       },
     }),
   });
+  const assistantSpaceId = 'assistant-space:local-user';
+  const retainedProjects = await workspaceRegistry.listProjects([assistantSpaceId]);
   const shellService = new DesktopShellService({
     applicationInstanceId,
     stateRepository: shellStateRepository,
     workspaceRegistry,
     workspaceGrantAuthority,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
-    startupStateDiagnostics: stateRejections.map((rejection) => ({
-      code: 'desktop-stored-state-invalid',
-      severity: 'error',
-      authorityKey: rejection.authorityKey,
-      rejectionId: rejection.rejectionId,
-      message: `Stored Desktop state '${rejection.authorityKey}' was rejected: ${rejection.diagnostic}`,
-    })),
+    retainedProjects,
+    startupStateDiagnostics: [
+      ...stateRejections.map((rejection) => ({
+        code: 'desktop-stored-state-invalid' as const,
+        severity: 'error' as const,
+        authorityKey: rejection.authorityKey,
+        rejectionId: rejection.rejectionId,
+        message: `Stored Desktop state '${rejection.authorityKey}' was rejected: ${rejection.diagnostic}`,
+      })),
+      ...applicationSettingsStateDiagnostics,
+    ],
   });
-  const assistantSpaceId = 'assistant-space:local-user';
   const agentCatalogReader = await NodePiConversationCatalogReader.create({
     userDataRoot: globalStorage.root,
   });
@@ -304,7 +315,7 @@ async function startDesktop(): Promise<void> {
     hostId: `electron:${applicationInstanceId}`,
     credentialRuntime,
     catalogReader: agentCatalogReader,
-    homeConversationWorkspaceIds: [assistantSpaceId],
+    assistantSpaceIds: [assistantSpaceId],
     builtinSkillRoot: resolveDesktopBuiltinSkillRoot({
       appPath: app.getAppPath(),
       isPackaged: app.isPackaged,
@@ -333,7 +344,7 @@ async function startDesktop(): Promise<void> {
   });
   const initialExtensionSnapshot = await extensionManager.readCatalog();
   extensionManager.setRuntimeReadiness(
-    initialExtensionSnapshot.revision,
+    initialExtensionSnapshot,
     await agentComposition.reconcilePluginRuntime(initialExtensionSnapshot),
   );
   const windowsById = new Map<string, BrowserWindow>();
@@ -766,12 +777,10 @@ async function startDesktop(): Promise<void> {
             viewId: owner.viewId,
             sessionId: owner.sessionId,
             rendererSessionId: shellProjection.rendererSessionId,
-            revision: owner.sourceFingerprint,
           },
           {
             absolutePath: resource.absolutePath,
             mediaType: resource.mediaType,
-            revision: resource.sourceFingerprint,
           },
         );
       },
@@ -812,12 +821,10 @@ async function startDesktop(): Promise<void> {
             viewId: owner.viewId,
             sessionId: owner.sessionId,
             rendererSessionId: owner.connectionId,
-            revision: owner.sourceFingerprint,
           },
           {
             absolutePath: source.absolutePath,
             mediaType: source.mediaType,
-            revision: source.sourceFingerprint,
           },
         ),
     },

@@ -194,7 +194,7 @@ describe('Desktop renderer styles', () => {
     expect(managementListRule?.groups?.body).toMatch(/padding\s*:\s*0/u);
     expect(managementListRule?.groups?.body).not.toMatch(/border|background|border-radius/u);
     expect(styles).toMatch(
-      /\.management-surface-list\[data-empty='true'\]\s*\{[\s\S]*?display\s*:\s*flex[\s\S]*?flex\s*:\s*1/u,
+      /\.management-surface-list\[data-empty='true'\]\s*\{[\s\S]*?display\s*:\s*grid[\s\S]*?grid-template-columns\s*:\s*minmax\(0, 1fr\)[\s\S]*?flex\s*:\s*1/u,
     );
     expect(styles).toMatch(/\.management-surface-row-actions button\s*\{[\s\S]*?width\s*:\s*28px/u);
     expect(styles).not.toMatch(/\.management-surface-empty/u);

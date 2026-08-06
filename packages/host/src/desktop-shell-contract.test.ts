@@ -78,8 +78,8 @@ describe('Desktop Shell contract', () => {
     });
   });
 
-  it('rejects Workspace conversations without one exact Project and unknown associations', () => {
-    expect(() =>
+  it('retains unavailable Workspace conversations and rejects unknown explicit associations', () => {
+    expect(
       projectDesktopConversationNavigation(
         { projects: [] },
         {
@@ -91,12 +91,15 @@ describe('Desktop Shell contract', () => {
           ],
           attention: { needsInput: 0, needsReview: 0, running: 0 },
         },
-      ),
-    ).toThrowError(
-      expect.objectContaining<Partial<DesktopShellContractError>>({
-        code: 'desktop-shell-project-identity-mismatch',
+      ).groups,
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'workspace',
+        workspaceId: 'workspace-missing',
+        fieldNames: ['workspaceId'],
+        conversations: [expect.objectContaining({ title: 'workspace-conversation' })],
       }),
-    );
+    ]);
     expect(() =>
       projectDesktopConversationNavigation(validProjection().catalog, {
         conversations: [

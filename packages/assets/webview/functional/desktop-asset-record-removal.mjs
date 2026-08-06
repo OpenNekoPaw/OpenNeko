@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const ASSET_LABEL = 'record-only-removal.png';
+const MISSING_ASSET_LABEL = 'missing-source-removal.png';
+const ACTIVE_ASSET_CENTER =
+  '.desktop-workbench-slot-deck__item[data-active="true"] [data-owner-root="asset-management"]';
 
 export const assetLibraryRecordRemovalScenario = Object.freeze({
   id: 'asset-library-record-removal',
@@ -10,38 +13,74 @@ export const assetLibraryRecordRemovalScenario = Object.freeze({
   async prepare({ fixtureHome }) {
     const workspacePath = join(fixtureHome, 'workspace');
     const assetPath = join(fixtureHome, '.neko', 'assets', ASSET_LABEL);
+    const missingAssetPath = join(fixtureHome, '.neko', 'assets', MISSING_ASSET_LABEL);
     await Promise.all([
       mkdir(workspacePath, { recursive: true }),
       mkdir(join(fixtureHome, '.neko', 'assets'), { recursive: true }),
     ]);
-    await writeFile(assetPath, 'record-only-source-bytes', 'utf8');
+    await Promise.all([
+      writeFile(assetPath, 'record-only-source-bytes', 'utf8'),
+      writeFile(missingAssetPath, 'source-becomes-unavailable', 'utf8'),
+    ]);
     return {
       workspacePath,
       assetPath,
+      missingAssetPath,
       sourceDigest: digest(await readFile(assetPath)),
     };
   },
   async run({ checkpoint, evaluate, prepared, restartApplication, screenshot, waitForSelector }) {
     await openAssetLibrary(evaluate, waitForSelector);
     await waitForAssetPresence(evaluate, true);
+    await waitForAssetPresence(evaluate, true, MISSING_ASSET_LABEL);
     await evaluate(`(() => {
       window.__openNekoRecordRemovalConfirmation = undefined;
       window.confirm = (message) => {
         window.__openNekoRecordRemovalConfirmation = String(message);
         return true;
       };
-      const entry = [...document.querySelectorAll('.global-library-browser__entry')]
-        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(ASSET_LABEL)});
-      if (!(entry instanceof HTMLElement)) throw new Error('Fixture Asset entry is unavailable.');
-      const remove = [...entry.querySelectorAll('button')].find((button) =>
-        /Remove Asset Library record|移除素材记录/u.test(button.getAttribute('aria-label') ?? ''),
-      );
-      if (!(remove instanceof HTMLButtonElement)) {
-        throw new Error('Record-only Asset removal action is unavailable.');
-      }
-      remove.click();
       return true;
     })()`);
+    await rm(prepared.missingAssetPath);
+    await evaluate(`(() => {
+      const root = document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)});
+      if (!(root instanceof HTMLElement)) throw new Error('Active Asset Center is unavailable.');
+      const refresh = [...root.querySelectorAll('button')].find((button) =>
+        /^(Refresh|刷新)$/u.test(button.getAttribute('aria-label') ?? ''),
+      );
+      if (!(refresh instanceof HTMLButtonElement)) throw new Error('Asset refresh is unavailable.');
+      refresh.click();
+      return true;
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const entry = [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_ASSET_CENTER} .global-library-browser__entry`)})]
+          .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(MISSING_ASSET_LABEL)});
+        return entry?.querySelector('.global-library-browser__entry-diagnostic')?.textContent
+          ?.includes('sourceRelativePath') === true;
+      })()`,
+      'Unavailable Asset membership did not expose sourceRelativePath.',
+    );
+    const unavailableScreenshot = await screenshot('asset-missing-source-visible');
+    checkpoint('asset-missing-source-visible', {
+      fieldName: 'sourceRelativePath',
+      siblingVisible:
+        await evaluate(`(() => [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_ASSET_CENTER} .global-library-browser__entry strong`)})]
+        .some((element) => element.textContent?.trim() === ${JSON.stringify(ASSET_LABEL)}))()`),
+    });
+    await removeAssetRecord(evaluate, waitForSelector, MISSING_ASSET_LABEL);
+    await waitForAssetPresence(evaluate, false, MISSING_ASSET_LABEL);
+
+    await evaluate(`(() => {
+      window.__openNekoRecordRemovalConfirmation = undefined;
+      window.confirm = (message) => {
+        window.__openNekoRecordRemovalConfirmation = String(message);
+        return true;
+      };
+      return true;
+    })()`);
+    await removeAssetRecord(evaluate, waitForSelector, ASSET_LABEL);
     await waitForAssetPresence(evaluate, false);
     const confirmation = await evaluate(`window.__openNekoRecordRemovalConfirmation ?? ''`);
     if (!/source file will be preserved|源文件会保留/iu.test(confirmation)) {
@@ -70,17 +109,15 @@ export const assetLibraryRecordRemovalScenario = Object.freeze({
       sourceDigestBefore: prepared.sourceDigest,
       sourceDigestAfterRemoval,
       sourceDigestAfterRestart,
-      screenshots: [removedScreenshot, restartScreenshot],
+      screenshots: [unavailableScreenshot, removedScreenshot, restartScreenshot],
     };
   },
 });
 
 async function openAssetLibrary(evaluate, waitForSelector) {
-  await waitForSelector(
-    '[data-owner-root="asset-management"], .home-primary-navigation .home-nav-button',
-  );
+  await waitForSelector(`${ACTIVE_ASSET_CENTER}, .home-primary-navigation .home-nav-button`);
   const visibleAfterStartup = await evaluate(
-    `Boolean(document.querySelector('[data-owner-root="asset-management"]'))`,
+    `Boolean(document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)}))`,
   );
   if (!visibleAfterStartup) {
     await evaluate(`(() => {
@@ -90,9 +127,11 @@ async function openAssetLibrary(evaluate, waitForSelector) {
       return true;
     })()`);
   }
-  await waitForSelector('[data-owner-root="asset-management"]');
+  await waitForSelector(ACTIVE_ASSET_CENTER);
   await evaluate(`(() => {
-    const button = [...document.querySelectorAll('.global-library-browser__facets button')]
+    const root = document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)});
+    if (!(root instanceof HTMLElement)) throw new Error('Active Asset Center is unavailable.');
+    const button = [...root.querySelectorAll('.global-library-browser__facets button')]
       .find((candidate) => /^(Asset Library|资产库)$/u.test(candidate.textContent?.trim() ?? ''));
     if (!(button instanceof HTMLButtonElement)) throw new Error('Asset Library facet is unavailable.');
     if (button.getAttribute('aria-pressed') !== 'true') button.click();
@@ -100,16 +139,42 @@ async function openAssetLibrary(evaluate, waitForSelector) {
   })()`);
   await waitForCondition(
     evaluate,
-    `document.querySelector('[data-owner-root="asset-management"]')?.getAttribute('data-catalog-status') === 'ready'`,
+    `document.querySelector(${JSON.stringify(ACTIVE_ASSET_CENTER)})?.getAttribute('data-catalog-status') === 'ready'`,
     'Asset Library catalog did not become ready.',
   );
 }
 
-async function waitForAssetPresence(evaluate, expected) {
+async function removeAssetRecord(evaluate, waitForSelector, label) {
+  await evaluate(`(() => {
+    const entry = [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_ASSET_CENTER} .global-library-browser__entry`)})]
+      .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(label)});
+    if (!(entry instanceof HTMLElement)) throw new Error('Fixture Asset entry is unavailable.');
+    entry.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      button: 2,
+      clientX: 80,
+      clientY: 80,
+    }));
+    return true;
+  })()`);
+  await waitForSelector('[role="menuitem"]');
+  await evaluate(`(() => {
+    const remove = [...document.querySelectorAll('[role="menuitem"]')].find((item) =>
+      /Remove selected records|移除所选记录/u.test(item.textContent?.trim() ?? ''),
+    );
+    if (!(remove instanceof HTMLElement)) {
+      throw new Error('Record-only Asset removal menu action is unavailable.');
+    }
+    remove.click();
+    return true;
+  })()`);
+}
+
+async function waitForAssetPresence(evaluate, expected, label = ASSET_LABEL) {
   await waitForCondition(
     evaluate,
-    `(() => [...document.querySelectorAll('.global-library-browser__entry strong')]
-      .some((element) => element.textContent?.trim() === ${JSON.stringify(ASSET_LABEL)}))() === ${JSON.stringify(expected)}`,
+    `(() => [...document.querySelectorAll(${JSON.stringify(`${ACTIVE_ASSET_CENTER} .global-library-browser__entry strong`)})]
+      .some((element) => element.textContent?.trim() === ${JSON.stringify(label)}))() === ${JSON.stringify(expected)}`,
     expected
       ? 'Fixture Asset did not enter the Asset Library membership projection.'
       : 'Removed Asset membership remained visible.',

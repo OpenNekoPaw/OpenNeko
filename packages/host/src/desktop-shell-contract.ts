@@ -83,6 +83,10 @@ export interface DesktopProjectCatalogItem {
   readonly displayName: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly unavailable?: {
+    readonly fieldNames: readonly string[];
+    readonly message: string;
+  };
 }
 
 export interface DesktopProjectCatalogProjection {
@@ -155,6 +159,13 @@ export type DesktopConversationNavigationGroup =
       readonly projectId: string;
       readonly workspaceId: string;
       readonly displayName: string;
+      readonly conversations: readonly DesktopAgentHomeConversationSummary[];
+    }
+  | {
+      readonly kind: 'workspace';
+      readonly workspaceId: string;
+      readonly fieldNames: readonly string[];
+      readonly message: string;
       readonly conversations: readonly DesktopAgentHomeConversationSummary[];
     }
   | {
@@ -380,6 +391,10 @@ export function projectDesktopConversationNavigation(
     ]);
   }
   const standaloneGroups = new Map<string, DesktopConversationNavigationGroup>();
+  const unavailableWorkspaceGroups = new Map<
+    string,
+    Extract<DesktopConversationNavigationGroup, { readonly kind: 'workspace' }>
+  >();
   for (const conversation of agentHome.conversations) {
     const explicitProjectId = conversation.groupedProjectId;
     if (explicitProjectId !== undefined) {
@@ -405,10 +420,19 @@ export function projectDesktopConversationNavigation(
     if (conversation.navigation.owner.kind === 'workspace') {
       const projects = projectsByWorkspace.get(conversation.navigation.owner.workspaceId) ?? [];
       if (projects.length !== 1) {
-        throw new DesktopShellContractError(
-          'desktop-shell-project-identity-mismatch',
-          `Workspace Conversation '${conversation.navigation.conversationId}' does not resolve to one exact Project.`,
-        );
+        const workspaceId = conversation.navigation.owner.workspaceId;
+        const current = unavailableWorkspaceGroups.get(workspaceId) ?? {
+          kind: 'workspace' as const,
+          workspaceId,
+          fieldNames: ['workspaceId'],
+          message:
+            projects.length === 0
+              ? `Workspace '${workspaceId}' is not present in the Project catalog.`
+              : `Workspace '${workspaceId}' resolves to multiple Project records.`,
+          conversations: [],
+        };
+        unavailableWorkspaceGroups.set(workspaceId, appendConversation(current, conversation));
+        continue;
       }
       const project = projects[0];
       if (!project) throw new Error('Exact Workspace Project resolution is missing.');
@@ -424,7 +448,11 @@ export function projectDesktopConversationNavigation(
   }
   return Object.freeze({
     groups: Object.freeze(
-      [...projectGroups.values(), ...standaloneGroups.values()].map((group) =>
+      [
+        ...projectGroups.values(),
+        ...unavailableWorkspaceGroups.values(),
+        ...standaloneGroups.values(),
+      ].map((group) =>
         Object.freeze({
           ...group,
           conversations: Object.freeze(
@@ -1075,6 +1103,35 @@ function parseDesktopConversationNavigationGroup(
       conversations: Object.freeze(conversations),
     });
   }
+  if (kind === 'workspace') {
+    requireExactKeys(
+      record,
+      ['kind', 'workspaceId', 'fieldNames', 'message', 'conversations'],
+      'Desktop unavailable Workspace Conversation group',
+    );
+    const fieldNames = requireArray(
+      record['fieldNames'],
+      'Desktop unavailable Workspace fields must be an array.',
+    ).map((fieldName) =>
+      requireNonEmptyString(fieldName, 'Desktop unavailable Workspace field is required.'),
+    );
+    if (fieldNames.length === 0 || new Set(fieldNames).size !== fieldNames.length) {
+      throw invalidPayload('Desktop unavailable Workspace fields must be unique and non-empty.');
+    }
+    return Object.freeze({
+      kind,
+      workspaceId: requireNonEmptyString(
+        record['workspaceId'],
+        'Desktop unavailable Workspace identity is required.',
+      ),
+      fieldNames: Object.freeze(fieldNames),
+      message: requireNonEmptyString(
+        record['message'],
+        'Desktop unavailable Workspace diagnostic is required.',
+      ),
+      conversations: Object.freeze(conversations),
+    });
+  }
   if (kind === 'assistant') {
     requireExactKeys(
       record,
@@ -1186,6 +1243,10 @@ function parseProjectCatalogItem(value: unknown): DesktopProjectCatalogItem {
   if (record['profile'] !== 'content') {
     throw invalidPayload('Desktop Project catalog only accepts Content projects.');
   }
+  const unavailable =
+    record['unavailable'] === undefined
+      ? undefined
+      : parseDesktopProjectUnavailable(record['unavailable']);
   return {
     projectId: requireNonEmptyString(record['projectId'], 'Desktop Project identity is required.'),
     workspaceId: requireNonEmptyString(
@@ -1199,6 +1260,30 @@ function parseProjectCatalogItem(value: unknown): DesktopProjectCatalogItem {
     ),
     createdAt: requireNonEmptyString(record['createdAt'], 'Desktop Project createdAt is required.'),
     updatedAt: requireNonEmptyString(record['updatedAt'], 'Desktop Project updatedAt is required.'),
+    ...(unavailable ? { unavailable } : {}),
+  };
+}
+
+function parseDesktopProjectUnavailable(
+  value: unknown,
+): NonNullable<DesktopProjectCatalogItem['unavailable']> {
+  const record = requireRecord(value, 'Desktop unavailable Project diagnostic must be an object.');
+  requireExactKeys(record, ['fieldNames', 'message'], 'Desktop unavailable Project diagnostic');
+  const fieldNames = requireArray(
+    record['fieldNames'],
+    'Desktop unavailable Project fields must be an array.',
+  ).map((fieldName) =>
+    requireNonEmptyString(fieldName, 'Desktop unavailable Project field name is required.'),
+  );
+  if (fieldNames.length === 0 || new Set(fieldNames).size !== fieldNames.length) {
+    throw invalidPayload('Desktop unavailable Project fields must be unique and non-empty.');
+  }
+  return {
+    fieldNames,
+    message: requireNonEmptyString(
+      record['message'],
+      'Desktop unavailable Project diagnostic message is required.',
+    ),
   };
 }
 

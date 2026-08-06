@@ -1,5 +1,5 @@
 import type { LocalMetadataStore } from '../contracts';
-import { initializeCoreLocalMetadataTables } from '../sqlite/m1-schema';
+import { initializeCoreLocalMetadataTables } from '../sqlite/core-tables';
 import { initializeMediaMetadataTables } from '../sqlite/media-metadata-schema';
 import { initializeResourceCacheTables } from '../sqlite/resource-cache-schema';
 import { resolveGlobalStorageLayout } from '../storage';

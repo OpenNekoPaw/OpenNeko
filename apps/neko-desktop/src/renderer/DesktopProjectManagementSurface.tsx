@@ -1,4 +1,12 @@
-import { FolderIcon, GridIcon, LayersIcon, OpenIcon, SearchIcon } from '@neko/ui';
+import {
+  FolderIcon,
+  GridIcon,
+  LayersIcon,
+  OpenIcon,
+  SearchIcon,
+  TrashIcon,
+  WarningIcon,
+} from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { EmptyState } from '@neko/ui/primitives';
 import { useMemo, useState } from 'react';
@@ -10,6 +18,7 @@ export type DesktopProjectManagementSort =
 export function DesktopProjectCatalogSurface({
   interactive,
   onOpen,
+  onRemove,
   onSelect,
   projects,
   selectedProjectId,
@@ -17,6 +26,7 @@ export function DesktopProjectCatalogSurface({
 }: {
   readonly interactive: boolean;
   readonly onOpen: (projectId: string) => void;
+  readonly onRemove: (project: DesktopProjectCatalogItem) => void;
   readonly onSelect: (projectId: string) => void;
   readonly projects: readonly DesktopProjectCatalogItem[];
   readonly selectedProjectId?: string;
@@ -25,7 +35,7 @@ export function DesktopProjectCatalogSurface({
   const { locale, t } = useTranslation();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<DesktopProjectManagementSort>('updated-descending');
-  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [view, setView] = useState<'grid' | 'list'>('list');
   const visible = useMemo(
     () => filterAndSortProjectCatalog(projects, query, sort),
     [projects, query, sort],
@@ -85,17 +95,34 @@ export function DesktopProjectCatalogSurface({
               <span className="management-surface-copy">
                 <strong>{project.displayName}</strong>
                 <small>{formatProjectDate(project.updatedAt, locale)}</small>
+                {project.unavailable ? (
+                  <small className="management-surface-row__diagnostic" role="status">
+                    <WarningIcon size={13} />
+                    <span>
+                      {project.unavailable.fieldNames.join(', ')}: {project.unavailable.message}
+                    </span>
+                  </small>
+                ) : null}
               </span>
             </button>
             <span className="management-surface-row-actions">
               <button
                 type="button"
                 aria-label={`${t('home.openProject')}: ${project.displayName}`}
-                disabled={!interactive}
+                disabled={!interactive || project.unavailable !== undefined}
                 title={t('home.openProject')}
                 onClick={() => onOpen(project.projectId)}
               >
                 <OpenIcon size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label={t('shell.removeRecentProject', { project: project.displayName })}
+                disabled={!interactive}
+                title={t('shell.removeRecentProject', { project: project.displayName })}
+                onClick={() => onRemove(project)}
+              >
+                <TrashIcon size={15} />
               </button>
             </span>
           </div>

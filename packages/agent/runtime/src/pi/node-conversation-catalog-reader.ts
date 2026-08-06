@@ -10,7 +10,7 @@ export interface CreateNodePiConversationCatalogReaderOptions {
 }
 
 export interface PiConversationCatalogReader {
-  listConversations(workspaceIds: readonly string[]): PiConversationCatalogSnapshot;
+  listConversations(): PiConversationCatalogSnapshot;
   findConversation(conversationId: string): PiConversationCatalogRecord | undefined;
   dispose(): void;
 }
@@ -48,10 +48,9 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
     );
   }
 
-  listConversations(workspaceIds: readonly string[]): PiConversationCatalogSnapshot {
+  listConversations(): PiConversationCatalogSnapshot {
     this.requireActive();
-    const scope = [...new Set(workspaceIds.map(requireWorkspaceId))];
-    if (scope.length === 0 || !existsSync(this.databasePath)) {
+    if (!existsSync(this.databasePath)) {
       return { records: [], diagnostics: [] };
     }
     const database = new this.Database(this.databasePath, {
@@ -59,7 +58,6 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
       timeout: 5_000,
     });
     try {
-      const placeholders = scope.map(() => '?').join(', ');
       const contextProjection = conversationContextProjection(database);
       const rows = database
         .prepare(
@@ -67,10 +65,9 @@ export class NodePiConversationCatalogReader implements PiConversationCatalogRea
                   p.created_at, p.updated_at, ${contextProjection.select}
              FROM pi_conversations p
              ${contextProjection.join}
-            WHERE p.workspace_id IN (${placeholders})
             ORDER BY p.updated_at DESC`,
         )
-        .all(...scope);
+        .all();
       const records: PiConversationCatalogRecord[] = [];
       const diagnostics: AgentHomeDiagnostic[] = [];
       for (const row of rows) {
@@ -188,13 +185,6 @@ function readOptionalString(value: object, key: string): string | undefined {
     throw new TypeError(`Pi conversation catalog row has invalid ${key}.`);
   }
   return field;
-}
-
-function requireWorkspaceId(workspaceId: string): string {
-  if (workspaceId.trim().length === 0) {
-    throw new TypeError('Pi conversation catalog workspaceId is required.');
-  }
-  return workspaceId;
 }
 
 function requireConversationId(conversationId: string): string {

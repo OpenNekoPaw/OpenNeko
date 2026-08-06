@@ -6,6 +6,7 @@ import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
 import { desktopWorkbenchRetentionProviderUiScenario } from './desktop-workbench-retention-provider-ui.mjs';
+import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import {
   desktopConversationNavigationScenario,
   desktopWorkbenchScenesScenario,
@@ -23,6 +24,7 @@ const scenarios = new Map(
     desktopWorkbenchScenesScenario,
     resourceBrowserEntityManagementScenario,
     assetLibraryRecordRemovalScenario,
+    noActiveProjectCatalogsScenario,
   ].map((scenario) => [scenario.id, scenario]),
 );
 

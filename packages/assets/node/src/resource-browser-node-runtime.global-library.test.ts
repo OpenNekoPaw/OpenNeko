@@ -57,6 +57,35 @@ describe('ResourceBrowserNodeRuntime global Library mutations', () => {
     });
   });
 
+  it('retains a missing Asset membership with exact fields and allows explicit removal', async () => {
+    const fixture = await createFixture();
+    fixture.memberships.seed(assetRecord('asset-missing', 'missing/hero.png', 'hero.png'));
+
+    const projection = await fixture.runtime.searchHomeAssets(searchInput(fixture.windowId));
+    expect(projection.items).toEqual([
+      expect.objectContaining({
+        id: 'asset-missing',
+        availability: 'unavailable',
+        description: 'missing/hero.png',
+        unavailable: {
+          fieldNames: ['sourceRelativePath'],
+          message: 'Asset source file is unavailable.',
+        },
+      }),
+    ]);
+    expect(projection.items[0]?.thumbnail).toBeUndefined();
+
+    await expect(
+      fixture.runtime.removeHomeAssets({
+        windowId: fixture.windowId,
+        assetIds: ['asset-missing'],
+      }),
+    ).resolves.toEqual({ status: 'removed', assetIds: ['asset-missing'] });
+    await expect(fixture.memberships.repository.get('asset-missing')).resolves.toMatchObject({
+      state: 'removed',
+    });
+  });
+
   it('moves Media files only inside one connection and rebuilds their locator identity', async () => {
     const fixture = await createFixture();
     const library = path.join(fixture.root, 'Footage');
@@ -280,7 +309,7 @@ function createMembershipRepository(): {
         [...records.values()].find((record) => record.sourceRelativePath === sourceRelativePath) ??
         null,
       listActive: async () => [...records.values()].filter((record) => record.state === 'active'),
-      initializeExistingInventory: async () => ({ status: 'already-initialized' }),
+      registerDiscovered: async () => undefined,
       activate: async () => {
         throw new Error('Asset activation is not expected.');
       },

@@ -202,6 +202,15 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('data-workbench-region-control="primary-sidebar"');
   });
 
+  it('activates retained management IPC only for the active Workbench', () => {
+    expect(desktopShellSource.match(/interactive=\{interactive && active\}/gu) ?? []).toHaveLength(
+      2,
+    );
+    expect(desktopShellSource).toContain(
+      "if (!input.active || !assetCenterSessionId || typeof window === 'undefined')",
+    );
+  });
+
   it('reserves Settings navigation and Main portal targets in the same Workbench', () => {
     const markup = renderShell(
       <DesktopShellView projection={projectionWithScene(settingsScene('appearance'))} />,

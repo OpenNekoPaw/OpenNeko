@@ -373,6 +373,11 @@
   font-size: 11px;
 }
 
+.global-library-browser__entry-copy .global-library-browser__entry-diagnostic {
+  color: var(--neko-danger, #a82626);
+  white-space: normal;
+}
+
 .global-library-browser__entry-action,
 .global-library-browser__menu summary {
   display: flex;

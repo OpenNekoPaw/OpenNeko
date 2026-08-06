@@ -56,19 +56,16 @@ describe('Asset Center Host contract', () => {
     ).toMatchObject({ route: 'thumbnail.resolve', thumbnail: { variant: 'hover' } });
   });
 
-  it.each(['rendererSessionId', 'absolutePath', 'selectedId', 'extension', 'previewKind'])(
-    'rejects renderer-owned %s fallback fields',
-    (field) => {
-      expect(() =>
-        parseAssetCenterHostRequest({
-          requestId: 'request-poison',
-          identity,
-          route: 'selection.select',
-          owner: 'global-asset-library',
-          itemId: 'global-asset-library:item-1',
-          [field]: field === 'absolutePath' ? '/private/item.png' : 'png',
-        }),
-      ).toThrow('unsupported fields');
-    },
-  );
+  it('rejects unsupported request fields', () => {
+    expect(() =>
+      parseAssetCenterHostRequest({
+        requestId: 'request-invalid',
+        identity,
+        route: 'selection.select',
+        owner: 'global-asset-library',
+        itemId: 'global-asset-library:item-1',
+        unsupportedField: true,
+      }),
+    ).toThrow('unsupported fields');
+  });
 });

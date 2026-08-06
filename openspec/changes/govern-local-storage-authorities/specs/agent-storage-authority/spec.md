@@ -30,12 +30,21 @@ scoped by exact conversation/session/request identity without writer epochs or s
 Listing, search and semantic acceleration SHALL be derived from Agent/project facts. Projection loss
 MAY trigger ordinary recomputation from current authority. A stale/invalid projection MUST NOT replace
 facts, return fabricated empty success or switch to a retired source.
+Conversation catalog enumeration SHALL read the one stable Pi Conversation authority independently
+from the currently open Workspace or Desktop Project catalog. A missing Project binding MUST NOT hide
+the Conversation; it SHALL produce an unavailable owner projection with exact fields.
 
 #### Scenario: One conversation projection is invalid
 
 - **WHEN** another conversation projection remains valid
 - **THEN** the invalid entry reports its exact identity
 - **AND** the valid conversation remains listable and restorable
+
+#### Scenario: Conversation Workspace is not in the Shell catalog
+
+- **WHEN** a valid Pi Conversation references a Workspace that is not currently open
+- **THEN** Agent Home still lists the Conversation under its stable Workspace identity
+- **AND** Desktop marks only the unavailable Project/locator fields for manual handling
 
 ### Requirement: Accepted memory uses its owning fact format
 

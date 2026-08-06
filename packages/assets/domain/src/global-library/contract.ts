@@ -24,6 +24,10 @@ interface GlobalLibraryItemBase {
   readonly byteLength?: number;
   readonly modifiedAt?: string;
   readonly availability: 'available' | 'unavailable';
+  readonly unavailable?: {
+    readonly fieldNames: readonly string[];
+    readonly message: string;
+  };
   readonly thumbnail?: GlobalLibraryThumbnailDescriptor;
 }
 
@@ -189,6 +193,7 @@ export function parseGlobalAssetItem(value: unknown): GlobalAssetItem {
       'byteLength',
       'modifiedAt',
       'availability',
+      'unavailable',
       'thumbnail',
     ],
     'Global Asset Library item is invalid.',
@@ -216,6 +221,7 @@ export function parseGlobalMediaLibraryItem(value: unknown): GlobalMediaLibraryI
       'byteLength',
       'modifiedAt',
       'availability',
+      'unavailable',
       'thumbnail',
       'libraryId',
       'libraryLabel',
@@ -316,9 +322,32 @@ function parseGlobalLibraryItemBase(
       ['available', 'unavailable'] as const,
       'availability',
     ),
+    ...(record['unavailable'] === undefined
+      ? {}
+      : { unavailable: parseUnavailableFields(record['unavailable']) }),
     ...(record['thumbnail'] === undefined
       ? {}
       : { thumbnail: parseGlobalLibraryThumbnailDescriptor(record['thumbnail']) }),
+  };
+}
+
+function parseUnavailableFields(value: unknown): NonNullable<GlobalLibraryItemBase['unavailable']> {
+  const record = requireExactRecord(
+    value,
+    ['fieldNames', 'message'],
+    'Global Library unavailable fields are invalid.',
+  );
+  if (!Array.isArray(record['fieldNames']) || record['fieldNames'].length === 0) {
+    throw new Error('Global Library unavailable fieldNames are required.');
+  }
+  return {
+    fieldNames: record['fieldNames'].map((fieldName) =>
+      requireNonEmptyString(fieldName, 'Global Library unavailable field name is required.'),
+    ),
+    message: requireNonEmptyString(
+      record['message'],
+      'Global Library unavailable message is required.',
+    ),
   };
 }
 

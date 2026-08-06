@@ -18,7 +18,7 @@ afterEach(async () => {
 });
 
 describe('Asset Library membership repository', () => {
-  it('initializes flat inventory once and preserves removed membership across reopen', async () => {
+  it('registers new discoveries and preserves removed membership across reopen', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-asset-membership-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
@@ -36,12 +36,7 @@ describe('Asset Library membership repository', () => {
       registeredAt: '2026-08-05T08:01:00.000Z',
     } as const;
 
-    await expect(
-      first.repositories.assetLibraryMemberships.initializeExistingInventory(
-        [registration],
-        registration.registeredAt,
-      ),
-    ).resolves.toEqual({ status: 'initialized', importedCount: 1 });
+    await first.repositories.assetLibraryMemberships.registerDiscovered([registration]);
     await first.repositories.assetLibraryMemberships.removeMany(
       [registration.membershipId],
       '2026-08-05T08:02:00.000Z',
@@ -52,13 +47,19 @@ describe('Asset Library membership repository', () => {
     await reopened.open({ databasePath, busyTimeoutMs: 1_000 });
     await initializeCoreLocalMetadataTables(reopened);
     await initializeAssetLibraryMembershipTables(reopened);
-    await expect(
-      reopened.repositories.assetLibraryMemberships.initializeExistingInventory(
-        [{ ...registration, membershipId: 'new-scanner-id' }],
-        '2026-08-05T08:03:00.000Z',
-      ),
-    ).resolves.toEqual({ status: 'already-initialized' });
-    await expect(reopened.repositories.assetLibraryMemberships.listActive()).resolves.toEqual([]);
+    await reopened.repositories.assetLibraryMemberships.registerDiscovered([
+      { ...registration, membershipId: 'new-scanner-id', registeredAt: '2026-08-05T08:03:00.000Z' },
+      {
+        ...registration,
+        membershipId: 'membership-new',
+        sourceRelativePath: 'new.png',
+        label: 'new.png',
+        registeredAt: '2026-08-05T08:03:00.000Z',
+      },
+    ]);
+    await expect(reopened.repositories.assetLibraryMemberships.listActive()).resolves.toMatchObject(
+      [{ membershipId: 'membership-new', sourceRelativePath: 'new.png', state: 'active' }],
+    );
     await expect(
       reopened.repositories.assetLibraryMemberships.get(registration.membershipId),
     ).resolves.toMatchObject({ state: 'removed', sourceRelativePath: 'hero.png' });
@@ -82,10 +83,7 @@ describe('Asset Library membership repository', () => {
       modifiedAt: null,
       registeredAt: '2026-08-05T08:00:00.000Z',
     } as const;
-    await store.repositories.assetLibraryMemberships.initializeExistingInventory(
-      [first],
-      first.registeredAt,
-    );
+    await store.repositories.assetLibraryMemberships.registerDiscovered([first]);
     await store.repositories.assetLibraryMemberships.removeMany(
       [first.membershipId],
       '2026-08-05T08:01:00.000Z',
@@ -110,14 +108,11 @@ describe('Asset Library membership repository', () => {
     await initializeCoreLocalMetadataTables(store);
     await initializeAssetLibraryMembershipTables(store);
     const registeredAt = '2026-08-05T08:00:00.000Z';
-    await store.repositories.assetLibraryMemberships.initializeExistingInventory(
-      [
-        registration('membership-a', 'a.png', registeredAt),
-        registration('membership-b', 'b.png', registeredAt),
-        registration('membership-conflict', 'folder/conflict.png', registeredAt),
-      ],
-      registeredAt,
-    );
+    await store.repositories.assetLibraryMemberships.registerDiscovered([
+      registration('membership-a', 'a.png', registeredAt),
+      registration('membership-b', 'b.png', registeredAt),
+      registration('membership-conflict', 'folder/conflict.png', registeredAt),
+    ]);
 
     await expect(
       store.repositories.assetLibraryMemberships.relocateMany([

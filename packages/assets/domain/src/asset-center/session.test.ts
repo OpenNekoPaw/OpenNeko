@@ -79,10 +79,13 @@ describe('AssetCenterSession', () => {
 });
 
 function createSession(): AssetCenterSession {
-  return new AssetCenterSession({
-    assetCenterSessionId: 'asset-center:window-1',
-    windowId: 'window-1',
-  });
+  return new AssetCenterSession(
+    {
+      assetCenterSessionId: 'asset-center:window-1',
+      windowId: 'window-1',
+    },
+    { ...createDefaultAssetCenterFilter(), catalog: 'media-library' },
+  );
 }
 
 function fileEntry() {

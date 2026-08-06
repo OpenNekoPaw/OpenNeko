@@ -9,6 +9,9 @@
       secrets and user-content SQLite authorities.
 - [x] 1.4 Update storage architecture/docs with the admission sequence and the distinction between
       portability/device transfer and internal schema migration, which is forbidden.
+- [x] 1.5 Reject versioned table files/names, `PRAGMA user_version`, table-generation discriminators
+      and versioned sentinel rows; delete the Asset inventory generation table and use idempotent
+      stable-membership discovery.
 
 ## 2. Agent Configuration Authorities
 
@@ -46,11 +49,19 @@
 - [ ] 4.5 Prove retired config/preferences/log/cache paths remain untouched and outside product cleanup.
 - [ ] 4.6 Add workspace copy/move, duplicate identity, unknown-file preservation, database/cache loss,
       project-fact rejection, log deletion and retained artifact safety tests.
+- [x] 4.7 Enumerate the stable `workspaces` authority into Project catalog independently from Shell
+      active/open state; retain unavailable records with exact locator fields and identity-scoped actions.
+- [x] 4.8 Enumerate the stable Pi Conversation authority without active Workspace filtering and retain
+      Conversations whose Project binding is unavailable as visible diagnostic entries.
+- [x] 4.9 Make Media Library open the stable membership catalog in list mode and visibly retain
+      unavailable membership records with exact source fields and explicit removal/relink handling.
 
 ## 5. Verification
 
-- [ ] 5.1 Run focused Local Metadata, Host, Agent runtime and Desktop tests/typechecks, then full build,
+- [x] 5.1 Run focused Local Metadata, Host, Agent runtime and Desktop tests/typechecks, then full build,
       test, check, legacy-debt and unused gates.
 - [ ] 5.2 Run isolated real Electron cold start, restart, config export/import, conversation export/import,
       database backup/restore, secret failure and record-local rejection scenarios.
-- [ ] 5.3 Record actual commands/results, canonical/retired path evidence and remaining user-data/security risks.
+- [x] 5.4 Run a real Electron no-active-Project scenario proving historical Conversations, Workspace
+      records and media memberships remain visible and invalid fields do not disable valid siblings.
+- [x] 5.3 Record actual commands/results, canonical/retired path evidence and remaining user-data/security risks.

@@ -110,14 +110,12 @@ describe('createResourceToCanvasInteraction', () => {
       target: {
         documentId: 'boards/a.nkc',
         sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
-        expectedRevision: 4,
       },
     });
 
     expect(executeIntent).toHaveBeenCalledWith(
       'window-1',
       expect.objectContaining({
-        expectedRevision: 4,
         identity: expect.objectContaining({
           viewId: canvasView.viewId,
           documentId: 'boards/a.nkc',
@@ -130,7 +128,10 @@ describe('createResourceToCanvasInteraction', () => {
             identity: {
               projectId: 'project-1',
               canvasId: 'boards/a.nkc',
-              canvasSessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
+              canvasSessionId: createCanvasHostSessionId(
+                canvasView.viewId,
+                canvasView.viewInstanceId,
+              ),
             },
             locator: { kind: 'workspace-file', path: 'media/cat.png' },
             mediaKind: 'image',
@@ -171,7 +172,6 @@ describe('createResourceToCanvasInteraction', () => {
         target: {
           documentId: 'boards/missing.nkc',
           sessionId: 'canvas-session:missing',
-          expectedRevision: 0,
         },
       }),
     ).rejects.toThrow('stale or not attached');
@@ -223,7 +223,6 @@ describe('createResourceToCanvasInteraction', () => {
       target: {
         documentId: 'boards/a.nkc',
         sessionId: createCanvasHostSessionId(canvasView.viewId, canvasView.viewInstanceId),
-        expectedRevision: 7,
       },
     });
 
@@ -257,6 +256,8 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     const workspacePath = path.join(root, 'workspace');
     await mkdir(workspacePath, { recursive: true });
     const registry: DesktopWorkspaceRegistry = {
+      listProjects: async () => [],
+      removeProject: async () => false,
       resolve: async () => ({
         workspaceId: 'workspace-1',
         workspacePath,
@@ -280,11 +281,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     const windowId = await shell.claimWindowId();
     shell.setRendererSessionId(windowId, 'renderer-session-1');
     const initial = await shell.getProjection(windowId);
-    const opened = await shell.openContent(
-      windowId,
-      workspacePath,
-      initial.rendererSessionId,
-    );
+    const opened = await shell.openContent(windowId, workspacePath, initial.rendererSessionId);
     const workspaceGrant = workspaceGrantAuthority.authorize({
       windowId,
       label: 'Workspace',
@@ -295,8 +292,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
         requestId: 'open-workspace-scene',
         rendererSessionId: opened.projection.rendererSessionId,
         windowId,
-        sceneId: resolveActiveDesktopWindowWorkbench(opened.projection.window).scene
-          .sceneId,
+        sceneId: resolveActiveDesktopWindowWorkbench(opened.projection.window).scene.sceneId,
         intent: { kind: 'open-workspace', workspaceGrantId: workspaceGrant.workspaceGrantId },
       }),
     );
@@ -422,7 +418,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           windowId,
           createResourceBrowserSnapshotRequest({
             requestId: 'snapshot-stale',
-            identity: { ...identity, viewId: 'resource-browser:legacy-main-view' },
+            identity: { ...identity, viewId: 'resource-browser:unattached-main-view' },
           }),
         ),
       ).rejects.toThrow('Project is not attached');
@@ -431,8 +427,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           requestId: 'leave-workspace-scene',
           rendererSessionId: projection.rendererSessionId,
           windowId,
-          sceneId: resolveActiveDesktopWindowWorkbench(projection.window).scene
-          .sceneId,
+          sceneId: resolveActiveDesktopWindowWorkbench(projection.window).scene.sceneId,
           intent: { kind: 'open-agent-entry' },
         }),
       );
@@ -730,7 +725,6 @@ function accepted(value: unknown): CanvasHostIntentResult {
     status: 'accepted',
     snapshot: {
       identity: request.identity,
-      revision: request.expectedRevision + 1,
       dirty: true,
       canvas: DEFAULT_CANVAS_DATA,
       presentation: {
@@ -827,6 +821,8 @@ async function createGlobalLibraryRuntimeFixture(
 
 function createGlobalLibraryShell(): DesktopShellService {
   const registry: DesktopWorkspaceRegistry = {
+    listProjects: async () => [],
+    removeProject: async () => false,
     resolve: async (): Promise<AssetWorkspaceResolution> => {
       throw new Error('Workspace resolution is not expected by this global-library test.');
     },

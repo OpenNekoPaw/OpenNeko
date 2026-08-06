@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GlobalLibraryBrowserRuntime } from '../global-library';
 import { AssetCenterController } from './controller';
 import { AssetCenterSession } from './session';
+import { createDefaultAssetCenterFilter } from './contract';
 
 describe('AssetCenterController', () => {
   it('owns catalog filters and resolves exact selection through its Assets port', async () => {
@@ -90,16 +91,12 @@ describe('AssetCenterController', () => {
           resourceOwner: 'media-library' as const,
           itemId: 'media-library:item-1',
         },
-        revision: 0,
       },
       status: 'ready' as const,
       descriptor: previewDescriptor(),
     }));
     const controller = new AssetCenterController(
-      new AssetCenterSession({
-        assetCenterSessionId: 'asset-center:window-1',
-        windowId: 'window-1',
-      }),
+      createMediaSession(),
       source,
       { resolve: async () => ({ kind: 'workspace-file', path: 'shots/shot.png' }) },
       {
@@ -148,10 +145,7 @@ describe('AssetCenterController', () => {
     source.searchAssets = vi.fn(async () => ({ items: [asset] }));
     const release = vi.fn(async () => undefined);
     const controller = new AssetCenterController(
-      new AssetCenterSession({
-        assetCenterSessionId: 'asset-center:window-1',
-        windowId: 'window-1',
-      }),
+      createMediaSession(),
       source,
       { resolve: async () => ({ kind: 'workspace-file', path: 'hero.png' }) },
       {
@@ -169,7 +163,6 @@ describe('AssetCenterController', () => {
                 resourceOwner: 'global-asset-library',
                 itemId: asset.id,
               },
-              revision: 0,
             },
             status: 'ready',
             descriptor: previewDescriptor(),
@@ -209,13 +202,16 @@ function createController(
     readonly itemId: string;
   }) => Promise<{ readonly kind: 'workspace-file'; readonly path: string }>,
 ): AssetCenterController {
-  return new AssetCenterController(
-    new AssetCenterSession({
+  return new AssetCenterController(createMediaSession(), source, { resolve });
+}
+
+function createMediaSession(): AssetCenterSession {
+  return new AssetCenterSession(
+    {
       assetCenterSessionId: 'asset-center:window-1',
       windowId: 'window-1',
-    }),
-    source,
-    { resolve },
+    },
+    { ...createDefaultAssetCenterFilter(), catalog: 'media-library' },
   );
 }
 

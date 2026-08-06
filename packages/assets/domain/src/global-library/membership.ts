@@ -32,20 +32,13 @@ export interface AssetLibraryMembershipRelocation {
   readonly relocatedAt: string;
 }
 
-export type AssetLibraryInventoryInitializationResult =
-  | { readonly status: 'initialized'; readonly importedCount: number }
-  | { readonly status: 'already-initialized' };
-
 export interface AssetLibraryMembershipRepository {
   get(membershipId: string): Promise<AssetLibraryMembershipRecord | null>;
   findBySourceRelativePath(
     sourceRelativePath: string,
   ): Promise<AssetLibraryMembershipRecord | null>;
   listActive(): Promise<readonly AssetLibraryMembershipRecord[]>;
-  initializeExistingInventory(
-    registrations: readonly AssetLibraryMembershipRegistration[],
-    completedAt: string,
-  ): Promise<AssetLibraryInventoryInitializationResult>;
+  registerDiscovered(registrations: readonly AssetLibraryMembershipRegistration[]): Promise<void>;
   activate(registration: AssetLibraryMembershipRegistration): Promise<AssetLibraryMembershipRecord>;
   removeMany(
     membershipIds: readonly string[],

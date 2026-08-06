@@ -155,7 +155,6 @@ export interface ResourceBrowserNodeRuntimeOptions {
         readonly viewInstanceId: string;
         readonly documentId: string;
         readonly sessionId: string;
-        readonly expectedRevision: number;
       };
     }): Promise<void>;
   };
@@ -323,7 +322,7 @@ export class ResourceBrowserNodeRuntime {
       this.workspaceMediaLibrarySync.applyRecovery({
         workspace,
         planId: request.planId,
-        expectedOperationRevision: request.expectedOperationRevision,
+        expectedOperationFingerprint: request.expectedOperationFingerprint,
       }),
     );
     return controller.execute({
@@ -984,7 +983,7 @@ export class ResourceBrowserNodeRuntime {
       item.role !== 'library-root' ||
       !item.libraryName ||
       !item.libraryStatus ||
-      item.libraryStatus.operationRevision !== request.expectedOperationRevision
+      item.libraryStatus.operationFingerprint !== request.expectedOperationFingerprint
     ) {
       throw new Error('Desktop Resource Browser recovery item is stale or not recoverable.');
     }
@@ -1019,6 +1018,7 @@ export function createResourceToCanvasInteraction(options: {
   readonly canvas: ResourceBrowserNodeRuntimeOptions['canvas'];
   readonly windowId: string;
 }): NonNullable<ResourceBrowserNodeSourceOptions['addToCanvas']> {
+  let commandSequence = 0;
   return async ({ identity: resourceIdentity, item, target }) => {
     const currentProjection = await options.shell.getProjection(options.windowId);
     const workspaceWorkbench = resolveDesktopWindowWorkspaceWorkbench(
@@ -1062,19 +1062,19 @@ export function createResourceToCanvasInteraction(options: {
         'Generated Resource Browser results require the Generation-owned commit path.',
       );
     }
+    commandSequence += 1;
     const commandIdentity = [
       'resource-browser',
       resourceIdentity.viewId,
       item.resourceId,
       target.sessionId,
-      String(target.expectedRevision),
+      String(commandSequence),
     ].join(':');
     const result = await options.canvas.executeIntent(
       options.windowId,
       createCanvasHostIntentRequest({
         requestId: commandIdentity,
         commandId: commandIdentity,
-        expectedRevision: target.expectedRevision,
         identity: canvasIdentity,
         intent: {
           type: 'author-material',

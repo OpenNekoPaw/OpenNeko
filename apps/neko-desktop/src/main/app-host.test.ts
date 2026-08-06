@@ -235,10 +235,7 @@ describe('DesktopAppHost', () => {
           webContentsId: 11,
           frameUrl: `${DESKTOP_APP_ORIGIN}/index.html`,
         },
-        createDesktopWindowMutationRequest(
-          'request-1',
-          fixture.projection.rendererSessionId,
-        ),
+        createDesktopWindowMutationRequest('request-1', fixture.projection.rendererSessionId),
         selectWorkspace,
       ),
     ).rejects.toThrow("Unknown Desktop IPC sender '11'");
@@ -583,10 +580,7 @@ describe('DesktopAppHost', () => {
     };
 
     const transitionScene = vi.spyOn(fixture.appHost.shell, 'transitionScene');
-    const attachAgentConversation = vi.spyOn(
-      fixture.appHost.shell,
-      'attachAgentConversation',
-    );
+    const attachAgentConversation = vi.spyOn(fixture.appHost.shell, 'attachAgentConversation');
     const first = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
     expect(providerStart).not.toHaveBeenCalled();
     expect(attachAgentConversation).toHaveBeenCalledOnce();
@@ -677,14 +671,18 @@ describe('DesktopAppHost', () => {
     );
     await fixture.appHost.sendAgentMessage(
       fixture.sender,
-      createDesktopAgentMessageRequest('projection-attach-first-submit-replay', bootstrap.connection, {
-        type: 'projectionAttach',
-        key: {
-          attachmentId: 'attachment:first-submit-2',
-          tabId: 'tab:first-submit-1',
-          conversationId: 'conversation:first-submit-1',
+      createDesktopAgentMessageRequest(
+        'projection-attach-first-submit-replay',
+        bootstrap.connection,
+        {
+          type: 'projectionAttach',
+          key: {
+            attachmentId: 'attachment:first-submit-2',
+            tabId: 'tab:first-submit-1',
+            conversationId: 'conversation:first-submit-1',
+          },
         },
-      }),
+      ),
     );
     expect(providerStart).toHaveBeenCalledOnce();
     finishProvider?.();
@@ -928,7 +926,6 @@ describe('DesktopAppHost', () => {
           conversationId: record.conversationId,
           scratchArtifactId: 'scratch:1',
         },
-        revision: 0,
       },
       status: 'unavailable' as const,
       diagnostic: { code: 'preview-unsupported-kind' as const, message: 'unsupported' },
@@ -1396,10 +1393,7 @@ describe('DesktopAppHost', () => {
     await expect(
       fixture.appHost.openContentProject(
         fixture.sender,
-        createDesktopWindowMutationRequest(
-          'request-1',
-          fixture.projection.rendererSessionId,
-        ),
+        createDesktopWindowMutationRequest('request-1', fixture.projection.rendererSessionId),
         selectWorkspace,
       ),
     ).rejects.toMatchObject({ code: 'desktop-shell-request-mismatch' });
@@ -1413,10 +1407,7 @@ describe('DesktopAppHost', () => {
 
     const result = await fixture.appHost.openContentProject(
       fixture.sender,
-      createDesktopWindowMutationRequest(
-        'request-1',
-        fixture.projection.rendererSessionId,
-      ),
+      createDesktopWindowMutationRequest('request-1', fixture.projection.rendererSessionId),
       selectWorkspace,
     );
 
@@ -1437,10 +1428,7 @@ describe('DesktopAppHost', () => {
 
     const result = await fixture.appHost.openContentProject(
       fixture.sender,
-      createDesktopWindowMutationRequest(
-        'request-1',
-        fixture.projection.rendererSessionId,
-      ),
+      createDesktopWindowMutationRequest('request-1', fixture.projection.rendererSessionId),
       async () => resolution.workspacePath,
     );
 
@@ -1469,10 +1457,7 @@ describe('DesktopAppHost', () => {
     fixture.registry.resolve.mockResolvedValue(resolution);
     const opened = await fixture.appHost.openContentProject(
       fixture.sender,
-      createDesktopWindowMutationRequest(
-        'open-1',
-        fixture.projection.rendererSessionId,
-      ),
+      createDesktopWindowMutationRequest('open-1', fixture.projection.rendererSessionId),
       async () => resolution.workspacePath,
     );
     const tab = opened.projection.window.tabs[0]!;
@@ -1485,11 +1470,7 @@ describe('DesktopAppHost', () => {
 
     const reopened = await fixture.appHost.openCatalogProject(
       fixture.sender,
-      createDesktopProjectOpenRequest(
-        'reopen-1',
-        project.projectId,
-        closed.rendererSessionId,
-      ),
+      createDesktopProjectOpenRequest('reopen-1', project.projectId, closed.rendererSessionId),
     );
 
     expect(reopened).toMatchObject({
@@ -1530,10 +1511,7 @@ describe('DesktopAppHost', () => {
     fixture.registry.resolve.mockResolvedValue(resolution);
     const opened = await fixture.appHost.openContentProject(
       fixture.sender,
-      createDesktopWindowMutationRequest(
-        'open-1',
-        fixture.projection.rendererSessionId,
-      ),
+      createDesktopWindowMutationRequest('open-1', fixture.projection.rendererSessionId),
       async () => resolution.workspacePath,
     );
     const project = opened.projection.catalog.projects[0]!;
@@ -1708,7 +1686,6 @@ describe('DesktopAppHost', () => {
       ],
     });
     fixture.extensionManager.readCatalog.mockResolvedValue({
-      revision: `sha256:${'a'.repeat(64)}`,
       records: [
         {
           id: 'computer-use@openneko',
@@ -1794,15 +1771,12 @@ describe('DesktopAppHost', () => {
     const extensions = await openExtensionsScene(fixture);
 
     await expect(
-      fixture.appHost.executeExtensionManagement(
-        fixture.sender,
-        {
-          route: 'snapshot.get',
-          requestId: 'extensions-removed-endpoint',
-          rendererSessionId: 'removed-endpoint',
-          identity: extensions.identity,
-        },
-      ),
+      fixture.appHost.executeExtensionManagement(fixture.sender, {
+        route: 'snapshot.get',
+        requestId: 'extensions-removed-endpoint',
+        rendererSessionId: 'removed-endpoint',
+        identity: extensions.identity,
+      }),
     ).rejects.toThrow('unsupported fields');
     expect(fixture.agent.readGlobalSkillCatalog).not.toHaveBeenCalled();
     expect(fixture.extensionManager.readCatalog).not.toHaveBeenCalled();
@@ -1842,7 +1816,6 @@ describe('DesktopAppHost', () => {
     const fixture = await createShellAppHost();
     const extensions = await openExtensionsScene(fixture);
     vi.mocked(fixture.agent.hasActiveTurns).mockReturnValue(true);
-    const catalogRevision = `sha256:${'a'.repeat(64)}`;
 
     await expect(
       fixture.appHost.executeExtensionManagement(
@@ -1852,7 +1825,6 @@ describe('DesktopAppHost', () => {
           requestId: 'plugin-remove-1',
           identity: extensions.identity,
           pluginId: 'computer-use@openneko',
-          expectedCatalogRevision: catalogRevision,
         }),
       ),
     ).rejects.toThrow('Agent turn is active');
@@ -2000,10 +1972,7 @@ describe('DesktopAppHost', () => {
     fixture.registry.resolve.mockResolvedValue(resolution);
     const opened = await fixture.appHost.openContentProject(
       fixture.sender,
-      createDesktopWindowMutationRequest(
-        'open-1',
-        fixture.projection.rendererSessionId,
-      ),
+      createDesktopWindowMutationRequest('open-1', fixture.projection.rendererSessionId),
       async () => resolution.workspacePath,
     );
     const tab = opened.projection.window.tabs[0];
@@ -2038,10 +2007,7 @@ describe('DesktopAppHost', () => {
     fixture.registry.resolve.mockResolvedValue(resolution);
     const opened = await fixture.appHost.openContentProject(
       fixture.sender,
-      createDesktopWindowMutationRequest(
-        'open-1',
-        fixture.projection.rendererSessionId,
-      ),
+      createDesktopWindowMutationRequest('open-1', fixture.projection.rendererSessionId),
       async () => resolution.workspacePath,
     );
     const tab = opened.projection.window.tabs[0];
@@ -2159,6 +2125,8 @@ function createShellFixture(applicationInstanceId: string): {
   const registry: DesktopWorkspaceRegistry & {
     readonly resolve: ReturnType<typeof vi.fn>;
   } = {
+    listProjects: vi.fn(async () => []),
+    removeProject: vi.fn(async () => false),
     resolve: vi.fn(async () => {
       throw new Error('Workspace resolution is not expected by this AppHost test.');
     }),
@@ -2332,7 +2300,6 @@ function createLaunchCatalog(
 ) {
   return {
     connection,
-    revision: 0,
     models: [],
     commands: [],
     skills: [],
@@ -2370,7 +2337,6 @@ function createExtensionManager(): AgentExtensionManager & {
 } {
   return {
     readCatalog: vi.fn<() => Promise<AgentExtensionCatalogSnapshot>>(async () => ({
-      revision: `sha256:${'a'.repeat(64)}`,
       records: [],
       runtimeDescriptors: [],
       diagnostics: [],
@@ -2406,7 +2372,6 @@ function createSettingsService(): DesktopApplicationSettingsService {
 
 function createAgentComposition(): AgentAppHost & {
   readonly attachWorkspace: ReturnType<typeof vi.fn>;
-  readonly setHomeWorkspaceScope: ReturnType<typeof vi.fn>;
   readonly getWorkspace: ReturnType<typeof vi.fn>;
   readonly readGlobalSkillCatalog: ReturnType<typeof vi.fn>;
   readonly readHomeProjection: ReturnType<typeof vi.fn>;
@@ -2426,7 +2391,6 @@ function createAgentComposition(): AgentAppHost & {
   });
   return {
     credentialRuntime,
-    setHomeWorkspaceScope: vi.fn<(workspaceIds: readonly string[]) => void>(),
     attachWorkspace: vi.fn(async (workspace: AssetWorkspaceResolution) =>
       createAgentWorkspaceRuntime(workspace.workspaceId),
     ),

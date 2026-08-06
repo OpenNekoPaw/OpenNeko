@@ -90,12 +90,14 @@ export interface DesktopShellServiceOptions {
   readonly workspaceGrantAuthority?: DesktopWorkspaceGrantAuthorityPort;
   readonly startupTarget: DesktopStartupTargetPreference;
   readonly startupStateDiagnostics?: readonly DesktopShellStateDiagnosticProjection[];
+  readonly retainedProjects?: readonly DesktopProjectCatalogItem[];
   readonly createIdentity?: () => string;
   readonly now?: () => string;
 }
 
 export interface DesktopWorkspaceResolutionPort {
   resolve(workspacePath: string): Promise<AssetWorkspaceResolution>;
+  removeProject?(workspaceId: string): Promise<boolean>;
   dispose(): Promise<void>;
 }
 
@@ -110,7 +112,6 @@ export class DesktopShellAgentIdentityError extends Error {
 }
 
 export interface DesktopAgentHomeProjectionSource {
-  setHomeWorkspaceScope(workspaceIds: readonly string[]): void;
   readHomeProjection(): DesktopAgentHomeProjection;
   subscribeHomeProjection(listener: () => void): () => void;
 }
@@ -151,6 +152,7 @@ interface DesktopWindowRuntime {
 
 export class DesktopShellService {
   private readonly activeWindows = new Map<string, DesktopWindowRuntime>();
+  private readonly retainedProjects = new Map<string, DesktopProjectCatalogItem>();
   private operationTail: Promise<void> = Promise.resolve();
   private agentCapabilityReady = false;
   private resourceBrowserCapabilityReady = false;
@@ -164,6 +166,9 @@ export class DesktopShellService {
 
   constructor(private readonly options: DesktopShellServiceOptions) {
     requireIdentity(options.applicationInstanceId, 'Desktop application instance identity');
+    for (const project of options.retainedProjects ?? []) {
+      this.retainedProjects.set(project.projectId, project);
+    }
   }
 
   setAgentCapabilityReady(ready: boolean): void {
@@ -237,7 +242,6 @@ export class DesktopShellService {
     return this.enqueue(async () => {
       this.requireActive();
       const state = await this.options.stateRepository.read();
-      this.synchronizeAgentHomeWorkspaceScope(state);
       const reusablePrimary =
         state.primaryWindowId !== null && !this.activeWindows.has(state.primaryWindowId)
           ? state.primaryWindowId
@@ -277,7 +281,7 @@ export class DesktopShellService {
       const qualifiedWindow = this.agentHomeProjectionSource
         ? reconcilePersistedAgentSurfaces(
             restoredWindow,
-            this.readAgentHomeProjection(state),
+            this.readAgentHomeProjection(),
             this.createIdentity,
           )
         : restoredWindow;
@@ -350,9 +354,10 @@ export class DesktopShellService {
       this.options.applicationInstanceId,
       windowId,
       this.rendererSessionId(windowId),
-      this.readAgentHomeProjection(state),
+      this.readAgentHomeProjection(),
       this.domainCapabilities(),
       this.options.startupStateDiagnostics ?? [],
+      [...this.retainedProjects.values()],
     );
   }
 
@@ -391,18 +396,36 @@ export class DesktopShellService {
         request.intent.kind === 'open-workspace' ||
         request.intent.kind === 'open-project-workspace'
       ) {
+        const targetProjectId =
+          request.intent.kind === 'open-project-workspace' ? request.intent.projectId : undefined;
+        const targetStoredProject = targetProjectId
+          ? state.projects.find((project) => project.projectId === targetProjectId)
+          : undefined;
         const targetProject =
-          request.intent.kind === 'open-project-workspace'
-            ? requireStoredProject(state, request.intent.projectId)
+          targetProjectId !== undefined
+            ? (targetStoredProject ?? this.retainedProjects.get(targetProjectId))
             : undefined;
+        if (request.intent.kind === 'open-project-workspace' && !targetProject) {
+          throw new DesktopShellContractError(
+            'desktop-shell-project-not-found',
+            `Desktop Project '${request.intent.projectId}' is not present in the stable catalog.`,
+          );
+        }
+        if (targetProject && 'unavailable' in targetProject && targetProject.unavailable) {
+          throw new DesktopShellContractError(
+            'desktop-shell-project-not-found',
+            `Desktop Project '${targetProject.projectId}' is unavailable: ${targetProject.unavailable.fieldNames.join(', ')}: ${targetProject.unavailable.message}`,
+          );
+        }
         const activeScene = activeDesktopWorkbench(window).scene;
         if (
-          targetProject &&
+          targetStoredProject &&
           window.activeTarget.kind === 'project' &&
-          window.activeTarget.tabId === requireProjectTab(window, targetProject.projectId).tabId &&
+          window.activeTarget.tabId ===
+            requireProjectTab(window, targetStoredProject.projectId).tabId &&
           activeScene.context.kind === 'agent' &&
           activeScene.context.scope.kind === 'workspace' &&
-          activeScene.context.scope.workspaceId === targetProject.workspaceId &&
+          activeScene.context.scope.workspaceId === targetStoredProject.workspaceId &&
           activeScene.context.scope.conversationId === undefined &&
           activeScene.slots.interaction?.kind === 'agent' &&
           activeScene.slots.interaction.phase === 'draft'
@@ -415,17 +438,22 @@ export class DesktopShellService {
         }
         const workspaceGrantAuthority = this.options.workspaceGrantAuthority;
         if (!workspaceGrantAuthority) return unavailableWorkspaceSceneTransition(request);
-        const resolution =
-          request.intent.kind === 'open-workspace'
-            ? await workspaceGrantAuthority.resolve(
-                request.windowId,
-                request.intent.workspaceGrantId,
-              )
-            : await workspaceGrantAuthority.restore(
-                request.windowId,
-                `workspace-grant:project:${this.createIdentity()}`,
-                requireStoredProject(state, request.intent.projectId).workspaceId,
-              );
+        let resolution;
+        if (request.intent.kind === 'open-workspace') {
+          resolution = await workspaceGrantAuthority.resolve(
+            request.windowId,
+            request.intent.workspaceGrantId,
+          );
+        } else {
+          if (!targetProject) {
+            throw new Error('Desktop Project catalog resolution lost its validated identity.');
+          }
+          resolution = await workspaceGrantAuthority.restore(
+            request.windowId,
+            `workspace-grant:project:${this.createIdentity()}`,
+            targetProject.workspaceId,
+          );
+        }
         const opened = openContentProject(
           state,
           request.windowId,
@@ -632,7 +660,7 @@ export class DesktopShellService {
         );
       }
       const context = input.context;
-      const homeConversation = this.readAgentHomeProjection(state).conversations.find(
+      const homeConversation = this.readAgentHomeProjection().conversations.find(
         (candidate) =>
           candidate.navigation.conversationId === navigation.conversationId &&
           isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
@@ -1070,7 +1098,7 @@ export class DesktopShellService {
       this.assertMutationContext(windowId, rendererSessionId);
       const state = await this.options.stateRepository.read();
       requireStoredWindow(state, windowId);
-      const agentHome = this.readAgentHomeProjection(state);
+      const agentHome = this.readAgentHomeProjection();
       const conversation = agentHome.conversations.find(
         (candidate) =>
           candidate.navigation.conversationId === navigation.conversationId &&
@@ -1096,10 +1124,29 @@ export class DesktopShellService {
       this.assertMutationContext(windowId, rendererSessionId);
       const state = await this.options.stateRepository.read();
       requireStoredWindow(state, windowId);
-      requireStoredProject(state, projectId);
-      const windows = state.windows.map((window) =>
-        removeProjectFromWindow(window, state, projectId, this.createIdentity),
-      );
+      const storedProject = state.projects.find((project) => project.projectId === projectId);
+      const project = storedProject ?? this.retainedProjects.get(projectId);
+      if (!project) {
+        throw new DesktopShellContractError(
+          'desktop-shell-project-not-found',
+          `Desktop Project '${projectId}' is not present in the stable catalog.`,
+        );
+      }
+      if (
+        this.options.workspaceRegistry.removeProject &&
+        !(await this.options.workspaceRegistry.removeProject(project.workspaceId))
+      ) {
+        throw new DesktopShellContractError(
+          'desktop-shell-project-not-found',
+          `Desktop Workspace '${project.workspaceId}' is not present in the stable authority.`,
+        );
+      }
+      this.retainedProjects.delete(projectId);
+      const windows = storedProject
+        ? state.windows.map((window) =>
+            removeProjectFromWindow(window, state, projectId, this.createIdentity),
+          )
+        : state.windows;
       this.assertMutationContext(windowId, rendererSessionId);
       const committed = await this.options.stateRepository.commit({
         ...state,
@@ -1386,7 +1433,6 @@ export class DesktopShellService {
   }
 
   private async emitAll(state: DesktopShellStoredState): Promise<void> {
-    this.synchronizeAgentHomeWorkspaceScope(state);
     for (const [windowId, runtime] of this.activeWindows) {
       const rendererSessionId = runtime.rendererSessionId;
       if (!rendererSessionId) continue;
@@ -1395,9 +1441,10 @@ export class DesktopShellService {
         this.options.applicationInstanceId,
         windowId,
         rendererSessionId,
-        this.readAgentHomeProjection(state),
+        this.readAgentHomeProjection(),
         this.domainCapabilities(),
         this.options.startupStateDiagnostics ?? [],
+        [...this.retainedProjects.values()],
       );
       runtime.sequence += 1;
       const event: DesktopShellProjectionEvent = {
@@ -1417,9 +1464,10 @@ export class DesktopShellService {
       this.options.applicationInstanceId,
       windowId,
       this.rendererSessionId(windowId),
-      this.readAgentHomeProjection(state),
+      this.readAgentHomeProjection(),
       this.domainCapabilities(),
       this.options.startupStateDiagnostics ?? [],
+      [...this.retainedProjects.values()],
     );
   }
 
@@ -1503,20 +1551,13 @@ export class DesktopShellService {
     if (this.disposed) throw new Error('Desktop Shell service is disposed.');
   }
 
-  private readAgentHomeProjection(state: DesktopShellStoredState): DesktopAgentHomeProjection {
-    this.synchronizeAgentHomeWorkspaceScope(state);
+  private readAgentHomeProjection(): DesktopAgentHomeProjection {
     this.requireAgentHomeProjectionHealthy();
     return (
       this.agentHomeProjectionSource?.readHomeProjection() ?? {
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }
-    );
-  }
-
-  private synchronizeAgentHomeWorkspaceScope(state: DesktopShellStoredState): void {
-    this.agentHomeProjectionSource?.setHomeWorkspaceScope(
-      state.projects.map((project) => project.workspaceId),
     );
   }
 
@@ -1742,16 +1783,23 @@ function projectShellState(
   agentHome: DesktopAgentHomeProjection,
   domainCapabilities: readonly DesktopDomainCapabilityProjection[],
   startupStateDiagnostics: readonly DesktopShellStateDiagnosticProjection[],
+  retainedProjects: readonly DesktopProjectCatalogItem[],
 ): DesktopShellProjection {
   const window = requireStoredWindow(state, windowId);
-  const projects: readonly DesktopProjectCatalogItem[] = state.projects.map((project) => ({
-    projectId: project.projectId,
-    workspaceId: project.workspaceId,
-    profile: 'content',
-    displayName: project.displayName,
-    createdAt: project.createdAt,
-    updatedAt: project.updatedAt,
-  }));
+  const projectsById = new Map(retainedProjects.map((project) => [project.projectId, project]));
+  for (const project of state.projects) {
+    projectsById.set(project.projectId, {
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      profile: 'content',
+      displayName: project.displayName,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+    });
+  }
+  const projects = [...projectsById.values()].sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  );
   const catalog = { projects };
   return {
     applicationInstanceId,

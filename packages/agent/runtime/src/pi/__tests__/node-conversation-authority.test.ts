@@ -287,7 +287,7 @@ describe('NodePiConversationAuthority', () => {
     ).toThrowError(expect.objectContaining({ code: 'conversation-not-found' }));
   });
 
-  it('rejects an unknown Pi conversation table shape without rewriting it', async () => {
+  it('preserves unknown Pi conversation columns without selecting another table shape', async () => {
     const sqlite = await import('node:sqlite');
     const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
     database.exec(`CREATE TABLE pi_conversations (
@@ -301,9 +301,8 @@ describe('NodePiConversationAuthority', () => {
     )`);
     database.close();
 
-    await expect(createAuthority('desktop-unknown')).rejects.toThrow(
-      'Pi conversation table contract is unsupported',
-    );
+    const authority = await createAuthority('desktop-unknown');
+    expect(authority.listConversations('workspace-1')).toEqual([]);
     const unchanged = new sqlite.DatabaseSync(join(root, 'neko.db'), { readOnly: true });
     try {
       expect(
@@ -320,6 +319,23 @@ describe('NodePiConversationAuthority', () => {
     } finally {
       unchanged.close();
     }
+  });
+
+  it('rejects a Pi conversation table missing a required column', async () => {
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
+    database.exec(`CREATE TABLE pi_conversations (
+      workspace_id TEXT NOT NULL,
+      conversation_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      active_branch_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`);
+    database.close();
+
+    await expect(createAuthority('desktop-invalid')).rejects.toThrow(
+      'Pi conversation table is missing required columns: updated_at',
+    );
   });
 
   it('deletes catalog metadata and every mapped Pi Session through the fenced writer', async () => {

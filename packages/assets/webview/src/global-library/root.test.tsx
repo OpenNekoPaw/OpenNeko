@@ -13,6 +13,7 @@ import type {
   GlobalMediaLibraryItem,
 } from '@neko/assets-domain/global-library/contract';
 import { AssetCenterController } from '@neko/assets-domain/asset-center/controller';
+import { createDefaultAssetCenterFilter } from '@neko/assets-domain/asset-center/contract';
 import { AssetCenterSession } from '@neko/assets-domain/asset-center/session';
 import { AssetManagementRoot } from './root';
 
@@ -154,14 +155,14 @@ describe('AssetManagementRoot', () => {
     await act(async () => wait(180));
 
     const collection = container.querySelector<HTMLElement>('.global-library-browser__collection');
-    expect(collection?.dataset['viewMode']).toBe('grid');
+    expect(collection?.dataset['viewMode']).toBe('list');
     expect(container.textContent).not.toContain('Browse');
     expect(container.textContent).not.toContain('Open folder');
 
-    const listButton = container.querySelector<HTMLButtonElement>('button[aria-label="List view"]');
-    await act(async () => listButton?.click());
-    expect(collection?.dataset['viewMode']).toBe('list');
-    expect(runtime.management.getSnapshot().filter.viewMode).toBe('list');
+    const gridButton = container.querySelector<HTMLButtonElement>('button[aria-label="Grid view"]');
+    await act(async () => gridButton?.click());
+    expect(collection?.dataset['viewMode']).toBe('grid');
+    expect(runtime.management.getSnapshot().filter.viewMode).toBe('grid');
 
     const entry = container.querySelector<HTMLElement>('article');
     await act(async () => {
@@ -402,6 +403,49 @@ describe('AssetManagementRoot', () => {
     );
     expect(runtime.source.removeAssets).toHaveBeenCalledWith([asset.id]);
     expect(runtime.source.removeMediaLibrary).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows unavailable source fields and removes the membership without preview selection', async () => {
+    const asset: GlobalAssetItem = {
+      id: 'global-asset-library:missing',
+      owner: 'global-asset-library',
+      label: 'missing.png',
+      description: 'missing/missing.png',
+      kind: 'asset',
+      mediaType: 'image',
+      availability: 'unavailable',
+      unavailable: {
+        fieldNames: ['sourceRelativePath'],
+        message: 'Asset source file is unavailable.',
+      },
+    };
+    const runtime = createRuntime(asset);
+    const select = vi.spyOn(runtime.management, 'select');
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
+      );
+    });
+    await act(async () => wait(180));
+
+    expect(container.textContent).toContain(
+      'sourceRelativePath: Asset source file is unavailable.',
+    );
+    await act(async () => container.querySelector<HTMLElement>('article')?.click());
+    expect(select).not.toHaveBeenCalled();
+    const removeButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Remove selected records'),
+    );
+    expect(removeButton?.disabled).toBe(false);
+    await act(async () => removeButton?.click());
+    await act(async () => wait(0));
+    expect(runtime.source.removeAssets).toHaveBeenCalledWith([asset.id]);
 
     await act(async () => root.unmount());
   });
@@ -723,6 +767,8 @@ function createRuntime(itemOrItems: GlobalLibraryItem | readonly GlobalLibraryIt
   readonly source: GlobalLibraryBrowserRuntime;
 } {
   const items = Array.isArray(itemOrItems) ? itemOrItems : [itemOrItems];
+  const firstItem = items[0];
+  if (!firstItem) throw new Error('Asset Center fixture requires one catalog item.');
   const source: GlobalLibraryBrowserRuntime = {
     searchAssets: vi.fn(async () => ({
       items: items.filter((item) => item.owner === 'global-asset-library'),
@@ -755,10 +801,13 @@ function createRuntime(itemOrItems: GlobalLibraryItem | readonly GlobalLibraryIt
       libraryId,
     })),
   };
-  const session = new AssetCenterSession({
-    assetCenterSessionId: 'asset-center:window-1',
-    windowId: 'window-1',
-  });
+  const session = new AssetCenterSession(
+    {
+      assetCenterSessionId: 'asset-center:window-1',
+      windowId: 'window-1',
+    },
+    { ...createDefaultAssetCenterFilter(), catalog: firstItem.owner },
+  );
   return {
     source,
     management: new AssetCenterController(session, source, {

@@ -390,7 +390,7 @@ describe('AgentAppHost', () => {
     expect(JSON.stringify(home)).not.toContain(fixture.workspace.workspacePath);
   });
 
-  it('projects scoped persisted conversations before a workspace runtime is attached', async () => {
+  it('projects persisted conversations before a workspace runtime is attached', async () => {
     const fixture = await createFixture();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
     await workspace.createConversation('conversation-cold-start');
@@ -415,8 +415,6 @@ describe('AgentAppHost', () => {
         },
       ],
     });
-    restored.setHomeWorkspaceScope([]);
-    expect(restored.readHomeProjection().conversations).toEqual([]);
   });
 
   it('idempotently materializes one exact conversation for lifecycle replay', async () => {
@@ -442,10 +440,9 @@ describe('AgentAppHost', () => {
     });
   });
 
-  it('retains immutable Assistant conversations while Project Home scope changes', async () => {
+  it('enumerates Assistant and Workspace conversations from one stable catalog', async () => {
     const fixture = await createFixture();
     const assistantSpaceId = 'assistant-space:local-user';
-    const observedScopes: string[][] = [];
     const conversations = [
       {
         workspaceId: assistantSpaceId,
@@ -464,42 +461,28 @@ describe('AgentAppHost', () => {
         updatedAt: '2026-08-04T00:01:00.000Z',
       },
     ] as const;
+    const listConversations = vi.fn(() => ({ records: conversations, diagnostics: [] }));
     const composition = createAgentAppHost({
       userDataRoot: fixture.userDataRoot,
       userHome: fixture.userHome,
       hostId: 'desktop-host-assistant-home-scope',
       credentialRuntime: createTestCredentialRuntime(),
       catalogReader: {
-        listConversations: (workspaceIds) => {
-          observedScopes.push([...workspaceIds]);
-          return {
-            records: conversations.filter((record) => workspaceIds.includes(record.workspaceId)),
-            diagnostics: [],
-          };
-        },
+        listConversations,
         findConversation: (conversationId) =>
           conversations.find((record) => record.conversationId === conversationId),
         dispose: () => undefined,
       },
-      homeConversationWorkspaceIds: [assistantSpaceId],
+      assistantSpaceIds: [assistantSpaceId],
     });
     compositions.push(composition);
 
-    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId, assistantSpaceId]);
     expect(
       composition
         .readHomeProjection()
         .conversations.map((conversation) => conversation.navigation.conversationId),
     ).toEqual(['conversation-assistant', 'conversation-project']);
-    expect(observedScopes.at(-1)).toEqual([fixture.workspace.workspaceId, assistantSpaceId]);
-
-    composition.setHomeWorkspaceScope([]);
-    expect(
-      composition
-        .readHomeProjection()
-        .conversations.map((conversation) => conversation.navigation.conversationId),
-    ).toEqual(['conversation-assistant']);
-    expect(observedScopes.at(-1)).toEqual([assistantSpaceId]);
+    expect(listConversations).toHaveBeenCalledWith();
   });
 
   it('fails visibly when the persisted Home catalog cannot be read', async () => {
@@ -517,7 +500,6 @@ describe('AgentAppHost', () => {
         dispose: () => undefined,
       },
     });
-    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId]);
     compositions.push(composition);
 
     expect(() => composition.readHomeProjection()).toThrow('catalog fixture failed');
@@ -560,7 +542,6 @@ describe('AgentAppHost', () => {
         dispose: () => undefined,
       },
     });
-    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId]);
     compositions.push(composition);
 
     expect(composition.readHomeProjection()).toMatchObject({
@@ -628,17 +609,13 @@ describe('AgentAppHost', () => {
       hostId: 'desktop-host-invalid-owner-scope',
       credentialRuntime: createTestCredentialRuntime(),
       catalogReader: {
-        listConversations: (workspaceIds) => ({
-          records: records.filter((record) => workspaceIds.includes(record.workspaceId)),
-          diagnostics: [],
-        }),
+        listConversations: () => ({ records, diagnostics: [] }),
         findConversation: (conversationId) =>
           records.find((record) => record.conversationId === conversationId),
         dispose: () => undefined,
       },
-      homeConversationWorkspaceIds: [assistantSpaceId],
+      assistantSpaceIds: [assistantSpaceId],
     });
-    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId]);
     compositions.push(composition);
 
     expect(composition.readHomeProjection()).toMatchObject({
@@ -1304,7 +1281,6 @@ describe('AgentAppHost', () => {
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       createIdentity: () => `identity-${(identity += 1)}`,
     });
-    composition.setHomeWorkspaceScope([workspace.workspaceId]);
     compositions.push(composition);
     return { root, userHome, userDataRoot, workspace, composition };
   }
@@ -1326,7 +1302,6 @@ async function createComposition(
       userDataRoot: fixture.userDataRoot,
     }),
   });
-  composition.setHomeWorkspaceScope(['11111111-1111-4111-8111-111111111111']);
   return composition;
 }
 

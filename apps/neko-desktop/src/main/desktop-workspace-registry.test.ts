@@ -24,6 +24,8 @@ describe('Desktop workspace registry', () => {
     };
     const operations: string[] = [];
     const registry: DesktopWorkspaceRegistry = {
+      listProjects: vi.fn(async () => []),
+      removeProject: vi.fn(async () => false),
       resolve: vi.fn(async () => {
         operations.push('resolve');
         return workspace;
@@ -49,7 +51,7 @@ describe('Desktop workspace registry', () => {
     ]);
   });
 
-  it('migrates every local metadata namespace required by project portability', async () => {
+  it('initializes local metadata and projects stable Workspace records independently from availability', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'neko-desktop-workspace-registry-'));
     const homedir = path.join(root, 'home');
     const workspacePath = path.join(root, 'workspace');
@@ -77,5 +79,22 @@ describe('Desktop workspace registry', () => {
         domain: 'media-metadata',
       }),
     ).resolves.toEqual([]);
+
+    await expect(registry.listProjects()).resolves.toEqual([
+      expect.objectContaining({
+        projectId: `content:${workspace.workspaceId}`,
+        workspaceId: workspace.workspaceId,
+        displayName: 'workspace',
+      }),
+    ]);
+    await rm(workspacePath, { recursive: true });
+    await expect(registry.listProjects()).resolves.toEqual([
+      expect.objectContaining({
+        projectId: `content:${workspace.workspaceId}`,
+        unavailable: expect.objectContaining({ fieldNames: ['currentLocator'] }),
+      }),
+    ]);
+    await expect(registry.removeProject(workspace.workspaceId)).resolves.toBe(true);
+    await expect(registry.listProjects()).resolves.toEqual([]);
   });
 });

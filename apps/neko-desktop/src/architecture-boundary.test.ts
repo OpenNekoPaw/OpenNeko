@@ -59,77 +59,19 @@ describe('Desktop architecture boundaries', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps retired Desktop JSON state outside product startup and commands', () => {
-    const main = readFileSync(path.join(sourceRoot, 'main', 'index.ts'), 'utf8');
-    const packageJson = readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8');
-
-    expect(main).not.toContain('migrateDesktopStateToSqlite');
-    expect(main).not.toContain('createDesktopRetiredJsonStatePort');
-    expect(packageJson).not.toContain('desktop:state:export-legacy');
-    expect(existsSync(path.join(sourceRoot, 'main', 'desktop-state-migration-adapter.ts'))).toBe(
-      false,
-    );
-    expect(
-      existsSync(path.join(repositoryRoot, 'scripts', 'export-desktop-state-for-downgrade.mts')),
-    ).toBe(false);
-    expect(
-      existsSync(
-        path.join(
-          repositoryRoot,
-          'scripts',
-          'desktop-functional',
-          'desktop-state-sqlite-migration.mjs',
-        ),
-      ),
-    ).toBe(false);
-    expect(
-      readFileSync(
-        path.join(repositoryRoot, 'scripts', 'desktop-functional', 'scenarios.mjs'),
-        'utf8',
-      ),
-    ).not.toContain('desktop-state-sqlite-migration');
-    expect(
-      readFileSync(path.join(repositoryRoot, 'scripts', 'run-desktop-ui-functional.mjs'), 'utf8'),
-    ).not.toContain('desktop-state-sqlite-migration');
-  });
-
   it('keeps Desktop Agent composition on the canonical host-neutral Pi path', () => {
     const mainRoot = path.join(sourceRoot, 'main');
-    const agentRoot = path.join(repositoryRoot, 'packages', 'agent');
     const violations = findForbiddenImports(mainRoot, [
       '@neko-agent/extension',
       '@neko/extension',
       'vscode',
     ]);
-    const removedAgentTokens = [
-      'host-message-event',
-      'retired-metadata-store',
-      'projectionVersion',
-      'baseProjectionVersion',
-      'messageQueueVersion',
-      'viewInstanceId',
-      'rendererSessionId',
-      'connectionEpoch',
-    ] as const;
-    const removedAgentTokenViolations = walkProductionTypeScript(agentRoot).flatMap((file) => {
-      const content = readFileSync(file, 'utf8');
-      return removedAgentTokens
-        .filter((token) => content.includes(token))
-        .map((token) => `${path.relative(repositoryRoot, file)} -> ${token}`);
-    });
     const composition = readFileSync(
       path.join(sourceRoot, '../../../packages/agent/runtime/src/application/agent-app-host.ts'),
       'utf8',
     );
 
     expect(violations).toEqual([]);
-    expect(removedAgentTokenViolations).toEqual([]);
-    expect(
-      existsSync(path.join(agentRoot, 'contracts', 'src', 'host-message-event.ts')),
-    ).toBe(false);
-    expect(
-      existsSync(path.join(agentRoot, 'runtime', 'src', 'retired-metadata-store.ts')),
-    ).toBe(false);
     expect(composition).toContain('PiConversationRuntime.open');
     expect(composition).toContain('NodePiConversationAuthority.create');
     expect(composition).toContain('createConversationProjectionStore');
@@ -210,13 +152,6 @@ describe('Desktop architecture boundaries', () => {
     expect(sync).toContain('applyRecovery');
     expect(bridgeContract).not.toContain('absolutePath');
     expect(bridgeContract).not.toContain('selectedDirectory');
-    for (const retired of [
-      'desktop-resource-browser-runtime.ts',
-      'desktop-resource-browser-source.ts',
-      'desktop-workspace-media-library-sync.ts',
-    ]) {
-      expect(existsSync(path.join(sourceRoot, 'main', retired))).toBe(false);
-    }
   });
 
   it('keeps Node, Electron and VS Code imports out of renderer', () => {
@@ -273,7 +208,7 @@ describe('Desktop architecture boundaries', () => {
     }
   });
 
-  it('poisons retired Desktop media transports and path-derived resource identity', () => {
+  it('keeps Desktop media on the authorized OpenNeko resource path', () => {
     const mainRoot = path.join(sourceRoot, 'main');
     const repositoryRoot = path.resolve(sourceRoot, '../../..');
     const openNekoProtocol = readFileSync(
@@ -293,46 +228,15 @@ describe('Desktop architecture boundaries', () => {
       'utf8',
     );
 
-    for (const retiredFile of [
-      'app-protocol.ts',
-      'app-protocol.test.ts',
-      'desktop-media-protocol.ts',
-      'desktop-media-protocol.test.ts',
-      'desktop-media-descriptor-registry.ts',
-      'desktop-media-descriptor-registry.test.ts',
-      'desktop-http-resource-gateway.ts',
-      'desktop-http-resource-gateway.test.ts',
-    ]) {
-      expect(existsSync(path.join(mainRoot, retiredFile))).toBe(false);
-    }
-    expect(
-      existsSync(path.join(repositoryRoot, 'packages/media/src/node/NodeMediaLoopbackServer.ts')),
-    ).toBe(false);
-
     expect(openNekoProtocol).toContain('protocol.handle(');
     expect(openNekoProtocol).toContain('OPENNEKO_SCHEME');
     expect(openNekoProtocol.match(/protocol\.handle\(/gu)).toHaveLength(1);
     expect(openNekoProtocol).toContain('DESKTOP_RESOURCE_HOST');
-    expect(openNekoProtocol).not.toContain('neko-app');
-    expect(openNekoProtocol).not.toContain('neko-media');
     expect(resourceRegistry).not.toMatch(/\bcreateServer\s*\(/u);
     expect(resourceRegistry).not.toMatch(/\bupstream\b/iu);
     expect(resourceRegistry).not.toContain('ContentLocator');
     expect(resourceRegistry).not.toContain('ResourceRef');
     expect(resourceRegistry).not.toMatch(/\b(?:MediaStream|RTCPeerConnection|getUserMedia)\b/u);
-
-    const resourceRefDeclarations = [
-      ...walkProductionTypeScript(path.join(repositoryRoot, 'apps')),
-      ...walkProductionTypeScript(path.join(repositoryRoot, 'packages')),
-    ].flatMap((file) => {
-      const content = readFileSync(file, 'utf8');
-      return /\b(?:interface|type|class)\s+\w*ResourceRef\b|\bimport\s+type\b[^;]*\bResourceRef\b/gu.test(
-        content,
-      )
-        ? [path.relative(repositoryRoot, file)]
-        : [];
-    });
-    expect(resourceRefDeclarations).toEqual([]);
 
     expect(canvasMediaRuntime).toContain(
       'Desktop Canvas PCM is not available for ordinary node playback.',
@@ -474,13 +378,8 @@ describe('Desktop architecture boundaries', () => {
     const preload = readFileSync(path.join(sourceRoot, 'preload', 'index.ts'), 'utf8');
     const contract = readFileSync(path.join(sourceRoot, 'shared', 'agent-contract.ts'), 'utf8');
     expect(preload).toContain('agent: {');
-    expect(preload).toContain(`async getBootstrap(
-      workbenchInstanceId,
-      agentSurfaceId,
-      projectId,
-      viewId,
-      conversationId,
-    )`);
+    expect(preload).toContain('async getBootstrap(');
+    expect(preload).toContain('createDesktopAgentBootstrapRequest');
     expect(preload).toContain('createDesktopAgentMessageRequest');
     expect(preload).toContain('createDesktopWorkbenchMutationRequest');
     expect(preload).toContain('workbench: {');
@@ -524,14 +423,6 @@ function walkTypeScript(directory: string): string[] {
       return statSync(file).isDirectory() ? walkTypeScript(file) : [file];
     })
     .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'));
-}
-
-function walkProductionTypeScript(directory: string): string[] {
-  return walkTypeScript(directory).filter(
-    (file) =>
-      !file.includes(`${path.sep}__tests__${path.sep}`) &&
-      !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file),
-  );
 }
 
 function containsModuleSpecifier(content: string, specifier: string): boolean {

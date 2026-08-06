@@ -745,13 +745,15 @@ async function readGlobalAssets(
       const byteLength = current?.byteLength ?? membership.byteLength ?? undefined;
       const mediaType =
         membership.mediaType ?? detectGlobalAssetMediaType(membership.sourceRelativePath);
-      const thumbnail = createGlobalLibraryThumbnailDescriptor({
-        owner: 'global-asset-library',
-        itemId: membership.membershipId,
-        mediaType,
-        modifiedAt,
-        byteLength,
-      });
+      const thumbnail = current
+        ? createGlobalLibraryThumbnailDescriptor({
+            owner: 'global-asset-library',
+            itemId: membership.membershipId,
+            mediaType,
+            modifiedAt,
+            byteLength,
+          })
+        : undefined;
       return {
         id: membership.membershipId,
         owner: 'global-asset-library' as const,
@@ -762,6 +764,14 @@ async function readGlobalAssets(
         ...(byteLength === undefined ? {} : { byteLength }),
         ...(modifiedAt ? { modifiedAt } : {}),
         availability: current ? ('available' as const) : ('unavailable' as const),
+        ...(current
+          ? {}
+          : {
+              unavailable: {
+                fieldNames: ['sourceRelativePath'],
+                message: 'Asset source file is unavailable.',
+              },
+            }),
         ...(thumbnail ? { thumbnail } : {}),
       };
     }),
@@ -780,7 +790,7 @@ async function initializeGlobalAssetMembershipInventory(input: {
     query: '',
   });
   const registeredAt = new Date().toISOString();
-  await input.memberships.initializeExistingInventory(
+  await input.memberships.registerDiscovered(
     entries.flatMap((entry) => {
       if (entry.role !== 'content' || entry.locator.kind !== 'workspace-file') return [];
       return [
@@ -795,7 +805,6 @@ async function initializeGlobalAssetMembershipInventory(input: {
         },
       ];
     }),
-    registeredAt,
   );
 }
 

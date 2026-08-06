@@ -18,7 +18,10 @@ import {
   resolveActiveDesktopWorkbenchInstance,
   type DesktopWindowWorkbenchCatalogProjection,
 } from './desktop-workbench-instance-contract';
-import type { DesktopShellStateDiagnosticProjection } from './desktop-shell-contract';
+import type {
+  DesktopProjectCatalogItem,
+  DesktopShellStateDiagnosticProjection,
+} from './desktop-shell-contract';
 
 function activeInstance(window: { readonly workbenches: DesktopWindowWorkbenchCatalogProjection }) {
   return resolveActiveDesktopWorkbenchInstance(window.workbenches);
@@ -83,32 +86,84 @@ describe('DesktopShellService', () => {
     expect(restored.catalog.projects).toHaveLength(1);
   });
 
-  it('scopes the Agent Home catalog from persisted Projects before the first snapshot', async () => {
-    const file = createMemoryFile();
-    const first = createFixture(file);
-    const firstWindowId = await first.service.claimWindowId();
-    first.service.setRendererSessionId(firstWindowId, 'renderer-session-1');
-    const initial = await first.service.getProjection(firstWindowId);
-    await openContent(first, firstWindowId, '/workspace/demo', initial.rendererSessionId);
-    first.service.releaseWindow(firstWindowId);
-    await first.service.dispose();
+  it('opens and explicitly removes a Project retained by the stable Workspace authority', async () => {
+    const retainedProject: DesktopProjectCatalogItem = {
+      projectId: 'content:11111111-1111-4111-8111-111111111111',
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      profile: 'content',
+      displayName: 'Retained Demo',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-06T00:00:00.000Z',
+    };
+    const fixture = createFixture(undefined, 'home', undefined, true, [], [retainedProject]);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    let projection = await fixture.service.getProjection(windowId);
 
-    const second = createFixture(file);
-    const setHomeWorkspaceScope = vi.fn<(workspaceIds: readonly string[]) => void>();
-    second.service.setAgentHomeProjectionSource({
-      setHomeWorkspaceScope,
+    expect(projection.catalog.projects).toEqual([retainedProject]);
+    const opened = await fixture.service.transitionScene(
+      createDesktopSceneTransitionRequest({
+        requestId: 'open-retained-project',
+        rendererSessionId: projection.rendererSessionId,
+        windowId,
+        sceneId: activeScene(projection.window).sceneId,
+        intent: { kind: 'open-project-workspace', projectId: retainedProject.projectId },
+      }),
+    );
+    expect(opened.status).toBe('transitioned');
+    expect(fixture.registry.restore).toHaveBeenCalledWith(retainedProject.workspaceId);
+
+    projection = await fixture.service.getProjection(windowId);
+    const removed = await fixture.service.removeRecentProject(
+      windowId,
+      retainedProject.projectId,
+      projection.rendererSessionId,
+    );
+    expect(fixture.registry.removeProject).toHaveBeenCalledWith(retainedProject.workspaceId);
+    expect(removed.catalog.projects).toEqual([]);
+  });
+
+  it('retains Workspace conversations when no Project is open', async () => {
+    const fixture = createFixture();
+    fixture.service.setAgentHomeProjectionSource({
       readHomeProjection: () => ({
-        conversations: [],
+        conversations: [
+          {
+            navigation: {
+              conversationId: 'conversation-unavailable-workspace',
+              owner: { kind: 'workspace', workspaceId: 'workspace-not-open' },
+            },
+            title: 'Unavailable Workspace conversation',
+            updatedAt: '2026-08-06T00:00:00.000Z',
+            attention: 'none',
+            lastActivity: {
+              kind: 'conversation-updated',
+              occurredAt: '2026-08-06T00:00:00.000Z',
+            },
+          },
+        ],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }),
       subscribeHomeProjection: () => () => undefined,
     });
 
-    const restoredWindowId = await second.service.claimWindowId();
-    second.service.setRendererSessionId(restoredWindowId, 'renderer-session-1');
-    await second.service.getProjection(restoredWindowId);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
 
-    expect(setHomeWorkspaceScope).toHaveBeenCalledWith(['11111111-1111-4111-8111-111111111111']);
+    expect(projection.catalog.projects).toEqual([]);
+    expect(projection.conversationNavigation.groups).toMatchObject([
+      {
+        kind: 'workspace',
+        workspaceId: 'workspace-not-open',
+        fieldNames: ['workspaceId'],
+        conversations: [
+          {
+            navigation: { conversationId: 'conversation-unavailable-workspace' },
+          },
+        ],
+      },
+    ]);
   });
 
   it('rejects a persisted Agent Surface whose Conversation no longer matches its canonical owner', async () => {
@@ -131,7 +186,6 @@ describe('DesktopShellService', () => {
       },
     });
     first.service.setAgentHomeProjectionSource({
-      setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
         conversations: [
           homeConversation('conversation:invalid-owner'),
@@ -279,7 +333,6 @@ describe('DesktopShellService', () => {
     const originalAuthorityBytes = JSON.stringify(invalidAuthorityRecord);
     const restored = createFixture(repository, 'restore');
     restored.service.setAgentHomeProjectionSource({
-      setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
         conversations: [homeConversation('conversation:valid-sibling')],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -346,7 +399,6 @@ describe('DesktopShellService', () => {
       owner: { kind: 'assistant' as const, assistantSpaceId: 'assistant-space:local-user' },
     };
     fixture.service.setAgentHomeProjectionSource({
-      setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
         conversations: [
           {
@@ -1369,7 +1421,6 @@ describe('DesktopShellService', () => {
 
     const restored = createFixture(file, 'home');
     restored.service.setAgentHomeProjectionSource({
-      setHomeWorkspaceScope: () => undefined,
       readHomeProjection: () => ({
         conversations: [
           {
@@ -2077,6 +2128,7 @@ function createFixture(
   workspaceGrantAuthority?: DesktopWorkspaceGrantAuthority,
   workspaceAuthorityEnabled = true,
   startupStateDiagnostics: readonly DesktopShellStateDiagnosticProjection[] = [],
+  retainedProjects: readonly DesktopProjectCatalogItem[] = [],
 ) {
   let identity = 0;
   const resolution: AssetWorkspaceResolution = {
@@ -2091,9 +2143,11 @@ function createFixture(
   const registry: DesktopWorkspaceResolutionPort & {
     readonly resolve: ReturnType<typeof vi.fn>;
     readonly restore: typeof restoreWorkspace;
+    readonly removeProject: ReturnType<typeof vi.fn>;
   } = {
     resolve: vi.fn(async () => resolution),
     restore: restoreWorkspace,
+    removeProject: vi.fn(async () => true),
     dispose: vi.fn(async () => undefined),
   };
   const authority =
@@ -2114,6 +2168,7 @@ function createFixture(
       workspaceGrantAuthority: workspaceAuthorityEnabled ? authority : undefined,
       startupTarget,
       startupStateDiagnostics,
+      retainedProjects,
       createIdentity: () => `identity-${(identity += 1)}`,
       now: () => '2026-07-27T00:00:00.000Z',
     }),

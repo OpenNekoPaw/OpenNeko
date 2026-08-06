@@ -15,10 +15,6 @@ const ASSET_LIBRARY_MEMBERSHIP_TABLES = [
   ) STRICT`,
   `CREATE INDEX IF NOT EXISTS asset_library_memberships_active_label_idx
     ON asset_library_memberships(membership_state, label, membership_id)`,
-  `CREATE TABLE IF NOT EXISTS asset_library_inventory_state (
-    inventory_id TEXT PRIMARY KEY NOT NULL CHECK (inventory_id = 'flat-v1'),
-    completed_at TEXT NOT NULL
-  ) STRICT`,
 ] as const;
 
 export function initializeAssetLibraryMembershipTables(store: LocalMetadataStore): Promise<void> {

@@ -70,7 +70,7 @@ export function mergeConfigs(base: UnifiedConfig, override: UnifiedConfig): Unif
   merged.modelOverrides = mergeOverrides(base.modelOverrides, override.modelOverrides);
   merged.mcpServerOverrides = mergeOverrides(base.mcpServerOverrides, override.mcpServerOverrides);
 
-  // Preserve removed Auth product settings until an explicit user-data migration exists.
+  // Keep user-managed Auth fields round-trippable during layered config merges.
   if (base.auth || override.auth) {
     merged.auth = {
       ...base.auth,
@@ -88,7 +88,7 @@ export function mergeConfigs(base: UnifiedConfig, override: UnifiedConfig): Unif
     };
   }
 
-  // Preserve removed Market product settings until an explicit user-data migration exists.
+  // Keep user-managed Market fields round-trippable during layered config merges.
   if (base.market || override.market) {
     merged.market = {
       ...base.market,

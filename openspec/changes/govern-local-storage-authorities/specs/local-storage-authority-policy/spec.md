@@ -30,12 +30,27 @@ package-local, Agent-specific or Electron-userData databases.
 SQLite repositories SHALL use stable tables without schema versions or migration registries.
 Initialization MAY create a missing table. Existing rows SHALL update only canonical owned columns and
 preserve unknown columns. Optional fields MAY be added only with one permanent absence meaning.
+The same authority MUST NOT be split into version-suffixed, pre-release, post-release, shadow or
+replacement tables, and readers MUST NOT dispatch by table generation. Repositories MUST NOT use
+`PRAGMA user_version`, table-generation discriminator fields/rows or versioned sentinel keys.
 
 #### Scenario: Existing authority row has an unknown column
 
 - **WHEN** a repository commits a canonical update
 - **THEN** the unknown column remains untouched
 - **AND** it does not select a parser, compatibility path, default or repair action
+
+#### Scenario: A component or release changes
+
+- **WHEN** an owning package changes code while existing authority rows remain on disk
+- **THEN** the package continues to read the same stable table and validates rows independently
+- **AND** it does not create or select a release-specific table
+
+#### Scenario: A repository needs repeatable discovery state
+
+- **WHEN** an owning package discovers current records more than once
+- **THEN** it uses stable record identity and idempotent current-table writes
+- **AND** it does not persist a versioned inventory sentinel or table-generation key
 
 ### Requirement: Portable data remains with the owning domain
 
@@ -78,12 +93,21 @@ Existing bytes MUST remain untouched.
 Batch readers, catalogs and projections SHALL validate entries independently when identity is
 available. An invalid entry MUST return an exact diagnostic beside valid siblings and MUST NOT create
 an empty successful result or disable unrelated workspaces.
+Catalog enumeration MUST be independent from the active Scene, current Project, open Workspace or
+selected component. When stable identity is readable, an unavailable entry SHALL remain visible with
+the exact invalid fields and explicit identity-scoped manual actions.
 
 #### Scenario: One cache projection row is invalid
 
 - **WHEN** valid rows exist beside one malformed row
 - **THEN** only the malformed row is rejected
 - **AND** valid rows and their workspace remain available
+
+#### Scenario: No Project is currently open
+
+- **WHEN** conversation, Workspace and media membership authority rows exist while Shell has no active Project
+- **THEN** their owning catalogs still list every identifiable record
+- **AND** unavailable records show their invalid fields instead of being omitted or reported as an empty catalog
 
 ### Requirement: Offline repair is explicit and product-unreachable
 

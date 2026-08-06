@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
-const CANONICAL_CONVERSATION_COLUMNS = [
+const REQUIRED_CONVERSATION_COLUMNS = [
   'workspace_id',
   'conversation_id',
   'title',
@@ -29,7 +29,7 @@ export async function openNodePiConversationStorage(
     timeout: 5_000,
   });
   try {
-    assertExistingConversationTableIsCanonical(database);
+    assertExistingConversationTableHasRequiredColumns(database);
     database.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
@@ -45,7 +45,7 @@ export async function openNodePiConversationStorage(
 }
 
 export function initializePiConversationTables(database: DatabaseSync): void {
-  assertExistingConversationTableIsCanonical(database);
+  assertExistingConversationTableHasRequiredColumns(database);
   database.exec(`
     CREATE TABLE IF NOT EXISTS pi_conversations (
       workspace_id TEXT NOT NULL,
@@ -97,26 +97,26 @@ export function initializePiConversationTables(database: DatabaseSync): void {
         ON DELETE CASCADE
     );
   `);
-  assertCanonicalConversationTable(database);
+  assertConversationTableHasRequiredColumns(database);
 }
 
-function assertExistingConversationTableIsCanonical(database: DatabaseSync): void {
+function assertExistingConversationTableHasRequiredColumns(database: DatabaseSync): void {
   const table = database
     .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
     .get('pi_conversations');
-  if (table !== undefined) assertCanonicalConversationTable(database);
+  if (table !== undefined) assertConversationTableHasRequiredColumns(database);
 }
 
-function assertCanonicalConversationTable(database: DatabaseSync): void {
-  const columns = database
-    .prepare(`PRAGMA table_info(pi_conversations)`)
-    .all()
-    .map((row) => readColumnName(row));
-  if (
-    columns.length !== CANONICAL_CONVERSATION_COLUMNS.length ||
-    columns.some((column, index) => column !== CANONICAL_CONVERSATION_COLUMNS[index])
-  ) {
-    throw new Error(`Pi conversation table contract is unsupported: ${columns.join(', ')}.`);
+function assertConversationTableHasRequiredColumns(database: DatabaseSync): void {
+  const columns = new Set(
+    database
+      .prepare(`PRAGMA table_info(pi_conversations)`)
+      .all()
+      .map((row) => readColumnName(row)),
+  );
+  const missing = REQUIRED_CONVERSATION_COLUMNS.filter((column) => !columns.has(column));
+  if (missing.length > 0) {
+    throw new Error(`Pi conversation table is missing required columns: ${missing.join(', ')}.`);
   }
 }
 

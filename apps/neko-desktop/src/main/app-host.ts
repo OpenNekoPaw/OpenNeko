@@ -709,10 +709,7 @@ export class DesktopAppHost {
     if (request.windowId !== window.windowId) {
       throw new Error('Desktop Workspace grant request belongs to another Window.');
     }
-    await this.shell.assertWindowMutationContext(
-      window.windowId,
-      request.rendererSessionId,
-    );
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
     const selection = await selectWorkspace();
     if (!selection) {
       return {
@@ -720,10 +717,7 @@ export class DesktopAppHost {
         status: 'cancelled',
       };
     }
-    await this.shell.assertWindowMutationContext(
-      window.windowId,
-      request.rendererSessionId,
-    );
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
     return {
       requestId: request.requestId,
       status: 'authorized',
@@ -752,10 +746,7 @@ export class DesktopAppHost {
       }
       return result;
     }
-    const grant = await this.resolveAgentConnectionGrant(
-      window.windowId,
-      request.connection,
-    );
+    const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
     return this.agentBridge.send(request, grant);
   }
 
@@ -770,10 +761,7 @@ export class DesktopAppHost {
     }
     const request = parseDesktopAgentAutomationRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const grant = await this.resolveAgentConnectionGrant(
-      window.windowId,
-      request.connection,
-    );
+    const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
     switch (request.operation.kind) {
       case 'wait-for-idle':
         return {
@@ -836,10 +824,7 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopWindowMutationRequest(payload);
     const window = this.windows.resolveSender(sender);
-    await this.shell.assertWindowMutationContext(
-      window.windowId,
-      request.rendererSessionId,
-    );
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
     const workspacePath = await selectWorkspace();
     if (!workspacePath) {
       return {
@@ -1083,46 +1068,28 @@ export class DesktopAppHost {
         break;
       case 'plugin.install': {
         this.requireAgentIdleForPluginMutation();
-        const snapshot = await this.options.extensionManager.installPlugin(
-          request.pluginId,
-          request.expectedCatalogRevision,
-        );
+        const snapshot = await this.options.extensionManager.installPlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
         break;
       }
       case 'plugin.remove': {
         this.requireAgentIdleForPluginMutation();
-        const snapshot = await this.options.extensionManager.removePlugin(
-          request.pluginId,
-          request.expectedCatalogRevision,
-        );
+        const snapshot = await this.options.extensionManager.removePlugin(request.pluginId);
         await this.activatePluginSnapshot(snapshot);
         break;
       }
       case 'marketplaces.refresh': {
         this.requireAgentIdleForPluginMutation();
-        const snapshot = await this.options.extensionManager.refreshMarketplaces(
-          request.expectedCatalogRevision,
-        );
+        const snapshot = await this.options.extensionManager.refreshMarketplaces();
         await this.activatePluginSnapshot(snapshot);
         break;
       }
       case 'skill.install': {
-        const catalog = await this.options.extensionManager.readCatalog();
-        if (catalog.revision !== request.expectedCatalogRevision) {
-          throw new Error('Agent extension catalog changed; refresh before retrying.');
-        }
         await this.options.personalSkillManager.install(window.windowId);
         break;
       }
       case 'skill.remove': {
-        const [catalog, skills] = await Promise.all([
-          this.options.extensionManager.readCatalog(),
-          this.agent.readGlobalSkillCatalog(),
-        ]);
-        if (catalog.revision !== request.expectedCatalogRevision) {
-          throw new Error('Agent extension catalog changed; refresh before retrying.');
-        }
+        const skills = await this.agent.readGlobalSkillCatalog();
         await this.options.personalSkillManager.remove(request.managementId, skills.records);
         break;
       }
@@ -1137,11 +1104,7 @@ export class DesktopAppHost {
   private async prepareExtensionCatalog() {
     const snapshot = await this.options.extensionManager.readCatalog();
     await this.activatePluginSnapshot(snapshot);
-    const projected = await this.options.extensionManager.readCatalog();
-    if (projected.revision !== snapshot.revision) {
-      throw new Error('Desktop extension catalog changed during Agent runtime composition.');
-    }
-    return projected;
+    return this.options.extensionManager.readCatalog();
   }
 
   private async projectExtensionManagement(
@@ -1177,7 +1140,6 @@ export class DesktopAppHost {
     );
     return {
       identity,
-      catalogRevision: extensionCatalog.revision,
       skills,
       skillDiscovery: projectSkillDiscovery(skillCatalog),
       extensions: extensionCatalog.records,
@@ -1189,7 +1151,7 @@ export class DesktopAppHost {
     snapshot: Awaited<ReturnType<AgentExtensionManager['readCatalog']>>,
   ): Promise<void> {
     const readiness = await this.agent.reconcilePluginRuntime(snapshot);
-    this.options.extensionManager.setRuntimeReadiness(snapshot.revision, readiness);
+    this.options.extensionManager.setRuntimeReadiness(snapshot, readiness);
   }
 
   private requireAgentIdleForPluginMutation(): void {
@@ -1231,10 +1193,7 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     return {
       requestId: request.requestId,
-      projection: await this.shell.activateHome(
-        window.windowId,
-        request.rendererSessionId,
-      ),
+      projection: await this.shell.activateHome(window.windowId, request.rendererSessionId),
     };
   }
 

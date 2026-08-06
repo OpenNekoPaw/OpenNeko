@@ -53,7 +53,7 @@ describe('createCoreTools', () => {
     expect(tools.map((tool) => tool.name)).toEqual(['Read', 'Write', 'ListDirectory', 'Grep']);
   });
 
-  it('keeps Bash opt-in for explicit Developer Mode or migration callers', () => {
+  it('keeps Bash opt-in for explicit Developer Mode callers', () => {
     const tools = createCoreTools({ includeShell: true });
 
     expect(tools.map((tool) => tool.name)).toContain('Bash');

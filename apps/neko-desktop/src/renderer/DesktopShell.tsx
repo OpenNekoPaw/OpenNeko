@@ -790,7 +790,11 @@ function DesktopWorkbenchRuntimePortals({
 }): JSX.Element {
   const { t } = useTranslation();
   const scene = instance.scene;
-  const assetCenter = useDesktopAssetCenterScene({ scene, viewMode: resourceBrowserView });
+  const assetCenter = useDesktopAssetCenterScene({
+    active,
+    scene,
+    viewMode: resourceBrowserView,
+  });
   const extensionManagement = useDesktopExtensionManagementScene(scene);
   const projectManagement = useDesktopProjectManagementScene(scene, projection.catalog.projects);
   const workspaceProject = resolveWorkspaceSceneProject(projection, instance);
@@ -839,12 +843,15 @@ function DesktopWorkbenchRuntimePortals({
       <DesktopSettingsMainSurface section={settingsSection} />
     ) : scene.context.kind === 'asset-center' ? (
       assetCenter.runtime ? (
-        <DesktopAssetManagementSurface interactive={interactive} runtime={assetCenter.runtime} />
+        <DesktopAssetManagementSurface
+          interactive={interactive && active}
+          runtime={assetCenter.runtime}
+        />
       ) : null
     ) : scene.context.kind === 'extensions' ? (
       extensionManagement ? (
         <DesktopExtensionManagementSurface
-          interactive={interactive}
+          interactive={interactive && active}
           runtime={extensionManagement}
         />
       ) : null
@@ -852,6 +859,7 @@ function DesktopWorkbenchRuntimePortals({
       <DesktopProjectCatalogSurface
         interactive={interactive}
         onOpen={actions.onSelectProject}
+        onRemove={actions.onRemoveRecentProject}
         onSelect={projectManagement.select}
         projects={projection.catalog.projects}
         selectedProjectId={projectManagement.project?.projectId}
@@ -1199,6 +1207,7 @@ function SceneSurfaceUnavailable({ owner }: { readonly owner: string }): JSX.Ele
 }
 
 function useDesktopAssetCenterScene(input: {
+  readonly active: boolean;
   readonly scene: DesktopWorkbenchSceneProjection;
   readonly viewMode: 'list' | 'grid';
 }): {
@@ -1210,13 +1219,13 @@ function useDesktopAssetCenterScene(input: {
       ? input.scene.context.assetCenterSessionId
       : undefined;
   const runtime = useMemo(() => {
-    if (!assetCenterSessionId || typeof window === 'undefined') return undefined;
+    if (!input.active || !assetCenterSessionId || typeof window === 'undefined') return undefined;
     return new DesktopAssetCenterRuntime(
       { assetCenterSessionId, windowId: input.scene.windowId },
       input.viewMode,
       window.openNekoDesktop,
     );
-  }, [assetCenterSessionId, input.scene.windowId, input.viewMode]);
+  }, [assetCenterSessionId, input.active, input.scene.windowId, input.viewMode]);
   const [sessionState, setSessionState] = useState<{
     readonly runtime: DesktopAssetCenterRuntime;
     readonly projection: AssetCenterSessionProjection;
@@ -2282,12 +2291,18 @@ function PrimaryRecentNavigation({
                 <span>{group.conversations.length}</span>
               </div>
             )}
+            {group.kind === 'workspace' ? (
+              <div className="primary-conversation-group__diagnostic" role="status">
+                <WarningIcon size={13} />
+                <span>{group.fieldNames.join(', ')}</span>
+              </div>
+            ) : null}
             <div className="primary-conversation-group__children">
               {conversations.map((conversation) => (
                 <ConversationNavigationRow
                   active={conversation.navigation.conversationId === activeConversationId}
                   conversation={conversation}
-                  disabled={disabled}
+                  disabled={disabled || group.kind === 'workspace'}
                   key={conversation.navigation.conversationId}
                   onDelete={onDeleteConversation}
                   onOpen={onOpenConversation}
@@ -2362,6 +2377,8 @@ function conversationGroupKey(group: DesktopConversationNavigationGroup): string
   switch (group.kind) {
     case 'project':
       return `project:${group.projectId}`;
+    case 'workspace':
+      return `workspace:${group.workspaceId}`;
     case 'assistant':
       return `assistant:${group.assistantSpaceId}`;
     case 'character':
@@ -2378,6 +2395,8 @@ function formatStandaloneConversationGroup(
   switch (group.kind) {
     case 'project':
       return group.displayName;
+    case 'workspace':
+      return t('home.unavailableWorkspace');
     case 'assistant':
       return t('home.personalAssistant');
     case 'character':

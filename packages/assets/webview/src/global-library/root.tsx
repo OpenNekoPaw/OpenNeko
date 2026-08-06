@@ -208,7 +208,7 @@ export function AssetManagementRoot({
   };
 
   const beginHoverPreview = (item: GlobalLibraryItem): void => {
-    if (!item.thumbnail) return;
+    if (item.availability !== 'available' || !item.thumbnail) return;
     cancelHoverPreview();
     const request = hoverRequest.current;
     hoverTimer.current = setTimeout(() => {
@@ -265,7 +265,11 @@ export function AssetManagementRoot({
     });
     setSelectedIds(update.selectedIds);
     setSelectionAnchorId(update.anchorId);
-    if (update.selectedIds.size === 1 && update.selectedIds.has(item.id)) {
+    if (
+      item.availability === 'available' &&
+      update.selectedIds.size === 1 &&
+      update.selectedIds.has(item.id)
+    ) {
       void runtime
         .select({ owner: item.owner, itemId: item.id })
         .catch((error: unknown) => setMutationError(describeError(error)));
@@ -276,9 +280,11 @@ export function AssetManagementRoot({
     if (!isActionableLibraryItem(item) || selectedIds.has(item.id)) return;
     setSelectedIds(new Set([item.id]));
     setSelectionAnchorId(item.id);
-    void runtime
-      .select({ owner: item.owner, itemId: item.id })
-      .catch((error: unknown) => setMutationError(describeError(error)));
+    if (item.availability === 'available') {
+      void runtime
+        .select({ owner: item.owner, itemId: item.id })
+        .catch((error: unknown) => setMutationError(describeError(error)));
+    }
   };
 
   const clearSelection = (): void => {
@@ -831,6 +837,11 @@ function GlobalLibraryEntry({
           {item.description ?? item.mediaType ?? item.kind}
           {item.modifiedAt ? ` · ${formatDate(item.modifiedAt, locale)}` : ''}
         </small>
+        {item.unavailable ? (
+          <small className="global-library-browser__entry-diagnostic" role="status">
+            {item.unavailable.fieldNames.join(', ')}: {item.unavailable.message}
+          </small>
+        ) : null}
       </span>
       {viewMode === 'list' && item.byteLength !== undefined ? (
         <small className="global-library-browser__size">{formatBytes(item.byteLength)}</small>
