@@ -10,14 +10,12 @@ import {
   validateWorkspaceLinkedMediaLibraryName,
 } from './workspace-linked-media-library';
 
-export const PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION = 1 as const;
-
 export type ProjectContentReferenceOwnerKind = 'canvas' | 'cut' | 'entity-representation';
 
 export interface ProjectContentReferenceOwnerSnapshot {
   readonly ownerKind: ProjectContentReferenceOwnerKind;
   readonly ownerId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly references: readonly ContentLocator[];
 }
 
@@ -29,7 +27,7 @@ export interface ProjectContentReferenceCoverage {
 export interface WorkspaceMediaLibraryReference {
   readonly ownerKind: ProjectContentReferenceOwnerKind;
   readonly ownerId: string;
-  readonly ownerRevision: string;
+  readonly ownerFingerprint: string;
   readonly locator: WorkspaceFileContentLocator;
   readonly descendantPath: string;
 }
@@ -41,7 +39,7 @@ export interface WorkspaceMediaLibraryRequirement {
 }
 
 export interface WorkspaceMediaLibraryRequirementSnapshot {
-  readonly revision: string;
+  readonly fingerprint: string;
   readonly coverage: 'complete' | 'incomplete';
   readonly missingOwnerKinds: readonly ProjectContentReferenceOwnerKind[];
   readonly requirements: readonly WorkspaceMediaLibraryRequirement[];
@@ -88,7 +86,7 @@ export interface WorkspaceMediaLibraryStatus {
   readonly state: WorkspaceMediaLibraryLinkState;
   readonly referenceCount: number;
   readonly missingCount: number;
-  readonly operationRevision: string;
+  readonly operationFingerprint: string;
   readonly diagnostic?: WorkspaceMediaLibrarySyncDiagnostic;
 }
 
@@ -96,8 +94,8 @@ export interface WorkspaceMediaLibraryRecoveryPlan {
   readonly planId: string;
   readonly workspaceId: string;
   readonly libraryName: string;
-  readonly requirementRevision: string;
-  readonly operationRevision: string;
+  readonly requirementFingerprint: string;
+  readonly operationFingerprint: string;
   readonly candidate:
     | {
         readonly kind: 'global-alias';
@@ -117,16 +115,15 @@ export type WorkspaceMediaLibraryPortabilityState =
 
 export interface WorkspaceMediaLibraryPortabilityProjection {
   readonly state: WorkspaceMediaLibraryPortabilityState;
-  readonly requirementRevision: string;
+  readonly requirementFingerprint: string;
   readonly libraries: readonly WorkspaceMediaLibraryStatus[];
 }
 
 export interface PortableMediaLibrarySnapshotPlan {
-  readonly version: typeof PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION;
   readonly snapshotId: string;
   readonly workspaceId: string;
-  readonly requirementRevision: string;
-  readonly operationRevision: string;
+  readonly requirementFingerprint: string;
+  readonly operationFingerprint: string;
   readonly entryCount: number;
   readonly totalByteLength: number;
   readonly libraries: readonly {
@@ -137,10 +134,9 @@ export interface PortableMediaLibrarySnapshotPlan {
 }
 
 export interface PortableMediaLibrarySnapshotProgress {
-  readonly version: typeof PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION;
   readonly snapshotId: string;
   readonly workspaceId: string;
-  readonly requirementRevision: string;
+  readonly requirementFingerprint: string;
   readonly status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled';
   readonly completedEntryCount: number;
   readonly totalEntryCount: number;
@@ -150,10 +146,9 @@ export interface PortableMediaLibrarySnapshotProgress {
 }
 
 export interface PortableMediaLibrarySnapshotTaskPayload {
-  readonly version: typeof PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION;
   readonly workspaceId: string;
   readonly snapshotId: string;
-  readonly requirementRevision: string;
+  readonly requirementFingerprint: string;
   readonly status: 'planned' | 'running' | 'completed' | 'failed' | 'cancelled';
   readonly completedEntryCount: number;
   readonly totalEntryCount: number;
@@ -161,10 +156,9 @@ export interface PortableMediaLibrarySnapshotTaskPayload {
 }
 
 export interface PortableMediaLibrarySnapshotCheckpointPayload {
-  readonly version: typeof PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION;
   readonly workspaceId: string;
   readonly snapshotId: string;
-  readonly requirementRevision: string;
+  readonly requirementFingerprint: string;
   readonly completedEntryKeys: readonly string[];
 }
 
@@ -177,11 +171,11 @@ export function aggregateWorkspaceMediaLibraryRequirements(input: {
   const coveredOwnerKinds = new Set(input.coverage.coveredOwnerKinds);
   const missingOwnerKinds = expectedOwnerKinds.filter((kind) => !coveredOwnerKinds.has(kind));
   const requirements = new Map<string, WorkspaceMediaLibraryReference[]>();
-  const revisionParts: string[] = [];
+  const fingerprintParts: string[] = [];
 
   for (const owner of owners) {
     requireOwnerSnapshot(owner);
-    revisionParts.push(`${owner.ownerKind}:${owner.ownerId}:${owner.revision}`);
+    fingerprintParts.push(`${owner.ownerKind}:${owner.ownerId}:${owner.sourceFingerprint}`);
     const seen = new Set<string>();
     for (const locator of owner.references) {
       const reference = workspaceMediaLibraryReference(owner, locator);
@@ -196,7 +190,7 @@ export function aggregateWorkspaceMediaLibraryRequirements(input: {
   }
 
   return {
-    revision: stableRequirementRevision(revisionParts),
+    fingerprint: stableRequirementFingerprint(fingerprintParts),
     coverage: missingOwnerKinds.length === 0 ? 'complete' : 'incomplete',
     missingOwnerKinds,
     requirements: [...requirements.entries()]
@@ -211,7 +205,7 @@ export function aggregateWorkspaceMediaLibraryRequirements(input: {
   };
 }
 
-function stableRequirementRevision(parts: readonly string[]): string {
+function stableRequirementFingerprint(parts: readonly string[]): string {
   if (parts.length === 0) return 'requirements:empty';
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;
@@ -229,18 +223,14 @@ export function parsePortableMediaLibrarySnapshotTaskPayload(
 ): PortableMediaLibrarySnapshotTaskPayload {
   const record = requireRecord(value, 'Portable snapshot task payload must be an object.');
   requireOnlyKeys(record, [
-    'version',
     'workspaceId',
     'snapshotId',
-    'requirementRevision',
+    'requirementFingerprint',
     'status',
     'completedEntryCount',
     'totalEntryCount',
     'diagnosticCode',
   ]);
-  if (record['version'] !== PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION) {
-    throw new Error('Portable snapshot task payload version is unsupported.');
-  }
   const status = record['status'];
   if (
     status !== 'planned' &&
@@ -267,11 +257,10 @@ export function parsePortableMediaLibrarySnapshotTaskPayload(
       ? undefined
       : requireDiagnosticCode(record['diagnosticCode']);
   return {
-    version: PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
     workspaceId: requireOpaqueIdentity(record['workspaceId'], 'Workspace identity is required.'),
     snapshotId: requireOpaqueIdentity(record['snapshotId'], 'Snapshot identity is required.'),
-    requirementRevision: requireOpaqueIdentity(
-      record['requirementRevision'],
+    requirementFingerprint: requireOpaqueIdentity(
+      record['requirementFingerprint'],
       'Requirement revision is required.',
     ),
     status,
@@ -286,18 +275,14 @@ export function parsePortableMediaLibrarySnapshotPlan(
 ): PortableMediaLibrarySnapshotPlan {
   const record = requireRecord(value, 'Portable snapshot plan must be an object.');
   requireOnlyKeys(record, [
-    'version',
     'snapshotId',
     'workspaceId',
-    'requirementRevision',
-    'operationRevision',
+    'requirementFingerprint',
+    'operationFingerprint',
     'entryCount',
     'totalByteLength',
     'libraries',
   ]);
-  if (record['version'] !== PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION) {
-    throw new Error('Portable snapshot plan version is unsupported.');
-  }
   if (!Array.isArray(record['libraries'])) {
     throw new Error('Portable snapshot plan libraries must be an array.');
   }
@@ -339,15 +324,14 @@ export function parsePortableMediaLibrarySnapshotPlan(
     throw new Error('Portable snapshot plan library byte lengths do not match.');
   }
   return {
-    version: PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
     snapshotId: requireOpaqueIdentity(record['snapshotId'], 'Snapshot identity is required.'),
     workspaceId: requireOpaqueIdentity(record['workspaceId'], 'Workspace identity is required.'),
-    requirementRevision: requireOpaqueIdentity(
-      record['requirementRevision'],
+    requirementFingerprint: requireOpaqueIdentity(
+      record['requirementFingerprint'],
       'Requirement revision is required.',
     ),
-    operationRevision: requireOpaqueIdentity(
-      record['operationRevision'],
+    operationFingerprint: requireOpaqueIdentity(
+      record['operationFingerprint'],
       'Operation revision is required.',
     ),
     entryCount,
@@ -361,10 +345,9 @@ export function parsePortableMediaLibrarySnapshotProgress(
 ): PortableMediaLibrarySnapshotProgress {
   const record = requireRecord(value, 'Portable snapshot progress must be an object.');
   requireOnlyKeys(record, [
-    'version',
     'snapshotId',
     'workspaceId',
-    'requirementRevision',
+    'requirementFingerprint',
     'status',
     'completedEntryCount',
     'totalEntryCount',
@@ -373,10 +356,9 @@ export function parsePortableMediaLibrarySnapshotProgress(
     'diagnosticCode',
   ]);
   const task = parsePortableMediaLibrarySnapshotTaskPayload({
-    version: record['version'],
     workspaceId: record['workspaceId'],
     snapshotId: record['snapshotId'],
-    requirementRevision: record['requirementRevision'],
+    requirementFingerprint: record['requirementFingerprint'],
     status: record['status'],
     completedEntryCount: record['completedEntryCount'],
     totalEntryCount: record['totalEntryCount'],
@@ -405,15 +387,11 @@ export function parsePortableMediaLibrarySnapshotCheckpointPayload(
 ): PortableMediaLibrarySnapshotCheckpointPayload {
   const record = requireRecord(value, 'Portable snapshot checkpoint must be an object.');
   requireOnlyKeys(record, [
-    'version',
     'workspaceId',
     'snapshotId',
-    'requirementRevision',
+    'requirementFingerprint',
     'completedEntryKeys',
   ]);
-  if (record['version'] !== PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION) {
-    throw new Error('Portable snapshot checkpoint version is unsupported.');
-  }
   if (!Array.isArray(record['completedEntryKeys'])) {
     throw new Error('Portable snapshot checkpoint entry keys must be an array.');
   }
@@ -428,11 +406,10 @@ export function parsePortableMediaLibrarySnapshotCheckpointPayload(
     throw new Error('Portable snapshot checkpoint entry keys must be unique.');
   }
   return {
-    version: PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
     workspaceId: requireOpaqueIdentity(record['workspaceId'], 'Workspace identity is required.'),
     snapshotId: requireOpaqueIdentity(record['snapshotId'], 'Snapshot identity is required.'),
-    requirementRevision: requireOpaqueIdentity(
-      record['requirementRevision'],
+    requirementFingerprint: requireOpaqueIdentity(
+      record['requirementFingerprint'],
       'Requirement revision is required.',
     ),
     completedEntryKeys,
@@ -472,7 +449,7 @@ function workspaceMediaLibraryReference(
     libraryName,
     ownerKind: owner.ownerKind,
     ownerId: owner.ownerId,
-    ownerRevision: owner.revision,
+    ownerFingerprint: owner.sourceFingerprint,
     locator: workspaceLocator,
     descendantPath: relative.slice(separator + 1),
   };
@@ -484,7 +461,10 @@ function requireOwnerSnapshot(snapshot: ProjectContentReferenceOwnerSnapshot): v
   if (!ownerId || ownerId !== snapshot.ownerId) {
     throw new Error('Project content owner identity must be workspace-relative.');
   }
-  requireOpaqueIdentity(snapshot.revision, 'Project content owner revision is required.');
+  requireOpaqueIdentity(
+    snapshot.sourceFingerprint,
+    'Project content owner source fingerprint is required.',
+  );
   if (!Array.isArray(snapshot.references)) {
     throw new Error('Project content owner references must be an array.');
   }

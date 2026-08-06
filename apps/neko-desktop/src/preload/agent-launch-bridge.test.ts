@@ -114,7 +114,6 @@ function createCatalog() {
       connectionId: 'launch-1',
       scope: { kind: 'assistant' as const, assistantSpaceId: 'assistant:1' },
     },
-    revision: 0,
     models: [],
     commands: [],
     skills: [],

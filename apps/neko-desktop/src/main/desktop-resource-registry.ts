@@ -17,13 +17,11 @@ export interface DesktopResourceOwner {
   readonly viewId: string;
   readonly sessionId: string;
   readonly rendererSessionId: string;
-  readonly revision: string;
 }
 
 export interface DesktopAuthorizedFileSource {
   readonly absolutePath: string;
   readonly mediaType: string;
-  readonly revision: string;
 }
 
 export interface DesktopResourceLease {
@@ -35,7 +33,6 @@ export interface DesktopResourceSetEntry {
   readonly virtualPath: string;
   readonly path: string;
   readonly contentType: string;
-  readonly revision?: string;
 }
 
 interface RegisteredFileSource {
@@ -143,7 +140,6 @@ export class DesktopResourceRegistry {
         await registerFileSource({
           absolutePath: entry.path,
           mediaType: entry.contentType,
-          revision: entry.revision ?? base.owner.revision,
         }),
       );
     }
@@ -176,7 +172,6 @@ export class DesktopResourceRegistry {
           {
             absolutePath,
             mediaType,
-            revision: owner.revision,
           },
           publisherId,
         );
@@ -510,7 +505,6 @@ export function registerDesktopResourceRequestAuthorization(
 async function registerFileSource(
   source: DesktopAuthorizedFileSource,
 ): Promise<RegisteredFileSource> {
-  requireIdentity(source.revision, 'revision');
   if (!isAbsolute(source.absolutePath)) {
     throw new Error('Desktop resource registration requires an absolute file path.');
   }

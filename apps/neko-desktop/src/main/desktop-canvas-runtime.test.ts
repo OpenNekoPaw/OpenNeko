@@ -45,22 +45,22 @@ describe('DesktopCanvasRuntime', () => {
         viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
         nodes: [
           {
-            id: 'legacy-media',
+            id: 'path-only-media',
             type: 'media',
             position: { x: 40, y: 60 },
             size: { width: 300, height: 180 },
             zIndex: 1,
-            data: { assetPath: 'media/legacy.mp4', mediaType: 'video' },
+            data: { assetPath: 'media/path-only.mp4', mediaType: 'video' },
           },
           {
-            id: 'legacy-file',
+            id: 'path-only-file',
             type: 'file',
             position: { x: 420, y: 60 },
             size: { width: 260, height: 180 },
             zIndex: 2,
             data: {
-              path: 'documents/legacy.md',
-              title: 'Legacy notes',
+              path: 'documents/path-only.md',
+              title: 'Path-only notes',
               mediaKind: 'document',
               mediaType: 'text/markdown',
             },
@@ -68,11 +68,11 @@ describe('DesktopCanvasRuntime', () => {
         ],
         connections: [
           {
-            id: 'legacy-reference',
-            sourceId: 'legacy-file',
-            targetId: 'legacy-media',
-            sourceEndpoint: { nodeId: 'legacy-file', scope: 'node' },
-            targetEndpoint: { nodeId: 'legacy-media', scope: 'node' },
+            id: 'path-only-reference',
+            sourceId: 'path-only-file',
+            targetId: 'path-only-media',
+            sourceEndpoint: { nodeId: 'path-only-file', scope: 'node' },
+            targetEndpoint: { nodeId: 'path-only-media', scope: 'node' },
             type: 'reference',
           },
         ],
@@ -103,15 +103,17 @@ describe('DesktopCanvasRuntime', () => {
 
     const snapshot = await runtime.getSnapshot('window-1', identity);
 
-    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual(['legacy-media', 'legacy-file']);
+    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual([
+      'path-only-media',
+      'path-only-file',
+    ]);
     expect(snapshot.canvas.connections.map((connection) => connection.id)).toEqual([
-      'legacy-reference',
+      'path-only-reference',
     ]);
     for (const node of snapshot.canvas.nodes) {
       expect(node.data).not.toHaveProperty('contentLocator');
       const actions = await runtime.resolveMaterialActions('window-1', {
         requestId: `resolve-${node.id}`,
-        expectedRevision: snapshot.revision,
         identity,
         selectedNodeIds: [node.id],
       });
@@ -124,7 +126,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'save-degraded-content',
         commandId: 'save-degraded-content',
-        expectedRevision: snapshot.revision,
         identity,
         intent: { type: 'save' },
       }),
@@ -155,7 +156,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-project-content',
         commandId: 'command-project-content',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -182,7 +182,6 @@ describe('DesktopCanvasRuntime', () => {
       }),
     ]);
     expect(result.snapshot.dirty).toBe(true);
-    expect(result.snapshot.revision).toBe(initial.revision + 1);
     expect(projectionEvents).toEqual([
       expect.objectContaining({ originCommandId: 'command-project-content' }),
     ]);
@@ -222,7 +221,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-preview-material',
         commandId: 'command-preview-material',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -241,7 +239,6 @@ describe('DesktopCanvasRuntime', () => {
     if (!node) throw new Error('Authored material node is missing.');
     const resolution = await runtime.resolveMaterialActions('window-1', {
       requestId: 'resolve-preview-action',
-      expectedRevision: authored.snapshot.revision,
       identity,
       selectedNodeIds: [node.id],
     });
@@ -259,14 +256,12 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-preview-action',
         commandId: 'command-preview-action',
-        expectedRevision: authored.snapshot.revision,
         identity,
         intent: {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
             actionId: CANVAS_PREVIEW_ACTION_ID,
-            expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
           },
@@ -328,7 +323,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-library-copy-material',
         commandId: 'command-library-copy-material',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -348,7 +342,6 @@ describe('DesktopCanvasRuntime', () => {
 
     const resolution = await runtime.resolveMaterialActions('window-1', {
       requestId: 'resolve-library-copy-action',
-      expectedRevision: authored.snapshot.revision,
       identity,
       selectedNodeIds: [node.id],
     });
@@ -367,14 +360,12 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-library-copy-action',
         commandId: 'command-library-copy-action',
-        expectedRevision: authored.snapshot.revision,
         identity,
         intent: {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
             actionId: CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
-            expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
           },
@@ -438,7 +429,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-cut-material',
         commandId: 'command-cut-material',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -465,7 +455,6 @@ describe('DesktopCanvasRuntime', () => {
 
     const resolution = await runtime.resolveMaterialActions('window-1', {
       requestId: 'resolve-cut-action',
-      expectedRevision: authored.snapshot.revision,
       identity,
       selectedNodeIds: [node.id],
     });
@@ -488,14 +477,12 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-open-in-cut',
         commandId: 'command-open-in-cut',
-        expectedRevision: authored.snapshot.revision,
         identity,
         intent: {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
             actionId: CANVAS_OPEN_IN_CUT_ACTION_ID,
-            expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
           },
@@ -552,7 +539,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-model-source',
         commandId: 'command-model-source',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-source',
@@ -626,7 +612,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-workspace-reference',
         commandId: 'command-workspace-reference',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-source',
@@ -705,7 +690,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-generation-draft',
         commandId: 'command-generation-draft',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-generation-draft',
@@ -791,7 +775,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-project-escape',
         commandId: 'command-project-escape',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -1038,7 +1021,6 @@ describe('DesktopCanvasRuntime', () => {
 
     const initial = await runtime.getSnapshot('window-1', identity);
     expect(initial.canvas.name).toBe('Fixture Canvas');
-    expect(initial.revision).toBe(0);
 
     const editedCanvas = {
       ...initial.canvas,
@@ -1049,7 +1031,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-edit',
         commandId: 'command-edit',
-        expectedRevision: initial.revision,
         identity,
         intent: { type: 'replace-document', canvas: editedCanvas },
       }),
@@ -1062,7 +1043,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-save',
         commandId: 'command-save',
-        expectedRevision: edit.snapshot.revision,
         identity,
         intent: { type: 'save' },
       }),
@@ -1102,7 +1082,6 @@ describe('DesktopCanvasRuntime', () => {
         {
           kind: 'generated-output' as const,
           outputId: 'output-frame-1',
-          revision: '1',
           digest: 'sha256:generated-frame-1',
           path: 'neko/generated/frame-1.png',
         },
@@ -1126,7 +1105,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-generation-restart',
         commandId: 'command-generation-restart',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-generation-draft',
@@ -1150,7 +1128,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'save-generation-restart',
         commandId: 'save-generation-restart',
-        expectedRevision: projected.snapshot.revision,
         identity,
         intent: { type: 'save' },
       }),
@@ -1227,7 +1204,6 @@ describe('DesktopCanvasRuntime', () => {
 
     const resolution = await restartedRuntime.resolveMaterialActions('window-1', {
       requestId: 'resolve-restarted-generation-actions',
-      expectedRevision: restarted.revision,
       identity,
       selectedNodeIds: [generatedNode.id],
     });
@@ -1300,7 +1276,6 @@ describe('DesktopCanvasRuntime', () => {
                 {
                   kind: 'generated-output' as const,
                   outputId: 'concept-frame',
-                  revision: '2',
                   digest: 'sha256:phase-1-generated',
                   path: 'neko/generated/concept-frame.png',
                 },
@@ -1309,7 +1284,6 @@ describe('DesktopCanvasRuntime', () => {
           : {
               ref: { kind: 'generation' as const, jobId: 'generation-phase-1-failure' },
               phase: 'failed' as const,
-              revision: 1,
               title: 'Generate video',
               inputNodeIds: [...input.inputNodeIds],
               mediaKind: 'video' as const,
@@ -1644,7 +1618,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'second-presentation',
         commandId: 'second-presentation',
-        expectedRevision: secondSnapshot.revision,
         identity: second,
         intent: {
           type: 'update-presentation',
@@ -1670,7 +1643,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'multi-edit',
         commandId: 'multi-edit',
-        expectedRevision: firstSnapshot.revision,
         identity: first,
         intent: {
           type: 'replace-document',
@@ -1779,7 +1751,6 @@ async function executeAcceptedIntent(
     createCanvasHostIntentRequest({
       requestId: `request-${commandId}`,
       commandId,
-      expectedRevision: snapshot.revision,
       identity,
       intent,
     }),

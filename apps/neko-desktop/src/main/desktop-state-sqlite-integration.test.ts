@@ -10,18 +10,25 @@ import { DesktopApplicationSettingsService } from '@neko/host/application-settin
 import {
   createDefaultDesktopApplicationSettingsState,
   parseDesktopApplicationSettingsStoredState,
+  readDesktopApplicationSettingsStateDiagnostics,
+  serializeDesktopApplicationSettingsStoredState,
 } from '@neko/host/application-settings-state';
 import {
   createEmptyDesktopShellState,
   parseDesktopShellStoredState,
+  readDesktopShellStateDiagnostics,
   serializeDesktopShellStoredState,
 } from '@neko/host/desktop-shell-state';
 import {
   DesktopShellService,
   type DesktopWorkspaceResolutionPort,
 } from '@neko/host/desktop-shell-service';
-import { createDefaultDesktopApplicationSidebar } from '@neko/host/desktop-scene-contract';
+import {
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+} from '@neko/host/desktop-scene-contract';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
+import { createDesktopWorkbenchInstanceFromScene } from '@neko/host/desktop-workbench-instance-contract';
 
 const roots: string[] = [];
 
@@ -61,7 +68,7 @@ describe('Desktop SQLite application state composition', () => {
     }
   });
 
-  it('isolates an old Window, opens a new Workbench, and preserves the rejected record', async () => {
+  it('isolates an invalid Window, opens a new Workbench, and preserves the rejected record', async () => {
     const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-invalid-window-'));
     roots.push(root);
     const store = createNodeSqliteLocalMetadataStore({ homedir: root });
@@ -74,22 +81,19 @@ describe('Desktop SQLite application state composition', () => {
     await repository.prepare();
     let identity = 0;
     const sceneId = 'scene:window-old:project-management';
-    const removedSchemaField = ['schema', 'Ver', 'sion'].join('');
-    const retiredState = {
+    const invalidState = {
       primaryWindowId: 'window-old',
       projects: [],
       windows: [
         {
           windowId: 'window-old',
-          revision: 4,
           activeTarget: { kind: 'home' },
           tabs: [],
           workbench: createDefaultDesktopWorkbenchLayout('window-old'),
           scene: {
-            [removedSchemaField]: 1,
+            unexpectedField: 1,
             sceneId,
             windowId: 'window-old',
-            revision: 4,
             context: {
               kind: 'project-management',
               projectManagementSessionId: 'project-management:1',
@@ -107,7 +111,7 @@ describe('Desktop SQLite application state composition', () => {
       ],
     };
     await store.transaction(
-      { mode: 'state-write', ownership: 'state', operation: 'seed-version-5-shell-scene' },
+      { mode: 'state-write', ownership: 'state', operation: 'seed-invalid-shell-scene' },
       ({ sql }) =>
         sql.run(
           `INSERT INTO desktop_application_state(
@@ -115,7 +119,7 @@ describe('Desktop SQLite application state composition', () => {
            ) VALUES (?, ?, ?)`,
           [
             DESKTOP_STATE_AUTHORITY_KEYS.shell,
-            JSON.stringify(retiredState),
+            JSON.stringify(invalidState),
             '2026-08-04T00:00:00.000Z',
           ],
         ),
@@ -160,7 +164,7 @@ describe('Desktop SQLite application state composition', () => {
       if (!isRecord(document) || !Array.isArray(document['windows'])) {
         throw new Error('Desktop Shell authority did not persist a Window collection.');
       }
-      expect(document['windows']).toContainEqual(retiredState.windows[0]);
+      expect(document['windows']).toContainEqual(invalidState.windows[0]);
       expect(document['windows']).toContainEqual(
         expect.objectContaining({ windowId, workbenches: expect.any(Object) }),
       );
@@ -170,8 +174,8 @@ describe('Desktop SQLite application state composition', () => {
     }
   });
 
-  it('isolates an invalid Shell root without rewriting it and opens a new Workbench', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-invalid-root-'));
+  it('restores Shell collections with unknown root metadata and preserves it on commit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-additive-root-'));
     roots.push(root);
     const initial = await openState(root);
     await initial.store.dispose();
@@ -184,29 +188,85 @@ describe('Desktop SQLite application state composition', () => {
       codec: shellCodec,
       now: () => '2026-08-05T00:00:00.000Z',
     });
-    const invalidDocument = JSON.stringify({
-      ...createEmptyDesktopShellState(),
-      [['schema', 'Ver', 'sion'].join('')]: 1,
+    const windowId = 'window:existing';
+    const projectId = 'project:existing';
+    const workspaceId = 'workspace:existing';
+    const scene = createDefaultDesktopAgentScene(windowId, 'draft:existing');
+    const workbench = createDesktopWorkbenchInstanceFromScene({
+      workbenchInstanceId: 'workbench:existing',
+      agentSurfaceId: 'agent-surface:existing',
+      layout: createDefaultDesktopWorkbenchLayout(windowId),
+      scene,
     });
+    const catalogMetadataField = ['catalog', 'Revi', 'sion'].join('');
+    const storageMetadataField = ['storage', 'Revi', 'sion'].join('');
+    const storedDocument = {
+      [catalogMetadataField]: 7,
+      [storageMetadataField]: { source: 'retained-fixture', ordinal: 3 },
+      primaryWindowId: windowId,
+      projects: [
+        {
+          projectId,
+          workspaceId,
+          profile: 'content',
+          displayName: 'Existing Project',
+          workspacePath: join(root, 'workspace'),
+          workspaceLocator: { kind: 'relative', value: 'workspace' },
+          createdAt: '2026-08-04T00:00:00.000Z',
+          updatedAt: '2026-08-04T00:00:00.000Z',
+        },
+      ],
+      windows: [
+        {
+          windowId,
+          activeTarget: { kind: 'home' },
+          tabs: [],
+          workbenches: {
+            windowId,
+            activeWorkbenchInstanceId: workbench.workbenchInstanceId,
+            instances: [workbench],
+          },
+          applicationSidebar: createDefaultDesktopApplicationSidebar(windowId),
+        },
+      ],
+    };
     try {
       await repository.prepare();
       const seeded = await store.transaction(
-        { mode: 'state-write', ownership: 'state', operation: 'seed-invalid-shell-root' },
+        { mode: 'state-write', ownership: 'state', operation: 'seed-additive-shell-root' },
         ({ sql }) =>
           sql.run(
             `INSERT INTO desktop_application_state(
                authority_key, document_json, updated_at
              ) VALUES (?, ?, ?)`,
-            [DESKTOP_STATE_AUTHORITY_KEYS.shell, invalidDocument, '2026-08-04T00:00:00.000Z'],
+            [
+              DESKTOP_STATE_AUTHORITY_KEYS.shell,
+              JSON.stringify(storedDocument),
+              '2026-08-04T00:00:00.000Z',
+            ],
           ),
       );
       expect(seeded.changes).toBe(1);
 
-      const rejection = await repository.inspectInvalidState();
-      expect(rejection).toMatchObject({
-        authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
-        diagnostic: expect.stringContaining(['schema', 'Ver', 'sion'].join('')),
+      await expect(repository.inspectInvalidState()).resolves.toBeUndefined();
+      const restored = await repository.read();
+      expect(restored.primaryWindowId).toBe(windowId);
+      expect(restored.projects.map((project) => project.projectId)).toEqual([projectId]);
+      expect(restored.windows.map((window) => window.windowId)).toEqual([windowId]);
+      expect(readDesktopShellStateDiagnostics(restored)).toEqual([
+        expect.objectContaining({
+          code: 'desktop-stored-state-metadata-retained',
+          fieldNames: [catalogMetadataField, storageMetadataField],
+        }),
+      ]);
+      await repository.commit({
+        ...restored,
+        projects: restored.projects.map((project) => ({
+          ...project,
+          displayName: 'Existing Project Updated',
+        })),
       });
+
       const settings = new SqliteJsonStateRepository({
         store,
         authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
@@ -226,47 +286,116 @@ describe('Desktop SQLite application state composition', () => {
           dispose: async () => undefined,
         },
         startupTarget: 'home',
-        startupStateDiagnostics: rejection
-          ? [
-              {
-                code: 'desktop-stored-state-invalid',
-                severity: 'error',
-                authorityKey: 'desktop.shell',
-                rejectionId: rejection.rejectionId,
-                message: rejection.diagnostic,
-              },
-            ]
-          : [],
         createIdentity: () => `identity-${(identity += 1)}`,
         now: () => '2026-08-05T00:00:00.000Z',
       });
-      const windowId = await service.claimWindowId();
-      service.setRendererSessionId(windowId, 'renderer-session:test');
-      const projection = await service.getProjection(windowId);
+      const claimedWindowId = await service.claimWindowId();
+      service.setRendererSessionId(claimedWindowId, 'renderer-session:test');
+      const projection = await service.getProjection(claimedWindowId);
+      expect(claimedWindowId).toBe(windowId);
+      expect(projection.catalog.projects).toEqual([
+        expect.objectContaining({ projectId, displayName: 'Existing Project Updated' }),
+      ]);
       expect(projection.window.workbenches.instances).toHaveLength(1);
       expect(projection.stateDiagnostics).toEqual([
         expect.objectContaining({
-          code: 'desktop-stored-state-invalid',
-          rejectionId: rejection?.rejectionId,
+          code: 'desktop-stored-state-metadata-retained',
+          fieldNames: [catalogMetadataField, storageMetadataField],
         }),
       ]);
-      const retained = await store.transaction(
-        { mode: 'read', ownership: 'state', operation: 'verify-invalid-shell-root-retained' },
+      const rows = await store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'verify-shell-root-metadata-retained' },
         ({ sql }) =>
           sql.all(
-            `SELECT authority_key, document_json
+            `SELECT document_json
                FROM desktop_application_state
               WHERE authority_key = ?`,
             [DESKTOP_STATE_AUTHORITY_KEYS.shell],
           ),
       );
-      expect(retained).toEqual([
-        {
-          authority_key: DESKTOP_STATE_AUTHORITY_KEYS.shell,
-          document_json: invalidDocument,
-        },
-      ]);
+      const persisted: unknown = JSON.parse(String(rows[0]?.['document_json']));
+      expect(persisted).toMatchObject({
+        [catalogMetadataField]: storedDocument[catalogMetadataField],
+        [storageMetadataField]: storedDocument[storageMetadataField],
+        primaryWindowId: windowId,
+        projects: [expect.objectContaining({ projectId, displayName: 'Existing Project Updated' })],
+        windows: [expect.objectContaining({ windowId })],
+      });
       await service.dispose();
+    } finally {
+      await store.dispose();
+    }
+  });
+
+  it('restores Application Settings with unknown root metadata and preserves it on update', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-settings-additive-root-'));
+    roots.push(root);
+    const store = createNodeSqliteLocalMetadataStore({ homedir: root });
+    await store.open({ databasePath: join(root, '.neko', 'neko.db'), busyTimeoutMs: 1_000 });
+    const settings = new SqliteJsonStateRepository({
+      store,
+      authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+      codec: settingsCodec,
+    });
+    const metadataField = ['storage', 'Revi', 'sion'].join('');
+    const metadataValue = { source: 'retained-settings-fixture', ordinal: 5 };
+    try {
+      await settings.prepare();
+      await store.transaction(
+        { mode: 'state-write', ownership: 'state', operation: 'seed-additive-settings-root' },
+        ({ sql }) =>
+          sql.run(
+            `INSERT INTO desktop_application_state(
+               authority_key, document_json, updated_at
+             ) VALUES (?, ?, ?)`,
+            [
+              DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
+              JSON.stringify({
+                [metadataField]: metadataValue,
+                preferences: {
+                  ...createDefaultDesktopApplicationSettingsState().preferences,
+                  theme: 'dark',
+                },
+              }),
+              '2026-08-04T00:00:00.000Z',
+            ],
+          ),
+      );
+
+      await expect(settings.inspectInvalidState()).resolves.toBeUndefined();
+      const restored = await settings.read();
+      expect(restored.preferences.theme).toBe('dark');
+      expect(readDesktopApplicationSettingsStateDiagnostics(restored)).toEqual([
+        expect.objectContaining({
+          code: 'desktop-stored-state-metadata-retained',
+          authorityKey: 'desktop.application-settings',
+          fieldNames: [metadataField],
+        }),
+      ]);
+
+      const service = new DesktopApplicationSettingsService(settings);
+      await expect(service.initialize()).resolves.toMatchObject({ preferences: { theme: 'dark' } });
+      await service.update({
+        ...restored.preferences,
+        locale: 'zh-cn',
+      });
+      await service.dispose();
+
+      const rows = await store.transaction(
+        { mode: 'read', ownership: 'state', operation: 'verify-settings-root-metadata-retained' },
+        ({ sql }) =>
+          sql.all(
+            `SELECT document_json
+               FROM desktop_application_state
+              WHERE authority_key = ?`,
+            [DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings],
+          ),
+      );
+      const persisted: unknown = JSON.parse(String(rows[0]?.['document_json']));
+      expect(persisted).toMatchObject({
+        [metadataField]: metadataValue,
+        preferences: expect.objectContaining({ theme: 'dark', locale: 'zh-cn' }),
+      });
     } finally {
       await store.dispose();
     }
@@ -295,8 +424,10 @@ describe('Desktop SQLite application state composition', () => {
       now: () => '2026-08-05T00:00:00.000Z',
     });
     const invalidDocument = JSON.stringify({
-      ...createDefaultDesktopApplicationSettingsState(),
-      [['schema', 'Ver', 'sion'].join('')]: 1,
+      preferences: {
+        ...createDefaultDesktopApplicationSettingsState().preferences,
+        theme: 'unknown-theme',
+      },
     });
     try {
       await settings.prepare();
@@ -319,7 +450,7 @@ describe('Desktop SQLite application state composition', () => {
       const rejection = await settings.inspectInvalidState();
       expect(rejection).toMatchObject({
         authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.applicationSettings,
-        diagnostic: expect.stringContaining(['schema', 'Ver', 'sion'].join('')),
+        diagnostic: expect.stringContaining('theme'),
       });
       expect(await settings.read()).toEqual(createDefaultDesktopApplicationSettingsState());
       expect(await shell.read()).toEqual(expectedShell);
@@ -352,7 +483,7 @@ describe('Desktop SQLite application state composition', () => {
       [join(root, '.neko', 'config.json'), '{"agent":"config"}\n'],
       [join(root, '.neko', 'transcripts', 'conversation.jsonl'), '{"role":"user"}\n'],
       [join(root, '.neko', 'logs', 'desktop.log'), 'diagnostic\n'],
-      [join(workspace, '.neko', 'workspace.json'), '{"workspace":"retired"}\n'],
+      [join(workspace, '.neko', 'workspace.json'), '{"workspace":"adjacent"}\n'],
       [join(workspace, 'neko', 'project.json'), '{"workspaceId":"portable"}\n'],
       [join(workspace, 'neko', 'memory.md'), '# Accepted memory\n'],
     ]);
@@ -388,6 +519,7 @@ const shellCodec = {
 const settingsCodec = {
   createEmpty: createDefaultDesktopApplicationSettingsState,
   parse: parseDesktopApplicationSettingsStoredState,
+  serialize: serializeDesktopApplicationSettingsStoredState,
 };
 
 async function openState(root: string) {

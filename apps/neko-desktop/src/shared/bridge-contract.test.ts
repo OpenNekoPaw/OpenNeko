@@ -35,7 +35,7 @@ describe('Desktop bridge contract', () => {
     expect(() =>
       parseDesktopBootstrapProjection({
         ...validProjection(),
-        application: { ...validProjection().application, version: '0.0.1' },
+        application: { ...validProjection().application, unexpectedField: 'invalid' },
       }),
     ).toThrowError(
       expect.objectContaining({
@@ -45,7 +45,7 @@ describe('Desktop bridge contract', () => {
     expect(() =>
       parseDesktopBootstrapProjection({
         ...validProjection(),
-        host: { ...validProjection().host, version: '43.2.0' },
+        host: { ...validProjection().host, unexpectedField: 'invalid' },
       }),
     ).toThrowError(expect.objectContaining({ code: 'invalid-desktop-bridge-payload' }));
   });

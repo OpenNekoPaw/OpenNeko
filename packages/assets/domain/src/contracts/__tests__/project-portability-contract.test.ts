@@ -24,7 +24,6 @@ describe('Desktop project portability contract', () => {
   ])('rejects target-bearing request fields: %o', (extra) => {
     expect(() =>
       parseDesktopProjectPortabilityRequest({
-        version: 1,
         requestId: 'request-a',
         identity,
         ...extra,
@@ -35,19 +34,18 @@ describe('Desktop project portability contract', () => {
   it('parses target-free readiness, plan, and progress projections', () => {
     expect(
       parseDesktopProjectPortabilityInspectResult({
-        version: 1,
         requestId: 'request-a',
         identity,
         portability: {
           state: 'sync-requires-relink',
-          requirementRevision: 'requirements:abc',
+          requirementFingerprint: 'requirements:abc',
           libraries: [
             {
               libraryName: 'Footage',
               state: 'required-unlinked',
               referenceCount: 1,
               missingCount: 1,
-              operationRevision: 'sha256:abc',
+              operationFingerprint: 'sha256:abc',
               diagnostic: {
                 code: 'content-incomplete',
                 severity: 'error',
@@ -67,16 +65,14 @@ describe('Desktop project portability contract', () => {
 
     expect(
       parseDesktopProjectPortabilityPlanResult({
-        version: 1,
         requestId: 'request-a',
         identity,
         status: 'planned',
         plan: {
-          version: 1,
           snapshotId: 'snapshot-a',
           workspaceId: 'workspace-a',
-          requirementRevision: 'requirements:abc',
-          operationRevision: 'sha256:abc',
+          requirementFingerprint: 'requirements:abc',
+          operationFingerprint: 'sha256:abc',
           entryCount: 1,
           totalByteLength: 12,
           libraries: [
@@ -92,14 +88,12 @@ describe('Desktop project portability contract', () => {
 
     expect(
       parseDesktopProjectPortabilityProgressEvent({
-        version: 1,
         sequence: 1,
         identity,
         progress: {
-          version: 1,
           snapshotId: 'snapshot-a',
           workspaceId: 'workspace-a',
-          requirementRevision: 'requirements:abc',
+          requirementFingerprint: 'requirements:abc',
           status: 'running',
           completedEntryCount: 1,
           totalEntryCount: 2,
@@ -113,20 +107,18 @@ describe('Desktop project portability contract', () => {
   it('rejects path-like identities and extra execute fields', () => {
     expect(() =>
       parseDesktopProjectPortabilityExecuteRequest({
-        version: 1,
         requestId: 'request-a',
         identity: { ...identity, workspaceId: '/absolute/workspace' },
         snapshotId: 'snapshot-a',
-        expectedOperationRevision: 'sha256:abc',
+        expectedOperationFingerprint: 'sha256:abc',
       }),
     ).toThrow('Workspace identity is invalid');
     expect(() =>
       parseDesktopProjectPortabilityExecuteRequest({
-        version: 1,
         requestId: 'request-a',
         identity,
         snapshotId: 'snapshot-a',
-        expectedOperationRevision: 'sha256:abc',
+        expectedOperationFingerprint: 'sha256:abc',
         destinationPath: '/Volumes/Export/Portable',
       }),
     ).toThrow('unsupported fields');

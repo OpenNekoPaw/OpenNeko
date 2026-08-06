@@ -66,6 +66,11 @@ export const zhCN = {
     '旧工作区状态已失效并安全隔离，已为你打开新的创作界面。项目、会话和其他数据未被重置。',
   'shell.storedSettingsInvalid':
     '旧应用设置已失效并安全隔离，已恢复默认设置。工作区、项目、会话和其他数据未被重置。',
+  'shell.projectCatalogInvalid': '项目目录数据不可用，其他工作区界面仍可使用。',
+  'shell.workspaceMetadataRetained':
+    '未识别的工作区元数据已原样保留（{fields}），项目和窗口仍可使用。',
+  'shell.settingsMetadataRetained':
+    '未识别的应用设置元数据已原样保留（{fields}），当前设置仍可使用。',
   'shell.conversationRecordInvalid':
     '旧会话“{conversationId}”的数据已失效并隔离，已打开新的草稿。其他会话、项目和文件均未修改。',
   'shell.conversationRecordInvalidUnknown':

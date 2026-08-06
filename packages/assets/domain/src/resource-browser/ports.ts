@@ -145,7 +145,6 @@ export interface ResourceBrowserInteractionPort {
     readonly target: {
       readonly documentId: string;
       readonly sessionId: string;
-      readonly expectedRevision: number;
     };
   }): Promise<void>;
   addToCut(input: {
@@ -156,7 +155,6 @@ export interface ResourceBrowserInteractionPort {
       readonly viewInstanceId: string;
       readonly documentId: string;
       readonly sessionId: string;
-      readonly expectedRevision: number;
     };
   }): Promise<void>;
 }

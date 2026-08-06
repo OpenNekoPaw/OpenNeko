@@ -20,9 +20,7 @@ import {
   parseDesktopWindowWorkbenchCatalog,
   resolveActiveDesktopWorkbenchInstance,
 } from '@neko/host/desktop-workbench-instance-contract';
-import {
-  DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
-} from '@neko/host/application-settings';
+import { DEFAULT_DESKTOP_APPLICATION_PREFERENCES } from '@neko/host/application-settings';
 import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
@@ -284,6 +282,63 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('shows retained Shell metadata while keeping the restored Workbench usable', async () => {
+    const projection: DesktopShellProjection = {
+      ...createProjection(),
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-state-metadata-retained',
+          severity: 'warning',
+          authorityKey: 'desktop.shell',
+          fieldNames: ['opaqueSourceMarker'],
+          message: 'Desktop Shell root metadata was preserved without interpretation.',
+        },
+      ],
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'Unrecognized workspace metadata was preserved (opaqueSourceMarker).',
+    );
+    expect(alert?.getAttribute('title')).toBe(
+      'Desktop Shell root metadata was preserved without interpretation.',
+    );
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+    expect(container.querySelector('.agent-workspace')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('shows retained Application Settings metadata while keeping the Workbench usable', async () => {
+    const projection: DesktopShellProjection = {
+      ...createProjection(),
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-state-metadata-retained',
+          severity: 'warning',
+          authorityKey: 'desktop.application-settings',
+          fieldNames: ['opaqueSourceMarker'],
+          message: 'Desktop application settings metadata was preserved without interpretation.',
+        },
+      ],
+    };
+    installBridge({ projection });
+
+    const { container, root } = await renderApplication();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'Unrecognized application settings metadata was preserved (opaqueSourceMarker).',
+    );
+    expect(alert?.getAttribute('title')).toBe(
+      'Desktop application settings metadata was preserved without interpretation.',
+    );
+    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it('shows a rejected Application Settings diagnostic while keeping the Workbench usable', async () => {
     const projection: DesktopShellProjection = {
       ...createProjection(),
@@ -305,9 +360,7 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(alert?.textContent).toContain(
       'The saved application settings are no longer compatible and were safely isolated.',
     );
-    expect(alert?.getAttribute('title')).toBe(
-      'Stored Desktop application settings were rejected.',
-    );
+    expect(alert?.getAttribute('title')).toBe('Stored Desktop application settings were rejected.');
     expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
@@ -444,7 +497,6 @@ describe('DesktopApplication scene lifecycle', () => {
     };
     const assetCenterExecute = vi.fn(
       async (request: { readonly requestId: string; readonly route: string }) => ({
-        schemaVersion: 1 as const,
         requestId: request.requestId,
         route: request.route,
         projection: sessionProjection,
@@ -549,17 +601,11 @@ describe('DesktopApplication scene lifecycle', () => {
       agentHome,
       conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
     };
-    const transition = vi.fn(
-      async (
-        _windowId: string,
-        _intent: unknown,
-        _sceneId: string,
-      ) => ({
-        status: 'transitioned' as const,
-        requestId: 'recent-transition',
-        scene: activeScene(projection),
-      }),
-    );
+    const transition = vi.fn(async (_windowId: string, _intent: unknown, _sceneId: string) => ({
+      status: 'transitioned' as const,
+      requestId: 'recent-transition',
+      scene: activeScene(projection),
+    }));
     const deleteConversation = vi.fn(async () => projection);
     const removeRecentProject = vi.fn(async () => projection);
     installBridge({
@@ -608,14 +654,10 @@ describe('DesktopApplication scene lifecycle', () => {
     }
     await act(async () => removeButton.click());
     await waitFor(() => removeRecentProject.mock.calls.length === 1);
-    expect(removeRecentProject).toHaveBeenCalledWith(
-      project.projectId,
-    );
+    expect(removeRecentProject).toHaveBeenCalledWith(project.projectId);
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith(
-      conversation.navigation,
-    );
+    expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
     await act(async () => root.unmount());
   });
 
@@ -686,7 +728,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('keeps the Workspace Agent layout mounted when the authoritative Main group is empty', async () => {
+  it('keeps the Workspace Agent layout mounted when Main or Project catalog is unavailable', async () => {
     const base = createProjection();
     const project = {
       projectId: 'content:workspace-empty',
@@ -760,6 +802,35 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(container.querySelector('.agent-workspace')).not.toBeNull();
     expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
     await act(async () => root.unmount());
+
+    const isolatedProjection: DesktopShellProjection = {
+      ...projection,
+      catalog: { projects: [] },
+      stateDiagnostics: [
+        {
+          code: 'desktop-shell-component-invalid',
+          severity: 'error',
+          component: 'project-catalog',
+          message: 'Desktop Project catalog projection was rejected without rewriting it.',
+        },
+      ],
+    };
+    installBridge({ projection: isolatedProjection });
+
+    const isolated = await renderApplication();
+    const alert = isolated.container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'Project catalog data is unavailable. Other workspace surfaces remain available.',
+    );
+    expect(alert?.getAttribute('title')).toContain('without rewriting it');
+    expect(
+      isolated.container.querySelector('[data-scene-surface-unavailable="workspace-authority"]'),
+    ).not.toBeNull();
+    expect(isolated.container.querySelector('.agent-workspace')).not.toBeNull();
+    expect(
+      isolated.container.querySelector('[data-neko-controlled-workbench="true"]'),
+    ).not.toBeNull();
+    await act(async () => isolated.root.unmount());
   });
 });
 
@@ -963,7 +1034,7 @@ function expectManagementSplit(
   const shell = container.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
   expect(shell?.dataset.mainSplit).toBe('columns');
   expect(shell?.dataset.mainComposition).toBe('independent-shells');
-  expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('34%');
+  expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('50%');
   expect(
     container.querySelector(
       `[data-workbench-main-panel="${managementPanelId}"][data-panel-size="compact"]`,

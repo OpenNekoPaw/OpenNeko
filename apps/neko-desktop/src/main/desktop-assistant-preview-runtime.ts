@@ -1,10 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import * as path from 'node:path';
-import type {
-  AgentScratchArtifactRef,
-  AssistantResourceIdentity,
-} from '@neko/agent-contracts';
+import type { AgentScratchArtifactRef, AssistantResourceIdentity } from '@neko/agent-contracts';
 import type { AssistantResourcePreviewPort } from '@neko/agent-runtime/application';
 import {
   parseAuthorizedPreviewSessionProjection,
@@ -40,10 +37,7 @@ export function createDesktopAssistantPreviewRuntime(options: {
   }): AssistantPreviewEntry => {
     requireActive();
     const entry = previews.get(input.previewSessionId);
-    if (
-      !entry ||
-      !sameAssistantResourceIdentity(entry.identity, input.identity)
-    ) {
+    if (!entry || !sameAssistantResourceIdentity(entry.identity, input.identity)) {
       throw new Error(
         `Assistant Preview session '${input.previewSessionId}' does not match its owner.`,
       );
@@ -79,32 +73,33 @@ export function createDesktopAssistantPreviewRuntime(options: {
           },
         });
       } else {
-        const absolutePath = await resolveScratchFile(options.resolveScratchRoot(artifact), artifact.label);
+        const absolutePath = await resolveScratchFile(
+          options.resolveScratchRoot(artifact),
+          artifact.label,
+        );
         const file = await stat(absolutePath);
         if (!file.isFile()) throw new Error('Assistant Scratch Preview source is not a file.');
         const bytes = await readFile(absolutePath);
         const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-        const revision = `${file.mtimeMs}:${file.size}`;
+        const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
         const lease = await options.resources.registerFile(
           {
             windowId: identity.windowId,
             viewId: identity.assistantSpaceId,
             sessionId: previewSessionId,
             rendererSessionId: previewSessionId,
-            revision,
           },
-          { absolutePath, mediaType, revision },
+          { absolutePath, mediaType },
         );
         projection = parseAuthorizedPreviewSessionProjection({
           identity: { previewSessionId, windowId: identity.windowId, owner },
           status: 'ready',
           descriptor: {
             descriptorId: `descriptor:${previewSessionId}`,
-            sourceFingerprint: revision,
+            sourceFingerprint,
             contentLocator: {
               kind: 'generated-output',
               outputId: artifact.scratchArtifactId,
-              revision,
               digest,
               path: artifact.label,
             },
@@ -142,7 +137,8 @@ export function createDesktopAssistantPreviewRuntime(options: {
     },
     dispose() {
       if (disposed) return;
-      for (const previewSessionId of previews.keys()) options.resources.releaseSession(previewSessionId);
+      for (const previewSessionId of previews.keys())
+        options.resources.releaseSession(previewSessionId);
       previews.clear();
       disposed = true;
     },

@@ -86,7 +86,6 @@ describe('Electron Agent launch Host runtime adapter', () => {
     const bridge = createBridge();
     bridge.agentLaunch.authorizeResource.mockResolvedValueOnce({
       ...createCatalog(),
-      revision: 1,
       resources: [
         {
           kind: 'resource',
@@ -135,7 +134,6 @@ function createCatalog() {
       connectionId: 'launch-1',
       scope: { kind: 'assistant' as const, assistantSpaceId: 'assistant:1' },
     },
-    revision: 0,
     models: [
       {
         kind: 'model' as const,

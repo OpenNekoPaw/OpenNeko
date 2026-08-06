@@ -14,7 +14,6 @@ export type DesktopAgentEventCursorAdvanceResult =
       readonly kind: 'accepted';
       readonly connection: DesktopAgentConnectionIdentity;
     }
-  | { readonly kind: 'retired' }
   | { readonly kind: 'foreign' }
   | {
       readonly kind: 'sequence-mismatch';
@@ -23,11 +22,8 @@ export type DesktopAgentEventCursorAdvanceResult =
       readonly receivedSequence: number;
     };
 
-const MAX_RETIRED_AGENT_CONNECTIONS = 128;
-
 export class DesktopAgentEventCursorRegistry {
   private readonly active = new Map<string, DesktopAgentEventCursor>();
-  private readonly retired = new Map<string, DesktopAgentConnectionIdentity>();
 
   register(connection: DesktopAgentConnectionIdentity): DesktopAgentEventCursor {
     const existing = this.active.get(connection.connectionId);
@@ -41,26 +37,15 @@ export class DesktopAgentEventCursorRegistry {
       this.active.set(connection.connectionId, existing);
       return existing;
     }
-    if (this.retired.has(connection.connectionId)) {
-      throw new Error(
-        `Desktop Agent connection '${connection.connectionId}' cannot be registered after retirement.`,
-      );
-    }
     const cursor = { connection, sequence: 0 };
     this.active.set(connection.connectionId, cursor);
     return cursor;
   }
 
-  retire(connection: DesktopAgentConnectionIdentity): void {
+  unregister(connection: DesktopAgentConnectionIdentity): void {
     const current = this.active.get(connection.connectionId);
     if (!current || !isSameDesktopAgentEventConnection(current.connection, connection)) return;
     this.active.delete(connection.connectionId);
-    this.retired.set(connection.connectionId, current.connection);
-    while (this.retired.size > MAX_RETIRED_AGENT_CONNECTIONS) {
-      const oldest = this.retired.keys().next().value as string | undefined;
-      if (oldest === undefined) break;
-      this.retired.delete(oldest);
-    }
   }
 
   advance(
@@ -86,10 +71,6 @@ export class DesktopAgentEventCursorRegistry {
         sequence,
       });
       return { kind: 'accepted', connection: current.connection };
-    }
-    const retired = this.retired.get(connection.connectionId);
-    if (retired && isSameDesktopAgentEventConnection(retired, connection)) {
-      return { kind: 'retired' };
     }
     return { kind: 'foreign' };
   }

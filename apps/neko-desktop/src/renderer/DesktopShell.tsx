@@ -93,6 +93,9 @@ type ShellState =
 type HomeSection = 'create' | 'assets' | 'extensions' | 'projects';
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
 
+export const MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO = 0.5;
+export const MANAGEMENT_MAIN_SPLIT_MIN_RATIO = 0.5;
+
 interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
@@ -132,7 +135,10 @@ export function DesktopApplication(): JSX.Element {
     const unsubscribe = window.openNekoDesktop.shell.subscribe((event) => {
       if (!active) return;
       pendingProjectionRequest.current = undefined;
-      if (rendererSessionId.current && event.projection.rendererSessionId !== rendererSessionId.current) {
+      if (
+        rendererSessionId.current &&
+        event.projection.rendererSessionId !== rendererSessionId.current
+      ) {
         setState({ kind: 'error', message: t('shell.endpointChanged') });
         void refresh().catch((error: unknown) => {
           if (active) setState({ kind: 'error', message: describeError(error) });
@@ -205,22 +211,29 @@ export function DesktopApplication(): JSX.Element {
   const visibleDiagnostic =
     diagnostic ??
     (persistedStateDiagnostic
-      ? persistedStateDiagnostic.code === 'desktop-stored-window-invalid'
-        ? t('shell.storedWindowInvalid', { windowId: persistedStateDiagnostic.windowId })
-        : persistedStateDiagnostic.authorityKey === 'desktop.application-settings'
-          ? t('shell.storedSettingsInvalid')
-          : t('shell.storedStateInvalid')
+      ? persistedStateDiagnostic.code === 'desktop-shell-component-invalid'
+        ? t('shell.projectCatalogInvalid')
+        : persistedStateDiagnostic.code === 'desktop-stored-state-metadata-retained'
+          ? t(
+              persistedStateDiagnostic.authorityKey === 'desktop.application-settings'
+                ? 'shell.settingsMetadataRetained'
+                : 'shell.workspaceMetadataRetained',
+              {
+                fields: persistedStateDiagnostic.fieldNames.join(', '),
+              },
+            )
+          : persistedStateDiagnostic.code === 'desktop-stored-window-invalid'
+            ? t('shell.storedWindowInvalid', { windowId: persistedStateDiagnostic.windowId })
+            : persistedStateDiagnostic.authorityKey === 'desktop.application-settings'
+              ? t('shell.storedSettingsInvalid')
+              : t('shell.storedStateInvalid')
       : persistedConversationMessage);
   const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
   const transitionScene = (intent: DesktopSceneTransitionIntent): void => {
     setPending(true);
     setDiagnostic(undefined);
     void window.openNekoDesktop.scenes
-      .transition(
-        projection.window.windowId,
-        intent,
-        activeWorkbench.scene.sceneId,
-      )
+      .transition(projection.window.windowId, intent, activeWorkbench.scene.sceneId)
       .then(async (result) => {
         if (result.status !== 'transitioned') {
           setDiagnostic(result.diagnostic.message);
@@ -249,11 +262,7 @@ export function DesktopApplication(): JSX.Element {
       ) {
         return;
       }
-      void runMutation(() =>
-        window.openNekoDesktop.conversations.delete(
-          conversation.navigation,
-        ),
-      );
+      void runMutation(() => window.openNekoDesktop.conversations.delete(conversation.navigation));
     },
     onRemoveRecentProject: (project) => {
       if (
@@ -261,11 +270,7 @@ export function DesktopApplication(): JSX.Element {
       ) {
         return;
       }
-      void runMutation(() =>
-        window.openNekoDesktop.projects.removeRecent(
-          project.projectId,
-        ),
-      );
+      void runMutation(() => window.openNekoDesktop.projects.removeRecent(project.projectId));
     },
     onUpdateWorkbench: (workbenchInstanceId, workbench) => {
       const instance = projection.window.workbenches.instances.find(
@@ -275,10 +280,7 @@ export function DesktopApplication(): JSX.Element {
         throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
       }
       void runMutation(() =>
-        window.openNekoDesktop.workbench.update(
-          workbenchInstanceId,
-          workbench,
-        ),
+        window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
       );
     },
     onUpdateApplicationSidebar: (sidebar) =>
@@ -451,21 +453,34 @@ function DesktopSceneWorkbench({
     activeWorkbench.layout.display.chatPosition === 'right'
       ? ('left' as const)
       : activeWorkbench.layout.display.chatPosition;
-  const activeAgentSurfaceId =
+  const requestedActiveAgentSurfaceId =
     scene.context.kind === 'agent' ? requireActiveAgentSurfaceId(activeWorkbench) : undefined;
   const allAgentSurfaces = projection.window.workbenches.instances.flatMap((instance) =>
-    instance.agentSurfaces.map((surface) => ({
-      agentSurfaceId: surface.agentSurfaceId,
-      lifecycle: surface.lifecycle,
-      surface: createDesktopAgentSurfaceProps({
+    instance.agentSurfaces.flatMap((surface) => {
+      const surfaceProps = createDesktopAgentSurfaceProps({
         projection,
         workbenchInstanceId: instance.workbenchInstanceId,
         surface,
         onChooseWorkspace: actions.onChooseWorkspace,
         workspaceSelectionDisabled: pending || !interactive,
-      }),
-    })),
+      });
+      return surfaceProps
+        ? [
+            {
+              agentSurfaceId: surface.agentSurfaceId,
+              lifecycle: surface.lifecycle,
+              surface: surfaceProps,
+            },
+          ]
+        : [];
+    }),
   );
+  const activeAgentSurfaceId = allAgentSurfaces.some(
+    (surface) => surface.agentSurfaceId === requestedActiveAgentSurfaceId,
+  )
+    ? requestedActiveAgentSurfaceId
+    : undefined;
+  const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
   const interaction = (
     <DesktopSurfaceErrorBoundary surfaceIdentity="agent-interaction">
       <div className="project-dock-panel" data-dock-owner="agent">
@@ -474,11 +489,15 @@ function DesktopSceneWorkbench({
           data-agent-scope={scene.context.kind === 'agent' ? scene.context.scope.kind : undefined}
           data-primary-surface="agent"
         >
-          <RetainedDesktopAgentSurfaceDeck
-            activeAgentSurfaceId={activeAgentSurfaceId}
-            surfaces={allAgentSurfaces}
-            visible={interactionVisible}
-          />
+          {projectCatalogUnavailable && allAgentSurfaces.length === 0 ? (
+            <SceneSurfaceUnavailable owner="workspace-authority" />
+          ) : (
+            <RetainedDesktopAgentSurfaceDeck
+              activeAgentSurfaceId={activeAgentSurfaceId}
+              surfaces={allAgentSurfaces}
+              visible={interactionVisible}
+            />
+          )}
         </section>
       </div>
     </DesktopSurfaceErrorBoundary>
@@ -491,7 +510,8 @@ function DesktopSceneWorkbench({
       ? 'workspace'
       : 'management';
   const managementSplitRatio =
-    managementSplitRatios.get(activeWorkbench.workbenchInstanceId) ?? 0.34;
+    managementSplitRatios.get(activeWorkbench.workbenchInstanceId) ??
+    MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO;
   const mainSplit = assetPreviewVisible
     ? ('columns' as const)
     : workspaceScene
@@ -500,10 +520,8 @@ function DesktopSceneWorkbench({
   const secondaryMainVisible =
     assetPreviewVisible || Boolean(workspaceScene && activeWorkbench.layout.main.groups[1]);
   const mainSplitResize: ControlledWorkbenchResizeBinding | undefined = assetPreviewVisible
-    ? {
+    ? createManagementMainSplitResizeBinding({
         label: t('workspace.resizeMainSplit'),
-        minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
-        maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
         onResizeEnd: (ratio) => {
           setManagementSplitRatios((current) => {
             const next = new Map(current);
@@ -511,7 +529,7 @@ function DesktopSceneWorkbench({
             return next;
           });
         },
-      }
+      })
     : workspaceScene && activeWorkbench.layout.main.split && !pending
       ? {
           label: t('workspace.resizeMainSplit'),
@@ -1025,7 +1043,7 @@ function createDesktopAgentSurfaceProps(input: {
   readonly surface: DesktopAgentSurfaceProjection;
   readonly onChooseWorkspace?: () => void;
   readonly workspaceSelectionDisabled?: boolean;
-}): DesktopAgentSurfaceProps {
+}): DesktopAgentSurfaceProps | undefined {
   const { interaction } = input.surface;
   const scope = interaction.scope;
   if (scope.kind === 'workspace') {
@@ -1035,6 +1053,7 @@ function createDesktopAgentSurfaceProps(input: {
         (candidate) => candidate.workspaceId === scope.workspaceId,
       );
     if (!project) {
+      if (hasProjectCatalogDiagnostic(input.projection)) return undefined;
       throw new Error(`Agent Surface '${input.surface.agentSurfaceId}' has no Workspace Project.`);
     }
     const tab = input.projection.window.tabs.find(
@@ -1081,6 +1100,16 @@ function createDesktopAgentSurfaceProps(input: {
   };
 }
 
+function hasProjectCatalogDiagnostic(projection: DesktopShellProjection): boolean {
+  return Boolean(
+    projection.stateDiagnostics?.some(
+      (diagnostic) =>
+        diagnostic.code === 'desktop-shell-component-invalid' &&
+        diagnostic.component === 'project-catalog',
+    ),
+  );
+}
+
 export function resolveAssetCenterPreviewSession(
   scene: DesktopWorkbenchSceneProjection,
   projection: AssetCenterSessionProjection,
@@ -1120,9 +1149,7 @@ function resolveWorkspaceSceneProject(
   const project = projection.catalog.projects.find(
     (candidate) => candidate.workspaceId === workspaceScope.workspaceId,
   );
-  if (!project) {
-    throw new Error('Workspace Scene has no matching Project catalog identity.');
-  }
+  if (!project) return undefined;
   const tab = projection.window.tabs.find((candidate) => candidate.projectId === project.projectId);
   if (!tab) {
     throw new Error('Workspace Scene has no matching Agent Window View.');
@@ -1364,9 +1391,7 @@ function useContentProjectWorkbenchSlots({
             <div className="project-resource-dock__content">
               {assetsCapability?.status === 'ready' ? (
                 <DesktopResourceBrowserSurface
-                  lifecyclePresentation={
-                    active ? 'active' : 'suspended'
-                  }
+                  lifecyclePresentation={active ? 'active' : 'suspended'}
                   onOpenCanvasDocument={(documentId, presentation) =>
                     actions.onUpdateWorkbench(
                       instance.workbenchInstanceId,
@@ -1766,6 +1791,21 @@ function createProjectDockResizeBinding({
         resizeProjectDockWorkbench(workbench, dock.owner, width),
       );
     },
+  };
+}
+
+export function createManagementMainSplitResizeBinding({
+  label,
+  onResizeEnd,
+}: {
+  readonly label: string;
+  readonly onResizeEnd: (ratio: number) => void;
+}): ControlledWorkbenchResizeBinding {
+  return {
+    label,
+    minSize: MANAGEMENT_MAIN_SPLIT_MIN_RATIO,
+    maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
+    onResizeEnd,
   };
 }
 

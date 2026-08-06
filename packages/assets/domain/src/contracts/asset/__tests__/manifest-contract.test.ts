@@ -20,7 +20,7 @@ function validManifest(overrides: Partial<AssetManifest> = {}): AssetManifest {
     type: 'preset',
     source: {
       kind: 'registry',
-      registry: 'https://market.neko.dev/api/v1',
+      registry: 'https://market.neko.dev/api/packages',
       package: '@studio/cinematic-lut',
       version: '1.0.0',
       integrity: 'sha256-abc',
@@ -98,7 +98,7 @@ describe('AssetManifest v4 contract', () => {
           hostRequirements: [{ host: 'desktop' }],
           profiles: [
             {
-              profileId: 'studio.storyboard.v1',
+              profileId: 'studio.storyboard.release',
               kind: 'artifact',
               version: 1,
               descriptorPath: 'profiles/storyboard.profile.json',
@@ -200,12 +200,12 @@ describe('AssetManifest v4 contract', () => {
     );
   });
 
-  it('rejects legacy asset types as direct AssetType values', () => {
+  it('rejects unsupported AssetType values', () => {
     expect(isAssetType('media')).toBe(true);
-    expect(isAssetType('video')).toBe(false);
-    expect(validateAssetManifest({ ...validManifest(), type: 'video' }).issues).toContainEqual({
+    expect(isAssetType('unknown')).toBe(false);
+    expect(validateAssetManifest({ ...validManifest(), type: 'unknown' }).issues).toContainEqual({
       field: 'type',
-      message: 'must be one of AssetType v4 values',
+      message: 'must be a supported AssetType value',
     });
   });
 
@@ -276,7 +276,7 @@ describe('AssetManifest v4 contract', () => {
     );
   });
 
-  it('requires intent useCases for client-side fallback validation', () => {
+  it('requires intent useCases for client-side validation', () => {
     const result = validateAssetManifest({
       ...validManifest(),
       intent: { useCases: [] },

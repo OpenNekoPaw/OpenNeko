@@ -134,7 +134,7 @@ export class DesktopPreviewRuntime {
     } else {
       const file = await stat(input.absolutePath);
       if (!file.isFile()) throw new Error('Desktop Preview source is not a file.');
-      const revision = `${file.mtimeMs}:${file.size}`;
+      const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
       const descriptorId = `preview:${sessionId}`;
       const resource = await publishPreviewResource({
         resources: this.options.resources,
@@ -143,13 +143,11 @@ export class DesktopPreviewRuntime {
           viewId,
           sessionId,
           rendererSessionId: input.identity.rendererSessionId,
-          revision,
         },
         absolutePath: input.absolutePath,
         displayName: input.item.label,
         contentKind,
         mediaType,
-        revision,
       });
       projection = parsePreviewProjection({
         identity: runtimeIdentity,
@@ -157,7 +155,7 @@ export class DesktopPreviewRuntime {
         status: 'ready',
         descriptor: {
           descriptorId,
-          sourceFingerprint: revision,
+          sourceFingerprint,
           contentLocator: resolvePreviewContentLocator(input.item),
           url: resource.url,
           ...(resource.resourceUris ? { resourceUris: resource.resourceUris } : {}),
@@ -245,7 +243,7 @@ export class DesktopPreviewRuntime {
     const file = await stat(input.absolutePath);
     if (!file.isFile()) throw new Error('Desktop quick Preview source is not a file.');
     const previewSessionId = `preview-hover:${this.createIdentity()}`;
-    const revision = `${file.mtimeMs}:${file.size}`;
+    const sourceFingerprint = `${file.mtimeMs}:${file.size}`;
     const descriptorId = `preview:${previewSessionId}`;
     const lease = await this.options.resources.registerFile(
       {
@@ -253,12 +251,10 @@ export class DesktopPreviewRuntime {
         viewId: input.identity.viewId,
         sessionId: previewSessionId,
         rendererSessionId: input.identity.rendererSessionId,
-        revision,
       },
       {
         absolutePath: input.absolutePath,
         mediaType,
-        revision,
       },
     );
     this.sessions.registerTransient(input.identity.windowId, previewSessionId);
@@ -266,7 +262,7 @@ export class DesktopPreviewRuntime {
       previewSessionId,
       descriptor: {
         descriptorId,
-        sourceFingerprint: revision,
+        sourceFingerprint,
         contentLocator: resolvePreviewContentLocator(input.item),
         url: lease.url,
         contentKind,
@@ -518,7 +514,6 @@ async function publishPreviewResource(input: {
   readonly displayName: string;
   readonly contentKind: PreviewContentKind;
   readonly mediaType: string;
-  readonly revision: string;
 }): Promise<PublishedPreviewResource> {
   if (
     input.contentKind !== 'model' ||
@@ -527,7 +522,6 @@ async function publishPreviewResource(input: {
     return input.resources.registerFile(input.owner, {
       absolutePath: input.absolutePath,
       mediaType: input.mediaType,
-      revision: input.revision,
     });
   }
   const dependencies = await resolveGltfDependencies(input.absolutePath);
@@ -539,13 +533,11 @@ async function publishPreviewResource(input: {
         virtualPath: entryPath,
         path: input.absolutePath,
         contentType: input.mediaType,
-        revision: input.revision,
       },
       ...dependencies.map((dependency) => ({
         virtualPath: dependency.virtualPath,
         path: dependency.absolutePath,
         contentType: dependency.mediaType,
-        revision: dependency.revision,
       })),
     ],
     entryPath,
@@ -569,7 +561,6 @@ interface GltfDependency {
   readonly virtualPath: string;
   readonly absolutePath: string;
   readonly mediaType: string;
-  readonly revision: string;
 }
 
 async function resolveGltfDependencies(absolutePath: string): Promise<readonly GltfDependency[]> {
@@ -599,7 +590,6 @@ async function resolveGltfDependencies(absolutePath: string): Promise<readonly G
         virtualPath,
         absolutePath: dependencyPath,
         mediaType: getGltfDependencyMediaType(virtualPath),
-        revision: `${metadata.mtimeMs}:${metadata.size}`,
       };
     }),
   );

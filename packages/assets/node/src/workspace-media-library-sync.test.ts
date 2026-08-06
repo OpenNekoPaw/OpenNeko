@@ -104,7 +104,7 @@ describe('Desktop Workspace Media Library sync', () => {
     const recovered = await service.applyRecovery({
       workspace: fixture.workspace,
       planId: plan.planId,
-      expectedOperationRevision: plan.operationRevision,
+      expectedOperationFingerprint: plan.operationFingerprint,
     });
     expect(recovered.statuses).toContainEqual(
       expect.objectContaining({ libraryName: 'Footage', state: 'available' }),
@@ -123,7 +123,7 @@ describe('Desktop Workspace Media Library sync', () => {
       service.applyRecovery({
         workspace: fixture.workspace,
         planId: stalePlan.planId,
-        expectedOperationRevision: stalePlan.operationRevision,
+        expectedOperationFingerprint: stalePlan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'stale-recovery-plan',
@@ -147,7 +147,7 @@ describe('Desktop Workspace Media Library sync', () => {
       service.applyRecovery({
         workspace: fixture.workspace,
         planId: plan.planId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'stale-recovery-plan',
@@ -174,7 +174,7 @@ describe('Desktop Workspace Media Library sync', () => {
     await service.applyRecovery({
       workspace: fixture.workspace,
       planId: plan.planId,
-      expectedOperationRevision: plan.operationRevision,
+      expectedOperationFingerprint: plan.operationFingerprint,
     });
 
     expect(await readlink(path.join(fixture.workspace.workspacePath, 'neko/assets/Footage'))).toBe(
@@ -193,8 +193,8 @@ describe('Desktop Workspace Media Library sync', () => {
       sourceDirectory: similar,
       locationKind: 'local',
     });
-    const legacyManifest = JSON.stringify({ Footage: similar });
-    await writeFile(path.join(fixture.workspace.workspacePath, 'library.json'), legacyManifest);
+    const ignoredManifest = JSON.stringify({ Footage: similar });
+    await writeFile(path.join(fixture.workspace.workspacePath, 'library.json'), ignoredManifest);
     const service = new WorkspaceMediaLibrarySyncService(fixture.globalRoot);
 
     await expect(
@@ -204,7 +204,7 @@ describe('Desktop Workspace Media Library sync', () => {
       validatedCount: 0,
     });
     expect(await readFile(path.join(fixture.workspace.workspacePath, 'library.json'), 'utf8')).toBe(
-      legacyManifest,
+      ignoredManifest,
     );
     await expect(
       lstat(path.join(fixture.workspace.workspacePath, 'neko/assets/Footage')),

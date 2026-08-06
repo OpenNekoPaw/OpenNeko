@@ -706,7 +706,6 @@ function launchCatalog(assistantSpaceId: string, connectionId: string) {
       connectionId,
       scope: { kind: 'assistant' as const, assistantSpaceId },
     },
-    revision: 0,
     models: [],
     commands: [],
     skills: [],

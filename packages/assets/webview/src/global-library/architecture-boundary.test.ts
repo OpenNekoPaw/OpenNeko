@@ -27,7 +27,7 @@ describe('Asset Management architecture boundary', () => {
     expect(surface).not.toContain('packages/assets/domain/src');
   });
 
-  it('uses one package-owned Asset Center IPC route and poisons Home asset routes', async () => {
+  it('uses one package-owned Asset Center IPC route', async () => {
     const ipc = await readFile(resolve(workspaceRoot, 'apps/neko-desktop/src/main/ipc.ts'), 'utf8');
     const disposeStart = ipc.indexOf('return () => {');
     expect(disposeStart).toBeGreaterThan(0);
@@ -35,8 +35,5 @@ describe('Asset Management architecture boundary', () => {
     const disposal = ipc.slice(disposeStart);
     expect(registration).toContain('ASSET_CENTER_HOST_CHANNEL');
     expect(disposal).toContain('ASSET_CENTER_HOST_CHANNEL');
-    expect(ipc).not.toMatch(
-      /DESKTOP_HOME_MANAGEMENT_CHANNELS\.(?:assets|libraryThumbnail|mediaLibraries)/u,
-    );
   });
 });

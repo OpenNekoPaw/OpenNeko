@@ -532,7 +532,7 @@ export function ResourceBrowserRoot({
           requestId: `resource-recovery-plan-${requestSequence.current}`,
           identity: runtime.identity,
           resourceId: item.resourceId,
-          expectedOperationRevision: libraryStatus.operationRevision,
+          expectedOperationFingerprint: libraryStatus.operationFingerprint,
           candidate,
         }),
       );
@@ -572,7 +572,7 @@ export function ResourceBrowserRoot({
           requestId: `resource-recovery-apply-${requestSequence.current}`,
           identity: runtime.identity,
           planId: recovery.plan.planId,
-          expectedOperationRevision: recovery.plan.operationRevision,
+          expectedOperationFingerprint: recovery.plan.operationFingerprint,
         }),
       );
       setRecovery(undefined);

@@ -246,19 +246,6 @@ describe('Resource Browser contract', () => {
     expect(parseResourceBrowserQuickPreviewResult(result)).toMatchObject({
       descriptor: { url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv' },
     });
-    for (const url of [
-      'http://127.0.0.1:43125/v1/resources/token',
-      'neko-media://desktop/token',
-      'opennekomedia://resource/token',
-      'openneko://desktop/index.html',
-    ]) {
-      expect(() =>
-        parseResourceBrowserQuickPreviewResult({
-          ...result,
-          descriptor: { ...result.descriptor, url },
-        }),
-      ).toThrow('authorized OpenNeko resource');
-    }
   });
 
   it('rejects target-bearing recovery requests, plans, and library statuses', () => {
@@ -268,7 +255,7 @@ describe('Resource Browser contract', () => {
         identity,
         route: RESOURCE_BROWSER_ROUTES.recoveryPlan,
         resourceId: 'library-1',
-        expectedOperationRevision: 'sha256:operation',
+        expectedOperationFingerprint: 'sha256:operation',
         candidate: 'select-directory',
         sourceDirectory: '/Users/private/Footage',
       }),
@@ -283,8 +270,8 @@ describe('Resource Browser contract', () => {
           planId: 'recovery-plan-1',
           workspaceId: identity.workspaceId,
           libraryName: 'Footage',
-          requirementRevision: 'requirements-1',
-          operationRevision: 'sha256:operation',
+          requirementFingerprint: 'requirements-1',
+          operationFingerprint: 'sha256:operation',
           candidate: {
             kind: 'global-alias',
             name: 'Footage',
@@ -314,7 +301,7 @@ describe('Resource Browser contract', () => {
               state: 'required-unlinked',
               referenceCount: 1,
               missingCount: 1,
-              operationRevision: 'sha256:operation',
+              operationFingerprint: 'sha256:operation',
               targetPath: '/Users/private/Footage',
             },
           },
@@ -367,32 +354,6 @@ describe('Resource Browser contract', () => {
       requestId: 'source-1',
       route: RESOURCE_BROWSER_ROUTES.linkGlobalLibrary,
     });
-  });
-
-  it('rejects legacy generic source and facet routes', () => {
-    for (const facet of ['all', 'materials']) {
-      expect(() =>
-        parseResourceBrowserProjection({
-          ...projection('files', []),
-          facet,
-        }),
-      ).toThrowError(ResourceBrowserContractError);
-    }
-    for (const route of [
-      'source.add',
-      'source.recover',
-      'source.repair',
-      'source.recovery',
-      'source.recovery.apply-direct',
-    ]) {
-      expect(() =>
-        parseResourceBrowserIntentRequest({
-          requestId: 'legacy-source',
-          identity,
-          route,
-        }),
-      ).toThrowError(ResourceBrowserContractError);
-    }
   });
 
   it('parses Workspace File mutations without accepting paths from Renderer', () => {
@@ -508,14 +469,12 @@ describe('Resource Browser contract', () => {
           viewInstanceId: 'view-instance-3',
           documentId: 'cuts/story.otio',
           sessionId: 'cut-session:cut:view-1:view-instance-3',
-          expectedRevision: 8,
         },
       }),
     ).toMatchObject({
       targetCut: {
         viewId: 'cut:view-1',
         documentId: 'cuts/story.otio',
-        expectedRevision: 8,
       },
     });
     expect(() =>

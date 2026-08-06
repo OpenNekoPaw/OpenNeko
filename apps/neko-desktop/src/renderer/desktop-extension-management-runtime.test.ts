@@ -8,7 +8,6 @@ describe('DesktopExtensionManagementRuntime', () => {
       route: request.route,
       projection: {
         identity: request.identity,
-        catalogRevision: `sha256:${'a'.repeat(64)}`,
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [],

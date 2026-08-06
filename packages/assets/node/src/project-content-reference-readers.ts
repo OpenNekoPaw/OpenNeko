@@ -126,7 +126,7 @@ async function readCanvasReferences(
   return {
     ownerKind: 'canvas',
     ownerId,
-    revision: fingerprint(bytes),
+    sourceFingerprint: fingerprint(bytes),
     references,
   };
 }
@@ -181,7 +181,7 @@ async function readCutReferences(
   return {
     ownerKind: 'cut',
     ownerId,
-    revision: fingerprint(bytes),
+    sourceFingerprint: fingerprint(bytes),
     references,
   };
 }
@@ -247,7 +247,7 @@ async function readEntityRepresentationReferences(input: {
   return {
     ownerKind: 'entity-representation',
     ownerId: PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH,
-    revision: snapshot.fingerprint,
+    sourceFingerprint: snapshot.fingerprint,
     references: snapshot.references,
   };
 }

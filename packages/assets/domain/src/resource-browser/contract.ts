@@ -238,7 +238,7 @@ export interface ResourceBrowserQuickPreviewReleaseResult {
 export interface ResourceBrowserRecoveryPlanRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.recoveryPlan;
   readonly resourceId: string;
-  readonly expectedOperationRevision: string;
+  readonly expectedOperationFingerprint: string;
   readonly candidate: 'existing-global' | 'select-directory';
 }
 
@@ -260,7 +260,7 @@ export type ResourceBrowserRecoveryPlanResult =
 export interface ResourceBrowserRecoveryApplyRequest extends ResourceBrowserRequest {
   readonly route: typeof RESOURCE_BROWSER_ROUTES.recoveryApply;
   readonly planId: string;
-  readonly expectedOperationRevision: string;
+  readonly expectedOperationFingerprint: string;
 }
 
 export interface ResourceBrowserRecoveryCancelRequest extends ResourceBrowserRequest {
@@ -302,12 +302,10 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     readonly viewInstanceId: string;
     readonly documentId: string;
     readonly sessionId: string;
-    readonly expectedRevision: number;
   };
   readonly targetCanvas?: {
     readonly documentId: string;
     readonly sessionId: string;
-    readonly expectedRevision: number;
   };
   readonly entityIntent?: ProjectEntityInspectorIntent;
 }
@@ -443,7 +441,7 @@ export function createResourceBrowserRecoveryPlanRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly resourceId: string;
-  readonly expectedOperationRevision: string;
+  readonly expectedOperationFingerprint: string;
   readonly candidate: ResourceBrowserRecoveryPlanRequest['candidate'];
 }): ResourceBrowserRecoveryPlanRequest {
   return parseResourceBrowserRecoveryPlanRequest({
@@ -451,7 +449,7 @@ export function createResourceBrowserRecoveryPlanRequest(input: {
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.recoveryPlan,
     resourceId: input.resourceId,
-    expectedOperationRevision: input.expectedOperationRevision,
+    expectedOperationFingerprint: input.expectedOperationFingerprint,
     candidate: input.candidate,
   });
 }
@@ -460,14 +458,14 @@ export function createResourceBrowserRecoveryApplyRequest(input: {
   readonly requestId: string;
   readonly identity: ResourceBrowserIdentity;
   readonly planId: string;
-  readonly expectedOperationRevision: string;
+  readonly expectedOperationFingerprint: string;
 }): ResourceBrowserRecoveryApplyRequest {
   return parseResourceBrowserRecoveryApplyRequest({
     requestId: input.requestId,
     identity: input.identity,
     route: RESOURCE_BROWSER_ROUTES.recoveryApply,
     planId: input.planId,
-    expectedOperationRevision: input.expectedOperationRevision,
+    expectedOperationFingerprint: input.expectedOperationFingerprint,
   });
 }
 
@@ -741,7 +739,7 @@ export function parseResourceBrowserRecoveryPlanRequest(
     'identity',
     'route',
     'resourceId',
-    'expectedOperationRevision',
+    'expectedOperationFingerprint',
     'candidate',
   ]);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.recoveryPlan) {
@@ -762,8 +760,8 @@ export function parseResourceBrowserRecoveryPlanRequest(
       record['resourceId'],
       'Resource Browser recovery resource identity is required.',
     ),
-    expectedOperationRevision: requireOpaqueIdentity(
-      record['expectedOperationRevision'],
+    expectedOperationFingerprint: requireOpaqueIdentity(
+      record['expectedOperationFingerprint'],
       'Resource Browser recovery operation revision is required.',
     ),
     candidate,
@@ -807,7 +805,7 @@ export function parseResourceBrowserRecoveryApplyRequest(
     'identity',
     'route',
     'planId',
-    'expectedOperationRevision',
+    'expectedOperationFingerprint',
   ]);
   if (record['route'] !== RESOURCE_BROWSER_ROUTES.recoveryApply) {
     throw invalidPayload('Resource Browser recovery apply route is invalid.');
@@ -823,8 +821,8 @@ export function parseResourceBrowserRecoveryApplyRequest(
       record['planId'],
       'Resource Browser recovery plan identity is required.',
     ),
-    expectedOperationRevision: requireOpaqueIdentity(
-      record['expectedOperationRevision'],
+    expectedOperationFingerprint: requireOpaqueIdentity(
+      record['expectedOperationFingerprint'],
       'Resource Browser recovery operation revision is required.',
     ),
   };
@@ -1065,10 +1063,6 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
           target['sessionId'],
           'Resource Browser target Cut session identity is required.',
         ),
-        expectedRevision: requireNonNegativeInteger(
-          target['expectedRevision'],
-          'Resource Browser target Cut revision must be a non-negative integer.',
-        ),
       },
     };
   }
@@ -1090,10 +1084,6 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
       sessionId: requireOpaqueIdentity(
         target['sessionId'],
         'Resource Browser target Canvas session identity is required.',
-      ),
-      expectedRevision: requireNonNegativeInteger(
-        target['expectedRevision'],
-        'Resource Browser target Canvas revision must be a non-negative integer.',
       ),
     },
   };
@@ -1477,7 +1467,7 @@ function parseWorkspaceMediaLibraryStatus(value: unknown): WorkspaceMediaLibrary
     'state',
     'referenceCount',
     'missingCount',
-    'operationRevision',
+    'operationFingerprint',
     'diagnostic',
   ]);
   const state = record['state'];
@@ -1510,8 +1500,8 @@ function parseWorkspaceMediaLibraryStatus(value: unknown): WorkspaceMediaLibrary
       record['missingCount'],
       'Resource Browser Media Library missing count is invalid.',
     ),
-    operationRevision: requireOpaqueIdentity(
-      record['operationRevision'],
+    operationFingerprint: requireOpaqueIdentity(
+      record['operationFingerprint'],
       'Resource Browser Media Library operation revision is required.',
     ),
     ...(diagnostic ? { diagnostic } : {}),
@@ -1573,8 +1563,8 @@ function parseWorkspaceMediaLibraryRecoveryPlan(value: unknown): WorkspaceMediaL
     'planId',
     'workspaceId',
     'libraryName',
-    'requirementRevision',
-    'operationRevision',
+    'requirementFingerprint',
+    'operationFingerprint',
     'candidate',
     'referencedCount',
     'validatedCount',
@@ -1618,12 +1608,12 @@ function parseWorkspaceMediaLibraryRecoveryPlan(value: unknown): WorkspaceMediaL
       record['libraryName'],
       'Resource Browser Media Library recovery library name is invalid.',
     ),
-    requirementRevision: requireRevision(
-      record['requirementRevision'],
+    requirementFingerprint: requireFingerprint(
+      record['requirementFingerprint'],
       'Resource Browser Media Library requirement revision is required.',
     ),
-    operationRevision: requireOpaqueIdentity(
-      record['operationRevision'],
+    operationFingerprint: requireOpaqueIdentity(
+      record['operationFingerprint'],
       'Resource Browser Media Library operation revision is required.',
     ),
     candidate,
@@ -1830,10 +1820,10 @@ function requireOpaqueIdentity(value: unknown, message: string): string {
   return identity;
 }
 
-function requireRevision(value: unknown, message: string): string {
-  const revision = requireNonEmptyString(value, message);
-  assertNoPathLikeValue(revision, 'Resource Browser revision');
-  return revision;
+function requireFingerprint(value: unknown, message: string): string {
+  const fingerprint = requireNonEmptyString(value, message);
+  assertNoPathLikeValue(fingerprint, 'Resource Browser fingerprint');
+  return fingerprint;
 }
 
 function requireNonNegativeInteger(value: unknown, message: string): number {

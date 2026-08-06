@@ -74,7 +74,6 @@ describe('Desktop Extension Management preload bridge', () => {
         route: request.route,
         projection: {
           identity,
-          catalogRevision: `sha256:${'a'.repeat(64)}`,
           skills: [],
           skillDiscovery: { diagnostics: [], duplicateCount: 0 },
           extensions: [],
@@ -93,20 +92,17 @@ describe('Desktop Extension Management preload bridge', () => {
   });
 
   it('rejects stale result identity and unknown projection fields', async () => {
-    const catalogRevision = `sha256:${'a'.repeat(64)}`;
     const request = createAgentExtensionManagementHostRequest({
       route: 'plugin.install',
       requestId: 'extensions-install-1',
       identity,
       pluginId: 'computer-use@openneko',
-      expectedCatalogRevision: catalogRevision,
     });
     electron.invoke.mockResolvedValue({
       requestId: 'stale-request',
       route: request.route,
       projection: {
         identity,
-        catalogRevision,
         skills: [],
         skillDiscovery: { diagnostics: [], duplicateCount: 0 },
         extensions: [],

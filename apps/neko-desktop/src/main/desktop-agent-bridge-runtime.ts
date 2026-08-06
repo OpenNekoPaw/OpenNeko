@@ -162,17 +162,9 @@ interface DesktopAgentConnection {
   sequence: number;
 }
 
-interface RetiredDesktopAgentConnection {
-  readonly identity: DesktopAgentConnectionIdentity;
-  readonly projectionAttachments: ReadonlyMap<string, ProjectionAttachmentKey>;
-}
-
-const MAX_RETIRED_AGENT_CONNECTIONS = 128;
-
 class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
   readonly startup: DesktopAgentStartupAudit;
   private readonly connections = new Map<string, DesktopAgentConnection>();
-  private readonly retiredConnections = new Map<string, RetiredDesktopAgentConnection>();
   private disposed = false;
 
   constructor(
@@ -234,7 +226,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
         connection.identity.workbenchInstanceId === identity.workbenchInstanceId &&
         connection.identity.agentSurfaceId === identity.agentSurfaceId
       ) {
-        this.disposeConnection(connectionId, connection, true);
+        this.disposeConnection(connectionId, connection);
       }
     }
     const effects = composition.createEffects({
@@ -343,24 +335,10 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       trackProjectionAttachment(connection, request.message);
       return acceptedAgentMessageResult(request.requestId);
     }
-    const retired = this.retiredConnections.get(request.connection.connectionId);
-    const retiredAttachment =
-      request.message.type === 'projectionDetach'
-        ? retired?.projectionAttachments.get(projectionAttachmentIdentity(request.message.key))
-        : undefined;
-    if (
-      !retired ||
-      request.message.type !== 'projectionDetach' ||
-      !isSameExactConnection(request.connection, retired.identity) ||
-      !retiredAttachment ||
-      !isSameProjectionAttachmentKey(request.message.key, retiredAttachment)
-    ) {
-      throw new DesktopAgentContractError(
-        'desktop-agent-identity-mismatch',
-        `Unknown or mismatched Desktop Agent projection connection '${request.connection.connectionId}'.`,
-      );
-    }
-    return acceptedAgentMessageResult(request.requestId);
+    throw new DesktopAgentContractError(
+      'desktop-agent-identity-mismatch',
+      `Unknown Desktop Agent projection connection '${request.connection.connectionId}'.`,
+    );
   }
 
   async injectContext(input: {
@@ -429,7 +407,6 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
         connection.identity.windowId === windowId &&
         connection.identity.workbenchInstanceId === workbenchInstanceId &&
         connection.identity.agentSurfaceId === agentSurfaceId,
-      true,
       `Failed to detach Desktop Agent Surface '${agentSurfaceId}'.`,
     );
   }
@@ -440,7 +417,6 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       (connection) =>
         connection.identity.windowId === windowId &&
         connection.identity.workbenchInstanceId === workbenchInstanceId,
-      true,
       `Failed to detach Desktop Agent Workbench '${workbenchInstanceId}'.`,
     );
   }
@@ -451,7 +427,6 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       (connection) =>
         connection.identity.windowId === windowId &&
         connection.initialConversationId === conversationId,
-      true,
       `Failed to detach Desktop Agent Conversation '${conversationId}'.`,
     );
   }
@@ -460,7 +435,6 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     this.requireActive();
     this.disposeMatchingConnections(
       (connection) => connection.identity.windowId === windowId,
-      false,
       `Failed to detach Desktop Agent Window '${windowId}'.`,
     );
   }
@@ -470,21 +444,19 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     this.disposed = true;
     this.disposeMatchingConnections(
       () => true,
-      false,
       'Failed to dispose Desktop Agent connections.',
     );
   }
 
   private disposeMatchingConnections(
     matches: (connection: DesktopAgentConnection) => boolean,
-    retainTombstone: boolean,
     aggregateMessage: string,
   ): void {
     const errors: unknown[] = [];
     for (const [connectionId, connection] of this.connections) {
       if (!matches(connection)) continue;
       try {
-        this.disposeConnection(connectionId, connection, retainTombstone);
+        this.disposeConnection(connectionId, connection);
       } catch (error) {
         errors.push(error);
       }
@@ -513,24 +485,10 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     return connection;
   }
 
-  private disposeConnection(
-    connectionId: string,
-    connection: DesktopAgentConnection,
-    retainTombstone: boolean,
-  ): void {
+  private disposeConnection(connectionId: string, connection: DesktopAgentConnection): void {
     if (this.connections.get(connectionId) !== connection) return;
     this.connections.delete(connectionId);
     connection.effects.dispose();
-    if (!retainTombstone) return;
-    this.retiredConnections.set(connectionId, {
-      identity: connection.identity,
-      projectionAttachments: new Map(connection.projectionAttachments),
-    });
-    while (this.retiredConnections.size > MAX_RETIRED_AGENT_CONNECTIONS) {
-      const oldest = this.retiredConnections.keys().next().value as string | undefined;
-      if (oldest === undefined) break;
-      this.retiredConnections.delete(oldest);
-    }
   }
 }
 
@@ -549,17 +507,6 @@ function trackProjectionAttachment(
 
 function projectionAttachmentIdentity(key: ProjectionAttachmentKey): string {
   return JSON.stringify([key.attachmentId, key.tabId, key.conversationId]);
-}
-
-function isSameProjectionAttachmentKey(
-  left: ProjectionAttachmentKey,
-  right: ProjectionAttachmentKey,
-): boolean {
-  return (
-    left.attachmentId === right.attachmentId &&
-    left.tabId === right.tabId &&
-    left.conversationId === right.conversationId
-  );
 }
 
 function acceptedAgentMessageResult(requestId: string): DesktopAgentMessageResult {

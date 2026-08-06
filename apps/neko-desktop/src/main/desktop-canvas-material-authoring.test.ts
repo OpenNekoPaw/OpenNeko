@@ -374,15 +374,19 @@ describe('CanvasMaterialAuthoringService', () => {
 
   it('authorizes and explicitly replaces a non-stale Entity representation', async () => {
     const fixture = await createFixture();
-    await writeFixtureFile(fixture.workspace.workspacePath, 'characters/neko-v1.png', 'v1');
-    await writeFixtureFile(fixture.workspace.workspacePath, 'characters/neko-v2.png', 'v2');
+    await writeFixtureFile(fixture.workspace.workspacePath, 'characters/neko-original.png', 'one');
+    await writeFixtureFile(
+      fixture.workspace.workspacePath,
+      'characters/neko-replacement.png',
+      'two',
+    );
     const service = new CanvasMaterialAuthoringService({
       host: fixture.host,
       globalMediaLibraryRoot: fixture.globalMediaLibraryRoot,
     });
     const originalEntity = {
       entityId: 'character-neko',
-      bindingId: 'binding-neko-v1',
+      bindingId: 'binding-neko-original',
       role: 'portrait',
     } as const;
     const original = await service.author({
@@ -392,7 +396,7 @@ describe('CanvasMaterialAuthoringService', () => {
       request: {
         ...directRequest(
           fixture.identity,
-          { kind: 'workspace-file', path: 'characters/neko-v1.png' },
+          { kind: 'workspace-file', path: 'characters/neko-original.png' },
           'image',
         ),
         entity: originalEntity,
@@ -412,12 +416,12 @@ describe('CanvasMaterialAuthoringService', () => {
           identity: materialIdentity(fixture.identity),
           nodeId: node.id,
           expectedEntity: { ...originalEntity, bindingId: 'stale-binding' },
-          locator: { kind: 'workspace-file', path: 'characters/neko-v2.png' },
+          locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
           mediaKind: 'image',
-          title: 'neko-v2.png',
+          title: 'neko-replacement.png',
           entity: {
             ...originalEntity,
-            bindingId: 'binding-neko-v2',
+            bindingId: 'binding-neko-replacement',
           },
         },
       }),
@@ -432,12 +436,12 @@ describe('CanvasMaterialAuthoringService', () => {
         identity: materialIdentity(fixture.identity),
         nodeId: node.id,
         expectedEntity: originalEntity,
-        locator: { kind: 'workspace-file', path: 'characters/neko-v2.png' },
+        locator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
         mediaKind: 'image',
-        title: 'neko-v2.png',
+        title: 'neko-replacement.png',
         entity: {
           ...originalEntity,
-          bindingId: 'binding-neko-v2',
+          bindingId: 'binding-neko-replacement',
         },
       },
     });
@@ -446,10 +450,10 @@ describe('CanvasMaterialAuthoringService', () => {
     expect(replaced.nodes[0]).toMatchObject({
       id: node.id,
       data: {
-        contentLocator: { kind: 'workspace-file', path: 'characters/neko-v2.png' },
+        contentLocator: { kind: 'workspace-file', path: 'characters/neko-replacement.png' },
         entityRepresentation: {
           entityId: 'character-neko',
-          bindingId: 'binding-neko-v2',
+          bindingId: 'binding-neko-replacement',
           role: 'portrait',
         },
       },

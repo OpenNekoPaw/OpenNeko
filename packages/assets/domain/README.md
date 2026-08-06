@@ -61,7 +61,3 @@ persistent Asset Library membership lifecycle. Removing a Media Library connecti
 managed connection; the ordinary Asset remove action marks only its membership record as removed and
 preserves the source file. Uninstall and unreferenced-byte garbage collection are separate explicit
 operations. Hover previews are static images and do not open or autoplay a media session.
-
-Retired Entity Asset graph data stays outside product runtime reachability. The normal Assets
-runtime reads only the canonical Media Library and Entity owners and leaves unrelated bytes
-untouched.

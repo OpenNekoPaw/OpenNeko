@@ -126,7 +126,7 @@ export function ProjectPortabilityControl({
           requestId: nextRequestId('execute'),
           identity,
           snapshotId: plan.snapshotId,
-          expectedOperationRevision: plan.operationRevision,
+          expectedOperationFingerprint: plan.operationFingerprint,
         }),
       );
       setPlan(undefined);
@@ -238,8 +238,8 @@ export function ProjectPortabilityControl({
         ) : (
           <div className="project-portability-panel__actions">
             {inspection?.resumableSnapshot &&
-            inspection.resumableSnapshot.requirementRevision ===
-              inspection.portability.requirementRevision ? (
+            inspection.resumableSnapshot.requirementFingerprint ===
+              inspection.portability.requirementFingerprint ? (
               <button
                 type="button"
                 disabled={pending || executing}

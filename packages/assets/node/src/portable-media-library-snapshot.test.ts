@@ -80,7 +80,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).resolves.toMatchObject({ status: 'completed', snapshotId: plan.snapshotId });
 
@@ -142,7 +142,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-source-stale',
@@ -167,7 +167,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
         onProgress: (progress) => {
           if (progress.completedEntryCount === 1) {
             void fixture.snapshot.cancel({
@@ -201,7 +201,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-publish-conflict',
@@ -227,7 +227,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-source-stale',
@@ -267,7 +267,7 @@ describe('Desktop portable Media Library snapshot', () => {
       snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-content-unavailable',
@@ -329,7 +329,7 @@ describe('Desktop portable Media Library snapshot', () => {
       snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-checkpoint-unavailable',
@@ -360,10 +360,9 @@ describe('Desktop portable Media Library snapshot', () => {
     });
     await binding.writeSnapshotCheckpoint(
       {
-        version: 1,
         workspaceId: fixture.workspace.workspaceId,
         snapshotId: firstPlan.snapshotId,
-        requirementRevision: firstPlan.requirementRevision,
+        requirementFingerprint: firstPlan.requirementFingerprint,
         completedEntryKeys: ['media/collected/Footage/shot.mov'],
       },
       Date.now(),
@@ -394,7 +393,7 @@ describe('Desktop portable Media Library snapshot', () => {
     await resumed.execute({
       workspace: fixture.workspace,
       snapshotId: resumedPlan.snapshotId,
-      expectedOperationRevision: resumedPlan.operationRevision,
+      expectedOperationFingerprint: resumedPlan.operationFingerprint,
     });
 
     expect(planningReadCount).toBeGreaterThan(0);
@@ -458,7 +457,7 @@ async function createFixture(): Promise<{
     locator: { kind: 'relative', value: 'workspace' },
   };
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: workspace.workspaceId },
+    identity: { workspaceId: workspace.workspaceId },
     locator: workspace.locator,
     seenAt: '2026-08-01T00:00:00.000Z',
   });

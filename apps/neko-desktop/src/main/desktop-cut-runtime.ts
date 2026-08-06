@@ -116,7 +116,6 @@ export class DesktopCutRuntime {
                 viewId: input.viewId,
                 sessionId: input.sessionId,
                 rendererSessionId: input.rendererSessionId,
-                revision: input.requestId,
               }),
           }),
       ...(options.createMediaAdapter === undefined

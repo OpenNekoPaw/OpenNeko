@@ -30,8 +30,7 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
     );
     if (
       canonical.projectId !== opened.project.workspaceId ||
-      'revision' in canonical ||
-      'schemaVersion' in canonical ||
+      Object.keys(canonical).some((field) => !['projectId', 'entities'].includes(field)) ||
       canonical.entities?.length !== 1 ||
       canonical.entities[0]?.names?.canonical !== 'Rin'
     ) {
@@ -147,8 +146,7 @@ export const resourceBrowserEntityManagementScenario = Object.freeze({
     const entity = document.entities?.find((candidate) => candidate.names?.canonical === 'MIO');
     if (
       document.projectId !== opened.project.workspaceId ||
-      'revision' in document ||
-      'schemaVersion' in document ||
+      Object.keys(document).some((field) => !['projectId', 'entities'].includes(field)) ||
       document.entities?.length !== 2 ||
       entity?.names?.canonical !== 'MIO' ||
       entity?.representations?.[0]?.target?.path !== 'characters/missing.png'
@@ -335,7 +333,7 @@ async function waitForActiveEntityDetail(evaluate, label) {
 async function inspectEntityDetailPresentation(evaluate) {
   return evaluate(`(() => ({
     selected: document
-      .querySelector('.neko-resource-browser__item-row[data-selected="true"] strong')
+      .querySelector('[data-resource-facet-instance]:not([hidden]) .neko-resource-browser__item-row[data-selected="true"] strong')
       ?.textContent?.trim(),
     active: document
       .querySelector(${JSON.stringify(`${ACTIVE_ENTITY_DETAIL_SELECTOR} .neko-entity-inspector header strong`)})

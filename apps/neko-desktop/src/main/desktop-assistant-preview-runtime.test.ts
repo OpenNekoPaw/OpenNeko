@@ -117,7 +117,6 @@ function identity() {
 
 function artifact(label: string) {
   return {
-    schemaVersion: 1 as const,
     scratchArtifactId: 'scratch:1',
     assistantSpaceId: 'assistant:1',
     conversationId: 'conversation:1',

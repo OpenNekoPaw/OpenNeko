@@ -12,10 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  encodeEntityRepresentationBindingFile,
-  encodeProjectEntityDocument,
-} from '@neko/entity-domain';
+import { encodeProjectEntityDocument } from '@neko/entity-domain';
 import type { ILogger } from '@neko/shared/logger';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import type {
@@ -88,27 +85,6 @@ describe('Desktop Resource Browser source', () => {
         ],
       }),
     );
-    await writeFile(
-      path.join(nekoDirectory, 'entity-representation-bindings.json'),
-      encodeEntityRepresentationBindingFile({
-        bindings: [
-          {
-            id: 'binding-retired',
-            entityId: 'character-a',
-            entityKind: 'character',
-            representation: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Retired/shot.mov',
-            },
-            role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
-            source: 'user',
-            updatedAt: '2026-08-01T00:00:00.000Z',
-          },
-        ],
-      }),
-    );
     const host = createElectronNekoHostPorts({
       homedir: fixture.root,
       nekoHome: path.join(fixture.root, '.openneko'),
@@ -155,9 +131,8 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(
       path.join(fixture.workspace, 'Untitled.nkc'),
       JSON.stringify({
-        version: '3.0',
         name: 'Untitled',
-        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        viewport: null,
         nodes: [
           {
             id: 'media-a',
@@ -938,7 +913,7 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(path.join(fixture.workspace, 'test_model.html'), '<main>model</main>');
     await writeFile(path.join(fixture.workspace, 'candidates.json'), '{"items":[]}');
     await writeFile(path.join(fixture.workspace, 'test.glb'), 'glb');
-    await writeFile(path.join(fixture.workspace, 'Untitled.nkc'), '{"version":1}');
+    await writeFile(path.join(fixture.workspace, 'Untitled.nkc'), '{"unexpectedField":1}');
     const composition = createComposition(fixture.workspace);
 
     const mediaRoots = await composition.source.media.search({
@@ -1130,12 +1105,40 @@ function createMemoryAssetMembershipRepository(): AssetLibraryMembershipReposito
       records.set(record.membershipId, record);
       return record;
     },
-    async remove(membershipId, removedAt) {
-      const existing = records.get(membershipId);
-      if (!existing || existing.state !== 'active') throw new Error('missing active membership');
-      const removed = { ...existing, state: 'removed' as const, updatedAt: removedAt };
-      records.set(membershipId, removed);
-      return removed;
+    async removeMany(membershipIds, removedAt) {
+      const active = membershipIds.map((membershipId) => {
+        const existing = records.get(membershipId);
+        if (!existing || existing.state !== 'active') throw new Error('missing active membership');
+        return existing;
+      });
+      return active.map((existing) => {
+        const removed = { ...existing, state: 'removed' as const, updatedAt: removedAt };
+        records.set(existing.membershipId, removed);
+        return removed;
+      });
+    },
+    async relocateMany(relocations) {
+      const active = relocations.map((relocation) => {
+        const existing = records.get(relocation.membershipId);
+        if (
+          !existing ||
+          existing.state !== 'active' ||
+          existing.sourceRelativePath !== relocation.expectedSourceRelativePath
+        ) {
+          throw new Error('missing active membership');
+        }
+        return { existing, relocation };
+      });
+      return active.map(({ existing, relocation }) => {
+        const relocated = {
+          ...existing,
+          sourceRelativePath: relocation.sourceRelativePath,
+          label: relocation.label,
+          updatedAt: relocation.relocatedAt,
+        };
+        records.set(existing.membershipId, relocated);
+        return relocated;
+      });
     },
   };
 }

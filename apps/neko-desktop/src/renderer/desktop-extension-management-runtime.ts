@@ -28,32 +28,29 @@ export class DesktopExtensionManagementRuntime implements AgentExtensionManageme
     return this.execute({ route: 'snapshot.get' });
   }
 
-  async installPlugin(pluginId: string, expectedCatalogRevision: string): Promise<void> {
+  async installPlugin(pluginId: string): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'plugin.install', pluginId, expectedCatalogRevision });
+    await this.execute({ route: 'plugin.install', pluginId });
   }
 
-  async removePlugin(pluginId: string, expectedCatalogRevision: string): Promise<void> {
+  async removePlugin(pluginId: string): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'plugin.remove', pluginId, expectedCatalogRevision });
+    await this.execute({ route: 'plugin.remove', pluginId });
   }
 
-  async refreshMarketplaces(expectedCatalogRevision: string): Promise<void> {
+  async refreshMarketplaces(): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'marketplaces.refresh', expectedCatalogRevision });
+    await this.execute({ route: 'marketplaces.refresh' });
   }
 
-  async installPersonalSkill(expectedCatalogRevision: string): Promise<void> {
+  async installPersonalSkill(): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'skill.install', expectedCatalogRevision });
+    await this.execute({ route: 'skill.install' });
   }
 
-  async removePersonalSkill(
-    managementId: string,
-    expectedCatalogRevision: string,
-  ): Promise<void> {
+  async removePersonalSkill(managementId: string): Promise<void> {
     this.requireActive();
-    await this.execute({ route: 'skill.remove', managementId, expectedCatalogRevision });
+    await this.execute({ route: 'skill.remove', managementId });
   }
 
   dispose(): void {

@@ -56,12 +56,12 @@ describe('EncryptedDesktopSecretPort', () => {
     await expect(unavailable.get('provider:a')).rejects.toThrow('fixture encryption unavailable');
 
     const filePath = join(root, 'invalid.json');
-    await writeFile(filePath, '{"schemaVersion":99,"entries":{}}\n', 'utf8');
+    await writeFile(filePath, '{"unexpectedField":99,"entries":{}}\n', 'utf8');
     const port = createEncryptedDesktopSecretPort({
       filePath,
       encryption: fixtureEncryption(),
     });
-    await expect(port.get('provider:a')).rejects.toThrow('unsupported fields: schemaVersion');
+    await expect(port.get('provider:a')).rejects.toThrow('unsupported fields: unexpectedField');
   });
 
   async function createRoot(): Promise<string> {

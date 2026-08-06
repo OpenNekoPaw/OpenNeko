@@ -75,15 +75,15 @@ describe('Desktop Agent preload event cursor', () => {
     });
   });
 
-  it('drops a queued event only after the exact connection is retired', () => {
+  it('rejects events after the exact connection is unregistered', () => {
     const registry = new DesktopAgentEventCursorRegistry();
     const previous = createConnection('connection-1');
     const current = createConnection('connection-2');
     registry.register(previous);
     registry.register(current);
-    registry.retire(previous);
+    registry.unregister(previous);
 
-    expect(registry.advance(previous, 1)).toEqual({ kind: 'retired' });
+    expect(registry.advance(previous, 1)).toEqual({ kind: 'foreign' });
     expect(registry.advance(current, 1)).toEqual({ kind: 'accepted', connection: current });
   });
 
@@ -108,15 +108,15 @@ describe('Desktop Agent preload event cursor', () => {
     });
   });
 
-  it('retires an unsubscribed connection and preserves another active View', () => {
+  it('unregisters one connection and preserves another active View', () => {
     const registry = new DesktopAgentEventCursorRegistry();
     const first = createConnection('connection-1');
     const second = { ...createConnection('connection-2'), viewId: 'view-2' };
     registry.register(first);
     registry.register(second);
-    registry.retire(second);
+    registry.unregister(second);
 
-    expect(registry.advance(second, 1)).toEqual({ kind: 'retired' });
+    expect(registry.advance(second, 1)).toEqual({ kind: 'foreign' });
     expect(registry.advance(first, 1)).toEqual({ kind: 'accepted', connection: first });
   });
 });

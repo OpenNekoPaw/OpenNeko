@@ -8,7 +8,10 @@ import {
 import {
   activateWorkbenchMainView,
   applyWorkbenchDisplayMode,
+  createManagementMainSplitResizeBinding,
   DesktopShellView,
+  MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO,
+  MANAGEMENT_MAIN_SPLIT_MIN_RATIO,
   openCanvasDocumentWorkbench,
   resizeApplicationSidebar,
   resizeProjectDockWorkbench,
@@ -24,6 +27,7 @@ import {
 import { createDesktopI18n } from './i18n';
 import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
+  DESKTOP_WORKBENCH_LIMITS,
   createDefaultDesktopWorkbenchLayout,
 } from '@neko/host/desktop-workbench-contract';
 import {
@@ -35,7 +39,6 @@ import {
 import { DEFAULT_DESKTOP_APPLICATION_PREFERENCES } from '@neko/host/application-settings';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import desktopShellSource from './DesktopShell.tsx?raw';
-import assetCenterRuntimeSource from './desktop-asset-center-runtime.ts?raw';
 import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?raw';
 import {
   createDesktopWorkbenchInstanceFromScene,
@@ -72,6 +75,21 @@ describe('Desktop scene Workbench', () => {
     });
     expect(resizeProjectDockWorkbench(workbench, 'agent', 400).display.chatWidth).toBe(400);
     expect(resizeProjectDockWorkbench(workbench, 'resources', 416).resourceDock.width).toBe(416);
+  });
+
+  it('keeps management Main at least as wide as Preview or Detail', () => {
+    const onResizeEnd = vi.fn();
+    const binding = createManagementMainSplitResizeBinding({
+      label: 'Resize Main split',
+      onResizeEnd,
+    });
+
+    expect(MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO).toBe(0.5);
+    expect(MANAGEMENT_MAIN_SPLIT_MIN_RATIO).toBe(0.5);
+    expect(binding.minSize).toBe(0.5);
+    expect(binding.maxSize).toBe(DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max);
+    binding.onResizeEnd(0.5);
+    expect(onResizeEnd).toHaveBeenCalledWith(0.5);
   });
 
   it('keeps Resource management state independent from creative Main and Agent placement', () => {
@@ -203,15 +221,39 @@ describe('Desktop scene Workbench', () => {
 
     expect(markup).toContain('data-workbench-slot="main"');
     expect(markup).toContain('data-active="true"');
+    expect(markup).toContain('data-main-split="none"');
     expect(markup).not.toContain('project-main-group__tabs');
+  });
+
+  it('defaults Asset management and Preview to an equal split', () => {
+    const scene = assetCenterScene();
+    const markup = renderShell(
+      <DesktopShellView
+        projection={projectionWithScene(
+          parseDesktopWorkbenchSceneProjection({
+            ...scene,
+            slots: {
+              ...scene.slots,
+              secondaryMain: {
+                kind: 'asset-preview',
+                assetCenterSessionId: 'asset-center-1',
+                previewSessionId: 'preview:asset-center:1',
+              },
+            },
+          }),
+        )}
+      />,
+    );
+
+    expect(markup).toContain('data-main-split="columns"');
+    expect(markup).toContain('--neko-controlled-main-split-ratio:50%');
+    expect(markup).toContain('aria-label="Resize Main split"');
   });
 
   it('mounts Asset Preview only from the same Scene and AssetCenterSession ref', () => {
     const scene = assetCenterScene();
     const session = {
-      schemaVersion: 1 as const,
       identity: { assetCenterSessionId: 'asset-center-1', windowId: 'window-1' },
-      revision: 2,
       filter: {
         catalog: 'media-library' as const,
         query: '',
@@ -305,7 +347,7 @@ describe('Desktop scene Workbench', () => {
     vi.unstubAllGlobals();
   });
 
-  it('maps Workspace only from the exact scene View and never from legacy active target', () => {
+  it('maps Workspace only from the exact scene View', () => {
     const assistant = agentProjection();
     const misleading: DesktopShellProjection = {
       ...assistant,
@@ -347,26 +389,9 @@ describe('Desktop scene Workbench', () => {
     ).toThrow('Workspace Scene Main Surface has no exact Workbench View');
   });
 
-  it('poisons superseded Home handoff, top-level branches and scene-owned sidebar paths', () => {
-    for (const forbidden of [
-      'Home' + 'Workspace',
-      'Home' + 'StartCreating',
-      'agent' + 'InitialInput',
-      'application' + 'Surface',
-      'DesktopApplication' + 'SidebarFrame',
-      'ProjectPrimary' + 'Sidebar',
-      'resolve' + 'ActiveProject',
-      '.window.' + 'activeTarget',
-      'Home' + 'AssetCenter',
-      'parseHome' + 'AssetSortOption',
-    ]) {
-      expect(desktopShellSource).not.toContain(forbidden);
-    }
+  it('uses one Workbench shell and the package-owned Asset Management surface', () => {
     expect(desktopShellSource.match(/<ControlledWorkbenchShell/gu) ?? []).toHaveLength(1);
     expect(assetManagementSurfaceSource).toContain('@neko/assets-webview/asset-management/root');
-    expect(assetCenterRuntimeSource).not.toMatch(
-      /absolutePath|selectedId|previewKind|path\.extname|home\.assets|home\.mediaLibraries/u,
-    );
   });
 
   it('opens and focuses Canvas documents without changing scene authority', () => {

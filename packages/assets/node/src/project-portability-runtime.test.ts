@@ -11,7 +11,6 @@ import {
 import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
   type DesktopProjectPortabilityIdentity,
   type DesktopProjectPortabilityProgressEvent,
 } from '@neko/assets-domain/contracts';
@@ -69,7 +68,7 @@ describe('Desktop project portability runtime', () => {
       {
         ...request('execute-a', identity),
         snapshotId: planned.plan.snapshotId,
-        expectedOperationRevision: planned.plan.operationRevision,
+        expectedOperationFingerprint: planned.plan.operationFingerprint,
       },
       (event) => events.push(event),
     );
@@ -106,7 +105,6 @@ describe('Desktop project portability runtime', () => {
 
 function request(requestId: string, identity: DesktopProjectPortabilityIdentity) {
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId,
     identity,
   };
@@ -154,7 +152,7 @@ async function createFixture(): Promise<{
     locator: { kind: 'relative', value: 'workspace' },
   };
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: workspace.workspaceId },
+    identity: { workspaceId: workspace.workspaceId },
     locator: workspace.locator,
     seenAt: '2026-08-01T00:00:00.000Z',
   });

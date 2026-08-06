@@ -314,13 +314,7 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   agent: {
-    async getBootstrap(
-      workbenchInstanceId,
-      agentSurfaceId,
-      projectId,
-      viewId,
-      conversationId,
-    ) {
+    async getBootstrap(workbenchInstanceId, agentSurfaceId, projectId, viewId, conversationId) {
       const request = createDesktopAgentBootstrapRequest(
         nextRequestId('desktop-agent-bootstrap'),
         workbenchInstanceId,
@@ -398,7 +392,7 @@ const bridge: OpenNekoDesktopBridge &
           const hasAnotherListener = [...agentListeners].some((entry) =>
             isSameDesktopAgentEventConnection(entry.connection, connection),
           );
-          if (!hasAnotherListener) agentEventCursors.retire(connection);
+          if (!hasAnotherListener) agentEventCursors.unregister(connection);
         });
       };
     },
@@ -614,7 +608,7 @@ const bridge: OpenNekoDesktopBridge &
         result.resourceId !== request.resourceId ||
         (result.status === 'planned' &&
           (result.plan.workspaceId !== request.identity.workspaceId ||
-            result.plan.operationRevision !== request.expectedOperationRevision))
+            result.plan.operationFingerprint !== request.expectedOperationFingerprint))
       ) {
         throw new Error('Desktop Resource Browser recovery plan identity does not match.');
       }
@@ -1159,7 +1153,6 @@ ipcRenderer.on(
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
     const event = parseDesktopAgentMessageEvent(value);
     const result = agentEventCursors.advance(event.connection, event.sequence);
-    if (result.kind === 'retired') return;
     if (result.kind === 'foreign') {
       throw new DesktopAgentContractError(
         'desktop-agent-identity-mismatch',

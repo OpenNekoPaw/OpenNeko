@@ -72,6 +72,12 @@ export const en = {
     'The saved workspace state is no longer compatible and was safely isolated. A new creation view is open; projects, conversations, and other data were not reset.',
   'shell.storedSettingsInvalid':
     'The saved application settings are no longer compatible and were safely isolated. Defaults were restored; workspaces, projects, conversations, and other data were not reset.',
+  'shell.projectCatalogInvalid':
+    'Project catalog data is unavailable. Other workspace surfaces remain available.',
+  'shell.workspaceMetadataRetained':
+    'Unrecognized workspace metadata was preserved ({fields}). Projects and windows remain available.',
+  'shell.settingsMetadataRetained':
+    'Unrecognized application settings metadata was preserved ({fields}). Your settings remain available.',
   'shell.conversationRecordInvalid':
     "Saved conversation '{conversationId}' is no longer compatible and was isolated. A new draft is open; other conversations, projects, and files were not changed.",
   'shell.conversationRecordInvalidUnknown':

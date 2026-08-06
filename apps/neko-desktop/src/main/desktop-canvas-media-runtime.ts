@@ -225,12 +225,7 @@ export class DesktopCanvasMediaRuntime {
     if (duration <= 0) {
       throw new Error('Desktop Canvas playback start is outside the media duration.');
     }
-    const playbackMedia = await this.createPlaybackMedia(
-      identity,
-      nodeId,
-      sourcePath,
-      contentLocator.path,
-    );
+    const playbackMedia = await this.createPlaybackMedia(identity, nodeId, sourcePath);
     const video =
       mediaType === 'video' ? await playbackMedia.media.prepareVideo(sourcePath) : undefined;
     let audio:
@@ -296,7 +291,6 @@ export class DesktopCanvasMediaRuntime {
     identity: CanvasHostRuntimeIdentity,
     nodeId: string,
     sourcePath: string,
-    locatorPath: string,
   ): Promise<{ readonly media: DesktopCanvasNodeMediaPort; readonly ownsMedia: boolean }> {
     if (this.options.media) return { media: this.options.media, ownsMedia: false };
     const resources = this.options.resources;
@@ -305,7 +299,6 @@ export class DesktopCanvasMediaRuntime {
     }
     const metadata = await stat(sourcePath);
     if (!metadata.isFile()) throw new Error('Desktop Canvas media source is not a file.');
-    const revision = `${metadata.mtimeMs}:${metadata.size}:${locatorPath}`;
     return {
       media: new NodeMediaRuntime({
         publisher: resources.createMediaPublisher({
@@ -313,7 +306,6 @@ export class DesktopCanvasMediaRuntime {
           viewId: identity.viewId,
           sessionId: `canvas-media:${identity.sessionId}:${nodeId}`,
           rendererSessionId: identity.rendererSessionId,
-          revision,
         }),
       }),
       ownsMedia: true,

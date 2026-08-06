@@ -83,8 +83,8 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
               planId: 'media-library-recovery:plan-1',
               workspaceId: identity.workspaceId,
               libraryName: 'Footage',
-              requirementRevision: 'requirements-1',
-              operationRevision: 'sha256:operation',
+              requirementFingerprint: 'requirements-1',
+              operationFingerprint: 'sha256:operation',
               candidate: {
                 kind: 'global-alias',
                 name: 'Footage',
@@ -109,7 +109,7 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
           requestId: 'recover-1',
           identity,
           resourceId: 'library-1',
-          expectedOperationRevision: 'sha256:operation',
+          expectedOperationFingerprint: 'sha256:operation',
           candidate: 'existing-global',
         }),
       ),
@@ -142,8 +142,8 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
             planId: 'media-library-recovery:plan-1',
             workspaceId: identity.workspaceId,
             libraryName: 'Footage',
-            requirementRevision: 'requirements-1',
-            operationRevision: 'sha256:operation',
+            requirementFingerprint: 'requirements-1',
+            operationFingerprint: 'sha256:operation',
             candidate: {
               kind: 'global-alias',
               name: 'Footage',
@@ -168,7 +168,7 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
           requestId: 'recover-2',
           identity,
           resourceId: 'library-1',
-          expectedOperationRevision: 'sha256:operation',
+          expectedOperationFingerprint: 'sha256:operation',
           candidate: 'existing-global',
         }),
       ),
@@ -182,16 +182,14 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
           throw new Error(`Unexpected project portability channel '${channel}'.`);
         }
         return {
-          version: 1,
           requestId: request.requestId,
           identity: portabilityIdentity,
           status: 'planned',
           plan: {
-            version: 1,
             snapshotId: 'snapshot-a',
             workspaceId: portabilityIdentity.workspaceId,
-            requirementRevision: 'requirements:abc',
-            operationRevision: 'sha256:abc',
+            requirementFingerprint: 'requirements:abc',
+            operationFingerprint: 'sha256:abc',
             entryCount: 1,
             totalByteLength: 12,
             libraries: [{ libraryName: 'Footage', entryCount: 1, totalByteLength: 12 }],
@@ -220,16 +218,14 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
   it('rejects a target-bearing portable snapshot result from Main', async () => {
     electron.invoke.mockImplementation(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        version: 1,
         requestId: request.requestId,
         identity: portabilityIdentity,
         status: 'planned',
         plan: {
-          version: 1,
           snapshotId: 'snapshot-a',
           workspaceId: portabilityIdentity.workspaceId,
-          requirementRevision: 'requirements:abc',
-          operationRevision: 'sha256:abc',
+          requirementFingerprint: 'requirements:abc',
+          operationFingerprint: 'sha256:abc',
           entryCount: 0,
           totalByteLength: 0,
           libraries: [],
@@ -272,7 +268,7 @@ function projection() {
           state: 'required-unlinked' as const,
           referenceCount: 1,
           missingCount: 1,
-          operationRevision: 'sha256:operation',
+          operationFingerprint: 'sha256:operation',
         },
       },
     ],

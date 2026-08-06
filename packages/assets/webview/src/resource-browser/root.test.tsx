@@ -424,7 +424,6 @@ describe('ResourceBrowserRoot', () => {
     expect(payload).toBeDefined();
     expect(transferred.get('application/json')).toBe(payload);
     expect(JSON.parse(payload!)).toEqual({
-      schemaVersion: 1,
       type: 'content-locator',
       locator: { kind: 'workspace-file', path: 'assets/cat.png' },
       name: 'cat.png',
@@ -1257,7 +1256,7 @@ describe('ResourceBrowserRoot', () => {
             state: 'required-unlinked',
             referenceCount: 2,
             missingCount: 2,
-            operationRevision: 'sha256:operation',
+            operationFingerprint: 'sha256:operation',
           },
           depth: 0,
           kind: 'directory',
@@ -1277,8 +1276,8 @@ describe('ResourceBrowserRoot', () => {
         planId: 'media-library-recovery:plan-1',
         workspaceId: libraryProjection.identity.workspaceId,
         libraryName: 'Footage',
-        requirementRevision: 'requirements-1',
-        operationRevision: 'sha256:operation',
+        requirementFingerprint: 'requirements-1',
+        operationFingerprint: 'sha256:operation',
         candidate: { kind: 'global-alias', name: 'Footage', locationKind: 'local' },
         referencedCount: 2,
         validatedCount: 2,
@@ -1301,7 +1300,7 @@ describe('ResourceBrowserRoot', () => {
         expect.objectContaining({
           route: 'source.recovery.apply',
           planId: 'media-library-recovery:plan-1',
-          expectedOperationRevision: 'sha256:operation',
+          expectedOperationFingerprint: 'sha256:operation',
         }),
       ),
     );

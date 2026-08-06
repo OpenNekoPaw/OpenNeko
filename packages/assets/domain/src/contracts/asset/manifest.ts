@@ -915,7 +915,7 @@ export function validateAssetManifest(manifest: unknown): AssetManifestValidatio
   requireNumber(manifest, 'updatedAt', issues);
 
   if (!isAssetType(manifest['type'])) {
-    issues.push({ field: 'type', message: 'must be one of AssetType v4 values' });
+    issues.push({ field: 'type', message: 'must be a supported AssetType value' });
   }
 
   if (!isDistributionKind(manifest['distributionKind'])) {

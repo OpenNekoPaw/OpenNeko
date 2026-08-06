@@ -116,7 +116,7 @@ describe('Agent controller composition', () => {
     await composition.dispose?.();
   });
 
-  it('bootstraps the exact persisted Conversation as the active Tab at revision zero', async () => {
+  it('bootstraps the exact persisted Conversation as the active Tab', async () => {
     const workspace = createWorkspace();
     await workspace.createConversation('conversation-1');
     const composition = createAgentControllerComposition({
@@ -191,7 +191,6 @@ describe('Agent controller composition', () => {
           ],
           activeTabId: 'tab-conversation-1',
         },
-        revision: 0,
       },
       {
         type: 'activeConversation',
@@ -256,6 +255,136 @@ describe('Agent controller composition', () => {
     ).toThrow(
       "Desktop Agent initial Conversation 'conversation-missing' does not exist in Workspace 'workspace-1'.",
     );
+    await composition.dispose?.();
+  });
+
+  it('serializes Tab mutations per connection and continues after a rejected mutation', async () => {
+    const workspace = createWorkspace();
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+        openWorkspaceConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+    });
+    const identity = {
+      hostKind: 'electron' as const,
+      applicationId: 'neko-desktop',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      workspaceId: workspace.workspaceId,
+      connectionId: 'connection-1',
+    };
+    const events: string[] = [];
+    let releaseFirstPost: (() => void) | undefined;
+    const firstPostGate = new Promise<void>((resolve) => {
+      releaseFirstPost = resolve;
+    });
+    const first = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-a', title: 'A', conversationId: 'conversation-a' }],
+        activeTabId: null,
+      },
+      {
+        identity,
+        post: async () => {
+          events.push('first-start');
+          await firstPostGate;
+          events.push('first-complete');
+        },
+      },
+    );
+    const second = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-b', title: 'B', conversationId: 'conversation-b' }],
+        activeTabId: null,
+      },
+      {
+        identity,
+        post: async () => {
+          events.push('second');
+        },
+      },
+    );
+
+    await vi.waitFor(() => expect(events).toEqual(['first-start']));
+    releaseFirstPost?.();
+    await Promise.all([first, second]);
+    expect(events).toEqual(['first-start', 'first-complete', 'second']);
+
+    const rejected = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-failed', title: 'Failed', conversationId: 'conversation-failed' }],
+        activeTabId: null,
+      },
+      {
+        identity,
+        post: async () => {
+          throw new Error('Tab projection delivery failed.');
+        },
+      },
+    );
+    const recovered = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-final', title: 'Final', conversationId: 'conversation-final' }],
+        activeTabId: null,
+      },
+      { identity, post: vi.fn(async () => undefined) },
+    );
+
+    await expect(rejected).rejects.toThrow('Tab projection delivery failed.');
+    await expect(recovered).resolves.toBeUndefined();
+    const finalMessages: AgentHostToWebviewMessage[] = [];
+    await effects.config.readTabState({
+      identity,
+      post: async (message) => {
+        finalMessages.push(message);
+      },
+    });
+    expect(finalMessages).toEqual([
+      {
+        type: 'tabState',
+        tabState: {
+          openTabs: [
+            { id: 'tab-final', title: 'Final', conversationId: 'conversation-final' },
+          ],
+          activeTabId: null,
+        },
+      },
+    ]);
+
+    effects.dispose();
     await composition.dispose?.();
   });
 
@@ -562,7 +691,6 @@ function createLocatorBackedProjection(): ConversationProjectionSnapshot {
     messageId: 'message-1',
     itemId: 'tool-item-1',
     sequence: 1,
-    itemRevision: 1,
     status: 'complete',
     createdAt: 1,
     updatedAt: 1,

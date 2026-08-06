@@ -26,6 +26,7 @@ export default defineConfig({
         '@neko/assets-domain/resource-browser/contract',
         '@neko/shared',
         '@neko/ui/icons',
+        '@neko/ui/primitives',
       ],
     },
   },

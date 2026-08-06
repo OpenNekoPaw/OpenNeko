@@ -159,7 +159,6 @@ async function runQualification(): Promise<void> {
       {
         absolutePath: fixtures.imagePath,
         mediaType: 'image/png',
-        revision: fixtures.imageRevision,
       },
     );
     const secondaryClosed = onceEvent(secondary, 'closed');
@@ -240,27 +239,22 @@ async function registerFixtures(
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.videoPath,
       mediaType: 'video/mp4',
-      revision: fixtures.videoRevision,
     }),
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.audioPath,
       mediaType: 'audio/wav',
-      revision: fixtures.audioRevision,
     }),
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.imagePath,
       mediaType: 'image/png',
-      revision: fixtures.imageRevision,
     }),
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.pdfPath,
       mediaType: 'application/pdf',
-      revision: fixtures.pdfRevision,
     }),
     registry.registerFile(resourceOwner, {
       absolutePath: fixtures.glbPath,
       mediaType: 'model/gltf-binary',
-      revision: fixtures.glbRevision,
     }),
   ]);
   const gltf = await registry.registerResourceSet(
@@ -270,13 +264,11 @@ async function registerFixtures(
         virtualPath: 'scene.gltf',
         path: fixtures.gltfPath,
         contentType: 'model/gltf+json',
-        revision: fixtures.gltfRevision,
       },
       {
         virtualPath: 'scene.bin',
         path: fixtures.gltfBinaryPath,
         contentType: 'application/octet-stream',
-        revision: fixtures.gltfBinaryRevision,
       },
     ],
     'scene.gltf',
@@ -299,7 +291,6 @@ async function qualifyPcmCancellation(
     viewId: 'qualification-view',
     sessionId: `pcm-${mode}`,
     rendererSessionId: 'qualification-epoch',
-    revision: 'pcm-revision',
   });
   const pcm = await publisher.registerPcm((signal) => {
     const stdout = new PassThrough();
@@ -358,7 +349,6 @@ function owner(windowId: string, sessionId: string): DesktopResourceOwner {
     viewId: 'qualification-view',
     sessionId,
     rendererSessionId: 'qualification-epoch',
-    revision: 'qualification-revision',
   };
 }
 
@@ -371,7 +361,7 @@ async function createFixtures(root: string) {
   const gltfPath = path.join(root, 'scene.gltf');
   const gltfBinaryPath = path.join(root, 'scene.bin');
   const ffmpegPath = process.env['OPENNEKO_QUALIFICATION_FFMPEG'] ?? 'ffmpeg';
-  const version = await execFileAsync(ffmpegPath, ['-version']);
+  const ffmpegReleaseOutput = await execFileAsync(ffmpegPath, ['-version']);
   await execFileAsync(ffmpegPath, [
     '-hide_banner',
     '-loglevel',
@@ -413,45 +403,45 @@ async function createFixtures(root: string) {
     writeFile(gltfBinaryPath, Buffer.from([1, 2, 3, 4])),
   ]);
   const [
-    videoRevision,
-    audioRevision,
-    imageRevision,
-    pdfRevision,
-    glbRevision,
-    gltfRevision,
-    gltfBinaryRevision,
+    videoFingerprint,
+    audioFingerprint,
+    imageFingerprint,
+    pdfFingerprint,
+    glbFingerprint,
+    gltfFingerprint,
+    gltfBinaryFingerprint,
   ] = await Promise.all([
-    fileRevision(videoPath),
-    fileRevision(audioPath),
-    fileRevision(imagePath),
-    fileRevision(pdfPath),
-    fileRevision(glbPath),
-    fileRevision(gltfPath),
-    fileRevision(gltfBinaryPath),
+    fileFingerprint(videoPath),
+    fileFingerprint(audioPath),
+    fileFingerprint(imagePath),
+    fileFingerprint(pdfPath),
+    fileFingerprint(glbPath),
+    fileFingerprint(gltfPath),
+    fileFingerprint(gltfBinaryPath),
   ] as const);
   return {
     videoPath,
     videoSha256: createHash('sha256')
       .update(await readFile(videoPath))
       .digest('hex'),
-    videoRevision,
+    videoFingerprint,
     audioPath,
-    audioRevision,
+    audioFingerprint,
     imagePath,
-    imageRevision,
+    imageFingerprint,
     pdfPath,
-    pdfRevision,
+    pdfFingerprint,
     glbPath,
-    glbRevision,
+    glbFingerprint,
     gltfPath,
-    gltfRevision,
+    gltfFingerprint,
     gltfBinaryPath,
-    gltfBinaryRevision,
-    ffmpegVersion: version.stdout.split(/\r?\n/u)[0] ?? 'unknown',
+    gltfBinaryFingerprint,
+    ffmpegVersion: ffmpegReleaseOutput.stdout.split(/\r?\n/u)[0] ?? 'unknown',
   };
 }
 
-async function fileRevision(filePath: string): Promise<string> {
+async function fileFingerprint(filePath: string): Promise<string> {
   const bytes = await readFile(filePath);
   return createHash('sha256').update(bytes).digest('hex');
 }

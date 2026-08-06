@@ -33,8 +33,8 @@ import {
 } from './project-content-reference-readers';
 
 export interface WorkspaceMediaLibrarySyncProjection {
-  readonly requirementRevision: string;
-  readonly operationRevision: string;
+  readonly requirementFingerprint: string;
+  readonly operationFingerprint: string;
   readonly coverage: ProjectContentReferenceSnapshot['requirements']['coverage'];
   readonly statuses: readonly WorkspaceMediaLibraryStatus[];
   readonly portability: WorkspaceMediaLibraryPortabilityProjection;
@@ -79,10 +79,10 @@ export class WorkspaceMediaLibrarySyncService {
       globalMediaLibraryRoot: this.globalMediaLibraryRoot,
       references,
     });
-    const operationRevision = revisionFor(references.requirements.revision, statuses);
+    const operationFingerprint = revisionFor(references.requirements.fingerprint, statuses);
     const normalizedStatuses = statuses.map((status) => ({
       ...status,
-      operationRevision,
+      operationFingerprint,
     }));
     const linkedPortabilityState =
       references.requirements.coverage === 'incomplete'
@@ -93,13 +93,13 @@ export class WorkspaceMediaLibrarySyncService {
           ? 'sync-requires-relink'
           : 'linked-ready';
     const baseProjection: WorkspaceMediaLibrarySyncProjection = {
-      requirementRevision: references.requirements.revision,
-      operationRevision,
+      requirementFingerprint: references.requirements.fingerprint,
+      operationFingerprint,
       coverage: references.requirements.coverage,
       statuses: normalizedStatuses,
       portability: {
         state: linkedPortabilityState,
-        requirementRevision: references.requirements.revision,
+        requirementFingerprint: references.requirements.fingerprint,
         libraries: normalizedStatuses,
       },
     };
@@ -111,7 +111,7 @@ export class WorkspaceMediaLibrarySyncService {
     try {
       const completedSnapshot =
         references.requirements.coverage === 'complete'
-          ? await binding.findCompletedSnapshot(references.requirements.revision)
+          ? await binding.findCompletedSnapshot(references.requirements.fingerprint)
           : null;
       const projection: WorkspaceMediaLibrarySyncProjection = completedSnapshot
         ? {
@@ -122,12 +122,6 @@ export class WorkspaceMediaLibrarySyncService {
             },
           }
         : baseProjection;
-      await binding.recordProjection({
-        freshness: 'fresh',
-        diagnostic:
-          normalizedStatuses.find((status) => status.diagnostic)?.diagnostic?.code ?? null,
-        updatedAt: new Date().toISOString(),
-      });
       return projection;
     } catch {
       return { ...baseProjection, metadataDiagnostic: 'local-metadata-write-failed' };
@@ -225,19 +219,19 @@ export class WorkspaceMediaLibrarySyncService {
   async applyRecovery(input: {
     readonly workspace: AssetWorkspaceResolution;
     readonly planId: string;
-    readonly expectedOperationRevision: string;
+    readonly expectedOperationFingerprint: string;
   }): Promise<WorkspaceMediaLibrarySyncProjection> {
     const plan = this.plans.get(input.planId);
     if (!plan || plan.publicPlan.workspaceId !== input.workspace.workspaceId) {
       throw stalePlan();
     }
-    if (plan.publicPlan.operationRevision !== input.expectedOperationRevision) {
+    if (plan.publicPlan.operationFingerprint !== input.expectedOperationFingerprint) {
       throw stalePlan();
     }
     const current = await this.inspect(input.workspace);
     if (
-      current.operationRevision !== plan.publicPlan.operationRevision ||
-      current.requirementRevision !== plan.publicPlan.requirementRevision
+      current.operationFingerprint !== plan.publicPlan.operationFingerprint ||
+      current.requirementFingerprint !== plan.publicPlan.requirementFingerprint
     ) {
       this.plans.delete(input.planId);
       throw stalePlan();
@@ -514,8 +508,8 @@ export class WorkspaceMediaLibrarySyncService {
       planId,
       workspaceId: input.workspace.workspaceId,
       libraryName: input.requirement.libraryName,
-      requirementRevision: input.current.requirementRevision,
-      operationRevision: input.status.operationRevision,
+      requirementFingerprint: input.current.requirementFingerprint,
+      operationFingerprint: input.status.operationFingerprint,
       candidate: input.candidate
         ? {
             kind: 'global-alias',
@@ -756,7 +750,7 @@ function status(
     state,
     referenceCount,
     missingCount,
-    operationRevision: 'pending',
+    operationFingerprint: 'pending',
     ...(diagnosticCode && message
       ? { diagnostic: { code: diagnosticCode, severity: 'error', message, missingCount } }
       : {}),
@@ -764,13 +758,13 @@ function status(
 }
 
 function revisionFor(
-  requirementRevision: string,
+  requirementFingerprint: string,
   statuses: readonly WorkspaceMediaLibraryStatus[],
 ): string {
   return `sha256:${createHash('sha256')
     .update(
       JSON.stringify([
-        requirementRevision,
+        requirementFingerprint,
         statuses.map(({ libraryName, state, referenceCount, missingCount }) => [
           libraryName,
           state,

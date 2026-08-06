@@ -47,7 +47,7 @@ describe('Desktop Agent fixture automation contract', () => {
   });
 
   it.each(['channel', 'command', 'path', 'credential', 'owner'])(
-    'poisons arbitrary %s controls',
+    'rejects arbitrary %s controls',
     (field) => {
       const value = request({ kind: 'reload-renderer' });
       value.operation[field] = 'forbidden';
@@ -56,14 +56,14 @@ describe('Desktop Agent fixture automation contract', () => {
   );
 
   it('rejects stale/missing exact identities and unsupported operations', () => {
-    const removedEpoch = request({
+    const unknownField = request({
       kind: 'cancel',
       conversationId: 'conversation-1',
       turnId: 'turn-1',
       runId: 'run-1',
     });
-    removedEpoch.connection.rendererSessionId = 1;
-    expect(() => parseDesktopAgentAutomationRequest(removedEpoch)).toThrow(
+    unknownField.connection.rendererSessionId = 1;
+    expect(() => parseDesktopAgentAutomationRequest(unknownField)).toThrow(
       'unknown=rendererSessionId',
     );
     const missing = request({ kind: 'reload-renderer' });
@@ -108,10 +108,7 @@ describe('Desktop Agent fixture automation contract', () => {
       ),
     ).toMatchObject({ status: 'idle', identity: { runId: 'run-1' } });
     expect(() =>
-      parseDesktopAgentAutomationResult(
-        { requestId: 'stale', status: 'accepted' },
-        'request-1',
-      ),
+      parseDesktopAgentAutomationResult({ requestId: 'stale', status: 'accepted' }, 'request-1'),
     ).toThrow('request identity does not match');
   });
 });

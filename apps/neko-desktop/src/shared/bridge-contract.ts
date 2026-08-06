@@ -1,7 +1,4 @@
-import {
-  parseNekoApplicationIdentity,
-  type NekoApplicationIdentity,
-} from '@neko/host/application';
+import { parseNekoApplicationIdentity, type NekoApplicationIdentity } from '@neko/host/application';
 import type { NekoHostIdentity } from '@neko/host/ports';
 
 export const DESKTOP_BRIDGE_CHANNELS = {
@@ -55,10 +52,8 @@ export interface OpenNekoDesktopBridge {
   };
 }
 
-export class DesktopBridgeContractError extends Error {
-  readonly code:
-    | 'invalid-desktop-bridge-payload'
-    | 'desktop-bridge-request-mismatch';
+class DesktopBridgeContractError extends Error {
+  readonly code: 'invalid-desktop-bridge-payload' | 'desktop-bridge-request-mismatch';
 
   constructor(code: DesktopBridgeContractError['code'], message: string) {
     super(message);
@@ -109,18 +104,8 @@ export function parseDesktopBootstrapProjection(
   const host = requireRecord(record['host'], 'Desktop bootstrap host identity is required.');
   const runtime = requireRecord(record['runtime'], 'Desktop bootstrap runtime is required.');
   requireExactKeys(window, ['windowId', 'rendererSessionId'], 'Desktop bootstrap window');
-  requireExactKeys(
-    host,
-    ['id', 'kind', 'ui', 'displayName'],
-    'Desktop bootstrap host',
-    true,
-  );
-  requireExactKeys(
-    runtime,
-    ['platform', 'arch', 'locale'],
-    'Desktop bootstrap runtime',
-    true,
-  );
+  requireExactKeys(host, ['id', 'kind', 'ui', 'displayName'], 'Desktop bootstrap host', true);
+  requireExactKeys(runtime, ['platform', 'arch', 'locale'], 'Desktop bootstrap runtime', true);
   if (record['status'] !== 'foundation-ready') {
     throw invalidPayload('Desktop bootstrap status must be foundation-ready.');
   }

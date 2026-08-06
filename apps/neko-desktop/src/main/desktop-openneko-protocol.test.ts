@@ -56,13 +56,10 @@ describe('Desktop OpenNeko protocol handler', () => {
   });
 
   it.each([
-    'neko-app://desktop/index.html',
-    'neko-media://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    'opennekomedia://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    'http://127.0.0.1:43125/index.html',
-    'openneko://desktop/index.html?legacy=1',
+    'https://desktop.invalid/index.html',
+    'openneko://desktop/index.html?unexpected=1',
     'openneko://desktop/assets/codicon.ttf?721d4c0a96379d0c13d3d5596893c348',
-  ])('poisons replaced or non-canonical protocol URL %s', async (url) => {
+  ])('rejects non-canonical protocol URL %s', async (url) => {
     rendererRoot = await mkdtemp(path.join(tmpdir(), 'desktop-openneko-protocol-'));
     await writeFile(path.join(rendererRoot, 'index.html'), '<main>unexpected</main>');
     const handleResource = vi.fn(async () => new Response('unexpected'));
