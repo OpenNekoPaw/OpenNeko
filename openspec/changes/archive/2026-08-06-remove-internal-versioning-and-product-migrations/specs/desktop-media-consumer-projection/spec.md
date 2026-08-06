@@ -25,3 +25,8 @@ Producer/consumer tests and real Electron scenarios SHALL assert that the exact 
 - **WHEN** real Electron fixtures load Canvas and Preview media/model/document content
 - **THEN** evidence records package-owned consumers and exact resource registrations
 - **AND** no loopback, alternate protocol, migration handler, or compatibility adapter is registered or imported
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Migration SHALL prove OpenNeko and poison replaced paths`
+- TO: `### Requirement: Canonical OpenNeko paths are proven and replaced paths are absent`

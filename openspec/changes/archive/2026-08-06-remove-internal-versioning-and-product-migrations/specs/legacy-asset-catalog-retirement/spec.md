@@ -42,3 +42,10 @@ AssetEntity contracts and services, Asset commands and Extension APIs, Asset sea
 **Reason**: The entire product migration path is removed rather than constrained.
 
 **Migration**: None; current Media Library and Entity owners remain the only product paths.
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Legacy Asset data is inspection-only`
+- TO: `### Requirement: Legacy Asset data is outside product runtime`
+- FROM: `### Requirement: Legacy runtime paths are removed after migration`
+- TO: `### Requirement: Legacy runtime paths are deleted`

@@ -13,3 +13,8 @@ Media Library tree, search, recent-use, technical metadata, and availability ent
 
 - **WHEN** a projection row fails the stable current entry contract
 - **THEN** Media Library leaves that row unchanged, reports the exact entry diagnostic, and continues serving valid sibling entries and workspaces without migration or automatic repair
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Media entries are rebuildable projections`
+- TO: `### Requirement: Media entries are source-derived projections`
