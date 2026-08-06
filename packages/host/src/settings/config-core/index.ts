@@ -5,7 +5,6 @@
  *
  * File locations:
  * - User config: ~/.neko/config.toml
- * - Workspace config: .neko/config.toml
  *
  * Node configuration reading is owned by @neko/host/settings.
  * @example
@@ -13,13 +12,12 @@
  * // In browser/webview - use types and normalizer only
  * import {
  *   type UnifiedConfig,
- *   processConfig,
+ *   normalizeConfig,
  * } from '@neko/host/settings';
  *
  * // In Node.js (extension, agent-cli) - import reader directly
  * import {
  *   readUserConfigResult,
- *   readWorkspaceConfigResult,
  * } from '@neko/host/settings';
  * ```
  */
@@ -37,7 +35,7 @@ export {
 } from './types';
 
 // Normalizer (browser-safe - pure functions, no Node.js dependencies)
-export { mergeConfigs, normalizeConfig, processConfig } from './config-normalizer';
+export { normalizeConfig } from './config-normalizer';
 
 export type {
   NekoTomlConfig,

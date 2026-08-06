@@ -24,8 +24,8 @@ describe('Agent Host controller contract', () => {
       .map(([route]) => route)
       .sort();
 
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(41);
-    expect(new Set(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).size).toBe(41);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(40);
+    expect(new Set(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).size).toBe(40);
     expect(partitions.flat().sort()).toEqual(implementedRoutes);
   });
 

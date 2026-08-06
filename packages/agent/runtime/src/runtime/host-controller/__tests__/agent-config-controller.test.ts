@@ -26,7 +26,6 @@ function createEffects(): AgentConfigControllerEffectPort {
     readConfig: vi.fn(),
     refreshConfig: vi.fn(),
     openUserConfig: vi.fn(),
-    openHostConfig: vi.fn(),
     readTabState: vi.fn(),
     updateSettings: vi.fn(),
     updateTabState: vi.fn(),
@@ -60,7 +59,6 @@ describe('Agent config controller', () => {
     await dispatch({ type: 'getConfig' }, effects, context);
     await dispatch({ type: 'refreshConfigSnapshot' }, effects, context);
     await dispatch({ type: 'openUserConfigFile' }, effects, context);
-    await dispatch({ type: 'openConfigFile' }, effects, context);
     await dispatch({ type: 'getTabState' }, effects, context);
     await dispatch(
       { type: 'updateSettings', conversationId: 'conversation-1', settings },
@@ -73,7 +71,6 @@ describe('Agent config controller', () => {
     expect(effects.readConfig).toHaveBeenCalledWith(context);
     expect(effects.refreshConfig).toHaveBeenCalledWith(context);
     expect(effects.openUserConfig).toHaveBeenCalledWith(context);
-    expect(effects.openHostConfig).toHaveBeenCalledWith(context);
     expect(effects.readTabState).toHaveBeenCalledWith(context);
     expect(effects.updateSettings).toHaveBeenCalledWith(
       { conversationId: 'conversation-1', settings },

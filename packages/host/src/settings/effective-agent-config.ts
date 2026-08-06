@@ -2,12 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { MEDIA_MODEL_TYPES, type MediaModelType, type ModelRefConfig } from '@neko/ai-contracts';
 import { stableStringify } from '@neko/shared';
-import {
-  DEFAULT_CONFIG,
-  DEFAULT_EXTENSION_CONFIG,
-  mergeConfigs,
-  type UnifiedConfig,
-} from './config-core/index';
+import { DEFAULT_CONFIG, DEFAULT_EXTENSION_CONFIG, type UnifiedConfig } from './config-core/index';
 import {
   normalizeExternalResearchConfig,
   type ExternalResearchConfig,
@@ -73,7 +68,6 @@ export interface EffectiveAgentWorkspaceConfigSnapshot {
 
 export interface ResolveEffectiveAgentWorkspaceConfigInput {
   readonly userConfigReadResult: ConfigReadResult | null | undefined;
-  readonly workspaceConfigReadResult?: ConfigReadResult | null;
   readonly providers: readonly Provider[];
   readonly models: readonly Model[];
   readonly mcpServers: readonly MCPServerPreset[];
@@ -83,7 +77,6 @@ export interface ResolveEffectiveAgentWorkspaceConfigInput {
 interface ConfigValue<T> {
   readonly value: T;
   readonly source: EffectiveAgentConfigValueSource;
-  readonly filePath?: string;
 }
 
 export function resolveEffectiveAgentWorkspaceConfigSnapshot(
@@ -91,58 +84,40 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
 ): EffectiveAgentWorkspaceConfigSnapshot {
   const diagnostics = collectReadDiagnostics(input);
   const userConfig = readOkConfig(input.userConfigReadResult);
-  const workspaceConfig = readOkConfig(input.workspaceConfigReadResult);
   const runtime = input.runtimeOverrides;
-  diagnostics.push(
-    ...collectWorkspacePolicyDiagnostics({
-      workspaceConfig,
-      workspaceConfigReadResult: input.workspaceConfigReadResult,
-    }),
-  );
 
-  const providerSelection = resolveProviderSelection(userConfig, workspaceConfig, runtime);
-  const modelSelection = resolveModelSelection(
-    userConfig,
-    workspaceConfig,
-    runtime,
-    providerSelection,
-  );
+  const providerSelection = resolveProviderSelection(userConfig, runtime);
+  const modelSelection = resolveModelSelection(userConfig, runtime, providerSelection);
   const temperature = resolveScalar({
     key: 'temperature',
     defaultValue: DEFAULT_CONFIG.temperature,
     userConfig,
-    workspaceConfig,
     runtimeValue: runtime?.temperature,
   });
   const maxTokens = resolveScalar({
     key: 'maxTokens',
     defaultValue: DEFAULT_CONFIG.maxTokens,
     userConfig,
-    workspaceConfig,
     runtimeValue: runtime?.maxTokens,
   });
   const thinkingBudget = resolveScalar({
     key: 'thinkingBudget',
     defaultValue: DEFAULT_EXTENSION_CONFIG.thinkingBudget,
     userConfig,
-    workspaceConfig,
     runtimeValue: runtime?.thinkingBudget,
   });
   const executionMode = resolveScalar({
     key: 'executionMode',
     defaultValue: DEFAULT_EXTENSION_CONFIG.executionMode,
     userConfig,
-    workspaceConfig,
     runtimeValue: runtime?.executionMode,
   });
   const outputFormat: ConfigValue<EffectiveAgentOutputFormat> = {
     value: runtime?.outputFormat ?? 'markdown',
     source: runtime?.outputFormat === undefined ? 'default' : 'runtime',
   };
-  const mediaDefaults = resolveMediaDefaults(userConfig, workspaceConfig, runtime);
-  const externalResearch = normalizeExternalResearchConfig(
-    mergeConfigs(userConfig, workspaceConfig).externalResearch,
-  );
+  const mediaDefaults = resolveMediaDefaults(userConfig, runtime);
+  const externalResearch = normalizeExternalResearchConfig(userConfig.externalResearch);
 
   const provider = providerSelection.value
     ? input.providers.find((candidate) => candidate.id === providerSelection.value)
@@ -154,7 +129,6 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
   diagnostics.push(
     ...validateProviderModelSelection({
       userConfigReadResult: input.userConfigReadResult,
-      workspaceConfigReadResult: input.workspaceConfigReadResult,
       providerSelection,
       modelSelection,
       provider,
@@ -164,7 +138,7 @@ export function resolveEffectiveAgentWorkspaceConfigSnapshot(
     }),
   );
 
-  const blockingDiagnostic = diagnostics.find(isBlockingEffectiveConfigDiagnostic);
+  const blockingDiagnostic = diagnostics[0];
 
   return {
     providerId: providerSelection.value,
@@ -295,38 +269,6 @@ function assertNonNegativeInteger(value: number, label: string): void {
   }
 }
 
-function collectWorkspacePolicyDiagnostics(input: {
-  readonly workspaceConfig: UnifiedConfig;
-  readonly workspaceConfigReadResult?: ConfigReadResult | null;
-}): AssistantConfigDiagnostic[] {
-  if (input.workspaceConfigReadResult?.status !== 'ok') return [];
-  const filePath = input.workspaceConfigReadResult.filePath;
-  const diagnostics: AssistantConfigDiagnostic[] = [];
-  if ((input.workspaceConfig.providers?.length ?? 0) > 0) {
-    diagnostics.push(
-      buildAssistantConfigAvailabilityDiagnostic(
-        'unsupportedWorkspaceProviderDefinition',
-        filePath,
-      ),
-    );
-  }
-  if ((input.workspaceConfig.models?.length ?? 0) > 0) {
-    diagnostics.push(
-      buildAssistantConfigAvailabilityDiagnostic('unsupportedWorkspaceModelDefinition', filePath),
-    );
-  }
-  if (isNonEmptyString(input.workspaceConfig.skillsDir)) {
-    diagnostics.push(
-      buildAssistantConfigAvailabilityDiagnostic('unsupportedSkillSource', filePath),
-    );
-  }
-  return diagnostics;
-}
-
-function isBlockingEffectiveConfigDiagnostic(diagnostic: AssistantConfigDiagnostic): boolean {
-  return diagnostic.code !== 'unsupportedSkillSource';
-}
-
 function collectReadDiagnostics(
   input: ResolveEffectiveAgentWorkspaceConfigInput,
 ): AssistantConfigDiagnostic[] {
@@ -334,11 +276,7 @@ function collectReadDiagnostics(
   const userDiagnostic = input.userConfigReadResult
     ? projectAssistantConfigReadResultDiagnostic(input.userConfigReadResult)
     : undefined;
-  const workspaceDiagnostic = input.workspaceConfigReadResult
-    ? projectAssistantConfigReadResultDiagnostic(input.workspaceConfigReadResult)
-    : undefined;
   if (userDiagnostic) diagnostics.push(userDiagnostic);
-  if (workspaceDiagnostic) diagnostics.push(workspaceDiagnostic);
   return diagnostics;
 }
 
@@ -348,19 +286,10 @@ function readOkConfig(result: ConfigReadResult | null | undefined): UnifiedConfi
 
 function resolveProviderSelection(
   userConfig: UnifiedConfig,
-  workspaceConfig: UnifiedConfig,
   runtime: EffectiveAgentRuntimeOverrides | undefined,
 ): ConfigValue<string | null> {
   if (runtime?.selectedProviderId !== undefined) {
     return { value: normalizeString(runtime.selectedProviderId), source: 'runtime' };
-  }
-  const workspaceDefaultModel = workspaceConfig.defaultModels?.llm;
-  if (workspaceDefaultModel?.providerId) {
-    return {
-      value: workspaceDefaultModel.providerId,
-      source: 'workspace',
-      filePath: undefined,
-    };
   }
   const userDefaultModel = userConfig.defaultModels?.llm;
   if (userDefaultModel?.providerId) {
@@ -371,19 +300,11 @@ function resolveProviderSelection(
 
 function resolveModelSelection(
   userConfig: UnifiedConfig,
-  workspaceConfig: UnifiedConfig,
   runtime: EffectiveAgentRuntimeOverrides | undefined,
   providerSelection: ConfigValue<string | null>,
 ): ConfigValue<string | null> {
   if (runtime?.selectedModelId !== undefined) {
     return { value: normalizeString(runtime.selectedModelId), source: 'runtime' };
-  }
-  const workspaceDefaultModel = workspaceConfig.defaultModels?.llm;
-  if (
-    workspaceDefaultModel?.modelId &&
-    (!providerSelection.value || workspaceDefaultModel.providerId === providerSelection.value)
-  ) {
-    return { value: workspaceDefaultModel.modelId, source: 'workspace' };
   }
   const userDefaultModel = userConfig.defaultModels?.llm;
   if (
@@ -402,15 +323,10 @@ function resolveScalar<
   readonly key: K;
   readonly defaultValue: T;
   readonly userConfig: UnifiedConfig;
-  readonly workspaceConfig: UnifiedConfig;
   readonly runtimeValue?: T;
 }): ConfigValue<T> {
   if (input.runtimeValue !== undefined) {
     return { value: input.runtimeValue, source: 'runtime' };
-  }
-  const workspaceValue = input.workspaceConfig[input.key];
-  if (workspaceValue !== undefined) {
-    return { value: workspaceValue as T, source: 'workspace' };
   }
   const userValue = input.userConfig[input.key];
   if (userValue !== undefined) {
@@ -421,7 +337,6 @@ function resolveScalar<
 
 function resolveMediaDefaults(
   userConfig: UnifiedConfig,
-  workspaceConfig: UnifiedConfig,
   runtime: EffectiveAgentRuntimeOverrides | undefined,
 ): {
   readonly values: Partial<Record<MediaModelType, string>>;
@@ -431,14 +346,10 @@ function resolveMediaDefaults(
   const sources: Partial<Record<MediaModelType, EffectiveAgentConfigValueSource>> = {};
   for (const type of MEDIA_MODEL_TYPES) {
     const runtimeValue = runtime?.defaultMediaModels?.[type];
-    const workspaceValue = workspaceConfig.defaultModels?.[type];
     const userValue = userConfig.defaultModels?.[type];
     if (runtimeValue) {
       values[type] = runtimeValue;
       sources[type] = 'runtime';
-    } else if (workspaceValue) {
-      values[type] = toModelOptionId(workspaceValue);
-      sources[type] = 'workspace';
     } else if (userValue) {
       values[type] = toModelOptionId(userValue);
       sources[type] = 'user';
@@ -449,7 +360,6 @@ function resolveMediaDefaults(
 
 function validateProviderModelSelection(input: {
   readonly userConfigReadResult: ConfigReadResult | null | undefined;
-  readonly workspaceConfigReadResult?: ConfigReadResult | null;
   readonly providerSelection: ConfigValue<string | null>;
   readonly modelSelection: ConfigValue<string | null>;
   readonly provider?: Provider;
@@ -492,24 +402,15 @@ function validateProviderModelSelection(input: {
 
 function resolveSelectionFilePath(input: {
   readonly userConfigReadResult: ConfigReadResult | null | undefined;
-  readonly workspaceConfigReadResult?: ConfigReadResult | null;
   readonly providerSelection: ConfigValue<string | null>;
   readonly modelSelection: ConfigValue<string | null>;
 }): string {
-  const source =
-    input.providerSelection.source === 'workspace' || input.modelSelection.source === 'workspace'
-      ? input.workspaceConfigReadResult
-      : input.userConfigReadResult;
-  return source?.filePath ?? input.userConfigReadResult?.filePath ?? '<agent-config>';
+  return input.userConfigReadResult?.filePath ?? '<agent-config>';
 }
 
 function normalizeString(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function isChatModel(model: Model): boolean {

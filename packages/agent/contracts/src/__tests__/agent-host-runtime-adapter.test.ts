@@ -91,7 +91,7 @@ describe('Agent host runtime adapter contracts', () => {
     );
 
     expect(supportCounts).toEqual({
-      implemented: 41,
+      implemented: 40,
       unsupported: 8,
       'host-inapplicable': 3,
     });

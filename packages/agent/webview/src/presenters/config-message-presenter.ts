@@ -567,9 +567,6 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
     code !== 'unsupportedModelType' &&
     code !== 'unsupportedDefaultModelType' &&
     code !== 'invalidDefaultModelBinding' &&
-    code !== 'unsupportedWorkspaceProviderDefinition' &&
-    code !== 'unsupportedWorkspaceModelDefinition' &&
-    code !== 'unsupportedSkillSource' &&
     code !== 'readError' &&
     code !== 'missingConfig' &&
     code !== 'missingProvider' &&

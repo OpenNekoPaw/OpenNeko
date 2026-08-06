@@ -349,7 +349,7 @@ function configurationSource(
   input: unknown,
   label: string,
 ): EffectiveAgentConfigurationProjection['sources']['modelBinding'] {
-  return oneOf(input, ['user', 'workspace', 'runtime', 'default'] as const, `${label} source`);
+  return oneOf(input, ['user', 'runtime', 'default'] as const, `${label} source`);
 }
 
 function parseConnection(input: unknown): DesktopAgentConnectionIdentity {

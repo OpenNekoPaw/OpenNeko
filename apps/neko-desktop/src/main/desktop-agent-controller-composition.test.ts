@@ -16,6 +16,7 @@ import {
   projectAgentSecretSafeConfig,
 } from '@neko/agent-runtime/application';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
+import type { AssistantRuntimeSettingsPort } from '@neko/host/settings';
 
 const temporaryRoots: string[] = [];
 
@@ -33,6 +34,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -46,7 +48,6 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -77,6 +78,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -90,7 +92,6 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -123,6 +124,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -136,7 +138,6 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -219,6 +220,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -232,7 +234,6 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -264,6 +265,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -277,7 +279,6 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -395,6 +396,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -408,7 +410,6 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -504,7 +505,6 @@ describe('Agent controller composition', () => {
           name: 'Provider',
           type: 'openai',
           enabled: true,
-          apiKey: 'must-not-cross-renderer',
           baseUrl: 'https://example.test',
           models: [],
         },
@@ -540,6 +540,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -553,7 +554,6 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError,
     });
@@ -772,4 +772,18 @@ function createCredentialRuntime() {
       notify: () => undefined,
     },
   });
+}
+
+function createRuntimeSettings(): AssistantRuntimeSettingsPort {
+  let settings: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = {};
+  return {
+    snapshot: () => settings,
+    commit: async (next) => {
+      settings = { ...next };
+    },
+    reset: async () => {
+      settings = {};
+    },
+    diagnostic: () => undefined,
+  };
 }

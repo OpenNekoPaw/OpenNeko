@@ -19,7 +19,6 @@ export * from './provider-configuration';
 export * from './retry-timeout-presets';
 export * from './user-config';
 export * from './user-config-template';
-export * from './workspace-config';
 export * from './types/config';
 export * from './types/error';
 export * from './types/provider';

@@ -4,7 +4,6 @@
  * Shared configuration format for agent-cli and platform.
  * File locations:
  * - User config: ~/.neko/config.toml
- * - Workspace config: .neko/config.toml
  */
 
 import { DEFAULT_EXTERNAL_RESEARCH_CONFIG } from '@neko/agent-contracts';

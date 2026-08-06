@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { ConfiguredProvider } from '@neko/agent-contracts';
 import { useTranslation } from '../../i18n/I18nContext';
 import { useAgentHostMessages } from '../../host-runtime-context';
-import { FileIcon, SettingsIcon } from '@neko/ui/icons';
+import { FileIcon } from '@neko/ui/icons';
 
 interface AccountBarProps {
   configuredProviders: ConfiguredProvider[];
@@ -39,10 +39,6 @@ export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBar
   );
   const isConfigured = !!activeProvider;
   const triggerLabel = activeProvider?.name ?? t('accountBar.connectTitle');
-  const closeAndOpenConfigFile = () => {
-    setOpen(false);
-    agentHostMessages.openConfigFile();
-  };
   const closeAndOpenUserConfigFile = () => {
     setOpen(false);
     agentHostMessages.openUserConfigFile();
@@ -82,28 +78,15 @@ export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBar
           style={ACCOUNT_MENU_STYLE}
           role="menu"
         >
-          <>
-            <button
-              type="button"
-              onClick={closeAndOpenConfigFile}
-              className="agent-header-menu-item"
-              role="menuitem"
-            >
-              <SettingsIcon className="h-3.5 w-3.5 flex-shrink-0 text-[var(--agent-fg-secondary)]" />
-              <span className="agent-header-menu-item-label">
-                {t('accountBar.modelGenerationConfig')}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={closeAndOpenUserConfigFile}
-              className="agent-header-menu-item"
-              role="menuitem"
-            >
-              <FileIcon className="h-3.5 w-3.5 flex-shrink-0 text-[var(--agent-fg-secondary)]" />
-              <span className="agent-header-menu-item-label">{t('accountBar.openConfigFile')}</span>
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={closeAndOpenUserConfigFile}
+            className="agent-header-menu-item"
+            role="menuitem"
+          >
+            <FileIcon className="h-3.5 w-3.5 flex-shrink-0 text-[var(--agent-fg-secondary)]" />
+            <span className="agent-header-menu-item-label">{t('accountBar.openConfigFile')}</span>
+          </button>
         </div>
       )}
     </div>

@@ -23,9 +23,6 @@ export type AgentConfigDiagnosticCode =
   | 'unsupportedDefaultModelType'
   | 'unsupportedDefaultModelPurpose'
   | 'invalidDefaultModelBinding'
-  | 'unsupportedWorkspaceProviderDefinition'
-  | 'unsupportedWorkspaceModelDefinition'
-  | 'unsupportedSkillSource'
   | 'invalidDefaultProvider'
   | 'invalidDefaultModel';
 

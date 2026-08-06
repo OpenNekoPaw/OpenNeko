@@ -2,7 +2,7 @@
  * Configuration Manager
  *
  * Providers/models: user config only (~/.neko/config.toml).
- * MCP servers: user + workspace merge (.neko/config.toml overrides by id).
+ * MCP servers: user configuration only.
  */
 
 import type { Provider, Model } from './types/provider';
@@ -18,7 +18,6 @@ import type { ProviderDefinition, UnifiedConfig } from './config-core/index';
 import { DEFAULT_CONFIG, DEFAULT_EXTENSION_CONFIG } from './config-core/index';
 import { type ConfigReadResult } from './config-reader';
 import { type UserConfig, type IUserConfigManager } from './user-config';
-import { loadWorkspaceConfigResult, type WorkspaceConfig } from './workspace-config';
 import { RETRY_TIMEOUT_PRESETS } from './retry-timeout-presets';
 import { ChatModelService } from './chat-model-service';
 import {
@@ -100,13 +99,11 @@ export interface ConfigManagerOptions {
  * ConfigManager - Unified configuration management
  *
  * - Providers/Models: user config only (~/.neko/config.toml)
- * - MCP Servers: user + workspace merge (workspace overrides by id)
+ * - MCP Servers: user configuration only
  */
 export class ConfigManager {
   private userConfigManager: IUserConfigManager | null = null;
-  private workspaceConfig: WorkspaceConfig | null = null;
   private userConfigReadResult: ConfigReadResult | null = null;
-  private workspaceConfigReadResult: ConfigReadResult | null = null;
   private configDiagnostic: AssistantConfigDiagnostic | undefined;
   private workspacePath: string | null = null;
   private configMerged = false;
@@ -373,7 +370,6 @@ export class ConfigManager {
     const runtimeSettings = this.getRuntimeAssistantSettings();
     return resolveEffectiveAgentWorkspaceConfigSnapshot({
       userConfigReadResult: this.userConfigReadResult,
-      workspaceConfigReadResult: this.workspaceConfigReadResult,
       providers: [...config.providers.values()],
       models: [...config.models.values()],
       mcpServers: [...config.mcpServers.values()],
@@ -649,11 +645,6 @@ export class ConfigManager {
   reloadConfig(): void {
     this.userConfigManager?.reload?.();
     this.userConfigReadResult = this.readUserConfigSnapshot();
-    const workspaceResult = this.workspacePath
-      ? loadWorkspaceConfigResult(this.workspacePath)
-      : undefined;
-    this.workspaceConfigReadResult = workspaceResult?.raw ?? null;
-    this.workspaceConfig = workspaceResult?.config ?? null;
     this.invalidateCache();
     this.configDiagnostic = this.buildConfigDiagnostic();
   }
@@ -801,11 +792,6 @@ export class ConfigManager {
       : undefined;
     if (userDiagnostic) return userDiagnostic;
 
-    const workspaceDiagnostic = this.workspaceConfigReadResult
-      ? projectAssistantConfigReadResultDiagnostic(this.workspaceConfigReadResult)
-      : undefined;
-    if (workspaceDiagnostic) return workspaceDiagnostic;
-
     const availabilityDiagnostic = this.buildAssistantAvailabilityDiagnostic();
     if (availabilityDiagnostic) return availabilityDiagnostic;
 
@@ -911,10 +897,10 @@ export class ConfigManager {
   }
 
   /**
-   * Merge user config + workspace MCP config into flat Maps.
+   * Project user configuration into flat runtime maps.
    *
    * - Providers/Models: user config only (no workspace layer)
-   * - MCP Servers: user + workspace merge (workspace overrides by id)
+   * - MCP Servers: user configuration only
    */
   private ensureMerged(): void {
     if (this.configMerged) {
@@ -923,7 +909,6 @@ export class ConfigManager {
 
     const userConfigResult = this.userConfigReadResult ?? this.readUserConfigSnapshot();
     const userConfig = userConfigResult.status === 'ok' ? userConfigResult.config : undefined;
-    const workspace = this.workspaceConfig;
 
     // --- Providers (user only) ---
     this.providers.clear();
@@ -945,7 +930,7 @@ export class ConfigManager {
       );
     }
 
-    // --- MCP Servers (user + workspace) ---
+    // --- MCP Servers (user only) ---
     this.mcpServers.clear();
     if (userConfigResult.status === 'ok') {
       this.mergeArrayToMap(
@@ -957,9 +942,6 @@ export class ConfigManager {
         userConfig?.mcpServerOverrides as Record<string, Partial<MCPServerPreset>> | undefined,
       );
     }
-    this.mergeArrayToMap(this.mcpServers, workspace?.mcpServers);
-    this.applyOverrides(this.mcpServers, workspace?.mcpServerOverrides);
-
     // Substitute workspace path in MCP server configurations
     this.substituteMCPWorkspacePath();
 

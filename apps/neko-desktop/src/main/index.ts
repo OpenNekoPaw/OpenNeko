@@ -900,10 +900,6 @@ async function startDesktop(): Promise<void> {
         requireOwnerWindow(identity.windowId);
         await openHostPath(absolutePath);
       },
-      openWorkspaceConfig: async ({ identity, absolutePath }) => {
-        requireOwnerWindow(identity.windowId);
-        await openHostPath(absolutePath);
-      },
     },
     reportError: (error) => {
       host.diagnostics?.report({

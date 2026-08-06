@@ -207,7 +207,6 @@ export interface EmptyWebviewMessage {
     | 'refreshConfigSnapshot'
     | 'getSkills'
     | 'openUserConfigFile'
-    | 'openConfigFile'
     | 'getTabState';
 }
 
@@ -982,7 +981,6 @@ const EMPTY_MESSAGE_TYPES: readonly EmptyWebviewMessage['type'][] = [
   'refreshConfigSnapshot',
   'getSkills',
   'openUserConfigFile',
-  'openConfigFile',
   'getTabState',
 ];
 const QUEUED_MESSAGE_ACTION_TYPES: readonly QueuedMessageActionWebviewMessage['type'][] = [

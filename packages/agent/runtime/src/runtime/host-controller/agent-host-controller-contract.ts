@@ -115,7 +115,6 @@ export interface AgentConfigControllerEffectPort {
   readConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
   refreshConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
   openUserConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
-  openHostConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
   readTabState(context: AgentHostRouteEffectContext): void | Promise<void>;
   updateSettings(
     input: {
@@ -244,7 +243,6 @@ export const AGENT_CONFIG_CONTROLLER_ROUTE_TYPES = [
   'getConfig',
   'refreshConfigSnapshot',
   'openUserConfigFile',
-  'openConfigFile',
   'getTabState',
   'updateSettings',
   'updateTabState',

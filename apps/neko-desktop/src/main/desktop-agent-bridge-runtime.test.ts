@@ -795,7 +795,6 @@ function createEffects(
       readConfig: vi.fn(),
       refreshConfig: vi.fn(),
       openUserConfig: vi.fn(),
-      openHostConfig: vi.fn(),
       readTabState: vi.fn(),
       updateSettings: vi.fn(),
       updateTabState: vi.fn(),

@@ -151,10 +151,6 @@ export interface AgentConfigInteractionPort {
     readonly identity: AgentHostRouteEffectContext['identity'];
     readonly absolutePath: string;
   }): Promise<void>;
-  openWorkspaceConfig(input: {
-    readonly identity: AgentHostRouteEffectContext['identity'];
-    readonly absolutePath: string;
-  }): Promise<void>;
 }
 
 export interface CreateAgentControllerCompositionOptions {
@@ -757,13 +753,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         await this.options.configInteraction.openUserConfig({
           identity: context.identity,
           absolutePath: join(this.options.userHome, '.neko', 'config.toml'),
-        });
-      },
-      openHostConfig: async (context) => {
-        bind(context);
-        await this.options.configInteraction.openWorkspaceConfig({
-          identity: context.identity,
-          absolutePath: join(workspace.workspace.workspacePath, '.neko', 'config.toml'),
         });
       },
       readTabState: async (context) => {

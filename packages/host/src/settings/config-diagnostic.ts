@@ -7,10 +7,7 @@ export type AssistantConfigAvailabilityCode =
   | 'missingProviderEndpoint'
   | 'invalidDefaultProvider'
   | 'invalidDefaultModel'
-  | 'invalidDefaultModelBinding'
-  | 'unsupportedWorkspaceProviderDefinition'
-  | 'unsupportedWorkspaceModelDefinition'
-  | 'unsupportedSkillSource';
+  | 'invalidDefaultModelBinding';
 
 export type AssistantConfigDiagnosticCode = ConfigReadErrorCode | AssistantConfigAvailabilityCode;
 
@@ -113,12 +110,6 @@ export function buildSafeConfigDiagnosticMessage(
       return `Configuration file contains an invalid default_model_purposes entry: ${filePath}. Use provider_id and model_id for each purpose binding, then open a new Agent session or tab.`;
     case 'invalidDefaultModelBinding':
       return `Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: ${filePath}. Fix the default binding, then open a new Agent session or tab.`;
-    case 'unsupportedWorkspaceProviderDefinition':
-      return `Workspace configuration defines provider entries: ${filePath}. Move provider definitions to the user config, then open a new Agent session or tab.`;
-    case 'unsupportedWorkspaceModelDefinition':
-      return `Workspace configuration defines model entries: ${filePath}. Move model definitions to the user config or account catalog, then open a new Agent session or tab.`;
-    case 'unsupportedSkillSource':
-      return `Configuration references a non-standard Skill source: ${filePath}. Register an explicit Skill source provider or use .agents/skills and neko/commands.`;
     case 'readError':
       return `Unable to read configuration file: ${filePath}. Check file permissions, then open a new Agent session or tab.`;
     case 'missingConfig':

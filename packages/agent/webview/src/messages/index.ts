@@ -204,11 +204,6 @@ export function createAgentHostMessages(adapter: AgentHostRuntimeAdapter) {
       postWebviewMessage({ type: 'openUserConfigFile' });
     },
 
-    /** Open the Agent config file in the Desktop editor. */
-    openConfigFile: () => {
-      postWebviewMessage({ type: 'openConfigFile' });
-    },
-
     // ==========================================================================
     // Context Management
     // ==========================================================================

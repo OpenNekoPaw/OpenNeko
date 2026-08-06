@@ -110,20 +110,6 @@ export function getUserConfigPath(): string {
   return path.join(getUserConfigDir(), CONFIG_FILE_NAME);
 }
 
-/**
- * Get workspace config directory (.neko in workDir)
- */
-export function getWorkspaceConfigDir(workDir: string): string {
-  return path.join(workDir, CONFIG_DIR_NAME);
-}
-
-/**
- * Get canonical workspace config file path (.neko/config.toml in workDir)
- */
-export function getWorkspaceConfigPath(workDir: string): string {
-  return path.join(getWorkspaceConfigDir(workDir), CONFIG_FILE_NAME);
-}
-
 // =============================================================================
 // Configuration Reading
 // =============================================================================
@@ -185,19 +171,8 @@ export function readUserConfigDocumentResult(): ConfigDocumentReadResult {
   return readConfigDocumentFileResult(getUserConfigPath());
 }
 
-export function readWorkspaceConfigDocumentResult(workDir: string): ConfigDocumentReadResult {
-  return readConfigDocumentFileResult(getWorkspaceConfigPath(workDir));
-}
-
 export function readUserConfigResult(): ConfigReadResult {
   return readConfigFileResult(getUserConfigPath());
-}
-
-/**
- * Read workspace configuration with a typed result (.neko/config.toml)
- */
-export function readWorkspaceConfigResult(workDir: string): ConfigReadResult {
-  return readConfigFileResult(getWorkspaceConfigPath(workDir));
 }
 
 // =============================================================================
@@ -221,16 +196,6 @@ export function writeConfigFile(filePath: string, config: UnifiedConfig): void {
  */
 export function writeUserConfig(config: UnifiedConfig): void {
   writeConfigFile(getUserConfigPath(), config);
-}
-
-/**
- * Write workspace configuration (.neko/config.toml)
- *
- * @param workDir - Workspace directory path
- * @param config - Configuration to write
- */
-export function writeWorkspaceConfig(workDir: string, config: UnifiedConfig): void {
-  writeConfigFile(getWorkspaceConfigPath(workDir), config);
 }
 
 function getConfigReadErrorCode(error: unknown): ConfigReadErrorCode {
@@ -429,44 +394,4 @@ function buildConfigReadDiagnostic(
         ...(detail !== undefined ? { detail } : {}),
       };
   }
-}
-
-// =============================================================================
-// Configuration Location Info
-// =============================================================================
-
-/**
- * Configuration location information
- */
-export interface ConfigLocationInfo {
-  dir: string;
-  file: string;
-  exists: boolean;
-}
-
-/**
- * Get configuration file locations info
- *
- * @param workDir - Workspace directory path (defaults to cwd)
- * @returns Information about user and workspace config locations
- */
-export function getConfigLocations(workDir: string = process.cwd()): {
-  user: ConfigLocationInfo;
-  workspace: ConfigLocationInfo;
-} {
-  const userFile = getUserConfigPath();
-  const workspaceFile = getWorkspaceConfigPath(workDir);
-
-  return {
-    user: {
-      dir: getUserConfigDir(),
-      file: userFile,
-      exists: fs.existsSync(userFile),
-    },
-    workspace: {
-      dir: getWorkspaceConfigDir(workDir),
-      file: workspaceFile,
-      exists: fs.existsSync(workspaceFile),
-    },
-  };
 }

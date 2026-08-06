@@ -1,4 +1,4 @@
-export type EffectiveAgentConfigValueSource = 'user' | 'workspace' | 'runtime' | 'default';
+export type EffectiveAgentConfigValueSource = 'user' | 'runtime' | 'default';
 export type EffectiveAgentOutputFormat = 'text' | 'json' | 'markdown';
 export type EffectiveAgentConfigDimensionKey =
   | 'modelBinding'

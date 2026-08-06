@@ -11,22 +11,9 @@ import type { MCPServerPreset } from '../types/config';
 import type { Model, Provider } from '../types/provider';
 
 const USER_CONFIG_PATH = '/home/.neko/config.toml';
-const WORKSPACE_CONFIG_PATH = '/workspace/.neko/config.toml';
 
-function okConfig(filePath: string, config: UnifiedConfig): ConfigReadResult {
-  return { status: 'ok', filePath, config };
-}
-
-function invalidTomlConfig(filePath: string): ConfigReadResult {
-  return {
-    status: 'invalidToml',
-    filePath,
-    diagnostic: {
-      code: 'invalidToml',
-      filePath,
-      message: 'invalid test TOML',
-    },
-  };
+function okConfig(config: UnifiedConfig): ConfigReadResult {
+  return { status: 'ok', filePath: USER_CONFIG_PATH, config };
 }
 
 function createUserConfig(): UnifiedConfig {
@@ -85,115 +72,74 @@ function createUserConfig(): UnifiedConfig {
   };
 }
 
-function createWorkspaceConfig(): UnifiedConfig {
-  return {
-    defaultModels: {
-      llm: { providerId: 'explicit-user', modelId: 'user-chat' },
-      image: { providerId: 'explicit-user', modelId: 'user-image' },
-    },
-    temperature: 0.55,
-    maxTokens: 2048,
-    thinkingBudget: 4000,
-    executionMode: 'auto',
-    mcpServers: [
-      {
-        id: 'project-search',
-        name: 'Project Search',
-        description: 'Project-local search MCP.',
-        category: 'development',
-        transport: 'stdio',
-        command: 'node',
-        args: ['${workspaceFolder}/tools/project-search.js'],
-        enabled: true,
-      },
-    ],
-  };
-}
-
-function explicitProviders(config: UnifiedConfig): readonly Provider[] {
+function providers(config: UnifiedConfig): readonly Provider[] {
   return (config.providers ?? []) as readonly Provider[];
 }
 
-function explicitModels(config: UnifiedConfig): readonly Model[] {
+function models(config: UnifiedConfig): readonly Model[] {
   return (config.models ?? []) as readonly Model[];
 }
 
-function mergedMcpServers(
-  userConfig: UnifiedConfig,
-  workspaceConfig: UnifiedConfig,
-): readonly MCPServerPreset[] {
-  return [...(userConfig.mcpServers ?? []), ...(workspaceConfig.mcpServers ?? [])];
+function mcpServers(config: UnifiedConfig): readonly MCPServerPreset[] {
+  return (config.mcpServers ?? []) as readonly MCPServerPreset[];
+}
+
+function resolve(config: UnifiedConfig, runtimeOverrides = {}) {
+  return resolveEffectiveAgentWorkspaceConfigSnapshot({
+    userConfigReadResult: okConfig(config),
+    providers: providers(config),
+    models: models(config),
+    mcpServers: mcpServers(config),
+    runtimeOverrides,
+  });
 }
 
 describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
-  it('resolves workspace defaults, scalars, media defaults, and merged MCP servers', () => {
-    const userConfig = createUserConfig();
-    const workspaceConfig = createWorkspaceConfig();
+  it('resolves every durable setting from the canonical user config', () => {
+    const snapshot = resolve(createUserConfig());
 
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
+    expect(snapshot).toMatchObject({
+      providerId: 'explicit-user',
+      modelId: 'user-chat',
+      temperature: 0.3,
+      maxTokens: 4096,
+      thinkingBudget: 8000,
+      executionMode: 'ask',
+      defaultMediaModels: { image: 'explicit-user:user-image' },
+      sources: {
+        provider: 'user',
+        model: 'user',
+        temperature: 'user',
+        maxTokens: 'user',
+        thinkingBudget: 'user',
+        executionMode: 'user',
+      },
     });
-
-    expect(snapshot.providerId).toBe('explicit-user');
-    expect(snapshot.modelId).toBe('user-chat');
-    expect(snapshot.temperature).toBe(0.55);
-    expect(snapshot.maxTokens).toBe(2048);
-    expect(snapshot.thinkingBudget).toBe(4000);
-    expect(snapshot.executionMode).toBe('auto');
-    expect(snapshot.defaultMediaModels.image).toBe('explicit-user:user-image');
-    expect(snapshot.sources).toEqual(
-      expect.objectContaining({
-        provider: 'workspace',
-        model: 'workspace',
-        temperature: 'workspace',
-        maxTokens: 'workspace',
-        thinkingBudget: 'workspace',
-        executionMode: 'workspace',
-      }),
-    );
-    expect(snapshot.mcpServers.map((server) => server.id)).toEqual([
-      'user-files',
-      'project-search',
-    ]);
+    expect(snapshot.mcpServers.map((server) => server.id)).toEqual(['user-files']);
     expect(snapshot.diagnostics).toEqual([]);
   });
 
-  it('keeps runtime overrides session-only in the resolved snapshot', () => {
+  it('keeps runtime overrides session-only', () => {
     const userConfig = createUserConfig();
-    const workspaceConfig = createWorkspaceConfig();
-
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
-      runtimeOverrides: {
-        selectedProviderId: 'explicit-user',
-        selectedModelId: 'user-chat',
-        temperature: 0.9,
-        maxTokens: 1234,
-        thinkingBudget: 64,
-        executionMode: 'plan',
-        outputFormat: 'json',
-        defaultMediaModels: { image: 'runtime:image-model' },
-      },
+    const snapshot = resolve(userConfig, {
+      selectedProviderId: 'explicit-user',
+      selectedModelId: 'user-chat',
+      temperature: 0.9,
+      maxTokens: 1234,
+      thinkingBudget: 64,
+      executionMode: 'plan' as const,
+      outputFormat: 'json' as const,
+      defaultMediaModels: { image: 'runtime:image-model' },
     });
 
-    expect(snapshot.providerId).toBe('explicit-user');
-    expect(snapshot.modelId).toBe('user-chat');
-    expect(snapshot.temperature).toBe(0.9);
-    expect(snapshot.maxTokens).toBe(1234);
-    expect(snapshot.thinkingBudget).toBe(64);
-    expect(snapshot.executionMode).toBe('plan');
-    expect(snapshot.outputFormat).toBe('json');
-    expect(snapshot.defaultMediaModels.image).toBe('runtime:image-model');
-    expect(snapshot.sources).toEqual(
-      expect.objectContaining({
+    expect(snapshot).toMatchObject({
+      temperature: 0.9,
+      maxTokens: 1234,
+      thinkingBudget: 64,
+      executionMode: 'plan',
+      outputFormat: 'json',
+      defaultMediaModels: { image: 'runtime:image-model' },
+      sources: {
         provider: 'runtime',
         model: 'runtime',
         temperature: 'runtime',
@@ -201,24 +147,14 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
         thinkingBudget: 'runtime',
         executionMode: 'runtime',
         outputFormat: 'runtime',
-      }),
-    );
+      },
+    });
     expect(userConfig.temperature).toBe(0.3);
-    expect(workspaceConfig.temperature).toBe(0.55);
   });
 
   it('projects a frozen typed identity and detects digest drift', () => {
-    const userConfig = createUserConfig();
-    const workspaceConfig = createWorkspaceConfig();
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
-    });
+    const projection = createEffectiveAgentConfigurationProjection(resolve(createUserConfig()));
 
-    const projection = createEffectiveAgentConfigurationProjection(snapshot);
     expect(assertEffectiveAgentConfigurationProjection(projection)).toBe(projection);
     expect(projection).toMatchObject({
       profileId: expect.stringMatching(/^effective-agent-[a-f0-9]{16}$/u),
@@ -234,7 +170,6 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
     });
     expect(projection.dimensions).toBe(EFFECTIVE_AGENT_CONFIG_DIMENSIONS);
     expect(Object.isFrozen(projection.values)).toBe(true);
-
     expect(() =>
       assertEffectiveAgentConfigurationProjection({
         ...projection,
@@ -244,15 +179,7 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
   });
 
   it('rejects invalid or incomplete effective configuration projection', () => {
-    const userConfig = createUserConfig();
-    const workspaceConfig = createWorkspaceConfig();
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
-    });
+    const snapshot = resolve(createUserConfig());
     expect(() =>
       createEffectiveAgentConfigurationProjection({ ...snapshot, maxTokens: 0 }),
     ).toThrow('positive integer');
@@ -264,46 +191,26 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
     ).toThrow('provider/model sources must match');
   });
 
-  it('does not silently fall back when workspace selects an invalid default model source', () => {
-    const userConfig = createUserConfig();
-    const workspaceConfig: UnifiedConfig = {
-      ...createWorkspaceConfig(),
-      defaultModels: {
-        llm: { providerId: 'missing-provider', modelId: 'missing-model' },
-      },
+  it('keeps an invalid user default visible instead of selecting another model', () => {
+    const config = createUserConfig();
+    config.defaultModels = {
+      llm: { providerId: 'missing-provider', modelId: 'missing-model' },
     };
-
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
-    });
+    const snapshot = resolve(config);
 
     expect(snapshot.providerId).toBe('missing-provider');
     expect(snapshot.modelId).toBe('missing-model');
     expect(snapshot.provider).toBeUndefined();
     expect(snapshot.model).toBeUndefined();
     expect(snapshot.blockingDiagnostic).toEqual(
-      expect.objectContaining({
-        code: 'invalidDefaultProvider',
-        filePath: WORKSPACE_CONFIG_PATH,
-      }),
+      expect.objectContaining({ code: 'invalidDefaultProvider', filePath: USER_CONFIG_PATH }),
     );
   });
 
   it('keeps provider and model unset when no explicit default exists', () => {
-    const userConfig = createUserConfig();
-    delete userConfig.defaultModels;
-
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: { status: 'missing', filePath: WORKSPACE_CONFIG_PATH },
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: userConfig.mcpServers as readonly MCPServerPreset[],
-    });
+    const config = createUserConfig();
+    delete config.defaultModels;
+    const snapshot = resolve(config);
 
     expect(snapshot.providerId).toBeNull();
     expect(snapshot.modelId).toBeNull();
@@ -312,97 +219,25 @@ describe('resolveEffectiveAgentWorkspaceConfigSnapshot', () => {
     expect(snapshot.diagnostics).toEqual([]);
   });
 
-  it('projects config read diagnostics into the shared blocking diagnostic model', () => {
-    const userConfig = createUserConfig();
-
+  it('projects canonical user config read failures as blocking diagnostics', () => {
+    const config = createUserConfig();
     const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: invalidTomlConfig(WORKSPACE_CONFIG_PATH),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: userConfig.mcpServers as readonly MCPServerPreset[],
+      userConfigReadResult: {
+        status: 'invalidToml',
+        filePath: USER_CONFIG_PATH,
+        diagnostic: {
+          code: 'invalidToml',
+          filePath: USER_CONFIG_PATH,
+          message: 'invalid test TOML',
+        },
+      },
+      providers: providers(config),
+      models: models(config),
+      mcpServers: mcpServers(config),
     });
 
     expect(snapshot.blockingDiagnostic).toEqual(
-      expect.objectContaining({
-        code: 'invalidToml',
-        filePath: WORKSPACE_CONFIG_PATH,
-      }),
+      expect.objectContaining({ code: 'invalidToml', filePath: USER_CONFIG_PATH }),
     );
-    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.code)).toContain('invalidToml');
-  });
-
-  it('rejects workspace-local provider and model definitions with policy diagnostics', () => {
-    const userConfig = createUserConfig();
-    const workspaceConfig: UnifiedConfig = {
-      ...createWorkspaceConfig(),
-      providers: [
-        {
-          id: 'workspace-provider',
-          name: 'Workspace Provider',
-          displayName: 'Workspace Provider',
-          type: 'generic',
-          apiUrl: 'https://workspace.example.test/api',
-          enabled: true,
-        },
-      ],
-      models: [
-        {
-          id: 'workspace-model',
-          name: 'workspace-model',
-          providerId: 'workspace-provider',
-          type: 'llm',
-          capabilities: ['chat'],
-          enabled: true,
-        },
-      ],
-    };
-
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
-    });
-
-    expect(snapshot.blockingDiagnostic).toEqual(
-      expect.objectContaining({
-        code: 'unsupportedWorkspaceProviderDefinition',
-        filePath: WORKSPACE_CONFIG_PATH,
-      }),
-    );
-    expect(snapshot.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining([
-        'unsupportedWorkspaceProviderDefinition',
-        'unsupportedWorkspaceModelDefinition',
-      ]),
-    );
-  });
-
-  it('reports non-standard Skill source settings without blocking the config snapshot', () => {
-    const userConfig = createUserConfig();
-    const workspaceConfig: UnifiedConfig = {
-      ...createWorkspaceConfig(),
-      skillsDir: '.codex/skills',
-    };
-
-    const snapshot = resolveEffectiveAgentWorkspaceConfigSnapshot({
-      userConfigReadResult: okConfig(USER_CONFIG_PATH, userConfig),
-      workspaceConfigReadResult: okConfig(WORKSPACE_CONFIG_PATH, workspaceConfig),
-      providers: explicitProviders(userConfig),
-      models: explicitModels(userConfig),
-      mcpServers: mergedMcpServers(userConfig, workspaceConfig),
-    });
-
-    expect(snapshot.providerId).toBe('explicit-user');
-    expect(snapshot.modelId).toBe('user-chat');
-    expect(snapshot.blockingDiagnostic).toBeUndefined();
-    expect(snapshot.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'unsupportedSkillSource',
-        filePath: WORKSPACE_CONFIG_PATH,
-      }),
-    ]);
   });
 });
