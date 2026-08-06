@@ -68,7 +68,6 @@ export function stageSharpRuntime({
   }
 
   const manifest = Object.freeze({
-    schemaVersion: 'openneko.embedded-runtime-closure.v1',
     target: resolvedTarget,
     modules: runtimePackages.map(({ packageName, specifier }) => ({ packageName, specifier })),
   });

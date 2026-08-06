@@ -1,25 +1,21 @@
 # Validation status
 
-Updated: 2026-08-03
+Updated: 2026-08-06
 
-The migration is implemented through `@neko/host` shell/settings contracts and services,
-`@neko/local-metadata` repositories/migration/export workflow, and Desktop-only Electron path plus
-retired-JSON adapters. Normal startup has one authority at `~/.neko/neko.db`; there is no JSON fallback
-or dual write.
+The original migration evidence is superseded by
+`remove-internal-versioning-and-product-migrations`. Current validation targets the stable canonical
+path: `@neko/host` shell/settings contracts and services, `@neko/local-metadata` stable repositories,
+and Desktop-only Electron composition. Normal startup has one authority at `~/.neko/neko.db`; there is
+no JSON fallback, migration marker, import/archive workflow, downgrade export or dual write.
 
-Evidence:
+Current evidence is recorded in the superseding change and includes:
 
-- `@neko/local-metadata`: 20 files / 91 tests passed, including preflight, atomic import, marker,
-  interruption, partial/corrupt input, repeated startup, archive failure and downgrade export.
-- `@neko/host`: 33 files / 280 tests passed for package-owned shell/settings contracts, services and
-  repository behavior.
-- Desktop: 57 files / 315 tests passed, including delegation, migration adapter and adjacent-owner
-  negative fixtures.
-- `pnpm test:local:ui --scenario=desktop-state-sqlite-migration --target=development` passed isolated
-  real Electron migration plus restart restoration.
-- `pnpm ci:local`, `pnpm check:legacy-debt`, `pnpm check:storage-authorities`, Knip and strict OpenSpec
-  passed.
+- Local Metadata stable-table initialization, unknown-column preservation and retired-path reachability.
+- Host version-free shell/settings contracts, authority-root metadata preservation and child-local failure.
+- Desktop producer/consumer tests, typecheck, startup/restart/workspace-switching scenarios and
+  Workbench Surface ErrorBoundary containment.
+- Repository `check:no-internal-versioning`, legacy-debt, boundary, build/test/check and strict OpenSpec
+  gates.
 
-Negative fixtures prove the migration does not read or mutate Agent configuration/transcripts/logs,
-workspace `.neko/workspace.json`, target `neko/project.json`, or `neko/memory.md`. Downgrade remains an
-explicit command and never participates in normal startup.
+Retired JSON and unrelated Agent/workspace/project data remain untouched. No product path reads,
+imports, archives, exports, deletes or repairs them.

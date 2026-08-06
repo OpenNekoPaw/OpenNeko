@@ -1,7 +1,7 @@
 ## 1. Package Ownership Convergence
 
 - [x] 1.1 Move document/session/command routing, preview controller and ExportJob lifecycle from `desktop-cut-runtime.ts` into `@neko/cut-domain` / `@neko/cut-node` public application entries with independent instance state and producer tests.
-- [x] 1.2 Reduce Desktop Cut runtime to sender/path authorization, Workbench/status projection, native file/process/resource adapters and disposal; delete or poison app-owned workflow/state and add delegation tests.
+- [x] 1.2 Reduce Desktop Cut runtime to sender/path authorization, Workbench/status projection, native file/process/resource adapters and disposal; delete app-owned workflow/state and add delegation plus removed-path-absence tests.
 
 ## 2. P0 document and playback closure
 

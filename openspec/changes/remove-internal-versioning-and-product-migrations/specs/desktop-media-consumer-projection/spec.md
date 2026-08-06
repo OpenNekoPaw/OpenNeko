@@ -12,7 +12,7 @@ Each Cut document, Canvas View, Preview session and Agent conversation SHALL own
 
 ### Requirement: Canonical OpenNeko paths are proven and replaced paths are absent
 
-Producer/consumer tests and real Electron scenarios SHALL assert that the exact `openneko` resource handler, package-owned viewer/player and intended native or PCM consumer were reached. Loopback HTTP, `neko-app:`, `neko-media:`, `opennekomedia:`, `MediaTransport`, Desktop upstream proxy, Canvas ordinary PCM and private media schemes MUST be deleted from product registration and imports rather than retained as migration, poison, or compatibility paths.
+Producer/consumer tests and real Electron scenarios SHALL assert that the exact `openneko` resource handler, package-owned viewer/player and intended native or PCM consumer were reached. Loopback HTTP, `neko-app:`, `neko-media:`, `opennekomedia:`, `MediaTransport`, Desktop upstream proxy, Canvas ordinary PCM and private media schemes MUST be deleted from product registration and imports; no dedicated retired-path handler or compatibility route may remain.
 
 #### Scenario: Cut playback succeeds
 

@@ -13,7 +13,7 @@
 - [x] 1.11 Add Home renderer/CSS red tests proving the Agent heading has no standalone icon tile and centers its title/subtitle without removing action icons.
 - [x] 1.12 Add Agent Webview red tests proving live activity is inside MessageList, the composer-adjacent run-status region is absent, canonical tool/streaming records are not duplicated, and idle/conversation switching clears the temporary item.
 - [x] 1.13 Add red tests proving a committed user message survives assistant-only projection and every transcript item uses one centered maximum-width rail, while Desktop Dock renders no roleplay Header action.
-- [x] 1.14 Add red Main/Bridge/preload tests proving exact retired projection cleanup succeeds, ordinary or forged retired operations fail, and queued retired events do not poison the current connection.
+- [x] 1.14 Add red Main/Bridge/preload tests proving exact retired projection cleanup succeeds, ordinary or forged retired operations fail, and queued retired events cannot mutate the current connection.
 - [x] 1.15 Add red Agent Webview tests proving global/session diagnostics portal to the renderer body, remain viewport-bounded, and retained hidden Tabs do not project alerts.
 
 ## 2. Persistent Agent Home catalog

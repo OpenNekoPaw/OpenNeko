@@ -27,10 +27,10 @@ tests`, Desktop `65 files / 323 tests`, and the repository typecheck. Tests asse
 scene/sidebar codecs and CAS path,
 package-owned Root delegation, exact directory grant and Workspace restore, Assistant first-submit
 idempotency, AssetCenter selection/Preview lifecycle, one Workbench/PrimarySidebar structure, and
-poisoned Home/raw-path/active-first-recent-Project fallback paths.
+absent Home/raw-path/active-first-recent-Project fallback paths.
 
 The Host focused regression additionally proves that Workspace Workbench mutations atomically update
-the Scene Main/Timeline refs, renderer epoch projection advances both aggregates together, and startup
+the Scene Main/Timeline refs, exact request-owned projection advances both aggregates together, and startup
 restoration rebuilds the Scene refs from the restored authoritative Workbench. The Desktop Resource
 Browser regression proves that its controller authorization is derived from the exact Workspace Scene,
 Agent View, Project and Tab identities; leaving that Scene fails closed even if the retired active target
@@ -42,9 +42,9 @@ The stored-state startup regression additionally passed:
 - `pnpm --filter @neko/app-desktop exec vitest run src/main/desktop-state-sqlite-integration.test.ts`
   (`9 / 9`)
 
-These tests prove exact version 5 migration of `project-catalog`, `asset-catalog`,
-`extension-catalog` and `assistant-resources` into canonical v6 slots. The current v6 codec and
-unknown version 5 Manager Surface kinds remain fail-visible.
+These tests prove canonical `project-catalog`, `asset-catalog`, `extension-catalog` and
+`assistant-resources` slots restore independently. A non-canonical Manager Surface remains untouched,
+fails only at its exact Workbench instance boundary, and does not select a migration/compatibility path.
 
 The 9.9 qualification regression rerun added and passed focused path evidence for:
 
@@ -63,7 +63,7 @@ The 9.10/9.11 regression rerun added path evidence for:
 - atomically restoring a Workspace conversation's Project target, attached Workbench, Scene session
   phase and exact Agent adapter rather than rendering the session through the previous draft scope;
 - closing the last Workspace Main View while retaining the exact Workspace Agent and Resources,
-  removing only the Scene Main/Timeline refs and continuing renderer-epoch projection;
+  removing only the Scene Main/Timeline refs and continuing exact request-owned projection;
 - preserving an error-only Pi assistant entry's persisted `errorMessage` in the canonical transcript
   projection instead of producing a label-only Error card.
 
@@ -420,12 +420,12 @@ Focused verification passed on 2026-08-05:
   package build, root `pnpm build`, root `pnpm test`, root `pnpm check`, `git diff --check` and
   strict OpenSpec validation passed.
 
-A visible isolated Electron fixture started from a migrated SQLite database whose Shell document had
-an obsolete `schemaVersion` field. Startup completed without `Desktop startup failed`; the full
-Workbench and Agent composer rendered under the invalid-state banner. The fixture quarantine row
-retained authority `desktop.shell`, storage revision `0`, the original obsolete field and the codec
-diagnostic. A separate normal Desktop cold start also rendered the current persisted Workbench after
-clearing a stale, generated Vite dependency cache; no product data was deleted for that cache repair.
+A visible isolated Electron fixture started from the stable SQLite authority with one invalid Shell
+child record carrying an unknown field. Startup completed without `Desktop startup failed`; the full
+Workbench and Agent composer rendered under the record-local diagnostic. The stored invalid bytes
+remained unchanged while valid sibling state restored. A separate normal Desktop cold start also
+rendered the current persisted Workbench after clearing a stale generated Vite dependency cache; no
+product data was deleted or migrated.
 
 The repository-wide `pnpm check:quality` remains blocked at `check:no-internal-versioning` by 310
 new audit-baseline occurrences across the broader in-progress Agent/Canvas/Host/Desktop worktree.
@@ -540,13 +540,13 @@ Focused verification passed on the final Surface-recovery and launch-identity pa
   renderer session, while snapshot, mutation and IPC paths continue to reject a missing or stale
   `rendererSessionId`.
 - Desktop AppHost, preload launch bridge, retained Agent Surface, renderer startup and i18n: `5 files /
-  62 tests`.
+62 tests`.
 - Agent launch runtime exact-Surface isolation: `1 file / 4 tests`; Agent launch/Home contracts: `3 files
-  / 10 tests`.
+/ 10 tests`.
 - Earlier full focused runs before unrelated concurrent repository-signature edits: Host `39 tests`,
   Host full `37 files / 333 tests`, Desktop AppHost + renderer `2 files / 46 tests`, Agent catalog
   `24 tests`, combined i18n/renderer/Host `3 files / 56 tests`, Agent Evaluation key-free `45 files /
-  290 tests`, dry-run `22 suites / 53 cases`, application boundaries `1446 files / 0 findings`,
+290 tests`, dry-run `22 suites / 53 cases`, application boundaries `1446 files / 0 findings`,
   `git diff --check` and strict OpenSpec validation.
 
 The real local SQLite authority contained four Conversation rows. Their `context_json` SQLite
@@ -558,16 +558,42 @@ A fresh development Electron run rebuilt Main, preload and renderer together, in
 claimed the Window and loaded the renderer without `bootstrap does not match`, `Agent launch attach
 does not match`, `Agent launch Host payload contains unsupported fields` or renderer bootstrap
 exceptions. Launch attachment now qualifies the retained hidden Agent Root by exact Window + Workbench
-+ Agent Surface identity instead of requiring the active Scene; a forged Surface remains
-`desktop-agent-identity-mismatch`. The visible Workbench remained usable under the localized
-invalid-state banner. With the application locale following `zh-CN`, the banner rendered Chinese;
-changing Settings to English updated the same banner and Settings Surface immediately. Reloading the
-renderer while Settings was active restored Settings and the hidden Agent Root without launch,
-bootstrap or attachment identity errors; restoring system language returned the interface to Chinese.
-The raw Host diagnostic remained available only as supplemental `title` text.
+
+- Agent Surface identity instead of requiring the active Scene; a forged Surface remains
+  `desktop-agent-identity-mismatch`. The visible Workbench remained usable under the localized
+  invalid-state banner. With the application locale following `zh-CN`, the banner rendered Chinese;
+  changing Settings to English updated the same banner and Settings Surface immediately. Reloading the
+  renderer while Settings was active restored Settings and the hidden Agent Root without launch,
+  bootstrap or attachment identity errors; restoring system language returned the interface to Chinese.
+  The raw Host diagnostic remained available only as supplemental `title` text.
 
 The current full Host run is `330 passed / 3 failed`: the remaining assertions still expect the
 superseded numeric or fixture-provided `viewInstanceId` instead of the current owner-generated identity.
 They are outside persisted Agent Surface recovery, and the focused recovery/startup path is green.
 Task 11.10 remains open for that repository-wide convergence and its combined
 multi-Workspace/provider/Canvas acceptance.
+
+## Management Main Minimum Width
+
+Date: 2026-08-06
+
+Task 11.12 changes only management/detail split ownership. Assets, Extensions and Projects now start
+at `0.5`; the management resize binding uses `0.5` as its minimum while ordinary Workspace Main
+splits retain their existing limits. Renderer tests cover the equal default, the minimum boundary and
+the no-Secondary-Main full-width case.
+
+The visible development Electron `desktop-workbench-scenes` run recorded the following isolated
+checkpoints before an unrelated later Assistant fixture failure:
+
+- 1440x960 default: management `536px`, Preview `526px`, ratio `50%`, no overlap.
+- Drag right: management `728.95px`, Preview `333.04px`, ratio `68%`.
+- Drag left toward `34%`: clamped to management `536px`, Preview `526px`, ratio `50%`.
+- 1040x700 compact: management `336px`, Preview `326px`, ratio `50%`, no overlap.
+
+The report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T10-41-35.232Z-desktop-workbench-scenes-development/report.json`.
+It recorded zero renderer exceptions, console errors, console warnings and poisoned resource requests.
+The overall scenario later failed because its isolated Agent configuration projected no available
+model and an Extension Management request no longer matched the active Agent Scene; that later failure
+does not invalidate the already committed large/compact management-layout checkpoints and is not
+counted as Agent acceptance.

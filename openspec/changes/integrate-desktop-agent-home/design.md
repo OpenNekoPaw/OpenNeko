@@ -3,7 +3,7 @@
 `@neko/agent-runtime` owns one program-level Pi conversation application authority and its independent
 conversation/session/turn state. Desktop Main constructs it with credential, content, clock and persistence
 ports and owns only sender-bound route adapters, Electron lifecycle and disposal. The fixed preload namespace
-derives application, window, view, workspace and renderer epoch from the sender. Renderer messages never
+derives application, window, View instance, workspace and renderer session identity from the sender. Renderer messages never
 choose an active workspace or inject Host identity.
 
 Each conversation carries explicit conversation/branch/session/turn/run/Tool identities. Pi Session owns
@@ -20,7 +20,7 @@ config, stale identity and unavailable capabilities fail visibly.
 ## Remaining gate
 
 First move remaining controller/AppHost business state from Desktop Main into the Agent runtime public
-application entry and poison the app-owned implementation. Add deterministic facts proving the shared
+application entry and delete the app-owned implementation. Add deterministic facts proving the shared
 controller/Pi/session/permission/Tool/Skill path, then run
 Content Project → conversation create/restore → Pi turn → Tool/Skill → Timeline projection in an isolated
 Electron fixture. Use a real provider only where behavior/routing requires it; key-free harness results

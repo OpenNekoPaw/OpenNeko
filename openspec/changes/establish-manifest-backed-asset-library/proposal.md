@@ -30,11 +30,11 @@ for publishing, downloading, verifying, reconciling, or working offline with clo
   source files and installed package bytes; byte deletion remains a separate explicit garbage-collection action.
 - Support `identity` / Entity Asset packages as a first-class Asset type while leaving project Entity
   creation, facts, merge, binding, and update application to the Entity owner.
-- **BREAKING**: retire successful flat-file Asset identity based on filename/path and migrate valuable
-  owned files into validated manifest-backed Assets without treating legacy `library.json` or ordinary
-  media discovery as the new catalog authority.
-- **BREAKING**: validate or archive existing manifest `remote.uri` / registry routing values and move
-  runtime account/repository selection to credential-backed local sync state.
+- **BREAKING**: retire successful flat-file Asset identity based on filename/path; existing bytes remain
+  untouched and enter validated manifest-backed Assets only through explicit user import, without
+  treating legacy `library.json` or ordinary media discovery as the new catalog authority.
+- **BREAKING**: reject credential-bearing manifest `remote.uri` / registry routing values in the exact
+  package and keep runtime account/repository selection in credential-backed local state.
 
 ## Capabilities
 

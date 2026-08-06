@@ -72,17 +72,17 @@ implementation.
 #### Scenario: Legacy generic source intent is submitted
 
 - **WHEN** a renderer submits `source.add`, an `all` facet or an `entities` facet
-- **THEN** the versioned Resource Browser contract rejects it visibly
+- **THEN** the canonical Resource Browser contract rejects it visibly
 - **AND** it does not dispatch a directory picker, mutate either registry or fall back to an active
   global Asset center
 
 ### Requirement: Desktop development keeps Home contract consumers coherent
 
 Desktop development SHALL restart the Electron Main lifecycle after a successful Main watch build so
-Main, preload and renderer consume one Desktop Home management contract version. A reloaded preload
-MUST NOT send a newer Home management request to a stale Main parser. Desktop MUST NOT accept
-multiple internal schema versions, downgrade requests, retry unsupported versions or hide the
-diagnostic as compatibility behavior.
+Main, preload and renderer consume one canonical Desktop Home management contract. A reloaded preload
+MUST NOT send a request carrying a mismatched renderer session identity to stale Main ownership.
+Desktop MUST NOT accept multiple internal shapes, retry another parser or hide the diagnostic as
+compatibility behavior.
 
 #### Scenario: Shared Home contract changes during development
 
@@ -108,9 +108,9 @@ Electron rather than only inspecting stylesheet source text.
 ### Requirement: Resource operations use sender-bound Host effects
 
 Desktop MUST route resource search, import/link, source selection, thumbnail/metadata projection,
-reveal and write operations through fixed versioned Assets effects. Main SHALL derive Window, View,
-Workspace and renderer epoch from the sender and SHALL validate locator containment, trust, owner and
-request schema.
+reveal and write operations through the canonical Assets effects. Main SHALL derive Window, View,
+Workspace and renderer session identity from the sender and SHALL validate locator containment, trust,
+owner and request shape.
 
 #### Scenario: User searches linked media
 
@@ -186,12 +186,12 @@ unrelated image is the model thumbnail.
 
 - **WHEN** a model file is introduced before a revision-matched Preview capture is available
 - **THEN** Canvas and Assets display the model placeholder without blocking import or model Preview
-- **AND** a later thumbnail implementation uses a disposable revision-fenced image projection
+- **AND** a later thumbnail implementation uses a disposable request-owned image projection
 - **AND** it does not expose a raw path or add another model renderer to Canvas or Desktop
 
 ### Requirement: Canvas Root consumes one injected host runtime
 
-The complete package-owned Canvas Root SHALL consume a versioned browser-safe Canvas runtime
+The complete package-owned Canvas Root SHALL consume a canonical browser-safe Canvas runtime
 supplied by Desktop preload/Main composition. Production Canvas code MUST NOT require a
 module-global host API, direct Electron IPC, app implementation import or Desktop demo surface.
 
@@ -202,17 +202,17 @@ module-global host API, direct Electron IPC, app implementation import or Deskto
 - **AND** `CanvasHostAdapterSurface`, fixed nodes, removed host APIs and active-view fallback do not
   participate
 
-### Requirement: Canvas authoring is explicit and revisioned
+### Requirement: Canvas authoring is explicit and session-owned
 
-Every Canvas mutation SHALL carry explicit Project, document/session, command and expected revision
-identity. The Canvas owner SHALL validate and apply the mutation, persist `.nkc` facts and publish the
-new revision. Missing, stale or mismatched identity MUST fail visibly.
+Every Canvas mutation SHALL carry explicit Project, document/session, request and command identity.
+The Canvas session owner SHALL serialize, validate and apply mutations, persist `.nkc` facts and publish
+the resulting snapshot. Missing, superseded or mismatched identity MUST fail visibly.
 
 #### Scenario: Resource is added to Canvas
 
 - **WHEN** the user adds a Resource Browser item to an explicit Canvas document
 - **THEN** the Resource identity is projected and the Canvas authoring service applies the matching node
-  mutation at the expected revision
+  mutation within the exact document session
 - **AND** cancellation or failure leaves Canvas unchanged
 
 #### Scenario: Resource is dragged onto Canvas
@@ -226,20 +226,20 @@ new revision. Missing, stale or mismatched identity MUST fail visibly.
 - **AND** no absolute path, file URL, VS Code `project:addSource` route or active-Canvas fallback
   participates
 
-#### Scenario: A stale Canvas View submits an edit
+#### Scenario: Another Canvas session submits an edit
 
-- **WHEN** the View sends a mutation with an old document revision or View epoch
-- **THEN** Host rejects it and obtains a new authoritative snapshot
-- **AND** it does not apply last-write-wins or mutate the currently active Canvas
+- **WHEN** a View sends a mutation with a missing or mismatched document session identity
+- **THEN** Host rejects only that request with a session-local diagnostic
+- **AND** it does not infer the active Canvas or mutate another document session
 
 #### Scenario: Material actions resolve beside a local Canvas status update
 
 - **WHEN** the package-owned Canvas Root requests material actions and queues a local Canvas status
   update in the same renderer scheduling turn
 - **THEN** the Webview Host waits until its renderer-originated operation queue is stable before
-  submitting the revisioned material-action request
-- **AND** Main does not receive a predictably stale request from that local ordering race
-- **AND** a genuinely stale View or concurrent external revision remains rejected visibly
+  submitting the identity-bound material-action request
+- **AND** a late result is accepted only for the exact current request identity
+- **AND** a mismatched View or document session remains rejected visibly
 
 ### Requirement: Workspace Board and candidate ownership remain canonical
 
@@ -267,7 +267,7 @@ import, delivery, candidate acceptance or Canvas mutation.
 
 ### Requirement: P1.4 qualification proves the canonical path
 
-The change SHALL provide producer/consumer, authorization, identity, revision, persistence,
+The change SHALL provide producer/consumer, authorization, identity, request ownership, persistence,
 lifecycle, architecture and UI tests plus an isolated Electron fixture scenario. Desktop Canvas
 behavior SHALL be revalidated through the production package or controlled Electron runtime when
 Webview behavior changes.
@@ -278,4 +278,4 @@ Webview behavior changes.
   saves/reopens and explicitly opens a second Canvas to the side
 - **THEN** visible state and durable facts succeed
 - **AND** evidence proves Assets services/Root, Content/Entity owners, Canvas runtime/domain and fixed
-  Desktop bridge were used while VS Code, active-object, demo/mock and path fallbacks remained poisoned
+  Desktop bridge were used while VS Code, active-object, demo/mock and path fallbacks were absent

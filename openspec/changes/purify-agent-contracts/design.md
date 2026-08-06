@@ -48,7 +48,7 @@ the behavior is host-neutral and reusable by runtime and renderer-side presentat
 `@neko/agent-contracts` may own:
 
 - types/interfaces and discriminated unions;
-- schema/version/kind/operation/status constants;
+- kind/operation/status constants and semantic identities;
 - codecs, parsers, type guards, structural validators, diagnostics, and identity normalization;
 - protocol messages and side-effect-free constructors whose output is determined directly from their
   fields without domain decisions.
@@ -93,11 +93,13 @@ ownership. Agent Domain may depend only on the narrow public contracts required 
 ### 5. Verify both boundary and path
 
 Contract tests preserve serialized codec behavior. Agent Domain producer tests cover the moved
-algorithms. Runtime/Webview consumer tests poison old exports/imports and assert the new module is
-called. Repository gates reject prohibited dependencies and business-behavior exports from contracts.
+algorithms. Runtime/Webview consumer tests assert the new module is called and repository checks prove
+old exports/imports are absent. Repository gates reject prohibited dependencies and business-behavior
+exports from contracts.
 
-No persistent data migration is expected. If an artifact codec changes during extraction, it must be
-versioned and handled as a separate contract change rather than silently accepted here.
+No persistent data migration is allowed. If an artifact codec must change, all producers and consumers
+switch atomically to one version-free canonical shape; existing non-canonical bytes remain untouched and
+fail only at their exact record boundary.
 
 ## Risks / Trade-offs
 
@@ -111,16 +113,16 @@ versioned and handled as a separate contract change rather than silently accepte
 - **[Large files remain large after a mechanical move]** → Split by contract versus use case, not by
   arbitrary line count, and retain focused tests per use case.
 
-## Migration Plan
+## Replacement Plan
 
 1. Inventory every Agent Contracts export and classify it as schema/codec or behavior.
 2. Scaffold `@neko/agent-domain` with strict TypeScript/package boundaries and no runtime-specific deps.
-3. Move shot-image-prep behavior and migrate all consumers/tests; poison old exports.
-4. Move comic-animation indexing/review behavior and migrate all consumers/tests; poison old exports.
+3. Move shot-image-prep behavior, switch all consumers/tests atomically and delete old exports.
+4. Move comic-animation indexing/review behavior, switch all consumers/tests atomically and delete old exports.
 5. Run dependency, package-boundary, contracts, Agent Domain, runtime, Webview, build, test, and check
    gates.
 
-Rollback reverts the whole consumer/import migration. It does not preserve dual exports.
+Rollback reverts the whole consumer/import replacement. It does not preserve dual exports.
 
 ## Open Questions
 

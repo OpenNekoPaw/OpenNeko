@@ -27,11 +27,11 @@ Electron, and project paths must remain portable workspace-relative locators out
   primitives. The project-file-io application service depends on narrow Canvas/Cut owner, workspace,
   reference, publication and trash ports. Desktop supplies their Electron implementations without
   exposing package internals.
-- **Interfaces:** one versioned create/import/open/trash-plan/trash-apply command family carries
+- **Interfaces:** one canonical create/import/open/trash-plan/trash-apply command family carries
   explicit Project/Workspace/Window/endpoint identity, portable target locators, request identity, and
   expected revisions/fingerprints.
 - **Extension:** document kinds are an exhaustive `.nkc | .otio` union with explicit owner adapters.
-  A future kind requires a new owner adapter and contract version rather than an extension-string
+  A future kind requires a new owner adapter and an atomic contract/consumer update rather than an extension-string
   fallback. Menus derive from projected capabilities rather than maintaining per-surface rules.
 - **Testing:** producer/consumer contract tests, owner codec/session tests, path and reference tests,
   Resource Browser interaction tests, Workbench/session reconciliation tests, and an isolated real
@@ -194,7 +194,7 @@ The plan result contains:
 - allowed dirty resolutions (`save-and-trash`, `discard-and-trash`) and typed diagnostics.
 
 Plans live only in the coordinator's bounded in-memory registry and are bound to sender, window,
-project, target, and endpoint epoch. `trash.apply` repeats authorization and requires the same
+project, target, renderer session, request and plan identity. `trash.apply` repeats authorization and requires the same
 fingerprint, a non-expired plan, explicit dirty resolution, and explicit reference acknowledgement
 when references exist. Missing reference coverage, invalid project documents, changed bytes, stale
 sessions, or active owner tasks reject apply visibly.
@@ -229,7 +229,7 @@ resource bytes. No compatibility alias maps any of these operations to creative-
 
 The old Canvas `onOpenCanvas` renderer callback and asymmetric Cut open path are replaced inside this
 boundary by the canonical creative-document open request. Legacy callbacks/routes are removed or
-poisoned after all callers migrate; new-path tests assert they do not participate.
+deleted after all callers switch atomically; new-path tests assert they do not participate.
 
 ### 9. Validation proves ownership and the actual execution path
 
@@ -240,7 +240,7 @@ staleness, trash failure recovery, multi-View reconciliation, and directory empt
 
 Renderer tests cover facet-aware toolbar content, item/blank-area menus, selection-before-menu,
 keyboard invocation, destructive separation, and accessibility. Owner tests prove canonical NKC/OTIO
-factories and sessions are invoked. Legacy open callbacks and direct delete paths are poisoned.
+factories and sessions are invoked. Retired open callbacks and direct delete paths are absent.
 
 An isolated synthetic Electron workspace validates:
 
@@ -278,16 +278,16 @@ or valuable system trash contents.
   remains understandable and recoverable at OS level but requires users to manage non-empty folders
   externally.
 
-## Migration Plan
+## Replacement Plan
 
 1. Add owner-neutral lifecycle contract, producer/consumer tests, and Desktop owner ports without
    exposing actions in UI.
-2. Implement create/import and owner adapters, then migrate Canvas/Cut open into the same command path.
+2. Implement create/import and owner adapters, then switch Canvas/Cut open atomically to the same command path.
 3. Add two-phase trash planning/apply, reference inspection, task/session checks, and Workbench
    reconciliation.
 4. Add capability projection, facet-aware toolbar, context menus, keyboard behavior, and empty-Main
    shortcuts using the new path.
-5. Poison and remove the old Canvas callback, asymmetric creative-document open routing, and any
+5. Remove the old Canvas callback, asymmetric creative-document open routing, and any
    direct delete entry in this boundary.
 6. Run focused package tests/build/typecheck and the isolated real Electron scenario before enabling
    destructive actions by default.

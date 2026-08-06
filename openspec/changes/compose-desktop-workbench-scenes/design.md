@@ -393,7 +393,7 @@ handle。普通属性 inspector 仍可 hot-retain，Modal/context menu 始终 ep
 
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 
-Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个兄弟 shell：各自拥有独立 DOM、边框、圆角、背景、裁切和 overflow 边界，并由保留可见 gutter 的 resize composition 连接。禁止让两个内容区共享一块连续 Main 底板后只绘制分隔线。两个 shell 都不渲染 Workspace View tab/header 或 Preview descriptor header；只有 Workspace Main 的真实多 View group 拥有 Workbench tab。Workspace 与 Asset Center 的 Preview 内容都使用 `@neko/preview-webview` 的 content-only chrome，并以透明内容背景继承所在 shell 的主题，而不是在 Desktop 复制 viewer 或硬编码另一组主题 token。只有 owner-qualified 且信息足以支撑独立内容区域的 Preview/Detail 才挂载 Secondary Main；低信息量的 Project selection 保留在 catalog 中，显式打开 Workspace 的操作也位于对应 catalog row，不创建空洞的 Project Detail shell。组合时 management panel 使用紧凑目录宽度，Preview/Detail 获得主要内容宽度；没有合格 detail 时 management shell 独占可用区域，且不保留 secondary column 或 gutter。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
+Management Main 与可选 Preview/Detail 使用 Workspace Main 相同的 panel shell、content frame 和 resize primitive，但它们是两个兄弟 shell：各自拥有独立 DOM、边框、圆角、背景、裁切和 overflow 边界，并由保留可见 gutter 的 resize composition 连接。禁止让两个内容区共享一块连续 Main 底板后只绘制分隔线。两个 shell 都不渲染 Workspace View tab/header 或 Preview descriptor header；只有 Workspace Main 的真实多 View group 拥有 Workbench tab。Workspace 与 Asset Center 的 Preview 内容都使用 `@neko/preview-webview` 的 content-only chrome，并以透明内容背景继承所在 shell 的主题，而不是在 Desktop 复制 viewer 或硬编码另一组主题 token。只有 owner-qualified 且信息足以支撑独立内容区域的 Preview/Detail 才挂载 Secondary Main；低信息量的 Project selection保留在 catalog 中，显式打开 Workspace 的操作也位于对应 catalog row，不创建空洞的 Project Detail shell。组合时 management panel 默认占可用分栏的 50%，共享 resize binding 将 management ratio 下限固定为 0.5，使 Assets、Extensions 与 Projects 的管理 Main 始终不窄于 Preview/Detail；没有合格 detail 时 management shell 独占可用区域，且不保留 secondary column 或 gutter。Workspace Resource Browser 继续复用 package Root，但隐藏与 Host 自动投影重复的顶部全局刷新按钮；relink/recovery 等真实领域操作保持可用。
 
 PrimarySidebar 顶部布局控件继续复用 `@neko/ui` 的 Codicon 入口。生产 renderer 必须让 Vite 从 query-free 的 canonical 字体引用生成 hashed asset 路径；不能依赖 vendor CSS 自带的 query-bearing URL，因为 `openneko://desktop` 协议有意拒绝所有带 query/hash 的非 canonical 应用资源请求。Desktop Main 只补齐 `.ttf` 的 `font/ttf` 响应类型并保留 `nosniff` 与 query 拒绝规则，不增加旧 URL 读取路径或第二套图标实现。
 
@@ -442,24 +442,24 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 - [Asset manager/preview selection 漂移] -> 单一 AssetCenterSession owner 内串行 mutation 与 exact preview session binding。
 - [缺失 Extensions/Project detail Root] -> owner-qualified empty/unavailable；不复制 app-local domain UI。
 - [Sidebar 双写] -> 原子切换 producer/consumer，并删除旧 Workbench sidebar update handler、字段和注册。
-- [已写入的 prelaunch scene 无法启动] -> Shell state 升级到 v6，仅迁移 v5 中已知的 management catalog 与 Assistant resources Manager Surface；当前或未知 kind 继续 fail-visible。
+- [已写入的 non-canonical scene 无法启动] -> 保留原字节并只拒绝精确 Scene/Workbench instance；有效 sibling instance 与 Shell 继续可用，不执行 shape migration。
 - [新 draft 显示旧 session] -> Host 分配 exact `draftId`，Agent package 在 identity transition 时清除 instance state，并删除通过 stable Scene/View 猜测 draft 的路径。
 - [StrictMode cleanup 使 Desktop 白屏] -> subscription cleanup 与 runtime final disposal 分离；保留 disposed fail-visible，并以 StrictMode + development/packaged Electron exception 证据验证。
 
-## Migration Plan
+## Replacement Plan
 
 1. 对齐冲突 active changes，并为 workspace Agent、Project Views、sidebar 和全部 display mode 建立基线与旧路径缺席测试。
 2. 添加 slot-specific scene、typed transition 和独立 sidebar canonical contract；一次性更新 producer/consumer/fixture/test，并删除旧字段、handler 与 dispatch。
 3. 将 Desktop 收敛为一个 PrimarySidebar + ControlledWorkbenchShell，把现有 Project和Settings转换为 slots并完成 parity gate。
 4. 建立 Assets-owned AssetCenterSession，组合 management + preview并删除 Home asset layout。
-5. 迁移 Extensions/Project management presentation到 owner-qualified Roots/slots，删除 Home containers。
+5. 将 Extensions/Project management presentation 原子切换到 owner-qualified Roots/slots，删除 Home containers。
 6. 增加 Agent draft/session presentation、launch-safe catalog和显式 Assistant/Workspace scope。
 7. 增加 directory grant、AssistantSpace/scratch、稳定 conversation context 和幂等 first-submit authority。
 8. 删除 Home composer、agentInitialInput、模型 intent scene routing 与所有隐式 Project owner selection。
 9. 运行 package tests/build、Agent evaluation、legacy/boundary gates和隔离真实 Electron大/小窗口场景。
 10. 引入 unbound Entry Draft identity、确定性的自动 Assistant 首次提交、显式 Workspace/Role binding 与 package-owned presentation reset；修复 renderer runtime StrictMode lifecycle并复验用户启动路径。
 
-回滚只能整体恢复上一稳定 commit 的 composition，不能删除实施期间创建的 conversation、published Asset、Workspace或用户授权记录。新 schema 若已写入，旧版本必须明确拒绝或执行有版本的单次迁移；不能静默回退 Home composer、默认 Project或双 sidebar路径。
+回滚只能整体恢复上一稳定 commit 的 composition，不能删除实施期间创建的 conversation、published Asset、Workspace或用户授权记录。非 canonical shape 必须在精确 owner 边界明确拒绝并保持原字节；不能执行产品迁移，也不能静默回退 Home composer、默认 Project或双 sidebar路径。
 
 ## Resolved Scope Decisions
 

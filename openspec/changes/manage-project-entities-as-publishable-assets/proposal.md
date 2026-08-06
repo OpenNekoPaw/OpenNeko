@@ -11,7 +11,7 @@ global Entity catalog or synchronization system.
 - Define Project Entity as the canonical mutable project instance for character, scene, object,
   location, and style identity; define Entity Asset as its immutable, versioned Asset Library
   publication form.
-- Consolidate confirmed Entity identity and accepted representation intent into one versioned project
+- Consolidate confirmed Entity identity and accepted representation intent into one canonical project
   fact authority under `neko/`; remove candidate, availability, orphan timestamps, inferred relations,
   visual drafts, and other rebuildable/workflow state from the authoritative JSON document.
 - Make workspace/document analysis and Asset/Media discovery produce directly searchable candidate and
@@ -29,9 +29,9 @@ global Entity catalog or synchronization system.
   synchronization service is introduced.
 - Define deletion and update behavior so missing content, removed Media Library links, uninstalled
   Entity Assets, and changed fingerprints never delete or silently mutate Project Entity facts.
-- **BREAKING**: migrate or explicitly preserve current `characters.json`, per-kind files,
-  `candidates.json`, representation bindings, visual drafts, and requirements; poison the fragmented
-  normal readers after the canonical Entity document commits.
+- **BREAKING**: keep current `characters.json`, per-kind files, `candidates.json`, representation
+  bindings, visual drafts, and requirements untouched but outside product reachability; delete
+  fragmented normal readers and accept new facts only through canonical Entity operations.
 
 ## Capabilities
 
@@ -61,10 +61,10 @@ global Entity catalog or synchronization system.
   `packages/assets/webview`, `packages/chara`, Agent content effects, and Desktop public-port composition.
 - Affected data: root `characters.json`, `neko/entities/*.json`, candidate/binding/draft/requirement files,
   SQLite Entity projections, project Asset provenance, and Resource Browser `materials` state.
-- User-data migration must inventory every existing Entity-related fact, preserve unknown or ambiguous
-  values, rebuild only proven projections, and never delete referenced content or Asset packages.
+- Existing non-canonical Entity-related bytes remain untouched. Canonical readers reject only the exact
+  record, rebuild only proven projections, and never delete referenced content or Asset packages.
 - This change depends on the generic manifest/version/publish/install boundaries from
   `establish-manifest-backed-asset-library`, including its cloud replication boundary, but remains
   independently implementable up to its Asset adapter contract and project management surface.
-- Desktop project attach composes the Entity-owned migration/restore application path before Resource Browser
-  projection so valid legacy facts become visible without renderer fallback reads.
+- Desktop project attach composes only the Entity-owned canonical application path before Resource
+  Browser projection; it never invokes a legacy or migration reader.

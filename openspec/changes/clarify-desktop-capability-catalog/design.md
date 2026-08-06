@@ -8,7 +8,7 @@ OpenNeko 自己维护真实插件，并让安装后的 portable Skill/MCP contri
 
 真实 owner 边界：
 
-1. OpenNeko public repository 中的 versioned marketplace snapshot 拥有可安装插件事实；
+1. OpenNeko public repository 中的 canonical marketplace snapshot 拥有可安装插件事实；
 2. OpenNeko 安装根拥有已安装 package 事实，`.openneko-plugin/plugin.json` 拥有展示
    metadata 与 contribution locator；
 3. Pi SkillHost 拥有 Skill discovery、fingerprint、selection 与 read receipt；
@@ -70,7 +70,7 @@ OpenNeko 自己维护真实插件，并让安装后的 portable Skill/MCP contri
 
 ### 2. OpenNeko repository 是唯一 inventory/mutation authority
 
-Agent extension application service 通过注入的 repository/file ports 读取 versioned OpenNeko
+Agent extension application service 通过注入的 repository/file ports 读取 canonical OpenNeko
 marketplace snapshot，并只管理 `${NEKO_HOME}/extensions/plugins` 下的 installed package。Desktop
 Main 解析实际 app path 并注入受限 adapter，不解释 manifest 或决定 mutation。首阶段 snapshot 位于公开
 `OpenNekoPaw/OpenNeko` 仓库并随 Desktop 打包，因此不需要 registry 服务，也不依赖用户
@@ -86,32 +86,32 @@ available 项必须再经过 Agent runtime 拥有的 support policy：
 - 已安装项始终保留用于状态诊断和卸载，即使当前 unsupported/error。
 
 `.openneko-plugin/plugin.json` 只允许 contained relative contribution locator。OpenNeko
-repository index 只接受 publisher `OpenNeko`、schema version 1、唯一 package id 和 contained
+repository index 只接受 publisher `OpenNeko`、唯一 package id、用户管理的 package version 和 contained
 package path。没有真实 entry 时必须返回空 available catalog；不得扫描 `~/.codex`、其他应用
 缓存或把 builtin Skill 包装成插件。
 
-每次 list 计算 immutable `catalogRevision`。mutation 携带 expected revision；陈旧请求、
+每次 list 计算 immutable catalog fingerprint。mutation 携带 exact request id、snapshot fingerprint；陈旧请求、
 无效 repository/index/package 明确失败，不能假成功。安装复制到 sibling staging，完成
 containment、manifest、Pi/MCP support 校验后原子 rename；移除移动到系统废纸篓。成功
 mutation 后重新读取 catalog，再更新 Agent runtime。
 
-### 3. 插件 runtime generation
+### 3. 插件 runtime instance
 
-Agent runtime extension service 拥有一个当前 plugin generation：
+Agent runtime extension service 拥有一个当前 plugin runtime instance：
 
 - verified plugin Skill roots；
 - 已连接 MCP manager 和动态发现的 MCP Tool；
 - 每个 plugin 的 readiness/diagnostic；
-- generation revision。
+- instance identity 与 cancellation scope。
 
-构建新 generation 时先完整发现并连接；只有没有 active turn 时才交换到所有 workspace。
+构建新 instance 时先完整发现并连接；只有没有 active turn 时才交换到所有 workspace。
 workspace unregister 旧 plugin Tool、register 新 Tool，然后旧 MCP manager 显式 dispose。构建
 失败保留旧 generation并返回明确 diagnostic；不回退 manifest-only success。
 
 MCP stdio `cwd`、相对 command、允许继承的 env 名称和 timeout 由 Agent extension service 解析并
 通过受限 process/env port 执行。HTTP bearer credential 通过 Desktop 注入的 secret adapter 解析；
 OAuth 尚无 owner，标记 unsupported。MCP Server id 冲突
-或 Tool name 冲突使对应 plugin 不进入 ready generation。
+或 Tool name 冲突使对应 plugin 不进入 ready instance。
 
 ### 4. Skill source 与管理
 
@@ -148,7 +148,7 @@ management id 与 allowed actions。mutation contract 独立于 list：
 - reload OpenNeko marketplace；
 - install/remove personal Skill。
 
-所有 mutation 都携带 sender-bound endpoint epoch、request id 和 expected catalog revision；
+所有 mutation 都携带 sender-bound renderer session identity、request id 和 catalog fingerprint；
 不保留旧 capability 或只读 extension fallback。
 
 ### 6. 搜索与固定排序保持确定性
@@ -167,9 +167,9 @@ Main contract、目录记录、卡片状态/来源标识和 Agent runtime 保持
 刷新、确认、busy/error 和空态。personal/plugin Skill 与 extension manifest 的作者 metadata
 不翻译。
 
-### 8. Home management contract 破坏性升级
+### 8. Home management contract 原子替换
 
-contract version 升级并一次性替换：
+contract 与全部 producer/consumer 一次性替换，不添加版本字段：
 
 - IPC channel 从 `home:capabilities:list` 改为 `home:extensions:list`；
 - request/result 从 `Capabilities` 改为 `Extensions`；
@@ -177,36 +177,36 @@ contract version 升级并一次性替换：
 - 增加 `DesktopHomeExtensionItem`、`extensionDiscovery` 与 `extensions`；
 - bridge 从 `home.capabilities` 改为 `home.extensions`。
 
-Main、preload、Renderer 和测试同时迁移。旧 payload/channel 不保留兼容分支。
+Main、preload、Renderer 和测试同时切换。旧 payload/channel 不保留兼容分支。
 
 ### 9. Renderer 在 Home 请求前建立 sender-bound identity
 
-Home management request 升级后必须携带当前 Desktop endpoint epoch。Renderer 入口在挂载 React 前并行完成基础 `bootstrap.get()` 与 settings 初始化；只有两者都完成后，Extensions Surface 才可能发起目录请求。preload 只接受 bootstrap 记住的 sender-bound identity，缺失或陈旧 epoch 直接失败，不回退当前 active window 或无 identity 请求。
+Home management request 必须携带当前 Desktop renderer session identity。Renderer 入口在挂载 React 前并行完成基础 `bootstrap.get()` 与 settings 初始化；只有两者都完成后，Extensions Surface 才可能发起目录请求。preload 只接受 bootstrap 记住的 sender-bound identity，缺失或陈旧 session 直接失败，不回退当前 active window 或无 identity 请求。
 
 ## Risks / Trade-offs
 
-- [OpenNeko marketplace schema 漂移] → versioned strict schema 和 fail-visible diagnostic。
+- [OpenNeko marketplace shape 漂移] → canonical strict codec 和 package-local fail-visible diagnostic。
 - [误读其他应用状态] → repository root 与 install root 均由 OpenNeko Desktop Main 显式
-  注入；测试 poison `~/.codex`/foreign marketplace 并证明不会读取。
+  注入；测试通过 path spy 和 reachability assertion 证明不会读取 `~/.codex`/foreign marketplace。
 - [第三方 category 不稳定] → 未知类别进入最低推荐优先级，不影响支持判定或显式名称排序。
-- [安装会修改 OpenNeko 用户数据] → 明确用户命令、确认、revision fencing、contained atomic
+- [安装会修改 OpenNeko 用户数据] → 明确用户命令、确认、request/snapshot identity、contained atomic
   install 和 recoverable removal。
-- [MCP process/HTTP 生命周期] → generation owner、idle-only swap、超时和显式 dispose。
+- [MCP process/HTTP 生命周期] → instance owner、idle-only swap、超时和显式 dispose。
 - [插件代码信任] → 只有用户安装且 manifest 可验证的 contribution 进入 runtime；外部 processor
   仍受 workspace trust/permission；OAuth/App 无 owner 时拒绝。
 - [中文 UI 出现英文插件描述] → 作者 metadata 保持原文；所有产品 shell 和状态完整本地化。
 
-## Migration Plan
+## Replacement Plan
 
-1. 升级 OpenSpec 与 typed management contract，poison Codex/foreign marketplace path。
+1. 更新 OpenSpec 与 typed management contract，删除 Codex/foreign marketplace path。
 2. 以 OpenNeko repository/installer 替换 Codex CLI adapter并实现 plugin mutation。
 3. 扩展 Pi Skill source并组合 plugin Skill roots。
-4. 组合 MCP generation、Tool projection和 idle-only replacement。
+4. 组合 MCP runtime instance、Tool projection和 idle-only replacement。
 5. 增加 personal Skill install/remove manager。
 6. 更新双语管理 UI 与 producer/consumer tests。
 7. 运行 Agent evaluation harness、Desktop build、真实 Electron 和聚焦 Agent path 验证。
 
-迁移不导入 Codex/OpenAI 已安装插件；OpenNeko install root 初始为空。用户的其他应用插件、
+替换过程不导入 Codex/OpenAI 已安装插件；OpenNeko install root 初始为空。用户的其他应用插件、
 Skill、设置、凭据和缓存保持不变。
 
 ## Open Questions

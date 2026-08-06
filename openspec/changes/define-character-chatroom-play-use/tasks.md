@@ -39,7 +39,7 @@
 - [ ] 5.1 Add sender-bound Desktop Host adapters for exact app/process/window/seat binding, OS permissions, cropped observations, allowed input traits and lease lifecycle.
 - [ ] 5.2 Add product projections for the four presets plus participant, model-role, visibility, learning/calibration and live Activity state without Renderer-owned authority.
 - [ ] 5.3 Add product entry, role/model configuration and always-visible Pause/Stop/Take over controls only after the owning Chara, Agent and Game ports are available.
-- [ ] 5.4 Poison unfinished, legacy, per-game shortcut and active-conversation fallback routes; add consumer tests proving only the canonical generic path succeeds.
+- [ ] 5.4 Keep unfinished, retired, per-game shortcut and active-conversation fallback routes unregistered; add consumer tests proving only the canonical generic path succeeds.
 
 ## 6. Qualification and delivery
 

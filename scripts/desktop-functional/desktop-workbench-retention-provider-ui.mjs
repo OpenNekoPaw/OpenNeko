@@ -217,12 +217,11 @@ async function installCanvas(evaluate, viewId) {
     evaluate,
     `(projection, current, tab, project) => ({
       ...current,
-      revision: current.revision + 1,
       display: { ...current.display, mode: 'chat-main' },
       main: {
         views: [{
           viewId: ${JSON.stringify(viewId)},
-          viewEpoch: tab.viewEpoch,
+          viewInstanceId: tab.viewInstanceId,
           projectId: project.projectId,
           workspaceId: project.workspaceId,
           kind: 'canvas',
@@ -257,14 +256,12 @@ async function openQueuedWorkspace(evaluate) {
     if (!active) throw new Error('Active Workbench is unavailable.');
     const grant = await window.openNekoDesktop.workspaceGrants.choose(
       projection.window.windowId,
-      projection.window.revision,
     );
     if (grant.status !== 'authorized') throw new Error('Second fixture Workspace was not authorized.');
     const transition = await window.openNekoDesktop.scenes.transition(
       projection.window.windowId,
       { kind: 'open-workspace', workspaceGrantId: grant.grant.workspaceGrantId },
-      projection.window.revision,
-      active.scene.revision,
+      active.scene.sceneId,
     );
     if (transition.status !== 'transitioned' || transition.scene.context.kind !== 'agent' ||
         transition.scene.context.scope.kind !== 'workspace') {
@@ -289,8 +286,7 @@ async function activateProject(evaluate, projectId) {
     const result = await window.openNekoDesktop.scenes.transition(
       projection.window.windowId,
       { kind: 'open-project-workspace', projectId: ${JSON.stringify(projectId)} },
-      projection.window.revision,
-      active.scene.revision,
+      active.scene.sceneId,
     );
     if (result.status !== 'transitioned') throw new Error(result.diagnostic.message);
   })()`);

@@ -369,7 +369,7 @@ Extensions and project management SHALL place their package-owned management Roo
 #### Scenario: Management selection opens Preview or Detail
 
 - **WHEN** Assets, Extensions or Projects provides a selected Preview/Detail Surface
-- **THEN** Workbench composes a compact management panel beside a primary Preview/Detail panel using the shared Workspace panel chrome and resize primitive
+- **THEN** Workbench composes management beside Preview/Detail using the shared Workspace panel chrome and resize primitive, with management occupying at least half of the available split area
 - **AND** Preview content continues through the canonical `@neko/preview-webview` presentation and viewer registry
 - **AND** Desktop does not implement another viewer, nested page card or management-owned preview renderer
 
@@ -387,6 +387,12 @@ Extensions and project management SHALL place their package-owned management Roo
 - **AND** the composition does not render both contents on one continuous Main surface separated only by a line
 - **AND** neither shell renders a synthetic single-item Workbench tab strip
 - **AND** Preview/Detail content does not render a descriptor header and inherits the same theme background as its sibling management shell
+
+#### Scenario: User resizes a management and detail split
+
+- **WHEN** Assets, Extensions or Projects displays a qualified Preview/Detail and the user drags the shared resize gutter
+- **THEN** the management Main remains at least as wide as the Preview/Detail panel
+- **AND** the resize contract rejects ratios below one half while preserving the full-width management layout when Secondary Main is absent
 
 #### Scenario: Workspace resources omit redundant global refresh
 

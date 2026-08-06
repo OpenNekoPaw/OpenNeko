@@ -19,7 +19,7 @@ describe('workspace test ownership audit', () => {
     };
     await assert.rejects(
       auditTestOwnership({
-        config: { schemaVersion: 'neko.test-ownership.v1', workspaces: [entry, entry] },
+        config: { workspaces: [entry, entry] },
       }),
       /multiple ownership entries|unknown workspace/u,
     );

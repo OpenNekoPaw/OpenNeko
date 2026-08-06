@@ -18,13 +18,13 @@ active/first/recent Project 作为 owner fallback。
 
 以下命令通过：
 
-- `pnpm --filter @neko/agent-contracts test`: 42 files / 286 tests；覆盖四种 owner、未知 kind/version、重复会话、identity mismatch 和 initial-turn completed projection。
+- `pnpm --filter @neko/agent-contracts test`: 42 files / 286 tests；覆盖四种 owner、未知 kind/field、重复会话、identity mismatch 和 initial-turn completed projection。
 - `pnpm --filter @neko/agent-runtime test`: 116 files / 1088 tests；覆盖 Pi catalog/context join、Assistant/Workspace owner 投影、旧 synthetic Project 路径移除、晚附着 Desktop terminal-idle 和 lifecycle completed。
 - `pnpm --filter @neko/agent-webview test`: 90 files / 699 tests；覆盖 Desktop 组合下隐藏 package Tabs/History。
 - `pnpm --filter @neko/host test`: 36 files / 323 tests；覆盖权威分组、确定性排序、精确 restore/delete、Character/Room unavailable 和 Project Draft 激活。
 - `pnpm --filter @neko/app-desktop test`: 65 files / 349 tests；覆盖 Main delegation、renderer 分组、折叠/展开、首条消息原子 Scene 激活、receiver-independent initial turn 和 fixture-only automation v2 contract。
 - `pnpm exec vitest run packages/host/src/desktop-shell-service.test.ts packages/host/src/desktop-shell-contract.test.ts packages/host/src/desktop-scene-contract.test.ts apps/neko-desktop/src/main/app-host.test.ts apps/neko-desktop/src/renderer/DesktopShell.test.tsx`: 5 files / 102 tests，最终修复后通过。
-- `pnpm exec vitest run packages/agent/contracts/src/__tests__/agent-draft-submit.test.ts packages/agent/runtime/src/application/agent-conversation-lifecycle-service.test.ts packages/agent/runtime/src/application/agent-conversation-lifecycle-repository.test.ts packages/agent/runtime/src/runtime/__tests__/agent-state-runtime.test.ts apps/neko-desktop/src/main/desktop-agent-controller-composition.test.ts packages/agent/runtime/src/pi/__tests__/node-conversation-authority.test.ts apps/neko-desktop/src/main/app-host.test.ts`：7 files / 67 tests，通过；覆盖 receiver-independent initial-turn port、晚附着 UI terminal state、lifecycle completed、重放不重启 provider 和旧 Pi 表迁移。
+- `pnpm exec vitest run packages/agent/contracts/src/__tests__/agent-draft-submit.test.ts packages/agent/runtime/src/application/agent-conversation-lifecycle-service.test.ts packages/agent/runtime/src/application/agent-conversation-lifecycle-repository.test.ts packages/agent/runtime/src/runtime/__tests__/agent-state-runtime.test.ts apps/neko-desktop/src/main/desktop-agent-controller-composition.test.ts packages/agent/runtime/src/pi/__tests__/node-conversation-authority.test.ts apps/neko-desktop/src/main/app-host.test.ts`：7 files / 67 tests，通过；覆盖 receiver-independent initial-turn port、晚附着 UI terminal state、lifecycle completed、重放不重启 provider 和旧 Pi 表产品不可达。
 - Agent Contracts、Agent Runtime、Agent Webview 和 Desktop 受影响 typecheck 通过；Host 没有 package `typecheck` script，生产类型路径由 root build/package 覆盖。
 - `pnpm build`、`pnpm test`、`pnpm check`、`pnpm check:quality`、`pnpm check:legacy-debt`、`pnpm check:application-boundaries` 通过。
 - `pnpm check:unused`: Knip 无 issue，仅输出既存 configuration hints。
@@ -32,15 +32,15 @@ active/first/recent Project 作为 owner fallback。
 - `git diff --check` 和 `pnpm exec openspec validate group-desktop-conversations-by-context --strict`: 通过。
 
 额外运行 `pnpm exec tsc -p packages/host/tsconfig.json --noEmit` 时命中一处未修改的 test-only 类型错误：
-`desktop-shell-state.test.ts:566` 展开 `unknown` migration fixture。该包没有声明此 typecheck 入口；本变更的 Host
+`desktop-shell-state.test.ts:566` 展开 `unknown` retired-path fixture。该包没有声明此 typecheck 入口；本变更的 Host
 聚焦测试、root build、Desktop typecheck 和正式打包均通过，未把该非门禁命令描述为成功。
 
 ## Path Evidence
 
-- Agent contract/parser 拒绝未知 projection version、owner kind、额外字段、不完整 CharacterRun/RoomRun 和重复 conversation identity。
-- Pi catalog 从同一 SQLite snapshot LEFT JOIN canonical conversation context；context payload/version 不匹配直接失败。
+- Agent contract/parser 拒绝未知 projection field、owner kind、不完整 CharacterRun/RoomRun 和重复 conversation identity。
+- Pi catalog 从同一 SQLite snapshot LEFT JOIN canonical conversation context；非 canonical context payload 只使该记录失败。
 - Host 从 Project catalog 和 Agent Home projection 生成唯一 grouped projection；Workspace 必须解析为一个 exact Project，renderer 不参与 join 或 owner 推断。
-- restore/delete 同时比较 `conversationId + full owner`；Assistant lifecycle 不要求 Project，wrong owner 和 stale revision fail closed。
+- restore/delete 同时比较 `conversationId + full owner`；Assistant lifecycle 不要求 Project，wrong owner 和 stale session/request identity fail closed。
 - Project 标题不选择历史会话；Host 单元回归证明 active Workspace session 会变为无 `conversationId` 的新 Draft，而同一 Workspace Draft 保持幂等。
 - Character/Room codec 可读取完整 run identity，但当前 Desktop 在 lifecycle context 读取前返回
   `desktop-scene-owner-unavailable`，不会降级为 Assistant/Workspace。
@@ -90,9 +90,9 @@ provider-backed case 不将其扩大为 Assistant/Character/Room 行为验收。
 | Target      | Scenario                          | Result                                                                                                                                                      | Report                                                                                                                                                                |
 | ----------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | development | `desktop-workbench-scenes`        | passed，17 checkpoints                                                                                                                                      | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-02-00.864Z-desktop-workbench-scenes-development/report.json`        |
-| packaged    | `desktop-workbench-scenes`        | passed，17 checkpoints，0 console error/warning/exception/poison                                                                                            | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-18.563Z-desktop-workbench-scenes-packaged/report.json`           |
+| packaged    | `desktop-workbench-scenes`        | passed，17 checkpoints，0 console error/warning/exception                                                                                                   | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-18.563Z-desktop-workbench-scenes-packaged/report.json`           |
 | development | `desktop-conversation-navigation` | passed，6→5 collapse、expand、exact delete/restore                                                                                                          | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-38-25.663Z-desktop-conversation-navigation-development/report.json` |
-| packaged    | `desktop-conversation-navigation` | passed，6→5 collapse、expand、exact delete/restore；0 console error/warning/exception/poison                                                                | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-40.024Z-desktop-conversation-navigation-packaged/report.json`    |
+| packaged    | `desktop-conversation-navigation` | passed，6→5 collapse、expand、exact delete/restore；0 console error/warning/exception                                                                       | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T15-50-40.024Z-desktop-conversation-navigation-packaged/report.json`    |
 | development | `desktop-agent-provider-ui`       | passed，可见 Entry composer + 真实 API；Assistant materialize、真实回复、Sidebar active、terminal UI/lifecycle completed；0 console error/warning/exception | `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T17-46-16.954Z-desktop-agent-provider-ui-development/report.json`       |
 
 导航场景还断言删除非活动会话不会改变 active session，恢复原会话后 transcript 可见，且 Agent package
@@ -115,12 +115,12 @@ catalog、Scene 仍停留中间 Assistant Draft。根因是 first-submit 前额�
 更新竞争；移除中间 transition 后，提交直接从 exact Entry Draft 原子附加 conversation。后续 development、
 packaged Workbench 和专用导航场景均通过。
 
-## User Data And Migration
+## User Data
 
 - Pi transcript、branch、conversation/context rows 不做破坏性重写，conversation identity 保持不变。
 - grouped navigation 是 Host 从 Project catalog + Agent Home 派生的可重建 projection，不成为持久权限或记忆事实。
-- 支持的旧 Workspace context 只通过既有 exact Workspace migration authority 一次性提交；无法解析的 context、未知 schema/version/kind 直接失败，不迁移到默认 Assistant 或最近 Project。
-- 回滚是预发布 source-level 回滚；派生 sidebar projection 可重建，但旧 binary 无法读取的新 contract version 应 fail visible。
+- 非 canonical Workspace context 保持原字节不变并只使该 conversation 失败；产品不迁移、修复或把它归入默认 Assistant/最近 Project。
+- 回滚是预发布 source-level 回滚；派生 sidebar projection 可从 canonical records 重新计算，未知字段/kind 在精确记录边界 fail visible。
 
 ## Quality Review And Residual Risk
 

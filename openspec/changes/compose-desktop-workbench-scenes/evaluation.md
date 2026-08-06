@@ -113,7 +113,7 @@ src/runtime/projection/__tests__/pi-conversation-history-projector.test.ts` is t
 - Assistant/Workspace exact bootstrap and provider-preflight failure checkpointing are `excluded`
   from provider-backed Evaluation as deterministic identity and persistence boundaries. Host/AppHost,
   bridge and controller tests prove Scene conversation -> exact connection -> active conversation/Tab
-  state, poison the prior connection, and fail visibly for a missing conversation. Agent Runtime tests
+  state, prove the prior connection cannot participate, and fail visibly for a missing conversation. Agent Runtime tests
   prove that a preflight failure checkpoints the original user message once under the committed
   conversation/turn identity, while a provider-started failure preserves the existing Pi checkpoint.
 - The visible development and packaged Electron scenario additionally proves that the locally

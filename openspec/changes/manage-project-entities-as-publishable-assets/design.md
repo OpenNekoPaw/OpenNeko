@@ -19,7 +19,7 @@ a real cloud provider exists.
 
 **Goals:**
 
-- Establish one versioned project Entity fact authority and make derived state rebuildable.
+- Establish one canonical project Entity fact authority and make derived state rebuildable.
 - Make inferred candidates searchable immediately while requiring explicit intent for stable Entities.
 - Provide Entity management in Resource Browser and an Entity Inspector.
 - Define safe instantiate, bind, publish, update, diff, and apply workflows for Entity Assets.
@@ -39,8 +39,8 @@ a real cloud provider exists.
 ### 1. Separate Project Entity from Entity Asset
 
 A Project Entity is a mutable semantic aggregate owned by the workspace. It contains stable project ID,
-kind, names/aliases, accepted facts, lifecycle state, accepted representation intent, provenance, and
-revision. An Entity Asset is an immutable Asset package revision containing a frozen semantic snapshot
+kind, names/aliases, accepted facts, lifecycle state, accepted representation intent, and provenance.
+An Entity Asset is an immutable user-managed Asset package revision containing a frozen semantic snapshot
 and package-owned resources suitable for reuse.
 
 Instantiating an Entity Asset creates a new Project Entity ID and records `originAssetId`, applied Asset
@@ -155,17 +155,17 @@ owning package must provide a typed handler and exact Conversation/Character/Roo
 Resource Browser must not synthesize an Agent slash command, mutate Agent Webview state, or restore the
 removed Agent Header roleplay selector.
 
-### 9. Current authority and consumer inventory
+### 9. Retired authority and consumer inventory
 
-The migration boundary covers every current normal producer of Entity semantic facts rather than only
-the Resource Browser reader. The following sources were audited before defining the canonical document:
+The retirement boundary covers every former producer of Entity semantic facts rather than only the
+Resource Browser reader. The following sources were audited before defining the canonical document:
 
 | Current source                                                                      | Current producer / reader                                                                          | Classification and target                                                                                                                                                                                                  |
 | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| root `characters.json`                                                              | `ProjectEntityStore`, character registry adapters, Character profile assembly                      | Accepted character identity/name/alias/semantic fields migrate to canonical facts; character-only runtime projections remain owned by Chara.                                                                               |
-| `neko/entities/scenes.json`, `locations.json`, `objects.json`, `styles.json`        | `ProjectEntityStore`, `CreativeEntityService`, Agent core tools                                    | Accepted identity/name/alias/semantic fields migrate to canonical facts; per-kind normal readers are poisoned after commit.                                                                                                |
+| root `characters.json`                                                              | `ProjectEntityStore`, character registry adapters, Character profile assembly                      | Retired input remains untouched and product-unreachable; new accepted character facts enter only through canonical Entity operations, while character runtime projections remain owned by Chara.                           |
+| `neko/entities/scenes.json`, `locations.json`, `objects.json`, `styles.json`        | `ProjectEntityStore`, `CreativeEntityService`, Agent core tools                                    | Retired inputs remain untouched; per-kind normal readers are deleted.                                                                                                                                                      |
 | `neko/entities/candidates.json`                                                     | `CandidateStore`, `CreativeEntityService`, Search Entity adapter                                   | Evidence, confidence, source references, freshness, rejection and dismissal are rebuildable/workflow projection state; an explicitly confirmed or merged result becomes a canonical operation, not a copied candidate row. |
-| `neko/entity-representation-bindings.json`                                          | `EntityRepresentationBindingService`, Resource Browser, Canvas/Cut/Agent representation resolution | Confirmed durable target, role, default selection, source and acceptance time migrate to canonical binding facts; suggested/rejected status, availability and orphan timestamps remain workflow/derived state.             |
+| `neko/entity-representation-bindings.json`                                          | `EntityRepresentationBindingService`, Resource Browser, Canvas/Cut/Agent representation resolution | Retired bindings remain untouched; new confirmed target, role, default selection, source and acceptance enter only through canonical operations, while availability remains derived.                                       |
 | `neko/entity-asset-requirements.json`                                               | `EntityAssetRequirementService`, Chara profile assembly                                            | Current missing/suggested/generated/bound/dismissed rows are workflow state. Explicitly accepted representation intent is represented by canonical bindings; unresolved rows are archived for inspection.                  |
 | `neko/visual-identity-drafts.json`                                                  | `VisualIdentityDraftService`, Chara profile assembly                                               | Prompts, generated output selections and extracted suggestions are authoring workflow state and remain outside canonical identity facts; accepted semantic values or bindings enter only through typed Entity operations.  |
 | Entity Asset projection records in local metadata                                   | `EntityAssetMetadataProjector`, Search local metadata binding                                      | Candidate, occurrence, binding availability and freshness remain rebuildable projections; they never become a second fact authority.                                                                                       |
@@ -174,10 +174,10 @@ the Resource Browser reader. The following sources were audited before defining 
 
 The normal consumer switch includes `CreativeEntityService`, Search `creative-entities`, Resource Browser,
 Agent Entity capability/content effects, Canvas material Entity refs, Chara profile/dialogue projection,
-and Assets project-reference/portability readers. Tests and migration-only inspectors may read archived
-legacy inputs, but no normal consumer may return success from them after the canonical commit.
+and Assets project-reference/portability readers. Product tests prove retired inputs are unreachable;
+only an explicitly authorized offline repair tool outside the product graph may inspect them.
 
-`scene` is a valid Project Entity kind in the v1 document. The current generic Asset manifest
+`scene` is a valid Project Entity kind in the canonical document. The current generic Asset manifest
 `IdentityMetadata.identityKind` does not yet include `scene`; therefore scene Entity Asset publication
 must fail with a typed unsupported-kind diagnostic until task 4.2 expands and tests that public Asset
 contract. Project Entity storage and management must not omit or remap scene identity in the meantime.
@@ -194,25 +194,21 @@ contract. Project Entity storage and management must not omit or remap scene ide
   require package copy or installable Asset dependency.
 - **[Risk] Merge leaves dangling references** → Require a complete typed reference rewrite plan and fail
   before commit when any owner cannot participate.
-- **[Trade-off] One JSON authority increases write contention** → Use expected revision and atomic replace;
-  the local Desktop product has bounded writers and benefits from atomic cross-Entity operations.
+- **[Trade-off] One JSON authority increases write contention** → Serialize mutations in the workspace
+  Entity owner and use atomic replace with exact request identity.
 
-## Migration Plan
+## Replacement Plan
 
-1. Add the canonical Entity codec/repository and a read-only inventory of all current Entity-related
-   files and known project references.
-2. Produce a migration plan and immutable archive with input digests; require confirmation for ambiguous
-   facts, identity merges, or unknown fields.
-3. Write `neko/entities.json` atomically under expected workspace revision, rebuild candidate/search/
+1. Add the canonical Entity codec/repository and identify all product-reachable Entity producers.
+2. Delete fragmented readers/writers and prove retired files remain untouched and product-unreachable.
+3. Write `neko/entities.json` atomically through the workspace Entity owner, compute candidate/search/
    availability projections, and verify reference resolution.
 4. Switch Entity consumers, Resource Browser, Agent effects, and bindings to the canonical public ports.
-5. Poison fragmented normal readers/writers; retain old files only in the explicit recovery archive.
+5. Prove fragmented normal readers/writers, fallback mappings and product recovery archives are absent.
 6. Enable Entity Asset instantiate/publish/update workflows over the generic Asset adapter and verify that
    cloud sync never reads the project Entity document.
 
-Before the canonical switch, rollback leaves existing files untouched. After a successful switch,
-rollback exports from the canonical document or restores the immutable archive with explicit user intent;
-normal legacy readers are not re-enabled.
+Rollback is source-level and leaves all existing files untouched; normal retired readers are not re-enabled.
 
 ## Open Questions
 
@@ -221,7 +217,7 @@ normal legacy readers are not re-enabled.
 
 ## Implementation Dependency Status
 
-As of 2026-08-05, the canonical `neko/entities.json` repository, migration/poison path, candidate and
+As of 2026-08-05, the canonical `neko/entities.json` repository, retired-path removal, candidate and
 availability projections, Resource Browser Inspector, package-owned `entity.manage` route, and basic
 confirm/edit/bind/unbind Desktop delegation are implemented. The Desktop application root only injects
 the exact workspace and public repositories; Entity IDs, timestamps, operation semantics, canonical
@@ -238,8 +234,8 @@ be exposed as successful production operations until that owner is implemented a
 
 On 2026-08-05, affected package tests/typechecks, `pnpm build`, `pnpm test`, `pnpm check`,
 `pnpm check:legacy-debt`, `pnpm check:unused`, and the complete `pnpm ci:local` gate passed. Canonical
-resource and migration tests poison fragmented readers, require expected revisions, preserve migration
-archives, and recover interrupted candidate decisions without returning partial success.
+resource and path tests prove fragmented readers are absent, serialize owner mutations, and keep
+interrupted candidate decisions local without returning partial success.
 
 The real Electron `resource-browser-entity-management` scenario passed and produced canonical revision 2
 after candidate confirmation, then projected a missing binding as needs-attention and retained two exact

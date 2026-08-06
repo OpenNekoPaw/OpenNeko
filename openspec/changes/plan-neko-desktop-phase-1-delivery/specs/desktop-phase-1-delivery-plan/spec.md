@@ -56,8 +56,8 @@ only public UI/domain adapters.
 
 ### Requirement: Application identity and data have one canonical migration
 
-Phase 1 MUST add `neko-desktop` as the canonical Desktop application identity and MUST delete or
-poison the unpublished `neko-home` success path within the same migration boundary. Before removal,
+Phase 1 MUST add `neko-desktop` as the canonical Desktop application identity and MUST delete
+the unpublished `neko-home` success path within the same replacement boundary. Before removal,
 the implementation MUST audit settings, conversations, project registry, credentials, trust,
 installed packages, generated artifacts, and rebuildable cache, and assign exactly one explicit
 reuse, migrate, rebuild, or reject-with-diagnostic disposition to each category.
@@ -65,7 +65,7 @@ reuse, migrate, rebuild, or reject-with-diagnostic disposition to each category.
 #### Scenario: No legacy Desktop data exists
 
 - **WHEN** the audit finds no valuable `neko-home` data
-- **THEN** the legacy identity and success path are removed or poisoned
+- **THEN** the retired identity and success path are removed
 - **AND** regression tests prove new requests cannot use an alias or fallback
 
 #### Scenario: Valuable legacy data exists
@@ -102,22 +102,22 @@ domain document facts. Phase 1 MUST permit only Content projects to open success
 Desktop MUST keep Project, Conversation, Run, Tool Call, Job, document, and cross-project Attention
 facts authoritative in AppHost or the owning domain. Renderer MUST use owner-keyed immutable
 replicas, Window-scoped layout/Project Tab state, and View-scoped draft/selection/scroll/viewport
-state. Projection attachment MUST be snapshot-first and MUST validate attachment identity, endpoint
-and View epoch, continuous sequence, and base revision.
+state. Projection attachment MUST be snapshot-first and MUST validate exact attachment, View instance
+and request identity plus a continuous live sequence.
 
 #### Scenario: A patch is missing or stale
 
-- **WHEN** Renderer receives a patch before snapshot, with a sequence gap, stale View/endpoint epoch,
-  wrong owner, unknown schema, or mismatched base revision
+- **WHEN** Renderer receives a patch before snapshot, with a sequence gap, disposed or mismatched
+  View/attachment/request identity, wrong owner, or malformed payload
 - **THEN** the attachment fails visibly and acquires a new authoritative snapshot
 - **AND** it does not apply last-write-wins, active-Tab fallback, or a persisted UI cache
 
 #### Scenario: User switches tabs during an async command
 
 - **WHEN** a response for View A arrives after View B becomes active or View A is reopened with a new
-  epoch
-- **THEN** the response reconciles only with its captured owner, command id, expected revision, and
-  original View epoch
+  View instance identity
+- **THEN** the response reconciles only with its captured owner, command, request, source fingerprint,
+  and original View instance identity
 - **AND** it cannot mutate View B or the new View A instance
 
 ### Requirement: Desktop workbench uses controlled creative surfaces
@@ -253,8 +253,8 @@ synthetic workspace data and MUST assert both user-visible results and the canon
 - **WHEN** the final Phase 1 functional scenario executes on `darwin-arm64`
 - **THEN** it exercises real Host ports, public package adapters, Pi conversation runtime, Pi Session,
   Product Turn Bridge, owning Jobs, `@neko/media`, and the Main-owned HTTP resource gateway
-- **AND** poisoned `neko-media:`/upstream proxy, retired host paths, `neko-home`, Engine/client, mock
-  stores, and demo surfaces are not involved
+- **AND** registry/import assertions prove `neko-media:`/upstream proxy, retired host paths,
+  `neko-home`, Engine/client, mock stores, and demo surfaces are not involved
 
 #### Scenario: Application restarts after work
 

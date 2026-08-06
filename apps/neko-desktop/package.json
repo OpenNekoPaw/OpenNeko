@@ -1,5 +1,6 @@
 {
   "name": "@neko/app-desktop",
+  "version": "0.0.1",
   "description": "Canonical Electron application composition root for OpenNeko",
   "private": true,
   "type": "module",

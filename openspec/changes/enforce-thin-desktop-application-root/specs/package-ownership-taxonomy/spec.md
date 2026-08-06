@@ -62,7 +62,7 @@ and generated-output lifecycle MUST NOT remain in either catch-all layer.
 - **WHEN** a Shared contract describes Agent, Canvas, Assets, Generation, Character, Preview, Tools,
   or another owning domain
 - **THEN** the contract and its authoritative tests move to that domain's public contract or domain
-  entry and the former Shared export is deleted or poisoned
+  entry and the former Shared export is deleted
 
 #### Scenario: Platform responsibility is migrated
 
@@ -142,5 +142,5 @@ catalog. Adding or renaming a package MUST automatically place it under the appl
 #### Scenario: Package migration is reported complete
 
 - **WHEN** a responsibility moves between Desktop, Shared, Platform, or a domain family
-- **THEN** producer and consumer tests, full dependency checks, explicit path assertions, and legacy
-  path poison prove the target owner is canonical and the former path did not participate
+- **THEN** producer and consumer tests, full dependency checks, explicit path assertions, and retired
+  import/export/registration absence prove the target owner is canonical and the former path did not participate

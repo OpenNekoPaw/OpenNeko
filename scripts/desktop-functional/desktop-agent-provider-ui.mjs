@@ -298,7 +298,6 @@ async function inspectCompletedConversation(evaluate, sentPrompt) {
     if (!(userPrompt instanceof HTMLElement) || !(response instanceof HTMLElement) ||
         !railLayoutValid || alerts.length > 0 || forbiddenDiagnostics.length > 0 ||
         activityObservation?.sawTranscriptActivity !== true ||
-        activityObservation.sawLegacyRunStatus === true ||
         document.querySelector('.agent-execution-activity') ||
         document.querySelector('.agent-run-status') ||
         document.querySelector('.agent-header-action-roleplay')) {
@@ -328,7 +327,6 @@ async function inspectCompletedConversation(evaluate, sentPrompt) {
       forbiddenDiagnostics,
       executionActivity: {
         appearedInTranscript: activityObservation.sawTranscriptActivity,
-        legacyStatusAppeared: activityObservation.sawLegacyRunStatus,
         terminalActivityVisible: Boolean(document.querySelector('.agent-execution-activity')),
       },
     };
@@ -340,7 +338,6 @@ async function beginExecutionActivityObservation(evaluate) {
     window.__openNekoAgentProviderUiObservation?.observer?.disconnect();
     const observation = {
       sawTranscriptActivity: false,
-      sawLegacyRunStatus: false,
       observer: undefined,
     };
     const inspect = () => {
@@ -348,7 +345,6 @@ async function beginExecutionActivityObservation(evaluate) {
         '[data-owner-root="agent"] .agent-message-list .agent-execution-activity',
       );
       observation.sawTranscriptActivity ||= activity instanceof HTMLElement;
-      observation.sawLegacyRunStatus ||= document.querySelector('.agent-run-status') !== null;
     };
     observation.observer = new MutationObserver(inspect);
     observation.observer.observe(document.body, {
@@ -462,8 +458,6 @@ async function inspectProviderWaitState(evaluate) {
       )?.textContent?.trim() ?? undefined,
       sawTranscriptActivity:
         window.__openNekoAgentProviderUiObservation?.sawTranscriptActivity === true,
-      sawLegacyRunStatus:
-        window.__openNekoAgentProviderUiObservation?.sawLegacyRunStatus === true,
       composerAvailable: Boolean(document.querySelector('.agent-composer-textarea')),
       stopControlVisible: Boolean(document.querySelector('.agent-composer-stop')),
       visibleMessages: [...document.querySelectorAll(

@@ -130,8 +130,7 @@ export async function inspectPackageProductStatus(root = repositoryRoot) {
   if (configurationFindings.length > 0) return failedResult(configurationFindings);
 
   const packages = await readWorkspacePackages(root, catalog);
-  const migrationOnly = new Set(configuration.migrationOnlyModules);
-  const sourceFiles = await discoverSourceFiles(root, catalog, migrationOnly);
+  const sourceFiles = await discoverSourceFiles(root, catalog);
   const moduleGraph = new Map();
   const unresolvedWorkspaceImports = [];
 
@@ -139,7 +138,7 @@ export async function inspectPackageProductStatus(root = repositoryRoot) {
     const source = await readFile(path.join(root, relativeFile), 'utf8');
     const edges = [];
     for (const specifier of collectRuntimeModuleSpecifiers(source, relativeFile)) {
-      const target = await resolveModule(root, relativeFile, specifier, packages, migrationOnly);
+      const target = await resolveModule(root, relativeFile, specifier, packages);
       if (target) {
         edges.push({ target, specifier, evidence: 'source' });
       } else if (findWorkspacePackage(specifier, packages)) {
@@ -222,12 +221,10 @@ export function validateProductStatusConfiguration(
   validateExactKeys(
     'configuration',
     configuration,
-    ['applicationEntries', 'dynamicEdges', 'migrationOnlyModules', 'version'],
+    ['applicationEntries', 'dynamicEdges'],
     findings,
   );
-  if (configuration.version !== 1) findings.push('configuration.version must equal 1');
   validatePathArray('applicationEntries', configuration.applicationEntries, findings);
-  validatePathArray('migrationOnlyModules', configuration.migrationOnlyModules, findings);
   if (!Array.isArray(configuration.dynamicEdges)) {
     findings.push('dynamicEdges must be an array');
   } else {
@@ -305,13 +302,13 @@ function validatePathArray(label, value, findings) {
   }
 }
 
-async function discoverSourceFiles(root, catalog, migrationOnly) {
+async function discoverSourceFiles(root, catalog) {
   const roots = ['apps/neko-desktop/src', ...catalog.packages.map((entry) => `${entry.path}/src`)];
   const files = [];
   for (const sourceRoot of roots) {
     for (const file of await walkFiles(path.join(root, sourceRoot))) {
       const relative = repositoryPath(root, file);
-      if (migrationOnly.has(relative) || !isSourceFile(relative)) continue;
+      if (!isSourceFile(relative)) continue;
       files.push(relative);
     }
   }
@@ -347,7 +344,7 @@ async function readWorkspacePackages(root, catalog) {
   return packages.sort((left, right) => right.name.length - left.name.length);
 }
 
-async function resolveModule(root, fromFile, specifier, packages, migrationOnly) {
+async function resolveModule(root, fromFile, specifier, packages) {
   let candidate;
   if (specifier.startsWith('.')) {
     candidate = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier));
@@ -362,7 +359,7 @@ async function resolveModule(root, fromFile, specifier, packages, migrationOnly)
   }
   if (!candidate) return undefined;
   const resolved = await resolveSourceCandidate(root, candidate);
-  return resolved && !migrationOnly.has(resolved) ? resolved : undefined;
+  return resolved;
 }
 
 function findWorkspacePackage(specifier, packages) {

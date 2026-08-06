@@ -2,7 +2,7 @@
 
 ### Requirement: Delivery uses one purpose-aware 3D reference contract
 
-The system SHALL deliver staged 3D reference context through one versioned `3d-reference` payload containing exact session identity, revision, selected purposes, subject/environment descriptors, structured staging, and purpose-specific output resources. The prelaunch `model-preview` discriminator and generic staged-image success path MUST be removed or poisoned and MUST NOT remain as fallback.
+The system SHALL deliver staged 3D reference context through one canonical `3d-reference` payload containing exact session/request identity, source fingerprint, selected purposes, subject/environment descriptors, structured staging, and purpose-specific output resources. The prelaunch `model-preview` discriminator and generic staged-image success path MUST be deleted and MUST NOT remain as fallback.
 
 #### Scenario: Deliver an independently captured purpose
 
@@ -11,7 +11,7 @@ The system SHALL deliver staged 3D reference context through one versioned `3d-r
 
 #### Scenario: Reject legacy context
 
-- **WHEN** Agent, Preview, or a fixture receives the removed `model-preview` discriminator after migration
+- **WHEN** Agent, Preview, or a fixture receives the removed `model-preview` discriminator after replacement
 - **THEN** contract parsing fails visibly instead of mapping it to `3d-reference` or returning legacy success
 
 ### Requirement: Each reference purpose has a distinct output type

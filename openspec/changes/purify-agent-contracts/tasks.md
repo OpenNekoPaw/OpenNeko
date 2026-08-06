@@ -11,19 +11,19 @@
       settings, no Node/Electron/React/DOM/Pi/storage dependency, and package-role documentation.
 - [ ] 2.2 Move shot-image preparation derivation, table, transition, and recommendation behavior while
       retaining types/constants/codecs/validators in Agent Contracts.
-- [ ] 2.3 Migrate all shot-image producer and runtime/Webview consumers; delete old exports and add poison
-      tests proving the new canonical path.
+- [ ] 2.3 Switch all shot-image producer and runtime/Webview consumers atomically; delete old exports and
+      add path-absence tests proving the new canonical path.
 - [ ] 2.4 Move comic-animation perception/index projection, capability policy/diagnosis, shot-reference
       projection, and review-table/artifact behavior while retaining schema/codecs in Agent Contracts.
-- [ ] 2.5 Migrate all comic-animation producer and runtime/Webview consumers; delete old exports and add
-      poison tests proving the new canonical path.
+- [ ] 2.5 Switch all comic-animation producer and runtime/Webview consumers atomically; delete old exports
+      and add path-absence tests proving the new canonical path.
 
 ## 3. Ownership And Compatibility Verification
 
 - [ ] 3.1 Add dependency tests preventing owning domains from importing Agent Domain and preventing Agent
       Domain from mutating domain facts or importing runtime/application adapters.
-- [ ] 3.2 Run existing serialized artifact fixtures through Agent Contracts and prove codec/version output
-      remains unchanged across the extraction.
+- [ ] 3.2 Run existing serialized artifact fixtures through Agent Contracts and prove canonical codec
+      output remains unchanged across the extraction.
 - [ ] 3.3 Run Agent Contracts/Domain/runtime/Webview tests and typechecks, package/application/Agent
       boundary gates, `pnpm build`, `pnpm test`, `pnpm check`, and `pnpm check:unused`.
 - [ ] 3.4 Record actual commands/results, old-path deletion/search evidence, any intentionally retained

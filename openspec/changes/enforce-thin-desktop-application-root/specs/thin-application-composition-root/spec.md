@@ -59,8 +59,8 @@ or maintain a second successful implementation path.
 #### Scenario: A business path is migrated from apps
 
 - **WHEN** callers switch to the package-owned implementation
-- **THEN** the former app-owned implementation is deleted, poisoned, or fail-closed and cannot return
-  success through compatibility, fallback, or dual-write behavior
+- **THEN** the former app-owned implementation is deleted, and import/export/registration assertions
+  prove it cannot return success through compatibility, fallback, or dual-write behavior
 
 ### Requirement: Existing application-layer drift is explicitly governed
 

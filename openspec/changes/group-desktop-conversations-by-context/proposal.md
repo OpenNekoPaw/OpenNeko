@@ -4,18 +4,18 @@ Desktop currently projects recent Projects and Agent conversations as two unrela
 
 ## What Changes
 
-- Add a package-owned, versioned conversation navigation projection that carries one closed runtime context owner (`assistant | workspace | character | room`) plus an optional Project grouping identity.
+- Add a package-owned, canonical conversation navigation projection that carries one closed runtime context owner (`assistant | workspace | character | room`) plus an optional Project grouping identity.
 - Group Workspace conversations under their exact Project in PrimarySidebar; show ungrouped Assistant, Character and Room conversations in owner-qualified standalone groups.
 - Keep Project grouping organizational only: it MUST NOT grant Workspace access, merge memory, change transcript ownership, or permit active/recent Project fallback.
 - Restore an exact conversation through its persisted context owner and complete Workbench Scene; keep same-Workspace navigation idempotent and preserve fail-visible unavailable behavior for Character/Room until qualified owners exist.
 - Make Project/container activation distinct from conversation restore: opening a Project enters or reuses its Workspace-bound Draft, while selecting a conversation restores that exact session.
-- **BREAKING** Replace Workspace-only `AgentHomeNavigationIdentity` and the separate recent Project/recent conversation rendering contract; migrate current Assistant and Workspace catalog projections to the new canonical representation without a dual-success compatibility path.
+- **BREAKING** Replace Workspace-only `AgentHomeNavigationIdentity` and the separate recent Project/recent conversation rendering contract; switch all current Assistant and Workspace catalog projection consumers atomically to the canonical representation without a dual-success compatibility path.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `desktop-conversation-context-navigation`: Defines conversation context ownership, optional Project grouping, grouped PrimarySidebar presentation, exact Scene restore, lifecycle operations, migration, and unavailable owner behavior.
+- `desktop-conversation-context-navigation`: Defines conversation context ownership, optional Project grouping, grouped PrimarySidebar presentation, exact Scene restore, lifecycle operations, record-local rejection, and unavailable owner behavior.
 
 ### Modified Capabilities
 

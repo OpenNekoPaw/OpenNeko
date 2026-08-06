@@ -291,6 +291,7 @@ The Agent Webview SHALL treat the roleplay selector as package-owned conversatio
 - **THEN** the Header does not render the roleplay selector
 - **AND** no duplicate character-session entry remains in the Agent panel
 - **AND** entity discovery and character-session launch remain owned by Resource management entity interactions
+
 ### Requirement: Existing Pi conversations restore without synthetic lifecycle state
 
 Desktop SHALL restore an exact persisted Pi conversation when its catalog/context exists even if it predates
@@ -367,10 +368,10 @@ connection remain rejected.
 
 #### Scenario: Cleanup identity is unknown or forged
 
-- **WHEN** a detach uses an unknown connection, mismatched sender identity or endpoint epoch
+- **WHEN** a detach uses an unknown connection, mismatched sender identity or attachment request identity
 - **THEN** Desktop fails visibly and does not report cleanup success
 
-### Requirement: Retired Agent events do not poison the current conversation
+### Requirement: Retired Agent events cannot mutate the current conversation
 
 Preload SHALL track Agent event sequence by exact connection lifecycle. It SHALL discard queued events from a
 known retired connection and SHALL NOT project them as errors or transcript records into the current connection.

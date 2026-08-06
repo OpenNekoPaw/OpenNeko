@@ -30,14 +30,15 @@ package-owned L0 contract
 | Project format        | Canvas `.nkc`、Cut OTIO                         | owning domain schema/codec | 是                           |
 | 媒体 port             | probe、frame、waveform、preview、PCM descriptor | `@neko/media`              | 否                           |
 | Host/renderer message | intent、status、diagnostic、session identity    | owning package L0 contract | 仅可恢复 UI state 可短期保存 |
-| Resource identity     | `ContentLocator`、Asset/Entity ID                  | shared/domain service      | 是                           |
+| Resource identity     | `ContentLocator`、Asset/Entity ID               | shared/domain service      | 是                           |
 
 ## 不变量
 
 - 普通共享 TypeScript shape 不得以 `*.proto -> interface` 生成链伪装为 wire contract。
 - 功能包通过窄领域 port 消费 `@neko/media`，不得重建万能 media client 或平行 DTO。
 - runtime handle、token、端口、URL、blob、renderer URI 和 stream id 不写入项目格式。
-- 未知 message、schema/version、缺失字段和陈旧 session identity 必须明确失败。
+- 未知 message、未知字段、缺失字段和陈旧 session identity 必须明确失败；内部契约不得用
+  schema/version 字段选择 shape。
 - UI projection 可以裁剪字段，但不能改变 identity、error、cancel 或 lifecycle 语义。
 - 新路径测试同时断言结果与 adapter/handler 路径，并证明退休 route 未参与。
 
@@ -47,7 +48,8 @@ package-owned L0 contract
 
 1. 存在两个明确的 runtime、语言或持久化边界；
 2. 有真实序列化 producer 与 consumer，而非只生成 TypeScript interface；
-3. 定义 schema version、兼容策略、未知字段行为和迁移/拒绝语义；
+3. 定义唯一 canonical schema、未知字段行为和拒绝语义；只有外部协议明确要求时才在 adapter
+   内保留其协议版本，产品 runtime 不为内部 shape 提供迁移或兼容分发；
 4. 生成物有明确 owner、发布方式和漂移门禁；
 5. owning domain 的直接 TypeScript contract 或 codec 无法更清晰地表达该边界。
 

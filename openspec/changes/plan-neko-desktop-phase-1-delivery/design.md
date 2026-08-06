@@ -32,8 +32,8 @@ qualifies Agent/Workbench,
 Canvas, Cut and Preview independently and does not mark the complete Phase 1 program done while the
 excluded library/entity changes remain open. Final qualification must prove
 explicit Project/Workspace/View/document/conversation/job identities, stable content identity, package-
-owned Roots and the Main resource handler. Demo, raw-path, active-object and retired-runtime poison paths
-must remain untouched.
+owned Roots and the Main resource handler. Demo, raw-path, active-object and retired-runtime paths
+must remain absent and cannot participate.
 
 Deterministic CI, real-provider Agent Evaluation and graphical Electron evidence are reported separately.
 A key-free harness cannot claim provider behavior; a browser/Vite render cannot claim preload/IPC/window

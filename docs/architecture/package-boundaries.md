@@ -402,7 +402,7 @@ provenance 文本、历史 prompt 和运行时 URL 都不得成为来源 authori
 展示；重新生成必须用稳定 `JobRef<'generation'>` 向 Generation owner 解析权威 recipe，
 并创建新的 Job、output identity 和 lineage，不能覆盖旧结果。
 
-Canvas selection toolbar 只投影 Host 在精确 project/Canvas/revision/selection 上解析出的
+Canvas selection toolbar 只投影 Host 在精确 project/Canvas session/request/selection 上解析出的
 owner capability descriptors。Preview、Cut、媒体/模型和 Generation 继续由各自 package
 执行；Canvas 不导入或复制其 viewer、editor、codec、provider 或文件写入实现。普通引用节点
 只得到适用的读取、复制、交接和非破坏派生动作；生成结果节点在 Generation authority 仍可

@@ -1,116 +1,88 @@
 ## Context
 
-`desktop-shell-state.json` and `desktop-application-settings.v1.json` are machine-local, structured,
-non-secret, UI-managed application state. Users perceive the resulting layout/preferences through the
-product but do not manage these repository files as content. They are currently written atomically under Electron
-`userData/state`. The existing user-level `neko.db` already owns structured local state and provides
-versioned namespaces, transactions, backups, integrity checks, and fail-visible startup diagnostics.
+Desktop shell state and application settings are machine-local, structured, non-secret application
+state. `@neko/host` owns their contracts and services, `@neko/local-metadata` owns the user-level SQLite
+repositories, and Desktop Main owns only Electron path resolution and concrete wiring.
 
-The migration must protect application state across interruption and release rollback without creating
-a permanent second authority. It consumes `local-storage-authority-policy` and must not absorb unrelated
-data merely because that data is structured or currently stored as JSON/TOML/Markdown.
+The original change implemented runtime import and downgrade paths for retired JSON repositories. The
+cross-cutting `remove-internal-versioning-and-product-migrations` decision supersedes that design. The
+repository is prelaunch, internal contracts ship together, and no independently deployed peer requires
+schema negotiation. Keeping migration machinery creates a second successful authority path and lets one
+old record affect global startup.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Make the existing user-level SQLite store the only normal runtime authority for Desktop shell
-  state and application settings.
-- Prove every migrated field is non-secret, machine-local, UI-managed application/operational state.
-- Import valid legacy JSON atomically and idempotently.
-- Preserve recoverability until committed rows have been read back and validated.
-- Support an explicit downgrade export owned by the migration boundary.
-- Keep current shell/settings service contracts stable where possible.
+- Keep `neko.db` as the only normal runtime authority for Desktop shell state and settings.
+- Keep contracts and stable tables version-free and additive.
+- Contain invalid data to the smallest Project, Window, Workbench instance, Scene, component or settings
+  record that can be identified.
+- Prove retired JSON and migration/export modules are unreachable from product runtime.
+- Preserve all existing bytes without automatic conversion or deletion.
 
 **Non-Goals:**
 
-- Migrating legacy `.neko/workspace.json`, target `neko/project.json`, project JSON/NKC/OTIO, JSONL
-  journals/logs, media bytes, cache artifacts, plugin packages, or generated outputs.
-- Migrating Agent portable configuration, Pi Session/conversation content, explicit memory, Skills,
-  prompts, profiles, workspace configuration, or project facts.
-- Storing credentials, provider tokens, mount secrets, or encryption material in ordinary SQLite.
-- Creating another database under Electron `userData` or a workspace.
-- Keeping permanent JSON fallback, dual-read, or dual-write paths.
+- Importing, classifying, archiving or exporting retired Desktop JSON.
+- Adding schema registries, migration markers, compatibility readers, dual writes or automatic repair.
+- Moving Agent, workspace, project, media, artifact, log or credential authorities into these tables.
 
 ## Decisions
 
-### 1. Add state-owned tables to the existing user-level database
+### 1. Stable package-owned SQLite repositories are canonical
 
-`@neko/host` owns the shell-state and application-settings service contracts.
-`@neko/local-metadata` adds their concrete SQLite repositories under a versioned Desktop namespace
-and owns the host-neutral migration workflow through injected legacy-file/archive ports. Rows are
-global machine-local state and are not assigned to an active workspace. Desktop Main supplies the
-Electron `userData` adapter and composition only; renderer and preload contracts remain unchanged.
+`@neko/host` owns shell/settings contracts and services. `@neko/local-metadata` provides stable tables
+through narrow repositories. Desktop Main constructs the concrete store and delegates; renderer and
+preload consume typed package projections without database or path access.
 
-### 2. Use one transactional import and a committed migration marker
+Initialization creates a missing stable table but never dispatches by schema generation. Updating an
+existing authority row changes only canonical owned columns and preserves unknown columns. New optional
+columns must have one permanent absence meaning.
 
-Startup performs a preflight that reads and validates both legacy documents without mutation. The
-database transaction then imports the validated values and writes a migration marker carrying source
-schema versions and content digests. If either document, transaction, or verification fails, no
-authoritative rows or marker commit and both JSON files remain untouched.
+### 2. Product migration paths are deleted
 
-After commit, startup reads the rows through the production repositories and validates their public
-contracts. Only then may the migration owner atomically rename legacy files to a non-runtime archive.
-Normal repositories never inspect that archive and never fall back to JSON.
+Startup, product imports, package public entries, build output and ordinary tests do not reference
+retired JSON adapters, migration markers/coordinators, archive steps, downgrade export or compatibility
+codecs. A retired file may remain on disk, but product code does not inspect its name or contents.
 
-An interrupted post-commit archive step is safe: the committed marker makes SQLite authoritative,
-and the next startup finishes archival after verifying the same source digest. A conflicting changed
-legacy file fails visibly and is not deleted or imported implicitly.
+If valuable data requires repair, the operation is an explicitly authorized offline tool outside the
+product dependency graph. It must require an exact target and confirmation, create an immutable backup,
+write atomically and validate the bounded result.
 
-### 3. Keep rollback explicit and owner-scoped
+### 3. Failure stays local
 
-Before a release downgrade, the `@neko/local-metadata` migration command exports current SQLite state through the
-shell/settings codecs to temporary JSON files, reads them back, validates them, and atomically
-publishes the legacy filenames. This export is not a normal startup fallback. Database backup and
-restore and JSON downgrade export stay owned by `LocalMetadataStore`; Desktop only provides the
-authorized legacy-file publication adapter.
+Authority roots validate required semantic collections. Unknown top-level metadata is preserved as
+opaque data and reported by exact field name; it never selects a parser or business behavior. Child
+records validate independently, so one invalid Window, Workbench instance, Scene or settings component
+does not clear valid siblings or disable Desktop.
 
-### 4. Preserve existing data ownership
+### 4. Ownership remains unchanged
 
-| Data                          | Owner after this change            | Reason                                                      |
-| ----------------------------- | ---------------------------------- | ----------------------------------------------------------- |
-| Desktop shell state           | User-level SQLite state repository | Durable structured machine-local state                      |
-| Desktop application settings  | User-level SQLite state repository | Durable structured machine-local preferences                |
-| Legacy `.neko/workspace.json` | Storage-governance migration       | Replaced by tracked `neko/project.json`, not app preference |
-| `neko/project.json`           | Workspace identity owner           | Portable project identity and minimal project metadata      |
-| Project JSON/NKC/OTIO         | Owning project codecs              | Reviewable project facts                                    |
-| JSONL journals/logs           | Journal/logger owners              | Append-oriented evidence and operational history            |
-| Media/artifact bytes          | File/artifact owners               | Large byte content is not relational metadata               |
-| Credentials and mount secrets | SecretStorage/keychain             | Security and trust boundary                                 |
+| Data                         | Canonical owner                          |
+| ---------------------------- | ---------------------------------------- |
+| Desktop shell state          | `@neko/host` + local-metadata state repo |
+| Desktop application settings | `@neko/host` + local-metadata state repo |
+| Workspace/project facts      | Owning project codecs                    |
+| Agent transcript/context     | Agent/Pi owners                          |
+| Logs/journals                | Logger/Journal owners                    |
+| Media/artifact bytes         | File/artifact owners                     |
+| Credentials                  | SecretStorage/keychain                   |
 
-Agent and workspace data follow the dedicated storage-governance matrix rather than this migration:
+## Risks / Trade-offs
 
-| Data                                      | Authority outside this change               | SQLite eligibility                   |
-| ----------------------------------------- | ------------------------------------------- | ------------------------------------ |
-| Agent runtime selections/feature settings | later Agent/application settings repository | canonical state only                 |
-| Portable provider/model/MCP definitions   | versioned user export/import authority      | not SQLite-only                      |
-| Pi transcript and conversation manifest   | versioned JSONL/manifest files              | derived index/operational state only |
-| Explicit accepted shared project memory   | optional tracked `neko/memory.md`           | no authoritative rows                |
-| Semantic indexes/freshness                | rebuildable metadata owner                  | canonical cache only                 |
-| Agent/Desktop logs                        | managed rotated files                       | prohibited                           |
-| Workspace/project facts and artifacts     | owning project files                        | derived projection only              |
+- [Retired JSON contains valuable state] -> Preserve its bytes and report a product-unreachable offline
+  repair requirement; never silently import or delete it.
+- [One stored child is invalid] -> Reject only that exact owner and project a visible diagnostic while
+  valid siblings remain usable.
+- [A future change cannot be additive] -> Stop implementation until an explicit user-data and offline
+  repair decision is approved.
 
-“Needs migration” in this table means device/install/workspace transfer or explicit export. SQLite
-schema migration remains mandatory for every eligible state/cache namespace.
+## Replacement Plan
 
-## Failure And Recovery
+1. Establish version-free Host contracts and stable local-metadata repositories.
+2. Switch Desktop composition atomically to those repositories.
+3. Delete migration/export/legacy modules, exports, imports, registrations and commands.
+4. Add product reachability and record-local failure tests.
+5. Validate focused packages, full repository gates and real Electron startup/restart/workspace switching.
 
-- Invalid or unknown legacy schema: fail startup with a migration diagnostic; preserve source files.
-- SQLite unavailable or incompatible: fail visibly; do not write a JSON fallback.
-- Transaction interruption: rollback all imported state and marker changes.
-- Commit succeeds but archive fails: SQLite remains authoritative; retry exact-digest archival.
-- Legacy file changes after commit: report a conflict and require explicit recovery.
-- Downgrade export fails validation: preserve SQLite and any existing legacy file; publish nothing.
-
-## Migration Plan
-
-1. Add contracts, repositories, schema migrations, and adapter tests.
-2. Add a migration coordinator with validation, transaction, verification, and archival.
-3. Inject SQLite repositories into the existing Desktop shell/settings services.
-4. Poison JSON fallback and dual-write paths in normal startup.
-5. Add explicit downgrade export and recovery diagnostics.
-6. Validate cold start, restart, interruption, conflicting legacy input, and rollback in isolated
-   Electron fixtures.
-
-Rollback of the feature uses the explicit downgrade export before installing a build that expects
-the legacy JSON files. It does not reinterpret archives or copy raw database rows.
+Rollback is source-level only. It must not restore product migration or rewrite user data.

@@ -15,7 +15,7 @@ const validPackage = {
 describe('package role catalog', () => {
   it('accepts a canonical grouped workspace inventory', () => {
     assert.deepEqual(
-      validatePackageRoleCatalog({ version: 1, packages: [validPackage] }, [
+      validatePackageRoleCatalog({ packages: [validPackage] }, [
         { path: validPackage.path, name: validPackage.name },
       ]),
       [],
@@ -25,7 +25,6 @@ describe('package role catalog', () => {
   it('rejects omissions, unknown roles, identity drift and invalid runtime projections', () => {
     const findings = validatePackageRoleCatalog(
       {
-        version: 1,
         packages: [
           {
             ...validPackage,
@@ -54,7 +53,6 @@ describe('package role catalog', () => {
   it('rejects legacy scopes, redundant prefixes and path/name mismatches', () => {
     const findings = validatePackageRoleCatalog(
       {
-        version: 1,
         packages: [
           {
             ...validPackage,

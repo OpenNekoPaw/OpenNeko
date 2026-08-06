@@ -3,7 +3,7 @@
 ### Requirement: Desktop owns one creative-document lifecycle command path
 
 Desktop SHALL execute `.nkc` and `.otio` create, import, open, trash-plan, and trash-apply operations
-through one versioned sender-bound creative-document lifecycle contract. Assets and empty Main SHALL
+through one canonical sender-bound creative-document lifecycle contract. Assets and empty Main SHALL
 only submit intents and render projections; Canvas and Cut SHALL remain the canonical document
 producers and session owners. Missing, stale, mismatched, or unauthorized identity MUST fail visibly
 without falling back to an active or recent project, document, View, or directory.
@@ -19,7 +19,7 @@ without falling back to an active or recent project, document, View, or director
 #### Scenario: Forged lifecycle identity is submitted
 
 - **WHEN** a renderer submits a stale Resource Browser revision, mismatched Workspace, stale endpoint
-  epoch, or target outside its sender-owned Project
+  renderer session/request identity, or target outside its sender-owned Project
 - **THEN** Main rejects the request with a typed diagnostic
 - **AND** no picker, file mutation, session creation, Workbench mutation, or fallback executes
 
@@ -197,7 +197,7 @@ permanent delete, cascade deletion, or reference rewriting.
 #### Scenario: Trash target changes after planning
 
 - **WHEN** the file fingerprint, session identity, dirty state, task state, Project ownership, or
-  endpoint epoch changes before apply
+  renderer session or request/plan identity changes before apply
 - **THEN** Desktop rejects the stale plan and requires a new plan
 - **AND** it does not apply using a label, previous absolute path, active View, or stale confirmation
 
@@ -267,4 +267,4 @@ another or report success.
 - **WHEN** create, open, import, or trash succeeds through the new lifecycle contract
 - **THEN** path-level tests prove the new coordinator and matching Canvas/Cut owner were invoked
 - **AND** the legacy Canvas open callback, asymmetric Cut open route, direct permanent delete, active
-  document fallback, and compatibility aliases are poisoned or absent
+  document fallback, and compatibility aliases are absent

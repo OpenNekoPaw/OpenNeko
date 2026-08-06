@@ -198,7 +198,7 @@ Timeline 负责实时执行记录，Pi transcript 负责可重开历史。Pi tur
 Agent user/business messages and projection control have different authorization lifecycles. `sendMessage`,
 configuration mutations, conversation mutations and automation operations remain bound to the exact active
 Agent Surface. Projection discovery/attach/acknowledge/detach are authorized by the sender-bound Window/renderer
-identity, the exact bridge-known open connection and the attachment endpoint epoch that connection created, so
+identity, the exact bridge-known open connection and the attachment request identity that connection created, so
 a hidden running Surface can acknowledge its own projection without using the visible Surface identity.
 Visibility replacement MUST NOT authorize user/business operations from another Surface.
 

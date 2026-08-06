@@ -5,7 +5,7 @@ import { checkApplicationBoundaries } from './check-application-boundaries.mjs';
 import {
   inspectApplicationResponsibility,
   inspectCanonicalPathFixture,
-  inspectLegacyPackageNaming,
+  inspectNonCanonicalPackageNaming,
   reconcileBoundaryExceptions,
 } from './check-package-boundaries.mjs';
 import { validatePackageRoleCatalog } from './check-package-roles.mjs';
@@ -36,39 +36,38 @@ describe('architecture boundary failing fixtures', () => {
   });
 
   it('rejects package-role omissions', () => {
-    const findings = validatePackageRoleCatalog({ version: 1, packages: [] }, [
+    const findings = validatePackageRoleCatalog({ packages: [] }, [
       { path: 'packages/missing/domain', name: '@neko/missing-domain' },
     ]);
     assert.ok(findings.some((finding) => finding.includes('missing from role catalog')));
   });
 
-  it('rejects legacy package scopes and redundant physical paths in executable inputs', () => {
-    const findings = inspectLegacyPackageNaming({
+  it('rejects non-canonical package scopes and redundant physical paths in executable inputs', () => {
+    const findings = inspectNonCanonicalPackageNaming({
       path: 'vite.config.ts',
-      source:
-        "import '@neko-example/runtime'; const source = 'packages/neko-example-runtime/src';",
+      source: "import '@neko-example/runtime'; const source = 'packages/neko-example-runtime/src';",
     });
     assert.deepEqual(
       findings.map((finding) => finding.rule),
-      ['legacy-package-identity', 'legacy-package-path'],
+      ['noncanonical-package-identity', 'noncanonical-package-path'],
     );
   });
 
-  it('rejects business ownership in apps and successful legacy fallbacks', () => {
+  it('rejects business ownership in apps and successful replaced paths', () => {
     const findings = [
       ...inspectApplicationResponsibility({
         path: 'apps/neko-desktop/src/main/domain-service.ts',
         responsibility: 'business-owner',
       }),
       ...inspectCanonicalPathFixture({
-        path: 'apps/neko-desktop/src/main/legacy-adapter.ts',
-        legacyFallbackReturnsSuccess: true,
+        path: 'apps/neko-desktop/src/main/replaced-adapter.ts',
+        replacedPathReturnsSuccess: true,
       }),
     ];
-    const result = reconcileBoundaryExceptions(findings, { version: 1, exceptions: [] });
+    const result = reconcileBoundaryExceptions(findings, { exceptions: [] });
     assert.deepEqual(
       result.unapproved.map((finding) => finding.rule),
-      ['business-owner-in-app', 'legacy-fallback-success'],
+      ['business-owner-in-app', 'replaced-path-success'],
     );
   });
 });

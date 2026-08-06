@@ -44,20 +44,19 @@ derivation/transitions/recommendations and comic-animation projection/review-bui
 exported only from `@neko/agent-domain`. Compatibility re-exports, aliases, or fallback implementations
 in `@neko/agent-contracts` MUST NOT remain.
 
-#### Scenario: Old contract behavior path is poisoned
+#### Scenario: Old contract behavior path is absent
 
-- **WHEN** tests configure every former Agent Contracts behavior export/import to fail
+- **WHEN** tests execute runtime and Webview producer/consumer scenarios
 - **THEN** runtime and Webview producer/consumer scenarios still pass through Agent Domain
-- **AND** repository search finds no normal consumer of the replaced path
+- **AND** repository search and export checks find no normal consumer or registration of the replaced path
 
-### Requirement: Contract serialization remains compatible during extraction
+### Requirement: Contract serialization remains canonical during extraction
 
-Moving behavior SHALL preserve current serialized Agent contract versions and codec results. Any needed
-wire/artifact schema change MUST be explicitly versioned and migrated rather than hidden in the package
-move.
+Moving behavior SHALL preserve current serialized Agent codec results. The extraction MUST NOT add a
+wire/artifact version, migration, compatibility branch or alternate decoder.
 
 #### Scenario: Existing artifact fixture is validated after extraction
 
-- **WHEN** the current versioned fixture is parsed and re-serialized through Agent Contracts
+- **WHEN** the current canonical fixture is parsed and re-serialized through Agent Contracts
 - **THEN** its contract result is unchanged
 - **AND** Agent Domain behavior consumes the validated value without redefining the codec

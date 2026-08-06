@@ -30,7 +30,7 @@
 - [x] 4.1 Freeze new feature-domain, React, Node, provider, and configuration responsibilities in `@neko/shared` and `@neko/platform` through review and automated gates.
 - [x] 4.2 Define the minimal retained `@neko/shared` public surface and replace its wildcard export with an explicit migration ledger for every removed entry.
 - [x] 4.3 Move `@neko/shared/components` consumers and implementations to `@neko/ui`, then delete the compatibility export and unnecessary React peer dependencies from Shared.
-- [x] 4.4 Move Agent, Canvas, Assets, Generation, Character, Preview, Tools, Content, and Entity contracts from Shared to their owning package one domain slice at a time, switching all consumers and poisoning each old export.
+- [x] 4.4 Move Agent, Canvas, Assets, Generation, Character, Preview, Tools, Content, and Entity contracts from Shared to their owning package one domain slice at a time, switching all consumers and deleting each old export.
 - [x] 4.5 Separate generic metadata/storage/IO ports and Node/SQLite adapters from domain-specific binding, migration, and projection schema; decide the narrow local-metadata owner without creating a central domain fact store.
 - [x] 4.6 Move Platform config/provider/media/files responsibilities to their assigned owners, switching all consumers without a compatibility facade.
 - [x] 4.7 Delete `@neko/platform`, its package aliases, manifest dependency, tests, documentation, and quality entries after the final owner migration proves no successful Platform path remains.
@@ -53,7 +53,7 @@
 - [x] 6.2 Move package-owned cross-runtime contracts out of `apps/neko-desktop/src/shared`; retain only Desktop shell/window/automation contracts whose owner is the executable product boundary.
 - [x] 6.3 Remove Desktop Vite/Vitest aliases to unexported package internals and resolve renderer entries through declared package exports.
 - [x] 6.4 Update package names, directory identities, manifests, imports, scripts, quality ownership, documentation, and lockfile within each bounded family migration; do not retain compatibility names or re-exports.
-- [x] 6.5 Delete, poison, or fail-closed every replaced app-owned business path and assert that no IPC handler, renderer bridge, test fixture, or development command can still return legacy success.
+- [x] 6.5 Delete every replaced app-owned business path and assert through import, export, registration and path checks that no IPC handler, renderer bridge, test fixture, or development command can return retired-path success.
 
 ## 7. Verification And Completion
 
@@ -66,7 +66,7 @@
 ## 8. Residual Application Ownership
 
 - [x] 8.1 Re-audit mixed Desktop `S` / `H` runtimes under the current thin-Application rules and record exact package owner, focused change, replaced business responsibility, retained Electron adapter, and verification boundary.
-- [x] 8.2 Close the Agent/Extension focused changes after moving conversation, catalog, install/runtime-generation and related workflow state to `@neko/agent-runtime` public entries and poisoning app-owned behavior.
+- [x] 8.2 Close the Agent/Extension focused changes after moving conversation, catalog, install/runtime-generation and related workflow state to `@neko/agent-runtime` public entries and deleting app-owned behavior.
 - [x] 8.3 Close Cut/Preview focused changes after moving document/session/export/preview lifecycle state to their package owners and reducing Desktop runtimes to authorization, projection and concrete adapters.
 - [ ] 8.4 Close Host settings and creative-document focused changes after moving repository migration and document lifecycle transactions to package-owned services with Desktop delegation tests.
 - [ ] 8.5 Re-run application-boundary, dependency, legacy, unused, build/test and isolated Electron path gates; archive only when every non-excluded residual item is closed or has an explicit separately approved blocker.

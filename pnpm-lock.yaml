@@ -39,6 +39,9 @@ importers:
       '@fission-ai/openspec':
         specifier: 1.3.1
         version: 1.3.1(@types/node@25.7.0)
+      '@neko/entity-domain':
+        specifier: workspace:*
+        version: link:packages/entity/domain
       '@neko/media':
         specifier: workspace:*
         version: link:packages/media

@@ -166,6 +166,7 @@ describe('internal versioning audit', () => {
 
     const removed = buildAuditReport({ findings: [], allowanceRegistry: emptyRegistry, baseline });
     assert.equal(removed.status, 'passed');
+    assert.deepEqual(removed.remaining, []);
 
     const added = scanSources([
       { path: 'packages/example/src/other.ts', content: 'const rendererEpoch = 1;' },
@@ -173,6 +174,7 @@ describe('internal versioning audit', () => {
     const report = buildAuditReport({ findings: added, allowanceRegistry: emptyRegistry, baseline });
     assert.equal(report.status, 'failed');
     assert.equal(report.summary.newInternalDebt, 1);
+    assert.deepEqual(report.remaining, []);
   });
 
   it('allows only exact Character or managed Asset domain occurrences inside their owners', () => {

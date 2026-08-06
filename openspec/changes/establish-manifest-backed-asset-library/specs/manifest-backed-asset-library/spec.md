@@ -34,7 +34,7 @@ change requires a new revision.
 
 ### Requirement: Manifests are closed portable package contracts
 
-An Asset manifest SHALL declare schema version, type, source/provenance, package-relative members,
+An Asset manifest SHALL use one canonical shape declaring type, source/provenance, package-relative members,
 dependencies, license policy, and type-specific metadata required by its Asset type. It MUST NOT persist
 absolute paths, physical Media Library targets, cache paths, provider credentials, or runtime URLs as
 durable package identity.
@@ -44,10 +44,10 @@ durable package identity.
 - **WHEN** an Asset publication selects content from a linked Media Library
 - **THEN** publication requires an owned package copy or an explicit installable Asset dependency and rejects the physical link target
 
-#### Scenario: Validate an unknown manifest version
+#### Scenario: Validate a non-canonical manifest
 
-- **WHEN** an installer receives a manifest schema version it does not support
-- **THEN** it rejects the package visibly before writing installed state
+- **WHEN** an installer receives a manifest with unknown fields or missing required semantic fields
+- **THEN** it rejects only that package visibly before writing installed state
 
 #### Scenario: Read remote provenance
 
@@ -56,7 +56,7 @@ durable package identity.
 
 #### Scenario: Encounter credential-bearing source URI
 
-- **WHEN** migration or installation finds a signed, credential-bearing, machine-private, or otherwise unsafe source URI
+- **WHEN** installation finds a signed, credential-bearing, machine-private, or otherwise unsafe source URI
 - **THEN** it rejects or archives the value without using or copying it into the installed manifest or synchronization state
 
 ### Requirement: Dependencies commit as a validated closure

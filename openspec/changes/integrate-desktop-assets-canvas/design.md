@@ -5,14 +5,16 @@ authorization, search/import effects and resource materialization. Canvas owns `
 identity, authoring commands and renderer state projection.
 
 Renderer mounts the package-owned Roots and uses fixed typed preload ports. All requests carry Project,
-Workspace, View/document, revision and renderer epoch. A stale sender, revision or resource generation
-fails visibly. Absolute paths, cache handles and arbitrary commands never cross the boundary.
+Workspace, View/document, session, request and command identity. A stale sender, mismatched session or
+superseded request fails visibly. Absolute paths, cache handles and arbitrary commands never cross the
+boundary.
 
-The Canvas Webview Host serializes renderer-originated mutations before revisioned read projections.
+The Canvas session owner serializes mutations, and the Webview Host serializes renderer-originated
+operations before material-action projections.
 A material-action query scheduled in the same renderer turn as a later `canvasStatus` enqueue waits
-until that local queue is stable before crossing IPC. This prevents a normal package-local ordering
-race from being reported as a stale remote request while preserving fail-visible CAS rejection for a
-genuinely stale View or concurrent external owner.
+until that local queue is stable before crossing IPC. Exact request identity prevents a late material
+action result from replacing a newer query, while exact session identity prevents another View or
+document owner from participating.
 
 Global Asset Center and Project Resource Dock remain separate presentation owners. Project resources
 use Files/Media/Materials facets; global and workspace-linked library registries keep separate lifecycle
@@ -42,6 +44,6 @@ command that produced it.
 3D model thumbnails are desirable visual projections, but the current image/video thumbnail factory
 cannot produce them and a generic file icon must not be reported as a model thumbnail. A later Preview
 and Assets contract extension should capture a disposable image after the package-owned model viewer
-successfully loads the exact model revision, fence stale revisions and retain the model icon until the
-capture is available. It must not persist an absolute path or introduce a second 3D renderer in Canvas
-or Desktop.
+successfully loads the exact source fingerprint, accept capture only for the current request identity
+and retain the model icon until the capture is available. It must not persist an absolute path or
+introduce a second 3D renderer in Canvas or Desktop.

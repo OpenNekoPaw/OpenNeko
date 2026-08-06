@@ -15,7 +15,7 @@ behavior.
   Agent artifacts but cannot become a second Canvas, Generation, Chara, Entity, or Content authority.
 - Update runtime and Webview consumers to import behavior from the Agent domain entry and contracts from
   `@neko/agent-contracts`; remove the replaced contract-package exports without compatibility re-exports.
-- Add boundary and poison tests that reject business-operation exports from the contracts package and
+- Add boundary and path-absence tests that reject business-operation exports from the contracts package and
   prove production consumers execute the new canonical path.
 
 ## Capabilities
@@ -37,5 +37,5 @@ behavior.
 - Affected package roles: `packages/agent/contracts`, new `packages/agent/domain`, Agent runtime/Webview
   consumers, package exports, workspace configuration, dependency rules, and focused producer/consumer
   tests.
-- No persistent user-data schema is changed; serialized Agent artifacts must retain codec compatibility
-  unless an owning contract is explicitly versioned in this change.
+- No persistent user-data shape is changed; serialized Agent artifacts keep the same canonical codec
+  result without adding an internal version or compatibility path.

@@ -7,7 +7,7 @@
 | 领域             | 行为 owner OpenSpec                                                        | 本变更提供/消费的拓扑                                                                                                                                                         | 不在本变更中重复定义                                                                     |
 | ---------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Generation       | `extract-generation-domain-package`                                        | `@neko/generation` 是 provider-neutral job/coordinator/store owner；Desktop 只投影 credential/config binding，Platform 的 generation lifecycle 必须迁出并删除旧入口           | GenerationJob 状态、恢复、provider case、成本授权与真实行为验收                          |
-| Tools            | `localize-media-diff-and-retire-timeline-contracts`                        | 当前 Tools 产品路径退役，不保留空 package、Desktop producer 或隐式能力；未来重新引入必须另建完整产品闭包                                                                        | NKV/Timeline/EngineDiff/Proto retirement 语义                                           |
+| Tools            | `localize-media-diff-and-retire-timeline-contracts`                        | 当前 Tools 产品路径退役，不保留空 package、Desktop producer 或隐式能力；未来重新引入必须另建完整产品闭包                                                                      | NKV/Timeline/EngineDiff/Proto retirement 语义                                            |
 | Agent Evaluation | `add-desktop-agent-evaluation-matrix`                                      | Desktop-owned driver 是 executable boundary；Agent runtime/contracts 只暴露产品已有的中立配置和 facts；evaluation scripts/testing package 不得成为第二个 Host                 | matrix、budget、shard、Judge、comparability、消融统计与 complete-session 场景            |
 | Media            | `replace-desktop-media-scheme-with-http-resource-gateway`                  | 保留 `@neko/media` 的 root/node/browser 模型；Desktop 仅拥有 `openneko:` protocol、exact-resource registry、sender authorization 和窗口生命周期                               | Range/PCM、resource-set、安全、codec/consumer qualification 与 transport 迁移细节        |
 | Assets           | `integrate-desktop-assets-canvas`、`optimize-workspace-media-library-sync` | `neko-assets` 按 domain/application、node、webview 依赖闭包收敛；Media Library requirement/recovery/collect/portability 从 Desktop/Shared 迁给 Assets 或明确的 document owner | Resource Browser UX、symlink 两层模型、recovery/collect 算法、fingerprint 和用户确认语义 |
@@ -35,4 +35,4 @@
 4. 每个领域切片删除对应 Shared/Platform/Desktop 旧入口；全部清空后才删除 Platform 和临时 ledger。
 
 上述顺序是依赖约束，不表示一个领域必须等待所有其他领域完成。没有文件或 contract 冲突的切片可独立
-推进，但每个切片必须在同一次变更内完成 caller switch、旧路径 poison/delete 和验证。
+推进，但每个切片必须在同一次变更内完成 caller switch、旧路径删除、不可达断言和验证。

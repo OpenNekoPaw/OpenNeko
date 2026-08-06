@@ -25,7 +25,7 @@ Range 调度、媒体缓存、demux、decoder backpressure 和 GOP 回收。
 | 层   | 决策                                                                                                                            |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Cut Core 解释 OTIO；Host 授权文件并运行 FFprobe/FFmpeg；Chromium 管理视频数据面；Webview 只管理双槽预热、切换和 Timeline 同步。 |
-| 依赖 | Webview 只接收 opaque OpenNeko resource URL 和 runtime-neutral descriptor，不接收路径、FFmpeg DTO 或视频字节。                    |
+| 依赖 | Webview 只接收 opaque OpenNeko resource URL 和 runtime-neutral descriptor，不接收路径、FFmpeg DTO 或视频字节。                  |
 | 接口 | 视频 descriptor 只有 URL、MIME、profile、source-time origin 和 Clip duration；PCM 使用独立 descriptor。                         |
 | 扩展 | 新 codec 通过 Host preparation profile 加入，但输出仍实现同一个普通 Range 文件契约。                                            |
 | 测试 | 单元测试证明 direct path 不启动 FFmpeg，路径测试证明无 MSE/fetch，真实 Webview 验证 CSP、Range、首帧、边界和取消。              |
@@ -48,7 +48,7 @@ OTIO document + revision
 
 FFmpeg、`<video>` 和 AudioContext 不得独立解释完整 OTIO。所有 operation、
 generation、session 和 cache entry 必须携带显式 document/session identity；
-缺失或陈旧 identity、未知 schema/version 和未实现 operation 必须 fail-visible，
+缺失或陈旧 identity、未知字段、非 canonical shape 和未实现 operation 必须 fail-visible，
 不得切换到平行媒体实现、第二套项目事实或隐式 active document。
 
 ### 2. 原生 `<video src>` 是唯一 Cut 视频路径
@@ -74,9 +74,9 @@ buffer window，也不把完整文件读入应用内存。Node 只按浏览器�
 
 当前直接播放白名单：
 
-| Profile                                    | Host 行为  | Webview 行为         |
-| ------------------------------------------ | ---------- | -------------------- |
-| H.264/AVC、8-bit、YUV 4:2:0、SDR、MP4/M4V  | 注册原文件 | 原生 Range seek/play |
+| Profile                                     | Host 行为  | Webview 行为         |
+| ------------------------------------------- | ---------- | -------------------- |
+| H.264/AVC、8-bit、YUV 4:2:0、SDR、MP4/M4V   | 注册原文件 | 原生 Range seek/play |
 | 已通过目标 Electron runtime 验证的 VP8 WebM | 注册原文件 | 原生 Range seek/play |
 
 非零 Clip source start 直接进入 descriptor 的 `mediaTimeOriginSeconds`。Chromium
@@ -187,11 +187,11 @@ profile、非法 URL、缺失硬件能力和 session mismatch 必须 fail-visibl
 
 ## 验证要求
 
-- direct H.264/VP8 descriptor 命中原文件，且 poison FFmpeg 不影响成功；
+- direct H.264/VP8 descriptor 命中原文件，并通过 adapter spy 证明 FFmpeg 未参与成功路径；
 - Range endpoint 覆盖 HEAD、开放/闭合 range、重复请求、撤销和浏览器取消；
 - remux 使用 `-c:v copy`，硬件转换包含 `-allow_sw 0` 且不含 `libx264`；
-- browser client 直接设置 `src`，测试中 poison `fetch`、`MediaSource` 和
-  `SourceBuffer`；
+- browser client 直接设置 `src`，并通过 spy 证明 `fetch`、`MediaSource` 和
+  `SourceBuffer` 未参与成功路径；
 - active/standby、same-Clip retain、paused seek、Clip boundary、EOF 和 dispose；
 - PCM PTS、预缓冲、峰值、generation handoff 和 A/V drift；
 - 真实 Electron Desktop 验证 CSP、Range 请求、变化帧、边界和 console；

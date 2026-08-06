@@ -4,11 +4,11 @@ Task 1.1 is complete. The isolated `canvas-openneko-consumer` Electron scenario 
 package-owned Canvas Root through the fixed Desktop bridge and recorded:
 
 - Add-menu Text authoring from one to two nodes;
-- material-action resolution after the local revisioned Canvas status queue settled;
+- material-action resolution after the local Canvas status operation queue settled;
 - video and audio playback across two independent Canvas Views;
 - View teardown with both OpenNeko resource URLs released;
 - zero renderer console errors/exceptions and no Main
-  `open-neko:canvas:material-actions-resolve` stale-revision handler error.
+  `open-neko:canvas:material-actions-resolve` request/session identity error.
 
 Evidence:
 

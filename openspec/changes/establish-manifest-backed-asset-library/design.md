@@ -15,8 +15,8 @@ integrity, installation, and cloud distribution. Restoring those properties must
 membership a prerequisite for opening a file.
 
 This change spans Asset contracts, Node storage and transfer adapters, Resource Browser UI, local
-metadata projections, and Desktop composition. It also migrates user-owned flat Asset files, so failed
-or ambiguous migration must remain visible and non-destructive.
+metadata projections, and Desktop composition. Existing user-owned flat Asset files remain untouched;
+only an explicit new import may create a managed package.
 
 ## Goals / Non-Goals
 
@@ -29,7 +29,7 @@ or ambiguous migration must remain visible and non-destructive.
 - Provide local-first cloud publication and replication with verified atomic installation, offline use,
   dependency transfer, resumable progress, and visible conflicts.
 - Keep credentials, remote state, local installed data, and UI projections in their correct authorities.
-- Provide one canonical Asset path and poison path-derived IDs and legacy catalog fallback.
+- Provide one canonical Asset path and delete path-derived IDs and legacy catalog fallback.
 
 **Non-Goals:**
 
@@ -61,7 +61,7 @@ integrity without rebuilding the catalog that was intentionally removed.
 ### 2. Installed immutable revision is the offline authority
 
 The manifest contract owned by `@neko/assets-domain` will require stable `assetId`, immutable `revision`,
-package `digest`, schema version, type metadata, dependencies, provenance, license, and package-relative
+package `digest`, type metadata, dependencies, provenance, license, and package-relative
 members. A mutable local record points an Asset channel/head to an installed immutable revision, but
 never changes the content of that revision.
 
@@ -71,11 +71,10 @@ rebuildable projections/state; losing them cannot make installed Assets unusable
 refresh tokens remain in the operating-system credential authority and are referenced only by opaque
 account IDs.
 
-The manifest `source` field is provenance only. Existing `remote` / `registry` values are inspected during
-migration: portable non-secret origin identifiers may remain as provenance, while provider endpoint,
-account routing, signed URL, credential-bearing URI, and synchronization policy move to machine-local
-`(accountRef, repositoryRef, assetId)` binding state. No manifest source variant is invoked as a runtime
-path or network resolver.
+The manifest `source` field is provenance only. Canonical manifests may retain portable non-secret
+origin identifiers as provenance; provider endpoint, account routing, signed URL, credential-bearing
+URI, and synchronization policy belong only to machine-local `(accountRef, repositoryRef, assetId)`
+binding state. No manifest source variant is invoked as a runtime path or network resolver.
 
 Alternative considered: make the remote catalog authoritative on every open. Rejected because it breaks
 offline use and turns network/provider availability into a local creative-runtime dependency.
@@ -131,7 +130,7 @@ after restart without hiding or deleting ordinary Media Library files.
 | Owner                              | Package role and canonical public entry                          | Producer                                                            | Consumer                                | Runtime boundary               | Replaced path                                     | User-data impact                                                      |
 | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------- | ------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------- |
 | Asset contracts and orchestration  | `packages/assets/domain` via `@neko/assets-domain`               | Manifest codecs, lifecycle/sync planner, diagnostics                | Node, Webview, Desktop adapters, Entity | Host-neutral TypeScript        | Flat `GlobalAssetItem` and path-derived identity  | Defines validated replacement facts; no direct IO                     |
-| Local package and transfer runtime | `packages/assets/node` via `@neko/assets-node`                   | Managed storage, staging, integrity, atomic install, remote adapter | Desktop composition                     | Node only                      | Direct flat-file copy/remove                      | Migrates owned bytes only after archive/validation                    |
+| Local package and transfer runtime | `packages/assets/node` via `@neko/assets-node`                   | Managed storage, staging, integrity, atomic install, remote adapter | Desktop composition                     | Node only                      | Direct flat-file copy/remove                      | Imports only explicitly selected owned bytes after validation         |
 | Asset Library presentation         | `packages/assets/webview` via `@neko/assets-webview`             | Asset source UI and typed intents                                   | Desktop renderer                        | Renderer/Webview sandbox       | Generic flat Asset list and `materials` ambiguity | No durable facts; shows diagnostics and progress                      |
 | Asset membership persistence       | Assets domain contract plus `packages/local-metadata` repository | Active/removed membership and one-time existing-file registration   | Asset Node/domain runtime               | Host-neutral contract + SQLite | Path scan as catalog authority                    | Preserved user choice; removal never deletes source or package bytes  |
 | Rebuildable local state            | `packages/local-metadata` public local-metadata port             | Remote heads, cursors, checkpoints, projections                     | Asset Node/domain runtime               | Node/SQLite                    | Ad hoc or absent sync state                       | May be deleted and rebuilt; contains no credentials or owned bytes    |
@@ -160,28 +159,26 @@ Entity catalog is created.
   a conflict that requires refresh or an explicitly new revision.
 - **[Risk] Large packages consume duplicate staging space** → Deduplicate by digest, expose estimated size,
   support cancellation/resume, and garbage-collect only unreferenced staging blobs.
-- **[Risk] Flat-file migration invents metadata** → Archive original inputs, classify each file, require
-  confirmation for ambiguous package identity, and preserve unresolved files untouched.
+- **[Risk] Flat-file discovery invents metadata** → Do not inspect retired catalogs; require explicit
+  user import and confirmed package identity, and preserve all unselected files untouched.
 - **[Trade-off] Immutable revisions require a new revision for metadata corrections** → Accept this to keep
   digest identity, reproducibility, and safe offline/project pins.
 
-## Migration Plan
+## Replacement Plan
 
 1. Introduce strict manifest/revision/package codecs and new public lifecycle ports without routing normal
    calls through them yet.
-2. Implement local staging, verification, atomic install, and projection rebuild; add poison tests for
-   path-derived IDs and legacy handlers.
-3. Inspect current managed Asset files, create a content-addressed recovery archive, classify explicit
-   reusable Assets, validate/redact existing remote/registry source values, and require user confirmation
-   for ambiguous grouping/metadata.
-4. Commit validated packages, rebuild Asset Library projections, and leave ordinary or unresolved files
-   accessible through their existing file owners.
+2. Implement local staging, verification, atomic install, and projection computation; add path-absence
+   tests for path-derived IDs and retired handlers.
+3. Keep current flat files and retired catalogs outside product discovery. Accept only explicit user
+   import selections, validate canonical provenance, and reject credential-bearing source values.
+4. Commit validated imported packages, compute Asset Library projections, and leave ordinary or
+   unselected files accessible through their existing file owners.
 5. Add the remote repository adapter and key-free contract tests, then add real provider evaluation behind
    explicit credentials.
 6. Switch Resource Browser and Desktop IPC to the new public ports and delete the flat runtime path.
 
-Rollback before the final switch restores the archived flat files and old application version. After the
-canonical path switch, rollback is read-only/export-based: immutable packages remain intact, but legacy
+Rollback is source-level. Flat files were never rewritten, immutable packages remain intact, and retired
 runtime success is not re-enabled.
 
 ## Open Questions

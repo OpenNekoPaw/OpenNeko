@@ -80,7 +80,7 @@ submit、queue、cancel、confirm、resume、reload 和 close 必须映射到普
 
 Desktop facts 从各权威 owner 投影，至少覆盖：
 
-- application/window/view/workspace/renderer epoch；
+- application/window/view/workspace instance and renderer session identity；
 - conversation/branch/Pi session/turn/run/tool-call identity；
 - controller、Pi runtime、transcript、catalog 与 projection path；
 - requested/effective provider、model、runtime configuration、Prompt fragment、Skill 和 Tool catalog
@@ -229,7 +229,7 @@ terminal、restore 和 no-fallback 证据。
 - **[隐藏窗口与可见窗口行为可能漂移]** → 两种模式共享相同 executable、preload、bridge 和 facts；
   protected visible matrix 定期覆盖 approval、focus、reload 和 close。
 - **[CDP 或 automation port 绕过安全边界]** → 仅在显式隔离 fixture 参数、受限路径和独立 userData
-  下启用；固定 typed operations、sender binding、无任意 IPC/文件/secret，并由拓扑/安全测试 poison。
+  下启用；固定 typed operations、sender binding、无任意 IPC/文件/secret，并由拓扑/安全测试证明越界入口不可达。
 - **[并行样本争用 provider、GPU、FFmpeg 或端口]** → provider/resource semaphore、动态端口、启动
   重试边界和独立资源类别；行为执行开始后不重试。
 - **[凭据被复制到 fixture 或报告]** → credential preflight 只通过 Desktop credential owner，报告

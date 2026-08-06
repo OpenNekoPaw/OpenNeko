@@ -20,8 +20,6 @@ const exactExcludedFiles = new Set([
   domainAllowancePath,
   correctnessAllowancePath,
   baselinePath,
-  'quality/ledgers/agent-code-debt-lcd-register.json',
-  'quality/ledgers/code-debt-surface-ledger.json',
   'scripts/check-legacy-debt-surfaces.mjs',
   'scripts/check-no-internal-versioning.mjs',
   'scripts/check-no-internal-versioning.test.mjs',
@@ -306,6 +304,7 @@ export function buildAuditReport({
       newInternalDebt: additions.length,
     },
     additions,
+    remaining: remainingBaseline,
     remainingByOwner: groupCounts(remainingBaseline),
     errors,
   };

@@ -37,7 +37,6 @@ describe('Sharp runtime staging', () => {
     });
 
     assert.deepEqual(manifest, {
-      schemaVersion: 'openneko.embedded-runtime-closure.v1',
       target: 'darwin-arm64',
       modules: [
         {

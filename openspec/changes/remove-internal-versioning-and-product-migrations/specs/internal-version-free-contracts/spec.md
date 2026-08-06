@@ -11,8 +11,9 @@ Every OpenNeko-owned contract shape, DTO shape, message shape, event shape, comm
 
 #### Scenario: Stale internal payload arrives
 
-- **WHEN** a payload lacks required semantic fields or carries removed fields
+- **WHEN** a runtime payload or independently owned component record lacks required semantic fields or carries removed fields
 - **THEN** the canonical decoder rejects that payload locally without attempting version negotiation, legacy conversion, or fallback routing
+- **AND** opaque metadata retained by a persisted authority root is never used to select the decoder or business behavior
 
 ### Requirement: External version fields stay at the external boundary
 
@@ -51,7 +52,7 @@ An owning domain SHALL retain immutable version identity when users explicitly c
 
 ### Requirement: Repository checks prevent version debt
 
-The repository SHALL run a quality gate that rejects meaningless internal version fields, versioned identifiers and paths, migration markers, compatibility dispatch, and unapproved version-like aliases. The gate MUST use exact evidence-backed external, user-managed domain, and verified correctness allowances rather than broad directory exclusions.
+The repository SHALL run a quality gate that rejects meaningless internal version fields, versioned identifiers and paths, migration markers, compatibility dispatch, alternate success paths, and unapproved version-like aliases in both production and test source. The gate MUST use exact evidence-backed external, user-managed domain, and verified correctness allowances rather than directory-, filename-, or broad-keyword exclusions.
 
 #### Scenario: Developer adds schemaVersion
 
@@ -62,6 +63,28 @@ The repository SHALL run a quality gate that rejects meaningless internal versio
 
 - **WHEN** an allowlisted adapter contains only the exact third-party version occurrence covered by its evidence
 - **THEN** the quality gate accepts that occurrence and continues checking the rest of the file
+
+### Requirement: Replacement evidence does not become permanent legacy knowledge
+
+Historical inputs, replaced-path spies, compatibility fixtures, fallback-success cases, and assertions named after a retired contract or implementation MAY be used only as temporary development evidence while a boundary is being replaced. They MUST be deleted before delivery together with the replaced implementation, registration, export, identifier, snapshot, and dedicated diagnostic. Ordinary unit, integration, Electron, and Evaluation suites SHALL retain only the current canonical contract, positive canonical-route assertions, generic invalid-current-input coverage, and unaffected-sibling coverage. They MUST NOT preserve a retired shape or path merely to prove that it is rejected or not called.
+
+A centralized repository gate MAY contain the minimum synthetic samples required to test its own detection rules. Such samples MUST be isolated from product imports, builds, domain fixtures, ordinary tests, and runtime registration; they MUST NOT reproduce real historical payloads or maintain a catalog of retired implementations.
+
+#### Scenario: Replacement is verified during development
+
+- **WHEN** temporary evidence proves the canonical path succeeds and the replaced path no longer runs
+- **THEN** the replacement may proceed only after the temporary historical fixture, spy target, and named assertion are deleted
+- **AND** the durable suite positively verifies the one canonical route and generic local-failure containment without knowledge of the retired path
+
+#### Scenario: A feature test preserves fallback success
+
+- **WHEN** a production-package or ordinary feature test constructs a fallback provider, compatibility field, legacy payload, or retired handler and expects any behavior from it
+- **THEN** the repository quality gate fails even if the production path is currently disabled or the test expects rejection
+
+#### Scenario: The repository gate tests its detector
+
+- **WHEN** a focused governance self-test supplies a minimal synthetic forbidden marker
+- **THEN** the detector rejects that marker without importing product code, registering a runtime path, or recording a real retired payload
 
 ### Requirement: Concurrency does not use data-generation versions
 

@@ -170,8 +170,8 @@
 - 跨领域业务没有明确 owner 时，先通过 OpenSpec 定义中立职责和依赖方向；禁止创建
   `@neko/desktop-core`、Desktop manager bag、万能 facade 或平行业务 contract 收纳无归属逻辑。
 - 从 Application 层迁移业务逻辑时，必须先建立 package-owned contract/test/application service，
-  再一次性切换本次边界内调用方，并删除、poison 或 fail-closed 隔离旧 app path；禁止 compatibility
-  shim、双实现、双写或 fallback 维持两份成功路径。
+  再一次性切换本次边界内调用方，并删除旧 app path 及其入口、导出、注册、fixture 和专用测试；禁止用
+  poison、fail-closed 占位、compatibility shim、双实现、双写或 fallback 保留旧路径。
 - 新增 `apps/neko-desktop` 生产模块或保留 app-local 实现时，OpenSpec、PR 或交付说明必须说明允许职责、
   组合的 package public contract、为何必须依赖 Application 层，以及 package producer、Desktop
   consumer、canonical path 和真实 Electron（如适用）验证证据。
@@ -260,9 +260,10 @@
 - 生产代码中的数据迁移和数据兼容逻辑没有临时例外；保护有价值本地数据、已发布契约或外部信任边界也不得成为保留旧数据读取、转换、fallback 或双路径的理由。数据保护只能通过备份、局部 fail-visible，以及用户显式执行的手工或独立离线脚本实现。
 - 开发和测试新路径时必须删除旧数据路径及其注册、入口和引用；不得保留即使默认关闭或只返回 diagnostic 的 compatibility shim、legacy adapter、migration-only handler、feature flag 或隐藏命令。旧数据只能由当前 canonical contract 局部拒绝，不得进入产品内迁移或兼容流程。
 - 不得用过度兜底或兼容逻辑隐藏代码缺陷：缺失新实现、contract mismatch、非法状态、未知消息、错误配置、未注册 handler/renderer/adapter 时，应 fail-visible 并暴露问题；不能回退旧实现、默认空数据、默认成功状态或 no-op。
-- 新路径验收必须是路径级验收，不得只断言最终结果成功；测试必须断言 canonical path、new handler、new renderer、new adapter 或新 contract 被命中，并通过 registry/import/export 断言以及 spy/counter/log assertion 证明旧路径不存在、未注册且未参与，不得为测试保留或 poison legacy path。
-- 新路径验证必须证明旧数据路径已被删除且不可触发；不得用 feature flag、migration-only 入口、fail-closed legacy handler 或 telemetry-only 分支保留旧路径。路径测试必须断言只有 canonical contract、handler、renderer 和 adapter 被注册或调用。
-- 测试不得通过 legacy fixture、旧字段 fallback、旧 message handler、旧 renderer 或旧 command alias 让新路径“看似通过”。Legacy fixture 仅可用于断言当前 canonical contract 会局部拒绝旧数据，且产品代码没有迁移、转换或兼容调用。
+- 新路径验收必须是路径级验收，不得只断言最终结果成功；长期测试必须正向断言唯一 canonical contract、handler、renderer、adapter、authoritative source 和 projection 被注册或调用，并通过精确 registry/import/export 约束阻止第二条成功路径，不得为了证明替换完成而永久保留被替代路径的名称、类型、入口、fixture、spy target 或专用 diagnostic。
+- 替换开发期间可以使用未提交或明确临时的旧输入 fixture、路径 spy、计数器和一次性搜索，验证旧路径已失效、新路径已生效；交付前必须删除这些临时测试资产及其引用，不得进入长期单元/集成测试、普通 fixture、snapshot、Evaluation suite、产品包、构建产物或质量 ledger。OpenSpec、PR 或交付说明只记录验证结论和命令，不得把历史 shape 或旧实现重新保存为可执行测试知识。
+- 长期测试只验证当前 canonical contract 的有效行为、与历史 shape 无关的一般非法输入、最小 owning scope 的明确 diagnostic，以及无关 sibling 仍可用；不得保留 legacy fixture、旧字段 fallback、旧 message/renderer/command、兼容 alias、fallback provider/source 或专门识别已删除 shape 的拒绝测试。当前 canonical decoder 应按当前必填语义拒绝非法输入，不得知道其属于哪个历史版本或旧路径。
+- 集中式仓库门禁可以保留验证拦截器本身所必需的最小合成反例，但必须位于治理脚本的聚焦自测中，与产品 import、构建、普通领域 fixture 和运行时不可达，且不得复制真实历史 payload、维护已删除入口清单或为具体旧路径建立长期行为测试。门禁必须默认扫描生产代码和测试代码；允许项必须精确到 occurrence 和真实外部/用户领域语义，不得按目录、文件名、`provider`/`runtime`/`canonical` 等宽泛词汇放行。
 - 不能借 prelaunch cleanup 忽略 Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、Proto、marketplace trust 或安全边界。
 - 不能静默删除或损坏有价值的本地项目数据、用户设置、trust state、entitlement、插件安装记录或生成产物。任何持久化数据都不得由产品迁移或重建，必须按上述规则保持稳定读取或局部 fail-visible；确需修复时只能使用显式手动操作或产品运行路径之外的独立离线脚本，并提供明确的数据保护方案或 fail-closed diagnostic。
 
@@ -283,7 +284,7 @@
 | Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI                                                                      |
 | 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local`，并按领域分别显式本地运行适用的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证；不得把本地专用入口并入 CI 命令                                                                      |
 
-- 新路径、独立离线数据处理脚本和 bug 修复必须同时验证结果与执行路径：生产路径断言 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中，并证明 legacy/fallback 路径不存在；离线脚本必须额外证明不会被产品代码、构建、启动、通用测试或 CI 调用。
+- 新路径、独立离线数据处理脚本和 bug 修复必须同时验证结果与执行路径：长期生产测试正向断言唯一 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中；替换期间对旧路径的反向验证属于交付前必须删除的一次性证据。离线脚本必须额外证明不会被产品代码、构建、启动、通用测试或 CI 调用。
 - 验证应重点发现循环依赖、Layer 0 反向依赖、Renderer/Webview 依赖 Electron/Node、Desktop Main 依赖 React、包到应用反向依赖等架构违规。
 - 验收结论必须列出实际执行的命令、结果和覆盖层级；未执行项需记录不适用原因、阻塞条件和残余风险，不能仅以单元测试通过声明功能完成。
 - Webview 功能场景由 owning package 维护 fixture、用户操作、业务断言和 authoritative side effect；共享 runner 只拥有宿主/CDP/错误策略/报告机制，不得在共享层加入包级业务 shortcut。
@@ -295,7 +296,7 @@
 新增功能、bug 修复和非平凡重构只有同时满足以下条件，才可声明完成：
 
 1. owning responsibility、目标设计、契约和依赖方向已经明确，并符合现有架构。
-2. canonical path 已实现并接入；本次边界内被替代的旧路径已删除、禁用、poison 或显式隔离，不能继续兜底成功。
+2. canonical path 已实现并接入；本次边界内被替代的旧实现、入口、导出、注册、fixture、专用 diagnostic 和临时验证测试均已删除，不存在被禁用、poison、fail-closed 隔离或仍可触发的旧路径。
 3. 抽象保持精简，未引入无真实变化点的接口层，也未保留平行接口、多实现或多种事实来源绕开设计问题。
 4. 回归测试能够证明目标行为或 bug 根因，并覆盖关键中间状态和执行路径。
 5. 已完成“测试与质量门禁”中所有适用验证，不能只依据单元测试或局部构建判断通过。

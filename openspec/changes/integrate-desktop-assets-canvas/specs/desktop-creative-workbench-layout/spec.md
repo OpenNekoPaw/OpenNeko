@@ -113,19 +113,19 @@ status, display, timeline and settings actions.
 - **AND** the project-local right-panel control reveals the exact Project/Workspace Resource Browser
 - **AND** Asset center remains the only resource-related primary destination
 
-### Requirement: Workbench v2 Resource Main Views migrate to the right Dock
+### Requirement: Non-canonical Resource Main Views fail locally
 
-Desktop SHALL migrate persisted v2 Workbench state to v3 before rendering. A v2
-`resource-browser` Main View SHALL be removed from Main groups and converted to visible right
-Resource Dock presentation. The v3 parser and renderer MUST reject or poison any later attempt to
-attach a Resource Browser as a Main View.
+Desktop SHALL use one version-free Workbench shape. A persisted `resource-browser` Main View is not a
+canonical Main View and MUST be rejected only at that Workbench instance boundary without conversion,
+group repair or automatic Dock mutation. The parser and renderer MUST reject any attempt to attach a
+Resource Browser as a Main View.
 
 #### Scenario: Existing Resource Browser Main View is restored
 
-- **WHEN** Desktop reads v2 Workbench state containing a `resource-browser` Main View
-- **THEN** migration removes that View identity and repairs affected Main groups
-- **AND** the right Resource Dock becomes visible with its existing bounded width
-- **AND** no legacy Main View handler participates after migration
+- **WHEN** Desktop reads Workbench state containing a `resource-browser` Main View
+- **THEN** only that Workbench instance reports an explicit invalid-layout diagnostic
+- **AND** stored bytes remain unchanged while sibling Workbench instances and the right Resource Dock remain usable
+- **AND** no retired Main View handler participates
 
 ### Requirement: Narrow layouts preserve a usable main surface
 

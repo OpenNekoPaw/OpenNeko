@@ -1,3 +1,1434 @@
 {
-  "allowances": []
+  "allowances": [
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "MediaRuntimeQualification FFmpeg executable release reported by the external binary",
+      "id": "5af547834c611b5c3f99",
+      "isolationRule": "The value records the selected external FFmpeg binary release for runtime qualification only; it never selects an OpenNeko contract, component shape, persistence schema, migration, or alternate media implementation.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/contracts.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "MediaRuntimeQualification ffprobe executable release reported by the external binary",
+      "id": "b150a5b378eb91d03b49",
+      "isolationRule": "The value records the selected external ffprobe binary release for runtime qualification only; it never selects an OpenNeko contract, component shape, persistence schema, migration, or alternate media implementation.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/contracts.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "Verified media descriptor test expectation for the packaged FFmpeg executable release",
+      "id": "bcc306ccf959e0db790e",
+      "isolationRule": "The fixture verifies one packaged external binary and cannot dispatch an OpenNeko schema, migration, component state, or fallback path; mismatch rejects that runtime bundle.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.test.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Verified media descriptor test expectation for the packaged ffprobe executable release",
+      "id": "18db4b1fe829eb0b8b89",
+      "isolationRule": "The fixture verifies one packaged external binary and cannot dispatch an OpenNeko schema, migration, component state, or fallback path; mismatch rejects that runtime bundle.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.test.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "MediaRuntimeDescriptor expected packaged FFmpeg executable release field",
+      "id": "98cce1a86ebac0e38673",
+      "isolationRule": "The field qualifies one packaged external binary and never identifies OpenNeko data generations, contracts, components, or migrations.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "MediaRuntimeDescriptor expected packaged ffprobe executable release field",
+      "id": "f1ddab72b1665cfbeeec",
+      "isolationRule": "The field qualifies one packaged external binary and never identifies OpenNeko data generations, contracts, components, or migrations.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "Strict media runtime descriptor parser read of the external FFmpeg release",
+      "id": "d4b875b6351fa68a695c",
+      "isolationRule": "The parser validates external binary metadata only; failure rejects the exact media runtime bundle and never selects an OpenNeko migration or alternate implementation.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Strict media runtime descriptor parser read of the external ffprobe release",
+      "id": "4cf0fbcbdba23415c732",
+      "isolationRule": "The parser validates external binary metadata only; failure rejects the exact media runtime bundle and never selects an OpenNeko migration or alternate implementation.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "Strict media runtime descriptor output copy of the external FFmpeg release",
+      "id": "0ca762e8c8a52868e4e0",
+      "isolationRule": "The parsed value remains external binary qualification metadata and cannot dispatch internal contracts, migrations, component state, or fallback paths.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Strict media runtime descriptor output copy of the external ffprobe release",
+      "id": "fe0493a877266201d807",
+      "isolationRule": "The parsed value remains external binary qualification metadata and cannot dispatch internal contracts, migrations, component state, or fallback paths.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/node/MediaRuntimeDescriptor.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "Node media runtime qualification fixture for external FFmpeg command output",
+      "id": "a6aba14370389e2e7f36",
+      "isolationRule": "The fixture represents external command output only and does not select an OpenNeko schema, migration, component state, or media path.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/node/NodeMediaRuntime.test.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Node media runtime qualification fixture for external ffprobe command output",
+      "id": "3af9018eac49cdf3fd64",
+      "isolationRule": "The fixture represents external command output only and does not select an OpenNeko schema, migration, component state, or media path.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/node/NodeMediaRuntime.test.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "Node media runtime capture of the external FFmpeg version command result",
+      "id": "d03e74f0f6c0eab417df",
+      "isolationRule": "The value is process-local external qualification output and never acts as persisted component state, internal data generation, migration key, or alternate route.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/node/NodeMediaRuntime.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Node media runtime capture of the external ffprobe version command result",
+      "id": "3ad0c5c5df4dffdc28e2",
+      "isolationRule": "The value is process-local external qualification output and never acts as persisted component state, internal data generation, migration key, or alternate route.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/node/NodeMediaRuntime.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tools",
+      "fieldScope": "MediaRuntimeQualification output property populated from FFmpeg -version",
+      "id": "58de99d62b1cd7878510",
+      "isolationRule": "The value reports the selected external executable release and cannot dispatch OpenNeko contracts, migrations, component state, caches, or alternate implementations.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "packages/media/src/node/NodeMediaRuntime.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "MediaRuntimeQualification output property populated from ffprobe -version",
+      "id": "ddf4f341b7342f4bc941",
+      "isolationRule": "The value reports the selected external executable release and cannot dispatch OpenNeko contracts, migrations, component state, caches, or alternate implementations.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "packages/media/src/node/NodeMediaRuntime.ts",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vitest coverage-v8 package",
+      "fieldScope": "Root development dependency package name only",
+      "id": "8cfabeedc0c9f8a64186",
+      "isolationRule": "The v8 suffix identifies Vitest's externally published coverage provider package and is not projected into OpenNeko contracts, persistence, component state, or runtime routing.",
+      "normativeSource": "https://vitest.dev/guide/coverage.html",
+      "path": "package.json",
+      "token": "-v8"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vitest V8 coverage provider",
+      "fieldScope": "Shared Vitest coverage provider selection only",
+      "id": "4595e9d906b77d93f30a",
+      "isolationRule": "The value selects Vitest's external V8 coverage implementation during tests and is not persisted or used by any OpenNeko product contract or runtime route.",
+      "normativeSource": "https://vitest.dev/guide/coverage.html",
+      "path": "vitest.shared.ts",
+      "token": "v8"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Electron Forge application manifest",
+      "fieldScope": "OpenNeko Desktop package.json application release version only",
+      "id": "1c856b923c78be3a3d93",
+      "isolationRule": "Electron Forge reads this value only while starting, packaging, and releasing the Desktop application; it is not projected into OpenNeko contracts, component state, persistence records, runtime routing, or data validity checks.",
+      "normativeSource": "https://github.com/electron/forge/blob/v7.11.2/packages/api/core/src/api/start.ts",
+      "path": "apps/neko-desktop/package.json",
+      "token": "version"
+    },
+    {
+      "category": "product-migration-or-compatibility",
+      "externalOwner": "Agent Skills specification",
+      "fieldScope": "Portable SKILL.md frontmatter definition only",
+      "id": "5ec0d49ea96b1da4411d",
+      "isolationRule": "The external frontmatter field is parsed and serialized only as portable Agent Skills metadata; OpenNeko Host eligibility is represented separately as hostFit and does not dispatch internal contracts or migrations.",
+      "normativeSource": "https://agentskills.io/specification",
+      "path": "packages/agent/contracts/src/portable-skill.ts",
+      "token": "compatibility"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation API",
+      "fieldScope": "MiniMax media adapter POST endpoint only",
+      "id": "4da8a025b31553174477",
+      "isolationRule": "The versioned route remains inside the MiniMax provider adapter and is never projected into an OpenNeko contract, component state, cache, or persistence record.",
+      "normativeSource": "https://platform.minimax.io/docs/api-reference/video-generation-t2v",
+      "path": "packages/generation/src/media/adapters/minimax-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "stdio MCP initialize request protocolVersion field only",
+      "id": "2691c5ed8f6dce14efeb",
+      "isolationRule": "The MCP protocol release is emitted only on the selected external server connection; it is not projected into OpenNeko contracts, persistence, component state, or runtime routing, and negotiation failure rejects only that connection.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2024-11-05/basic/lifecycle",
+      "path": "packages/agent/runtime/src/mcp/mcp-client.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "stdio MCP initialize request clientInfo.version field only",
+      "id": "95db656e8dcce61a78af",
+      "isolationRule": "The required MCP client implementation release stays inside clientInfo for the selected external server connection and never acts as an OpenNeko schema or data-generation discriminator.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2024-11-05/basic/lifecycle",
+      "path": "packages/agent/runtime/src/mcp/mcp-client.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "HTTP MCP initialize request protocolVersion field only",
+      "id": "8260cec064999580cf28",
+      "isolationRule": "The MCP protocol release is emitted only on the selected external HTTP server connection; it is not projected into OpenNeko contracts, persistence, component state, or runtime routing, and negotiation failure rejects only that connection.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2024-11-05/basic/lifecycle",
+      "path": "packages/agent/runtime/src/mcp/mcp-client.ts",
+      "token": "protocolVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Model Context Protocol lifecycle specification",
+      "fieldScope": "HTTP MCP initialize request clientInfo.version field only",
+      "id": "a0040bee08933732d194",
+      "isolationRule": "The required MCP client implementation release stays inside clientInfo for the selected external HTTP server connection and never acts as an OpenNeko schema or data-generation discriminator.",
+      "normativeSource": "https://modelcontextprotocol.io/specification/2024-11-05/basic/lifecycle",
+      "path": "packages/agent/runtime/src/mcp/mcp-client.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Three.js Material API",
+      "fieldScope": "MeshStandardMaterial update counter asserted after changing blending flags",
+      "id": "05e578b11e2fc9bb8545",
+      "isolationRule": "The assertion observes Three.js material invalidation only; the value is neither persisted nor exposed through an OpenNeko contract and cannot select a component shape, migration, or alternate renderer.",
+      "normativeSource": "https://threejs.org/docs/#api/en/materials/Material.version",
+      "path": "packages/preview/webview/src/model/threeRuntime.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI chat-image adapter ImageModelV3 interface import",
+      "id": "4d88762712712a1febb2",
+      "isolationRule": "The identifier is required by the installed AI SDK provider interface and remains inside the selected provider adapter; it cannot identify OpenNeko data or dispatch an internal contract.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-chat-image-model.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI chat-image adapter specificationVersion implementation field",
+      "id": "b908dc39d9f32cb0988c",
+      "isolationRule": "The field satisfies the external ImageModelV3 interface only and is never persisted or projected into an OpenNeko contract, component, cache, or migration.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-chat-image-model.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI chat-image adapter external ImageModelV3 specification value",
+      "id": "0d3c2d52df152d5a926d",
+      "isolationRule": "The literal is required by the external AI SDK interface and cannot select an OpenNeko schema, persistence generation, migration, or alternate internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-chat-image-model.ts",
+      "token": "v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "NewAPI chat-image adapter request endpoint",
+      "id": "6d1250ae87df43afba40",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-chat-image-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Images API",
+      "fieldScope": "NewAPI chat-image adapter diagnostic naming the standard image endpoint",
+      "id": "7f49bb2b475199bd270e",
+      "isolationRule": "The route appears only in a provider-bound diagnostic and cannot dispatch an OpenNeko schema, migration, component state, or alternate internal implementation.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/images",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-chat-image-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Images API",
+      "fieldScope": "NewAPI image adapter test assertion for its outbound generations endpoint",
+      "id": "b8710de1779a9ed48919",
+      "isolationRule": "The test observes only the selected external adapter request URL and cannot define an OpenNeko contract, persisted identity, migration, or fallback.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/images",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-image-model.test.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI image adapter ImageModelV3 interface import",
+      "id": "d9262bf18a68d8701fe2",
+      "isolationRule": "The identifier is required by the installed AI SDK provider interface and remains inside the selected provider adapter; it cannot identify OpenNeko data or dispatch an internal contract.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-image-model.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI image adapter specificationVersion implementation field",
+      "id": "53b107175c99089ca41e",
+      "isolationRule": "The field satisfies the external ImageModelV3 interface only and is never persisted or projected into an OpenNeko contract, component, cache, or migration.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-image-model.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI image adapter external ImageModelV3 specification value",
+      "id": "ecfc57d232270dc59eb7",
+      "isolationRule": "The literal is required by the external AI SDK interface and cannot select an OpenNeko schema, persistence generation, migration, or alternate internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-image-model.ts",
+      "token": "v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Images API",
+      "fieldScope": "NewAPI image adapter text-to-image request endpoint",
+      "id": "7c4119862161168ef864",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/images",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-image-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Images API",
+      "fieldScope": "NewAPI image adapter edit request endpoint",
+      "id": "72bb8393ce3f03ebfcd4",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/images",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-image-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI speech adapter SpeechModelV3 interface imports",
+      "id": "7a03bd2f6c31ee8590ce",
+      "isolationRule": "The identifiers are required by the installed AI SDK provider interface and remain inside the selected provider adapter; they cannot identify OpenNeko data or dispatch an internal contract.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-speech-model.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI speech adapter specificationVersion implementation field",
+      "id": "934431cf2cd51e82b958",
+      "isolationRule": "The field satisfies the external SpeechModelV3 interface only and is never persisted or projected into an OpenNeko contract, component, cache, or migration.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-speech-model.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI speech adapter external SpeechModelV3 specification value",
+      "id": "d3e1da6f74fe4cec2c0b",
+      "isolationRule": "The literal is required by the external AI SDK interface and cannot select an OpenNeko schema, persistence generation, migration, or alternate internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-speech-model.ts",
+      "token": "v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Audio API",
+      "fieldScope": "NewAPI speech adapter request endpoint",
+      "id": "bc0dfab6b536fc31fc9e",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/audio/createSpeech",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-speech-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI video adapter Experimental_VideoModelV3 interface import",
+      "id": "7e7fc983b7d855fd52e0",
+      "isolationRule": "The identifier is required by the installed AI SDK provider interface and remains inside the selected provider adapter; it cannot identify OpenNeko data or dispatch an internal contract.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI video adapter specificationVersion implementation field",
+      "id": "6b8794ae188a088bba7b",
+      "isolationRule": "The field satisfies the external VideoModelV3 interface only and is never persisted or projected into an OpenNeko contract, component, cache, or migration.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "specificationVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "NewAPI video adapter external VideoModelV3 specification value",
+      "id": "1aaa7ee7a132748a2700",
+      "isolationRule": "The literal is required by the external AI SDK interface and cannot select an OpenNeko schema, persistence generation, migration, or alternate internal implementation.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "v3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI video generation API",
+      "fieldScope": "NewAPI video adapter submit endpoint",
+      "id": "71d99efb44187373d26d",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI video generation API",
+      "fieldScope": "NewAPI video adapter task status endpoint",
+      "id": "45447e99883b52b857d7",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "NewAPI video generation API",
+      "fieldScope": "NewAPI video adapter result download endpoint",
+      "id": "d088de700e146c873a2d",
+      "isolationRule": "The route is emitted only by the explicitly selected NewAPI adapter and never becomes an OpenNeko contract, persisted identity, or fallback path.",
+      "normativeSource": "https://docs.newapi.pro/en/api/openai-video/",
+      "path": "packages/ai/sdk/src/providers/newapi/newapi-video-model.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Shared provider type import for ImageModelV3",
+      "id": "5ac6dd8cdc7b0ac56c7c",
+      "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/image-generation",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Shared provider type import for Experimental_VideoModelV3",
+      "id": "c76b6d886ce7983e4759",
+      "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/video-generation",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "versioned-identifier",
+      "externalOwner": "Vercel AI SDK provider contract",
+      "fieldScope": "Shared provider type import for SpeechModelV3",
+      "id": "31d9d9eadf5c004ed946",
+      "isolationRule": "The identifier types the selected external provider result only and cannot identify OpenNeko data, component state, migrations, or internal routing.",
+      "normativeSource": "https://ai-sdk.dev/docs/ai-sdk-core/speech",
+      "path": "packages/ai/sdk/src/types.ts",
+      "token": "lV3"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Suno music generation model catalog",
+      "fieldScope": "Agent purpose-model parsing fixture input for the external Suno v4 model ID",
+      "id": "0ca0ed5f4555c1248d8e",
+      "isolationRule": "The value identifies the explicitly selected external model only and cannot select an Agent contract, persisted schema, component state, migration, or fallback provider.",
+      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
+      "path": "packages/agent/contracts/src/__tests__/webview-protocol.test.ts",
+      "token": "v4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Suno music generation model catalog",
+      "fieldScope": "Agent purpose-model parsing expected output for the external Suno v4 model ID",
+      "id": "2181fa247dedc798846b",
+      "isolationRule": "The value identifies the explicitly selected external model only and cannot select an Agent contract, persisted schema, component state, migration, or fallback provider.",
+      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
+      "path": "packages/agent/contracts/src/__tests__/webview-protocol.test.ts",
+      "token": "v4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Alibaba Cloud Model Studio Wanx image model catalog",
+      "fieldScope": "DashScope image adapter default model identifier for request submission",
+      "id": "a2672233fcaf3db974f9",
+      "isolationRule": "The value identifies the explicitly selected external model for one provider request and cannot select an OpenNeko contract, migration, component state, or fallback provider.",
+      "normativeSource": "https://help.aliyun.com/zh/model-studio/text-to-image-api-reference",
+      "path": "packages/generation/src/media/adapters/dashscope-media-adapter.ts",
+      "token": "-v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Alibaba Cloud Model Studio Wanx image model catalog",
+      "fieldScope": "DashScope image adapter default model identifier for task submission",
+      "id": "83b0949c53adfb95a241",
+      "isolationRule": "The value identifies the explicitly selected external model for one provider request and cannot select an OpenNeko contract, migration, component state, or fallback provider.",
+      "normativeSource": "https://help.aliyun.com/zh/model-studio/text-to-image-api-reference",
+      "path": "packages/generation/src/media/adapters/dashscope-media-adapter.ts",
+      "token": "-v1"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Luma Dream Machine API response contract",
+      "fieldScope": "Provider response version metadata received from Luma only",
+      "id": "42a3afe7d45fe17ecada",
+      "isolationRule": "The optional value mirrors one external provider response and is not persisted as OpenNeko schema identity or used for migration, component validity, or alternate routing.",
+      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
+      "path": "packages/generation/src/media/adapters/luma-media-adapter.ts",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Luma Dream Machine API",
+      "fieldScope": "Luma generation submission endpoint",
+      "id": "59e722b105bc3ed5c08f",
+      "isolationRule": "The route remains inside the selected Luma adapter and cannot dispatch internal contracts, migrations, component state, or another provider.",
+      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
+      "path": "packages/generation/src/media/adapters/luma-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Luma Dream Machine API",
+      "fieldScope": "Luma generation status endpoint",
+      "id": "2d778d4373b1cd462340",
+      "isolationRule": "The route remains inside the selected Luma adapter and failure rejects only that provider task without internal fallback or schema dispatch.",
+      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
+      "path": "packages/generation/src/media/adapters/luma-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Luma Dream Machine API",
+      "fieldScope": "Luma generation cancellation endpoint",
+      "id": "184d8b05c037dccf09e2",
+      "isolationRule": "The route remains inside the selected Luma adapter and failure rejects only that provider task without internal fallback or schema dispatch.",
+      "normativeSource": "https://docs.lumalabs.ai/docs/video-generation",
+      "path": "packages/generation/src/media/adapters/luma-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax Video Generation API",
+      "fieldScope": "MiniMax video task query endpoint",
+      "id": "7885a67fd7b33c30d63b",
+      "isolationRule": "The versioned route remains inside the MiniMax provider adapter and cannot select an OpenNeko contract, migration, component state, or alternate provider.",
+      "normativeSource": "https://platform.minimax.io/docs/api-reference/video-generation-t2v",
+      "path": "packages/generation/src/media/adapters/minimax-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "MiniMax File API",
+      "fieldScope": "MiniMax generated file retrieval endpoint",
+      "id": "7d079ecf6fec92ec12df",
+      "isolationRule": "The versioned route remains inside the MiniMax provider adapter and failure rejects only that provider request without internal schema dispatch or provider fallback.",
+      "normativeSource": "https://platform.minimax.io/docs/api-reference/video-generation-t2v",
+      "path": "packages/generation/src/media/adapters/minimax-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Images API",
+      "fieldScope": "OpenAI-compatible image generation endpoint template",
+      "id": "a7a5f0fd62f6620d241d",
+      "isolationRule": "The route is provider-bound configuration for one explicit adapter and cannot identify OpenNeko data, component state, migrations, or fallback implementations.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/images/create",
+      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Videos API",
+      "fieldScope": "OpenAI-compatible video generation endpoint template",
+      "id": "78cdaaaf21bf03e40fab",
+      "isolationRule": "The route is provider-bound configuration for one explicit adapter and cannot identify OpenNeko data, component state, migrations, or fallback implementations.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/videos",
+      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Videos API",
+      "fieldScope": "OpenAI-compatible video status endpoint template",
+      "id": "0a9ee2cac1ee3cd14c63",
+      "isolationRule": "The route is provider-bound configuration for one explicit adapter and failure stays request-local without internal migration or provider fallback.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/videos",
+      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Videos API",
+      "fieldScope": "OpenAI-compatible video cancellation endpoint template",
+      "id": "97f28c3a8d1c5afe0648",
+      "isolationRule": "The route is provider-bound configuration for one explicit adapter and failure stays request-local without internal migration or provider fallback.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/videos",
+      "path": "packages/generation/src/media/adapters/openai-compat-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Runway API",
+      "fieldScope": "Runway-Version request header value",
+      "id": "92c7f9386ac53318731c",
+      "isolationRule": "The value is emitted only to the selected Runway API request and cannot select an OpenNeko contract, migration, component state, or fallback provider.",
+      "normativeSource": "https://docs.dev.runwayml.com/api/",
+      "path": "packages/generation/src/media/adapters/runway-media-adapter.ts",
+      "token": "apiVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Runway API",
+      "fieldScope": "Runway video generation endpoint",
+      "id": "1b1ef4540d700c2d0074",
+      "isolationRule": "The route remains inside the selected Runway adapter and cannot dispatch internal contracts, migrations, component state, or another provider.",
+      "normativeSource": "https://docs.dev.runwayml.com/api/",
+      "path": "packages/generation/src/media/adapters/runway-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Runway API",
+      "fieldScope": "Runway task status endpoint",
+      "id": "254030483e26e0f933cf",
+      "isolationRule": "The route remains inside the selected Runway adapter and failure stays task-local without internal schema dispatch or provider fallback.",
+      "normativeSource": "https://docs.dev.runwayml.com/api/",
+      "path": "packages/generation/src/media/adapters/runway-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Runway API",
+      "fieldScope": "Runway task cancellation endpoint",
+      "id": "4111a6e389fb56986945",
+      "isolationRule": "The route remains inside the selected Runway adapter and failure stays task-local without internal schema dispatch or provider fallback.",
+      "normativeSource": "https://docs.dev.runwayml.com/api/",
+      "path": "packages/generation/src/media/adapters/runway-media-adapter.ts",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Suno music generation model catalog",
+      "fieldScope": "Suno chirp-v3-5 provider model identifier",
+      "id": "4b82f22838b5c2e03d79",
+      "isolationRule": "The value identifies the explicitly selected external model only and cannot select an OpenNeko contract, persisted schema, migration, component state, or fallback provider.",
+      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
+      "path": "packages/generation/src/media/adapters/suno-media-adapter.ts",
+      "token": "-v3-"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Suno music generation model catalog",
+      "fieldScope": "Suno chirp-v4 provider model identifier",
+      "id": "7de16738ee21ea3912c4",
+      "isolationRule": "The value identifies the explicitly selected external model only and cannot select an OpenNeko contract, persisted schema, migration, component state, or fallback provider.",
+      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
+      "path": "packages/generation/src/media/adapters/suno-media-adapter.ts",
+      "token": "-v4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vidu API",
+      "fieldScope": "Vidu generation submission base URL",
+      "id": "81c20b56d9b77c40c6df",
+      "isolationRule": "The base URL remains inside the selected Vidu adapter and cannot dispatch internal contracts, migrations, component state, or another provider.",
+      "normativeSource": "https://platform.vidu.com/docs/en/api",
+      "path": "packages/generation/src/media/adapters/vidu-media-adapter.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vidu API",
+      "fieldScope": "Vidu generation status base URL",
+      "id": "ec861de479897e835120",
+      "isolationRule": "The base URL remains inside the selected Vidu adapter and failure stays task-local without internal schema dispatch or provider fallback.",
+      "normativeSource": "https://platform.vidu.com/docs/en/api",
+      "path": "packages/generation/src/media/adapters/vidu-media-adapter.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Vidu API",
+      "fieldScope": "Vidu generation cancellation base URL",
+      "id": "c43dbec45e51ac6de91b",
+      "isolationRule": "The base URL remains inside the selected Vidu adapter and failure stays task-local without internal schema dispatch or provider fallback.",
+      "normativeSource": "https://platform.vidu.com/docs/en/api",
+      "path": "packages/generation/src/media/adapters/vidu-media-adapter.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "New API OpenAI-compatible protocol",
+      "fieldScope": "Built-in Neko Gateway provider base path only",
+      "id": "60201a6f0ee72750b5ac",
+      "isolationRule": "The route is passed only to the selected external gateway adapter and cannot select an OpenNeko contract, persisted shape, migration, component generation, or alternate provider.",
+      "normativeSource": "https://docs.newapi.pro/en/api/",
+      "path": "packages/host/src/settings/default-config.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "New API OpenAI-compatible protocol",
+      "fieldScope": "User-configurable New API provider base path only",
+      "id": "9003a7ab7d2131ad2680",
+      "isolationRule": "The route is passed only to the explicitly selected external gateway adapter and cannot select an OpenNeko contract, persisted shape, migration, component generation, or fallback provider.",
+      "normativeSource": "https://docs.newapi.pro/en/api/",
+      "path": "packages/host/src/settings/default-config.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Suno music generation model catalog",
+      "fieldScope": "Built-in gateway music model catalog name only",
+      "id": "6beebf2b68732ba9d5d0",
+      "isolationRule": "The value identifies the selected external music model only and cannot dispatch an OpenNeko contract, persisted schema, migration, component state, or alternate provider.",
+      "normativeSource": "https://docs.sunoapi.org/suno-api/generate-music",
+      "path": "packages/host/src/settings/default-config.ts",
+      "token": "-v4"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Electron distribution archive",
+      "fieldScope": "Pinned macOS arm64 Electron archive checksum key",
+      "id": "c714055b504093648da6",
+      "isolationRule": "The archive name is consumed only by Electron Forge download verification and cannot affect OpenNeko data contracts, persistence, component state, or runtime routing.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
+      "path": "apps/neko-desktop/forge.config.ts",
+      "token": "-v43."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Electron fuses API",
+      "fieldScope": "Electron FuseVersion import required by the Forge fuses plugin",
+      "id": "1e7ce2a30aa21f2efcff",
+      "isolationRule": "The enum configures the packaged Electron executable only and is never projected into OpenNeko contracts, persisted data, component state, or routing.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
+      "path": "apps/neko-desktop/fuse.config.ts",
+      "token": "FuseVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Electron fuses API",
+      "fieldScope": "Electron FuseConfig version property required by @electron/fuses",
+      "id": "0cd889112eb6216cd1bb",
+      "isolationRule": "The property selects the external Electron fuse layout during packaging only and cannot validate or dispatch OpenNeko data.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
+      "path": "apps/neko-desktop/fuse.config.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Electron fuses API",
+      "fieldScope": "Architecture test import of the exact Electron fuse enum",
+      "id": "65c1e795e119bb1302d6",
+      "isolationRule": "The enum is used only to assert the packaged Electron security configuration and has no product data consumer.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
+      "path": "apps/neko-desktop/src/architecture-boundary.test.ts",
+      "token": "FuseVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Electron distribution archive",
+      "fieldScope": "Architecture test assertion for the supported macOS arm64 archive",
+      "id": "a770e3a9dc691e74e0ac",
+      "isolationRule": "The literal verifies Electron Forge download pinning only and cannot enter product contracts or persistence.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
+      "path": "apps/neko-desktop/src/architecture-boundary.test.ts",
+      "token": "-v43."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Electron distribution archive",
+      "fieldScope": "Architecture test exclusion of an unsupported Windows archive",
+      "id": "ac98cda244db7e771284",
+      "isolationRule": "The literal verifies packaging target scope only and cannot enter product contracts or persistence.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
+      "path": "apps/neko-desktop/src/architecture-boundary.test.ts",
+      "token": "-v43."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Electron distribution archive",
+      "fieldScope": "Architecture test exclusion of an unsupported Linux archive",
+      "id": "4d03a75c5f3e048f8397",
+      "isolationRule": "The literal verifies packaging target scope only and cannot enter product contracts or persistence.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/installation#mirrors-and-custom-caches",
+      "path": "apps/neko-desktop/src/architecture-boundary.test.ts",
+      "token": "-v43."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Electron fuses API",
+      "fieldScope": "Architecture test assertion for the external FuseConfig version property",
+      "id": "e9f47b3424faa57f03d0",
+      "isolationRule": "The property is asserted only as Electron packaging security metadata and never participates in OpenNeko data validity.",
+      "normativeSource": "https://www.electronjs.org/docs/latest/tutorial/fuses",
+      "path": "apps/neko-desktop/src/architecture-boundary.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "glTF 2.0 specification",
+      "fieldScope": "Desktop media qualification glTF asset declaration",
+      "id": "288b3a42a48c9f738792",
+      "isolationRule": "The value exists only inside a generated glTF fixture parsed by the external format consumer and cannot dispatch OpenNeko contracts or persistence.",
+      "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
+      "path": "apps/neko-desktop/src/main/desktop-openneko-qualification.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tool",
+      "fieldScope": "Desktop qualification report of the selected external FFmpeg release",
+      "id": "c7fd9bbc4d163e00c085",
+      "isolationRule": "The value is qualification output only and never selects an OpenNeko contract, migration, component generation, codec path, or persisted data shape.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "apps/neko-desktop/src/main/desktop-openneko-qualification.ts",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "glTF 2.0 specification",
+      "fieldScope": "Desktop Preview valid glTF dependency fixture asset declaration",
+      "id": "e2161f8e8096302e1279",
+      "isolationRule": "The value is confined to one glTF fixture and cannot dispatch OpenNeko contracts, persistence, migrations, or Preview component state.",
+      "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
+      "path": "apps/neko-desktop/src/main/desktop-preview-runtime.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "glTF 2.0 specification",
+      "fieldScope": "Desktop Preview unsafe-path glTF fixture asset declaration",
+      "id": "b23231d9ad48766cd49c",
+      "isolationRule": "The value is confined to one rejected glTF fixture and cannot dispatch OpenNeko contracts, persistence, migrations, or Preview component state.",
+      "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
+      "path": "apps/neko-desktop/src/main/desktop-preview-runtime.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "glTF 2.0 specification",
+      "fieldScope": "Desktop Preview symlink-escape glTF fixture asset declaration",
+      "id": "7e6cbfca600f63361019",
+      "isolationRule": "The value is confined to one rejected glTF fixture and cannot dispatch OpenNeko contracts, persistence, migrations, or Preview component state.",
+      "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
+      "path": "apps/neko-desktop/src/main/desktop-preview-runtime.test.ts",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "OpenNeko Pi provider default external API base URL fixture",
+      "id": "d437a4fc482f193eb5d7",
+      "isolationRule": "The route is confined to the selected provider adapter and cannot identify OpenNeko contracts, persistence, component state, migrations, or alternate providers; failure rejects only that provider request.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/openneko-provider.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "OpenNeko Pi provider configuration projection fixture external API base URL",
+      "id": "adfe470c447c08bfddcb",
+      "isolationRule": "The route remains inside one provider projection and never becomes OpenNeko schema, component, persistence, migration, or fallback identity.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/openneko-provider.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Ollama OpenAI-compatible API",
+      "fieldScope": "Local Ollama OpenAI-compatible provider base URL fixture",
+      "id": "5f2480c4a76d9ea4646e",
+      "isolationRule": "The route is scoped to the explicitly selected local Ollama provider and cannot dispatch OpenNeko contracts, persistence, component state, migrations, or another provider.",
+      "normativeSource": "https://docs.ollama.com/api/openai-compatibility",
+      "path": "packages/agent/runtime/src/pi/__tests__/openneko-provider.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "Synthetic local OpenAI-compatible streaming provider base URL fixture",
+      "id": "3b4120baa583097b3f38",
+      "isolationRule": "The route drives one provider-bound streaming request test and cannot select OpenNeko schemas, persistence, component state, migrations, fallbacks, or sibling providers.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/openneko-provider.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "Synthetic local OpenAI-compatible provider error response base URL fixture",
+      "id": "7be9225ce35a9bc62fa8",
+      "isolationRule": "The route drives one provider-bound error test and cannot select OpenNeko schemas, persistence, component state, migrations, alternate providers, or fallback success.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/openneko-provider.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "Remote OpenAI-compatible provider loopback-policy fixture base URL",
+      "id": "557c45ebef43aa0b0cc8",
+      "isolationRule": "The route remains provider configuration used to verify one selected remote adapter and cannot identify OpenNeko contracts, migrations, component state, persistence, or another provider.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/openneko-provider.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "Projected Pi Tool model external API base URL fixture",
+      "id": "d1ca9f834ff7af9a7532",
+      "isolationRule": "The route is scoped to the explicitly selected model provider and never becomes OpenNeko contract, persistence, component, migration, or fallback identity.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/openneko-tool.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "Pi public API characterization model external API base URL fixture",
+      "id": "f32c62ee921a3560a0a6",
+      "isolationRule": "The route is external model metadata for one characterization fixture and cannot dispatch OpenNeko contracts, persistence, component state, migrations, or alternate providers.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/pi-public-api-characterization.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "Purpose-bound model runtime external API base URL fixture",
+      "id": "0e041b236c2d3f5a8082",
+      "isolationRule": "The route remains inside the explicitly selected provider model fixture and cannot identify OpenNeko contracts, persistence, component state, migrations, alternate providers, or fallback success.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/runtime/src/pi/__tests__/purpose-model-runtime.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI Chat Completions API",
+      "fieldScope": "Agent Webview model configuration external OpenAI API base URL fixture",
+      "id": "184ec843c6b215c9b5ef",
+      "isolationRule": "The route is external provider configuration only and cannot identify OpenNeko contracts, persistence, component state, migrations, alternate providers, or fallback success.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat",
+      "path": "packages/agent/webview/src/components/__tests__/types.test.ts",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
+      "id": "b1eafc66bda4df4678b4",
+      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
+      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
+      "id": "7ed98c94e7b560a3bffd",
+      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
+      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
+      "token": "/v1/"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
+      "id": "48e989deab9c6e8d2a47",
+      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
+      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "OpenAI-compatible Chat Completions API",
+      "fieldScope": "OpenAI-compatible Judge provider endpoint fixture",
+      "id": "c541f1daea179c62c0c1",
+      "isolationRule": "The versioned route is confined to the explicitly configured external Judge provider endpoint and cannot select an OpenNeko contract, persisted shape, migration, provider fallback, or component state.",
+      "normativeSource": "https://platform.openai.com/docs/api-reference/chat/create",
+      "path": "scripts/agent-eval/judge/provider-adapter.test.mjs",
+      "token": "/v1"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "DeepSeek model catalog",
+      "fieldScope": "DeepSeek externally published model identifier fixture",
+      "id": "6a4582bfb9a753d6c528",
+      "isolationRule": "The identifier selects one explicitly configured external model and cannot identify an OpenNeko data generation, contract, migration, or fallback provider.",
+      "normativeSource": "https://api-docs.deepseek.com/quick_start/pricing",
+      "path": "scripts/agent-eval/suites/agent-runtime/perception-routing/suite.json",
+      "token": "-v4-"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "2b7c93741f213dd8d5d6",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/assert-macos-release-metadata.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "538b3d8415278e11c2be",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/assert-macos-release-metadata.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Node.js runtime",
+      "fieldScope": "Node.js external runtime release parsing and policy verification",
+      "id": "840ac262db73b4a40d7b",
+      "isolationRule": "The value qualifies the executing external Node.js runtime only and cannot identify an OpenNeko contract, persistence shape, migration, component generation, or alternate runtime path.",
+      "normativeSource": "https://nodejs.org/api/process.html#processversions",
+      "path": "scripts/check-local-metadata-runtime-matrix.mjs",
+      "token": "parseVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Khronos glTF 2.0 specification",
+      "fieldScope": "Desktop qualification glTF asset format declaration",
+      "id": "c31ba6bcbffcc9859633",
+      "isolationRule": "The field declares the external glTF file format only and cannot dispatch an OpenNeko contract, component shape, persistence schema, migration, or alternate loader.",
+      "normativeSource": "https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html",
+      "path": "scripts/desktop-functional/media-fixtures.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tool",
+      "fieldScope": "Packaged FFmpeg executable release qualification",
+      "id": "89a3c7963435b7762ec0",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Packaged ffprobe executable release qualification",
+      "id": "8a80d23fae1bae6ac102",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tool",
+      "fieldScope": "Packaged FFmpeg executable release qualification",
+      "id": "a2959877276ea612e653",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Packaged ffprobe executable release qualification",
+      "id": "5ae33486216e2bab3a2a",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tool",
+      "fieldScope": "Packaged FFmpeg executable release qualification",
+      "id": "51131164bd98ac102ce2",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Packaged ffprobe executable release qualification",
+      "id": "ca76f0cf88c4eb12420a",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tool",
+      "fieldScope": "Packaged FFmpeg executable release qualification",
+      "id": "fa2b53fd04e4cb592f41",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "readFfmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Packaged ffprobe executable release qualification",
+      "id": "2d3f4cc2fb266a38d785",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "scripts/media-runtime-closure.mjs",
+      "token": "readFfprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "26cb653a02729545f8dc",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/prepare-macos-release-artifacts.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "fa723615f4a7680f017c",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/prepare-macos-release-artifacts.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "4c7e9499791690c8a37a",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/prepare-macos-release-artifacts.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "095056e08b864efceee4",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/project-macos-release-version.mjs",
+      "token": "projectMacOSReleaseVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "41cc1737266e173c9228",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/project-macos-release-version.mjs",
+      "token": "previousVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "0e410b83fd4b803e8997",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/project-macos-release-version.mjs",
+      "token": "previousVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "dc6d3a3553ade8d57b28",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/project-macos-release-version.mjs",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Arm A-profile architecture",
+      "fieldScope": "External ARMv8 cache architecture fixture",
+      "id": "31ffe20b88da89049b3a",
+      "isolationRule": "The suffix identifies the external CPU architecture cache target only and cannot identify an OpenNeko data generation, contract, migration, or fallback path.",
+      "normativeSource": "https://developer.arm.com/Architectures/A-Profile%20Architecture",
+      "path": "scripts/test-orchestration/act-ci-cache.test.mjs",
+      "token": "-v8"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "396c00be5f8198907606",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "projectMacOSReleaseVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Semantic Versioning release tag",
+      "fieldScope": "macOS release tag fixture governed by SemVer",
+      "id": "716cb8365d1b372fb58c",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://semver.org/",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "v1."
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Semantic Versioning release tag",
+      "fieldScope": "macOS release tag fixture governed by SemVer",
+      "id": "f22e5ba31cdb42f2f0e0",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://semver.org/",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "v1."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "59cf8db965d2cd6b9848",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Semantic Versioning release tag",
+      "fieldScope": "macOS release tag fixture governed by SemVer",
+      "id": "df0464694c3005d48094",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://semver.org/",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "v1."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "c027ff40b8c7dbea0658",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Semantic Versioning release tag",
+      "fieldScope": "macOS release tag fixture governed by SemVer",
+      "id": "03b1d8ae6ee93c63ef49",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://semver.org/",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "v1."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "ebb088fa43d7b98496ab",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "previousVersion"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Semantic Versioning release tag",
+      "fieldScope": "macOS release tag fixture governed by SemVer",
+      "id": "5a30a63cfc45cb08ff2b",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://semver.org/",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "v1."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "4ef2513a2a7044aaa4e4",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "3f88adab10e14b4b4107",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "70fbc675612917e7a844",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "905e4f19469dae92fb57",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Semantic Versioning release tag",
+      "fieldScope": "macOS release tag fixture governed by SemVer",
+      "id": "604af4b23d908b14ca12",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://semver.org/",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "v1."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "npm package and application release metadata",
+      "fieldScope": "macOS release package metadata projection and test",
+      "id": "866e3f7b86fa4a95d971",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://docs.npmjs.com/cli/v11/configuring-npm/package-json#version",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "version"
+    },
+    {
+      "category": "versioned-path-or-key",
+      "externalOwner": "Semantic Versioning release tag",
+      "fieldScope": "macOS release tag fixture governed by SemVer",
+      "id": "5b9cab85f0057f66b40b",
+      "isolationRule": "The value exists only in release packaging metadata and tests; it cannot select an OpenNeko internal contract, persisted shape, migration, component state, or runtime fallback.",
+      "normativeSource": "https://semver.org/",
+      "path": "scripts/test-orchestration/macos-release-artifacts.test.mjs",
+      "token": "v1."
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg command-line tool",
+      "fieldScope": "Packaged FFmpeg executable release qualification",
+      "id": "fd3973a9edbcadcd705f",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffmpeg.html",
+      "path": "scripts/test-orchestration/media-runtime-closure.test.mjs",
+      "token": "ffmpegVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "FFmpeg ffprobe command-line tool",
+      "fieldScope": "Packaged ffprobe executable release qualification",
+      "id": "0125508c1b9dbb96c11b",
+      "isolationRule": "The value is external binary qualification metadata only; mismatch rejects the exact media runtime bundle and cannot select an OpenNeko contract, migration, component state, or fallback implementation.",
+      "normativeSource": "https://ffmpeg.org/ffprobe.html",
+      "path": "scripts/test-orchestration/media-runtime-closure.test.mjs",
+      "token": "ffprobeVersion"
+    },
+    {
+      "category": "internal-version-field",
+      "externalOwner": "Node.js runtime",
+      "fieldScope": "Node.js external runtime release parsing and policy verification",
+      "id": "572e458064317a2fad2b",
+      "isolationRule": "The value qualifies the executing external Node.js runtime only and cannot identify an OpenNeko contract, persistence shape, migration, component generation, or alternate runtime path.",
+      "normativeSource": "https://nodejs.org/api/process.html#processversions",
+      "path": "scripts/test-orchestration/node-toolchain-policy.test.mjs",
+      "token": "nodeVersion"
+    }
+  ]
 }

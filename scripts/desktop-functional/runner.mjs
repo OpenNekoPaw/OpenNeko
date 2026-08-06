@@ -12,18 +12,6 @@ import {
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const fixturePrefix = 'openneko-desktop-functional-';
-const LEGACY_RESOURCE_PATTERNS = Object.freeze([
-  'neko-app://*',
-  'neko-media://*',
-  'opennekomedia://*',
-  'http://127.0.0.1:*/v1/resources/*',
-  'http://127.0.0.1:*/v1/streams/*',
-  'http://127.0.0.1:*/v1/resource-sets/*',
-  'http://localhost:*/v1/resources/*',
-  'http://localhost:*/v1/streams/*',
-  'http://localhost:*/v1/resource-sets/*',
-]);
-
 export async function runAutomatedDesktopFunctional(options) {
   const scenario = validateDesktopFunctionalScenario(options.scenario);
   const createTemporaryRoot =
@@ -114,7 +102,7 @@ export async function runAutomatedDesktopFunctional(options) {
       return { restarted: true };
     };
     await launchRuntime();
-    const version = await cdp.send('Browser.getVersion');
+    const browserMetadata = await cdp.send('Browser.getVersion');
     const scenarioAbort = new AbortController();
     let screenshotSequence = 0;
     const evidence = await withTimeout(
@@ -188,7 +176,6 @@ export async function runAutomatedDesktopFunctional(options) {
     }
     scenario.assertObservation?.(observed, evidence);
     report = {
-      schema: 'openneko.desktop-functional-report.v1',
       status: 'passed',
       scenario: { id: scenario.id, owner: scenario.owner },
       target: options.target ?? 'development',
@@ -202,8 +189,8 @@ export async function runAutomatedDesktopFunctional(options) {
       runtime: {
         platform: options.platform ?? process.platform,
         architecture: process.arch,
-        browserProduct: version.product,
-        userAgent: version.userAgent,
+        browserProduct: browserMetadata.product,
+        userAgent: browserMetadata.userAgent,
       },
       observation: observed,
       checkpoints,
@@ -213,7 +200,6 @@ export async function runAutomatedDesktopFunctional(options) {
     return { reportPath, report };
   } catch (error) {
     report = {
-      schema: 'openneko.desktop-functional-report.v1',
       status: 'failed',
       scenario: { id: scenario.id, owner: scenario.owner },
       target: options.target ?? 'development',
@@ -372,7 +358,6 @@ function createDesktopObservation(cdp, fixtureHome) {
         cdp.send('Runtime.enable'),
         cdp.send('Page.enable'),
       ]);
-      await cdp.send('Network.setBlockedURLs', { urls: LEGACY_RESOURCE_PATTERNS });
     },
     openNekoResourceRequests() {
       return [...openNekoResourceRequests];

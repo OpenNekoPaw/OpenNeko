@@ -47,8 +47,12 @@ async function collectPackageJsonPaths(directory) {
 export async function validateLocalMetadataRuntimeMatrix() {
   const errors = [];
   const matrix = await readJson(matrixPath);
-  if (!isRecord(matrix) || matrix.version !== 1 || !isRecord(matrix.minimums)) {
-    return ['Runtime matrix must be a version 1 object with minimums'];
+  if (
+    !isRecord(matrix) ||
+    Object.keys(matrix).sort().join('\0') !== ['minimums', 'targets'].join('\0') ||
+    !isRecord(matrix.minimums)
+  ) {
+    return ['Runtime matrix must contain exactly minimums and targets'];
   }
   const minimumNode = matrix.minimums.node;
   if (typeof minimumNode !== 'string') {

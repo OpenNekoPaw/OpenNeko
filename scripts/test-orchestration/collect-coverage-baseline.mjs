@@ -16,8 +16,14 @@ export async function collectCoverageBaseline(options = {}) {
   const ownership =
     options.ownership ??
     JSON.parse(await readFile(join(root, 'quality/test-ownership.json'), 'utf8'));
-  if (ownership.schemaVersion !== 'neko.test-ownership.v1') {
-    throw new Error('quality/test-ownership.json has an unknown schemaVersion');
+  if (
+    !ownership ||
+    typeof ownership !== 'object' ||
+    Array.isArray(ownership) ||
+    Object.keys(ownership).join('\0') !== 'workspaces' ||
+    !Array.isArray(ownership.workspaces)
+  ) {
+    throw new Error('quality/test-ownership.json must contain exactly the workspaces collection');
   }
   const owners = [
     ...new Set(
@@ -40,7 +46,6 @@ export async function collectCoverageBaseline(options = {}) {
     results.push(projectOwnerCoverage(root, owner, summary));
   }
   return {
-    schemaVersion: 'neko.coverage-baseline.v1',
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     command: 'pnpm test:coverage',
     defaultThresholds: DEFAULT_THRESHOLDS,

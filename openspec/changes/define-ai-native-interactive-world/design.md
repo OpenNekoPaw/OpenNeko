@@ -8,13 +8,13 @@
 
 ### 五层分析
 
-| 层 | 结论 |
-| --- | --- |
-| 职责 | World 拥有互动世界定义、Experience composition、运行状态、事件、观察、存档与分支；Chara 拥有角色 canon/CharacterRun；Agent 拥有模型会话；表现 owner 只渲染 WorldView。 |
+| 层   | 结论                                                                                                                                                                         |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | World 拥有互动世界定义、Experience composition、运行状态、事件、观察、存档与分支；Chara 拥有角色 canon/CharacterRun；Agent 拥有模型会话；表现 owner 只渲染 WorldView。       |
 | 依赖 | World core 只依赖稳定 ref/domain value；application 通过窄 Chara、Agent、Content/Asset、AI capability 与 repository port 组合，不导入 Electron、React、Node 或具体模型 SDK。 |
-| 接口 | public contract 分 authoring、publication、runtime、persistence 和 projection；所有 mutation 携带显式 project/version/run/branch/actor identity 与 expected revision。 |
-| 扩展 | 新 Story 类型、AI role、表现方式或模型 provider 通过注册的 schema/policy/port 扩展；不通过游戏名称、Renderer 类型或 Provider 名称分支。 |
-| 测试 | domain fixture 验证发布、状态转换、知识过滤、分支/回放和 AI 越界拒绝；Node fixture 验证项目文件；Desktop/Webview 接入后使用隔离工作区和真实 Electron。 |
+| 接口 | public contract 分 authoring、publication、runtime、persistence 和 projection；所有 mutation 携带显式 project/version/run/branch/actor identity 与 expected revision。       |
+| 扩展 | 新 Story 类型、AI role、表现方式或模型 provider 通过注册的 schema/policy/port 扩展；不通过游戏名称、Renderer 类型或 Provider 名称分支。                                      |
+| 测试 | domain fixture 验证发布、状态转换、知识过滤、分支/回放和 AI 越界拒绝；Node fixture 验证项目文件；Desktop/Webview 接入后使用隔离工作区和真实 Electron。                       |
 
 ## Goals / Non-Goals
 
@@ -107,13 +107,13 @@ AI 不得从自然语言自行升级 stance。participant、controller、run、b
 
 每个 AI role 使用独立 scope：
 
-| Role | 输入 | 允许输出 |
-| --- | --- | --- |
-| Intent Interpreter | 用户输入、stance、当前 interaction schema 与用户 WorldView | typed user intent candidate |
-| Character Agent | CharacterVersion、角色 memory view、角色专属 WorldView | utterance/action intent |
-| World Director | Scenario、允许的全局导演投影与 policy | participant scheduling、story/event candidate |
-| Rule Evaluator | 单个 action、相关规则和裁剪状态 | resolution evidence/candidate |
-| Narrator | 已提交事件和目标参与者 WorldView | 叙述表现 |
+| Role                    | 输入                                                         | 允许输出                                                                |
+| ----------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| Intent Interpreter      | 用户输入、stance、当前 interaction schema 与用户 WorldView   | typed user intent candidate                                             |
+| Character Agent         | CharacterVersion、角色 memory view、角色专属 WorldView       | utterance/action intent                                                 |
+| World Director          | Scenario、允许的全局导演投影与 policy                        | participant scheduling、story/event candidate                           |
+| Rule Evaluator          | 单个 action、相关规则和裁剪状态                              | resolution evidence/candidate                                           |
+| Narrator                | 已提交事件和目标参与者 WorldView                             | 叙述表现                                                                |
 | Generative Presentation | WorldView、presentation profile、经审阅 grounding 与授权资源 | 满足实时 contract 的流式 image/audio/video/spatial projection candidate |
 
 Character utterance 只是 speech event，不会自动成为 WorldFact。Director proposal、Rule output、Narration 和生成媒体也不直接修改 State。Prompt injection、模型伪造身份或模型遗漏字段都被 strict codec、Host binding 和 owner validation 隔离。
@@ -170,7 +170,7 @@ Canonical producer 是 World package public authoring/publication/runtime servic
 
 ### 15. 项目事实、本地状态和表现资源保持分离
 
-WorldProject、WorldVersion、WorldExperienceVersion 与 portable WorldSave 是 owning-domain versioned files；具体 workspace-relative canonical path 和扩展名由实现 OpenSpec 冻结。用户级 SQLite 只保存 installed catalog、recent run、恢复索引、attention 和可重建 Search projection。素材由 Generation/Content/Asset owner 在 authoring 时提供 durable ContentLocator，并在发布后作为 grounding/reference 被实时 Context Materializer裁剪使用；普通 Generation runtime、cache、opaque URL 和 runtime token 不进入 World Run 或 facts。
+WorldProject 与 portable WorldSave 使用稳定的 owning-domain 文件结构；WorldVersion 和 WorldExperienceVersion 是用户可发布、选择和绑定的不可变业务版本身份。具体 workspace-relative canonical path 和扩展名由实现 OpenSpec 冻结。用户级 SQLite 只保存 installed catalog、recent run、恢复索引、attention 和可重建 Search projection。素材由 Generation/Content/Asset owner 在 authoring 时提供 durable ContentLocator，并在发布后作为 grounding/reference 被实时 Context Materializer裁剪使用；普通 Generation runtime、cache、opaque URL 和 runtime token 不进入 World Run 或 facts。
 
 ## Risks / Trade-offs
 

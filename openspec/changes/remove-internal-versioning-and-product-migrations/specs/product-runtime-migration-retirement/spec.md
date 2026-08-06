@@ -37,6 +37,18 @@ OpenNeko-owned persisted shapes SHALL retain existing field names and semantics.
 - **WHEN** a current reader opens an existing record written before an optional field existed
 - **THEN** it applies the field's permanent absence semantics and leaves the original record unchanged
 
+#### Scenario: Persisted root contains unknown metadata
+
+- **WHEN** a persisted authority root contains unknown top-level fields beside valid required collections
+- **THEN** the reader retains and reports those fields without interpreting them as a schema generation
+- **AND** ordinary writes preserve their JSON values without migration, automatic repair, or field-name-specific compatibility logic
+
+#### Scenario: Existing authority row has unknown table columns
+
+- **WHEN** the state repository commits an authority identity that already exists in its stable table
+- **THEN** it updates only the canonical owned columns and leaves unknown columns untouched
+- **AND** it does not execute an insert branch, inspect those columns, or synthesize values for them
+
 #### Scenario: Proposed change cannot be additive
 
 - **WHEN** a persisted data change would rename, delete, or reinterpret an existing field

@@ -1,10 +1,11 @@
 ## 1. Governance and inventory
 
 - [x] 1.1 Add an exact repository audit for internal version fields, versioned identifiers/paths, migration code, and version-like data-generation aliases, with focused self-tests and no broad directory exclusions.
-- [ ] 1.2 Add machine-readable third-party, user-managed domain, and verified correctness allowance registries recording each exact occurrence, owner, normative/business requirement or correctness invariant, concrete consumer/workflow, field scope, and isolation/removal rule.
+- [x] 1.2 Add machine-readable third-party, user-managed domain, and verified correctness allowance registries recording each exact occurrence, owner, normative/business requirement or correctness invariant, concrete consumer/workflow, field scope, and isolation/removal rule.
 - [x] 1.3 Wire the audit into `check:quality` and record the initial owner-grouped violation inventory without allowing new internal debt.
-- [ ] 1.4 Update stable architecture documents and conflicting active OpenSpec artifacts so they no longer require internal versioning, product migration, poison handlers, or automatic repair.
+- [x] 1.4 Update stable architecture documents and conflicting active OpenSpec artifacts so they no longer require internal versioning, product migration, poison handlers, or automatic repair.
 - [x] 1.5 Extend development governance and the repository debt audit to cover explicit and hidden internal multi-path markers, adapter/provider fallback, projection authority drift, implicit owner selection, and path-level canonical-route evidence without changing product runtime code.
+- [x] 1.6 Delete historical lifecycle inventory fields such as Agent Evaluation case replacement catalogs instead of renaming legacy or migration metadata.
 
 ## 2. Component presentation and local failure
 
@@ -51,15 +52,15 @@
 
 ## 7. Runtime version-alias redesign
 
-- [ ] 7.1 Audit every remaining `revision`, `epoch`, `generation`, numeric version suffix, versioned route/table/key, and version-named helper; classify third-party versions, user-managed business versions, and verified correctness tokens separately from meaningless technical versioning.
-- [ ] 7.2 Replace unnecessary internal CAS/version checks with owner serialization, exact request identity, instance isolation, or boundary-local content fingerprint checks; retain only tokens with an exact consumer, invariant, no-version design analysis, and removal condition.
-- [ ] 7.3 Replace asynchronous generation counters with cancellation scopes and request identities, and verify late completions cannot mutate another instance.
+- [x] 7.1 Audit every remaining `revision`, `epoch`, `generation`, numeric version suffix, versioned route/table/key, and version-named helper; classify third-party versions, user-managed business versions, and verified correctness tokens separately from meaningless technical versioning.
+- [x] 7.2 Replace unnecessary internal CAS/version checks with owner serialization, exact request identity, instance isolation, or boundary-local content fingerprint checks; retain only tokens with an exact consumer, invariant, no-version design analysis, and removal condition.
+- [x] 7.3 Replace asynchronous generation counters with cancellation scopes and request identities, and verify late completions cannot mutate another instance.
 - [x] 7.4 Delete versioned private workspace package metadata where the toolchain does not require it; retain only verified build, dependency, and release manifest values.
-- [ ] 7.5 Run the repository audit with zero unapproved occurrences and validate every external, user-managed domain, or correctness allowance against its exact source, requirement/invariant, and isolation test.
+- [x] 7.5 Run the repository audit with zero unapproved occurrences and validate every external, user-managed domain, or correctness allowance against its exact source, requirement/invariant, and isolation test.
 
 ## 8. Completion and quality gates
 
-- [ ] 8.1 Run focused package tests and typechecks after each owner slice, then run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused`, and `git diff --check`.
-- [ ] 8.2 Run required real Electron Desktop scenarios for startup, workspace switching, Resource Browser, Agent, Preview, Canvas, Cut, CSP, IPC, focus, and media lifecycle.
-- [ ] 8.3 Validate this change and all modified active changes with strict OpenSpec validation and record canonical-path, removed-path, external-allowance, local-failure, and user-data evidence.
-- [ ] 8.4 Complete `neko-quality-review`, document actual commands and residual risks, and keep the change open until the repository audit reports no internal version or product migration path.
+- [x] 8.1 Run focused package tests and typechecks after each owner slice, then run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:quality`, `pnpm check:legacy-debt`, `pnpm check:unused`, and `git diff --check`.
+- [x] 8.2 Run required real Electron Desktop scenarios for startup, workspace switching, Resource Browser, Agent, Preview, Canvas, Cut, CSP, IPC, focus, and media lifecycle.
+- [x] 8.3 Validate this change and all modified active changes with strict OpenSpec validation and record canonical-path, removed-path, external-allowance, local-failure, and user-data evidence.
+- [x] 8.4 Complete `neko-quality-review`, document actual commands and residual risks, and keep the change open until the repository audit reports no internal version or product migration path.

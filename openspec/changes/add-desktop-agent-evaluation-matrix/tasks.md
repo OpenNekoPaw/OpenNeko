@@ -15,7 +15,7 @@
 
 ## 3. Isolated Desktop automation path
 
-- [x] 3.1 Define a fixed typed fixture-only Desktop automation control/facts contract and poison arbitrary IPC, arbitrary command, filesystem, shell, credential and owner-selection paths.
+- [x] 3.1 Define a fixed typed fixture-only Desktop automation control/facts contract and prove arbitrary IPC, arbitrary command, filesystem, shell, credential and owner-selection paths are unavailable.
 - [x] 3.2 Extend Desktop functional launch to support hidden and visible modes with unique fixture home, Electron `userData`, Workspace and dynamic control/CDP port while preserving ordinary startup when the fixture flag is absent.
 - [x] 3.3 Implement the Desktop driver adapter that submits, queues, cancels, confirms, resumes and reads projections through the renderer/preload public Agent bridge instead of importing Main or Pi turn APIs.
 - [x] 3.4 Implement terminal-idle, reload/reconnect, conversation restore, application restart and disposal controls with exact identity, checkpoint, lease and cleanup evidence.
@@ -31,7 +31,7 @@
 - [x] 4.5 Restore deterministic hard-gate, artifact-check, owning-validator, Judge, baseline and report stages around Desktop facts without copying Evaluation outcome logic into Desktop.
 - [x] 4.6 Restore repeated samples and aggregate reports while retaining every attempt, effective identity, assertion result, artifact, usage/cost availability and residual risk.
 - [x] 4.7 Implement failure attribution and exit-code handling that keeps configuration-invalid, case-fail, infrastructure-blocked/fail and non-comparable distinct and never retries behavior failure into success.
-- [x] 4.8 Add canonical positive, unavailable/denied, Tool approval, cancellation and persistence/recovery runner tests with poisoned retired-host/direct-runtime fallbacks, plus authoring tests proving Skill-generated drafts cannot register code or bypass unsupported operations.
+- [x] 4.8 Add canonical positive, unavailable/denied, Tool approval, cancellation and persistence/recovery runner tests with retired-host/direct-runtime fallbacks absent, plus authoring tests proving Skill-generated drafts cannot register code or bypass unsupported operations.
 
 ## 5. Batch matrix scheduling
 

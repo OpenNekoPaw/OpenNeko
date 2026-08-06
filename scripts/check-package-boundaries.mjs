@@ -67,7 +67,7 @@ export function inspectPackageManifestBoundary(entry) {
       if (/^@neko-[a-z0-9-]+\//u.test(dependency)) {
         findings.push(
           finding(
-            'legacy-package-identity',
+            'noncanonical-package-identity',
             `${entry.path}/package.json`,
             dependency,
             'Workspace dependencies must not use a legacy multi-scope package identity.',
@@ -79,12 +79,12 @@ export function inspectPackageManifestBoundary(entry) {
   return findings;
 }
 
-export function inspectLegacyPackageNaming({ path: entryPath, source }) {
+export function inspectNonCanonicalPackageNaming({ path: entryPath, source }) {
   const findings = [];
   for (const match of source.matchAll(/@neko-[a-z0-9-]+\/[a-z0-9._/-]+/gu)) {
     findings.push(
       finding(
-        'legacy-package-identity',
+        'noncanonical-package-identity',
         entryPath,
         match[0],
         'Executable source and current configuration must use the single @neko/* scope.',
@@ -94,7 +94,7 @@ export function inspectLegacyPackageNaming({ path: entryPath, source }) {
   for (const match of source.matchAll(/packages\/neko-[a-z0-9-*]+/gu)) {
     findings.push(
       finding(
-        'legacy-package-path',
+        'noncanonical-package-path',
         entryPath,
         match[0],
         'Executable source and current configuration must use canonical package roots.',
@@ -126,13 +126,13 @@ export function inspectApplicationResponsibility({ path: entryPath, responsibili
     : [];
 }
 
-export function inspectCanonicalPathFixture({ path: entryPath, legacyFallbackReturnsSuccess }) {
-  return legacyFallbackReturnsSuccess
+export function inspectCanonicalPathFixture({ path: entryPath, replacedPathReturnsSuccess }) {
+  return replacedPathReturnsSuccess
     ? [
         finding(
-          'legacy-fallback-success',
+          'replaced-path-success',
           entryPath,
-          'legacy-success',
+          'replaced-success',
           'Replaced paths must be deleted, poisoned, or fail-closed.',
         ),
       ]
@@ -152,7 +152,7 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
     for (const file of await findFiles(sourceRoot, isProductionSource)) {
       const source = await readFile(file, 'utf8');
       const relativeFile = repositoryPath(root, file);
-      findings.push(...inspectLegacyPackageNaming({ path: relativeFile, source }));
+      findings.push(...inspectNonCanonicalPackageNaming({ path: relativeFile, source }));
       for (const specifier of extractImportSpecifiers(source)) {
         const target = workspaceByName.find(
           (candidate) =>
@@ -207,7 +207,7 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
   const appEntry = await readApplicationEntry(root);
   if (appEntry) {
     findings.push(
-      ...inspectLegacyPackageNaming({
+      ...inspectNonCanonicalPackageNaming({
         path: `${appEntry.path}/package.json`,
         source: JSON.stringify(appEntry.manifest),
       }),
@@ -216,7 +216,7 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
     for (const file of await findFiles(sourceRoot, isProductionSource)) {
       const source = await readFile(file, 'utf8');
       const relativeFile = repositoryPath(root, file);
-      findings.push(...inspectLegacyPackageNaming({ path: relativeFile, source }));
+      findings.push(...inspectNonCanonicalPackageNaming({ path: relativeFile, source }));
       for (const specifier of extractImportSpecifiers(source)) {
         const target = workspaceByName.find(
           (candidate) =>
@@ -268,7 +268,7 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
   for (const file of configFiles) {
     const source = await readFile(file, 'utf8');
     const relativeFile = repositoryPath(root, file);
-    findings.push(...inspectLegacyPackageNaming({ path: relativeFile, source }));
+    findings.push(...inspectNonCanonicalPackageNaming({ path: relativeFile, source }));
     for (const target of extractConfigurationSourceTargets(file, source)) {
       const resolved = resolveConfigurationTarget(file, target);
       const packageSource = resolved && packageSourcePath(root, resolved);
@@ -290,7 +290,7 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
   for (const file of await findNamingConfigurationFiles(root)) {
     const source = await readFile(file, 'utf8');
     findings.push(
-      ...inspectLegacyPackageNaming({ path: repositoryPath(root, file), source }),
+      ...inspectNonCanonicalPackageNaming({ path: repositoryPath(root, file), source }),
     );
   }
 
@@ -317,7 +317,14 @@ export async function inspectPackageBoundaries(root = repositoryRoot) {
 
 function validateExceptionLedger(ledger) {
   const findings = [];
-  if (ledger.version !== 1) findings.push('exception ledger version must equal 1');
+  if (
+    !ledger ||
+    typeof ledger !== 'object' ||
+    Array.isArray(ledger) ||
+    Object.keys(ledger).join('\0') !== 'exceptions'
+  ) {
+    findings.push('exception ledger must contain exactly the exceptions collection');
+  }
   if (!Array.isArray(ledger.exceptions)) {
     findings.push('exception ledger exceptions must be an array');
     return findings;
@@ -366,11 +373,7 @@ async function readApplicationEntry(root) {
 }
 
 async function readExceptionLedger(root) {
-  try {
-    return JSON.parse(await readFile(path.join(root, exceptionPath), 'utf8'));
-  } catch {
-    return { version: 1, exceptions: [] };
-  }
+  return JSON.parse(await readFile(path.join(root, exceptionPath), 'utf8'));
 }
 
 function expectedPackageName(packagePath) {

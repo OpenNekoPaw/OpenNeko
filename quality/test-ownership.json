@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "neko.test-ownership.v1",
   "workspaces": [
     {
       "path": "apps/neko-desktop",

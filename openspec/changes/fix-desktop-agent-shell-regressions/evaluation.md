@@ -118,7 +118,7 @@ Date: 2026-08-03
 ## Interpretation
 
 - Deterministic producer/consumer tests cover the five reported regressions at their owning
-  boundaries and poison the relevant wrong paths. Production Electron evidence additionally covers
+  boundaries and prove the relevant wrong paths are absent or cannot participate. Production Electron evidence additionally covers
   default Canvas mounting, Resource Browser Main ownership, Chat/Main layout modes and Popover
   opacity.
 - Key-free Evaluation success cannot establish real model, Tool, checkpoint or renderer behavior.
@@ -197,12 +197,12 @@ Date: 2026-08-03
 - Package checks: `pnpm --filter @neko/agent-webview build` passed and
   `pnpm package:desktop` produced the verified darwin-arm64 package.
 - Packaged visible Electron: `pnpm test:local:ui --scenario desktop-agent-diagnostic-portal
-  --target packaged` passed against an isolated fixture. A real workspace composer click triggered
+--target packaged` passed against an isolated fixture. A real workspace composer click triggered
   the visible global diagnostic while Agent, Canvas Main and Resource management were present.
   The alert was a direct `document.body` child, was outside the Agent Root, measured `360px` at
   `left=824/right=1184` in a `1200px` viewport, extended beyond the Agent Dock boundary, resolved
   `position=fixed` and `z-index=60`, and won the center-point hit test. No console error, renderer
-  exception or poisoned resource request was observed. Report:
+  exception or rejected retired resource request was observed. Report:
   `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T09-25-20.768Z-desktop-agent-diagnostic-portal-packaged/report.json`;
   screenshot: `screenshots/01-agent-diagnostic-portal-visible.png` under that report.
 - The full Agent Webview run completed 711 tests with 697 passing. Fourteen tests across nine

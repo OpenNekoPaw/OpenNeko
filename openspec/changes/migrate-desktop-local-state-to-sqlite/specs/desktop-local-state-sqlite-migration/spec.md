@@ -1,79 +1,62 @@
 ## ADDED Requirements
 
-### Requirement: Desktop structured local state uses the existing user-level SQLite authority
+### Requirement: Desktop structured local state uses one stable SQLite authority
 
-The system SHALL persist Desktop shell state and application settings in state-owned repositories in
-the existing user-level local metadata database. It MUST NOT create a workspace database, a second
-Desktop database, or a permanent JSON fallback. Every persisted field MUST be classified as non-secret,
-machine-local, UI-managed application or operational state under the repository storage-authority
-policy.
+Desktop shell state and application settings SHALL persist through package-owned repositories in the
+existing user-level local metadata database. Contracts and tables MUST have one canonical version-free
+shape. The product MUST NOT create a workspace database, second Desktop database, JSON fallback,
+migration registry or schema dispatch path.
 
-#### Scenario: Desktop restarts after migration
+#### Scenario: Desktop restarts with canonical state
 
-- **WHEN** valid shell state and application settings have been migrated
-- **THEN** Desktop restores both through their SQLite repositories
-- **AND** normal startup does not read or write the legacy JSON files
+- **WHEN** valid shell state and application settings exist in their stable tables
+- **THEN** Desktop restores both through the package-owned SQLite repositories
+- **AND** startup does not inspect retired JSON files or migration markers
 
-### Requirement: Legacy import is transactional and restart-safe
+### Requirement: Retired local-state paths are product-unreachable
 
-The system SHALL validate all legacy inputs before mutation and SHALL import their state plus a
-versioned migration marker in one transaction. A failed or interrupted import MUST preserve the
-legacy sources and MUST NOT expose partially imported state.
+Desktop startup, package public entries, production imports, build output and ordinary tests MUST NOT
+read, write, import, archive, export, repair or classify retired shell/settings JSON. Existing bytes
+MUST remain untouched.
 
-#### Scenario: One legacy document is invalid
+#### Scenario: Retired JSON remains on disk
 
-- **WHEN** shell state is valid but application settings has an unknown schema or invalid value
-- **THEN** migration fails visibly before committing either repository
-- **AND** both legacy files remain available for explicit recovery
+- **WHEN** a retired Desktop state JSON file exists beside canonical SQLite state
+- **THEN** product startup opens only the canonical repository
+- **AND** no retired reader, import, archive, downgrade export or compatibility handler runs
 
-#### Scenario: Archival is interrupted after commit
+### Requirement: Stable tables evolve additively
 
-- **WHEN** SQLite commit succeeds but a legacy file cannot be archived
-- **THEN** the committed marker keeps SQLite authoritative
-- **AND** the next startup retries archival only after matching and validating the recorded digest
+Initialization SHALL create only missing stable tables. Existing authority rows SHALL be updated in
+place by authority identity, changing only canonical owned columns and preserving unknown columns.
+Optional fields MAY be added only with one permanent absence meaning.
 
-### Requirement: Normal runtime has one canonical path
+#### Scenario: Existing row has an unknown column
 
-After migration, Desktop shell and settings operations SHALL read and write only the SQLite
-repositories. Unknown schema, repository absence, or migration conflict MUST fail visibly instead of
-falling back to legacy JSON or dual-writing both stores.
+- **WHEN** the repository commits canonical state to an existing authority row
+- **THEN** it updates only canonical owned columns and leaves the unknown column untouched
+- **AND** it does not inspect that column as a schema generation or synthesize a value for it
 
-#### Scenario: SQLite repository is unavailable
+### Requirement: Invalid persisted state fails locally
 
-- **WHEN** Desktop cannot access a compatible shell-state or settings repository
-- **THEN** startup reports an explicit diagnostic
-- **AND** it does not make the legacy JSON repository authoritative again
+Authority roots SHALL preserve unknown top-level metadata as opaque values while validating required
+semantic collections. Child Projects, Windows, Workbench instances, Scenes and settings components
+SHALL validate independently. An invalid child MUST NOT clear valid siblings or disable Desktop.
 
-### Requirement: Release rollback uses explicit validated export
+#### Scenario: One Workbench instance is invalid
 
-The migration owner SHALL provide an explicit downgrade export that serializes current SQLite state
-through the owning shell/settings codecs and atomically publishes validated legacy JSON documents.
-The export MUST NOT be invoked as a normal runtime fallback.
+- **WHEN** a Window contains one invalid Workbench instance beside a valid sibling
+- **THEN** only the invalid instance is rejected with an exact diagnostic
+- **AND** the valid instance, PrimarySidebar and unrelated settings remain available
 
-#### Scenario: Downgrade export fails validation
+### Requirement: Unrelated data retains its owner
 
-- **WHEN** exported shell state or settings cannot be read back through its owning codec
-- **THEN** no legacy destination is replaced
-- **AND** the SQLite state remains unchanged and authoritative
+Desktop local-state repositories MUST exclude workspace identity, project facts, journals/logs,
+media/artifact bytes, credentials, Agent configuration, Pi transcripts, explicit memory, Skills,
+prompts, profiles and workspace configuration.
 
-### Requirement: Unrelated data retains its current owner
+#### Scenario: Adjacent Agent and workspace data exists
 
-The migration MUST exclude legacy and target workspace identity, project facts, journals/logs, media and artifact
-bytes, credentials or mount secrets, portable Agent configuration, Pi Session/transcript content,
-conversation manifests, explicit memory/preferences, Skills, prompts, profiles, and workspace
-configuration. Rebuildable Agent/workspace indexes and operational state MAY enter canonical SQLite
-only through their owning changes; this migration MUST NOT claim them.
-
-#### Scenario: Desktop local state migration completes
-
-- **WHEN** shell state and application settings are committed to SQLite
-- **THEN** legacy `.neko/workspace.json`, target `neko/project.json`, project JSON/NKC/OTIO, and JSONL
-  journals/logs remain outside this migration
-- **AND** credentials remain in SecretStorage or the system keychain
-
-#### Scenario: Agent and workspace data exist beside legacy Desktop state
-
-- **WHEN** Desktop local state migration scans its two legacy JSON inputs
-- **THEN** it imports only classified shell/application fields
-- **AND** it does not read, copy, index, delete, or archive Agent, log, memory, configuration, or
-  workspace-owned data
+- **WHEN** Desktop opens its shell/settings repositories
+- **THEN** it reads only the exact canonical authority rows
+- **AND** it does not read, copy, index, delete or repair Agent-, workspace- or project-owned data

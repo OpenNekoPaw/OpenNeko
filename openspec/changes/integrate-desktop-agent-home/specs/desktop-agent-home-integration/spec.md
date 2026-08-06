@@ -53,8 +53,8 @@ CredentialStore and authoritative Timeline projection. It MUST NOT create or res
 
 ### Requirement: Agent IPC is fixed, sender-bound and path-safe
 
-Desktop preload MUST expose only a fixed versioned Agent namespace. Main MUST derive application,
-Window, View, workspace and renderer epoch from the registered sender. Renderer messages and
+Desktop preload MUST expose only one fixed Agent namespace. Main MUST derive application,
+Window, View instance, workspace and renderer session identity from the registered sender. Renderer messages and
 projections MUST use stable content/resource identities and MUST NOT expose or trust absolute paths,
 credentials, SQLite details, Host objects, runtime handles, raw IPC channels or arbitrary commands.
 
@@ -67,7 +67,7 @@ credentials, SQLite details, Host objects, runtime handles, raw IPC channels or 
 
 #### Scenario: Renderer forges an owner identity
 
-- **WHEN** a renderer message names another Window, View, workspace, conversation or stale renderer epoch
+- **WHEN** a renderer message names another Window, View, workspace, conversation or stale renderer session identity
 - **THEN** Main rejects it with a typed identity diagnostic
 - **AND** it does not use the active Project, active Tab or current conversation as fallback
 
@@ -96,19 +96,19 @@ handoff.
 ### Requirement: Agent presentation and runtime recover by their owners
 
 Renderer reload, Project Tab close, Window close, explicit cancellation and app quit MUST have distinct
-lifecycle behavior. Attachments and View presentation state MUST be isolated by View epoch; conversation
+lifecycle behavior. Attachments and View presentation state MUST be isolated by exact View instance identity; conversation
 runtime and durable facts MUST remain owned by AppHost/Pi/domain authorities.
 
 #### Scenario: Renderer reloads during an active conversation
 
-- **WHEN** the renderer reconnects with a new renderer and View epoch
+- **WHEN** the renderer reconnects with a new renderer session and View instance identity
 - **THEN** the old connection detaches and the new View obtains a snapshot before accepting patches
 - **AND** the Pi conversation is not duplicated, restarted or hydrated from renderer state
 
-#### Scenario: Renderer repeats bootstrap within the same owner epoch
+#### Scenario: Renderer repeats bootstrap for the same exact owner
 
 - **WHEN** React lifecycle replay or another equivalent retry repeats Agent bootstrap for the exact
-  same Application, Window, Project, Workspace, View, View epoch and renderer epoch
+  same Application, Window, Project, Workspace, View instance and renderer session
 - **THEN** Host returns the existing connection identity and refreshes its event publisher
 - **AND** it does not dispose the shared controller effects or make the already-mounted Agent Root
   send through an unknown connection
@@ -222,4 +222,4 @@ workspace.
 - **THEN** user-visible state and durable recovery succeed
 - **AND** path evidence proves the shared controller, Pi conversation runtime, Pi Session, Product Turn
   Bridge and authoritative projection were used while VS Code, legacy AgentSession, demo/mock and
-  active-object fallbacks remained poisoned
+  active-object fallbacks were absent and did not participate

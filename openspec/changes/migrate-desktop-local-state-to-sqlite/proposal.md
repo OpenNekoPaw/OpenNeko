@@ -1,30 +1,23 @@
 ## Why
 
-Desktop shell state and application settings are UI-managed machine-local application state, but they
-currently use separate whole-file JSON repositories under Electron `userData/state`. OpenNeko
-already has one user-level SQLite authority for structured local metadata, transactions, migrations,
-backup, and integrity checks. Keeping these two stores outside that authority duplicates durability
-and recovery behavior.
-
-This migration is intentionally separate from Media Library sync recovery. Shell state and
-application preferences have different owners, startup impact, rollback needs, and user-data risk;
-combining them with link recovery would blur responsibilities and create an unsafe release boundary.
+Desktop shell state and application settings are UI-managed machine-local application state. Their
+canonical authority is the existing user-level `neko.db`, owned through package contracts rather than
+Desktop-local JSON repositories. The earlier runtime migration design is superseded by
+`remove-internal-versioning-and-product-migrations`: product startup must open the canonical authority
+directly and must not import, archive, downgrade-export or otherwise inspect retired JSON data.
 
 ## What Changes
 
-- Add state-owned SQLite repositories for Desktop shell state and Desktop application settings in the
+- Keep state-owned SQLite repositories for Desktop shell state and application settings in the
   existing user-level `neko.db`.
-- Migrate each validated legacy JSON document through a versioned, transactional, restart-safe import
-  before switching its repository to SQLite.
-- Keep the original JSON recoverable until the committed SQLite state has been read back and
-  validated, then archive it as migration evidence that normal runtime never reads.
-- Define explicit rollback/export ownership for restoring a compatible legacy JSON document when a
-  release rollback requires it.
-- Remove normal dual-read and dual-write behavior after migration; an unknown schema, conflict, or
-  failed transaction remains visible and leaves the legacy source untouched.
-- Apply the repository-wide local-storage admission policy: only these application-owned settings and
-  operational shell values enter SQLite; file format alone never makes other JSON/TOML/Markdown data
-  eligible.
+- Use stable tables and version-free package-owned contracts; initialization creates only missing
+  tables and ordinary writes update canonical owned columns.
+- Delete product-reachable migration markers, legacy JSON readers/writers, startup import/archive
+  workflow, downgrade export, dual-read/dual-write and automatic repair.
+- Leave retired JSON bytes untouched and outside product imports, build, startup, public entries and
+  ordinary tests. Any separately authorized offline repair must target exact data and preserve a backup.
+- Reject invalid child records at their exact owner boundary while valid sibling Shell/settings state
+  remains available.
 - Keep portable/user-managed Agent configuration, conversation content, explicit memory, workspace
   identity and project facts, journals/logs, media/artifact bytes, and credentials with their distinct
   owners.
@@ -33,18 +26,17 @@ combining them with link recovery would blur responsibilities and create an unsa
 
 ### New Capabilities
 
-- `desktop-local-state-sqlite-migration`: Transactional migration and rollback of Desktop shell state
-  and application preferences into the existing user-level local metadata store.
+- `desktop-local-state-sqlite-migration`: Retained capability name for this completed prelaunch change;
+  its final requirement is the stable canonical SQLite authority and explicit retirement of every
+  product migration path.
 
 ### Modified Capabilities
 
-<!-- None. The change consumes `local-storage-authority-policy` from the dedicated governance change. -->
+<!-- None. -->
 
 ## Impact
 
-- `@neko/host`: shell-state and application-settings contracts/services.
-- `@neko/local-metadata`: SQLite repositories, schema, migration ledger, transactional legacy-import
-  and downgrade-export workflow through injected file/archive ports.
-- Desktop Main: Electron `userData` path/native file adapters, startup wiring and diagnostics only.
-- Desktop startup/restart behavior and release rollback tooling.
-- Focused migration, crash-recovery, downgrade-export, and real Electron startup validation.
+- `@neko/host`: version-free shell-state and application-settings contracts/services.
+- `@neko/local-metadata`: stable SQLite repositories and record-local diagnostics.
+- Desktop Main: Electron path resolution, repository wiring and diagnostic projection only.
+- Product startup/restart reads only canonical SQLite authorities; retired files remain untouched.

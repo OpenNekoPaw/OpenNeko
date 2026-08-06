@@ -28,6 +28,22 @@ Catalogs, registries, projections, and batch readers SHALL validate entries inde
 - **WHEN** a registry loads one invalid package or capability beside valid registrations
 - **THEN** it rejects only that registration and exposes the diagnostic without disabling the valid capabilities
 
+### Requirement: Persisted authority roots preserve additive metadata
+
+A persisted authority root SHALL validate its required semantic collections and identities while retaining unknown top-level fields as opaque metadata. Unknown root metadata MUST produce an exact diagnostic and MUST be serialized unchanged on a later ordinary commit. It MUST NOT select a parser, compatibility path, migration, repair, default owner, or business behavior. A structurally invalid root or invalid required root collection MAY reject the authority only when no smaller owning record can be identified.
+
+#### Scenario: Shell root contains unknown additive metadata
+
+- **WHEN** Desktop reads a Shell authority containing valid Projects and Windows plus unknown top-level metadata
+- **THEN** it restores the valid Projects and Windows and reports the unknown field names
+- **AND** a later Shell commit preserves the unknown metadata byte-equivalent at the JSON value level without interpreting, converting, or repairing it
+
+#### Scenario: Shell root cannot identify its collections
+
+- **WHEN** the Shell authority is not an object or its required Project or Window collection is absent or has the wrong type
+- **THEN** the authority fails visibly because no smaller Project or Window owner can be identified
+- **AND** the stored bytes remain unchanged
+
 ### Requirement: Local failure containment is tested end to end
 
 Every changed owner SHALL test both the rejecting boundary and an unaffected sibling path. Electron trust-boundary changes MUST additionally prove the failure stays within the current request, sender, or authorized resource.

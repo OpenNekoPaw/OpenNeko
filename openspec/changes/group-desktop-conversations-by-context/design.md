@@ -14,13 +14,13 @@ The implementation crosses `@neko/agent-contracts`, `@neko/agent-runtime`, `@nek
 
 ### Five-layer analysis
 
-| Layer          | Decision                                                                                                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Responsibility | Agent owns conversation catalog facts and context identity; Host owns Project membership composition and Window navigation; Desktop renderer only presents the validated groups.    |
-| Dependency     | Agent contracts/runtime remain host-neutral or Node/SQLite; Host consumes public Agent contracts; renderer consumes typed preload projection without Node/Electron imports.         |
-| Interface      | Replace nullable/project-shaped fields with a closed owner union and optional Project grouping; lifecycle operations carry exact conversation + owner identity and revision fences. |
-| Extension      | Character/Room variants require stable run identity and qualified owner adapters; adding a producer does not change Workspace/Assistant or sidebar grouping algorithms.             |
-| Testing        | Contract codecs, SQLite catalog join/migration, Agent producer, Host grouping/restore/delete, renderer interaction and isolated Electron scenarios provide path-level evidence.     |
+| Layer          | Decision                                                                                                                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Responsibility | Agent owns conversation catalog facts and context identity; Host owns Project membership composition and Window navigation; Desktop renderer only presents the validated groups.   |
+| Dependency     | Agent contracts/runtime remain host-neutral or Node/SQLite; Host consumes public Agent contracts; renderer consumes typed preload projection without Node/Electron imports.        |
+| Interface      | Replace nullable/project-shaped fields with a closed owner union and optional Project grouping; lifecycle operations carry exact conversation, owner, sender and request identity. |
+| Extension      | Character/Room variants require stable run identity and qualified owner adapters; adding a producer does not change Workspace/Assistant or sidebar grouping algorithms.            |
+| Testing        | Contract codecs, SQLite catalog join, Agent producer, Host grouping/restore/delete, renderer interaction and isolated Electron scenarios provide path-level evidence.              |
 
 ## Goals / Non-Goals
 
@@ -72,9 +72,9 @@ Alternative considered: make Project the owner of every conversation. Rejected b
 
 ### 2. Agent runtime produces owner-qualified catalog entries from exact context metadata
 
-`@neko/agent-contracts` owns `AgentConversationOwnerRef`, the versioned home projection and strict codecs. `@neko/agent-runtime` remains the producer through its public application entry.
+`@neko/agent-contracts` owns `AgentConversationOwnerRef`, the canonical home projection and strict codecs. `@neko/agent-runtime` remains the producer through its public application entry.
 
-The Node Pi catalog reader reads conversation rows and the canonical `agent_conversation_context` metadata from the same user-level SQLite snapshot. New conversations must have exact context metadata. Existing Workspace records without context continue through the already-defined explicit Workspace context migration; unresolved records are excluded only through a visible catalog diagnostic, never projected as Assistant or assigned to a recent Project. Existing Assistant lifecycle records resolve to `assistantSpaceId`, not a synthetic Workspace Project.
+The Node Pi catalog reader reads conversation rows and the canonical `agent_conversation_context` metadata from the same user-level SQLite snapshot. New conversations must have exact context metadata. A record without canonical context is excluded only through a visible record-local catalog diagnostic; the product does not migrate, rebuild or infer its owner. Existing Assistant lifecycle records resolve to `assistantSpaceId`, not a synthetic Workspace Project.
 
 Character/Room owner refs include run identity rather than only `characterId`/`roomId`. Their navigation parser/summary variants are closed and testable, but they are not added to executable `AgentConversationContext` until Chara/Room packages provide qualified context and Scene adapters. Current Desktop composition rejects successful restore before reading them as an executable Agent context.
 
@@ -121,7 +121,7 @@ Agent-internal conversation Tabs are not a navigation authority. PrimarySidebar 
 
 ### 5. Lifecycle actions use exact owner identity
 
-Delete and future association operations carry `conversationId + owner`, Agent home revision and Window/endpoint revision. Host compares the complete identity against the authoritative projection before delegating to Agent lifecycle/Pi deletion. Assistant deletion no longer requires a Project catalog record. Owner mismatch, stale revision or missing summary fails visibly.
+Delete and future association operations carry `conversationId + owner` plus exact sender/session/request identity. Host compares the complete identity against the authoritative projection before delegating to Agent lifecycle/Pi deletion. Assistant deletion no longer requires a Project catalog record. Owner mismatch, stale session/request identity or missing summary fails visibly.
 
 The renderer retains confirmation presentation only; it cannot alter the owner or synthesize group membership.
 
@@ -151,17 +151,15 @@ Production code retained in `apps/neko-desktop` is limited to Electron sender/Wi
 
 ## Risks / Trade-offs
 
-- [Existing Pi row lacks lifecycle context] -> Reuse the explicit exact Workspace migration authority; surface a catalog diagnostic and block restore when identity cannot be resolved.
+- [Existing Pi row lacks lifecycle context] -> Leave the row untouched, surface a record-local catalog diagnostic and block only that restore when identity cannot be resolved.
 - [Project removed while an associated non-Workspace conversation remains] -> Keep the conversation under its standalone owner group and expose the broken association diagnostic; never delete the conversation with the Project.
 - [Character/Room union appears before product owner exists] -> Codec support does not imply availability; current producer cannot create these contexts and Desktop restore returns owner-qualified unavailable.
 - [Sidebar becomes long] -> Show a bounded recent subset per group with explicit expand/collapse; preserve stable dimensions and scrolling without adding nested card shells.
 - [Same Workspace has multiple active conversations] -> Conversation runtime state remains isolated; Workspace document editing continues through one Workspace/DocumentSession owner and one editable View policy.
-- [Breaking stored/UI projection] -> Migrate exact supported records once and bump strict contract versions; unknown versions/kinds fail instead of dual-reading old navigation identities.
-- [Retired Pi table still embeds context columns] -> Strictly recognize the exact pre-canonical
-  `context_schema_version/context_kind/context_id/project_id/workspace_id` table shape and rebuild it
-  once into the canonical Pi catalog shape before any writer opens. Preserve conversation and branch
-  identities; retain an old Scratch `context_id` only as its exact Pi runtime scope, never as a default
-  Assistant owner. Unknown table shapes fail visibly without attempting an INSERT compatibility path.
+- [Breaking stored/UI projection] -> Switch all in-scope producers and consumers atomically to the
+  version-free canonical shape; unknown fields/kinds fail locally instead of dual-reading old navigation identities.
+- [Retired Pi table still exists] -> Product startup and ordinary readers do not inspect or rebuild it;
+  the bytes remain untouched and canonical catalog records continue independently.
 - [Initial provider port loses its controller receiver] -> Expose the port as a bound function value,
   call it with the exact materialized runtime, and cover detached invocation before the visible
   provider-backed Electron acceptance. Missing ports and mismatched conversation/runtime identities
@@ -174,21 +172,22 @@ Production code retained in `apps/neko-desktop` is limited to Electron sender/Wi
   exact initial-turn port resolves. Provider or persistence failure remains `failed` with a visible
   diagnostic; replay never restarts a claimed terminal turn.
 
-## Migration Plan
+## Replacement Plan
 
 1. Add strict owner/navigation codecs and producer tests before changing consumers.
 2. Extend the canonical SQLite catalog read to join exact conversation context and add explicit project-association metadata only where a real association operation exists.
-3. Produce new Agent home summaries; poison the fabricated `content:${workspaceId}` Agent-side Project path.
-4. Add Host grouped projection and exact lifecycle validation; migrate every consumer in one boundary.
+3. Produce new Agent home summaries and delete the fabricated `content:${workspaceId}` Agent-side Project path.
+4. Add Host grouped projection and exact lifecycle validation; switch every consumer in one boundary.
 5. Replace PrimarySidebar two-list rendering and remove old labels/helpers/styles/tests.
-6. Bump Desktop shell wire/stored projection versions only where serialized shape changes; migrate supported Assistant/Workspace state, preserving user conversations.
+6. Keep Desktop shell wire/stored projections version-free; reject only non-canonical records while preserving their bytes and valid sibling conversations.
 7. Validate producer/consumer paths, key-free Agent Evaluation, real Electron navigation/reload/delete, full quality gates and documentation before accepting the change.
-8. Rebuild the retired embedded-context `pi_conversations` table before opening an authority, preserving
-   rows and foreign-key integrity while removing the obsolete columns and indexes. Validate a real
-   user-visible composer submit and provider response in a visible Electron fixture; bridge-created
-   conversations do not satisfy this UI acceptance.
+8. Prove the retired embedded-context `pi_conversations` table is unreachable from product startup,
+   public entries and ordinary readers. Validate a real user-visible composer submit and provider
+   response in a visible Electron fixture; bridge-created conversations do not satisfy this UI acceptance.
 
-Rollback is source-level before release. User conversation/context rows are not destructively rewritten; reverting the binary may require rebuilding the derived sidebar projection, while unknown newer contract versions fail visibly.
+Rollback is source-level before release. User conversation/context rows are not destructively rewritten;
+the derived sidebar projection can be recomputed from canonical rows, while non-canonical records remain
+untouched and fail at their exact owner boundary.
 
 ## Open Questions
 

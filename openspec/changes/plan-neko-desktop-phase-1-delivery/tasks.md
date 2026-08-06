@@ -37,7 +37,7 @@
 - [ ] 4.1 Create `qualify-neko-desktop-phase-1` with frozen synthetic workspace/media fixtures.
 - [ ] 4.2 Run the authoritative launch → unified Agent Workbench → explicit directory Workspace →
       Media Library → Canvas → Cut → Export workflow with exact identity and side-effect assertions.
-- [ ] 4.3 Assert canonical-path counters/poisoning for Pi runtime/session, product controllers, package
+- [ ] 4.3 Assert canonical-path counters and removed-path absence for Pi runtime/session, product controllers, package
       Roots, resource gateway, project writer and domain Jobs.
 - [ ] 4.4 Verify `darwin-arm64` package/install/startup and retain Windows/Linux deterministic tests
       without native artifacts.

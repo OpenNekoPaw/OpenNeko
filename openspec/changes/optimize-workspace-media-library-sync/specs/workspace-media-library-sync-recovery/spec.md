@@ -2,7 +2,7 @@
 
 ### Requirement: Required Media Libraries are derived from authoritative project references
 
-The system SHALL derive required Media Library names and descendants from revisioned, portable
+The system SHALL derive required Media Library names and descendants from canonical, portable
 `ContentLocator` references supplied by the owning project-document domains. It MUST NOT persist a
 required-library manifest, `library.json`, physical target, global library ID, or alternate runtime
 mapping in the project.
@@ -26,18 +26,17 @@ mapping in the project.
 - **THEN** portability readiness returns `coverage-incomplete`
 - **AND** it does not claim that the project is fully linked or portable
 
-#### Scenario: Current-version Canvas contains a legacy workspace path
+#### Scenario: Canvas contains a non-canonical workspace path
 
-- **WHEN** a current-version NKC Media or File node predates canonical locator persistence and
+- **WHEN** an NKC Media or File node lacks a canonical `ContentLocator` and
   contains a normalized workspace-relative legacy path but no `ContentLocator`
-- **THEN** the NKC load boundary explicitly migrates that path to a workspace-file locator before
-  owner reference extraction
+- **THEN** the NKC load boundary rejects that document record and leaves its bytes unchanged
 - **AND** absolute paths, runtime URLs, malformed paths, and unknown document schemas remain invalid
   instead of being accepted as compatibility fallback
 
-#### Scenario: One Canvas document remains invalid after migration
+#### Scenario: One Canvas document is invalid
 
-- **WHEN** an NKC document cannot be parsed, migrated, or validated through the owning codec
+- **WHEN** an NKC document cannot be parsed or validated through the owning codec
 - **THEN** reference aggregation records a bounded owner diagnostic and marks Canvas coverage
   incomplete while continuing to inspect other owners and filesystem library roots
 - **AND** recovery and portability never treat the unread document as complete reference coverage
@@ -59,7 +58,7 @@ recomputed from OS inspection.
 
 #### Scenario: Cached projection disagrees with current project facts
 
-- **WHEN** a stored projection revision is stale relative to any authoritative owner revision
+- **WHEN** a stored projection fingerprint is stale relative to any authoritative owner/source fingerprint
 - **THEN** the cached projection is marked stale and current requirements are rebuilt from project
   facts
 - **AND** cached membership or availability cannot authorize recovery
@@ -103,7 +102,7 @@ target-free and MUST NOT convert an illegal or unknown state into an empty succe
 
 ### Requirement: Recovery uses an immutable exact-name plan
 
-Media Library recovery SHALL create an immutable revisioned plan before mutation. The plan MUST use
+Media Library recovery SHALL create an immutable request-owned plan before mutation. The plan MUST use
 an exact library-name match, validate all authoritative referenced descendants through the existing
 containment guard, and require explicit user confirmation before creating or replacing a workspace
 link.
@@ -130,7 +129,7 @@ link.
 
 #### Scenario: Recovery is cancelled or stale
 
-- **WHEN** the picker or confirmation is cancelled, or any project/owner/link revision changes before
+- **WHEN** the picker or confirmation is cancelled, or any project/owner/link fingerprint changes before
   apply
 - **THEN** recovery changes neither global connections nor workspace links
 - **AND** stale apply fails visibly instead of rebuilding and applying an implicit plan
@@ -206,7 +205,7 @@ or external Media Library.
 ### Requirement: Resumable collection uses the existing task ledger
 
 Portable snapshot work that must survive process restart SHALL use the existing user-level `tasks`
-and `task_checkpoints` repositories with explicit workspace identity and typed payload versions. It
+and `task_checkpoints` repositories with explicit workspace identity and canonical typed payloads. It
 MUST NOT introduce a job JSON file or a Media Library-specific task table.
 
 #### Scenario: Snapshot checkpoint is persisted
@@ -237,5 +236,5 @@ Engine tokens.
 #### Scenario: Renderer requests recovery
 
 - **WHEN** the project Resource Browser submits a recovery intent
-- **THEN** it sends only project identity, library name, operation revision, and user choice
+- **THEN** it sends only project identity, library name, request/plan identity, and user choice
 - **AND** Desktop Main owns candidate resolution, native directory authorization, and mutation

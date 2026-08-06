@@ -1,17 +1,13 @@
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const ACTIVE_AGENT_SURFACE_SELECTOR =
-  '.desktop-agent-surface-deck__item[data-active="true"]';
-const ACTIVE_AGENT_TEXTAREA_SELECTOR =
-  `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
+const ACTIVE_AGENT_SURFACE_SELECTOR = '.desktop-agent-surface-deck__item[data-active="true"]';
+const ACTIVE_AGENT_TEXTAREA_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
 const ACTIVE_AGENT_SEND_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-send`;
 const ACTIVE_WORKBENCH_SLOT_ITEM_SELECTOR =
   '.desktop-workbench-slot-deck__item[data-active="true"]';
-const ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR =
-  `${ACTIVE_WORKBENCH_SLOT_ITEM_SELECTOR} [data-workbench-slot="main"]`;
-const ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR =
-  `${ACTIVE_WORKBENCH_SLOT_ITEM_SELECTOR} [data-workbench-slot="secondaryMain"]`;
+const ACTIVE_WORKBENCH_MAIN_TARGET_SELECTOR = `${ACTIVE_WORKBENCH_SLOT_ITEM_SELECTOR} [data-workbench-slot="main"]`;
+const ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR = `${ACTIVE_WORKBENCH_SLOT_ITEM_SELECTOR} [data-workbench-slot="secondaryMain"]`;
 
 export const desktopWorkbenchScenesScenario = Object.freeze({
   id: 'desktop-workbench-scenes',
@@ -279,9 +275,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
 
     await resizeWindow(evaluate, 1440, 960);
     await click('.home-primary-navigation .home-nav-button', 0);
-    await waitForSelector(
-      `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
-    );
+    await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
     const freshEntryDraft = await inspectEntryDraft(evaluate, [
       initialEntryDraft.draftId,
       workspaceActivation.draftId,
@@ -398,9 +392,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
   prepare: desktopWorkbenchScenesScenario.prepare,
   async run({ checkpoint, click, evaluate, screenshot, type, waitForSelector }) {
     await resizeWindow(evaluate, 1440, 960);
-    await waitForSelector(
-      `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
-    );
+    await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
     const initialDraft = await inspectEntryDraft(evaluate);
     await type(ACTIVE_AGENT_TEXTAREA_SELECTOR, 'Verify atomic Assistant session activation.');
     await waitForCondition(
@@ -481,7 +473,6 @@ async function chooseFixtureWorkspace(evaluate) {
     ${requireActiveWorkbenchProjection('projection')}
     const result = await window.openNekoDesktop.workspaceGrants.choose(
       projection.window.windowId,
-      projection.window.revision,
     );
     if (result.status !== 'authorized') {
       throw new Error('The isolated fixture Workspace grant was cancelled.');
@@ -492,8 +483,7 @@ async function chooseFixtureWorkspace(evaluate) {
     const transition = await window.openNekoDesktop.scenes.transition(
       projection.window.windowId,
       { kind: 'open-workspace', workspaceGrantId: result.grant.workspaceGrantId },
-      projection.window.revision,
-      activeWorkbench.scene.revision,
+      activeWorkbench.scene.sceneId,
     );
     if (transition.status !== 'transitioned') {
       throw new Error('Workspace grant did not activate an exact Workspace Scene.');
@@ -739,7 +729,6 @@ async function assertFixtureWorkspaceCancellation(evaluate) {
     ${requireActiveWorkbenchProjection('before', 'beforeWorkbench')}
     const result = await window.openNekoDesktop.workspaceGrants.choose(
       before.window.windowId,
-      before.window.revision,
     );
     if (result.status !== 'cancelled') {
       throw new Error('The isolated native Workspace picker did not report cancellation.');
@@ -747,8 +736,7 @@ async function assertFixtureWorkspaceCancellation(evaluate) {
     const after = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('after', 'afterWorkbench')}
     if (
-      after.window.revision !== before.window.revision ||
-      afterWorkbench.scene.revision !== beforeWorkbench.scene.revision ||
+      JSON.stringify(after.window) !== JSON.stringify(before.window) ||
       JSON.stringify(afterWorkbench.scene) !== JSON.stringify(beforeWorkbench.scene) ||
       JSON.stringify(after.catalog.projects) !== JSON.stringify(before.catalog.projects)
     ) {
@@ -756,8 +744,9 @@ async function assertFixtureWorkspaceCancellation(evaluate) {
     }
     return {
       status: result.status,
-      windowRevision: after.window.revision,
-      sceneRevision: afterWorkbench.scene.revision,
+      windowId: after.window.windowId,
+      activeWorkbenchInstanceId: afterWorkbench.workbenchInstanceId,
+      sceneId: afterWorkbench.scene.sceneId,
       sceneKind: afterWorkbench.scene.context.kind,
       projectCount: after.catalog.projects.length,
     };
@@ -1173,21 +1162,23 @@ async function exercisePrimarySidebar(evaluate, click, drag) {
 
 async function exerciseManagementMainSplit(evaluate, drag) {
   const initial = await inspectMainSplit(evaluate);
+  assertManagementMainNotNarrower(initial, 'initial');
   await drag(
     '.neko-controlled-workbench-main-split-handle--columns',
     '.neko-controlled-workbench-main',
-    { targetPosition: { xRatio: 0.46, yRatio: 0.5 } },
+    { targetPosition: { xRatio: 0.68, yRatio: 0.5 } },
   );
   await waitForCondition(
     evaluate,
     `(() => {
       const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
       return shell instanceof HTMLElement &&
-        parseFloat(shell.style.getPropertyValue('--neko-controlled-main-split-ratio')) > 40;
+        parseFloat(shell.style.getPropertyValue('--neko-controlled-main-split-ratio')) > 60;
     })()`,
-    'Management Main split resize did not update the shared Workbench ratio.',
+    'Management Main split resize did not enlarge the management panel.',
   );
   const resized = await inspectMainSplit(evaluate);
+  assertManagementMainNotNarrower(resized, 'resized');
   await drag(
     '.neko-controlled-workbench-main-split-handle--columns',
     '.neko-controlled-workbench-main',
@@ -1199,12 +1190,24 @@ async function exerciseManagementMainSplit(evaluate, drag) {
       const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
       if (!(shell instanceof HTMLElement)) return false;
       const ratio = parseFloat(shell.style.getPropertyValue('--neko-controlled-main-split-ratio'));
-      return ratio >= 32 && ratio <= 36;
+      return ratio >= 49.5 && ratio <= 50.5;
     })()`,
-    'Management Main split resize did not restore the compact catalog ratio.',
+    'Management Main split resize did not enforce the 50% management minimum.',
   );
   const restored = await inspectMainSplit(evaluate);
+  assertManagementMainNotNarrower(restored, 'minimum');
   return { initial, resized, restored };
+}
+
+function assertManagementMainNotNarrower(detail, phase) {
+  if (
+    (Math.abs(detail.ratio - 50) > 0.5 && phase !== 'resized') ||
+    detail.primaryWidth < detail.secondaryWidth
+  ) {
+    throw new Error(
+      `Management Main became narrower than Detail during ${phase}: ${JSON.stringify(detail)}`,
+    );
+  }
 }
 
 async function inspectMainSplit(evaluate) {
@@ -1678,7 +1681,7 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     !detail.compactPanelIds.includes(managementPanelId) ||
     detail.mainSplit !== 'columns' ||
     detail.mainComposition !== 'independent-shells' ||
-    Math.abs(detail.mainSplitRatio - 0.34) > 0.025 ||
+    Math.abs(detail.mainSplitRatio - 0.5) > 0.025 ||
     !detail.hasMainSplitResize ||
     detail.primaryMainShell !== 'primary' ||
     detail.secondaryMainShell !== 'secondary' ||
@@ -1699,7 +1702,7 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.secondaryMainShadow === 'none' ||
     detail.mainPanelsOverlap ||
     detail.primaryMainWidth <= 0 ||
-    detail.secondaryMainWidth <= detail.primaryMainWidth
+    detail.primaryMainWidth < detail.secondaryMainWidth
   ) {
     throw new Error(
       `Management + Detail did not preserve the shared compact Workbench composition: ${JSON.stringify(detail)}`,

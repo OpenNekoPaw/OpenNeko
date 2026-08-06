@@ -2,8 +2,8 @@
 
 ### Requirement: Cut Root consumes one injected owning runtime
 
-The system MUST render the complete package-owned Cut Root through a versioned, browser-safe runtime
-whose identity includes Project, Workspace, Window, View epoch, document, session and endpoint epoch.
+The system MUST render the complete package-owned Cut Root through one canonical browser-safe runtime
+whose identity includes Project, Workspace, Window, View instance, document, session and request.
 The Cut Stage and Timeline MUST consume the same document/session projection and MUST NOT use a
 global VS Code API, fixed demo timeline or renderer-owned OTIO store.
 
@@ -76,7 +76,7 @@ preview.
 ### Requirement: Media transport is opaque, scoped and releasable
 
 The system MUST resolve thumbnails and preview media through Host-authorized descriptors scoped to
-the real WebContents, Window/View/document session, endpoint epoch and content revision. Renderer
+the real WebContents, Window/View/document session, exact request identity and source content fingerprint. Renderer
 payloads MUST retain the source ContentLocator and MAY contain only the short-lived
 `openneko://resource` URL issued by the Desktop exact-resource registry. They MUST NOT contain absolute
 paths, `file://` URLs, arbitrary localhost URLs, cache paths, private media schemes, Engine/client

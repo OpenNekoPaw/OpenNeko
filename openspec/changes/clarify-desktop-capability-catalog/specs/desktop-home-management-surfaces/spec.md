@@ -22,8 +22,8 @@ MUST NOT project builtin Skills or Desktop product modules as manageable extensi
 
 - **WHEN** the user views Skills or Extensions
 - **THEN** Renderer SHALL already have completed sender-bound Desktop bootstrap
-- **AND** the request SHALL carry the current endpoint epoch
-- **AND** a missing or stale endpoint identity SHALL fail visibly before Skill or extension discovery
+- **AND** the request SHALL carry the current renderer session identity and request id
+- **AND** a missing or stale session identity SHALL fail visibly before Skill or extension discovery
 - **AND** no active-window fallback SHALL satisfy the request
 - **AND** Skill records omit physical paths/locators and exclude project and builtin source records
 - **AND** installed extension rows reflect the OpenNeko install root plus a verified manifest
@@ -98,18 +98,18 @@ MUST NOT project builtin Skills or Desktop product modules as manageable extensi
 
 #### Scenario: User installs or removes a plugin
 
-- **WHEN** the user confirms install or removal for the current catalog revision
+- **WHEN** the user confirms install or removal for the current catalog fingerprint
 - **THEN** Main SHALL atomically install from the contained OpenNeko package source or move the exact
   installed package to system trash
 - **AND** Main SHALL re-read the authoritative catalog
-- **AND** Main SHALL replace the Pi plugin runtime generation only when no Agent turn is active
-- **AND** the result SHALL contain the new catalog revision and safe operation status
+- **AND** Main SHALL replace the Pi plugin runtime instance only when no Agent turn is active
+- **AND** the result SHALL contain the new catalog fingerprint and safe operation status
 
 #### Scenario: Plugin management request is stale or Agent is busy
 
-- **WHEN** the expected catalog revision is stale or an Agent turn is active
+- **WHEN** the expected catalog fingerprint is stale or an Agent turn is active
 - **THEN** the mutation SHALL fail visibly without changing the OpenNeko install root or runtime
-- **AND** the previous plugin installation and runtime generation SHALL remain authoritative
+- **AND** the previous plugin installation and runtime instance SHALL remain authoritative
 
 #### Scenario: Global extension record cannot be verified
 
@@ -204,4 +204,4 @@ metadata MUST remain author-owned and MUST NOT be silently translated.
 
 **Reason**: Desktop product modules are not plugins or extensions and do not belong in the global extension catalog.
 
-**Migration**: Delete the builtin capability DTO, Shell domain projection and Renderer cards; use verified global extension manifests instead.
+**Replacement**: Delete the builtin capability DTO, Shell domain projection and Renderer cards; use verified global extension manifests instead.

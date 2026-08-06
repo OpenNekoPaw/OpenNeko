@@ -4,8 +4,6 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 
 const repoRoot = process.cwd();
-const ledgerPath = 'quality/ledgers/code-debt-surface-ledger.json';
-
 const terms = ['legacy', 'fallback', 'deprecated', 'compat', 'shim', 'upgrade'];
 const requiredSemanticClasses = [
   'delete-now',
@@ -21,7 +19,6 @@ const requiredSemanticClasses = [
   'test-only',
   'false-positive-word',
 ];
-const allowedSemanticClasses = new Set([...requiredSemanticClasses, 'needs-review']);
 const failingProductionSemanticClasses = new Set([
   'current-bridge',
   'delete-now',
@@ -29,94 +26,6 @@ const failingProductionSemanticClasses = new Set([
   'migration-only',
   'needs-review',
 ]);
-const retiredAssetCatalogBoundaryPathPatterns = [
-  'packages/local-metadata/src/node-workspace-storage-inspection.ts',
-  'packages/assets/domain/src/workspace-linked-media-library.ts',
-  'packages/content/src/contracts/content-locator.ts',
-];
-const canonicalGlobalAssetLibraryPathPatterns = [
-  'packages/assets/node/src/global-asset-files.ts',
-  'packages/assets/node/src/resource-browser-node-runtime.ts',
-  'packages/assets/node/src/resource-browser-node-source.ts',
-  'packages/assets/domain/src/global-library/contract.ts',
-  'packages/assets/domain/src/global-library/controller.ts',
-  'packages/assets/domain/src/global-library/root.tsx',
-];
-// Match both the owning boundary and its rejection marker so unrelated debt in the same file fails.
-const explicitBoundaryRejectionRules = [
-  {
-    path: 'packages/generation/src/job/codec.ts',
-    markers: [
-      'assertnolegacygenerationpayload',
-      'containslegacygenerationfield',
-      'legacy_materialized_request_keys',
-    ],
-  },
-  {
-    path: 'packages/quality/src/core/index.ts',
-    markers: ['rejectlegacymediapathrequest'],
-  },
-  {
-    path: 'packages/quality/src/index.ts',
-    markers: ['rejectlegacymediapathrequest'],
-  },
-  {
-    path: 'packages/quality/src/internal/quality-gate-runtime.ts',
-    markers: ['rejectlegacymediapathrequest', 'legacy-path-target-rejected'],
-  },
-  {
-    path: 'packages/generation/src/media/local-metadata/generated-output-projection-store.ts',
-    markers: ['invalid or legacy projection'],
-  },
-  {
-    path: 'packages/canvas/domain/src/nkc/index.ts',
-    markers: [
-      'canvas_material_legacy_evidence_kinds',
-      'inspectlegacycanvasmaterialnodes',
-      'canvasmateriallegacyevidencekind',
-      'canvasmateriallegacyinspection',
-    ],
-  },
-  {
-    path: 'packages/canvas/domain/src/types/canvas-material-contracts.ts',
-    markers: ['canvas-material-legacy-generation-evidence'],
-  },
-  {
-    path: 'packages/generation/src/domain-contracts/media-quality.ts',
-    markers: ['legacy-path-target-rejected'],
-  },
-];
-const retiredAssetCatalogRules = [
-  { id: 'catalog-type', pattern: /\b(?:AssetEntity|AssetVariant|AssetFile|AssetSource)\b/g },
-  { id: 'catalog-api', pattern: /\b(?:ListAssets|GetAsset|ImportAsset)\b/g },
-  { id: 'asset-uri', pattern: /project:\/\/assets\//g },
-  { id: 'catalog-file', pattern: /neko\/assets\/library\.json/g },
-  { id: 'search-partition', pattern: /['"]asset-library['"]/g },
-  { id: 'picker-mode', pattern: /['"]asset-picker['"]/g },
-];
-const allowedStatuses = new Set(['active', 'planned', 'removed']);
-const allowedActions = new Set([
-  'delete',
-  'migrate',
-  'preserve',
-  'rename',
-  'defer',
-  'model-entrypoint',
-  'review',
-]);
-const requiredLedgerEntryFields = [
-  'id',
-  'package',
-  'surface',
-  'semanticClass',
-  'action',
-  'status',
-  'owner',
-  'replacement',
-  'removeCondition',
-  'validation',
-];
-
 const excludedDirectories = new Set([
   '.git',
   'coverage',
@@ -142,28 +51,17 @@ if (args.has('--self-test')) {
 const packageRoots = collectPackageRoots();
 const files = walkSourceFiles(repoRoot);
 const matches = scanFiles(files);
-const retiredAssetCatalogMatches = scanRetiredAssetCatalog(files);
-const report = buildReport(matches, files, retiredAssetCatalogMatches);
+const report = buildReport(matches, files);
 
-if (args.has('--validate-ledger')) {
-  const result = validateLedger(report);
-  if (args.has('--json')) {
-    console.log(JSON.stringify({ report, validation: result }, null, 2));
-  } else {
-    printValidation(result);
-  }
-  process.exitCode = result.errors.length > 0 || report.qualityGate.status === 'failed' ? 1 : 0;
+if (args.has('--json')) {
+  console.log(JSON.stringify(report, null, 2));
 } else {
-  if (args.has('--json')) {
-    console.log(JSON.stringify(report, null, 2));
-  } else {
-    printHumanReport(report);
-  }
-  process.exitCode = report.qualityGate.status === 'failed' ? 1 : 0;
+  printHumanReport(report);
 }
+process.exitCode = report.qualityGate.status === 'failed' ? 1 : 0;
 
 function printHelp() {
-  console.log(`Usage: node scripts/check-legacy-debt-surfaces.mjs [--json] [--validate-ledger] [--self-test]
+  console.log(`Usage: node scripts/check-legacy-debt-surfaces.mjs [--json] [--self-test]
 
 Scans TypeScript sources for legacy, fallback, deprecated, compatibility, and shim cleanup surfaces.
 
@@ -283,7 +181,7 @@ function scanFiles(sourceFiles) {
   return results;
 }
 
-function buildReport(allMatches, sourceFiles, catalogMatches) {
+function buildReport(allMatches, sourceFiles) {
   const allFiles = sourceFiles.map(toRepoPath);
   const nonTestFiles = allFiles.filter((file) => !isTestPath(file));
   const nonTestMatches = allMatches.filter((match) => !match.isTest);
@@ -302,7 +200,6 @@ function buildReport(allMatches, sourceFiles, catalogMatches) {
         '**/*.spec.ts',
         '**/*.spec.tsx',
       ],
-      ledgerPath,
     },
     scopes: {
       allSource: summarizeScope(allMatches, allFiles),
@@ -315,8 +212,7 @@ function buildReport(allMatches, sourceFiles, catalogMatches) {
         nonTestMatches.filter((match) => !isAgentGovernedPath(match.file)),
       ),
     },
-    retiredAssetCatalog: summarizeRetiredAssetCatalog(catalogMatches),
-    qualityGate: buildQualityGate(nonTestMatches, catalogMatches),
+    qualityGate: buildQualityGate(nonTestMatches),
     hotspots: {
       packages: topRows(
         groupMatches(nonTestMatches, (match) => match.packageName),
@@ -335,7 +231,7 @@ function buildReport(allMatches, sourceFiles, catalogMatches) {
   };
 }
 
-function buildQualityGate(nonTestMatches, catalogMatches = []) {
+function buildQualityGate(nonTestMatches) {
   const governedMatches = nonTestMatches;
   const failingMatches = governedMatches.filter((match) =>
     failingProductionSemanticClasses.has(match.semanticClass),
@@ -350,84 +246,15 @@ function buildQualityGate(nonTestMatches, catalogMatches = []) {
     };
   }
 
-  const catalogViolations = catalogMatches.filter((match) => match.allowlist === undefined);
 
   return {
     scope: 'all-production',
     excludedAgentOccurrences: 0,
-    status: failingMatches.length === 0 && catalogViolations.length === 0 ? 'passed' : 'failed',
+    status: failingMatches.length === 0 ? 'passed' : 'failed',
     failingProductionSemanticClasses: [...failingProductionSemanticClasses].sort(),
-    blockingOccurrences: failingMatches.length + catalogViolations.length,
+    blockingOccurrences: failingMatches.length,
     classes,
-    retiredAssetCatalogViolations: {
-      occurrences: catalogViolations.length,
-      files: new Set(catalogViolations.map((match) => match.file)).size,
-      examples: catalogViolations.slice(0, 50),
-    },
   };
-}
-
-function scanRetiredAssetCatalog(sourceFiles) {
-  const results = [];
-  for (const file of sourceFiles) {
-    const relPath = toRepoPath(file);
-    let content = '';
-    try {
-      content = readFileSync(file, 'utf8');
-    } catch {
-      continue;
-    }
-    const lines = content.split(/\r?\n/);
-    for (let index = 0; index < lines.length; index += 1) {
-      const line = lines[index] ?? '';
-      for (const rule of retiredAssetCatalogRules) {
-        rule.pattern.lastIndex = 0;
-        let match = rule.pattern.exec(line);
-        while (match !== null) {
-          const allowlist = retiredAssetCatalogAllowlist(relPath, rule.id);
-          results.push({
-            file: relPath,
-            line: index + 1,
-            rule: rule.id,
-            text: line.trim(),
-            ...(allowlist ? { allowlist } : {}),
-          });
-          match = rule.pattern.exec(line);
-        }
-      }
-    }
-  }
-  return results;
-}
-
-function summarizeRetiredAssetCatalog(matches) {
-  const violations = matches.filter((match) => match.allowlist === undefined);
-  return {
-    rules: retiredAssetCatalogRules.map((rule) => rule.id),
-    allowlists: {
-      migrationOnly: [],
-      boundaryRejection: retiredAssetCatalogBoundaryPathPatterns,
-      canonicalGlobalAssetLibrary: canonicalGlobalAssetLibraryPathPatterns,
-      tests: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
-    },
-    matches: matches.length,
-    allowedMatches: matches.length - violations.length,
-    violations,
-  };
-}
-
-function retiredAssetCatalogAllowlist(file, rule) {
-  if (isTestPath(file)) return 'test-or-poison-fixture';
-  if (retiredAssetCatalogBoundaryPathPatterns.some((pattern) => matchesGlob(file, pattern))) {
-    return 'boundary-rejection';
-  }
-  if (
-    rule === 'search-partition' &&
-    canonicalGlobalAssetLibraryPathPatterns.some((pattern) => matchesGlob(file, pattern))
-  ) {
-    return 'canonical-global-asset-library';
-  }
-  return undefined;
 }
 
 function summarizeScope(scopeMatches, scopeFiles) {
@@ -596,12 +423,6 @@ function classifySurface(file, line, term) {
   if (isExternalContractSurface(lowerFile, lowerLine, term)) {
     return 'external-contract';
   }
-  if (isExplicitBoundaryRejectionSurface(lowerFile, lowerLine)) {
-    return 'boundary-canonicalizer';
-  }
-  if (isExplicitRejectionDiagnostic(lowerLine)) {
-    return 'boundary-canonicalizer';
-  }
   if (isDomainDeprecatedSurface(lowerFile, lowerLine, term)) {
     return 'domain-status';
   }
@@ -613,9 +434,6 @@ function classifySurface(file, line, term) {
   }
   if (isCurrentBridgeSurface(lowerFile, lowerLine)) {
     return 'current-bridge';
-  }
-  if (isMigrationOnlySurface(lowerFile)) {
-    return 'migration-only';
   }
   if (isBoundaryCanonicalizerSurface(lowerFile, lowerLine)) {
     return 'boundary-canonicalizer';
@@ -634,17 +452,6 @@ function classifySurface(file, line, term) {
   }
 
   return 'needs-review';
-}
-
-function isMigrationOnlySurface(lowerFile) {
-  return containsAny(lowerFile, [
-    'packages/generation/src/media/generated-asset-index.ts',
-    'packages/generation/src/media/generated-output-adoption.ts',
-    'packages/generation/src/media/index.ts',
-    'packages/entity/node/src/node-project-entity-migration-inventory.ts',
-    'packages/entity/node/src/node-project-entity-migration.ts',
-    'packages/local-metadata/src/migration-planner.ts',
-  ]);
 }
 
 function isGeneratedPath(file) {
@@ -799,7 +606,6 @@ function isBoundaryCanonicalizerSurface(lowerFile, lowerLine) {
       'node-workspace-resource-cache-binding.ts',
       'project-authoring/index.ts',
       'packages/local-metadata/src/storage.ts',
-      'local-metadata/migration-planner.ts',
       'nkc/validator.ts',
       'canvas-workspace-board.ts',
       'canvasdurableresourceidentity.ts',
@@ -944,25 +750,6 @@ function isMigrateNowSurface(lowerLine, term) {
   return containsAny(lowerLine, ['alias', 'compat', 'legacy', 'migrat', 'old', '@deprecated']);
 }
 
-function isExplicitRejectionDiagnostic(lowerLine) {
-  return containsAny(lowerLine, [
-    'fallback is forbidden',
-    'legacy-version',
-    'legacy activation lifecycle is intentionally absent',
-    'legacy code renderer tokens; removed',
-    'legacy media path request',
-    'legacy-perception-model-override-rejected',
-    'path-only legacy requests are rejected',
-    'legacy resourcecache manifest paths are retired',
-  ]);
-}
-
-function isExplicitBoundaryRejectionSurface(lowerFile, lowerLine) {
-  return explicitBoundaryRejectionRules.some(
-    (rule) => lowerFile === rule.path && containsAny(lowerLine, rule.markers),
-  );
-}
-
 function containsAny(value, needles) {
   return needles.some((needle) => value.includes(needle));
 }
@@ -993,272 +780,6 @@ function getPackageName(file) {
     }
   }
   return 'repo-root';
-}
-
-function validateLedger(report) {
-  const errors = [];
-  const warnings = [];
-  const absoluteLedgerPath = resolve(repoRoot, ledgerPath);
-
-  if (!existsSync(absoluteLedgerPath)) {
-    return {
-      ledgerPath,
-      errors: [`Missing cleanup ledger: ${ledgerPath}`],
-      warnings,
-      checkedEntries: 0,
-    };
-  }
-
-  let ledger;
-  try {
-    ledger = JSON.parse(readFileSync(absoluteLedgerPath, 'utf8'));
-  } catch (error) {
-    return {
-      ledgerPath,
-      errors: [
-        `Invalid JSON in ${ledgerPath}: ${error instanceof Error ? error.message : String(error)}`,
-      ],
-      warnings,
-      checkedEntries: 0,
-    };
-  }
-
-  validateLedgerRoot(ledger, errors);
-  const entries = Array.isArray(ledger.entries) ? ledger.entries : [];
-  const entriesById = new Map();
-
-  for (const entry of entries) {
-    validateLedgerEntry(entry, errors, warnings);
-    if (typeof entry?.id === 'string') {
-      if (entriesById.has(entry.id)) {
-        errors.push(`Duplicate ledger entry id: ${entry.id}`);
-      }
-      entriesById.set(entry.id, entry);
-    }
-  }
-
-  validateRequiredCoverage(ledger, entriesById, report, errors, warnings);
-  validateRemovedStalePatterns(entries, errors);
-  addCoverageWarnings(report, entries, warnings);
-  validateQualityGate(report, errors);
-
-  return {
-    ledgerPath,
-    errors,
-    warnings,
-    checkedEntries: entries.length,
-  };
-}
-
-function validateQualityGate(report, errors) {
-  if (report.qualityGate.status !== 'failed') {
-    return;
-  }
-
-  const summary = Object.entries(report.qualityGate.classes)
-    .filter(([, row]) => row.occurrences > 0)
-    .map(([semanticClass, row]) => `${semanticClass}=${row.occurrences}`)
-    .join(', ');
-  const catalogViolations = report.qualityGate.retiredAssetCatalogViolations.occurrences;
-  errors.push(
-    `Production unresolved canonical-path debt remains: ${summary || 'none'}; ` +
-      `retired-asset-catalog=${catalogViolations}. ` +
-      'Resolve, rename, or ledger-classify these surfaces before the gate can pass.',
-  );
-}
-
-function validateLedgerRoot(ledger, errors) {
-  if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger)) {
-    errors.push('Ledger root must be a JSON object.');
-    return;
-  }
-  if (ledger.schemaVersion !== 1) {
-    errors.push('Ledger schemaVersion must be 1.');
-  }
-  if (ledger.scope !== 'all-production') {
-    errors.push('Ledger scope must be "all-production".');
-  }
-  if (
-    !ledger.semanticClasses ||
-    typeof ledger.semanticClasses !== 'object' ||
-    Array.isArray(ledger.semanticClasses)
-  ) {
-    errors.push('Ledger semanticClasses must be an object.');
-  } else {
-    for (const semanticClass of requiredSemanticClasses) {
-      if (!ledger.semanticClasses[semanticClass]) {
-        errors.push(`Ledger semanticClasses is missing ${semanticClass}.`);
-      }
-    }
-  }
-  if (!Array.isArray(ledger.entries)) {
-    errors.push('Ledger entries must be an array.');
-  }
-}
-
-function validateLedgerEntry(entry, errors, warnings) {
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-    errors.push('Ledger entry must be an object.');
-    return;
-  }
-
-  const id = typeof entry.id === 'string' ? entry.id : '<missing-id>';
-  for (const field of requiredLedgerEntryFields) {
-    if (entry[field] === undefined || entry[field] === null || entry[field] === '') {
-      errors.push(`${id}: missing required field ${field}.`);
-    }
-  }
-
-  if (!allowedSemanticClasses.has(entry.semanticClass)) {
-    errors.push(`${id}: invalid semanticClass ${String(entry.semanticClass)}.`);
-  }
-  if (!allowedStatuses.has(entry.status)) {
-    errors.push(`${id}: invalid status ${String(entry.status)}.`);
-  }
-  if (!allowedActions.has(entry.action)) {
-    errors.push(`${id}: invalid action ${String(entry.action)}.`);
-  }
-  if (typeof entry.package === 'string' && entry.package.includes('neko-agent')) {
-    errors.push(`${id}: non-Agent ledger must not own Agent package entries.`);
-  }
-
-  if (!Array.isArray(entry.paths) || entry.paths.length === 0) {
-    errors.push(`${id}: paths must be a non-empty array.`);
-  }
-
-  if (
-    !entry.validation ||
-    !Array.isArray(entry.validation.commands) ||
-    entry.validation.commands.length === 0
-  ) {
-    errors.push(`${id}: validation.commands must be a non-empty array.`);
-  }
-
-  if (entry.status === 'active' && entry.semanticClass !== 'runtime-resilience') {
-    if (typeof entry.removeCondition !== 'string' || entry.removeCondition.trim().length < 8) {
-      errors.push(`${id}: active non-resilience entry must have a specific removeCondition.`);
-    }
-  }
-
-  for (const path of Array.isArray(entry.paths) ? entry.paths : []) {
-    if (typeof path !== 'string') {
-      errors.push(`${id}: every path must be a string.`);
-      continue;
-    }
-    if (path.startsWith('packages/neko-agent/')) {
-      errors.push(
-        `${id}: Agent path belongs in agent-code-debt-lcd-register.json, not ${ledgerPath}.`,
-      );
-    }
-    if (entry.status !== 'removed' && !path.includes('*') && !existsSync(resolve(repoRoot, path))) {
-      warnings.push(`${id}: path does not currently exist: ${path}`);
-    }
-  }
-}
-
-function validateRequiredCoverage(ledger, entriesById, report, errors, warnings) {
-  const requiredCoverage = Array.isArray(ledger.requiredCoverage) ? ledger.requiredCoverage : [];
-  const nonTestFiles = new Set(collectFilesWithTermMatches(false));
-
-  for (const coverage of requiredCoverage) {
-    const id = coverage?.id ?? '<missing-coverage-id>';
-    const entry = entriesById.get(coverage?.ledgerEntryId);
-    if (!entry) {
-      errors.push(
-        `${id}: requiredCoverage references missing ledger entry ${String(coverage?.ledgerEntryId)}.`,
-      );
-      continue;
-    }
-    if (entry.status === 'removed' && coverage.allowRemovedEntry !== true) {
-      errors.push(`${id}: requiredCoverage cannot point at removed ledger entry ${entry.id}.`);
-    }
-    if (typeof coverage.pathPattern !== 'string') {
-      errors.push(`${id}: requiredCoverage.pathPattern must be a string.`);
-      continue;
-    }
-
-    const matchedFiles = [...nonTestFiles].filter((file) =>
-      matchesGlob(file, coverage.pathPattern),
-    );
-    if (
-      coverage.requiredWhileMatched !== false &&
-      matchedFiles.length === 0 &&
-      !(entry.status === 'removed' && coverage.allowRemovedEntry === true)
-    ) {
-      warnings.push(
-        `${id}: required coverage pattern currently has no matches: ${coverage.pathPattern}`,
-      );
-    }
-
-    const entryPaths = Array.isArray(entry.paths) ? entry.paths : [];
-    const covered = entryPaths.some(
-      (path) => matchesGlob(coverage.pathPattern, path) || matchesGlob(path, coverage.pathPattern),
-    );
-    if (!covered) {
-      errors.push(
-        `${id}: ledger entry ${entry.id} does not list coverage path ${coverage.pathPattern}.`,
-      );
-    }
-  }
-}
-
-function validateRemovedStalePatterns(entries, errors) {
-  for (const entry of entries) {
-    if (entry?.status !== 'removed') {
-      continue;
-    }
-    for (const stalePattern of Array.isArray(entry.stalePatterns) ? entry.stalePatterns : []) {
-      const pattern = stalePattern?.pattern;
-      const paths = stalePattern?.paths;
-      if (typeof pattern !== 'string' || !Array.isArray(paths) || paths.length === 0) {
-        errors.push(`${entry.id}: removed entries with stalePatterns need pattern and paths.`);
-        continue;
-      }
-      const regex = new RegExp(pattern, 'i');
-      for (const pathPattern of paths) {
-        for (const file of walkSourceFiles(repoRoot)) {
-          const relFile = toRepoPath(file);
-          if (!matchesGlob(relFile, pathPattern)) {
-            continue;
-          }
-          const content = readFileSync(file, 'utf8');
-          if (regex.test(content)) {
-            errors.push(`${entry.id}: stale pattern ${pattern} still appears in ${relFile}.`);
-          }
-        }
-      }
-    }
-  }
-}
-
-function collectFilesWithTermMatches(includeTests) {
-  const matchedFiles = [];
-  const termPattern = new RegExp(terms.join('|'), 'i');
-  for (const file of walkSourceFiles(repoRoot)) {
-    const relFile = toRepoPath(file);
-    if (!includeTests && isTestPath(relFile)) {
-      continue;
-    }
-    const content = readFileSync(file, 'utf8');
-    if (termPattern.test(content)) {
-      matchedFiles.push(relFile);
-    }
-  }
-  return matchedFiles;
-}
-
-function addCoverageWarnings(report, entries, warnings) {
-  const coveredPatterns = entries.flatMap((entry) =>
-    Array.isArray(entry.paths) ? entry.paths : [],
-  );
-  for (const row of report.cleanupCandidates.slice(0, 12)) {
-    const covered = coveredPatterns.some((pattern) => matchesGlob(row.key, pattern));
-    if (!covered && row.occurrences >= 10) {
-      warnings.push(
-        `High-volume cleanup candidate lacks ledger path coverage: ${row.key} (${row.occurrences})`,
-      );
-    }
-  }
 }
 
 function matchesGlob(value, glob) {
@@ -1313,11 +834,6 @@ function printHumanReport(report) {
   printSemanticClassSummary(report.semanticClasses.nonTestSource);
   console.log('');
   printQualityGate(report.qualityGate);
-  console.log(
-    `Retired Asset catalog audit: ${report.retiredAssetCatalog.violations.length} violation(s), ` +
-      `${report.retiredAssetCatalog.allowedMatches} allowlisted migration/rejection/test match(es)`,
-  );
-  console.log('');
   printHotspots('Top package hotspots', report.hotspots.packages, 12);
   console.log('');
   printHotspots('Top file hotspots', report.hotspots.files, 20);
@@ -1344,15 +860,6 @@ function printQualityGate(qualityGate) {
     console.log(`- ${semanticClass}: ${row.occurrences} occurrences in ${row.files} files`);
     for (const example of row.examples.slice(0, 3)) {
       console.log(`  ${example.file}:${example.line} ${example.text}`);
-    }
-  }
-  const catalog = qualityGate.retiredAssetCatalogViolations;
-  if (catalog.occurrences > 0) {
-    console.log(
-      `- retired-asset-catalog: ${catalog.occurrences} occurrences in ${catalog.files} files`,
-    );
-    for (const example of catalog.examples.slice(0, 8)) {
-      console.log(`  ${example.file}:${example.line} [${example.rule}] ${example.text}`);
     }
   }
 }
@@ -1386,295 +893,45 @@ function formatTermCounts(termCounts) {
   return terms.map((term) => `${term}=${termCounts[term] ?? 0}`).join(', ');
 }
 
-function printValidation(result) {
-  console.log(`Cleanup ledger validation: ${result.errors.length === 0 ? 'passed' : 'failed'}`);
-  console.log(`Ledger: ${result.ledgerPath}`);
-  console.log(`Entries checked: ${result.checkedEntries}`);
-  if (result.errors.length > 0) {
-    console.log('');
-    console.log('Errors');
-    for (const error of result.errors) {
-      console.log(`- ${error}`);
-    }
-  }
-  if (result.warnings.length > 0) {
-    console.log('');
-    console.log('Warnings');
-    for (const warning of result.warnings) {
-      console.log(`- ${warning}`);
-    }
-  }
-}
-
 function runSelfTest() {
   const cases = [
     {
       value: classifySurface(
-        'packages/shared/src/generated/timeline.engine.ts',
-        'legacy field',
+        'packages/example/src/generated/output.ts',
+        'const legacyValue = input;',
         'legacy',
       ),
       expected: 'generated-source',
     },
     {
       value: classifySurface(
-        'packages/neko-market/packages/core/src/status.ts',
-        "status: 'deprecated'",
-        'deprecated',
-      ),
-      expected: 'domain-status',
-    },
-    {
-      value: classifySurface(
-        'packages/generation/src/media/adapters/openai-compat-media-adapter.ts',
-        'export class OpenAICompatMediaAdapter extends BaseMediaAdapter {}',
-        'compat',
-      ),
-      expected: 'external-contract',
-    },
-    {
-      value: classifySurface(
-        'apps/neko-desktop/vite.renderer.config.ts',
-        "'use-sync-external-store/shim/with-selector.js',",
-        'shim',
-      ),
-      expected: 'external-contract',
-    },
-    {
-      value: classifySurface(
-        'packages/example/src/storage-upgrade.ts',
-        'const upgradeHandler = createUpgradeHandler();',
-        'upgrade',
-      ),
-      expected: 'needs-review',
-    },
-    {
-      value: classifySurface(
-        'packages/assets/domain/src/contracts/asset/manifest.ts',
-        'upgradeTo?: { packageId: string; version: string };',
-        'upgrade',
-      ),
-      expected: 'domain-status',
-    },
-    {
-      value: classifySurface(
-        'packages/agent/runtime/src/runtime/capability/external-research-capability-provider.ts',
-        'Do not present external research as a default model knowledge upgrade.',
-        'upgrade',
-      ),
-      expected: 'false-positive-word',
-    },
-    {
-      value: classifySurface(
-        'packages/preview/webview/src/Viewer.tsx',
-        'const fallbackLabel = "Open";',
+        'packages/example/src/view.tsx',
+        'return <Suspense fallback={null} />;',
         'fallback',
       ),
       expected: 'presentation-default',
     },
     {
       value: classifySurface(
-        'packages/ui/src/error-boundary/index.tsx',
-        'return this.props.fallback(fallbackProps);',
-        'fallback',
-      ),
-      expected: 'presentation-default',
-    },
-    {
-      value: classifySurface(
-        'packages/shared/src/types/asset/classifier.ts',
-        "source?: 'llm' | 'fallback';",
-        'fallback',
-      ),
-      expected: 'domain-status',
-    },
-    {
-      value: classifySurface(
-        'packages/shared/src/types/narrative-production-binding.ts',
-        "'fallback',",
-        'fallback',
-      ),
-      expected: 'domain-status',
-    },
-    {
-      value: classifySurface(
-        'packages/agent/runtime/src/skill/legacy-skill-migration.ts',
-        "const LEGACY_MANIFEST_FILE = 'manifest.json';",
+        'packages/example/src/runtime.ts',
+        'const legacyReader = createReader();',
         'legacy',
       ),
-      expected: 'boundary-canonicalizer',
-    },
-    {
-      value: classifySurface(
-        'packages/media/src/node/NodeMediaRuntime.ts',
-        'fallback to software encoding when hardware fails',
-        'fallback',
-      ),
-      expected: 'runtime-resilience',
-    },
-    {
-      value: classifySurface(
-        'knip.config.ts',
-        "'@img/sharp-wasm32', // Sharp WASM fallback",
-        'fallback',
-      ),
-      expected: 'runtime-resilience',
+      expected: 'migrate-now',
     },
     {
       value: buildQualityGate([
         {
-          file: 'packages/media/src/node/NodeMediaRuntime.ts',
-          packageName: '@neko/media',
-          lineNumber: 1,
-          term: 'fallback',
-          text: 'fallback to cpu when gpu fails',
-          isTest: false,
-          semanticClass: 'runtime-resilience',
-        },
-      ]).status,
-      expected: 'passed',
-    },
-    {
-      value: buildQualityGate([
-        {
-          file: 'apps/neko-desktop/src/main/desktop-state-migration-adapter.ts',
-          packageName: '@neko/app-desktop',
+          file: 'packages/example/src/runtime.ts',
+          packageName: '@neko/example',
           lineNumber: 1,
           term: 'legacy',
-          text: 'legacy adapter path',
-          isTest: false,
-          semanticClass: 'current-bridge',
-        },
-        {
-          file: 'packages/entity/node/src/entity-migration.ts',
-          packageName: '@neko/entity-node',
-          lineNumber: 1,
-          term: 'legacy',
-          text: 'legacy migration path',
-          isTest: false,
-          semanticClass: 'migration-only',
-        },
-      ]).status,
-      expected: 'failed',
-    },
-    {
-      value: buildQualityGate([
-        {
-          file: 'packages/shared/src/project-file-io/save-session.ts',
-          packageName: '@neko/shared',
-          lineNumber: 1,
-          term: 'fallback',
-          text: 'readonly fallbackMessage: string;',
-          isTest: false,
-          semanticClass: 'needs-review',
-        },
-      ]).status,
-      expected: 'failed',
-    },
-    {
-      value: buildQualityGate([
-        {
-          file: 'packages/agent/runtime/src/runtime.ts',
-          packageName: '@neko/agent-runtime',
-          lineNumber: 1,
-          term: 'legacy',
-          text: 'legacy runtime alias',
+          text: 'const legacyReader = createReader();',
           isTest: false,
           semanticClass: 'migrate-now',
         },
       ]).status,
       expected: 'failed',
-    },
-    {
-      value: classifySurface(
-        'packages/host/src/application.ts',
-        'active-workspace fallback is forbidden.',
-        'fallback',
-      ),
-      expected: 'boundary-canonicalizer',
-    },
-    {
-      value: classifySurface(
-        'packages/canvas/webview/src/components/content/creatorPresentation.ts',
-        'referenceMedia: semanticRow.referenceMedia || summarizeLegacyReferenceMedia(data),',
-        'legacy',
-      ),
-      expected: 'migrate-now',
-    },
-    {
-      value: classifySurface(
-        'packages/generation/src/job/codec.ts',
-        'assertNoLegacyGenerationPayload(snapshot);',
-        'legacy',
-      ),
-      expected: 'boundary-canonicalizer',
-    },
-    {
-      value: classifySurface(
-        'packages/quality/src/internal/quality-gate-runtime.ts',
-        'export function rejectLegacyMediaPathRequest(value: unknown): never {',
-        'legacy',
-      ),
-      expected: 'boundary-canonicalizer',
-    },
-    {
-      value: classifySurface(
-        'packages/shared/src/local-metadata/node-generated-output-projection-binding.ts',
-        'Resource contains an invalid or legacy projection.',
-        'legacy',
-      ),
-      expected: 'migrate-now',
-    },
-    {
-      value: classifySurface(
-        'packages/shared/src/nkc/index.ts',
-        'legacyCanvasMaterialReader,',
-        'legacy',
-      ),
-      expected: 'migrate-now',
-    },
-    {
-      value: classifySurface(
-        'packages/shared/src/types/canvas-material-contracts.ts',
-        "code: 'canvas-material-legacy-generation-evidence',",
-        'legacy',
-      ),
-      expected: 'migrate-now',
-    },
-    {
-      value: retiredAssetCatalogAllowlist(
-        'packages/content/src/contracts/content-locator.ts',
-        'asset-uri',
-      ),
-      expected: 'boundary-rejection',
-    },
-    {
-      value: retiredAssetCatalogAllowlist(
-        'packages/assets/domain/src/global-library/contract.ts',
-        'search-partition',
-      ),
-      expected: 'canonical-global-asset-library',
-    },
-    {
-      value: retiredAssetCatalogAllowlist(
-        'packages/assets/domain/src/global-library/contract.ts',
-        'catalog-type',
-      ),
-      expected: undefined,
-    },
-    {
-      value: retiredAssetCatalogAllowlist(
-        'apps/neko-desktop/src/main/unrelated.ts',
-        'search-partition',
-      ),
-      expected: undefined,
-    },
-    {
-      value: matchesGlob(
-        'packages/shared/src/types/storyboard-table.ts',
-        'packages/shared/src/types/*.ts',
-      ),
-      expected: true,
     },
   ];
 

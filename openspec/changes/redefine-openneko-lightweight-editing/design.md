@@ -15,7 +15,7 @@ Cut 的 canonical path 是 Electron Desktop Main document session → revisioned
 - **Extension:** new v1 operations extend the typed command union and one projection path. Unsupported
   OTIO objects, media profiles and subtitles remain explicit diagnostics.
 - **Testing:** Domain behavior, Main producer/consumer path, renderer interaction and isolated Electron
-  scenarios jointly prove the canonical path and poisoned legacy routes.
+  scenarios jointly prove the canonical path and absence of retired routes.
 
 ## Decisions
 
