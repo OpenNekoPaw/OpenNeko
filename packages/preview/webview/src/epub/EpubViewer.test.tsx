@@ -12,6 +12,7 @@ import {
   EpubViewer,
   applyEpubImageLayout,
   fetchForEpub,
+  getChapterNeighborhood,
   waitForEpubImage,
   waitForEpubResourceReadiness,
 } from './EpubViewer';
@@ -186,6 +187,27 @@ describe('EPUB waterfall image layout', () => {
       expect(page.style.margin).toBe('0px auto');
       expect(page.style.getPropertyPriority('margin')).toBe('important');
     }
+  });
+});
+
+describe('EPUB waterfall progressive rendering', () => {
+  it('selects only the target chapter and its bounded neighbors', () => {
+    const entries = Array.from({ length: 10 }, (_, index) => ({ index }));
+
+    expect(getChapterNeighborhood(entries, 5, 2).map((entry) => entry.index)).toEqual([
+      5, 4, 6, 3, 7,
+    ]);
+    expect(getChapterNeighborhood(entries, 0, 2).map((entry) => entry.index)).toEqual([0, 1, 2]);
+    expect(getChapterNeighborhood(entries, 20, 2)).toEqual([]);
+  });
+
+  it('keeps one waterfall chapter render path without hidden full-spine measurement', () => {
+    const source = readFileSync(resolve(import.meta.dirname, 'EpubViewer.tsx'), 'utf8');
+
+    expect(source.match(/await entry\.section\.render\(/g)).toHaveLength(1);
+    expect(source).not.toContain('measureContainerRef');
+    expect(source).not.toContain('measurementQueueRef');
+    expect(source).not.toContain('warmChapterHeights');
   });
 });
 
