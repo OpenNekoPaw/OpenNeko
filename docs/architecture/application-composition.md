@@ -140,12 +140,15 @@ Desktop 不得伪造占位业务 UI。
 
 Host 把完整 Project catalog、Desktop stored recent Project context 与 owner-qualified Agent conversation
 catalog 组合成一个 canonical grouped navigation projection，PrimarySidebar 只消费该投影，不在 React 中
-重新 join 或推断。Project header 是容器入口，conversation child 携带 exact `conversationId + owner`；无
-Project 的 Assistant、Character 和 Room conversation 位于独立 owner group。当前拥有 Conversation 或属于
-recent Project context 的 Project 保留一个 group；清理最后一条 Conversation 只让 child 变为空，不得让
-recent Project 从侧栏消失或伪造默认 Conversation。完整 catalog 中从未进入 recent context 且没有
-Conversation 的 Project 只出现在 Project Management，不得由 Renderer 从 active tab、catalog 顺序或
-mounted Root 临时补组。该轻量 presentation 不改变 capability、memory、resource grant 或 Scene owner。
+重新 join 或推断。Project header 是容器入口，conversation child 携带 exact `conversationId + owner`；当前
+PrimarySidebar 将 `project` 和无法解析 Project 的 `workspace` group 统一放入“项目”，并只将无 Project 的
+Assistant conversation 放入“会话”。失效 Workspace group 保留局部 diagnostic 和清理操作，不得转成独立
+Assistant conversation。Character、Room 与 World 只保留封闭的未来分类，未具备 package-owned projection
+和 runtime 前不得显示空栏目、占位记录、数量、操作或路由。当前拥有 Conversation 或属于 recent Project
+context 的 Project 保留一个 group；清理最后一条 Conversation 只让 child 变为空，不得让 recent Project
+从侧栏消失或伪造默认 Conversation。完整 catalog 中从未进入 recent context 且没有 Conversation 的 Project
+只出现在 Project Management，不得由 Renderer 从 active tab、catalog 顺序或 mounted Root 临时补组。该轻量
+presentation 不改变 capability、memory、resource grant 或 Scene owner。
 场景切换、renderer reload 和应用重启不得丢失这些 identity；有 child 的组默认展示有界 child 并显式
 展开/收起。sidebar 展开、折叠和宽度修改只更新 Window-owned sidebar aggregate，不修改任何 Workspace
 instance。Workspace 只能由显式 Project identity 或 sender/Window-bound opaque directory grant 打开；

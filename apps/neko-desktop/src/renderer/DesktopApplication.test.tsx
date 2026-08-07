@@ -852,6 +852,12 @@ describe('DesktopApplication scene lifecycle', () => {
     installBridge({ projection, transition });
 
     const { container, root } = await renderApplication();
+    const projectSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="projects"]',
+    );
+    const conversationSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="conversations"]',
+    );
     const group = container.querySelector<HTMLElement>(
       '.primary-conversation-group[data-group-kind="project"]',
     );
@@ -865,7 +871,19 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!group || !projectButton || !newConversationButton || !cleanupButton) {
       throw new Error('Desktop fixture requires empty Project navigation actions.');
     }
+    if (!projectSection || !conversationSection) {
+      throw new Error('Desktop fixture requires current navigation sections.');
+    }
 
+    expect(projectSection.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects1');
+    expect(conversationSection.querySelector('.home-sidebar-heading')?.textContent).toBe(
+      'Conversations0',
+    );
+    expect(projectSection.contains(group)).toBe(true);
+    expect(
+      projectSection.compareDocumentPosition(conversationSection) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(projectButton.textContent).toContain(project.displayName);
     expect(container.textContent).not.toContain(catalogOnlyProject.displayName);
     expect(group.querySelector('.primary-conversation-group__count')?.textContent).toBe('0');
@@ -1456,6 +1474,14 @@ describe('DesktopApplication scene lifecycle', () => {
       '.primary-conversation-group[data-group-kind="workspace"]',
     );
     if (!group) throw new Error('Desktop fixture requires an unavailable Workspace group.');
+    const projectSection = group.closest<HTMLElement>('[data-navigation-section="projects"]');
+    const conversationSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="conversations"]',
+    );
+    expect(projectSection?.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects1');
+    expect(conversationSection?.querySelector('.home-sidebar-heading')?.textContent).toBe(
+      'Conversations0',
+    );
     const heading = group.querySelector<HTMLElement>(
       '.primary-conversation-group__standalone-heading',
     );
@@ -1607,6 +1633,16 @@ describe('DesktopApplication scene lifecycle', () => {
       '.primary-conversation-group[data-group-kind="assistant"]',
     );
     if (!group) throw new Error('Desktop fixture requires a standalone Assistant group.');
+    const projectSection = container.querySelector<HTMLElement>(
+      '[data-navigation-section="projects"]',
+    );
+    const conversationSection = group.closest<HTMLElement>(
+      '[data-navigation-section="conversations"]',
+    );
+    expect(projectSection?.querySelector('.home-sidebar-heading')?.textContent).toBe('Projects0');
+    expect(conversationSection?.querySelector('.home-sidebar-heading')?.textContent).toBe(
+      'Conversations6',
+    );
     expect(group.textContent).toContain('Personal assistant');
     expect(
       group.querySelector(
@@ -1643,8 +1679,16 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('renders distinct Character and Room owner icons above shared Conversation icons', async () => {
+  it('keeps future Character, Room, and World classifications out of current navigation', async () => {
     const base = createProjection();
+    const currentProject = {
+      projectId: 'content:project-1',
+      workspaceId: 'workspace-1',
+      profile: 'content' as const,
+      displayName: 'Current authoring project',
+      createdAt: '2026-08-07T00:00:00.000Z',
+      updatedAt: '2026-08-07T00:00:00.000Z',
+    };
     const conversations = [
       {
         navigation: {
@@ -1680,8 +1724,24 @@ describe('DesktopApplication scene lifecycle', () => {
           occurredAt: '2026-08-07T02:00:00.000Z',
         },
       },
+      {
+        navigation: {
+          conversationId: 'assistant-conversation-current',
+          owner: {
+            kind: 'assistant' as const,
+            assistantSpaceId: 'assistant-space:local-user',
+          },
+        },
+        title: 'Current assistant conversation',
+        updatedAt: '2026-08-07T03:00:00.000Z',
+        attention: 'none' as const,
+        lastActivity: {
+          kind: 'conversation-updated' as const,
+          occurredAt: '2026-08-07T03:00:00.000Z',
+        },
+      },
     ];
-    const catalog = { projects: [] };
+    const catalog = { projects: [currentProject] };
     const agentHome = {
       conversations,
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -1690,38 +1750,43 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, [
+        currentProject.projectId,
+      ]),
     };
     installBridge({ projection });
     const { container, root } = await renderApplication();
 
-    const characterGroup = container.querySelector<HTMLElement>(
-      '.primary-conversation-group[data-group-kind="character"]',
-    );
-    const roomGroup = container.querySelector<HTMLElement>(
-      '.primary-conversation-group[data-group-kind="room"]',
-    );
-    if (!characterGroup || !roomGroup) {
-      throw new Error('Desktop fixture requires Character and Room groups.');
-    }
+    const navigation = container.querySelector<HTMLElement>('.home-recent-navigation');
+    if (!navigation) throw new Error('Desktop fixture requires PrimarySidebar navigation.');
+    const headings = [
+      ...navigation.querySelectorAll('.home-sidebar-heading > span:first-child'),
+    ].map((heading) => heading.textContent);
+    expect(headings).toEqual(['Projects', 'Conversations']);
     expect(
-      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-character'),
-    ).not.toBeNull();
+      navigation.querySelector('[data-navigation-section="projects"] .home-sidebar-heading')
+        ?.textContent,
+    ).toBe('Projects1');
     expect(
-      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-room'),
-    ).not.toBeNull();
+      navigation.querySelector('[data-navigation-section="conversations"] .home-sidebar-heading')
+        ?.textContent,
+    ).toBe('Conversations1');
     expect(
-      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-conversation'),
-    ).not.toBeNull();
+      navigation.querySelector('[data-navigation-section="projects"] [data-group-kind="project"]')
+        ?.textContent,
+    ).toContain(currentProject.displayName);
     expect(
-      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-conversation'),
-    ).not.toBeNull();
-    expect(
-      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-room'),
-    ).toBeNull();
-    expect(
-      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-character'),
-    ).toBeNull();
+      navigation.querySelector(
+        '[data-navigation-section="conversations"] [data-group-kind="assistant"]',
+      )?.textContent,
+    ).toContain('Current assistant conversation');
+    expect(navigation.querySelector('[data-group-kind="character"]')).toBeNull();
+    expect(navigation.querySelector('[data-group-kind="room"]')).toBeNull();
+    expect(navigation.querySelector('[data-navigation-section="character"]')).toBeNull();
+    expect(navigation.querySelector('[data-navigation-section="room"]')).toBeNull();
+    expect(navigation.querySelector('[data-navigation-section="world"]')).toBeNull();
+    expect(navigation.textContent).not.toContain('Character conversation');
+    expect(navigation.textContent).not.toContain('Room conversation');
 
     await act(async () => root.unmount());
   });

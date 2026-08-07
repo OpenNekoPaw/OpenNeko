@@ -704,7 +704,7 @@ code {
   white-space: nowrap;
 }
 
-.home-sidebar-conversation-heading {
+.primary-navigation-section + .primary-navigation-section {
   margin-top: 16px;
 }
 

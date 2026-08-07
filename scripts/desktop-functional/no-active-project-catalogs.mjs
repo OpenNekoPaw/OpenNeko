@@ -2,6 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const CONVERSATION_TITLE = 'Retained historical conversation';
+const ASSISTANT_CONVERSATION_COUNT = 6;
+const ASSISTANT_CONVERSATION_TITLE = 'Retained assistant conversation';
 const ASSET_LABEL = 'missing-retained-asset.png';
 const ACTIVE_WORKBENCH = '.desktop-scene-workbench';
 const SCROLL_PROJECT_COUNT = 28;
@@ -101,20 +103,30 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
           timestamp,
         );
       }
-      database
-        .prepare(
-          `INSERT INTO pi_conversations (
-             workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          'workspace-without-project',
-          'conversation-retained',
-          CONVERSATION_TITLE,
-          'branch-main',
-          timestamp,
-          timestamp,
+      const insertConversation = database.prepare(
+        `INSERT INTO pi_conversations (
+           workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?)`,
+      );
+      insertConversation.run(
+        'workspace-without-project',
+        'conversation-retained',
+        CONVERSATION_TITLE,
+        'branch-main',
+        timestamp,
+        timestamp,
+      );
+      for (let index = 1; index <= ASSISTANT_CONVERSATION_COUNT; index += 1) {
+        const assistantTimestamp = `2026-08-06T00:0${String(index)}:00.000Z`;
+        insertConversation.run(
+          'assistant-space:local-user',
+          `assistant-conversation-${String(index)}`,
+          `${ASSISTANT_CONVERSATION_TITLE} ${String(index)}`,
+          `assistant-branch-${String(index)}`,
+          assistantTimestamp,
+          assistantTimestamp,
         );
+      }
       database
         .prepare(
           `INSERT INTO asset_library_memberships (
@@ -133,7 +145,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
             unrecognizedSettingForNotice: true,
             preferences: {
               theme: 'light',
-              locale: 'system',
+              locale: 'en',
               startupTarget: 'home',
               resourceBrowserView: 'list',
             },
@@ -212,6 +224,50 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     })()`);
     await waitForSelector('.desktop-scene-workbench--agent-only');
     await waitForSelector('.primary-conversation-group[data-group-kind="workspace"]');
+    await waitForSelector('.primary-conversation-group[data-group-kind="assistant"]');
+    const navigationSections = await evaluate(`(() => {
+      const navigation = document.querySelector('.home-recent-navigation');
+      const sections = [...(navigation?.querySelectorAll('.primary-navigation-section') ?? [])]
+        .map((section) => ({
+          id: section.getAttribute('data-navigation-section') ?? '',
+          label: section.querySelector('.home-sidebar-heading > span:first-child')?.textContent?.trim() ?? '',
+          count: section.querySelector('.home-sidebar-heading > span:last-child')?.textContent?.trim() ?? '',
+          groupKinds: [...section.querySelectorAll(':scope > .primary-conversation-group')]
+            .map((group) => group.getAttribute('data-group-kind') ?? '')
+            .sort(),
+        }));
+      const assistant = navigation?.querySelector(
+        '[data-navigation-section="conversations"] [data-group-kind="assistant"]',
+      );
+      return {
+        sections,
+        assistantCount:
+          assistant?.querySelector('.primary-conversation-group__count')?.textContent?.trim() ?? '',
+        assistantVisibleRows:
+          assistant?.querySelectorAll('.primary-recent-conversation-row').length ?? -1,
+        assistantTitleVisible:
+          assistant?.textContent?.includes(${JSON.stringify(`${ASSISTANT_CONVERSATION_TITLE} 6`)}) === true,
+        futureSectionCount: navigation?.querySelectorAll(
+          '[data-navigation-section="character"], [data-navigation-section="room"], [data-navigation-section="world"]',
+        ).length ?? -1,
+      };
+    })()`);
+    if (
+      JSON.stringify(navigationSections.sections) !==
+        JSON.stringify([
+          { id: 'projects', label: 'Projects', count: '2', groupKinds: ['project', 'workspace'] },
+          { id: 'conversations', label: 'Conversations', count: '6', groupKinds: ['assistant'] },
+        ]) ||
+      navigationSections.assistantCount !== '6' ||
+      navigationSections.assistantVisibleRows !== 5 ||
+      !navigationSections.assistantTitleVisible ||
+      navigationSections.futureSectionCount !== 0
+    ) {
+      throw new Error(
+        `PrimarySidebar section classification is incorrect: ${JSON.stringify(navigationSections)}`,
+      );
+    }
+    checkpoint('primary-navigation-sections-visible', navigationSections);
     const conversation = await evaluate(`(async () => {
       const group = document.querySelector('.primary-conversation-group[data-group-kind="workspace"]');
       const row = group?.querySelector('.primary-recent-conversation-row');
@@ -405,6 +461,16 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         catalogProjectCount: projection.catalog.projects.length,
         conversationGroupCount: document.querySelectorAll('.primary-conversation-group').length,
         projectGroupCount: groups.length,
+        projectSectionCount:
+          document.querySelector('[data-navigation-section="projects"] .home-sidebar-heading > span:last-child')
+            ?.textContent?.trim() ?? '',
+        conversationSectionCount:
+          document.querySelector('[data-navigation-section="conversations"] .home-sidebar-heading > span:last-child')
+            ?.textContent?.trim() ?? '',
+        assistantGroupCount:
+          document.querySelectorAll(
+            '[data-navigation-section="conversations"] [data-group-kind="assistant"]',
+          ).length,
         everyProjectEmpty: groups.every(
           (group) => group.querySelectorAll('.primary-recent-conversation-row').length === 0,
         ),
@@ -418,8 +484,11 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     if (
       !primaryProjects.catalogProjectPresent ||
       primaryProjects.catalogProjectCount !== expectedProjectCount ||
-      primaryProjects.conversationGroupCount !== 1 ||
+      primaryProjects.conversationGroupCount !== 2 ||
       primaryProjects.projectGroupCount !== 1 ||
+      primaryProjects.projectSectionCount !== '1' ||
+      primaryProjects.conversationSectionCount !== '6' ||
+      primaryProjects.assistantGroupCount !== 1 ||
       !primaryProjects.everyProjectEmpty ||
       !primaryProjects.navigationScrollable ||
       !primaryProjects.availableProject.present ||

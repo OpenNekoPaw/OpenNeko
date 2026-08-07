@@ -20,8 +20,6 @@ import {
   Tooltip,
   TooltipProvider,
   TrashIcon,
-  UserIcon,
-  UsersIcon,
   WarningIcon,
   WorkbenchEditorTabs,
   toCodiconClassName,
@@ -2233,6 +2231,42 @@ function ApplicationPrimarySidebar({
   );
 }
 
+type PrimaryNavigationSectionId = 'projects' | 'conversations';
+
+type PrimaryNavigationClassification = DesktopConversationNavigationGroup['kind'] | 'world';
+
+const PRIMARY_NAVIGATION_SECTION_BY_CLASSIFICATION = {
+  project: 'projects',
+  workspace: 'projects',
+  assistant: 'conversations',
+  character: undefined,
+  room: undefined,
+  world: undefined,
+} satisfies Readonly<
+  Record<PrimaryNavigationClassification, PrimaryNavigationSectionId | undefined>
+>;
+
+function partitionPrimaryNavigationGroups(groups: readonly DesktopConversationNavigationGroup[]): {
+  readonly projects: readonly DesktopConversationNavigationGroup[];
+  readonly conversations: readonly DesktopConversationNavigationGroup[];
+} {
+  const projects: DesktopConversationNavigationGroup[] = [];
+  const conversations: DesktopConversationNavigationGroup[] = [];
+  for (const group of groups) {
+    switch (PRIMARY_NAVIGATION_SECTION_BY_CLASSIFICATION[group.kind]) {
+      case 'projects':
+        projects.push(group);
+        break;
+      case 'conversations':
+        conversations.push(group);
+        break;
+      case undefined:
+        break;
+    }
+  }
+  return { projects, conversations };
+}
+
 function PrimaryRecentNavigation({
   activeProjectId,
   disabled = false,
@@ -2264,6 +2298,13 @@ function PrimaryRecentNavigation({
     activeScene.context.kind === 'agent' && activeScene.context.scope.kind !== 'unbound'
       ? activeScene.context.scope.conversationId
       : undefined;
+  const navigationGroups = partitionPrimaryNavigationGroups(
+    projection.conversationNavigation.groups,
+  );
+  const assistantConversationCount = navigationGroups.conversations.reduce(
+    (count, group) => count + group.conversations.length,
+    0,
+  );
   const toggleCollapsed = (group: DesktopConversationNavigationGroup) => {
     const key = conversationGroupKey(group);
     setCollapsedGroups((current) => {
@@ -2282,177 +2323,183 @@ function PrimaryRecentNavigation({
       return next;
     });
   };
+  const renderNavigationGroup = (group: DesktopConversationNavigationGroup): JSX.Element => {
+    const key = conversationGroupKey(group);
+    const collapsed = collapsedGroups.has(key);
+    const showAll = showAllGroups.has(key);
+    const conversations = showAll
+      ? group.conversations
+      : group.conversations.slice(0, INITIAL_CONVERSATIONS_PER_GROUP);
+    const project =
+      group.kind === 'project'
+        ? projection.catalog.projects.find((candidate) => candidate.projectId === group.projectId)
+        : undefined;
+    const projectUnavailable = project?.unavailable;
+    const workspaceConversationCount =
+      group.kind === 'project'
+        ? group.conversations.filter(
+            (conversation) =>
+              conversation.navigation.owner.kind === 'workspace' &&
+              conversation.navigation.owner.workspaceId === group.workspaceId,
+          ).length
+        : 0;
+    if (group.kind === 'project' && !project) {
+      throw new Error(`Conversation navigation references missing Project '${group.projectId}'.`);
+    }
+    return (
+      <section
+        className="primary-conversation-group"
+        data-group-id={key}
+        data-group-kind={group.kind}
+        key={key}
+      >
+        {group.kind === 'project' && project ? (
+          <ContextMenu
+            items={createProjectNavigationMenuItems({
+              disabled,
+              onDeleteConversations: () => onDeleteProjectConversations(project),
+              onManageProjects,
+              onOpen: () => onOpenRecent(project.projectId),
+              onRemove: () => onRemoveProject(project),
+              project,
+              t,
+              workspaceConversationCount,
+            })}
+            trigger={
+              <div
+                className="primary-recent-project-row primary-conversation-group__header"
+                data-active={project.projectId === activeProjectId ? 'true' : 'false'}
+              >
+                {group.conversations.length > 0 ? (
+                  <IconButton
+                    className="primary-conversation-group__collapse"
+                    disabled={disabled}
+                    size="xs"
+                    label={
+                      collapsed
+                        ? t('home.expandConversationGroup', { group: project.displayName })
+                        : t('home.collapseConversationGroup', { group: project.displayName })
+                    }
+                    aria-expanded={!collapsed}
+                    icon={
+                      collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />
+                    }
+                    onClick={() => toggleCollapsed(group)}
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="primary-conversation-group__collapse-spacer"
+                  />
+                )}
+                <button
+                  type="button"
+                  className="home-project-link primary-conversation-group__project-link"
+                  disabled={disabled || projectUnavailable !== undefined}
+                  title={projectUnavailable?.message}
+                  onClick={() => onOpenRecent(project.projectId)}
+                >
+                  {conversationGroupIcon(group)}
+                  <span>{project.displayName}</span>
+                </button>
+                <span className="primary-conversation-group__count">
+                  {group.conversations.length}
+                </span>
+                <span className="primary-navigation-state">
+                  {projectUnavailable ? (
+                    <NavigationUnavailableStatus message={projectUnavailable.message} />
+                  ) : null}
+                </span>
+                <span className="primary-navigation-row-actions">
+                  {!projectUnavailable ? (
+                    <IconButton
+                      disabled={disabled}
+                      size="xs"
+                      label={t('home.newProjectConversation', { project: project.displayName })}
+                      title={t('home.newProjectConversation', { project: project.displayName })}
+                      icon={<PlusIcon size={13} />}
+                      onClick={() => onOpenRecent(project.projectId)}
+                    />
+                  ) : null}
+                  <IconButton
+                    disabled={disabled || workspaceConversationCount === 0}
+                    size="xs"
+                    label={t('shell.deleteProjectConversations', {
+                      project: project.displayName,
+                    })}
+                    title={t('shell.deleteProjectConversations', {
+                      project: project.displayName,
+                    })}
+                    icon={<TrashIcon size={13} />}
+                    onClick={() => onDeleteProjectConversations(project)}
+                  />
+                  <IconButton
+                    disabled={disabled}
+                    size="xs"
+                    label={t('shell.removeProject', { project: project.displayName })}
+                    title={t('shell.removeProject', { project: project.displayName })}
+                    icon={<RemoveIcon size={13} />}
+                    onClick={() => onRemoveProject(project)}
+                  />
+                </span>
+              </div>
+            }
+          />
+        ) : (
+          <StandaloneConversationGroupHeader
+            collapsed={collapsed}
+            disabled={disabled}
+            group={group}
+            onDeleteConversations={() => onDeleteConversations(group.conversations)}
+            onToggle={() => toggleCollapsed(group)}
+          />
+        )}
+        {!collapsed ? (
+          <div className="primary-conversation-group__children">
+            {conversations.map((conversation) => (
+              <ConversationNavigationRow
+                active={conversation.navigation.conversationId === activeConversationId}
+                conversation={conversation}
+                disabled={disabled}
+                key={conversation.navigation.conversationId}
+                navigationDisabled={
+                  disabled || group.kind === 'workspace' || projectUnavailable !== undefined
+                }
+                onDelete={(conversation) => onDeleteConversations([conversation])}
+                onOpen={onOpenConversation}
+              />
+            ))}
+            {group.conversations.length > INITIAL_CONVERSATIONS_PER_GROUP ? (
+              <button
+                type="button"
+                className="primary-conversation-group__expand"
+                disabled={disabled}
+                onClick={() => toggleShowAll(group)}
+              >
+                {showAll ? t('home.collapseConversations') : t('home.expandConversations')}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+    );
+  };
   return (
     <div className="home-recent-navigation">
-      <div className="home-sidebar-heading">
-        <span>{t('home.conversationGroups')}</span>
-        <span>{projection.conversationNavigation.groups.length}</span>
-      </div>
-      {projection.conversationNavigation.groups.map((group) => {
-        const key = conversationGroupKey(group);
-        const collapsed = collapsedGroups.has(key);
-        const showAll = showAllGroups.has(key);
-        const conversations = showAll
-          ? group.conversations
-          : group.conversations.slice(0, INITIAL_CONVERSATIONS_PER_GROUP);
-        const project =
-          group.kind === 'project'
-            ? projection.catalog.projects.find(
-                (candidate) => candidate.projectId === group.projectId,
-              )
-            : undefined;
-        const projectUnavailable = project?.unavailable;
-        const workspaceConversationCount =
-          group.kind === 'project'
-            ? group.conversations.filter(
-                (conversation) =>
-                  conversation.navigation.owner.kind === 'workspace' &&
-                  conversation.navigation.owner.workspaceId === group.workspaceId,
-              ).length
-            : 0;
-        if (group.kind === 'project' && !project) {
-          throw new Error(
-            `Conversation navigation references missing Project '${group.projectId}'.`,
-          );
-        }
-        return (
-          <section
-            className="primary-conversation-group"
-            data-group-id={key}
-            data-group-kind={group.kind}
-            key={key}
-          >
-            {group.kind === 'project' && project ? (
-              <ContextMenu
-                items={createProjectNavigationMenuItems({
-                  disabled,
-                  onDeleteConversations: () => onDeleteProjectConversations(project),
-                  onManageProjects,
-                  onOpen: () => onOpenRecent(project.projectId),
-                  onRemove: () => onRemoveProject(project),
-                  project,
-                  t,
-                  workspaceConversationCount,
-                })}
-                trigger={
-                  <div
-                    className="primary-recent-project-row primary-conversation-group__header"
-                    data-active={project.projectId === activeProjectId ? 'true' : 'false'}
-                  >
-                    {group.conversations.length > 0 ? (
-                      <IconButton
-                        className="primary-conversation-group__collapse"
-                        disabled={disabled}
-                        size="xs"
-                        label={
-                          collapsed
-                            ? t('home.expandConversationGroup', { group: project.displayName })
-                            : t('home.collapseConversationGroup', { group: project.displayName })
-                        }
-                        aria-expanded={!collapsed}
-                        icon={
-                          collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />
-                        }
-                        onClick={() => toggleCollapsed(group)}
-                      />
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="primary-conversation-group__collapse-spacer"
-                      />
-                    )}
-                    <button
-                      type="button"
-                      className="home-project-link primary-conversation-group__project-link"
-                      disabled={disabled || projectUnavailable !== undefined}
-                      title={projectUnavailable?.message}
-                      onClick={() => onOpenRecent(project.projectId)}
-                    >
-                      {conversationGroupIcon(group)}
-                      <span>{project.displayName}</span>
-                    </button>
-                    <span className="primary-conversation-group__count">
-                      {group.conversations.length}
-                    </span>
-                    <span className="primary-navigation-state">
-                      {projectUnavailable ? (
-                        <NavigationUnavailableStatus message={projectUnavailable.message} />
-                      ) : null}
-                    </span>
-                    <span className="primary-navigation-row-actions">
-                      {!projectUnavailable ? (
-                        <IconButton
-                          disabled={disabled}
-                          size="xs"
-                          label={t('home.newProjectConversation', { project: project.displayName })}
-                          title={t('home.newProjectConversation', { project: project.displayName })}
-                          icon={<PlusIcon size={13} />}
-                          onClick={() => onOpenRecent(project.projectId)}
-                        />
-                      ) : null}
-                      <IconButton
-                        disabled={disabled || workspaceConversationCount === 0}
-                        size="xs"
-                        label={t('shell.deleteProjectConversations', {
-                          project: project.displayName,
-                        })}
-                        title={t('shell.deleteProjectConversations', {
-                          project: project.displayName,
-                        })}
-                        icon={<TrashIcon size={13} />}
-                        onClick={() => onDeleteProjectConversations(project)}
-                      />
-                      <IconButton
-                        disabled={disabled}
-                        size="xs"
-                        label={t('shell.removeProject', { project: project.displayName })}
-                        title={t('shell.removeProject', { project: project.displayName })}
-                        icon={<RemoveIcon size={13} />}
-                        onClick={() => onRemoveProject(project)}
-                      />
-                    </span>
-                  </div>
-                }
-              />
-            ) : (
-              <StandaloneConversationGroupHeader
-                collapsed={collapsed}
-                disabled={disabled}
-                group={group}
-                onDeleteConversations={() => onDeleteConversations(group.conversations)}
-                onToggle={() => toggleCollapsed(group)}
-              />
-            )}
-            {!collapsed ? (
-              <div className="primary-conversation-group__children">
-                {conversations.map((conversation) => (
-                  <ConversationNavigationRow
-                    active={conversation.navigation.conversationId === activeConversationId}
-                    conversation={conversation}
-                    disabled={disabled}
-                    key={conversation.navigation.conversationId}
-                    navigationDisabled={
-                      disabled || group.kind === 'workspace' || projectUnavailable !== undefined
-                    }
-                    onDelete={(conversation) => onDeleteConversations([conversation])}
-                    onOpen={onOpenConversation}
-                  />
-                ))}
-                {group.conversations.length > INITIAL_CONVERSATIONS_PER_GROUP ? (
-                  <button
-                    type="button"
-                    className="primary-conversation-group__expand"
-                    disabled={disabled}
-                    onClick={() => toggleShowAll(group)}
-                  >
-                    {showAll ? t('home.collapseConversations') : t('home.expandConversations')}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
+      <section className="primary-navigation-section" data-navigation-section="projects">
+        <div className="home-sidebar-heading">
+          <span>{t('home.projects')}</span>
+          <span>{navigationGroups.projects.length}</span>
+        </div>
+        {navigationGroups.projects.map(renderNavigationGroup)}
+      </section>
+      <section className="primary-navigation-section" data-navigation-section="conversations">
+        <div className="home-sidebar-heading">
+          <span>{t('home.conversations')}</span>
+          <span>{assistantConversationCount}</span>
+        </div>
+        {navigationGroups.conversations.map(renderNavigationGroup)}
+      </section>
     </div>
   );
 }
@@ -2823,11 +2870,8 @@ function conversationGroupIcon(group: DesktopConversationNavigationGroup): JSX.E
         <BotIcon className="primary-conversation-group__identity-icon is-assistant" size={14} />
       );
     case 'character':
-      return (
-        <UserIcon className="primary-conversation-group__identity-icon is-character" size={14} />
-      );
     case 'room':
-      return <UsersIcon className="primary-conversation-group__identity-icon is-room" size={14} />;
+      throw new Error(`Future ${group.kind} navigation must not enter the current renderer.`);
   }
 }
 
@@ -2843,9 +2887,8 @@ function formatStandaloneConversationGroup(
     case 'assistant':
       return t('home.personalAssistant');
     case 'character':
-      return t('home.characterConversations');
     case 'room':
-      return t('home.roomConversations');
+      throw new Error(`Future ${group.kind} navigation must not enter the current renderer.`);
   }
 }
 

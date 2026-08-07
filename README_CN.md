@@ -7,12 +7,13 @@
 ![Status](https://img.shields.io/badge/Status-Alpha-orange)
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](./LICENSE)
 
-OpenNeko 是一款桌面应用，用于管理内容，并在同一个工作区中连接 Agent、素材库与创作工具。
+OpenNeko 是一款本地优先的桌面应用，用于管理项目与内容，并在同一个工作区中连接 Agent、素材库与创作工具。
 
-![OpenNeko Desktop：Agent 与 Canvas 创作工作区](./docs/assets/openneko-desktop.png)
+![OpenNeko Desktop：按项目与助手分类的会话导航](./docs/assets/openneko-desktop.png)
 
 使用 OpenNeko，你可以：
 
+- 在侧栏分别管理项目上下文会话与个人助手会话；
 - 让 Agent 理解当前项目并协助生成、分析和迭代内容；
 - 管理素材与生成结果，并在画布或视频时间线中继续处理；
 - 将项目文件保留在本地，预览、导出或交给专业工具继续创作。
@@ -21,6 +22,7 @@ OpenNeko 是一款桌面应用，用于管理内容，并在同一个工作区�
 
 | 能力         | 你可以做什么                                           |
 | ------------ | ------------------------------------------------------ |
+| 项目与会话   | 分区管理项目上下文会话和个人助手会话                   |
 | 创作 Agent   | 基于项目上下文对话、规划任务、调用工具和生成内容       |
 | 工具与 API   | 配置云端或本地 AI API，并让 Agent 使用已支持的本地工具 |
 | Skill 与扩展 | 管理个人 Skill 和 OpenNeko 扩展                        |
@@ -34,7 +36,7 @@ OpenNeko 是一款桌面应用，用于管理内容，并在同一个工作区�
 
 - **Alpha**：目前以源码体验和产品验证为主，界面与项目格式仍可能变化。
 - **平台**：当前只支持 Apple Silicon macOS；预览版尚未进行 Developer ID 签名和 Apple 公证。
-- **产品重点**：优先服务通用的 AI 辅助内容创作者；Character 与 Interactive World 仍是实验方向。
+- **产品重点**：当前提供项目与个人助手入口；Character、Room 与 World 是未来方向，尚未开放对应产品栏目。
 - **开发中**：完整端到端创作闭环、稳定发布通道和专业工具集成尚未完成。
 
 ## 从源码开始
