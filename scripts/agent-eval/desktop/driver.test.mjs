@@ -31,6 +31,11 @@ describe('Desktop Agent external driver adapter', () => {
     });
     await driver.resume({ conversationId: 'conversation-1' });
     await driver.readProjection('conversation-1');
+    await driver.observeWorkflowStep({
+      conversationId: 'conversation-1',
+      afterEventOffset: 0,
+      timeoutMs: 30_000,
+    });
     await driver.waitForIdle('conversation-1', 30_000);
     await driver.readFacts({
       conversationId: 'conversation-1',
@@ -41,13 +46,14 @@ describe('Desktop Agent external driver adapter', () => {
     await driver.closeApplication();
     await driver.dispose();
 
-    expect(evaluate).toHaveBeenCalledTimes(13);
+    expect(evaluate).toHaveBeenCalledTimes(14);
     const expressions = evaluate.mock.calls.map(([expression]) => expression).join('\n');
     expect(expressions).toContain('window.openNekoDesktop?.agent');
     expect(expressions).toContain("type: 'sendMessage'");
     expect(expressions).toContain('contextPayloads');
     expect(expressions).toContain("type: 'newConversation'");
     expect(expressions).toContain("type: 'confirmTool'");
+    expect(expressions).toContain("type: 'getMessageQueue'");
     expect(expressions).toContain("kind: 'wait-for-idle'");
     expect(expressions).toContain("kind: 'read-facts'");
     expect(expressions).toContain("kind: 'reload-renderer'");
@@ -252,6 +258,71 @@ describe('Desktop Agent external driver adapter', () => {
     }
   });
 
+  it('captures queue and transcript snapshots through ordinary public Agent messages', async () => {
+    let publish;
+    const sent = [];
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: connection('app-1', 'connection-1'),
+          })),
+          subscribe: vi.fn((_connection, listener) => {
+            publish = listener;
+            return () => {};
+          }),
+          send: vi.fn((_connection, message) => sent.push(message)),
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect(owner());
+      const queued = await driver.queue({
+        conversationId: 'conversation-1',
+        prompt: 'follow up',
+      });
+      publish({
+        type: 'messageQueued',
+        conversationId: 'conversation-1',
+        snapshot: queueSnapshot(1, 3),
+      });
+      const observed = driver.observeWorkflowStep({
+        conversationId: 'conversation-1',
+        afterEventOffset: queued.eventOffset,
+        timeoutMs: 1000,
+      });
+      await Promise.resolve();
+      publish({
+        type: 'conversationSnapshot',
+        conversation: {
+          id: 'conversation-1',
+          messages: [{ id: 'user-1', role: 'user', content: 'follow up' }],
+        },
+      });
+      publish({ type: 'messageQueueSnapshot', snapshot: queueSnapshot(1, 3) });
+
+      await expect(observed).resolves.toMatchObject({
+        conversationId: 'conversation-1',
+        queued: true,
+        messageQueue: { pendingCount: 1, sequence: 3 },
+        messages: [{ id: 'user-1', role: 'user' }],
+      });
+      expect(sent).toEqual([
+        expect.objectContaining({ type: 'sendMessage' }),
+        { type: 'getConversationSnapshot', conversationId: 'conversation-1' },
+        { type: 'getMessageQueue', conversationId: 'conversation-1' },
+      ]);
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
   it('fails as infrastructure-blocked when no renderer evaluator exists', () => {
     expect(() => createDesktopAgentDriver({})).toThrow('requires a CDP renderer evaluate function');
   });
@@ -336,5 +407,15 @@ function connection(applicationInstanceId, connectionId) {
     workspaceId: 'workspace-1',
     viewId: 'view-1',
     connectionId,
+  };
+}
+
+function queueSnapshot(pendingCount, sequence) {
+  return {
+    conversationId: 'conversation-1',
+    pendingCount,
+    sequence,
+    pausedAfterCancel: false,
+    items: [],
   };
 }

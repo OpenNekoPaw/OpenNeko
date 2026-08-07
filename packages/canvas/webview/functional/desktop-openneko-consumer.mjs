@@ -265,11 +265,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     const restoredDefault = await evaluate(`(async () => {
       const projection = await window.openNekoDesktop.shell.getSnapshot();
       const active = projection.window.activeTarget;
-      const instance = projection.window.workbenches.instances.find(
-        (candidate) => candidate.workbenchInstanceId ===
-          projection.window.workbenches.activeWorkbenchInstanceId,
-      );
-      if (!instance) throw new Error('Restored active Workbench instance is missing.');
+      const instance = projection.window.workbench;
       const views = instance.layout.main.views;
       return {
         activeTarget: active.kind,
@@ -485,7 +481,7 @@ async function waitForInteractiveSelector(evaluate, selector) {
       const bounds = target.getBoundingClientRect();
       const point = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
       const hit = document.elementFromPoint(point.x, point.y);
-      const workbench = target.closest('[data-workbench-instance-id]');
+      const workbench = target.closest('.desktop-scene-workbench');
       const ancestor = (selector) => {
         const element = target.closest(selector);
         if (!(element instanceof HTMLElement)) return undefined;

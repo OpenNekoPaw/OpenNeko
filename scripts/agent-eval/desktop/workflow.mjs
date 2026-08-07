@@ -2,6 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 export async function executeDesktopAgentWorkflow(input) {
   const receipts = new Map();
+  const steps = [];
   let terminalIdle;
   let conversationId = input.conversationId;
   for (const step of input.steps) {
@@ -16,6 +17,17 @@ export async function executeDesktopAgentWorkflow(input) {
       conversationId = receipt.conversationId;
     }
     receipts.set(step.id, deepFreeze(receipt));
+    steps.push(
+      deepFreeze(
+        await createWorkflowStepEvidence({
+          driver: input.driver,
+          conversationId,
+          defaultTimeoutMs: input.defaultTimeoutMs,
+          step,
+          receipt,
+        }),
+      ),
+    );
     if (step.kind === 'wait-for-idle') terminalIdle = receipt;
     input.checkpoint?.(`agent-workflow-${step.kind}`, checkpointDetail(step, receipt));
   }
@@ -29,6 +41,7 @@ export async function executeDesktopAgentWorkflow(input) {
     conversationId,
     terminalIdle,
     receipts: Object.fromEntries(receipts),
+    steps,
   });
 }
 
@@ -142,6 +155,45 @@ function checkpointDetail(step, receipt) {
     identity: receipt?.identity,
     toolCallId: receipt?.toolCallId,
   };
+}
+
+async function createWorkflowStepEvidence(input) {
+  const observation =
+    typeof input.driver.observeWorkflowStep === 'function' && typeof input.conversationId === 'string'
+      ? await input.driver.observeWorkflowStep({
+          conversationId: input.conversationId,
+          afterEventOffset: input.receipt?.eventOffset,
+          timeoutMs: input.defaultTimeoutMs,
+        })
+      : undefined;
+  return {
+    id: input.step.id,
+    kind: input.step.kind,
+    method: workflowMethod(input.step.kind),
+    ...(input.receipt?.accepted === undefined ? {} : { accepted: input.receipt.accepted }),
+    ...(input.step.kind === 'queue' ? { queued: observation?.queued === true } : {}),
+    ...(observation === undefined ? {} : { snapshot: observation }),
+  };
+}
+
+function workflowMethod(kind) {
+  switch (kind) {
+    case 'submit':
+    case 'queue':
+    case 'feedback':
+      return 'message.submit';
+    case 'wait-for-idle':
+      return 'session.waitForIdle';
+    case 'cancel':
+      return 'message.cancel';
+    case 'confirm':
+      return 'tool.confirm';
+    case 'resume':
+    case 'restart':
+      return 'session.resume';
+    default:
+      throw configurationError(`Desktop Agent workflow step '${kind}' has no evidence method.`);
+  }
 }
 
 function deepFreeze(value) {

@@ -19,11 +19,7 @@ export async function openFixtureWorkspace(evaluate) {
 export async function replaceWorkbench(evaluate, createWorkbenchSource) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    const instance = projection.window.workbenches.instances.find(
-      (candidate) => candidate.workbenchInstanceId ===
-        projection.window.workbenches.activeWorkbenchInstanceId,
-    );
-    if (!instance) throw new Error('Desktop functional active Workbench instance is missing.');
+    const instance = projection.window.workbench;
     const current = instance.layout;
     const active = projection.window.activeTarget;
     if (active.kind !== 'project') throw new Error('Desktop functional Project is not active.');

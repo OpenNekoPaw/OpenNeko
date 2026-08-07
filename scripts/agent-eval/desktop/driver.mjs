@@ -53,6 +53,9 @@ export function createDesktopAgentDriver(input) {
     async readProjection(conversationId) {
       return evaluate({ kind: 'read-projection', conversationId });
     },
+    async observeWorkflowStep(command) {
+      return evaluate({ kind: 'observe-workflow-step', ...command });
+    },
     async waitForIdle(conversationId, timeoutMs) {
       return evaluate({ kind: 'wait-for-idle', conversationId, timeoutMs });
     },
@@ -277,6 +280,23 @@ export function driverExpression(command) {
       const values = Array.isArray(value) ? value : Object.values(value);
       return values.some((item) => isProjectionEvent(item));
     };
+    const findMessageQueueSnapshot = (value, conversationId, type) => {
+      if (!value || typeof value !== 'object') return undefined;
+      if (
+        (!type || value.type === type) &&
+        value.snapshot?.conversationId === conversationId &&
+        Number.isInteger(value.snapshot?.pendingCount) &&
+        Number.isInteger(value.snapshot?.sequence)
+      ) {
+        return value.snapshot;
+      }
+      const values = Array.isArray(value) ? value : Object.values(value);
+      for (const item of values) {
+        const snapshot = findMessageQueueSnapshot(item, conversationId, type);
+        if (snapshot) return snapshot;
+      }
+      return undefined;
+    };
     const waitForEvent = async (state, afterEventOffset, timeoutMs, select, failureMessage) => {
       const offset = Number.isInteger(afterEventOffset) && afterEventOffset >= 0
         ? afterEventOffset
@@ -466,6 +486,47 @@ export function driverExpression(command) {
           (event) => belongsToConversation(event, conversationId) && isProjectionEvent(event),
         );
         return { connection: state.connection, events };
+      }
+      case 'observe-workflow-step': {
+        const state = requireState();
+        const conversationId = requireText(command.conversationId, 'Conversation identity');
+        const eventOffset = state.events.length;
+        bridge.send(state.connection, { type: 'getConversationSnapshot', conversationId });
+        bridge.send(state.connection, { type: 'getMessageQueue', conversationId });
+        const conversation = await waitForEvent(
+          state,
+          eventOffset,
+          command.timeoutMs,
+          (event) => event?.type === 'conversationSnapshot' && event?.conversation?.id === conversationId
+            ? event.conversation
+            : undefined,
+          'Desktop Agent workflow observation did not publish a conversation snapshot.',
+        );
+        const currentQueue = await waitForEvent(
+          state,
+          eventOffset,
+          command.timeoutMs,
+          (event) => findMessageQueueSnapshot(event, conversationId, 'messageQueueSnapshot'),
+          'Desktop Agent workflow observation did not publish a message queue snapshot.',
+        );
+        const actionOffset =
+          Number.isInteger(command.afterEventOffset) && command.afterEventOffset >= 0
+            ? command.afterEventOffset
+            : eventOffset;
+        const actionEvents = state.events.slice(actionOffset);
+        const queuedSnapshot = actionEvents
+          .map((event) => findMessageQueueSnapshot(event, conversationId, 'messageQueued'))
+          .find((snapshot) => snapshot?.pendingCount > 0);
+        const projectionEvents = state.events.filter(
+          (event) => belongsToConversation(event, conversationId) && isProjectionEvent(event),
+        );
+        return {
+          conversationId,
+          messages: conversation.messages ?? [],
+          messageQueue: queuedSnapshot ?? currentQueue,
+          queued: queuedSnapshot !== undefined,
+          projectionEvents,
+        };
       }
       case 'wait-for-idle': {
         const state = requireState();

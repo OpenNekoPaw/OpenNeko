@@ -4,8 +4,7 @@ import { join } from 'node:path';
 
 const ASSET_LABEL = 'record-only-removal.png';
 const MISSING_ASSET_LABEL = 'missing-source-removal.png';
-const ACTIVE_ASSET_CENTER =
-  '.desktop-workbench-slot-deck__item[data-active="true"] [data-owner-root="asset-management"]';
+const ACTIVE_ASSET_CENTER = '[data-workbench-slot="main"] [data-owner-root="asset-management"]';
 
 export const assetLibraryRecordRemovalScenario = Object.freeze({
   id: 'asset-library-record-removal',

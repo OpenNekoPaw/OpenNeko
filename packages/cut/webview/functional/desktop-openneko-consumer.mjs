@@ -7,6 +7,15 @@ import {
 } from '../../../../scripts/desktop-functional/desktop-operations.mjs';
 import { createDesktopMediaFixtureSet } from '../../../../scripts/desktop-functional/media-fixtures.mjs';
 
+const VISUAL_SETTLE_MILLISECONDS = 1_000;
+const MEDIA_HAVE_CURRENT_DATA = 2;
+const ACTIVE_CUT_ROOT_SELECTOR =
+  '[data-workbench-slot="main"] ' +
+  '.project-main-view-stack__item[data-main-view-id] ' +
+  '[data-owner-root="cut"]';
+const ACTIVE_CUT_TIMELINE_SELECTOR =
+  '[data-workbench-slot="timeline"] ' + '[data-testid="desktop-cut-timeline-slot"]';
+
 export const cutOpenNekoConsumerScenario = Object.freeze({
   id: 'cut-openneko-consumer',
   owner: '@neko/cut-webview',
@@ -40,6 +49,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     evaluate,
     prepared,
     readOpenNekoResourceRequests,
+    screenshot,
     waitForSelector,
   }) {
     await openFixtureWorkspace(evaluate);
@@ -71,18 +81,22 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
         timeline: { presentation: 'docked', ownerViewId: 'cut:functional', height: 240 },
       })`,
     );
-    await waitForSelector('[data-owner-root="cut"] [data-testid="cut-preview-toggle-playback"]');
+    await waitForSelector(
+      `${ACTIVE_CUT_ROOT_SELECTOR} [data-testid="cut-preview-toggle-playback"]`,
+    );
     await waitForCutReady(evaluate);
     checkpoint('cut-ready');
     await evaluate(`(() => {
       window.__openNekoCutClickEvidence = [];
-      document.querySelector('[data-testid="cut-preview-toggle-playback"]')?.addEventListener(
+      const root = document.querySelector(${JSON.stringify(ACTIVE_CUT_ROOT_SELECTOR)});
+      root?.querySelector('[data-testid="cut-preview-toggle-playback"]')?.addEventListener(
         'click', (event) => window.__openNekoCutClickEvidence.push({
           kind: 'playback-toggle',
           trusted: event.isTrusted,
         }),
       );
-      document.querySelector('.cut-basic-ruler')?.addEventListener('pointerdown', (event) => {
+      document.querySelector(${JSON.stringify(ACTIVE_CUT_TIMELINE_SELECTOR)})
+        ?.querySelector('.cut-basic-ruler')?.addEventListener('pointerdown', (event) => {
         const rect = event.currentTarget.getBoundingClientRect();
         window.__openNekoCutClickEvidence.push({
           kind: 'ruler-seek',
@@ -92,13 +106,19 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       });
       return true;
     })()`);
-    await click('[data-testid="cut-preview-toggle-playback"]');
+    await click(`${ACTIVE_CUT_ROOT_SELECTOR} [data-testid="cut-preview-toggle-playback"]`);
     const playing = await waitForCutPlayback(evaluate);
     checkpoint('cut-playing', { startTime: playing.startTime, endTime: playing.endTime });
     const requestsBeforeSeek = new Set(readOpenNekoResourceRequests());
-    await click('.cut-basic-ruler', 0, { xRatio: 0.25 });
+    const seekTarget = await readCutMidpointTarget(evaluate);
+    await click(
+      `${ACTIVE_CUT_TIMELINE_SELECTOR} .cut-basic-ruler-tick`,
+      seekTarget.replacementTickIndex,
+    );
     const seekOutput = await evaluate(
-      `document.querySelector('.cut-preview-controls output')?.textContent`,
+      `document.querySelector(${JSON.stringify(
+        ACTIVE_CUT_ROOT_SELECTOR,
+      )})?.querySelector('.cut-preview-controls output')?.textContent`,
     );
     checkpoint('cut-seek-clicked', { output: seekOutput });
     const seeked = await waitForCutPausedSeek(
@@ -106,11 +126,27 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       playing.url,
       requestsBeforeSeek,
       readOpenNekoResourceRequests,
+      seekTarget.replacementSeconds,
     );
-    checkpoint('cut-seek-ready', { currentTime: seeked.currentTime });
     const releasedStatus = await waitForReleasedUrl(evaluate, playing.url);
     checkpoint('cut-preview-request-released');
+    const readyMidpointState = await seekCutToTimelineMidpoint({ click, evaluate });
+    const readyScreenshot = await captureSettledScreenshot(screenshot, 'cut-editor-ready');
+    checkpoint('cut-ready-visual-midpoint', { visualMidpoint: readyMidpointState.evidence });
+    const seekMidpointState = await seekCutToTimelineMidpoint({ click, evaluate });
+    const seekScreenshot = await captureSettledScreenshot(screenshot, 'cut-playback-seek-visible');
+    checkpoint('cut-seek-ready', {
+      currentTime: seeked.currentTime,
+      functionalSeekTime: seeked.timelineTime,
+      visualMidpoint: seekMidpointState.evidence,
+    });
     const authoring = await qualifyCutAuthoring({ evaluate, prepared, checkpoint });
+    await waitForCutAuthoringVisible(evaluate);
+    const authoringMidpointState = await seekCutToTimelineMidpoint({ click, evaluate });
+    const authoringScreenshot = await captureSettledScreenshot(
+      screenshot,
+      'cut-authoring-complete',
+    );
     const exported = await stat(
       join(prepared.workspacePath, 'exports', 'functional-cut-export.mp4'),
     );
@@ -128,6 +164,12 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       releasedStatus,
       trustedInteractions: seeked.clickEvidence,
       authoring: { ...authoring, exportBytes: exported.size },
+      visualMidpoints: {
+        ready: readyMidpointState.evidence,
+        seek: seekMidpointState.evidence,
+        authoring: authoringMidpointState.evidence,
+      },
+      screenshots: [readyScreenshot, seekScreenshot, authoringScreenshot],
     };
   },
   assertObservation(observation, evidence) {
@@ -212,11 +254,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         rate: 30,
       }],
     });
-    const workbenchInstance = projection.window.workbenches.instances.find(
-      (candidate) => candidate.workbenchInstanceId ===
-        projection.window.workbenches.activeWorkbenchInstanceId,
-    );
-    if (!workbenchInstance) throw new Error('Cut functional active Workbench is unavailable.');
+    const workbenchInstance = projection.window.workbench;
     const currentWorkbench = workbenchInstance.layout;
     const nextWorkbench = {
       ...currentWorkbench,
@@ -255,10 +293,10 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       workbenchInstance.workbenchInstanceId,
       nextWorkbench,
     );
-    const updatedWorkbenchInstance = projection.window.workbenches.instances.find(
-      (candidate) => candidate.workbenchInstanceId === workbenchInstance.workbenchInstanceId,
-    );
-    if (!updatedWorkbenchInstance) throw new Error('Updated Cut Workbench is unavailable.');
+    const updatedWorkbenchInstance = projection.window.workbench;
+    if (updatedWorkbenchInstance.workbenchInstanceId !== workbenchInstance.workbenchInstanceId) {
+      throw new Error('Updated Cut Workbench identity changed.');
+    }
     const identityFor = (viewId) => {
       const view = updatedWorkbenchInstance.layout.main.views.find(
         (candidate) => candidate.viewId === viewId,
@@ -409,17 +447,18 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
         groups: current.main.groups.map((group, index) => index === 0 ? ({
           ...group,
           viewIds: [...group.viewIds, 'cut:authoring-reopened'],
+          activeViewId: 'cut:authoring-reopened',
         }) : group),
+      },
+      timeline: {
+        ...current.timeline,
+        ownerViewId: 'cut:authoring-reopened',
       },
     })`,
   );
   const reopened = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    const workbenchInstance = projection.window.workbenches.instances.find(
-      (candidate) => candidate.workbenchInstanceId ===
-        projection.window.workbenches.activeWorkbenchInstanceId,
-    );
-    if (!workbenchInstance) throw new Error('Reopened Cut Workbench is unavailable.');
+    const workbenchInstance = projection.window.workbench;
     const view = workbenchInstance.layout.main.views.find(
       (candidate) => candidate.viewId === 'cut:authoring-reopened',
     );
@@ -483,7 +522,13 @@ async function waitForCutPlayback(evaluate) {
   );
 }
 
-async function waitForCutPausedSeek(evaluate, previousUrl, requestsBeforeSeek, readRequests) {
+async function waitForCutPausedSeek(
+  evaluate,
+  previousUrl,
+  requestsBeforeSeek,
+  readRequests,
+  targetTimelineSeconds,
+) {
   const deadline = Date.now() + 30_000;
   let last;
   while (Date.now() < deadline) {
@@ -497,13 +542,14 @@ async function waitForCutPausedSeek(evaluate, previousUrl, requestsBeforeSeek, r
         (video) =>
           video.url?.startsWith('openneko://resource/') &&
           !requestsBeforeSeek.has(video.url) &&
-          video.currentTime > 1 &&
+          video.readyState >= MEDIA_HAVE_CURRENT_DATA &&
           video.paused,
       );
-      if (seekedVideo && sample.output?.startsWith('00:02.')) {
+      if (seekedVideo && Math.abs(sample.timelineTime - targetTimelineSeconds) <= 0.05) {
         return {
           ...seekedVideo,
           output: sample.output,
+          timelineTime: sample.timelineTime,
           clickEvidence: sample.clickEvidence,
         };
       }
@@ -517,22 +563,188 @@ async function waitForCutPausedSeek(evaluate, previousUrl, requestsBeforeSeek, r
 
 async function waitForCutReady(evaluate) {
   const deadline = Date.now() + 30_000;
+  let last;
   while (Date.now() < deadline) {
-    const ready = await evaluate(`(() => {
-      const output = document.querySelector('.cut-preview-controls output')?.textContent ?? '';
-      return output.includes('00:04.00') &&
-        document.querySelectorAll('.cut-basic-clip').length === 2;
+    const state = await evaluate(`(() => {
+      const roots = [...document.querySelectorAll(${JSON.stringify(ACTIVE_CUT_ROOT_SELECTOR)})];
+      const root = roots[0];
+      const timelines = [...document.querySelectorAll(${JSON.stringify(
+        ACTIVE_CUT_TIMELINE_SELECTOR,
+      )})];
+      const timeline = timelines[0];
+      const output = root?.querySelector('.cut-preview-controls output')?.textContent ?? '';
+      return {
+        rootCount: roots.length,
+        timelineCount: timelines.length,
+        output,
+        clipCount: timeline?.querySelectorAll('.cut-basic-clip').length ?? 0,
+        panelIds: [...document.querySelectorAll(
+          '[data-workbench-slot="main"] [data-workbench-main-panel][data-active="true"]',
+        )].map((panel) => panel.getAttribute('data-workbench-main-panel')),
+      };
     })()`);
-    if (ready) return;
+    last = state;
+    if (
+      state.rootCount === 1 &&
+      state.timelineCount === 1 &&
+      state.output.includes('00:04.00') &&
+      state.clipCount === 2
+    ) {
+      return;
+    }
     await delay(100);
   }
-  throw new Error('Cut package-owned OTIO View did not become ready before timeout.');
+  throw new Error(
+    `Cut package-owned OTIO View did not become ready before timeout: ${JSON.stringify(last)}`,
+  );
+}
+
+async function seekCutToTimelineMidpoint({ click, evaluate }) {
+  const target = await readCutMidpointTarget(evaluate);
+  await click(`${ACTIVE_CUT_TIMELINE_SELECTOR} .cut-basic-ruler-tick`, target.tickIndex);
+  const presented = await waitForCutFrameAtTimelineTime(evaluate, target.midpointSeconds);
+  return {
+    evidence: {
+      durationSeconds: target.durationSeconds,
+      midpointSeconds: target.midpointSeconds,
+      presentedSeconds: presented.timelineTime,
+      mediaTime: presented.currentTime,
+    },
+    resourceUrl: presented.url,
+  };
+}
+
+async function readCutMidpointTarget(evaluate) {
+  const target = await evaluate(`(() => {
+    const root = document.querySelector(${JSON.stringify(ACTIVE_CUT_ROOT_SELECTOR)});
+    const timeline = document.querySelector(${JSON.stringify(ACTIVE_CUT_TIMELINE_SELECTOR)});
+    const readClock = (value) => {
+      const parts = value.trim().split(':');
+      if (parts.length !== 2) return undefined;
+      const minutes = Number(parts[0]);
+      const seconds = Number(parts[1]);
+      return Number.isFinite(minutes) && Number.isFinite(seconds)
+        ? minutes * 60 + seconds
+        : undefined;
+    };
+    const output = root?.querySelector('.cut-preview-controls output')?.textContent ?? '';
+    const outputParts = output.split('/');
+    const durationSeconds = readClock(outputParts[outputParts.length - 1] ?? '');
+    const ruler = timeline?.querySelector('.cut-basic-ruler');
+    const referenceTick = [...(timeline?.querySelectorAll('.cut-basic-ruler-tick') ?? [])].find((tick) => {
+      const seconds = readClock(tick.textContent ?? '');
+      const left = Number.parseFloat(tick.style.left);
+      return seconds !== undefined && seconds > 0 && Number.isFinite(left) && left > 0;
+    });
+    const referenceSeconds = referenceTick ? readClock(referenceTick.textContent ?? '') : undefined;
+    const referenceLeft = referenceTick ? Number.parseFloat(referenceTick.style.left) : undefined;
+    const rulerWidth = ruler?.getBoundingClientRect().width ?? 0;
+    if (
+      durationSeconds === undefined ||
+      durationSeconds <= 0 ||
+      referenceSeconds === undefined ||
+      referenceLeft === undefined ||
+      rulerWidth <= 0
+    ) {
+      return { output, durationSeconds, referenceSeconds, referenceLeft, rulerWidth };
+    }
+    const pixelsPerSecond = referenceLeft / referenceSeconds;
+    const midpointSeconds = durationSeconds / 2;
+    const ticks = [...(timeline?.querySelectorAll('.cut-basic-ruler-tick') ?? [])].map((tick, index) => ({
+      index,
+      seconds: Number.parseFloat(tick.style.left) / pixelsPerSecond,
+    }));
+    const nearestTick = (seconds) => ticks.reduce((nearest, candidate) =>
+      Math.abs(candidate.seconds - seconds) < Math.abs(nearest.seconds - seconds)
+        ? candidate
+        : nearest,
+    );
+    const midpointTick = nearestTick(midpointSeconds);
+    const replacementSeconds = durationSeconds * 0.625;
+    const replacementTick = nearestTick(replacementSeconds);
+    return {
+      durationSeconds,
+      midpointSeconds,
+      tickIndex: midpointTick.index,
+      tickSeconds: midpointTick.seconds,
+      replacementSeconds,
+      replacementTickIndex: replacementTick.index,
+      replacementTickSeconds: replacementTick.seconds,
+      rulerWidth,
+      pixelsPerSecond,
+      output,
+    };
+  })()`);
+  if (
+    !target ||
+    !Number.isFinite(target.durationSeconds) ||
+    !Number.isFinite(target.midpointSeconds) ||
+    !Number.isInteger(target.tickIndex) ||
+    !Number.isFinite(target.tickSeconds) ||
+    Math.abs(target.tickSeconds - target.midpointSeconds) > 0.05 ||
+    !Number.isInteger(target.replacementTickIndex) ||
+    !Number.isFinite(target.replacementTickSeconds) ||
+    Math.abs(target.replacementTickSeconds - target.replacementSeconds) > 0.05
+  ) {
+    throw new Error(
+      `Cut midpoint target could not be derived from the visible timeline: ${JSON.stringify(target)}`,
+    );
+  }
+  return target;
+}
+
+async function waitForCutFrameAtTimelineTime(evaluate, targetTimelineSeconds) {
+  const deadline = Date.now() + 30_000;
+  let last;
+  while (Date.now() < deadline) {
+    const sample = await evaluate(cutVideoSeekSampleExpression());
+    last = sample;
+    const visibleVideo = sample?.videos?.find(
+      (video) =>
+        video.url?.startsWith('openneko://resource/') &&
+        video.ariaHidden !== 'true' &&
+        video.readyState >= MEDIA_HAVE_CURRENT_DATA &&
+        video.paused,
+    );
+    if (visibleVideo && Math.abs(sample.timelineTime - targetTimelineSeconds) <= 0.05) {
+      return { ...visibleVideo, timelineTime: sample.timelineTime };
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `Cut midpoint frame did not become visible before timeout: ${JSON.stringify(last)}`,
+  );
+}
+
+async function waitForCutAuthoringVisible(evaluate) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const visible = await evaluate(`(() => {
+      const timeline = document.querySelector(${JSON.stringify(ACTIVE_CUT_TIMELINE_SELECTOR)});
+      return [...(timeline?.querySelectorAll('.cut-basic-clip-name') ?? [])].some(
+        (element) => element.textContent?.trim() === 'Saved authoring clip',
+      );
+    })()`);
+    if (visible) return;
+    await delay(100);
+  }
+  throw new Error('Cut saved authoring state did not become visible before screenshot capture.');
 }
 
 function cutVideoSeekSampleExpression() {
   return `(() => {
-    const root = document.querySelector('[data-owner-root="cut"]');
-    const videos = [...document.querySelectorAll('[data-owner-root="cut"] video')];
+    const root = document.querySelector(${JSON.stringify(ACTIVE_CUT_ROOT_SELECTOR)});
+    const videos = [...(root?.querySelectorAll('video') ?? [])];
+    const output = root?.querySelector('.cut-preview-controls output')?.textContent ?? '';
+    const readClock = (value) => {
+      const parts = value.trim().split(':');
+      if (parts.length !== 2) return undefined;
+      const minutes = Number(parts[0]);
+      const seconds = Number(parts[1]);
+      return Number.isFinite(minutes) && Number.isFinite(seconds)
+        ? minutes * 60 + seconds
+        : undefined;
+    };
     const video = videos.find(
       (candidate) => candidate.getAttribute('aria-hidden') !== 'true' && candidate.src,
     );
@@ -542,7 +754,8 @@ function cutVideoSeekSampleExpression() {
       currentTime: video?.currentTime,
       readyState: video?.readyState,
       paused: video?.paused,
-      output: root?.querySelector('.cut-preview-controls output')?.textContent,
+      output,
+      timelineTime: readClock(output.split('/')[0] ?? ''),
       clickEvidence: window.__openNekoCutClickEvidence,
       videos: videos.map((candidate) => ({
         url: candidate.src,
@@ -567,8 +780,8 @@ async function waitForReleasedUrl(evaluate, url) {
 
 function cutVideoSampleExpression() {
   return `(() => {
-    const root = document.querySelector('[data-owner-root="cut"]');
-    const videos = [...document.querySelectorAll('[data-owner-root="cut"] video')];
+    const root = document.querySelector(${JSON.stringify(ACTIVE_CUT_ROOT_SELECTOR)});
+    const videos = [...(root?.querySelectorAll('video') ?? [])];
     const video = videos.find((candidate) => !candidate.paused && candidate.src) ??
       videos.find((candidate) => candidate.getAttribute('aria-hidden') !== 'true' && candidate.src) ??
       videos.find((candidate) => candidate.src);
@@ -698,4 +911,9 @@ function timeRange(startValue, durationValue) {
 
 function delay(milliseconds) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+}
+
+async function captureSettledScreenshot(screenshot, label) {
+  await delay(VISUAL_SETTLE_MILLISECONDS);
+  return screenshot(label);
 }

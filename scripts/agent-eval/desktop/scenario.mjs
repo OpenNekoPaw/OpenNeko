@@ -8,7 +8,7 @@ import { createDesktopAgentDriver } from './driver.mjs';
 import { requiresOpenNekoResourceObservation } from './evidence.mjs';
 import { executeDesktopAgentWorkflow } from './workflow.mjs';
 
-const ACTIVE_AGENT_SURFACE_SELECTOR = '.desktop-agent-surface-deck__item[data-active="true"]';
+const ACTIVE_AGENT_SURFACE_SELECTOR = '[data-primary-surface="agent"]';
 const ACTIVE_AGENT_TEXTAREA_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
 const ACTIVE_AGENT_SEND_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-send`;
 const ACTIVE_AGENT_APPROVE_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-inline-card.is-warning .neko-button:not(.neko-button-secondary)`;
@@ -148,21 +148,14 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
 }
 
 function resolveWorkspaceAgentOwner(opened) {
-  const catalog = opened.projection.window.workbenches;
-  const workbench = catalog.instances.find(
-    (candidate) => candidate.workbenchInstanceId === catalog.activeWorkbenchInstanceId,
-  );
-  if (!workbench) throw new Error('Desktop Agent Evaluation has no active Workbench instance.');
-  const agentSurfaceId = workbench.activeAgentSurfaceId;
-  if (
-    typeof agentSurfaceId !== 'string' ||
-    !workbench.agentSurfaces.some((surface) => surface.agentSurfaceId === agentSurfaceId)
-  ) {
+  const workbench = opened.projection.window.workbench;
+  const interaction = workbench.scene.slots.interaction;
+  if (!interaction) {
     throw new Error('Desktop Agent Evaluation has no exact active Agent Surface.');
   }
   return {
     workbenchInstanceId: workbench.workbenchInstanceId,
-    agentSurfaceId,
+    agentSurfaceId: interaction.agentSurfaceId,
     projectId: opened.project.projectId,
     viewId: opened.tab.viewId,
   };

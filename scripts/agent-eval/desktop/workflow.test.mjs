@@ -19,6 +19,19 @@ describe('Desktop Agent workflow interpreter', () => {
           messages: [{ id: 'assistant-1', role: 'assistant', content: 'previous answer' }],
         },
       })),
+      observeWorkflowStep: vi.fn(async ({ afterEventOffset }) => ({
+        conversationId: 'conversation-1',
+        messages: [],
+        messageQueue: {
+          conversationId: 'conversation-1',
+          pendingCount: afterEventOffset === 4 ? 1 : 0,
+          sequence: 1,
+          pausedAfterCancel: false,
+          items: [],
+        },
+        queued: afterEventOffset === 4,
+        projectionEvents: [],
+      })),
     };
     const checkpoints = [];
     const result = await executeDesktopAgentWorkflow({
@@ -49,6 +62,13 @@ describe('Desktop Agent workflow interpreter', () => {
     expect(result.conversationId).toBe('conversation-1');
     expect(result.terminalIdle.identity).toEqual(identity);
     expect(Object.isFrozen(result.receipts)).toBe(true);
+    expect(result.steps).toHaveLength(6);
+    expect(result.steps[1]).toMatchObject({
+      id: 'queue',
+      method: 'message.submit',
+      queued: true,
+      snapshot: { messageQueue: { pendingCount: 1 } },
+    });
     expect(checkpoints).toHaveLength(6);
   });
 

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 const CONVERSATION_TITLE = 'Retained historical conversation';
 const ASSET_LABEL = 'missing-retained-asset.png';
-const ACTIVE_WORKBENCH = '.desktop-workbench-slot-deck__item[data-active="true"]';
+const ACTIVE_WORKBENCH = '.desktop-scene-workbench';
 
 export const noActiveProjectCatalogsScenario = Object.freeze({
   id: 'no-active-project-catalogs',
@@ -174,10 +174,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         openDisabled: open instanceof HTMLButtonElement && open.disabled,
         cleanupEnabled: cleanup instanceof HTMLButtonElement && !cleanup.disabled,
         sceneUnchanged:
-          before.window.workbenches.activeWorkbenchInstanceId ===
-            after.window.workbenches.activeWorkbenchInstanceId &&
-          JSON.stringify(before.window.workbenches.instances) ===
-            JSON.stringify(after.window.workbenches.instances),
+          JSON.stringify(before.window.workbench) === JSON.stringify(after.window.workbench),
       };
     })()`);
     if (
@@ -231,10 +228,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         openDisabled: open instanceof HTMLButtonElement && open.disabled,
         cleanupEnabled: cleanup instanceof HTMLButtonElement && !cleanup.disabled,
         sceneUnchanged:
-          before.window.workbenches.activeWorkbenchInstanceId ===
-            after.window.workbenches.activeWorkbenchInstanceId &&
-          JSON.stringify(before.window.workbenches.instances) ===
-            JSON.stringify(after.window.workbenches.instances),
+          JSON.stringify(before.window.workbench) === JSON.stringify(after.window.workbench),
       };
     })()`);
     if (

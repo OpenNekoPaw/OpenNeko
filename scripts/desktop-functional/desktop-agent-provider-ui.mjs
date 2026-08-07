@@ -471,13 +471,7 @@ async function inspectProviderWaitState(evaluate) {
 }
 
 function requireActiveWorkbenchProjection(projectionName) {
-  return `const activeWorkbench = ${projectionName}.window.workbenches.instances.find(
-    (instance) => instance.workbenchInstanceId ===
-      ${projectionName}.window.workbenches.activeWorkbenchInstanceId,
-  );
-  if (!activeWorkbench) {
-    throw new Error('Desktop projection has no exact active Workbench instance.');
-  }`;
+  return `const activeWorkbench = ${projectionName}.window.workbench;`;
 }
 
 function requireEnvironmentIdentity(value, label) {

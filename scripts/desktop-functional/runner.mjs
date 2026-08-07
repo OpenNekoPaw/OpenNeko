@@ -117,6 +117,8 @@ export async function runAutomatedDesktopFunctional(options) {
           checkpoints.push({ label, elapsedMs: Date.now() - startedAt, detail });
         },
         evaluate: (expression) => abortable(evaluate(cdp, expression), scenarioAbort.signal),
+        measureRendererResources: () =>
+          abortable(readDesktopRendererResources(cdp), scenarioAbort.signal),
         click: (selector, index, position) =>
           abortable(clickElement(cdp, selector, index, position), scenarioAbort.signal),
         hover: (selector, index, position) =>
@@ -406,6 +408,32 @@ async function evaluate(cdp, expression) {
     );
   }
   return result.result?.value;
+}
+
+export async function readDesktopRendererResources(cdp) {
+  await cdp.send('Performance.enable');
+  const [domCounters, performance] = await Promise.all([
+    cdp.send('Memory.getDOMCounters'),
+    cdp.send('Performance.getMetrics'),
+  ]);
+  const metrics = Object.fromEntries(
+    (performance.metrics ?? []).map((metric) => [metric.name, metric.value]),
+  );
+  return Object.freeze({
+    documents: domCounters.documents,
+    nodes: domCounters.nodes,
+    jsEventListeners: domCounters.jsEventListeners,
+    jsHeapUsedBytes: requirePerformanceMetric(metrics, 'JSHeapUsedSize'),
+    jsHeapTotalBytes: requirePerformanceMetric(metrics, 'JSHeapTotalSize'),
+  });
+}
+
+function requirePerformanceMetric(metrics, name) {
+  const value = metrics[name];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`Desktop Renderer performance metric '${name}' is unavailable.`);
+  }
+  return value;
 }
 
 async function waitForSelector(cdp, selector, timeoutMs = 30_000) {

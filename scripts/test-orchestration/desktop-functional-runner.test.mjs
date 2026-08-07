@@ -10,6 +10,7 @@ import {
   createProcessController,
   dragDesktopElement,
   pressDesktopKey,
+  readDesktopRendererResources,
   scrollDesktopElement,
   typeDesktopText,
 } from '../desktop-functional/runner.mjs';
@@ -21,8 +22,6 @@ import {
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
 } from '../desktop-functional/scenario-contract.mjs';
-import { resolveDesktopFunctionalScenarios } from '../desktop-functional/scenarios.mjs';
-
 describe('Desktop automated functional runner contract', () => {
   it('requires explicit provider, model, and cost authorization for visible Agent UI', () => {
     assert.deepEqual(
@@ -67,17 +66,15 @@ describe('Desktop automated functional runner contract', () => {
         .run(JSON.stringify({ pendingTurn: { status: 'failed' } }));
       assert.equal(await readLatestVisibleAgentLifecycleState(databasePath), undefined);
       database.exec(`CREATE TABLE agent_conversation_records (payload_json TEXT NOT NULL)`);
-      database
-        .prepare(`INSERT INTO agent_conversation_records (payload_json) VALUES (?)`)
-        .run(
-          JSON.stringify({
-            conversationId: 'conversation-1',
-            pendingTurn: {
-              turnId: 'turn-1',
-              status: 'completed',
-            },
-          }),
-        );
+      database.prepare(`INSERT INTO agent_conversation_records (payload_json) VALUES (?)`).run(
+        JSON.stringify({
+          conversationId: 'conversation-1',
+          pendingTurn: {
+            turnId: 'turn-1',
+            status: 'completed',
+          },
+        }),
+      );
       assert.deepEqual(await readLatestVisibleAgentLifecycleState(databasePath), {
         conversationId: 'conversation-1',
         turnId: 'turn-1',
@@ -197,15 +194,6 @@ describe('Desktop automated functional runner contract', () => {
     );
   });
 
-  it('discovers the two-Workspace retained Workbench provider scenario', () => {
-    const [scenario] = resolveDesktopFunctionalScenarios(
-      'desktop-workbench-retention-provider-ui',
-    );
-
-    assert.equal(scenario?.id, 'desktop-workbench-retention-provider-ui');
-    assert.equal(scenario?.owner, '@neko/app-desktop');
-  });
-
   it('drives text, keyboard, scrolling, and screenshot evidence through CDP', async () => {
     const calls = [];
     const cdp = {
@@ -278,8 +266,7 @@ describe('Desktop automated functional runner contract', () => {
     );
     assert.equal(
       calls.filter(
-        (call) =>
-          call.method === 'Input.dispatchMouseEvent' && call.params.type === 'mouseMoved',
+        (call) => call.method === 'Input.dispatchMouseEvent' && call.params.type === 'mouseMoved',
       ).length,
       10,
     );
@@ -287,6 +274,40 @@ describe('Desktop automated functional runner contract', () => {
       method: 'Page.captureScreenshot',
       params: { format: 'png', fromSurface: true, captureBeyondViewport: false },
     });
+  });
+
+  it('captures exact Renderer DOM and heap resource counters through CDP', async () => {
+    const calls = [];
+    const cdp = {
+      async send(method) {
+        calls.push(method);
+        if (method === 'Memory.getDOMCounters') {
+          return { documents: 2, nodes: 320, jsEventListeners: 41 };
+        }
+        if (method === 'Performance.getMetrics') {
+          return {
+            metrics: [
+              { name: 'JSHeapUsedSize', value: 12_000_000 },
+              { name: 'JSHeapTotalSize', value: 24_000_000 },
+            ],
+          };
+        }
+        return {};
+      },
+    };
+
+    assert.deepEqual(await readDesktopRendererResources(cdp), {
+      documents: 2,
+      nodes: 320,
+      jsEventListeners: 41,
+      jsHeapUsedBytes: 12_000_000,
+      jsHeapTotalBytes: 24_000_000,
+    });
+    assert.deepEqual(calls, [
+      'Performance.enable',
+      'Memory.getDOMCounters',
+      'Performance.getMetrics',
+    ]);
   });
 
   it('fails visibly for invalid keyboard and scroll requests', async () => {

@@ -54,12 +54,108 @@ describe('Desktop Agent assertion-driven evidence', () => {
     ).toBe(false);
   });
 
-  it('fails before launch when the Desktop evidence adapter is unavailable', () => {
+  it('accepts workflow evidence and rejects unsupported continuation ordering before launch', () => {
     expect(() =>
       assertDesktopEvidenceSupport([
-        { id: 'process', kind: 'process-order', evidenceRef: 'facts', events: [] },
+        {
+          id: 'process',
+          kind: 'process-order',
+          evidenceRef: 'facts',
+          events: [
+            { kind: 'workflow-step', stepId: 'submit' },
+            { kind: 'turn', role: 'assistant' },
+          ],
+        },
+        {
+          id: 'queue',
+          kind: 'queue-state',
+          stepId: 'queue',
+          status: 'queued',
+          evidenceRef: 'facts',
+        },
       ]),
-    ).toThrow("assertion 'process-order' is not supported");
+    ).not.toThrow();
+    expect(() =>
+      assertDesktopEvidenceSupport([
+        {
+          id: 'process',
+          kind: 'process-order',
+          evidenceRef: 'facts',
+          events: [
+            { kind: 'workflow-step', stepId: 'submit' },
+            { kind: 'continuation', source: 'subagent-result-continuation' },
+          ],
+        },
+      ]),
+    ).toThrow("process-order event 'continuation' is not supported");
+  });
+
+  it('proves queued, drained and ordered workflow state from public Desktop snapshots', () => {
+    const assertions = [
+      {
+        id: 'queued',
+        kind: 'queue-state',
+        stepId: 'review',
+        status: 'queued',
+        minPending: 1,
+        evidenceRef: 'facts',
+      },
+      {
+        id: 'drained',
+        kind: 'queue-state',
+        stepId: 'idle',
+        status: 'drained',
+        evidenceRef: 'facts',
+      },
+      {
+        id: 'order',
+        kind: 'process-order',
+        events: [
+          { kind: 'workflow-step', stepId: 'draft', method: 'message.submit' },
+          { kind: 'workflow-step', stepId: 'review', method: 'message.submit' },
+          { kind: 'turn', role: 'assistant' },
+        ],
+        evidenceRef: 'facts',
+      },
+    ];
+    const input = evidenceInput(assertions);
+    input.workflow.steps = [
+      {
+        id: 'draft',
+        kind: 'submit',
+        method: 'message.submit',
+        accepted: true,
+        snapshot: workflowSnapshot({ pendingCount: 0 }),
+      },
+      {
+        id: 'review',
+        kind: 'queue',
+        method: 'message.submit',
+        accepted: true,
+        queued: true,
+        snapshot: workflowSnapshot({ pendingCount: 1 }),
+      },
+      {
+        id: 'idle',
+        kind: 'wait-for-idle',
+        method: 'session.waitForIdle',
+        snapshot: workflowSnapshot({
+          pendingCount: 0,
+          messages: [{ id: 'assistant-1', role: 'assistant', content: 'complete' }],
+        }),
+      },
+    ];
+
+    expect(run(input)).toEqual([
+      expect.objectContaining({ id: 'queued', status: 'pass' }),
+      expect.objectContaining({ id: 'drained', status: 'pass' }),
+      expect.objectContaining({ id: 'order', status: 'pass' }),
+    ]);
+
+    input.workflow.steps[1].queued = false;
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('not accepted') }),
+    );
   });
 
   it('proves denied resource projection without authorizing a render transport', () => {
@@ -188,5 +284,21 @@ function evidenceInput(assertions) {
       diagnostics: bounded(),
       disposal: { status: 'disposed' },
     },
+  };
+}
+
+function workflowSnapshot(options = {}) {
+  return {
+    conversationId: 'conversation-1',
+    messages: options.messages ?? [],
+    messageQueue: {
+      conversationId: 'conversation-1',
+      pendingCount: options.pendingCount ?? 0,
+      sequence: 1,
+      pausedAfterCancel: false,
+      items: [],
+    },
+    queued: (options.pendingCount ?? 0) > 0,
+    projectionEvents: [],
   };
 }
