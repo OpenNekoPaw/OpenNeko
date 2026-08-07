@@ -855,12 +855,21 @@ describe('DesktopApplication scene lifecycle', () => {
       scene: activeScene(projection),
     }));
     const deleteConversation = vi.fn(async () => projection);
-    const removeRecentProject = vi.fn(async () => projection);
+    const deletedProjection: DesktopShellProjection = {
+      ...projection,
+      catalog: { projects: [] },
+      agentHome: {
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      },
+      conversationNavigation: { groups: [] },
+    };
+    const deleteProjects = vi.fn(async () => deletedProjection);
     installBridge({
       projection,
       transition,
       deleteConversation,
-      removeRecentProject,
+      deleteProjects,
     });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
@@ -871,13 +880,18 @@ describe('DesktopApplication scene lifecycle', () => {
     const conversationButton = [
       ...container.querySelectorAll<HTMLButtonElement>('.home-project-link'),
     ].find((button) => button.textContent?.includes(conversation.title));
-    if (!projectButton || !conversationButton) {
+    const newConversationButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="New conversation in Project one"]',
+    );
+    if (!projectButton || !conversationButton || !newConversationButton) {
       throw new Error('Desktop fixture requires recent Project and conversation actions.');
     }
     await act(async () => projectButton.click());
     await waitFor(() => transition.mock.calls.length === 1);
-    await act(async () => conversationButton.click());
+    await act(async () => newConversationButton.click());
     await waitFor(() => transition.mock.calls.length === 2);
+    await act(async () => conversationButton.click());
+    await waitFor(() => transition.mock.calls.length === 3);
     expect(transition).toHaveBeenNthCalledWith(
       1,
       projection.window.windowId,
@@ -887,25 +901,49 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(transition).toHaveBeenNthCalledWith(
       2,
       projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      activeScene(projection).sceneId,
+    );
+    expect(transition).toHaveBeenNthCalledWith(
+      3,
+      projection.window.windowId,
       { kind: 'restore-conversation', navigation: conversation.navigation },
       activeScene(projection).sceneId,
     );
 
-    const removeButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove Project one from recent projects"]',
+    const collapseButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse Project one"]',
+    );
+    if (!collapseButton) throw new Error('Desktop fixture requires Project group collapse.');
+    await act(async () => collapseButton.click());
+    expect(
+      container.querySelector(
+        '.primary-conversation-group[data-group-kind="project"] .primary-recent-conversation-row',
+      ),
+    ).toBeNull();
+    expect(collapseButton.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => collapseButton.click());
+    expect(collapseButton.getAttribute('aria-expanded')).toBe('true');
+
+    const deleteProjectButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete Project one and its conversations"]',
     );
     const deleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete conversation Conversation one"]',
     );
-    if (!removeButton || !deleteButton) {
-      throw new Error('Desktop fixture requires recent removal actions.');
+    if (!deleteProjectButton || !deleteButton) {
+      throw new Error('Desktop fixture requires Project and conversation deletion actions.');
     }
-    await act(async () => removeButton.click());
-    await waitFor(() => removeRecentProject.mock.calls.length === 1);
-    expect(removeRecentProject).toHaveBeenCalledWith([project.projectId]);
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
     expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
+    await act(async () => deleteProjectButton.click());
+    await waitFor(() => deleteProjects.mock.calls.length === 1);
+    expect(deleteProjects).toHaveBeenCalledWith([project.projectId]);
+    await waitFor(
+      () =>
+        container.querySelector('.primary-conversation-group[data-group-kind="project"]') === null,
+    );
     await act(async () => root.unmount());
   });
 
@@ -973,8 +1011,8 @@ describe('DesktopApplication scene lifecycle', () => {
       scene: activeScene(projection),
     }));
     const deleteConversation = vi.fn(async () => projection);
-    const removeRecentProject = vi.fn(async () => projection);
-    installBridge({ projection, transition, deleteConversation, removeRecentProject });
+    const deleteProjects = vi.fn(async () => projection);
+    installBridge({ projection, transition, deleteConversation, deleteProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
@@ -994,6 +1032,19 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(projectButton.title).toBe(project.unavailable.message);
     expect(unavailableButton.disabled).toBe(true);
     expect(unavailableButton.title).toBe(unavailableConversation.unavailable.message);
+    const projectGroup = projectButton.closest('.primary-conversation-group');
+    const unavailableRow = unavailableButton.closest('.primary-recent-conversation-row');
+    expect(
+      projectGroup?.querySelector(
+        '.primary-conversation-group__header > .primary-navigation-state .primary-navigation-unavailable',
+      ),
+    ).not.toBeNull();
+    expect(
+      unavailableRow?.querySelector(
+        ':scope > .primary-navigation-state .primary-navigation-unavailable',
+      ),
+    ).not.toBeNull();
+    expect(projectGroup?.querySelector('.primary-conversation-group__diagnostic')).toBeNull();
 
     await act(async () => {
       projectButton.click();
@@ -1010,7 +1061,7 @@ describe('DesktopApplication scene lifecycle', () => {
     );
 
     const removeButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove Unavailable Project from recent projects"]',
+      'button[aria-label="Delete Unavailable Project and its conversations"]',
     );
     const deleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete conversation Unavailable conversation"]',
@@ -1021,11 +1072,85 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(removeButton.disabled).toBe(false);
     expect(deleteButton.disabled).toBe(false);
     await act(async () => removeButton.click());
-    await waitFor(() => removeRecentProject.mock.calls.length === 1);
+    await waitFor(() => deleteProjects.mock.calls.length === 1);
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(removeRecentProject).toHaveBeenCalledWith([project.projectId]);
+    expect(deleteProjects).toHaveBeenCalledWith([project.projectId]);
     expect(deleteConversation).toHaveBeenCalledWith(unavailableConversation.navigation);
+    await act(async () => root.unmount());
+  });
+
+  it('keeps unavailable Workspace groups collapsible and places diagnostics in the trailing track', async () => {
+    const base = createProjection();
+    const conversation = {
+      navigation: {
+        conversationId: 'conversation:missing-workspace',
+        owner: { kind: 'workspace' as const, workspaceId: 'workspace:missing' },
+      },
+      title: 'Missing Workspace conversation',
+      updatedAt: '2026-08-07T00:00:00.000Z',
+      attention: 'none' as const,
+      lastActivity: {
+        kind: 'conversation-updated' as const,
+        occurredAt: '2026-08-07T00:00:00.000Z',
+      },
+      unavailable: {
+        fieldNames: ['context'],
+        message: 'Conversation context is missing.',
+      },
+    };
+    const catalog = { projects: [] };
+    const agentHome = {
+      conversations: [conversation],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    };
+    const transition = vi.fn();
+    const deleteConversation = vi.fn(async () => projection);
+    installBridge({ projection, transition, deleteConversation });
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const { container, root } = await renderApplication();
+
+    const group = container.querySelector<HTMLElement>(
+      '.primary-conversation-group[data-group-kind="workspace"]',
+    );
+    if (!group) throw new Error('Desktop fixture requires an unavailable Workspace group.');
+    const heading = group.querySelector<HTMLElement>(
+      '.primary-conversation-group__standalone-heading',
+    );
+    expect(heading?.textContent).toContain('Unavailable workspace');
+    expect(heading?.textContent).not.toContain('workspaceId');
+    expect(
+      heading?.querySelector(':scope > .primary-navigation-state .primary-navigation-unavailable'),
+    ).not.toBeNull();
+    expect(group.querySelector('.primary-conversation-group__diagnostic')).toBeNull();
+
+    const conversationButton = group.querySelector<HTMLButtonElement>('.home-conversation-link');
+    const collapseButton = group.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse Unavailable workspace"]',
+    );
+    if (!conversationButton || !collapseButton) {
+      throw new Error('Unavailable Workspace controls are incomplete.');
+    }
+    expect(conversationButton.disabled).toBe(true);
+    await act(async () => collapseButton.click());
+    expect(group.querySelector('.primary-recent-conversation-row')).toBeNull();
+    await act(async () => collapseButton.click());
+    expect(group.querySelector('.primary-recent-conversation-row')).not.toBeNull();
+    expect(transition).not.toHaveBeenCalled();
+
+    const deleteButton = group.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete conversation Missing Workspace conversation"]',
+    );
+    if (!deleteButton) throw new Error('Unavailable Workspace cleanup action is missing.');
+    await act(async () => deleteButton.click());
+    await waitFor(() => deleteConversation.mock.calls.length === 1);
+    expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
     await act(async () => root.unmount());
   });
 
@@ -1058,8 +1183,8 @@ describe('DesktopApplication scene lifecycle', () => {
       },
       projectManagementScene(),
     );
-    const removeRecentProject = vi.fn(async () => projection);
-    installBridge({ projection, removeRecentProject });
+    const deleteProjects = vi.fn(async () => projection);
+    installBridge({ projection, deleteProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { container, root } = await renderApplication();
     await waitFor(() => container.querySelector('.management-surface-row__select') !== null);
@@ -1073,19 +1198,16 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () =>
       second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })),
     );
-    const removeSelected = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Remove selected',
+    const deleteSelected = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Delete selected',
     );
-    if (!removeSelected) throw new Error('Project Management batch action is unavailable.');
+    if (!deleteSelected) throw new Error('Project Management batch action is unavailable.');
 
-    await act(async () => removeSelected.click());
-    expect(removeRecentProject).not.toHaveBeenCalled();
-    await act(async () => removeSelected.click());
-    await waitFor(() => removeRecentProject.mock.calls.length === 1);
-    expect(removeRecentProject).toHaveBeenCalledWith([
-      'content:workspace-1',
-      'content:workspace-2',
-    ]);
+    await act(async () => deleteSelected.click());
+    expect(deleteProjects).not.toHaveBeenCalled();
+    await act(async () => deleteSelected.click());
+    await waitFor(() => deleteProjects.mock.calls.length === 1);
+    expect(deleteProjects).toHaveBeenCalledWith(['content:workspace-1', 'content:workspace-2']);
     await act(async () => root.unmount());
   });
 
@@ -1269,7 +1391,7 @@ function installBridge({
   subscribe = vi.fn(() => () => undefined),
   transition = vi.fn(),
   deleteConversation = vi.fn(),
-  removeRecentProject = vi.fn(),
+  deleteProjects = vi.fn(),
   updateApplicationSidebar = vi.fn(),
   updateWorkbench = vi.fn(),
   assetCenterExecute = vi.fn(),
@@ -1279,7 +1401,7 @@ function installBridge({
   readonly subscribe?: (listener: (event: DesktopShellProjectionEvent) => void) => () => void;
   readonly transition?: ReturnType<typeof vi.fn>;
   readonly deleteConversation?: ReturnType<typeof vi.fn>;
-  readonly removeRecentProject?: ReturnType<typeof vi.fn>;
+  readonly deleteProjects?: ReturnType<typeof vi.fn>;
   readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
   readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
@@ -1290,7 +1412,7 @@ function installBridge({
       shell: { getSnapshot, subscribe },
       scenes: { transition },
       conversations: { delete: deleteConversation },
-      projects: { removeRecent: removeRecentProject },
+      projects: { delete: deleteProjects },
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },

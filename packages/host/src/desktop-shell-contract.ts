@@ -31,7 +31,7 @@ export const DESKTOP_SHELL_CHANNELS = {
   projectionEvent: 'openneko:desktop:shell:projection:event',
   projectOpenContent: 'openneko:desktop:project:content:open',
   projectOpenCatalog: 'openneko:desktop:project:catalog:open',
-  projectRemoveRecent: 'openneko:desktop:project:recent:remove',
+  projectDelete: 'openneko:desktop:project:delete',
   projectRequestProfile: 'openneko:desktop:project:profile:request',
   conversationDelete: 'openneko:desktop:home:conversation:delete',
   homeActivate: 'openneko:desktop:home:activate',
@@ -71,7 +71,7 @@ export interface DesktopProjectOpenRequest extends DesktopWindowMutationRequest 
   readonly projectId: string;
 }
 
-export interface DesktopProjectRemoveRecentRequest extends DesktopWindowMutationRequest {
+export interface DesktopProjectDeleteRequest extends DesktopWindowMutationRequest {
   readonly projectIds: readonly string[];
 }
 
@@ -327,7 +327,7 @@ export interface OpenNekoDesktopShellBridge {
   readonly projects: {
     openContent(): Promise<DesktopOpenContentResult>;
     open(projectId: string): Promise<DesktopOpenContentResult>;
-    removeRecent(projectIds: readonly string[]): Promise<DesktopShellProjection>;
+    delete(projectIds: readonly string[]): Promise<DesktopShellProjection>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly conversations: {
@@ -579,11 +579,11 @@ export function createDesktopProjectOpenRequest(
   };
 }
 
-export function createDesktopProjectRemoveRecentRequest(
+export function createDesktopProjectDeleteRequest(
   requestId: string,
   projectIds: readonly string[],
   rendererSessionId: string,
-): DesktopProjectRemoveRecentRequest {
+): DesktopProjectDeleteRequest {
   return {
     ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
     projectIds: requireUniqueProjectIds(projectIds),
@@ -662,16 +662,14 @@ export function parseDesktopProjectOpenRequest(value: unknown): DesktopProjectOp
   );
 }
 
-export function parseDesktopProjectRemoveRecentRequest(
-  value: unknown,
-): DesktopProjectRemoveRecentRequest {
-  const record = requireRecord(value, 'Desktop Project remove-recent request must be an object.');
+export function parseDesktopProjectDeleteRequest(value: unknown): DesktopProjectDeleteRequest {
+  const record = requireRecord(value, 'Desktop Project delete request must be an object.');
   requireExactKeys(
     record,
     ['requestId', 'projectIds', 'rendererSessionId'],
-    'Desktop Project remove-recent request',
+    'Desktop Project delete request',
   );
-  return createDesktopProjectRemoveRecentRequest(
+  return createDesktopProjectDeleteRequest(
     parseDesktopShellRequestId(record),
     requireUniqueProjectIds(
       requireArray(record['projectIds'], 'Desktop Project identities must be an array.'),

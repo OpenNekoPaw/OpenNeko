@@ -18,13 +18,13 @@ export type DesktopProjectManagementSort =
 
 export function DesktopProjectCatalogSurface({
   interactive,
+  onDelete,
   onOpen,
-  onRemove,
   projects,
 }: {
   readonly interactive: boolean;
+  readonly onDelete: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onOpen: (projectId: string) => void;
-  readonly onRemove: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly projects: readonly DesktopProjectCatalogItem[];
 }): JSX.Element {
   const { locale, t } = useTranslation();
@@ -111,9 +111,9 @@ export function DesktopProjectCatalogSurface({
         >
           <strong>{t('home.projects.selectedCount', { count: selectedProjects.length })}</strong>
           <span className="project-management-batch-toolbar__spacer" />
-          <button type="button" disabled={!interactive} onClick={() => onRemove(selectedProjects)}>
+          <button type="button" disabled={!interactive} onClick={() => onDelete(selectedProjects)}>
             <TrashIcon size={14} />
-            <span>{t('home.projects.removeSelected')}</span>
+            <span>{t('home.projects.deleteSelected')}</span>
           </button>
           <button
             type="button"
@@ -149,7 +149,7 @@ export function DesktopProjectCatalogSurface({
             (event.key === 'Delete' || event.key === 'Backspace')
           ) {
             event.preventDefault();
-            onRemove(selectedProjects);
+            onDelete(selectedProjects);
             return;
           }
           if (event.key === 'Home' || event.key === 'End') {
@@ -207,10 +207,10 @@ export function DesktopProjectCatalogSurface({
               </button>
               <button
                 type="button"
-                aria-label={t('shell.removeRecentProject', { project: project.displayName })}
+                aria-label={t('shell.deleteProject', { project: project.displayName })}
                 disabled={!interactive}
-                title={t('shell.removeRecentProject', { project: project.displayName })}
-                onClick={() => onRemove([project])}
+                title={t('shell.deleteProject', { project: project.displayName })}
+                onClick={() => onDelete([project])}
               >
                 <TrashIcon size={15} />
               </button>

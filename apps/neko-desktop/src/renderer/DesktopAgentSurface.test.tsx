@@ -468,7 +468,7 @@ function installBridge(
       projects: {
         open: vi.fn(),
         openContent: vi.fn(),
-        removeRecent: vi.fn(),
+        delete: vi.fn(),
         requestProfile: vi.fn(),
       },
       conversations: { delete: vi.fn() },

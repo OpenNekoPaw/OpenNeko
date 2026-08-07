@@ -683,8 +683,9 @@ code {
 
 .primary-recent-project-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(24px, auto) 24px;
   align-items: center;
+  gap: 2px;
   border-radius: var(--neko-desktop-radius-control);
 }
 
@@ -711,25 +712,42 @@ code {
 }
 
 .primary-conversation-group__header {
+  grid-template-columns: 24px minmax(0, 1fr) auto minmax(24px, auto) 24px;
   margin-bottom: 1px;
+}
+
+.primary-conversation-group__collapse {
+  color: var(--neko-desktop-text-subtle);
+}
+
+.primary-conversation-group__project-link {
+  min-height: 30px;
+  padding: 0 4px;
 }
 
 .primary-conversation-group__standalone-heading {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 24px auto minmax(0, 1fr) auto minmax(24px, auto);
   align-items: center;
-  gap: 7px;
+  gap: 4px;
   min-height: 30px;
-  padding: 0 9px;
+  padding: 0;
   color: var(--neko-desktop-text-secondary);
   font-size: 11px;
   font-weight: 600;
 }
 
-.primary-conversation-group__standalone-heading span {
+.primary-conversation-group__label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.primary-conversation-group__count {
+  min-width: 18px;
+  color: var(--neko-desktop-text-subtle);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .primary-conversation-group__children {
@@ -762,17 +780,31 @@ code {
 
 .home-conversation-link {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.primary-navigation-state {
+  display: inline-flex;
+  min-width: 24px;
+  min-height: 24px;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .primary-navigation-unavailable {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  max-width: 74px;
   color: var(--neko-desktop-warning);
   font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.primary-navigation-unavailable > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .home-conversation-attention {

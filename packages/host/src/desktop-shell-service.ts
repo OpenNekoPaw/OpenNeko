@@ -116,6 +116,11 @@ export interface DesktopShellOpenContentResult {
   readonly workspace: AssetWorkspaceResolution;
 }
 
+export interface DesktopProjectCatalogRemovalResult {
+  readonly conversations: readonly DesktopAgentHomeNavigationIdentity[];
+  readonly projection: DesktopShellProjection;
+}
+
 export interface DesktopAgentViewGrant extends DesktopAgentViewIdentity {
   readonly windowId: string;
   readonly workspaceId: string;
@@ -1108,11 +1113,11 @@ export class DesktopShellService {
     });
   }
 
-  async removeRecentProjects(
+  async removeProjectsFromCatalog(
     windowId: string,
     projectIds: readonly string[],
     rendererSessionId: string,
-  ): Promise<DesktopShellProjection> {
+  ): Promise<DesktopProjectCatalogRemovalResult> {
     return this.enqueue(async () => {
       this.requireActive();
       this.assertMutationContext(windowId, rendererSessionId);
@@ -1141,6 +1146,19 @@ export class DesktopShellService {
         }
         return project;
       });
+      const currentProjection = this.projectWindow(state, windowId);
+      const conversations = projectIds.flatMap((projectId) => {
+        const group = currentProjection.conversationNavigation.groups.find(
+          (candidate) => candidate.kind === 'project' && candidate.projectId === projectId,
+        );
+        if (!group || group.kind !== 'project') {
+          throw new DesktopShellContractError(
+            'desktop-shell-project-identity-mismatch',
+            `Desktop Project '${projectId}' has no authoritative conversation group.`,
+          );
+        }
+        return group.conversations.map((conversation) => conversation.navigation);
+      });
       if (
         this.options.workspaceRegistry.removeProjects &&
         !(await this.options.workspaceRegistry.removeProjects(
@@ -1167,7 +1185,10 @@ export class DesktopShellService {
       });
       projectIds.forEach((projectId) => this.retainedProjects.delete(projectId));
       await this.emitAll(committed);
-      return this.projectWindow(committed, windowId);
+      return {
+        conversations,
+        projection: this.projectWindow(committed, windowId),
+      };
     });
   }
 

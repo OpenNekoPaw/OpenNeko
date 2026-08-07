@@ -8,6 +8,7 @@ import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import {
   desktopConversationNavigationScenario,
+  desktopProjectSidebarManagementScenario,
   desktopWorkbenchScenesScenario,
 } from './desktop-workbench-scenes.mjs';
 
@@ -19,6 +20,7 @@ const scenarios = new Map(
     desktopAgentProviderUiScenario,
     desktopAgentDiagnosticPortalScenario,
     desktopConversationNavigationScenario,
+    desktopProjectSidebarManagementScenario,
     desktopWorkbenchScenesScenario,
     resourceBrowserEntityManagementScenario,
     assetLibraryRecordRemovalScenario,

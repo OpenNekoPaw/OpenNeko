@@ -1,4 +1,6 @@
 import {
+  ChevronDownIcon,
+  ChevronRightIcon,
   CloseIcon,
   ControlledWorkbenchShell,
   FolderIcon,
@@ -104,7 +106,7 @@ interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onRemoveRecentProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onDeleteProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onUpdateWorkbench: (
     workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
@@ -300,19 +302,19 @@ export function DesktopApplication(): JSX.Element {
       }
       void runMutation(() => window.openNekoDesktop.conversations.delete(conversation.navigation));
     },
-    onRemoveRecentProjects: (projects) => {
+    onDeleteProjects: (projects) => {
       if (projects.length === 0) {
-        throw new Error('At least one recent Project is required for removal.');
+        throw new Error('At least one Project is required for deletion.');
       }
       const confirmation =
         projects.length === 1 && projects[0]
-          ? t('shell.removeRecentProjectConfirm', { project: projects[0].displayName })
-          : t('shell.removeRecentProjectsConfirm', { count: projects.length });
+          ? t('shell.deleteProjectConfirm', { project: projects[0].displayName })
+          : t('shell.deleteProjectsConfirm', { count: projects.length });
       if (!globalThis.confirm(confirmation)) {
         return;
       }
       void runMutation(() =>
-        window.openNekoDesktop.projects.removeRecent(projects.map((project) => project.projectId)),
+        window.openNekoDesktop.projects.delete(projects.map((project) => project.projectId)),
       );
     },
     onUpdateWorkbench: (workbenchInstanceId, workbench) => {
@@ -409,7 +411,7 @@ export function DesktopShellView({
     onSelectProject: () => undefined,
     onOpenConversation: () => undefined,
     onDeleteConversation: () => undefined,
-    onRemoveRecentProjects: () => undefined,
+    onDeleteProjects: () => undefined,
     onUpdateWorkbench: () => undefined,
     onUpdateApplicationSidebar: () => undefined,
     onTransitionScene: () => undefined,
@@ -637,7 +639,7 @@ function DesktopSceneWorkbench({
             onNavigate={(section) => actions.onTransitionScene(sceneIntentForSection(section))}
             onOpenConversation={actions.onOpenConversation}
             onOpenRecent={actions.onSelectProject}
-            onRemoveRecentProject={(project) => actions.onRemoveRecentProjects([project])}
+            onDeleteProject={(project) => actions.onDeleteProjects([project])}
             onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
             onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
             projection={projection}
@@ -845,7 +847,7 @@ function DesktopWorkbenchRuntimePortals({
       <DesktopProjectCatalogSurface
         interactive={interactive}
         onOpen={actions.onSelectProject}
-        onRemove={actions.onRemoveRecentProjects}
+        onDelete={actions.onDeleteProjects}
         projects={projection.catalog.projects}
       />
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
@@ -2030,7 +2032,7 @@ function ApplicationPrimarySidebar({
   onNavigate,
   onOpenConversation,
   onOpenRecent,
-  onRemoveRecentProject,
+  onDeleteProject,
   onOpenSettings,
   onToggle,
   projection,
@@ -2045,7 +2047,7 @@ function ApplicationPrimarySidebar({
   readonly onNavigate: (section: HomeSection) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
-  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
+  readonly onDeleteProject: (project: DesktopProjectCatalogItem) => void;
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
@@ -2100,9 +2102,9 @@ function ApplicationPrimarySidebar({
         activeProjectId={activeProjectId}
         disabled={disabled}
         onDeleteConversation={onDeleteConversation}
+        onDeleteProject={onDeleteProject}
         onOpenConversation={onOpenConversation}
         onOpenRecent={onOpenRecent}
-        onRemoveRecentProject={onRemoveRecentProject}
         projection={projection}
       />
       <PrimarySidebarFooter
@@ -2118,29 +2120,39 @@ function PrimaryRecentNavigation({
   activeProjectId,
   disabled = false,
   onDeleteConversation,
+  onDeleteProject,
   onOpenConversation,
   onOpenRecent,
-  onRemoveRecentProject,
   projection,
 }: {
   readonly activeProjectId?: string;
   readonly disabled?: boolean;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onDeleteProject: (project: DesktopProjectCatalogItem) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
-  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const [showAllGroups, setShowAllGroups] = useState<ReadonlySet<string>>(() => new Set());
   const activeScene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
   const activeConversationId =
     activeScene.context.kind === 'agent' && activeScene.context.scope.kind !== 'unbound'
       ? activeScene.context.scope.conversationId
       : undefined;
-  const toggleExpanded = (group: DesktopConversationNavigationGroup) => {
+  const toggleCollapsed = (group: DesktopConversationNavigationGroup) => {
     const key = conversationGroupKey(group);
-    setExpandedGroups((current) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const toggleShowAll = (group: DesktopConversationNavigationGroup) => {
+    const key = conversationGroupKey(group);
+    setShowAllGroups((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -2155,8 +2167,9 @@ function PrimaryRecentNavigation({
       </div>
       {projection.conversationNavigation.groups.map((group) => {
         const key = conversationGroupKey(group);
-        const expanded = expandedGroups.has(key);
-        const conversations = expanded
+        const collapsed = collapsedGroups.has(key);
+        const showAll = showAllGroups.has(key);
+        const conversations = showAll
           ? group.conversations
           : group.conversations.slice(0, INITIAL_CONVERSATIONS_PER_GROUP);
         const project =
@@ -2172,78 +2185,126 @@ function PrimaryRecentNavigation({
           );
         }
         return (
-          <section className="primary-conversation-group" data-group-kind={group.kind} key={key}>
+          <section
+            className="primary-conversation-group"
+            data-group-id={key}
+            data-group-kind={group.kind}
+            key={key}
+          >
             {group.kind === 'project' && project ? (
               <div
                 className="primary-recent-project-row primary-conversation-group__header"
                 data-active={project.projectId === activeProjectId ? 'true' : 'false'}
               >
+                <IconButton
+                  className="primary-conversation-group__collapse"
+                  disabled={disabled}
+                  size="xs"
+                  label={
+                    collapsed
+                      ? t('home.expandConversationGroup', { group: project.displayName })
+                      : t('home.collapseConversationGroup', { group: project.displayName })
+                  }
+                  aria-expanded={!collapsed}
+                  icon={collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
+                  onClick={() => toggleCollapsed(group)}
+                />
                 <button
                   type="button"
-                  className="home-project-link"
+                  className="home-project-link primary-conversation-group__project-link"
                   disabled={disabled || projectUnavailable !== undefined}
                   title={projectUnavailable?.message}
                   onClick={() => onOpenRecent(project.projectId)}
                 >
                   <FolderIcon size={15} />
                   <span>{project.displayName}</span>
-                  {projectUnavailable ? (
-                    <span
-                      className="primary-navigation-unavailable"
-                      role="status"
-                      aria-label={projectUnavailable.message}
-                    >
-                      <WarningIcon size={12} />
-                      {t('home.unavailable')}
-                    </span>
-                  ) : null}
                 </button>
+                <span className="primary-conversation-group__count">
+                  {group.conversations.length}
+                </span>
+                <span className="primary-navigation-state">
+                  {projectUnavailable ? (
+                    <NavigationUnavailableStatus message={projectUnavailable.message} />
+                  ) : (
+                    <IconButton
+                      disabled={disabled}
+                      size="xs"
+                      label={t('home.newProjectConversation', { project: project.displayName })}
+                      title={t('home.newProjectConversation', { project: project.displayName })}
+                      icon={<PlusIcon size={13} />}
+                      onClick={() => onOpenRecent(project.projectId)}
+                    />
+                  )}
+                </span>
                 <IconButton
                   disabled={disabled}
                   size="xs"
-                  label={t('shell.removeRecentProject', { project: project.displayName })}
+                  label={t('shell.deleteProject', { project: project.displayName })}
+                  title={t('shell.deleteProject', { project: project.displayName })}
                   icon={<TrashIcon size={13} />}
-                  onClick={() => onRemoveRecentProject(project)}
+                  onClick={() => onDeleteProject(project)}
                 />
               </div>
             ) : (
               <div className="primary-conversation-group__standalone-heading">
+                <IconButton
+                  className="primary-conversation-group__collapse"
+                  disabled={disabled}
+                  size="xs"
+                  label={
+                    collapsed
+                      ? t('home.expandConversationGroup', {
+                          group: formatStandaloneConversationGroup(group, t),
+                        })
+                      : t('home.collapseConversationGroup', {
+                          group: formatStandaloneConversationGroup(group, t),
+                        })
+                  }
+                  aria-expanded={!collapsed}
+                  icon={collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
+                  onClick={() => toggleCollapsed(group)}
+                />
                 <StorylineIcon size={14} />
-                <span>{formatStandaloneConversationGroup(group, t)}</span>
-                <span>{group.conversations.length}</span>
+                <span className="primary-conversation-group__label">
+                  {formatStandaloneConversationGroup(group, t)}
+                </span>
+                <span className="primary-conversation-group__count">
+                  {group.conversations.length}
+                </span>
+                <span className="primary-navigation-state">
+                  {group.kind === 'workspace' ? (
+                    <NavigationUnavailableStatus message={group.message} />
+                  ) : null}
+                </span>
               </div>
             )}
-            {group.kind === 'workspace' ? (
-              <div className="primary-conversation-group__diagnostic" role="status">
-                <WarningIcon size={13} />
-                <span>{group.fieldNames.join(', ')}</span>
+            {!collapsed ? (
+              <div className="primary-conversation-group__children">
+                {conversations.map((conversation) => (
+                  <ConversationNavigationRow
+                    active={conversation.navigation.conversationId === activeConversationId}
+                    conversation={conversation}
+                    disabled={disabled}
+                    key={conversation.navigation.conversationId}
+                    navigationDisabled={
+                      disabled || group.kind === 'workspace' || projectUnavailable !== undefined
+                    }
+                    onDelete={onDeleteConversation}
+                    onOpen={onOpenConversation}
+                  />
+                ))}
+                {group.conversations.length > INITIAL_CONVERSATIONS_PER_GROUP ? (
+                  <button
+                    type="button"
+                    className="primary-conversation-group__expand"
+                    disabled={disabled}
+                    onClick={() => toggleShowAll(group)}
+                  >
+                    {showAll ? t('home.collapseConversations') : t('home.expandConversations')}
+                  </button>
+                ) : null}
               </div>
             ) : null}
-            <div className="primary-conversation-group__children">
-              {conversations.map((conversation) => (
-                <ConversationNavigationRow
-                  active={conversation.navigation.conversationId === activeConversationId}
-                  conversation={conversation}
-                  disabled={disabled}
-                  key={conversation.navigation.conversationId}
-                  navigationDisabled={
-                    disabled || group.kind === 'workspace' || projectUnavailable !== undefined
-                  }
-                  onDelete={onDeleteConversation}
-                  onOpen={onOpenConversation}
-                />
-              ))}
-              {group.conversations.length > INITIAL_CONVERSATIONS_PER_GROUP ? (
-                <button
-                  type="button"
-                  className="primary-conversation-group__expand"
-                  disabled={disabled}
-                  onClick={() => toggleExpanded(group)}
-                >
-                  {expanded ? t('home.collapseConversations') : t('home.expandConversations')}
-                </button>
-              ) : null}
-            </div>
           </section>
         );
       })}
@@ -2283,22 +2344,17 @@ function ConversationNavigationRow({
       >
         <StorylineIcon size={13} />
         <span>{conversation.title}</span>
+      </button>
+      <span className="primary-navigation-state">
         {conversation.unavailable ? (
-          <span
-            className="primary-navigation-unavailable"
-            role="status"
-            aria-label={conversation.unavailable.message}
-          >
-            <WarningIcon size={12} />
-            {t('home.unavailable')}
-          </span>
+          <NavigationUnavailableStatus message={conversation.unavailable.message} />
         ) : conversation.attention !== 'none' ? (
           <span
             className={`home-conversation-attention is-${conversation.attention}`}
             aria-label={formatAttention(conversation.attention, t)}
           />
         ) : null}
-      </button>
+      </span>
       <IconButton
         disabled={disabled}
         size="xs"
@@ -2307,6 +2363,23 @@ function ConversationNavigationRow({
         onClick={() => onDelete(conversation)}
       />
     </div>
+  );
+}
+
+function NavigationUnavailableStatus({ message }: { readonly message: string }): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <Tooltip content={message} side="right">
+      <span
+        className="primary-navigation-unavailable"
+        role="status"
+        title={message}
+        aria-label={`${t('home.unavailable')}: ${message}`}
+      >
+        <WarningIcon size={12} />
+        <span>{t('home.unavailable')}</span>
+      </span>
+    </Tooltip>
   );
 }
 

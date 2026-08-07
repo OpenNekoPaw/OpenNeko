@@ -36,6 +36,7 @@ import {
   createDesktopWebPreferences,
 } from './security';
 import { DesktopShellService } from '@neko/host/desktop-shell-service';
+import { DesktopProjectConversationManagementService } from '@neko/host/desktop-project-conversation-management-service';
 import {
   createEmptyDesktopShellState,
   parseDesktopShellStoredState,
@@ -1091,10 +1092,21 @@ async function startDesktop(): Promise<void> {
     grants: agentLaunch,
     preview: assistantPreview,
   });
+  const projectConversations = new DesktopProjectConversationManagementService({
+    shell: shellService,
+    conversations: {
+      deleteConversations: async (conversations) => {
+        for (const conversation of conversations) {
+          await agentComposition.deleteConversation(conversation.conversationId);
+        }
+      },
+    },
+  });
   const appHost = new DesktopAppHost({
     host,
     logger,
     shell: shellService,
+    projectConversations,
     agent: agentComposition,
     assistantWorkspace,
     agentControllerComposition,

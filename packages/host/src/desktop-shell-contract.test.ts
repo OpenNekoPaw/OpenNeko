@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
+  createDesktopProjectDeleteRequest,
   createDesktopProjectOpenRequest,
-  createDesktopProjectRemoveRecentRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
-  parseDesktopProjectRemoveRecentRequest,
+  parseDesktopProjectDeleteRequest,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
   projectDesktopConversationNavigation,
@@ -136,7 +136,7 @@ describe('Desktop Shell contract', () => {
       projectId: 'content:workspace-1',
     });
     expect(
-      createDesktopProjectRemoveRecentRequest(
+      createDesktopProjectDeleteRequest(
         'request-4',
         ['content:workspace-1', 'content:workspace-2'],
         'renderer-session-1',
@@ -165,19 +165,19 @@ describe('Desktop Shell contract', () => {
     });
   });
 
-  it('strictly rejects invalid and removed single-Project removal payloads', () => {
+  it('strictly rejects invalid Project delete payloads', () => {
     expect(() =>
-      parseDesktopProjectRemoveRecentRequest({
+      parseDesktopProjectDeleteRequest({
         requestId: 'request-1',
         rendererSessionId: 'renderer-session-1',
         projectId: 'content:workspace-1',
       }),
     ).toThrowError(DesktopShellContractError);
     expect(() =>
-      createDesktopProjectRemoveRecentRequest('request-2', [], 'renderer-session-1'),
+      createDesktopProjectDeleteRequest('request-2', [], 'renderer-session-1'),
     ).toThrowError('At least one Desktop Project identity is required.');
     expect(() =>
-      createDesktopProjectRemoveRecentRequest(
+      createDesktopProjectDeleteRequest(
         'request-3',
         ['content:workspace-1', 'content:workspace-1'],
         'renderer-session-1',

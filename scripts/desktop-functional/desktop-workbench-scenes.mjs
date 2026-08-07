@@ -1,4 +1,4 @@
-import { copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 
@@ -10,6 +10,8 @@ const ACTIVE_WORKBENCH_SECONDARY_MAIN_TARGET_SELECTOR = '[data-workbench-slot="s
 const APPLICATION_NAVIGATION_BUTTON_SELECTOR =
   '[data-primary-sidebar="application"] .home-primary-navigation .home-nav-button';
 const VISUAL_SETTLE_MILLISECONDS = 1_000;
+const PROJECT_SIDEBAR_WORKSPACE_ID = '11111111-2222-4333-8444-555555555555';
+const PROJECT_SIDEBAR_CONVERSATION_ID = 'conversation:project-sidebar-history';
 
 export const desktopWorkbenchScenesScenario = Object.freeze({
   id: 'desktop-workbench-scenes',
@@ -538,6 +540,77 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
   },
 });
 
+export const desktopProjectSidebarManagementScenario = Object.freeze({
+  id: 'desktop-project-sidebar-management',
+  owner: '@neko/app-desktop',
+  async prepare(context) {
+    const prepared = await desktopWorkbenchScenesScenario.prepare(context);
+    await mkdir(join(prepared.workspacePath, 'neko'), { recursive: true });
+    await writeFile(
+      join(prepared.workspacePath, 'neko', 'project.json'),
+      `${JSON.stringify({ workspaceId: PROJECT_SIDEBAR_WORKSPACE_ID }, null, 2)}\n`,
+      'utf8',
+    );
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(context.fixtureHome, '.neko', 'neko.db'));
+    try {
+      database.exec(`
+        CREATE TABLE pi_conversations (
+          workspace_id TEXT NOT NULL,
+          conversation_id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          active_branch_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      database
+        .prepare(
+          `INSERT INTO pi_conversations (
+             workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
+           ) VALUES (?, ?, ?, 'branch-main', ?, ?)`,
+        )
+        .run(
+          PROJECT_SIDEBAR_WORKSPACE_ID,
+          PROJECT_SIDEBAR_CONVERSATION_ID,
+          'Project sidebar history',
+          '2026-08-07T00:00:00.000Z',
+          '2026-08-07T00:00:00.000Z',
+        );
+    } finally {
+      database.close();
+    }
+    return prepared;
+  },
+  async run({ checkpoint, click, evaluate, prepared, screenshot, waitForSelector }) {
+    await resizeWindow(evaluate, 1200, 800);
+    await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
+    const cancellation = await assertFixtureWorkspaceCancellation(evaluate);
+    const activation = await chooseFixtureWorkspaceWithHistory(evaluate);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await inspectActivatedWorkspaceAgent(evaluate);
+    const management = await exerciseProjectConversationGroup({
+      click,
+      evaluate,
+      projectId: activation.projectId,
+      screenshot,
+      workspaceId: activation.workspaceId,
+    });
+    await access(join(prepared.workspacePath, 'preview.png'));
+    const evidence = {
+      activation,
+      cancellation,
+      management,
+      projectFilesRetained: true,
+    };
+    checkpoint('project-sidebar-management', evidence);
+    return {
+      ...evidence,
+      screenshots: [management.screenshot],
+    };
+  },
+});
+
 export const desktopConversationNavigationScenario = Object.freeze({
   id: 'desktop-conversation-navigation',
   owner: '@neko/app-desktop',
@@ -727,6 +800,182 @@ async function inspectRendererResidency(evaluate, measureRendererResources) {
   return { presentation, renderer };
 }
 
+async function exerciseProjectConversationGroup({
+  click,
+  evaluate,
+  projectId,
+  screenshot,
+  workspaceId,
+}) {
+  const groupSelector = `.primary-conversation-group[data-group-id=${JSON.stringify(
+    `project:${projectId}`,
+  )}]`;
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const group = projection.conversationNavigation.groups.find(
+        (candidate) => candidate.kind === 'project' &&
+          candidate.projectId === ${JSON.stringify(projectId)},
+      );
+      const root = document.querySelector(${JSON.stringify(groupSelector)});
+      return group?.conversations.length === 1 &&
+        group.conversations[0]?.navigation.conversationId === ${JSON.stringify(PROJECT_SIDEBAR_CONVERSATION_ID)} &&
+        root?.querySelectorAll('.primary-recent-conversation-row').length === 1;
+    })()`,
+    'Persisted Project conversation did not render in its exact sidebar group.',
+  );
+  const initial = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const groupProjection = projection.conversationNavigation.groups.find(
+      (candidate) => candidate.kind === 'project' &&
+        candidate.projectId === ${JSON.stringify(projectId)},
+    );
+    const group = document.querySelector(${JSON.stringify(groupSelector)});
+    const header = group?.querySelector('.primary-conversation-group__header');
+    const collapse = header?.querySelector('.primary-conversation-group__collapse');
+    const open = header?.querySelector('.primary-conversation-group__project-link');
+    const count = header?.querySelector('.primary-conversation-group__count');
+    const create = header?.querySelector('.primary-navigation-state button');
+    const deletion = header?.querySelector(':scope > button:last-child');
+    const conversationStatus = group?.querySelector(
+      '.primary-recent-conversation-row > .primary-navigation-state .primary-navigation-unavailable',
+    );
+    const openRect = open?.getBoundingClientRect();
+    const stateRect = create?.getBoundingClientRect();
+    return {
+      conversationId: groupProjection?.conversations[0]?.navigation.conversationId,
+      conversationCount: groupProjection?.conversations.length ?? -1,
+      visibleRows: group?.querySelectorAll('.primary-recent-conversation-row').length ?? -1,
+      collapseEnabled: collapse instanceof HTMLButtonElement && !collapse.disabled,
+      openEnabled: open instanceof HTMLButtonElement && !open.disabled,
+      createEnabled: create instanceof HTMLButtonElement && !create.disabled,
+      deletionEnabled: deletion instanceof HTMLButtonElement && !deletion.disabled,
+      conversationUnavailableTrailing: conversationStatus instanceof HTMLElement,
+      countText: count?.textContent?.trim() ?? '',
+      trailingTrackDoesNotOverlap:
+        openRect !== undefined && stateRect !== undefined && stateRect.left >= openRect.right,
+    };
+  })()`);
+  if (
+    typeof initial.conversationId !== 'string' ||
+    initial.conversationCount !== 1 ||
+    initial.visibleRows !== 1 ||
+    !initial.collapseEnabled ||
+    !initial.openEnabled ||
+    !initial.createEnabled ||
+    !initial.deletionEnabled ||
+    !initial.conversationUnavailableTrailing ||
+    initial.countText !== '1' ||
+    !initial.trailingTrackDoesNotOverlap
+  ) {
+    throw new Error(`Project sidebar controls are incorrect: ${JSON.stringify(initial)}`);
+  }
+
+  await click(`${groupSelector} .primary-conversation-group__collapse`);
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const group = document.querySelector(${JSON.stringify(groupSelector)});
+      const toggle = group?.querySelector('.primary-conversation-group__collapse');
+      return toggle?.getAttribute('aria-expanded') === 'false' &&
+        group?.querySelectorAll('.primary-recent-conversation-row').length === 0;
+    })()`,
+    'Project conversation group did not collapse.',
+  );
+  await click(`${groupSelector} .primary-conversation-group__collapse`);
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const group = document.querySelector(${JSON.stringify(groupSelector)});
+      const toggle = group?.querySelector('.primary-conversation-group__collapse');
+      return toggle?.getAttribute('aria-expanded') === 'true' &&
+        group?.querySelectorAll('.primary-recent-conversation-row').length === 1;
+    })()`,
+    'Project conversation group did not expand.',
+  );
+  const groupScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-group-expanded',
+  );
+
+  await click(`${groupSelector} .primary-conversation-group__project-link`);
+  await waitForProjectDraft(evaluate, projectId, workspaceId, 'Project open');
+  await click(`${groupSelector} .primary-navigation-state button`);
+  await waitForProjectDraft(evaluate, projectId, workspaceId, 'New conversation');
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const group = document.querySelector(${JSON.stringify(groupSelector)});
+      const deletion = group?.querySelector(
+        '.primary-conversation-group__header > button:last-child',
+      );
+      return deletion instanceof HTMLButtonElement && !deletion.disabled;
+    })()`,
+    'Project sidebar deletion control did not become interactive after draft transition.',
+  );
+
+  await evaluate(`(() => {
+    globalThis.confirm = () => true;
+    const group = document.querySelector(${JSON.stringify(groupSelector)});
+    const deletion = group?.querySelector(
+      '.primary-conversation-group__header > button:last-child',
+    );
+    if (!(deletion instanceof HTMLButtonElement) || deletion.disabled) {
+      throw new Error('Project sidebar deletion control is unavailable.');
+    }
+    deletion.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      return !projection.catalog.projects.some(
+        (project) => project.projectId === ${JSON.stringify(projectId)},
+      ) && !projection.agentHome.conversations.some(
+        (conversation) =>
+          conversation.navigation.conversationId === ${JSON.stringify(initial.conversationId)},
+      ) && !projection.conversationNavigation.groups.some(
+        (group) => group.kind === 'project' && group.projectId === ${JSON.stringify(projectId)},
+      ) && document.querySelector(${JSON.stringify(groupSelector)}) === null;
+    })()`,
+    'Project sidebar deletion did not remove the Project group and its conversations.',
+  );
+  const deleted = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    return {
+      projectPresent: projection.catalog.projects.some(
+        (project) => project.projectId === ${JSON.stringify(projectId)},
+      ),
+      conversationPresent: projection.agentHome.conversations.some(
+        (conversation) =>
+          conversation.navigation.conversationId === ${JSON.stringify(initial.conversationId)},
+      ),
+      groupPresent: document.querySelector(${JSON.stringify(groupSelector)}) !== null,
+    };
+  })()`);
+  return { initial, deleted, screenshot: groupScreenshot };
+}
+
+async function waitForProjectDraft(evaluate, projectId, workspaceId, action) {
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const context = projection.window.workbench.scene.context;
+      const project = projection.catalog.projects.find(
+        (candidate) => candidate.projectId === ${JSON.stringify(projectId)},
+      );
+      return project?.workspaceId === ${JSON.stringify(workspaceId)} &&
+        context.kind === 'agent' && context.scope.kind === 'workspace' &&
+        context.scope.workspaceId === ${JSON.stringify(workspaceId)} &&
+        context.scope.conversationId === undefined;
+    })()`,
+    `${action} did not activate the exact Project draft.`,
+  );
+}
+
 async function openProjectWorkspace(evaluate, projectId) {
   await waitForCondition(
     evaluate,
@@ -836,6 +1085,52 @@ async function chooseFixtureWorkspace(evaluate) {
       projectId: project.projectId,
       draftId: transition.scene.context.scope.draftId,
       conversationCount: committed.agentHome.conversations.length,
+    };
+  })()`);
+}
+
+async function chooseFixtureWorkspaceWithHistory(evaluate) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    ${requireActiveWorkbenchProjection('projection')}
+    const result = await window.openNekoDesktop.workspaceGrants.choose(
+      projection.window.windowId,
+    );
+    if (result.status !== 'authorized') {
+      throw new Error('The isolated fixture Workspace grant was cancelled.');
+    }
+    const transition = await window.openNekoDesktop.scenes.transition(
+      projection.window.windowId,
+      { kind: 'open-workspace', workspaceGrantId: result.grant.workspaceGrantId },
+      activeWorkbench.scene.sceneId,
+    );
+    if (
+      transition.status !== 'transitioned' ||
+      transition.scene.context.kind !== 'agent' ||
+      transition.scene.context.scope.kind !== 'workspace'
+    ) {
+      throw new Error('Workspace history fixture did not activate a Workspace Scene.');
+    }
+    const committed = await window.openNekoDesktop.shell.getSnapshot();
+    const project = committed.catalog.projects.find(
+      (candidate) => candidate.workspaceId === transition.scene.context.scope.workspaceId,
+    );
+    const group = committed.conversationNavigation.groups.find(
+      (candidate) => candidate.kind === 'project' && candidate.projectId === project?.projectId,
+    );
+    if (
+      transition.scene.context.scope.workspaceId !== ${JSON.stringify(PROJECT_SIDEBAR_WORKSPACE_ID)} ||
+      !project ||
+      group?.conversations[0]?.navigation.conversationId !== ${JSON.stringify(PROJECT_SIDEBAR_CONVERSATION_ID)}
+    ) {
+      throw new Error('Workspace history did not attach to the exact Project group.');
+    }
+    return {
+      workspaceGrantId: result.grant.workspaceGrantId,
+      workspaceId: transition.scene.context.scope.workspaceId,
+      projectId: project.projectId,
+      draftId: transition.scene.context.scope.draftId,
+      conversationCount: group.conversations.length,
     };
   })()`);
 }

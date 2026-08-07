@@ -111,13 +111,13 @@ describe('DesktopShellService', () => {
     expect(fixture.registry.restore).toHaveBeenCalledWith(retainedProject.workspaceId);
 
     projection = await fixture.service.getProjection(windowId);
-    const removed = await fixture.service.removeRecentProjects(
+    const removed = await fixture.service.removeProjectsFromCatalog(
       windowId,
       [retainedProject.projectId],
       projection.rendererSessionId,
     );
     expect(fixture.registry.removeProjects).toHaveBeenCalledWith([retainedProject.workspaceId]);
-    expect(removed.catalog.projects).toEqual([]);
+    expect(removed.projection.catalog.projects).toEqual([]);
   });
 
   it('removes a validated Project batch through one registry call and one state commit', async () => {
@@ -147,7 +147,7 @@ describe('DesktopShellService', () => {
     const projection = await fixture.service.getProjection(windowId);
     commit.mockClear();
 
-    const removed = await fixture.service.removeRecentProjects(
+    const removed = await fixture.service.removeProjectsFromCatalog(
       windowId,
       projects.map((project) => project.projectId),
       projection.rendererSessionId,
@@ -156,7 +156,66 @@ describe('DesktopShellService', () => {
     expect(fixture.registry.removeProjects).toHaveBeenCalledOnce();
     expect(fixture.registry.removeProjects).toHaveBeenCalledWith(['workspace-1', 'workspace-2']);
     expect(commit).toHaveBeenCalledOnce();
-    expect(removed.catalog.projects).toEqual([]);
+    expect(removed.projection.catalog.projects).toEqual([]);
+  });
+
+  it('captures only conversations from the exact authoritative Project groups', async () => {
+    const projects: readonly DesktopProjectCatalogItem[] = [
+      {
+        projectId: 'content:workspace-1',
+        workspaceId: 'workspace-1',
+        profile: 'content',
+        displayName: 'First',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-06T00:00:00.000Z',
+      },
+      {
+        projectId: 'content:workspace-2',
+        workspaceId: 'workspace-2',
+        profile: 'content',
+        displayName: 'Second',
+        createdAt: '2026-08-02T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+      },
+    ];
+    const fixture = createFixture(undefined, 'home', undefined, true, [], projects);
+    fixture.service.setAgentHomeProjectionSource({
+      readHomeProjection: () => ({
+        conversations: [
+          workspaceHomeConversation('conversation:first', 'workspace-1'),
+          workspaceHomeConversation('conversation:second', 'workspace-2'),
+          {
+            ...workspaceHomeConversation('conversation:assistant', 'workspace-1'),
+            navigation: {
+              conversationId: 'conversation:assistant',
+              owner: {
+                kind: 'assistant' as const,
+                assistantSpaceId: 'assistant-space:local-user',
+              },
+            },
+          },
+        ],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+
+    const removed = await fixture.service.removeProjectsFromCatalog(
+      windowId,
+      ['content:workspace-1'],
+      projection.rendererSessionId,
+    );
+
+    expect(removed.conversations).toEqual([
+      {
+        conversationId: 'conversation:first',
+        owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+      },
+    ]);
+    expect(removed.projection.catalog.projects).toEqual([projects[1]]);
   });
 
   it('retains Workspace conversations when no Project is open', async () => {
@@ -1772,7 +1831,7 @@ describe('DesktopShellService', () => {
     expect(secondEvents).toHaveBeenCalled();
   });
 
-  it('removes recent Projects and all of their cross-window Tabs without deleting workspace files', async () => {
+  it('deletes Projects and all of their cross-window Tabs without deleting workspace files', async () => {
     const fixture = createFixture();
     const firstWindow = await fixture.service.claimWindowId();
     const secondWindow = await fixture.service.claimWindowId();
@@ -1789,15 +1848,15 @@ describe('DesktopShellService', () => {
     await openContent(fixture, secondWindow, '/workspace/demo', secondInitial.rendererSessionId);
     const project = firstOpened.projection.catalog.projects[0]!;
 
-    const removed = await fixture.service.removeRecentProjects(
+    const removed = await fixture.service.removeProjectsFromCatalog(
       firstWindow,
       [project.projectId],
       firstOpened.projection.rendererSessionId,
     );
     const secondProjection = await fixture.service.getProjection(secondWindow);
 
-    expect(removed.catalog.projects).toEqual([]);
-    expect(removed.window).toMatchObject({
+    expect(removed.projection.catalog.projects).toEqual([]);
+    expect(removed.projection.window).toMatchObject({
       activeTarget: { kind: 'home' },
       tabs: [],
     });
@@ -1850,13 +1909,13 @@ describe('DesktopShellService', () => {
     );
     const home = await first.service.activateHome(windowId, withCanvas.rendererSessionId);
 
-    const removed = await first.service.removeRecentProjects(
+    const removed = await first.service.removeProjectsFromCatalog(
       windowId,
       [project.projectId],
       home.rendererSessionId,
     );
 
-    expect(activeWorkbench(removed.window).main.views).toEqual([]);
+    expect(activeWorkbench(removed.projection.window).main.views).toEqual([]);
     first.service.releaseWindow(windowId);
     await first.service.dispose();
 
@@ -1890,7 +1949,7 @@ describe('DesktopShellService', () => {
     const project = opened.projection.catalog.projects[0]!;
 
     await expect(
-      fixture.service.removeRecentProjects(
+      fixture.service.removeProjectsFromCatalog(
         windowId,
         [project.projectId, `${project.projectId}:missing`],
         opened.projection.rendererSessionId,
@@ -2519,6 +2578,22 @@ async function openContent(
     throw new Error('Desktop test Workspace transition is unavailable.');
   }
   return { projection: await fixture.service.getProjection(windowId), workspace };
+}
+
+function workspaceHomeConversation(conversationId: string, workspaceId: string) {
+  return {
+    navigation: {
+      conversationId,
+      owner: { kind: 'workspace' as const, workspaceId },
+    },
+    title: conversationId,
+    updatedAt: '2026-08-06T00:00:00.000Z',
+    attention: 'none' as const,
+    lastActivity: {
+      kind: 'conversation-updated' as const,
+      occurredAt: '2026-08-06T00:00:00.000Z',
+    },
+  };
 }
 
 function createMemoryFile(): InMemoryDesktopShellStateRepository {

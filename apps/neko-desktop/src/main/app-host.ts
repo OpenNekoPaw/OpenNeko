@@ -19,7 +19,7 @@ import {
   parseDesktopConversationDeleteRequest,
   parseDesktopProfileRequest,
   parseDesktopProjectOpenRequest,
-  parseDesktopProjectRemoveRecentRequest,
+  parseDesktopProjectDeleteRequest,
   parseDesktopShellRequest,
   parseDesktopTabMutationRequest,
   parseDesktopWorkbenchMutationRequest,
@@ -51,6 +51,7 @@ import {
   type DesktopAgentConnectionGrant,
 } from './desktop-agent-bridge-runtime';
 import type { DesktopShellService } from '@neko/host/desktop-shell-service';
+import type { DesktopProjectConversationManagementService } from '@neko/host/desktop-project-conversation-management-service';
 import { DESKTOP_DEFAULT_ASSISTANT_SPACE_ID } from '@neko/host/desktop-shell-state';
 import type {
   ResourceBrowserChildrenRequest,
@@ -159,6 +160,7 @@ export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
   readonly logger: ILogger;
   readonly shell: DesktopShellService;
+  readonly projectConversations: DesktopProjectConversationManagementService;
   readonly agent: AgentAppHost;
   readonly assistantWorkspace: AssetWorkspaceResolution;
   readonly agentControllerComposition?: AgentControllerComposition;
@@ -191,6 +193,7 @@ export class DesktopAppHost {
   readonly applicationIdentity: NekoApplicationIdentity;
   readonly windows = new DesktopWindowRegistry();
   readonly shell: DesktopShellService;
+  readonly projectConversations: DesktopProjectConversationManagementService;
   readonly agent: AgentAppHost;
   readonly agentBridge: DesktopAgentBridgeRuntime;
   readonly agentLaunch: DesktopAgentLaunchRuntime;
@@ -215,6 +218,7 @@ export class DesktopAppHost {
       instanceId: options.instanceId ?? randomUUID(),
     };
     this.shell = options.shell;
+    this.projectConversations = options.projectConversations;
     this.agent = options.agent;
     this.agentBridge = createDesktopAgentBridgeRuntime({
       ...(options.agentControllerComposition
@@ -911,19 +915,19 @@ export class DesktopAppHost {
     };
   }
 
-  async removeRecentProjects(
+  async deleteProjects(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<DesktopShellResponse> {
     this.requireActive();
-    const request = parseDesktopProjectRemoveRecentRequest(payload);
+    const request = parseDesktopProjectDeleteRequest(payload);
     const window = this.windows.resolveSender(sender);
     return {
       requestId: request.requestId,
-      projection: await this.shell.removeRecentProjects(
+      projection: await this.projectConversations.deleteProjects(
         window.windowId,
-        request.projectIds,
         request.rendererSessionId,
+        request.projectIds,
       ),
     };
   }

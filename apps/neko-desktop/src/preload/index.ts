@@ -34,8 +34,8 @@ import {
 import {
   createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
+  createDesktopProjectDeleteRequest,
   createDesktopProjectOpenRequest,
-  createDesktopProjectRemoveRecentRequest,
   createDesktopShellRequest,
   createDesktopTabMutationRequest,
   createDesktopWindowMutationRequest,
@@ -984,15 +984,15 @@ const bridge: OpenNekoDesktopBridge &
       rememberShellProjection(result.projection);
       return result;
     },
-    async removeRecent(projectIds) {
+    async delete(projectIds) {
       const context = requireShellMutationContext();
-      const request = createDesktopProjectRemoveRecentRequest(
-        nextRequestId('desktop-project-remove-recent'),
+      const request = createDesktopProjectDeleteRequest(
+        nextRequestId('desktop-project-delete'),
         projectIds,
         context.rendererSessionId,
       );
       const response: unknown = await ipcRenderer.invoke(
-        DESKTOP_SHELL_CHANNELS.projectRemoveRecent,
+        DESKTOP_SHELL_CHANNELS.projectDelete,
         request,
       );
       return rememberShellProjection(

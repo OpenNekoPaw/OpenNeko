@@ -18,8 +18,8 @@ import { createAgentExtensionManagementHostRequest } from '@neko/agent-contracts
 import { type AgentHomeNavigationIdentity } from '@neko/agent-contracts';
 import {
   createDesktopConversationDeleteRequest,
+  createDesktopProjectDeleteRequest,
   createDesktopProjectOpenRequest,
-  createDesktopProjectRemoveRecentRequest,
   createDesktopWindowMutationRequest,
   resolveActiveDesktopWindowWorkbench,
   type DesktopShellProjection,
@@ -42,6 +42,7 @@ import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DESKTOP_APP_ORIGIN } from './security';
 import { DesktopShellService } from '@neko/host/desktop-shell-service';
+import { DesktopProjectConversationManagementService } from '@neko/host/desktop-project-conversation-management-service';
 import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import {
   DesktopApplicationSettingsService,
@@ -63,6 +64,8 @@ describe('DesktopAppHost', () => {
     const settings = createSettingsService();
     await settings.initialize();
     const openAgentAdvancedSettings = vi.fn(async () => undefined);
+    const shell = createShellService('app-1');
+    const agent = createAgentComposition();
     const appHost = new DesktopAppHost({
       host: createElectronNekoHostPorts({
         homedir: '/Users/fixture',
@@ -71,8 +74,9 @@ describe('DesktopAppHost', () => {
       }),
       instanceId: 'app-1',
       logger,
-      shell: createShellService('app-1'),
-      agent: createAgentComposition(),
+      shell,
+      projectConversations: createProjectConversationManagementService(shell, agent),
+      agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       workspaceGrants: createWorkspaceGrantAuthority(),
@@ -142,12 +146,15 @@ describe('DesktopAppHost', () => {
       locale: 'zh-CN',
       logger,
     });
+    const shell = createShellService('app-1');
+    const agent = createAgentComposition();
     const appHost = new DesktopAppHost({
       host,
       instanceId: 'app-1',
       logger,
-      shell: createShellService('app-1'),
-      agent: createAgentComposition(),
+      shell,
+      projectConversations: createProjectConversationManagementService(shell, agent),
+      agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       workspaceGrants: createWorkspaceGrantAuthority(),
@@ -197,6 +204,7 @@ describe('DesktopAppHost', () => {
   it('fails visibly after disposal', async () => {
     const logger = createLogger();
     const agent = createAgentComposition();
+    const shell = createShellService('app-1');
     const appHost = new DesktopAppHost({
       host: createElectronNekoHostPorts({
         homedir: '/Users/fixture',
@@ -205,7 +213,8 @@ describe('DesktopAppHost', () => {
       }),
       instanceId: 'app-1',
       logger,
-      shell: createShellService('app-1'),
+      shell,
+      projectConversations: createProjectConversationManagementService(shell, agent),
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
@@ -1518,7 +1527,7 @@ describe('DesktopAppHost', () => {
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledTimes(2);
   });
 
-  it('strictly delegates recent Project removal through the package-owned batch contract', async () => {
+  it('strictly delegates Project deletion through the package-owned batch contract', async () => {
     const fixture = await createShellAppHost();
     const resolution = createWorkspaceResolution();
     fixture.registry.resolve.mockResolvedValue(resolution);
@@ -1529,29 +1538,48 @@ describe('DesktopAppHost', () => {
       async () => resolution.workspacePath,
     );
     const project = opened.projection.catalog.projects[0]!;
+    const projectConversation = {
+      conversationId: 'conversation:project-1',
+      owner: { kind: 'workspace' as const, workspaceId: project.workspaceId },
+    };
+    setAgentHomeConversation(fixture.agent, projectConversation);
+    fixture.agent.deleteConversation.mockImplementation(async () => {
+      fixture.agent.readHomeProjection.mockReturnValue({
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      });
+    });
 
     await expect(
-      fixture.appHost.removeRecentProjects(fixture.sender, {
-        requestId: 'removed-single-payload',
+      fixture.appHost.deleteProjects(fixture.sender, {
+        requestId: 'delete-invalid-payload',
         rendererSessionId: opened.projection.rendererSessionId,
         projectId: project.projectId,
       }),
     ).rejects.toMatchObject({ code: 'invalid-desktop-shell-payload' });
     expect(fixture.registry.removeProjects).not.toHaveBeenCalled();
+    expect(fixture.agent.deleteConversation).not.toHaveBeenCalled();
 
-    const removed = await fixture.appHost.removeRecentProjects(
+    const removed = await fixture.appHost.deleteProjects(
       fixture.sender,
-      createDesktopProjectRemoveRecentRequest(
-        'remove-batch',
+      createDesktopProjectDeleteRequest(
+        'delete-batch',
         [project.projectId],
         opened.projection.rendererSessionId,
       ),
     );
 
     expect(fixture.registry.removeProjects).toHaveBeenCalledWith([project.workspaceId]);
+    expect(fixture.agent.deleteConversation).toHaveBeenCalledWith(
+      projectConversation.conversationId,
+    );
     expect(removed).toMatchObject({
-      requestId: 'remove-batch',
-      projection: { catalog: { projects: [] }, window: { tabs: [] } },
+      requestId: 'delete-batch',
+      projection: {
+        catalog: { projects: [] },
+        window: { tabs: [] },
+        conversationNavigation: { groups: [] },
+      },
     });
   });
 
@@ -2332,6 +2360,7 @@ async function createShellAppHost(options?: {
     instanceId: 'app-1',
     logger,
     shell: fixture.service,
+    projectConversations: createProjectConversationManagementService(fixture.service, agent),
     agent,
     assistantWorkspace: createAssistantWorkspaceResolution(),
     agentLaunch: options?.agentLaunch ?? createAgentLaunchRuntime(),
@@ -2577,6 +2606,22 @@ function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {
     detachWindow: vi.fn(async () => undefined),
     dispose: vi.fn(async () => undefined),
   };
+}
+
+function createProjectConversationManagementService(
+  shell: DesktopShellService,
+  agent: AgentAppHost,
+): DesktopProjectConversationManagementService {
+  return new DesktopProjectConversationManagementService({
+    shell,
+    conversations: {
+      deleteConversations: async (conversations) => {
+        for (const conversation of conversations) {
+          await agent.deleteConversation(conversation.conversationId);
+        }
+      },
+    },
+  });
 }
 
 function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime {

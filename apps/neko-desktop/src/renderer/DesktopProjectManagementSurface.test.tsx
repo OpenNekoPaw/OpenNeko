@@ -26,7 +26,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={onOpen}
-        onRemove={vi.fn()}
+        onDelete={vi.fn()}
         projects={[project()]}
       />,
     );
@@ -39,7 +39,7 @@ describe('Desktop Project Management surfaces', () => {
   });
 
   it('supports range, modifier, filtered select-all, escape, and keyboard batch removal', async () => {
-    const onRemove = vi.fn();
+    const onDelete = vi.fn();
     const projects = [
       project('Alpha', 'project-alpha'),
       project('Beta', 'project-beta'),
@@ -49,7 +49,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={vi.fn()}
-        onRemove={onRemove}
+        onDelete={onDelete}
         projects={projects}
       />,
     );
@@ -80,7 +80,7 @@ describe('Desktop Project Management surfaces', () => {
     await act(async () => {
       list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' }));
     });
-    expect(onRemove).toHaveBeenCalledWith([projects[1]]);
+    expect(onDelete).toHaveBeenCalledWith([projects[1]]);
     await act(async () => markup.root.unmount());
   });
 
@@ -119,7 +119,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={vi.fn()}
-        onRemove={vi.fn()}
+        onDelete={vi.fn()}
         projects={[]}
       />,
     );
@@ -138,7 +138,7 @@ describe('Desktop Project Management surfaces', () => {
 
   it('defaults to list mode and keeps unavailable Workspace fields visible and removable', async () => {
     const onOpen = vi.fn();
-    const onRemove = vi.fn();
+    const onDelete = vi.fn();
     const unavailable = {
       ...project(),
       unavailable: {
@@ -150,7 +150,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={onOpen}
-        onRemove={onRemove}
+        onDelete={onDelete}
         projects={[unavailable]}
       />,
     );
@@ -179,8 +179,10 @@ describe('Desktop Project Management surfaces', () => {
       'currentLocator: Workspace directory is unavailable.',
     );
     expect(findButton(markup.container, 'Open project: Demo').disabled).toBe(true);
-    await act(async () => findButton(markup.container, 'Remove Demo from recent projects').click());
-    expect(onRemove).toHaveBeenCalledWith([unavailable]);
+    await act(async () =>
+      findButton(markup.container, 'Delete Demo and its conversations').click(),
+    );
+    expect(onDelete).toHaveBeenCalledWith([unavailable]);
     expect(onOpen).not.toHaveBeenCalled();
     await act(async () => markup.root.unmount());
   });
@@ -190,7 +192,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={vi.fn()}
-        onRemove={vi.fn()}
+        onDelete={vi.fn()}
         projects={[project()]}
       />,
     );
@@ -219,7 +221,7 @@ describe('Desktop Project Management surfaces', () => {
       <DesktopProjectCatalogSurface
         interactive
         onOpen={vi.fn()}
-        onRemove={vi.fn()}
+        onDelete={vi.fn()}
         projects={[project()]}
       />,
     );
