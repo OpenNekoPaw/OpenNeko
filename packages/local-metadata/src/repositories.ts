@@ -1,7 +1,7 @@
 import type { WorkspaceIdentityDescriptor, WorkspacePortableLocator } from './storage';
 import type { ResourceCacheEntry } from '@neko/local-metadata/resource-cache';
 import type { MediaFileMetadata } from '@neko/media';
-import type { CompactMediaSemanticIndex, SemanticEvidenceProjection } from '@neko/search-domain';
+import type { CompactMediaSemanticIndex } from '@neko/search-domain';
 import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
 import type {
   ProjectIndexFreshness,
@@ -209,7 +209,6 @@ export interface SemanticProjectionRecord {
   readonly coverage: readonly ProjectSemanticCoverageAnalysisKind[];
   readonly freshness: ProjectIndexFreshness;
   readonly index: CompactMediaSemanticIndex;
-  readonly evidence: readonly SemanticEvidenceProjection[];
   readonly updatedAt: string;
 }
 

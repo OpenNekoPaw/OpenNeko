@@ -380,7 +380,6 @@ function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticPro
         },
       },
     },
-    evidence: request.result.evidence,
     updatedAt: request.updatedAt,
   };
 }

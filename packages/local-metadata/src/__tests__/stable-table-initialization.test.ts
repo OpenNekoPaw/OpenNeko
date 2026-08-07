@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createNodeSqliteLocalMetadataStore } from '../node-sqlite-local-metadata-store';
 import { initializeCoreLocalMetadataTables } from '../sqlite/core-tables';
 import { initializeResourceCacheTables } from '../sqlite/resource-cache-schema';
+import { initializeSearchProjectionTables } from '../sqlite/search-projection-schema';
+import { initializeLocalMetadataTables } from '../table-initialization';
 
 const roots: string[] = [];
 
@@ -51,6 +53,56 @@ describe('stable local metadata table initialization', () => {
     );
 
     expect(rows).toEqual([{ resource_id: 'resource-1', entry_json: '{"id":"resource-1"}' }]);
+    await store.dispose();
+  });
+
+  it.each([
+    ['BLOB', 'payload BLOB'],
+    ['untyped', 'payload'],
+  ])(
+    'rejects an application %s column and rolls back only that initialization',
+    async (_kind, column) => {
+      const store = await openStore();
+      await initializeCoreLocalMetadataTables(store);
+
+      await expect(
+        initializeLocalMetadataTables(store, {
+          ownership: 'cache',
+          operation: 'initialize-invalid-binary-table',
+          statements: [`CREATE TABLE IF NOT EXISTS invalid_binary_table (id TEXT, ${column})`],
+        }),
+      ).rejects.toMatchObject({
+        code: 'metadata-schema-forbidden',
+        operation: 'initialize-invalid-binary-table',
+      });
+
+      expect(await readTableNames(store)).toContain('workspaces');
+      expect(await readTableNames(store)).not.toContain('invalid_binary_table');
+      await store.dispose();
+    },
+  );
+
+  it('accepts only the exact Search FTS5 engine table family exemption', async () => {
+    const store = await openStore();
+    await initializeCoreLocalMetadataTables(store);
+    await expect(initializeSearchProjectionTables(store)).resolves.toBeUndefined();
+    expect(await readTableNames(store)).toEqual(
+      expect.arrayContaining(['search_documents_fts', 'search_documents_fts_data']),
+    );
+
+    await expect(
+      initializeLocalMetadataTables(store, {
+        ownership: 'cache',
+        operation: 'initialize-noncanonical-fts-table',
+        statements: [
+          `CREATE VIRTUAL TABLE IF NOT EXISTS unrelated_documents_fts USING fts5(content)`,
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'metadata-schema-forbidden',
+      operation: 'initialize-noncanonical-fts-table',
+    });
+    expect(await readTableNames(store)).not.toContain('unrelated_documents_fts');
     await store.dispose();
   });
 });

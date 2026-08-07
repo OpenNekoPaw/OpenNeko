@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { LocalMetadataSqlBindingValue } from '../contracts';
 import { evaluateLocalMetadataCacheQuota } from '../repositories';
 
 describe('local metadata contracts', () => {
+  it('exposes scalar-only SQLite binding values', () => {
+    expectTypeOf<LocalMetadataSqlBindingValue>().toEqualTypeOf<string | number | bigint | null>();
+  });
+
   it('computes bounded cache reclamation without touching state ownership', () => {
     expect(
       evaluateLocalMetadataCacheQuota(

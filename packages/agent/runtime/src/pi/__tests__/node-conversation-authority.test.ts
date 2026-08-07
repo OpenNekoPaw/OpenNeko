@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   NodePiConversationAuthority,
+  serializePiBranchMetadata,
   type ConversationExecutionLease,
 } from '../node-conversation-authority';
 
@@ -22,6 +23,20 @@ describe('NodePiConversationAuthority', () => {
   afterEach(async () => {
     await Promise.all(authorities.splice(0).map((authority) => authority.dispose()));
     await rm(root, { recursive: true, force: true });
+  });
+
+  it('delegates Pi branch metadata to the canonical Local Metadata admission boundary', () => {
+    expect(() =>
+      serializePiBranchMetadata({
+        workspaceId: 'workspace-1',
+        binary: Buffer.from([0, 1, 2, 3]),
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'metadata-binary-forbidden',
+        operation: 'write-pi-branch-metadata',
+      }),
+    );
   });
 
   it('stores Pi JSONL and SQLite under the user root and reopens by product identities', async () => {

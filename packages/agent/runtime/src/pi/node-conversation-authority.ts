@@ -12,6 +12,7 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import type { AgentConversationContext } from '@neko/agent-contracts';
+import { serializeLocalMetadataJson } from '@neko/local-metadata';
 import {
   parsePortablePiConversationManifest,
   type PortablePiConversationBranch,
@@ -1050,11 +1051,17 @@ function insertBranch(database: DatabaseSync, branch: PiConversationBranchRecord
       branch.session.cwd,
       branch.session.path,
       branch.session.parentSessionPath ?? null,
-      branch.session.metadata === undefined ? null : JSON.stringify(branch.session.metadata),
+      branch.session.metadata === undefined
+        ? null
+        : serializePiBranchMetadata(branch.session.metadata),
       branch.leafId,
       branch.createdAt,
       branch.updatedAt,
     );
+}
+
+export function serializePiBranchMetadata(metadata: unknown): string {
+  return serializeLocalMetadataJson(metadata, 'write-pi-branch-metadata');
 }
 
 function readConversationRow(value: unknown): PiConversationCatalogRecord | undefined {

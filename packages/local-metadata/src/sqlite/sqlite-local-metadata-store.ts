@@ -87,8 +87,7 @@ import {
   isProjectSearchItemKind,
   isProjectSearchPartitionKind,
 } from '@neko/search-domain';
-import { isMediaSemanticIndex } from '@neko/search-domain';
-import { isCompactMediaSemanticIndex, isSemanticEvidenceProjection } from '@neko/search-domain';
+import { isCompactMediaSemanticIndex } from '@neko/search-domain';
 import {
   NekoStorageContractError,
   createWorkspacePortableLocator,
@@ -384,21 +383,9 @@ function decodeSearchDocument(row: SqliteRow): SearchDocumentRecord {
   return document;
 }
 
-type SemanticEvidenceKind = 'text-segment' | 'entity-mention' | 'semantic-tag' | 'perception-ref';
-
-interface EncodedSemanticEvidence {
-  readonly kind: SemanticEvidenceKind;
-  readonly evidenceId: string;
-  readonly ordinal: number;
-  readonly payload: unknown;
-}
-
-function decodeSemanticProjection(
-  sourceRow: SqliteRow,
-  evidenceRows: readonly SqliteRow[],
-): SemanticProjectionRecord {
+function decodeSemanticProjection(sourceRow: SqliteRow): SemanticProjectionRecord {
   const sourceId = readString(sourceRow, 'source_id');
-  const indexMetadata = parseJsonColumn(
+  const index = parseJsonColumn(
     readString(sourceRow, 'index_json'),
     'decode-semantic-source-index',
   );
@@ -415,8 +402,8 @@ function decodeSemanticProjection(
     'decode-semantic-coverage',
   );
   if (
-    !isRecord(indexMetadata) ||
-    JSON.stringify(indexMetadata['sourceRef']) !== JSON.stringify(sourceRef) ||
+    !isCompactMediaSemanticIndex(index) ||
+    JSON.stringify(index.sourceRef) !== JSON.stringify(sourceRef) ||
     !isProjectSemanticProviderMetadata(provider) ||
     !Array.isArray(coverage) ||
     !coverage.every(isProjectSemanticCoverageAnalysisKind)
@@ -425,39 +412,6 @@ function decodeSemanticProjection(
       code: 'metadata-integrity-failed',
       operation: 'decode-semantic-projection',
       message: `Stored semantic source metadata is invalid: ${sourceId}`,
-    });
-  }
-  const evidence = evidenceRows.map(decodeSemanticEvidence);
-  const compactEvidence = evidence
-    .filter((item) => item.kind === 'text-segment')
-    .map((item) => item.payload);
-  if (!compactEvidence.every(isSemanticEvidenceProjection)) {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-semantic-projection',
-      message: `Stored semantic evidence contains an incompatible body-bearing payload: ${sourceId}`,
-    });
-  }
-  const entityMentions = evidence
-    .filter((item) => item.kind === 'entity-mention')
-    .map((item) => item.payload);
-  const semanticTags = evidence
-    .filter((item) => item.kind === 'semantic-tag')
-    .map((item) => item.payload);
-  const perceptionRefs = evidence
-    .filter((item) => item.kind === 'perception-ref')
-    .map((item) => item.payload);
-  const index: unknown = {
-    ...indexMetadata,
-    ...(entityMentions.length > 0 ? { entityMentions } : {}),
-    ...(semanticTags.length > 0 ? { semanticTags } : {}),
-    ...(perceptionRefs.length > 0 ? { perceptionRefs } : {}),
-  };
-  if (!isCompactMediaSemanticIndex(index)) {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-semantic-projection',
-      message: `Stored semantic evidence does not reconstruct a valid compact index: ${sourceId}`,
     });
   }
   const freshness = readString(sourceRow, 'freshness');
@@ -475,25 +429,7 @@ function decodeSemanticProjection(
     coverage,
     freshness,
     index,
-    evidence: compactEvidence,
     updatedAt: readString(sourceRow, 'updated_at'),
-  };
-}
-
-function decodeSemanticEvidence(row: SqliteRow): EncodedSemanticEvidence {
-  const kind = readString(row, 'evidence_kind');
-  if (!isSemanticEvidenceKind(kind)) {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-semantic-evidence',
-      message: `Stored semantic evidence kind is invalid: ${kind}`,
-    });
-  }
-  return {
-    kind,
-    evidenceId: readString(row, 'evidence_id'),
-    ordinal: readNumber(row, 'ordinal'),
-    payload: parseJsonColumn(readString(row, 'evidence_json'), 'decode-semantic-evidence'),
   };
 }
 
@@ -628,7 +564,7 @@ class RawWorkspaceRegistryRepository implements WorkspaceRegistryRepository {
         request.identity.workspaceId,
         request.locator.kind,
         request.locator.value,
-        JSON.stringify([request.locator]),
+        serializeLocalMetadataJson([request.locator], 'bind-workspace-locator-history'),
         request.seenAt,
       ],
     );
@@ -659,7 +595,7 @@ class RawWorkspaceRegistryRepository implements WorkspaceRegistryRepository {
       [
         request.locator.kind,
         request.locator.value,
-        JSON.stringify(locatorHistory),
+        serializeLocalMetadataJson(locatorHistory, 'rebind-workspace-locator-history'),
         request.reboundAt,
         request.workspaceId,
       ],
@@ -1497,26 +1433,12 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         ORDER BY source_id`,
       [key],
     );
-    const evidenceRows = await this.connection().all(
-      `SELECT source_id, evidence_kind, evidence_id, ordinal, evidence_json
-         FROM semantic_evidence
-        WHERE partition_key = ?
-        ORDER BY source_id, ordinal, evidence_kind, evidence_id`,
-      [key],
-    );
-    const evidenceBySource = new Map<string, SqliteRow[]>();
-    for (const row of evidenceRows) {
-      const sourceId = readString(row, 'source_id');
-      const rows = evidenceBySource.get(sourceId) ?? [];
-      rows.push(row);
-      evidenceBySource.set(sourceId, rows);
-    }
     const records: SemanticProjectionRecord[] = [];
     const diagnostics: SemanticProjectionReadDiagnostic[] = [];
     for (const row of sourceRows) {
       const sourceId = readString(row, 'source_id');
       try {
-        records.push(decodeSemanticProjection(row, evidenceBySource.get(sourceId) ?? []));
+        records.push(decodeSemanticProjection(row));
       } catch (error) {
         diagnostics.push({
           code: 'invalid-semantic-projection-record',
@@ -1544,14 +1466,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     );
     const sourceRow = sourceRows[0];
     if (!sourceRow) return null;
-    const evidenceRows = await this.connection().all(
-      `SELECT source_id, evidence_kind, evidence_id, ordinal, evidence_json
-         FROM semantic_evidence
-        WHERE partition_key = ? AND source_id = ?
-        ORDER BY ordinal, evidence_kind, evidence_id`,
-      [key, sourceId],
-    );
-    return decodeSemanticProjection(sourceRow, evidenceRows);
+    return decodeSemanticProjection(sourceRow);
   }
 
   async replacePartition(request: SemanticProjectionReplaceRequest): Promise<void> {
@@ -1560,7 +1475,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     const sourceIds = new Set<string>();
     const prepared = request.sources.map((source) => {
       assertSemanticProjectionRecord(source, sourceIds);
-      return { source, ...splitSemanticProjection(source) };
+      return source;
     });
     await this.connection().run('DELETE FROM semantic_sources WHERE partition_key = ?', [
       partitionKey(request.partition),
@@ -1580,16 +1495,12 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         message: 'Semantic source replacement timestamp must match its source record',
       });
     }
-    const prepared = {
-      source: request.source,
-      ...splitSemanticProjection(request.source),
-    };
     assertSemanticProjectionRecord(request.source, new Set<string>());
     await this.connection().run(
       'DELETE FROM semantic_sources WHERE partition_key = ? AND source_id = ?',
       [partitionKey(request.partition), request.source.sourceId],
     );
-    await this.insertSource(request.partition, prepared);
+    await this.insertSource(request.partition, request.source);
   }
 
   async deleteSource(
@@ -1616,25 +1527,23 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     const sourceIds = new Set<string>();
     const prepared = request.sources.map((source) => {
       assertSemanticProjectionRecord(source, sourceIds);
-      return { source, ...splitSemanticProjection(source) };
+      return source;
     });
     const insertedSourceIds: string[] = [];
     const preservedSourceIds: string[] = [];
     for (const item of prepared) {
       if (!(await this.insertSource(request.partition, item, true))) {
-        preservedSourceIds.push(item.source.sourceId);
+        preservedSourceIds.push(item.sourceId);
         continue;
       }
-      insertedSourceIds.push(item.source.sourceId);
+      insertedSourceIds.push(item.sourceId);
     }
     return { insertedSourceIds, preservedSourceIds };
   }
 
   private async insertSource(
     partition: LocalMetadataPartition,
-    item: { readonly source: SemanticProjectionRecord } & ReturnType<
-      typeof splitSemanticProjection
-    >,
+    source: SemanticProjectionRecord,
     preserveExisting = false,
   ): Promise<boolean> {
     const key = partitionKey(partition);
@@ -1649,36 +1558,18 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         key,
         partition.scope,
         partition.workspaceId,
-        item.source.sourceId,
-        item.source.index.assetId,
-        serializeLocalMetadataJson(item.source.index.sourceRef, 'write-semantic-source-ref'),
-        item.source.sourceFingerprint,
-        serializeLocalMetadataJson(item.source.provider, 'write-semantic-provider'),
-        serializeLocalMetadataJson(item.source.coverage, 'write-semantic-coverage'),
-        item.source.freshness,
-        serializeLocalMetadataJson(item.indexMetadata, 'write-semantic-source-index'),
-        item.source.updatedAt,
+        source.sourceId,
+        source.index.assetId,
+        serializeLocalMetadataJson(source.index.sourceRef, 'write-semantic-source-ref'),
+        source.sourceFingerprint,
+        serializeLocalMetadataJson(source.provider, 'write-semantic-provider'),
+        serializeLocalMetadataJson(source.coverage, 'write-semantic-coverage'),
+        source.freshness,
+        serializeLocalMetadataJson(source.index, 'write-semantic-source-index'),
+        source.updatedAt,
       ],
     );
     if (result.changes === 0) return false;
-    for (const evidence of item.evidence) {
-      await this.connection().run(
-        `INSERT INTO semantic_evidence (
-          partition_key, partition_scope, workspace_id, source_id,
-          evidence_kind, evidence_id, ordinal, evidence_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          key,
-          partition.scope,
-          partition.workspaceId,
-          item.source.sourceId,
-          evidence.kind,
-          evidence.evidenceId,
-          evidence.ordinal,
-          serializeLocalMetadataJson(evidence.payload, 'write-semantic-evidence'),
-        ],
-      );
-    }
     return true;
   }
 }
@@ -1899,7 +1790,7 @@ class RawCatalogProjectionRepository implements CatalogProjectionRepository {
           item.relativePath,
           item.fingerprint,
           item.enabled ? 1 : 0,
-          JSON.stringify(item.diagnosticCodes),
+          serializeLocalMetadataJson(item.diagnosticCodes, 'replace-catalog-diagnostic-codes'),
           item.updatedAt,
         ],
       );
@@ -2250,10 +2141,7 @@ function assertSemanticProjectionRecord(
     !isProjectSemanticProviderMetadata(record.provider) ||
     !record.coverage.every(isProjectSemanticCoverageAnalysisKind) ||
     !isProjectIndexFreshness(record.freshness) ||
-    !isMediaSemanticIndex(record.index) ||
-    Object.prototype.hasOwnProperty.call(record.index, 'textSegments') ||
-    !Array.isArray(record.evidence) ||
-    !record.evidence.every(isSemanticEvidenceProjection) ||
+    !isCompactMediaSemanticIndex(record.index) ||
     !Number.isFinite(Date.parse(record.updatedAt))
   ) {
     throw new LocalMetadataError({
@@ -2263,72 +2151,6 @@ function assertSemanticProjectionRecord(
     });
   }
   sourceIds.add(record.sourceId);
-}
-
-function splitSemanticProjection(record: SemanticProjectionRecord): {
-  readonly indexMetadata: Omit<
-    SemanticProjectionRecord['index'],
-    'entityMentions' | 'semanticTags' | 'perceptionRefs'
-  >;
-  readonly evidence: readonly EncodedSemanticEvidence[];
-} {
-  const { entityMentions, semanticTags, perceptionRefs, ...indexMetadata } = record.index;
-  const evidence: EncodedSemanticEvidence[] = [];
-  let ordinal = 0;
-  for (const item of record.evidence) {
-    evidence.push({
-      kind: 'text-segment',
-      evidenceId: item.evidenceId,
-      ordinal: ordinal++,
-      payload: item,
-    });
-  }
-  for (const mention of entityMentions ?? []) {
-    evidence.push({
-      kind: 'entity-mention',
-      evidenceId: mention.mentionId,
-      ordinal: ordinal++,
-      payload: mention,
-    });
-  }
-  for (const tag of semanticTags ?? []) {
-    evidence.push({
-      kind: 'semantic-tag',
-      evidenceId: tag.tagId,
-      ordinal: ordinal++,
-      payload: tag,
-    });
-  }
-  for (const [refIndex, ref] of (perceptionRefs ?? []).entries()) {
-    evidence.push({
-      kind: 'perception-ref',
-      evidenceId: ref.cacheKey ?? ref.sourceToolCallId ?? `${ref.assetId}:${refIndex}`,
-      ordinal: ordinal++,
-      payload: ref,
-    });
-  }
-  const identities = new Set<string>();
-  for (const item of evidence) {
-    const identity = `${item.kind}:${item.evidenceId}`;
-    if (!item.evidenceId.trim() || identities.has(identity)) {
-      throw new LocalMetadataError({
-        code: 'metadata-transaction-failed',
-        operation: 'replace-semantic-evidence',
-        message: `Semantic evidence identity is empty or duplicated: ${identity}`,
-      });
-    }
-    identities.add(identity);
-  }
-  return { indexMetadata, evidence };
-}
-
-function isSemanticEvidenceKind(value: string): value is SemanticEvidenceKind {
-  return (
-    value === 'text-segment' ||
-    value === 'entity-mention' ||
-    value === 'semantic-tag' ||
-    value === 'perception-ref'
-  );
 }
 
 function assertEntityAssetProjectionPartition(partition: LocalMetadataPartition): void {

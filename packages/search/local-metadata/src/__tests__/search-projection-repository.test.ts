@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 describe('Search projection repository', () => {
-  it('creates only three Search core tables and no coverage, job, history, or status tables', async () => {
+  it('creates Search records without the retired semantic evidence table', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-search-schema-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
@@ -42,7 +42,7 @@ describe('Search projection repository', () => {
     const names = rows.flatMap((row) => (typeof row['name'] === 'string' ? [row['name']] : []));
     database.close();
 
-    expect(names).toEqual(['search_documents', 'semantic_evidence', 'semantic_sources']);
+    expect(names).toEqual(['search_documents', 'semantic_sources']);
     expect(names.some((name) => /(?:coverage|job|history|status)/u.test(name))).toBe(false);
   });
 
@@ -151,7 +151,7 @@ describe('Search projection repository', () => {
     await second.dispose();
   });
 
-  it('round-trips semantic source coverage and evidence without a separate coverage table', async () => {
+  it('round-trips semantic source coverage and the complete compact index', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-semantic-projection-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
@@ -199,22 +199,6 @@ describe('Search projection repository', () => {
             ],
             updatedAt: '2026-07-13T02:00:00.000Z',
           },
-          evidence: [
-            {
-              evidenceId: 'segment-1',
-              unitId: 'page-1',
-              kind: 'ocr',
-              sourceRef: {
-                kind: 'document',
-                source: { filePath: 'docs/comic.pdf', format: 'pdf' },
-                range: { startLine: 1, endLine: 10 },
-              },
-              locator: { kind: 'page', pageNumber: 1, pageIndex: 0 },
-              range: { startLine: 1, endLine: 10 },
-              contentHash: 'sha256:segment-1',
-              provenance: { providerId: 'ocr.local', sourceKind: 'comic' },
-            },
-          ],
         },
       ],
       updatedAt: '2026-07-13T02:00:00.000Z',
@@ -238,7 +222,6 @@ describe('Search projection repository', () => {
             assetId: 'asset-page-1',
             semanticTags: [expect.objectContaining({ tagId: 'tag-rin', label: 'Rin' })],
           }),
-          evidence: [expect.objectContaining({ evidenceId: 'segment-1', kind: 'ocr' })],
         }),
       ],
       diagnostics: [],
@@ -247,11 +230,7 @@ describe('Search projection repository', () => {
 
     const database = new DatabaseSync(databasePath, { readOnly: true });
     const persistedPayloads = database
-      .prepare(
-        `SELECT evidence_json AS payload FROM semantic_evidence
-         UNION ALL SELECT index_json AS payload FROM semantic_sources
-         UNION ALL SELECT document_json AS payload FROM search_documents`,
-      )
+      .prepare(`SELECT index_json AS payload FROM semantic_sources`)
       .all()
       .flatMap((row) => (typeof row['payload'] === 'string' ? [row['payload']] : []));
     database.close();
@@ -283,7 +262,7 @@ describe('Search projection repository', () => {
     const invalidIndex = {
       indexId: 'semantic:rejected-body',
       assetId: 'rejected-body',
-      sourceRef,
+      sourceRef: { kind: 'file', path: '${WORKSPACE}/different-story.md' },
       updatedAt: '2026-07-13T02:00:00.000Z',
     };
     const database = new DatabaseSync(databasePath);
@@ -323,28 +302,6 @@ describe('Search projection repository', () => {
       }),
       '2026-07-13T02:00:00.000Z',
     );
-    database
-      .prepare(
-        `INSERT INTO semantic_evidence (
-          partition_key, partition_scope, workspace_id, source_id,
-          evidence_kind, evidence_id, ordinal, evidence_json
-        ) VALUES (?, 'workspace', ?, ?, 'text-segment', 'segment-1', 0, ?)`,
-      )
-      .run(
-        partitionKey,
-        WORKSPACE_ID,
-        'semantic:rejected-body',
-        JSON.stringify({
-          segmentId: 'segment-1',
-          kind: 'manual',
-          text: 'Complete rejected source body.',
-          sourceRef: {
-            kind: 'document',
-            source: { filePath: '${WORKSPACE}/story.md', format: 'markdown' },
-          },
-          provenance: { providerId: 'rejected.text', sourceKind: 'document' },
-        }),
-      );
     database.close();
 
     const second = createNodeSqliteLocalMetadataStore({ homedir });
@@ -416,7 +373,6 @@ describe('Search projection repository', () => {
         semanticTags: [{ tagId: 'shared-tag', label: 'Shared', source: 'document' as const }],
         updatedAt: '2026-07-13T02:00:00.000Z',
       },
-      evidence: [],
       updatedAt: '2026-07-13T02:00:00.000Z',
     };
 
@@ -441,5 +397,82 @@ describe('Search projection repository', () => {
       diagnostics: [],
     });
     await Promise.all([first.dispose(), second.dispose()]);
+  });
+
+  it('never reads, writes, repairs, or removes an existing retired evidence table', async () => {
+    const homedir = await mkdtemp(join(tmpdir(), 'neko-retired-semantic-evidence-'));
+    temporaryDirectories.push(homedir);
+    const databasePath = resolveGlobalStorageLayout(homedir).database;
+    const partition = {
+      scope: 'workspace' as const,
+      workspaceId: WORKSPACE_ID,
+      domain: 'semantic-projection',
+    };
+    const first = createNodeSqliteLocalMetadataStore({ homedir });
+    await first.open({ databasePath, busyTimeoutMs: 1_000 });
+    await initializeCoreLocalMetadataTables(first);
+    await initializeSearchProjectionTables(first);
+    await first.repositories.workspaces.bind({
+      identity: { workspaceId: WORKSPACE_ID },
+      locator: { kind: 'variable', value: '${HOME}/workspace' },
+      seenAt: '2026-07-13T00:00:00.000Z',
+    });
+    await first.dispose();
+
+    const retired = new DatabaseSync(databasePath);
+    retired.exec(`
+      CREATE TABLE semantic_evidence (marker TEXT NOT NULL) STRICT;
+      INSERT INTO semantic_evidence(marker) VALUES ('retired-row');
+      CREATE TRIGGER semantic_evidence_reject_insert BEFORE INSERT ON semantic_evidence BEGIN
+        SELECT RAISE(ABORT, 'retired evidence insert path used');
+      END;
+      CREATE TRIGGER semantic_evidence_reject_update BEFORE UPDATE ON semantic_evidence BEGIN
+        SELECT RAISE(ABORT, 'retired evidence update path used');
+      END;
+      CREATE TRIGGER semantic_evidence_reject_delete BEFORE DELETE ON semantic_evidence BEGIN
+        SELECT RAISE(ABORT, 'retired evidence delete path used');
+      END;
+    `);
+    retired.close();
+
+    const second = createNodeSqliteLocalMetadataStore({ homedir });
+    await second.open({ databasePath, busyTimeoutMs: 1_000 });
+    await initializeCoreLocalMetadataTables(second);
+    await initializeSearchProjectionTables(second);
+    const source = {
+      sourceId: 'semantic:current-source',
+      sourceFingerprint: 'sha256:current-source',
+      provider: { providerId: 'canonical.text' },
+      coverage: ['entity-mention'] as const,
+      freshness: 'fresh' as const,
+      index: {
+        indexId: 'semantic:current-source',
+        assetId: 'current-source',
+        sourceRef: { kind: 'file' as const, path: '${WORKSPACE}/story.md' },
+        updatedAt: '2026-07-13T02:00:00.000Z',
+      },
+      updatedAt: '2026-07-13T02:00:00.000Z',
+    };
+    await expect(
+      second.repositories.semanticProjections.replaceSource({
+        partition,
+        source,
+        updatedAt: source.updatedAt,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      second.repositories.semanticProjections.get(partition, source.sourceId),
+    ).resolves.toMatchObject({ sourceId: source.sourceId, index: source.index });
+    await expect(second.repositories.semanticProjections.list(partition)).resolves.toMatchObject({
+      records: [expect.objectContaining({ sourceId: source.sourceId })],
+      diagnostics: [],
+    });
+    await second.dispose();
+
+    const preserved = new DatabaseSync(databasePath, { readOnly: true });
+    expect(preserved.prepare('SELECT marker FROM semantic_evidence').all()).toEqual([
+      { marker: 'retired-row' },
+    ]);
+    preserved.close();
   });
 });

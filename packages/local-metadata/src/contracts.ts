@@ -15,6 +15,9 @@ export type LocalMetadataDiagnosticCode =
   | 'metadata-restore-failed'
   | 'metadata-unsupported-runtime'
   | 'metadata-secret-forbidden'
+  | 'metadata-binary-forbidden'
+  | 'metadata-record-too-large'
+  | 'metadata-schema-forbidden'
   | 'metadata-stale-projection';
 
 export interface LocalMetadataDiagnostic {
@@ -49,7 +52,7 @@ export interface LocalMetadataTransactionOptions {
   readonly operation: string;
 }
 
-export type LocalMetadataSqlBindingValue = string | number | bigint | Uint8Array | null;
+export type LocalMetadataSqlBindingValue = string | number | bigint | null;
 
 export interface LocalMetadataSqlRunResult {
   readonly changes: number;

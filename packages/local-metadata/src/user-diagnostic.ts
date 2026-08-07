@@ -92,6 +92,10 @@ export function projectLocalMetadataUserDiagnostic(
     case 'metadata-store-not-open':
     case 'metadata-store-disposed':
     case 'metadata-transaction-failed':
+    case 'metadata-secret-forbidden':
+    case 'metadata-binary-forbidden':
+    case 'metadata-record-too-large':
+    case 'metadata-schema-forbidden':
       return diagnostic(
         'local-metadata-unavailable',
         'error',

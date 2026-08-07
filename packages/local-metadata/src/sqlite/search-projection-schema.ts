@@ -66,27 +66,6 @@ const SEARCH_PROJECTION_TABLES = [
   ) STRICT`,
   `CREATE INDEX IF NOT EXISTS semantic_sources_partition_asset_idx
     ON semantic_sources(partition_key, asset_id, freshness, updated_at)`,
-  `CREATE TABLE IF NOT EXISTS semantic_evidence (
-    partition_key TEXT NOT NULL,
-    partition_scope TEXT NOT NULL CHECK (partition_scope IN ('global', 'workspace')),
-    workspace_id TEXT,
-    source_id TEXT NOT NULL,
-    evidence_kind TEXT NOT NULL CHECK (
-      evidence_kind IN ('text-segment', 'entity-mention', 'semantic-tag', 'perception-ref')
-    ),
-    evidence_id TEXT NOT NULL,
-    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
-    evidence_json TEXT NOT NULL,
-    PRIMARY KEY (partition_key, source_id, evidence_kind, evidence_id),
-    FOREIGN KEY (partition_key, source_id)
-      REFERENCES semantic_sources(partition_key, source_id) ON DELETE CASCADE,
-    CHECK (
-      (partition_scope = 'global' AND workspace_id IS NULL) OR
-      (partition_scope = 'workspace' AND workspace_id IS NOT NULL)
-    )
-  ) STRICT`,
-  `CREATE INDEX IF NOT EXISTS semantic_evidence_partition_source_idx
-    ON semantic_evidence(partition_key, source_id, ordinal)`,
 ] as const;
 
 export function initializeSearchProjectionTables(store: LocalMetadataStore): Promise<void> {
