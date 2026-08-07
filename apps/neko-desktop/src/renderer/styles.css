@@ -713,8 +713,14 @@ code {
 }
 
 .primary-conversation-group__header {
+  --primary-project-actions-width: 80px;
+
   grid-template-columns: 24px minmax(0, 1fr) auto minmax(24px, auto);
   margin-bottom: 1px;
+}
+
+.primary-conversation-group__header:is(:hover, :focus-within) {
+  grid-template-columns: 24px minmax(0, 1fr) 0 var(--primary-project-actions-width);
 }
 
 .primary-conversation-group__collapse {
@@ -853,6 +859,13 @@ code {
 }
 
 .primary-recent-project-row:is(:hover, :focus-within) > .primary-navigation-state {
+  opacity: 0;
+}
+
+.primary-conversation-group__header:is(:hover, :focus-within) > .primary-conversation-group__count {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
   opacity: 0;
 }
 

@@ -1066,7 +1066,12 @@ async function exerciseProjectConversationGroups({
     evaluate,
     `${retentionGroupSelector} .primary-conversation-group__header`,
   );
-  if (projectHoverActions.visibleActionCount !== 3 || !projectHoverActions.withinRow) {
+  if (
+    projectHoverActions.visibleActionCount !== 3 ||
+    projectHoverActions.countOpacity !== '0' ||
+    !projectHoverActions.contentClearOfActions ||
+    !projectHoverActions.withinRow
+  ) {
     throw new Error(`Project hover actions are incorrect: ${JSON.stringify(projectHoverActions)}`);
   }
   const projectHoverScreenshot = await captureSettledScreenshot(
@@ -1577,8 +1582,11 @@ async function inspectSidebarRowActions(evaluate, rowSelector) {
     const row = document.querySelector(${JSON.stringify(rowSelector)});
     const actions = row?.querySelector(':scope > .primary-navigation-row-actions');
     const status = row?.querySelector(':scope > .primary-navigation-state');
+    const count = row?.querySelector(':scope > .primary-conversation-group__count');
+    const content = row?.querySelector(':scope > .primary-conversation-group__project-link');
     const rowRect = row?.getBoundingClientRect();
     const actionsRect = actions?.getBoundingClientRect();
+    const contentRect = content?.getBoundingClientRect();
     return {
       visibleActionCount: actions instanceof HTMLElement && getComputedStyle(actions).opacity === '1'
         ? actions.querySelectorAll('button').length
@@ -1588,6 +1596,10 @@ async function inspectSidebarRowActions(evaluate, rowSelector) {
           ? document.activeElement.getAttribute('aria-label') ?? ''
           : '',
       statusOpacity: status instanceof HTMLElement ? getComputedStyle(status).opacity : '',
+      countOpacity: count instanceof HTMLElement ? getComputedStyle(count).opacity : '',
+      contentClearOfActions:
+        contentRect !== undefined && actionsRect !== undefined &&
+        contentRect.right <= actionsRect.left,
       withinRow:
         rowRect !== undefined && actionsRect !== undefined &&
         actionsRect.left >= rowRect.left && actionsRect.right <= rowRect.right,
