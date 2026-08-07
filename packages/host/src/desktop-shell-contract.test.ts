@@ -15,10 +15,7 @@ import {
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
 } from './desktop-scene-contract';
-import {
-  createDesktopWorkbenchInstanceFromScene,
-  parseDesktopWindowWorkbenchCatalog,
-} from './desktop-workbench-instance-contract';
+import { createDesktopWindowComposition } from './desktop-window-composition-contract';
 
 describe('Desktop Shell contract', () => {
   it('groups Workspace conversations under exact Projects and Assistant conversations standalone', () => {
@@ -400,9 +397,8 @@ describe('Desktop Shell contract', () => {
 
 function validProjection() {
   const scene = createDefaultDesktopAgentScene('window-1', 'draft:test');
-  const workbench = createDesktopWorkbenchInstanceFromScene({
+  const workbench = createDesktopWindowComposition({
     workbenchInstanceId: 'workbench:window-1:entry',
-    agentSurfaceId: 'agent-surface:window-1:entry',
     layout: createDefaultDesktopWorkbenchLayout('window-1'),
     scene,
   });
@@ -432,11 +428,7 @@ function validProjection() {
           viewInstanceId: 'view-instance-1',
         },
       ],
-      workbenches: parseDesktopWindowWorkbenchCatalog({
-        windowId: 'window-1',
-        activeWorkbenchInstanceId: workbench.workbenchInstanceId,
-        instances: [workbench],
-      }),
+      workbench,
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {

@@ -16,12 +16,9 @@ import {
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
 import {
-  parseDesktopWindowWorkbenchCatalog,
-  resolveActiveDesktopWorkbenchInstance,
-  resolveDesktopWorkbenchInstanceByOwner,
-  type DesktopWorkbenchInstanceProjection,
-  type DesktopWindowWorkbenchCatalogProjection,
-} from './desktop-workbench-instance-contract';
+  parseDesktopWindowComposition,
+  type DesktopWindowCompositionProjection,
+} from './desktop-window-composition-contract';
 import {
   parseDesktopApplicationSidebarProjection,
   type DesktopApplicationSidebarProjection,
@@ -107,28 +104,36 @@ export interface DesktopWindowShellProjection {
   readonly windowId: string;
   readonly activeTarget: DesktopWindowActiveTarget;
   readonly tabs: readonly DesktopProjectTabProjection[];
-  readonly workbenches: DesktopWindowWorkbenchCatalogProjection;
+  readonly workbench: DesktopWindowCompositionProjection;
   readonly applicationSidebar: DesktopApplicationSidebarProjection;
 }
 
 export function resolveActiveDesktopWindowWorkbench(
   window: DesktopWindowShellProjection,
-): DesktopWorkbenchInstanceProjection {
-  return resolveActiveDesktopWorkbenchInstance(window.workbenches);
+): DesktopWindowCompositionProjection {
+  return window.workbench;
 }
 
 export function resolveDesktopWindowWorkspaceWorkbench(
   window: DesktopWindowShellProjection,
   workspaceId: string,
-): DesktopWorkbenchInstanceProjection {
-  const instance = resolveDesktopWorkbenchInstanceByOwner(window.workbenches, {
-    kind: 'workspace',
-    workspaceId: requireNonEmptyString(workspaceId, 'Desktop Workspace identity is required.'),
-  });
-  if (!instance) {
-    throw invalidPayload(`Desktop Workspace '${workspaceId}' has no open Workbench instance.`);
+): DesktopWindowCompositionProjection {
+  const exactWorkspaceId = requireNonEmptyString(
+    workspaceId,
+    'Desktop Workspace identity is required.',
+  );
+  const interaction = window.workbench.scene.slots.interaction;
+  if (
+    window.workbench.scene.context.kind !== 'agent' ||
+    window.workbench.scene.context.scope.kind !== 'workspace' ||
+    window.workbench.scene.context.scope.workspaceId !== exactWorkspaceId ||
+    interaction?.kind !== 'agent' ||
+    interaction.scope.kind !== 'workspace' ||
+    interaction.scope.workspaceId !== exactWorkspaceId
+  ) {
+    throw invalidPayload(`Desktop Workspace '${exactWorkspaceId}' is not the current composition.`);
   }
-  return instance;
+  return window.workbench;
 }
 
 export interface DesktopAttentionProjection {
@@ -809,7 +814,7 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   const windowRecord = requireRecord(record['window'], 'Desktop Window projection is required.');
   requireExactKeys(
     windowRecord,
-    ['windowId', 'activeTarget', 'tabs', 'workbenches', 'applicationSidebar'],
+    ['windowId', 'activeTarget', 'tabs', 'workbench', 'applicationSidebar'],
     'Desktop Window projection',
   );
   const agentHomeRecord = requireRecord(
@@ -827,7 +832,7 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     parseProjectTab,
   );
   const activeTarget = parseActiveTarget(windowRecord['activeTarget']);
-  const workbenches = parseDesktopWindowWorkbenchCatalog(windowRecord['workbenches']);
+  const workbench = parseDesktopWindowComposition(windowRecord['workbench']);
   const applicationSidebar = parseDesktopApplicationSidebarProjection(
     windowRecord['applicationSidebar'],
   );
@@ -835,8 +840,8 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
     windowRecord['windowId'],
     'Desktop Window identity is required.',
   );
-  if (workbenches.windowId !== windowId) {
-    throw invalidPayload('Desktop Workbench catalog belongs to another Window.');
+  if (workbench.windowId !== windowId) {
+    throw invalidPayload('Desktop Window composition belongs to another Window.');
   }
   if (applicationSidebar.windowId !== windowId) {
     throw invalidPayload('Desktop Application Sidebar belongs to another Window.');
@@ -850,22 +855,17 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
   }
   if (
     !catalogResult.diagnostic &&
-    workbenches.instances.some((instance) =>
-      instance.layout.main.views.some((view) => !projectIds.has(view.projectId)),
-    )
+    workbench.layout.main.views.some((view) => !projectIds.has(view.projectId))
   ) {
     throw invalidPayload('Desktop Workbench View references an unknown Project.');
   }
   if (activeTarget.kind === 'project') {
     const activeTab = tabs.find((tab) => tab.tabId === activeTarget.tabId);
-    const activeWorkbench = workbenches.instances.find(
-      (instance) => instance.workbenchInstanceId === workbenches.activeWorkbenchInstanceId,
-    );
     if (
       !activeTab ||
-      !activeWorkbench ||
-      (activeWorkbench.owner.kind === 'workspace' &&
-        activeWorkbench.layout.main.views.some((view) => view.projectId !== activeTab.projectId))
+      (workbench.scene.context.kind === 'agent' &&
+        workbench.scene.context.scope.kind === 'workspace' &&
+        workbench.layout.main.views.some((view) => view.projectId !== activeTab.projectId))
     ) {
       throw invalidPayload('Desktop Workbench View belongs to another active Project.');
     }
@@ -884,7 +884,7 @@ export function parseDesktopShellProjection(value: unknown): DesktopShellProject
       windowId,
       activeTarget,
       tabs,
-      workbenches,
+      workbench,
       applicationSidebar,
     },
     agentHome,

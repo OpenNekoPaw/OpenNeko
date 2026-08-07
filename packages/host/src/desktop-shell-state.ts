@@ -10,10 +10,14 @@ import {
   type DesktopApplicationSidebarProjection,
 } from './desktop-scene-contract';
 import {
-  parseDesktopWindowWorkbenchCatalog,
-  serializeDesktopWindowWorkbenchCatalog,
-  type DesktopWindowWorkbenchCatalogProjection,
-} from './desktop-workbench-instance-contract';
+  parseDesktopWorkbenchLayout,
+  type DesktopWorkbenchLayoutProjection,
+} from './desktop-workbench-contract';
+import {
+  parseDesktopWindowComposition,
+  serializeDesktopWindowComposition,
+  type DesktopWindowCompositionProjection,
+} from './desktop-window-composition-contract';
 
 export const DESKTOP_DEFAULT_ASSISTANT_SPACE_ID = 'assistant-space:local-user' as const;
 
@@ -34,9 +38,13 @@ export interface DesktopStoredProject {
 export interface DesktopStoredWindow {
   readonly windowId: string;
   readonly activeTarget: DesktopWindowActiveTarget;
-  readonly tabs: readonly DesktopProjectTabProjection[];
-  readonly workbenches: DesktopWindowWorkbenchCatalogProjection;
+  readonly tabs: readonly DesktopStoredProjectTab[];
+  readonly workbench: DesktopWindowCompositionProjection;
   readonly applicationSidebar: DesktopApplicationSidebarProjection;
+}
+
+export interface DesktopStoredProjectTab extends DesktopProjectTabProjection {
+  readonly presentation?: DesktopWorkbenchLayoutProjection;
 }
 
 export interface DesktopShellStoredState {
@@ -93,13 +101,13 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
   const projects = requireArray(record['projects'], 'Desktop Shell projects must be an array.').map(
     parseStoredProject,
   );
-  const projectIds = new Set<string>();
+  const projectsById = new Map<string, DesktopStoredProject>();
   const workspaceIds = new Set<string>();
   for (const project of projects) {
-    if (projectIds.has(project.projectId) || workspaceIds.has(project.workspaceId)) {
+    if (projectsById.has(project.projectId) || workspaceIds.has(project.workspaceId)) {
       throw invalidState('Desktop Shell Project and Workspace identities must be unique.');
     }
-    projectIds.add(project.projectId);
+    projectsById.set(project.projectId, project);
     workspaceIds.add(project.workspaceId);
   }
   const retainedInvalidWindows = readRetainedInvalidWindows(value);
@@ -116,7 +124,7 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
     candidateWindowIds.add(candidateWindowId);
     let window: DesktopStoredWindow;
     try {
-      window = parseStoredWindow(candidate, projectIds);
+      window = parseStoredWindow(candidate, projectsById);
     } catch (error) {
       invalidWindows.push({
         record: candidate,
@@ -209,7 +217,7 @@ function serializeStoredWindow(window: DesktopStoredWindow): unknown {
     windowId: window.windowId,
     activeTarget: window.activeTarget,
     tabs: window.tabs,
-    workbenches: serializeDesktopWindowWorkbenchCatalog(window.workbenches),
+    workbench: serializeDesktopWindowComposition(window.workbench),
     applicationSidebar: window.applicationSidebar,
   };
 }
@@ -282,20 +290,27 @@ function parseStoredProject(value: unknown): DesktopStoredProject {
   };
 }
 
-function parseStoredWindow(value: unknown, projectIds: ReadonlySet<string>): DesktopStoredWindow {
+function parseStoredWindow(
+  value: unknown,
+  projectsById: ReadonlyMap<string, DesktopStoredProject>,
+): DesktopStoredWindow {
   const record = requireRecord(value, 'Desktop stored Window must be an object.');
   requireExactKeys(
     record,
-    ['windowId', 'activeTarget', 'tabs', 'workbenches', 'applicationSidebar'],
+    ['windowId', 'activeTarget', 'tabs', 'workbench', 'applicationSidebar'],
     'Desktop stored Window',
   );
+  const windowId = requireNonEmptyString(
+    record['windowId'],
+    'Desktop stored Window identity is required.',
+  );
   const tabs = requireArray(record['tabs'], 'Desktop stored Project Tabs must be an array.').map(
-    parseStoredTab,
+    (tab) => parseStoredTab(tab, windowId, projectsById),
   );
   const tabIds = new Set<string>();
   const tabProjectIds = new Set<string>();
   for (const tab of tabs) {
-    if (!projectIds.has(tab.projectId)) {
+    if (!projectsById.has(tab.projectId)) {
       throw invalidState(`Desktop Project Tab references unknown Project '${tab.projectId}'.`);
     }
     if (tabIds.has(tab.tabId) || tabProjectIds.has(tab.projectId)) {
@@ -308,17 +323,13 @@ function parseStoredWindow(value: unknown, projectIds: ReadonlySet<string>): Des
   if (activeTarget.kind === 'project' && !tabIds.has(activeTarget.tabId)) {
     throw invalidState('Desktop active Project Tab is not present in its Window.');
   }
-  const windowId = requireNonEmptyString(
-    record['windowId'],
-    'Desktop stored Window identity is required.',
-  );
-  const workbenches = parseStoredWorkbenchCatalog(record['workbenches'], windowId);
+  const workbench = parseStoredWindowComposition(record['workbench'], windowId);
   const applicationSidebar = parseStoredApplicationSidebar(record['applicationSidebar'], windowId);
   return {
     windowId,
     activeTarget,
     tabs,
-    workbenches,
+    workbench,
     applicationSidebar,
   };
 }
@@ -398,24 +409,24 @@ function isRetainedInvalidWindow(value: unknown): value is DesktopRetainedInvali
   );
 }
 
-function parseStoredWorkbenchCatalog(
+function parseStoredWindowComposition(
   value: unknown,
   windowId: string,
-): DesktopWindowWorkbenchCatalogProjection {
-  let workbenches: DesktopWindowWorkbenchCatalogProjection;
+): DesktopWindowCompositionProjection {
+  let workbench: DesktopWindowCompositionProjection;
   try {
-    workbenches = parseDesktopWindowWorkbenchCatalog(value);
+    workbench = parseDesktopWindowComposition(value);
   } catch (error) {
     throw invalidState(
-      `Desktop stored Workbench catalog is invalid: ${
+      `Desktop stored Window composition is invalid: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   }
-  if (workbenches.windowId !== windowId) {
-    throw invalidState('Desktop stored Workbench catalog belongs to another Window.');
+  if (workbench.windowId !== windowId) {
+    throw invalidState('Desktop stored Window composition belongs to another Window.');
   }
-  return workbenches;
+  return workbench;
 }
 
 function parseStoredApplicationSidebar(
@@ -438,27 +449,57 @@ function parseStoredApplicationSidebar(
   return sidebar;
 }
 
-function parseStoredTab(value: unknown): DesktopProjectTabProjection {
+function parseStoredTab(
+  value: unknown,
+  windowId: string,
+  projectsById: ReadonlyMap<string, DesktopStoredProject>,
+): DesktopStoredProjectTab {
   const record = requireRecord(value, 'Desktop stored Project Tab must be an object.');
+  const hasPresentation = Object.hasOwn(record, 'presentation');
   requireExactKeys(
     record,
-    ['tabId', 'projectId', 'viewId', 'viewInstanceId'],
+    [
+      'tabId',
+      'projectId',
+      'viewId',
+      'viewInstanceId',
+      ...(hasPresentation ? ['presentation'] : []),
+    ],
     'Desktop stored Project Tab',
   );
+  const projectId = requireNonEmptyString(
+    record['projectId'],
+    'Desktop stored Project identity is required.',
+  );
+  const presentation = hasPresentation
+    ? parseDesktopWorkbenchLayout(record['presentation'])
+    : undefined;
+  const project = projectsById.get(projectId);
+  if (!project) {
+    throw invalidState(`Desktop Project Tab references unknown Project '${projectId}'.`);
+  }
+  if (presentation !== undefined && presentation.windowId !== windowId) {
+    throw invalidState('Desktop stored Project presentation belongs to another Window.');
+  }
+  if (
+    presentation?.main.views.some(
+      (view) => view.projectId !== projectId || view.workspaceId !== project.workspaceId,
+    )
+  ) {
+    throw invalidState('Desktop stored Project presentation contains a foreign View.');
+  }
   return {
     tabId: requireNonEmptyString(
       record['tabId'],
       'Desktop stored Project Tab identity is required.',
     ),
-    projectId: requireNonEmptyString(
-      record['projectId'],
-      'Desktop stored Project identity is required.',
-    ),
+    projectId,
     viewId: requireNonEmptyString(record['viewId'], 'Desktop stored View identity is required.'),
     viewInstanceId: requireNonEmptyString(
       record['viewInstanceId'],
       'Desktop stored View instance identity is required.',
     ),
+    ...(presentation === undefined ? {} : { presentation }),
   };
 }
 

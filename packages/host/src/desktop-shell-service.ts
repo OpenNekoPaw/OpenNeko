@@ -26,20 +26,9 @@ import {
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
 import {
-  activateDesktopWorkbenchInstance,
-  closeDesktopWorkbenchInstance,
-  createDesktopWorkbenchInstanceFromScene,
-  handoffDesktopAgentSurface,
-  openOrFocusDesktopWorkbenchInstance,
-  parseDesktopWindowWorkbenchCatalog,
-  putDesktopAgentSurface,
-  projectDesktopWorkbenchInstanceOwner,
-  replaceDesktopWorkbenchInstance,
-  resolveActiveDesktopWorkbenchInstance,
-  resolveDesktopWorkbenchInstanceByOwner,
-  type DesktopWorkbenchInstanceProjection,
-  type DesktopAgentSurfaceProjection,
-} from './desktop-workbench-instance-contract';
+  createDesktopWindowComposition,
+  type DesktopWindowCompositionProjection,
+} from './desktop-window-composition-contract';
 import {
   applyDesktopApplicationSidebarMutation,
   createDefaultDesktopAgentScene,
@@ -50,6 +39,7 @@ import {
   type DesktopApplicationSidebarMutationRequest,
   type DesktopApplicationSidebarProjection,
   type DesktopAgentScopeProjection,
+  type DesktopAgentInteractionSurfaceRef,
   type DesktopSceneTransitionIntent,
   type DesktopSceneTransitionRequest,
   type DesktopSceneTransitionResult,
@@ -59,6 +49,7 @@ import type {
   DesktopShellStateRepositoryPort,
   DesktopShellStoredState,
   DesktopStoredProject,
+  DesktopStoredProjectTab,
   DesktopStoredWindow,
 } from './desktop-shell-state';
 import {
@@ -134,8 +125,8 @@ export interface DesktopAgentSurfaceGrant {
   readonly windowId: string;
   readonly workbenchInstanceId: string;
   readonly agentSurfaceId: string;
-  readonly workbench: DesktopWorkbenchInstanceProjection;
-  readonly surface: DesktopAgentSurfaceProjection;
+  readonly workbench: DesktopWindowCompositionProjection;
+  readonly interaction: DesktopAgentInteractionSurfaceRef;
 }
 
 export interface DesktopCanvasViewGrant {
@@ -253,9 +244,8 @@ export class DesktopShellService {
       const windowId = reusablePrimary ?? this.createIdentity();
       if (!state.windows.some((window) => window.windowId === windowId)) {
         const scene = createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`);
-        const workbenchInstance = createDesktopWorkbenchInstanceFromScene({
+        const workbench = createDesktopWindowComposition({
           workbenchInstanceId: `workbench:${this.createIdentity()}`,
-          agentSurfaceId: `agent-surface:${this.createIdentity()}`,
           layout: createDefaultDesktopWorkbenchLayout(windowId),
           scene,
         });
@@ -268,11 +258,7 @@ export class DesktopShellService {
               windowId,
               activeTarget: { kind: 'home' },
               tabs: [],
-              workbenches: parseDesktopWindowWorkbenchCatalog({
-                windowId,
-                activeWorkbenchInstanceId: workbenchInstance.workbenchInstanceId,
-                instances: [workbenchInstance],
-              }),
+              workbench,
               applicationSidebar: createDefaultDesktopApplicationSidebar(windowId),
             },
           ],
@@ -283,7 +269,7 @@ export class DesktopShellService {
       }
       const restoredWindow = requireStoredWindow(state, windowId);
       const qualifiedWindow = this.agentHomeProjectionSource
-        ? reconcilePersistedAgentSurfaces(
+        ? reconcilePersistedAgentSurface(
             restoredWindow,
             this.readAgentHomeProjection(),
             this.createIdentity,
@@ -477,16 +463,11 @@ export class DesktopShellService {
         const openedWindow = requireStoredWindow(opened, request.windowId);
         const project = requireWorkspaceProject(opened, resolution.workspace.workspaceId);
         const tab = requireProjectTab(openedWindow, project.projectId);
-        const workspaceWorkbench =
-          resolveDesktopWorkbenchInstanceByOwner(openedWindow.workbenches, {
-            kind: 'workspace',
-            workspaceId: resolution.workspace.workspaceId,
-          })?.layout ??
-          attachProjectWorkbench(
-            createDefaultDesktopWorkbenchLayout(openedWindow.windowId),
-            project,
-            this.createIdentity,
-          );
+        const workspaceWorkbench = attachProjectWorkbench(
+          openedWindow.workbench.layout,
+          project,
+          this.createIdentity,
+        );
         const scene = createWorkspaceAgentScene({
           current: activeScene,
           draftId:
@@ -506,7 +487,6 @@ export class DesktopShellService {
                   window: candidate,
                   scene,
                   layout: workspaceWorkbench,
-                  createIdentity: this.createIdentity,
                 })
               : candidate,
           ),
@@ -531,7 +511,6 @@ export class DesktopShellService {
             ? putSceneWorkbench({
                 window: candidate,
                 scene,
-                createIdentity: this.createIdentity,
               })
             : candidate,
         ),
@@ -638,7 +617,6 @@ export class DesktopShellService {
             ? putSceneWorkbench({
                 window: candidate,
                 scene,
-                createIdentity: this.createIdentity,
               })
             : candidate,
         ),
@@ -665,7 +643,7 @@ export class DesktopShellService {
       this.requireActive();
       this.assertMutationContext(request.windowId, request.rendererSessionId);
       const state = await this.options.stateRepository.read();
-      const window = requireStoredWindow(state, request.windowId);
+      const window = captureActiveProjectPresentation(requireStoredWindow(state, request.windowId));
       if (activeDesktopWorkbench(window).scene.sceneId !== request.sceneId) {
         throw new DesktopSceneContractError(
           'desktop-scene-stale-identity',
@@ -732,11 +710,14 @@ export class DesktopShellService {
           );
         }
         const workbench = attachProjectWorkbench(
-          activeDesktopWorkbench(window).layout,
+          tab.presentation ?? createDefaultDesktopWorkbenchLayout(window.windowId),
           project,
           this.createIdentity,
         );
-        workspaceAttachment = { tab, workbench };
+        workspaceAttachment = {
+          tab: { ...tab, presentation: workbench },
+          workbench,
+        };
         draft = createWorkspaceAgentScene({
           current: activeDesktopWorkbench(window).scene,
           draftId: `draft:${this.createIdentity()}`,
@@ -750,28 +731,24 @@ export class DesktopShellService {
       this.assertMutationContext(request.windowId, request.rendererSessionId);
       const committed = await this.options.stateRepository.commit({
         ...state,
-        windows: state.windows.map((candidate) =>
-          candidate.windowId === request.windowId
-            ? workspaceAttachment
-              ? putSceneWorkbench({
-                  window: {
-                    ...candidate,
-                    activeTarget: {
-                      kind: 'project',
-                      tabId: workspaceAttachment.tab.tabId,
-                    },
-                  },
-                  scene,
-                  layout: workspaceAttachment.workbench,
-                  createIdentity: this.createIdentity,
-                })
-              : putSceneWorkbench({
-                  window: candidate,
-                  scene,
-                  createIdentity: this.createIdentity,
-                })
-            : candidate,
-        ),
+        windows: state.windows.map((candidate) => {
+          if (candidate.windowId !== request.windowId) return candidate;
+          if (!workspaceAttachment) return putSceneWorkbench({ window, scene });
+          return putSceneWorkbench({
+            window: {
+              ...window,
+              tabs: window.tabs.map((tab) =>
+                tab.tabId === workspaceAttachment.tab.tabId ? workspaceAttachment.tab : tab,
+              ),
+              activeTarget: {
+                kind: 'project',
+                tabId: workspaceAttachment.tab.tabId,
+              },
+            },
+            scene,
+            layout: workspaceAttachment.workbench,
+          });
+        }),
       });
       await this.emitAll(committed);
       return { status: 'transitioned', requestId: request.requestId, scene };
@@ -822,7 +799,6 @@ export class DesktopShellService {
             ? putSceneWorkbench({
                 window: candidate,
                 scene,
-                createIdentity: this.createIdentity,
               })
             : candidate,
         ),
@@ -885,7 +861,6 @@ export class DesktopShellService {
             ? putSceneWorkbench({
                 window: candidate,
                 scene: next,
-                createIdentity: this.createIdentity,
               })
             : candidate,
         ),
@@ -932,30 +907,26 @@ export class DesktopShellService {
     this.requireWindowRuntime(windowId);
     const state = await this.options.stateRepository.read();
     const window = requireStoredWindow(state, windowId);
-    const workbench = window.workbenches.instances.find(
-      (candidate) => candidate.workbenchInstanceId === identity.workbenchInstanceId,
-    );
-    if (!workbench) {
+    const workbench = window.workbench;
+    if (workbench.workbenchInstanceId !== identity.workbenchInstanceId) {
       throw new DesktopShellAgentIdentityError(
         'desktop-agent-identity-mismatch',
-        `Desktop Agent Workbench '${identity.workbenchInstanceId}' is not open in Window '${windowId}'.`,
+        `Desktop Agent Workbench '${identity.workbenchInstanceId}' is not current in Window '${windowId}'.`,
       );
     }
-    const surface = workbench.agentSurfaces.find(
-      (candidate) => candidate.agentSurfaceId === identity.agentSurfaceId,
-    );
-    if (!surface) {
+    const interaction = workbench.scene.slots.interaction;
+    if (interaction?.agentSurfaceId !== identity.agentSurfaceId) {
       throw new DesktopShellAgentIdentityError(
         'desktop-agent-identity-mismatch',
-        `Desktop Agent Surface '${identity.agentSurfaceId}' is not open in Workbench '${identity.workbenchInstanceId}'.`,
+        `Desktop Agent Surface '${identity.agentSurfaceId}' is not current in Workbench '${identity.workbenchInstanceId}'.`,
       );
     }
     return {
       windowId,
       workbenchInstanceId: workbench.workbenchInstanceId,
-      agentSurfaceId: surface.agentSurfaceId,
+      agentSurfaceId: interaction.agentSurfaceId,
       workbench,
-      surface,
+      interaction,
     };
   }
 
@@ -1014,9 +985,7 @@ export class DesktopShellService {
     ) {
       throw new Error('Desktop Canvas Window or renderer identity is stale.');
     }
-    const view = resolveActiveDesktopWorkbenchInstance(
-      projection.window.workbenches,
-    ).layout.main.views.find(
+    const view = projection.window.workbench.layout.main.views.find(
       (candidate) => candidate.viewId === identity.viewId && candidate.kind === 'canvas',
     );
     if (
@@ -1050,9 +1019,7 @@ export class DesktopShellService {
     ) {
       throw new Error('Desktop Cut Window or renderer identity is stale.');
     }
-    const view = resolveActiveDesktopWorkbenchInstance(
-      projection.window.workbenches,
-    ).layout.main.views.find(
+    const view = projection.window.workbench.layout.main.views.find(
       (candidate) => candidate.viewId === identity.viewId && candidate.kind === 'cut',
     );
     if (
@@ -1267,48 +1234,6 @@ export class DesktopShellService {
     };
   }
 
-  async activateTab(
-    windowId: string,
-    tabId: string,
-    rendererSessionId: string,
-  ): Promise<DesktopShellProjection> {
-    return this.mutateWindow(windowId, rendererSessionId, (window, state) => {
-      if (!window.tabs.some((tab) => tab.tabId === tabId)) {
-        throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
-      }
-      const tab = window.tabs.find((candidate) => candidate.tabId === tabId);
-      if (!tab) {
-        throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
-      }
-      const project = requireStoredProject(state, tab.projectId);
-      const workbench = resolveDesktopWorkbenchInstanceByOwner(window.workbenches, {
-        kind: 'workspace',
-        workspaceId: project.workspaceId,
-      });
-      if (!workbench) {
-        throw new DesktopShellContractError(
-          'desktop-shell-project-identity-mismatch',
-          `Desktop Project '${project.projectId}' has no open Workbench instance.`,
-        );
-      }
-      if (
-        window.activeTarget.kind === 'project' &&
-        window.activeTarget.tabId === tabId &&
-        window.workbenches.activeWorkbenchInstanceId === workbench.workbenchInstanceId
-      ) {
-        return window;
-      }
-      return {
-        ...window,
-        activeTarget: { kind: 'project', tabId },
-        workbenches: activateDesktopWorkbenchInstance(
-          window.workbenches,
-          workbench.workbenchInstanceId,
-        ),
-      };
-    });
-  }
-
   async activateHome(windowId: string, rendererSessionId: string): Promise<DesktopShellProjection> {
     return this.mutateWindow(windowId, rendererSessionId, (window) => {
       if (window.activeTarget.kind === 'home') return window;
@@ -1324,7 +1249,7 @@ export class DesktopShellService {
     tabId: string,
     rendererSessionId: string,
   ): Promise<DesktopShellProjection> {
-    return this.mutateWindow(windowId, rendererSessionId, (window, state) => {
+    return this.mutateWindow(windowId, rendererSessionId, (window) => {
       const tabIndex = window.tabs.findIndex((tab) => tab.tabId === tabId);
       if (tabIndex < 0) {
         throw new Error(`Unknown Desktop Project Tab '${tabId}' for Window '${windowId}'.`);
@@ -1332,37 +1257,18 @@ export class DesktopShellService {
       const tabs = window.tabs.filter((tab) => tab.tabId !== tabId);
       const wasActive =
         window.activeTarget.kind === 'project' && window.activeTarget.tabId === tabId;
-      const nextActiveTab = tabs[Math.min(tabIndex, tabs.length - 1)];
-      const project = requireStoredProject(state, window.tabs[tabIndex]!.projectId);
-      const closing = resolveDesktopWorkbenchInstanceByOwner(window.workbenches, {
-        kind: 'workspace',
-        workspaceId: project.workspaceId,
-      });
-      let workbenches = window.workbenches;
-      if (closing && workbenches.instances.length > 1) {
-        const next = nextActiveTab
-          ? resolveDesktopWorkbenchInstanceByOwner(workbenches, {
-              kind: 'workspace',
-              workspaceId: requireStoredProject(state, nextActiveTab.projectId).workspaceId,
-            })
-          : workbenches.instances.find(
-              (instance) => instance.workbenchInstanceId !== closing.workbenchInstanceId,
-            );
-        workbenches = closeDesktopWorkbenchInstance(
-          workbenches,
-          closing.workbenchInstanceId,
-          wasActive ? next?.workbenchInstanceId : undefined,
-        );
-      }
+      const workbench = wasActive
+        ? createDesktopWindowComposition({
+            workbenchInstanceId: window.workbench.workbenchInstanceId,
+            layout: createDefaultDesktopWorkbenchLayout(windowId),
+            scene: createDefaultDesktopAgentScene(windowId, `draft:${this.createIdentity()}`),
+          })
+        : window.workbench;
       return {
         ...window,
         tabs,
-        activeTarget: wasActive
-          ? nextActiveTab
-            ? { kind: 'project', tabId: nextActiveTab.tabId }
-            : { kind: 'home' }
-          : window.activeTarget,
-        workbenches,
+        activeTarget: wasActive ? { kind: 'home' } : window.activeTarget,
+        workbench,
       };
     });
   }
@@ -1375,10 +1281,8 @@ export class DesktopShellService {
   ): Promise<DesktopShellProjection> {
     const parsed = parseDesktopWorkbenchLayout(workbench);
     return this.mutateWindow(windowId, rendererSessionId, (window, state) => {
-      const instance = window.workbenches.instances.find(
-        (candidate) => candidate.workbenchInstanceId === workbenchInstanceId,
-      );
-      if (!instance) {
+      const instance = window.workbench;
+      if (instance.workbenchInstanceId !== workbenchInstanceId) {
         throw new DesktopShellContractError(
           'desktop-shell-project-identity-mismatch',
           `Desktop Workbench instance '${workbenchInstanceId}' is unavailable.`,
@@ -1415,8 +1319,11 @@ export class DesktopShellService {
       }
       return {
         ...window,
-        workbenches: replaceDesktopWorkbenchInstance(window.workbenches, {
-          ...instance,
+        tabs: window.tabs.map((candidate) =>
+          candidate.tabId === tab.tabId ? { ...candidate, presentation: parsed } : candidate,
+        ),
+        workbench: createDesktopWindowComposition({
+          workbenchInstanceId: instance.workbenchInstanceId,
           layout: parsed,
           scene: synchronizeWorkspaceSceneWithWorkbench(instance.scene, parsed),
         }),
@@ -1614,66 +1521,24 @@ export class DesktopShellService {
   }
 }
 
-function reconcilePersistedAgentSurfaces(
+function reconcilePersistedAgentSurface(
   window: DesktopStoredWindow,
   agentHome: DesktopAgentHomeProjection,
   createIdentity: () => string,
 ): DesktopStoredWindow {
-  let workbenches = window.workbenches;
-  let changed = false;
-  for (const instance of window.workbenches.instances) {
-    const invalidSurfaceIds = new Set(
-      instance.agentSurfaces
-        .filter((surface) => !isPersistedAgentSurfaceQualified(surface, agentHome))
-        .map((surface) => surface.agentSurfaceId),
-    );
-    if (invalidSurfaceIds.size === 0) continue;
-
-    changed = true;
-    const retainedSurfaces = instance.agentSurfaces.filter(
-      (surface) => !invalidSurfaceIds.has(surface.agentSurfaceId),
-    );
-    if (
-      instance.activeAgentSurfaceId === undefined ||
-      !invalidSurfaceIds.has(instance.activeAgentSurfaceId)
-    ) {
-      workbenches = replaceDesktopWorkbenchInstance(workbenches, {
-        ...instance,
-        agentSurfaces: retainedSurfaces,
-      });
-      continue;
-    }
-
-    const draftId = `draft:${createIdentity()}`;
-    const scene = createReplacementAgentDraftScene(instance, draftId);
-    const interaction = scene.slots.interaction;
-    if (!interaction) {
-      throw new DesktopSceneContractError(
-        'desktop-scene-scope-mismatch',
-        `Desktop Workbench '${instance.workbenchInstanceId}' replacement draft has no Agent interaction.`,
-      );
-    }
-    const replacementSurface: DesktopAgentSurfaceProjection = {
-      agentSurfaceId: `agent-surface:${createIdentity()}`,
-      lifecycle: 'hot-retained',
-      interaction,
-    };
-    workbenches = replaceDesktopWorkbenchInstance(workbenches, {
-      ...instance,
-      scene,
-      activeAgentSurfaceId: replacementSurface.agentSurfaceId,
-      agentSurfaces: [...retainedSurfaces, replacementSurface],
-    });
-  }
-  return changed ? { ...window, workbenches } : window;
+  const interaction = window.workbench.scene.slots.interaction;
+  if (!interaction || isPersistedAgentSurfaceQualified(interaction, agentHome)) return window;
+  return replaceActiveDesktopWorkbench(window, {
+    scene: createReplacementAgentDraftScene(window.workbench, `draft:${createIdentity()}`),
+  });
 }
 
 function isPersistedAgentSurfaceQualified(
-  surface: DesktopAgentSurfaceProjection,
+  interaction: DesktopAgentInteractionSurfaceRef,
   agentHome: DesktopAgentHomeProjection,
 ): boolean {
-  if (surface.interaction.phase === 'draft') return true;
-  const scope = surface.interaction.scope;
+  if (interaction.phase === 'draft') return true;
+  const scope = interaction.scope;
   if (scope.kind === 'unbound' || scope.conversationId === undefined) return false;
   const owner =
     scope.kind === 'assistant'
@@ -1687,18 +1552,20 @@ function isPersistedAgentSurfaceQualified(
 }
 
 function createReplacementAgentDraftScene(
-  instance: DesktopWorkbenchInstanceProjection,
+  instance: DesktopWindowCompositionProjection,
   draftId: string,
 ): DesktopWorkbenchSceneProjection {
-  if (instance.owner.kind === 'assistant-space') {
+  if (
+    instance.scene.context.kind === 'agent' &&
+    instance.scene.context.scope.kind === 'assistant'
+  ) {
     return createAssistantAgentScene({
       current: instance.scene,
-      assistantSpaceId: instance.owner.assistantSpaceId,
+      assistantSpaceId: instance.scene.context.scope.assistantSpaceId,
       draftId,
     });
   }
   if (
-    instance.owner.kind !== 'workspace' ||
     instance.scene.context.kind !== 'agent' ||
     instance.scene.context.scope.kind !== 'workspace' ||
     instance.scene.slots.interaction?.kind !== 'agent'
@@ -1734,11 +1601,10 @@ function removeProjectFromWindow(
   const removedTabIndexes = window.tabs.flatMap((tab, index) =>
     tab.projectId === projectId ? [index] : [],
   );
-  const closing = resolveDesktopWorkbenchInstanceByOwner(window.workbenches, {
-    kind: 'workspace',
-    workspaceId: project.workspaceId,
-  });
-  if (removedTabIndexes.length === 0 && !closing) return window;
+  const currentScope = window.workbench.scene.slots.interaction?.scope;
+  const currentProjectRemoved =
+    currentScope?.kind === 'workspace' && currentScope.workspaceId === project.workspaceId;
+  if (removedTabIndexes.length === 0 && !currentProjectRemoved) return window;
   const tabs = window.tabs.filter((tab) => tab.projectId !== projectId);
   const activeTarget = window.activeTarget;
   const activeTab =
@@ -1746,59 +1612,22 @@ function removeProjectFromWindow(
       ? window.tabs.find((tab) => tab.tabId === activeTarget.tabId)
       : undefined;
   const activeProjectRemoved = activeTab?.projectId === projectId;
-  const firstRemovedTabIndex = removedTabIndexes[0];
-  const nextActiveTab =
-    firstRemovedTabIndex === undefined
-      ? undefined
-      : tabs[Math.min(firstRemovedTabIndex, tabs.length - 1)];
-  let workbenches = window.workbenches;
-  if (closing) {
-    if (workbenches.instances.length === 1) {
-      const scene = createDefaultDesktopAgentScene(window.windowId, `draft:${createIdentity()}`);
-      const replacement = createDesktopWorkbenchInstanceFromScene({
-        workbenchInstanceId: `workbench:${createIdentity()}`,
-        agentSurfaceId: `agent-surface:${createIdentity()}`,
-        layout: createDefaultDesktopWorkbenchLayout(window.windowId),
-        scene,
-      });
-      workbenches = openOrFocusDesktopWorkbenchInstance(workbenches, replacement);
-    }
-    const nextWorkspace = nextActiveTab
-      ? resolveDesktopWorkbenchInstanceByOwner(workbenches, {
-          kind: 'workspace',
-          workspaceId: requireStoredProject(state, nextActiveTab.projectId).workspaceId,
-        })
-      : undefined;
-    const replacement =
-      nextWorkspace ??
-      workbenches.instances.find(
-        (instance) => instance.workbenchInstanceId !== closing.workbenchInstanceId,
-      );
-    workbenches = closeDesktopWorkbenchInstance(
-      workbenches,
-      closing.workbenchInstanceId,
-      closing.workbenchInstanceId === workbenches.activeWorkbenchInstanceId
-        ? replacement?.workbenchInstanceId
-        : undefined,
-    );
-  }
-  if (!activeProjectRemoved) {
+  if (!activeProjectRemoved && !currentProjectRemoved) {
     return {
       ...window,
       tabs,
-      workbenches,
     };
   }
-  if (firstRemovedTabIndex === undefined) {
-    throw new Error('Removed project tabs must include their original indexes.');
-  }
+  const scene = createDefaultDesktopAgentScene(window.windowId, `draft:${createIdentity()}`);
   return {
     ...window,
     tabs,
-    activeTarget: nextActiveTab
-      ? { kind: 'project', tabId: nextActiveTab.tabId }
-      : { kind: 'home' },
-    workbenches,
+    activeTarget: { kind: 'home' },
+    workbench: createDesktopWindowComposition({
+      workbenchInstanceId: window.workbench.workbenchInstanceId,
+      layout: createDefaultDesktopWorkbenchLayout(window.windowId),
+      scene,
+    }),
   };
 }
 
@@ -1841,14 +1670,50 @@ function projectShellState(
     window: {
       windowId: window.windowId,
       activeTarget: window.activeTarget,
-      tabs: window.tabs,
-      workbenches: window.workbenches,
+      tabs: window.tabs.map(projectStoredTab),
+      workbench: window.workbench,
       applicationSidebar: window.applicationSidebar,
     },
     agentHome,
     conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
     domains: domainCapabilities,
     stateDiagnostics: [...startupStateDiagnostics, ...readDesktopShellStateDiagnostics(state)],
+  };
+}
+
+function projectStoredTab(tab: DesktopStoredProjectTab) {
+  return {
+    tabId: tab.tabId,
+    projectId: tab.projectId,
+    viewId: tab.viewId,
+    viewInstanceId: tab.viewInstanceId,
+  };
+}
+
+function captureActiveProjectPresentation(window: DesktopStoredWindow): DesktopStoredWindow {
+  if (window.activeTarget.kind !== 'project') return window;
+  const activeTabId = window.activeTarget.tabId;
+  const activeTab = window.tabs.find((tab) => tab.tabId === activeTabId);
+  if (!activeTab) {
+    throw new DesktopShellContractError(
+      'desktop-shell-project-identity-mismatch',
+      `Desktop active Project Tab '${activeTabId}' is unavailable.`,
+    );
+  }
+  const presentation = window.workbench.layout;
+  if (presentation.main.views.length === 0) return window;
+  if (presentation.main.views.some((view) => view.projectId !== activeTab.projectId)) {
+    throw new DesktopShellContractError(
+      'desktop-shell-project-identity-mismatch',
+      `Desktop active Project Tab '${activeTab.tabId}' has a foreign presentation.`,
+    );
+  }
+  if (activeTab.presentation === presentation) return window;
+  return {
+    ...window,
+    tabs: window.tabs.map((tab) =>
+      tab.tabId === activeTab.tabId ? { ...tab, presentation } : tab,
+    ),
   };
 }
 
@@ -1859,7 +1724,8 @@ function openContentProject(
   now: string,
   createIdentity: () => string,
 ): DesktopShellStoredState {
-  const window = requireStoredWindow(state, windowId);
+  const storedWindow = requireStoredWindow(state, windowId);
+  const window = captureActiveProjectPresentation(storedWindow);
   const existingProject = state.projects.find(
     (project) => project.workspaceId === workspace.workspaceId,
   );
@@ -1884,46 +1750,57 @@ function openContentProject(
       )
     : [...state.projects, project];
   const existingTab = window.tabs.find((tab) => tab.projectId === project.projectId);
-  const tab = existingTab ?? {
+  const tabIdentity = existingTab ?? {
     tabId: `tab:${windowId}:${project.projectId}`,
     projectId: project.projectId,
     viewId: `view:${createIdentity()}`,
     viewInstanceId: `view-instance:${createIdentity()}`,
   };
   const activeAlready =
-    window.activeTarget.kind === 'project' && window.activeTarget.tabId === tab.tabId;
-  const existingWorkspaceWorkbench = resolveDesktopWorkbenchInstanceByOwner(window.workbenches, {
-    kind: 'workspace',
-    workspaceId: project.workspaceId,
-  });
+    window.activeTarget.kind === 'project' && window.activeTarget.tabId === tabIdentity.tabId;
+  const currentScope = window.workbench.scene.slots.interaction?.scope;
+  const reusesCurrentLayout =
+    currentScope?.kind === 'workspace' && currentScope.workspaceId === project.workspaceId;
   const workbench = attachProjectWorkbench(
-    existingWorkspaceWorkbench?.layout ?? createDefaultDesktopWorkbenchLayout(window.windowId),
+    reusesCurrentLayout
+      ? window.workbench.layout
+      : existingTab?.presentation
+        ? existingTab.presentation
+        : createDefaultDesktopWorkbenchLayout(window.windowId),
     project,
     createIdentity,
   );
+  const tab: DesktopStoredProjectTab =
+    existingTab?.presentation === workbench
+      ? existingTab
+      : { ...tabIdentity, presentation: workbench };
   if (
     existingProject &&
     !projectChanged &&
     existingTab &&
     activeAlready &&
-    existingWorkspaceWorkbench !== undefined &&
-    workbench === existingWorkspaceWorkbench.layout
+    reusesCurrentLayout &&
+    workbench === window.workbench.layout
   ) {
-    return state;
+    if (window === storedWindow) return state;
+    return {
+      ...state,
+      windows: state.windows.map((candidate) =>
+        candidate.windowId === windowId ? window : candidate,
+      ),
+    };
   }
   const updatedWindow: DesktopStoredWindow = {
     ...window,
-    tabs: existingTab ? window.tabs : [...window.tabs, tab],
+    tabs: existingTab
+      ? window.tabs.map((candidate) => (candidate.tabId === tab.tabId ? tab : candidate))
+      : [...window.tabs, tab],
     activeTarget: { kind: 'project', tabId: tab.tabId },
-    workbenches: existingWorkspaceWorkbench
-      ? activateDesktopWorkbenchInstance(
-          replaceDesktopWorkbenchInstance(window.workbenches, {
-            ...existingWorkspaceWorkbench,
-            layout: workbench,
-          }),
-          existingWorkspaceWorkbench.workbenchInstanceId,
-        )
-      : window.workbenches,
+    workbench: createDesktopWindowComposition({
+      workbenchInstanceId: window.workbench.workbenchInstanceId,
+      layout: workbench,
+      scene: window.workbench.scene,
+    }),
   };
   return {
     ...state,
@@ -2052,8 +1929,8 @@ function unavailableDomain(
   };
 }
 
-function activeDesktopWorkbench(window: DesktopStoredWindow): DesktopWorkbenchInstanceProjection {
-  return resolveActiveDesktopWorkbenchInstance(window.workbenches);
+function activeDesktopWorkbench(window: DesktopStoredWindow): DesktopWindowCompositionProjection {
+  return window.workbench;
 }
 
 function replaceActiveDesktopWorkbench(
@@ -2066,10 +1943,10 @@ function replaceActiveDesktopWorkbench(
   const active = activeDesktopWorkbench(window);
   return {
     ...window,
-    workbenches: replaceDesktopWorkbenchInstance(window.workbenches, {
-      ...active,
-      ...(update.layout === undefined ? {} : { layout: update.layout }),
-      ...(update.scene === undefined ? {} : { scene: update.scene }),
+    workbench: createDesktopWindowComposition({
+      workbenchInstanceId: active.workbenchInstanceId,
+      layout: update.layout ?? active.layout,
+      scene: update.scene ?? active.scene,
     }),
   };
 }
@@ -2077,91 +1954,35 @@ function replaceActiveDesktopWorkbench(
 function putSceneWorkbench(input: {
   readonly window: DesktopStoredWindow;
   readonly scene: DesktopWorkbenchSceneProjection;
-  readonly createIdentity: () => string;
   readonly layout?: DesktopWorkbenchLayoutProjection;
 }): DesktopStoredWindow {
-  const owner = projectDesktopWorkbenchInstanceOwner(input.scene);
-  const existing = resolveDesktopWorkbenchInstanceByOwner(input.window.workbenches, owner);
-  const interaction = input.scene.slots.interaction;
-  const source = activeDesktopWorkbench(input.window);
-  const sourceSurface = source.agentSurfaces.find(
-    (surface) => surface.agentSurfaceId === source.activeAgentSurfaceId,
-  );
-  if (
-    interaction &&
-    sourceSurface?.interaction.phase === 'draft' &&
-    sourceSurface.interaction.scope.draftId === interaction.scope.draftId &&
-    source.workbenchInstanceId !== existing?.workbenchInstanceId
-  ) {
-    return {
-      ...input.window,
-      workbenches: handoffDesktopAgentSurface({
-        catalog: input.window.workbenches,
-        sourceWorkbenchInstanceId: source.workbenchInstanceId,
-        agentSurfaceId: sourceSurface.agentSurfaceId,
-        targetScene: input.scene,
-        ...(input.layout ? { targetLayout: input.layout } : {}),
-      }),
-    };
-  }
-  if (!existing) {
-    const instance = createDesktopWorkbenchInstanceFromScene({
-      workbenchInstanceId: `workbench:${input.createIdentity()}`,
-      ...(input.scene.slots.interaction
-        ? { agentSurfaceId: `agent-surface:${input.createIdentity()}` }
-        : {}),
-      layout: input.layout ?? createDefaultDesktopWorkbenchLayout(input.window.windowId),
-      scene: input.scene,
-    });
-    return {
-      ...input.window,
-      workbenches: openOrFocusDesktopWorkbenchInstance(input.window.workbenches, instance),
-    };
-  }
-
-  let workbenches = input.window.workbenches;
-  if (interaction) {
-    const activeSurface = existing.agentSurfaces.find(
-      (surface) => surface.agentSurfaceId === existing.activeAgentSurfaceId,
-    );
-    const sameDraft = activeSurface?.interaction.scope.draftId === interaction.scope.draftId;
-    const conversationId =
-      interaction.scope.kind === 'unbound' ? undefined : interaction.scope.conversationId;
-    const sameConversation = existing.agentSurfaces.find((surface) => {
-      const scope = surface.interaction.scope;
-      return (
-        conversationId !== undefined &&
-        scope.kind !== 'unbound' &&
-        scope.conversationId === conversationId
-      );
-    });
-    const agentSurfaceId =
-      sameConversation?.agentSurfaceId ??
-      (sameDraft ? activeSurface?.agentSurfaceId : undefined) ??
-      `agent-surface:${input.createIdentity()}`;
-    workbenches = putDesktopAgentSurface({
-      catalog: workbenches,
-      workbenchInstanceId: existing.workbenchInstanceId,
-      surface: { agentSurfaceId, lifecycle: 'hot-retained', interaction },
-      scene: input.scene,
-    });
-  } else {
-    workbenches = openOrFocusDesktopWorkbenchInstance(
-      replaceDesktopWorkbenchInstance(workbenches, {
-        ...existing,
-        scene: input.scene,
-      }),
-      existing,
-    );
-  }
-  if (input.layout) {
-    const updated = resolveActiveDesktopWorkbenchInstance(workbenches);
-    workbenches = replaceDesktopWorkbenchInstance(workbenches, {
-      ...updated,
-      layout: input.layout,
-    });
-  }
-  return { ...input.window, workbenches };
+  const current = activeDesktopWorkbench(input.window);
+  const currentInteraction = current.scene.slots.interaction;
+  const nextInteraction = input.scene.slots.interaction;
+  const preservesDraftSurface =
+    currentInteraction?.phase === 'draft' &&
+    nextInteraction?.phase === 'draft' &&
+    currentInteraction.scope.draftId === nextInteraction.scope.draftId;
+  const scene = preservesDraftSurface
+    ? parseDesktopWorkbenchSceneProjection({
+        ...input.scene,
+        slots: {
+          ...input.scene.slots,
+          interaction: {
+            ...nextInteraction,
+            agentSurfaceId: currentInteraction.agentSurfaceId,
+          },
+        },
+      })
+    : input.scene;
+  return {
+    ...input.window,
+    workbench: createDesktopWindowComposition({
+      workbenchInstanceId: current.workbenchInstanceId,
+      layout: input.layout ?? current.layout,
+      scene,
+    }),
+  };
 }
 
 function unavailableSceneTransition(
@@ -2324,6 +2145,7 @@ function createAssistantAgentScene(input: {
     slots: {
       interaction: {
         kind: 'agent',
+        agentSurfaceId: `agent-surface:${input.current.windowId}:${input.draftId}`,
         agentViewId,
         phase: 'draft',
         scope,
@@ -2380,6 +2202,7 @@ function createWorkspaceAgentScene(input: {
     slots: {
       interaction: {
         kind: 'agent',
+        agentSurfaceId: `agent-surface:${input.current.windowId}:${input.draftId}`,
         agentViewId: input.tab.viewId,
         phase: 'draft',
         scope,
@@ -2563,27 +2386,25 @@ function createTransitionedScene(
     });
   }
   if (intent.kind === 'open-extensions') {
-    const extensionManagementSessionId = `extension-management:${createIdentity()}`;
     const sceneId = `scene:${windowId}:extensions`;
     return parseDesktopWorkbenchSceneProjection({
       sceneId,
       windowId,
-      context: { kind: 'extensions', extensionManagementSessionId },
+      context: { kind: 'extensions' },
       slots: {
-        main: { kind: 'extension-management', extensionManagementSessionId },
+        main: { kind: 'extension-management' },
         status: { kind: 'scene-status', sceneId },
       },
     });
   }
   if (intent.kind === 'open-project-management') {
-    const projectManagementSessionId = `project-management:${createIdentity()}`;
     const sceneId = `scene:${windowId}:project-management`;
     return parseDesktopWorkbenchSceneProjection({
       sceneId,
       windowId,
-      context: { kind: 'project-management', projectManagementSessionId },
+      context: { kind: 'project-management' },
       slots: {
-        main: { kind: 'project-management', projectManagementSessionId },
+        main: { kind: 'project-management' },
         status: { kind: 'scene-status', sceneId },
       },
     });

@@ -30,12 +30,13 @@ export type DesktopWorkbenchSceneContext =
       readonly scope: DesktopAgentScopeProjection;
     }
   | { readonly kind: 'asset-center'; readonly assetCenterSessionId: string }
-  | { readonly kind: 'extensions'; readonly extensionManagementSessionId: string }
-  | { readonly kind: 'project-management'; readonly projectManagementSessionId: string }
+  | { readonly kind: 'extensions' }
+  | { readonly kind: 'project-management' }
   | { readonly kind: 'settings'; readonly settingsSectionId: string };
 
 export interface DesktopAgentInteractionSurfaceRef {
   readonly kind: 'agent';
+  readonly agentSurfaceId: string;
   readonly agentViewId: string;
   readonly phase: 'draft' | 'session';
   readonly scope: DesktopAgentScopeProjection;
@@ -61,13 +62,10 @@ export type DesktopWorkbenchMainSurfaceRef =
       readonly previewSessionId: string;
     }
   | { readonly kind: 'asset-management'; readonly assetCenterSessionId: string }
-  | {
-      readonly kind: 'extension-management';
-      readonly extensionManagementSessionId: string;
-    }
-  | { readonly kind: 'extension-detail'; readonly extensionManagementSessionId: string }
-  | { readonly kind: 'project-management'; readonly projectManagementSessionId: string }
-  | { readonly kind: 'project-detail'; readonly projectManagementSessionId: string }
+  | { readonly kind: 'extension-management' }
+  | { readonly kind: 'extension-detail' }
+  | { readonly kind: 'project-management' }
+  | { readonly kind: 'project-detail' }
   | { readonly kind: 'settings-main'; readonly settingsSectionId: string };
 
 export type DesktopWorkbenchManagerSurfaceRef =
@@ -347,7 +345,13 @@ export function createDefaultDesktopAgentScene(
     windowId: exactWindowId,
     context: { kind: 'agent', agentViewId, scope },
     slots: {
-      interaction: { kind: 'agent', agentViewId, phase: 'draft', scope },
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: `agent-surface:${exactWindowId}:${exactDraftId}`,
+        agentViewId,
+        phase: 'draft',
+        scope,
+      },
       status: { kind: 'scene-status', sceneId },
     },
   };
@@ -491,28 +495,12 @@ function parseSceneContext(value: unknown): DesktopWorkbenchSceneContext {
     };
   }
   if (kind === 'extensions') {
-    requireExactKeys(record, ['kind', 'extensionManagementSessionId'], 'Extensions Scene context');
-    return {
-      kind,
-      extensionManagementSessionId: requireIdentity(
-        record['extensionManagementSessionId'],
-        'Extension Management Session',
-      ),
-    };
+    requireExactKeys(record, ['kind'], 'Extensions Scene context');
+    return { kind };
   }
   if (kind === 'project-management') {
-    requireExactKeys(
-      record,
-      ['kind', 'projectManagementSessionId'],
-      'Project Management Scene context',
-    );
-    return {
-      kind,
-      projectManagementSessionId: requireIdentity(
-        record['projectManagementSessionId'],
-        'Project Management Session',
-      ),
-    };
+    requireExactKeys(record, ['kind'], 'Project Management Scene context');
+    return { kind };
   }
   if (kind === 'settings') {
     requireExactKeys(record, ['kind', 'settingsSectionId'], 'Settings Scene context');
@@ -596,7 +584,7 @@ function parseInteractionSurface(value: unknown): DesktopAgentInteractionSurface
   const record = requireRecord(value, 'Interaction Surface ref must be an object.');
   requireExactKeys(
     record,
-    ['kind', 'agentViewId', 'phase', 'scope'],
+    ['kind', 'agentSurfaceId', 'agentViewId', 'phase', 'scope'],
     'Agent Interaction Surface ref',
   );
   if (record['kind'] !== 'agent') throw unsupported('Interaction slot only accepts Agent Surface.');
@@ -606,6 +594,7 @@ function parseInteractionSurface(value: unknown): DesktopAgentInteractionSurface
   }
   return {
     kind: 'agent',
+    agentSurfaceId: requireIdentity(record['agentSurfaceId'], 'Agent Surface'),
     agentViewId: requireIdentity(record['agentViewId'], 'Agent View'),
     phase,
     scope: parseDesktopAgentScopeProjection(record['scope']),
@@ -662,56 +651,20 @@ function parseMainSurface(value: unknown): DesktopWorkbenchMainSurfaceRef {
     };
   }
   if (kind === 'extension-management') {
-    requireExactKeys(
-      record,
-      ['kind', 'extensionManagementSessionId'],
-      'Extension Management Surface ref',
-    );
-    return {
-      kind,
-      extensionManagementSessionId: requireIdentity(
-        record['extensionManagementSessionId'],
-        'Extension Management Session',
-      ),
-    };
+    requireExactKeys(record, ['kind'], 'Extension Management Surface ref');
+    return { kind };
   }
   if (kind === 'extension-detail') {
-    requireExactKeys(
-      record,
-      ['kind', 'extensionManagementSessionId'],
-      'Extension Detail Surface ref',
-    );
-    return {
-      kind,
-      extensionManagementSessionId: requireIdentity(
-        record['extensionManagementSessionId'],
-        'Extension Management Session',
-      ),
-    };
+    requireExactKeys(record, ['kind'], 'Extension Detail Surface ref');
+    return { kind };
   }
   if (kind === 'project-detail') {
-    requireExactKeys(record, ['kind', 'projectManagementSessionId'], 'Project Detail Surface ref');
-    return {
-      kind,
-      projectManagementSessionId: requireIdentity(
-        record['projectManagementSessionId'],
-        'Project Management Session',
-      ),
-    };
+    requireExactKeys(record, ['kind'], 'Project Detail Surface ref');
+    return { kind };
   }
   if (kind === 'project-management') {
-    requireExactKeys(
-      record,
-      ['kind', 'projectManagementSessionId'],
-      'Project Management Surface ref',
-    );
-    return {
-      kind,
-      projectManagementSessionId: requireIdentity(
-        record['projectManagementSessionId'],
-        'Project Management Session',
-      ),
-    };
+    requireExactKeys(record, ['kind'], 'Project Management Surface ref');
+    return { kind };
   }
   if (kind === 'settings-main') {
     requireExactKeys(record, ['kind', 'settingsSectionId'], 'Settings Main Surface ref');
@@ -873,11 +826,7 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     if (slots.main?.kind !== 'extension-management') {
       throw mismatch('Extensions Scene requires its Extension Management Main Surface.');
     }
-    return validateManagementIdentity(
-      slots,
-      'extensionManagementSessionId',
-      context.extensionManagementSessionId,
-    );
+    return;
   }
   if (context.kind === 'project-management') {
     assertManagerKinds(slots, []);
@@ -885,15 +834,11 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     if (slots.main?.kind !== 'project-management') {
       throw mismatch('Project Management Scene requires its Management Main Surface.');
     }
-    return validateManagementIdentity(
-      slots,
-      'projectManagementSessionId',
-      context.projectManagementSessionId,
-    );
+    return;
   }
   assertManagerKinds(slots, ['settings-navigation']);
   assertMainKinds(slots, ['settings-main']);
-  validateManagementIdentity(slots, 'settingsSectionId', context.settingsSectionId);
+  validateManagementIdentity(slots, context.settingsSectionId);
 }
 
 function validateAgentMain(
@@ -959,11 +904,10 @@ function assertMainKinds(
 
 function validateManagementIdentity(
   slots: DesktopWorkbenchSceneProjection['slots'],
-  key: 'extensionManagementSessionId' | 'projectManagementSessionId' | 'settingsSectionId',
   expected: string,
 ): void {
   for (const ref of [slots.leftManager, slots.rightManager, slots.main, slots.secondaryMain]) {
-    if (ref && readManagementIdentity(ref, key) !== expected) {
+    if (ref && readManagementIdentity(ref) !== expected) {
       throw mismatch(`Management Surface '${ref.kind}' does not match its Scene identity.`);
     }
   }
@@ -971,14 +915,7 @@ function validateManagementIdentity(
 
 function readManagementIdentity(
   ref: DesktopWorkbenchMainSurfaceRef | DesktopWorkbenchManagerSurfaceRef,
-  key: 'extensionManagementSessionId' | 'projectManagementSessionId' | 'settingsSectionId',
 ): string | undefined {
-  if (key === 'extensionManagementSessionId') {
-    return 'extensionManagementSessionId' in ref ? ref.extensionManagementSessionId : undefined;
-  }
-  if (key === 'projectManagementSessionId') {
-    return 'projectManagementSessionId' in ref ? ref.projectManagementSessionId : undefined;
-  }
   return 'settingsSectionId' in ref ? ref.settingsSectionId : undefined;
 }
 

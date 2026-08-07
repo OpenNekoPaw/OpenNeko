@@ -26,6 +26,7 @@ describe('Desktop Scene contract', () => {
       slots: {
         interaction: {
           kind: 'agent',
+          agentSurfaceId: 'agent-surface:window-1:draft-1',
           agentViewId: 'agent-view:window-1:draft-1',
           phase: 'draft',
           scope: { kind: 'unbound', draftId: 'draft-1' },
@@ -181,12 +182,10 @@ describe('Desktop Scene contract', () => {
       windowId: 'window-1',
       context: {
         kind: 'extensions' as const,
-        extensionManagementSessionId: 'extension-management-1',
       },
       slots: {
         main: {
           kind: 'extension-management' as const,
-          extensionManagementSessionId: 'extension-management-1',
         },
         status: { kind: 'scene-status' as const, sceneId },
       },
@@ -198,7 +197,6 @@ describe('Desktop Scene contract', () => {
         slots: {
           leftManager: {
             kind: 'extension-catalog',
-            extensionManagementSessionId: 'extension-management-1',
           },
           status: projection.slots.status,
         },
@@ -403,6 +401,7 @@ function workspaceScene() {
     slots: {
       interaction: {
         kind: 'agent' as const,
+        agentSurfaceId: 'agent-surface:window-1',
         agentViewId: 'agent-view:window-1',
         phase: 'session' as const,
         scope: {

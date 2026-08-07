@@ -14,9 +14,9 @@ import {
 } from './desktop-scene-contract';
 import { createDefaultDesktopWorkbenchLayout } from './desktop-workbench-contract';
 import {
-  createDesktopWorkbenchInstanceFromScene,
-  parseDesktopWindowWorkbenchCatalog,
-} from './desktop-workbench-instance-contract';
+  createDesktopWindowComposition,
+  parseDesktopWindowComposition,
+} from './desktop-window-composition-contract';
 import { createInMemoryDesktopShellStateRepository } from './testing/in-memory-desktop-shell-state-repository';
 
 describe('Desktop Shell state codec', () => {
@@ -31,100 +31,13 @@ describe('Desktop Shell state codec', () => {
     expect(committed.primaryWindowId).toBe('window:2');
   });
 
-  it('restores multiple valid Workbench siblings from the one canonical shape', () => {
-    const initial = createEmptyDesktopShellState();
-    const first = draftWorkbench('window:1', 'workbench:draft:1', 'draft:1');
-    const second = draftWorkbench('window:1', 'workbench:draft:2', 'draft:2');
-    const state = withCatalog(initial, {
-      windowId: 'window:1',
-      activeWorkbenchInstanceId: second.workbenchInstanceId,
-      instances: [first, second],
-    });
-
-    const parsed = parseDesktopShellStoredState(state);
-
-    expect(parsed.windows[0]?.workbenches).toEqual({
-      windowId: 'window:1',
-      activeWorkbenchInstanceId: second.workbenchInstanceId,
-      instances: [first, second],
-      diagnostics: [],
-    });
-  });
-
-  it('isolates one invalid Workbench child and retains valid siblings unchanged', () => {
-    const initial = createEmptyDesktopShellState();
-    const valid = draftWorkbench('window:1', 'workbench:valid', 'draft:valid');
-    const invalid = {
-      ...draftWorkbench('window:1', 'workbench:invalid', 'draft:invalid'),
-      scene: {
-        ...createDefaultDesktopAgentScene('window:1', 'draft:invalid'),
-        context: { kind: 'unknown-scene' },
-      },
-    };
-    const state = withCatalog(initial, {
-      windowId: 'window:1',
-      activeWorkbenchInstanceId: valid.workbenchInstanceId,
-      instances: [valid, invalid],
-    });
-    const before = JSON.stringify(state);
-
-    const parsed = parseDesktopShellStoredState(state);
-
-    expect(JSON.stringify(state)).toBe(before);
-    expect(parsed.windows[0]?.workbenches.instances).toEqual([valid]);
-    expect(parsed.windows[0]?.workbenches.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'desktop-workbench-instance-invalid',
-        workbenchInstanceId: 'workbench:invalid',
-      }),
-    ]);
-    expect(serializeDesktopShellStoredState(parsed)).toMatchObject({
-      windows: [
-        expect.objectContaining({
-          workbenches: expect.objectContaining({ instances: [valid, invalid] }),
-        }),
-      ],
-    });
-  });
-
-  it('restores a Window when its exact active Workbench follows a duplicate owner sibling', () => {
-    const initial = createEmptyDesktopShellState();
-    const inactive = draftWorkbench('window:1', 'workbench:inactive', 'draft:shared-owner');
-    const active = draftWorkbench('window:1', 'workbench:active', 'draft:shared-owner');
-    const state = withCatalog(initial, {
-      windowId: 'window:1',
-      activeWorkbenchInstanceId: active.workbenchInstanceId,
-      instances: [inactive, active],
-    });
-
-    const parsed = parseDesktopShellStoredState(state);
-
-    expect(parsed.windows).toHaveLength(1);
-    expect(parsed.windows[0]?.workbenches.activeWorkbenchInstanceId).toBe(
-      active.workbenchInstanceId,
-    );
-    expect(parsed.windows[0]?.workbenches.instances).toEqual([active]);
-    expect(parsed.windows[0]?.workbenches.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'desktop-workbench-instance-owner-duplicate',
-        workbenchInstanceId: inactive.workbenchInstanceId,
-      }),
-    ]);
-    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([]);
-  });
-
-  it('isolates a Window whose active Workbench identity names an invalid child', () => {
+  it('isolates a Window whose current composition violates the canonical contract', () => {
     const initial = withPrimaryWindow(createEmptyDesktopShellState(), 'window:1');
-    const valid = draftWorkbench('window:1', 'workbench:valid', 'draft:valid');
     const state = {
       ...initial,
       windows: initial.windows.map((window) => ({
         ...window,
-        workbenches: {
-          windowId: 'window:1',
-          activeWorkbenchInstanceId: 'workbench:missing',
-          instances: [valid],
-        },
+        workbench: { ...window.workbench, scene: { invalid: true } },
       })),
     };
 
@@ -135,9 +48,7 @@ describe('Desktop Shell state codec', () => {
       expect.objectContaining({
         code: 'desktop-stored-window-invalid',
         windowId: 'window:1',
-        message: expect.stringContaining(
-          "Desktop Window active Workbench instance 'workbench:missing' is unavailable.",
-        ),
+        message: expect.stringContaining('Desktop stored Window composition is invalid'),
       }),
     ]);
     expect(serializeDesktopShellStoredState(parsed)).toMatchObject({ windows: state.windows });
@@ -209,6 +120,78 @@ describe('Desktop Shell state codec', () => {
     expect(serializeDesktopShellStoredState(parsed)).toMatchObject({ windows: invalid.windows });
   });
 
+  it('round-trips the current optional Project presentation snapshot', () => {
+    const windowId = 'window:1';
+    const initial = withPrimaryWindow(createEmptyDesktopShellState(), windowId);
+    const project = storedProject('project:1', 'workspace:1');
+    const presentation = projectPresentation(windowId, project.projectId, project.workspaceId);
+    const state: DesktopShellStoredState = {
+      ...initial,
+      projects: [project],
+      windows: initial.windows.map((window) => ({
+        ...window,
+        tabs: [
+          {
+            tabId: 'tab:1',
+            projectId: project.projectId,
+            viewId: 'view:1',
+            viewInstanceId: 'view-instance:1',
+            presentation,
+          },
+        ],
+      })),
+    };
+
+    const parsed = parseDesktopShellStoredState(serializeDesktopShellStoredState(state));
+
+    expect(parsed.windows[0]?.tabs[0]?.presentation).toEqual(presentation);
+  });
+
+  it.each([
+    {
+      label: 'another Window',
+      presentation: projectPresentation('window:other', 'project:1', 'workspace:1'),
+    },
+    {
+      label: 'another Project',
+      presentation: projectPresentation('window:1', 'project:other', 'workspace:1'),
+    },
+    {
+      label: 'another Workspace',
+      presentation: projectPresentation('window:1', 'project:1', 'workspace:other'),
+    },
+  ])(
+    'isolates a Window whose Project presentation contains $label identity',
+    ({ presentation }) => {
+      const initial = withPrimaryWindow(createEmptyDesktopShellState(), 'window:1');
+      const project = storedProject('project:1', 'workspace:1');
+      const state: DesktopShellStoredState = {
+        ...initial,
+        projects: [project],
+        windows: initial.windows.map((window) => ({
+          ...window,
+          tabs: [
+            {
+              tabId: 'tab:1',
+              projectId: project.projectId,
+              viewId: 'view:1',
+              viewInstanceId: 'view-instance:1',
+              presentation,
+            },
+          ],
+        })),
+      };
+
+      const parsed = parseDesktopShellStoredState(state);
+
+      expect(parsed.windows).toEqual([]);
+      expect(readDesktopShellStateDiagnostics(parsed)[0]).toMatchObject({
+        code: 'desktop-stored-window-invalid',
+        windowId: 'window:1',
+      });
+    },
+  );
+
   it('keeps a superseded Window record unchanged while allowing a new canonical Window', async () => {
     const oldWindow = {
       windowId: 'window:old',
@@ -246,28 +229,24 @@ function withPrimaryWindow(
   windowId: string,
 ): DesktopShellStoredState {
   const workbench = draftWorkbench(windowId, `workbench:${windowId}`, `draft:${windowId}`);
-  return withCatalog(state, {
-    windowId,
-    activeWorkbenchInstanceId: workbench.workbenchInstanceId,
-    instances: [workbench],
-  });
+  return withComposition(state, workbench);
 }
 
-function withCatalog(
+function withComposition(
   state: DesktopShellStoredState,
-  workbenches: Parameters<typeof parseDesktopWindowWorkbenchCatalog>[0],
+  value: Parameters<typeof parseDesktopWindowComposition>[0],
 ): DesktopShellStoredState {
-  const catalog = parseDesktopWindowWorkbenchCatalog(workbenches);
+  const workbench = parseDesktopWindowComposition(value);
   return {
     ...state,
-    primaryWindowId: catalog.windowId,
+    primaryWindowId: workbench.windowId,
     windows: [
       {
-        windowId: catalog.windowId,
+        windowId: workbench.windowId,
         activeTarget: { kind: 'home' },
         tabs: [],
-        workbenches: catalog,
-        applicationSidebar: createDefaultDesktopApplicationSidebar(catalog.windowId),
+        workbench,
+        applicationSidebar: createDefaultDesktopApplicationSidebar(workbench.windowId),
       },
     ],
   };
@@ -275,10 +254,52 @@ function withCatalog(
 
 function draftWorkbench(windowId: string, workbenchInstanceId: string, draftId: string) {
   const scene = createDefaultDesktopAgentScene(windowId, draftId);
-  return createDesktopWorkbenchInstanceFromScene({
+  return createDesktopWindowComposition({
     workbenchInstanceId,
-    agentSurfaceId: `agent-surface:${draftId}`,
     layout: createDefaultDesktopWorkbenchLayout(windowId),
     scene,
   });
+}
+
+function storedProject(projectId: string, workspaceId: string) {
+  return {
+    projectId,
+    workspaceId,
+    profile: 'content' as const,
+    displayName: projectId,
+    workspacePath: `/workspace/${workspaceId}`,
+    workspaceLocator: { kind: 'variable' as const, value: `\${HOME}/workspace/${workspaceId}` },
+    createdAt: '2026-08-07T00:00:00.000Z',
+    updatedAt: '2026-08-07T00:00:00.000Z',
+  };
+}
+
+function projectPresentation(windowId: string, projectId: string, workspaceId: string) {
+  const layout = createDefaultDesktopWorkbenchLayout(windowId);
+  return {
+    ...layout,
+    display: { ...layout.display, mode: 'chat-main' as const },
+    main: {
+      views: [
+        {
+          viewId: `canvas:${projectId}`,
+          viewInstanceId: `view-instance:${projectId}`,
+          projectId,
+          workspaceId,
+          kind: 'canvas' as const,
+          ownerId: `canvas:${projectId}`,
+          displayLabel: 'workspace.nkc',
+          documentId: 'neko/boards/workspace.nkc',
+        },
+      ],
+      groups: [
+        {
+          groupId: 'main:primary',
+          viewIds: [`canvas:${projectId}`],
+          activeViewId: `canvas:${projectId}`,
+        },
+      ],
+      activeGroupId: 'main:primary',
+    },
+  };
 }

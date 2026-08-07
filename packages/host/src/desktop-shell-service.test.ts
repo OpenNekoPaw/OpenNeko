@@ -14,26 +14,23 @@ import {
   parseDesktopWorkbenchSceneProjection,
 } from './desktop-scene-contract';
 import {
-  putDesktopAgentSurface,
-  resolveActiveDesktopWorkbenchInstance,
-  type DesktopWindowWorkbenchCatalogProjection,
-} from './desktop-workbench-instance-contract';
+  createDesktopWindowComposition,
+  type DesktopWindowCompositionProjection,
+} from './desktop-window-composition-contract';
 import type {
   DesktopProjectCatalogItem,
   DesktopShellStateDiagnosticProjection,
 } from './desktop-shell-contract';
 
-function activeInstance(window: { readonly workbenches: DesktopWindowWorkbenchCatalogProjection }) {
-  return resolveActiveDesktopWorkbenchInstance(window.workbenches);
+function activeInstance(window: { readonly workbench: DesktopWindowCompositionProjection }) {
+  return window.workbench;
 }
 
-function activeScene(window: { readonly workbenches: DesktopWindowWorkbenchCatalogProjection }) {
+function activeScene(window: { readonly workbench: DesktopWindowCompositionProjection }) {
   return activeInstance(window).scene;
 }
 
-function activeWorkbench(window: {
-  readonly workbenches: DesktopWindowWorkbenchCatalogProjection;
-}) {
+function activeWorkbench(window: { readonly workbench: DesktopWindowCompositionProjection }) {
   return activeInstance(window).layout;
 }
 
@@ -53,7 +50,7 @@ describe('DesktopShellService', () => {
     const projection = await fixture.service.getProjection(windowId);
 
     expect(projection.stateDiagnostics).toEqual([diagnostic]);
-    expect(projection.window.workbenches.instances).toHaveLength(1);
+    expect(projection.window.workbench.windowId).toBe(windowId);
     expect(activeScene(projection.window).context).toMatchObject({
       kind: 'agent',
       scope: { kind: 'unbound' },
@@ -354,10 +351,6 @@ describe('DesktopShellService', () => {
     const recovered = await restored.service.getProjection(restoredWindowId);
     const recoveredActive = activeInstance(recovered.window);
 
-    expect(recoveredActive.owner).toEqual({
-      kind: 'assistant-space',
-      assistantSpaceId: 'assistant-space:local-user',
-    });
     expect(recoveredActive.scene).toMatchObject({
       context: { kind: 'agent', scope: { kind: 'assistant' } },
       slots: { interaction: { phase: 'draft', scope: { kind: 'assistant' } } },
@@ -366,23 +359,11 @@ describe('DesktopShellService', () => {
       'scope.conversationId',
       'conversation:invalid-owner',
     );
-    expect(
-      recoveredActive.agentSurfaces.some(
-        (surface) =>
-          surface.interaction.scope.kind !== 'unbound' &&
-          surface.interaction.scope.conversationId === 'conversation:invalid-owner',
-      ),
-    ).toBe(false);
-    expect(
-      recoveredActive.agentSurfaces.some(
-        (surface) =>
-          surface.interaction.scope.kind !== 'unbound' &&
-          surface.interaction.scope.conversationId === 'conversation:valid-sibling',
-      ),
-    ).toBe(true);
-    expect(
-      recovered.window.workbenches.instances.some((instance) => instance.owner.kind === 'settings'),
-    ).toBe(true);
+    expect(recovered.agentHome.conversations).toEqual([
+      expect.objectContaining({
+        navigation: expect.objectContaining({ conversationId: 'conversation:valid-sibling' }),
+      }),
+    ]);
     expect(recovered.agentHome.diagnostics).toEqual([
       expect.objectContaining({
         code: 'invalid-conversation-record',
@@ -1283,6 +1264,7 @@ describe('DesktopShellService', () => {
         ...workspaceResult.scene.slots,
         interaction: {
           kind: 'agent',
+          agentSurfaceId: workspaceResult.scene.slots.interaction!.agentSurfaceId,
           agentViewId: context.agentViewId,
           phase: 'session',
           scope,
@@ -1294,14 +1276,9 @@ describe('DesktopShellService', () => {
       windows: [
         {
           ...storedWindow,
-          workbenches: putDesktopAgentSurface({
-            catalog: storedWindow.workbenches,
+          workbench: createDesktopWindowComposition({
             workbenchInstanceId: activeInstance(storedWindow).workbenchInstanceId,
-            surface: {
-              agentSurfaceId: activeInstance(storedWindow).activeAgentSurfaceId!,
-              lifecycle: 'hot-retained',
-              interaction: sessionScene.slots.interaction!,
-            },
+            layout: activeInstance(storedWindow).layout,
             scene: sessionScene,
           }),
         },
@@ -1851,14 +1828,10 @@ describe('DesktopShellService', () => {
       catalog: { projects: [] },
       window: {
         activeTarget: { kind: 'home' },
-        workbenches: {
-          instances: [
-            expect.objectContaining({
-              layout: expect.objectContaining({
-                main: expect.objectContaining({ views: [] }),
-              }),
-            }),
-          ],
+        workbench: {
+          layout: expect.objectContaining({
+            main: expect.objectContaining({ views: [] }),
+          }),
         },
       },
     });
@@ -1888,7 +1861,7 @@ describe('DesktopShellService', () => {
     expect(await fixture.service.getProjection(windowId)).toEqual(opened.projection);
   });
 
-  it('rejects a closed Tab identity without changing state', async () => {
+  it('rejects closing an unavailable Tab identity without changing state', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -1903,7 +1876,7 @@ describe('DesktopShellService', () => {
     await fixture.service.closeTab(windowId, tabId, opened.projection.rendererSessionId);
 
     await expect(
-      fixture.service.activateTab(windowId, tabId, opened.projection.rendererSessionId),
+      fixture.service.closeTab(windowId, tabId, opened.projection.rendererSessionId),
     ).rejects.toThrow(`Unknown Desktop Project Tab '${tabId}'`);
     expect((await fixture.service.getProjection(windowId)).window.tabs).toEqual([]);
   });
@@ -2016,6 +1989,118 @@ describe('DesktopShellService', () => {
       presentation: 'docked',
       width: 412,
     });
+  });
+
+  it('restores each Project presentation after exact Workspace switching', async () => {
+    const fixture = createFixture();
+    const firstWorkspace: AssetWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/first',
+      displayName: 'First',
+      locator: { kind: 'variable', value: '${HOME}/workspace/first' },
+    };
+    const secondWorkspace: AssetWorkspaceResolution = {
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      workspacePath: '/workspace/second',
+      displayName: 'Second',
+      locator: { kind: 'variable', value: '${HOME}/workspace/second' },
+    };
+    const workspaces = new Map(
+      [firstWorkspace, secondWorkspace].map((workspace) => [workspace.workspacePath, workspace]),
+    );
+    fixture.registry.resolve.mockImplementation(async (workspacePath: string) => {
+      const workspace = workspaces.get(workspacePath);
+      if (!workspace) throw new Error(`Unknown fixture Workspace '${workspacePath}'.`);
+      return workspace;
+    });
+
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await fixture.service.getProjection(windowId);
+    const firstOpened = await openContent(
+      fixture,
+      windowId,
+      firstWorkspace.workspacePath,
+      initial.rendererSessionId,
+    );
+    const firstProject = firstOpened.projection.catalog.projects.find(
+      (project) => project.workspaceId === firstWorkspace.workspaceId,
+    );
+    const firstTab = firstOpened.projection.window.tabs.find(
+      (tab) => tab.projectId === firstProject?.projectId,
+    );
+    if (!firstProject || !firstTab) throw new Error('First fixture Project is unavailable.');
+    const previewViewId = 'preview:first-workspace:temporary';
+    const previewWorkbench = {
+      ...activeWorkbench(firstOpened.projection.window),
+      main: {
+        views: [
+          {
+            viewId: previewViewId,
+            viewInstanceId: firstTab.viewInstanceId,
+            projectId: firstProject.projectId,
+            workspaceId: firstWorkspace.workspaceId,
+            kind: 'preview' as const,
+            ownerId: 'preview-session:first-workspace',
+            displayLabel: 'preview.png',
+            documentId: 'preview.png',
+            previewPresentation: 'temporary' as const,
+          },
+        ],
+        groups: [
+          {
+            groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+            viewIds: [previewViewId],
+            activeViewId: previewViewId,
+          },
+        ],
+        activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+      },
+    };
+    const withPreview = await fixture.service.updateWorkbench(
+      windowId,
+      firstOpened.projection.rendererSessionId,
+      activeInstance(firstOpened.projection.window).workbenchInstanceId,
+      previewWorkbench,
+    );
+
+    const secondOpened = await openContent(
+      fixture,
+      windowId,
+      secondWorkspace.workspacePath,
+      withPreview.rendererSessionId,
+    );
+    expect(activeWorkbench(secondOpened.projection.window).main.views).toEqual([
+      expect.objectContaining({
+        kind: 'canvas',
+        workspaceId: secondWorkspace.workspaceId,
+      }),
+    ]);
+
+    const restored = await fixture.service.openCatalogProject(
+      windowId,
+      firstProject.projectId,
+      secondOpened.projection.rendererSessionId,
+    );
+
+    expect(activeWorkbench(restored.projection.window)).toEqual(previewWorkbench);
+    expect(activeWorkbench(restored.projection.window).main).toEqual({
+      views: [
+        expect.objectContaining({ viewId: previewViewId, workspaceId: firstWorkspace.workspaceId }),
+      ],
+      groups: [
+        {
+          groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+          viewIds: [previewViewId],
+          activeViewId: previewViewId,
+        },
+      ],
+      activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+    });
+    expect(restored.projection.window.tabs).toHaveLength(2);
+    for (const tab of restored.projection.window.tabs) {
+      expect(tab).not.toHaveProperty('presentation');
+    }
   });
 
   it('rejects Workbench updates while no Project is active', async () => {

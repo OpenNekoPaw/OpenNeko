@@ -8,7 +8,6 @@ import {
   parseDesktopWorkbenchLayout,
   reorderMainView,
   resizeMainSplit,
-  resolveDesktopWorkbenchViewLifecycle,
   setWorkbenchDisplayMode,
   showWorkbenchTimeline,
   splitMainView,
@@ -36,14 +35,6 @@ describe('Desktop Workbench contract', () => {
       'Desktop Workbench layout has unexpected fields',
     );
     expect(parseDesktopWorkbenchLayout(current)).toEqual(current);
-  });
-
-  it('declares every high-cost Main View as suspendable in the owning contract', () => {
-    expect(resolveDesktopWorkbenchViewLifecycle(viewRef('canvas-1', 'canvas'))).toBe('suspendable');
-    expect(resolveDesktopWorkbenchViewLifecycle(viewRef('preview-1', 'preview'))).toBe(
-      'suspendable',
-    );
-    expect(resolveDesktopWorkbenchViewLifecycle(viewRef('cut-1', 'cut'))).toBe('suspendable');
   });
 
   it('opens, focuses and splits Main Views without changing Chat presentation', () => {

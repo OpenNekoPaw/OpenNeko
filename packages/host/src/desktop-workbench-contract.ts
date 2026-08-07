@@ -17,7 +17,6 @@ export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only
 export type DesktopWorkbenchMainSplitAxis = 'columns' | 'rows';
 export type DesktopPreviewViewPresentation = 'temporary' | 'pinned' | 'side';
 export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut';
-export type DesktopWorkbenchViewLifecyclePolicy = 'suspendable';
 
 export interface DesktopWorkbenchViewRef {
   readonly viewId: string;
@@ -30,17 +29,6 @@ export interface DesktopWorkbenchViewRef {
   readonly documentId?: string;
   readonly previewPresentation?: DesktopPreviewViewPresentation;
   readonly previewContentKind?: PreviewContentKind;
-}
-
-export function resolveDesktopWorkbenchViewLifecycle(
-  view: Pick<DesktopWorkbenchViewRef, 'kind'>,
-): DesktopWorkbenchViewLifecyclePolicy {
-  switch (view.kind) {
-    case 'canvas':
-    case 'preview':
-    case 'cut':
-      return 'suspendable';
-  }
 }
 
 export interface DesktopWorkbenchMainGroup {
