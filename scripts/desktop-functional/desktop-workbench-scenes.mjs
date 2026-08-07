@@ -13,8 +13,7 @@ const VISUAL_SETTLE_MILLISECONDS = 1_000;
 const PROJECT_SIDEBAR_WORKSPACE_ID = '11111111-2222-4333-8444-555555555555';
 const PROJECT_SIDEBAR_CONVERSATION_ID = 'conversation:project-sidebar-history';
 const PROJECT_SIDEBAR_CLEANUP_WORKSPACE_ID = '66666666-7777-4888-8999-aaaaaaaaaaaa';
-const PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID =
-  'conversation:project-sidebar-cleanup-history';
+const PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID = 'conversation:project-sidebar-cleanup-history';
 
 export const desktopWorkbenchScenesScenario = Object.freeze({
   id: 'desktop-workbench-scenes',
@@ -887,6 +886,12 @@ async function exerciseProjectConversationGroups({
     const create = header?.querySelector('.primary-navigation-state button');
     const cleanupButton = header?.querySelector(':scope > button:nth-last-child(2)');
     const removalButton = header?.querySelector(':scope > button:last-child');
+    const projectIdentityIcon = header?.querySelector(
+      '.primary-conversation-group__identity-icon.is-project',
+    );
+    const conversationIdentityIcon = group?.querySelector(
+      '.primary-recent-conversation-row .primary-conversation-group__identity-icon.is-conversation',
+    );
     const conversationStatus = group?.querySelector(
       '.primary-recent-conversation-row > .primary-navigation-state .primary-navigation-unavailable',
     );
@@ -904,6 +909,14 @@ async function exerciseProjectConversationGroups({
       createEnabled: create instanceof HTMLButtonElement && !create.disabled,
       cleanupEnabled: cleanupButton instanceof HTMLButtonElement && !cleanupButton.disabled,
       removalEnabled: removalButton instanceof HTMLButtonElement && !removalButton.disabled,
+      projectIdentityIcon:
+        projectIdentityIcon instanceof SVGElement &&
+        projectIdentityIcon.getAttribute('width') === '15' &&
+        projectIdentityIcon.getAttribute('height') === '15',
+      conversationIdentityIcon:
+        conversationIdentityIcon instanceof SVGElement &&
+        conversationIdentityIcon.getAttribute('width') === '13' &&
+        conversationIdentityIcon.getAttribute('height') === '13',
       conversationUnavailableTrailing: conversationStatus instanceof HTMLElement,
       countText: count?.textContent?.trim() ?? '',
       trailingTrackDoesNotOverlap:
@@ -927,6 +940,8 @@ async function exerciseProjectConversationGroups({
     !initial.createEnabled ||
     !initial.cleanupEnabled ||
     !initial.removalEnabled ||
+    !initial.projectIdentityIcon ||
+    !initial.conversationIdentityIcon ||
     !initial.conversationUnavailableTrailing ||
     initial.countText !== '1' ||
     !initial.trailingTrackDoesNotOverlap
@@ -973,6 +988,9 @@ async function exerciseProjectConversationGroups({
       const headerRect = header?.getBoundingClientRect();
       return {
         buttonCount: buttons.length,
+        identityIconCount: group?.querySelectorAll(
+          '.primary-conversation-group__identity-icon',
+        ).length ?? 0,
         fits:
           headerRect !== undefined &&
           buttons.every((button) => {
@@ -984,7 +1002,9 @@ async function exerciseProjectConversationGroups({
   })()`);
   if (
     compactLayout.length !== 2 ||
-    compactLayout.some((group) => group.buttonCount !== 4 || !group.fits)
+    compactLayout.some(
+      (group) => group.buttonCount !== 4 || group.identityIconCount !== 2 || !group.fits,
+    )
   ) {
     throw new Error(`Compact Project sidebar controls overflow: ${JSON.stringify(compactLayout)}`);
   }
@@ -992,15 +1012,60 @@ async function exerciseProjectConversationGroups({
     screenshot,
     'project-sidebar-groups-expanded-compact',
   );
+  await click('.home-navigation-footer__actions button:last-child');
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[data-settings-surface="main"]') instanceof HTMLElement`,
+    'Desktop Settings did not open for sidebar theme validation.',
+  );
+  await evaluate(`(() => {
+    const appearance = document.querySelectorAll(
+      '.desktop-settings__navigation .home-nav-button',
+    )[1];
+    if (!(appearance instanceof HTMLButtonElement)) {
+      throw new Error('Desktop Appearance settings are unavailable.');
+    }
+    appearance.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[data-settings-surface="main"] select') instanceof HTMLSelectElement`,
+    'Desktop Theme setting did not render.',
+  );
+  await selectDesktopTheme(evaluate, 'dark');
+  const darkTheme = await evaluate(`(() => {
+    const group = document.querySelector(${JSON.stringify(retentionGroupSelector)});
+    const projectIcon = group?.querySelector(
+      '.primary-conversation-group__identity-icon.is-project',
+    );
+    const conversationIcon = group?.querySelector(
+      '.primary-conversation-group__identity-icon.is-conversation',
+    );
+    return {
+      theme: document.documentElement.dataset.nekoTheme,
+      projectIconColor:
+        projectIcon instanceof SVGElement ? getComputedStyle(projectIcon).color : '',
+      conversationIconColor:
+        conversationIcon instanceof SVGElement ? getComputedStyle(conversationIcon).color : '',
+    };
+  })()`);
+  if (
+    darkTheme.theme !== 'dark' ||
+    darkTheme.projectIconColor.length === 0 ||
+    darkTheme.conversationIconColor.length === 0
+  ) {
+    throw new Error(`Dark sidebar icon presentation is incomplete: ${JSON.stringify(darkTheme)}`);
+  }
+  const darkCompactScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-groups-expanded-compact-dark',
+  );
+  await selectDesktopTheme(evaluate, 'light');
   await resizeWindow(evaluate, 1200, 800);
 
   await click(`${retentionGroupSelector} .primary-conversation-group__project-link`);
-  await waitForProjectDraft(
-    evaluate,
-    retention.projectId,
-    retention.workspaceId,
-    'Project open',
-  );
+  await waitForProjectDraft(evaluate, retention.projectId, retention.workspaceId, 'Project open');
   await click(`${retentionGroupSelector} .primary-navigation-state button`);
   await waitForProjectDraft(
     evaluate,
@@ -1197,16 +1262,37 @@ async function exerciseProjectConversationGroups({
     cleaned,
     cleanupCancellation,
     compactLayout,
+    darkTheme,
     initial,
     removalCancellation,
     removed,
     screenshots: [
       desktopScreenshot,
       compactScreenshot,
+      darkCompactScreenshot,
       unavailableScreenshot,
       cleanedScreenshot,
     ],
   };
+}
+
+async function selectDesktopTheme(evaluate, theme) {
+  await evaluate(`(() => {
+    const select = document.querySelector('[data-settings-surface="main"] select');
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Desktop Theme setting is unavailable.');
+    }
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    if (!setter) throw new Error('Desktop Theme select setter is unavailable.');
+    setter.call(select, ${JSON.stringify(theme)});
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `document.documentElement.dataset.nekoTheme === ${JSON.stringify(theme)}`,
+    `Desktop Theme did not switch to ${theme} through Settings.`,
+  );
 }
 
 async function waitForProjectDraft(evaluate, projectId, workspaceId, action) {
