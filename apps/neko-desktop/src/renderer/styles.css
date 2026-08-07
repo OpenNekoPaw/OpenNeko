@@ -682,8 +682,9 @@ code {
 }
 
 .primary-recent-project-row {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(24px, auto) 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(24px, auto);
   align-items: center;
   gap: 2px;
   border-radius: var(--neko-desktop-radius-control);
@@ -712,7 +713,7 @@ code {
 }
 
 .primary-conversation-group__header {
-  grid-template-columns: 24px minmax(0, 1fr) auto minmax(24px, auto) 24px 24px;
+  grid-template-columns: 24px minmax(0, 1fr) auto minmax(24px, auto);
   margin-bottom: 1px;
 }
 
@@ -793,47 +794,20 @@ code {
 
 .primary-navigation-unavailable {
   display: inline-flex;
+  width: 24px;
+  height: 24px;
   align-items: center;
-  gap: 3px;
-  max-width: 74px;
+  justify-content: center;
   color: var(--neko-desktop-warning);
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.primary-navigation-unavailable > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.home-conversation-attention {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--neko-desktop-status-neutral);
-}
-
-.home-conversation-attention.is-needs-input,
-.home-conversation-attention.is-needs-review {
-  background: var(--neko-desktop-warning);
-}
-
-.home-conversation-attention.is-running {
-  background: var(--neko-desktop-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--neko-desktop-accent) 16%, transparent);
 }
 
 .home-conversation-status {
   display: inline-flex;
-  max-width: 76px;
+  width: 24px;
+  height: 24px;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
   color: var(--neko-desktop-text-subtle);
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .home-conversation-status.is-needs-input,
@@ -845,10 +819,31 @@ code {
   color: var(--neko-desktop-accent);
 }
 
-.home-conversation-status__label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.primary-navigation-row-actions {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 0;
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  gap: 2px;
+  padding-left: 4px;
+  border-radius: var(--neko-desktop-radius-control);
+  background: var(--neko-desktop-control-hover);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
+}
+
+.primary-recent-project-row[data-active='true'] > .primary-navigation-row-actions {
+  background: var(--neko-accent-soft);
+}
+
+.primary-recent-project-row:is(:hover, :focus-within) > .primary-navigation-row-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .desktop-navigation-menu-label {

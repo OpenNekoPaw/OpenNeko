@@ -1022,6 +1022,12 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!projectRow || !conversationRow) {
       throw new Error('Desktop fixture requires Project and Conversation context-menu rows.');
     }
+    expect(
+      projectRow.querySelectorAll(':scope > .primary-navigation-row-actions button'),
+    ).toHaveLength(3);
+    expect(
+      conversationRow.querySelectorAll(':scope > .primary-navigation-row-actions button'),
+    ).toHaveLength(1);
 
     await openContextMenu(projectRow);
     await selectContextMenuItem('Open project');
@@ -1077,7 +1083,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('disables unavailable context navigation and shows exact Conversation execution attention', async () => {
+  it('disables unavailable context navigation and shows icon-only exact Conversation execution attention', async () => {
     const base = createProjection();
     const project = {
       projectId: 'content:execution-state-project',
@@ -1126,9 +1132,21 @@ describe('DesktopApplication scene lifecycle', () => {
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
-    expect(readConversationStatus(container, 'Running task')).toBe('Running');
-    expect(readConversationStatus(container, 'Input task')).toBe('Needs input');
-    expect(readConversationStatus(container, 'Review task')).toBe('Needs review');
+    expect(readConversationStatus(container, 'Running task')).toEqual({
+      accessibleName: 'Running',
+      iconVisible: true,
+      inlineText: '',
+    });
+    expect(readConversationStatus(container, 'Input task')).toEqual({
+      accessibleName: 'Needs input',
+      iconVisible: true,
+      inlineText: '',
+    });
+    expect(readConversationStatus(container, 'Review task')).toEqual({
+      accessibleName: 'Needs review',
+      iconVisible: true,
+      inlineText: '',
+    });
     expect(readConversationStatus(container, 'Idle task')).toBeUndefined();
     expect(readConversationStatus(container, 'Unavailable running task')).toBeUndefined();
 
@@ -1243,6 +1261,22 @@ describe('DesktopApplication scene lifecycle', () => {
         ':scope > .primary-navigation-state .primary-navigation-unavailable',
       ),
     ).not.toBeNull();
+    const projectUnavailableStatus = projectGroup?.querySelector<HTMLElement>(
+      '.primary-conversation-group__header > .primary-navigation-state .primary-navigation-unavailable',
+    );
+    const conversationUnavailableStatus = unavailableRow?.querySelector<HTMLElement>(
+      ':scope > .primary-navigation-state .primary-navigation-unavailable',
+    );
+    expect(projectUnavailableStatus?.textContent?.trim()).toBe('');
+    expect(conversationUnavailableStatus?.textContent?.trim()).toBe('');
+    expect(projectUnavailableStatus?.querySelector('svg')).not.toBeNull();
+    expect(conversationUnavailableStatus?.querySelector('svg')).not.toBeNull();
+    expect(projectUnavailableStatus?.getAttribute('aria-label')).toContain(
+      project.unavailable.message,
+    );
+    expect(conversationUnavailableStatus?.getAttribute('aria-label')).toContain(
+      unavailableConversation.unavailable.message,
+    );
     expect(projectGroup?.querySelector('.primary-conversation-group__diagnostic')).toBeNull();
 
     const projectHeader = projectButton.closest<HTMLElement>('.primary-conversation-group__header');
@@ -1921,10 +1955,26 @@ function findConversationRow(container: HTMLElement, title: string): HTMLElement
   return row;
 }
 
-function readConversationStatus(container: HTMLElement, title: string): string | undefined {
-  return findConversationRow(container, title)
-    .querySelector<HTMLElement>('.home-conversation-status__label')
-    ?.textContent?.trim();
+function readConversationStatus(
+  container: HTMLElement,
+  title: string,
+):
+  | {
+      readonly accessibleName: string | null;
+      readonly iconVisible: boolean;
+      readonly inlineText: string;
+    }
+  | undefined {
+  const status = findConversationRow(container, title).querySelector<HTMLElement>(
+    '.home-conversation-status',
+  );
+  return status
+    ? {
+        accessibleName: status.getAttribute('aria-label'),
+        iconVisible: status.querySelector('svg') !== null,
+        inlineText: status.textContent?.trim() ?? '',
+      }
+    : undefined;
 }
 
 function createSidebarConversation(

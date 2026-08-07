@@ -2,12 +2,14 @@ import {
   BotIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ClockIcon,
   CloseIcon,
   ContextMenu,
   ControlledWorkbenchShell,
   FolderIcon,
   GridIcon,
   IconButton,
+  LoadingIcon,
   MessageIcon,
   OpenIcon,
   PackageIcon,
@@ -2306,7 +2308,10 @@ function PrimaryRecentNavigation({
                     <span className="primary-navigation-state">
                       {projectUnavailable ? (
                         <NavigationUnavailableStatus message={projectUnavailable.message} />
-                      ) : (
+                      ) : null}
+                    </span>
+                    <span className="primary-navigation-row-actions">
+                      {!projectUnavailable ? (
                         <IconButton
                           disabled={disabled}
                           size="xs"
@@ -2315,28 +2320,28 @@ function PrimaryRecentNavigation({
                           icon={<PlusIcon size={13} />}
                           onClick={() => onOpenRecent(project.projectId)}
                         />
-                      )}
+                      ) : null}
+                      <IconButton
+                        disabled={disabled || workspaceConversationCount === 0}
+                        size="xs"
+                        label={t('shell.deleteProjectConversations', {
+                          project: project.displayName,
+                        })}
+                        title={t('shell.deleteProjectConversations', {
+                          project: project.displayName,
+                        })}
+                        icon={<TrashIcon size={13} />}
+                        onClick={() => onDeleteProjectConversations(project)}
+                      />
+                      <IconButton
+                        disabled={disabled}
+                        size="xs"
+                        label={t('shell.removeProject', { project: project.displayName })}
+                        title={t('shell.removeProject', { project: project.displayName })}
+                        icon={<RemoveIcon size={13} />}
+                        onClick={() => onRemoveProject(project)}
+                      />
                     </span>
-                    <IconButton
-                      disabled={disabled || workspaceConversationCount === 0}
-                      size="xs"
-                      label={t('shell.deleteProjectConversations', {
-                        project: project.displayName,
-                      })}
-                      title={t('shell.deleteProjectConversations', {
-                        project: project.displayName,
-                      })}
-                      icon={<TrashIcon size={13} />}
-                      onClick={() => onDeleteProjectConversations(project)}
-                    />
-                    <IconButton
-                      disabled={disabled}
-                      size="xs"
-                      label={t('shell.removeProject', { project: project.displayName })}
-                      title={t('shell.removeProject', { project: project.displayName })}
-                      icon={<RemoveIcon size={13} />}
-                      onClick={() => onRemoveProject(project)}
-                    />
                   </div>
                 }
               />
@@ -2460,13 +2465,15 @@ function ConversationNavigationRow({
               <ConversationAttentionStatus attention={conversation.attention} />
             ) : null}
           </span>
-          <IconButton
-            disabled={disabled}
-            size="xs"
-            label={t('shell.deleteConversation', { conversation: conversation.title })}
-            icon={<TrashIcon size={13} />}
-            onClick={() => onDelete(conversation)}
-          />
+          <span className="primary-navigation-row-actions">
+            <IconButton
+              disabled={disabled}
+              size="xs"
+              label={t('shell.deleteConversation', { conversation: conversation.title })}
+              icon={<TrashIcon size={13} />}
+              onClick={() => onDelete(conversation)}
+            />
+          </span>
         </div>
       }
     />
@@ -2482,12 +2489,29 @@ function ConversationAttentionStatus({
   const label = formatAttention(attention, t);
   return (
     <Tooltip content={label} side="right">
-      <span className={`home-conversation-status is-${attention}`} role="status" title={label}>
-        <span className={`home-conversation-attention is-${attention}`} />
-        <span className="home-conversation-status__label">{label}</span>
+      <span
+        className={`home-conversation-status is-${attention}`}
+        role="status"
+        title={label}
+        aria-label={label}
+      >
+        {conversationAttentionIcon(attention)}
       </span>
     </Tooltip>
   );
+}
+
+function conversationAttentionIcon(
+  attention: Exclude<DesktopAgentHomeConversationSummary['attention'], 'none'>,
+): JSX.Element {
+  switch (attention) {
+    case 'running':
+      return <LoadingIcon size={12} />;
+    case 'needs-input':
+      return <WarningIcon size={12} />;
+    case 'needs-review':
+      return <ClockIcon size={12} />;
+  }
 }
 
 function createProjectNavigationMenuItems(input: {
@@ -2625,7 +2649,6 @@ function NavigationUnavailableStatus({ message }: { readonly message: string }):
         aria-label={`${t('home.unavailable')}: ${message}`}
       >
         <WarningIcon size={12} />
-        <span>{t('home.unavailable')}</span>
       </span>
     </Tooltip>
   );

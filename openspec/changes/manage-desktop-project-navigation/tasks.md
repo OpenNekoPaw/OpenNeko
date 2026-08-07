@@ -14,3 +14,9 @@
 - [x] 3.1 Run focused Desktop Renderer/UI tests, affected typechecks, lint/format, strict OpenSpec validation, dependency/legacy/unused gates, and record any residual risk.
 - [x] 3.2 Validate normal click, right-click menu actions, unavailable items, background running status, narrow layout, and dark/light presentation in the real Electron Desktop without using the user database for fixture-driven checks.
 - [x] 3.3 Complete the Neko quality review, confirm no internal versioning/migration/fallback path was added, and commit the implementation separately from unrelated user changes.
+
+## 4. Compact Sidebar Markers And Actions
+
+- [x] 4.1 Update Renderer and CSS regression tests to require icon-only unavailable/execution states and hover/focus-revealed Project and Conversation actions.
+- [x] 4.2 Replace inline marker labels with accessible icons and compose the existing Project and Conversation buttons into a stable trailing hover/focus action layer.
+- [x] 4.3 Re-run focused quality gates and validate default, hover, keyboard-focus, unavailable, running, narrow and dark/light states in isolated Electron Desktop evidence.

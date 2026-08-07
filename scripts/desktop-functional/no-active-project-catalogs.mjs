@@ -190,10 +190,10 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
           .some((element) => element.textContent?.trim() === ${JSON.stringify(CONVERSATION_TITLE)}),
         groupDiagnostic:
           heading?.querySelector(':scope > .primary-navigation-state .primary-navigation-unavailable')
-            ?.textContent?.trim() ?? '',
+            ?.getAttribute('aria-label') ?? '',
         itemDiagnostic:
           row?.querySelector(':scope > .primary-navigation-state .primary-navigation-unavailable')
-            ?.textContent?.trim() ?? '',
+            ?.getAttribute('aria-label') ?? '',
         rawWorkspaceFieldVisible: group?.textContent?.includes('workspaceId') === true,
         separateDiagnosticVisible:
           group?.querySelector('.primary-conversation-group__diagnostic') !== null,

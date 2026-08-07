@@ -7,7 +7,8 @@ Desktop PrimarySidebar 已能按项目展示会话，但项目与会话操作依
 - 为 PrimarySidebar 的项目组与会话条目增加复用 `@neko/ui` primitive 的右键菜单，并保留键盘可达的条目语义。
 - 项目菜单集中提供打开项目、新建项目会话、进入项目管理、删除该项目工作区会话和移除项目；不可用项目只允许安全的管理与清理操作。
 - 会话菜单提供打开和删除；不可用会话继续禁止打开，但允许显式删除。
-- 将 Agent Home 已投影的 `running`、`needs-input`、`needs-review` 状态显示为条目右侧的可读状态，不新增持久字段、数据库迁移或 Renderer 推断。
+- 将 Agent Home 已投影的 `running`、`needs-input`、`needs-review` 状态显示为条目右侧的紧凑图标，并通过 Tooltip 与可访问名称保留完整语义。
+- 不可用状态仅显示警告图标；项目与会话的行内操作默认收起，在条目悬停或键盘聚焦时显示，右键菜单保持完整操作入口。
 - 保持 Project、Conversation、Scene 和 Agent runtime 的现有 owner 与 typed port，不新增 IPC 成功路径、兼容分支或 fallback。
 
 ## Capabilities
@@ -23,6 +24,6 @@ Desktop PrimarySidebar 已能按项目展示会话，但项目与会话操作依
 ## Impact
 
 - `apps/neko-desktop/src/renderer/DesktopShell.tsx`：Desktop 产品 Shell 组合现有 project/conversation actions、Scene intent、Agent Home projection 与共享 ContextMenu；仅拥有窗口级 presentation 和交互 wiring。
-- `apps/neko-desktop/src/renderer/styles.css` 与 i18n：增加紧凑状态标签和菜单文案，不建立 package-local design system。
+- `apps/neko-desktop/src/renderer/styles.css` 与 i18n：组合紧凑状态图标、hover/focus 操作区和菜单文案，不建立 package-local design system。
 - `apps/neko-desktop/src/renderer/DesktopApplication.test.tsx`、样式测试与真实 Electron 验收：覆盖右键操作、禁用态、执行状态与相邻导航行为。
 - `@neko/host`、`@neko/agent-contracts`、preload/Main IPC、SQLite 和用户项目数据不变；本次只消费其现有公开契约。

@@ -30,25 +30,36 @@ describe('Desktop renderer styles', () => {
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
   });
 
-  it('reserves stable Project-group columns for navigation and independent cleanup actions', () => {
+  it('reserves stable Project-group columns while actions use the overlay track', () => {
     const projectGroupRule = styles.match(
       /\.primary-conversation-group__header\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
 
     expect(projectGroupRule?.groups?.body).toMatch(
-      /grid-template-columns\s*:\s*24px minmax\(0, 1fr\) auto minmax\(24px, auto\) 24px 24px/u,
+      /grid-template-columns\s*:\s*24px minmax\(0, 1fr\) auto minmax\(24px, auto\)/u,
     );
   });
 
-  it('bounds readable Conversation execution status in the trailing row track', () => {
+  it('uses icon-only status markers and reveals stable row actions on hover or focus', () => {
     const statusRule = styles.match(/\.home-conversation-status\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const unavailableRule = styles.match(
+      /\.primary-navigation-unavailable\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const actionsRule = styles.match(/\.primary-navigation-row-actions\s*\{(?<body>[\s\S]*?)\n\}/u);
 
     expect(statusRule?.groups?.body).toMatch(/display\s*:\s*inline-flex/u);
-    expect(statusRule?.groups?.body).toMatch(/max-width\s*:\s*76px/u);
-    expect(statusRule?.groups?.body).toMatch(/white-space\s*:\s*nowrap/u);
+    expect(statusRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(statusRule?.groups?.body).toMatch(/justify-content\s*:\s*center/u);
+    expect(unavailableRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(unavailableRule?.groups?.body).toMatch(/justify-content\s*:\s*center/u);
+    expect(actionsRule?.groups?.body).toMatch(/position\s*:\s*absolute/u);
+    expect(actionsRule?.groups?.body).toMatch(/opacity\s*:\s*0/u);
+    expect(actionsRule?.groups?.body).toMatch(/pointer-events\s*:\s*none/u);
     expect(styles).toMatch(
-      /\.home-conversation-status__label\s*\{[\s\S]*?text-overflow\s*:\s*ellipsis/u,
+      /\.primary-recent-project-row:is\(\s*:hover,\s*:focus-within\s*\)\s*>\s*\.primary-navigation-row-actions\s*\{[\s\S]*?opacity\s*:\s*1/u,
     );
+    expect(styles).not.toContain('.home-conversation-status__label');
+    expect(styles).not.toContain('.primary-navigation-unavailable > span');
   });
 
   it('centers a bounded Settings control column without centering its text', () => {

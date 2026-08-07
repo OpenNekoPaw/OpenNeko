@@ -11,7 +11,8 @@ PrimarySidebar 已消费 `@neko/host/desktop-shell-contract` 生成的 owner-qua
 - 项目组和会话条目使用同一个共享 ContextMenu 交互模式，并复用现有 command handler。
 - 项目菜单集中呈现打开、新建会话、项目管理、会话清理与项目移除。
 - 会话菜单呈现精确恢复与删除，并保持不可用记录可清理但不可打开。
-- 把实时 `running`、`needs-input`、`needs-review` 显示为条目右侧可读、可访问的状态标签。
+- 把实时 `running`、`needs-input`、`needs-review` 显示为条目右侧紧凑、可访问的状态图标。
+- 不可用状态只保留警告图标；行内项目与会话操作仅在 hover/focus 时显示，降低常驻视觉噪音。
 - 保持项目、会话、后台 Agent runtime 与当前 React Root 的所有权隔离。
 
 **Non-Goals:**
@@ -39,9 +40,11 @@ Owner 分工保持不变：`@neko/agent-contracts` 生产 Conversation attention
 
 ### 3. 状态只展示当前 attention
 
-Renderer 对 `attention !== none` 显示带颜色标记和本地化文本的 trailing label。`running` 表示后台 turn 正在执行，`needs-input` 和 `needs-review` 表示该会话需要用户处理。`none` 不显示标签，避免把历史 `lastActivity` 误报为当前运行状态或让密集列表充满“空闲/已完成”。
+Renderer 对 `attention !== none` 显示带语义颜色的 trailing icon。`running` 表示后台 turn 正在执行，`needs-input` 和 `needs-review` 表示该会话需要用户处理。可见行内不重复状态文本，完整本地化语义由 Tooltip、`aria-label` 和 `role=status` 保留。`none` 不显示图标，避免把历史 `lastActivity` 误报为当前运行状态。
 
 状态来自每个 Conversation identity 的 authoritative projection；active Scene 只决定选中展示，不参与状态计算。不可用 diagnostic 优先占用 trailing state 位置，避免一个失效条目同时声称可执行状态。
+
+不可用 Project、Workspace group 和 Conversation 统一只显示 `WarningIcon`，diagnostic 继续保存在 Tooltip、title 与可访问名称中。Project header 的新增会话、会话清理和移除，以及 Conversation row 的删除操作放入绝对定位的 trailing action layer；默认透明且不接收指针，row hover 或 focus-within 时显示，避免布局位移并保留键盘可达性。右键菜单仍是完整且稳定的管理入口。
 
 ### 4. 不新增命令路径
 
@@ -49,7 +52,8 @@ Renderer 对 `attention !== none` 显示带颜色标记和本地化文本的 tra
 
 ## Risks / Trade-offs
 
-- [较窄侧栏中的状态文本可能挤压标题] → trailing label 设置有界宽度和不可收缩的单行布局，项目/会话标题继续 ellipsis；在小窗口和暗色主题做真实 Electron 检查。
+- [图标语义可能不够清晰] → 每个状态图标保留本地化 Tooltip、title 和可访问名称；在小窗口和暗色主题做真实 Electron 检查。
+- [hover-only 操作可能影响键盘用户] → action layer 保留正常 Tab 顺序，并在 `focus-within` 时显示；右键菜单提供同一 canonical action。
 - [右键菜单可能与嵌套 button 事件冲突] → 使用 Radix `asChild` 的现有共享 primitive，并测试普通点击、右键选择和 disabled primary action互不影响。
 - [“项目管理”不能自动聚焦某一行] → 当前 Project Management Scene 是完整 catalog，菜单明确命名为通用项目管理入口；不为单一入口扩大 Scene contract。
 - [运行完成后状态标签消失可能被误解] → 本变更只声明当前执行/attention 状态；完整历史终态继续由 conversation transcript 拥有。

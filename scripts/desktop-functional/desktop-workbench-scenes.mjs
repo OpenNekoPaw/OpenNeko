@@ -600,7 +600,17 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
     }
     return prepared;
   },
-  async run({ cdp, checkpoint, click, evaluate, prepared, pressKey, screenshot, waitForSelector }) {
+  async run({
+    cdp,
+    checkpoint,
+    click,
+    evaluate,
+    hover,
+    prepared,
+    pressKey,
+    screenshot,
+    waitForSelector,
+  }) {
     await resizeWindow(evaluate, 1200, 800);
     await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
     const cancellation = await assertFixtureWorkspaceCancellation(evaluate);
@@ -624,6 +634,7 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
         conversationId: PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID,
       },
       evaluate,
+      hover,
       pressKey,
       retention: {
         ...retentionActivation,
@@ -679,7 +690,9 @@ export const desktopConversationNavigationScenario = Object.freeze({
         return {
           visible: status instanceof HTMLElement && rectangle !== undefined &&
             rectangle.width > 0 && rectangle.height > 0,
-          label: status?.textContent?.trim() ?? '',
+          label: status?.getAttribute('aria-label') ?? '',
+          inlineText: status?.textContent?.trim() ?? '',
+          iconVisible: status?.querySelector('svg') instanceof SVGElement,
           conversationTitle: row?.querySelector('.home-conversation-link')?.textContent?.trim() ?? '',
           active: row?.getAttribute('data-active'),
         };
@@ -687,6 +700,8 @@ export const desktopConversationNavigationScenario = Object.freeze({
       if (
         !runningStatus.visible ||
         !['Running', '运行中'].includes(runningStatus.label) ||
+        runningStatus.inlineText !== '' ||
+        !runningStatus.iconVisible ||
         runningStatus.conversationTitle.length === 0
       ) {
         throw new Error(
@@ -868,6 +883,7 @@ async function exerciseProjectConversationGroups({
   cleanup,
   click,
   evaluate,
+  hover,
   pressKey,
   retention,
   screenshot,
@@ -912,9 +928,13 @@ async function exerciseProjectConversationGroups({
     const collapse = header?.querySelector('.primary-conversation-group__collapse');
     const open = header?.querySelector('.primary-conversation-group__project-link');
     const count = header?.querySelector('.primary-conversation-group__count');
-    const create = header?.querySelector('.primary-navigation-state button');
-    const cleanupButton = header?.querySelector(':scope > button:nth-last-child(2)');
-    const removalButton = header?.querySelector(':scope > button:last-child');
+    const actions = header?.querySelector(':scope > .primary-navigation-row-actions');
+    const create = actions?.querySelector('button:nth-child(1)');
+    const cleanupButton = actions?.querySelector('button:nth-child(2)');
+    const removalButton = actions?.querySelector('button:nth-child(3)');
+    const conversationActions = group?.querySelector(
+      '.primary-recent-conversation-row > .primary-navigation-row-actions',
+    );
     const projectIdentityIcon = header?.querySelector(
       '.primary-conversation-group__identity-icon.is-project',
     );
@@ -924,10 +944,7 @@ async function exerciseProjectConversationGroups({
     const conversationStatus = group?.querySelector(
       '.primary-recent-conversation-row > .primary-navigation-state .primary-navigation-unavailable',
     );
-    const openRect = open?.getBoundingClientRect();
-    const stateRect = create?.getBoundingClientRect();
-    const cleanupRect = cleanupButton?.getBoundingClientRect();
-    const removalRect = removalButton?.getBoundingClientRect();
+    const actionsRect = actions?.getBoundingClientRect();
     const headerRect = header?.getBoundingClientRect();
     return {
       conversationId: groupProjection?.conversations[0]?.navigation.conversationId,
@@ -938,6 +955,11 @@ async function exerciseProjectConversationGroups({
       createEnabled: create instanceof HTMLButtonElement && !create.disabled,
       cleanupEnabled: cleanupButton instanceof HTMLButtonElement && !cleanupButton.disabled,
       removalEnabled: removalButton instanceof HTMLButtonElement && !removalButton.disabled,
+      projectActionCount: actions?.querySelectorAll('button').length ?? -1,
+      conversationActionCount: conversationActions?.querySelectorAll('button').length ?? -1,
+      projectActionsHidden: actions instanceof HTMLElement && getComputedStyle(actions).opacity === '0',
+      conversationActionsHidden:
+        conversationActions instanceof HTMLElement && getComputedStyle(conversationActions).opacity === '0',
       projectIdentityIcon:
         projectIdentityIcon instanceof SVGElement &&
         projectIdentityIcon.getAttribute('width') === '15' &&
@@ -948,16 +970,11 @@ async function exerciseProjectConversationGroups({
         conversationIdentityIcon.getAttribute('height') === '13',
       conversationUnavailableTrailing: conversationStatus instanceof HTMLElement,
       countText: count?.textContent?.trim() ?? '',
-      trailingTrackDoesNotOverlap:
-        openRect !== undefined &&
-        stateRect !== undefined &&
-        cleanupRect !== undefined &&
-        removalRect !== undefined &&
+      actionLayerWithinRow:
+        actionsRect !== undefined &&
         headerRect !== undefined &&
-        stateRect.left >= openRect.right &&
-        cleanupRect.left >= stateRect.right &&
-        removalRect.left >= cleanupRect.right &&
-        removalRect.right <= headerRect.right,
+        actionsRect.left >= headerRect.left &&
+        actionsRect.right <= headerRect.right,
     };
   })()`);
   if (
@@ -969,13 +986,89 @@ async function exerciseProjectConversationGroups({
     !initial.createEnabled ||
     !initial.cleanupEnabled ||
     !initial.removalEnabled ||
+    initial.projectActionCount !== 3 ||
+    initial.conversationActionCount !== 1 ||
+    !initial.projectActionsHidden ||
+    !initial.conversationActionsHidden ||
     !initial.projectIdentityIcon ||
     !initial.conversationIdentityIcon ||
     !initial.conversationUnavailableTrailing ||
     initial.countText !== '1' ||
-    !initial.trailingTrackDoesNotOverlap
+    !initial.actionLayerWithinRow
   ) {
     throw new Error(`Project sidebar controls are incorrect: ${JSON.stringify(initial)}`);
+  }
+
+  await hover(`${retentionGroupSelector} .primary-conversation-group__header`);
+  await waitForCondition(
+    evaluate,
+    `getComputedStyle(document.querySelector(${JSON.stringify(
+      `${retentionGroupSelector} .primary-conversation-group__header > .primary-navigation-row-actions`,
+    )})).opacity === '1'`,
+    'Project row actions did not appear on hover.',
+  );
+  const projectHoverActions = await inspectSidebarRowActions(
+    evaluate,
+    `${retentionGroupSelector} .primary-conversation-group__header`,
+  );
+  if (projectHoverActions.visibleActionCount !== 3 || !projectHoverActions.withinRow) {
+    throw new Error(`Project hover actions are incorrect: ${JSON.stringify(projectHoverActions)}`);
+  }
+  const projectHoverScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-project-actions-hover',
+  );
+
+  const retentionConversationSelector = `${retentionGroupSelector} .primary-recent-conversation-row`;
+  await hover(retentionConversationSelector);
+  await waitForCondition(
+    evaluate,
+    `getComputedStyle(document.querySelector(${JSON.stringify(
+      `${retentionConversationSelector} > .primary-navigation-row-actions`,
+    )})).opacity === '1'`,
+    'Conversation row actions did not appear on hover.',
+  );
+  const conversationHoverActions = await inspectSidebarRowActions(
+    evaluate,
+    retentionConversationSelector,
+  );
+  if (conversationHoverActions.visibleActionCount !== 1 || !conversationHoverActions.withinRow) {
+    throw new Error(
+      `Conversation hover actions are incorrect: ${JSON.stringify(conversationHoverActions)}`,
+    );
+  }
+  const conversationHoverScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-conversation-actions-hover',
+  );
+
+  await evaluate(`(() => {
+    const link = document.querySelector(${JSON.stringify(
+      `${retentionGroupSelector} .primary-conversation-group__project-link`,
+    )});
+    if (!(link instanceof HTMLButtonElement)) {
+      throw new Error('Project link is unavailable for keyboard action validation.');
+    }
+    link.focus();
+  })()`);
+  await pressKey('Tab');
+  await waitForCondition(
+    evaluate,
+    `getComputedStyle(document.querySelector(${JSON.stringify(
+      `${retentionGroupSelector} .primary-conversation-group__header > .primary-navigation-row-actions`,
+    )})).opacity === '1'`,
+    'Project row actions did not appear for keyboard focus.',
+  );
+  const keyboardActions = await inspectSidebarRowActions(
+    evaluate,
+    `${retentionGroupSelector} .primary-conversation-group__header`,
+  );
+  if (
+    keyboardActions.visibleActionCount !== 3 ||
+    !keyboardActions.withinRow ||
+    keyboardActions.focusedAction.length === 0
+  ) {
+    throw new Error(`Project keyboard actions are incorrect: ${JSON.stringify(keyboardActions)}`);
   }
 
   const projectContextMenu = await openSidebarContextMenu({
@@ -1047,7 +1140,7 @@ async function exerciseProjectConversationGroups({
     ];
     return groups.map((group) => {
       const header = group?.querySelector('.primary-conversation-group__header');
-      const buttons = [...(header?.querySelectorAll(':scope > button') ?? [])];
+      const buttons = [...(header?.querySelectorAll('button') ?? [])];
       const headerRect = header?.getBoundingClientRect();
       return {
         buttonCount: buttons.length,
@@ -1066,7 +1159,7 @@ async function exerciseProjectConversationGroups({
   if (
     compactLayout.length !== 2 ||
     compactLayout.some(
-      (group) => group.buttonCount !== 4 || group.identityIconCount !== 2 || !group.fits,
+      (group) => group.buttonCount !== 5 || group.identityIconCount !== 2 || !group.fits,
     )
   ) {
     throw new Error(`Compact Project sidebar controls overflow: ${JSON.stringify(compactLayout)}`);
@@ -1129,7 +1222,7 @@ async function exerciseProjectConversationGroups({
 
   await click(`${retentionGroupSelector} .primary-conversation-group__project-link`);
   await waitForProjectDraft(evaluate, retention.projectId, retention.workspaceId, 'Project open');
-  await click(`${retentionGroupSelector} .primary-navigation-state button`);
+  await click(`${retentionGroupSelector} .primary-navigation-row-actions button:first-child`);
   await waitForProjectDraft(
     evaluate,
     retention.projectId,
@@ -1140,7 +1233,7 @@ async function exerciseProjectConversationGroups({
     evaluate,
     `(() => {
       const removal = document.querySelector(${JSON.stringify(
-        `${retentionGroupSelector} .primary-conversation-group__header > button:last-child`,
+        `${retentionGroupSelector} .primary-navigation-row-actions button:last-child`,
       )});
       return removal instanceof HTMLButtonElement && !removal.disabled;
     })()`,
@@ -1151,7 +1244,7 @@ async function exerciseProjectConversationGroups({
     globalThis.confirm = () => false;
     const group = document.querySelector(${JSON.stringify(retentionGroupSelector)});
     const removal = group?.querySelector(
-      '.primary-conversation-group__header > button:last-child',
+      '.primary-navigation-row-actions button:last-child',
     );
     if (!(removal instanceof HTMLButtonElement) || removal.disabled) {
       throw new Error('Project sidebar removal control is unavailable.');
@@ -1176,7 +1269,7 @@ async function exerciseProjectConversationGroups({
   await evaluate(`(() => {
     globalThis.confirm = () => true;
     const removal = document.querySelector(${JSON.stringify(
-      `${retentionGroupSelector} .primary-conversation-group__header > button:last-child`,
+      `${retentionGroupSelector} .primary-navigation-row-actions button:last-child`,
     )});
     if (!(removal instanceof HTMLButtonElement) || removal.disabled) {
       throw new Error('Project sidebar removal control is unavailable.');
@@ -1233,7 +1326,7 @@ async function exerciseProjectConversationGroups({
   const cleanupCancellation = await evaluate(`(async () => {
     globalThis.confirm = () => false;
     const cleanupButton = document.querySelector(${JSON.stringify(
-      `${cleanupGroupSelector} .primary-conversation-group__header > button:nth-last-child(2)`,
+      `${cleanupGroupSelector} .primary-navigation-row-actions button:nth-child(2)`,
     )});
     if (!(cleanupButton instanceof HTMLButtonElement) || cleanupButton.disabled) {
       throw new Error('Project conversation cleanup control is unavailable.');
@@ -1258,7 +1351,7 @@ async function exerciseProjectConversationGroups({
   await evaluate(`(() => {
     globalThis.confirm = () => true;
     const cleanupButton = document.querySelector(${JSON.stringify(
-      `${cleanupGroupSelector} .primary-conversation-group__header > button:nth-last-child(2)`,
+      `${cleanupGroupSelector} .primary-navigation-row-actions button:nth-child(2)`,
     )});
     if (!(cleanupButton instanceof HTMLButtonElement) || cleanupButton.disabled) {
       throw new Error('Project conversation cleanup control is unavailable.');
@@ -1325,14 +1418,19 @@ async function exerciseProjectConversationGroups({
     cleaned,
     cleanupCancellation,
     compactLayout,
+    conversationHoverActions,
     darkTheme,
     initial,
+    keyboardActions,
+    projectHoverActions,
     projectContextMenu,
     conversationContextMenu,
     removalCancellation,
     removed,
     screenshots: [
       desktopScreenshot,
+      projectHoverScreenshot,
+      conversationHoverScreenshot,
       projectContextMenuScreenshot,
       conversationContextMenuScreenshot,
       compactScreenshot,
@@ -1341,6 +1439,27 @@ async function exerciseProjectConversationGroups({
       cleanedScreenshot,
     ],
   };
+}
+
+async function inspectSidebarRowActions(evaluate, rowSelector) {
+  return evaluate(`(() => {
+    const row = document.querySelector(${JSON.stringify(rowSelector)});
+    const actions = row?.querySelector(':scope > .primary-navigation-row-actions');
+    const rowRect = row?.getBoundingClientRect();
+    const actionsRect = actions?.getBoundingClientRect();
+    return {
+      visibleActionCount: actions instanceof HTMLElement && getComputedStyle(actions).opacity === '1'
+        ? actions.querySelectorAll('button').length
+        : 0,
+      focusedAction:
+        document.activeElement instanceof HTMLButtonElement && actions?.contains(document.activeElement)
+          ? document.activeElement.getAttribute('aria-label') ?? ''
+          : '',
+      withinRow:
+        rowRect !== undefined && actionsRect !== undefined &&
+        actionsRect.left >= rowRect.left && actionsRect.right <= rowRect.right,
+    };
+  })()`);
 }
 
 async function openSidebarContextMenu({ cdp, evaluate, selector }) {
@@ -2126,7 +2245,7 @@ async function exerciseAssistantConversationGroup(evaluate, click, type, origina
     globalThis.confirm = () => true;
     const deleteButtons = document.querySelectorAll(
       '.primary-conversation-group[data-group-kind="assistant"] ' +
-        '.primary-recent-conversation-row > button:last-child',
+        '.primary-recent-conversation-row > .primary-navigation-row-actions button:last-child',
     );
     const deleteButton = deleteButtons[1];
     if (!(deleteButton instanceof HTMLButtonElement) || deleteButton.disabled) {
