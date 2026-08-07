@@ -92,7 +92,7 @@ export interface DesktopShellServiceOptions {
 
 export interface DesktopWorkspaceResolutionPort {
   resolve(workspacePath: string): Promise<AssetWorkspaceResolution>;
-  removeProject?(workspaceId: string): Promise<boolean>;
+  removeProjects?(workspaceIds: readonly string[]): Promise<boolean>;
   dispose(): Promise<void>;
 }
 
@@ -1108,9 +1108,9 @@ export class DesktopShellService {
     });
   }
 
-  async removeRecentProject(
+  async removeRecentProjects(
     windowId: string,
-    projectId: string,
+    projectIds: readonly string[],
     rendererSessionId: string,
   ): Promise<DesktopShellProjection> {
     return this.enqueue(async () => {
@@ -1118,35 +1118,54 @@ export class DesktopShellService {
       this.assertMutationContext(windowId, rendererSessionId);
       const state = await this.options.stateRepository.read();
       requireStoredWindow(state, windowId);
-      const storedProject = state.projects.find((project) => project.projectId === projectId);
-      const project = storedProject ?? this.retainedProjects.get(projectId);
-      if (!project) {
+      const requestedProjectIds = new Set(projectIds);
+      const storedProjectIds = new Set(
+        state.projects
+          .filter((project) => requestedProjectIds.has(project.projectId))
+          .map((project) => project.projectId),
+      );
+      if (projectIds.length === 0 || requestedProjectIds.size !== projectIds.length) {
         throw new DesktopShellContractError(
-          'desktop-shell-project-not-found',
-          `Desktop Project '${projectId}' is not present in the stable catalog.`,
+          'invalid-desktop-shell-payload',
+          'Desktop Project removal identities must be non-empty and unique.',
         );
       }
+      const projects = projectIds.map((projectId) => {
+        const storedProject = state.projects.find((project) => project.projectId === projectId);
+        const project = storedProject ?? this.retainedProjects.get(projectId);
+        if (!project) {
+          throw new DesktopShellContractError(
+            'desktop-shell-project-not-found',
+            `Desktop Project '${projectId}' is not present in the stable catalog.`,
+          );
+        }
+        return project;
+      });
       if (
-        this.options.workspaceRegistry.removeProject &&
-        !(await this.options.workspaceRegistry.removeProject(project.workspaceId))
+        this.options.workspaceRegistry.removeProjects &&
+        !(await this.options.workspaceRegistry.removeProjects(
+          projects.map((project) => project.workspaceId),
+        ))
       ) {
         throw new DesktopShellContractError(
           'desktop-shell-project-not-found',
-          `Desktop Workspace '${project.workspaceId}' is not present in the stable authority.`,
+          'One or more Desktop Workspaces are not present in the stable authority.',
         );
       }
-      this.retainedProjects.delete(projectId);
-      const windows = storedProject
-        ? state.windows.map((window) =>
-            removeProjectFromWindow(window, state, projectId, this.createIdentity),
-          )
-        : state.windows;
+      const windows = state.windows.map((window) =>
+        [...storedProjectIds].reduce(
+          (current, projectId) =>
+            removeProjectFromWindow(current, state, projectId, this.createIdentity),
+          window,
+        ),
+      );
       this.assertMutationContext(windowId, rendererSessionId);
       const committed = await this.options.stateRepository.commit({
         ...state,
-        projects: state.projects.filter((project) => project.projectId !== projectId),
+        projects: state.projects.filter((project) => !requestedProjectIds.has(project.projectId)),
         windows,
       });
+      projectIds.forEach((projectId) => this.retainedProjects.delete(projectId));
       await this.emitAll(committed);
       return this.projectWindow(committed, windowId);
     });

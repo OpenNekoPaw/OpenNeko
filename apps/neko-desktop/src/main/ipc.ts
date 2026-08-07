@@ -251,7 +251,7 @@ export function registerDesktopIpc(
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectRemoveRecent,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.removeRecentProject(requireSender(event), payload),
+      appHost.removeRecentProjects(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.conversationDelete,

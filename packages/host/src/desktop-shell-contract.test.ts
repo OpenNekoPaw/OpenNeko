@@ -6,6 +6,7 @@ import {
   createDesktopProjectRemoveRecentRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
+  parseDesktopProjectRemoveRecentRequest,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
   projectDesktopConversationNavigation,
@@ -137,13 +138,13 @@ describe('Desktop Shell contract', () => {
     expect(
       createDesktopProjectRemoveRecentRequest(
         'request-4',
-        'content:workspace-1',
+        ['content:workspace-1', 'content:workspace-2'],
         'renderer-session-1',
       ),
     ).toEqual({
       requestId: 'request-4',
       rendererSessionId: 'renderer-session-1',
-      projectId: 'content:workspace-1',
+      projectIds: ['content:workspace-1', 'content:workspace-2'],
     });
     expect(
       createDesktopConversationDeleteRequest(
@@ -162,6 +163,26 @@ describe('Desktop Shell contract', () => {
         owner: { kind: 'workspace', workspaceId: 'workspace-1' },
       },
     });
+  });
+
+  it('strictly rejects invalid and removed single-Project removal payloads', () => {
+    expect(() =>
+      parseDesktopProjectRemoveRecentRequest({
+        requestId: 'request-1',
+        rendererSessionId: 'renderer-session-1',
+        projectId: 'content:workspace-1',
+      }),
+    ).toThrowError(DesktopShellContractError);
+    expect(() =>
+      createDesktopProjectRemoveRecentRequest('request-2', [], 'renderer-session-1'),
+    ).toThrowError('At least one Desktop Project identity is required.');
+    expect(() =>
+      createDesktopProjectRemoveRecentRequest(
+        'request-3',
+        ['content:workspace-1', 'content:workspace-1'],
+        'renderer-session-1',
+      ),
+    ).toThrowError('Desktop Project identities must be unique.');
   });
 
   it('rejects an active Tab that is not in the Window projection', () => {

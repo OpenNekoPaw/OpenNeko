@@ -71,7 +71,9 @@ export interface DesktopProjectOpenRequest extends DesktopWindowMutationRequest 
   readonly projectId: string;
 }
 
-export interface DesktopProjectRemoveRecentRequest extends DesktopProjectOpenRequest {}
+export interface DesktopProjectRemoveRecentRequest extends DesktopWindowMutationRequest {
+  readonly projectIds: readonly string[];
+}
 
 export interface DesktopProjectCatalogItem {
   readonly projectId: string;
@@ -325,7 +327,7 @@ export interface OpenNekoDesktopShellBridge {
   readonly projects: {
     openContent(): Promise<DesktopOpenContentResult>;
     open(projectId: string): Promise<DesktopOpenContentResult>;
-    removeRecent(projectId: string): Promise<DesktopShellProjection>;
+    removeRecent(projectIds: readonly string[]): Promise<DesktopShellProjection>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly conversations: {
@@ -579,11 +581,12 @@ export function createDesktopProjectOpenRequest(
 
 export function createDesktopProjectRemoveRecentRequest(
   requestId: string,
-  projectId: string,
+  projectIds: readonly string[],
   rendererSessionId: string,
 ): DesktopProjectRemoveRecentRequest {
   return {
-    ...createDesktopProjectOpenRequest(requestId, projectId, rendererSessionId),
+    ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
+    projectIds: requireUniqueProjectIds(projectIds),
   };
 }
 
@@ -665,12 +668,14 @@ export function parseDesktopProjectRemoveRecentRequest(
   const record = requireRecord(value, 'Desktop Project remove-recent request must be an object.');
   requireExactKeys(
     record,
-    ['requestId', 'projectId', 'rendererSessionId'],
+    ['requestId', 'projectIds', 'rendererSessionId'],
     'Desktop Project remove-recent request',
   );
   return createDesktopProjectRemoveRecentRequest(
     parseDesktopShellRequestId(record),
-    requireNonEmptyString(record['projectId'], 'Desktop Project identity is required.'),
+    requireUniqueProjectIds(
+      requireArray(record['projectIds'], 'Desktop Project identities must be an array.'),
+    ),
     requireNonEmptyString(
       record['rendererSessionId'],
       'Desktop renderer session identity is required.',
@@ -1407,6 +1412,19 @@ function requireMatchingRequestId(value: unknown, expectedRequestId: string): st
 function requireArray(value: unknown, message: string): readonly unknown[] {
   if (!Array.isArray(value)) throw invalidPayload(message);
   return value;
+}
+
+function requireUniqueProjectIds(value: readonly unknown[]): readonly string[] {
+  if (value.length === 0) {
+    throw invalidPayload('At least one Desktop Project identity is required.');
+  }
+  const projectIds = value.map((projectId) =>
+    requireNonEmptyString(projectId, 'Desktop Project identity is required.'),
+  );
+  if (new Set(projectIds).size !== projectIds.length) {
+    throw invalidPayload('Desktop Project identities must be unique.');
+  }
+  return projectIds;
 }
 
 function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {

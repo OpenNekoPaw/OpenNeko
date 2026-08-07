@@ -984,11 +984,11 @@ const bridge: OpenNekoDesktopBridge &
       rememberShellProjection(result.projection);
       return result;
     },
-    async removeRecent(projectId) {
+    async removeRecent(projectIds) {
       const context = requireShellMutationContext();
       const request = createDesktopProjectRemoveRecentRequest(
         nextRequestId('desktop-project-remove-recent'),
-        projectId,
+        projectIds,
         context.rendererSessionId,
       );
       const response: unknown = await ipcRenderer.invoke(

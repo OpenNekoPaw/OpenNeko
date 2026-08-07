@@ -1419,6 +1419,55 @@ code {
   flex: 1;
 }
 
+.project-management-batch-toolbar {
+  display: flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 10px;
+  padding: 6px 0;
+  border-block: 1px solid var(--neko-desktop-border);
+}
+
+.project-management-batch-toolbar strong {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.project-management-batch-toolbar__spacer {
+  flex: 1;
+}
+
+.project-management-batch-toolbar button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--neko-desktop-border);
+  border-radius: 6px;
+  color: var(--neko-fg-secondary);
+  background: var(--neko-desktop-surface-raised);
+}
+
+.project-management-batch-toolbar button:last-child {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+}
+
+.project-management-batch-toolbar button:hover:not(:disabled) {
+  color: var(--neko-fg);
+  background: var(--neko-desktop-control-hover);
+}
+
+.project-management-batch-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .management-surface-row {
   display: flex;
   min-width: 0;
@@ -1454,6 +1503,12 @@ code {
   background: var(--neko-list-hoverBackground, var(--neko-desktop-control-hover));
 }
 
+.management-surface-row[data-selected='true'] {
+  border-color: color-mix(in srgb, var(--neko-accent) 55%, var(--neko-desktop-border));
+  background: color-mix(in srgb, var(--neko-accent) 9%, var(--neko-desktop-control));
+  box-shadow: inset 3px 0 0 var(--neko-accent);
+}
+
 .management-surface-row__select:disabled {
   cursor: not-allowed;
 }
@@ -1476,7 +1531,12 @@ code {
 }
 
 .management-surface-copy {
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
 }
 
 .management-surface-copy strong,
@@ -1492,17 +1552,26 @@ code {
 }
 
 .management-surface-copy small {
-  margin-top: 3px;
+  margin-top: 0;
   color: var(--neko-fg-secondary);
   font-size: 10px;
 }
 
 .management-surface-copy .management-surface-row__diagnostic {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: 4px;
   color: var(--neko-danger);
   white-space: normal;
+}
+
+.management-surface-row__diagnostic span {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .management-surface-row__diagnostic svg {
@@ -1561,6 +1630,14 @@ code {
   .management-surface-actions {
     align-items: stretch;
     flex-wrap: wrap;
+  }
+
+  .project-management-batch-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .project-management-batch-toolbar__spacer {
+    display: none;
   }
 
   .management-search-field {

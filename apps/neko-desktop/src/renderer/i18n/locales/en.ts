@@ -14,6 +14,8 @@ export const en = {
   'shell.removeRecentProject': 'Remove {project} from recent projects',
   'shell.removeRecentProjectConfirm':
     'Remove “{project}” from recent projects? Project files will not be deleted.',
+  'shell.removeRecentProjectsConfirm':
+    'Remove {count} selected projects from recent projects? Project files will not be deleted.',
   'shell.deleteConversation': 'Delete conversation {conversation}',
   'shell.deleteConversationConfirm':
     'Permanently delete the conversation “{conversation}”? This cannot be undone.',
@@ -198,6 +200,9 @@ export const en = {
   'home.projects.sort': 'Project sorting',
   'home.projects.view': 'Project view',
   'home.projects.noResults': 'No matching projects',
+  'home.projects.selectedCount': '{count} selected',
+  'home.projects.removeSelected': 'Remove selected',
+  'home.projects.clearSelection': 'Clear selection',
   'home.projects.select': 'Select a project to inspect it',
   'home.projects.updated': 'Updated',
   'home.projects.created': 'Created',

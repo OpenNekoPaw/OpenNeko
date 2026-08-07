@@ -254,7 +254,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
     await mkdir(workspacePath, { recursive: true });
     const registry: DesktopWorkspaceRegistry = {
       listProjects: async () => [],
-      removeProject: async () => false,
+      removeProjects: async () => false,
       resolve: async () => ({
         workspaceId: 'workspace-1',
         workspacePath,
@@ -820,7 +820,7 @@ async function createGlobalLibraryRuntimeFixture(
 function createGlobalLibraryShell(): DesktopShellService {
   const registry: DesktopWorkspaceRegistry = {
     listProjects: async () => [],
-    removeProject: async () => false,
+    removeProjects: async () => false,
     resolve: async (): Promise<AssetWorkspaceResolution> => {
       throw new Error('Workspace resolution is not expected by this global-library test.');
     },

@@ -104,7 +104,7 @@ interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
+  readonly onRemoveRecentProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onUpdateWorkbench: (
     workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
@@ -300,13 +300,20 @@ export function DesktopApplication(): JSX.Element {
       }
       void runMutation(() => window.openNekoDesktop.conversations.delete(conversation.navigation));
     },
-    onRemoveRecentProject: (project) => {
-      if (
-        !globalThis.confirm(t('shell.removeRecentProjectConfirm', { project: project.displayName }))
-      ) {
+    onRemoveRecentProjects: (projects) => {
+      if (projects.length === 0) {
+        throw new Error('At least one recent Project is required for removal.');
+      }
+      const confirmation =
+        projects.length === 1 && projects[0]
+          ? t('shell.removeRecentProjectConfirm', { project: projects[0].displayName })
+          : t('shell.removeRecentProjectsConfirm', { count: projects.length });
+      if (!globalThis.confirm(confirmation)) {
         return;
       }
-      void runMutation(() => window.openNekoDesktop.projects.removeRecent(project.projectId));
+      void runMutation(() =>
+        window.openNekoDesktop.projects.removeRecent(projects.map((project) => project.projectId)),
+      );
     },
     onUpdateWorkbench: (workbenchInstanceId, workbench) => {
       if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
@@ -402,7 +409,7 @@ export function DesktopShellView({
     onSelectProject: () => undefined,
     onOpenConversation: () => undefined,
     onDeleteConversation: () => undefined,
-    onRemoveRecentProject: () => undefined,
+    onRemoveRecentProjects: () => undefined,
     onUpdateWorkbench: () => undefined,
     onUpdateApplicationSidebar: () => undefined,
     onTransitionScene: () => undefined,
@@ -630,7 +637,7 @@ function DesktopSceneWorkbench({
             onNavigate={(section) => actions.onTransitionScene(sceneIntentForSection(section))}
             onOpenConversation={actions.onOpenConversation}
             onOpenRecent={actions.onSelectProject}
-            onRemoveRecentProject={actions.onRemoveRecentProject}
+            onRemoveRecentProject={(project) => actions.onRemoveRecentProjects([project])}
             onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
             onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
             projection={projection}
@@ -784,7 +791,6 @@ function DesktopWorkbenchRuntimePortals({
     viewMode: resourceBrowserView,
   });
   const extensionManagement = useDesktopExtensionManagementScene(scene);
-  const projectManagement = useDesktopProjectManagementScene(scene, projection.catalog.projects);
   const workspaceProject = resolveWorkspaceSceneProject(projection, composition);
   const workspaceSlots = useContentProjectWorkbenchSlots({
     actions,
@@ -839,10 +845,8 @@ function DesktopWorkbenchRuntimePortals({
       <DesktopProjectCatalogSurface
         interactive={interactive}
         onOpen={actions.onSelectProject}
-        onRemove={actions.onRemoveRecentProject}
-        onSelect={projectManagement.select}
+        onRemove={actions.onRemoveRecentProjects}
         projects={projection.catalog.projects}
-        selectedProjectId={projectManagement.project?.projectId}
       />
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
       workspaceSlots.main
@@ -1253,32 +1257,6 @@ function useDisposeRuntime<T extends { dispose(): void }>(runtime: T | undefined
       });
     };
   }, [runtime]);
-}
-
-function useDesktopProjectManagementScene(
-  scene: DesktopWorkbenchSceneProjection,
-  projects: readonly DesktopProjectCatalogItem[],
-): {
-  readonly project?: DesktopProjectCatalogItem;
-  readonly select: (projectId: string) => void;
-} {
-  const [selectedProjectId, setSelectedProjectId] = useState<string>();
-  const project =
-    scene.context.kind === 'project-management'
-      ? projects.find((candidate) => candidate.projectId === selectedProjectId)
-      : undefined;
-  return {
-    ...(project ? { project } : {}),
-    select: (projectId) => {
-      if (scene.context.kind !== 'project-management') {
-        throw new Error('Project Management Scene is unavailable.');
-      }
-      if (!projects.some((candidate) => candidate.projectId === projectId)) {
-        throw new Error(`Project Management item '${projectId}' is unavailable.`);
-      }
-      setSelectedProjectId(projectId);
-    },
-  };
 }
 
 type ContentProjectWorkbenchSlots = Pick<

@@ -26,7 +26,7 @@ describe('Desktop workspace registry', () => {
     const operations: string[] = [];
     const registry: DesktopWorkspaceRegistry = {
       listProjects: vi.fn(async () => []),
-      removeProject: vi.fn(async () => false),
+      removeProjects: vi.fn(async () => false),
       resolve: vi.fn(async () => {
         operations.push('resolve');
         return workspace;
@@ -102,7 +102,31 @@ describe('Desktop workspace registry', () => {
         unavailable: expect.objectContaining({ fieldNames: ['currentLocator'] }),
       }),
     ]);
-    await expect(registry.removeProject(workspace.workspaceId)).resolves.toBe(true);
+    await expect(registry.removeProjects([workspace.workspaceId])).resolves.toBe(true);
+    await expect(registry.listProjects()).resolves.toEqual([]);
+  });
+
+  it('removes a validated Workspace batch in one metadata transaction', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'neko-desktop-workspace-batch-'));
+    const homedir = path.join(root, 'home');
+    const firstPath = path.join(root, 'first');
+    const secondPath = path.join(root, 'second');
+    await Promise.all(
+      [homedir, firstPath, secondPath].map((directory) => mkdir(directory, { recursive: true })),
+    );
+    const registry = await createDesktopWorkspaceRegistry({ homedir });
+    cleanups.push(async () => {
+      await registry.dispose();
+      await rm(root, { recursive: true, force: true });
+    });
+    const [first, second] = await Promise.all([
+      registry.resolve(firstPath),
+      registry.resolve(secondPath),
+    ]);
+
+    await expect(registry.removeProjects([first.workspaceId, second.workspaceId])).resolves.toBe(
+      true,
+    );
     await expect(registry.listProjects()).resolves.toEqual([]);
   });
 });

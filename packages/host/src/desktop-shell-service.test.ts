@@ -111,12 +111,51 @@ describe('DesktopShellService', () => {
     expect(fixture.registry.restore).toHaveBeenCalledWith(retainedProject.workspaceId);
 
     projection = await fixture.service.getProjection(windowId);
-    const removed = await fixture.service.removeRecentProject(
+    const removed = await fixture.service.removeRecentProjects(
       windowId,
-      retainedProject.projectId,
+      [retainedProject.projectId],
       projection.rendererSessionId,
     );
-    expect(fixture.registry.removeProject).toHaveBeenCalledWith(retainedProject.workspaceId);
+    expect(fixture.registry.removeProjects).toHaveBeenCalledWith([retainedProject.workspaceId]);
+    expect(removed.catalog.projects).toEqual([]);
+  });
+
+  it('removes a validated Project batch through one registry call and one state commit', async () => {
+    const projects: readonly DesktopProjectCatalogItem[] = [
+      {
+        projectId: 'content:workspace-1',
+        workspaceId: 'workspace-1',
+        profile: 'content',
+        displayName: 'First',
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-06T00:00:00.000Z',
+      },
+      {
+        projectId: 'content:workspace-2',
+        workspaceId: 'workspace-2',
+        profile: 'content',
+        displayName: 'Second',
+        createdAt: '2026-08-02T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+      },
+    ];
+    const repository = createInMemoryDesktopShellStateRepository();
+    const commit = vi.spyOn(repository, 'commit');
+    const fixture = createFixture(repository, 'home', undefined, true, [], projects);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+    commit.mockClear();
+
+    const removed = await fixture.service.removeRecentProjects(
+      windowId,
+      projects.map((project) => project.projectId),
+      projection.rendererSessionId,
+    );
+
+    expect(fixture.registry.removeProjects).toHaveBeenCalledOnce();
+    expect(fixture.registry.removeProjects).toHaveBeenCalledWith(['workspace-1', 'workspace-2']);
+    expect(commit).toHaveBeenCalledOnce();
     expect(removed.catalog.projects).toEqual([]);
   });
 
@@ -1733,7 +1772,7 @@ describe('DesktopShellService', () => {
     expect(secondEvents).toHaveBeenCalled();
   });
 
-  it('removes one recent Project and all of its cross-window Tabs without deleting workspace files', async () => {
+  it('removes recent Projects and all of their cross-window Tabs without deleting workspace files', async () => {
     const fixture = createFixture();
     const firstWindow = await fixture.service.claimWindowId();
     const secondWindow = await fixture.service.claimWindowId();
@@ -1750,9 +1789,9 @@ describe('DesktopShellService', () => {
     await openContent(fixture, secondWindow, '/workspace/demo', secondInitial.rendererSessionId);
     const project = firstOpened.projection.catalog.projects[0]!;
 
-    const removed = await fixture.service.removeRecentProject(
+    const removed = await fixture.service.removeRecentProjects(
       firstWindow,
-      project.projectId,
+      [project.projectId],
       firstOpened.projection.rendererSessionId,
     );
     const secondProjection = await fixture.service.getProjection(secondWindow);
@@ -1811,9 +1850,9 @@ describe('DesktopShellService', () => {
     );
     const home = await first.service.activateHome(windowId, withCanvas.rendererSessionId);
 
-    const removed = await first.service.removeRecentProject(
+    const removed = await first.service.removeRecentProjects(
       windowId,
-      project.projectId,
+      [project.projectId],
       home.rendererSessionId,
     );
 
@@ -1851,14 +1890,15 @@ describe('DesktopShellService', () => {
     const project = opened.projection.catalog.projects[0]!;
 
     await expect(
-      fixture.service.removeRecentProject(
+      fixture.service.removeRecentProjects(
         windowId,
-        `${project.projectId}:missing`,
+        [project.projectId, `${project.projectId}:missing`],
         opened.projection.rendererSessionId,
       ),
     ).rejects.toMatchObject({ code: 'desktop-shell-project-not-found' });
 
     expect(await fixture.service.getProjection(windowId)).toEqual(opened.projection);
+    expect(fixture.registry.removeProjects).not.toHaveBeenCalled();
   });
 
   it('rejects closing an unavailable Tab identity without changing state', async () => {
@@ -2410,11 +2450,11 @@ function createFixture(
   const registry: DesktopWorkspaceResolutionPort & {
     readonly resolve: ReturnType<typeof vi.fn>;
     readonly restore: typeof restoreWorkspace;
-    readonly removeProject: ReturnType<typeof vi.fn>;
+    readonly removeProjects: ReturnType<typeof vi.fn>;
   } = {
     resolve: vi.fn(async () => resolution),
     restore: restoreWorkspace,
-    removeProject: vi.fn(async () => true),
+    removeProjects: vi.fn(async () => true),
     dispose: vi.fn(async () => undefined),
   };
   const authority =

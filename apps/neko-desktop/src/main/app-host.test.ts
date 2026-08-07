@@ -19,6 +19,7 @@ import { type AgentHomeNavigationIdentity } from '@neko/agent-contracts';
 import {
   createDesktopConversationDeleteRequest,
   createDesktopProjectOpenRequest,
+  createDesktopProjectRemoveRecentRequest,
   createDesktopWindowMutationRequest,
   resolveActiveDesktopWindowWorkbench,
   type DesktopShellProjection,
@@ -1517,6 +1518,43 @@ describe('DesktopAppHost', () => {
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledTimes(2);
   });
 
+  it('strictly delegates recent Project removal through the package-owned batch contract', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    fixture.registry.removeProjects.mockResolvedValue(true);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest('open-1', fixture.projection.rendererSessionId),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+
+    await expect(
+      fixture.appHost.removeRecentProjects(fixture.sender, {
+        requestId: 'removed-single-payload',
+        rendererSessionId: opened.projection.rendererSessionId,
+        projectId: project.projectId,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-desktop-shell-payload' });
+    expect(fixture.registry.removeProjects).not.toHaveBeenCalled();
+
+    const removed = await fixture.appHost.removeRecentProjects(
+      fixture.sender,
+      createDesktopProjectRemoveRecentRequest(
+        'remove-batch',
+        [project.projectId],
+        opened.projection.rendererSessionId,
+      ),
+    );
+
+    expect(fixture.registry.removeProjects).toHaveBeenCalledWith([project.workspaceId]);
+    expect(removed).toMatchObject({
+      requestId: 'remove-batch',
+      projection: { catalog: { projects: [] }, window: { tabs: [] } },
+    });
+  });
+
   it('deletes a recent conversation through the exact Agent workspace authority', async () => {
     const fixture = await createShellAppHost();
     const resolution = createWorkspaceResolution();
@@ -2193,15 +2231,17 @@ function createShellFixture(applicationInstanceId: string): {
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly registry: DesktopWorkspaceRegistry & {
     readonly resolve: ReturnType<typeof vi.fn>;
+    readonly removeProjects: ReturnType<typeof vi.fn>;
   };
 } {
   let identity = 0;
   const repository = createInMemoryDesktopShellStateRepository();
   const registry: DesktopWorkspaceRegistry & {
     readonly resolve: ReturnType<typeof vi.fn>;
+    readonly removeProjects: ReturnType<typeof vi.fn>;
   } = {
     listProjects: vi.fn(async () => []),
-    removeProject: vi.fn(async () => false),
+    removeProjects: vi.fn(async () => false),
     resolve: vi.fn(async () => {
       throw new Error('Workspace resolution is not expected by this AppHost test.');
     }),

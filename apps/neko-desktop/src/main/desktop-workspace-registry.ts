@@ -27,7 +27,7 @@ export interface DesktopWorkspaceRegistry {
   listProjects(
     excludedWorkspaceIds?: readonly string[],
   ): Promise<readonly DesktopProjectCatalogItem[]>;
-  removeProject(workspaceId: string): Promise<boolean>;
+  removeProjects(workspaceIds: readonly string[]): Promise<boolean>;
   resolve(workspacePath: string): Promise<AssetWorkspaceResolution>;
   restore?(workspaceId: string): Promise<AssetWorkspaceResolution>;
   dispose(): Promise<void>;
@@ -179,9 +179,28 @@ class NodeDesktopWorkspaceRegistry implements DesktopWorkspaceRegistry {
     };
   }
 
-  async removeProject(workspaceId: string): Promise<boolean> {
+  async removeProjects(workspaceIds: readonly string[]): Promise<boolean> {
     this.requireActive();
-    return this.metadataStore.repositories.workspaces.remove(workspaceId);
+    return this.metadataStore.transaction(
+      {
+        mode: 'state-write',
+        ownership: 'state',
+        operation: 'remove-desktop-workspace-projects',
+      },
+      async ({ repositories }) => {
+        const records = await Promise.all(
+          workspaceIds.map((workspaceId) => repositories.workspaces.get(workspaceId)),
+        );
+        if (records.some((record) => record === null)) return false;
+        const removed = await Promise.all(
+          workspaceIds.map((workspaceId) => repositories.workspaces.remove(workspaceId)),
+        );
+        if (!removed.every(Boolean)) {
+          throw new Error('Validated Desktop Workspace batch removal did not remove every record.');
+        }
+        return true;
+      },
+    );
   }
 
   async restore(workspaceId: string): Promise<AssetWorkspaceResolution> {

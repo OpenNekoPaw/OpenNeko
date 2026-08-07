@@ -902,7 +902,7 @@ describe('DesktopApplication scene lifecycle', () => {
     }
     await act(async () => removeButton.click());
     await waitFor(() => removeRecentProject.mock.calls.length === 1);
-    expect(removeRecentProject).toHaveBeenCalledWith(project.projectId);
+    expect(removeRecentProject).toHaveBeenCalledWith([project.projectId]);
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
     expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
@@ -1024,8 +1024,68 @@ describe('DesktopApplication scene lifecycle', () => {
     await waitFor(() => removeRecentProject.mock.calls.length === 1);
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(removeRecentProject).toHaveBeenCalledWith(project.projectId);
+    expect(removeRecentProject).toHaveBeenCalledWith([project.projectId]);
     expect(deleteConversation).toHaveBeenCalledWith(unavailableConversation.navigation);
+    await act(async () => root.unmount());
+  });
+
+  it('confirms and delegates the complete Project Management selection as one batch', async () => {
+    const base = createProjection();
+    const projects = [
+      {
+        projectId: 'content:workspace-1',
+        workspaceId: 'workspace-1',
+        profile: 'content' as const,
+        displayName: 'First Project',
+        createdAt: '2026-07-28T00:00:00.000Z',
+        updatedAt: '2026-07-29T00:00:00.000Z',
+      },
+      {
+        projectId: 'content:workspace-2',
+        workspaceId: 'workspace-2',
+        profile: 'content' as const,
+        displayName: 'Second Project',
+        createdAt: '2026-07-29T00:00:00.000Z',
+        updatedAt: '2026-07-30T00:00:00.000Z',
+      },
+    ];
+    const catalog = { projects };
+    const projection = withActiveScene(
+      {
+        ...base,
+        catalog,
+        conversationNavigation: projectDesktopConversationNavigation(catalog, base.agentHome),
+      },
+      projectManagementScene(),
+    );
+    const removeRecentProject = vi.fn(async () => projection);
+    installBridge({ projection, removeRecentProject });
+    vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const { container, root } = await renderApplication();
+    await waitFor(() => container.querySelector('.management-surface-row__select') !== null);
+    const selectionButtons = container.querySelectorAll<HTMLButtonElement>(
+      '.management-surface-row__select',
+    );
+    const first = selectionButtons[0];
+    const second = selectionButtons[1];
+    if (!first || !second) throw new Error('Project Management batch fixture is incomplete.');
+    await act(async () => first.click());
+    await act(async () =>
+      second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })),
+    );
+    const removeSelected = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Remove selected',
+    );
+    if (!removeSelected) throw new Error('Project Management batch action is unavailable.');
+
+    await act(async () => removeSelected.click());
+    expect(removeRecentProject).not.toHaveBeenCalled();
+    await act(async () => removeSelected.click());
+    await waitFor(() => removeRecentProject.mock.calls.length === 1);
+    expect(removeRecentProject).toHaveBeenCalledWith([
+      'content:workspace-1',
+      'content:workspace-2',
+    ]);
     await act(async () => root.unmount());
   });
 

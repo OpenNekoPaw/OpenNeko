@@ -911,7 +911,7 @@ export class DesktopAppHost {
     };
   }
 
-  async removeRecentProject(
+  async removeRecentProjects(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<DesktopShellResponse> {
@@ -920,9 +920,9 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     return {
       requestId: request.requestId,
-      projection: await this.shell.removeRecentProject(
+      projection: await this.shell.removeRecentProjects(
         window.windowId,
-        request.projectId,
+        request.projectIds,
         request.rendererSessionId,
       ),
     };

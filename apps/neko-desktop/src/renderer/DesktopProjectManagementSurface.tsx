@@ -1,4 +1,5 @@
 import {
+  CloseIcon,
   FolderIcon,
   GridIcon,
   LayersIcon,
@@ -9,7 +10,7 @@ import {
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { EmptyState } from '@neko/ui/primitives';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { DesktopProjectCatalogItem } from '@neko/host/desktop-shell-contract';
 
 export type DesktopProjectManagementSort =
@@ -19,25 +20,55 @@ export function DesktopProjectCatalogSurface({
   interactive,
   onOpen,
   onRemove,
-  onSelect,
   projects,
-  selectedProjectId,
 }: {
   readonly interactive: boolean;
   readonly onOpen: (projectId: string) => void;
-  readonly onRemove: (project: DesktopProjectCatalogItem) => void;
-  readonly onSelect: (projectId: string) => void;
+  readonly onRemove: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly projects: readonly DesktopProjectCatalogItem[];
-  readonly selectedProjectId?: string;
 }): JSX.Element {
   const { locale, t } = useTranslation();
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<DesktopProjectManagementSort>('updated-descending');
   const [view, setView] = useState<'grid' | 'list'>('list');
+  const [selectedProjectIds, setSelectedProjectIds] = useState<ReadonlySet<string>>(new Set());
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string>();
   const visible = useMemo(
     () => filterAndSortProjectCatalog(projects, query, sort),
     [projects, query, sort],
   );
+  const selectedProjects = useMemo(
+    () => projects.filter((project) => selectedProjectIds.has(project.projectId)),
+    [projects, selectedProjectIds],
+  );
+  useEffect(() => {
+    setSelectedProjectIds((current) => {
+      const reconciled = reconcileProjectSelection(current, projects);
+      return setsEqual(current, reconciled) ? current : reconciled;
+    });
+    setSelectionAnchorId((current) =>
+      current && projects.some((project) => project.projectId === current) ? current : undefined,
+    );
+  }, [projects]);
+  const clearSelection = (): void => {
+    setSelectedProjectIds(new Set());
+    setSelectionAnchorId(undefined);
+  };
+  const selectProject = (
+    projectId: string,
+    event: Pick<ReactMouseEvent<HTMLButtonElement>, 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+  ): void => {
+    const selection = applyProjectSelection({
+      projectIds: visible.map((project) => project.projectId),
+      selectedProjectIds,
+      anchorId: selectionAnchorId,
+      projectId,
+      toggle: event.metaKey || event.ctrlKey,
+      range: event.shiftKey,
+    });
+    setSelectedProjectIds(selection.selectedProjectIds);
+    setSelectionAnchorId(selection.anchorId);
+  };
   return (
     <section className="project-management-catalog">
       <header className="management-surface-header">
@@ -72,15 +103,60 @@ export function DesktopProjectCatalogSurface({
           <LayersIcon size={15} />
         </button>
       </div>
+      {selectedProjects.length > 0 ? (
+        <div
+          className="project-management-batch-toolbar"
+          role="toolbar"
+          aria-label={t('home.projects.selectedCount', { count: selectedProjects.length })}
+        >
+          <strong>{t('home.projects.selectedCount', { count: selectedProjects.length })}</strong>
+          <span className="project-management-batch-toolbar__spacer" />
+          <button type="button" disabled={!interactive} onClick={() => onRemove(selectedProjects)}>
+            <TrashIcon size={14} />
+            <span>{t('home.projects.removeSelected')}</span>
+          </button>
+          <button
+            type="button"
+            aria-label={t('home.projects.clearSelection')}
+            disabled={!interactive}
+            title={t('home.projects.clearSelection')}
+            onClick={clearSelection}
+          >
+            <CloseIcon size={14} />
+          </button>
+        </div>
+      ) : null}
       <div
         aria-label={t('home.allProjects')}
         className={`management-surface-list is-${view}`}
         data-empty={visible.length === 0}
         onKeyDown={(event) => {
-          if (event.key !== 'Home' && event.key !== 'End') return;
-          event.preventDefault();
-          event.currentTarget.scrollTop =
-            event.key === 'Home' ? 0 : event.currentTarget.scrollHeight;
+          if (isTextEntryTarget(event.target)) return;
+          if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'a') {
+            event.preventDefault();
+            setSelectedProjectIds(selectAllProjectIds(visible));
+            setSelectionAnchorId(visible[0]?.projectId);
+            return;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            clearSelection();
+            return;
+          }
+          if (
+            interactive &&
+            selectedProjects.length > 0 &&
+            (event.key === 'Delete' || event.key === 'Backspace')
+          ) {
+            event.preventDefault();
+            onRemove(selectedProjects);
+            return;
+          }
+          if (event.key === 'Home' || event.key === 'End') {
+            event.preventDefault();
+            event.currentTarget.scrollTop =
+              event.key === 'Home' ? 0 : event.currentTarget.scrollHeight;
+          }
         }}
         role="region"
         tabIndex={0}
@@ -91,22 +167,26 @@ export function DesktopProjectCatalogSurface({
         {visible.map((project) => (
           <div
             className="management-surface-row"
-            data-selected={project.projectId === selectedProjectId}
+            data-selected={selectedProjectIds.has(project.projectId)}
             key={project.projectId}
           >
             <button
               type="button"
               className="management-surface-row__select"
-              aria-pressed={project.projectId === selectedProjectId}
+              aria-pressed={selectedProjectIds.has(project.projectId)}
               disabled={!interactive}
-              onClick={() => onSelect(project.projectId)}
+              onClick={(event) => selectProject(project.projectId, event)}
             >
               <FolderIcon size={17} />
               <span className="management-surface-copy">
                 <strong>{project.displayName}</strong>
                 <small>{formatProjectDate(project.updatedAt, locale)}</small>
                 {project.unavailable ? (
-                  <small className="management-surface-row__diagnostic" role="status">
+                  <small
+                    className="management-surface-row__diagnostic"
+                    role="status"
+                    title={`${project.unavailable.fieldNames.join(', ')}: ${project.unavailable.message}`}
+                  >
                     <WarningIcon size={13} />
                     <span>
                       {project.unavailable.fieldNames.join(', ')}: {project.unavailable.message}
@@ -130,7 +210,7 @@ export function DesktopProjectCatalogSurface({
                 aria-label={t('shell.removeRecentProject', { project: project.displayName })}
                 disabled={!interactive}
                 title={t('shell.removeRecentProject', { project: project.displayName })}
-                onClick={() => onRemove(project)}
+                onClick={() => onRemove([project])}
               >
                 <TrashIcon size={15} />
               </button>
@@ -140,6 +220,61 @@ export function DesktopProjectCatalogSurface({
       </div>
     </section>
   );
+}
+
+export interface ProjectSelectionUpdate {
+  readonly selectedProjectIds: ReadonlySet<string>;
+  readonly anchorId: string | undefined;
+}
+
+export function applyProjectSelection(input: {
+  readonly projectIds: readonly string[];
+  readonly selectedProjectIds: ReadonlySet<string>;
+  readonly anchorId: string | undefined;
+  readonly projectId: string;
+  readonly toggle: boolean;
+  readonly range: boolean;
+}): ProjectSelectionUpdate {
+  if (!input.projectIds.includes(input.projectId)) {
+    throw new Error(`Project Management item '${input.projectId}' is unavailable.`);
+  }
+  if (input.range && input.anchorId) {
+    const anchorIndex = input.projectIds.indexOf(input.anchorId);
+    const projectIndex = input.projectIds.indexOf(input.projectId);
+    if (anchorIndex >= 0) {
+      const rangeIds = input.projectIds.slice(
+        Math.min(anchorIndex, projectIndex),
+        Math.max(anchorIndex, projectIndex) + 1,
+      );
+      return {
+        selectedProjectIds: input.toggle
+          ? new Set([...input.selectedProjectIds, ...rangeIds])
+          : new Set(rangeIds),
+        anchorId: input.anchorId,
+      };
+    }
+  }
+  if (input.toggle) {
+    const selectedProjectIds = new Set(input.selectedProjectIds);
+    if (selectedProjectIds.has(input.projectId)) selectedProjectIds.delete(input.projectId);
+    else selectedProjectIds.add(input.projectId);
+    return { selectedProjectIds, anchorId: input.projectId };
+  }
+  return { selectedProjectIds: new Set([input.projectId]), anchorId: input.projectId };
+}
+
+export function selectAllProjectIds(
+  projects: readonly DesktopProjectCatalogItem[],
+): ReadonlySet<string> {
+  return new Set(projects.map((project) => project.projectId));
+}
+
+export function reconcileProjectSelection(
+  selectedProjectIds: ReadonlySet<string>,
+  projects: readonly DesktopProjectCatalogItem[],
+): ReadonlySet<string> {
+  const projectIds = new Set(projects.map((project) => project.projectId));
+  return new Set([...selectedProjectIds].filter((projectId) => projectIds.has(projectId)));
 }
 
 export function filterAndSortProjectCatalog(
@@ -178,4 +313,17 @@ export function parseProjectManagementSort(value: string): DesktopProjectManagem
 
 function formatProjectDate(value: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value));
+}
+
+function setsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  return left.size === right.size && [...left].every((value) => right.has(value));
+}
+
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
 }

@@ -13,6 +13,8 @@ export const zhCN = {
   'shell.closeProjectTab': '关闭项目标签',
   'shell.removeRecentProject': '从最近项目中移除 {project}',
   'shell.removeRecentProjectConfirm': '要从最近项目中移除“{project}”吗？此操作不会删除项目文件。',
+  'shell.removeRecentProjectsConfirm':
+    '要从最近项目中移除选中的 {count} 个项目吗？此操作不会删除项目文件。',
   'shell.deleteConversation': '删除会话 {conversation}',
   'shell.deleteConversationConfirm': '要永久删除会话“{conversation}”吗？此操作无法撤销。',
   'shell.openProject': '打开内容项目',
@@ -180,6 +182,9 @@ export const zhCN = {
   'home.projects.sort': '项目排序',
   'home.projects.view': '项目视图',
   'home.projects.noResults': '没有匹配的项目',
+  'home.projects.selectedCount': '已选择 {count} 个项目',
+  'home.projects.removeSelected': '移除所选项目',
+  'home.projects.clearSelection': '清除选择',
   'home.projects.select': '选择项目以查看详情',
   'home.projects.updated': '更新时间',
   'home.projects.created': '创建时间',

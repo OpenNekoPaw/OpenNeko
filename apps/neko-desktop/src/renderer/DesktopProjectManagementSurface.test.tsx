@@ -5,8 +5,11 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import {
+  applyProjectSelection,
   DesktopProjectCatalogSurface,
   filterAndSortProjectCatalog,
+  reconcileProjectSelection,
+  selectAllProjectIds,
 } from './DesktopProjectManagementSurface';
 import { createDesktopI18n } from './i18n';
 
@@ -17,24 +20,90 @@ describe('Desktop Project Management surfaces', () => {
     document.body.replaceChildren();
   });
 
-  it('keeps selection separate from the explicit Workspace open command', async () => {
-    const onSelect = vi.fn();
+  it('keeps local selection separate from the explicit Workspace open command', async () => {
     const onOpen = vi.fn();
     const { container, root } = await renderWithI18n(
       <DesktopProjectCatalogSurface
         interactive
         onOpen={onOpen}
         onRemove={vi.fn()}
-        onSelect={onSelect}
         projects={[project()]}
       />,
     );
     await act(async () => findButton(container, 'Demo').click());
-    expect(onSelect).toHaveBeenCalledWith('project-1');
+    expect(findButton(container, 'Demo').getAttribute('aria-pressed')).toBe('true');
     expect(onOpen).not.toHaveBeenCalled();
     await act(async () => findButton(container, 'Open project: Demo').click());
     expect(onOpen).toHaveBeenCalledWith('project-1');
     await act(async () => root.unmount());
+  });
+
+  it('supports range, modifier, filtered select-all, escape, and keyboard batch removal', async () => {
+    const onRemove = vi.fn();
+    const projects = [
+      project('Alpha', 'project-alpha'),
+      project('Beta', 'project-beta'),
+      project('Gamma', 'project-gamma'),
+    ];
+    const markup = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        interactive
+        onOpen={vi.fn()}
+        onRemove={onRemove}
+        projects={projects}
+      />,
+    );
+    const list = markup.container.querySelector<HTMLElement>('.management-surface-list');
+    const alpha = findButton(markup.container, 'Alpha');
+    const gamma = findButton(markup.container, 'Gamma');
+    await act(async () => alpha.click());
+    await act(async () =>
+      gamma.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })),
+    );
+    expect(markup.container.textContent).toContain('3 selected');
+
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    });
+    expect(markup.container.textContent).not.toContain('selected');
+
+    const search = markup.container.querySelector<HTMLInputElement>('input');
+    if (!search) throw new Error('Project Management search is unavailable.');
+    await act(async () => {
+      setNativeInputValue(search, 'Beta');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a', metaKey: true }));
+    });
+    expect(markup.container.textContent).toContain('1 selected');
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' }));
+    });
+    expect(onRemove).toHaveBeenCalledWith([projects[1]]);
+    await act(async () => markup.root.unmount());
+  });
+
+  it('applies deterministic selection updates and removes stale identities', () => {
+    const projects = [
+      project('Alpha', 'alpha'),
+      project('Beta', 'beta'),
+      project('Gamma', 'gamma'),
+    ];
+    const selected = applyProjectSelection({
+      projectIds: projects.map((item) => item.projectId),
+      selectedProjectIds: new Set(['alpha']),
+      anchorId: 'alpha',
+      projectId: 'gamma',
+      toggle: true,
+      range: true,
+    });
+    expect([...selected.selectedProjectIds]).toEqual(['alpha', 'beta', 'gamma']);
+    expect([...selectAllProjectIds(projects.slice(1))]).toEqual(['beta', 'gamma']);
+    expect([...reconcileProjectSelection(selected.selectedProjectIds, projects.slice(1))]).toEqual([
+      'beta',
+      'gamma',
+    ]);
   });
 
   it('sorts the catalog deterministically without creating a Detail surface', () => {
@@ -51,7 +120,6 @@ describe('Desktop Project Management surfaces', () => {
         interactive
         onOpen={vi.fn()}
         onRemove={vi.fn()}
-        onSelect={vi.fn()}
         projects={[]}
       />,
     );
@@ -83,7 +151,6 @@ describe('Desktop Project Management surfaces', () => {
         interactive
         onOpen={onOpen}
         onRemove={onRemove}
-        onSelect={vi.fn()}
         projects={[unavailable]}
       />,
     );
@@ -113,7 +180,7 @@ describe('Desktop Project Management surfaces', () => {
     );
     expect(findButton(markup.container, 'Open project: Demo').disabled).toBe(true);
     await act(async () => findButton(markup.container, 'Remove Demo from recent projects').click());
-    expect(onRemove).toHaveBeenCalledWith(unavailable);
+    expect(onRemove).toHaveBeenCalledWith([unavailable]);
     expect(onOpen).not.toHaveBeenCalled();
     await act(async () => markup.root.unmount());
   });
@@ -124,7 +191,6 @@ describe('Desktop Project Management surfaces', () => {
         interactive
         onOpen={vi.fn()}
         onRemove={vi.fn()}
-        onSelect={vi.fn()}
         projects={[project()]}
       />,
     );
@@ -154,7 +220,6 @@ describe('Desktop Project Management surfaces', () => {
         interactive
         onOpen={vi.fn()}
         onRemove={vi.fn()}
-        onSelect={vi.fn()}
         projects={[project()]}
       />,
     );
@@ -191,10 +256,16 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   return button;
 }
 
-function project(name = 'Demo') {
+function setNativeInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  if (!setter) throw new Error('HTML input value setter is unavailable.');
+  setter.call(input, value);
+}
+
+function project(name = 'Demo', projectId = 'project-1') {
   return {
-    projectId: 'project-1',
-    workspaceId: 'workspace-1',
+    projectId,
+    workspaceId: projectId.replace('project', 'workspace'),
     profile: 'content' as const,
     displayName: name,
     createdAt: '2026-01-01T00:00:00.000Z',
