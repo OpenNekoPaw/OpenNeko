@@ -120,10 +120,24 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
     );
-    await waitForSelector(
-      '[data-owner-view-id="canvas:functional:video"] [data-canvas-node-child-instance][data-active="true"]',
-    );
-    checkpoint('canvas-material-actions-resolved', { retainedNodeInspector: true });
+    const selectedNodePresentation = await evaluate(`(() => {
+      const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
+      if (!(view instanceof HTMLElement)) throw new Error('Canvas View is unavailable.');
+      return {
+        nodeLocalActionCount: view.querySelectorAll('[data-selection-action]').length,
+        propertyDockCount: view.querySelectorAll('.neko-creative-workbench-right-panel').length,
+      };
+    })()`);
+    if (
+      selectedNodePresentation.nodeLocalActionCount === 0 ||
+      selectedNodePresentation.propertyDockCount !== 0
+    ) {
+      throw new Error(
+        `Canvas selected-node presentation is invalid: ${JSON.stringify(selectedNodePresentation)}`,
+      );
+    }
+    checkpoint('canvas-node-selected-without-property-dock', selectedNodePresentation);
+    const selectedNodeScreenshot = await screenshot('canvas-node-selected-without-property-dock');
     await evaluate(`(() => {
       const viewport = document.querySelector(
         '[data-owner-view-id="canvas:functional:video"] [data-canvas-viewport-root="true"]',
@@ -134,9 +148,10 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     })()`);
     await waitForCondition(
       evaluate,
-      `document.querySelector('[data-owner-view-id="canvas:functional:video"] .canvas-workbench-root')
-        ?.getAttribute('data-active-node-inspector') === null`,
-      'Canvas active Node Inspector did not close after clearing selection.',
+      `document.querySelector(
+        '[data-owner-view-id="canvas:functional:video"] [data-selection-action]'
+      ) === null`,
+      'Canvas node-local selection actions did not close after clearing selection.',
     );
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-canvas-toolbar-action="toggle-playback-panel"]',
@@ -354,6 +369,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       unifiedWorkbenchScreenshot,
       rootCount: 2,
       authoredNodeCount,
+      selectedNodePresentation,
+      selectedNodeScreenshot,
       locatorBackedNodes: ['video', 'audio'],
       nativeElements: ['video', 'audio'],
       storylineAdvancedTo: storylinePlayback.currentTime,
@@ -390,6 +407,8 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     if (
       evidence.rootCount !== 2 ||
       evidence.authoredNodeCount !== 2 ||
+      evidence.selectedNodePresentation.nodeLocalActionCount === 0 ||
+      evidence.selectedNodePresentation.propertyDockCount !== 0 ||
       !evidence.isolatedUrls ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||

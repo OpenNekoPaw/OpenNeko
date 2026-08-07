@@ -586,8 +586,8 @@ Webview Root or connection to continue.
 ### Requirement: Navigation reconstructs Surfaces from owner facts and minimal snapshots
 
 Each stateful product Surface SHALL keep durable business facts and required recoverable presentation snapshots with
-its owning package. Workbench, Main tab, resource page and Canvas node navigation SHALL mount only current or
-explicitly split Roots and MUST NOT retain hidden component trees as mutable state owners. Host durable contracts
+its owning package. Workbench, Main tab and resource page navigation SHALL mount only current or explicitly split
+Roots and MUST NOT retain hidden component trees as mutable state owners. Host durable contracts
 MUST NOT classify Renderer instances as `hot-retained`, `suspendable` or `ephemeral`.
 
 #### Scenario: User switches Workbench shell or panel
@@ -614,12 +614,11 @@ MUST NOT classify Renderer instances as `hot-retained`, `suspendable` or `epheme
 
 #### Scenario: User switches Canvas nodes
 
-- **WHEN** the user selects node B after editing node A in the same Canvas
-- **THEN** the Canvas owner commits A's required editor/inspector snapshot and unmounts A's UI
-- **AND** B uses its own node-qualified UI while consuming current Canvas-owned node facts
-- **AND** selecting A again restores its uncommitted control, expansion and scroll state
-- **AND** the inactive media/GPU viewer releases playback, decoder, frame-loop and GPU handles without discarding its recoverable snapshot
-- **AND** deleting A releases only A's facts and snapshot after the Canvas owner commits deletion
+- **WHEN** the user selects node B after selecting node A in the same Canvas
+- **THEN** the Canvas owner updates its exact node selection while continuing to consume current Canvas-owned node facts
+- **AND** the selected node remains operable through node-local Canvas controls without mounting a right-side property Inspector
+- **AND** selection changes do not create a separate node Root, presentation snapshot or runtime lifecycle
+- **AND** deleting a selected node removes only that node's Canvas facts after the Canvas owner commits deletion
 
 #### Scenario: Parent instance becomes hidden
 

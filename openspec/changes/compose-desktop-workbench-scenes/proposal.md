@@ -41,7 +41,8 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
   Conversation 在隐藏后继续运行，但不要求隐藏 Agent Root/connection；不可见且空闲的 Conversation 与
   Workspace runtime 可释放并从本地 authority 恢复。
 - Entry Draft 每个 Window 至多保存一个轻量未发送 snapshot，不为每个 draft 保留 Webview Root。管理页、
-  资源 facet/page/detail/preview 和 Canvas inspector/editor 也不得用隐藏 DOM 作为状态 owner。
+  资源 facet/page/detail/preview 也不得用隐藏 DOM 作为状态 owner；Canvas node selection 保持为
+  package-owned 画布状态，不挂载独立 inspector/right dock。
 - Host durable contract 不保存 `hot-retained`、`suspendable`、`ephemeral` 或其他 Renderer lifecycle policy；
   生命周期和并发预算由 `bound-desktop-ui-residency` 的 package-owned runtime/UI 约束负责。
 - 核心编辑草稿和未提交修改由 owning package 的内存 model 与适用的本地 shadow persistence 保持；UI

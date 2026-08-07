@@ -188,8 +188,6 @@ const config: KnipConfig = {
         // Barrel exports
         'src/utils/index.ts',
         // Used via barrel exports in panels/
-        'src/components/panels/PortEditor.tsx',
-        'src/components/panels/PropertyPanel.tsx',
       ],
     },
     'packages/preview/webview': {

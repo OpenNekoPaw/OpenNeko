@@ -28,7 +28,6 @@ import { InfiniteCanvas, ZoomControls, MiniMap } from './components';
 import { ContextMenu } from './components/common/ContextMenu';
 import { CanvasToolbar } from './components/toolbar/CanvasToolbar';
 import { PlaybackWorkspace } from './components/playback/PlaybackWorkspace';
-import { PropertyPanel } from './components/panels/PropertyPanel';
 import { MIN_ZOOM, MAX_ZOOM } from './hooks';
 import { useCanvasHostMessages } from './hooks/useCanvasHostMessages';
 import { useNodeHelpers } from './hooks/useNodeHelpers';
@@ -136,10 +135,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const updateConnection = useCanvasStore((state) => state.updateConnection);
   const deleteSelected = useCanvasStore((state) => state.deleteSelected);
   const setPlaybackEntry = useCanvasStore((state) => state.setPlaybackEntry);
-  const updateNode = useCanvasStore((state) => state.updateNode);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
-  const updateNodePorts = useCanvasStore((state) => state.updateNodePorts);
-  const removeNode = useCanvasStore((state) => state.removeNode);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const moveNodeEnd = useCanvasStore((state) => state.moveNodeEnd);
@@ -166,7 +162,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const connections = canvasData?.connections ?? [];
   const selectedNodeIds = selection.nodeIds;
   const selectedConnectionIds = selection.connectionIds;
-  const selectedInspectorNode = nodes.find((node) => node.id === selectedNodeIds[0]);
   const isPanMode = interactionTool === 'pan';
   const setCanvasContainerRef = useCallback((element: HTMLDivElement | null) => {
     canvasContainerRef.current = element;
@@ -1194,32 +1189,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
               </div>
             }
           />
-        }
-        rightDock={
-          selectedInspectorNode
-            ? {
-                id: 'canvas-node-inspector-dock',
-                panelId: `canvas-node-inspector:${hostPort.documentId}`,
-                defaultSize: 280,
-                minSize: 220,
-                maxSize: 440,
-                label: t('panel.properties'),
-                children: (
-                  <PropertyPanel
-                    selectedNodes={[selectedInspectorNode]}
-                    onUpdateNode={updateNode}
-                    onUpdateNodeData={updateNodeData}
-                    onUpdatePorts={updateNodePorts}
-                    onDeleteNode={removeNode}
-                    onToggleLock={(nodeId) => {
-                      const node = nodes.find((candidate) => candidate.id === nodeId);
-                      if (!node) throw new Error(`Canvas node '${nodeId}' is unavailable.`);
-                      updateNode(nodeId, { locked: !node.locked });
-                    }}
-                  />
-                ),
-              }
-            : undefined
         }
       />
     </div>

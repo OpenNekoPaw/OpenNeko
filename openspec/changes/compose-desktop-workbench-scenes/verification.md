@@ -679,6 +679,40 @@ truncation in the committed screenshot; this fix changes submission ownership ra
 that advisory visual issue remains outside this regression. Packaged and explicitly authorized real
 provider coverage remains part of open task 12.8.
 
+## Canvas Selected Node Without Property Dock
+
+Date: 2026-08-08
+
+`@neko/canvas-webview` remains the browser presentation owner. The canonical public Canvas Root,
+Canvas store and node-local selection controls are unchanged; the removed path was only
+`selected node -> CreativeWorkbenchShell.rightDock -> PropertyPanel`. No Desktop contract, host
+resource lifecycle, persisted Canvas facts or user data shape changed.
+
+Deterministic verification passed:
+
+- `pnpm --filter @neko/canvas-webview test`: `57 files / 326 tests` after removing the obsolete
+  PropertyPanel/PortEditor implementations and their test-only coverage.
+- `pnpm --filter @neko/canvas-webview build`.
+- `pnpm check:application-boundaries`: `1428 files / 0 findings`.
+- `pnpm check:unused`; the removed panel entries were also deleted from `knip.config.ts`.
+- `pnpm test:local:ui:contract` and
+  `pnpm exec openspec validate compose-desktop-workbench-scenes --strict`.
+- `git diff --check` and the Canvas Desktop scenario syntax check.
+
+The isolated visible development Electron run selected the video node through user-operable Canvas
+controls and recorded `nodeLocalActionCount: 3` with `propertyDockCount: 0`. Direct inspection of
+`screenshots/02-canvas-node-selected-without-property-dock.png` confirmed a continuous Canvas layout
+without the former property column, blank reserved space, clipping or overlap; the expected Workspace
+Resource dock remained visible. Clearing selection removed the node-local actions, and the adjacent
+storyline/media playback, View teardown, restart restoration and Resource dock checkpoints completed.
+
+The report is
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-07T16-38-30.830Z-canvas-openneko-consumer-development/report.json`.
+The overall UI result remains failed because the run observed four `Canvas Webview Host is disposed`
+renderer exceptions from the Canvas operation/host-message path. That stack does not traverse the
+removed right-dock path, but runtime diagnostics are fail-visible and therefore the complete UI
+scenario is not reported as passed. A compact selected-node screenshot was not executed separately.
+
 ## Workspace Resize And Compact Conversation Composer
 
 Date: 2026-08-08

@@ -104,6 +104,7 @@
 - [x] 10.17 Make Entry Draft first-submit atomically hand off to the exact scope-owned Agent session and projection endpoint: materialize/replay the committed runtime conversation after lifecycle initial-message commit and before provider claim, retire launch attachments through their old binding, prove default Assistant and explicit Workspace activation plus second-message delivery, and update focused Evaluation/quality evidence.
 - [x] 10.18 Replace the mixed Workspace layout menu and Main-header buttons with VS Code-style PrimarySidebar-top controls that independently toggle PrimarySidebar, Agent, Main and management presentation; add ownership, placement, interaction and focused renderer/style regressions.
 - [x] 10.19 Restore packaged PrimarySidebar layout glyphs through a query-free canonical Codicon font asset and explicit TTF protocol MIME while retaining query-bearing URL rejection; add UI source and Desktop protocol regressions plus production renderer evidence.
+- [x] 10.20 Keep Canvas node selection on the Canvas without mounting the selected node PropertyPanel as a Workbench right dock; verify the focused Webview test/build, application boundaries and strict OpenSpec. The selected-node Electron checkpoint passes, while the overall scenario remains failed on current Canvas Host-disposed exceptions recorded in `verification.md`.
 
 ## 11. Multi-Workbench And Agent Surface Instances
 

@@ -345,10 +345,10 @@ Assets、Extensions、Projects 与 Settings 是单例当前管理 Scene，不拥
 Workbench instance。Settings section、资源 filter/selection 和其他有用户价值的展示状态由 owning
 package 保存最小 snapshot；离开 Scene 时 Root 卸载，返回时从领域事实与 snapshot 重建。
 
-Canvas Root 本身继续拥有完整 canvas store/runtime；选择 Canvas node 不创建新的领域 node。Canvas
-owner 保存 node-qualified editor/inspector snapshot，只挂载当前 node 的 UI。切换节点时提交必要的
-viewport/control snapshot，停止 inactive viewer 的 frame loop、playback 和 decoder 并释放高成本 handle；
-返回节点时从 Canvas facts 与 snapshot 重建。Modal/context menu invocation 结束后直接释放。
+Canvas Root 本身继续拥有完整 canvas store/runtime；选择 Canvas node 只更新 Canvas-owned selection，
+不创建新的领域 node、独立 node Root 或右侧 inspector/property dock。节点选择继续由画布上的 node-local
+controls 消费当前 Canvas facts；viewer 资源释放跟随 Canvas View/Root 可见性，而不跟随节点选择。
+Modal/context menu invocation 结束后直接释放。
 
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 
