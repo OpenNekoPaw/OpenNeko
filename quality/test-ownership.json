@@ -1,5 +1,4 @@
 {
-  "schemaVersion": "neko.test-ownership.v1",
   "workspaces": [
     {
       "path": "apps/neko-desktop",
@@ -154,6 +153,13 @@
       "mode": "self",
       "sourceScope": "src/**/*.ts",
       "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/entity/webview",
+      "owner": "packages/entity/webview",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
       "path": "packages/generation",

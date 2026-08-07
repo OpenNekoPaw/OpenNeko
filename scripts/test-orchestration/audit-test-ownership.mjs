@@ -68,7 +68,6 @@ export async function auditTestOwnership(options = {}) {
   }
 
   const result = {
-    schemaVersion: config.schemaVersion,
     ok: errors.length === 0,
     sourceBearingWorkspaces: sourceBearing.length,
     selfOwned: config.workspaces.filter((entry) => entry.mode === 'self').length,
@@ -85,8 +84,13 @@ export async function auditTestOwnership(options = {}) {
 }
 
 function validateConfig(config) {
-  if (config?.schemaVersion !== 'neko.test-ownership.v1') {
-    throw new Error('quality/test-ownership.json has an unknown schemaVersion');
+  if (
+    !config ||
+    typeof config !== 'object' ||
+    Array.isArray(config) ||
+    Object.keys(config).join('\0') !== 'workspaces'
+  ) {
+    throw new Error('quality/test-ownership.json must contain exactly the workspaces collection');
   }
   if (!Array.isArray(config.workspaces)) {
     throw new Error('quality/test-ownership.json workspaces must be an array');

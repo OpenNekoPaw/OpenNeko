@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin } from 'vite';
 
 interface DesktopDevelopmentMainRestartPlugin extends Plugin {
-  closeBundle(): void;
+  writeBundle(): void;
 }
 
 export function createDesktopDevelopmentMainRestartPlugin(
@@ -10,7 +10,7 @@ export function createDesktopDevelopmentMainRestartPlugin(
 ): DesktopDevelopmentMainRestartPlugin {
   return {
     name: 'openneko:desktop:restart-main-after-development-build',
-    closeBundle() {
+    writeBundle() {
       if (command === 'serve') requestRestart();
     },
   };

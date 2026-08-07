@@ -56,12 +56,8 @@ function detectExplicitAiConfig(input: AiProviderSourceInput): ExplicitAiConfigS
   const isExplicit =
     hasNonEmptyArray(raw.providers) ||
     hasNonEmptyArray(raw.models) ||
-    isNonEmptyString(raw.defaultProvider) ||
-    isNonEmptyString(raw.defaultModel) ||
     hasNonEmptyRecord(raw.defaultModels) ||
-    hasNonEmptyRecord(raw.defaultModelPurposes) ||
-    hasNonEmptyRecord(raw.providerOverrides) ||
-    hasNonEmptyRecord(raw.modelOverrides);
+    hasNonEmptyRecord(raw.defaultModelPurposes);
   if (!isExplicit) return { isExplicit: false };
 
   const invalidDiagnostic = isExplicitAiAvailabilityDiagnostic(input.configDiagnostic)
@@ -145,7 +141,7 @@ function isExplicitAiAvailabilityDiagnostic(
   return (
     diagnostic?.code === 'missingProvider' ||
     diagnostic?.code === 'missingModel' ||
-    diagnostic?.code === 'missingApiKey' ||
+    diagnostic?.code === 'missingProviderEndpoint' ||
     diagnostic?.code === 'invalidDefaultProvider' ||
     diagnostic?.code === 'invalidDefaultModel' ||
     diagnostic?.code === 'invalidDefaultModelBinding'
@@ -158,10 +154,6 @@ function hasNonEmptyArray(value: unknown): boolean {
 
 function hasNonEmptyRecord(value: unknown): boolean {
   return !!value && typeof value === 'object' && Object.keys(value).length > 0;
-}
-
-function isNonEmptyString(value: unknown): boolean {
-  return typeof value === 'string' && value.length > 0;
 }
 
 function isPositiveInteger(value: unknown): value is number {

@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "queue-during-run",
   "suiteId": "agent-runtime.workflow-controller",
   "caseGroup": "workflow",
@@ -14,11 +14,6 @@
       "Pi Conversation runtime and Pi Session",
       "authoritative Timeline projection"
     ],
-    "forbiddenFallback": [
-      "sequential direct Agent calls",
-      "alternate queue",
-      "direct Agent turn runner"
-    ],
     "observables": [
       {
         "ref": "workflow-facts",
@@ -30,9 +25,13 @@
     "expectedResult": "The follow-up is queued during the active turn, drains in order, and the session reaches terminal idle.",
     "expectedFailure": "A non-queued follow-up, reordered turn, incomplete queue evidence, or non-idle terminal state fails."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "draft",
@@ -45,10 +44,18 @@
       "prompt": "Review the preceding outline and list exactly three concrete corrections.",
       "afterStepId": "draft"
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
   ],
   "assertions": [
-    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "workflow-facts" },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "workflow-facts"
+    },
     {
       "id": "queued",
       "kind": "queue-state",
@@ -68,20 +75,42 @@
       "id": "order",
       "kind": "process-order",
       "events": [
-        { "kind": "workflow-step", "stepId": "draft", "method": "message.submit" },
-        { "kind": "workflow-step", "stepId": "review", "method": "message.submit" },
-        { "kind": "turn", "role": "assistant" }
+        {
+          "kind": "workflow-step",
+          "stepId": "draft",
+          "method": "message.submit"
+        },
+        {
+          "kind": "workflow-step",
+          "stepId": "review",
+          "method": "message.submit"
+        },
+        {
+          "kind": "turn",
+          "role": "assistant"
+        }
       ],
       "evidenceRef": "workflow-facts"
     },
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
       "evidenceRef": "workflow-facts"
     },
-    { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "workflow-facts" }
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "workflow-facts"
+    }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
 }

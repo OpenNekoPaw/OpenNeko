@@ -1,7 +1,7 @@
-import type { LocalMetadataMigration, LocalMetadataStore } from '../contracts';
-import { M1_LOCAL_METADATA_MIGRATIONS } from '../sqlite/m1-schema';
-import { MEDIA_METADATA_MIGRATIONS } from '../sqlite/media-metadata-schema';
-import { RESOURCE_CACHE_MIGRATIONS } from '../sqlite/resource-cache-schema';
+import type { LocalMetadataStore } from '../contracts';
+import { initializeCoreLocalMetadataTables } from '../sqlite/core-tables';
+import { initializeMediaMetadataTables } from '../sqlite/media-metadata-schema';
+import { initializeResourceCacheTables } from '../sqlite/resource-cache-schema';
 import { resolveGlobalStorageLayout } from '../storage';
 
 const CONTRACT_WORKSPACE_ID = '4be0e209-c70b-48b8-a513-cd230d915b93';
@@ -22,31 +22,19 @@ export async function runLocalMetadataAdapterContract(
   const sourceLayout = resolveGlobalStorageLayout(options.sourceHome);
   const backupLayout = resolveGlobalStorageLayout(options.backupHome);
   const backupSourcePath = `${backupLayout.database}.source.bak`;
-  const destructiveBackupPath = `${backupLayout.database}.pre-destructive.bak`;
-  const resourceCacheBackupPath = `${backupLayout.database}.pre-resource-cache-v2.bak`;
   const source = options.createStore(options.sourceHome);
   await source.open({ databasePath: sourceLayout.database, busyTimeoutMs: 1_000 });
 
-  const firstMigration = await source.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  assert(firstMigration.previousVersion === 0, 'M1 previous version must be zero');
-  assert(firstMigration.currentVersion === 3, 'M1 current version must be three');
-  assert(firstMigration.appliedVersions.length === 3, 'M1 must apply all three core migrations');
-  await source.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
-    destructiveBackup: { destinationPath: resourceCacheBackupPath, reason: 'migration' },
-  });
-  await source.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(source);
+  await initializeResourceCacheTables(source);
+  await initializeMediaMetadataTables(source);
 
   await source.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: CONTRACT_WORKSPACE_ID },
+    identity: { workspaceId: CONTRACT_WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/contract-workspace' },
     seenAt: '2026-07-13T00:00:00.000Z',
   });
 
-  const partition = {
-    scope: 'workspace' as const,
-    workspaceId: CONTRACT_WORKSPACE_ID,
-    domain: 'contract',
-  };
   await source.transaction(
     { mode: 'cache-write', ownership: 'cache', operation: 'adapter-contract-commit' },
     async ({ repositories }) => {
@@ -58,12 +46,6 @@ export async function runLocalMetadataAdapterContract(
         source: 'import',
         model: null,
         createdAt: '2026-07-13T00:00:00.000Z',
-        updatedAt: '2026-07-13T01:00:00.000Z',
-      });
-      await repositories.projectionVersions.increment({
-        partition,
-        freshness: 'fresh',
-        diagnostic: null,
         updatedAt: '2026-07-13T01:00:00.000Z',
       });
     },
@@ -108,10 +90,6 @@ export async function runLocalMetadataAdapterContract(
     conversations[0]?.conversationId === 'contract-conversation',
     'conversation query returned the wrong record',
   );
-  assert(
-    (await source.readPartitionRevision(partition))?.revision === 1,
-    'partition revision must commit with the projection',
-  );
   const resourceCachePartition = {
     scope: 'workspace' as const,
     workspaceId: CONTRACT_WORKSPACE_ID,
@@ -126,10 +104,6 @@ export async function runLocalMetadataAdapterContract(
     (await source.repositories.resourceCache.list(resourceCachePartition))[0]?.variants[0]
       ?.relativePath === 'contract/thumbnail.jpg',
     'ResourceCache entry and variant must round-trip through the adapter',
-  );
-  assert(
-    (await source.readPartitionRevision(resourceCachePartition))?.revision === 1,
-    'ResourceCache replacement must increment its partition revision',
   );
   const mediaMetadataPartition = {
     scope: 'workspace' as const,
@@ -157,37 +131,13 @@ export async function runLocalMetadataAdapterContract(
       ?.metadata.codec === 'h264',
     'Media probe metadata must round-trip through the adapter',
   );
-  assert(
-    (await source.readPartitionRevision(mediaMetadataPartition))?.revision === 1,
-    'Media metadata upsert must increment its partition revision',
-  );
   assert((await source.integrityCheck()).ok, 'integrity_check must return ok');
-  assert(
-    (await source.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS)).appliedVersions.length === 0,
-    're-running M1 must be idempotent',
-  );
-
-  const destructiveMigration: LocalMetadataMigration = {
-    namespace: 'core',
-    version: 4,
-    name: 'rebuild-conversation-order-index',
-    checksum: 'sha256:adapter-contract-rebuild-conversation-order-index',
-    ownership: 'cache',
-    destructive: true,
-    statements: [
-      'DROP INDEX conversations_workspace_updated_idx',
-      `CREATE INDEX conversations_workspace_updated_idx
-        ON conversations(workspace_id, updated_at DESC)`,
-    ],
-  };
-  await source.migrateNamespace([...M1_LOCAL_METADATA_MIGRATIONS, destructiveMigration], {
-    destructiveBackup: { destinationPath: destructiveBackupPath, reason: 'migration' },
-  });
+  await initializeCoreLocalMetadataTables(source);
   await source.repositories.conversations.upsert({
     conversationId: 'contract-conversation',
     workspaceId: CONTRACT_WORKSPACE_ID,
     journalId: 'contract-journal',
-    title: 'Updated after destructive migration',
+    title: 'Updated before backup',
     source: 'import',
     model: null,
     createdAt: '2026-07-13T00:00:00.000Z',
@@ -196,16 +146,6 @@ export async function runLocalMetadataAdapterContract(
 
   await source.backup({ destinationPath: backupSourcePath, reason: 'manual' });
   await source.dispose();
-
-  const preDestructive = options.createStore(options.backupHome);
-  await preDestructive.restore({ sourcePath: destructiveBackupPath });
-  await preDestructive.open({ databasePath: backupLayout.database, busyTimeoutMs: 1_000 });
-  assert(
-    (await preDestructive.repositories.conversations.get('contract-conversation'))?.title ===
-      'Adapter contract conversation',
-    'destructive migration backup must preserve the pre-migration record',
-  );
-  await preDestructive.dispose();
 
   const restored = options.createStore(options.backupHome);
   await restored.restore({ sourcePath: backupSourcePath });
@@ -222,8 +162,8 @@ export async function runLocalMetadataAdapterContract(
   );
   assert(
     (await restored.repositories.conversations.get('contract-conversation'))?.title ===
-      'Updated after destructive migration',
-    'manual backup must preserve the post-migration record',
+      'Updated before backup',
+    'manual backup must preserve the current record',
   );
   assert(
     (

@@ -92,6 +92,50 @@ describe('conversation render state adapter', () => {
     expect(acknowledged.messages.map((message) => message.id)).toEqual(['pi-message-1']);
   });
 
+  it('retains a pending user message when an assistant-only Host projection completes', () => {
+    const coordinator = new ConversationRenderCoordinator();
+    ingestConversationRenderSnapshot({
+      coordinator,
+      conversationId: 'conv-a',
+      messages: [
+        {
+          id: 'pending-send:assistant-only',
+          role: 'user',
+          content: 'keep my prompt in the transcript',
+          timestamp: 1,
+        },
+      ],
+      source: 'local',
+      streaming: {
+        streamingMessageId: null,
+        isThinking: true,
+      },
+    });
+
+    const completed = ingestConversationRenderSnapshot({
+      coordinator,
+      conversationId: 'conv-a',
+      messages: [
+        {
+          id: 'assistant-message-1',
+          role: 'assistant',
+          content: 'response',
+          timestamp: 2,
+        },
+      ],
+      source: 'host',
+      streaming: {
+        streamingMessageId: null,
+        isThinking: false,
+      },
+    });
+
+    expect(completed.messages.map((message) => message.id)).toEqual([
+      'pending-send:assistant-only',
+      'assistant-message-1',
+    ]);
+  });
+
   it('does not acknowledge a pending message from an older user message with identical content', () => {
     const coordinator = new ConversationRenderCoordinator();
     const olderMessage: Message = {

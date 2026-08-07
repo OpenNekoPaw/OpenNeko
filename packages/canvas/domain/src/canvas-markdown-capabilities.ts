@@ -102,7 +102,7 @@ const RUNTIME_RESOURCE_PATTERNS: readonly RegExp[] = [
   /^data:/i,
   /^https?:\/\/127\.0\.0\.1(?::|\/)/i,
   /^https?:\/\/localhost(?::|\/)/i,
-  /(?:^|\/)\.neko\/\.cache(?:\/|$)/i,
+  /(?:^|\/)\.[^/]+(?:\/|$)/,
   /^\/tmp(?:\/|$)/i,
   /^\/var\/folders(?:\/|$)/i,
 ];

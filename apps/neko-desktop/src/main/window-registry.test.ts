@@ -31,7 +31,7 @@ describe('DesktopWindowRegistry', () => {
     ).toThrow('unauthorized frame URL');
   });
 
-  it('uses monotonic renderer epochs and lifecycle sequences', () => {
+  it('uses exact renderer session identities and live lifecycle sequences', () => {
     const registry = new DesktopWindowRegistry();
     registry.register({
       windowId: 'window-1',
@@ -39,21 +39,36 @@ describe('DesktopWindowRegistry', () => {
       allowedOrigin: DESKTOP_APP_ORIGIN,
     });
 
-    expect(registry.rendererLoading('window-1', 'app-1')).toMatchObject({
-      rendererEpoch: 1,
+    const firstLoading = registry.rendererLoading('window-1', 'app-1');
+    expect(firstLoading).toMatchObject({
       sequence: 1,
       type: 'renderer-loading',
     });
+    expect(firstLoading.rendererSessionId).not.toHaveLength(0);
     expect(registry.rendererReady('window-1', 'app-1')).toMatchObject({
-      rendererEpoch: 1,
+      rendererSessionId: firstLoading.rendererSessionId,
       sequence: 2,
       type: 'renderer-ready',
     });
-    expect(registry.rendererLoading('window-1', 'app-1')).toMatchObject({
-      rendererEpoch: 2,
+    const secondLoading = registry.rendererLoading('window-1', 'app-1');
+    expect(secondLoading).toMatchObject({
       sequence: 3,
       type: 'renderer-loading',
     });
+    expect(secondLoading.rendererSessionId).not.toBe(firstLoading.rendererSessionId);
+  });
+
+  it('rejects renderer-ready before the window starts loading', () => {
+    const registry = new DesktopWindowRegistry();
+    registry.register({
+      windowId: 'window-1',
+      webContentsId: 10,
+      allowedOrigin: DESKTOP_APP_ORIGIN,
+    });
+
+    expect(() => registry.rendererReady('window-1', 'app-1')).toThrow(
+      "Desktop window 'window-1' became ready before renderer loading.",
+    );
   });
 
   it('disposes only the closed window owner and is idempotent', () => {

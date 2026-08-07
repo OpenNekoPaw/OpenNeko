@@ -8,20 +8,17 @@ Human-readable architecture decisions, review policies, and validation matrices 
 
 | Path                                        | Purpose                                                                                          |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `ledgers/code-debt-surface-ledger.json`     | Repository-wide non-Agent legacy, fallback, and deprecated surface ledger.                       |
-| `ledgers/neko-shared-public-surface.json`   | Canonical minimal Shared exports and permanently retired public entries.                         |
-| `ledgers/package-boundary-exceptions.json`  | Exact, expiring baseline for current package identity, export, and source-alias migration debt.  |
-| `ledgers/agent-code-debt-lcd-register.json` | Agent-specific legacy compatibility debt register for Agent boundary checks and review evidence. |
+| `ledgers/neko-shared-public-surface.json`   | Canonical minimal Shared exports.                                                                 |
+| `ledgers/package-boundary-exceptions.json`  | Exact, expiring exceptions for current package identity, export, and source-alias rules.          |
 | `local-metadata-runtime-matrix.json`        | Supported SQLite Host, OS, architecture, and minimum runtime matrix.                             |
 | `package-roles.json`                        | Complete workspace package role, runtime, product-status, and architecture-state catalog.        |
 | `package-product-status.json`               | Supported production entries plus exact expiring declarations for non-literal runtime edges.     |
-| `storage-authority-sources.json`            | Exact expiring declarations for read-only or migration-only non-canonical storage sources.       |
 | `skill-development-history/history.json`    | Immutable, evidence-linked local Skill development checkpoints; excludes Market release state.   |
 
 ## Rules
 
-- Keep ledgers deterministic and machine-readable.
+- Keep quality inputs deterministic and machine-readable.
 - Adding a Shared responsibility needs architecture review and OpenSpec evidence that no owning domain or focused infrastructure package is appropriate.
-- Update the consuming script and validation command when moving or renaming a ledger.
+- Update the consuming script and validation command when moving or renaming a quality input.
 - Keep policy explanations in `docs/architecture/adr-code-review-quality-gates.md`; link to this directory for concrete CI input data.
 - Do not store one-off command output, implementation journals, or dated status snapshots here.

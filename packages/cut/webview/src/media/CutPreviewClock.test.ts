@@ -52,7 +52,7 @@ describe('CutPreviewClock', () => {
     expect(reading).toEqual({ mediaTimeSeconds: 6.5, discontinuity: false });
   });
 
-  it('keeps a retained same-Clip video clock continuous across a PCM generation boundary', () => {
+  it('keeps a retained same-Clip video clock continuous across a PCM previewRequestId boundary', () => {
     const video = videoClock(10.25, 1);
     const reading = new CutPreviewClock({
       primaryAudio: audioClock(20.25),

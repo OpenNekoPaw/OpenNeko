@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko/preview-domain';
+import { PREVIEW_HOST_RUNTIME_ROUTES } from '@neko/preview-domain';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
@@ -13,6 +13,11 @@ import {
 } from '@neko/host/desktop-workbench-contract';
 import { DesktopResourceRegistry } from './desktop-resource-registry';
 import { DesktopPreviewRuntime, type DesktopPreviewShellPort } from './desktop-preview-runtime';
+import {
+  createDefaultDesktopApplicationSidebar,
+  parseDesktopWorkbenchSceneProjection,
+} from '@neko/host/desktop-scene-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 const roots: string[] = [];
 const registries: DesktopResourceRegistry[] = [];
@@ -21,8 +26,8 @@ const resourceIdentity: ResourceBrowserIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'resource-browser:project-view-1',
-  viewEpoch: 1,
-  endpointEpoch: 'endpoint-1',
+  viewInstanceId: 'view-instance-1',
+  rendererSessionId: 'endpoint-1',
 };
 
 afterEach(async () => {
@@ -52,18 +57,7 @@ describe('DesktopPreviewRuntime', () => {
       await writeFile(absolutePath, 'preview-bytes');
       const workbench = createDefaultDesktopWorkbenchLayout('window-1');
       const shell: DesktopPreviewShellPort = {
-        getProjection: async () => ({
-          endpointEpoch: 'endpoint-1',
-          catalog: {
-            projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
-          },
-          window: {
-            windowId: 'window-1',
-            revision: 1,
-            tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
-            workbench,
-          },
-        }),
+        getProjection: async () => createShellProjection(workbench),
         updateWorkbench: vi.fn(async () => undefined),
       };
       const runtime = new DesktopPreviewRuntime({
@@ -105,18 +99,7 @@ describe('DesktopPreviewRuntime', () => {
     const workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const updateWorkbench = vi.fn();
     const shell: DesktopPreviewShellPort = {
-      getProjection: async () => ({
-        endpointEpoch: 'endpoint-1',
-        catalog: {
-          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
-        },
-        window: {
-          windowId: 'window-1',
-          revision: 1,
-          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
-          workbench,
-        },
-      }),
+      getProjection: async () => createShellProjection(workbench),
       updateWorkbench,
     };
     const resources = createResources();
@@ -157,18 +140,7 @@ describe('DesktopPreviewRuntime', () => {
     await writeFile(mediaPath, 'video');
     const workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
-      getProjection: async () => ({
-        endpointEpoch: 'endpoint-1',
-        catalog: {
-          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
-        },
-        window: {
-          windowId: 'window-1',
-          revision: 1,
-          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
-          workbench,
-        },
-      }),
+      getProjection: async () => createShellProjection(workbench),
       updateWorkbench: vi.fn(async () => undefined),
     };
     const runtime = new DesktopPreviewRuntime({
@@ -193,12 +165,11 @@ describe('DesktopPreviewRuntime', () => {
 
     await expect(
       runtime.execute('window-1', {
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
-        requestId: 'stale-revision',
+        requestId: 'wrong-panel-owner',
         route: PREVIEW_HOST_RUNTIME_ROUTES.snapshotGet,
-        identity: { ...projection.identity, revision: projection.identity.revision + 1 },
+        identity: { ...projection.identity, viewId: 'preview:another-panel' },
       }),
-    ).rejects.toThrow('revision does not match');
+    ).rejects.toThrow('viewId does not match');
     expect((await fetchResource(projection.descriptor.url)).status).toBe(200);
     expect(() => runtime.releaseQuickPreview('window-2', quick.previewSessionId)).toThrow(
       'is unavailable',
@@ -219,7 +190,7 @@ describe('DesktopPreviewRuntime', () => {
     await writeFile(secondPath, 'glb');
     let workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
       viewId: 'canvas:project-view-1:board',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       kind: 'canvas',
@@ -238,25 +209,14 @@ describe('DesktopPreviewRuntime', () => {
         mode: 'chat-main',
       },
     };
-    let windowRevision = 1;
-    let endpointEpoch = 'endpoint-1';
+    let rendererSessionId = 'endpoint-1';
     const shell: DesktopPreviewShellPort = {
-      getProjection: async () => ({
-        endpointEpoch,
-        catalog: {
-          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
+      getProjection: async () => createShellProjection(workbench, rendererSessionId),
+      updateWorkbench: vi.fn(
+        async (_windowId, _rendererSessionId, _workbenchInstanceId, next) => {
+          workbench = next;
         },
-        window: {
-          windowId: 'window-1',
-          revision: windowRevision,
-          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
-          workbench,
-        },
-      }),
-      updateWorkbench: vi.fn(async (_windowId, _epoch, _windowRevision, _revision, next) => {
-        workbench = next;
-        windowRevision += 1;
-      }),
+      ),
     };
     const resources = createResources();
     const identities = ['one', 'two', 'three'];
@@ -272,12 +232,11 @@ describe('DesktopPreviewRuntime', () => {
         item: createItem('first.json', 'content:first'),
         absolutePath: firstPath,
         target: {
-          viewId: 'preview:project-view-1:temporary',
+          viewId: 'preview:stale-view:temporary',
           presentation: 'temporary',
-          expectedWorkbenchRevision: 0,
         },
       }),
-    ).rejects.toThrow('target View or workbench revision is stale');
+    ).rejects.toThrow('target View identity is stale');
     const first = await runtime.open({
       identity: resourceIdentity,
       item: createItem('first.json', 'content:first'),
@@ -285,7 +244,6 @@ describe('DesktopPreviewRuntime', () => {
       target: {
         viewId: 'preview:project-view-1:temporary',
         presentation: 'temporary',
-        expectedWorkbenchRevision: 1,
       },
     });
     if (first.status !== 'ready') throw new Error('Expected a ready Preview.');
@@ -322,14 +280,13 @@ describe('DesktopPreviewRuntime', () => {
     ]);
     await expect(
       runtime.getSnapshot('window-1', {
-        schemaVersion: 1,
         requestId: 'request-1',
         projectId: 'project-1',
         workspaceId: 'workspace-1',
         viewId: 'preview:project-view-1:temporary',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         sessionId: 'preview-session:two',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       }),
     ).resolves.toMatchObject({
       status: 'ready',
@@ -337,14 +294,12 @@ describe('DesktopPreviewRuntime', () => {
     });
 
     const pinned = await runtime.execute('window-1', {
-      schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
       requestId: 'pin-second',
       route: PREVIEW_HOST_RUNTIME_ROUTES.viewPin,
       identity: second.identity,
     });
     expect(pinned).toMatchObject({
       presentation: 'pinned',
-      identity: { revision: 1 },
     });
     expect(pinned.identity.viewId).not.toBe(second.identity.viewId);
     expect(workbench.main.views).toContainEqual(
@@ -366,7 +321,6 @@ describe('DesktopPreviewRuntime', () => {
     expect(workbench.main.views.filter((view) => view.kind === 'preview')).toHaveLength(2);
 
     const side = await runtime.execute('window-1', {
-      schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
       requestId: 'side-third',
       route: PREVIEW_HOST_RUNTIME_ROUTES.viewOpen,
       identity: third.identity,
@@ -390,7 +344,6 @@ describe('DesktopPreviewRuntime', () => {
     expect(getActiveMainView(workbench)?.viewId).toBe(side.identity.viewId);
 
     await runtime.execute('window-1', {
-      schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
       requestId: 'close-third',
       route: PREVIEW_HOST_RUNTIME_ROUTES.viewClose,
       identity: side.identity,
@@ -415,17 +368,16 @@ describe('DesktopPreviewRuntime', () => {
     });
     expect(JSON.stringify(unsupported)).not.toMatch(/absolutePath|must-not-be-opened|neko-media:/u);
 
-    endpointEpoch = 'endpoint-2';
+    rendererSessionId = 'endpoint-2';
     await expect(
       runtime.getSnapshot('window-1', {
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
         requestId: 'renderer-reload',
         projectId: unsupported.identity.projectId,
         workspaceId: unsupported.identity.workspaceId,
         viewId: unsupported.identity.viewId,
-        viewEpoch: unsupported.identity.viewEpoch,
+        viewInstanceId: unsupported.identity.viewInstanceId,
         sessionId: unsupported.identity.sessionId,
-        endpointEpoch,
+        rendererSessionId,
       }),
     ).rejects.toThrow('endpoint is stale');
   });
@@ -448,18 +400,7 @@ describe('DesktopPreviewRuntime', () => {
     await writeFile(path.join(root, 'undeclared.bin'), 'private');
     const workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
-      getProjection: async () => ({
-        endpointEpoch: 'endpoint-1',
-        catalog: {
-          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
-        },
-        window: {
-          windowId: 'window-1',
-          revision: 1,
-          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
-          workbench,
-        },
-      }),
+      getProjection: async () => createShellProjection(workbench),
       updateWorkbench: vi.fn(async () => undefined),
     };
     const runtime = new DesktopPreviewRuntime({
@@ -510,18 +451,7 @@ describe('DesktopPreviewRuntime', () => {
     );
     const workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
-      getProjection: async () => ({
-        endpointEpoch: 'endpoint-1',
-        catalog: {
-          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
-        },
-        window: {
-          windowId: 'window-1',
-          revision: 1,
-          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
-          workbench,
-        },
-      }),
+      getProjection: async () => createShellProjection(workbench),
       updateWorkbench: vi.fn(async () => undefined),
     };
     const runtime = new DesktopPreviewRuntime({
@@ -555,18 +485,7 @@ describe('DesktopPreviewRuntime', () => {
     await symlink(path.join(outside, 'secret.bin'), path.join(root, 'linked.bin'));
     const workbench = createDefaultDesktopWorkbenchLayout('window-1');
     const shell: DesktopPreviewShellPort = {
-      getProjection: async () => ({
-        endpointEpoch: 'endpoint-1',
-        catalog: {
-          projects: [{ projectId: 'project-1', workspaceId: 'workspace-1' }],
-        },
-        window: {
-          windowId: 'window-1',
-          revision: 1,
-          tabs: [{ projectId: 'project-1', viewId: 'project-view-1', viewEpoch: 1 }],
-          workbench,
-        },
-      }),
+      getProjection: async () => createShellProjection(workbench),
       updateWorkbench: vi.fn(async () => undefined),
     };
     const runtime = new DesktopPreviewRuntime({
@@ -584,6 +503,69 @@ describe('DesktopPreviewRuntime', () => {
     ).rejects.toThrow('escapes the model directory');
   });
 });
+
+function createShellProjection(
+  workbench: ReturnType<typeof createDefaultDesktopWorkbenchLayout>,
+  rendererSessionId = 'endpoint-1',
+): Awaited<ReturnType<DesktopPreviewShellPort['getProjection']>> {
+  const sceneId = 'scene:window-1:workspace-1';
+  const scope = {
+    kind: 'workspace' as const,
+    draftId: 'draft:workspace-1',
+    workspaceId: 'workspace-1',
+    workspaceGrantId: 'workspace-grant:workspace-1',
+  };
+  const scene = parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'agent', agentViewId: 'project-view-1', scope },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface:workspace-1',
+        agentViewId: 'project-view-1',
+        phase: 'draft',
+        scope,
+      },
+      rightManager: { kind: 'workspace-resources', workspaceId: 'workspace-1' },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+  const instance = createDesktopWindowComposition({
+    workbenchInstanceId: 'workbench:workspace-1',
+    layout: workbench,
+    scene,
+  });
+  return {
+    rendererSessionId,
+    catalog: {
+      projects: [
+        {
+          projectId: 'project-1',
+          workspaceId: 'workspace-1',
+          profile: 'content',
+          displayName: 'Fixture',
+          createdAt: '2026-08-05T00:00:00.000Z',
+          updatedAt: '2026-08-05T00:00:00.000Z',
+        },
+      ],
+    },
+    window: {
+      windowId: 'window-1',
+      activeTarget: { kind: 'project', tabId: 'tab-1' },
+      tabs: [
+        {
+          tabId: 'tab-1',
+          projectId: 'project-1',
+          viewId: 'project-view-1',
+          viewInstanceId: 'view-instance-1',
+        },
+      ],
+      workbench: instance,
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+    },
+  };
+}
 
 function createResources(): DesktopResourceRegistry {
   const registry = new DesktopResourceRegistry();

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { extractSemanticText, SemanticTextExtractionError } from './text';
 
 const storySchemaAdapter = {
-  schema: { schemaId: 'openneko.story', schemaVersion: '1' },
+  schema: { schemaId: 'openneko.story' },
   formats: ['json', 'yaml'] as const,
   selectField: ({ path, value }: { path: readonly (string | number)[]; value: string }) => {
     const normalizedPath = path.filter((item): item is string => typeof item === 'string');

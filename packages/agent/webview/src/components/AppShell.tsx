@@ -14,14 +14,17 @@ import { Header } from './Header';
 import { OnboardingFlow } from './OnboardingFlow';
 import { useConfigState, useResourceState } from '../hooks';
 import { ConversationController } from './ConversationController';
+import type { AgentRootPresentation } from '@neko/agent-contracts';
 
 export interface AppShellProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
+  readonly agentPresentation?: AgentRootPresentation;
 }
 
 export function AppShell({
+  agentPresentation,
   initialConversation,
   initialInput,
   presentation = 'default',
@@ -58,9 +61,7 @@ export function AppShell({
   const isAiConfigured = !!settings.configuredProviders.find(
     (provider) =>
       provider.enabled !== false &&
-      ((provider.models?.length ?? 0) > 0 ||
-        !!provider.apiKey ||
-        provider.requiresApiKey === false),
+      ((provider.models?.length ?? 0) > 0 || provider.requiresApiKey === false),
   );
   useEffect(() => {
     if (presentation === 'default' && hasConfigSnapshot && !isAiConfigured) {
@@ -81,6 +82,7 @@ export function AppShell({
       className="flex flex-col h-screen bg-[var(--neko-sideBar-background,var(--neko-editor-background))] text-[var(--neko-foreground)]"
     >
       <ConversationController
+        agentPresentation={agentPresentation}
         emptyStatePresentation={presentation === 'desktop-dock' ? 'desktop-dock' : 'default'}
         initialConversation={initialConversation}
         initialInput={initialInput}
@@ -101,14 +103,17 @@ export function AppShell({
         pluginsAvailable={pluginsAvailable}
         setPluginsAvailable={setPluginsAvailable}
         setShowOnboarding={setShowOnboarding}
-        renderHeader={(headerProps) => (
-          <Header
-            {...headerProps}
-            configuredProviders={settings.configuredProviders}
-            onOpenOnboarding={() => setShowOnboarding(true)}
-            showAccountBar={presentation === 'default'}
-          />
-        )}
+        renderHeader={(headerProps) =>
+          presentation === 'default' ? (
+            <Header
+              {...headerProps}
+              configuredProviders={settings.configuredProviders}
+              onOpenOnboarding={() => setShowOnboarding(true)}
+              showAccountBar
+              showConversationNavigation
+            />
+          ) : null
+        }
       />
       {presentation === 'default' && showOnboarding ? (
         <OnboardingFlow onComplete={() => setShowOnboarding(false)} />

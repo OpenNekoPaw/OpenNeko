@@ -1,9 +1,9 @@
 import type { MarkdownDiagnostic } from './diagnostics';
 import type { NormalizedMarkdownDocument } from './document';
 import {
-  createMarkdownRevision,
+  createMarkdownDocumentId,
   createMarkdownSessionId,
-  type MarkdownRevision,
+  type MarkdownDocumentId,
   type MarkdownSessionId,
 } from './identity';
 import type { MarkdownNode } from './nodes';
@@ -21,7 +21,7 @@ import {
 
 export interface MarkdownStreamingSnapshot {
   readonly sessionId: MarkdownSessionId;
-  readonly revision: MarkdownRevision;
+  readonly documentId: MarkdownDocumentId;
   readonly source: string;
   readonly document: NormalizedMarkdownDocument;
   readonly stableEndOffset: number;
@@ -33,7 +33,7 @@ export interface MarkdownStreamingSnapshot {
 export interface MarkdownStreamingFailure {
   readonly status: 'failed';
   readonly sessionId: MarkdownSessionId;
-  readonly revision: MarkdownRevision;
+  readonly documentId: MarkdownDocumentId;
   readonly source: string;
   readonly isFinal: boolean;
   readonly diagnostics: readonly MarkdownDiagnostic[];
@@ -48,7 +48,7 @@ export type MarkdownStreamingResult = MarkdownStreamingReady | MarkdownStreaming
 
 export interface MarkdownStreamingSessionOptions extends Omit<
   ParseNormalizedMarkdownOptions,
-  'sessionId' | 'revision' | 'policy'
+  'sessionId' | 'documentId' | 'policy'
 > {
   readonly sessionId?: MarkdownSessionId;
   readonly policy?: MarkdownParsePolicy;
@@ -57,9 +57,11 @@ export interface MarkdownStreamingSessionOptions extends Omit<
 export class MarkdownStreamingSession {
   readonly #sessionId: MarkdownSessionId;
   readonly #policy: MarkdownParsePolicy;
-  readonly #parseOptions: Omit<ParseNormalizedMarkdownOptions, 'sessionId' | 'revision' | 'policy'>;
+  readonly #parseOptions: Omit<
+    ParseNormalizedMarkdownOptions,
+    'sessionId' | 'documentId' | 'policy'
+  >;
   #source = '';
-  #revisionNumber = 0;
   #finalized = false;
   #lastSnapshot: MarkdownStreamingSnapshot | undefined;
 
@@ -121,19 +123,18 @@ export class MarkdownStreamingSession {
   }
 
   #parseCurrent(isFinal: boolean): MarkdownStreamingResult {
-    this.#revisionNumber += 1;
-    const revision = createMarkdownRevision(this.#revisionNumber);
+    const documentId = createMarkdownDocumentId();
     const result = parseNormalizedMarkdown(this.#source, {
       ...this.#parseOptions,
       sessionId: this.#sessionId,
-      revision,
+      documentId,
       policy: this.#policy,
     });
     if (result.status === 'failed') {
       return {
         status: 'failed',
         sessionId: this.#sessionId,
-        revision,
+        documentId,
         source: this.#source,
         isFinal,
         diagnostics: result.diagnostics,
@@ -151,7 +152,7 @@ export class MarkdownStreamingSession {
     }
     const snapshot: MarkdownStreamingSnapshot = {
       sessionId: this.#sessionId,
-      revision,
+      documentId,
       source: this.#source,
       document: result.document,
       stableEndOffset,

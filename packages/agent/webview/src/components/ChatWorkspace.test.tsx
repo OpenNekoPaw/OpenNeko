@@ -27,8 +27,8 @@ const hostMocks = vi.hoisted(() => ({
   clearActiveSkill: vi.fn(),
 }));
 
-vi.mock('../messages', () => ({
-  AgentHostMessages: hostMocks,
+vi.mock('../host-runtime-context', () => ({
+  useAgentHostMessages: () => hostMocks,
 }));
 
 vi.mock('./ChatView/InputAreaContext', () => ({
@@ -105,7 +105,7 @@ vi.mock('./ChatView', () => ({
     onCompositionChange?: (isComposing: boolean) => void;
     focusRequestOwner?: string;
     focusRequestTarget?: 'none' | 'input';
-    focusRequestRevision?: number;
+    focusRequestId?: string;
     viewport?: {
       followMode: 'follow-tail' | 'detached';
       anchorMessageId?: string;
@@ -179,7 +179,7 @@ vi.mock('./ChatView', () => ({
       <span data-testid="composition-state">{String(props.isComposing ?? false)}</span>
       <span data-testid="focus-request">
         {props.focusRequestOwner ?? 'none'}:{props.focusRequestTarget ?? 'none'}:
-        {props.focusRequestRevision ?? 0}
+        {props.focusRequestId ?? 'none'}
       </span>
       <span data-testid="viewport-state">
         {props.viewport?.followMode ?? 'none'}:{props.viewport?.anchorMessageId ?? 'none'}:
@@ -772,6 +772,32 @@ describe('ChatWorkspace pending send', () => {
     expect(hostMocks.sendMessage).not.toHaveBeenCalled();
   });
 
+  it('projects a retained session diagnostic only while its owning Tab is visible', () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-1', conversationId: 'conv-1' });
+    runtime.store.updateState({
+      diagnostics: [
+        {
+          type: 'sessionDiagnostic',
+          code: 'active-tab-mismatch',
+          severity: 'error',
+          action: 'session-mutation',
+          message: 'The exact conversation is no longer active.',
+        },
+      ],
+    });
+    const props = createProps({ tabRenderStore: runtime.store, isVisible: false });
+    const { rerender } = render(<ChatWorkspace {...props} />);
+
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    rerender(<ChatWorkspace {...props} isVisible />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert.parentElement).toBe(document.body);
+    expect(alert.textContent).toContain('active-tab-mismatch');
+    expect(alert.textContent).toContain('The exact conversation is no longer active.');
+  });
+
   it('routes visible mutations through the immutable Tab runtime binding', () => {
     const clearMessages = vi.fn();
     const setAmbientNodes = vi.fn();
@@ -859,22 +885,24 @@ describe('ChatWorkspace pending send', () => {
     expect(runtimeA.store.getSnapshot().state.composition).toEqual({ isComposing: true });
     expect(runtimeA.store.getSnapshot().state.focus).toEqual({
       target: 'input',
-      requestRevision: 1,
+      requestId: expect.any(String),
     });
+    const runtimeAFocusRequestId = runtimeA.store.getSnapshot().state.focus.requestId;
 
     rerender(<ChatWorkspace {...createProps({ tabRenderStore: runtimeB.store })} />);
     expect(screen.getByTestId('composition-state').textContent).toBe('false');
-    expect(screen.getByTestId('focus-request').textContent).toContain('tab-b:none:0');
+    expect(screen.getByTestId('focus-request').textContent).toContain('tab-b:none:none');
 
     fireEvent.click(screen.getByTestId('composition-start'));
     runRegisteredShortcut('focusInput');
     expect(runtimeB.store.getSnapshot().state.composition).toEqual({ isComposing: true });
     expect(runtimeB.store.getSnapshot().state.focus).toEqual({
       target: 'input',
-      requestRevision: 1,
+      requestId: expect.any(String),
     });
+    expect(runtimeB.store.getSnapshot().state.focus.requestId).not.toBe(runtimeAFocusRequestId);
     expect(runtimeA.store.getSnapshot().state.composition).toEqual({ isComposing: true });
-    expect(runtimeA.store.getSnapshot().state.focus.requestRevision).toBe(1);
+    expect(runtimeA.store.getSnapshot().state.focus.requestId).toBe(runtimeAFocusRequestId);
   });
 
   it('does not require a host active-conversation owner to mutate the visible Tab', () => {

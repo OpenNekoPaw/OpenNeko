@@ -474,8 +474,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private interactionDepth = 0;
-  private loadEpoch = 0;
-  private panoramaEpoch = 0;
+  private modelLoadRequest: object | undefined;
+  private panoramaLoadRequest: object | undefined;
   private disposed = false;
   private readonly requestRender = (): void => this.renderScheduler.request();
   private readonly handleTransformChange = (): void => this.requestRender();
@@ -579,14 +579,15 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
 
   async load(source: ModelPreviewSourceDescriptor): Promise<NormalizedModelFacts> {
     this.assertLive();
-    const epoch = ++this.loadEpoch;
+    const request = {};
+    this.modelLoadRequest = request;
     this.detachModel();
     const manager = new THREE.LoadingManager();
     manager.setURLModifier(createExactUrlModifier(source));
     manager.onError = (url) =>
       this.callbacks.onDiagnostic?.(`Failed to load authorized URL: ${url}`);
     const loaded = await loadModelSource(source, manager);
-    if (this.disposed || epoch !== this.loadEpoch) {
+    if (this.disposed || request !== this.modelLoadRequest) {
       disposeObjectTree(loaded.root);
       throw new Error('Model Preview load completed after its session was replaced.');
     }
@@ -608,7 +609,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     preset: Extract<ThreeReferencePanelSubject, { readonly kind: 'builtin-preset' }>,
   ): Promise<NormalizedModelFacts> {
     this.assertLive();
-    const epoch = ++this.loadEpoch;
+    const request = {};
+    this.modelLoadRequest = request;
     this.detachModel();
     if (preset.runtime.kind !== 'procedural') {
       throw new Error(`Unsupported 3D Reference preset runtime: ${preset.subject.presetId}`);
@@ -625,7 +627,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       : createBlockoutReferencePreset(
           toBlockoutReferenceImplementationId(preset.runtime.implementationId),
         );
-    if (this.disposed || epoch !== this.loadEpoch) {
+    if (this.disposed || request !== this.modelLoadRequest) {
       disposeObjectTree(root);
       throw new Error('3D Reference preset load completed after its session was replaced.');
     }
@@ -664,9 +666,10 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     readonly orientation: ThreeReferencePanoramaOrientation;
   }): Promise<void> {
     this.assertLive();
-    const epoch = ++this.panoramaEpoch;
+    const request = {};
+    this.panoramaLoadRequest = request;
     const texture = await loadPanoramaTexture(environment.runtime);
-    if (this.disposed || epoch !== this.panoramaEpoch) {
+    if (this.disposed || request !== this.panoramaLoadRequest) {
       texture.dispose();
       throw new Error('3D Reference panorama load completed after its session was replaced.');
     }
@@ -690,7 +693,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
 
   clearPanoramaEnvironment(): void {
     this.assertLive();
-    this.panoramaEpoch += 1;
+    this.panoramaLoadRequest = undefined;
     this.detachPanoramaEnvironment();
     this.requestRender();
   }
@@ -917,7 +920,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.loadEpoch += 1;
+    this.modelLoadRequest = undefined;
     this.renderScheduler.dispose();
     this.transform.removeEventListener('dragging-changed', this.handleTransformDraggingChanged);
     this.transform.removeEventListener('change', this.handleTransformChange);
@@ -937,7 +940,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.directDrag.dispose();
     this.orbit.dispose();
     this.detachModel();
-    this.panoramaEpoch += 1;
+    this.panoramaLoadRequest = undefined;
     this.detachPanoramaEnvironment();
     for (const light of this.directionalLights.values()) {
       this.scene.remove(light, light.target);
@@ -1361,11 +1364,11 @@ function modelLightGuideColor(lightId: string, index: number): number {
 
 function toNeutralMannequinVariant(implementationId: string): NeutralMannequinVariant | undefined {
   switch (implementationId) {
-    case 'neutral-mannequin-female-v2':
+    case 'neutral-mannequin-female':
       return 'female';
-    case 'neutral-mannequin-male-v2':
+    case 'neutral-mannequin-male':
       return 'male';
-    case 'neutral-mannequin-child-v2':
+    case 'neutral-mannequin-child':
       return 'child';
     default:
       return undefined;
@@ -1376,11 +1379,11 @@ function toBlockoutReferenceImplementationId(
   implementationId: string,
 ): BlockoutReferenceImplementationId {
   switch (implementationId) {
-    case 'blockout-cube-v1':
-    case 'blockout-sphere-v1':
-    case 'blockout-cylinder-v1':
-    case 'studio-room-blockout-v1':
-    case 'neutral-panorama-grid-v1':
+    case 'blockout-cube':
+    case 'blockout-sphere':
+    case 'blockout-cylinder':
+    case 'studio-room-blockout':
+    case 'neutral-panorama-grid':
       return implementationId;
     default:
       throw new Error(`Unknown procedural 3D Reference runtime: ${implementationId}`);

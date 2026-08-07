@@ -27,14 +27,6 @@ describe('tool execution owner scope', () => {
     expect(requireToolExecutionRunScope(options({ metadata: OWNER, trace: OWNER }))).toEqual(OWNER);
   });
 
-  it('treats an unknown trace conversation as absent when metadata owns the execution', () => {
-    expect(
-      requireToolExecutionRunScope(
-        options({ metadata: OWNER, trace: { conversationId: 'unknown', runId: OWNER.runId } }),
-      ),
-    ).toEqual(OWNER);
-  });
-
   it('rejects mismatched conversation ownership', () => {
     expect(() =>
       requireToolExecutionRunScope(
@@ -54,21 +46,13 @@ describe('tool execution owner scope', () => {
   it.each([
     [{ metadata: { runId: OWNER.runId } }, /conversationId ownership/],
     [{ metadata: { conversationId: OWNER.conversationId } }, /runId ownership/],
-    [{ trace: { conversationId: 'unknown', runId: OWNER.runId } }, /conversationId ownership/],
+    [{ trace: { conversationId: '   ', runId: OWNER.runId } }, /non-empty trace.conversationId/],
   ] satisfies readonly [ToolExecuteOptions, RegExp][])(
     'rejects incomplete ownership %#',
     (input, error) => {
       expect(() => requireToolExecutionRunScope(input)).toThrow(error);
     },
   );
-
-  it('rejects an unknown metadata conversation owner', () => {
-    expect(() =>
-      requireToolExecutionRunScope(
-        options({ metadata: { conversationId: 'unknown', runId: OWNER.runId } }),
-      ),
-    ).toThrow(/concrete conversationId owner/);
-  });
 
   it('overrides request metadata with the canonical execution owner', () => {
     expect(

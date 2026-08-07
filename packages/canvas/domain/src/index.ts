@@ -16,7 +16,6 @@ export {
 } from './workspace-board-delivery-ledger';
 export {
   WorkspaceBoardDeliveryCoordinator,
-  createCanvasWorkspaceBoardRevision,
   type CanvasWorkspaceBoardLoadedDocument,
   type CanvasWorkspaceBoardMutationPort,
   type WorkspaceBoardDeliveryCoordinatorOptions,
@@ -29,7 +28,6 @@ export type {
   CanvasOperationSource,
 } from './edit-operations';
 export {
-  CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
   CANVAS_HOST_RUNTIME_ROUTES,
   CanvasHostRuntimeContractError,
   assertCanvasHostRuntimeIdentity,
@@ -38,11 +36,16 @@ export {
   createCanvasMaterialActionResolutionRequest,
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
+  parseCanvasHostPresentationState,
   parseCanvasMaterialActionResolution,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
   parseCanvasHostSnapshot,
 } from './canvas-host-runtime-contract';
+export {
+  createCanvasHostPresentationSnapshotStore,
+  type CanvasHostPresentationSnapshotStore,
+} from './canvas-host-presentation-snapshot';
 export type {
   CanvasHostAuthoringCapabilities,
   CanvasHostIntent,

@@ -25,33 +25,11 @@ describe('ProjectFormatCodecRegistry', () => {
 });
 
 describe('NKC-only project file ownership', () => {
-  it('registers NKC and rejects retired NKV', () => {
+  it('registers the NKC project format', () => {
     const registry = createNkcProjectFormatCodecRegistry();
 
     expect(registry.list().map((codec) => codec.formatId)).toEqual(['nkc']);
     expect(registry.getByExtension('board.nkc')?.formatId).toBe('nkc');
-    expect(registry.getByExtension('legacy.nkv')).toBeUndefined();
-    expect(() => registry.requireByExtension('legacy.nkv')).toThrow(
-      'No project format codec registered',
-    );
-  });
-
-  it('fails closed without reading or rewriting retired NKV bytes', async () => {
-    const legacyBytes = new TextEncoder().encode('{"version":"2.0","name":"legacy"}');
-    const readFile = vi.fn(async () => legacyBytes);
-    const writeFile = vi.fn(async () => undefined);
-    const store = new ProjectFileStore({
-      registry: createNkcProjectFormatCodecRegistry(),
-      fileOps: { readFile, writeFile },
-    });
-
-    const result = await store.load({ filePath: '/workspace/legacy.nkv' });
-
-    expect(result).toMatchObject({ ok: false, readOnly: true });
-    expect(result.diagnostics).toEqual([expect.objectContaining({ code: 'invalid-format' })]);
-    expect(readFile).not.toHaveBeenCalled();
-    expect(writeFile).not.toHaveBeenCalled();
-    expect(new TextDecoder().decode(legacyBytes)).toBe('{"version":"2.0","name":"legacy"}');
   });
 
   it('round-trips an NKC document through the shared storage boundary', async () => {
@@ -81,7 +59,6 @@ function createJsonCodec(formatId: string, extension: string): ProjectFormatCode
   return {
     formatId,
     fileExtensions: [extension],
-    currentVersion: '1',
     load: (json) => ({ document: JSON.parse(json) as unknown, diagnostics: [] }),
     save: (document) => ({ content: JSON.stringify(document), diagnostics: [] }),
   };

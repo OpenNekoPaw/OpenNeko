@@ -23,9 +23,6 @@ export interface ValidationResult {
   readonly warnings: ValidationError[];
 }
 
-const LEGACY_RUNTIME_GENERATED_GROUP_ID_PREFIX = 'runtime:canvas-generated-group:';
-const LEGACY_RUNTIME_GENERATED_CANDIDATE_ID_PREFIX = 'runtime:canvas-generated-candidate:';
-
 // =============================================================================
 // Type Guards (internal helpers)
 // =============================================================================
@@ -78,11 +75,6 @@ function validateRoot(
   errors: ValidationError[],
   _warnings: ValidationError[],
 ): void {
-  // version — required string
-  if (!isString(data['version'])) {
-    errors.push({ field: 'version', message: 'must be a string', severity: 'error' });
-  }
-
   // name — required string
   if (!isString(data['name'])) {
     errors.push({ field: 'name', message: 'must be a string', severity: 'error' });
@@ -117,7 +109,7 @@ function validateRoot(
     if (data[field] !== undefined) {
       errors.push({
         field,
-        message: 'legacy Canvas subsystem state is not allowed in the canonical format',
+        message: 'Canvas subsystem state is not allowed in the canonical format',
         severity: 'error',
       });
     }
@@ -165,15 +157,6 @@ function validateNode(
   // id — required string
   if (!isString(node['id'])) {
     structuralErrors.push({ field: `${path}.id`, message: 'must be a string', severity: 'error' });
-  } else if (
-    node['id'].startsWith(LEGACY_RUNTIME_GENERATED_GROUP_ID_PREFIX) ||
-    node['id'].startsWith(LEGACY_RUNTIME_GENERATED_CANDIDATE_ID_PREFIX)
-  ) {
-    structuralErrors.push({
-      field: `${path}.id`,
-      message: 'runtime generated Group identities cannot be persisted',
-      severity: 'error',
-    });
   }
 
   // type — required, must be in allowed set
@@ -333,10 +316,19 @@ function validateJobNodeData(value: unknown, path: string, errors: ValidationErr
       severity: 'error',
     });
   }
-  if (!isNonNegativeInteger(value['revision'])) {
+  const allowedFields = new Set([
+    'jobRef',
+    'title',
+    'objective',
+    'status',
+    'inputRefs',
+    'outputRefs',
+    'diagnostic',
+  ]);
+  for (const field of Object.keys(value).filter((candidate) => !allowedFields.has(candidate))) {
     errors.push({
-      field: `${path}.revision`,
-      message: 'Job revision must be a non-negative integer',
+      field: `${path}.${field}`,
+      message: 'Job node data contains an unknown field',
       severity: 'error',
     });
   }
@@ -430,10 +422,6 @@ function isCanvasJobStatus(value: unknown): boolean {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function validatePort(

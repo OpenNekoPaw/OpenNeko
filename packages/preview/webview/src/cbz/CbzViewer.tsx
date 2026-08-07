@@ -13,11 +13,7 @@ import { type Entry, BlobWriter, ZipReader, HttpReader } from '@zip.js/zip.js';
 import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
-import {
-  usePersistedState,
-  initPersistedStore,
-  notifySubscribers,
-} from '../shared/usePersistedState';
+import { usePersistedState, usePersistedStateRestore } from '../shared/usePersistedState';
 import { useTranslation } from '../i18n/I18nContext';
 
 const IMAGE_EXTENSIONS = /\.(jpe?g|png|gif|webp|bmp|avif)$/i;
@@ -42,6 +38,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   const [pageCache, setPageCache] = useState<Map<number, string>>(new Map());
   const [currentPage, setCurrentPage] = usePersistedState('currentPage', 0);
   const [viewMode, setViewMode] = usePersistedState<'scroll' | 'single'>('viewMode', 'scroll');
+  const restorePersistedState = usePersistedStateRestore();
   // Track natural image heights after load (for stable scroll)
   const [imageHeights, setImageHeights] = useState<Map<number, number>>(new Map());
   const persistedPageRef = useRef(currentPage);
@@ -93,8 +90,7 @@ export const CbzViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =>
   useHostMessage((msg) => {
     const m = msg as unknown as { type: string; payload: Record<string, unknown> };
     if (m.type === 'document:restoreState') {
-      initPersistedStore(m.payload as Record<string, unknown>);
-      notifySubscribers();
+      restorePersistedState(m.payload);
     } else if (!sourceUrl && msg.type === 'document:data') {
       void loadCbzFromUrl(msg.payload.url);
     } else if (msg.type === 'document:navigate') {

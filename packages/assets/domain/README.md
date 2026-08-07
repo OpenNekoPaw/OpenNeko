@@ -28,11 +28,21 @@ Desktop Main composes the package's host-neutral services through public entries
 projections, and `SemanticSourceDiscoveryService` emits reviewable semantic evidence without writing
 Entity facts. The package-owned renderer root projects those services through typed Desktop IPC.
 
-The project Resource Browser is independent from the global Library Browser. It keeps its own
-selection, facet, query, and list/grid state, and projects safe required, unavailable, incomplete,
-conflict, and unreferenced statuses without receiving a physical target. Recovery is an explicit
-revisioned plan followed by confirmation and apply; generic repair routes fail closed. Add and
-relink create OS links through the machine-global alias topology and never copy a whole library.
+The project Resource Browser is independent from the global Library Browser. It exposes the four
+owner-preserving `files`, `media`, `assets`, and `entities` facets and keeps per-facet selection,
+navigation, query, and list/grid state. Asset results retain exact Asset identity; Entity and candidate
+results retain their Entity owner identity. The package-owned `entity.manage` route validates selection,
+capability, identity, and expected project revision before delegating to the exact Entity owner. It does
+not infer Entity operations or write project files in the Renderer or Desktop application root.
+
+The browser projects safe required, unavailable, incomplete, conflict, and unreferenced statuses without
+receiving a physical target. Recovery is an explicit revisioned plan followed by confirmation and apply;
+generic repair routes fail closed. Add and relink create OS links through the machine-global alias
+topology and never copy a whole library.
+
+Entity Asset intents remain capability-gated until the manifest-backed Asset package runtime,
+publication lifecycle, and remote provider are production-wired. The flat global Asset file surface is
+not a fallback package provider.
 
 Portable snapshot execution is owned by the Desktop project lifecycle surface, not this browser.
 That operation creates a new independent project, collects only authoritative referenced bytes, and
@@ -45,11 +55,9 @@ Library connections and OpenNeko-owned Asset Library files. It accepts only opaq
 identities, catalog revisions, relative Media Library locators, and revisioned `icon`/`hover`
 thumbnail descriptors. Basenames beginning with `.` never enter either projection.
 
-Desktop Main remains the authority for native selection, absolute-path resolution, thumbnail
-generation, operation-owned Asset import staging, and system-trash removal. Removing a Media
-Library connection unlinks only the managed connection; removing an Asset validates the current
-owned regular file and moves it to the operating-system trash. Hover previews are static images and
-do not open or autoplay a media session.
-
-Retired Entity Asset graph data is handled only by explicit inspection and migration in
-`@neko/entity-node`; the normal Assets runtime does not read a legacy Asset catalog.
+Desktop Main remains the authority for native selection and Electron wiring. Assets Node owns
+absolute-path resolution, thumbnail input authorization, operation-owned import staging, and the
+persistent Asset Library membership lifecycle. Removing a Media Library connection unlinks only the
+managed connection; the ordinary Asset remove action marks only its membership record as removed and
+preserves the source file. Uninstall and unreferenced-byte garbage collection are separate explicit
+operations. Hover previews are static images and do not open or autoplay a media session.

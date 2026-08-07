@@ -56,7 +56,7 @@ describe('ResearchNote Markdown persistence', () => {
     );
   });
 
-  it('rejects non-Markdown paths and .neko project memory writes', async () => {
+  it('rejects non-Markdown paths and managed project-local writes', async () => {
     const writeFile = vi.fn(async () => undefined);
 
     await expect(
@@ -67,8 +67,12 @@ describe('ResearchNote Markdown persistence', () => {
       }),
     ).rejects.toThrow('ResearchNote must be saved as a Markdown file.');
     await expect(
-      saveResearchNoteMarkdown({ note: createNote(), path: '.neko/memory.md', fs: { writeFile } }),
-    ).rejects.toThrow('ResearchNote must not be saved into .neko project memory.');
+      saveResearchNoteMarkdown({
+        note: createNote(),
+        path: '.runtime/internal.md',
+        fs: { writeFile },
+      }),
+    ).rejects.toThrow('ResearchNote must not be saved into managed project-local storage.');
     expect(writeFile).not.toHaveBeenCalled();
   });
 });

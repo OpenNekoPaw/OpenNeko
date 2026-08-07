@@ -43,7 +43,6 @@ export interface NekoSkillProfileDependency {
   readonly id: string;
   readonly kind: AgentProfileKind;
   readonly relationship: AgentProfileRelationship;
-  readonly versionRange?: string;
 }
 
 export interface NekoSkillDependencies {
@@ -63,18 +62,16 @@ export interface NekoSkillRelationships {
 
 /** Optional Neko Host overlay serialized to agents/neko.yaml. */
 export interface NekoSkillOverlay {
-  readonly schemaVersion: 1;
   readonly interface?: NekoSkillInterfaceMetadata;
   readonly dependencies?: NekoSkillDependencies;
   readonly relationships?: NekoSkillRelationships;
 }
 
-export type SkillValidationArea =
-  'portable' | 'overlay' | 'compatibility' | 'quality' | 'creation' | 'migration';
+export type SkillValidationArea = 'portable' | 'overlay' | 'host-fit' | 'quality' | 'creation';
 
 export type SkillDiagnosticSeverity = 'error' | 'warning' | 'info';
 
-/** Stable machine-readable diagnostic shared by validation, creation, and migration. */
+/** Stable machine-readable diagnostic shared by validation and creation. */
 export interface SkillDiagnostic {
   readonly area: SkillValidationArea;
   readonly code: string;
@@ -88,10 +85,10 @@ export interface SkillValidationDimension {
   readonly diagnostics: readonly SkillDiagnostic[];
 }
 
-export type SkillCompatibilityState = 'compatible' | 'incompatible' | 'unknown';
+export type SkillHostFitState = 'supported' | 'unsupported' | 'unknown';
 
-export interface SkillCompatibilityStatus {
-  readonly state: SkillCompatibilityState;
+export interface SkillHostFitStatus {
+  readonly state: SkillHostFitState;
   readonly diagnostics: readonly SkillDiagnostic[];
 }
 
@@ -99,7 +96,7 @@ export interface SkillCompatibilityStatus {
 export interface PortableSkillValidationResult {
   readonly portable: SkillValidationDimension;
   readonly overlay: SkillValidationDimension;
-  readonly compatibility: SkillCompatibilityStatus;
+  readonly hostFit: SkillHostFitStatus;
   readonly quality: SkillValidationDimension;
 }
 
@@ -151,39 +148,7 @@ export interface NekoSkillHostProjection {
   readonly enabled: boolean;
   readonly editable: boolean;
   readonly trusted: boolean;
-  readonly compatibility: SkillCompatibilityStatus;
+  readonly hostFit: SkillHostFitStatus;
   readonly fingerprint: string;
   readonly catalogActions: readonly SkillCatalogAction[];
-}
-
-export type LegacySkillMigrationFailureCode =
-  | 'migration-source-not-found'
-  | 'migration-source-invalid'
-  | 'migration-data-unmappable'
-  | 'migration-target-conflict'
-  | 'migration-filesystem-error';
-
-/** Explicit-only migration request for importing a legacy .neko/skills package. */
-export interface LegacySkillMigrationInput {
-  readonly source: CreateSkillTarget;
-  readonly target: CreateSkillTarget;
-  readonly name: string;
-}
-
-export interface LegacySkillMigrationPlan {
-  readonly sourcePath: string;
-  readonly targetPath: string;
-  readonly createInput: CreateSkillInput;
-  readonly diagnostics: readonly SkillDiagnostic[];
-}
-
-export interface LegacySkillMigrationResult {
-  readonly sourcePath: string;
-  readonly created: CreateSkillResult;
-  readonly diagnostics: readonly SkillDiagnostic[];
-}
-
-export interface LegacySkillMigrationFailure {
-  readonly code: LegacySkillMigrationFailureCode;
-  readonly diagnostics: readonly SkillDiagnostic[];
 }

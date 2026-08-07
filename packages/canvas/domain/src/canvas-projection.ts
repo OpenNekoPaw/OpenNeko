@@ -9,7 +9,6 @@ export type CanvasProjectionKind = 'entity' | 'memory';
 export interface ProjectedCanvasSource {
   readonly kind: CanvasProjectionKind;
   readonly uri: string;
-  readonly version?: string;
   readonly metadata?: CanvasSerializableRecord;
 }
 
@@ -113,11 +112,7 @@ export function isProjectedCanvasSource(value: unknown): value is ProjectedCanva
     return false;
   }
   const candidate = value as Record<string, unknown>;
-  return (
-    isCanvasProjectionKind(candidate['kind']) &&
-    typeof candidate['uri'] === 'string' &&
-    (candidate['version'] === undefined || typeof candidate['version'] === 'string')
-  );
+  return isCanvasProjectionKind(candidate['kind']) && typeof candidate['uri'] === 'string';
 }
 
 export function isCanvasProjectionKind(value: unknown): value is CanvasProjectionKind {

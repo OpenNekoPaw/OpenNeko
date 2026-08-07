@@ -43,7 +43,6 @@ export interface AgentCapabilityContributionIdentity {
   readonly id: string;
   readonly source: AgentCapabilitySource;
   readonly sourceId: string;
-  readonly version?: string;
   readonly trustLevel: AgentCapabilityTrustLevel;
 }
 
@@ -69,7 +68,6 @@ export interface AgentArtifactProtocolContribution {
   readonly id: string;
   readonly artifactKind: string;
   readonly profile?: string;
-  readonly schemaVersion: number;
   readonly validatorId: string;
   readonly rendererIds?: readonly string[];
   readonly projectorIds?: readonly string[];
@@ -79,7 +77,6 @@ export interface AgentArtifactProfileContribution {
   readonly id: string;
   readonly profileId: string;
   readonly protocol: string;
-  readonly version: number;
   readonly descriptorRef?: string;
 }
 
@@ -106,7 +103,6 @@ export interface AgentArtifactExecutionCapabilityContribution {
   readonly actions: readonly string[];
   readonly risk: AgentArtifactCapabilityRisk;
   readonly requiresApproval: boolean;
-  readonly minVersion?: string;
 }
 
 export type AgentSemanticFacetAvailability = 'available' | 'unavailable' | 'degraded';
@@ -280,7 +276,6 @@ export interface AgentCapabilityTelemetryEvent {
   readonly contributionId: string;
   readonly source: AgentCapabilitySource;
   readonly sourceId: string;
-  readonly version?: string;
   readonly field?: string;
   readonly reason: AgentCapabilityTelemetryReason;
   readonly hash?: string;

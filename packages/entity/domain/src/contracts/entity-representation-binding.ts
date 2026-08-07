@@ -1,7 +1,6 @@
 import { validateContentLocator, type ContentLocator } from '@neko/content';
 import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
 
-export const ENTITY_REPRESENTATION_BINDING_FILE_VERSION = 2 as const;
 export const ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH =
   'neko/entity-representation-bindings.json' as const;
 
@@ -33,7 +32,6 @@ export const ENTITY_REPRESENTATION_BINDING_SOURCES = [
   'canvas',
   'agent',
   'matcher',
-  'migration',
 ] as const;
 
 export type EntityRepresentationRole = (typeof ENTITY_REPRESENTATION_ROLES)[number];
@@ -44,8 +42,7 @@ export type EntityRepresentationBindingStatus = 'suggested' | 'confirmed' | 'rej
 
 export type EntityRepresentationBindingAvailability = 'active' | 'orphaned' | 'archived';
 
-export type EntityRepresentationBindingSource =
-  'user' | 'story' | 'canvas' | 'agent' | 'matcher' | 'migration';
+export type EntityRepresentationBindingSource = 'user' | 'story' | 'canvas' | 'agent' | 'matcher';
 
 export interface EntityRepresentationBinding {
   readonly id: string;
@@ -63,7 +60,6 @@ export interface EntityRepresentationBinding {
 }
 
 export interface EntityRepresentationBindingFile {
-  readonly version: typeof ENTITY_REPRESENTATION_BINDING_FILE_VERSION;
   readonly bindings: readonly EntityRepresentationBinding[];
 }
 
@@ -101,8 +97,7 @@ export const ENTITY_REPRESENTATION_ROLE_ORDER: Readonly<
   cut: ['motion', 'live2d', 'live3d', 'portrait'],
 } as const;
 
-export type EntityRepresentationBindingFileDiagnosticCode =
-  'legacy-version' | 'unsupported-version' | 'invalid-file';
+export type EntityRepresentationBindingFileDiagnosticCode = 'invalid-file';
 
 export type EntityRepresentationBindingFileDecodeResult =
   | { readonly ok: true; readonly file: EntityRepresentationBindingFile }
@@ -157,7 +152,6 @@ export function isEntityRepresentationBindingFile(
   return (
     isRecord(value) &&
     hasOnlyKeys(value, BINDING_FILE_KEYS) &&
-    value['version'] === 2 &&
     Array.isArray(value['bindings']) &&
     value['bindings'].every(isEntityRepresentationBinding)
   );
@@ -166,20 +160,6 @@ export function isEntityRepresentationBindingFile(
 export function decodeEntityRepresentationBindingFile(
   value: unknown,
 ): EntityRepresentationBindingFileDecodeResult {
-  if (isRecord(value) && value['version'] === 1) {
-    return {
-      ok: false,
-      code: 'legacy-version',
-      message: 'Legacy Entity Asset bindings require explicit inspection and migration.',
-    };
-  }
-  if (isRecord(value) && value['version'] !== undefined && value['version'] !== 2) {
-    return {
-      ok: false,
-      code: 'unsupported-version',
-      message: 'Entity representation bindings use an unsupported schema version.',
-    };
-  }
   if (!isEntityRepresentationBindingFile(value)) {
     return {
       ok: false,
@@ -199,14 +179,13 @@ export function assertEntityRepresentationBindingFile(
 }
 
 export function createEmptyEntityRepresentationBindingFile(): EntityRepresentationBindingFile {
-  return { version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION, bindings: [] };
+  return { bindings: [] };
 }
 
 export function normalizeEntityRepresentationBindingFile(
   file: EntityRepresentationBindingFile,
 ): EntityRepresentationBindingFile {
   return {
-    version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
     bindings: [...file.bindings].sort(compareBindings),
   };
 }
@@ -236,7 +215,7 @@ const BINDING_KEYS = [
   'confidence',
   'updatedAt',
 ] as const;
-const BINDING_FILE_KEYS = ['version', 'bindings'] as const;
+const BINDING_FILE_KEYS = ['bindings'] as const;
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   return Object.keys(value).every((key) => allowed.includes(key));

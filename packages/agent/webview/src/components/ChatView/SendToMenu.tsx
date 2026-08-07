@@ -9,7 +9,8 @@
  */
 
 import { memo, useCallback } from 'react';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
+import type { AgentHostMessageSender } from '../../messages';
 import { ArrowRightIcon, FileIcon, LayersIcon, ScissorsIcon, UploadIcon } from '@neko/ui/icons';
 import { useTranslation } from '../../i18n/I18nContext';
 import type {
@@ -90,6 +91,7 @@ function SendToMenuComponent({
   className,
 }: SendToMenuProps) {
   const { t } = useTranslation();
+  const agentHostMessages = useAgentHostMessages();
   const prefixLabel = labelOverride ?? t('chat.transfer.sendTo');
 
   const handleSendTo = useCallback(
@@ -107,7 +109,7 @@ function SendToMenuComponent({
           ? projectCanvasAuthoringHandoffFromMarkdown(canvasMarkdownHandoff)
           : (canvasAuthoringHandoff ?? projectCanvasAuthoringHandoffFromTransfer(transferPayload));
         if (!authoringHandoff) return;
-        AgentHostMessages.requestCanvasAuthoringHandoff({
+        agentHostMessages.requestCanvasAuthoringHandoff({
           conversationId,
           requestId: createCanvasAuthoringHandoffRequestId(),
           ...authoringHandoff,
@@ -122,7 +124,7 @@ function SendToMenuComponent({
         payload,
       });
       if (!transferPayload) return;
-      AgentHostMessages.sendToPlugin(target, transferPayload);
+      agentHostMessages.sendToPlugin(target, transferPayload);
     },
     [
       assetPath,
@@ -133,6 +135,7 @@ function SendToMenuComponent({
       conversationId,
       mediaType,
       payload,
+      agentHostMessages,
     ],
   );
   const handleDirectCanvasImport = useCallback(() => {
@@ -144,8 +147,8 @@ function SendToMenuComponent({
       payload,
     });
     if (!transferPayload) return;
-    AgentHostMessages.sendToPlugin('canvas', transferPayload);
-  }, [assetPath, assetPaths, assets, mediaType, payload]);
+    agentHostMessages.sendToPlugin('canvas', transferPayload);
+  }, [agentHostMessages, assetPath, assetPaths, assets, mediaType, payload]);
 
   const projection = projectPluginTransferMenu({
     mediaType,
@@ -226,7 +229,7 @@ function createCanvasAuthoringHandoffRequestId(): string {
 }
 
 type CanvasAuthoringHandoffRequestPayload = Parameters<
-  typeof AgentHostMessages.requestCanvasAuthoringHandoff
+  AgentHostMessageSender['requestCanvasAuthoringHandoff']
 >[0];
 
 type CanvasAuthoringHandoffRequestBody = Omit<

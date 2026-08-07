@@ -49,7 +49,6 @@ function fixtureView(): TimelineView {
   return {
     documentUri: 'file:///workspace/cut.otio',
     sessionId: 'session-1',
-    revision: 1,
     name: 'Cut',
     durationSeconds: 8,
     tracks: [

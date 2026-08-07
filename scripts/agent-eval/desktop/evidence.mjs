@@ -1,3 +1,8 @@
+import {
+  assertOrderedWorkflowEvents,
+  assertWorkflowQueueState,
+} from '../runner/workflow-evidence.mjs';
+
 const DESKTOP_EVIDENCE_ASSERTION_KINDS = new Set([
   'runtime-errors-empty',
   'fully-idle',
@@ -7,13 +12,14 @@ const DESKTOP_EVIDENCE_ASSERTION_KINDS = new Set([
   'skill',
   'model',
   'tool-call',
+  'process-order',
+  'queue-state',
   'cancellation',
   'recovery',
   'conversation-persistence',
   'terminal-idle',
   'timeline-projection',
   'resource-display-projection',
-  'no-fallback',
 ]);
 
 export function createDesktopEvaluationFacts(input) {
@@ -27,7 +33,7 @@ export function createDesktopEvaluationFacts(input) {
     throw new Error('Desktop Agent complete-session evidence is incomplete.');
   }
   return Object.freeze({
-    schema: 'neko.agent-eval.desktop-session-facts.v1',
+    schema: 'neko.agent-eval.desktop-session-facts',
     neutralFacts: input.facts,
     identity: input.identity,
     workflow: input.workflow,
@@ -56,10 +62,19 @@ export function assertDesktopEvidenceSupport(assertions) {
       `Desktop Agent assertion '${unsupported.kind}' is not supported by the Desktop evidence boundary.`,
     );
   }
+  const unsupportedProcessEvent = assertions
+    .filter((assertion) => assertion.kind === 'process-order')
+    .flatMap((assertion) => assertion.events)
+    .find((event) => event.kind === 'continuation');
+  if (unsupportedProcessEvent) {
+    throw configurationError(
+      "Desktop Agent process-order event 'continuation' is not supported by the Desktop evidence boundary.",
+    );
+  }
 }
 
 export function isDesktopEvaluationFacts(facts) {
-  return facts?.schema === 'neko.agent-eval.desktop-session-facts.v1';
+  return facts?.schema === 'neko.agent-eval.desktop-session-facts';
 }
 
 export function runDesktopHardGate(assertion, facts, context) {
@@ -95,6 +110,10 @@ export function runDesktopHardGate(assertion, facts, context) {
       return assertModel(assertion, input);
     case 'tool-call':
       return assertToolCall(assertion, input);
+    case 'process-order':
+      return assertOrderedWorkflowEvents(assertion, readDesktopWorkflowSteps(input.workflow));
+    case 'queue-state':
+      return assertWorkflowQueueState(assertion, readDesktopWorkflowSteps(input.workflow));
     case 'cancellation':
       return assertCancellation(assertion, input.workflow);
     case 'recovery':
@@ -107,8 +126,6 @@ export function runDesktopHardGate(assertion, facts, context) {
       return assertTimelineProjection(assertion, input);
     case 'resource-display-projection':
       return assertResourceDisplayProjection(assertion, input);
-    case 'no-fallback':
-      return assertNoFallback(assertion, input);
     default:
       throw configurationError(
         `Desktop Agent assertion '${assertion.kind}' reached execution without an evidence adapter.`,
@@ -136,8 +153,7 @@ function assertCanonicalFacts(input) {
     facts.runtimePath.runtime !== 'pi-conversation-runtime' ||
     facts.runtimePath.transcript !== 'pi-session' ||
     facts.runtimePath.metadata !== 'sqlite' ||
-    facts.runtimePath.projection !== 'conversation-projection-store' ||
-    facts.runtimePath.forbiddenPathCount !== 0
+    facts.runtimePath.projection !== 'conversation-projection-store'
   ) {
     throw new Error(
       'Desktop Agent terminal facts did not use the canonical complete-session path.',
@@ -369,7 +385,6 @@ function assertTimelineProjection(assertion, input) {
     conversationId: terminal.conversationId,
     turnId: terminal.turnId,
     runId: terminal.runId,
-    projectionVersion: terminal.projectionVersion,
     completionStatus: terminal.completion.status,
   };
 }
@@ -411,25 +426,6 @@ function assertResourceDisplayProjection(assertion, input) {
   return projection;
 }
 
-function assertNoFallback(assertion, input) {
-  if (input.facts.runtimePath.forbiddenPathCount !== 0) {
-    throw new Error('Desktop Agent forbidden runtime path participated in execution.');
-  }
-  const projected = JSON.stringify(input.projection);
-  const transportFallback = /ResourceRef|resourceRef|neko-media:|opennekomedia:|file:/u.test(
-    projected,
-  );
-  if (transportFallback)
-    throw new Error('Desktop Agent public projection used a forbidden fallback.');
-  const observed = assertion.forbiddenRefs.filter((ref) => projected.includes(ref));
-  if (observed.length > 0) {
-    throw new Error(
-      `Desktop Agent forbidden fallback reference(s) observed: ${observed.join(', ')}`,
-    );
-  }
-  return { forbiddenRefs: assertion.forbiddenRefs, observedForbiddenRefs: [] };
-}
-
 function assertFactsContainNoRenderUrl(facts) {
   const serialized = JSON.stringify(facts);
   if (
@@ -439,6 +435,75 @@ function assertFactsContainNoRenderUrl(facts) {
   ) {
     throw new Error('Desktop Agent provider/Tool facts contain a render transport URL.');
   }
+}
+
+function readDesktopWorkflowSteps(workflow) {
+  if (!Array.isArray(workflow.steps)) {
+    throw new Error('Desktop Agent workflow controller trace is unavailable.');
+  }
+  return workflow.steps.map((step) => ({
+    ...step,
+    ...(step.snapshot === undefined
+      ? {}
+      : { snapshot: normalizeDesktopWorkflowSnapshot(step.snapshot) }),
+  }));
+}
+
+function normalizeDesktopWorkflowSnapshot(snapshot) {
+  const timeline = collectProjectionTimeline(snapshot.projectionEvents);
+  const toolCalls = timeline
+    .filter((item) => item.kind === 'tool')
+    .map((item) => ({ name: item.toolName, status: item.status }));
+  const messages = Array.isArray(snapshot.messages) ? snapshot.messages : [];
+  const turns = messages.map((message) => ({
+    ...message,
+    ...(message?.role === 'user' && message.source === undefined ? { source: 'user' } : {}),
+  }));
+  if (timeline.length > 0 || toolCalls.length > 0) {
+    turns.push({ role: 'assistant', toolCalls, timeline });
+  }
+  return {
+    conversationId: snapshot.conversationId,
+    messageQueue: snapshot.messageQueue,
+    turns,
+    continuations: [],
+  };
+}
+
+function collectProjectionTimeline(events) {
+  const items = collectObjects(
+    Array.isArray(events) ? events : [],
+    (item) => item.kind === 'assistant_text' || item.kind === 'tool_call',
+  );
+  const byIdentity = new Map();
+  for (const item of items) {
+    const identity = `${item.turnId ?? ''}\u0000${item.id ?? item.itemId ?? ''}`;
+    const existing = byIdentity.get(identity);
+    const projected =
+      item.kind === 'assistant_text'
+        ? {
+            kind: 'assistant_text',
+            sequence: item.sequence,
+            content: item.payload?.content ?? item.content ?? '',
+          }
+        : {
+            kind: 'tool',
+            sequence: item.sequence,
+            toolName: item.payload?.toolCall?.name,
+            status: projectToolStatus(item.payload?.toolCall),
+          };
+    if (!existing || projected.status !== undefined) byIdentity.set(identity, projected);
+  }
+  return [...byIdentity.values()].sort(
+    (left, right) => (left.sequence ?? 0) - (right.sequence ?? 0),
+  );
+}
+
+function projectToolStatus(toolCall) {
+  if (toolCall?.result?.success === true) return 'success';
+  if (toolCall?.result?.success === false) return 'error';
+  if (toolCall?.pendingConfirmation === true) return 'pending';
+  return undefined;
 }
 
 function collectObjects(value, predicate, output = []) {

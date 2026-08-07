@@ -41,7 +41,7 @@ describe('createImportedMarkdownNodeData', () => {
 });
 
 describe('createTableMarkdownNodeData', () => {
-  it('creates an editable GFM table without restoring the legacy table node type', () => {
+  it('creates an editable GFM table', () => {
     expect(createTableMarkdownNodeData()).toEqual({
       title: 'Table',
       content: '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |',

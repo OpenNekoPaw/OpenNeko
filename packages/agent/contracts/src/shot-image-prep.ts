@@ -22,9 +22,7 @@ import type {
   StoryboardTable,
 } from '@neko/canvas-domain';
 
-export const SHOT_IMAGE_PREP_SCHEMA_VERSION = 1 as const;
 export const SHOT_IMAGE_PREP_KIND = 'shot-image-prep-plan' as const;
-export const SHOT_IMAGE_PREP_PROFILE_VERSION = 1 as const;
 export const MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID =
   'media-production.shot-image-prep' as const;
 
@@ -109,7 +107,7 @@ export interface ShotImageRegenerationRecommendation {
 
 export type ShotImagePrepDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-schema-version'
+  | 'unsupported-field'
   | 'invalid-kind'
   | 'missing-required-field'
   | 'invalid-required-field'
@@ -187,7 +185,6 @@ export interface ShotReferenceBundle {
 }
 
 export interface ShotImagePrepPlan {
-  readonly schemaVersion: typeof SHOT_IMAGE_PREP_SCHEMA_VERSION;
   readonly kind: typeof SHOT_IMAGE_PREP_KIND;
   readonly planId: string;
   readonly storyboardId?: string;
@@ -257,7 +254,6 @@ export const SHOT_IMAGE_PREP_PROFILE: ArtifactProfileDescriptor = {
   profileId: MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID,
   kind: 'artifact',
   protocol: 'GenericTable',
-  version: SHOT_IMAGE_PREP_PROFILE_VERSION,
   source: 'builtin',
   title: 'Shot Image Prep',
   fieldDefinitions: [
@@ -489,15 +485,12 @@ export function buildShotImagePrepTable(
   options: {
     readonly tableId?: string;
     readonly title?: string;
-    readonly includeProfileVersion?: boolean;
   } = {},
 ): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? 'shot-image-prep',
     profile: MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID,
-    ...(options.includeProfileVersion ? { profileVersion: SHOT_IMAGE_PREP_PROFILE_VERSION } : {}),
     title: options.title ?? 'Shot Image Prep',
     columns: shotImagePrepColumns(),
     rows: plans.map(projectPlanToRow),
@@ -631,7 +624,6 @@ function deriveShotImagePrepPlanFromShot(input: {
   }
 
   const plan: ShotImagePrepPlan = {
-    schemaVersion: SHOT_IMAGE_PREP_SCHEMA_VERSION,
     kind: SHOT_IMAGE_PREP_KIND,
     planId: `${shotId}-image-prep`,
     ...(input.storyboardId ? { storyboardId: input.storyboardId } : {}),
@@ -642,7 +634,7 @@ function deriveShotImagePrepPlanFromShot(input: {
     operationPlan,
     ...(referenceBundle ? { referenceBundle } : {}),
     ...(input.shot.visualStyle ? { targetStyle: input.shot.visualStyle } : {}),
-    ...(input.shot.generationPrompt ? { generationPrompt: input.shot.generationPrompt } : {}),
+    ...(input.shot.imagePrompt ? { generationPrompt: input.shot.imagePrompt } : {}),
     ...(input.shot.visualDescription ? { editInstruction: input.shot.visualDescription } : {}),
     ...(maskRefs.length > 0 ? { maskRefs } : {}),
     ...(perceptionCardRefs.length > 0 ? { perceptionCardRefs } : {}),
@@ -996,11 +988,31 @@ function validateShotImagePrepPlanValue(
     );
     return;
   }
-  validateLiteral(
-    value['schemaVersion'],
-    SHOT_IMAGE_PREP_SCHEMA_VERSION,
-    [...path, 'schemaVersion'],
-    'invalid-schema-version',
+  rejectUnknownFields(
+    value,
+    new Set([
+      'kind',
+      'planId',
+      'storyboardId',
+      'sceneId',
+      'shotId',
+      'sourceMediaRefs',
+      'imageStrategy',
+      'operationPlan',
+      'referenceBundle',
+      'targetAspectRatio',
+      'targetStyle',
+      'editInstruction',
+      'generationPrompt',
+      'negativePrompt',
+      'maskRefs',
+      'perceptionCardRefs',
+      'outputMediaRefs',
+      'status',
+      'diagnostics',
+      'metadata',
+    ]),
+    path,
     diagnostics,
   );
   validateLiteral(
@@ -1264,6 +1276,26 @@ function validateStatus(
   }
 }
 
+function rejectUnknownFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+  path: readonly ArtifactPathSegment[],
+  diagnostics: ShotImagePrepDiagnostic[],
+): void {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'unsupported-field',
+        [...path, field],
+        `Shot image prep contains unsupported field ${field}.`,
+        { actual: diagnosticValue(value[field]) },
+      ),
+    );
+  }
+}
+
 function validateLiteral(
   actual: unknown,
   expected: string | number,
@@ -1486,8 +1518,8 @@ function mapDiagnosticCode(code: ShotImagePrepDiagnosticCode): ArtifactDiagnosti
   switch (code) {
     case 'invalid-root':
       return 'invalid-root';
-    case 'invalid-schema-version':
-      return 'invalid-schema-version';
+    case 'unsupported-field':
+      return 'unsupported-field';
     case 'invalid-kind':
       return 'invalid-kind';
     case 'missing-required-field':
@@ -1670,7 +1702,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
   }
   if (/^[a-z]:\\/i.test(value)) return true;
   if (value.startsWith('/') && !value.startsWith('${')) return true;
-  if (normalized.includes('/.neko/.cache/')) return true;
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) return true;
   if (normalized.includes('/library/application support/code/user/globalstorage/')) return true;
   return false;
 }

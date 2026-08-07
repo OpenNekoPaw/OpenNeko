@@ -14,7 +14,6 @@ export interface ConversationTurnProjection {
 
 export interface ConversationProjectionSnapshot {
   readonly conversationId: string;
-  readonly projectionVersion: number;
   readonly turns: readonly ConversationTurnProjection[];
 }
 
@@ -31,8 +30,6 @@ export interface ConversationProjectionUpdate {
 export interface ConversationProjectionPatch {
   readonly type: 'conversationProjectionPatch';
   readonly conversationId: string;
-  readonly baseProjectionVersion: number;
-  readonly projectionVersion: number;
   readonly turnId: string;
   readonly runId: string;
   readonly messageId: string;
@@ -51,7 +48,6 @@ export function applyAgentTurnProjectionOperations(
     }
 
     const item = operation.item;
-    assertPositiveRevision(item.itemId, item.itemRevision);
     const current = items.get(item.itemId);
     if (!current) {
       assertSequenceAvailable(items, item);
@@ -60,7 +56,6 @@ export function applyAgentTurnProjectionOperations(
     }
 
     assertStableItemIdentity(current, item);
-    assertIncreasingRevision(current, item.itemRevision);
     if (operation.operation === 'append') {
       items.set(item.itemId, appendTextItem(current, item));
       continue;
@@ -84,16 +79,6 @@ export function applyConversationProjectionPatch(
   if (patch.conversationId !== snapshot.conversationId) {
     throw new Error(
       `Conversation projection patch owner mismatch: expected ${snapshot.conversationId}, received ${patch.conversationId}.`,
-    );
-  }
-  if (patch.baseProjectionVersion !== snapshot.projectionVersion) {
-    throw new Error(
-      `Conversation projection patch base mismatch: expected ${snapshot.projectionVersion}, received ${patch.baseProjectionVersion}.`,
-    );
-  }
-  if (patch.projectionVersion <= patch.baseProjectionVersion) {
-    throw new Error(
-      `Conversation projection patch version must increase from ${patch.baseProjectionVersion}, received ${patch.projectionVersion}.`,
     );
   }
   if (patch.operations.length === 0 && !patch.completion) {
@@ -132,7 +117,6 @@ export function applyConversationProjectionPatch(
 
   return freezeProjectionSnapshot({
     conversationId: snapshot.conversationId,
-    projectionVersion: patch.projectionVersion,
     turns,
   });
 }
@@ -215,13 +199,8 @@ function applyCompletion(
   if (current.kind !== operation.kind) {
     throw new Error(`Turn projection completion changed item kind: ${operation.itemId}.`);
   }
-  if (current.payload.sourceGeneration !== operation.sourceGeneration) {
-    throw new Error(`Turn projection completion changed source generation: ${operation.itemId}.`);
-  }
-  assertIncreasingRevision(current, operation.itemRevision);
   items.set(operation.itemId, {
     ...current,
-    itemRevision: operation.itemRevision,
     status: operation.status,
     updatedAt: operation.updatedAt,
   });
@@ -232,7 +211,6 @@ function appendTextItem(
   item: AgentTurnTimelineItem,
 ): AgentTurnTimelineItem {
   if (current.kind === 'assistant_text' && item.kind === 'assistant_text') {
-    assertSourceGeneration(current, item);
     return structuredClone({
       ...item,
       createdAt: current.createdAt,
@@ -244,7 +222,6 @@ function appendTextItem(
     });
   }
   if (current.kind === 'thinking' && item.kind === 'thinking') {
-    assertSourceGeneration(current, item);
     return structuredClone({
       ...item,
       createdAt: current.createdAt,
@@ -271,34 +248,6 @@ function assertStableItemIdentity(
     current.sequence !== next.sequence
   ) {
     throw new Error(`Turn projection operation changed item identity: ${next.itemId}.`);
-  }
-}
-
-function assertSourceGeneration(
-  current:
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'assistant_text' }>
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'thinking' }>,
-  next:
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'assistant_text' }>
-    | Extract<AgentTurnTimelineItem, { readonly kind: 'thinking' }>,
-): void {
-  if (current.payload.sourceGeneration !== next.payload.sourceGeneration) {
-    throw new Error(`Turn projection append changed source generation: ${next.itemId}.`);
-  }
-}
-
-function assertPositiveRevision(itemId: string, revision: number): void {
-  if (!Number.isInteger(revision) || revision <= 0) {
-    throw new Error(`Turn projection item ${itemId} has invalid revision ${revision}.`);
-  }
-}
-
-function assertIncreasingRevision(current: AgentTurnTimelineItem, nextRevision: number): void {
-  assertPositiveRevision(current.itemId, nextRevision);
-  if (nextRevision <= current.itemRevision) {
-    throw new Error(
-      `Turn projection item ${current.itemId} revision must increase from ${current.itemRevision}, received ${nextRevision}.`,
-    );
   }
 }
 

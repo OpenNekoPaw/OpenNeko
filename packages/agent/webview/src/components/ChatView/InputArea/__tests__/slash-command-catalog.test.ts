@@ -59,7 +59,6 @@ describe('slash-command-catalog', () => {
     expect(names).toContain('/model');
     expect(names).not.toContain('/config');
     expect(names).not.toContain('/commands');
-    expect(names).not.toContain('/migrate-tasks');
   });
 
   it('hides only the builtin /as command and leaves plugin slash commands visible', () => {

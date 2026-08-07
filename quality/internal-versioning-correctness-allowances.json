@@ -1,0 +1,17 @@
+{
+  "allowances": [
+    {
+      "category": "product-migration-or-compatibility",
+      "consumer": "Developers and repository quality workflows invoking pnpm check:legacy-debt",
+      "correctnessInvariant": "The command must continue to reject reachable retired imports, aliases, shims, and duplicated success paths required by repository governance.",
+      "fieldScope": "Root package script name for the read-only repository debt audit only",
+      "id": "bbfe7153c3d546887f89",
+      "isolationRule": "The command scans source files and exits with diagnostics; it is not imported by product code and cannot read, rewrite, migrate, repair, or invalidate user data.",
+      "owner": "repository quality governance",
+      "path": "package.json",
+      "removalCondition": "Remove this allowance when AGENTS.md, the quality ADR, and all documented quality gates adopt a replacement command name with the same static audit coverage.",
+      "token": "legacy",
+      "versionFreeAnalysis": "No version-free runtime replacement is needed because this occurrence is a stable developer command label, not a contract version, data generation, compatibility reader, or migration implementation. Renaming it independently would break required governance entry points without changing product behavior."
+    }
+  ]
+}

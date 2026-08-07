@@ -65,16 +65,16 @@ export function createDesktopResourceBrowserIdentity(input: {
   readonly workspaceId: string;
   readonly windowId: string;
   readonly projectViewId: string;
-  readonly projectViewEpoch: number;
-  readonly endpointEpoch: string;
+  readonly projectViewInstanceId: string;
+  readonly rendererSessionId: string;
 }): ResourceBrowserIdentity {
   return {
     projectId: input.projectId,
     workspaceId: input.workspaceId,
     windowId: input.windowId,
     viewId: createResourceBrowserViewId(input.projectViewId),
-    viewEpoch: input.projectViewEpoch,
-    endpointEpoch: input.endpointEpoch,
+    viewInstanceId: input.projectViewInstanceId,
+    rendererSessionId: input.rendererSessionId,
   };
 }
 
@@ -87,7 +87,7 @@ export function isSameResourceBrowserIdentity(
     left.workspaceId === right.workspaceId &&
     left.windowId === right.windowId &&
     left.viewId === right.viewId &&
-    left.viewEpoch === right.viewEpoch &&
-    left.endpointEpoch === right.endpointEpoch
+    left.viewInstanceId === right.viewInstanceId &&
+    left.rendererSessionId === right.rendererSessionId
   );
 }

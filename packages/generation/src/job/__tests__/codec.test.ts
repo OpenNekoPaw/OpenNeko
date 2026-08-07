@@ -34,7 +34,8 @@ describe('Generation Job codec', () => {
   });
 
   it.each([
-    ['resultRefs', { resultRefs: [{ id: 'legacy-result' }] }],
+    ['unknown field', { unexpectedField: 1 }],
+    ['resultRefs', { resultRefs: [{ id: 'unsupported-result' }] }],
     [
       'runtime URI',
       {
@@ -71,26 +72,14 @@ describe('Generation Job codec', () => {
         },
       },
     ],
-    [
-      'nested retired resource-reference fields',
-      {
-        request: {
-          ...snapshot().request,
-          request: {
-            ...snapshot().request.request,
-            ipAdapterRefs: [{ imageRef: { id: 'legacy-resource' }, mode: 'subject' }],
-          },
-        },
-      },
-    ],
-  ])('rejects legacy %s payloads with a migration diagnostic', (_name, legacyFields) => {
+  ])('rejects removed %s payload fields at the record boundary', (_name, removedFields) => {
     const value = {
       ...snapshot(),
-      ...legacyFields,
+      ...removedFields,
     };
 
     expect(() => decodeGenerationJobSnapshot(JSON.stringify(value))).toThrow(
-      expect.objectContaining({ code: 'generation-job-migration-required' }),
+      expect.objectContaining({ code: 'generation-job-persistence-invalid' }),
     );
   });
 
@@ -140,7 +129,6 @@ function snapshot(): GenerationJobSnapshot {
     ref: { kind: 'generation', jobId: 'generation-1' },
     lifecycleMode: 'detached',
     phase: 'pending',
-    revision: 1,
     createdAt: 1,
     updatedAt: 1,
     request: {

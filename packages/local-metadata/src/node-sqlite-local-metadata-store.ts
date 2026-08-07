@@ -29,7 +29,25 @@ function normalizeRows(rows: unknown): readonly SqliteRow[] {
   });
 }
 
-function toNodeParameters(parameters: readonly SqliteBindingValue[]): readonly SQLInputValue[] {
+function toNodeParameters(
+  parameters: readonly SqliteBindingValue[],
+  operation: 'run' | 'query',
+): readonly SQLInputValue[] {
+  for (const [index, value] of parameters.entries()) {
+    if (
+      value === null ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'bigint'
+    ) {
+      continue;
+    }
+    throw new LocalMetadataError({
+      code: typeof value === 'object' ? 'metadata-binary-forbidden' : 'metadata-transaction-failed',
+      operation,
+      message: `Local metadata SQL binding ${index} for ${operation} must be a scalar value`,
+    });
+  }
   return parameters;
 }
 
@@ -59,7 +77,7 @@ class NodeSqliteConnection implements SqliteConnection {
 
   async run(sql: string, parameters: readonly SqliteBindingValue[] = []): Promise<SqliteRunResult> {
     try {
-      const result = this.database.prepare(sql).run(...toNodeParameters(parameters));
+      const result = this.database.prepare(sql).run(...toNodeParameters(parameters, 'run'));
       return { changes: Number(result.changes), lastInsertRowid: result.lastInsertRowid };
     } catch (error) {
       throw translateNodeSqliteError('run', error);
@@ -71,7 +89,9 @@ class NodeSqliteConnection implements SqliteConnection {
     parameters: readonly SqliteBindingValue[] = [],
   ): Promise<readonly SqliteRow[]> {
     try {
-      return normalizeRows(this.database.prepare(sql).all(...toNodeParameters(parameters)));
+      return normalizeRows(
+        this.database.prepare(sql).all(...toNodeParameters(parameters, 'query')),
+      );
     } catch (error) {
       throw translateNodeSqliteError('query', error);
     }

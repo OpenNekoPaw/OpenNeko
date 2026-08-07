@@ -122,7 +122,6 @@ export interface ToolCallDisplayProjection {
 
 export interface GenerationJobCardProjection {
   readonly jobId: string;
-  readonly revision: number;
   readonly phase: string;
   readonly stage: string;
   readonly percent: number;
@@ -217,8 +216,6 @@ function projectGenerationJobCard(
     (readString(result, 'jobId') ? result : undefined);
   if (!state || (state.kind !== undefined && state.kind !== 'generation-job')) return null;
   const jobId = readString(state, 'jobId');
-  const revision =
-    readNonNegativeInteger(state, 'revision') ?? readNonNegativeInteger(state, 'jobRevision');
   const resultProgress = asRecord(state.progress);
   const phase =
     readString(state, 'phase') ??
@@ -231,13 +228,12 @@ function projectGenerationJobCard(
     readProgressPercent(state, 'percent') ??
     readProgressPercent(resultProgress, 'percent') ??
     (phase === 'succeeded' ? 100 : undefined);
-  if (!jobId || revision === undefined || !phase || !stage || percent === undefined) return null;
+  if (!jobId || !phase || !stage || percent === undefined) return null;
 
   const board = asRecord(result?.boardDelivery);
   const routedTo = asRecord(result?.routedTo);
   return {
     jobId,
-    revision,
     phase,
     stage,
     percent,
@@ -723,7 +719,6 @@ function formatDocumentImageReferenceJson(input: {
   return JSON.stringify(
     {
       kind: 'document-image-reference',
-      protocolVersion: 2,
       document: {
         filePath: input.filePath,
         ...(input.source ? { source: input.source } : {}),
@@ -1019,14 +1014,6 @@ function readFiniteNumber(
 ): number | undefined {
   const value = obj?.[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function readNonNegativeInteger(
-  obj: Record<string, unknown> | undefined,
-  key: string,
-): number | undefined {
-  const value = obj?.[key];
-  return Number.isSafeInteger(value) && typeof value === 'number' && value >= 0 ? value : undefined;
 }
 
 function readProgressPercent(

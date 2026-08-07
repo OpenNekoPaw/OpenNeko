@@ -62,7 +62,7 @@ export interface TabComposerCompositionState {
 
 export interface TabComposerFocusState {
   readonly target: TabComposerFocusTarget;
-  readonly requestRevision: number;
+  readonly requestId?: string;
 }
 
 export interface TabRenderMenuState {
@@ -103,13 +103,11 @@ export type TabRenderStateUpdate =
 export interface TabRenderRetentionSnapshot {
   readonly isComposing: boolean;
   readonly hasDirtyInput: boolean;
-  readonly revision: number;
 }
 
 export interface TabRenderStoreSnapshot extends TabRenderBinding {
   readonly visibility: TabRenderVisibility;
   readonly state: TabRenderState;
-  readonly revision: number;
 }
 
 export interface TabRenderStore {
@@ -122,19 +120,14 @@ export interface TabRenderStore {
   dispose(): void;
 }
 
-export interface TabRenderRuntimeRetentionSnapshot extends Omit<
-  TabRenderRetentionSnapshot,
-  'revision'
-> {
+export interface TabRenderRuntimeRetentionSnapshot extends TabRenderRetentionSnapshot {
   readonly lifecycle: TabRenderRuntimeLifecycle;
-  readonly revision: number;
 }
 
 export interface TabProjectionAttachmentBinding extends Pick<
   ProjectionAttachmentClientOptions,
   'send' | 'reportError'
 > {
-  readonly endpointEpoch: string;
   readonly attachmentId: string;
 }
 
@@ -190,9 +183,8 @@ class DefaultTabRenderStore implements TabRenderStore {
       ...binding,
       visibility: 'hidden',
       state,
-      revision: 0,
     });
-    this.retentionSnapshot = createTabRenderRetentionSnapshot(state, 0);
+    this.retentionSnapshot = createTabRenderRetentionSnapshot(state);
   }
 
   getSnapshot(): TabRenderStoreSnapshot {
@@ -223,10 +215,7 @@ class DefaultTabRenderStore implements TabRenderStore {
     if (hasSameStateFields(this.snapshot.state, nextState)) return;
     const previousRetention = this.retentionSnapshot;
     this.commit({ state: nextState });
-    const nextRetention = createTabRenderRetentionSnapshot(
-      nextState,
-      previousRetention.revision + 1,
-    );
+    const nextRetention = createTabRenderRetentionSnapshot(nextState);
     if (hasSameRetentionFields(previousRetention, nextRetention)) return;
     this.retentionSnapshot = nextRetention;
     for (const listener of this.retentionListeners) listener();
@@ -249,7 +238,6 @@ class DefaultTabRenderStore implements TabRenderStore {
     this.snapshot = Object.freeze({
       ...this.snapshot,
       ...patch,
-      revision: this.snapshot.revision + 1,
     });
     for (const listener of this.listeners) listener();
   }
@@ -286,7 +274,6 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     this.retentionSnapshot = createTabRenderRuntimeRetentionSnapshot(
       this.currentLifecycle,
       this.store.getRetentionSnapshot(),
-      0,
     );
     this.unsubscribeStoreRetention = this.store.subscribeRetention(() => this.publishRetention());
   }
@@ -369,7 +356,6 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     });
     this.currentProjectionAttachment = client;
     client.attach({
-      endpointEpoch: binding.endpointEpoch,
       attachmentId: binding.attachmentId,
     });
   }
@@ -384,7 +370,7 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     const current = this.currentProjectionAttachment;
     if (current) {
       if (reason === 'endpoint-replaced') {
-        current.abandon();
+        current.detach('endpoint-replaced');
       } else {
         current.detach('protocol-fatal');
       }
@@ -437,7 +423,6 @@ class DefaultTabRenderRuntime implements TabRenderRuntime {
     const next = createTabRenderRuntimeRetentionSnapshot(
       this.currentLifecycle,
       this.store.getRetentionSnapshot(),
-      this.retentionSnapshot.revision + 1,
     );
     if (
       next.lifecycle === this.retentionSnapshot.lifecycle &&
@@ -557,20 +542,15 @@ class DefaultTabRenderRuntimeRegistry implements TabRenderRuntimeRegistry {
 function createTabRenderRuntimeRetentionSnapshot(
   lifecycle: TabRenderRuntimeLifecycle,
   store: TabRenderRetentionSnapshot,
-  revision: number,
 ): TabRenderRuntimeRetentionSnapshot {
   return Object.freeze({
     lifecycle,
     isComposing: store.isComposing,
     hasDirtyInput: store.hasDirtyInput,
-    revision,
   });
 }
 
-function createTabRenderRetentionSnapshot(
-  state: TabRenderState,
-  revision: number,
-): TabRenderRetentionSnapshot {
+function createTabRenderRetentionSnapshot(state: TabRenderState): TabRenderRetentionSnapshot {
   return Object.freeze({
     isComposing: state.composition.isComposing,
     hasDirtyInput: Boolean(
@@ -580,7 +560,6 @@ function createTabRenderRetentionSnapshot(
       state.contextReferences.length > 0 ||
       state.queuedEdit !== null,
     ),
-    revision,
   });
 }
 
@@ -607,7 +586,7 @@ function createInitialTabRenderState(): TabRenderState {
     generationCategory: 'image',
     generationParams: Object.freeze({ ...DEFAULT_GENERATION_PARAMS }),
     composition: Object.freeze({ isComposing: false }),
-    focus: Object.freeze({ target: 'none', requestRevision: 0 }),
+    focus: Object.freeze({ target: 'none' }),
     viewport: Object.freeze({ ...DEFAULT_TAB_VIEWPORT }),
     menus: Object.freeze({
       entryPrompt: null,

@@ -26,10 +26,10 @@ export function isSameCutHostIdentity(
     left.workspaceId === right.workspaceId &&
     left.windowId === right.windowId &&
     left.viewId === right.viewId &&
-    left.viewEpoch === right.viewEpoch &&
+    left.viewInstanceId === right.viewInstanceId &&
     left.documentId === right.documentId &&
     left.sessionId === right.sessionId &&
-    left.endpointEpoch === right.endpointEpoch
+    left.rendererSessionId === right.rendererSessionId
   );
 }
 

@@ -2,23 +2,25 @@ import * as path from 'node:path';
 
 import type {
   DesktopProjectTabProjection,
+  DesktopShellStateDiagnosticProjection,
+  DesktopStoredWindowInvalidDiagnosticProjection,
   DesktopWindowActiveTarget,
 } from './desktop-shell-contract';
 import {
-  createDefaultDesktopWorkbenchLayout,
-  migrateDesktopWorkbenchV1,
-  migrateDesktopWorkbenchV2,
+  parseDesktopApplicationSidebarProjection,
+  type DesktopApplicationSidebarProjection,
+} from './desktop-scene-contract';
+import {
   parseDesktopWorkbenchLayout,
   type DesktopWorkbenchLayoutProjection,
 } from './desktop-workbench-contract';
+import {
+  parseDesktopWindowComposition,
+  serializeDesktopWindowComposition,
+  type DesktopWindowCompositionProjection,
+} from './desktop-window-composition-contract';
 
-export const DESKTOP_SHELL_STATE_VERSION = 4 as const;
-// Version 1 remains readable because it contains user-owned local Project and Window state.
-const DESKTOP_SHELL_STATE_V1 = 1 as const;
-// Version 2 carries the prelaunch Workbench v1 presentation.
-const DESKTOP_SHELL_STATE_V2 = 2 as const;
-// Version 3 carries the prelaunch Workbench v2 presentation.
-const DESKTOP_SHELL_STATE_V3 = 3 as const;
+export const DESKTOP_DEFAULT_ASSISTANT_SPACE_ID = 'assistant-space:local-user' as const;
 
 export interface DesktopStoredProject {
   readonly projectId: string;
@@ -36,31 +38,45 @@ export interface DesktopStoredProject {
 
 export interface DesktopStoredWindow {
   readonly windowId: string;
-  readonly revision: number;
   readonly activeTarget: DesktopWindowActiveTarget;
-  readonly tabs: readonly DesktopProjectTabProjection[];
-  readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly tabs: readonly DesktopStoredProjectTab[];
+  readonly workbench: DesktopWindowCompositionProjection;
+  readonly applicationSidebar: DesktopApplicationSidebarProjection;
+}
+
+export interface DesktopStoredProjectTab extends DesktopProjectTabProjection {
+  readonly presentation?: DesktopWorkbenchLayoutProjection;
 }
 
 export interface DesktopShellStoredState {
-  readonly schemaVersion: typeof DESKTOP_SHELL_STATE_VERSION;
-  readonly storageRevision: number;
-  readonly catalogRevision: number;
   readonly primaryWindowId: string | null;
   readonly projects: readonly DesktopStoredProject[];
   readonly windows: readonly DesktopStoredWindow[];
 }
 
+export type DesktopShellStateDiagnostic = DesktopShellStateDiagnosticProjection;
+
+type DesktopRetainedRootMetadataEntry = readonly [fieldName: string, value: unknown];
+
+const ISOLATED_INVALID_WINDOW_DIAGNOSTICS: unique symbol = Symbol(
+  'desktop-isolated-invalid-window-diagnostics',
+);
+const RETAINED_ROOT_METADATA: unique symbol = Symbol('desktop-retained-root-metadata');
+const DESKTOP_SHELL_ROOT_FIELDS = ['primaryWindowId', 'projects', 'windows'] as const;
+const DESKTOP_SHELL_ROOT_FIELD_SET = new Set<string>(DESKTOP_SHELL_ROOT_FIELDS);
+
+type DesktopShellStateWithDiagnostics = DesktopShellStoredState & {
+  readonly [ISOLATED_INVALID_WINDOW_DIAGNOSTICS]: readonly DesktopStoredWindowInvalidDiagnosticProjection[];
+  readonly [RETAINED_ROOT_METADATA]: readonly DesktopRetainedRootMetadataEntry[];
+};
+
 export interface DesktopShellStateRepositoryPort {
   read(): Promise<DesktopShellStoredState>;
-  commit(
-    expectedStorageRevision: number,
-    nextState: DesktopShellStoredState,
-  ): Promise<DesktopShellStoredState>;
+  commit(nextState: DesktopShellStoredState): Promise<DesktopShellStoredState>;
 }
 
 export class DesktopShellStateError extends Error {
-  readonly code: 'desktop-shell-invalid-state' | 'desktop-shell-stale-storage-revision';
+  readonly code: 'desktop-shell-invalid-state';
 
   constructor(code: DesktopShellStateError['code'], message: string) {
     super(message);
@@ -71,9 +87,6 @@ export class DesktopShellStateError extends Error {
 
 export function createEmptyDesktopShellState(): DesktopShellStoredState {
   return {
-    schemaVersion: DESKTOP_SHELL_STATE_VERSION,
-    storageRevision: 0,
-    catalogRevision: 0,
     primaryWindowId: null,
     projects: [],
     windows: [],
@@ -82,68 +95,116 @@ export function createEmptyDesktopShellState(): DesktopShellStoredState {
 
 export function parseDesktopShellStoredState(value: unknown): DesktopShellStoredState {
   const record = requireRecord(value, 'Desktop Shell state must be an object.');
-  requireExactKeys(
-    record,
-    [
-      'schemaVersion',
-      'storageRevision',
-      'catalogRevision',
-      'primaryWindowId',
-      'projects',
-      'windows',
-    ],
-    'Desktop Shell state',
-  );
-  const sourceVersion = record['schemaVersion'];
-  if (
-    sourceVersion !== DESKTOP_SHELL_STATE_VERSION &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V3 &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V2 &&
-    sourceVersion !== DESKTOP_SHELL_STATE_V1
-  ) {
-    throw invalidState(
-      `Unsupported Desktop Shell state version '${String(record['schemaVersion'])}'.`,
-    );
-  }
+  const retainedRootMetadata = collectRetainedRootMetadata(value, record);
   const projects = requireArray(record['projects'], 'Desktop Shell projects must be an array.').map(
     parseStoredProject,
   );
-  const projectIds = new Set<string>();
+  const projectsById = new Map<string, DesktopStoredProject>();
   const workspaceIds = new Set<string>();
   for (const project of projects) {
-    if (projectIds.has(project.projectId) || workspaceIds.has(project.workspaceId)) {
+    if (projectsById.has(project.projectId) || workspaceIds.has(project.workspaceId)) {
       throw invalidState('Desktop Shell Project and Workspace identities must be unique.');
     }
-    projectIds.add(project.projectId);
+    projectsById.set(project.projectId, project);
     workspaceIds.add(project.workspaceId);
   }
-  const windows = requireArray(record['windows'], 'Desktop Shell windows must be an array.').map(
-    (item) => parseStoredWindow(item, projectIds, sourceVersion),
+  const windowCandidates = requireArray(
+    record['windows'],
+    'Desktop Shell windows must be an array.',
   );
+  const windows: DesktopStoredWindow[] = [];
+  const invalidWindowDiagnostics = [...readIsolatedInvalidWindowDiagnostics(value)];
   const windowIds = new Set<string>();
-  for (const window of windows) {
+  const candidateWindowIds = new Set<string>();
+  for (const [index, candidate] of windowCandidates.entries()) {
+    const candidateWindowId = readCandidateWindowId(candidate, index);
+    candidateWindowIds.add(candidateWindowId);
+    let window: DesktopStoredWindow;
+    try {
+      window = parseStoredWindow(candidate, projectsById);
+    } catch (error) {
+      invalidWindowDiagnostics.push({
+        code: 'desktop-stored-window-invalid',
+        severity: 'error',
+        windowId: candidateWindowId,
+        message: `Stored Window '${candidateWindowId}' is unavailable and was not opened: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+      continue;
+    }
     if (windowIds.has(window.windowId)) {
-      throw invalidState(`Duplicate Desktop Window identity '${window.windowId}'.`);
+      invalidWindowDiagnostics.push({
+        code: 'desktop-stored-window-invalid',
+        severity: 'error',
+        windowId: window.windowId,
+        message: `Duplicate Desktop Window identity '${window.windowId}'.`,
+      });
+      continue;
     }
     windowIds.add(window.windowId);
+    windows.push(window);
   }
-  const primaryWindowId = readNullableString(record['primaryWindowId']);
-  if (primaryWindowId !== null && !windowIds.has(primaryWindowId)) {
+  const storedPrimaryWindowId = readNullableString(record['primaryWindowId']);
+  if (
+    storedPrimaryWindowId !== null &&
+    !windowIds.has(storedPrimaryWindowId) &&
+    !candidateWindowIds.has(storedPrimaryWindowId)
+  ) {
     throw invalidState('Desktop primary Window identity is not present in stored windows.');
   }
-  return {
-    schemaVersion: DESKTOP_SHELL_STATE_VERSION,
-    storageRevision: requireNonNegativeInteger(
-      record['storageRevision'],
-      'Desktop Shell storage revision is invalid.',
-    ),
-    catalogRevision: requireNonNegativeInteger(
-      record['catalogRevision'],
-      'Desktop Shell catalog revision is invalid.',
-    ),
+  const primaryWindowId =
+    storedPrimaryWindowId !== null && windowIds.has(storedPrimaryWindowId)
+      ? storedPrimaryWindowId
+      : null;
+  const parsed: DesktopShellStateWithDiagnostics = {
     primaryWindowId,
     projects,
     windows,
+    [ISOLATED_INVALID_WINDOW_DIAGNOSTICS]: invalidWindowDiagnostics,
+    [RETAINED_ROOT_METADATA]: retainedRootMetadata,
+  };
+  return parsed;
+}
+
+export function readDesktopShellStateDiagnostics(
+  state: DesktopShellStoredState,
+): readonly DesktopShellStateDiagnostic[] {
+  const invalidWindowDiagnostics = readIsolatedInvalidWindowDiagnostics(state);
+  const retainedRootMetadata = readRetainedRootMetadata(state);
+  if (retainedRootMetadata.length === 0) return invalidWindowDiagnostics;
+  const fieldNames = retainedRootMetadata.map(([fieldName]) => fieldName);
+  return [
+    ...invalidWindowDiagnostics,
+    {
+      code: 'desktop-stored-state-metadata-retained',
+      severity: 'warning',
+      authorityKey: 'desktop.shell',
+      fieldNames,
+      message: `Desktop Shell root metadata was preserved without interpretation: ${fieldNames
+        .map((fieldName) => JSON.stringify(fieldName))
+        .join(', ')}.`,
+    },
+  ];
+}
+
+export function serializeDesktopShellStoredState(state: DesktopShellStoredState): unknown {
+  const parsed = parseDesktopShellStoredState(state);
+  return {
+    ...Object.fromEntries(readRetainedRootMetadata(parsed)),
+    primaryWindowId: parsed.primaryWindowId,
+    projects: parsed.projects,
+    windows: parsed.windows.map(serializeStoredWindow),
+  };
+}
+
+function serializeStoredWindow(window: DesktopStoredWindow): unknown {
+  return {
+    windowId: window.windowId,
+    activeTarget: window.activeTarget,
+    tabs: window.tabs,
+    workbench: serializeDesktopWindowComposition(window.workbench),
+    applicationSidebar: window.applicationSidebar,
   };
 }
 
@@ -217,28 +278,25 @@ function parseStoredProject(value: unknown): DesktopStoredProject {
 
 function parseStoredWindow(
   value: unknown,
-  projectIds: ReadonlySet<string>,
-  sourceVersion:
-    | typeof DESKTOP_SHELL_STATE_VERSION
-    | typeof DESKTOP_SHELL_STATE_V3
-    | typeof DESKTOP_SHELL_STATE_V2
-    | typeof DESKTOP_SHELL_STATE_V1,
+  projectsById: ReadonlyMap<string, DesktopStoredProject>,
 ): DesktopStoredWindow {
   const record = requireRecord(value, 'Desktop stored Window must be an object.');
   requireExactKeys(
     record,
-    sourceVersion === DESKTOP_SHELL_STATE_V1
-      ? ['windowId', 'revision', 'activeTarget', 'tabs']
-      : ['windowId', 'revision', 'activeTarget', 'tabs', 'workbench'],
+    ['windowId', 'activeTarget', 'tabs', 'workbench', 'applicationSidebar'],
     'Desktop stored Window',
   );
+  const windowId = requireNonEmptyString(
+    record['windowId'],
+    'Desktop stored Window identity is required.',
+  );
   const tabs = requireArray(record['tabs'], 'Desktop stored Project Tabs must be an array.').map(
-    parseStoredTab,
+    (tab) => parseStoredTab(tab, windowId, projectsById),
   );
   const tabIds = new Set<string>();
   const tabProjectIds = new Set<string>();
   for (const tab of tabs) {
-    if (!projectIds.has(tab.projectId)) {
+    if (!projectsById.has(tab.projectId)) {
       throw invalidState(`Desktop Project Tab references unknown Project '${tab.projectId}'.`);
     }
     if (tabIds.has(tab.tabId) || tabProjectIds.has(tab.projectId)) {
@@ -251,76 +309,184 @@ function parseStoredWindow(
   if (activeTarget.kind === 'project' && !tabIds.has(activeTarget.tabId)) {
     throw invalidState('Desktop active Project Tab is not present in its Window.');
   }
-  const windowId = requireNonEmptyString(
-    record['windowId'],
-    'Desktop stored Window identity is required.',
-  );
-  const workbench =
-    sourceVersion === DESKTOP_SHELL_STATE_V1
-      ? createDefaultDesktopWorkbenchLayout(windowId)
-      : parseStoredWorkbench(record['workbench'], windowId, sourceVersion);
+  const workbench = parseStoredWindowComposition(record['workbench'], windowId);
+  const applicationSidebar = parseStoredApplicationSidebar(record['applicationSidebar'], windowId);
   return {
     windowId,
-    revision: requireNonNegativeInteger(
-      record['revision'],
-      'Desktop stored Window revision is invalid.',
-    ),
     activeTarget,
     tabs,
     workbench,
+    applicationSidebar,
   };
 }
 
-function parseStoredWorkbench(
+function readCandidateWindowId(value: unknown, index: number): string {
+  if (isUnknownRecord(value)) {
+    const windowId = value['windowId'];
+    if (typeof windowId === 'string' && windowId.trim().length > 0) return windowId;
+  }
+  return `invalid-window-record:${index + 1}`;
+}
+
+function readIsolatedInvalidWindowDiagnostics(
+  value: unknown,
+): readonly DesktopStoredWindowInvalidDiagnosticProjection[] {
+  if (!isUnknownRecord(value) || !(ISOLATED_INVALID_WINDOW_DIAGNOSTICS in value)) return [];
+  const diagnostics = value[ISOLATED_INVALID_WINDOW_DIAGNOSTICS];
+  if (!Array.isArray(diagnostics)) {
+    throw invalidState('Desktop isolated invalid Window diagnostics must be an array.');
+  }
+  return diagnostics.map((candidate) => {
+    if (!isStoredWindowInvalidDiagnostic(candidate)) {
+      throw invalidState('Desktop isolated invalid Window diagnostic is invalid.');
+    }
+    return candidate;
+  });
+}
+
+function collectRetainedRootMetadata(
+  value: unknown,
+  record: Readonly<Record<string, unknown>>,
+): readonly DesktopRetainedRootMetadataEntry[] {
+  return validateRetainedRootMetadata([
+    ...readRetainedRootMetadata(value),
+    ...Object.entries(record).filter(([fieldName]) => !DESKTOP_SHELL_ROOT_FIELD_SET.has(fieldName)),
+  ]);
+}
+
+function readRetainedRootMetadata(value: unknown): readonly DesktopRetainedRootMetadataEntry[] {
+  if (!isUnknownRecord(value) || !(RETAINED_ROOT_METADATA in value)) return [];
+  const retained = value[RETAINED_ROOT_METADATA];
+  if (!Array.isArray(retained)) {
+    throw invalidState('Desktop retained root metadata must be an array.');
+  }
+  return validateRetainedRootMetadata(retained);
+}
+
+function validateRetainedRootMetadata(
+  entries: readonly unknown[],
+): readonly DesktopRetainedRootMetadataEntry[] {
+  const fieldNames = new Set<string>();
+  const retained: DesktopRetainedRootMetadataEntry[] = [];
+  for (const entry of entries) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') {
+      throw invalidState('Desktop retained root metadata entry is invalid.');
+    }
+    const fieldName = entry[0];
+    if (DESKTOP_SHELL_ROOT_FIELD_SET.has(fieldName) || fieldNames.has(fieldName)) {
+      throw invalidState(`Desktop retained root metadata field '${fieldName}' is duplicated.`);
+    }
+    fieldNames.add(fieldName);
+    retained.push([fieldName, entry[1]]);
+  }
+  return retained;
+}
+
+function isStoredWindowInvalidDiagnostic(
+  value: unknown,
+): value is DesktopStoredWindowInvalidDiagnosticProjection {
+  if (!isUnknownRecord(value)) return false;
+  return (
+    value['code'] === 'desktop-stored-window-invalid' &&
+    value['severity'] === 'error' &&
+    typeof value['windowId'] === 'string' &&
+    value['windowId'].trim().length > 0 &&
+    typeof value['message'] === 'string' &&
+    value['message'].trim().length > 0
+  );
+}
+
+function parseStoredWindowComposition(
   value: unknown,
   windowId: string,
-  sourceVersion:
-    | typeof DESKTOP_SHELL_STATE_VERSION
-    | typeof DESKTOP_SHELL_STATE_V3
-    | typeof DESKTOP_SHELL_STATE_V2,
-): DesktopWorkbenchLayoutProjection {
-  let workbench: DesktopWorkbenchLayoutProjection;
+): DesktopWindowCompositionProjection {
+  let workbench: DesktopWindowCompositionProjection;
   try {
-    workbench =
-      sourceVersion === DESKTOP_SHELL_STATE_V2
-        ? migrateDesktopWorkbenchV1(value)
-        : sourceVersion === DESKTOP_SHELL_STATE_V3
-          ? migrateDesktopWorkbenchV2(value)
-          : parseDesktopWorkbenchLayout(value);
+    workbench = parseDesktopWindowComposition(value);
   } catch (error) {
     throw invalidState(
-      `Desktop stored Workbench layout is invalid: ${
+      `Desktop stored Window composition is invalid: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
   }
   if (workbench.windowId !== windowId) {
-    throw invalidState('Desktop stored Workbench belongs to another Window.');
+    throw invalidState('Desktop stored Window composition belongs to another Window.');
   }
   return workbench;
 }
 
-function parseStoredTab(value: unknown): DesktopProjectTabProjection {
+function parseStoredApplicationSidebar(
+  value: unknown,
+  windowId: string,
+): DesktopApplicationSidebarProjection {
+  let sidebar: DesktopApplicationSidebarProjection;
+  try {
+    sidebar = parseDesktopApplicationSidebarProjection(value);
+  } catch (error) {
+    throw invalidState(
+      `Desktop stored Application Sidebar is invalid: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  if (sidebar.windowId !== windowId) {
+    throw invalidState('Desktop stored Application Sidebar belongs to another Window.');
+  }
+  return sidebar;
+}
+
+function parseStoredTab(
+  value: unknown,
+  windowId: string,
+  projectsById: ReadonlyMap<string, DesktopStoredProject>,
+): DesktopStoredProjectTab {
   const record = requireRecord(value, 'Desktop stored Project Tab must be an object.');
+  const hasPresentation = Object.hasOwn(record, 'presentation');
   requireExactKeys(
     record,
-    ['tabId', 'projectId', 'viewId', 'viewEpoch'],
+    [
+      'tabId',
+      'projectId',
+      'viewId',
+      'viewInstanceId',
+      ...(hasPresentation ? ['presentation'] : []),
+    ],
     'Desktop stored Project Tab',
   );
+  const projectId = requireNonEmptyString(
+    record['projectId'],
+    'Desktop stored Project identity is required.',
+  );
+  const presentation = hasPresentation
+    ? parseDesktopWorkbenchLayout(record['presentation'])
+    : undefined;
+  const project = projectsById.get(projectId);
+  if (!project) {
+    throw invalidState(`Desktop Project Tab references unknown Project '${projectId}'.`);
+  }
+  if (presentation !== undefined && presentation.windowId !== windowId) {
+    throw invalidState('Desktop stored Project presentation belongs to another Window.');
+  }
+  if (
+    presentation?.main.views.some(
+      (view) => view.projectId !== projectId || view.workspaceId !== project.workspaceId,
+    )
+  ) {
+    throw invalidState('Desktop stored Project presentation contains a foreign View.');
+  }
   return {
     tabId: requireNonEmptyString(
       record['tabId'],
       'Desktop stored Project Tab identity is required.',
     ),
-    projectId: requireNonEmptyString(
-      record['projectId'],
-      'Desktop stored Project identity is required.',
-    ),
+    projectId,
     viewId: requireNonEmptyString(record['viewId'], 'Desktop stored View identity is required.'),
-    viewEpoch: requirePositiveInteger(
-      record['viewEpoch'],
-      'Desktop stored View epoch must be a positive integer.',
+    viewInstanceId: requireNonEmptyString(
+      record['viewInstanceId'],
+      'Desktop stored View instance identity is required.',
     ),
+    ...(presentation === undefined ? {} : { presentation }),
   };
 }
 
@@ -380,19 +546,6 @@ function isUnknownRecord(value: unknown): value is Readonly<Record<string, unkno
 function requireNonEmptyString(value: unknown, message: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) throw invalidState(message);
   return value;
-}
-
-function requireNonNegativeInteger(value: unknown, message: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw invalidState(message);
-  }
-  return value;
-}
-
-function requirePositiveInteger(value: unknown, message: string): number {
-  const integer = requireNonNegativeInteger(value, message);
-  if (integer === 0) throw invalidState(message);
-  return integer;
 }
 
 function invalidState(message: string): DesktopShellStateError {

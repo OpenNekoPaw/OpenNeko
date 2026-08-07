@@ -13,12 +13,10 @@ describe('project search provider registry helpers', () => {
     const story = createStorySearchProviderContribution({
       providerId: 'story.workspace',
       adapters: [],
-      replacesCompatibility: true,
     });
     const assets = createAssetSearchProviderContribution({
       providerId: 'assets.library',
       adapters: [],
-      replacesCompatibility: true,
     });
     const documents = createDocumentSearchProviderContribution({
       providerId: 'documents.lightweight',
@@ -32,7 +30,6 @@ describe('project search provider registry helpers', () => {
         itemKinds: expect.arrayContaining(['script-role', 'creative-entity']),
       }),
     );
-    expect(story.replacesCompatibilityPartitions).toEqual(['story-symbols', 'creative-entities']);
     expect(assets.capabilities).toEqual(
       expect.objectContaining({
         providerId: 'assets.library',
@@ -50,25 +47,20 @@ describe('project search provider registry helpers', () => {
     );
   });
 
-  it('reports compatibility partitions replaced by first-class providers', () => {
-    const registerAdapter = vi.fn(() => ({ dispose: vi.fn() }));
-    const onCompatibilityPartitionReplaced = vi.fn();
-    const registry = createProviderRegistration(registerAdapter, {
-      onCompatibilityPartitionReplaced,
-    });
+  it('registers and disposes every adapter owned by one provider contribution', () => {
+    const disposeAdapter = vi.fn();
+    const registerAdapter = vi.fn(() => ({ dispose: disposeAdapter }));
+    const registry = createProviderRegistration(registerAdapter);
     const adapter = createStaticProjectSearchAdapter('media-library', []);
 
-    registry.registerProvider({
+    const registration = registry.registerProvider({
       providerId: 'assets.library',
       adapters: [adapter],
-      replacesCompatibilityPartitions: ['media-library'],
     });
 
     expect(registerAdapter).toHaveBeenCalledWith(adapter);
-    expect(onCompatibilityPartitionReplaced).toHaveBeenCalledWith(
-      ['media-library'],
-      expect.objectContaining({ providerId: 'assets.library' }),
-    );
+    registration.dispose();
+    expect(disposeAdapter).toHaveBeenCalledOnce();
   });
 
   it('builds lightweight projection adapters for document range source refs', async () => {

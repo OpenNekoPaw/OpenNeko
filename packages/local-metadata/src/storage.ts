@@ -18,7 +18,7 @@ export type NekoStorageScope =
   | 'user-global'
   | 'project-fact'
   | 'project-local'
-  | 'project-cache'
+  | 'workspace-cache'
   | 'extension-private'
   | 'media-library'
   | 'scratch';
@@ -66,6 +66,7 @@ export type NekoStorageOwner =
   | 'host-extension'
   | 'media-library'
   | 'secret-store'
+  | 'logger'
   | 'runtime';
 
 export type NekoTrackingPolicy = 'git-trackable' | 'gitignored' | 'outside-workspace';
@@ -73,22 +74,16 @@ export type NekoTrackingPolicy = 'git-trackable' | 'gitignored' | 'outside-works
 export type NekoCleanupPolicy =
   'never-automatic' | 'rebuildable-only' | 'retention-policy' | 'explicit-confirmation';
 
-export type NekoMigrationPolicy =
-  'none' | 'backup-and-migrate' | 'rebuild' | 'promote' | 'diagnose';
-
 export type NekoBackupPolicy = 'required' | 'optional' | 'not-applicable';
 
 export type NekoStorageDiagnosticCode =
   | 'unknown-managed-storage'
-  | 'retired-workspace-database'
   | 'invalid-workspace-identity'
-  | 'workspace-identity-version-mismatch'
   | 'absolute-workspace-locator'
   | 'duplicate-workspace-identity'
   | 'ambiguous-workspace-locator'
   | 'deprecated-hook-catalog'
   | 'misplaced-personal-content'
-  | 'legacy-workspace-metadata'
   | 'misplaced-project-fact'
   | 'large-workspace-cache'
   | 'workspace-logs-present'
@@ -131,7 +126,6 @@ export interface NekoStorageClassification {
   readonly defaultLocation: string;
   readonly tracking: NekoTrackingPolicy;
   readonly cleanup: NekoCleanupPolicy;
-  readonly migration: NekoMigrationPolicy;
   readonly backup: NekoBackupPolicy;
 }
 
@@ -170,71 +164,6 @@ export interface NekoStorageDiagnostic {
   readonly message: string;
 }
 
-export type NekoManagedContentKind =
-  'hook' | 'skill' | 'command' | 'prompt' | 'processor' | 'agents';
-
-export interface WorkspaceContentPlacementObservation {
-  readonly relativePath: string;
-  readonly kind: NekoManagedContentKind;
-  readonly intendedScope: 'personal' | 'project' | 'unknown';
-}
-
-export interface WorkspaceContentPlacementDiagnostic extends NekoStorageDiagnostic {
-  readonly code: 'deprecated-hook-catalog' | 'misplaced-personal-content';
-  readonly relativePath: string;
-  readonly kind: NekoManagedContentKind;
-  readonly suggestedTarget: string;
-}
-
-export type WorkspaceStorageInspectionEntryKind =
-  | 'legacy-database'
-  | 'legacy-manifest'
-  | 'legacy-projection'
-  | 'misplaced-project-fact'
-  | 'misplaced-personal-content'
-  | 'large-cache'
-  | 'raw-logs'
-  | 'preview-recordings'
-  | 'import-staging'
-  | 'temporary-storage'
-  | 'deprecated-directory';
-
-export interface WorkspaceStorageInspectionEntry extends NekoStorageDiagnostic {
-  readonly severity: 'info' | 'warning' | 'error';
-  readonly relativePath: string;
-  readonly kind: WorkspaceStorageInspectionEntryKind;
-  readonly sizeBytes: number | null;
-  readonly suggestedTarget?: string;
-  readonly requiresExplicitAction: boolean;
-}
-
-export interface WorkspaceStorageInspectionReport {
-  readonly workspaceRoot: string;
-  readonly inspectedRoot: string;
-  readonly totalCacheBytes: number;
-  readonly largeCacheThresholdBytes: number;
-  readonly entries: readonly WorkspaceStorageInspectionEntry[];
-}
-
-export interface WorkspaceGitIgnoreMatch {
-  readonly ignored: boolean;
-  readonly matchedRule: string | null;
-}
-
-export interface WorkspaceGitHygieneDiagnostic extends NekoStorageDiagnostic {
-  readonly code: 'workspace-local-not-gitignored' | 'project-facts-gitignored';
-  readonly severity: 'warning' | 'error';
-  readonly matchedRule: string | null;
-}
-
-export interface WorkspaceGitHygieneReport {
-  readonly gitignorePath: string;
-  readonly updated: boolean;
-  readonly workspaceLocal: WorkspaceGitIgnoreMatch;
-  readonly projectFacts: WorkspaceGitIgnoreMatch;
-  readonly diagnostics: readonly WorkspaceGitHygieneDiagnostic[];
-}
-
 export class NekoStorageContractError extends Error {
   readonly code: NekoStorageDiagnosticCode;
 
@@ -265,7 +194,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<workspace>/neko/',
     tracking: 'git-trackable',
     cleanup: 'never-automatic',
-    migration: 'backup-and-migrate',
     backup: 'required',
   },
   'user-editable-global': {
@@ -285,7 +213,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '~/.neko/',
     tracking: 'outside-workspace',
     cleanup: 'never-automatic',
-    migration: 'backup-and-migrate',
     backup: 'required',
   },
   'user-editable-project': {
@@ -305,7 +232,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<workspace>/neko/',
     tracking: 'git-trackable',
     cleanup: 'never-automatic',
-    migration: 'diagnose',
     backup: 'required',
   },
   'valuable-local-state': {
@@ -325,7 +251,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '~/.neko/neko.db#state',
     tracking: 'outside-workspace',
     cleanup: 'explicit-confirmation',
-    migration: 'backup-and-migrate',
     backup: 'required',
   },
   'rebuildable-metadata': {
@@ -345,12 +270,11 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '~/.neko/neko.db#cache',
     tracking: 'outside-workspace',
     cleanup: 'rebuildable-only',
-    migration: 'rebuild',
     backup: 'optional',
   },
   'workspace-cache-artifacts': {
     id: 'workspace-cache-artifacts',
-    scope: 'project-cache',
+    scope: 'workspace-cache',
     storageClass: 'artifact-file',
     metadataOwnership: null,
     durability: 'rebuildable',
@@ -362,10 +286,9 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     sqliteRole: 'prohibited',
     deletion: 'owner-controlled',
     retention: 'rebuildable',
-    defaultLocation: '~/.neko/cache/workspaces/<workspaceId>/',
+    defaultLocation: '~/.neko/workspace-cache/<workspaceId>/',
     tracking: 'outside-workspace',
     cleanup: 'rebuildable-only',
-    migration: 'rebuild',
     backup: 'not-applicable',
   },
   'conversation-journals': {
@@ -385,7 +308,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '~/.neko/journals/',
     tracking: 'outside-workspace',
     cleanup: 'never-automatic',
-    migration: 'backup-and-migrate',
     backup: 'required',
   },
   'raw-logs': {
@@ -394,7 +316,7 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     storageClass: 'raw-log',
     metadataOwnership: null,
     durability: 'valuable-local-state',
-    owner: 'host-extension',
+    owner: 'logger',
     authorityKind: 'log-file',
     userManagement: 'opaque',
     portability: 'machine-local',
@@ -405,7 +327,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<managed-log-root>/',
     tracking: 'outside-workspace',
     cleanup: 'retention-policy',
-    migration: 'diagnose',
     backup: 'optional',
   },
   'extension-private-files': {
@@ -425,7 +346,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<globalStorageUri>/',
     tracking: 'outside-workspace',
     cleanup: 'retention-policy',
-    migration: 'rebuild',
     backup: 'not-applicable',
   },
   'retained-media': {
@@ -445,7 +365,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<workspace-or-media-library>/',
     tracking: 'gitignored',
     cleanup: 'explicit-confirmation',
-    migration: 'promote',
     backup: 'required',
   },
   'scratch-data': {
@@ -465,7 +384,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<managed-scratch-root>/',
     tracking: 'gitignored',
     cleanup: 'retention-policy',
-    migration: 'promote',
     backup: 'not-applicable',
   },
   'secret-credentials': {
@@ -485,7 +403,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<system-credential-store>/',
     tracking: 'outside-workspace',
     cleanup: 'explicit-confirmation',
-    migration: 'backup-and-migrate',
     backup: 'not-applicable',
   },
   'ephemeral-memory': {
@@ -505,7 +422,6 @@ const STORAGE_CLASSIFICATIONS: Readonly<
     defaultLocation: '<process-memory>/',
     tracking: 'outside-workspace',
     cleanup: 'retention-policy',
-    migration: 'none',
     backup: 'not-applicable',
   },
 };
@@ -575,67 +491,6 @@ export function decideNekoStorageAuthority(
   });
 }
 
-export function diagnoseWorkspaceContentPlacement(
-  observations: readonly WorkspaceContentPlacementObservation[],
-): readonly WorkspaceContentPlacementDiagnostic[] {
-  const diagnostics: WorkspaceContentPlacementDiagnostic[] = [];
-  for (const observation of observations) {
-    const relativePath = normalizeWorkspaceContentPath(observation.relativePath);
-    if (relativePath === '.neko/hooks' || relativePath.startsWith('.neko/hooks/')) {
-      diagnostics.push({
-        code: 'deprecated-hook-catalog',
-        kind: observation.kind,
-        relativePath,
-        suggestedTarget: '.neko/settings.local.json',
-        message:
-          'Deprecated .neko/hooks content must be converted to settings-based hook configuration.',
-      });
-      continue;
-    }
-    if (
-      observation.intendedScope === 'personal' &&
-      (relativePath === '.neko' ||
-        relativePath.startsWith('.neko/') ||
-        relativePath === '.agents/skills' ||
-        relativePath.startsWith('.agents/skills/'))
-    ) {
-      diagnostics.push({
-        code: 'misplaced-personal-content',
-        kind: observation.kind,
-        relativePath,
-        suggestedTarget: personalContentTarget(observation.kind),
-        message: `Personal ${managedContentLabel(observation.kind)} content is misplaced in workspace-local storage.`,
-      });
-    }
-  }
-  return diagnostics;
-}
-
-function normalizeWorkspaceContentPath(value: string): string {
-  return value.replace(/\\/gu, '/').replace(/^\.\//u, '').replace(/\/+$/u, '');
-}
-
-function personalContentTarget(kind: NekoManagedContentKind): string {
-  switch (kind) {
-    case 'skill':
-      return '~/.agents/skills';
-    case 'command':
-      return '~/.neko/commands';
-    case 'prompt':
-      return '~/.neko/prompts';
-    case 'processor':
-      return '~/.neko/processors';
-    case 'agents':
-      return '~/.neko/AGENTS.md';
-    case 'hook':
-      return '~/.neko/settings.json';
-  }
-}
-
-function managedContentLabel(kind: NekoManagedContentKind): string {
-  return kind === 'agents' ? 'AGENTS' : kind;
-}
-
 /** User-level global storage roots (`~/.neko/` plus portable `~/.agents/skills`). */
 export interface IGlobalStorageLayout {
   readonly root: string;
@@ -644,6 +499,10 @@ export interface IGlobalStorageLayout {
   readonly mediaLibraries: string;
   readonly journals: string;
   readonly logs: string;
+  readonly desktopLogs: string;
+  readonly workspaceLogs: string;
+  readonly agentLogs: string;
+  readonly workspaceCaches: string;
   readonly skills: string;
   readonly commands: string;
   readonly prompts: string;
@@ -660,53 +519,25 @@ export interface IGlobalStorageLayout {
 /** Project facts (`neko/`) — Git-trackable and team-shared. */
 export interface IProjectFactsLayout {
   readonly root: string;
+  readonly identity: string;
   readonly settings: string;
   readonly providerCards: string;
   readonly entityBindings: string;
-  readonly visualIdentityDrafts: string;
-  readonly entityAssetRequirements: string;
-}
-
-/** Project cache artifacts (`.neko/.cache/`) — derived and not Git-tracked. */
-export interface ICacheLayout {
-  readonly root: string;
-  readonly mediaMetadata: string;
-  readonly thumbnails: string;
-  readonly resources: string;
-  readonly resourceManifest: string;
-  readonly proxies: string;
-  readonly proxyManifest: string;
-  readonly generated: string;
-  readonly generatedIndex: string;
-  readonly vectors: string;
-  readonly assetGraph: string;
-  readonly searchIndex: string;
-}
-
-/** Project-local editable/runtime roots (`.neko/` plus explicit `.agents/skills`). */
-export interface IProjectLocalLayout {
-  readonly root: string;
-  readonly workspaceIdentity: string;
-  readonly settingsLocal: string;
-  readonly memory: string;
-  readonly skills: string;
-  readonly commands: string;
-  readonly prompts: string;
-  readonly agentsMd: string;
-  readonly config: string;
-  readonly processors: string;
-  readonly cache: ICacheLayout;
 }
 
 export interface IProjectStorageLayout {
   readonly facts: IProjectFactsLayout;
-  readonly local: IProjectLocalLayout;
 }
 
 export interface IStorageLayout {
   readonly global: IGlobalStorageLayout;
   readonly project: IProjectStorageLayout;
 }
+
+export type ManagedLogOwner =
+  | { readonly kind: 'desktop' }
+  | { readonly kind: 'agent' }
+  | { readonly kind: 'workspace'; readonly workspaceId: string };
 
 export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayout {
   const root = join(homedir, '.neko');
@@ -717,6 +548,10 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
     mediaLibraries: join(root, 'media-libraries'),
     journals: join(root, 'journals'),
     logs: join(root, 'logs'),
+    desktopLogs: join(root, 'logs', 'desktop'),
+    workspaceLogs: join(root, 'logs', 'workspaces'),
+    agentLogs: join(root, 'logs', 'agent'),
+    workspaceCaches: join(root, 'workspace-cache'),
     skills: join(homedir, '.agents', 'skills'),
     commands: join(root, 'commands'),
     prompts: join(root, 'prompts'),
@@ -733,65 +568,59 @@ export function resolveGlobalStorageLayout(homedir: string): IGlobalStorageLayou
 
 export function resolveStorageLayout(workspaceRoot: string, homedir: string): IStorageLayout {
   const factsRoot = join(workspaceRoot, 'neko');
-  const localRoot = join(workspaceRoot, '.neko');
-  const cacheRoot = join(localRoot, '.cache');
 
   const facts: IProjectFactsLayout = {
     root: factsRoot,
+    identity: join(factsRoot, 'project.json'),
     settings: join(factsRoot, 'settings.json'),
     providerCards: join(factsRoot, 'providers'),
     entityBindings: join(factsRoot, 'entity-bindings.json'),
-    visualIdentityDrafts: join(factsRoot, 'visual-identity-drafts.json'),
-    entityAssetRequirements: join(factsRoot, 'entity-asset-requirements.json'),
-  };
-
-  const cache: ICacheLayout = {
-    root: cacheRoot,
-    mediaMetadata: join(cacheRoot, 'media-metadata.json'),
-    thumbnails: join(cacheRoot, 'thumbnails'),
-    resources: join(cacheRoot, 'resources'),
-    resourceManifest: join(cacheRoot, 'resources', 'manifest.json'),
-    proxies: join(cacheRoot, 'proxies'),
-    proxyManifest: join(cacheRoot, 'proxies', 'manifest.json'),
-    generated: join(cacheRoot, 'generated'),
-    generatedIndex: join(cacheRoot, 'generated', 'index.json'),
-    vectors: join(cacheRoot, 'vectors'),
-    assetGraph: join(cacheRoot, 'asset-graph.json'),
-    searchIndex: join(cacheRoot, 'search-index.json'),
   };
 
   return {
     global: resolveGlobalStorageLayout(homedir),
-    project: {
-      facts,
-      local: {
-        root: localRoot,
-        workspaceIdentity: join(localRoot, 'workspace.json'),
-        settingsLocal: join(localRoot, 'settings.local.json'),
-        memory: join(localRoot, 'memory.md'),
-        skills: join(workspaceRoot, '.agents', 'skills'),
-        commands: join(localRoot, 'commands'),
-        prompts: join(localRoot, 'prompts'),
-        agentsMd: join(localRoot, 'AGENTS.md'),
-        config: join(localRoot, 'config.toml'),
-        processors: join(localRoot, 'processors'),
-        cache,
-      },
-    },
+    project: { facts },
   };
+}
+
+export function resolveWorkspaceCachePartition(homedir: string, workspaceId: string): string {
+  if (!isWorkspaceId(workspaceId)) {
+    throw new NekoStorageContractError({
+      code: 'invalid-workspace-identity',
+      message: 'Workspace cache partition requires a valid workspaceId.',
+    });
+  }
+  return join(resolveGlobalStorageLayout(homedir).workspaceCaches, workspaceId);
+}
+
+export function resolveManagedLogFile(homedir: string, owner: ManagedLogOwner): string {
+  const layout = resolveGlobalStorageLayout(homedir);
+  switch (owner.kind) {
+    case 'desktop':
+      return join(layout.desktopLogs, 'desktop.ndjson');
+    case 'agent':
+      return join(layout.agentLogs, 'agent.ndjson');
+    case 'workspace':
+      if (!isWorkspaceId(owner.workspaceId)) {
+        throw new NekoStorageContractError({
+          code: 'invalid-workspace-identity',
+          message: 'Workspace log partition requires a valid workspaceId.',
+        });
+      }
+      return join(layout.workspaceLogs, owner.workspaceId, 'workspace.ndjson');
+  }
 }
 
 export function assertCanonicalMetadataDatabasePath(path: string, homedir: string): void {
   const canonicalPath = resolveGlobalStorageLayout(homedir).database;
   if (path === canonicalPath) return;
   throw new NekoStorageContractError({
-    code: 'retired-workspace-database',
-    message: `SQLite metadata must use ${canonicalPath}; refused retired or package-local path ${path}`,
+    code: 'unknown-managed-storage',
+    message: `SQLite metadata must use ${canonicalPath}; received ${path}`,
   });
 }
 
-export const WORKSPACE_IDENTITY_VERSION = 1;
-export const WORKSPACE_IDENTITY_RELATIVE_PATH = '.neko/workspace.json';
+export const WORKSPACE_IDENTITY_RELATIVE_PATH = 'neko/project.json';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -819,7 +648,7 @@ function isVariableWorkspaceLocator(value: string): boolean {
 }
 
 export interface WorkspaceIdentityDescriptor {
-  readonly version: typeof WORKSPACE_IDENTITY_VERSION;
+  readonly [metadata: string]: unknown;
   readonly workspaceId: string;
 }
 
@@ -849,25 +678,6 @@ export interface WorkspaceIdentityBinding {
   readonly orphanedAt: string | null;
 }
 
-export type WorkspaceIdentityAction =
-  | {
-      readonly kind: 'clone';
-      readonly sourceWorkspaceId: string;
-      readonly newWorkspaceId: string;
-      readonly locator: WorkspacePortableLocator;
-    }
-  | {
-      readonly kind: 'rebind';
-      readonly workspaceId: string;
-      readonly locator: WorkspacePortableLocator;
-    }
-  | {
-      readonly kind: 'select-current';
-      readonly workspaceId: string;
-      readonly conflictingWorkspaceIds: readonly string[];
-      readonly locator: WorkspacePortableLocator;
-    };
-
 export function isWorkspaceId(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
 }
@@ -879,19 +689,13 @@ export function parseWorkspaceIdentityDescriptor(value: unknown): WorkspaceIdent
       message: 'Workspace identity descriptor must be an object',
     });
   }
-  if (value.version !== WORKSPACE_IDENTITY_VERSION) {
-    throw new NekoStorageContractError({
-      code: 'workspace-identity-version-mismatch',
-      message: `Unsupported workspace identity version: ${String(value.version)}`,
-    });
-  }
   if (!isWorkspaceId(value.workspaceId)) {
     throw new NekoStorageContractError({
       code: 'invalid-workspace-identity',
       message: 'Workspace identity workspaceId must be a valid UUID',
     });
   }
-  return { version: WORKSPACE_IDENTITY_VERSION, workspaceId: value.workspaceId };
+  return { ...value, workspaceId: value.workspaceId };
 }
 
 export function parseWorkspaceIdentityJson(json: string): WorkspaceIdentityDescriptor {
@@ -925,7 +729,6 @@ export async function ensureWorkspaceIdentityDescriptor(
   }
 
   const candidate = parseWorkspaceIdentityDescriptor({
-    version: WORKSPACE_IDENTITY_VERSION,
     workspaceId: filePort.createWorkspaceId(),
   });
   await filePort.ensureParentDirectory(descriptorPath);

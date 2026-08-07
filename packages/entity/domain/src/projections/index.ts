@@ -2,9 +2,7 @@ export {
   projectEntityBindingAvailability,
   projectEntityBindingAvailabilityText,
   type EntityBindingAvailabilityProjection,
-  type EntityBindingAvailabilityProjectionInput,
 } from './bindingAvailabilityProjection';
-export {
-  EntityAssetMetadataProjector,
-  type EntityAssetMetadataProjectorOptions,
-} from './entityAssetMetadataProjection';
+export * from './projectEntityAssetLifecycleProjection';
+export * from './projectEntityManagementProjection';
+export * from './projectEntityInspectorProjection';

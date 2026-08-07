@@ -5,7 +5,6 @@
  * These are always available to the agent alongside meta tools.
  */
 
-import type { IProjectMemoryManager } from '@neko/agent-contracts';
 import type { Tool } from '@neko/agent-contracts';
 import { ReadTool } from './read-tool';
 import { WriteTool } from './write-tool';
@@ -29,11 +28,9 @@ export interface CoreToolsOptions {
   workspaceIgnoreRules?: WorkspaceFileIgnoreRules;
   /** Bash command timeout in ms (default 120000). Ignored unless includeShell is true. */
   bashTimeout?: number;
-  /** Explicit Developer Mode / migration switch. Ordinary creative sessions keep this false. */
+  /** Explicit Developer Mode shell switch. Ordinary creative sessions keep this false. */
   includeShell?: boolean;
-  /** Project memory manager — enables MemoryWrite tool when provided */
-  projectMemoryManager?: IProjectMemoryManager;
-  /** Client/domain proposal sink for MemoryWrite. The tool never commits `.neko` directly. */
+  /** Owning-domain proposal sink for MemoryWrite. The Agent never commits durable facts. */
   projectMemoryProposalSink?: ProjectMemoryMutationProposalSink;
   /** Explicit file access policy for core file/search tools. */
   fileAccessPolicy?: CoreFileAccessPolicy;
@@ -70,7 +67,7 @@ export function createCoreTools(options?: CoreToolsOptions): Tool[] {
     tools.push(new BashTool(bashOpts));
   }
 
-  if (options?.projectMemoryManager) {
+  if (options?.projectMemoryProposalSink) {
     tools.push(new MemoryWriteTool({ proposalSink: options.projectMemoryProposalSink }));
   }
 

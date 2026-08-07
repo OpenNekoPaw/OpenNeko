@@ -1,14 +1,11 @@
 import type { ContentLocator } from '@neko/content';
 
-export const MODEL_PREVIEW_STAGING_SCHEMA_VERSION = 3 as const;
-
 export const MODEL_PREVIEW_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'ply'] as const;
 export type ModelPreviewFormat = (typeof MODEL_PREVIEW_FORMATS)[number];
 
 export interface ModelPreviewIdentity {
   readonly sessionId: string;
   readonly sourceFingerprint: string;
-  readonly revision: number;
 }
 
 export interface ModelPreviewVector3 {
@@ -61,7 +58,6 @@ export interface ModelPreviewCaptureSettings {
 }
 
 export interface ModelPreviewStagingState extends ModelPreviewIdentity {
-  readonly schemaVersion: typeof MODEL_PREVIEW_STAGING_SCHEMA_VERSION;
   readonly selectedNodePath?: string;
   readonly transformPatches: readonly ModelPreviewTransformPatch[];
   readonly cameraPresets: readonly ModelPreviewCameraPreset[];
@@ -105,9 +101,8 @@ export type ModelPreviewDiagnosticCode =
   | 'unsafe-dependency'
   | 'missing-dependency'
   | 'dependency-limit-exceeded'
-  | 'protocol-mismatch'
+  | 'message-invalid'
   | 'session-mismatch'
-  | 'stale-revision'
   | 'stale-state'
   | 'load-failed'
   | 'empty-model'
@@ -128,13 +123,25 @@ export function isModelPreviewFormat(value: unknown): value is ModelPreviewForma
 }
 
 export function isModelPreviewIdentity(value: unknown): value is ModelPreviewIdentity {
-  return isRecord(value) && isIdentity(value);
+  return (
+    isRecord(value) && hasOnlyKeys(value, ['sessionId', 'sourceFingerprint']) && isIdentity(value)
+  );
 }
 
 export function isModelPreviewStagingState(value: unknown): value is ModelPreviewStagingState {
   if (!isRecord(value)) return false;
   return (
-    value['schemaVersion'] === MODEL_PREVIEW_STAGING_SCHEMA_VERSION &&
+    hasOnlyKeys(value, [
+      'sessionId',
+      'sourceFingerprint',
+      'selectedNodePath',
+      'transformPatches',
+      'cameraPresets',
+      'activeCameraId',
+      'lightRig',
+      'background',
+      'capture',
+    ]) &&
     isIdentity(value) &&
     optionalNonEmptyString(value['selectedNodePath']) &&
     isArrayOf(value['transformPatches'], isTransformPatch) &&
@@ -159,11 +166,7 @@ export function isNormalizedModelFacts(value: unknown): value is NormalizedModel
 }
 
 function isIdentity(value: Record<string, unknown>): boolean {
-  return (
-    isNonEmptyString(value['sessionId']) &&
-    isNonEmptyString(value['sourceFingerprint']) &&
-    isNonNegativeInteger(value['revision'])
-  );
+  return isNonEmptyString(value['sessionId']) && isNonEmptyString(value['sourceFingerprint']);
 }
 
 function isTransformPatch(value: unknown): value is ModelPreviewTransformPatch {
@@ -254,6 +257,10 @@ function isEuler(value: unknown): value is ModelPreviewEuler {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(record).every((key) => keys.includes(key));
 }
 
 function isNonEmptyString(value: unknown): value is string {

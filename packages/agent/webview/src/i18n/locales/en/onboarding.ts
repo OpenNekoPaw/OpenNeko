@@ -8,6 +8,6 @@ export const onboarding = {
   'onboarding.openConfigButton': 'Open Config File',
   'onboarding.fileOpenedTitle': 'Config file opened',
   'onboarding.fileOpenedHint':
-    'Add your API key to the config file. The changes will be detected automatically.',
+    'Add a provider and model definition. Credentials are requested through the protected system prompt when needed.',
   'onboarding.gotIt': 'Got it',
 } as const satisfies MessageBundle;

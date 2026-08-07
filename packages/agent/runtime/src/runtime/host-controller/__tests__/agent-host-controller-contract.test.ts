@@ -6,6 +6,7 @@ import {
   AGENT_PROJECTION_CONTROLLER_ROUTE_TYPES,
   AGENT_SHARED_CONTROLLER_ROUTE_TYPES,
   AGENT_SKILL_CONTROLLER_ROUTE_TYPES,
+  AGENT_WINDOW_NAVIGATION_ROUTE_TYPES,
   type AgentHostControllerConnection,
 } from '../agent-host-controller-contract';
 import { ELECTRON_AGENT_HOST_ROUTE_COVERAGE } from '@neko/agent-contracts';
@@ -24,9 +25,11 @@ describe('Agent Host controller contract', () => {
       .map(([route]) => route)
       .sort();
 
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(41);
-    expect(new Set(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).size).toBe(41);
-    expect(partitions.flat().sort()).toEqual(implementedRoutes);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(39);
+    expect(new Set(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).size).toBe(39);
+    expect([...partitions.flat(), ...AGENT_WINDOW_NAVIGATION_ROUTE_TYPES].sort()).toEqual(
+      implementedRoutes,
+    );
   });
 
   it('keeps connection identity and transport instance-scoped', () => {
@@ -40,7 +43,6 @@ describe('Agent Host controller contract', () => {
         windowId: 'window-1',
         viewId: 'view-1',
         workspaceId: 'workspace-1',
-        rendererEpoch: 'renderer-1',
         connectionId: 'connection-1',
       },
       post,

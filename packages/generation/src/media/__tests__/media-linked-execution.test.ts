@@ -116,7 +116,7 @@ describe('MediaGenerationExecutor linked execution', () => {
     ).rejects.toThrow(/does not support asynchronous task description/);
   });
 
-  it('keeps provider execution behind GenerationJob and poisons direct Agent Tool execution', () => {
+  it('keeps provider execution behind GenerationJob and rejects direct Agent Tool execution', () => {
     const serviceSource = fs.readFileSync(
       path.resolve(import.meta.dirname, '..', 'media-generation-service.ts'),
       'utf8',

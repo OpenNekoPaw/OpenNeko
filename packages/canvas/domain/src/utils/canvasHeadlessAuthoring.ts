@@ -8,12 +8,7 @@ import type {
   CanvasSerializableRecord,
   CanvasSerializableValue,
 } from '../types/canvas';
-import {
-  DEFAULT_CANVAS_DATA,
-  isCanvasConnectionType,
-  isCanvasMaterialGenerationContext,
-  isCanvasNodeType,
-} from '../types/canvas';
+import { DEFAULT_CANVAS_DATA, isCanvasConnectionType, isCanvasNodeType } from '../types/canvas';
 import type {
   CanvasAgentApplyContentResult,
   CanvasAgentContentPayload,
@@ -33,7 +28,6 @@ import type {
   CanvasHeadlessAuthoringOperationBatch,
   CanvasHeadlessAuthoringPlan,
 } from '../types/canvas-headless-authoring';
-import { CANVAS_HEADLESS_AUTHORING_CONTRACT_VERSION } from '../types/canvas-headless-authoring';
 import type { JsonPointerPath } from '../types/canvas-layered';
 import {
   isCanvasEntityRepresentationEvidence,
@@ -549,7 +543,6 @@ function createNodeFromSpec(
           ...readResourceFields(input),
           ...readGenerationEvidence(input),
           ...readEntityRepresentationEvidence(input),
-          ...readGenerationContext(input),
           ...readProvenance(input),
         },
       };
@@ -570,13 +563,17 @@ function createNodeFromSpec(
           ...readProvenance(input),
         },
       };
-    case 'job':
+    case 'job': {
+      assertOnlyFields(
+        input,
+        ['jobRef', 'title', 'objective', 'status', 'inputRefs', 'outputRefs', 'diagnostic'],
+        'Canvas Job',
+      );
       return {
         ...base,
         type,
         data: {
           jobRef: readRequiredJobRef(input['jobRef']),
-          revision: readRequiredNonNegativeInteger(input, 'revision', 'Canvas Job'),
           title: readRequiredString(input, 'title', 'Canvas Job'),
           ...readOptionalStringField(input, 'objective'),
           status: readRequiredJobStatus(input['status']),
@@ -585,6 +582,7 @@ function createNodeFromSpec(
           ...readOptionalStringField(input, 'diagnostic'),
         },
       };
+    }
     case 'file': {
       const path = readString(input, 'path');
       const contentLocator = validateContentLocator(input['contentLocator']);
@@ -604,7 +602,6 @@ function createNodeFromSpec(
           ...readResourceFields(input),
           ...readGenerationEvidence(input),
           ...readEntityRepresentationEvidence(input),
-          ...readGenerationContext(input),
           ...readProvenance(input),
         },
       };
@@ -727,7 +724,6 @@ function createBatch(
   createdConnections: readonly CanvasHeadlessAuthoringCreatedConnectionRef[] = [],
 ): CanvasHeadlessAuthoringOperationBatch {
   return {
-    version: CANVAS_HEADLESS_AUTHORING_CONTRACT_VERSION,
     operations,
     ...(createdNodes.length ? { createdNodes } : {}),
     ...(createdConnections.length ? { createdConnections } : {}),
@@ -805,16 +801,16 @@ function readOptionalPositiveNumberField(
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? { [key]: value } : {};
 }
 
-function readRequiredNonNegativeInteger(
+function assertOnlyFields(
   record: Record<string, unknown>,
-  key: string,
+  fields: readonly string[],
   owner: string,
-): number {
-  const value = record[key];
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new Error(`${owner} ${key} must be a non-negative integer`);
+): void {
+  const allowed = new Set(fields);
+  const unknown = Object.keys(record).filter((field) => !allowed.has(field));
+  if (unknown.length > 0) {
+    throw new Error(`${owner} contains unknown field "${unknown[0]}"`);
   }
-  return value;
 }
 
 function readMediaType(record: Record<string, unknown>): {
@@ -832,12 +828,6 @@ function readResourceFields(record: Record<string, unknown>) {
 function readContentLocator(record: Record<string, unknown>) {
   const contentLocator = validateContentLocator(record['contentLocator']);
   return contentLocator.ok ? { contentLocator: contentLocator.locator } : {};
-}
-
-function readGenerationContext(record: Record<string, unknown>) {
-  return isCanvasMaterialGenerationContext(record['generationContext'])
-    ? { generationContext: record['generationContext'] }
-    : {};
 }
 
 function readGenerationEvidence(record: Record<string, unknown>) {

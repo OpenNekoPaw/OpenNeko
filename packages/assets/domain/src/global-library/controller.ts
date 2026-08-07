@@ -5,6 +5,7 @@ import {
   type GlobalAssetRemoveResult,
   type GlobalLibraryBrowserRuntime,
   type GlobalLibraryItem,
+  type GlobalLibraryMoveResult,
   type GlobalLibraryOwner,
   type GlobalLibrarySearchInput,
   type GlobalLibraryThumbnailResult,
@@ -16,7 +17,7 @@ import {
 } from './contract';
 
 export class GlobalLibraryController {
-  private readonly readGeneration = new Map<GlobalLibraryOwner, number>();
+  private readonly activeReads = new Map<GlobalLibraryOwner, object>();
   private readonly projections = new Map<
     GlobalLibraryOwner,
     GlobalAssetProjection | GlobalMediaLibraryProjection
@@ -26,18 +27,18 @@ export class GlobalLibraryController {
   constructor(private readonly runtime: GlobalLibraryBrowserRuntime) {}
 
   async searchAssets(input: GlobalLibrarySearchInput): Promise<GlobalAssetProjection> {
-    const generation = this.beginRead('global-asset-library');
+    const requestIdentity = this.beginRead('global-asset-library');
     const projection = await this.runtime.searchAssets(input);
-    this.commitRead('global-asset-library', generation, projection);
+    this.commitRead('global-asset-library', requestIdentity, projection);
     return projection;
   }
 
   async searchMediaLibraries(
     input: GlobalLibrarySearchInput,
   ): Promise<GlobalMediaLibraryProjection> {
-    const generation = this.beginRead('media-library');
+    const requestIdentity = this.beginRead('media-library');
     const projection = await this.runtime.searchMediaLibraries(input);
-    this.commitRead('media-library', generation, projection);
+    this.commitRead('media-library', requestIdentity, projection);
     return projection;
   }
 
@@ -47,9 +48,9 @@ export class GlobalLibraryController {
       readonly relativePath: string;
     },
   ): Promise<GlobalMediaLibraryProjection> {
-    const generation = this.beginRead('media-library');
+    const requestIdentity = this.beginRead('media-library');
     const projection = await this.runtime.readMediaLibraryChildren(input);
-    this.commitRead('media-library', generation, projection);
+    this.commitRead('media-library', requestIdentity, projection);
     return projection;
   }
 
@@ -64,86 +65,89 @@ export class GlobalLibraryController {
       !current?.thumbnail ||
       !item.thumbnail ||
       current.thumbnail.descriptorId !== item.thumbnail.descriptorId ||
-      current.thumbnail.revision !== item.thumbnail.revision
+      current.thumbnail.sourceFingerprint !== item.thumbnail.sourceFingerprint
     ) {
       throw new Error('Global Library thumbnail item is stale.');
     }
     return this.runtime.resolveThumbnail({
       owner: item.owner,
       itemId: item.id,
-      expectedCatalogRevision: projection.revision,
       descriptorId: item.thumbnail.descriptorId,
-      thumbnailRevision: item.thumbnail.revision,
+      sourceFingerprint: item.thumbnail.sourceFingerprint,
       variant,
     });
   }
 
   importAssets(): Promise<GlobalAssetImportResult> {
-    return this.runtime.importAssets(this.requireProjection('global-asset-library').revision);
+    this.requireProjection('global-asset-library');
+    return this.runtime.importAssets();
   }
 
-  removeAsset(item: GlobalAssetItem): Promise<GlobalAssetRemoveResult> {
-    return this.runtime.removeAsset(
-      item.id,
-      this.requireProjection('global-asset-library').revision,
-    );
+  removeAssets(items: readonly GlobalAssetItem[]): Promise<GlobalAssetRemoveResult> {
+    this.requireBatchItems(items, 'global-asset-library');
+    return this.runtime.removeAssets(items.map((item) => item.id));
   }
 
-  addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind): Promise<
-    | {
-        readonly status: 'added';
-        readonly libraryId: string;
-        readonly revision: number;
+  moveItems(items: readonly GlobalLibraryItem[]): Promise<GlobalLibraryMoveResult> {
+    const owner = items[0]?.owner;
+    if (!owner) throw new Error('Global Library move requires at least one item.');
+    this.requireBatchItems(items, owner);
+    if (owner === 'media-library') {
+      const first = items[0];
+      const libraryId = first?.owner === 'media-library' ? first.libraryId : undefined;
+      if (
+        !libraryId ||
+        items.some(
+          (item) =>
+            item.owner !== 'media-library' || item.kind !== 'file' || item.libraryId !== libraryId,
+        )
+      ) {
+        throw new Error('Global Library move requires files from one Media Library.');
       }
-    | { readonly status: 'cancelled'; readonly revision: number }
-  > {
-    return this.runtime.addMediaLibrary(
-      locationKind,
-      this.requireProjection('media-library').revision,
-    );
+    }
+    return this.runtime.moveItems(items.map((item) => item.id));
+  }
+
+  addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind) {
+    this.requireProjection('media-library');
+    return this.runtime.addMediaLibrary(locationKind);
   }
 
   relinkMediaLibrary(libraryId: string): Promise<GlobalMediaLibraryRelinkResult> {
-    return this.runtime.relinkMediaLibrary(
-      libraryId,
-      this.requireProjection('media-library').revision,
-    );
+    this.requireProjection('media-library');
+    return this.runtime.relinkMediaLibrary(libraryId);
   }
 
   removeMediaLibrary(libraryId: string): Promise<GlobalMediaLibraryMutationResult> {
-    return this.runtime.removeMediaLibrary(
-      libraryId,
-      this.requireProjection('media-library').revision,
-    );
+    this.requireProjection('media-library');
+    return this.runtime.removeMediaLibrary(libraryId);
   }
 
   revealMediaLibrary(libraryId: string): Promise<GlobalMediaLibraryMutationResult> {
-    return this.runtime.revealMediaLibrary(
-      libraryId,
-      this.requireProjection('media-library').revision,
-    );
+    this.requireProjection('media-library');
+    return this.runtime.revealMediaLibrary(libraryId);
   }
 
   dispose(): void {
     this.disposed = true;
-    this.readGeneration.clear();
+    this.activeReads.clear();
     this.projections.clear();
   }
 
-  private beginRead(owner: GlobalLibraryOwner): number {
+  private beginRead(owner: GlobalLibraryOwner): object {
     this.requireActive();
-    const generation = (this.readGeneration.get(owner) ?? 0) + 1;
-    this.readGeneration.set(owner, generation);
-    return generation;
+    const requestIdentity = {};
+    this.activeReads.set(owner, requestIdentity);
+    return requestIdentity;
   }
 
   private commitRead(
     owner: GlobalLibraryOwner,
-    generation: number,
+    requestIdentity: object,
     projection: GlobalAssetProjection | GlobalMediaLibraryProjection,
   ): void {
     this.requireActive();
-    if (this.readGeneration.get(owner) !== generation) {
+    if (this.activeReads.get(owner) !== requestIdentity) {
       throw new Error('Global Library catalog response is stale.');
     }
     this.projections.set(owner, projection);
@@ -163,6 +167,22 @@ export class GlobalLibraryController {
       throw new Error(`Global Library ${owner} projection is unavailable.`);
     }
     return projection;
+  }
+
+  private requireBatchItems(items: readonly GlobalLibraryItem[], owner: GlobalLibraryOwner): void {
+    if (items.length === 0) throw new Error('Global Library batch requires at least one item.');
+    const itemIds = new Set<string>();
+    const projection = this.requireProjection(owner);
+    for (const item of items) {
+      if (item.owner !== owner || itemIds.has(item.id)) {
+        throw new Error('Global Library batch item identity is invalid.');
+      }
+      const current = projection.items.find((candidate) => candidate.id === item.id);
+      if (!current || current.owner !== item.owner) {
+        throw new Error(`Global Library batch item '${item.id}' is stale.`);
+      }
+      itemIds.add(item.id);
+    }
   }
 
   private requireActive(): void {

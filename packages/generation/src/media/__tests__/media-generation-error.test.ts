@@ -14,7 +14,7 @@ describe('media generation error normalization', () => {
         value: { error: { message: 'invalid size', code: 'bad_request' } },
         enumerable: false,
       },
-      url: { value: 'https://api.example.test/v1/images/generations', enumerable: false },
+      url: { value: 'https://api.example.test/media/images/generations', enumerable: false },
       isRetryable: { value: false, enumerable: false },
     });
 
@@ -24,7 +24,7 @@ describe('media generation error normalization', () => {
       name: 'Error',
       message: 'Provider rejected the request',
       status: 400,
-      url: 'https://api.example.test/v1/images/generations',
+      url: 'https://api.example.test/media/images/generations',
       isRetryable: false,
       responseBody: '{"error":{"message":"invalid size","code":"bad_request"}}',
     });

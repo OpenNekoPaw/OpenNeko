@@ -1,24 +1,17 @@
-import { resolveGlobalStorageLayout, resolveStorageLayout } from '@neko/local-metadata';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '@neko/local-metadata';
-import {
-  migrateLegacyAssetGraph,
-  type LegacyAssetGraphMigrationReport,
-} from './node-entity-asset-projection-migration';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
+import type { LocalMetadataPartition } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
 import {
-  ENTITY_ASSET_PROJECTION_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
+  initializeEntityAssetProjectionTables,
+  initializeCoreLocalMetadataTables,
 } from '@neko/local-metadata/sqlite';
 
 export interface NodeWorkspaceEntityAssetMetadataBinding {
   readonly workspaceId: string;
   readonly partition: LocalMetadataPartition;
   readonly repository: EntityAssetProjectionRepository;
-  readonly migrationReport: LegacyAssetGraphMigrationReport;
-  readRevision(): Promise<LocalMetadataPartitionRevision | null>;
-  markStale(diagnostic: string, updatedAt: string): Promise<LocalMetadataPartitionRevision>;
   dispose(): Promise<void>;
 }
 
@@ -30,12 +23,13 @@ export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
 }): Promise<NodeWorkspaceEntityAssetMetadataBinding> {
   const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: options.homedir });
   try {
+    const databasePath = resolveGlobalStorageLayout(options.homedir).database;
     await metadataStore.open({
-      databasePath: resolveGlobalStorageLayout(options.homedir).database,
+      databasePath,
       busyTimeoutMs: 2_000,
     });
-    await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeEntityAssetProjectionTables(metadataStore);
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -49,25 +43,10 @@ export async function createNodeWorkspaceEntityAssetMetadataBinding(options: {
       workspaceId: identity.workspaceId,
       domain: 'entity-asset-projection',
     };
-    const migrationReport = await migrateLegacyAssetGraph({
-      assetGraphPath: resolveStorageLayout(options.workDir, options.homedir).project.local.cache
-        .assetGraph,
-      partition,
-      repository: metadataStore.repositories.entityAssetProjections,
-    });
     return {
       workspaceId: identity.workspaceId,
       partition,
       repository: metadataStore.repositories.entityAssetProjections,
-      migrationReport,
-      readRevision: () => metadataStore.readPartitionRevision(partition),
-      markStale: (diagnostic, updatedAt) =>
-        metadataStore.repositories.projectionVersions.markStale({
-          partition,
-          freshness: 'stale',
-          diagnostic,
-          updatedAt,
-        }),
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {

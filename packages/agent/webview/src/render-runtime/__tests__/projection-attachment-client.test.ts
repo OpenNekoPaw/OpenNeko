@@ -13,31 +13,23 @@ import {
 } from '../projection-attachment-client';
 
 const keyA: ProjectionAttachmentKey = {
-  endpointEpoch: 'endpoint-1',
   attachmentId: 'attachment-a',
   tabId: 'tab-a',
   conversationId: 'conversation-a',
 };
 
-function emptySnapshot(version = 0): ConversationProjectionSnapshot {
+function emptySnapshot(): ConversationProjectionSnapshot {
   return {
     conversationId: 'conversation-a',
-    projectionVersion: version,
     turns: [],
   };
 }
 
-function appendPatch(
-  content: string,
-  baseProjectionVersion: number,
-  projectionVersion: number,
-): ConversationProjectionPatch {
-  const item = assistantTextItem(content, projectionVersion, 'conversation-a');
+function appendPatch(content: string, nextValue: number): ConversationProjectionPatch {
+  const item = assistantTextItem(content, nextValue, 'conversation-a');
   return {
     type: 'conversationProjectionPatch',
     conversationId: 'conversation-a',
-    baseProjectionVersion,
-    projectionVersion,
     turnId: 'turn-a',
 
     runId: 'run-a',
@@ -48,7 +40,7 @@ function appendPatch(
 
 function assistantTextItem(
   content: string,
-  itemRevision: number,
+  updatedAt: number,
   conversationId: string,
 ): AgentTurnTimelineAssistantTextItem {
   return {
@@ -59,12 +51,11 @@ function assistantTextItem(
     messageId: 'message-a',
     itemId: 'text-a',
     sequence: 1,
-    itemRevision,
     kind: 'assistant_text',
     status: 'streaming',
     createdAt: 1,
-    updatedAt: itemRevision,
-    payload: { content, sourceGeneration: 1 },
+    updatedAt,
+    payload: { content },
   };
 }
 
@@ -79,7 +70,7 @@ function createClient(key: ProjectionAttachmentKey = keyA) {
     send: (message) => messages.push(message),
     reportError,
   });
-  client.attach({ endpointEpoch: key.endpointEpoch, attachmentId: key.attachmentId });
+  client.attach({ attachmentId: key.attachmentId });
   return { client, replica, messages, reportError };
 }
 
@@ -91,7 +82,6 @@ function snapshotFrame(
     type: 'projectionSnapshot',
     key,
     sequence: 0,
-    projectionVersion: projection.projectionVersion,
     projection,
   };
 }
@@ -101,13 +91,11 @@ describe('ProjectionAttachmentClient', () => {
     const { client, replica, messages } = createClient();
 
     client.accept(snapshotFrame(keyA));
-    const patch = appendPatch('hello', 0, 1);
+    const patch = appendPatch('hello', 1);
     client.accept({
       type: 'projectionPatch',
       key: keyA,
       sequence: 1,
-      baseProjectionVersion: 0,
-      projectionVersion: 1,
       patch,
     });
 
@@ -117,24 +105,20 @@ describe('ProjectionAttachmentClient', () => {
         type: 'projectionSnapshotAck',
         key: keyA,
         sequence: 0,
-        projectionVersion: 0,
       },
     ]);
     expect(replica.getSnapshot().projection).toMatchObject({
       conversationId: 'conversation-a',
-      projectionVersion: 1,
       turns: [{ items: [{ payload: { content: 'hello' } }] }],
     });
     expect(client.getSnapshot()).toMatchObject({
       phase: 'live',
       lastSequence: 1,
-      projectionVersion: 1,
     });
   });
 
-  it('rejects endpoint, attachment, Tab, and conversation identity mismatches without mutating the replica', () => {
+  it('rejects attachment, Tab, and conversation identity mismatches without mutating the replica', () => {
     const mismatches: ProjectionAttachmentKey[] = [
-      { ...keyA, endpointEpoch: 'endpoint-old' },
       { ...keyA, attachmentId: 'attachment-other' },
       { ...keyA, tabId: 'tab-other' },
       { ...keyA, conversationId: 'conversation-other' },
@@ -152,53 +136,47 @@ describe('ProjectionAttachmentClient', () => {
   it('makes sequence gaps fatal and leaves the last valid projection unchanged', () => {
     const { client, replica, reportError } = createClient();
     client.accept(snapshotFrame(keyA));
-    const gap = appendPatch('gap', 0, 1);
+    const gap = appendPatch('gap', 1);
 
     expect(() =>
       client.accept({
         type: 'projectionPatch',
         key: keyA,
         sequence: 2,
-        baseProjectionVersion: 0,
-        projectionVersion: 1,
         patch: gap,
       }),
     ).toThrow(/frame gap/);
     expect(client.getSnapshot().phase).toBe('fatal');
-    expect(replica.getSnapshot().projection?.projectionVersion).toBe(0);
+    expect(replica.getSnapshot().projection?.turns).toEqual([]);
     expect(reportError).toHaveBeenCalledOnce();
   });
 
-  it('makes patch base/version mismatches fatal before changing the replica', () => {
+  it('makes patch owner mismatches fatal before changing the replica', () => {
     const { client, replica } = createClient();
     client.accept(snapshotFrame(keyA));
-    const patch = appendPatch('wrong-base', 1, 2);
+    const patch = { ...appendPatch('wrong-owner', 1), conversationId: 'conversation-b' };
 
     expect(() =>
       client.accept({
         type: 'projectionPatch',
         key: keyA,
         sequence: 1,
-        baseProjectionVersion: 1,
-        projectionVersion: 2,
         patch,
       }),
-    ).toThrow(/patch base\/version mismatch/);
-    expect(replica.getSnapshot().projection?.projectionVersion).toBe(0);
+    ).toThrow(/patch owner mismatch/);
+    expect(replica.getSnapshot().projection?.turns).toEqual([]);
   });
 
   it('makes projection operation contract failures fatal without partial replica mutation', () => {
     const { client, replica, reportError } = createClient();
     client.accept(snapshotFrame(keyA));
-    const invalid = appendPatch('invalid owner', 0, 1);
+    const invalid = appendPatch('invalid owner', 1);
 
     expect(() =>
       client.accept({
         type: 'projectionPatch',
         key: keyA,
         sequence: 1,
-        baseProjectionVersion: 0,
-        projectionVersion: 1,
         patch: {
           ...invalid,
           operations: [
@@ -211,7 +189,7 @@ describe('ProjectionAttachmentClient', () => {
       }),
     ).toThrow(/rejected its live patch/);
     expect(client.getSnapshot().phase).toBe('fatal');
-    expect(replica.getSnapshot().projection?.projectionVersion).toBe(0);
+    expect(replica.getSnapshot().projection?.turns).toEqual([]);
     expect(reportError).toHaveBeenCalledOnce();
   });
 
@@ -225,13 +203,11 @@ describe('ProjectionAttachmentClient', () => {
       type: 'projectionPatch',
       key: keyA,
       sequence: 1,
-      baseProjectionVersion: 0,
-      projectionVersion: 1,
-      patch: appendPatch('only-a', 0, 1),
+      patch: appendPatch('only-a', 1),
     });
 
     expect(a.replica).not.toBe(b.replica);
-    expect(a.replica.getSnapshot().projection?.projectionVersion).toBe(1);
+    expect(a.replica.getSnapshot().projection?.turns).toHaveLength(1);
     expect(b.replica.getSnapshot().projection).toBeNull();
     expect(a.client.getSnapshot().phase).toBe('live');
     expect(b.client.getSnapshot().phase).toBe('awaiting-snapshot');

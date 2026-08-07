@@ -90,11 +90,11 @@ export function finishPreviewPlaybackSegment(
 }
 
 export function shouldAcceptPreviewReady(
-  readyGeneration: number,
-  requestedGeneration: number | undefined,
+  readyRequestId: string,
+  requestedRequestId: string | undefined,
   playing: boolean,
 ): boolean {
-  return playing && readyGeneration === requestedGeneration;
+  return playing && readyRequestId === requestedRequestId;
 }
 
 export function applyPreviewPlaybackAdvance(

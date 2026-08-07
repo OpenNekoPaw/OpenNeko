@@ -169,7 +169,7 @@ function applyMessageQueueSnapshot(
             .isThinking ?? false),
     queuedMessageCount: snapshot.pendingCount,
     queuedMessages: snapshot.items,
-    messageQueueVersion: snapshot.version,
+    messageQueueSequence: snapshot.sequence,
   }));
 }
 
@@ -177,9 +177,9 @@ function isStaleMessageQueueSnapshot(
   snapshot: MessageQueueSnapshotMessage['snapshot'],
   context: MessageHandlerContext,
 ): boolean {
-  const currentVersion = context.conversationRenderCoordinator.read(snapshot.conversationId)
-    ?.streaming.messageQueueVersion;
-  return currentVersion !== undefined && snapshot.version < currentVersion;
+  const currentSequence = context.conversationRenderCoordinator.read(snapshot.conversationId)
+    ?.streaming.messageQueueSequence;
+  return currentSequence !== undefined && snapshot.sequence < currentSequence;
 }
 
 /**

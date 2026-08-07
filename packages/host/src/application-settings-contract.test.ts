@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
-  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
   DesktopApplicationSettingsContractError,
   createDesktopApplicationSettingsUpdateRequest,
   parseDesktopApplicationPreferences,
@@ -10,17 +9,14 @@ import {
 } from './application-settings-contract';
 
 describe('Desktop application settings contract', () => {
-  it('creates and parses a complete versioned update', () => {
+  it('creates a canonical update from semantic fields only', () => {
     expect(
       createDesktopApplicationSettingsUpdateRequest(
         'settings-update-1',
-        3,
         DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
       ),
     ).toEqual({
-      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
       requestId: 'settings-update-1',
-      expectedRevision: 3,
       preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
     });
   });
@@ -38,15 +34,12 @@ describe('Desktop application settings contract', () => {
 
   it('rejects mismatched response identities and event sequences', () => {
     const projection = {
-      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-      revision: 1,
       eventSequence: 1,
       preferences: DEFAULT_DESKTOP_APPLICATION_PREFERENCES,
     };
     expect(() =>
       parseDesktopApplicationSettingsResponse(
         {
-          schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
           requestId: 'response-2',
           projection,
         },
@@ -55,7 +48,6 @@ describe('Desktop application settings contract', () => {
     ).toThrow(/does not match/);
     expect(() =>
       parseDesktopApplicationSettingsProjectionEvent({
-        schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
         sequence: 2,
         projection,
       }),

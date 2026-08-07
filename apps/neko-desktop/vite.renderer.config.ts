@@ -6,13 +6,18 @@ import path from 'node:path';
 import { DESKTOP_VITE_CSP_NONCE } from './src/shared/vite-development-security';
 
 const functionalFixtureHome = process.env['OPENNEKO_DESKTOP_FUNCTIONAL_HOME'];
-const canonicalWorkspacePublicEntries = new Set([
+export const DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES = Object.freeze([
+  '@neko/agent-contracts',
   '@neko/agent-webview/root',
   '@neko/canvas-webview/root',
   '@neko/cut-webview/root',
   '@neko/cut-webview/runtime-bridge',
   '@neko/preview-webview/root',
-]);
+] as const);
+
+const canonicalWorkspacePublicEntries = new Set<string>(
+  DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES,
+);
 
 function createWorkspacePublicEntryCanonicalizationPlugin(): Plugin {
   return {
@@ -46,6 +51,7 @@ export default defineConfig({
   },
   resolve: {
     dedupe: [
+      '@neko/agent-contracts',
       '@neko/agent-webview',
       '@neko/assets-webview',
       '@neko/canvas-webview',
@@ -60,26 +66,29 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [
+      '@neko/agent-contracts',
       '@neko/agent-webview/root',
+      '@neko/assets-webview/resource-browser/presentation-snapshot',
+      '@neko/assets-webview/resource-browser/root',
+      '@neko/assets-domain/asset-center/contract',
+      '@neko/assets-domain/asset-center/host-contract',
+      '@neko/assets-domain/contracts',
+      '@neko/assets-domain/global-library/contract',
+      '@neko/assets-domain/resource-browser/contract',
       '@neko/canvas-domain',
       '@neko/canvas-webview/root',
       '@neko/cut-webview/root',
       '@neko/cut-webview/runtime-bridge',
+      '@neko/host/application-settings',
+      '@neko/host/desktop-scene-contract',
+      '@neko/host/desktop-shell-contract',
+      '@neko/host/desktop-workbench-contract',
+      '@neko/host/desktop-window-composition-contract',
+      '@neko/preview-webview/presentation-snapshot',
       '@neko/preview-webview/root',
       '@neko/media',
       '@neko/media/browser',
-    ],
-    include: [
-      '@zip.js/zip.js',
-      '@neko/agent-contracts',
-      '@neko/agent-contracts/host-message-event',
-      '@neko/assets-domain/contracts',
-      '@neko/content/project-file-io',
-      '@neko/generation',
-      '@neko/markdown',
-      '@neko/search-domain',
-      '@neko/shared',
-      '@neko/shared/job-lifecycle',
+      '@neko/ui',
       '@neko/ui/creative',
       '@neko/ui/hooks',
       '@neko/ui/icons',
@@ -88,6 +97,15 @@ export default defineConfig({
       '@neko/ui/primitives',
       '@neko/ui/utils',
       '@neko/ui/workbench',
+    ],
+    include: [
+      '@zip.js/zip.js',
+      '@neko/content/project-file-io',
+      '@neko/generation',
+      '@neko/markdown',
+      '@neko/search-domain',
+      '@neko/shared',
+      '@neko/shared/job-lifecycle',
       '@tanstack/react-virtual',
       'clsx',
       'docx-preview',

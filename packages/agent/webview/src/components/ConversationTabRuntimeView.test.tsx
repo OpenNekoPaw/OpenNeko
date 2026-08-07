@@ -32,7 +32,6 @@ describe('ConversationTabRuntimeView', () => {
   it('does not render non-Timeline active Markdown through an empty initial snapshot', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
     runtime.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: vi.fn(),
       reportError: vi.fn(),
@@ -97,16 +96,13 @@ describe('ConversationTabRuntimeView', () => {
         runtime.acceptProjectionFrame({
           type: 'projectionSnapshot',
           key: {
-            endpointEpoch: 'endpoint-1',
             attachmentId: 'attachment-a',
             tabId: 'tab-a',
             conversationId: 'conv-a',
           },
           sequence: 0,
-          projectionVersion: 1,
           projection: {
             conversationId: 'conv-a',
-            projectionVersion: 1,
             turns: [],
           },
         });
@@ -125,19 +121,14 @@ describe('ConversationTabRuntimeView', () => {
       runtime.acceptProjectionFrame({
         type: 'projectionPatch',
         key: {
-          endpointEpoch: 'endpoint-1',
           attachmentId: 'attachment-a',
           tabId: 'tab-a',
           conversationId: 'conv-a',
         },
         sequence: 1,
-        baseProjectionVersion: 1,
-        projectionVersion: 2,
         patch: {
           type: 'conversationProjectionPatch',
           conversationId: 'conv-a',
-          baseProjectionVersion: 1,
-          projectionVersion: 2,
           turnId: 'turn-1',
 
           runId: 'run-a',
@@ -153,10 +144,9 @@ describe('ConversationTabRuntimeView', () => {
                 messageId,
                 itemId: 'text-1',
                 sequence: 1,
-                itemRevision: 1,
                 kind: 'assistant_text',
                 status: 'streaming',
-                payload: { content: 'partial', format: 'markdown', sourceGeneration: 1 },
+                payload: { content: 'partial', format: 'markdown' },
                 createdAt: 1,
                 updatedAt: 1,
               },
@@ -180,7 +170,6 @@ describe('ConversationTabRuntimeView', () => {
   it('renders from its own projection replica without rebinding on visibility changes', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
     runtime.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: vi.fn(),
       reportError: vi.fn(),
@@ -200,16 +189,13 @@ describe('ConversationTabRuntimeView', () => {
       runtime.acceptProjectionFrame({
         type: 'projectionSnapshot',
         key: {
-          endpointEpoch: 'endpoint-1',
           attachmentId: 'attachment-a',
           tabId: 'tab-a',
           conversationId: 'conv-a',
         },
         sequence: 0,
-        projectionVersion: 1,
         projection: {
           conversationId: 'conv-a',
-          projectionVersion: 1,
           turns: [
             {
               turnId: 'turn-1',
@@ -237,16 +223,14 @@ describe('ConversationTabRuntimeView', () => {
     expect(view.container.querySelector('[data-agent-tab-runtime="tab-a"]')).toMatchObject({
       dataset: expect.objectContaining({
         agentProjectionAttachment: 'attachment-a',
-        agentProjectionEndpoint: 'endpoint-1',
         agentProjectionPhase: 'live',
         agentProjectionSequence: '0',
-        agentProjectionVersion: '1',
       }),
     });
 
     view.rerender(<ConversationTabRuntimeView {...props} visible={false} />);
 
-    expect(runtime.projectionReplica.getSnapshot().projection?.projectionVersion).toBe(1);
+    expect(runtime.projectionReplica.getSnapshot().projection?.turns).toHaveLength(1);
     expect(runtime.markdownSessions.metrics().activeSessions).toBe(1);
     expect(
       view.container.querySelector('[data-agent-tab-runtime="tab-a"]')?.hasAttribute('hidden'),
@@ -351,7 +335,6 @@ function createSettings(): SettingsState {
 function projectionSnapshot(content: string) {
   return {
     conversationId: 'conv-a',
-    projectionVersion: 1,
     turns: [
       {
         turnId: 'turn-1',
@@ -373,10 +356,9 @@ function projectionTextItem(content: string) {
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,
-    itemRevision: 1,
     kind: 'assistant_text' as const,
     status: 'streaming' as const,
-    payload: { content, format: 'markdown' as const, sourceGeneration: 1 },
+    payload: { content, format: 'markdown' as const },
     createdAt: 1,
     updatedAt: 1,
   };

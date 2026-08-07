@@ -48,7 +48,7 @@
 - [ ] 6.2 Implement `WorldActorInstance -> CharacterRun -> primary AgentSession` composition and prove an embodied user-controlled actor does not create a hidden Character Agent.
 - [ ] 6.3 Implement isolated Intent Interpreter, Character Agent, World Director, Rule Evaluator and Narrator scopes over the existing Pi/AgentSession canonical path; do not create a World-specific Agent loop.
 - [ ] 6.4 Implement immutable per-turn context materialization and exact provider/model/parameter receipts while keeping credentials, hidden model state and unrelated participant facts out of WorldSave and prompts.
-- [ ] 6.5 Implement required realtime AI capability resolution with explicit unavailable diagnostics, measured qualification receipts and only explicitly selected author-declared realtime profiles; poison inference-free, silent model/purpose/profile fallback paths.
+- [ ] 6.5 Implement required realtime AI capability resolution with explicit unavailable diagnostics, measured qualification receipts and only explicitly selected author-declared realtime profiles; delete silent model/purpose/profile fallback paths and prove they cannot participate.
 - [ ] 6.6 Add adversarial evaluation cases for prompt injection in imported World content, identity/stance spoofing, hidden-knowledge leakage, Director canon mutation, false utterance promotion and cross-run session contamination.
 - [ ] 6.7 Run focused real Agent evaluations for intent interpretation, multi-character response, World Director proposal and failure recovery, and record scenario IDs, model bindings, evidence and residual risks.
 
@@ -60,11 +60,11 @@
 - [ ] 7.4 Implement interruption, cancellation and newer-intent supersession so obsolete chunks, proposals and presentation results cannot commit or render.
 - [ ] 7.5 Implement deadline, stream-loss and resource-budget diagnostics that pause/fail the affected capability without changing model, purpose, profile or execution path.
 - [ ] 7.6 Add sustained-latency and adversarial tests for provider jitter, first-response timeout, broken heartbeat, cancellation refusal, late chunks, Scene/revision changes and multi-role concurrency.
-- [ ] 7.7 Poison active-Run access to ordinary GenerationJob/offline render APIs and add path tests proving non-realtime image/video creation exists only in authoring, publication preparation or post-Run export.
+- [ ] 7.7 Keep ordinary GenerationJob/offline render APIs unregistered for active Runs and add path tests proving non-realtime image/video creation exists only in authoring, publication preparation or post-Run export.
 
 ## 8. World experience and presentation
 
-- [ ] 8.1 Implement the package-owned World Webview host contract for snapshot-first attach, participant WorldView streams, bound user intents, renderer epoch, interruption, cancellation and disposal.
+- [ ] 8.1 Implement the package-owned World Webview host contract for snapshot-first attach, participant WorldView streams, bound user intents, exact renderer session and request identity, interruption, cancellation and disposal.
 - [ ] 8.2 Build the first streaming-text plus illustrated-2D realtime Experience surface using shared UI primitives, including scene, visible characters, narration/dialogue, world context, suggested affordances, free-form input and event/branch access.
 - [ ] 8.3 Implement explicit transition between separately qualified realtime presentation profiles so they consume one WorldView and intent path without copying state or silently degrading.
 - [ ] 8.4 Integrate durable Entity/Asset/Content grounding and representation plus qualified realtime Voice/Live2D descriptors through owning public ports; keep ordinary GenerationJob, local paths, provider payloads and runtime URLs out of World runtime and facts.
@@ -76,7 +76,7 @@
 - [ ] 9.2 Compose package-owned World authoring/publication/runtime/persistence services in Desktop Main with explicit repository, Chara, Agent, Content/Asset, realtime AI, settings and resource adapters; retain no host-neutral World workflow in `apps/neko-desktop`.
 - [ ] 9.3 Add the lightweight World Library to Desktop Home for installed/authored works, recent Runs, Saves, branches, realtime capability/qualification status and attention without game lobby/achievement/engine settings.
 - [ ] 9.4 Add work detail and launch setup for exact version, entry point, stance, optional embodied Character, new/existing Save or branch and a qualified author-supported realtime presentation profile.
-- [ ] 9.5 Replace the current World unavailable projection only after the full package producer/consumer and realtime qualification path is registered; add consumer/path tests that poison empty view, mock repository, no-op handler, inference-free continuation and app-owned World success paths.
+- [ ] 9.5 Replace the current World unavailable projection only after the full package producer/consumer and realtime qualification path is registered; add consumer/path tests proving empty-view, mock-repository, no-op-handler, inference-free continuation and app-owned World success paths are absent or cannot participate.
 - [ ] 9.6 Add a real Electron isolated-fixture scenario covering Home -> World detail -> qualification -> new Run -> realtime user interaction -> interrupted Character response -> Save -> reload -> continue -> branch -> close, including latency evidence, IPC identity, resource revocation and disposal assertions.
 
 ## 10. Documentation and quality gates
@@ -87,4 +87,4 @@
 - [ ] 10.4 Run `pnpm test:agent:eval` plus the focused real Agent realtime evaluation scripts; state explicitly which evidence is harness-only and which exercises a real model path with measured latency/interruption.
 - [ ] 10.5 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:application-boundaries`, `pnpm check:legacy-debt` and `pnpm check:unused`, fixing canonical-path failures rather than adding compatibility fallback.
 - [ ] 10.6 Run the sustained real Electron World functional scenario outside CI and `pnpm package:desktop` where applicable, then record host/version, model/provider binding, latency percentiles, interruption/cancellation evidence, sanitized artifacts, unexecuted gates and residual risks.
-- [ ] 10.7 Complete `neko-quality-review` against the final diff and verify producer tests, Desktop delegation tests, realtime runtime path evidence and deletion/poison/fail-closed proof for every replaced or newly enabled route.
+- [ ] 10.7 Complete `neko-quality-review` against the final diff and verify producer tests, Desktop delegation tests, realtime runtime path evidence and deletion, registration-absence or fail-closed proof for every replaced or newly enabled route.

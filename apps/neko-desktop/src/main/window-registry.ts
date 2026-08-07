@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type { DesktopLifecycleEvent, DesktopLifecycleEventType } from '../shared/bridge-contract';
-import { DESKTOP_BRIDGE_CONTRACT_VERSION } from '../shared/bridge-contract';
 import { isAllowedDesktopRendererUrl } from './security';
 
 export interface DesktopOwnedDisposable {
@@ -11,7 +10,7 @@ export interface DesktopWindowRegistration {
   readonly windowId: string;
   readonly webContentsId: number;
   readonly allowedOrigin: string;
-  readonly rendererEpoch: number;
+  readonly rendererSessionId: string;
   readonly sequence: number;
 }
 
@@ -25,7 +24,8 @@ interface MutableDesktopWindowRegistration {
   readonly webContentsId: number;
   readonly allowedOrigin: string;
   readonly disposables: Set<DesktopOwnedDisposable>;
-  rendererEpoch: number;
+  rendererSessionId: string;
+  rendererLoading: boolean;
   sequence: number;
   disposed: boolean;
 }
@@ -53,7 +53,8 @@ export class DesktopWindowRegistry {
       windowId,
       webContentsId: input.webContentsId,
       allowedOrigin: input.allowedOrigin,
-      rendererEpoch: 0,
+      rendererSessionId: randomUUID(),
+      rendererLoading: false,
       sequence: 0,
       disposables: new Set(),
       disposed: false,
@@ -84,15 +85,17 @@ export class DesktopWindowRegistry {
 
   rendererLoading(windowId: string, applicationInstanceId: string): DesktopLifecycleEvent {
     const record = this.requireWindow(windowId);
-    record.rendererEpoch += 1;
+    record.rendererSessionId = randomUUID();
+    record.rendererLoading = true;
     return this.createLifecycleEvent(record, applicationInstanceId, 'renderer-loading');
   }
 
   rendererReady(windowId: string, applicationInstanceId: string): DesktopLifecycleEvent {
     const record = this.requireWindow(windowId);
-    if (record.rendererEpoch === 0) {
+    if (!record.rendererLoading) {
       throw new Error(`Desktop window '${windowId}' became ready before renderer loading.`);
     }
+    record.rendererLoading = false;
     return this.createLifecycleEvent(record, applicationInstanceId, 'renderer-ready');
   }
 
@@ -164,10 +167,9 @@ export class DesktopWindowRegistry {
     }
     record.sequence += 1;
     return {
-      schemaVersion: DESKTOP_BRIDGE_CONTRACT_VERSION,
       applicationInstanceId,
       windowId: record.windowId,
-      rendererEpoch: record.rendererEpoch,
+      rendererSessionId: record.rendererSessionId,
       sequence: record.sequence,
       type,
     };
@@ -179,7 +181,7 @@ function snapshot(record: MutableDesktopWindowRegistration): DesktopWindowRegist
     windowId: record.windowId,
     webContentsId: record.webContentsId,
     allowedOrigin: record.allowedOrigin,
-    rendererEpoch: record.rendererEpoch,
+    rendererSessionId: record.rendererSessionId,
     sequence: record.sequence,
   };
 }

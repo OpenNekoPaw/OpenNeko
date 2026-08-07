@@ -53,6 +53,6 @@ information needed to explain, validate, and efficiently restore the required li
   references through a minimal read/rewrite contract.
 - Project sync, package/export, path authorization, Git-local link exclusion, diagnostics, and
   isolated Electron Desktop acceptance coverage.
-- Existing local-metadata projection versions, referenced-media metadata, tasks, and task checkpoints
-  in the user-level SQLite store; broader Desktop shell-state and application-settings JSON
-  migration is intentionally deferred to a separate persistence change.
+- Existing stable local-metadata projections, referenced-media metadata, tasks, and task checkpoints
+  in the user-level SQLite store; Desktop shell-state and application-settings use their canonical
+  authorities without any Media Library migration path.

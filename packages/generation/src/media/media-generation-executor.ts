@@ -193,8 +193,7 @@ export class MediaGenerationExecutor {
     throwIfAborted(context?.signal);
     const capabilities = model.capabilities ?? [];
     const imageMode =
-      capabilities.includes('chat') &&
-      (capabilities.includes('image_generation') || capabilities.includes('text_to_image'))
+      capabilities.includes('chat') && capabilities.includes('text_to_image')
         ? ('chat' as const)
         : ('standard' as const);
     const resolved = resolveProvider(

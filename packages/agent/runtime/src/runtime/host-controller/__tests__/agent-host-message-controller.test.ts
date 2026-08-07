@@ -12,7 +12,6 @@ function createEffects(): AgentHostControllerEffectPorts {
       submitTurn: vi.fn(),
       confirmTool: vi.fn(),
       cancelTurn: vi.fn(),
-      createConversation: vi.fn(),
       activateConversation: vi.fn(),
       deleteConversation: vi.fn(),
       listConversations: vi.fn(),
@@ -31,7 +30,6 @@ function createEffects(): AgentHostControllerEffectPorts {
       readConfig: vi.fn(),
       refreshConfig: vi.fn(),
       openUserConfig: vi.fn(),
-      openHostConfig: vi.fn(),
       readTabState: vi.fn(),
       updateSettings: vi.fn(),
       updateTabState: vi.fn(),
@@ -69,7 +67,6 @@ function createContext(): AgentHostRouteEffectContext {
       windowId: 'window-1',
       viewId: 'view-1',
       workspaceId: 'workspace-1',
-      rendererEpoch: 'renderer-1',
       connectionId: 'connection-1',
     },
     post: vi.fn(),
@@ -83,7 +80,7 @@ describe('Agent Host message controller', () => {
     const controller = createAgentHostMessageController(effects, context);
 
     expect(controller.identity).toBe(context.identity);
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(41);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(39);
 
     await controller.tryHandle({ type: 'getConversations' });
     await controller.tryHandle({ type: 'getConfig' });
@@ -94,7 +91,6 @@ describe('Agent Host message controller', () => {
     });
     await controller.tryHandle({
       type: 'projectionEndpointDiscover',
-      protocolVersion: 1,
       realmId: 'realm-1',
     });
 
@@ -110,7 +106,6 @@ describe('Agent Host message controller', () => {
     expect(effects.projection.discoverEndpoint).toHaveBeenCalledWith(
       {
         type: 'projectionEndpointDiscover',
-        protocolVersion: 1,
         realmId: 'realm-1',
       },
       context,

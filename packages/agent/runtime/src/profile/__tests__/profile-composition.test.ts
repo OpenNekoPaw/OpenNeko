@@ -48,7 +48,6 @@ function makeArtifactProfile(): ArtifactProfileDescriptor {
     profileId: 'studio.shot-review',
     kind: 'artifact',
     protocol: 'GenericTable',
-    version: 1,
     source: 'package',
     columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
   };
@@ -61,7 +60,6 @@ function makeProviderExpressionProfile(): ProviderExpressionProfileDescriptor {
     source: 'package',
     providerId: 'flux',
     displayName: 'Flux',
-    version: '1.0.0',
     sourceLayer: 'builtin',
     capabilities: ['image.generate'],
     syntaxProfile: { notes: [] },

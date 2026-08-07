@@ -20,7 +20,7 @@ import type { UnifiedConfig } from './types';
  * Validation error for a specific field
  */
 export interface ValidationError {
-  /** Field path (e.g., 'providers[0].apiKey') */
+  /** Field path (e.g., 'providers[0].apiUrl') */
   field: string;
   /** Error message */
   message: string;
@@ -56,16 +56,15 @@ export interface ValidationResult {
  * class CLIConfigAdapter implements IConfigAdapter<CLIConfig> {
  *   fromUnified(config: UnifiedConfig): CLIConfig {
  *     return {
- *       provider: config.defaultProvider ?? 'anthropic',
- *       model: config.defaultModel ?? 'claude-sonnet-4-20250514',
+ *       provider: config.defaultModels?.llm?.providerId ?? 'anthropic',
+ *       model: config.defaultModels?.llm?.modelId ?? 'claude-sonnet-4-20250514',
  *       // ... map other fields
  *     };
  *   }
  *
  *   toUnified(config: CLIConfig): UnifiedConfig {
  *     return {
- *       defaultProvider: config.provider,
- *       defaultModel: config.model,
+ *       defaultModels: { llm: { providerId: config.provider, modelId: config.model } },
  *       // ... map other fields
  *     };
  *   }

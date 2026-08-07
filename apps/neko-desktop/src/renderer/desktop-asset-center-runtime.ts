@@ -1,0 +1,180 @@
+import type { AssetCenterManagementRuntime } from '@neko/assets-domain/asset-center/controller';
+import {
+  createAssetCenterHostRequest,
+  type OpenNekoAssetCenterBridge,
+} from '@neko/assets-domain/asset-center/host-contract';
+import type {
+  AssetCenterFilterProjection,
+  AssetCenterSessionIdentity,
+  AssetCenterSessionProjection,
+} from '@neko/assets-domain/asset-center/contract';
+import type {
+  GlobalAssetItem,
+  GlobalLibraryItem,
+  GlobalLibraryThumbnailVariant,
+  GlobalMediaLibraryLocationKind,
+} from '@neko/assets-domain/global-library/contract';
+
+export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
+  readonly identity: AssetCenterSessionIdentity;
+  private projection: AssetCenterSessionProjection | undefined;
+  private attachPromise: Promise<AssetCenterSessionProjection> | undefined;
+  private readonly listeners = new Set<(projection: AssetCenterSessionProjection) => void>();
+  private disposed = false;
+
+  constructor(
+    identity: AssetCenterSessionIdentity,
+    private readonly initialViewMode: AssetCenterFilterProjection['viewMode'],
+    private readonly bridge: OpenNekoAssetCenterBridge,
+  ) {
+    this.identity = identity;
+  }
+
+  getSnapshot(): Promise<AssetCenterSessionProjection> {
+    this.requireActive();
+    if (this.projection) return Promise.resolve(this.projection);
+    if (!this.attachPromise) {
+      this.attachPromise = this.execute({ route: 'attach', initialViewMode: this.initialViewMode });
+    }
+    return this.attachPromise;
+  }
+
+  subscribe(listener: (projection: AssetCenterSessionProjection) => void): () => void {
+    this.requireActive();
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  updateFilter(filter: AssetCenterFilterProjection): Promise<AssetCenterSessionProjection> {
+    return this.execute({ route: 'filter.update', filter });
+  }
+
+  refresh(): Promise<AssetCenterSessionProjection> {
+    return this.execute({ route: 'catalog.refresh' });
+  }
+
+  select(input: {
+    readonly owner: GlobalLibraryItem['owner'];
+    readonly itemId: string;
+  }): Promise<AssetCenterSessionProjection> {
+    return this.execute({ route: 'selection.select', ...input });
+  }
+
+  resolveThumbnail(item: GlobalLibraryItem, variant: GlobalLibraryThumbnailVariant) {
+    const projection = this.requireProjection();
+    if (projection.catalog.status !== 'ready' || !item.thumbnail) {
+      return Promise.reject(new Error('Asset Center thumbnail identity is unavailable.'));
+    }
+    const request = createAssetCenterHostRequest({
+      requestId: crypto.randomUUID(),
+      identity: this.identity,
+      route: 'thumbnail.resolve',
+      itemId: item.id,
+      variant,
+    });
+    return this.bridge.assetCenter.execute(request).then((result) => {
+      if (result.route !== 'thumbnail.resolve') {
+        throw new Error('Asset Center thumbnail request returned a projection result.');
+      }
+      return result.thumbnail;
+    });
+  }
+
+  async importAssets(): Promise<void> {
+    await this.execute({ route: 'asset.import' });
+  }
+
+  async removeAssets(items: readonly GlobalAssetItem[]): Promise<void> {
+    await this.execute({ route: 'assets.remove', itemIds: items.map((item) => item.id) });
+  }
+
+  async moveItems(items: readonly GlobalLibraryItem[]): Promise<void> {
+    await this.execute({ route: 'items.move', itemIds: items.map((item) => item.id) });
+  }
+
+  async addMediaLibrary(locationKind: GlobalMediaLibraryLocationKind): Promise<void> {
+    await this.execute({ route: 'media-library.add', locationKind });
+  }
+
+  async relinkMediaLibrary(libraryId: string): Promise<void> {
+    await this.execute({ route: 'media-library.relink', libraryId });
+  }
+
+  async removeMediaLibrary(libraryId: string): Promise<void> {
+    await this.execute({ route: 'media-library.remove', libraryId });
+  }
+
+  async revealMediaLibrary(libraryId: string): Promise<void> {
+    await this.execute({ route: 'media-library.reveal', libraryId });
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    const attachment = this.attachPromise;
+    this.disposed = true;
+    this.listeners.clear();
+    if (attachment) {
+      void attachment.then(() =>
+        this.bridge.assetCenter.execute(
+          createAssetCenterHostRequest({
+            requestId: crypto.randomUUID(),
+            identity: this.identity,
+            route: 'session.detach',
+          }),
+        ),
+      );
+    }
+  }
+
+  private async execute(
+    input:
+      | { readonly route: 'attach'; readonly initialViewMode: 'list' | 'grid' }
+      | {
+          readonly route: 'filter.update';
+          readonly filter: AssetCenterFilterProjection;
+        }
+      | { readonly route: 'catalog.refresh' }
+      | {
+          readonly route: 'selection.select';
+          readonly owner: GlobalLibraryItem['owner'];
+          readonly itemId: string;
+        }
+      | { readonly route: 'asset.import' }
+      | {
+          readonly route: 'assets.remove' | 'items.move';
+          readonly itemIds: readonly string[];
+        }
+      | {
+          readonly route: 'media-library.add';
+          readonly locationKind: GlobalMediaLibraryLocationKind;
+        }
+      | {
+          readonly route: 'media-library.relink' | 'media-library.remove' | 'media-library.reveal';
+          readonly libraryId: string;
+        },
+  ): Promise<AssetCenterSessionProjection> {
+    this.requireActive();
+    const request = createAssetCenterHostRequest({
+      requestId: crypto.randomUUID(),
+      identity: this.identity,
+      ...input,
+    });
+    const result = await this.bridge.assetCenter.execute(request);
+    if (result.route === 'preview.get' || result.route === 'thumbnail.resolve') {
+      throw new Error('Asset Center management request returned a non-projection result.');
+    }
+    this.projection = result.projection;
+    for (const listener of this.listeners) listener(result.projection);
+    return result.projection;
+  }
+
+  private requireProjection(): AssetCenterSessionProjection {
+    this.requireActive();
+    if (!this.projection) throw new Error('Asset Center session is not attached.');
+    return this.projection;
+  }
+
+  private requireActive(): void {
+    if (this.disposed) throw new Error('Desktop Asset Center runtime is disposed.');
+  }
+}

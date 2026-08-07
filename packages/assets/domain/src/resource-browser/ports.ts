@@ -1,5 +1,11 @@
-import type { CreativeEntity, EntityRepresentationBinding } from '@neko/entity-domain';
+import type {
+  ProjectEntityInspectorIntent,
+  ProjectEntityInspectorOwnerCapabilities,
+  ProjectEntityDiagnostic,
+  ProjectEntityManagementProjection,
+} from '@neko/entity-domain';
 import type { ContentLocator } from '@neko/content';
+import type { GlobalAssetItem } from '../global-library/contract';
 import type {
   MediaLibraryProjectionEntry,
   WorkspaceMediaLibraryStatus,
@@ -54,19 +60,50 @@ export interface ResourceBrowserEntityReader {
     readonly query: string;
     readonly limit: number;
   }): Promise<{
-    readonly entities: readonly CreativeEntity[];
-    readonly bindings: readonly EntityRepresentationBinding[];
+    readonly projections: readonly ProjectEntityManagementProjection[];
+    readonly diagnostics?: readonly ProjectEntityDiagnostic[];
+    readonly inspectorCapabilities?: readonly {
+      readonly projectionId: string;
+      readonly capabilities: ProjectEntityInspectorOwnerCapabilities;
+    }[];
   }>;
+}
+
+export interface ResourceBrowserAssetReader {
+  list(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly query: string;
+    readonly limit: number;
+  }): Promise<readonly GlobalAssetItem[]>;
 }
 
 export interface ResourceBrowserProjectionSource {
   readonly files: ResourceBrowserFilesReader;
   readonly media: ResourceBrowserMediaSearch;
+  readonly assets: ResourceBrowserAssetReader;
   readonly entities: ResourceBrowserEntityReader;
   refresh(identity: ResourceBrowserIdentity): Promise<void>;
 }
 
 export interface ResourceBrowserInteractionPort {
+  createDirectory(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly parent?: ResourceBrowserContentItem;
+    readonly name: string;
+  }): Promise<void>;
+  importFiles(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly parent?: ResourceBrowserContentItem;
+  }): Promise<'imported' | 'cancelled'>;
+  trashContent(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: ResourceBrowserContentItem;
+  }): Promise<void>;
+  manageEntity(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>;
+    readonly intent: ProjectEntityInspectorIntent;
+  }): Promise<void>;
   linkGlobalLibrary(input: {
     readonly identity: ResourceBrowserIdentity;
   }): Promise<'linked' | 'cancelled'>;
@@ -87,7 +124,6 @@ export interface ResourceBrowserInteractionPort {
     readonly target: {
       readonly viewId: string;
       readonly presentation: 'temporary' | 'side';
-      readonly expectedWorkbenchRevision: number;
     };
   }): Promise<void>;
   openCut(input: {
@@ -109,7 +145,6 @@ export interface ResourceBrowserInteractionPort {
     readonly target: {
       readonly documentId: string;
       readonly sessionId: string;
-      readonly expectedRevision: number;
     };
   }): Promise<void>;
   addToCut(input: {
@@ -117,10 +152,9 @@ export interface ResourceBrowserInteractionPort {
     readonly item: ResourceBrowserItem;
     readonly target: {
       readonly viewId: string;
-      readonly viewEpoch: number;
+      readonly viewInstanceId: string;
       readonly documentId: string;
       readonly sessionId: string;
-      readonly expectedRevision: number;
     };
   }): Promise<void>;
 }

@@ -71,7 +71,7 @@ describe('registerRuntimeProviderCardDirectories', () => {
     const logger = { warn: vi.fn() };
     const registerDirectory = vi.fn(async (options) => {
       options.onError?.({
-        path: '/workspace/project/.neko/providers/demo.card.md',
+        path: '/workspace/project/neko/providers/demo.card.md',
         reason: 'parse-failed',
         cause: new Error('bad card'),
       });
@@ -124,9 +124,11 @@ function createRegistry(): IProviderCardRegistry {
 
 function createProviderCard(providerId: string): ProviderCard {
   return {
+    profileId: `provider-expression:${providerId}`,
+    kind: 'provider-expression',
+    source: 'personal',
     providerId,
     displayName: providerId,
-    version: '1.0.0',
     sourceLayer: 'personal',
     sourceRef: `${providerId}.card.md`,
     capabilities: [],

@@ -6,9 +6,13 @@ import type { OpenNekoDesktopResourceBrowserBridge } from './resource-browser-br
 import type { OpenNekoDesktopPreviewBridge } from './preview-bridge-contract';
 import type { OpenNekoDesktopCanvasBridge } from './canvas-bridge-contract';
 import type { OpenNekoDesktopCutBridge } from './cut-bridge-contract';
-import type { OpenNekoDesktopHomeManagementBridge } from './home-management-contract';
 import type { OpenNekoDesktopApplicationSettingsBridge } from '@neko/host/application-settings';
 import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domain/contracts';
+import type { OpenNekoAssetCenterBridge } from '@neko/assets-domain/asset-center/host-contract';
+import type { OpenNekoAgentExtensionManagementBridge } from '@neko/agent-contracts/extension-management-host';
+import type { OpenNekoAgentLaunchBridge } from '@neko/agent-contracts/agent-launch-host';
+import type { OpenNekoAssistantResourceBridge } from '@neko/agent-contracts/assistant-resource-host';
+import type { OpenNekoDesktopWorkspaceGrantBridge } from '@neko/host/desktop-workspace-grant-contract';
 
 declare global {
   interface Window {
@@ -20,7 +24,11 @@ declare global {
       OpenNekoDesktopPreviewBridge &
       OpenNekoDesktopCanvasBridge &
       OpenNekoDesktopCutBridge &
-      OpenNekoDesktopHomeManagementBridge &
+      OpenNekoAssetCenterBridge &
+      OpenNekoAgentLaunchBridge &
+      OpenNekoAssistantResourceBridge &
+      OpenNekoDesktopWorkspaceGrantBridge &
+      OpenNekoAgentExtensionManagementBridge &
       OpenNekoDesktopApplicationSettingsBridge &
       OpenNekoDesktopProjectPortabilityBridge;
   }

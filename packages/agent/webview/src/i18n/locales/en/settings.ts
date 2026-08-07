@@ -20,11 +20,6 @@ export const settings = {
   'settings.providers.displayName': 'Display Name',
   'settings.providers.displayNamePlaceholder': 'e.g., My Claude',
   'settings.providers.apiUrl': 'API URL (optional)',
-  'settings.providers.urlMissingV1': 'URL may need /v1 suffix for OpenAI-compatible APIs',
-  'settings.providers.appendV1': 'Add /v1',
-  'settings.providers.apiKey': 'API Key',
-  'settings.providers.apiKeyOptional': '(optional for local)',
-  'settings.providers.apiKeyKeepCurrent': '(leave empty to keep current)',
   'settings.providers.models': 'Models',
   'settings.providers.modelsSelected': '{count} model(s) selected',
   'settings.providers.selectModels': 'Select or add models to enable',
@@ -61,10 +56,6 @@ export const settings = {
   'settings.providers.protocolAuto': 'Auto (infer from model name)',
   'settings.providers.protocolHint':
     'Specify API protocol type. "Auto" infers from model name (e.g., claude, gpt).',
-  'settings.providers.validateApiKey': 'Validate API Key',
-  'settings.providers.validating': 'Validating...',
-  'settings.providers.apiKeyValid': 'API Key is valid',
-  'settings.providers.apiKeyInvalid': 'API Key is invalid',
 
   'settings.prompts.title': 'Configured Prompts',
   'settings.prompts.description':
@@ -120,7 +111,7 @@ export const settings = {
   'settings.prompts.fileContentHint':
     'Prompt content will be saved to a file that you can edit in Desktop editor.',
   'settings.prompts.personalFilePath': 'User location: ~/.neko/prompts/<name>.md',
-  'settings.prompts.projectFilePath': 'Workspace location: .neko/prompts/<name>.md',
+  'settings.prompts.projectFilePath': 'Workspace location: neko/prompts/<name>.md',
   'settings.prompts.openInEditor': 'Open in Desktop editor',
   'settings.prompts.editHelp':
     'User and workspace prompts can be edited in Desktop editor. Built-in prompts can only be enabled or disabled.',
@@ -128,27 +119,10 @@ export const settings = {
   'settings.prompts.agentsDescription':
     'Global instructions are injected as an environment overlay in all conversations. They do not replace the built-in system prompt.',
   'settings.prompts.agentsPriorityHint':
-    'Priority: Project (.neko/AGENTS.md) > User (~/.neko/AGENTS.md)',
+    'Priority: Project (neko/AGENTS.md) > User (~/.neko/AGENTS.md)',
   'settings.prompts.skillsHintTitle': 'Use Skills to Customize AI Behavior',
   'settings.prompts.skillsHintDescription':
     'Skills are a more powerful way to customize AI behavior. Create portable Skill packages in .agents/skills/ (project) or ~/.agents/skills/ (personal), then invoke them explicitly or let the Agent activate one after it explains why the Skill is needed.',
-
-  'settings.hooks.title': 'Hooks Configuration',
-  'settings.hooks.description':
-    'Hooks allow running custom commands at specific points during Agent execution. Configuration is saved in settings.json.',
-  'settings.hooks.projectSettings': 'Project Settings',
-  'settings.hooks.personalSettings': 'User Settings',
-  'settings.hooks.localSettings': 'Local Settings',
-  'settings.hooks.projectPath': 'neko/settings.json',
-  'settings.hooks.personalPath': '~/.neko/settings.json',
-  'settings.hooks.localPath': '.neko/settings.local.json (not committed to Git)',
-  'settings.hooks.priorityHint': 'Priority: Local > Project > User',
-  'settings.hooks.events.PreToolUse': 'Before tool call (can block)',
-  'settings.hooks.events.PostToolUse': 'After tool call',
-  'settings.hooks.events.UserPromptSubmit': 'User submits prompt (can block)',
-  'settings.hooks.events.Stop': 'AI finishes response (can block)',
-  'settings.hooks.events.SessionStart': 'Session starts',
-  'settings.hooks.events.SessionEnd': 'Session ends',
 
   'settings.mcp.title': 'Configured MCP Servers',
   'settings.mcp.description':
@@ -197,11 +171,11 @@ export const settings = {
   'settings.skills.skillPersonalPath': 'User location: ~/.agents/skills/<name>/SKILL.md',
   'settings.skills.skillProjectPath': 'Workspace location: .agents/skills/<name>/SKILL.md',
   'settings.skills.commandPersonalPath': 'User location: ~/.neko/commands/<name>.md',
-  'settings.skills.commandProjectPath': 'Workspace location: .neko/commands/<name>.md',
+  'settings.skills.commandProjectPath': 'Workspace location: neko/commands/<name>.md',
   'settings.skills.scriptPersonalPath': 'User location: ~/.neko/script/<name>.md',
-  'settings.skills.scriptProjectPath': 'Workspace location: .neko/script/<name>.md',
+  'settings.skills.scriptProjectPath': 'Workspace location: neko/script/<name>.md',
   'settings.skills.hookPersonalPath': 'User location: ~/.neko/hook/<name>.md',
-  'settings.skills.hookProjectPath': 'Workspace location: .neko/hook/<name>.md',
+  'settings.skills.hookProjectPath': 'Workspace location: neko/hook/<name>.md',
   'settings.skills.openInEditor': 'Open in Desktop editor',
   'settings.skills.viewDetail': 'View Details',
   'settings.skills.builtinNoEdit': 'Built-in skill content cannot be edited',
@@ -238,8 +212,7 @@ export const settings = {
     'Subtitle and captioning assistant: add subtitles, transcribe, translate, timing, SRT/VTT.',
 
   'settings.models.title': 'Model Presets',
-  'settings.models.description':
-    'Configure AI models for image, video, and audio generation. Add API keys to enable models.',
+  'settings.models.description': 'Configure AI models for image, video, and audio generation.',
   'settings.models.search': 'Search models...',
   'settings.models.searchPlaceholder': 'Search models...',
   'settings.models.all': 'All',
@@ -259,9 +232,6 @@ export const settings = {
   'settings.models.editConfig': 'Edit Configuration',
   'settings.models.configured_badge': 'Configured',
   'settings.models.notConfigured': 'Not configured',
-  'settings.models.apiKey': 'API Key',
-  'settings.models.apiKeyPlaceholder': 'Enter your API key',
-  'settings.models.leaveEmptyToKeep': 'leave empty to keep current',
   'settings.models.baseUrl': 'Base URL',
   'settings.models.baseUrlPlaceholder': 'Custom API endpoint',
   'settings.models.capabilities': 'Capabilities',
@@ -277,12 +247,10 @@ export const settings = {
   'settings.models.importExportTitle': 'Import/Export Configuration',
   'settings.models.export': 'Export',
   'settings.models.exportDesc': 'Export your model configurations for backup or sharing.',
-  'settings.models.exportWithoutSecrets': 'Export (without API keys)',
-  'settings.models.exportWithSecrets': 'Export (with API keys)',
+  'settings.models.exportWithoutSecrets': 'Export definitions',
   'settings.models.import': 'Import',
   'settings.models.importDesc': 'Import model configurations from a JSON file.',
   'settings.models.importPlaceholder': 'Paste configuration JSON here...',
   'settings.models.importOverwrite': 'Overwrite existing',
-  'settings.models.importIncludeSecrets': 'Include API keys',
   'settings.models.importConfig': 'Import Configuration',
 } as const satisfies MessageBundle;

@@ -71,7 +71,7 @@ export function createOptimizerContext(planInput, intakeInputs) {
     );
   }
   return {
-    schema: 'neko.agent-eval.optimizer-context.v1',
+    schema: 'neko.agent-eval.optimizer-context',
     planId: plan.id,
     target: plan.target,
     baseFingerprint: plan.baseFingerprint,

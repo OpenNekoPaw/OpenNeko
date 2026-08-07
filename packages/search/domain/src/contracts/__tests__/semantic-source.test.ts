@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAutomaticEntityCandidateProjectionMetadata,
   isCompactMediaSemanticIndex,
   isSemanticEvidenceProjection,
   isSemanticSourceDescriptor,
@@ -29,14 +28,26 @@ describe('semantic source contracts', () => {
         portablePath: '${WORKSPACE}/docs/story.md',
         format: 'markdown',
         analysisMode: 'link-existing',
-        fingerprint: 'sha256:source-v1',
+        fingerprint: 'sha256:source-content',
         sizeBytes: 120,
         modifiedAtMs: 10,
       }),
     ).toBe(true);
   });
 
-  it('rejects active-path identity and malformed candidate projection metadata', () => {
+  it('accepts every discovery owner and rejects active-path identity', () => {
+    for (const rootKind of ['workspace', 'document', 'managed-asset', 'media-library'] as const) {
+      expect(
+        isSemanticSourceScope({
+          workspaceId: 'workspace-1',
+          rootId: `root-${rootKind}`,
+          rootKind,
+          portableRoot: `\${${rootKind.toUpperCase().replace('-', '_')}}`,
+          analysisMode: 'discover-candidates',
+          priority: 0,
+        }),
+      ).toBe(true);
+    }
     expect(
       isSemanticSourceScope({
         workspaceId: '',
@@ -57,20 +68,9 @@ describe('semantic source contracts', () => {
         portablePath: '${WORKSPACE}/config.json',
         format: 'json',
         analysisMode: 'link-existing',
-        fingerprint: 'sha256:source-v1',
+        fingerprint: 'sha256:source-content',
         sizeBytes: 120,
         modifiedAtMs: 10,
-      }),
-    ).toBe(false);
-    expect(
-      isAutomaticEntityCandidateProjectionMetadata({
-        projectionKind: 'automatic-entity-candidate',
-        normalizedName: 'rin',
-        reviewStatus: 'confirmed',
-        sourceOccurrenceCount: 1,
-        explicitStructuralMentionCount: 1,
-        mentionIds: ['mention-1'],
-        entityRevision: 'entities-v1',
       }),
     ).toBe(false);
   });
@@ -95,7 +95,6 @@ describe('semantic source contracts', () => {
 
   it('accepts only semantic indexes without a persistent textSegments field', () => {
     const index = {
-      version: 1,
       indexId: 'semantic:story',
       assetId: 'story',
       sourceRef: {
@@ -106,5 +105,34 @@ describe('semantic source contracts', () => {
     };
     expect(isCompactMediaSemanticIndex(index)).toBe(true);
     expect(isCompactMediaSemanticIndex({ ...index, textSegments: [] })).toBe(false);
+  });
+
+  it('rejects unknown creative schema and semantic index fields', () => {
+    expect(
+      isSemanticSourceDescriptor({
+        sourceId: 'workspace:story.json',
+        workspaceId: 'workspace-1',
+        rootId: 'workspace',
+        rootKind: 'workspace',
+        relativePath: 'story.json',
+        portablePath: '${WORKSPACE}/story.json',
+        format: 'json',
+        analysisMode: 'link-existing',
+        fingerprint: 'sha256:story',
+        sizeBytes: 120,
+        modifiedAtMs: 10,
+        creativeSchema: {
+          schemaId: 'openneko.story',
+          unexpectedField: 'value',
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isCompactMediaSemanticIndex({
+        unexpectedField: 1,
+        assetId: 'story',
+        sourceRef: { kind: 'file', path: '${WORKSPACE}/story.json' },
+      }),
+    ).toBe(false);
   });
 });

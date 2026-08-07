@@ -290,10 +290,7 @@ export type ModelCapability =
   | 'image.control.depth'
   | 'image.reference.ip-adapter'
   | 'image.control.camera'
-  | 'image.control.panorama'
-  // Legacy aliases (for backwards compatibility)
-  | 'image_generation'
-  | 'video_generation';
+  | 'image.control.panorama';
 
 export const KNOWN_MODEL_CAPABILITIES = [
   'chat',
@@ -341,8 +338,6 @@ export const KNOWN_MODEL_CAPABILITIES = [
   'image.reference.ip-adapter',
   'image.control.camera',
   'image.control.panorama',
-  'image_generation',
-  'video_generation',
 ] as const satisfies readonly ModelCapability[];
 
 /**
@@ -363,11 +358,6 @@ export interface ModelConfig {
    * models that require different wire protocols.
    */
   protocolProfile?: ProviderProtocolProfile;
-  /**
-   * Adapter type override for older config files.
-   * Prefer protocolProfile for request protocol differences.
-   */
-  protocol?: ProviderType;
   /**
    * Use Authorization: Bearer instead of x-api-key header.
    * Overrides provider's useBearerAuth if specified.

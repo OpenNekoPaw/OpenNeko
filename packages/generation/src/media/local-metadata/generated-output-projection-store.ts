@@ -24,8 +24,7 @@ export interface NodeGeneratedOutputProjectionBinding {
   dispose(): Promise<void>;
 }
 
-export type GeneratedOutputProjectionRejectionCode =
-  'generated-output-projection-migration-required' | 'retired-generated-draft-projection';
+export type GeneratedOutputProjectionRejectionCode = 'invalid-generated-output-projection';
 
 export interface GeneratedOutputProjectionRejection {
   readonly code: GeneratedOutputProjectionRejectionCode;
@@ -39,7 +38,6 @@ export interface PreserveAndReportGeneratedOutputProjectionRejectionPolicy {
 }
 
 interface GeneratedOutputProjectionPayload {
-  readonly version: 1;
   readonly asset: PathlessGeneratedAsset;
   readonly pathKey: string;
   readonly storyboardShotPathKeys?: readonly (readonly string[])[];
@@ -111,7 +109,6 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
     const pathKey = this.toPortablePathKey(asset.path);
     assertLifecycleMatchesProjectionPath(asset, pathKey);
     const projection: GeneratedOutputProjectionPayload = {
-      version: 1,
       asset: stripGeneratedAssetPath(asset),
       pathKey,
       ...(asset.type === 'generated-storyboard'
@@ -169,20 +166,13 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
   }
 
   private decodeEntryStrict(entry: ResourceCacheEntry): GeneratedAsset | null {
-    if (isRetiredGeneratedDraftProjection(entry)) {
-      throw createProjectionRejection(
-        'retired-generated-draft-projection',
-        entry.descriptor.id,
-        `Resource ${entry.descriptor.id} must be rebuilt through the generated output index.`,
-      );
-    }
     if (!this.isProjectionEntry(entry)) return null;
     const projection = readGeneratedOutputProjection(entry);
     if (!projection) {
       throw createProjectionRejection(
-        'generated-output-projection-migration-required',
+        'invalid-generated-output-projection',
         entry.descriptor.id,
-        `Resource ${entry.descriptor.id} contains an invalid or legacy projection.`,
+        `Resource ${entry.descriptor.id} contains an invalid generated output projection.`,
       );
     }
     assertLifecycleMatchesProjectionPath(projection.asset, projection.pathKey, entry.descriptor.id);
@@ -196,7 +186,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
         const shotPathKeys = projection.storyboardShotPathKeys;
         if (!shotPathKeys || shotPathKeys.length !== projection.asset.scenes.length) {
           throw createProjectionRejection(
-            'generated-output-projection-migration-required',
+            'invalid-generated-output-projection',
             entry.descriptor.id,
             `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
           );
@@ -208,7 +198,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
             const scenePathKeys = shotPathKeys[sceneIndex];
             if (!scenePathKeys || scenePathKeys.length !== scene.shots.length) {
               throw createProjectionRejection(
-                'generated-output-projection-migration-required',
+                'invalid-generated-output-projection',
                 entry.descriptor.id,
                 `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
               );
@@ -219,7 +209,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
                 const shotPathKey = scenePathKeys[shotIndex];
                 if (!shotPathKey) {
                   throw createProjectionRejection(
-                    'generated-output-projection-migration-required',
+                    'invalid-generated-output-projection',
                     entry.descriptor.id,
                     `Generated storyboard ${projection.asset.id} is missing shot path ${shotIndex}.`,
                   );
@@ -307,14 +297,6 @@ export async function createNodeGeneratedOutputProjectionBinding(options: {
   };
 }
 
-function isRetiredGeneratedDraftProjection(entry: ResourceCacheEntry): boolean {
-  return (
-    entry.descriptor.kind === 'generated' &&
-    (entry.descriptor.provider === ['generated', 'draft', 'index'].join('-') ||
-      entry.providerMetadata?.[['generated', 'Draft', 'Projection'].join('')] !== undefined)
-  );
-}
-
 function readGeneratedOutputProjection(
   entry: ResourceCacheEntry,
 ): GeneratedOutputProjectionPayload | undefined {
@@ -330,7 +312,7 @@ function isGeneratedOutputProjectionPayload(
 ): value is GeneratedOutputProjectionPayload {
   return (
     isRecord(value) &&
-    value['version'] === 1 &&
+    hasOnlyKeys(value, ['asset', 'pathKey', 'storyboardShotPathKeys']) &&
     isPathlessGeneratedAsset(value['asset']) &&
     typeof value['pathKey'] === 'string' &&
     isPortablePathKey(value['pathKey']) &&
@@ -425,13 +407,9 @@ function assertLifecycleMatchesProjectionPath(
   if (contentPath !== asset.lifecycle.contentLocator.path) {
     const message = `Generated asset ${asset.id} lifecycle locator does not match its workspace projection path.`;
     if (resourceId) {
-      throw createProjectionRejection(
-        'generated-output-projection-migration-required',
-        resourceId,
-        message,
-      );
+      throw createProjectionRejection('invalid-generated-output-projection', resourceId, message);
     }
-    throw new Error(`generated-output-projection-migration-required: ${message}`);
+    throw new Error(`invalid-generated-output-projection: ${message}`);
   }
 }
 
@@ -452,17 +430,18 @@ function createProjectionRejection(
 
 function throwProjectionPathError(message: string, resourceId?: string): never {
   if (resourceId) {
-    throw createProjectionRejection(
-      'generated-output-projection-migration-required',
-      resourceId,
-      message,
-    );
+    throw createProjectionRejection('invalid-generated-output-projection', resourceId, message);
   }
   throw new Error(message);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowedKeys: readonly string[]): boolean {
+  const allowed = new Set(allowedKeys);
+  return Object.keys(value).every((key) => allowed.has(key));
 }
 
 function isFiniteNumber(value: unknown): value is number {

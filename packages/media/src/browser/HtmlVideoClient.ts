@@ -3,7 +3,6 @@ import { isMediaResourceUrl } from '../contracts';
 const videoElementOwners = new WeakMap<HTMLVideoElement, HtmlVideoClient>();
 
 export interface HtmlVideoClientDescriptor {
-  readonly version: 1;
   readonly url: string;
   readonly mimeType: string;
   readonly mediaTimeOriginSeconds: number;
@@ -237,9 +236,6 @@ function waitForEvent(target: EventTarget, eventName: string, signal: AbortSigna
 }
 
 function validateDescriptor(descriptor: HtmlVideoClientDescriptor): void {
-  if (descriptor.version !== 1) {
-    throw new Error('Unsupported Cut HTML video descriptor version.');
-  }
   if (!isMediaResourceUrl(descriptor.url)) {
     throw new Error('Invalid Cut HTML video descriptor resource URL.');
   }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import type { MediaUnderstandingModels, SessionMode } from '@neko/agent-contracts';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import { SettingsIcon } from '@neko/ui/icons';
@@ -23,11 +23,7 @@ import {
   useComposerControlMenu,
 } from './composer-menu-runtime';
 import { useClickOutsideSingle } from './useClickOutside';
-import {
-  dropdownPositionClass,
-  useDropdownPlacement,
-  type DropdownPlacement,
-} from './useDropdownDirection';
+import { dropdownPositionClass, useBoundedDropdownLayout } from './useDropdownDirection';
 import type {
   ComposerConfigCategory,
   ComposerConfigSection,
@@ -124,14 +120,11 @@ export function ComposerConfigMenu({
   const defaultCategory = configCategoryForMode(activeMode);
   const [category, setCategory] = useComposerConfigCategory(defaultCategory);
   const [section, setSection] = useComposerConfigSection('model');
-  const [placement, setPlacement] = useState<DropdownPlacement>({
-    direction: 'up',
-    alignment: 'start',
-  });
   const menuRef = useRef<HTMLDivElement>(null);
-  const getPlacement = useDropdownPlacement(menuRef, {
+  const dialogLayout = useBoundedDropdownLayout(menuRef, {
+    enabled: isOpen,
     preferredDirection: 'up',
-    estimatedWidth: 420,
+    preferredInlineSize: 420,
   });
 
   useClickOutsideSingle(menuRef, () => setIsOpen(false));
@@ -155,6 +148,8 @@ export function ComposerConfigMenu({
 
   const parameterSummary =
     activeMode === 'agent' ? undefined : getMediaParameterSummary(activeMode, genParams, t);
+  const sections: readonly ComposerConfigSection[] =
+    category === 'llm' ? SECTIONS.slice(0, 1) : SECTIONS;
 
   const openConfig = (nextSection: ComposerConfigSection) => {
     if (!canOpen) return;
@@ -163,7 +158,6 @@ export function ComposerConfigMenu({
       setIsOpen(false);
       return;
     }
-    if (!isOpen) setPlacement(getPlacement());
     setCategory(defaultCategory);
     setSection(nextSection);
     setIsOpen(true);
@@ -217,9 +211,13 @@ export function ComposerConfigMenu({
 
       {isOpen && canOpen ? (
         <div
-          className={`agent-dropdown-menu agent-model-config-dialog absolute ${dropdownPositionClass(placement)}`}
+          className={`agent-dropdown-menu agent-model-config-dialog absolute ${dropdownPositionClass(dialogLayout.direction)}`}
           role="dialog"
           aria-label={t('chat.configMenu.title')}
+          style={{
+            width: dialogLayout.inlineSize,
+            left: dialogLayout.horizontalOffset,
+          }}
         >
           <div className="agent-model-config-header">{t('chat.configMenu.title')}</div>
           <div
@@ -251,26 +249,28 @@ export function ComposerConfigMenu({
             ))}
           </div>
 
-          <div
-            className="agent-model-config-secondary-tabs"
-            role="tablist"
-            aria-label={t('chat.configMenu.section')}
-          >
-            {(category === 'llm' ? SECTIONS.slice(0, 1) : SECTIONS).map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="tab"
-                aria-selected={section === option}
-                className={`agent-model-config-secondary-tab ${
-                  section === option ? 'agent-model-config-secondary-tab-selected' : ''
-                }`}
-                onClick={() => setSection(option)}
-              >
-                {t(`chat.configMenu.section.${option}`)}
-              </button>
-            ))}
-          </div>
+          {sections.length > 1 ? (
+            <div
+              className="agent-model-config-secondary-tabs"
+              role="tablist"
+              aria-label={t('chat.configMenu.section')}
+            >
+              {sections.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="tab"
+                  aria-selected={section === option}
+                  className={`agent-model-config-secondary-tab ${
+                    section === option ? 'agent-model-config-secondary-tab-selected' : ''
+                  }`}
+                  onClick={() => setSection(option)}
+                >
+                  {t(`chat.configMenu.section.${option}`)}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="agent-model-config-content">
             {category === 'llm' ? (

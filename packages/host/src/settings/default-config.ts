@@ -187,8 +187,6 @@ const DEFAULT_MODELS: ModelConfig[] = [
  * Default user configuration written by explicit tooling.
  */
 export const DEFAULT_USER_CONFIG: UnifiedConfig = {
-  defaultProvider: OLLAMA_LOCAL_PROVIDER_ID,
-  defaultModel: OLLAMA_LOCAL_DEFAULT_CHAT_MODEL_ID,
   defaultModels: {
     llm: {
       providerId: NEKO_GATEWAY_PROVIDER_ID,

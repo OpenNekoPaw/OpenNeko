@@ -12,11 +12,9 @@ function appendText(input: {
   readonly messageId?: string;
   readonly itemId?: string;
   readonly content: string;
-  readonly itemRevision: number;
+  readonly updatedAt: number;
   readonly sequence?: number;
-  readonly updatedAt?: number;
 }): AgentTurnTimelineOperation {
-  const updatedAt = input.updatedAt ?? input.itemRevision;
   return {
     operation: 'append',
     item: {
@@ -26,15 +24,11 @@ function appendText(input: {
       messageId: input.messageId ?? 'message-a',
       itemId: input.itemId ?? 'text-1',
       sequence: input.sequence ?? 1,
-      itemRevision: input.itemRevision,
       kind: 'assistant_text',
       status: 'streaming',
       createdAt: 1,
-      updatedAt,
-      payload: {
-        content: input.content,
-        sourceGeneration: 1,
-      },
+      updatedAt: input.updatedAt,
+      payload: { content: input.content },
     },
   };
 }
@@ -57,7 +51,7 @@ describe('ConversationProjectionStore', () => {
       turnId: 'turn-a',
       runId: 'run-a',
       messageId: 'message-a',
-      operations: [appendText({ content: 'A', itemRevision: 1 })],
+      operations: [appendText({ content: 'A', updatedAt: 1 })],
     });
     conversationB.apply({
       type: 'agentTurnTimelineUpdate',
@@ -72,19 +66,17 @@ describe('ConversationProjectionStore', () => {
           runId: 'run-b',
           messageId: 'message-b',
           content: 'B',
-          itemRevision: 1,
+          updatedAt: 1,
         }),
       ],
     });
 
     expect(conversationA.snapshot()).toMatchObject({
       conversationId: 'conversation-a',
-      projectionVersion: 1,
       turns: [{ turnId: 'turn-a', messageId: 'message-a' }],
     });
     expect(conversationB.snapshot()).toMatchObject({
       conversationId: 'conversation-b',
-      projectionVersion: 1,
       turns: [{ turnId: 'turn-b', messageId: 'message-b' }],
     });
     expect(readText(conversationA.snapshot())).toBe('A');
@@ -104,10 +96,9 @@ describe('ConversationProjectionStore', () => {
         turnId: 'turn-a',
         runId: 'run-a',
         messageId: 'message-a',
-        operations: [appendText({ content, itemRevision: index + 1 })],
+        operations: [appendText({ content, updatedAt: index + 1 })],
       });
-      expect(patch.baseProjectionVersion).toBe(index);
-      expect(patch.projectionVersion).toBe(index + 1);
+      expect(patch.conversationId).toBe('conversation-a');
       expect(patch.operations).toHaveLength(1);
       expect(patch).not.toHaveProperty('turns');
     }
@@ -124,7 +115,7 @@ describe('ConversationProjectionStore', () => {
       turnId: 'turn-a',
       runId: 'run-a',
       messageId: 'message-a',
-      operations: [appendText({ content: 'first', itemRevision: 1 })],
+      operations: [appendText({ content: 'first', updatedAt: 1 })],
     });
     const firstSnapshot = store.snapshot();
 
@@ -134,7 +125,7 @@ describe('ConversationProjectionStore', () => {
       turnId: 'turn-a',
       runId: 'run-a',
       messageId: 'message-a',
-      operations: [appendText({ content: '-second', itemRevision: 2 })],
+      operations: [appendText({ content: '-second', updatedAt: 2 })],
     });
 
     expect(readText(firstSnapshot)).toBe('first');
@@ -144,7 +135,7 @@ describe('ConversationProjectionStore', () => {
     expect(Object.isFrozen(firstSnapshot.turns[0]?.items)).toBe(true);
   });
 
-  it('publishes ordered structural and completion patches with monotonic versions', () => {
+  it('publishes structural and completion patches in owner order', () => {
     const store = createConversationProjectionStore('conversation-a');
     const patches: unknown[] = [];
     store.subscribe((patch) => patches.push(patch));
@@ -155,7 +146,7 @@ describe('ConversationProjectionStore', () => {
       turnId: 'turn-a',
       runId: 'run-a',
       messageId: 'message-a',
-      operations: [appendText({ content: 'answer', itemRevision: 1 })],
+      operations: [appendText({ content: 'answer', updatedAt: 1 })],
     });
     const second = store.apply({
       type: 'agentTurnTimelineUpdate',
@@ -167,9 +158,7 @@ describe('ConversationProjectionStore', () => {
         {
           operation: 'complete',
           itemId: 'text-1',
-          itemRevision: 2,
           kind: 'assistant_text',
-          sourceGeneration: 1,
           status: 'complete',
           updatedAt: 9,
         },
@@ -177,12 +166,19 @@ describe('ConversationProjectionStore', () => {
       completion: completion(),
     });
 
-    expect(first).toMatchObject({ baseProjectionVersion: 0, projectionVersion: 1 });
-    expect(second).toMatchObject({ baseProjectionVersion: 1, projectionVersion: 2 });
+    expect(first).toMatchObject({
+      conversationId: 'conversation-a',
+      operations: [{ operation: 'append' }],
+    });
+    expect(second).toMatchObject({
+      conversationId: 'conversation-a',
+      operations: [{ operation: 'complete' }],
+      completion: { status: 'completed' },
+    });
     expect(patches).toEqual([first, second]);
     expect(store.snapshot().turns[0]).toMatchObject({
       completion: { status: 'completed' },
-      items: [{ itemRevision: 2, status: 'complete' }],
+      items: [{ status: 'complete' }],
     });
   });
 
@@ -194,7 +190,7 @@ describe('ConversationProjectionStore', () => {
       turnId: 'turn-a',
       runId: 'run-a',
       messageId: 'message-a',
-      operations: [appendText({ content: 'first', itemRevision: 1 })],
+      operations: [appendText({ content: 'first', updatedAt: 1 })],
     });
 
     expect(() =>
@@ -205,13 +201,11 @@ describe('ConversationProjectionStore', () => {
         runId: 'run-a',
         messageId: 'message-a',
         operations: [
-          appendText({ content: '-partial', itemRevision: 2 }),
+          appendText({ content: '-partial', updatedAt: 2 }),
           {
             operation: 'complete',
             itemId: 'missing',
-            itemRevision: 1,
             kind: 'assistant_text',
-            sourceGeneration: 1,
             status: 'failed',
             updatedAt: 2,
           },
@@ -219,7 +213,6 @@ describe('ConversationProjectionStore', () => {
       }),
     ).toThrow(/unknown text item/i);
 
-    expect(store.snapshot()).toMatchObject({ projectionVersion: 1 });
     expect(readText(store.snapshot())).toBe('first');
   });
 
@@ -233,7 +226,7 @@ describe('ConversationProjectionStore', () => {
         turnId: 'turn-a',
         runId: 'run-a',
         messageId: 'message-a',
-        operations: [appendText({ content: 'wrong owner', itemRevision: 1 })],
+        operations: [appendText({ content: 'wrong owner', updatedAt: 1 })],
       }),
     ).toThrow(/projection owner mismatch/i);
 
@@ -244,7 +237,7 @@ describe('ConversationProjectionStore', () => {
         turnId: 'turn-a',
         runId: 'run-b',
         messageId: 'message-a',
-        operations: [appendText({ runId: 'run-b', content: 'wrong run', itemRevision: 1 })],
+        operations: [appendText({ runId: 'run-b', content: 'wrong run', updatedAt: 1 })],
       }),
     ).not.toThrow();
     expect(() =>
@@ -254,7 +247,7 @@ describe('ConversationProjectionStore', () => {
         turnId: 'turn-a',
         runId: 'run-c',
         messageId: 'message-a',
-        operations: [appendText({ runId: 'run-c', content: 'changed run', itemRevision: 2 })],
+        operations: [appendText({ runId: 'run-c', content: 'changed run', updatedAt: 2 })],
       }),
     ).toThrow(/owned by run-b\/message-a/i);
 
@@ -265,7 +258,7 @@ describe('ConversationProjectionStore', () => {
       turnId: 'turn-a',
       runId: 'run-a',
       messageId: 'message-a',
-      operations: [appendText({ content: 'done', itemRevision: 1 })],
+      operations: [appendText({ content: 'done', updatedAt: 1 })],
       completion: completion(),
     });
     expect(() =>
@@ -275,7 +268,7 @@ describe('ConversationProjectionStore', () => {
         turnId: 'turn-a',
         runId: 'run-a',
         messageId: 'message-a',
-        operations: [appendText({ content: 'late', itemRevision: 2 })],
+        operations: [appendText({ content: 'late', updatedAt: 2 })],
       }),
     ).toThrow(/completed turn/i);
 
@@ -288,7 +281,7 @@ describe('ConversationProjectionStore', () => {
         turnId: 'turn-b',
         runId: 'run-b',
         messageId: 'message-b',
-        operations: [appendText({ content: 'late', itemRevision: 1 })],
+        operations: [appendText({ content: 'late', updatedAt: 1 })],
       }),
     ).toThrow(/disposed/i);
   });

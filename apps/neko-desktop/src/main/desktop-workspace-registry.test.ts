@@ -1,8 +1,13 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { createDesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createDesktopWorkspaceRegistry,
+  createRestoringDesktopWorkspaceResolver,
+  type DesktopWorkspaceRegistry,
+} from './desktop-workspace-registry';
+import { WORKSPACE_IDENTITY_RELATIVE_PATH } from '@neko/local-metadata';
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -11,7 +16,43 @@ afterEach(async () => {
 });
 
 describe('Desktop workspace registry', () => {
-  it('migrates every local metadata namespace required by project portability', async () => {
+  it('restores package-owned project state before returning resolved workspaces', async () => {
+    const workspace = {
+      workspaceId: 'workspace-1',
+      workspacePath: '/workspace',
+      displayName: 'Workspace',
+      locator: { kind: 'relative' as const, value: 'workspace' },
+    };
+    const operations: string[] = [];
+    const registry: DesktopWorkspaceRegistry = {
+      listProjects: vi.fn(async () => []),
+      removeProjects: vi.fn(async () => false),
+      resolve: vi.fn(async () => {
+        operations.push('resolve');
+        return workspace;
+      }),
+      restore: vi.fn(async () => {
+        operations.push('restore-resolution');
+        return workspace;
+      }),
+      dispose: vi.fn(async () => undefined),
+    };
+    const resolver = createRestoringDesktopWorkspaceResolver(registry, async (resolved) => {
+      expect(resolved).toBe(workspace);
+      operations.push('restore-project');
+    });
+
+    await expect(resolver.resolve('/workspace')).resolves.toBe(workspace);
+    await expect(resolver.restore?.('workspace-1')).resolves.toBe(workspace);
+    expect(operations).toEqual([
+      'resolve',
+      'restore-project',
+      'restore-resolution',
+      'restore-project',
+    ]);
+  });
+
+  it('initializes local metadata and projects stable Workspace records independently from availability', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'neko-desktop-workspace-registry-'));
     const homedir = path.join(root, 'home');
     const workspacePath = path.join(root, 'workspace');
@@ -39,5 +80,53 @@ describe('Desktop workspace registry', () => {
         domain: 'media-metadata',
       }),
     ).resolves.toEqual([]);
+
+    await expect(registry.listProjects()).resolves.toEqual([
+      expect.objectContaining({
+        projectId: `content:${workspace.workspaceId}`,
+        workspaceId: workspace.workspaceId,
+        displayName: 'workspace',
+      }),
+    ]);
+    await rm(path.join(workspacePath, WORKSPACE_IDENTITY_RELATIVE_PATH));
+    await expect(registry.listProjects()).resolves.toEqual([
+      expect.objectContaining({
+        projectId: `content:${workspace.workspaceId}`,
+        unavailable: expect.objectContaining({ fieldNames: ['identity'] }),
+      }),
+    ]);
+    await rm(workspacePath, { recursive: true });
+    await expect(registry.listProjects()).resolves.toEqual([
+      expect.objectContaining({
+        projectId: `content:${workspace.workspaceId}`,
+        unavailable: expect.objectContaining({ fieldNames: ['currentLocator'] }),
+      }),
+    ]);
+    await expect(registry.removeProjects([workspace.workspaceId])).resolves.toBe(true);
+    await expect(registry.listProjects()).resolves.toEqual([]);
+  });
+
+  it('removes a validated Workspace batch in one metadata transaction', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'neko-desktop-workspace-batch-'));
+    const homedir = path.join(root, 'home');
+    const firstPath = path.join(root, 'first');
+    const secondPath = path.join(root, 'second');
+    await Promise.all(
+      [homedir, firstPath, secondPath].map((directory) => mkdir(directory, { recursive: true })),
+    );
+    const registry = await createDesktopWorkspaceRegistry({ homedir });
+    cleanups.push(async () => {
+      await registry.dispose();
+      await rm(root, { recursive: true, force: true });
+    });
+    const [first, second] = await Promise.all([
+      registry.resolve(firstPath),
+      registry.resolve(secondPath),
+    ]);
+
+    await expect(registry.removeProjects([first.workspaceId, second.workspaceId])).resolves.toBe(
+      true,
+    );
+    await expect(registry.listProjects()).resolves.toEqual([]);
   });
 });

@@ -348,7 +348,7 @@ function validateExecutionTargets(plan, candidate, targets) {
         `${label} development checkpoint fingerprint differs from Host identity`,
       );
     }
-    if (target.buildTarget.sourceRevision === 'working-tree') {
+    if (target.buildTarget.sourceCommit === 'working-tree') {
       throw evaluationError(
         'optimization-revision-unstable',
         `${label} target requires a concrete development revision`,

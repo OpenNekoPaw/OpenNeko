@@ -49,13 +49,13 @@ describe('ProjectIndexCoordinator', () => {
     expect(result.items.map((item) => item.id)).toEqual(['media-2']);
   });
 
-  it('replaces an existing partition adapter when a first-class provider registers', async () => {
+  it('replaces the existing adapter when another adapter registers for the same partition', async () => {
     const coordinator = createCoordinator();
-    const compatibilityAdapter = makeAdapter('media-library', [
-      makeItem('media:compat', 'media', '小橘 old projection', 'media-library', 0),
+    const existingAdapter = makeAdapter('media-library', [
+      makeItem('media:existing', 'media', '小橘 existing projection', 'media-library', 0),
     ]);
-    const disposeCompatibility = vi.fn();
-    coordinator.registerAdapter({ ...compatibilityAdapter, dispose: disposeCompatibility });
+    const disposeExisting = vi.fn();
+    coordinator.registerAdapter({ ...existingAdapter, dispose: disposeExisting });
     coordinator.registerAdapter(
       makeAdapter('media-library', [
         makeItem('media:first-class', 'media', '小橘 source file', 'media-library', 5),
@@ -68,7 +68,7 @@ describe('ProjectIndexCoordinator', () => {
       partitions: ['media-library'],
     });
 
-    expect(disposeCompatibility).toHaveBeenCalledTimes(1);
+    expect(disposeExisting).toHaveBeenCalledTimes(1);
     expect(result.items.map((item) => item.id)).toEqual(['media:first-class']);
   });
 
@@ -119,10 +119,8 @@ describe('ProjectIndexCoordinator', () => {
         },
         semantic: {
           providerId: 'semantic.test',
-          modelVersion: 'm1',
-          chunkingVersion: 'c1',
+          model: 'embedding-local',
           sourceIdentity: 'doc-1',
-          indexVersion: 'i1',
         },
       }),
     });
@@ -144,10 +142,8 @@ describe('ProjectIndexCoordinator', () => {
       expect.objectContaining({
         provider: expect.objectContaining({ semantic: true, rag: true }),
         semantic: expect.objectContaining({
-          modelVersion: 'm1',
-          chunkingVersion: 'c1',
+          model: 'embedding-local',
           sourceIdentity: 'doc-1',
-          indexVersion: 'i1',
         }),
       }),
     );

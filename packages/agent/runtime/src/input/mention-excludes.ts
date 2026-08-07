@@ -1,7 +1,6 @@
 export const DEFAULT_MENTION_EXCLUDED_DIRECTORIES = [
   'node_modules',
   '.git',
-  '.neko',
   '.cache',
   'dist',
   'build',
@@ -19,5 +18,7 @@ export function isMentionExcludedPath(
   excludedDirectories: readonly string[] = DEFAULT_MENTION_EXCLUDED_DIRECTORIES,
 ): boolean {
   const segments = filePath.replace(/\\/g, '/').split('/').filter(Boolean);
-  return segments.some((segment) => excludedDirectories.includes(segment));
+  return segments.some(
+    (segment) => segment.startsWith('.') || excludedDirectories.includes(segment),
+  );
 }

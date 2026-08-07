@@ -26,7 +26,6 @@ function input() {
     suite: {
       id: 'agent-runtime.model-binding',
       target: { kind: 'runtime', id: 'model-binding', contractHash: HASH },
-      repositoryRevision: 'abc123',
     },
     scenario: { id: 'explicit-chat-model' },
     outcome: 'pass',
@@ -61,9 +60,9 @@ function input() {
 describe('Agent Evaluation report writer', () => {
   it('creates versioned evidence-linked report documents with sanitized summary', () => {
     const documents = createM1ReportDocuments(input());
-    expect(documents.result.schema).toBe('neko.agent-eval.result.v2');
-    expect(documents.evidence.schema).toBe('neko.agent-eval.evidence.v2');
-    expect(documents.artifactManifest.schema).toBe('neko.agent-eval.artifact-manifest.v2');
+    expect(documents.result.schema).toBe('neko.agent-eval.result');
+    expect(documents.evidence.schema).toBe('neko.agent-eval.evidence');
+    expect(documents.artifactManifest.schema).toBe('neko.agent-eval.artifact-manifest');
     expect(documents.qualityReport).toContain('# Agent Evaluation Quality Report');
     expect(documents.evidence.items[0].data).toMatchObject({
       history: '[REDACTED]',
@@ -74,18 +73,47 @@ describe('Agent Evaluation report writer', () => {
     expect(JSON.stringify(documents.summary)).not.toContain('hidden prompt');
   });
 
+  it('summarizes Desktop complete-session facts by conversation turns and terminal state', () => {
+    const desktop = input();
+    desktop.facts = {
+      schema: 'neko.agent-eval.desktop-session-facts',
+      snapshot: {
+        messages: [
+          { role: 'user', content: 'first' },
+          { role: 'assistant', content: 'first reply' },
+          { role: 'user', content: 'second' },
+          { role: 'assistant', content: 'second reply' },
+        ],
+      },
+      workflow: { terminalIdle: { identity: { turnId: 'turn-2', runId: 'run-2' } } },
+      neutralFacts: {
+        projection: { terminalState: 'completed' },
+        diagnostics: {
+          items: [{ severity: 'warning', code: 'unsupported-thinking-budget' }],
+          droppedCount: 0,
+        },
+      },
+    };
+
+    const documents = createM1ReportDocuments(desktop);
+
+    expect(documents.evidence.items[0].summary).toBe(
+      'Observed 2 turn(s), 0 runtime error(s), fullyIdle=true.',
+    );
+  });
+
   it('writes all raw and sanitized artifacts under the selected report root', async () => {
     const outputRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-report-'));
     temporaryDirectories.push(outputRoot);
     const files = await writeEvaluationReport(createM1ReportDocuments(input()), { outputRoot });
-    await expect(fs.readFile(files.result, 'utf8')).resolves.toContain('neko.agent-eval.result.v2');
+    await expect(fs.readFile(files.result, 'utf8')).resolves.toContain('neko.agent-eval.result');
     await expect(fs.readFile(files.evidence, 'utf8')).resolves.toContain('turn-facts');
     await expect(fs.readFile(files.artifactManifest, 'utf8')).resolves.toContain(
-      'artifact-manifest.v2',
+      'artifact-manifest',
     );
     await expect(fs.readFile(files.qualityReport, 'utf8')).resolves.toContain('Hard Gates');
     await expect(fs.readFile(files.summary, 'utf8')).resolves.toContain(
-      'neko.agent-eval.summary.v2',
+      'neko.agent-eval.summary',
     );
   });
 

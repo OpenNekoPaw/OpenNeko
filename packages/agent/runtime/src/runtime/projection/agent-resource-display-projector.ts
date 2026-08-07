@@ -26,14 +26,13 @@ export interface AgentResourceDisplayRegistrationPort {
       readonly windowId: string;
       readonly viewId: string;
       readonly sessionId: string;
-      readonly endpointEpoch: string;
-      readonly revision: string;
-      readonly generation: string;
+      readonly connectionId: string;
+      readonly sourceFingerprint: string;
     },
     source: {
       readonly absolutePath: string;
       readonly mediaType: string;
-      readonly revision: string;
+      readonly sourceFingerprint: string;
     },
   ): Promise<AgentResourceDisplayLease>;
 }
@@ -54,7 +53,7 @@ export interface AgentResourceDisplayHostIdentity {
 
 interface DisplayLease {
   readonly attachmentId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly lease: AgentResourceDisplayLease;
 }
 
@@ -77,7 +76,6 @@ export function createAgentResourceDisplayProjector<
     context: { readonly mediaType?: string },
     attachmentId: string,
     conversationId: string,
-    generation: number,
   ): Promise<string | undefined> => {
     if (disposed) throw new Error('Desktop Agent resource display projector is disposed.');
     const relativePath = projectableWorkspacePath(locator);
@@ -86,10 +84,10 @@ export function createAgentResourceDisplayProjector<
     if (!mediaType) return undefined;
     const metadata = await contentRead.stat(locator);
     if (metadata.status !== 'ready') return undefined;
-    const revision = contentRevision(metadata.fingerprint, metadata.byteLength);
+    const sourceFingerprint = resourceFingerprint(metadata.fingerprint, metadata.byteLength);
     const key = `${attachmentId}:${contentLocatorKey(locator)}`;
     const current = leases.get(key);
-    if (current?.revision === revision) return current.lease.url;
+    if (current?.sourceFingerprint === sourceFingerprint) return current.lease.url;
     current?.lease.release();
     leases.delete(key);
     const absolutePath = await resolveWorkspaceFile(input.workspace.workspacePath, relativePath);
@@ -98,13 +96,12 @@ export function createAgentResourceDisplayProjector<
         windowId: input.identity.windowId,
         viewId: input.identity.viewId,
         sessionId: `agent-display:${conversationId}:${attachmentId}`,
-        endpointEpoch: input.identity.connectionId,
-        revision,
-        generation: String(generation),
+        connectionId: input.identity.connectionId,
+        sourceFingerprint,
       },
-      { absolutePath, mediaType, revision },
+      { absolutePath, mediaType, sourceFingerprint },
     );
-    leases.set(key, { attachmentId, revision, lease });
+    leases.set(key, { attachmentId, sourceFingerprint, lease });
     return lease.url;
   };
 
@@ -118,11 +115,7 @@ export function createAgentResourceDisplayProjector<
             ...frame,
             projection: await projectConversationProjectionSnapshotForResourceDisplay(
               frame.projection,
-              projectionOptions(
-                frame.key.attachmentId,
-                frame.key.conversationId,
-                frame.projectionVersion,
-              ),
+              projectionOptions(frame.key.attachmentId, frame.key.conversationId),
             ),
           };
           break;
@@ -131,11 +124,7 @@ export function createAgentResourceDisplayProjector<
             ...frame,
             patch: await projectConversationProjectionPatchForResourceDisplay(
               frame.patch,
-              projectionOptions(
-                frame.key.attachmentId,
-                frame.key.conversationId,
-                frame.projectionVersion,
-              ),
+              projectionOptions(frame.key.attachmentId, frame.key.conversationId),
             ),
           };
           break;
@@ -162,10 +151,10 @@ export function createAgentResourceDisplayProjector<
     },
   };
 
-  function projectionOptions(attachmentId: string, conversationId: string, generation: number) {
+  function projectionOptions(attachmentId: string, conversationId: string) {
     return {
       resolveContentLocator: (locator: ContentLocator, context: { readonly mediaType?: string }) =>
-        resolveContentLocator(locator, context, attachmentId, conversationId, generation),
+        resolveContentLocator(locator, context, attachmentId, conversationId),
     };
   }
 }
@@ -286,7 +275,7 @@ async function resolveWorkspaceFile(workspaceRoot: string, relativePath: string)
   return target;
 }
 
-function contentRevision(fingerprint: ContentFingerprint, byteLength: number): string {
+function resourceFingerprint(fingerprint: ContentFingerprint, byteLength: number): string {
   return `${fingerprint.strategy}:${fingerprint.value}:${byteLength}`;
 }
 

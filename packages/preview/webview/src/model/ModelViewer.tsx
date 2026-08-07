@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  THREE_REFERENCE_PROTOCOL_VERSION,
   isThreeReferenceDiagnostic,
-  isThreeReferenceIdentity,
+  isThreeReferenceRequestIdentity,
   isThreeReferencePanoramaRuntimeDescriptor,
   isThreeReferencePanelSubject,
   isThreeReferencePresetOption,
@@ -134,7 +133,7 @@ export function ModelViewer({
     if (!sessionId) {
       setStatus('error');
       setDiagnostic({
-        code: 'protocol-mismatch',
+        code: 'message-invalid',
         message: 'Model Preview Webview started without a session identity.',
         severity: 'error',
       });
@@ -193,7 +192,11 @@ export function ModelViewer({
           };
           setDiagnostic(diagnostic);
           setStatus('error');
-          host.postMessage({ type: '3d-reference/diagnostic', diagnostic });
+          host.postMessage({
+            type: '3d-reference/diagnostic',
+            identity: createRequestIdentity(sessionId),
+            diagnostic,
+          });
         },
       });
     } catch (error) {
@@ -205,7 +208,11 @@ export function ModelViewer({
       };
       setDiagnostic(diagnostic);
       setStatus('error');
-      host.postMessage({ type: '3d-reference/diagnostic', diagnostic });
+      host.postMessage({
+        type: '3d-reference/diagnostic',
+        identity: createRequestIdentity(sessionId),
+        diagnostic,
+      });
       return;
     }
     runtimeRef.current = runtime;
@@ -217,13 +224,31 @@ export function ModelViewer({
     observer.observe(canvas);
     resize();
 
+    const readyIdentity = createRequestIdentity(sessionId);
     const disposeMessages = host.subscribe((value) => {
       const message = parseHostMessage(value);
-      if (!message) return;
+      if (!message) {
+        const identity = createRequestIdentity(sessionId);
+        const invalidMessage = {
+          code: 'message-invalid' as const,
+          message: 'Model Preview received an invalid panel message.',
+          severity: 'error' as const,
+          identity: { sessionId },
+        };
+        setDiagnostic(invalidMessage);
+        setStatus('error');
+        host.postMessage({
+          type: '3d-reference/diagnostic',
+          identity,
+          diagnostic: invalidMessage,
+        });
+        return;
+      }
       void handleHostMessage({
         message,
         runtime,
         sessionId,
+        readyRequestId: readyIdentity.requestId,
         host,
         setStatus,
         setStaging,
@@ -242,8 +267,7 @@ export function ModelViewer({
     });
     host.postMessage({
       type: '3d-reference/ready',
-      protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
-      sessionId,
+      identity: readyIdentity,
     });
     return () => {
       observer.disconnect();
@@ -268,11 +292,15 @@ export function ModelViewer({
     const current = referenceStagingRef.current;
     if (!current) throw new Error('3D Reference staging is unavailable.');
     const candidate = update(current);
-    const next = { ...candidate, revision: current.revision + 1 };
+    const next = candidate;
     referenceStagingRef.current = next;
     setReferenceStaging(next);
     host.setState({ threeReferenceStaging: next });
-    host.postMessage({ type: '3d-reference/staging-changed', staging: next });
+    host.postMessage({
+      type: '3d-reference/staging-changed',
+      identity: createRequestIdentity(next.sessionId),
+      staging: next,
+    });
   };
   const controlsDisabled = !staging || status !== 'ready';
   const duplicateCamera = (cameraId: string): void => {
@@ -343,7 +371,6 @@ export function ModelViewer({
       data-key-light-intensity={
         staging?.lightRig.lights.find((light) => light.id === 'key')?.intensity ?? ''
       }
-      data-staging-revision={staging?.revision ?? 0}
       data-view-distance={viewState.distance}
       data-view-target={`${viewState.target.x},${viewState.target.y},${viewState.target.z}`}
       data-selection-kind={sceneSelection.kind}
@@ -424,7 +451,7 @@ export function ModelViewer({
             if (!current) throw new Error('3D Reference staging is unavailable.');
             host.postMessage({
               type: '3d-reference/panorama-picker-requested',
-              identity: referenceIdentityOf(current),
+              identity: createRequestIdentity(current.sessionId),
             });
           }}
           onPresetRequest={(presetId) => {
@@ -432,7 +459,7 @@ export function ModelViewer({
             if (!current) throw new Error('3D Reference staging is unavailable.');
             host.postMessage({
               type: '3d-reference/preset-subject-requested',
-              identity: referenceIdentityOf(current),
+              identity: createRequestIdentity(current.sessionId),
               presetId,
             });
           }}
@@ -485,8 +512,7 @@ export function ModelViewer({
             setOutputPreview(image);
             host.postMessage({
               type: '3d-reference/capture-requested',
-              requestId: crypto.randomUUID(),
-              identity: referenceIdentityOf(current),
+              identity: createRequestIdentity(current.sessionId),
               purpose,
               imageDataUrl: image,
               width: staging?.capture.width ?? 1024,
@@ -542,6 +568,7 @@ async function handleHostMessage(input: {
   readonly message: ThreeReferenceHostMessage;
   readonly runtime: ThreeModelRuntimePort;
   readonly sessionId: string;
+  readonly readyRequestId: string;
   readonly host: ModelViewerHostPort;
   readonly setStatus: (status: ViewerStatus) => void;
   readonly setStaging: (state: ModelPreviewStagingState) => void;
@@ -560,11 +587,30 @@ async function handleHostMessage(input: {
   readonly referenceStagingRef: React.MutableRefObject<ThreeReferenceStagingSnapshot | undefined>;
 }): Promise<void> {
   const { message } = input;
+  if (message.identity.sessionId !== input.sessionId) {
+    const diagnostic = {
+      code: 'session-mismatch' as const,
+      message: '3D Reference message belongs to another Preview panel.',
+      severity: 'error' as const,
+      identity: { sessionId: input.sessionId },
+    };
+    input.setDiagnostic(diagnostic);
+    input.setStatus('error');
+    input.host.postMessage({
+      type: '3d-reference/diagnostic',
+      identity: createRequestIdentity(input.sessionId),
+      diagnostic,
+    });
+    return;
+  }
   try {
     switch (message.type) {
       case '3d-reference/session-init': {
-        if (message.staging.sessionId !== input.sessionId) {
-          throw new Error('3D Reference session identity does not match this Webview.');
+        if (
+          message.identity.requestId !== input.readyRequestId ||
+          message.staging.sessionId !== input.sessionId
+        ) {
+          throw new Error('3D Reference initialization request does not match this Preview panel.');
         }
         input.setStatus('loading');
         input.setDiagnostic(undefined);
@@ -596,7 +642,7 @@ async function handleHostMessage(input: {
         input.setStatus('ready');
         input.host.postMessage({
           type: '3d-reference/load-completed',
-          identity: referenceIdentityOf(message.staging),
+          identity: message.identity,
           ...(facts ? { facts } : {}),
         });
         break;
@@ -610,7 +656,6 @@ async function handleHostMessage(input: {
         }
         break;
       case '3d-reference/environment-runtime': {
-        if (message.identity.sessionId !== input.sessionId) return;
         input.referenceStagingRef.current = message.staging;
         input.setReferenceStaging(message.staging);
         input.setPanoramaRuntime(message.runtime);
@@ -627,7 +672,6 @@ async function handleHostMessage(input: {
         break;
       }
       case '3d-reference/cancel':
-        if (message.identity.sessionId !== input.sessionId) return;
         input.setStatus('error');
         input.setDiagnostic({
           code: 'disposed',
@@ -644,7 +688,6 @@ async function handleHostMessage(input: {
       identity: input.stagingRef.current
         ? {
             sessionId: input.sessionId,
-            revision: input.referenceStagingRef.current?.revision ?? 0,
           }
         : { sessionId: input.sessionId },
     };
@@ -654,34 +697,19 @@ async function handleHostMessage(input: {
     }
     input.host.postMessage({
       type: '3d-reference/diagnostic',
+      identity: message.identity,
       diagnostic: {
         code: 'source-load-failed',
         message: diagnostic.message,
         severity: 'error',
-        ...(diagnostic.identity
-          ? {
-              identity: {
-                ...(diagnostic.identity.sessionId
-                  ? { sessionId: diagnostic.identity.sessionId }
-                  : {}),
-                ...(diagnostic.identity.revision === undefined
-                  ? {}
-                  : { revision: diagnostic.identity.revision }),
-              },
-            }
-          : {}),
+        ...(diagnostic.identity ? { identity: diagnostic.identity } : {}),
       },
     });
   }
 }
 
 function isViewerFatalDiagnostic(code: string): boolean {
-  switch (code) {
-    case 'stale-revision':
-      return false;
-    default:
-      return true;
-  }
+  return code !== 'request-mismatch' && code !== 'staging-invalid';
 }
 
 function toModelDiagnostic(
@@ -689,13 +717,15 @@ function toModelDiagnostic(
 ): ModelPreviewDiagnostic {
   return {
     code:
-      diagnostic.code === 'stale-revision'
-        ? 'stale-revision'
-        : diagnostic.code === 'renderer-lost'
-          ? 'renderer-lost'
-          : diagnostic.code === 'renderer-unavailable'
-            ? 'renderer-unavailable'
-            : 'load-failed',
+      diagnostic.code === 'renderer-lost'
+        ? 'renderer-lost'
+        : diagnostic.code === 'renderer-unavailable'
+          ? 'renderer-unavailable'
+          : diagnostic.code === 'session-mismatch'
+            ? 'session-mismatch'
+            : diagnostic.code === 'message-invalid'
+              ? 'message-invalid'
+              : 'load-failed',
     message: diagnostic.message,
     severity: diagnostic.severity,
     identity: diagnostic.identity,
@@ -713,7 +743,6 @@ function postState(
   if (!activeCamera) throw new Error('3D Reference active camera is unavailable.');
   const next: ThreeReferenceStagingSnapshot = {
     ...staging,
-    revision: staging.revision + 1,
     camera: {
       cameraId: activeCamera.id,
       position: activeCamera.position,
@@ -723,14 +752,18 @@ function postState(
     },
   };
   host.setState({ threeReferenceStaging: next });
-  host.postMessage({ type: '3d-reference/staging-changed', staging: next });
+  host.postMessage({
+    type: '3d-reference/staging-changed',
+    identity: createRequestIdentity(next.sessionId),
+    staging: next,
+  });
   return next;
 }
 
-function referenceIdentityOf(staging: ThreeReferenceStagingSnapshot) {
+function createRequestIdentity(sessionId: string) {
   return {
-    sessionId: staging.sessionId,
-    revision: staging.revision,
+    sessionId,
+    requestId: crypto.randomUUID(),
   };
 }
 
@@ -738,7 +771,15 @@ function parseHostMessage(value: unknown): ThreeReferenceHostMessage | undefined
   if (!isRecord(value) || typeof value['type'] !== 'string') return undefined;
   switch (value['type']) {
     case '3d-reference/session-init':
-      return value['protocolVersion'] === THREE_REFERENCE_PROTOCOL_VERSION &&
+      return hasOnlyKeys(value, [
+        'type',
+        'identity',
+        'panelSubject',
+        'availablePresets',
+        'eligiblePurposes',
+        'staging',
+      ]) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
         isThreeReferencePanelSubject(value['panelSubject']) &&
         Array.isArray(value['availablePresets']) &&
         value['availablePresets'].every(isThreeReferencePresetOption) &&
@@ -747,7 +788,7 @@ function parseHostMessage(value: unknown): ThreeReferenceHostMessage | undefined
         isThreeReferenceStagingSnapshot(value['staging'])
         ? {
             type: '3d-reference/session-init',
-            protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+            identity: value['identity'],
             panelSubject: value['panelSubject'],
             availablePresets: value['availablePresets'],
             eligiblePurposes: value['eligiblePurposes'],
@@ -755,15 +796,21 @@ function parseHostMessage(value: unknown): ThreeReferenceHostMessage | undefined
           }
         : undefined;
     case '3d-reference/diagnostic':
-      return isThreeReferenceDiagnostic(value['diagnostic'])
-        ? { type: '3d-reference/diagnostic', diagnostic: value['diagnostic'] }
+      return hasOnlyKeys(value, ['type', 'identity', 'diagnostic']) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
+        isThreeReferenceDiagnostic(value['diagnostic'])
+        ? {
+            type: '3d-reference/diagnostic',
+            identity: value['identity'],
+            diagnostic: value['diagnostic'],
+          }
         : undefined;
     case '3d-reference/environment-runtime':
-      return isThreeReferenceIdentity(value['identity']) &&
+      return hasOnlyKeys(value, ['type', 'identity', 'staging', 'runtime']) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
         isThreeReferenceStagingSnapshot(value['staging']) &&
         isThreeReferencePanoramaRuntimeDescriptor(value['runtime']) &&
         value['identity'].sessionId === value['staging'].sessionId &&
-        value['identity'].revision === value['staging'].revision &&
         value['staging'].environment !== undefined &&
         contentLocatorsEqual(value['staging'].environment.source, value['runtime'].source) &&
         value['staging'].environment?.fingerprint === value['runtime'].fingerprint
@@ -774,23 +821,16 @@ function parseHostMessage(value: unknown): ThreeReferenceHostMessage | undefined
             runtime: value['runtime'],
           }
         : undefined;
-    case '3d-reference/cancel': {
-      const revision = isRecord(value['identity']) ? value['identity']['revision'] : undefined;
-      return isRecord(value['identity']) &&
-        typeof value['identity']['sessionId'] === 'string' &&
-        typeof revision === 'number' &&
-        Number.isInteger(revision) &&
+    case '3d-reference/cancel':
+      return hasOnlyKeys(value, ['type', 'identity', 'reason']) &&
+        isThreeReferenceRequestIdentity(value['identity']) &&
         typeof value['reason'] === 'string'
         ? {
             type: '3d-reference/cancel',
-            identity: {
-              sessionId: value['identity']['sessionId'],
-              revision,
-            },
+            identity: value['identity'],
             reason: value['reason'],
           }
         : undefined;
-    }
     default:
       return undefined;
   }
@@ -834,10 +874,8 @@ function toViewportStaging(
     };
   }
   return {
-    schemaVersion: 3,
     sessionId: staging.sessionId,
     sourceFingerprint: subjectFingerprint(staging),
-    revision: 0,
     transformPatches: [],
     cameraPresets: [
       {
@@ -876,4 +914,8 @@ function subjectFingerprint(staging: ThreeReferenceStagingSnapshot): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(record).every((key) => keys.includes(key));
 }

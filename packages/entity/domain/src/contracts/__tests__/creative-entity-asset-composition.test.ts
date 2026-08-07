@@ -125,10 +125,12 @@ describe('creative entity asset composition contracts', () => {
     expect(isCreativeEntityCandidate({ ...candidate, provenance: [{ providerId: 'story' }] })).toBe(
       false,
     );
-    expect(isCreativeEntityCandidateFile({ version: 1, candidates: [candidate] })).toBe(true);
+    expect(isCreativeEntityCandidateFile({ candidates: [candidate] })).toBe(true);
+    expect(isCreativeEntityCandidateFile({ unexpectedField: 1, candidates: [candidate] })).toBe(
+      false,
+    );
     expect(
       isProjectCreativeEntityFile({
-        version: 1,
         kind: 'location',
         entities: [
           {
@@ -143,7 +145,6 @@ describe('creative entity asset composition contracts', () => {
     ).toBe(true);
     expect(
       isProjectCreativeEntityFile({
-        version: 1,
         kind: 'location',
         entities: [
           {
@@ -158,7 +159,7 @@ describe('creative entity asset composition contracts', () => {
     ).toBe(false);
   });
 
-  it('validates entity change events and operation result metadata', () => {
+  it('validates version-free entity change events and operation result metadata', () => {
     const changedRef = {
       kind: 'entity',
       id: 'char_xiaoju',
@@ -171,7 +172,6 @@ describe('creative entity asset composition contracts', () => {
         projectRoot: '${workspaceFolder}',
         reason: 'rename',
         changedRefs: [changedRef],
-        generation: 2,
         freshness: 'fresh',
         updatedAt: '2026-05-18T00:00:00.000Z',
       }),
@@ -183,7 +183,6 @@ describe('creative entity asset composition contracts', () => {
         projectRoot: '${workspaceFolder}',
         affectedEntityRefs: [{ entityId: 'char_xiaoju', entityKind: 'character' }],
         changedRefs: [changedRef],
-        generation: 2,
         freshness: 'fresh',
         updatedAt: '2026-05-18T00:00:00.000Z',
       }),
@@ -202,7 +201,6 @@ describe('creative entity asset composition contracts', () => {
         projectRoot: '${workspaceFolder}',
         reason: 'rewrite-script',
         changedRefs: [changedRef],
-        generation: 2,
         freshness: 'fresh',
         updatedAt: '2026-05-18T00:00:00.000Z',
       }),
@@ -212,7 +210,6 @@ describe('creative entity asset composition contracts', () => {
   it('validates draft and requirement file shapes', () => {
     expect(
       isVisualIdentityDraftFile({
-        version: 1,
         drafts: [
           {
             id: 'draft-1',
@@ -227,7 +224,6 @@ describe('creative entity asset composition contracts', () => {
     ).toBe(true);
     expect(
       isEntityAssetRequirementFile({
-        version: 1,
         requirements: [
           {
             id: 'req-1',
@@ -252,8 +248,8 @@ describe('creative entity asset composition contracts', () => {
     expect(custom).toBe('tattoo_style');
   });
 
-  it('applies candidate defaults without accepting legacy binding fallback', () => {
-    const oldCandidate = {
+  it('applies permanent candidate defaults', () => {
+    const minimalCandidate = {
       id: 'candidate:story:character:xiaoju',
       kind: 'character',
       name: '小橘',
@@ -266,17 +262,17 @@ describe('creative entity asset composition contracts', () => {
       ],
       sourceRefs: [],
     };
-    expect(isCreativeEntityCandidate(oldCandidate)).toBe(true);
-    expect(isCreativeEntityCandidateFile({ version: 1, candidates: [oldCandidate] })).toBe(true);
+    expect(isCreativeEntityCandidate(minimalCandidate)).toBe(true);
+    expect(isCreativeEntityCandidateFile({ candidates: [minimalCandidate] })).toBe(true);
 
-    if (!isCreativeEntityCandidate(oldCandidate)) {
+    if (!isCreativeEntityCandidate(minimalCandidate)) {
       throw new Error('Candidate fixture should pass the guard.');
     }
 
-    expect(withCreativeEntityCandidateDefaults(oldCandidate).identityBasis).toBe('user-named');
+    expect(withCreativeEntityCandidateDefaults(minimalCandidate).identityBasis).toBe('user-named');
     expect(
-      withCreativeEntityCandidateFileDefaults({ version: 1, candidates: [oldCandidate] })
-        .candidates[0]?.identityBasis,
+      withCreativeEntityCandidateFileDefaults({ candidates: [minimalCandidate] }).candidates[0]
+        ?.identityBasis,
     ).toBe('user-named');
   });
 });

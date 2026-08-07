@@ -55,7 +55,7 @@ describe('MarkdownRenderer structured artifacts', () => {
 
     const root = container.querySelector('[data-markdown-session-id]');
     expect(root?.getAttribute('data-markdown-session-id')).toBe(timelineSnapshot?.sessionId);
-    expect(root?.getAttribute('data-markdown-revision')).toBe('1');
+    expect(root?.getAttribute('data-markdown-document-id')).toBe(timelineSnapshot?.documentId);
     expect(root?.getAttribute('data-markdown-final')).toBe('false');
     expect(screen.getByRole('table')).toBeTruthy();
   });
@@ -68,7 +68,7 @@ describe('MarkdownRenderer structured artifacts', () => {
 
     const root = container.querySelector('[data-markdown-session-id]');
     expect(root?.getAttribute('data-markdown-final')).toBe('true');
-    expect(root?.getAttribute('data-markdown-revision')).toBe('1');
+    expect(root?.getAttribute('data-markdown-document-id')).toMatch(/^md-document:/u);
     expect(screen.getByRole('table')).toBeTruthy();
   });
 
@@ -112,7 +112,6 @@ describe('MarkdownRenderer structured artifacts', () => {
 
 \`\`\`NEKO
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "artifact-storyboard",
   "title": "Comic artifact",
@@ -122,9 +121,7 @@ describe('MarkdownRenderer structured artifacts', () => {
       "kind": "domain",
       "title": "Storyboard Payload",
       "domainKind": "StoryboardTable",
-      "schemaVersion": 1,
       "payload": {
-        "schemaVersion": 1,
         "kind": "storyboard-table",
         "title": "Opening",
         "scenes": [
@@ -159,14 +156,13 @@ describe('MarkdownRenderer structured artifacts', () => {
     renderMarkdown(
       `\`\`\`neko
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "blocks": [`,
       true,
     );
 
     expect(screen.getByText('Generating structured content...')).toBeTruthy();
-    expect(screen.queryByText(/"schemaVersion": 1/)).toBeNull();
+    expect(screen.queryByText(/"kind": "composite-artifact"/)).toBeNull();
   });
 
   it('keeps ordinary json code blocks visible', () => {
@@ -181,7 +177,6 @@ describe('MarkdownRenderer structured artifacts', () => {
   it('renders non-storyboard composite artifacts with the generic artifact renderer', () => {
     renderMarkdown(`\`\`\`NEKO
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "character-review",
   "title": "Character Review",
@@ -192,7 +187,6 @@ describe('MarkdownRenderer structured artifacts', () => {
       "kind": "table",
       "title": "Review Table",
       "table": {
-        "schemaVersion": 1,
         "kind": "generic-table",
         "tableId": "characters",
         "title": "Characters",
@@ -234,7 +228,7 @@ describe('MarkdownRenderer structured artifacts', () => {
           resources: [
             { token: 'page_1', label: 'Page 1', role: 'source', sourcePath: 'assets/page-1.png' },
           ],
-          renderUris: ['http://127.0.0.1:43125/v1/resources/page-1'],
+          renderUris: ['http://127.0.0.1:43125/resources/page-1'],
           diagnostics: [],
         },
       ],
@@ -252,10 +246,10 @@ describe('MarkdownRenderer structured artifacts', () => {
 
     expect(screen.queryByText('page_1')).toBeNull();
     expect(screen.getByAltText('Page 1').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/page-1',
+      'http://127.0.0.1:43125/resources/page-1',
     );
     expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain(
-      'http://127.0.0.1:43125/v1/resources/page-1',
+      'http://127.0.0.1:43125/resources/page-1',
     );
   });
 
@@ -276,7 +270,7 @@ describe('MarkdownRenderer structured artifacts', () => {
             status: 'bound',
             refs: [{ label: 'Page 1', role: 'source' }],
             resources: [{ token: 'P1', label: 'Page 1', role: 'source', sourcePath: 'P1' }],
-            renderUris: ['http://127.0.0.1:43125/v1/resources/page-1'],
+            renderUris: ['http://127.0.0.1:43125/resources/page-1'],
             diagnostics: [],
           },
         ],
@@ -284,7 +278,7 @@ describe('MarkdownRenderer structured artifacts', () => {
     );
 
     const image = screen.getByAltText('Page 1');
-    expect(image.getAttribute('src')).toBe('http://127.0.0.1:43125/v1/resources/page-1');
+    expect(image.getAttribute('src')).toBe('http://127.0.0.1:43125/resources/page-1');
     expect(image.className).toContain('object-contain');
     expect(image.className).toContain('max-h-40');
     expect(image.className).not.toContain('h-12');
@@ -428,7 +422,7 @@ describe('MarkdownRenderer structured artifacts', () => {
             status: 'bound',
             refs: [{ label: 'Page 1', role: 'source' }],
             resources: [{ token: 'P1', label: 'Page 1', role: 'source', sourcePath: 'P1' }],
-            renderUris: ['http://127.0.0.1:43125/v1/resources/page-1'],
+            renderUris: ['http://127.0.0.1:43125/resources/page-1'],
             diagnostics: [],
           },
         ],
@@ -492,8 +486,8 @@ describe('MarkdownRenderer structured artifacts', () => {
             refs: [{ label: 'Page 1' }, { label: 'Page 1 duplicate' }],
             resources: [],
             renderUris: [
-              'http://127.0.0.1:43125/v1/resources/page-1',
-              'http://127.0.0.1:43125/v1/resources/page-1-duplicate',
+              'http://127.0.0.1:43125/resources/page-1',
+              'http://127.0.0.1:43125/resources/page-1-duplicate',
             ],
             diagnostics: [
               {
@@ -586,7 +580,7 @@ describe('MarkdownRenderer structured artifacts', () => {
               sourcePath: 'read-image-cover.jpg',
             },
           ],
-          renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
+          renderUris: ['http://127.0.0.1:43125/resources/cover'],
           diagnostics: [],
         },
       ],
@@ -605,10 +599,10 @@ describe('MarkdownRenderer structured artifacts', () => {
     expect(screen.queryByText('`read-image-cover.jpg`')).toBeNull();
     expect(screen.queryByText('image')).toBeNull();
     expect(screen.getByAltText('read-image-cover.jpg').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/cover',
+      'http://127.0.0.1:43125/resources/cover',
     );
     expect(JSON.stringify(projection.tokens[0]?.refs)).not.toContain(
-      'http://127.0.0.1:43125/v1/resources/cover',
+      'http://127.0.0.1:43125/resources/cover',
     );
   });
 
@@ -696,14 +690,14 @@ describe('MarkdownRenderer structured artifacts', () => {
               sourcePath: 'assets/cover.png',
             },
           ],
-          renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
+          renderUris: ['http://127.0.0.1:43125/resources/cover'],
           diagnostics: [],
         },
       ],
     });
 
     expect(screen.getByAltText('cover.png').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/cover',
+      'http://127.0.0.1:43125/resources/cover',
     );
     expect(screen.queryByText('assets/cover.png')).toBeNull();
   });
@@ -718,14 +712,14 @@ describe('MarkdownRenderer structured artifacts', () => {
           status: 'bound',
           refs: [{ label: 'Page 1', role: 'source' }],
           resources: [{ token: 'P1', label: 'Page 1', role: 'source', sourcePath: 'P1' }],
-          renderUris: ['http://127.0.0.1:43125/v1/resources/page-1'],
+          renderUris: ['http://127.0.0.1:43125/resources/page-1'],
           diagnostics: [],
         },
       ],
     });
 
     expect(screen.getByAltText('Page 1').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/page-1',
+      'http://127.0.0.1:43125/resources/page-1',
     );
     expect(screen.queryByText('P1#panel_1')).toBeNull();
   });
@@ -931,7 +925,7 @@ describe('MarkdownRenderer structured artifacts', () => {
               sourcePath: 'cover.png',
             },
           ],
-          renderUris: ['http://127.0.0.1:43125/v1/resources/cover'],
+          renderUris: ['http://127.0.0.1:43125/resources/cover'],
           diagnostics: [],
         },
       ],
@@ -952,7 +946,7 @@ describe('MarkdownRenderer structured artifacts', () => {
     });
 
     expect(screen.getByAltText('cover.png').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/cover',
+      'http://127.0.0.1:43125/resources/cover',
     );
     expect(screen.queryByText('![[cover.png#panel_1]]')).toBeNull();
   });
@@ -1000,8 +994,6 @@ function createTimelineMarkdownSession(content: string): string {
 
     runId: 'run-a',
     messageId,
-    projectionVersion: 1,
-    baseProjectionVersion: 0,
     operations: [
       {
         operation: 'append',
@@ -1013,10 +1005,9 @@ function createTimelineMarkdownSession(content: string): string {
           messageId,
           itemId,
           sequence: 1,
-          itemRevision: 1,
           kind: 'assistant_text',
           status: 'streaming',
-          payload: { content, format: 'markdown', sourceGeneration: 1 },
+          payload: { content, format: 'markdown' },
           createdAt: 1,
           updatedAt: 1,
         },

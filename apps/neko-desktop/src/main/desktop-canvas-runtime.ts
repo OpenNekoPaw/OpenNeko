@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   CanvasHostRuntimeSession,
+  createCanvasHostPresentationSnapshotStore,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostIntentRequest,
   projectGenerationSnapshotToCanvas,
@@ -17,7 +18,6 @@ import {
 import type { NekoHostPorts } from '@neko/host/ports';
 import { type ContentLocator } from '@neko/content';
 import {
-  CANVAS_VERSION,
   loadNkc,
   saveNkc,
   type CanvasData,
@@ -95,6 +95,7 @@ export interface DesktopCanvasGlobalMediaLibraryCopySelection {
 
 export class DesktopCanvasRuntime {
   private readonly sessions = new Map<string, DesktopCanvasSessionEntry>();
+  private readonly presentationSnapshots = createCanvasHostPresentationSnapshotStore();
   private readonly materialAuthoring: CanvasMaterialAuthoringService;
   private readonly mediaLibraryCopy: CanvasMediaLibraryCopyService;
   private disposed = false;
@@ -233,13 +234,18 @@ export class DesktopCanvasRuntime {
       entry.session.dispose();
       this.sessions.delete(key);
     }
+    this.presentationSnapshots.deleteWindow(windowId);
     this.options.media?.detachWindow(windowId);
     this.options.generation?.detachWindow(windowId);
   }
 
-  reconcileWorkbench(windowId: string, workbench: DesktopWorkbenchLayoutProjection): void {
+  reconcileWindow(
+    windowId: string,
+    workbenches: readonly DesktopWorkbenchLayoutProjection[],
+  ): void {
     const attached = new Map(
-      workbench.main.views
+      workbenches
+        .flatMap((workbench) => workbench.main.views)
         .filter((view) => view.kind === 'canvas')
         .map((view) => [view.viewId, view] as const),
     );
@@ -248,7 +254,7 @@ export class DesktopCanvasRuntime {
       const view = attached.get(entry.identity.viewId);
       if (
         view &&
-        view.viewEpoch === entry.identity.viewEpoch &&
+        view.viewInstanceId === entry.identity.viewInstanceId &&
         view.documentId === entry.identity.documentId
       ) {
         continue;
@@ -264,6 +270,7 @@ export class DesktopCanvasRuntime {
     this.disposed = true;
     for (const entry of this.sessions.values()) entry.session.dispose();
     this.sessions.clear();
+    this.presentationSnapshots.clear();
     this.materialAuthoring.dispose();
     await this.options.media?.dispose();
     await this.options.generation?.dispose();
@@ -486,6 +493,7 @@ export class DesktopCanvasRuntime {
     const session = new CanvasHostRuntimeSession({
       identity,
       initialCanvas,
+      presentationSnapshots: this.presentationSnapshots,
       effects: {
         resolveMaterialActions: ({ identity: requestIdentity, targets }) =>
           materialActionOwner.resolve({
@@ -596,7 +604,6 @@ export class DesktopCanvasRuntime {
     } catch (error: unknown) {
       if (isFileNotFound(error)) {
         return {
-          version: CANVAS_VERSION,
           name: `${workspaceName} Canvas`,
           viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
           nodes: [],
@@ -716,10 +723,10 @@ function sessionKey(identity: CanvasHostRuntimeIdentity): string {
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
   ].join(':');
 }
 

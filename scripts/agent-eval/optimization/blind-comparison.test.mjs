@@ -38,7 +38,7 @@ function sample(label, overrides = {}) {
 function profile() {
   return {
     id: 'content-quality-judge',
-    adapter: 'openai-chat-completions-v1',
+    adapter: 'openai-chat-completions',
     providerId: 'openai',
     modelId: 'gpt-5-mini',
     endpointEnv: 'JUDGE_ENDPOINT',
@@ -50,7 +50,7 @@ function profile() {
 }
 
 describe('blind A/B comparison', () => {
-  it('randomizes public evidence and hides checkpoint, report, revision, build and diff identities', () => {
+  it('randomizes public evidence and hides checkpoint, report, build, and diff identities', () => {
     const comparison = createBlindABComparison(
       {
         baseline: sample('base'),
@@ -63,7 +63,6 @@ describe('blind A/B comparison', () => {
     const projection = JSON.stringify(comparison.projection);
     expect(projection).not.toContain('report-base');
     expect(projection).not.toContain('run-variant');
-    expect(projection).not.toContain('repositoryRevision');
     expect(projection).not.toContain('fingerprint');
     expect(projection).not.toContain('diff --git');
   });
@@ -131,7 +130,7 @@ describe('blind A/B comparison', () => {
     expect(() =>
       createBlindABComparison({
         baseline: sample('base'),
-        candidate: sample('variant', { repositoryRevision: 'secret-revision' }),
+        candidate: sample('variant', { unexpectedIdentity: 'secret-identity' }),
         rubric: { id: 'draft-quality' },
       }),
     ).toThrow('forbidden identity field');

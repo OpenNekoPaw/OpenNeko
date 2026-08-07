@@ -14,7 +14,7 @@ export interface AgentMarkdownSessionRegistryMetrics {
   readonly activeSessions: number;
   readonly createdSessions: number;
   readonly disposedSessions: number;
-  readonly renderRevisions: number;
+  readonly renderUpdates: number;
   readonly notifications: number;
   readonly activeSubscriptions: number;
 }
@@ -46,9 +46,7 @@ export interface AgentMarkdownSessionRegistry {
 interface RegistryEntry {
   readonly conversationId: string;
   readonly messageId: string;
-  readonly sourceGeneration: number;
   readonly session: MarkdownStreamingSession;
-  itemRevision: number;
   snapshot: MarkdownStreamingSnapshot;
 }
 
@@ -61,8 +59,6 @@ interface PendingSessionMutation {
   readonly sessionKey: string;
   readonly conversationId: string;
   readonly messageId: string;
-  readonly sourceGeneration: number;
-  readonly itemRevision: number;
   readonly mode: 'append' | 'replace' | 'snapshot';
   readonly source: string;
   readonly complete: boolean;
@@ -80,7 +76,7 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
   const listeners = new Map<string, Set<() => void>>();
   let createdSessions = 0;
   let disposedSessions = 0;
-  let renderRevisions = 0;
+  let renderUpdates = 0;
   let notifications = 0;
 
   const notify = (sessionKey: string): void => {
@@ -100,13 +96,11 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
     entries.set(mutation.sessionKey, {
       conversationId: mutation.conversationId,
       messageId: mutation.messageId,
-      sourceGeneration: mutation.sourceGeneration,
       session,
-      itemRevision: mutation.itemRevision,
       snapshot,
     });
     createdSessions += 1;
-    renderRevisions += 1;
+    renderUpdates += 1;
   };
 
   const appendEntry = (mutation: PendingSessionMutation): void => {
@@ -115,22 +109,11 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
       replaceEntry(mutation);
       return;
     }
-    if (entry.sourceGeneration !== mutation.sourceGeneration) {
-      throw new Error(
-        `Markdown append generation mismatch for ${mutation.sessionKey}: expected ${entry.sourceGeneration}, received ${mutation.sourceGeneration}.`,
-      );
-    }
-    if (mutation.itemRevision <= entry.itemRevision) {
-      throw new Error(
-        `Markdown item revision must increase for ${mutation.sessionKey}: current ${entry.itemRevision}, received ${mutation.itemRevision}.`,
-      );
-    }
     const result = mutation.complete
       ? entry.session.finalize(`${entry.session.source}${mutation.source}`)
       : entry.session.append(mutation.source);
     entry.snapshot = requireReadySnapshot(result, mutation.sessionKey);
-    entry.itemRevision = mutation.itemRevision;
-    renderRevisions += 1;
+    renderUpdates += 1;
   };
 
   const createPublication = (
@@ -192,10 +175,7 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
     for (const mutation of mutations.values()) {
       const entry = entries.get(mutation.sessionKey);
       const isMatching =
-        entry?.sourceGeneration === mutation.sourceGeneration &&
-        entry.itemRevision === mutation.itemRevision &&
-        entry.snapshot.source === mutation.source &&
-        entry.snapshot.isFinal === mutation.complete;
+        entry?.snapshot.source === mutation.source && entry.snapshot.isFinal === mutation.complete;
       if (isMatching) continue;
       replaceEntry(mutation);
       affectedSessionKeys.add(mutation.sessionKey);
@@ -266,7 +246,7 @@ export function createAgentMarkdownSessionRegistry(): AgentMarkdownSessionRegist
         activeSessions: entries.size,
         createdSessions,
         disposedSessions,
-        renderRevisions,
+        renderUpdates,
         notifications,
         activeSubscriptions: Array.from(listeners.values()).reduce(
           (count, subscribers) => count + subscribers.size,
@@ -317,7 +297,6 @@ function collectOperationMutation(
     if (current) {
       pending.set(sessionKey, {
         ...current,
-        itemRevision: operation.itemRevision,
         complete: true,
       });
       return;
@@ -326,8 +305,6 @@ function collectOperationMutation(
       sessionKey,
       conversationId: delivery.conversationId,
       messageId: delivery.messageId,
-      sourceGeneration: operation.sourceGeneration,
-      itemRevision: operation.itemRevision,
       mode: 'append',
       source: '',
       complete: true,
@@ -345,10 +322,9 @@ function collectOperationMutation(
   const complete = item.status !== 'streaming';
   if (operation.operation === 'append') {
     const current = pending.get(sessionKey);
-    if (current?.mode === 'append' && current.sourceGeneration === item.payload.sourceGeneration) {
+    if (current?.mode === 'append') {
       pending.set(sessionKey, {
         ...current,
-        itemRevision: item.itemRevision,
         source: `${current.source}${item.payload.content}`,
         complete: current.complete || complete,
       });
@@ -358,8 +334,6 @@ function collectOperationMutation(
       sessionKey,
       conversationId: delivery.conversationId,
       messageId: delivery.messageId,
-      sourceGeneration: item.payload.sourceGeneration,
-      itemRevision: item.itemRevision,
       mode: 'append',
       source: item.payload.content,
       complete,
@@ -371,8 +345,6 @@ function collectOperationMutation(
     sessionKey,
     conversationId: delivery.conversationId,
     messageId: delivery.messageId,
-    sourceGeneration: item.payload.sourceGeneration,
-    itemRevision: item.itemRevision,
     mode: operation.operation === 'snapshot' ? 'snapshot' : 'replace',
     source: item.payload.content,
     complete,
@@ -399,8 +371,6 @@ function collectSnapshotMutations(
       sessionKey,
       conversationId: snapshot.conversationId,
       messageId: snapshot.messageId,
-      sourceGeneration: item.payload.sourceGeneration,
-      itemRevision: item.itemRevision,
       mode: 'snapshot',
       source: item.payload.content,
       complete: item.status !== 'streaming',

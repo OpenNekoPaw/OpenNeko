@@ -29,7 +29,6 @@ describe('agent capability Desktop contracts', () => {
   it('models provider and declaration runtime requirements', () => {
     const provider: AgentCapabilityProvider = {
       id: 'neko-assets',
-      version: '1.0.0',
       hostRequirements: [{ host: 'desktop' }],
       requirements: {
         contentAccess: true,
@@ -79,7 +78,6 @@ describe('agent capability Desktop contracts', () => {
     };
     const summary: AgentCapabilityProviderAvailabilitySummary = {
       providerId: 'neko-cut',
-      version: '1.0.0',
       loaded: [{ kind: 'tool', name: 'assets.list' }],
       skipped: [diagnostic],
     };

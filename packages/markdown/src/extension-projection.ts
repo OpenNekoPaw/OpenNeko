@@ -60,7 +60,6 @@ export interface NekoMarkdownCreativeTableProjection {
   readonly unknownColumns: readonly string[];
 }
 
-/** Legacy projection input; contextual `ref` is not copied into the normalized annotation. */
 export interface NekoMarkdownSemanticPromptSpan {
   readonly kind: string;
   readonly range: MarkdownSourceRange;

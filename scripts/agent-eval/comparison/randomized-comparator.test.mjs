@@ -15,7 +15,7 @@ describe('randomized evidence comparison', () => {
         rightId: 'candidate-secret-label',
         leftEvidence: { reportId: 'left-report', output: 'A' },
         rightEvidence: { reportId: 'right-report', output: 'B' },
-        publicContract: { rubricId: 'quality-v1' },
+        publicContract: { rubricId: 'quality' },
       },
       { random: () => random },
     );

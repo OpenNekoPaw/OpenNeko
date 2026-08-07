@@ -30,7 +30,6 @@ export interface NekoProjectAuthoringTarget {
 export type PluginTransferTargetRef = CanvasAgentTargetRef &
   NekoProjectAuthoringTarget & {
     readonly plugin?: PluginTransferTarget;
-    readonly expectedProjectRevision?: string;
   };
 
 export interface PluginTransferProvenance {
@@ -109,7 +108,6 @@ export interface PluginTransferCanvasImportAssetPayload {
 
 export interface PluginTransferAuthoringPayloadBase {
   readonly target?: NekoProjectAuthoringTarget;
-  readonly expectedProjectRevision?: string;
   readonly reveal?: boolean;
   readonly provenance?: PluginTransferProvenance;
 }

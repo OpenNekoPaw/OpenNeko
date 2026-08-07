@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.media-library-content",
   "owner": { "kind": "agent-runtime", "id": "media-library-content" },
   "target": {
@@ -7,7 +7,6 @@
     "id": "media-library-content",
     "contractHash": "sha256:18a712135ab0d135e764d2cebca6933196c03bccc4b8d2be5872b87f4b23444e"
   },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     {
       "id": "canonical-default",
@@ -28,7 +27,7 @@
       "id": "media-library-workspace",
       "root": "shared-fixtures/media-library-workspace",
       "source": "repository",
-      "digest": "sha256:d28afb6074e7876857cee1093d0ea3f92386c9e72b0836cd27ddfac0a702edad",
+      "digest": "sha256:475e0a3d8d9a6f481f4b2148ef9681cd4175a4046e8fbd170c8166010e883c93",
       "mutable": true,
       "links": [
         { "path": "neko/assets/Reference", "target": "media-source" }
@@ -40,12 +39,6 @@
       "id": "linked-media-search-read",
       "file": "cases/linked-media-search-read.json",
       "group": "canonical",
-      "visibility": "public"
-    },
-    {
-      "id": "legacy-asset-reference-rejected",
-      "file": "cases/legacy-asset-reference-rejected.json",
-      "group": "boundary",
       "visibility": "public"
     },
     {

@@ -18,7 +18,6 @@ const representations = [
   {
     kind: 'generated-output',
     outputId: 'xiaoju-image',
-    revision: 'revision-1',
     digest: 'sha256:xiaoju-image',
     path: 'neko/generated/xiaoju.png',
   },
@@ -40,7 +39,7 @@ describe('EntityRepresentationAccessService', () => {
         bytes: new Uint8Array([1]),
         offset: 0,
         totalByteLength: 1,
-        fingerprint: { strategy: 'provider' as const, value: 'owner:v1' },
+        fingerprint: { strategy: 'provider' as const, value: 'owner:fingerprint' },
       }));
       const service = createAccessService([binding], { read });
 
@@ -94,7 +93,6 @@ describe('EntityRepresentationRebindService', () => {
       projectRoot: '/workspace',
       affectedEntityRefs: [],
       changedRefs: [],
-      generation: 1,
       freshness: 'fresh' as const,
       updatedAt: '2026-07-22T02:00:00.000Z',
     }));
@@ -234,7 +232,7 @@ function createAccessService(
       status: 'ready',
       locator,
       byteLength: 1,
-      fingerprint: { strategy: 'provider', value: 'owner:v1' },
+      fingerprint: { strategy: 'provider', value: 'owner:fingerprint' },
     }),
     read: async (locator) => ({
       status: 'ready',
@@ -242,7 +240,7 @@ function createAccessService(
       bytes: new Uint8Array([1]),
       offset: 0,
       totalByteLength: 1,
-      fingerprint: { strategy: 'provider', value: 'owner:v1' },
+      fingerprint: { strategy: 'provider', value: 'owner:fingerprint' },
     }),
     ...contentOverrides,
   };

@@ -14,7 +14,7 @@ runtime，而是证明生产 Desktop 组合满足性能、许可、凭据和安�
   event subscription with explicit conversation/branch/turn/run/Tool identities.
 - **Extension:** new providers and purposes require an actual Desktop caller and explicit binding; missing
   capability or credential fails visibly without provider/model fallback.
-- **Testing:** deterministic path tests poison retired Agent/provider/session paths; packaged Electron
+- **Testing:** deterministic path tests prove retired Agent/provider/session imports and registrations are absent; packaged Electron
   measurement owns startup, bundle, OAuth callback/cancellation and redaction acceptance.
 
 ## Decisions

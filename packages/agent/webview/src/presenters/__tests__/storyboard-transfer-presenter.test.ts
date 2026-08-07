@@ -44,7 +44,7 @@ describe('storyboard transfer presenter', () => {
         shots: [
           {
             url: 'webview://shot-1.png',
-            localPath: '/repo/.neko/.cache/generated/shot-1.png',
+            localPath: '/repo/.runtime/cache/generated/shot-1.png',
             shotIndex: 1,
           },
           {
@@ -100,7 +100,6 @@ describe('storyboard transfer presenter', () => {
       title: 'Opening',
       diagnostics: [],
       storyboardTable: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Opening',
         scenes: [
@@ -114,7 +113,7 @@ describe('storyboard transfer presenter', () => {
                 visualDescription: 'Wide establishing frame',
                 characterAction: 'The character looks across the hallway.',
                 imageStrategy: 'reuse-original',
-                mediaRefs: [
+                sourceMediaRefs: [
                   {
                     refId: 'asset-1',
                     role: 'source',
@@ -176,9 +175,7 @@ describe('storyboard transfer presenter', () => {
       title: 'Two Scenes',
       diagnostics: [],
       storyboardTable: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
-        contractVersion: 1,
         sourceProfile: 'from-script',
         sourceTrace: [
           {
@@ -190,12 +187,7 @@ describe('storyboard transfer presenter', () => {
             },
           },
         ],
-        revision: {
-          revisionId: 'storyboard-rev-1',
-          sequence: 1,
-          contentDigest: 'sha256:storyboard-rev-1',
-          createdAt: '2026-07-12T00:00:00.000Z',
-        },
+        contentFingerprint: 'sha256:storyboard-content',
         title: 'Two Scenes',
         scenes: [
           {
@@ -239,7 +231,6 @@ describe('storyboard transfer presenter', () => {
                     contentLocator: {
                       kind: 'generated-output',
                       outputId: 'generated-image-2',
-                      revision: '1',
                       digest: 'sha256:generated-image-2',
                       path: 'generated/generated-image-2.png',
                     },
@@ -274,7 +265,7 @@ describe('storyboard transfer presenter', () => {
       sourceKind: 'structured-content',
       sourceFormat: 'composite-artifact',
       canonicalStoryboard: {
-        revision: { revisionId: 'storyboard-rev-1' },
+        contentFingerprint: 'sha256:storyboard-content',
         scenes: [
           {
             sceneId: 'scene-1',
@@ -301,7 +292,6 @@ describe('storyboard transfer presenter', () => {
                     contentLocator: {
                       kind: 'generated-output',
                       outputId: 'generated-image-2',
-                      revision: '1',
                       digest: 'sha256:generated-image-2',
                       path: 'generated/generated-image-2.png',
                     },
@@ -316,16 +306,5 @@ describe('storyboard transfer presenter', () => {
     });
     expect(handoff).not.toHaveProperty('kind', 'assetBatch');
     expect(JSON.stringify(handoff)).not.toMatch(/neko-media:|blob:|\.neko\/.cache/);
-  });
-
-  it('poisons old Markdown storyboard compiler transfer paths for new Canvas requests', async () => {
-    const moduleExports = (await import('../storyboard-transfer-presenter')) as Record<
-      string,
-      unknown
-    >;
-    expect(moduleExports.projectStoryboardScenesCutTimelinePayload).toBeUndefined();
-    expect(moduleExports.projectMarkdownStoryboardTransferPayload).toBeUndefined();
-    expect(moduleExports.projectAssistantMarkdownCanvasTransferPayload).toBeUndefined();
-    expect(moduleExports.projectAssistantMarkdownCanvasDraftPayload).toBeUndefined();
   });
 });

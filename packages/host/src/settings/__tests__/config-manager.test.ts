@@ -11,6 +11,7 @@ import type { Provider, Model } from '../types/provider';
 import type { MCPServerPreset } from '../types/config';
 import type { UnifiedConfig } from '../config-core/index';
 import type { ConfigReadResult } from '../config-reader';
+import type { AssistantRuntimeSettingsPort } from '../assistant-runtime-settings-port';
 import { RETRY_TIMEOUT_PRESETS } from '../retry-timeout-presets';
 
 // =============================================================================
@@ -19,24 +20,13 @@ import { RETRY_TIMEOUT_PRESETS } from '../retry-timeout-presets';
 
 function createMockUserConfigManager(
   initial?: Partial<UserConfig>,
-  rawScalars: Omit<
-    UnifiedConfig,
-    | 'providers'
-    | 'models'
-    | 'mcpServers'
-    | 'providerOverrides'
-    | 'modelOverrides'
-    | 'mcpServerOverrides'
-  > = {},
+  rawScalars: Omit<UnifiedConfig, 'providers' | 'models' | 'mcpServers'> = {},
 ): IUserConfigManager {
   let scalars = { ...rawScalars };
   let config: UserConfig = {
     providers: [],
     models: [],
     mcpServers: [],
-    providerOverrides: {},
-    modelOverrides: {},
-    mcpServerOverrides: {},
     ...initial,
   };
 
@@ -50,9 +40,6 @@ function createMockUserConfigManager(
     save: async (c: UserConfig) => {
       config = { ...c };
     },
-    updateProviderOverride: async (id, override) => {
-      config.providerOverrides[id] = { ...config.providerOverrides[id], ...override };
-    },
     addProvider: async (p: Provider) => {
       const i = config.providers.findIndex((x) => x.id === p.id);
       if (i >= 0) config.providers[i] = p;
@@ -60,7 +47,6 @@ function createMockUserConfigManager(
     },
     removeProvider: async (id: string) => {
       config.providers = config.providers.filter((p) => p.id !== id);
-      delete config.providerOverrides[id];
     },
     addModel: async (m: Model) => {
       const i = config.models.findIndex((x) => x.id === m.id);
@@ -69,10 +55,6 @@ function createMockUserConfigManager(
     },
     removeModel: async (id: string) => {
       config.models = config.models.filter((m) => m.id !== id);
-      delete config.modelOverrides[id];
-    },
-    updateMCPServerOverride: async (id, override) => {
-      config.mcpServerOverrides[id] = { ...config.mcpServerOverrides[id], ...override };
     },
     addMCPServer: async (s: MCPServerPreset) => {
       const i = config.mcpServers.findIndex((x) => x.id === s.id);
@@ -81,16 +63,12 @@ function createMockUserConfigManager(
     },
     removeMCPServer: async (id: string) => {
       config.mcpServers = config.mcpServers.filter((s) => s.id !== id);
-      delete config.mcpServerOverrides[id];
     },
     clear: async () => {
       config = {
         providers: [],
         models: [],
         mcpServers: [],
-        providerOverrides: {},
-        modelOverrides: {},
-        mcpServerOverrides: {},
       };
     },
     loadRaw: () => ({
@@ -98,9 +76,6 @@ function createMockUserConfigManager(
       providers: config.providers,
       models: config.models,
       mcpServers: config.mcpServers,
-      providerOverrides: config.providerOverrides,
-      modelOverrides: config.modelOverrides,
-      mcpServerOverrides: config.mcpServerOverrides,
     }),
     loadRawResult: () => ({
       status: 'ok',
@@ -110,10 +85,9 @@ function createMockUserConfigManager(
         providers: config.providers,
         models: config.models,
         mcpServers: config.mcpServers,
-        providerOverrides: config.providerOverrides,
-        modelOverrides: config.modelOverrides,
-        mcpServerOverrides: config.mcpServerOverrides,
       } satisfies UnifiedConfig,
+      diagnostics: [],
+      providerCredentials: {},
     }),
     updateScalar: async (key, value) => {
       scalars = { ...scalars, [key]: value };
@@ -129,22 +103,58 @@ function createEmptyConfigManager(): ConfigManager {
   return new ConfigManager({ userConfigManager: createMockUserConfigManager() });
 }
 
-function createReadResultUserConfigManager(
-  result: ConfigReadResult | (() => ConfigReadResult),
-): IUserConfigManager {
-  const readResult = () => (typeof result === 'function' ? result() : result);
+function createMemoryAssistantRuntimeSettings(): AssistantRuntimeSettingsPort {
+  let state: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = {};
   return {
-    load: () => {
-      throw new Error('legacy load fallback should not be used');
+    snapshot: () => state,
+    commit: async (next) => {
+      state = { ...next };
     },
+    reset: async () => {
+      state = {};
+    },
+    diagnostic: () => undefined,
+  };
+}
+
+type TestConfigReadResult =
+  | ConfigReadResult
+  | {
+      readonly status: 'ok';
+      readonly filePath: string;
+      readonly config: UnifiedConfig;
+      readonly diagnostics?: Extract<ConfigReadResult, { readonly status: 'ok' }>['diagnostics'];
+      readonly providerCredentials?: Extract<
+        ConfigReadResult,
+        { readonly status: 'ok' }
+      >['providerCredentials'];
+    };
+
+function createReadResultUserConfigManager(
+  result: TestConfigReadResult | (() => TestConfigReadResult),
+): IUserConfigManager {
+  const readResult = (): ConfigReadResult => {
+    const current = typeof result === 'function' ? result() : result;
+    return current.status === 'ok'
+      ? {
+          ...current,
+          diagnostics: current.diagnostics ?? [],
+          providerCredentials: current.providerCredentials ?? {},
+        }
+      : current;
+  };
+  return {
+    load: () => ({
+      providers: [],
+      models: [],
+      mcpServers: [],
+    }),
     loadRaw: () => {
-      throw new Error('legacy raw fallback should not be used');
+      const current = readResult();
+      return current.status === 'ok' ? current.config : {};
     },
     loadRawResult: readResult,
     save: async () => {
-      throw new Error('write path should not be used');
-    },
-    updateProviderOverride: async () => {
       throw new Error('write path should not be used');
     },
     addProvider: async () => {
@@ -157,9 +167,6 @@ function createReadResultUserConfigManager(
       throw new Error('write path should not be used');
     },
     removeModel: async () => {
-      throw new Error('write path should not be used');
-    },
-    updateMCPServerOverride: async () => {
       throw new Error('write path should not be used');
     },
     addMCPServer: async () => {
@@ -238,28 +245,6 @@ describe('ConfigManager', () => {
       expect(manager.getProvider('anthropic')?.displayName).toBe('Anthropic');
       expect(manager.getModel('anthropic-claude-sonnet-4')).toBeDefined();
     });
-
-    it('should apply provider overrides', () => {
-      const ucm = createMockUserConfigManager({
-        providers: [SAMPLE_PROVIDER],
-        providerOverrides: { anthropic: { apiKey: 'sk-test-123' } },
-      });
-      const manager = new ConfigManager({ userConfigManager: ucm });
-      const provider = manager.getProvider('anthropic');
-
-      expect(provider?.apiKey).toBe('sk-test-123');
-    });
-
-    it('should apply model overrides', () => {
-      const ucm = createMockUserConfigManager({
-        models: [SAMPLE_MODEL],
-        modelOverrides: { 'anthropic-claude-sonnet-4': { enabled: false } },
-      });
-      const manager = new ConfigManager({ userConfigManager: ucm });
-      const model = manager.getModel('anthropic-claude-sonnet-4');
-
-      expect(model?.enabled).toBe(false);
-    });
   });
 
   describe('CRUD operations', () => {
@@ -294,12 +279,6 @@ describe('ConfigManager', () => {
       expect(manager.getProvider('anthropic')).toBeUndefined();
     });
 
-    it('should set provider API key', async () => {
-      await manager.setProviderApiKey('anthropic', 'sk-new-key');
-      const provider = manager.getProvider('anthropic');
-      expect(provider?.apiKey).toBe('sk-new-key');
-    });
-
     it('should add custom model', async () => {
       const model: Model = {
         id: 'custom-model',
@@ -317,76 +296,6 @@ describe('ConfigManager', () => {
       expect(manager.getModel('anthropic-claude-sonnet-4')).toBeDefined();
       await manager.removeModel('anthropic-claude-sonnet-4');
       expect(manager.getModel('anthropic-claude-sonnet-4')).toBeUndefined();
-    });
-
-    it('should import provider credentials from unified config files with later configs winning', async () => {
-      const result = await manager.importProviderCredentialsFromUnifiedConfigs([
-        {
-          providers: [
-            {
-              ...SAMPLE_PROVIDER,
-              apiKey: 'sk-user',
-            },
-            {
-              id: 'openai',
-              name: 'openai',
-              displayName: 'OpenAI',
-              type: 'openai',
-              apiUrl: 'https://api.openai.com/v1',
-              apiKey: 'sk-openai',
-              enabled: true,
-            },
-          ],
-        },
-        {
-          providers: [
-            {
-              ...SAMPLE_PROVIDER,
-              apiKey: 'sk-workspace',
-            },
-          ],
-        },
-      ]);
-
-      expect(manager.getProvider('anthropic')?.apiKey).toBe('sk-workspace');
-      expect(manager.getProvider('openai')?.apiKey).toBe('sk-openai');
-      expect(result.imported.map((item) => item.id)).toEqual(['anthropic', 'openai']);
-      expect(result.failed).toEqual([]);
-    });
-
-    it('should project provider credentials in memory without writing config files', async () => {
-      const ucm = createMockUserConfigManager({
-        providers: [SAMPLE_PROVIDER],
-      });
-      ucm.updateProviderOverride = async () => {
-        throw new Error('write path should not be used');
-      };
-      ucm.addProvider = async () => {
-        throw new Error('write path should not be used');
-      };
-      const failingManager = new ConfigManager({ userConfigManager: ucm });
-
-      const result = await failingManager.importProviderCredentialsFromUnifiedConfigs([
-        {
-          providers: [
-            { ...SAMPLE_PROVIDER, apiKey: 'sk-user' },
-            {
-              id: 'openai',
-              name: 'openai',
-              displayName: 'OpenAI',
-              type: 'openai',
-              apiUrl: 'https://api.openai.com/v1',
-              apiKey: 'sk-openai',
-              enabled: true,
-            },
-          ],
-        },
-      ]);
-
-      expect(result.imported.map((item) => item.id)).toEqual(['anthropic', 'openai']);
-      expect(result.failed).toEqual([]);
-      expect(failingManager.getProvider('anthropic')?.apiKey).toBe('sk-user');
-      expect(failingManager.getProvider('openai')?.apiKey).toBe('sk-openai');
     });
   });
 
@@ -424,30 +333,35 @@ describe('ConfigManager', () => {
       );
     });
 
-    it('surfaces unsupported provider protocol profile diagnostics', () => {
+    it('surfaces a local provider diagnostic without blocking valid siblings', () => {
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
-          status: 'unsupportedProviderProtocolProfile',
+          status: 'ok',
           filePath: '/tmp/neko/config.toml',
-          diagnostic: {
-            code: 'unsupportedProviderProtocolProfile',
-            filePath: '/tmp/neko/config.toml',
-            message: 'unsupported protocol_profile detail',
-            detail: 'Unsupported provider protocol_profile "deepseek"',
+          config: {
+            providers: [SAMPLE_PROVIDER],
+            models: [SAMPLE_MODEL],
           },
+          diagnostics: [
+            {
+              code: 'unsupportedProviderProtocolProfile',
+              filePath: '/tmp/neko/config.toml',
+              path: 'providers.invalid.protocol_profile',
+              message: 'invalid provider protocol profile',
+            },
+          ],
+          providerCredentials: {},
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'unsupportedProviderProtocolProfile',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Configuration file contains an unsupported provider protocol_profile: /tmp/neko/config.toml. Use newapi, openai-chat, openai-responses, anthropic, google, or ollama, then open a new Agent session or tab.',
-      });
-      expect(manager.getConfig().providers.size).toBe(0);
-      expect(() => manager.assertConfigAvailable()).toThrow(
-        'unsupported provider protocol_profile',
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'unsupportedProviderProtocolProfile',
+          path: 'providers.invalid.protocol_profile',
+        }),
       );
+      expect(manager.getConfig().providers.has('anthropic')).toBe(true);
+      expect(() => manager.assertConfigAvailable()).not.toThrow();
     });
 
     it('keeps missing config out of settings data until account-aware projection runs', () => {
@@ -462,7 +376,7 @@ describe('ConfigManager', () => {
         code: 'missingConfig',
         filePath: '/tmp/neko/config.toml',
         message:
-          'Agent configuration file is missing: /tmp/neko/config.toml. Create the config file with at least one enabled provider, chat model, and required provider credentials, then open a new Agent session or tab.',
+          'Agent configuration file is missing: /tmp/neko/config.toml. Create the config file with at least one enabled provider and chat model, then open a new Agent session or tab.',
       });
       expect(manager.getConfig().providers.size).toBe(0);
       expect(manager.getAssistantSettingsData().selectedProviderId).toBeNull();
@@ -500,7 +414,7 @@ describe('ConfigManager', () => {
         code: 'missingProvider',
         filePath: '/tmp/neko/config.toml',
         message:
-          'Agent configuration has no enabled providers: /tmp/neko/config.toml. Add at least one enabled provider with its required endpoint and credentials, then open a new Agent session or tab.',
+          'Agent configuration has no enabled providers: /tmp/neko/config.toml. Add at least one enabled provider with its endpoint, then open a new Agent session or tab.',
       });
       expect(manager.getAssistantSettingsData()).toEqual(
         expect.objectContaining({
@@ -567,31 +481,6 @@ describe('ConfigManager', () => {
             image: `${provider.id}:${imageModel.id}`,
           },
         }),
-      );
-    });
-
-    it('reports missing API keys for enabled chat models before model resolution', () => {
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [SAMPLE_PROVIDER],
-            models: [SAMPLE_MODEL],
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'missingApiKey',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Agent configuration has no configured enabled chat provider: /tmp/neko/config.toml. Add the required provider endpoint and credentials, then open a new Agent session or tab.',
-      });
-      expect(manager.getAssistantSettingsData().selectedProviderId).toBeNull();
-      expect(manager.getAssistantSettingsData().selectedModelId).toBeNull();
-      expect(() => manager.assertConfigAvailable()).toThrow(
-        'Agent configuration has no configured enabled chat provider',
       );
     });
 
@@ -728,55 +617,6 @@ describe('ConfigManager', () => {
       );
     });
 
-    it('lets valid type default llm binding supersede invalid legacy chat scalars', () => {
-      const localProvider: Provider = {
-        id: 'ollama-local',
-        name: 'ollama',
-        displayName: 'Ollama Local',
-        type: 'ollama',
-        apiUrl: 'http://localhost:11434/api',
-        enabled: true,
-        connectionKind: 'local',
-        protocolProfile: 'ollama',
-        requiresApiKey: false,
-      };
-      const localModel: Model = {
-        id: 'ollama-local-chat',
-        name: 'llama3.2',
-        providerId: 'ollama-local',
-        type: 'llm',
-        capabilities: ['chat'],
-        enabled: true,
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            defaultProvider: 'missing-provider',
-            defaultModel: 'missing-model',
-            providers: [localProvider],
-            models: [localModel],
-            defaultModels: {
-              llm: {
-                providerId: 'ollama-local',
-                modelId: 'ollama-local-chat',
-              },
-            },
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()).toBeUndefined();
-      expect(() => manager.assertConfigAvailable()).not.toThrow();
-      expect(manager.getAssistantSettingsData()).toEqual(
-        expect.objectContaining({
-          selectedProviderId: 'ollama-local',
-          selectedModelId: 'ollama-local-chat',
-        }),
-      );
-    });
-
     it('reports type default models that do not match the configured model type', () => {
       const localProvider: Provider = {
         id: 'ollama-local',
@@ -814,15 +654,13 @@ describe('ConfigManager', () => {
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultModelBinding',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Configuration file contains a default model binding that references an unavailable provider/model or mismatched capability: /tmp/neko/config.toml. Fix the default binding, then open a new Agent session or tab.',
-      });
-      expect(() => manager.assertConfigAvailable()).toThrow(
-        'Configuration file contains a default model binding',
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'invalidDefaultModelBinding',
+          path: 'default_models.video',
+        }),
       );
+      expect(() => manager.assertConfigAvailable()).not.toThrow();
     });
 
     it('resolves purpose-specific model bindings before capability fallback', () => {
@@ -836,7 +674,6 @@ describe('ConfigManager', () => {
         connectionKind: 'direct',
         protocolProfile: 'google',
         requiresApiKey: true,
-        apiKey: 'test-key',
       };
       const fastModel: Model = {
         id: 'gemini-flash',
@@ -997,7 +834,6 @@ describe('ConfigManager', () => {
         connectionKind: 'direct',
         protocolProfile: 'google',
         requiresApiKey: true,
-        apiKey: 'test-key',
       };
       const flashModel: Model = {
         id: 'gemini-flash',
@@ -1115,7 +951,6 @@ describe('ConfigManager', () => {
         connectionKind: 'direct',
         protocolProfile: 'google',
         requiresApiKey: true,
-        apiKey: 'test-key',
       };
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
@@ -1148,48 +983,13 @@ describe('ConfigManager', () => {
       expect(manager.resolveModelRefForPurpose('video.understand')).toBeUndefined();
     });
 
-    it('clears availability diagnostics after runtime credential projection', async () => {
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [SAMPLE_PROVIDER],
-            models: [SAMPLE_MODEL],
-          },
-        }),
-      });
-
-      expect(manager.getConfigDiagnostic()?.code).toBe('missingApiKey');
-
-      await manager.importProviderCredentialsFromUnifiedConfigs([
-        {
-          providers: [{ ...SAMPLE_PROVIDER, apiKey: 'sk-runtime' }],
-        },
-      ]);
-
-      expect(manager.getConfigDiagnostic()).toBeUndefined();
-      expect(manager.getAssistantDefaultProvider()).toEqual(
-        expect.objectContaining({
-          id: 'anthropic',
-          defaultModel: 'anthropic-claude-sonnet-4',
-          modelIds: ['anthropic-claude-sonnet-4'],
-        }),
-      );
-      expect(manager.getAssistantSettingsData()).toEqual(
-        expect.objectContaining({
-          selectedProviderId: null,
-          selectedModelId: null,
-        }),
-      );
-      expect(() => manager.assertConfigAvailable()).not.toThrow();
-    });
-
     it('refreshes only through explicit reloadConfig snapshots', () => {
       let current: ConfigReadResult = {
         status: 'ok',
         filePath: '<test-config>',
         config: { providers: [SAMPLE_PROVIDER], models: [SAMPLE_MODEL] },
+        diagnostics: [],
+        providerCredentials: {},
       };
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager(() => current),
@@ -1213,28 +1013,29 @@ describe('ConfigManager', () => {
       expect(manager.getConfigDiagnostic()?.code).toBe('invalidToml');
     });
 
-    it('drops runtime provider/model selection on config reload so file defaults route agent turns', async () => {
+    it('retains runtime provider/model selection across config reload', async () => {
       const deepseekProvider: Provider = {
         id: 'deepseek-chat',
         name: 'deepseek',
         displayName: 'DeepSeek',
         type: 'generic',
-        apiUrl: 'https://api.deepseek.com/v1',
+        apiUrl: 'https://api.deepseek.com/api',
         enabled: true,
         connectionKind: 'direct',
         protocolProfile: 'openai-chat',
         requiresApiKey: false,
       };
       const deepseekModel: Model = {
-        id: 'deepseek-v4-pro',
+        id: 'deepseek-pro',
         name: 'deepseek-chat',
-        displayName: 'DeepSeek V4 Pro',
+        displayName: 'DeepSeek Pro',
         providerId: 'deepseek-chat',
         type: 'llm',
         capabilities: ['chat'],
         enabled: true,
       };
       const manager = new ConfigManager({
+        assistantRuntimeSettings: createMemoryAssistantRuntimeSettings(),
         userConfigManager: createReadResultUserConfigManager({
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
@@ -1244,7 +1045,7 @@ describe('ConfigManager', () => {
             defaultModels: {
               llm: {
                 providerId: 'deepseek-chat',
-                modelId: 'deepseek-v4-pro',
+                modelId: 'deepseek-pro',
               },
             },
           },
@@ -1268,8 +1069,8 @@ describe('ConfigManager', () => {
 
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
         expect.objectContaining({
-          selectedProviderId: 'deepseek-chat',
-          selectedModelId: 'deepseek-v4-pro',
+          selectedProviderId: 'nekoapi-chat',
+          selectedModelId: 'gateway-chat',
           executionMode: 'auto',
         }),
       );
@@ -1281,22 +1082,23 @@ describe('ConfigManager', () => {
         name: 'deepseek',
         displayName: 'DeepSeek',
         type: 'generic',
-        apiUrl: 'https://api.deepseek.com/v1',
+        apiUrl: 'https://api.deepseek.com/api',
         enabled: true,
         connectionKind: 'direct',
         protocolProfile: 'openai-chat',
         requiresApiKey: false,
       };
       const deepseekModel: Model = {
-        id: 'deepseek-v4-pro',
+        id: 'deepseek-pro',
         name: 'deepseek-chat',
-        displayName: 'DeepSeek V4 Pro',
+        displayName: 'DeepSeek Pro',
         providerId: 'deepseek-chat',
         type: 'llm',
         capabilities: ['chat'],
         enabled: true,
       };
       const manager = new ConfigManager({
+        assistantRuntimeSettings: createMemoryAssistantRuntimeSettings(),
         userConfigManager: createReadResultUserConfigManager({
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
@@ -1306,7 +1108,7 @@ describe('ConfigManager', () => {
             defaultModels: {
               llm: {
                 providerId: 'deepseek-chat',
-                modelId: 'deepseek-v4-pro',
+                modelId: 'deepseek-pro',
               },
             },
           },
@@ -1325,44 +1127,76 @@ describe('ConfigManager', () => {
       expect(manager.getAssistantRuntimeSettingsSnapshot()).toEqual(
         expect.objectContaining({
           selectedProviderId: 'deepseek-chat',
-          selectedModelId: 'deepseek-v4-pro',
+          selectedModelId: 'deepseek-pro',
         }),
       );
     });
 
-    it('blocks conversation when selected default provider is unavailable', () => {
+    it('allows explicit reset when the runtime settings authority rejected its stored record', async () => {
+      let rejected = true;
+      const reset = vi.fn(async () => {
+        rejected = false;
+      });
+      const runtimeSettings: AssistantRuntimeSettingsPort = {
+        snapshot: () => ({}),
+        commit: async () => {
+          throw new Error('commit must remain unavailable while the stored record is invalid');
+        },
+        reset,
+        diagnostic: () =>
+          rejected
+            ? {
+                authority: 'neko.db#agent.runtime-settings:assistant-space:local-user',
+                message: 'Stored Agent runtime settings are invalid.',
+              }
+            : undefined,
+      };
+      const manager = new ConfigManager({
+        assistantRuntimeSettings: runtimeSettings,
+        userConfigManager: createMockUserConfigManager(),
+      });
+
+      await expect(manager.setAssistantSettings({ executionMode: 'plan' })).rejects.toThrow(
+        'Stored Agent runtime settings are invalid.',
+      );
+      await manager.resetAssistantSettings();
+
+      expect(reset).toHaveBeenCalledOnce();
+      expect(runtimeSettings.diagnostic()).toBeUndefined();
+    });
+
+    it('blocks conversation when the default chat binding provider is unavailable', () => {
       const validProvider: Provider = {
         ...SAMPLE_PROVIDER,
-        apiKey: 'sk-valid',
       };
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
           config: {
-            defaultProvider: 'missing-provider',
-            defaultModel: SAMPLE_MODEL.id,
+            defaultModels: {
+              llm: { providerId: 'missing-provider', modelId: SAMPLE_MODEL.id },
+            },
             providers: [validProvider],
             models: [SAMPLE_MODEL],
           },
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultProvider',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Agent configuration selects an unavailable default provider: /tmp/neko/config.toml. Fix default_provider, then open a new Agent session or tab.',
-      });
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'invalidDefaultModelBinding',
+          path: 'default_models.llm',
+        }),
+      );
       expect(() => manager.assertConfigAvailable()).toThrow(
         'Agent configuration selects an unavailable default provider',
       );
     });
 
-    it('blocks conversation when selected default model is not a chat model for the selected provider', () => {
+    it('blocks conversation when the default chat binding references a non-chat model', () => {
       const validProvider: Provider = {
         ...SAMPLE_PROVIDER,
-        apiKey: 'sk-valid',
       };
       const imageModel: Model = {
         id: 'anthropic-image',
@@ -1378,22 +1212,23 @@ describe('ConfigManager', () => {
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
           config: {
-            defaultProvider: 'anthropic',
-            defaultModel: imageModel.id,
+            defaultModels: {
+              llm: { providerId: 'anthropic', modelId: imageModel.id },
+            },
             providers: [validProvider],
             models: [SAMPLE_MODEL, imageModel],
           },
         }),
       });
 
-      expect(manager.getConfigDiagnostic()).toEqual({
-        code: 'invalidDefaultModel',
-        filePath: '/tmp/neko/config.toml',
-        message:
-          'Agent configuration selects an unavailable default chat model: /tmp/neko/config.toml. Fix default_model, then open a new Agent session or tab.',
-      });
+      expect(manager.getConfigDiagnostic()).toEqual(
+        expect.objectContaining({
+          code: 'invalidDefaultModelBinding',
+          path: 'default_models.llm',
+        }),
+      );
       expect(() => manager.assertConfigAvailable()).toThrow(
-        'Agent configuration selects an unavailable default chat model',
+        'Configuration file contains a default model binding',
       );
     });
 
@@ -1440,8 +1275,9 @@ describe('ConfigManager', () => {
           status: 'ok',
           filePath: '/tmp/neko/config.toml',
           config: {
-            defaultProvider: localProvider.id,
-            defaultModel: localModel.id,
+            defaultModels: {
+              llm: { providerId: localProvider.id, modelId: localModel.id },
+            },
             providers: [localProvider, invalidProvider],
             models: [localModel, brokenModel],
           },
@@ -1479,7 +1315,7 @@ describe('ConfigManager', () => {
               name: 'openai',
               displayName: 'OpenAI',
               type: 'openai',
-              apiUrl: 'https://api.openai.com/v1',
+              apiUrl: 'https://api.openai.com/api',
               enabled: false,
             },
           ],
@@ -1572,10 +1408,11 @@ describe('ConfigManager', () => {
         userConfigManager: createMockUserConfigManager({ providers: [SAMPLE_PROVIDER] }),
       });
       const config1 = manager.getConfig();
-      await manager.setProviderApiKey('anthropic', 'new-key');
+      await manager.setProvider({ ...SAMPLE_PROVIDER, enabled: false });
       const config2 = manager.getConfig();
 
       expect(config1).not.toBe(config2);
+      expect(config2.providers.get('anthropic')?.enabled).toBe(false);
     });
   });
 

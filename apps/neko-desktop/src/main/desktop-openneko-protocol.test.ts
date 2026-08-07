@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -16,6 +16,8 @@ describe('Desktop OpenNeko protocol handler', () => {
     rendererRoot = await mkdtemp(path.join(tmpdir(), 'desktop-openneko-protocol-'));
     await writeFile(path.join(rendererRoot, 'index.html'), '<main>OpenNeko</main>');
     await writeFile(path.join(rendererRoot, 'pdf.worker.mjs'), 'export default true;');
+    await mkdir(path.join(rendererRoot, 'assets'));
+    await writeFile(path.join(rendererRoot, 'assets', 'codicon.ttf'), 'font-bytes');
     const handleResource = vi.fn(async () => new Response('resource-bytes'));
     const handle = createDesktopOpenNekoProtocolHandler(rendererRoot, {
       handle: handleResource,
@@ -29,6 +31,11 @@ describe('Desktop OpenNeko protocol handler', () => {
     );
     const workerResponse = await handle(new Request('openneko://desktop/pdf.worker.mjs'));
     expect(workerResponse.headers.get('Content-Type')).toBe('text/javascript; charset=utf-8');
+    const fontResponse = await handle(
+      new Request('openneko://desktop/assets/codicon.ttf'),
+    );
+    expect(fontResponse.status).toBe(200);
+    expect(fontResponse.headers.get('Content-Type')).toBe('font/ttf');
 
     const resourceRequest = new Request('openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     expect(await (await handle(resourceRequest)).text()).toBe('resource-bytes');
@@ -49,12 +56,10 @@ describe('Desktop OpenNeko protocol handler', () => {
   });
 
   it.each([
-    'neko-app://desktop/index.html',
-    'neko-media://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    'opennekomedia://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    'http://127.0.0.1:43125/index.html',
-    'openneko://desktop/index.html?legacy=1',
-  ])('poisons replaced or non-canonical protocol URL %s', async (url) => {
+    'https://desktop.invalid/index.html',
+    'openneko://desktop/index.html?unexpected=1',
+    'openneko://desktop/assets/codicon.ttf?721d4c0a96379d0c13d3d5596893c348',
+  ])('rejects non-canonical protocol URL %s', async (url) => {
     rendererRoot = await mkdtemp(path.join(tmpdir(), 'desktop-openneko-protocol-'));
     await writeFile(path.join(rendererRoot, 'index.html'), '<main>unexpected</main>');
     const handleResource = vi.fn(async () => new Response('unexpected'));

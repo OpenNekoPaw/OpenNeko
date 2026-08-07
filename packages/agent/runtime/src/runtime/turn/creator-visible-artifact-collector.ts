@@ -15,7 +15,7 @@ import { extractCompositeContentFenceCandidates } from '@neko/agent-contracts';
 
 export interface CreatorVisibleArtifactCandidate {
   readonly artifactId: string;
-  readonly revision: string;
+  readonly contentFingerprint: string;
   readonly role: 'source' | 'analysis' | 'output';
   readonly kind: Exclude<CanvasWorkspaceProjectionKind, 'markdown'> | 'markdown';
   readonly title: string;
@@ -65,12 +65,7 @@ export function collectCreatorVisibleArtifacts(
     for (const attachment of result.attachments ?? []) {
       const contentLocator = attachment.contentLocator ?? attachment.assetRef?.contentLocator;
       if (!contentLocator) {
-        if (attachment.path !== undefined) {
-          throw new Error(
-            'creator-visible-artifact-migration-required: Tool attachment requires contentLocator.',
-          );
-        }
-        continue;
+        throw new Error('Creator-visible Tool attachment requires contentLocator.');
       }
       if (!isContentLocator(contentLocator)) {
         throw new Error('Creator-visible Tool attachment contains an invalid contentLocator.');
@@ -82,7 +77,7 @@ export function collectCreatorVisibleArtifacts(
       const intrinsicDimensions = imageDimensions.get(contentLocatorKey(contentLocator));
       const candidate: CreatorVisibleArtifactCandidate = {
         artifactId: attachment.assetRef?.assetId ?? sourceId,
-        revision: createContentRevision(contentLocator),
+        contentFingerprint: createContentFingerprint(contentLocator),
         role: nativeImageAnalysisKind || input.consumedContentSourceIds ? 'source' : 'output',
         kind: attachment.type,
         title: attachment.assetRef?.label ?? `${attachment.type} result`,
@@ -101,7 +96,7 @@ export function collectCreatorVisibleArtifacts(
   for (const lifecycle of input.generatedLifecycles ?? []) {
     candidates.push({
       artifactId: lifecycle.assetId,
-      revision: lifecycle.revision,
+      contentFingerprint: lifecycle.revision,
       role: 'output',
       kind: lifecycle.mediaKind,
       title: `Generated ${lifecycle.mediaKind}`,
@@ -153,7 +148,7 @@ function collectNativeImageAnalysisArtifact(
   const artifactId = `read-image-analysis:${hashStableValue(identity)}`;
   return {
     artifactId,
-    revision: `markdown:${hashStableValue(identity)}`,
+    contentFingerprint: `markdown:${hashStableValue(identity)}`,
     role: 'analysis',
     kind: 'markdown',
     title: nativeImageAnalysisTitle(analysisKinds),
@@ -205,12 +200,7 @@ function collectReadImageDimensions(
     if (!isRecord(image)) continue;
     const contentLocator = image['contentLocator'];
     if (!isContentLocator(contentLocator)) {
-      if (image['resourceRef'] !== undefined || image['documentResourceRef'] !== undefined) {
-        throw new Error(
-          'creator-visible-artifact-migration-required: ReadImage output requires contentLocator.',
-        );
-      }
-      continue;
+      throw new Error('Creator-visible ReadImage output entry requires a valid contentLocator.');
     }
     const width = readPositiveFiniteNumber(image['width']);
     const height = readPositiveFiniteNumber(image['height']);
@@ -251,7 +241,7 @@ function collectCompositeMarkdownArtifact(
   const sourceArtifactIds = readSourceArtifactIds(value['provenance']);
   return {
     artifactId,
-    revision: `markdown:${hashStableValue({ artifact: value, markdown })}`,
+    contentFingerprint: `markdown:${hashStableValue({ artifact: value, markdown })}`,
     role: 'analysis',
     kind: 'markdown',
     title,
@@ -316,17 +306,12 @@ function collectReadDocumentSource(data: unknown): CreatorVisibleArtifactCandida
   if (!isRecord(data)) return undefined;
   const contentLocator = data['contentLocator'];
   if (!isContentLocator(contentLocator)) {
-    if (data['resourceRef'] !== undefined || data['documentResourceRef'] !== undefined) {
-      throw new Error(
-        'creator-visible-artifact-migration-required: ReadDocument output requires contentLocator.',
-      );
-    }
-    return undefined;
+    throw new Error('Creator-visible ReadDocument output requires a valid contentLocator.');
   }
   const id = createContentSourceId(contentLocator);
   return {
     artifactId: id,
-    revision: createContentRevision(contentLocator),
+    contentFingerprint: createContentFingerprint(contentLocator),
     role: 'source',
     kind: 'file-reference',
     title: createContentTitle(contentLocator),
@@ -351,9 +336,10 @@ function createContentSourceId(locator: ContentLocator): string {
   return `content:${hashStableValue(contentLocatorKey(locator))}`;
 }
 
-function createContentRevision(locator: ContentLocator): string {
+function createContentFingerprint(locator: ContentLocator): string {
   switch (locator.kind) {
     case 'generated-output':
+      return locator.digest;
     case 'package-resource':
       return locator.revision;
     case 'workspace-file':
@@ -406,7 +392,7 @@ function deduplicateCandidates(
       retained.push(candidate);
       continue;
     }
-    const identity = `${candidate.artifactId}:${candidate.revision}`;
+    const identity = `${candidate.artifactId}:${candidate.contentFingerprint}`;
     if (seen.has(identity)) continue;
     seen.add(identity);
     retained.push(candidate);

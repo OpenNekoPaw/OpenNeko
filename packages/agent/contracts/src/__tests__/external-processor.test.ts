@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXTERNAL_PROCESSOR_SCHEMA,
-  EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   createExternalProcessorRegistry,
   isExternalProcessorRootAlias,
   matchesExternalProcessorSecretEnvPattern,
@@ -16,7 +15,6 @@ import {
 
 const validManifest = {
   schema: EXTERNAL_PROCESSOR_SCHEMA,
-  schemaVersion: EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   id: 'upscale-image',
   kind: 'external-processor',
   displayName: 'Upscale Image',
@@ -56,36 +54,16 @@ describe('external processor contract', () => {
     expect(result.manifest).toEqual(validManifest);
   });
 
-  it('rejects unknown schema and schema version', () => {
+  it('rejects an unknown schema and an unknown manifest field', () => {
     const result = validateExternalProcessorManifest({
       ...validManifest,
       schema: 'example.processor',
-      schemaVersion: 99,
+      unexpectedField: 99,
     });
 
     expect(result.manifest).toBeUndefined();
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining(['unknown-schema', 'unknown-schema-version']),
-    );
-  });
-
-  it('rejects legacy resourceCache output policy instead of migrating it implicitly', () => {
-    const result = validateExternalProcessorManifest({
-      ...validManifest,
-      schemaVersion: 1,
-      outputs: {
-        image: { produces: ['image/png'], root: 'resourceCache' },
-      },
-      policy: {
-        ...validManifest.policy,
-        allowedInputRoots: ['workspace', 'resourceCache'],
-        allowedOutputRoots: ['resourceCache'],
-      },
-    });
-
-    expect(result.manifest).toBeUndefined();
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining(['unknown-schema-version', 'invalid-root-alias']),
+      expect.arrayContaining(['unknown-schema', 'invalid-manifest']),
     );
   });
 
@@ -155,7 +133,6 @@ describe('external processor contract', () => {
   });
 
   it('exposes root alias and secret env helpers', () => {
-    expect(isExternalProcessorRootAlias('resourceCache')).toBe(false);
     expect(isExternalProcessorRootAlias('pluginPrivateResources')).toBe(true);
     expect(isExternalProcessorRootAlias('tmp')).toBe(false);
     expect(matchesExternalProcessorSecretEnvPattern('NPM_TOKEN')).toBe(true);
@@ -164,11 +141,11 @@ describe('external processor contract', () => {
 });
 
 describe('external processor registry', () => {
-  it('upserts registrations and emits revisioned lifecycle events', () => {
+  it('upserts registrations and emits owner-qualified lifecycle events', () => {
     const registry = createExternalProcessorRegistry();
     const events: string[] = [];
     registry.onDidChange((event) => {
-      events.push(`${event.revision}:${event.kind}:${event.registrationId}`);
+      events.push(`${event.kind}:${event.registrationId}`);
     });
 
     const first = registry.upsert(
@@ -176,7 +153,7 @@ describe('external processor registry', () => {
         sourceScope: 'project',
         agentCapabilitySource: 'local',
         sourceId: 'workspace',
-        locationRef: '.neko/processors/upscale.neko-processor.json',
+        locationRef: 'neko/processors/upscale.neko-processor.json',
       },
       validManifest,
     );
@@ -189,13 +166,11 @@ describe('external processor registry', () => {
       { ...validManifest, version: '1.0.1' },
     );
 
-    expect(first.revision).toBe(1);
-    expect(updated.revision).toBe(2);
     expect(first.version).toBe('1.0.0');
     expect(updated.version).toBe('1.0.1');
     expect(events).toEqual([
-      '1:registered:project:workspace:upscale-image',
-      '2:updated:project:workspace:upscale-image',
+      'registered:project:workspace:upscale-image',
+      'updated:project:workspace:upscale-image',
     ]);
   });
 
@@ -261,12 +236,14 @@ describe('external processor registry', () => {
 
     registry.upsert(
       { sourceScope: 'project', agentCapabilitySource: 'local', sourceId: 'workspace-1' },
-      { ...validManifest, version: '1.2.0' },
+      { ...validManifest, displayName: 'Updated Upscale Image' },
     );
 
-    expect(runningSnapshot).toEqual(expect.objectContaining({ revision: 1, version: '1.0.0' }));
+    expect(runningSnapshot.manifest.displayName).toBe('Upscale Image');
     expect(registry.resolve('upscale-image')).toEqual(
-      expect.objectContaining({ revision: 2, version: '1.2.0' }),
+      expect.objectContaining({
+        manifest: expect.objectContaining({ displayName: 'Updated Upscale Image' }),
+      }),
     );
   });
 
@@ -322,14 +299,14 @@ describe('external processor registry', () => {
     );
   });
 
-  it('projects project manifests from .neko/processors files', () => {
+  it('projects project manifests from canonical processor files', () => {
     const registry = createExternalProcessorRegistry();
     const result = registerProjectExternalProcessorManifests({
       registry,
       workspaceSourceId: 'workspace-1',
       files: [
         {
-          path: '.neko/processors/upscale.neko-processor.json',
+          path: 'neko/processors/upscale.neko-processor.json',
           contents: JSON.stringify(validManifest),
         },
       ],
@@ -342,7 +319,7 @@ describe('external processor registry', () => {
         sourceScope: 'project',
         agentCapabilitySource: 'local',
         trustLevel: 'untrusted',
-        locationRef: '.neko/processors/upscale.neko-processor.json',
+        locationRef: 'neko/processors/upscale.neko-processor.json',
       }),
     );
   });
@@ -352,7 +329,7 @@ describe('external processor registry', () => {
     const result = registerProjectExternalProcessorManifests({
       registry,
       workspaceSourceId: 'workspace-1',
-      files: [{ path: '.neko/processors/bad.neko-processor.json', contents: '{' }],
+      files: [{ path: 'neko/processors/bad.neko-processor.json', contents: '{' }],
     });
 
     expect(result.registrations).toEqual([]);
@@ -360,7 +337,7 @@ describe('external processor registry', () => {
       expect.objectContaining({
         code: 'invalid-manifest',
         details: expect.objectContaining({
-          locationRef: '.neko/processors/bad.neko-processor.json',
+          locationRef: 'neko/processors/bad.neko-processor.json',
         }),
       }),
     ]);

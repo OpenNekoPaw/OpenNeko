@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import {
   captureDesktopScreenshot,
@@ -7,15 +10,100 @@ import {
   createProcessController,
   dragDesktopElement,
   pressDesktopKey,
+  readDesktopRendererResources,
   scrollDesktopElement,
   typeDesktopText,
 } from '../desktop-functional/runner.mjs';
 import {
+  readLatestVisibleAgentLifecycleState,
+  resolveVisibleAgentProviderAuthorization,
+} from '../desktop-functional/desktop-agent-provider-ui.mjs';
+import {
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
 } from '../desktop-functional/scenario-contract.mjs';
-
+import { createDesktopUiFunctionalLaunch } from '../run-desktop-ui-functional.mjs';
 describe('Desktop automated functional runner contract', () => {
+  it('keeps Agent Evaluation on the shared isolated Desktop runner', async () => {
+    const source = await readFile(
+      new URL('../agent-eval/runner/run-case.mjs', import.meta.url),
+      'utf8',
+    );
+
+    assert.match(
+      source,
+      /import \{ runAutomatedDesktopFunctional \} from '\.\.\/\.\.\/desktop-functional\/runner\.mjs';/u,
+    );
+    assert.match(
+      source,
+      /const runDesktop = options\.runDesktop \?\? runAutomatedDesktopFunctional;/u,
+    );
+  });
+
+  it('requires explicit provider, model, and cost authorization for visible Agent UI', () => {
+    assert.deepEqual(
+      resolveVisibleAgentProviderAuthorization(
+        {
+          OPENNEKO_AGENT_EVAL_PROVIDER_ID: 'provider-1',
+          OPENNEKO_AGENT_EVAL_MODEL_ID: 'model-1',
+          OPENNEKO_AGENT_EVAL_COST_APPROVED: 'true',
+        },
+        '/Users/fixture',
+      ),
+      {
+        providerId: 'provider-1',
+        modelId: 'model-1',
+        configurationFile: '/Users/fixture/.neko/config.toml',
+      },
+    );
+    assert.throws(
+      () =>
+        resolveVisibleAgentProviderAuthorization(
+          {
+            OPENNEKO_AGENT_EVAL_PROVIDER_ID: 'provider-1',
+            OPENNEKO_AGENT_EVAL_MODEL_ID: 'model-1',
+            OPENNEKO_AGENT_EVAL_COST_APPROVED: 'false',
+          },
+          '/Users/fixture',
+        ),
+      /cost authorization is not approved/u,
+    );
+  });
+
+  it('treats an uninitialized lifecycle database as pending without hiding query failures', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'openneko-visible-agent-lifecycle-'));
+    const databasePath = join(fixtureRoot, 'neko.db');
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(databasePath);
+    try {
+      assert.equal(await readLatestVisibleAgentLifecycleState(databasePath), undefined);
+      database.exec(`CREATE TABLE agent_conversation_lifecycle (snapshot_json TEXT NOT NULL)`);
+      database
+        .prepare(`INSERT INTO agent_conversation_lifecycle (snapshot_json) VALUES (?)`)
+        .run(JSON.stringify({ pendingTurn: { status: 'failed' } }));
+      assert.equal(await readLatestVisibleAgentLifecycleState(databasePath), undefined);
+      database.exec(`CREATE TABLE agent_conversation_records (payload_json TEXT NOT NULL)`);
+      database.prepare(`INSERT INTO agent_conversation_records (payload_json) VALUES (?)`).run(
+        JSON.stringify({
+          conversationId: 'conversation-1',
+          pendingTurn: {
+            turnId: 'turn-1',
+            status: 'completed',
+          },
+        }),
+      );
+      assert.deepEqual(await readLatestVisibleAgentLifecycleState(databasePath), {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        diagnostic: undefined,
+      });
+    } finally {
+      database.close();
+      await rm(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it('launches development Electron with isolated workspace and CDP control', () => {
     const launch = createAutomatedDesktopLaunch({
       platform: 'darwin',
@@ -42,6 +130,47 @@ describe('Desktop automated functional runner contract', () => {
       OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT:
         '/tmp/openneko-desktop-functional-cut/workspace/exports/functional-cut-export.mp4',
     });
+  });
+
+  it('rejects functional launch paths that can reach user storage', () => {
+    const base = {
+      platform: 'darwin',
+      target: 'development',
+      fixtureHome: '/tmp/openneko-desktop-functional-storage',
+      userDataRoot: '/tmp/openneko-desktop-functional-storage/electron-user-data',
+      workspacePath: '/tmp/openneko-desktop-functional-storage/workspace',
+      debugPort: 43128,
+    };
+
+    assert.throws(
+      () => createAutomatedDesktopLaunch({ ...base, fixtureHome: '/Users/example' }),
+      /unsafe directory name/u,
+    );
+    assert.throws(
+      () =>
+        createAutomatedDesktopLaunch({
+          ...base,
+          userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
+        }),
+      /Electron userData must remain inside its fixture home/u,
+    );
+    assert.throws(
+      () =>
+        createAutomatedDesktopLaunch({
+          ...base,
+          workspacePath: '/Users/example/OpenNekoProjects/user-project',
+        }),
+      /Workspace must remain inside its fixture home/u,
+    );
+    assert.throws(
+      () =>
+        createDesktopUiFunctionalLaunch({
+          platform: 'darwin',
+          fixtureHome: base.fixtureHome,
+          userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
+        }),
+      /Electron userData must remain inside its fixture home/u,
+    );
   });
 
   it('launches the current native packaged application directly', () => {
@@ -142,6 +271,7 @@ describe('Desktop automated functional runner contract', () => {
       platform: 'darwin',
     });
     await pressDesktopKey(cdp, 'Enter', ['Shift']);
+    await pressDesktopKey(cdp, 'End');
     await scrollDesktopElement(cdp, '[data-testid="timeline"]', 0, { deltaY: 240 });
     await dragDesktopElement(cdp, '[data-testid="clip"]', '[data-testid="track"]');
     const screenshot = await captureDesktopScreenshot(cdp);
@@ -162,6 +292,8 @@ describe('Desktop automated functional runner contract', () => {
         ['keyUp', 'Backspace', 0],
         ['keyDown', 'Enter', 8],
         ['keyUp', 'Enter', 8],
+        ['keyDown', 'End', 0],
+        ['keyUp', 'End', 0],
       ],
     );
     assert.deepEqual(
@@ -193,10 +325,50 @@ describe('Desktop automated functional runner contract', () => {
         ['mouseReleased', 0],
       ],
     );
+    assert.equal(
+      calls.filter(
+        (call) => call.method === 'Input.dispatchMouseEvent' && call.params.type === 'mouseMoved',
+      ).length,
+      10,
+    );
     assert.deepEqual(calls.at(-1), {
       method: 'Page.captureScreenshot',
       params: { format: 'png', fromSurface: true, captureBeyondViewport: false },
     });
+  });
+
+  it('captures exact Renderer DOM and heap resource counters through CDP', async () => {
+    const calls = [];
+    const cdp = {
+      async send(method) {
+        calls.push(method);
+        if (method === 'Memory.getDOMCounters') {
+          return { documents: 2, nodes: 320, jsEventListeners: 41 };
+        }
+        if (method === 'Performance.getMetrics') {
+          return {
+            metrics: [
+              { name: 'JSHeapUsedSize', value: 12_000_000 },
+              { name: 'JSHeapTotalSize', value: 24_000_000 },
+            ],
+          };
+        }
+        return {};
+      },
+    };
+
+    assert.deepEqual(await readDesktopRendererResources(cdp), {
+      documents: 2,
+      nodes: 320,
+      jsEventListeners: 41,
+      jsHeapUsedBytes: 12_000_000,
+      jsHeapTotalBytes: 24_000_000,
+    });
+    assert.deepEqual(calls, [
+      'Performance.enable',
+      'Memory.getDOMCounters',
+      'Performance.getMetrics',
+    ]);
   });
 
   it('fails visibly for invalid keyboard and scroll requests', async () => {

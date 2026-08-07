@@ -30,8 +30,6 @@ import type { PerceptionCard, PerceptionEvidenceEntry } from './perception-card'
 import type { CharacterReferenceRef, ShotReferenceBundle } from './shot-image-prep';
 import type { StoryboardMediaRef } from '@neko/canvas-domain';
 
-export const COMIC_ANIMATION_INDEXING_SCHEMA_VERSION = 1 as const;
-
 export interface MediaBoundingBox {
   readonly x: number;
   readonly y: number;
@@ -225,7 +223,7 @@ export type ComicAnimationPathSegment = CharacterMemoryPathSegment;
 
 export type ComicAnimationDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-schema-version'
+  | 'unsupported-field'
   | 'invalid-kind'
   | 'missing-required-field'
   | 'invalid-required-field'
@@ -283,7 +281,7 @@ export interface IndexTaskState {
   readonly task: ComicAnimationIndexTask;
   readonly status: IndexTaskStatus;
   readonly providerId?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly sourceHash?: string;
   readonly confidence?: number;
   readonly cacheKey?: string;
@@ -297,7 +295,6 @@ export interface IndexTaskState {
 }
 
 export interface IndexedRangeState {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof INDEXED_RANGE_STATE_KIND;
   readonly rangeId: string;
   readonly assetId: string;
@@ -310,7 +307,6 @@ export interface IndexedRangeState {
 }
 
 export interface VisualOccurrence {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof VISUAL_OCCURRENCE_KIND;
   readonly occurrenceId: string;
   readonly sourceRef: CharacterMemorySourceRef;
@@ -322,7 +318,7 @@ export interface VisualOccurrence {
   readonly candidateIds?: readonly string[];
   readonly appearanceText?: string;
   readonly providerId?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly confidence?: number;
   readonly reviewState?: ComicAnimationReviewState;
   readonly diagnostics?: readonly ComicAnimationDiagnostic[];
@@ -340,8 +336,7 @@ export interface PerceptionCapabilityFacet {
   readonly cachePolicy: PerceptionCachePolicy;
   readonly confidenceKind: PerceptionConfidenceKind;
   readonly approvalRequired?: boolean;
-  readonly providerVersion?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly unavailableReason?: string;
   readonly metadata?: ComicAnimationJsonRecord;
 }
@@ -357,7 +352,6 @@ export interface StoryPositionRef {
 }
 
 export interface PlotEvent {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof PLOT_EVENT_KIND;
   readonly eventId: string;
   readonly summary: string;
@@ -373,7 +367,6 @@ export interface PlotEvent {
 }
 
 export interface CharacterStateChange {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof CHARACTER_STATE_CHANGE_KIND;
   readonly changeId: string;
   readonly characterRef: CreativeEntityRef;
@@ -392,7 +385,6 @@ export interface CharacterStateChange {
 }
 
 export interface ContinuityConstraint {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof CONTINUITY_CONSTRAINT_KIND;
   readonly constraintId: string;
   readonly type: ContinuityConstraintType;
@@ -426,7 +418,6 @@ export interface StoryContinuityQuery {
 }
 
 export interface StoryContinuitySnapshot {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof STORY_CONTINUITY_SNAPSHOT_KIND;
   readonly snapshotId: string;
   readonly query: StoryContinuityQuery;
@@ -492,7 +483,6 @@ export interface BatchExecutionItem {
 }
 
 export interface BatchExecutionPlan {
-  readonly schemaVersion: typeof COMIC_ANIMATION_INDEXING_SCHEMA_VERSION;
   readonly kind: typeof BATCH_EXECUTION_PLAN_KIND;
   readonly planId: string;
   readonly sourceArtifactRefs?: readonly string[];
@@ -529,7 +519,7 @@ export interface ProjectVisualOccurrenceFromEvidenceInput {
   readonly candidateIds?: readonly string[];
   readonly appearanceText?: string;
   readonly providerId?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
   readonly confidence?: number;
   readonly facet?: PerceptionCapabilityFacet;
   readonly metadata?: ComicAnimationJsonRecord;
@@ -643,8 +633,7 @@ export function createLocalPerceptionCapabilityFacet(input: {
   readonly confidenceKind?: PerceptionConfidenceKind;
   readonly cachePolicy?: PerceptionCachePolicy;
   readonly approvalRequired?: boolean;
-  readonly providerVersion?: string;
-  readonly modelVersion?: string;
+  readonly modelId?: string;
 }): PerceptionCapabilityFacet {
   return {
     providerId: input.providerId,
@@ -657,8 +646,7 @@ export function createLocalPerceptionCapabilityFacet(input: {
     cachePolicy: input.cachePolicy ?? 'recommended',
     confidenceKind: input.confidenceKind ?? 'provider-score',
     ...(input.approvalRequired !== undefined ? { approvalRequired: input.approvalRequired } : {}),
-    ...(input.providerVersion ? { providerVersion: input.providerVersion } : {}),
-    ...(input.modelVersion ? { modelVersion: input.modelVersion } : {}),
+    ...(input.modelId ? { modelId: input.modelId } : {}),
   };
 }
 
@@ -784,7 +772,6 @@ export function projectPerceptionCardToIndexedRangeState(
   const tasks = input.tasks ?? perceptionCardTasks(input.card);
   const rangeId = input.rangeId ?? `${input.card.assetId}:${input.rangeKind ?? 'asset'}`;
   return {
-    schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
     kind: INDEXED_RANGE_STATE_KIND,
     rangeId,
     assetId: input.card.assetId,
@@ -821,7 +808,6 @@ export function projectVisualOccurrenceFromEvidence(
       })
     : [];
   return {
-    schemaVersion: COMIC_ANIMATION_INDEXING_SCHEMA_VERSION,
     kind: VISUAL_OCCURRENCE_KIND,
     occurrenceId: input.occurrenceId,
     sourceRef: input.sourceRef,
@@ -833,7 +819,7 @@ export function projectVisualOccurrenceFromEvidence(
     ...(input.candidateIds ? { candidateIds: input.candidateIds } : {}),
     ...(input.appearanceText ? { appearanceText: input.appearanceText } : {}),
     ...(input.providerId ? { providerId: input.providerId } : {}),
-    ...(input.modelVersion ? { modelVersion: input.modelVersion } : {}),
+    ...(input.modelId ? { modelId: input.modelId } : {}),
     ...(input.confidence !== undefined ? { confidence: input.confidence } : {}),
     reviewState,
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
@@ -909,7 +895,6 @@ export function buildComicAnimationReviewArtifact(input: {
     });
   }
   return {
-    schemaVersion: 1,
     kind: 'composite-artifact',
     artifactId: input.artifactId,
     profile: 'comic-animation-review',
@@ -924,7 +909,6 @@ export function buildVisualOccurrenceReviewTable(
   options: { readonly tableId?: string; readonly title?: string } = {},
 ): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? 'visual-occurrence-review',
     profile: 'comic-visual-occurrence-review',
@@ -939,7 +923,6 @@ export function buildBatchExecutionReviewTable(
   options: { readonly tableId?: string; readonly title?: string } = {},
 ): GenericTable {
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? `${plan.planId}-review`,
     profile: 'batch-execution-review',
@@ -959,7 +942,6 @@ export function buildContinuityDiagnosticsReviewTable(
     ...(snapshot.unresolvedQuestions ?? []).map(projectUnresolvedQuestionToRow),
   ];
   return {
-    schemaVersion: 1,
     kind: 'generic-table',
     tableId: options.tableId ?? `${snapshot.snapshotId}-continuity-review`,
     profile: 'story-continuity-diagnostics-review',
@@ -1069,7 +1051,7 @@ function validateIndexedRangeStateValue(
     );
     return;
   }
-  validateEnvelope(value, path, INDEXED_RANGE_STATE_KIND, diagnostics);
+  validateEnvelope(value, path, INDEXED_RANGE_STATE_KIND, INDEXED_RANGE_STATE_FIELDS, diagnostics);
   requireString(value['rangeId'], [...path, 'rangeId'], diagnostics);
   requireString(value['assetId'], [...path, 'assetId'], diagnostics);
   validateIndexedRangeRef(value['rangeRef'], [...path, 'rangeRef'], diagnostics, options);
@@ -1142,7 +1124,7 @@ function validateVisualOccurrenceValue(
     );
     return;
   }
-  validateEnvelope(value, path, VISUAL_OCCURRENCE_KIND, diagnostics);
+  validateEnvelope(value, path, VISUAL_OCCURRENCE_KIND, VISUAL_OCCURRENCE_FIELDS, diagnostics);
   requireString(value['occurrenceId'], [...path, 'occurrenceId'], diagnostics);
   validateSourceRef(value['sourceRef'], [...path, 'sourceRef'], diagnostics, options);
   validateBoundingBox(value['boundingBox'], [...path, 'boundingBox'], diagnostics);
@@ -1275,7 +1257,7 @@ function validatePlotEventValue(
     diagnostics.push(diagnostic('error', 'invalid-root', path, 'Plot event must be an object.'));
     return;
   }
-  validateEnvelope(value, path, PLOT_EVENT_KIND, diagnostics);
+  validateEnvelope(value, path, PLOT_EVENT_KIND, PLOT_EVENT_FIELDS, diagnostics);
   requireString(value['eventId'], [...path, 'eventId'], diagnostics);
   requireString(value['summary'], [...path, 'summary'], diagnostics);
   validateStoryPosition(value['storyPosition'], [...path, 'storyPosition'], diagnostics);
@@ -1301,7 +1283,13 @@ function validateCharacterStateChangeValue(
     );
     return;
   }
-  validateEnvelope(value, path, CHARACTER_STATE_CHANGE_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    CHARACTER_STATE_CHANGE_KIND,
+    CHARACTER_STATE_CHANGE_FIELDS,
+    diagnostics,
+  );
   requireString(value['changeId'], [...path, 'changeId'], diagnostics);
   validateCreativeEntityRef(
     value['characterRef'],
@@ -1329,7 +1317,13 @@ function validateContinuityConstraintValue(
     );
     return;
   }
-  validateEnvelope(value, path, CONTINUITY_CONSTRAINT_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    CONTINUITY_CONSTRAINT_KIND,
+    CONTINUITY_CONSTRAINT_FIELDS,
+    diagnostics,
+  );
   requireString(value['constraintId'], [...path, 'constraintId'], diagnostics);
   if (!isContinuityConstraintType(value['type'])) {
     diagnostics.push(
@@ -1358,7 +1352,13 @@ function validateStoryContinuitySnapshotValue(
     );
     return;
   }
-  validateEnvelope(value, path, STORY_CONTINUITY_SNAPSHOT_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    STORY_CONTINUITY_SNAPSHOT_KIND,
+    STORY_CONTINUITY_SNAPSHOT_FIELDS,
+    diagnostics,
+  );
   requireString(value['snapshotId'], [...path, 'snapshotId'], diagnostics);
   validateStoryContinuityQuery(value['query'], [...path, 'query'], diagnostics);
   validateRequiredArray(value['events'], [...path, 'events'], diagnostics, (item, itemPath) =>
@@ -1393,7 +1393,13 @@ function validateBatchExecutionPlanValue(
     );
     return;
   }
-  validateEnvelope(value, path, BATCH_EXECUTION_PLAN_KIND, diagnostics);
+  validateEnvelope(
+    value,
+    path,
+    BATCH_EXECUTION_PLAN_KIND,
+    BATCH_EXECUTION_PLAN_FIELDS,
+    diagnostics,
+  );
   requireString(value['planId'], [...path, 'planId'], diagnostics);
   if (!isBatchExecutionTargetDomain(value['targetDomain'])) {
     diagnostics.push(
@@ -1451,22 +1457,133 @@ function validateBatchExecutionItem(
   validateSerializable(value, path, diagnostics, options);
 }
 
+const INDEXED_RANGE_STATE_FIELDS = new Set([
+  'kind',
+  'rangeId',
+  'assetId',
+  'rangeRef',
+  'status',
+  'tasks',
+  'diagnostics',
+  'updatedAt',
+  'metadata',
+]);
+
+const VISUAL_OCCURRENCE_FIELDS = new Set([
+  'kind',
+  'occurrenceId',
+  'sourceRef',
+  'range',
+  'boundingBox',
+  'cropRef',
+  'maskRefs',
+  'candidateEntityRefs',
+  'candidateIds',
+  'appearanceText',
+  'providerId',
+  'modelId',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const PLOT_EVENT_FIELDS = new Set([
+  'kind',
+  'eventId',
+  'summary',
+  'storyPosition',
+  'orderIndex',
+  'sourceRef',
+  'participantRefs',
+  'evidenceRefs',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const CHARACTER_STATE_CHANGE_FIELDS = new Set([
+  'kind',
+  'changeId',
+  'characterRef',
+  'dimension',
+  'storyPosition',
+  'orderIndex',
+  'before',
+  'after',
+  'note',
+  'sourceRef',
+  'evidenceRefs',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const CONTINUITY_CONSTRAINT_FIELDS = new Set([
+  'kind',
+  'constraintId',
+  'type',
+  'message',
+  'appliesTo',
+  'entityRefs',
+  'sourceRef',
+  'evidenceRefs',
+  'active',
+  'confidence',
+  'reviewState',
+  'diagnostics',
+  'metadata',
+]);
+
+const STORY_CONTINUITY_SNAPSHOT_FIELDS = new Set([
+  'kind',
+  'snapshotId',
+  'query',
+  'events',
+  'characterStates',
+  'constraints',
+  'unresolvedQuestions',
+  'diagnostics',
+  'limitsApplied',
+  'generatedAt',
+  'metadata',
+]);
+
+const BATCH_EXECUTION_PLAN_FIELDS = new Set([
+  'kind',
+  'planId',
+  'sourceArtifactRefs',
+  'targetDomain',
+  'items',
+  'approvalPolicy',
+  'executionPolicy',
+  'costEstimate',
+  'status',
+  'diagnostics',
+  'createdAt',
+  'updatedAt',
+  'metadata',
+]);
+
 function validateEnvelope(
   value: Readonly<Record<string, unknown>>,
   path: readonly ComicAnimationPathSegment[],
   kind: string,
+  allowedFields: ReadonlySet<string>,
   diagnostics: ComicAnimationDiagnostic[],
 ): void {
-  if (value['schemaVersion'] !== COMIC_ANIMATION_INDEXING_SCHEMA_VERSION) {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
     diagnostics.push(
       diagnostic(
         'error',
-        'invalid-schema-version',
-        [...path, 'schemaVersion'],
-        'Invalid schema version.',
+        'unsupported-field',
+        [...path, field],
+        `Comic animation field ${field} is not supported.`,
         {
-          expected: String(COMIC_ANIMATION_INDEXING_SCHEMA_VERSION),
-          actual: diagnosticValue(value['schemaVersion']),
+          actual: diagnosticValue(value[field]),
         },
       ),
     );
@@ -2193,7 +2310,7 @@ function isUnsafeRuntimeHandle(value: string): boolean {
   }
   if (/^[a-z]:\\/i.test(value)) return true;
   if (value.startsWith('/') && !value.startsWith('${')) return true;
-  if (normalized.includes('/.neko/.cache/')) return true;
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) return true;
   return false;
 }
 

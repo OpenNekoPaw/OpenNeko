@@ -22,6 +22,12 @@ The surface SHALL provide distinct typed intents for import, install, update, pu
 uninstall, and inspect diagnostics. It MUST NOT infer package membership or destructive intent from file
 selection, discovery, or removal from a view.
 
+#### Scenario: Remove a library record
+
+- **WHEN** the user activates the ordinary remove action on a local Asset item
+- **THEN** the confirmation states that only the Asset Library record is removed and files are preserved
+- **AND** the command does not present system-trash wording or invoke an uninstall/garbage-collection intent
+
 #### Scenario: Import selected content
 
 - **WHEN** the user chooses Import as Asset for selected content

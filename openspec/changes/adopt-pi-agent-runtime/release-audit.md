@@ -6,8 +6,8 @@
 - Renderer consumes only typed sender-bound Agent projections through preload.
 - Pi owns the generic Agent loop, provider protocol, Tool scheduling, Skill disclosure and transcript.
 - OpenNeko owns product identities, permission, durable domain Jobs, stable resources and UI projection.
-- Legacy AgentSession/Executor, Platform chat, duplicate transcript and retired Host composition paths
-  are forbidden and must remain poisoned or absent.
+- Retired AgentSession/Executor, Platform chat, duplicate transcript and retired Host composition paths
+  are forbidden and must remain absent from imports and registrations.
 
 ## Required evidence
 

@@ -54,7 +54,7 @@ const mainModel = {
   name: 'Main',
   api: 'openai-completions' as const,
   provider: 'openai',
-  baseUrl: 'https://api.openai.invalid/v1',
+  baseUrl: 'https://api.openai.invalid/api',
   reasoning: false,
   input: ['text' as const],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -97,13 +97,13 @@ describe('bridgePiCapabilityTools', () => {
           credentialState: 'configured',
         },
         {
-          model: { provider: 'media', id: 'image-v2', name: 'Image v2' },
+          model: { provider: 'media', id: 'image-current', name: 'Image current' },
           execution: 'domain',
           capabilities: ['image.generate'],
           credentialState: 'ambient',
         },
         {
-          model: { provider: 'media', id: 'video-v2', name: 'Video v2' },
+          model: { provider: 'media', id: 'video-current', name: 'Video current' },
           execution: 'domain',
           capabilities: ['video.generate'],
           credentialState: 'ambient',
@@ -111,8 +111,8 @@ describe('bridgePiCapabilityTools', () => {
       ],
       userBindings: {
         'agent.main': { providerId: 'openai', modelId: 'main' },
-        'image.generate': { providerId: 'media', modelId: 'image-v2' },
-        'video.generate': { providerId: 'media', modelId: 'video-v2' },
+        'image.generate': { providerId: 'media', modelId: 'image-current' },
+        'video.generate': { providerId: 'media', modelId: 'video-current' },
       },
     });
     const execute = vi.fn(async ({ context }) => ({
@@ -262,8 +262,8 @@ describe('bridgePiCapabilityTools', () => {
   it('isolates concurrent purpose tools, cancellation, and immutable model snapshots', async () => {
     const bindings: AgentModelBindingMap = {
       'agent.main': { providerId: 'openai', modelId: 'main' },
-      'image.generate': { providerId: 'media-image', modelId: 'image-v1' },
-      'video.understand': { providerId: 'media-video', modelId: 'video-v1' },
+      'image.generate': { providerId: 'media-image', modelId: 'image-current' },
+      'video.understand': { providerId: 'media-video', modelId: 'video-current' },
     };
     const snapshot = resolveAgentModelPolicy({
       catalog: [
@@ -276,8 +276,8 @@ describe('bridgePiCapabilityTools', () => {
           model: {
             ...mainModel,
             provider: 'media-image',
-            id: 'image-v1',
-            name: 'Image v1',
+            id: 'image-current',
+            name: 'Image current',
           },
           capabilities: ['image.generate'],
           credentialState: 'configured',
@@ -286,8 +286,8 @@ describe('bridgePiCapabilityTools', () => {
           model: {
             ...mainModel,
             provider: 'media-video',
-            id: 'video-v1',
-            name: 'Video v1',
+            id: 'video-current',
+            name: 'Video current',
           },
           capabilities: ['video.understand'],
           credentialState: 'configured',
@@ -295,8 +295,8 @@ describe('bridgePiCapabilityTools', () => {
       ],
       userBindings: bindings,
     });
-    bindings['image.generate'] = { providerId: 'future-image', modelId: 'image-v2' };
-    bindings['video.understand'] = { providerId: 'future-video', modelId: 'video-v2' };
+    bindings['image.generate'] = { providerId: 'future-image', modelId: 'image-future' };
+    bindings['video.understand'] = { providerId: 'future-video', modelId: 'video-future' };
     let finishVideo: (() => void) | undefined;
     const videoGate = new Promise<void>((resolve) => {
       finishVideo = resolve;
@@ -354,8 +354,8 @@ describe('bridgePiCapabilityTools', () => {
       details: { usage: { inputTokens: 4, outputTokens: 2 } },
     });
     expect(observed).toEqual(['image.generate:media-image', 'video.understand:media-video']);
-    expect(snapshot['image.generate']?.model.id).toBe('image-v1');
-    expect(snapshot['video.understand']?.model.id).toBe('video-v1');
+    expect(snapshot['image.generate']?.model.id).toBe('image-current');
+    expect(snapshot['video.understand']?.model.id).toBe('video-current');
   });
 
   it('registers strict schemas and closes over exact identity and purpose model', async () => {

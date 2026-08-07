@@ -25,6 +25,8 @@ export type {
   ResizePointerPosition,
   ResizeRect,
   ResizeState,
+  ResizeStateDiagnostic,
+  ResizeStateDiagnosticReporter,
   UseResizableControlledOptions,
   UseResizableOptions,
   UseResizableReturn,

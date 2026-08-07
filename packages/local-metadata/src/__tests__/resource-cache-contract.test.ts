@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   areResourceCacheEntryDescriptorsContentCompatible,
-  asProjectCachePath,
+  asWorkspaceCachePath,
   asProjectFactPath,
   compareResourceCacheDescriptorObservationStrength,
   createResourceCacheContentIdentity,
@@ -12,7 +12,7 @@ import {
   createResourceVariantKey,
   getResourcePathCategory,
   isManagedCachePathCategory,
-  isProjectCachePath,
+  isWorkspaceCachePath,
   isProjectFactPath,
   isResourceCacheManifest,
   isResourceCacheStatus,
@@ -33,9 +33,9 @@ describe('resource cache contracts', () => {
     document: {
       filePath: '${BOOKS}/comic.epub',
       format: 'epub' as const,
-      fileId: 'comic-v1',
+      fileId: 'comic-source',
     },
-    identity: { fileId: 'comic-v1', sizeBytes: 1024, mtimeMs: 42 },
+    identity: { fileId: 'comic-source', sizeBytes: 1024, mtimeMs: 42 },
   };
 
   const contentLocator = {
@@ -85,42 +85,44 @@ describe('resource cache contracts', () => {
     ).toBe(false);
   });
 
-  it('distinguishes logical file identity from durable resource revisions', () => {
+  it('distinguishes logical file identity from durable content fingerprints', () => {
     const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
-    const fallback: ResourceCacheEntryDescriptor = {
-      id: 'res_fallback',
+    const pathFingerprint: ResourceCacheEntryDescriptor = {
+      id: 'res_path_fingerprint',
       scope: 'project',
       provider: 'source-file-content-access',
       kind: 'document',
       source: { kind: 'file', projectRelativePath: portablePath },
       fingerprint: { strategy: 'none', value: portablePath },
     };
-    const firstRevision: ResourceCacheEntryDescriptor = {
-      ...fallback,
+    const firstFingerprint: ResourceCacheEntryDescriptor = {
+      ...pathFingerprint,
       id: 'res_hash_1',
-      fingerprint: { strategy: 'hash', value: 'sha256:volume-01-v1' },
+      fingerprint: { strategy: 'hash', value: 'sha256:volume-01-initial' },
     };
-    const secondRevision: ResourceCacheEntryDescriptor = {
-      ...fallback,
+    const secondFingerprint: ResourceCacheEntryDescriptor = {
+      ...pathFingerprint,
       id: 'res_hash_2',
-      fingerprint: { strategy: 'hash', value: 'sha256:volume-01-v2' },
+      fingerprint: { strategy: 'hash', value: 'sha256:volume-01-updated' },
     };
 
-    expect(createResourceCacheLogicalContentIdentity(fallback)).toBe(
-      createResourceCacheLogicalContentIdentity(firstRevision),
+    expect(createResourceCacheLogicalContentIdentity(pathFingerprint)).toBe(
+      createResourceCacheLogicalContentIdentity(firstFingerprint),
     );
-    expect(areResourceCacheEntryDescriptorsContentCompatible(fallback, firstRevision)).toBe(true);
     expect(
-      compareResourceCacheDescriptorObservationStrength(firstRevision, fallback),
+      areResourceCacheEntryDescriptorsContentCompatible(pathFingerprint, firstFingerprint),
+    ).toBe(true);
+    expect(
+      compareResourceCacheDescriptorObservationStrength(firstFingerprint, pathFingerprint),
     ).toBeGreaterThan(0);
-    expect(createResourceCacheContentIdentity(fallback)).not.toBe(
-      createResourceCacheContentIdentity(firstRevision),
+    expect(createResourceCacheContentIdentity(pathFingerprint)).not.toBe(
+      createResourceCacheContentIdentity(firstFingerprint),
     );
-    expect(areResourceCacheEntryDescriptorsContentCompatible(firstRevision, secondRevision)).toBe(
-      false,
-    );
-    expect(createResourceCacheContentIdentity(firstRevision)).not.toBe(
-      createResourceCacheContentIdentity(secondRevision),
+    expect(
+      areResourceCacheEntryDescriptorsContentCompatible(firstFingerprint, secondFingerprint),
+    ).toBe(false);
+    expect(createResourceCacheContentIdentity(firstFingerprint)).not.toBe(
+      createResourceCacheContentIdentity(secondFingerprint),
     );
   });
 
@@ -131,7 +133,7 @@ describe('resource cache contracts', () => {
       kind: 'document',
       source,
       contentLocator,
-      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'doc-entry-v1' }),
+      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'doc-entry-initial' }),
     });
     const variant: ResourceCacheVariantDescriptor = {
       descriptor,
@@ -170,12 +172,10 @@ describe('resource cache contracts', () => {
       kind: 'document',
       source,
       contentLocator,
-      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'doc-entry-v1' }),
+      fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'doc-entry-initial' }),
     });
     const now = '2026-06-05T00:00:00.000Z';
     const manifest: ResourceCacheManifest = {
-      version: 2,
-      projectRoot: '/workspace',
       createdAt: now,
       updatedAt: now,
       entries: {
@@ -216,7 +216,6 @@ describe('resource cache contracts', () => {
     expect(
       isResourceCacheManifest({
         ...manifest,
-        version: 1,
         entries: {
           [descriptor.id]: {
             ...manifest.entries[descriptor.id],
@@ -230,13 +229,16 @@ describe('resource cache contracts', () => {
 
   it('classifies cache and project fact paths conservatively', () => {
     const projectRoot = '/workspace/demo';
+    const workspaceCacheRoot = '/Users/feng/.neko/workspace-cache/workspace-id';
     const globalRoot = '/Users/feng/.neko';
     const extensionPrivateRoot =
       '/Users/feng/Library/Application Support/Code/User/globalStorage/neko.neko-agent';
 
     expect(
-      getResourcePathCategory('/workspace/demo/.neko/.cache/resources/a.jpg', { projectRoot }),
-    ).toBe('project-cache');
+      getResourcePathCategory('/Users/feng/.neko/workspace-cache/workspace-id/resources/a.jpg', {
+        workspaceCacheRoot,
+      }),
+    ).toBe('workspace-cache');
     expect(
       getResourcePathCategory('/workspace/demo/neko/assets/library.json', { projectRoot }),
     ).toBe('project-fact');
@@ -251,18 +253,22 @@ describe('resource cache contracts', () => {
     ).toBe('extension-private-cache');
     expect(getResourcePathCategory('/media/source/a.jpg', { projectRoot })).toBe('source-asset');
     expect(
-      isProjectCachePath('/workspace/demo/.neko/.cache/resources/a.jpg', { projectRoot }),
+      isWorkspaceCachePath('/Users/feng/.neko/workspace-cache/workspace-id/resources/a.jpg', {
+        workspaceCacheRoot,
+      }),
     ).toBe(true);
     expect(isProjectFactPath('/workspace/demo/neko/assets/library.json', { projectRoot })).toBe(
       true,
     );
     expect(
-      asProjectCachePath('/workspace/demo/neko/assets/library.json', { projectRoot }),
+      asWorkspaceCachePath('/workspace/demo/neko/assets/library.json', { workspaceCacheRoot }),
     ).toBeUndefined();
     expect(
-      asProjectFactPath('/workspace/demo/.neko/.cache/resources/a.jpg', { projectRoot }),
+      asProjectFactPath('/Users/feng/.neko/workspace-cache/workspace-id/resources/a.jpg', {
+        projectRoot,
+      }),
     ).toBeUndefined();
-    expect(isManagedCachePathCategory('project-cache')).toBe(true);
+    expect(isManagedCachePathCategory('workspace-cache')).toBe(true);
     expect(isManagedCachePathCategory('project-fact')).toBe(false);
   });
 
@@ -270,10 +276,7 @@ describe('resource cache contracts', () => {
     const layout = resolveStorageLayout('/workspace/demo', '/Users/feng');
 
     expect(layout.global.database).toBe('/Users/feng/.neko/neko.db');
-    expect(layout.project.local.cache.resources).toBe('/workspace/demo/.neko/.cache/resources');
-    expect(layout.project.local.cache.resourceManifest).toBe(
-      '/workspace/demo/.neko/.cache/resources/manifest.json',
-    );
-    expect('database' in layout.project.local.cache).toBe(false);
+    expect(layout.global.workspaceCaches).toBe('/Users/feng/.neko/workspace-cache');
+    expect(layout.project.facts.identity).toBe('/workspace/demo/neko/project.json');
   });
 });

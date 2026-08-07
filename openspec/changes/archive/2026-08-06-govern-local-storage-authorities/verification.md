@@ -1,0 +1,178 @@
+## Verification Evidence
+
+Date: 2026-08-06
+
+### Deterministic gates
+
+- `pnpm build` passed for all build-owning workspaces and Electron Forge packaging on
+  `darwin-arm64`.
+- `pnpm test` passed, including Local Metadata 71 tests, Assets Node 65 tests, Agent Runtime 966
+  tests and Desktop 391 tests.
+- `pnpm check` passed: unused analysis completed and dependency-cruiser reported no violations
+  across 1393 modules and 4743 dependencies.
+- `pnpm check:no-internal-versioning` passed with 0 baseline internal occurrences and 0 new
+  internal occurrences. The gate now rejects versioned table files/names, table-generation
+  identifiers, `PRAGMA user_version` and version-suffixed DDL.
+- `pnpm check:legacy-debt` passed with 0 blocking production occurrences.
+- `openspec validate govern-local-storage-authorities --strict --no-interactive` passed.
+- `git diff --check` passed.
+
+Focused table and local-failure evidence:
+
+- `node --test scripts/check-no-internal-versioning.test.mjs` passed 11 tests.
+- `pnpm --filter @neko/agent-runtime exec vitest run src/pi/__tests__/node-conversation-authority.test.ts`
+  passed 12 tests. Unknown columns remain readable; a missing required column fails explicitly.
+- Focused Local Metadata, Assets Node and Desktop discovery tests passed after deleting
+  `asset_library_inventory_state` and `initializeExistingInventory`.
+
+Agent configuration authority evidence:
+
+- `pnpm test` passed after the Agent authority changes, including Host 295 tests, Agent Contracts
+  261 tests, Agent Webview 690 tests, Agent Runtime 1055 tests and Desktop 392 tests.
+- Runtime settings use the stable `agent_runtime_settings` table in the shared user-level
+  `neko.db`. Focused repository tests proved database reopen retention, exact `scope_id` isolation,
+  corrupt-row diagnostics, blocked implicit replacement and explicit reset.
+- Config export/import tests proved strict provider/model definition decoding and secret redaction.
+  Product TOML parsing rejects credential fields; Agent credential status/provenance is read only
+  through the CredentialStore/SecretStorage owner.
+- Producer/consumer tests proved Host diagnostics and the Agent wire contract share
+  `missingProviderEndpoint`. Desktop secret-safe projection now reconstructs every renderer field
+  from a whitelist, so structurally injected `apiKey` data cannot cross the boundary.
+- Static reachability scans found no remaining settings hook loader, UI metadata registry,
+  config credential importer/resolver, provider credential mutation runtime, secret-bearing export
+  option or old diagnostic code under Agent, Host or Desktop production entries.
+- Existing retired config bytes were not read, imported, rewritten or deleted.
+
+Conversation and accepted-memory authority evidence:
+
+- The canonical portable Conversation manifest has no `version`, schema, Session path or SQLite
+  operational fields. Its strict codec rejects unknown fields and invalid branch/entry topology.
+- Export holds an exact temporary Conversation lease, reads every branch transcript from Pi Session,
+  and rejects active leases or non-durable turns. Import creates new Pi Sessions and rebuilds only the
+  stable catalog/branch mapping; lease, checkpoint and database bytes are never exported.
+- Focused branch export/import tests restored active/historical topology and both transcript branches
+  after a full authority dispose/reopen. Source checkpoint identity was absent after import.
+- Chara remains the durable accepted-memory owner through `neko/character-memory.json`. Its focused
+  test moves a draft observation to `accepted`, persists it through the Chara codec/store, and proves
+  an absent owning fact file returns no accepted memory without reading another source.
+- The unused Agent `.neko/memory.md` manager, recall implementation, public contract and self-contained
+  tests were deleted. `MemoryWrite` is registered only with an owning-domain proposal sink and always
+  reports `committed: false`; Agent has no durable memory writer or log-replay path.
+- `pnpm --filter @neko/agent-runtime exec vitest run ...` passed 50 focused Agent tests;
+  `pnpm --filter @neko/chara exec vitest run src/contracts/__tests__/character-memory.test.ts`
+  passed 11 tests. Agent Contracts, Agent Runtime and Chara typechecks passed.
+
+Owner-partitioned log evidence:
+
+- Desktop, Agent and exact UUID Workspace owners resolve to separate NDJSON files under
+  `~/.neko/logs/`; the Assistant synthetic space remains part of the Agent owner.
+- Managed file transport tests proved structured redaction of credentials, prompts and absolute
+  local paths, bounded size rotation, retention expiry, confirmation-required deletion and
+  initialization/write failure containment to one owner.
+- Agent AppHost tests proved Workspace attach, Conversation create/delete and Workspace disposal
+  records use the exact injected Workspace logger. Desktop disposes file transports only after
+  owned runtimes finish disposal.
+- `pnpm --filter @neko/shared test` passed 60 tests, `pnpm --filter @neko/local-metadata test`
+  passed 70 tests and `pnpm --filter @neko/agent-runtime test` passed 977 tests. Shared and Desktop
+  typechecks, `check:no-internal-versioning` and `check:legacy-debt` passed.
+
+Workspace authority and retired-path evidence:
+
+| Retired project-local bytes                                                               | Authority classification                         | Canonical product authority                                                         |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| identity and project facts (`workspace.json`, settings, providers, entity/Asset bindings) | project facts                                    | `neko/project.json` and owning `neko/` facts                                        |
+| project Agent content (AGENTS, prompts, commands, processors, Skills/hooks/preferences)   | user-editable project content                    | owning `neko/` files or `.agents/skills`; unsupported content has no product reader |
+| sessions, locks and runtime state                                                         | valuable local state / Agent journals            | Pi Conversation files and stable `neko.db#state` repositories                       |
+| logs and audit streams                                                                    | raw logs                                         | owner-partitioned `~/.neko/logs/` files                                             |
+| cache, semantic indexes and test output                                                   | rebuildable metadata / workspace cache artifacts | `neko.db#cache` or `~/.neko/workspace-cache/<workspaceId>/`                         |
+| accepted memory                                                                           | project-domain fact                              | owning Chara/project fact file                                                      |
+| recordings, imports, temporary data and archives                                          | retained media or scratch                        | explicit media promotion/export or bounded scratch owner                            |
+| every other `.neko/**` entry                                                              | unknown retired data                             | no product authority; bytes remain untouched                                        |
+
+- Production scans found no Workspace/Project-root `.neko` join, retired identity/preferences/memory
+  filename, storage inspector, old Agent event sink or recovery symbol. Every production `.neko/`
+  text match was an explicit user-level `~/.neko` authority.
+- `neko/project.json` carries only stable `workspaceId` identity plus opaque unknown top-level facts;
+  it has no schema/table version. Copy, move, duplicate identity, unknown-fact preservation and
+  database-loss tests use only the canonical file and shared database.
+- Workspace state uses the stable `workspaces` table, resource projections use the stable cache
+  repository and large derived bytes resolve only to the user-level UUID cache partition. The empty
+  `ResourceCacheManifestStore.invalidateCache()` contract and its self-test implementation were
+  deleted.
+- Canonical cache-loss coverage deleted one exact user-level Workspace cache partition and proved
+  project facts plus retained media bytes remained unchanged. Existing path-branding tests reject
+  project facts as managed cache; managed log tests require confirmation before deletion.
+- `pnpm --filter @neko/local-metadata test` passed 71 tests and
+  `pnpm --filter @neko/generation test` passed 162 tests; both package typechecks and
+  `check:storage-authorities` passed. `check:unused` passed after deleting the unconsumed Agent
+  EventBus and shared-memory implementations, barrels and self-contained tests. Agent runtime then
+  passed 108 files and 966 tests plus typecheck.
+
+### Agent Evaluation
+
+- Authoring decision: `reuse` the indexed `agent-runtime.model-binding` suite and its
+  `explicit-chat-model` case for provider/model routing. Corrupt-row isolation and secret ownership
+  remain deterministic repository/security assertions.
+- `pnpm test:agent:eval` passed 44 files and 283 key-free harness tests; all 22 indexed suites and
+  52 cases passed dry-run validation. This is infrastructure evidence, not Agent behavior evidence.
+- The focused real case returned `infrastructure-blocked` before Desktop/API startup because
+  explicit provider, model and cost authorization were not present. No real Agent behavior pass is
+  claimed.
+
+### Real Electron
+
+- `pnpm test:local:ui --scenario desktop-workbench-scenes` passed:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T16-33-07.240Z-desktop-workbench-scenes-development/report.json`.
+  It proved isolated cold start, exact Workspace restart recovery, retained Media Library connection,
+  fresh Preview authorization and list-mode presentation. The restart checkpoint reported
+  `catalog=媒体库`, `viewMode=list`, `connectionRetained=true`, `contentVisible=true` and
+  `previewReady=true`; the report contained no console error, warning, exception or poisoned
+  resource request.
+- `pnpm test:local:ui --scenario asset-library-record-removal` passed:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T12-32-19.897Z-asset-library-record-removal-development/report.json`.
+  It proved an unavailable membership remains visible with `sourceRelativePath`, a valid sibling
+  remains usable, identity-scoped removal preserves source bytes and the removal persists after
+  restart.
+- `pnpm test:local:ui --scenario no-active-project-catalogs` passed:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T16-36-09.544Z-no-active-project-catalogs-development/report.json`.
+  With no active Project, it proved historical Conversations, retained Workspace rows and retained
+  Asset memberships remain visible. Diagnostics exposed `workspaceId`, `currentLocator`,
+  `orphanedAt` and `sourceRelativePath`; both management catalogs opened in list mode.
+- `pnpm test:local:ui --scenario desktop-agent-diagnostic-portal` passed:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T16-37-08.866Z-desktop-agent-diagnostic-portal-development/report.json`.
+  The isolated real Electron runtime showed the Agent diagnostic in a readable 360px fixed portal,
+  retained the adjacent Resource dock and reported no console error, warning or exception. The
+  screenshot was inspected for clipping, overlap, text fit and layering.
+
+All scenarios used an isolated temporary home. The real `~/.neko/neko.db` was not opened,
+rewritten or migrated.
+
+### Owning Integration Recovery
+
+- Host config reader/manager/export tests passed 74 assertions. Portable definitions round-tripped,
+  credential-bearing or corrupt imports failed before writes, and secrets stayed outside exported
+  documents.
+- Node Pi Conversation authority passed 12 assertions. Branch facts survived export/import and a
+  full authority reopen without copying lease, checkpoint or SQLite operational state; in-flight
+  export remained fail-visible.
+- Local Metadata Node SQLite backup/restore and user diagnostics passed 9 assertions. Workspace,
+  Conversation, ResourceCache and media metadata survived an integrity-checked restore, while
+  invalid records remained isolated.
+- Desktop encrypted-secret and SQLite state integration passed 7 assertions. Secret failures did not
+  expose plaintext, and invalid Shell/Application Settings rows did not reset valid sibling state.
+- These operations currently have no Desktop UI command. They were therefore verified through their
+  owning integration boundaries rather than adding fixture-only IPC or a second product path.
+
+### Evaluation disposition
+
+Agent Evaluation is excluded. These changes affect deterministic local repository discovery,
+catalog enumeration and presentation projection; they do not change prompts, Skills, tool routing,
+provider/model selection, AgentSession execution, queues or model behavior.
+
+### Remaining risk
+
+- Real provider/model UI behavior remains blocked by missing explicit provider/model/cost
+  authorization; deterministic model-binding and secret-boundary tests passed.
+- The change remains local-only. Cloud synchronization is intentionally absent.
+- Existing unreachable internal inventory-state bytes, if present in a user's database, are left
+  untouched. Product code no longer reads, writes, repairs or deletes them.

@@ -1,25 +1,18 @@
-import {
-  ArrowLeftIcon,
-  FolderIcon,
-  GridIcon,
-  PackageIcon,
-  SearchIcon,
-  SettingsIcon,
-} from '@neko/ui';
+import { FolderIcon, GridIcon, PackageIcon, SearchIcon, SettingsIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { useMemo, useState, type ReactNode } from 'react';
 import type { DesktopApplicationPreferences } from '@neko/host/application-settings';
 import { useDesktopApplicationSettings } from './application-settings-context';
-import {
-  DesktopApplicationBrand,
-  DesktopApplicationNavigationButton,
-  DesktopApplicationSidebarFrame,
-} from './DesktopApplicationSidebar';
-import type { ControlledWorkbenchResizeBinding } from '@neko/ui';
+import { DesktopApplicationNavigationButton } from './DesktopApplicationSidebar';
 
-type SettingsCategory = 'general' | 'appearance' | 'creative' | 'agent';
+export type DesktopSettingsSection = 'general' | 'appearance' | 'creative' | 'agent';
 
-const categories: readonly SettingsCategory[] = ['general', 'appearance', 'creative', 'agent'];
+const categories: readonly DesktopSettingsSection[] = [
+  'general',
+  'appearance',
+  'creative',
+  'agent',
+];
 
 const categoryMessageKeys = {
   general: {
@@ -40,21 +33,15 @@ const categoryMessageKeys = {
   },
 } as const;
 
-export function DesktopSettingsSurface({
-  onBack,
-  sidebarResize,
-  sidebarWidth,
+export function DesktopSettingsNavigationSurface({
+  activeSection,
+  onSectionChange,
 }: {
-  readonly onBack: () => void;
-  readonly sidebarResize?: ControlledWorkbenchResizeBinding;
-  readonly sidebarWidth: number;
+  readonly activeSection: DesktopSettingsSection;
+  readonly onSectionChange: (section: DesktopSettingsSection) => void;
 }): JSX.Element {
   const { t } = useTranslation();
-  const settings = useDesktopApplicationSettings();
-  const [category, setCategory] = useState<SettingsCategory>('general');
   const [query, setQuery] = useState('');
-  const [pending, setPending] = useState(false);
-  const [diagnostic, setDiagnostic] = useState<string>();
   const visibleCategories = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     if (!normalized) return categories;
@@ -66,7 +53,53 @@ export function DesktopSettingsSurface({
         .includes(normalized);
     });
   }, [query, t]);
-  const activeCategories = query.trim() ? visibleCategories : [category];
+
+  return (
+    <aside
+      className="desktop-settings__navigation"
+      data-settings-surface="navigation"
+      aria-label={t('settings.navigation')}
+    >
+      <label className="desktop-settings__search management-search-field">
+        <SearchIcon size={15} />
+        <input
+          aria-label={t('settings.search')}
+          placeholder={t('settings.search')}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+      </label>
+      <nav className="home-primary-navigation" aria-label={t('settings.navigation')}>
+        {visibleCategories.map((item) => (
+          <DesktopApplicationNavigationButton
+            key={item}
+            active={item === activeSection}
+            icon={categoryIcon(item)}
+            label={t(categoryMessageKeys[item].title)}
+            onClick={() => {
+              setQuery('');
+              onSectionChange(item);
+            }}
+          />
+        ))}
+      </nav>
+      {visibleCategories.length === 0 ? (
+        <div className="desktop-settings__empty">{t('settings.noResults')}</div>
+      ) : null}
+    </aside>
+  );
+}
+
+export function DesktopSettingsMainSurface({
+  section,
+}: {
+  readonly section: DesktopSettingsSection;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const settings = useDesktopApplicationSettings();
+  const [pending, setPending] = useState(false);
+  const [diagnostic, setDiagnostic] = useState<string>();
 
   const update = async (preferences: DesktopApplicationPreferences): Promise<void> => {
     setPending(true);
@@ -81,194 +114,153 @@ export function DesktopSettingsSurface({
   };
 
   return (
-    <main className="desktop-settings home-layout" aria-labelledby="desktop-settings-title">
-      <DesktopApplicationSidebarFrame
-        compact={false}
-        expandedWidth={sidebarWidth}
-        resize={sidebarResize}
-      >
-        <aside
-          className="desktop-settings__navigation home-navigation project-primary-sidebar"
-          data-primary-sidebar="application"
-        >
-          <div className="desktop-settings__navigation-control">
-            <DesktopApplicationBrand />
-            <button
-              className="desktop-settings__back home-nav-button"
-              type="button"
-              onClick={onBack}
-            >
-              <ArrowLeftIcon size={16} />
-              <span>{t('settings.back')}</span>
-            </button>
-            <label className="desktop-settings__search home-search-field">
-              <SearchIcon size={15} />
-              <input
-                aria-label={t('settings.search')}
-                placeholder={t('settings.search')}
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.currentTarget.value)}
-              />
-            </label>
-            <nav className="home-primary-navigation" aria-label={t('settings.navigation')}>
-              {categories.map((item) => (
-                <DesktopApplicationNavigationButton
-                  key={item}
-                  active={item === category && !query.trim()}
-                  icon={categoryIcon(item)}
-                  label={t(categoryMessageKeys[item].title)}
-                  onClick={() => {
-                    setQuery('');
-                    setCategory(item);
-                  }}
-                />
-              ))}
-            </nav>
+    <section
+      className="desktop-settings__content"
+      data-settings-surface="main"
+      aria-labelledby="desktop-settings-title"
+    >
+      <div className="desktop-settings__overview">
+        <header className="desktop-settings__title home-launchpad-heading">
+          <span className="desktop-settings__title-icon home-launchpad-heading-icon">
+            <SettingsIcon size={18} />
+          </span>
+          <div>
+            <h1 id="desktop-settings-title">{t('settings.title')}</h1>
+            <p>{t('settings.description')}</p>
           </div>
-        </aside>
-      </DesktopApplicationSidebarFrame>
-      <section className="desktop-settings__content home-main">
-        <div className="desktop-settings__overview">
-          <header className="desktop-settings__title home-launchpad-heading">
-            <span className="desktop-settings__title-icon home-launchpad-heading-icon">
-              <SettingsIcon size={18} />
-            </span>
-            <div>
-              <h1 id="desktop-settings-title">{t('settings.title')}</h1>
-              <p>{t('settings.description')}</p>
-            </div>
-          </header>
-          {diagnostic ? (
-            <div className="desktop-settings__diagnostic" role="alert">
-              {diagnostic}
-            </div>
-          ) : null}
-          {visibleCategories.length === 0 ? (
-            <div className="desktop-settings__empty">{t('settings.noResults')}</div>
-          ) : null}
-          {activeCategories.includes('general') ? (
-            <SettingsGroup
-              description={t('settings.category.general.description')}
-              title={t('settings.category.general')}
-            >
-              <SettingsSelect
-                disabled={pending}
-                label={t('settings.startup.label')}
-                description={t('settings.startup.description')}
-                value={settings.projection.preferences.startupTarget}
-                options={[
-                  { value: 'restore', label: t('settings.startup.restore') },
-                  { value: 'home', label: t('settings.startup.home') },
-                ]}
-                onChange={(value) =>
-                  update({
-                    ...settings.projection.preferences,
-                    startupTarget: value,
-                  })
-                }
-              />
-            </SettingsGroup>
-          ) : null}
-          {activeCategories.includes('appearance') ? (
-            <SettingsGroup
-              description={t('settings.category.appearance.description')}
-              title={t('settings.category.appearance')}
-            >
-              <SettingsSelect
-                disabled={pending}
-                label={t('settings.theme.label')}
-                description={t('settings.theme.description')}
-                value={settings.projection.preferences.theme}
-                options={[
-                  { value: 'system', label: t('settings.theme.system') },
-                  { value: 'light', label: t('settings.theme.light') },
-                  { value: 'dark', label: t('settings.theme.dark') },
-                ]}
-                onChange={(value) =>
-                  update({
-                    ...settings.projection.preferences,
-                    theme: value,
-                  })
-                }
-              />
-              <SettingsSelect
-                disabled={pending}
-                label={t('settings.locale.label')}
-                description={t('settings.locale.description')}
-                value={settings.projection.preferences.locale}
-                options={[
-                  { value: 'system', label: t('settings.locale.system') },
-                  { value: 'en', label: 'English' },
-                  { value: 'zh-cn', label: '简体中文' },
-                ]}
-                onChange={(value) =>
-                  update({
-                    ...settings.projection.preferences,
-                    locale: value,
-                  })
-                }
-              />
-            </SettingsGroup>
-          ) : null}
-          {activeCategories.includes('creative') ? (
-            <SettingsGroup
-              description={t('settings.category.creative.description')}
-              title={t('settings.category.creative')}
-            >
-              <SettingsSelect
-                disabled={pending}
-                label={t('settings.resources.label')}
-                description={t('settings.resources.description')}
-                value={settings.projection.preferences.resourceBrowserView}
-                options={[
-                  { value: 'list', label: t('settings.resources.list') },
-                  { value: 'grid', label: t('settings.resources.grid') },
-                ]}
-                onChange={(value) =>
-                  update({
-                    ...settings.projection.preferences,
-                    resourceBrowserView: value,
-                  })
-                }
-              />
-            </SettingsGroup>
-          ) : null}
-          {activeCategories.includes('agent') ? (
-            <SettingsGroup
-              description={t('settings.category.agent.description')}
-              title={t('settings.category.agent')}
-            >
-              <div className="desktop-settings__row">
-                <div>
-                  <strong>{t('settings.agent.advanced')}</strong>
-                  <p>{t('settings.agent.advancedDescription')}</p>
-                </div>
-                <button
-                  className="desktop-settings__action"
-                  disabled={pending}
-                  type="button"
-                  onClick={() => {
-                    setPending(true);
-                    setDiagnostic(undefined);
-                    void settings
-                      .openAgentAdvanced()
-                      .catch((error: unknown) =>
-                        setDiagnostic(error instanceof Error ? error.message : String(error)),
-                      )
-                      .finally(() => setPending(false));
-                  }}
-                >
-                  {t('settings.agent.openConfig')}
-                </button>
+        </header>
+        {diagnostic ? (
+          <div className="desktop-settings__diagnostic" role="alert">
+            {diagnostic}
+          </div>
+        ) : null}
+        {section === 'general' ? (
+          <SettingsGroup
+            description={t('settings.category.general.description')}
+            title={t('settings.category.general')}
+          >
+            <SettingsSelect
+              disabled={pending}
+              label={t('settings.startup.label')}
+              description={t('settings.startup.description')}
+              value={settings.projection.preferences.startupTarget}
+              options={[
+                { value: 'restore', label: t('settings.startup.restore') },
+                { value: 'home', label: t('settings.startup.home') },
+              ]}
+              onChange={(value) =>
+                update({
+                  ...settings.projection.preferences,
+                  startupTarget: value,
+                })
+              }
+            />
+          </SettingsGroup>
+        ) : null}
+        {section === 'appearance' ? (
+          <SettingsGroup
+            description={t('settings.category.appearance.description')}
+            title={t('settings.category.appearance')}
+          >
+            <SettingsSelect
+              disabled={pending}
+              label={t('settings.theme.label')}
+              description={t('settings.theme.description')}
+              value={settings.projection.preferences.theme}
+              options={[
+                { value: 'system', label: t('settings.theme.system') },
+                { value: 'light', label: t('settings.theme.light') },
+                { value: 'dark', label: t('settings.theme.dark') },
+              ]}
+              onChange={(value) =>
+                update({
+                  ...settings.projection.preferences,
+                  theme: value,
+                })
+              }
+            />
+            <SettingsSelect
+              disabled={pending}
+              label={t('settings.locale.label')}
+              description={t('settings.locale.description')}
+              value={settings.projection.preferences.locale}
+              options={[
+                { value: 'system', label: t('settings.locale.system') },
+                { value: 'en', label: 'English' },
+                { value: 'zh-cn', label: '简体中文' },
+              ]}
+              onChange={(value) =>
+                update({
+                  ...settings.projection.preferences,
+                  locale: value,
+                })
+              }
+            />
+          </SettingsGroup>
+        ) : null}
+        {section === 'creative' ? (
+          <SettingsGroup
+            description={t('settings.category.creative.description')}
+            title={t('settings.category.creative')}
+          >
+            <SettingsSelect
+              disabled={pending}
+              label={t('settings.resources.label')}
+              description={t('settings.resources.description')}
+              value={settings.projection.preferences.resourceBrowserView}
+              options={[
+                { value: 'list', label: t('settings.resources.list') },
+                { value: 'grid', label: t('settings.resources.grid') },
+              ]}
+              onChange={(value) =>
+                update({
+                  ...settings.projection.preferences,
+                  resourceBrowserView: value,
+                })
+              }
+            />
+          </SettingsGroup>
+        ) : null}
+        {section === 'agent' ? (
+          <SettingsGroup
+            description={t('settings.category.agent.description')}
+            title={t('settings.category.agent')}
+          >
+            <div className="desktop-settings__row">
+              <div>
+                <strong>{t('settings.agent.advanced')}</strong>
+                <p>{t('settings.agent.advancedDescription')}</p>
               </div>
-              <p className="desktop-settings__authority">{t('settings.agent.authority')}</p>
-            </SettingsGroup>
-          ) : null}
-        </div>
-      </section>
-    </main>
+              <button
+                className="desktop-settings__action"
+                disabled={pending}
+                type="button"
+                onClick={() => {
+                  setPending(true);
+                  setDiagnostic(undefined);
+                  void settings
+                    .openAgentAdvanced()
+                    .catch((error: unknown) =>
+                      setDiagnostic(error instanceof Error ? error.message : String(error)),
+                    )
+                    .finally(() => setPending(false));
+                }}
+              >
+                {t('settings.agent.openConfig')}
+              </button>
+            </div>
+            <p className="desktop-settings__authority">{t('settings.agent.authority')}</p>
+          </SettingsGroup>
+        ) : null}
+      </div>
+    </section>
   );
+}
+
+export function parseDesktopSettingsSection(value: string): DesktopSettingsSection {
+  const section = categories.find((candidate) => candidate === value);
+  if (!section) throw new Error(`Unknown Desktop Settings section '${value}'.`);
+  return section;
 }
 
 function SettingsGroup({
@@ -333,7 +325,7 @@ function SettingsSelect<T extends string>({
   );
 }
 
-function categoryIcon(category: SettingsCategory): JSX.Element {
+function categoryIcon(category: DesktopSettingsSection): JSX.Element {
   switch (category) {
     case 'general':
       return <SettingsIcon size={16} />;

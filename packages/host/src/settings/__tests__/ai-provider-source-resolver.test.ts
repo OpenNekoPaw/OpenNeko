@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConfigReadResult } from '../config-reader';
+import type { UnifiedConfig } from '../config-core/index';
 import type { Model, Provider } from '../types/provider';
 import { resolveAiProviderSources } from '../ai-provider-source-resolver';
 
@@ -8,8 +9,7 @@ const provider: Provider = {
   name: 'user-newapi',
   displayName: 'User NewAPI',
   type: 'newapi',
-  apiUrl: 'https://gateway.example.com/v1',
-  apiKey: 'sk-user',
+  apiUrl: 'https://gateway.example.com/api',
   enabled: true,
   connectionKind: 'gateway',
   protocolProfile: 'newapi',
@@ -26,8 +26,14 @@ const model: Model = {
   enabled: true,
 };
 
-function createReadResult(config: Record<string, unknown>): ConfigReadResult {
-  return { status: 'ok', filePath: '<test-config>', config } as ConfigReadResult;
+function createReadResult(config: UnifiedConfig): ConfigReadResult {
+  return {
+    status: 'ok',
+    filePath: '<test-config>',
+    config,
+    diagnostics: [],
+    providerCredentials: {},
+  };
 }
 
 describe('resolveAiProviderSources', () => {
@@ -61,7 +67,9 @@ describe('resolveAiProviderSources', () => {
     const projection = resolveAiProviderSources({
       providers: [],
       models: [],
-      userConfigReadResult: createReadResult({ defaultProvider: 'missing' }),
+      userConfigReadResult: createReadResult({
+        defaultModels: { llm: { providerId: 'missing', modelId: 'missing' } },
+      }),
       configDiagnostic: diagnostic,
     });
 

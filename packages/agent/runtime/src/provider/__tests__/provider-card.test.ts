@@ -48,7 +48,6 @@ describe('Provider Expression Context', () => {
       `---
 providerId: openai
 modelId: gpt-image-1
-version: 1.0.0
 displayName: GPT Image
 capabilities: [image.generate]
 ---
@@ -61,12 +60,51 @@ capabilities: [image.generate]
     expect(card.modelId).toBe('gpt-image-1');
   });
 
+  it('rejects an unknown ProviderCard attribute without invalidating a canonical sibling', async () => {
+    const errors: string[] = [];
+    const registry = createProviderCardRegistry();
+    const cards = await registerProviderCardDirectory({
+      registry,
+      root: '/workspace/neko/providers',
+      sourceLayer: 'project',
+      fs: {
+        async readdir() {
+          return ['invalid.card.md', 'valid.card.md'].map((name) => ({
+            name,
+            isDirectory: () => false,
+            isFile: () => true,
+          }));
+        },
+        async readFile(path) {
+          const providerId = path.includes('invalid') ? 'invalid' : 'valid';
+          return `---
+providerId: ${providerId}
+${providerId === 'invalid' ? 'unexpectedField: value\n' : ''}displayName: ${providerId}
+capabilities: [image.generate]
+---
+# ${providerId}
+`;
+        },
+      },
+      onError: (error) => errors.push(String(error.cause)),
+    });
+
+    expect(cards.map((card) => card.providerId)).toEqual(['valid']);
+    expect(registry.get('valid')).toMatchObject({
+      profileId: 'provider-expression:valid',
+      kind: 'provider-expression',
+      source: 'project',
+    });
+    expect(errors).toEqual([
+      expect.stringContaining('Provider card contains unsupported attribute: unexpectedField'),
+    ]);
+  });
+
   it('parses ProviderCard input modalities separately from generation capabilities', () => {
     const card = parseProviderCardMarkdown(
       `---
 providerId: openai
 modelId: gpt-vision
-version: 1.0.0
 displayName: GPT Vision
 capabilities: [image.generate]
 inputModalities: [text, image, audio:realtime-only]
@@ -114,7 +152,6 @@ inputModalities: [text, image, audio:realtime-only]
       `---
 providerId: flux
 modelId: flux-anime
-version: 1.0.0
 displayName: Flux Anime
 capabilities: [image.generate]
 ---
@@ -156,7 +193,6 @@ capabilities: [image.generate]
       `---
 providerId: flux
 modelId: flux-lite
-version: 1.0.0
 displayName: Flux Lite
 capabilities: [image.generate]
 ---
@@ -232,7 +268,6 @@ capabilities: [image.generate]
     const project = parseProviderCardMarkdown(
       `---
 providerId: flux
-version: 1.0.1
 displayName: Flux Project Override
 capabilities: [image.generate]
 ---
@@ -391,7 +426,6 @@ capabilities: [image.generate]
       `---
 providerId: flux
 modelId: flux-pro-1.1
-version: 1.1.0
 displayName: Flux Pro 1.1
 capabilities: [image.generate]
 ---
@@ -421,7 +455,7 @@ capabilities: [image.generate]
   });
 
   it('loads provider cards from project directories as project overrides', async () => {
-    const root = '/workspace/.neko/providers';
+    const root = '/workspace/neko/providers';
     const registry = createProviderCardRegistry([
       parseProviderCardMarkdown(readCard('sdxl.card.md'), { sourceLayer: 'builtin' }),
     ]);
@@ -440,7 +474,6 @@ capabilities: [image.generate]
         expect(path).toBe(`${root}/sdxl.card.md`);
         return `---
 providerId: sdxl
-version: 1.1.0
 displayName: SDXL Project Card
 capabilities: [image.generate]
 ---
@@ -462,11 +495,11 @@ capabilities: [image.generate]
       root,
       sourceLayer: 'project',
       fs,
-      sourceRefPrefix: '.neko/providers',
+      sourceRefPrefix: 'neko/providers',
     });
 
     expect(cards).toHaveLength(1);
-    expect(cards[0]?.sourceRef).toBe('.neko/providers/sdxl.card.md');
+    expect(cards[0]?.sourceRef).toBe('neko/providers/sdxl.card.md');
     expect(registry.get('sdxl')?.displayName).toBe('SDXL Project Card');
     expect(registry.get('sdxl')?.trainingProfile.styleAffinities['pixel-art']).toBe(3);
   });

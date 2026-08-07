@@ -220,7 +220,6 @@ export {
 
 export {
   buildConfigBridgeGlobalErrorMessage,
-  buildConfigChangedRuntimeMessage,
   runConfigBridgeQueryRuntime,
   type ConfigBridgeRuntimeLogger,
   type ConfigBridgeQueryConfigState,
@@ -262,6 +261,7 @@ export {
   type AgentExternalProcessorChainTargetChangeInput,
   type DeveloperModeTemporaryProcessorRequest,
   type DeveloperModeTemporaryProcessorRequestInput,
+  type DeveloperModeTemporaryProcessorDefinition,
 } from './capability/external-processor-runtime';
 
 export {

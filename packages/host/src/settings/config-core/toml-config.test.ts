@@ -22,13 +22,13 @@ name = "web_search"
 query_arg = "query"
 max_results_arg = "limit"
 allowed_domains_arg = "allowed_domains"
-output_schema = "neko.externalResearch.search.v1"
+output_schema = "neko.externalResearch.search"
 
 [external_research.mcp.fetch_tool]
 name = "fetch_url"
 url_arg = "url"
 max_content_tokens_arg = "max_tokens"
-output_schema = "neko.externalResearch.fetch.v1"
+output_schema = "neko.externalResearch.fetch"
 `);
 
     expect(config.externalResearch).toEqual({
@@ -47,13 +47,13 @@ output_schema = "neko.externalResearch.fetch.v1"
           queryArg: 'query',
           maxResultsArg: 'limit',
           allowedDomainsArg: 'allowed_domains',
-          outputSchema: 'neko.externalResearch.search.v1',
+          outputSchema: 'neko.externalResearch.search',
         },
         fetchTool: {
           name: 'fetch_url',
           urlArg: 'url',
           maxContentTokensArg: 'max_tokens',
-          outputSchema: 'neko.externalResearch.fetch.v1',
+          outputSchema: 'neko.externalResearch.fetch',
         },
       },
     });
@@ -70,7 +70,7 @@ output_schema = "neko.externalResearch.fetch.v1"
           searchTool: {
             name: 'web_search',
             queryArg: 'query',
-            outputSchema: 'neko.externalResearch.search.v1',
+            outputSchema: 'neko.externalResearch.search',
           },
         },
       },

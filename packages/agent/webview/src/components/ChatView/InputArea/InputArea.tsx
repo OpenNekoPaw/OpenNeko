@@ -12,7 +12,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon } from '@neko/ui/icons';
+import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon, FolderIcon } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
 import { SessionModeSelector } from './SessionModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
@@ -67,8 +67,15 @@ import type {
   SessionMode,
 } from '@neko/agent-contracts';
 import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
+import { useAgentHostMessages } from '../../../host-runtime-context';
+import {
+  useComposerWorkspacePresentation,
+  type AgentComposerWorkspaceTarget,
+} from '../../ComposerWorkspaceContext';
 
 interface InputAreaProps {
+  presentation?: 'entry' | 'conversation';
+  composerPresentation?: 'default' | 'compact';
   inputValue: string;
   isThinking: boolean;
   /** Conversation-owned run state for queue/send/stop behavior. */
@@ -101,6 +108,9 @@ interface InputAreaProps {
   attachedFiles?: MessageAttachment[];
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
+  onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
+  draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  onDraftWorkspaceTargetChange?: (target: AgentComposerWorkspaceTarget | undefined) => void;
   /** Session-bound @file references selected from the mention menu. */
   selectedFileReferences?: SelectedFileReference[];
   onSelectedFileReferencesChange?: (references: SelectedFileReference[]) => void;
@@ -109,7 +119,7 @@ interface InputAreaProps {
   focusRequestOwner?: string;
   focusRequestEnabled?: boolean;
   focusRequestTarget?: 'none' | 'input';
-  focusRequestRevision?: number;
+  focusRequestId?: string;
 }
 
 type InputAreaTranslator = (key: string, params?: Record<string, string | number>) => string;
@@ -183,6 +193,8 @@ function resolveStateAction<T>(action: StateAction<T>, previous: T): T {
 }
 
 export function InputArea({
+  presentation = 'conversation',
+  composerPresentation = 'default',
   inputValue,
   isThinking,
   isRunActive = isThinking,
@@ -204,6 +216,9 @@ export function InputArea({
   disabled = false,
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
+  onAuthorizeResource,
+  draftWorkspaceTarget,
+  onDraftWorkspaceTargetChange,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
   isComposing = false,
@@ -211,8 +226,11 @@ export function InputArea({
   focusRequestOwner,
   focusRequestEnabled = true,
   focusRequestTarget = 'none',
-  focusRequestRevision = 0,
+  focusRequestId,
 }: InputAreaProps) {
+  const agentHostMessages = useAgentHostMessages();
+  const composerWorkspace = useComposerWorkspacePresentation();
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -259,11 +277,11 @@ export function InputArea({
   }, [inputValue]);
 
   useEffect(() => {
-    if (!focusRequestEnabled || focusRequestTarget !== 'input' || focusRequestRevision <= 0) {
+    if (!focusRequestEnabled || focusRequestTarget !== 'input' || !focusRequestId) {
       return;
     }
     textareaRef.current?.focus();
-  }, [focusRequestEnabled, focusRequestOwner, focusRequestRevision, focusRequestTarget]);
+  }, [focusRequestEnabled, focusRequestId, focusRequestOwner, focusRequestTarget]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Input history for arrow key navigation
@@ -413,7 +431,8 @@ export function InputArea({
   const showEntryPromptMenu = Boolean(entryPromptMenu);
   const isMediaGenerationSession = isMediaGenerationMode(sessionMode);
   const isRoleplayConversation = isRoleplayConversationKind(conversationKind);
-  const allowCommandMenus = !isMediaGenerationSession && !isRoleplayConversation;
+  const allowCommandMenus =
+    presentation !== 'entry' && !isMediaGenerationSession && !isRoleplayConversation;
   const slashMenuOpen = allowCommandMenus && showSlashMenu;
   const skillMenuOpen = allowCommandMenus && showSkillMenu;
 
@@ -900,12 +919,13 @@ export function InputArea({
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    submitRoleplayEntrySelection(item, inputValue);
+    submitRoleplayEntrySelection(agentHostMessages, item, inputValue);
     textareaRef.current?.focus();
   };
 
   const projectedQueuedMessageCount = Math.max(queuedMessageCount, queuedMessages.length);
   const inputAreaProjection = projectInputAreaUi({
+    presentation,
     inputValue,
     attachedFileCount: attachedFiles.length + selectedFileReferences.length,
     contextChipCount: contextChips.length,
@@ -917,6 +937,7 @@ export function InputArea({
     sessionMode,
     conversationKind,
     currentSessionMediaModelCount,
+    compactControls: composerPresentation === 'compact',
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
   return (
@@ -948,7 +969,7 @@ export function InputArea({
         )}
 
         {/* ── Input container ── */}
-        <div className="agent-composer-shell relative mx-2 mb-2">
+        <div className="agent-composer-shell relative">
           {/* Slash command menu */}
           <SlashCommandMenu
             isOpen={slashMenuOpen}
@@ -1036,7 +1057,15 @@ export function InputArea({
             {/* Attachment button */}
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (onAuthorizeResource) {
+                  void onAuthorizeResource().then((payload) => {
+                    if (payload) onAddContextChip?.(payload);
+                  });
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
               className="agent-composer-tool-button"
               title={t('chat.input.attach')}
             >
@@ -1049,7 +1078,79 @@ export function InputArea({
               accept="image/*,video/*,audio/*,.txt,.md,.json,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.css,.html,.xml,.yaml,.yml,.toml"
               className="hidden"
               onChange={handleFileSelect}
+              disabled={onAuthorizeResource !== undefined}
             />
+
+            {composerWorkspace &&
+            (presentation === 'entry' || composerPresentation === 'default') ? (
+              <div
+                className="agent-composer-workspace"
+                aria-label={t('chat.input.workspace.label')}
+              >
+                <FolderIcon size={14} />
+                {composerWorkspace.kind === 'workspace' ? (
+                  <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
+                    {composerWorkspace.label}
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="agent-composer-workspace-button"
+                      disabled={composerWorkspace.disabled}
+                      onClick={() => setWorkspaceMenuOpen((open) => !open)}
+                      aria-expanded={workspaceMenuOpen}
+                    >
+                      {draftWorkspaceTarget?.label ?? t('chat.input.workspace.openProject')}
+                    </button>
+                    {draftWorkspaceTarget ? (
+                      <button
+                        type="button"
+                        className="agent-composer-workspace-clear"
+                        title={t('chat.input.workspace.clear')}
+                        onClick={() => onDraftWorkspaceTargetChange?.(undefined)}
+                      >
+                        <CloseIcon size={12} />
+                      </button>
+                    ) : null}
+                    {workspaceMenuOpen ? (
+                      <div className="agent-composer-workspace-menu" role="menu">
+                        {composerWorkspace.projects.map((project) => (
+                          <button
+                            key={project.projectId}
+                            type="button"
+                            role="menuitem"
+                            disabled={project.disabled}
+                            onClick={() => {
+                              void composerWorkspace
+                                .onSelectProject(project.projectId)
+                                .then((target) => {
+                                  if (target) onDraftWorkspaceTargetChange?.(target);
+                                  setWorkspaceMenuOpen(false);
+                                });
+                            }}
+                          >
+                            {project.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            void composerWorkspace.onChooseDirectory().then((target) => {
+                              if (target) onDraftWorkspaceTargetChange?.(target);
+                              setWorkspaceMenuOpen(false);
+                            });
+                          }}
+                        >
+                          {t('chat.input.workspace.chooseDirectory')}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
 
             {(inputAreaProjection.showSessionModeSelector ||
               inputAreaProjection.showModelConfig) && (
@@ -1088,9 +1189,8 @@ export function InputArea({
               </ComposerMenuRuntimeProvider>
             )}
 
-            {allowCommandMenus && (
+            {composerPresentation === 'default' && allowCommandMenus ? (
               <>
-                {/* Slash command button */}
                 <button
                   type="button"
                   onClick={handleSlashClick}
@@ -1099,7 +1199,6 @@ export function InputArea({
                 >
                   /
                 </button>
-
                 <button
                   type="button"
                   onClick={handleSkillClick}
@@ -1109,17 +1208,19 @@ export function InputArea({
                   $
                 </button>
               </>
-            )}
+            ) : null}
 
             {/* Token usage pie */}
-            <UsageIndicator
-              tokenCount={contextTokenCount}
-              maxTokens={maxContextTokens}
-              maxOutputTokens={outputTokenCap}
-              modelMaxOutputTokens={modelMaxOutputTokens}
-              isCompressing={isCompressing}
-              onCompress={onCompressContext}
-            />
+            {presentation !== 'entry' ? (
+              <UsageIndicator
+                tokenCount={contextTokenCount}
+                maxTokens={maxContextTokens}
+                maxOutputTokens={outputTokenCap}
+                modelMaxOutputTokens={modelMaxOutputTokens}
+                isCompressing={isCompressing}
+                onCompress={onCompressContext}
+              />
+            ) : null}
 
             {/* Media call count */}
             {inputAreaProjection.showMediaCallCount && (

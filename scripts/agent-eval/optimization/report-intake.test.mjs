@@ -24,7 +24,6 @@ function result(overrides = {}) {
     runId: 'run-creation-persona-failure',
     outcome: 'case-fail',
     target: { kind: 'skill', identity: identity() },
-    repositoryRevision: '0123456789abcdef',
     modelIdentity: { providerId: 'nekoapi-chat', modelId: 'gpt-5.5' },
     effectiveConfiguration: {
       runtimeProfileId: 'markdown',
@@ -125,7 +124,6 @@ function judge() {
     modelId: 'gpt-5-mini',
     profileId: 'content-quality-judge',
     rubricId: 'rain-station-draft-quality',
-    rubricVersion: 'v1',
     promptHash: HASH,
     sampling: { temperature: 0, maxTokens: 1_800 },
     criteria: [

@@ -59,7 +59,7 @@ diagnostic, capabilities, and selection behavior in list and grid layouts.
 
 #### Scenario: One project document cannot provide references
 
-- **WHEN** one Canvas or Cut project document cannot be migrated or validated while Media Library
+- **WHEN** one Canvas or Cut project document cannot be validated while Media Library
   roots remain inspectable
 - **THEN** the Media Library surface keeps the inspectable roots available and reports project
   reference coverage as incomplete
@@ -79,3 +79,14 @@ surfaces while retaining Assets ownership of library interactions and presentati
   and content start position
 - **AND** Media Library list/grid browsing, directory activation, thumbnail preview, and mutations
   remain owned by the existing Global Library browser
+
+### Requirement: Restored Media facet navigation cannot hide a fresh root projection
+
+The Resource Browser SHALL validate retained facet navigation against each new authoritative projection before
+filtering visible items.
+
+#### Scenario: Media facet remounts after browsing a library
+
+- **WHEN** a previous Media container identity is retained but the remounted search returns the Media root
+- **THEN** the facet returns to root and displays every available linked library
+- **AND** it does not describe the root as an empty successful result

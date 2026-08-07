@@ -23,8 +23,8 @@ export interface ConversationUpdateResult {
   queuedMessageCount?: number;
   /** If provided, update authoritative queued user message items */
   queuedMessages?: readonly AgentQueuedMessageItem[];
-  /** If provided, update queue snapshot version */
-  messageQueueVersion?: number;
+  /** If provided, update live queue event order. */
+  messageQueueSequence?: number;
 }
 
 /**
@@ -68,10 +68,10 @@ export function updateConversation(
           result.queuedMessages !== undefined
             ? result.queuedMessages
             : (streaming.queuedMessages ?? []),
-        messageQueueVersion:
-          result.messageQueueVersion !== undefined
-            ? result.messageQueueVersion
-            : streaming.messageQueueVersion,
+        messageQueueSequence:
+          result.messageQueueSequence !== undefined
+            ? result.messageQueueSequence
+            : streaming.messageQueueSequence,
       },
     };
   });

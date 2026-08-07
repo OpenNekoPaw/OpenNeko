@@ -35,6 +35,11 @@ export interface SemanticSourceStoredRecord {
   readonly sourceFingerprint: string;
 }
 
+export interface SemanticSourceProjectionListResult {
+  readonly sources: readonly SemanticSourceDescriptor[];
+  readonly diagnostics: readonly SemanticSourceDiagnostic[];
+}
+
 export interface SemanticSourceDiscoveryPort {
   listFiles(input: {
     readonly scope: SemanticSourceRuntimeScope;
@@ -52,7 +57,7 @@ export interface SemanticSourceDiscoveryPort {
 
 export interface SemanticSourceProjectionPort {
   getSource(sourceId: string): Promise<SemanticSourceStoredRecord | null>;
-  listSources(rootId: string): Promise<readonly SemanticSourceDescriptor[]>;
+  listSources(rootId: string): Promise<SemanticSourceProjectionListResult>;
   replaceSource(input: {
     readonly source: SemanticSourceDescriptor;
     readonly result: SemanticSourceAnalysisResult;
@@ -182,8 +187,9 @@ export class SemanticSourceCoordinator {
     this.reconcileContinuation.delete(rootId);
     this.reconcileSeen.delete(rootId);
     const stored = await this.ports.projection.listSources(rootId);
+    diagnostics.push(...stored.diagnostics);
     let deleted = 0;
-    for (const source of stored) {
+    for (const source of stored.sources) {
       if (seen.has(source.sourceId)) continue;
       if (await this.ports.projection.deleteSource(source.sourceId, this.now())) deleted += 1;
     }
@@ -377,7 +383,6 @@ export function isExcludedSemanticPath(relativePath: string): boolean {
   const segments = normalizeRelativePath(relativePath).toLocaleLowerCase().split('/');
   const excludedSegments = new Set([
     '.git',
-    '.neko',
     'node_modules',
     'dist',
     'build',
@@ -387,7 +392,9 @@ export function isExcludedSemanticPath(relativePath: string): boolean {
     'logs',
     'cache',
   ]);
-  if (segments.some((segment) => excludedSegments.has(segment))) return true;
+  if (segments.some((segment) => segment.startsWith('.') || excludedSegments.has(segment))) {
+    return true;
+  }
   const fileName = segments[segments.length - 1] ?? '';
   return (
     fileName.startsWith('.env') ||

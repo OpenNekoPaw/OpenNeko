@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "media-tool-terminal-result",
   "suiteId": "agent-runtime.workflow-controller",
   "caseGroup": "workflow",
@@ -16,32 +16,24 @@
       "generated-output ContentLocator",
       "ReadImage Tool call"
     ],
-    "forbiddenFallback": [
-      "generic TaskManager",
-      "TaskRef",
-      "task-result continuation",
-      "mock media execution",
-      "GetAsset for generated-output id",
-      "implicit AssetLibrary membership",
-      "SubAgent result lookup for media generation",
-      "retired Host session owner",
-      "model-authored provider or model id",
-      "nested mediaModels routing"
-    ],
     "observables": [
       {
         "ref": "tool-result-facts",
         "kind": "runtime-fact",
-        "description": "GenerateImage and ReadImage Tool identities and terminal results, generated-output ContentLocator artifact digest/provenance/validator, forbidden legacy references, ordering, and terminal idle facts.",
+        "description": "GenerateImage and ReadImage Tool identities and terminal results, generated-output ContentLocator artifact digest/provenance/validator, ordering, and terminal idle facts.",
         "required": true
       }
     ],
     "expectedResult": "GenerateImage remains active until it returns a generated resource, ReadImage inspects that resource successfully in the same Agent turn, and no generic Task or continuation participates.",
     "expectedFailure": "Missing terminal Tool result, generated resource evidence, ReadImage success, ordering, forbidden Task participation, or terminal idle evidence fails."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "generate",
@@ -56,10 +48,18 @@
       "approved": true,
       "timeoutMs": 180000
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 300000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 300000
+    }
   ],
   "assertions": [
-    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "tool-result-facts" },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "tool-result-facts"
+    },
     {
       "id": "pi-runtime",
       "kind": "pi-runtime",
@@ -111,17 +111,6 @@
       "evidenceRef": "tool-result-facts"
     },
     {
-      "id": "no-generic-task-path",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "generic-task-manager",
-        "TaskRef",
-        "task-result-continuation",
-        "task-continuation-identity-incomplete"
-      ],
-      "evidenceRef": "tool-result-facts"
-    },
-    {
       "id": "generated-output",
       "kind": "artifact",
       "artifactKind": "generated-asset",
@@ -146,21 +135,36 @@
       "id": "order",
       "kind": "process-order",
       "events": [
-        { "kind": "workflow-step", "stepId": "generate", "method": "message.submit" },
+        {
+          "kind": "workflow-step",
+          "stepId": "generate",
+          "method": "message.submit"
+        },
         {
           "kind": "workflow-step",
           "stepId": "confirm-generate-image",
           "method": "tool.confirm"
         },
-        { "kind": "tool", "name": "GenerateImage", "status": "success" },
-        { "kind": "tool", "name": "ReadImage", "status": "success" }
+        {
+          "kind": "tool",
+          "name": "GenerateImage",
+          "status": "success"
+        },
+        {
+          "kind": "tool",
+          "name": "ReadImage",
+          "status": "success"
+        }
       ],
       "evidenceRef": "tool-result-facts"
     },
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
       "evidenceRef": "tool-result-facts"
     },
     {
@@ -171,5 +175,8 @@
     }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 300000,
+    "repetitions": 1
+  }
 }

@@ -10,8 +10,6 @@ import {
   type WorkspaceMediaLibrarySyncDiagnostic,
 } from './asset/workspace-media-library-sync';
 
-export const DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION = 1 as const;
-
 export const DESKTOP_PROJECT_PORTABILITY_CHANNELS = {
   inspect: 'openneko:project-portability:inspect',
   plan: 'openneko:project-portability:plan',
@@ -25,17 +23,15 @@ export interface DesktopProjectPortabilityIdentity {
   readonly projectId: string;
   readonly workspaceId: string;
   readonly windowId: string;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
 }
 
 export interface DesktopProjectPortabilityRequest {
-  readonly version: typeof DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: DesktopProjectPortabilityIdentity;
 }
 
 export interface DesktopProjectPortabilityInspectResult {
-  readonly version: typeof DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: DesktopProjectPortabilityIdentity;
   readonly portability: WorkspaceMediaLibraryPortabilityProjection;
@@ -44,14 +40,12 @@ export interface DesktopProjectPortabilityInspectResult {
 
 export type DesktopProjectPortabilityPlanResult =
   | {
-      readonly version: typeof DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION;
       readonly requestId: string;
       readonly identity: DesktopProjectPortabilityIdentity;
       readonly status: 'planned';
       readonly plan: PortableMediaLibrarySnapshotPlan;
     }
   | {
-      readonly version: typeof DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION;
       readonly requestId: string;
       readonly identity: DesktopProjectPortabilityIdentity;
       readonly status: 'cancelled';
@@ -62,11 +56,10 @@ export interface DesktopProjectPortabilityResumeRequest extends DesktopProjectPo
 }
 
 export interface DesktopProjectPortabilityExecuteRequest extends DesktopProjectPortabilityResumeRequest {
-  readonly expectedOperationRevision: string;
+  readonly expectedOperationFingerprint: string;
 }
 
 export interface DesktopProjectPortabilityCancelResult {
-  readonly version: typeof DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: DesktopProjectPortabilityIdentity;
   readonly snapshotId: string;
@@ -74,17 +67,15 @@ export interface DesktopProjectPortabilityCancelResult {
 }
 
 export interface DesktopProjectPortabilityExecuteResult {
-  readonly version: typeof DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION;
   readonly requestId: string;
   readonly identity: DesktopProjectPortabilityIdentity;
   readonly snapshotId: string;
-  readonly requirementRevision: string;
+  readonly requirementFingerprint: string;
   readonly status: 'completed';
   readonly metadataDiagnostic?: 'snapshot-checkpoint-unavailable';
 }
 
 export interface DesktopProjectPortabilityProgressEvent {
-  readonly version: typeof DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION;
   readonly sequence: number;
   readonly identity: DesktopProjectPortabilityIdentity;
   readonly progress: PortableMediaLibrarySnapshotProgress;
@@ -113,10 +104,7 @@ export function createDesktopProjectPortabilityRequest(input: {
   readonly requestId: string;
   readonly identity: DesktopProjectPortabilityIdentity;
 }): DesktopProjectPortabilityRequest {
-  return parseDesktopProjectPortabilityRequest({
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
-    ...input,
-  });
+  return parseDesktopProjectPortabilityRequest(input);
 }
 
 export function createDesktopProjectPortabilityResumeRequest(input: {
@@ -124,32 +112,24 @@ export function createDesktopProjectPortabilityResumeRequest(input: {
   readonly identity: DesktopProjectPortabilityIdentity;
   readonly snapshotId: string;
 }): DesktopProjectPortabilityResumeRequest {
-  return parseDesktopProjectPortabilityResumeRequest({
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
-    ...input,
-  });
+  return parseDesktopProjectPortabilityResumeRequest(input);
 }
 
 export function createDesktopProjectPortabilityExecuteRequest(input: {
   readonly requestId: string;
   readonly identity: DesktopProjectPortabilityIdentity;
   readonly snapshotId: string;
-  readonly expectedOperationRevision: string;
+  readonly expectedOperationFingerprint: string;
 }): DesktopProjectPortabilityExecuteRequest {
-  return parseDesktopProjectPortabilityExecuteRequest({
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
-    ...input,
-  });
+  return parseDesktopProjectPortabilityExecuteRequest(input);
 }
 
 export function parseDesktopProjectPortabilityRequest(
   value: unknown,
 ): DesktopProjectPortabilityRequest {
   const record = requireRecord(value, 'Project portability request must be an object.');
-  requireOnlyKeys(record, ['version', 'requestId', 'identity']);
-  requireVersion(record['version']);
+  requireOnlyKeys(record, ['requestId', 'identity']);
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId: requireOpaque(
       record['requestId'],
       'Project portability request identity is invalid.',
@@ -162,10 +142,9 @@ export function parseDesktopProjectPortabilityResumeRequest(
   value: unknown,
 ): DesktopProjectPortabilityResumeRequest {
   const record = requireRecord(value, 'Project portability resume request must be an object.');
-  requireOnlyKeys(record, ['version', 'requestId', 'identity', 'snapshotId']);
+  requireOnlyKeys(record, ['requestId', 'identity', 'snapshotId']);
   return {
     ...parseDesktopProjectPortabilityRequest({
-      version: record['version'],
       requestId: record['requestId'],
       identity: record['identity'],
     }),
@@ -180,22 +159,15 @@ export function parseDesktopProjectPortabilityExecuteRequest(
   value: unknown,
 ): DesktopProjectPortabilityExecuteRequest {
   const record = requireRecord(value, 'Project portability execute request must be an object.');
-  requireOnlyKeys(record, [
-    'version',
-    'requestId',
-    'identity',
-    'snapshotId',
-    'expectedOperationRevision',
-  ]);
+  requireOnlyKeys(record, ['requestId', 'identity', 'snapshotId', 'expectedOperationFingerprint']);
   return {
     ...parseDesktopProjectPortabilityResumeRequest({
-      version: record['version'],
       requestId: record['requestId'],
       identity: record['identity'],
       snapshotId: record['snapshotId'],
     }),
-    expectedOperationRevision: requireOpaque(
-      record['expectedOperationRevision'],
+    expectedOperationFingerprint: requireOpaque(
+      record['expectedOperationFingerprint'],
       'Project portability operation revision is invalid.',
     ),
   };
@@ -205,10 +177,8 @@ export function parseDesktopProjectPortabilityInspectResult(
   value: unknown,
 ): DesktopProjectPortabilityInspectResult {
   const record = requireRecord(value, 'Project portability inspection must be an object.');
-  requireOnlyKeys(record, ['version', 'requestId', 'identity', 'portability', 'resumableSnapshot']);
-  requireVersion(record['version']);
+  requireOnlyKeys(record, ['requestId', 'identity', 'portability', 'resumableSnapshot']);
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId: requireOpaque(
       record['requestId'],
       'Project portability request identity is invalid.',
@@ -229,12 +199,10 @@ export function parseDesktopProjectPortabilityPlanResult(
   value: unknown,
 ): DesktopProjectPortabilityPlanResult {
   const record = requireRecord(value, 'Project portability plan result must be an object.');
-  requireVersion(record['version']);
   const status = record['status'];
   if (status === 'cancelled') {
-    requireOnlyKeys(record, ['version', 'requestId', 'identity', 'status']);
+    requireOnlyKeys(record, ['requestId', 'identity', 'status']);
     return {
-      version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
       requestId: requireOpaque(
         record['requestId'],
         'Project portability request identity is invalid.',
@@ -244,9 +212,8 @@ export function parseDesktopProjectPortabilityPlanResult(
     };
   }
   if (status !== 'planned') throw new Error('Project portability plan status is invalid.');
-  requireOnlyKeys(record, ['version', 'requestId', 'identity', 'status', 'plan']);
+  requireOnlyKeys(record, ['requestId', 'identity', 'status', 'plan']);
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId: requireOpaque(
       record['requestId'],
       'Project portability request identity is invalid.',
@@ -262,15 +229,13 @@ export function parseDesktopProjectPortabilityExecuteResult(
 ): DesktopProjectPortabilityExecuteResult {
   const record = requireRecord(value, 'Project portability execute result must be an object.');
   requireOnlyKeys(record, [
-    'version',
     'requestId',
     'identity',
     'snapshotId',
-    'requirementRevision',
+    'requirementFingerprint',
     'status',
     'metadataDiagnostic',
   ]);
-  requireVersion(record['version']);
   if (record['status'] !== 'completed') {
     throw new Error('Project portability execution status is invalid.');
   }
@@ -281,7 +246,6 @@ export function parseDesktopProjectPortabilityExecuteResult(
     throw new Error('Project portability metadata diagnostic is invalid.');
   }
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId: requireOpaque(
       record['requestId'],
       'Project portability request identity is invalid.',
@@ -291,8 +255,8 @@ export function parseDesktopProjectPortabilityExecuteResult(
       record['snapshotId'],
       'Project portability snapshot identity is invalid.',
     ),
-    requirementRevision: requireOpaque(
-      record['requirementRevision'],
+    requirementFingerprint: requireOpaque(
+      record['requirementFingerprint'],
       'Project portability requirement revision is invalid.',
     ),
     status: 'completed',
@@ -304,13 +268,11 @@ export function parseDesktopProjectPortabilityCancelResult(
   value: unknown,
 ): DesktopProjectPortabilityCancelResult {
   const record = requireRecord(value, 'Project portability cancel result must be an object.');
-  requireOnlyKeys(record, ['version', 'requestId', 'identity', 'snapshotId', 'status']);
-  requireVersion(record['version']);
+  requireOnlyKeys(record, ['requestId', 'identity', 'snapshotId', 'status']);
   if (record['status'] !== 'cancelled') {
     throw new Error('Project portability cancellation status is invalid.');
   }
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId: requireOpaque(
       record['requestId'],
       'Project portability request identity is invalid.',
@@ -328,10 +290,8 @@ export function parseDesktopProjectPortabilityProgressEvent(
   value: unknown,
 ): DesktopProjectPortabilityProgressEvent {
   const record = requireRecord(value, 'Project portability progress event must be an object.');
-  requireOnlyKeys(record, ['version', 'sequence', 'identity', 'progress']);
-  requireVersion(record['version']);
+  requireOnlyKeys(record, ['sequence', 'identity', 'progress']);
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     sequence: requireInteger(record['sequence'], 'Project portability event sequence is invalid.'),
     identity: parseDesktopProjectPortabilityIdentity(record['identity']),
     progress: parsePortableMediaLibrarySnapshotProgress(record['progress']),
@@ -346,24 +306,24 @@ export function isSameDesktopProjectPortabilityIdentity(
     left.projectId === right.projectId &&
     left.workspaceId === right.workspaceId &&
     left.windowId === right.windowId &&
-    left.endpointEpoch === right.endpointEpoch
+    left.rendererSessionId === right.rendererSessionId
   );
 }
 
 function parseDesktopProjectPortabilityIdentity(value: unknown): DesktopProjectPortabilityIdentity {
   const record = requireRecord(value, 'Project portability identity must be an object.');
-  requireOnlyKeys(record, ['projectId', 'workspaceId', 'windowId', 'endpointEpoch']);
+  requireOnlyKeys(record, ['projectId', 'workspaceId', 'windowId', 'rendererSessionId']);
   return {
     projectId: requireOpaque(record['projectId'], 'Project identity is invalid.'),
     workspaceId: requireOpaque(record['workspaceId'], 'Workspace identity is invalid.'),
     windowId: requireOpaque(record['windowId'], 'Window identity is invalid.'),
-    endpointEpoch: requireOpaque(record['endpointEpoch'], 'Endpoint epoch is invalid.'),
+    rendererSessionId: requireOpaque(record['rendererSessionId'], 'Endpoint epoch is invalid.'),
   };
 }
 
 function parsePortabilityProjection(value: unknown): WorkspaceMediaLibraryPortabilityProjection {
   const record = requireRecord(value, 'Project portability projection must be an object.');
-  requireOnlyKeys(record, ['state', 'requirementRevision', 'libraries']);
+  requireOnlyKeys(record, ['state', 'requirementFingerprint', 'libraries']);
   const state = record['state'];
   if (
     state !== 'linked-ready' &&
@@ -378,8 +338,8 @@ function parsePortabilityProjection(value: unknown): WorkspaceMediaLibraryPortab
   }
   return {
     state,
-    requirementRevision: requireOpaque(
-      record['requirementRevision'],
+    requirementFingerprint: requireOpaque(
+      record['requirementFingerprint'],
       'Project portability requirement revision is invalid.',
     ),
     libraries: record['libraries'].map(parseLibraryStatus),
@@ -393,7 +353,7 @@ function parseLibraryStatus(value: unknown): WorkspaceMediaLibraryStatus {
     'state',
     'referenceCount',
     'missingCount',
-    'operationRevision',
+    'operationFingerprint',
     'diagnostic',
   ]);
   const state = record['state'];
@@ -416,8 +376,8 @@ function parseLibraryStatus(value: unknown): WorkspaceMediaLibraryStatus {
       'Media Library reference count is invalid.',
     ),
     missingCount: requireInteger(record['missingCount'], 'Media Library missing count is invalid.'),
-    operationRevision: requireOpaque(
-      record['operationRevision'],
+    operationFingerprint: requireOpaque(
+      record['operationFingerprint'],
       'Media Library operation revision is invalid.',
     ),
     ...(record['diagnostic'] === undefined
@@ -434,10 +394,9 @@ function parseDiagnostic(value: unknown): WorkspaceMediaLibrarySyncDiagnostic {
   }
   const code = record['code'];
   const parsedProgress = parsePortableMediaLibrarySnapshotProgress({
-    version: 1,
     snapshotId: 'diagnostic',
     workspaceId: 'diagnostic',
-    requirementRevision: 'diagnostic',
+    requirementFingerprint: 'diagnostic',
     status: 'failed',
     completedEntryCount: 0,
     totalEntryCount: 0,
@@ -461,12 +420,6 @@ function parseDiagnostic(value: unknown): WorkspaceMediaLibrarySyncDiagnostic {
           ),
         }),
   };
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION) {
-    throw new Error('Project portability contract version is unsupported.');
-  }
 }
 
 function requireOpaque(value: unknown, message: string): string {

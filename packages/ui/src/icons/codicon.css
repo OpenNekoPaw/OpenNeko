@@ -1,1 +1,13 @@
 @import "@vscode/codicons/dist/codicon.css";
+
+/* The Desktop app protocol rejects query-bearing asset URLs. Redeclare the
+ * vendor face so Vite emits a canonical hashed font path without its source query. */
+@font-face {
+  font-family: "openneko-codicon";
+  font-display: block;
+  src: url("@vscode/codicons/dist/codicon.ttf") format("truetype");
+}
+
+.codicon[class*='codicon-'] {
+  font-family: "openneko-codicon";
+}

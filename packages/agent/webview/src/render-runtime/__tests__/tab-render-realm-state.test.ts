@@ -3,9 +3,10 @@ import { createTabRenderRuntimeRegistry } from '../tab-render-runtime';
 import {
   createTabRenderRealmStateCoordinator,
   parseTabRenderRealmState,
-  TAB_RENDER_REALM_STATE_VERSION,
+  readAgentEntryDraftSnapshot,
+  writeAgentEntryDraftSnapshot,
+  type AgentEntryDraftSnapshot,
   type TabRenderDraftSnapshot,
-  type TabRenderRealmState,
   type TabRenderRealmStateHost,
 } from '../tab-render-realm-state';
 
@@ -15,7 +16,6 @@ describe('Tab render realm state', () => {
   it('restores drafts by complete Tab binding and coalesces subsequent writes', () => {
     vi.useFakeTimers();
     const host = createHost({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
       drafts: [draft('tab-a', 'conv-a', 'draft-a'), draft('tab-b', 'conv-b', 'draft-b')],
     });
     const registry = createTabRenderRuntimeRegistry();
@@ -74,18 +74,31 @@ describe('Tab render realm state', () => {
     registry.dispose();
   });
 
-  it('rejects a persisted draft owned by another conversation', () => {
+  it('rejects only a persisted draft owned by another conversation', () => {
     const host = createHost({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
-      drafts: [draft('tab-a', 'conv-stale', 'stale')],
+      drafts: [draft('tab-a', 'conv-stale', 'stale'), draft('tab-b', 'conv-b', 'valid')],
     });
     const registry = createTabRenderRuntimeRegistry();
-    registry.reconcile([{ tabId: 'tab-a', conversationId: 'conv-a' }], 'tab-a');
+    registry.reconcile(
+      [
+        { tabId: 'tab-a', conversationId: 'conv-a' },
+        { tabId: 'tab-b', conversationId: 'conv-b' },
+      ],
+      'tab-a',
+    );
     const coordinator = createTabRenderRealmStateCoordinator(host.adapter, registry);
 
-    expect(() => coordinator.reconcile([{ tabId: 'tab-a', conversationId: 'conv-a' }])).toThrow(
-      'belongs to conv-stale, not conv-a',
-    );
+    expect(() =>
+      coordinator.reconcile([
+        { tabId: 'tab-a', conversationId: 'conv-a' },
+        { tabId: 'tab-b', conversationId: 'conv-b' },
+      ]),
+    ).not.toThrow();
+    expect(registry.require('tab-a').store.getSnapshot().state.inputValue).toBe('');
+    expect(registry.require('tab-b').store.getSnapshot().state.inputValue).toBe('valid');
+    expect(coordinator.getDiagnostics()).toEqual([
+      expect.objectContaining({ code: 'draft-owner-mismatch', tabId: 'tab-a' }),
+    ]);
 
     coordinator.dispose();
     registry.dispose();
@@ -94,7 +107,6 @@ describe('Tab render realm state', () => {
   it('removes only a closed Tab draft and flushes pending state during disposal', () => {
     vi.useFakeTimers();
     const host = createHost({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
       drafts: [draft('tab-a', 'conv-a', 'draft-a'), draft('tab-b', 'conv-b', 'draft-b')],
     });
     const registry = createTabRenderRuntimeRegistry();
@@ -117,78 +129,118 @@ describe('Tab render realm state', () => {
 
     expect(host.setState).toHaveBeenCalledTimes(1);
     expect(host.setState).toHaveBeenCalledWith({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
       drafts: [expect.objectContaining({ tabId: 'tab-b', conversationId: 'conv-b' })],
     });
     registry.dispose();
   });
 
-  it('fails visibly for unknown schemas and malformed draft fields', () => {
-    expect(() => parseTabRenderRealmState({ schemaVersion: 'unknown', drafts: [] })).toThrow(
-      'Unsupported Agent Tab render realm state schema',
-    );
-    expect(() =>
-      parseTabRenderRealmState({
-        schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
-        drafts: [{ ...draft('tab-a', 'conv-a', 'draft'), generationCategory: 'document' }],
+  it('rejects one malformed draft while restoring valid siblings', () => {
+    const parsed = parseTabRenderRealmState({
+      drafts: [
+        { ...draft('tab-a', 'conv-a', 'draft'), viewport: { followMode: 'sideways' } },
+        draft('tab-b', 'conv-b', 'valid'),
+      ],
+    });
+
+    expect(parsed.state).toEqual({ drafts: [draft('tab-b', 'conv-b', 'valid')] });
+    expect(parsed.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'invalid-draft',
+        draftIndex: 0,
+        tabId: 'tab-a',
+        message: expect.stringContaining('viewport.followMode has an unsupported value'),
       }),
-    ).toThrow('generationCategory has an unsupported value');
+    ]);
   });
 
-  it('migrates the retired timeline recovery projection to the canonical v1 state', () => {
-    const host = createHost({
-      agentTurnTimelineRecoveries: [
-        {
-          connectionEpoch: 'epoch-1',
-          conversationId: 'conv-a',
-          turnId: 'turn-a',
-          messageId: 'message-a',
-          lastAppliedDeliveryRevision: 1,
-        },
-      ],
-    } as never);
+  it('leaves an unrelated historical state untouched and reports a realm-local diagnostic', () => {
+    const persistedState = { unrelatedState: [{ marker: 'opaque' }] };
+    const host = createHost(persistedState);
     const registry = createTabRenderRuntimeRegistry();
 
     const coordinator = createTabRenderRealmStateCoordinator(host.adapter, registry);
 
-    expect(host.setState).toHaveBeenCalledWith({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
-      drafts: [],
-    });
+    expect(host.setState).not.toHaveBeenCalled();
+    expect(host.reportStateDiagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'invalid-realm-state' }),
+    );
+    expect(coordinator.getDiagnostics()).toHaveLength(1);
     coordinator.dispose();
     registry.dispose();
   });
 
-  it('does not treat arbitrary schema-less state as a legacy migration', () => {
-    expect(() => parseTabRenderRealmState({ openTabs: [] })).toThrow(
-      'Unsupported Agent Tab render realm state schema',
-    );
-    expect(() =>
-      parseTabRenderRealmState({
-        agentTurnTimelineRecoveries: [
-          {
-            connectionEpoch: 'epoch-1',
-            conversationId: 'conv-a',
-            turnId: 'turn-a',
-            messageId: 'message-a',
-            lastAppliedDeliveryRevision: 0,
-          },
-        ],
-      }),
-    ).toThrow('Unsupported Agent Tab render realm state schema');
+  it('keeps the surface available for invalid top-level state', () => {
+    expect(parseTabRenderRealmState({ openTabs: [] })).toEqual({
+      state: { drafts: [] },
+      diagnostics: [
+        {
+          code: 'invalid-realm-state',
+          message: 'Agent Tab render realm state drafts must be an array.',
+        },
+      ],
+    });
+  });
+
+  it('restores one exact entry draft and isolates an owner mismatch', () => {
+    const stored = entryDraft('draft-a', 'continue the scene');
+    const host = createMutableHost({ drafts: [], entryDraft: stored });
+
+    expect(readAgentEntryDraftSnapshot(host.adapter, 'draft-a')).toEqual({
+      snapshot: stored,
+      diagnostics: [],
+    });
+    expect(readAgentEntryDraftSnapshot(host.adapter, 'draft-b')).toEqual({
+      diagnostics: [
+        expect.objectContaining({
+          code: 'entry-draft-owner-mismatch',
+          message: expect.stringContaining('draft-a'),
+        }),
+      ],
+    });
+    expect(host.state).toEqual({ drafts: [], entryDraft: stored });
+  });
+
+  it('writes and clears only the entry draft while preserving Tab drafts', () => {
+    const tabDraft = draft('tab-a', 'conv-a', 'tab text');
+    const host = createMutableHost({ drafts: [tabDraft] });
+    const stored = entryDraft('draft-a', 'entry text');
+
+    writeAgentEntryDraftSnapshot(host.adapter, stored);
+    expect(host.state).toEqual({ drafts: [tabDraft], entryDraft: stored });
+
+    writeAgentEntryDraftSnapshot(host.adapter, undefined);
+    expect(host.state).toEqual({ drafts: [tabDraft] });
+  });
+
+  it('isolates an invalid entry draft without dropping valid Tab drafts', () => {
+    const tabDraft = draft('tab-a', 'conv-a', 'tab text');
+    const parsed = parseTabRenderRealmState({
+      drafts: [tabDraft],
+      entryDraft: {
+        ...entryDraft('draft-a', 'entry text'),
+        draftId: '',
+      },
+    });
+
+    expect(parsed.state).toEqual({ drafts: [tabDraft] });
+    expect(parsed.diagnostics).toEqual([expect.objectContaining({ code: 'invalid-entry-draft' })]);
   });
 });
 
-function createHost(state: TabRenderRealmState | undefined): {
+function createHost(state: unknown): {
   readonly adapter: TabRenderRealmStateHost;
   readonly setState: ReturnType<typeof vi.fn>;
+  readonly reportStateDiagnostic: ReturnType<typeof vi.fn>;
 } {
   const setState = vi.fn();
+  const reportStateDiagnostic = vi.fn();
   return {
     setState,
+    reportStateDiagnostic,
     adapter: {
       getState: () => state,
       setState,
+      reportStateDiagnostic,
     },
   };
 }
@@ -198,19 +250,34 @@ function draft(tabId: string, conversationId: string, inputValue: string): TabRe
     tabId,
     conversationId,
     inputValue,
-    selectedModel: 'provider:model',
-    mediaModelSelection: { image: 'none', video: 'none', audio: 'none' },
-    mediaUnderstandingSelection: { image: 'auto', video: 'auto', audio: 'auto' },
-    sessionMode: 'agent',
+    viewport: { followMode: 'follow-tail' },
+  };
+}
+
+function entryDraft(draftId: string, inputValue: string): AgentEntryDraftSnapshot {
+  return {
+    draftId,
+    inputValue,
+    contextReferences: [],
+    selectedModel: 'test:test-model',
     executionMode: 'ask',
-    generationCategory: 'image',
-    generationParams: {
-      ratio: '16:9',
-      resolution: '1080p',
-      videoDuration: 'auto',
-      videoFps: 24,
-      audioDuration: 'auto',
-      audioType: 'sfx',
+  };
+}
+
+function createMutableHost(initialState: unknown): {
+  readonly adapter: TabRenderRealmStateHost;
+  readonly state: unknown;
+} {
+  let state = initialState;
+  return {
+    get state() {
+      return state;
+    },
+    adapter: {
+      getState: () => state,
+      setState: (next) => {
+        state = next;
+      },
     },
   };
 }

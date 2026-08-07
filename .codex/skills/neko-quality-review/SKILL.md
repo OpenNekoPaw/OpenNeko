@@ -81,7 +81,7 @@ Source of truth:
 
    For Agent Evaluation platform, scenario, debug automation protocol, or exported fact-contract changes, run the key-free harness gate documented by the platform. This is not real Agent behavior acceptance. If the change can alter prompt or Skill behavior, capability/tool registration or routing, provider/model selection, AgentSession multi-turn/queue/async/recovery behavior, or Desktop Agent event projection, use `neko-agent-evaluation` to produce focused path-level evidence. Review the recorded blocking condition and residual risk when a real case could not run. Do not infer that scenario assertions passed unless the current runner executed an evaluator for them.
 
-   For renderer/Webview visual, layout, interaction, focus, CSP, media preview, or lifecycle changes, build the affected package and validate an isolated Electron Desktop fixture through the production package or controlled app runtime. Use Computer Use for visible interaction evidence when required. A generic browser or Vite page may assist explicit browser-compatibility work, but it does not exercise preload, typed IPC, Electron CSP, window focus, or Desktop resource lifecycle.
+   For implemented user-visible UI behavior, use `neko-ui-validation` to derive the affected function inventory and produce focused functional, visual, and adjacent-regression evidence. Treat a failed or blocked UI result as an advisory finding or follow-up, not a blocking code finding, unless the same defect is independently established by a functional, contract, security, or code-gate failure. Renderer/Webview behavior that crosses focus, CSP, media preview, host messaging, native resources, or lifecycle boundaries should still use an isolated Electron Desktop fixture through the production package or controlled app runtime; browser-only evidence cannot prove those boundaries.
 
 ## Review Checklist
 
@@ -121,6 +121,7 @@ Always check:
 Add domain checks as needed:
 
 - Webview/UX: component reuse audit, layout, theme, focus, keyboard, i18n, and runtime evidence from an isolated Electron Desktop fixture; browser-only screenshots do not count as Desktop IPC/lifecycle acceptance evidence.
+- UI reference review: when run, inspect the `neko-ui-validation` applicability decision, acceptance inventory, authoritative runtime, functional and visual results, adjacent regression evidence, and residual risk. Report findings accurately without making this advisory review a code gate.
 - Engine/media: `cargo test`, CLI smoke, `serve` integration, performance before/after when relevant.
 - Proto/shared: generated types are synchronized and callers are migrated.
 - Agent/AI: tool contracts, permissions, Journal/traceability, failure recovery, and whether the change triggers `neko-agent-evaluation`. When triggered, check focused canonical-path evidence, forbidden-fallback evidence, assertion support in the current runner, and either a real Desktop complete-session result or an explicit blocking condition with residual risk. Protocol-only, mock-only, or final-text-only results do not count as Agent behavior acceptance.

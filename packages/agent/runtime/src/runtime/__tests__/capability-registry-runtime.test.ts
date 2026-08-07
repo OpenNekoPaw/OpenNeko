@@ -23,7 +23,6 @@ function createTool(name: string): Tool {
 function createProvider(id: string, tools: Tool[]): AgentCapabilityProvider {
   return {
     id,
-    version: '1.0.0',
     getTools: () => tools,
   };
 }
@@ -84,7 +83,6 @@ describe('CapabilityRegistryRuntime', () => {
     runtime.replaceManifests([
       {
         id: 'neko.installed',
-        version: '1.0.0',
         displayName: 'Installed',
         capabilities: [],
       },
@@ -194,14 +192,15 @@ describe('CapabilityRegistryRuntime', () => {
       profileId: 'studio.shot-review',
       kind: 'artifact',
       protocol: 'GenericTable',
-      version: 1,
       source: 'package',
       columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
     };
     const providerCard: ProviderCard = {
+      profileId: 'provider-expression:flux',
+      kind: 'provider-expression',
+      source: 'builtin',
       providerId: 'flux',
       displayName: 'Flux',
-      version: '1.0.0',
       capabilities: ['image.generate'],
       sourceLayer: 'builtin',
       syntaxProfile: { notes: [] },
@@ -213,13 +212,13 @@ describe('CapabilityRegistryRuntime', () => {
       {
         ...createProvider('neko.profiles', []),
         getArtifactProfiles: () => [artifactProfile],
-        getProviderCards: () => [providerCard],
+        getProviderExpressionProfiles: () => [providerCard],
       },
       { hostContext: {} },
     );
 
-    expect(artifactProfileRegistry.get('studio.shot-review', 1)).toEqual(artifactProfile);
-    expect(providerExpressionProfileRegistry.get('provider-expression:flux', '1.0.0')).toEqual(
+    expect(artifactProfileRegistry.get('studio.shot-review')).toEqual(artifactProfile);
+    expect(providerExpressionProfileRegistry.get('provider-expression:flux')).toEqual(
       expect.objectContaining({
         profileId: 'provider-expression:flux',
         kind: 'provider-expression',
@@ -229,9 +228,7 @@ describe('CapabilityRegistryRuntime', () => {
 
     runtime.unregisterProvider('neko.profiles');
 
-    expect(artifactProfileRegistry.get('studio.shot-review', 1)).toBeUndefined();
-    expect(
-      providerExpressionProfileRegistry.get('provider-expression:flux', '1.0.0'),
-    ).toBeUndefined();
+    expect(artifactProfileRegistry.get('studio.shot-review')).toBeUndefined();
+    expect(providerExpressionProfileRegistry.get('provider-expression:flux')).toBeUndefined();
   });
 });

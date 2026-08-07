@@ -138,10 +138,6 @@ export { AgentError, type AgentErrorCategory, type AgentErrorInfo } from './erro
 
 // Export executor
 
-// Export memory
-export { FileProjectMemoryManager, createFileProjectMemoryManager, MemoryRecall } from './memory';
-export type { MemoryRecallOptions, RecalledMemory } from './memory';
-
 // Export MCP
 export {
   StdioMCPClient,
@@ -294,23 +290,7 @@ export {
   type PromptCompositionFragmentProjection,
 } from './prompt';
 
-// Export settings hook execution
-export {
-  type HookExecutionResult,
-  type ISettingsFileSystem,
-  type IShellExecutor,
-  type LoadedSettingsHook,
-  type SettingsHookLoadResult,
-  type SettingsHookLoaderOptions,
-  SettingsHookLoader,
-  createSettingsHookLoader,
-} from './hook-loader';
-
 // Export session management
-export {
-  RetiredAgentMetadataStoreError,
-  type RetiredAgentMetadataStoreKind,
-} from './retired-metadata-store';
 export {
   buildConversationHistoryClearedMessage,
   createConversationId,
@@ -373,7 +353,8 @@ export {
 // Export workspace/content layout helpers
 export {
   NEKO_AGENTS_FILE_NAME,
-  NEKO_CONTENT_DIR,
+  PERSONAL_NEKO_CONTENT_DIR,
+  PROJECT_NEKO_CONTENT_DIR,
   NEKO_CONTENT_SUBDIRS,
   resolveAgentsFile,
   resolveNekoContentDir,

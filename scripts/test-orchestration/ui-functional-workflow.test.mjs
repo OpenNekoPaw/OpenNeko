@@ -6,10 +6,14 @@ import { describe, it } from 'node:test';
 import { createDesktopUiFunctionalLaunch } from '../run-desktop-ui-functional.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const REMOTE_GATE_ROOTS = Object.freeze(['check:ci', 'gate:remote', 'ci:remote']);
-const LOCAL_RUNTIME_SCRIPTS = Object.freeze([
-  'dev:desktop',
+const CODE_GATE_ROOTS = Object.freeze([
+  'check:ci',
+  'gate:local',
+  'gate:remote',
+  'ci:local',
+  'ci:remote',
 ]);
+const LOCAL_RUNTIME_SCRIPTS = Object.freeze(['dev:desktop']);
 
 describe('Desktop functional workflow boundary', () => {
   it('launches graphical UI acceptance with isolated functional and Electron data roots', () => {
@@ -100,7 +104,7 @@ describe('Desktop functional workflow boundary', () => {
     }
   });
 
-  it('keeps VS Code, GUI startup, and real API commands unreachable from remote gates', async () => {
+  it('keeps VS Code, GUI startup, and real API commands unreachable from code gates', async () => {
     const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'));
     const scripts = packageJson.scripts ?? {};
     const workflowRoot = join(repoRoot, '.github/workflows');
@@ -114,7 +118,7 @@ describe('Desktop functional workflow boundary', () => {
       workflowSources.some((source) => referencesScript(source, scriptName)),
     );
     const reachableScripts = collectReachableScripts(scripts, [
-      ...REMOTE_GATE_ROOTS,
+      ...CODE_GATE_ROOTS,
       ...workflowRoots,
     ]);
 
@@ -128,13 +132,22 @@ describe('Desktop functional workflow boundary', () => {
       assert.equal(
         reachableScripts.has(localScript),
         false,
-        `${localScript} must not be reachable from remote CI`,
+        `${localScript} must not be reachable from code gates or CI`,
       );
     }
     assert.equal(
       scripts['test:local:ui'],
       'node scripts/run-desktop-ui-functional.mjs',
       'graphical UI acceptance must retain one explicit local launcher',
+    );
+    assert.equal(
+      scripts['test:local:ui:contract'],
+      'node --test scripts/local-ui-validation/ui-validation-skill.test.mjs',
+      'advisory UI policy and coverage must retain one explicit local contract',
+    );
+    assert.doesNotMatch(
+      scripts['check:test-orchestration'] ?? '',
+      /local-ui-validation|ui-validation-skill/u,
     );
     assert.equal(
       scripts['test:local:media-openneko'],
@@ -148,7 +161,7 @@ describe('Desktop functional workflow boundary', () => {
     for (const source of workflowSources) {
       assert.doesNotMatch(
         source,
-        /vscode-debug-config\.local\.mjs|test:local:|run-desktop-(?:ui-functional|openneko-qualification)\.mjs|OPENNEKO_(?:DESKTOP_FUNCTIONAL_HOME|MEDIA_QUALIFICATION_ROOT)|openneko-functional-fixture/u,
+        /vscode-debug-config\.local\.mjs|local-ui-validation|ui-validation-skill|test:local:|run-desktop-(?:ui-functional|openneko-qualification)\.mjs|OPENNEKO_(?:DESKTOP_FUNCTIONAL_HOME|MEDIA_QUALIFICATION_ROOT)|openneko-functional-fixture/u,
       );
     }
   });

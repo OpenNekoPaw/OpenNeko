@@ -6,7 +6,6 @@ import type {
 } from '@neko/canvas-domain';
 import {
   CANVAS_CUT_DRAFT_KIND,
-  CANVAS_CUT_DRAFT_SCHEMA_VERSION,
   isCanvasCutDraftPayload,
   projectCanvasPlaybackRouteToCutDraft,
   validateCanvasCutDraftPayload,
@@ -60,8 +59,8 @@ describe('canvas cut draft contract', () => {
     const result = projectCanvasPlaybackRouteToCutDraft({
       plan,
       sourceCanvasUri: 'neko://canvas/project.nkc',
-      sourceRevision: 7,
-      currentSourceRevision: 7,
+      sourceContentFingerprint: 'sha256:canvas-source',
+      currentSourceFingerprint: 'sha256:canvas-source',
       projectName: 'Scene 1 Cut',
       routeId: 'scene:scene-1',
     });
@@ -70,8 +69,10 @@ describe('canvas cut draft contract', () => {
     if (!result.ok) throw new Error('Expected draft projection to succeed.');
     expect(result.payload).toMatchObject({
       kind: CANVAS_CUT_DRAFT_KIND,
-      schemaVersion: CANVAS_CUT_DRAFT_SCHEMA_VERSION,
-      source: { canvasUri: 'neko://canvas/project.nkc', revision: 7 },
+      source: {
+        canvasUri: 'neko://canvas/project.nkc',
+        contentFingerprint: 'sha256:canvas-source',
+      },
       route: { id: 'scene:scene-1', unitIds: ['shot-a', 'shot-b'] },
       projectName: 'Scene 1 Cut',
     });
@@ -122,18 +123,47 @@ describe('canvas cut draft contract', () => {
     ]);
   });
 
-  it('rejects stale source revisions before Cut import', () => {
+  it('rejects changed source content before Cut import', () => {
     const result = projectCanvasPlaybackRouteToCutDraft({
       plan: createPlan(),
       sourceCanvasUri: 'neko://canvas/project.nkc',
-      sourceRevision: 3,
-      currentSourceRevision: 4,
+      sourceContentFingerprint: 'sha256:previous-source',
+      currentSourceFingerprint: 'sha256:current-source',
     });
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics).toEqual([
       expect.objectContaining({ code: 'draft-stale-source', severity: 'error' }),
     ]);
+
+    expect(
+      projectCanvasPlaybackRouteToCutDraft({
+        plan: createPlan(),
+        sourceCanvasUri: 'neko://canvas/project.nkc',
+        currentSourceFingerprint: 'sha256:current-source',
+      }),
+    ).toMatchObject({
+      ok: false,
+      diagnostics: [expect.objectContaining({ code: 'draft-stale-source' })],
+    });
+  });
+
+  it('rejects only a draft whose source contains non-canonical fields', () => {
+    const invalid = {
+      ...createPayload(),
+      source: {
+        canvasUri: 'neko://canvas/project.nkc',
+        contentFingerprint: 'sha256:canvas-source',
+        unexpected: 'unsupported',
+      },
+    };
+    const sibling = createPayload();
+
+    expect(validateCanvasCutDraftPayload(invalid)).toMatchObject({
+      valid: false,
+      diagnostics: [expect.objectContaining({ code: 'draft-invalid-root' })],
+    });
+    expect(validateCanvasCutDraftPayload(sibling).valid).toBe(true);
   });
 
   it('rejects invalid extension namespaces and timeline semantics', () => {
@@ -259,8 +289,7 @@ function playbackUnit(id: string, overrides: Partial<CanvasPlaybackUnit> = {}): 
 function createPayload(overrides: Partial<CanvasCutDraftPayload> = {}): CanvasCutDraftPayload {
   return {
     kind: CANVAS_CUT_DRAFT_KIND,
-    schemaVersion: CANVAS_CUT_DRAFT_SCHEMA_VERSION,
-    source: { canvasUri: 'neko://canvas/project.nkc', revision: 1 },
+    source: { canvasUri: 'neko://canvas/project.nkc', contentFingerprint: 'sha256:canvas-source' },
     route: {
       id: 'auto-entry:shot-a',
       title: 'Shot A',

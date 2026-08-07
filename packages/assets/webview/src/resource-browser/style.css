@@ -9,6 +9,11 @@
   background: var(--neko-sideBar-background, #ffffff);
 }
 
+.neko-resource-browser > .neko-entity-inspector {
+  max-height: min(52%, 460px);
+  flex: 0 1 auto;
+}
+
 .neko-resource-browser__header {
   display: flex;
   align-items: center;
@@ -21,10 +26,10 @@
   justify-content: space-between;
 }
 
-.neko-resource-browser__header > div {
+.neko-resource-browser__toolbar {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 
 .neko-resource-browser__library-menu {
@@ -59,6 +64,41 @@
   white-space: nowrap;
 }
 
+.neko-resource-browser__context-menu {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  width: max-content;
+  min-width: 178px;
+  padding: 4px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 7px;
+  color: var(--neko-foreground, #26312c);
+  background: var(--neko-elevated, #ffffff);
+  box-shadow: var(--neko-shadow, 0 8px 24px rgb(21 31 27 / 16%));
+}
+
+.neko-resource-browser__context-menu > button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 7px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.neko-resource-browser__dialog input {
+  min-width: 220px;
+  height: 30px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 6px;
+  padding: 0 8px;
+  color: inherit;
+  background: var(--neko-input-background, #f7f8f7);
+}
+
 .neko-resource-browser button {
   border: 1px solid transparent;
   border-radius: 7px;
@@ -88,7 +128,8 @@
   font-size: 11px;
 }
 
-.neko-resource-browser__header button {
+.neko-resource-browser__header button,
+.neko-resource-browser__toolbar .neko-resource-browser__icon-button {
   width: 28px;
   height: 28px;
   padding: 0;
@@ -156,7 +197,7 @@
 
 .neko-resource-browser__facets {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 3px;
   padding: 3px 7px;
   border-bottom: 1px solid var(--neko-border, #e2e5e3);
@@ -445,6 +486,16 @@
 
 .neko-resource-browser-status.is-error {
   color: var(--neko-errorForeground, #a3404e);
+}
+
+.neko-resource-browser__diagnostics {
+  display: grid;
+  gap: 2px;
+  padding: 5px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--neko-errorForeground, #a3404e) 35%, transparent);
+  color: var(--neko-errorForeground, #a3404e);
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .neko-resource-browser__dialog-backdrop {

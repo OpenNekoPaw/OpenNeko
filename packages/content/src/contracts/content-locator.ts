@@ -21,7 +21,6 @@ export interface DocumentEntryContentLocator {
 export interface GeneratedOutputContentLocator {
   readonly kind: 'generated-output';
   readonly outputId: string;
-  readonly revision: string;
   readonly digest: string;
   readonly path: string;
 }
@@ -100,7 +99,6 @@ export function contentLocatorsEqual(left: ContentLocator, right: ContentLocator
       return (
         right.kind === 'generated-output' &&
         left.outputId === right.outputId &&
-        left.revision === right.revision &&
         left.digest === right.digest &&
         left.path === right.path
       );
@@ -134,13 +132,7 @@ export function contentLocatorKey(locator: ContentLocator): string {
         locator.fingerprint?.value,
       ]);
     case 'generated-output':
-      return JSON.stringify([
-        locator.kind,
-        locator.outputId,
-        locator.revision,
-        locator.digest,
-        locator.path,
-      ]);
+      return JSON.stringify([locator.kind, locator.outputId, locator.digest, locator.path]);
     case 'package-resource':
       return JSON.stringify([
         locator.kind,
@@ -159,15 +151,15 @@ export function normalizeWorkspaceContentPath(value: string): string | undefined
   if (normalized.includes('${')) return undefined;
   if (normalized.startsWith('/') || /^[A-Za-z]:(?:\/|$)/.test(normalized)) return undefined;
   if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(normalized)) return undefined;
-  if (normalized.startsWith('.neko/.cache/') || normalized.startsWith('neko/.cache/')) {
-    return undefined;
-  }
-
   const segments = normalized.split('/');
   if (
     segments.some(
       (segment) =>
-        segment.length === 0 || segment === '.' || segment === '..' || segment.includes(':'),
+        segment.length === 0 ||
+        segment === '.' ||
+        segment === '..' ||
+        segment.startsWith('.') ||
+        segment.includes(':'),
     )
   ) {
     return undefined;
@@ -259,14 +251,13 @@ function validateGeneratedOutputLocator(
     typeof value['path'] === 'string' ? normalizeWorkspaceContentPath(value['path']) : undefined;
   if (
     !isStableOwnerIdentity(value['outputId']) ||
-    !isStableOwnerIdentity(value['revision']) ||
     !isDigest(value['digest']) ||
     !path ||
     path !== value['path']
   ) {
     return invalidLocator(
       'content-locator-invalid-identity',
-      'Generated output locator requires stable identity, digest, revision, and workspace path.',
+      'Generated output locator requires stable identity, digest, and workspace path.',
     );
   }
   return {
@@ -274,7 +265,6 @@ function validateGeneratedOutputLocator(
     locator: {
       kind: 'generated-output',
       outputId: value['outputId'],
-      revision: value['revision'],
       digest: value['digest'],
       path,
     },
@@ -373,7 +363,7 @@ function fingerprintsEqual(
 
 const WORKSPACE_FILE_KEYS = ['kind', 'path', 'fingerprint'] as const;
 const DOCUMENT_ENTRY_KEYS = ['kind', 'source', 'entryPath', 'fingerprint'] as const;
-const GENERATED_OUTPUT_KEYS = ['kind', 'outputId', 'revision', 'digest', 'path'] as const;
+const GENERATED_OUTPUT_KEYS = ['kind', 'outputId', 'digest', 'path'] as const;
 const PACKAGE_RESOURCE_KEYS = [
   'kind',
   'packageId',

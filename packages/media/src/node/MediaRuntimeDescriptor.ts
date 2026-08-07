@@ -9,12 +9,9 @@ import {
 } from './NodeFfmpegProcess';
 import { NodeMediaRuntime } from './NodeMediaRuntime';
 
-export const MEDIA_RUNTIME_DESCRIPTOR_SCHEMA = 'openneko.media-runtime.v2';
-
 export type MediaRuntimeTarget = 'darwin-arm64';
 
 export interface MediaRuntimeDescriptor {
-  readonly schemaVersion: typeof MEDIA_RUNTIME_DESCRIPTOR_SCHEMA;
   readonly target: MediaRuntimeTarget;
   readonly ffmpegVersion: string;
   readonly ffprobeVersion: string;
@@ -115,9 +112,15 @@ export async function verifyMediaRuntimeDirectory(
 }
 
 function parseMediaRuntimeDescriptor(value: unknown): MediaRuntimeDescriptor {
-  if (!isRecord(value) || value['schemaVersion'] !== MEDIA_RUNTIME_DESCRIPTOR_SCHEMA) {
-    throw new Error('Media runtime descriptor schema is invalid.');
-  }
+  if (!isRecord(value)) throw new Error('Media runtime descriptor must be an object.');
+  requireExactKeys(value, [
+    'target',
+    'ffmpegVersion',
+    'ffprobeVersion',
+    'license',
+    'executables',
+    'requiredCapabilities',
+  ]);
   const target = value['target'];
   if (target !== 'darwin-arm64') {
     throw new Error('Media runtime descriptor fields are invalid.');
@@ -141,7 +144,6 @@ function parseMediaRuntimeDescriptor(value: unknown): MediaRuntimeDescriptor {
   });
   assertCapabilityFloor(target, requiredCapabilities);
   return Object.freeze({
-    schemaVersion: MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
     target,
     ffmpegVersion,
     ffprobeVersion,
@@ -295,4 +297,17 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireExactKeys(
+  value: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+): void {
+  const unexpected = Object.keys(value).filter((key) => !expected.includes(key));
+  const missing = expected.filter((key) => !Object.hasOwn(value, key));
+  if (unexpected.length > 0 || missing.length > 0) {
+    throw new Error(
+      `Media runtime descriptor fields are invalid. Missing: ${missing.join(', ') || 'none'}; unsupported: ${unexpected.join(', ') || 'none'}.`,
+    );
+  }
 }

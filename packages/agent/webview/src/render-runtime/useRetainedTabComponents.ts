@@ -24,7 +24,7 @@ export function useRetainedTabComponents({
   sessionStateByConversation,
 }: UseRetainedTabComponentsInput): ReadonlySet<string> {
   const policyRef = useRef<TabComponentRetentionPolicy>();
-  const [, publishRetentionChange] = useReducer((revision: number) => revision + 1, 0);
+  const [, publishRetentionChange] = useReducer((value: boolean) => !value, false);
   policyRef.current ??= createTabComponentRetentionPolicy();
 
   useLayoutEffect(() => {

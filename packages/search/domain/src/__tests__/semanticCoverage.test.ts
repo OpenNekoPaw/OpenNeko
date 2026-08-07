@@ -17,10 +17,10 @@ describe('semantic coverage coordinator', () => {
             range: { startLine: 1, endLine: 10 },
             segmentIds: ['segment-1'],
             evidenceIds: ['evidence-1'],
-            provider: { providerId: 'semantic.sidecar', schemaVersion: '1' },
+            provider: { providerId: 'semantic.sidecar' },
           },
         ],
-        provider: { providerId: 'semantic.sidecar', schemaVersion: '1' },
+        provider: { providerId: 'semantic.sidecar' },
       }),
     );
     coordinator.registerSemanticCoverageProvider(
@@ -36,7 +36,7 @@ describe('semantic coverage coordinator', () => {
           },
         ],
         staleReasons: ['range-partial'],
-        provider: { providerId: 'semantic.gaps', schemaVersion: '1' },
+        provider: { providerId: 'semantic.gaps' },
       }),
     );
 
@@ -54,8 +54,6 @@ describe('semantic coverage coordinator', () => {
         staleReasons: ['range-partial'],
       }),
     );
-    expect(JSON.stringify(result)).not.toContain('.neko/.cache');
-    expect(JSON.stringify(result)).not.toContain('.neko/semantic-index');
   });
 
   it('preserves stale metadata and isolates provider failures', async () => {
@@ -64,31 +62,31 @@ describe('semantic coverage coordinator', () => {
       makeProvider('semantic.stale', {
         coverage: 'stale',
         freshness: 'stale',
-        staleReasons: ['provider-version', 'schema-version'],
+        staleReasons: ['source-fingerprint', 'index-stale'],
         matchedRanges: [
           {
             coverage: 'stale',
             freshness: 'stale',
             range: { startLine: 1, endLine: 5 },
-            staleReasons: ['provider-version'],
+            staleReasons: ['source-fingerprint'],
             provider: {
               providerId: 'semantic.stale',
-              modelVersion: 'old',
-              schemaVersion: '1',
+              model: 'embedding-local',
+              sourceIdentity: 'stale-source',
             },
           },
         ],
         provider: {
           providerId: 'semantic.stale',
-          modelVersion: 'old',
-          schemaVersion: '1',
+          model: 'embedding-local',
+          sourceIdentity: 'stale-source',
         },
       }),
     );
     coordinator.registerSemanticCoverageProvider({
       providerId: 'semantic.failing',
       querySemanticCoverage: vi.fn(async () => {
-        throw new Error('/mock/workspace/.neko/.cache/private.db');
+        throw new Error('/mock/workspace/.private/cache/private.db');
       }),
     });
 
@@ -96,7 +94,7 @@ describe('semantic coverage coordinator', () => {
 
     expect(result.coverage).toBe('partial');
     expect(result.freshness).toBe('partial');
-    expect(result.staleReasons).toEqual(['provider-version', 'schema-version']);
+    expect(result.staleReasons).toEqual(['source-fingerprint', 'index-stale']);
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -106,7 +104,7 @@ describe('semantic coverage coordinator', () => {
       ]),
     );
     expect(JSON.stringify(result)).not.toContain('private.db');
-    expect(JSON.stringify(result)).not.toContain('.neko/.cache');
+    expect(JSON.stringify(result)).not.toContain('.private/cache');
   });
 
   it('reports missing coverage when no provider is registered', async () => {
@@ -164,7 +162,7 @@ function createCoordinator(): ProjectIndexCoordinator {
 
 function makeProvider(
   providerId: string,
-  result: Omit<ProjectSemanticCoverageResult, 'query' | 'projectRoot' | 'generation'>,
+  result: Omit<ProjectSemanticCoverageResult, 'query' | 'projectRoot'>,
 ): ProjectSemanticCoverageProvider {
   return {
     providerId,
@@ -172,7 +170,6 @@ function makeProvider(
       query,
       ...result,
       ...(context.projectRoot ? { projectRoot: context.projectRoot } : {}),
-      generation: 1,
     })),
   };
 }

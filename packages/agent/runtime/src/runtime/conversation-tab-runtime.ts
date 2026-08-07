@@ -1,5 +1,4 @@
 import {
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildAgentSessionDiagnosticMessage,
   buildAmbientCanvasUpdateMessage,
   buildExternalInputMessage,
@@ -88,7 +87,6 @@ export type ChatRestorePlanAction =
 
 export interface BuildChatRestorePlanInput {
   tabState: TabState;
-  tabStateRevision: number;
   hasWebview: boolean;
   pluginCommands?: NonNullable<PluginCommandsMessage['commands']>;
 }
@@ -200,20 +198,12 @@ export function buildChatPluginCommandsMessage(
   return buildPluginCommandsMessage(commands);
 }
 
-export function buildChatTabStateMessage(tabState: TabState, revision: number): TabStateMessage {
-  return buildTabStateMessage(tabState, revision);
+export function buildChatTabStateMessage(tabState: TabState): TabStateMessage {
+  return buildTabStateMessage(tabState);
 }
 
 export function buildInvalidWebviewPayloadMessage(raw: unknown): AgentSessionDiagnosticMessage {
   const messageType = readMessageType(raw);
-  if (messageType === 'projectionEndpointDiscover') {
-    const receivedVersion = readProtocolVersion(raw);
-    return buildAgentSessionDiagnosticMessage({
-      code: 'webview-protocol-mismatch',
-      action: messageType,
-      message: `Agent Webview protocol mismatch: Desktop host expects v${AGENT_WEBVIEW_PROTOCOL_VERSION}, Webview sent ${receivedVersion === null ? 'no version' : `v${receivedVersion}`}. Reload the Webview.`,
-    });
-  }
   const keys = readMessageKeys(raw);
   return buildAgentSessionDiagnosticMessage({
     code: 'invalid-webview-message',
@@ -224,10 +214,6 @@ export function buildInvalidWebviewPayloadMessage(raw: unknown): AgentSessionDia
 
 function readMessageType(raw: unknown): string | null {
   return isRecord(raw) && typeof raw.type === 'string' ? raw.type : null;
-}
-
-function readProtocolVersion(raw: unknown): number | null {
-  return isRecord(raw) && typeof raw.protocolVersion === 'number' ? raw.protocolVersion : null;
 }
 
 function readMessageKeys(raw: unknown): string[] {
@@ -253,7 +239,7 @@ export function buildChatRestorePlan(input: BuildChatRestorePlanInput): ChatRest
   }
   actions.push({
     type: 'postTabState',
-    message: buildTabStateMessage(input.tabState, input.tabStateRevision),
+    message: buildTabStateMessage(input.tabState),
   });
 
   actions.push({ type: 'sendAgentStateSnapshot' });

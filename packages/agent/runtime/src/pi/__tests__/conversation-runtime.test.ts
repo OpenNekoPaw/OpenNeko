@@ -30,7 +30,7 @@ const MODEL: Model<'openai-completions'> = {
   name: 'Main',
   api: 'openai-completions',
   provider: 'newapi',
-  baseUrl: 'https://newapi.example.invalid/v1',
+  baseUrl: 'https://newapi.example.invalid/api',
   reasoning: false,
   input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -178,7 +178,6 @@ describe('PiConversationRuntime', () => {
           generationJob: {
             kind: 'generation-job',
             jobId: 'generation-1',
-            revision: 3,
             phase: 'succeeded',
           },
         },
@@ -543,6 +542,63 @@ describe('PiConversationRuntime', () => {
     runtime.dispose();
   });
 
+  it('checkpoints the submitted message when provider transport startup fails', async () => {
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+    const models = createFixtureModels(() => {
+      throw new Error('provider transport is offline');
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+
+    await expect(
+      runtime.execute({
+        turnId: 'turn-provider-startup-failed',
+        runId: 'run-provider-startup-failed',
+        prompt: 'retain this submitted message',
+        modelPolicy,
+        skillSnapshot: await emptySkills(),
+        capabilityTools: [],
+        permissionPolicy: { preflight: () => ({ allowed: true }) },
+        workspaceTrusted: true,
+        events: { emit: () => undefined },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      (await authority.readBranchEntries('conversation-1', 'branch-main'))
+        .filter((entry) => entry.type === 'message')
+        .map((entry) => entry.message),
+    ).toMatchObject([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'retain this submitted message' }],
+      },
+      {
+        role: 'assistant',
+        content: [],
+        stopReason: 'error',
+        errorMessage: 'provider transport is offline',
+      },
+    ]);
+    expect(
+      authority.readCheckpoint('conversation-1', 'turn-provider-startup-failed'),
+    ).toMatchObject({ terminalState: 'failed' });
+    runtime.dispose();
+  });
+
   it('keeps the writer lease alive between turns for the lifetime of the runtime', async () => {
     await authority.dispose();
     vi.useFakeTimers();
@@ -600,7 +656,7 @@ describe('PiConversationRuntime', () => {
       ).resolves.toBeUndefined();
       expect(authority.readCheckpoint('conversation-1', 'turn-2')).toMatchObject({
         terminalState: 'completed',
-        writerEpoch: 1,
+        writerLeaseId: lease.leaseId,
       });
     } finally {
       runtime.dispose();
@@ -664,6 +720,78 @@ describe('PiConversationRuntime', () => {
     } finally {
       await otherHost.dispose();
       vi.useRealTimers();
+    }
+  });
+
+  it('preserves the original checkpoint error after terminal projection without a second failure turn', async () => {
+    const lease = authority.acquireLease('conversation-terminal-checkpoint-failure');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-terminal-checkpoint-failure',
+      branchId: 'branch-main',
+    });
+    let finishProvider: (() => void) | undefined;
+    const models = createFixtureModels(() => {
+      const stream = createAssistantMessageEventStream();
+      const message = assistant('stop', 'completed before checkpoint');
+      stream.push({ type: 'start', partial: message });
+      finishProvider = () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      };
+      return stream;
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-terminal-checkpoint-failure',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'base',
+    });
+    const events: PiProductAgentEvent[] = [];
+    const execution = runtime.execute({
+      turnId: 'turn-terminal-checkpoint-failure',
+      runId: 'run-terminal-checkpoint-failure',
+      prompt: 'complete then lose the lease',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: collect(events),
+    });
+    await vi.waitFor(() => expect(finishProvider).toBeTypeOf('function'));
+    const otherHost = await NodePiConversationAuthority.create({
+      userDataRoot: root,
+      workspaceId: 'workspace-1',
+      hostId: 'desktop-checkpoint-takeover',
+    });
+    const takeover = otherHost.acquireLease('conversation-terminal-checkpoint-failure', {
+      takeover: true,
+    });
+
+    try {
+      finishProvider?.();
+      await expect(execution).rejects.toMatchObject({ code: 'lease-stale' });
+      expect(events.filter((event) => event.type === 'turn.completed')).toHaveLength(1);
+      expect(events.filter((event) => event.type === 'turn.failed')).toHaveLength(0);
+      expect(events.at(-1)).toMatchObject({
+        type: 'turn.persistence',
+        state: 'persistence-delayed',
+      });
+      expect(
+        authority.readCheckpoint(
+          'conversation-terminal-checkpoint-failure',
+          'turn-terminal-checkpoint-failure',
+        ),
+      ).toBeUndefined();
+      expect(() => runtime.dispose()).not.toThrow();
+      otherHost.releaseLease(takeover);
+    } finally {
+      await otherHost.dispose();
     }
   });
 

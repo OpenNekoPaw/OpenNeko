@@ -16,7 +16,7 @@ describe('Global Library contract', () => {
     expect(first).not.toContain('Hero.png');
   });
 
-  it('creates revisioned thumbnail descriptors only for images and videos', () => {
+  it('creates source-fingerprinted thumbnail descriptors only for images and videos', () => {
     expect(
       createGlobalLibraryThumbnailDescriptor({
         owner: 'global-asset-library',
@@ -26,7 +26,7 @@ describe('Global Library contract', () => {
         byteLength: 42,
       }),
     ).toMatchObject({
-      revision: '2026-07-31T00:00:00.000Z:42',
+      sourceFingerprint: '2026-07-31T00:00:00.000Z:42',
       mediaType: 'image',
     });
     expect(
@@ -53,7 +53,7 @@ describe('Global Library contract', () => {
         availability: 'available',
         thumbnail: {
           descriptorId: 'global-asset-library:thumb',
-          revision: '2026-07-31T00:00:00.000Z:42',
+          sourceFingerprint: '2026-07-31T00:00:00.000Z:42',
           mediaType: 'image',
         },
       }),
@@ -113,9 +113,8 @@ describe('Global Library contract', () => {
     const request = {
       owner: 'global-asset-library' as const,
       itemId: 'global-asset-library:1',
-      expectedCatalogRevision: 2,
       descriptorId: 'global-asset-library:thumb',
-      thumbnailRevision: 'revision:42',
+      sourceFingerprint: 'fingerprint:42',
       variant: 'hover' as const,
     };
     expect(parseGlobalLibraryThumbnailRequest(request)).toEqual(request);
@@ -125,8 +124,8 @@ describe('Global Library contract', () => {
         dataUrl: 'data:image/png;base64,AA==',
       }),
     ).toEqual({ ...request, dataUrl: 'data:image/png;base64,AA==' });
-    expect(() =>
-      parseGlobalLibraryThumbnailRequest({ ...request, expectedCatalogRevision: -1 }),
-    ).toThrow('revision');
+    expect(() => parseGlobalLibraryThumbnailRequest({ ...request, sourceFingerprint: '' })).toThrow(
+      'source fingerprint',
+    );
   });
 });

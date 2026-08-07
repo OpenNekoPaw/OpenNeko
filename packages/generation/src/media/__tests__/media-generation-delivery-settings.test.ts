@@ -21,11 +21,11 @@ describe('media-generation-delivery-settings', () => {
     expect(
       buildMediaGenerationDeliverySettingsPlan({
         workspaceRoot: '/repo',
-        defaultOutputDir: '/repo/.neko/.cache/generated',
+        defaultOutputDir: '/home/.neko/workspace-cache/workspace-id/generated',
       }),
     ).toEqual({
       workspaceRoot: '/repo',
-      outputDir: '/repo/.neko/.cache/generated',
+      outputDir: '/home/.neko/workspace-cache/workspace-id/generated',
       showSaveNotification: true,
     });
   });

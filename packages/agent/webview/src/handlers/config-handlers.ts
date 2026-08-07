@@ -1,7 +1,7 @@
 /**
  * Config Message Handlers
  *
- * Handles: settingsData, projectFiles, configState, configChanged
+ * Handles: settingsData, projectFiles, configState
  */
 
 import { defineHandler } from './types';
@@ -11,7 +11,6 @@ import type {
   SettingsDataMessage,
   ProjectFilesMessage,
   ConfigStateMessage,
-  ConfigChangedMessage,
   PluginCommandsMessage,
   PluginsAvailableMessage,
   ProviderMutationResultMessage,
@@ -25,7 +24,6 @@ import {
   projectSettingsDataMessage,
   projectSettingsMutationError,
 } from '../presenters/config-message-presenter';
-import { AgentHostMessages } from '../messages';
 import type { SettingsDataProjection } from '@neko/agent-contracts';
 
 /**
@@ -46,7 +44,7 @@ const handleSettingsData: MessageHandler<'settingsData'> = (
     settingsPatch: projection.settingsPatch,
   });
   if (!projection.selectedModel && defaultChatModel) {
-    AgentHostMessages.updateSettings(
+    context.agentHostMessages.updateSettings(
       {
         providerId: defaultChatModel.providerId,
         modelId: defaultChatModel.modelId,
@@ -106,16 +104,6 @@ const handleConfigState: MessageHandler<'configState'> = (message: ConfigStateMe
 };
 
 /**
- * Handle 'configChanged' message - Configuration changed
- */
-const handleConfigChanged: MessageHandler<'configChanged'> = (
-  _message: ConfigChangedMessage,
-  _context,
-) => {
-  // Deprecated: Agent config is snapshot-loaded on session/tab open, not file-watch refresh.
-};
-
-/**
  * Handle 'pluginCommands' message - Plugin slash commands from external extensions
  */
 const handlePluginCommands: MessageHandler<'pluginCommands'> = (
@@ -152,7 +140,6 @@ export const configHandlers: HandlerRegistration[] = [
   defineHandler('settingsData', handleSettingsData),
   defineHandler('projectFiles', handleProjectFiles),
   defineHandler('configState', handleConfigState),
-  defineHandler('configChanged', handleConfigChanged),
   defineHandler('settingsUpdated', handleSettingsMutationAck),
   defineHandler('modelAdded', handleSettingsMutationAck),
   defineHandler('modelRemoved', handleSettingsMutationAck),

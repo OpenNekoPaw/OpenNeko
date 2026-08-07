@@ -87,7 +87,6 @@ describe('project cache/search contracts', () => {
       generatorId: 'media-thumbnail',
       sourceFingerprint: 'hero.png',
       specFingerprint: 'thumbnail-256',
-      revision: '1',
     };
     const item: ProjectSearchItem = {
       id: 'script-role:/workspace/cases/test.fountain:小橘',
@@ -162,7 +161,6 @@ describe('project cache/search contracts', () => {
     const [semanticItem] = projectMediaSemanticIndexToSearchItems({
       projectRoot: '/workspace',
       index: {
-        version: 1,
         assetId: 'asset-page-1',
         sourceRef: {
           kind: 'asset',
@@ -230,20 +228,16 @@ describe('project cache/search contracts', () => {
     expect(isProjectSearchItem(observationItem)).toBe(true);
   });
 
-  it('validates cache manifests with partition generation metadata', () => {
+  it('validates cache manifests with source freshness metadata', () => {
     expect(
       isProjectSearchCacheManifest({
-        version: 1,
         projectRoot: '/workspace',
         createdAt: '2026-05-18T00:00:00.000Z',
         updatedAt: '2026-05-18T00:00:00.000Z',
-        generation: 3,
         sourceIdentity: 'workspace:123',
         partitions: [
           {
             partition: 'media-library',
-            version: 1,
-            generation: 3,
             freshness: 'fresh',
             itemCount: 12,
             sourceIdentity: 'media-library:mtime',
@@ -254,12 +248,35 @@ describe('project cache/search contracts', () => {
     ).toBe(true);
     expect(
       isProjectSearchCacheManifest({
-        version: 1,
         projectRoot: '/workspace',
         createdAt: '2026-05-18T00:00:00.000Z',
         updatedAt: '2026-05-18T00:00:00.000Z',
-        generation: 3,
         partitions: [{ partition: 'unknown' }],
+      }),
+    ).toBe(false);
+    expect(
+      isProjectSearchCacheManifest({
+        unexpectedField: 1,
+        projectRoot: '/workspace',
+        createdAt: '2026-05-18T00:00:00.000Z',
+        updatedAt: '2026-05-18T00:00:00.000Z',
+        partitions: [],
+      }),
+    ).toBe(false);
+    expect(
+      isProjectSearchCacheManifest({
+        projectRoot: '/workspace',
+        createdAt: '2026-05-18T00:00:00.000Z',
+        updatedAt: '2026-05-18T00:00:00.000Z',
+        partitions: [
+          {
+            partition: 'documents',
+            unexpectedField: 1,
+            freshness: 'fresh',
+            itemCount: 1,
+            updatedAt: '2026-05-18T00:00:00.000Z',
+          },
+        ],
       }),
     ).toBe(false);
   });
@@ -287,10 +304,7 @@ describe('project cache/search contracts', () => {
       isProjectSemanticProviderMetadata({
         providerId: 'rag.local',
         model: 'text-embedding-local',
-        modelVersion: '2026-05-18',
-        chunkingVersion: 'document-v1',
         sourceIdentity: 'workspace:abc',
-        indexVersion: 'idx-1',
       }),
     ).toBe(true);
     expect(isProjectSemanticProviderMetadata({ model: 'missing-provider' })).toBe(false);
@@ -304,10 +318,8 @@ describe('project cache/search contracts', () => {
         provider: { providerId: 'rag.local', semantic: true, partitions: ['documents'] },
         semantic: {
           providerId: 'rag.local',
-          modelVersion: '2026-05-18',
-          chunkingVersion: 'document-v1',
+          model: 'text-embedding-local',
           sourceIdentity: 'workspace:abc',
-          indexVersion: 'idx-1',
         },
       }),
     ).toBe(true);
@@ -327,7 +339,6 @@ describe('project cache/search contracts', () => {
         semantic: {
           providerId: 'semantic-index.local',
           sourceIdentity: 'semantic-index:mtime',
-          indexVersion: 'semantic-index-v1',
         },
       }),
     ).toBe(true);
@@ -358,7 +369,8 @@ describe('project cache/search contracts', () => {
     expect(isProjectSemanticCoverageStatus('unknown')).toBe(false);
     expect(isProjectSemanticCoverageAnalysisKind('ocr')).toBe(true);
     expect(isProjectSemanticCoverageAnalysisKind('workflow-route')).toBe(false);
-    expect(isProjectSemanticCoverageStaleReason('schema-version')).toBe(true);
+    expect(isProjectSemanticCoverageStaleReason('source-fingerprint')).toBe(true);
+    expect(isProjectSemanticCoverageStaleReason('schema-version')).toBe(false);
     expect(isProjectSemanticCoverageStaleReason('local-cache-row')).toBe(false);
   });
 
@@ -381,9 +393,7 @@ describe('project cache/search contracts', () => {
           evidenceIds: ['evidence-1'],
           provider: {
             providerId: 'semantic-index.local',
-            schemaVersion: '1',
             skillId: 'storyboard',
-            skillVersion: '2026-06-11',
           },
         },
         {
@@ -413,10 +423,8 @@ describe('project cache/search contracts', () => {
       ],
       provider: {
         providerId: 'semantic-index.local',
-        schemaVersion: '1',
       },
       projectRoot: '/workspace',
-      generation: 7,
     };
 
     expect(validateProjectSemanticCoverageQuery(query)).toEqual([]);
@@ -455,7 +463,7 @@ describe('project cache/search contracts', () => {
       sourceRef: {
         kind: 'runtime',
         runtimeKind: 'cache-path',
-        value: '${PROJECT}/.neko/.cache/semantic/pages.json',
+        value: 'scratch://semantic/pages.json',
       },
     };
     const badResult = {
@@ -464,7 +472,7 @@ describe('project cache/search contracts', () => {
       freshness: 'fresh',
       provider: {
         providerId: 'semantic-index.local',
-        sourceIdentity: '${PROJECT}/.neko/semantic-index/comic/page-1.json',
+        sourceIdentity: 'sqlite://semantic-index/comic/page-1.json',
       },
     };
 
@@ -510,8 +518,6 @@ function makeCoverageQuery(): ProjectSemanticCoverageQuery {
     },
     analysisKind: 'ocr',
     skillId: 'storyboard',
-    skillVersion: '2026-06-11',
-    schemaVersion: '1',
     projectRoot: '/workspace',
   };
 }

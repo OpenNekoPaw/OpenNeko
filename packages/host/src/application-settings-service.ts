@@ -1,6 +1,4 @@
 import {
-  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-  DesktopApplicationSettingsContractError,
   parseDesktopApplicationPreferences,
   type DesktopApplicationPreferences,
   type DesktopApplicationSettingsProjection,
@@ -8,15 +6,12 @@ import {
 } from './application-settings-contract';
 
 export interface DesktopApplicationSettingsStoredState {
-  readonly schemaVersion: typeof DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION;
-  readonly storageRevision: number;
   readonly preferences: DesktopApplicationPreferences;
 }
 
 export interface DesktopApplicationSettingsRepositoryPort {
   read(): Promise<DesktopApplicationSettingsStoredState>;
   commit(
-    expectedRevision: number,
     next: DesktopApplicationSettingsStoredState,
   ): Promise<DesktopApplicationSettingsStoredState>;
 }
@@ -52,7 +47,6 @@ export class DesktopApplicationSettingsService {
   }
 
   async update(
-    expectedRevision: number,
     preferences: DesktopApplicationPreferences,
   ): Promise<DesktopApplicationSettingsProjection> {
     let resolveResult!: (value: DesktopApplicationSettingsProjection) => void;
@@ -63,23 +57,15 @@ export class DesktopApplicationSettingsService {
     });
     const operation = this.operationTail.then(async () => {
       this.requireActive();
-      const current = this.requireState();
-      if (current.storageRevision !== expectedRevision) {
-        throw new DesktopApplicationSettingsContractError(
-          'desktop-application-settings-stale-revision',
-          `Desktop settings revision ${expectedRevision} is stale; current revision is ${current.storageRevision}.`,
-        );
-      }
-      const committed = await this.repository.commit(expectedRevision, {
-        schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-        storageRevision: expectedRevision + 1,
+      this.requireState();
+      const committed = await this.repository.commit({
+        ...this.state,
         preferences: parseDesktopApplicationPreferences(preferences),
       });
       this.state = committed;
       this.eventSequence += 1;
       const projection = this.project();
       const event: DesktopApplicationSettingsProjectionEvent = {
-        schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
         sequence: this.eventSequence,
         projection,
       };
@@ -102,8 +88,6 @@ export class DesktopApplicationSettingsService {
   private project(): DesktopApplicationSettingsProjection {
     const state = this.requireState();
     return {
-      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
-      revision: state.storageRevision,
       eventSequence: this.eventSequence,
       preferences: state.preferences,
     };

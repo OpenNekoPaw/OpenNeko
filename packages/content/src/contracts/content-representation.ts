@@ -73,7 +73,6 @@ export interface ContentRepresentationLocator {
   readonly generatorId: string;
   readonly sourceFingerprint: string;
   readonly specFingerprint: string;
-  readonly revision: string;
 }
 
 export interface ContentRepresentationMetadata {
@@ -159,7 +158,6 @@ export interface ContentRepresentationGeneratorResult {
 
 export interface ContentRepresentationGenerator {
   readonly id: string;
-  readonly revision: string;
   readonly kinds: readonly ContentRepresentationKind[];
   generate(
     input: ContentRepresentationGeneratorInput,
@@ -169,13 +167,18 @@ export interface ContentRepresentationGenerator {
 export function isContentRepresentationLocator(
   value: unknown,
 ): value is ContentRepresentationLocator {
-  if (!isRecord(value) || value['kind'] !== 'content-representation') return false;
+  if (
+    !isRecord(value) ||
+    value['kind'] !== 'content-representation' ||
+    !hasOnlyKeys(value, CONTENT_REPRESENTATION_LOCATOR_KEYS)
+  ) {
+    return false;
+  }
   if (
     typeof value['id'] !== 'string' ||
     typeof value['generatorId'] !== 'string' ||
     typeof value['sourceFingerprint'] !== 'string' ||
     typeof value['specFingerprint'] !== 'string' ||
-    typeof value['revision'] !== 'string' ||
     !isContentLocator(value['source']) ||
     !isContentRepresentationSpec(value['spec'])
   ) {
@@ -282,6 +285,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const allowed = new Set(keys);
+  return Object.keys(value).every((key) => allowed.has(key));
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -305,3 +313,14 @@ function isNonEmptyString(value: unknown): value is string {
 function isOptionalImageFormat(value: unknown): boolean {
   return value === undefined || value === 'png' || value === 'jpeg' || value === 'webp';
 }
+
+const CONTENT_REPRESENTATION_LOCATOR_KEYS = [
+  'kind',
+  'id',
+  'representationKind',
+  'source',
+  'spec',
+  'generatorId',
+  'sourceFingerprint',
+  'specFingerprint',
+] as const;

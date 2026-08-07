@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   CUT_HOST_RUNTIME_ROUTES,
-  CUT_HOST_RUNTIME_VERSION,
   DEFAULT_CUT_HOST_PRESENTATION,
   applyCutCommand,
   createOtioTimeline,
@@ -17,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
-  DESKTOP_SHELL_CONTRACT_VERSION,
+  projectDesktopConversationNavigation,
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
@@ -27,6 +26,11 @@ import {
   setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
+import {
+  createDefaultDesktopApplicationSidebar,
+  parseDesktopWorkbenchSceneProjection,
+} from '@neko/host/desktop-scene-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 const roots: string[] = [];
 
@@ -42,12 +46,10 @@ describe('DesktopCutRuntime', () => {
     const identity = createIdentity('cuts/new-story.otio');
     const runtime = createRuntime(workspacePath, identity);
     const created = await runtime.execute(identity.windowId, {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'create-request',
       commandId: 'create-command',
       route: CUT_HOST_RUNTIME_ROUTES.documentCreate,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'cut:document-create',
         name: 'New Story',
@@ -70,28 +72,24 @@ describe('DesktopCutRuntime', () => {
         ],
       },
     });
-    expect(created.snapshot).toMatchObject({ revision: 1, dirty: false });
+    expect(created.snapshot).toMatchObject({ dirty: false });
 
     const appended = await runtime.execute(identity.windowId, {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'append-request',
       commandId: 'append-command',
       route: CUT_HOST_RUNTIME_ROUTES.commandExecute,
       identity,
-      expectedRevision: 1,
       payload: {
         type: 'append-route',
         items: [{ kind: 'gap', durationFrames: 30, rate: 30 }],
       },
     });
-    expect(appended.snapshot).toMatchObject({ revision: 2, dirty: true });
+    expect(appended.snapshot).toMatchObject({ dirty: true });
     await runtime.execute(identity.windowId, {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'save-request',
       commandId: 'save-command',
       route: CUT_HOST_RUNTIME_ROUTES.save,
       identity,
-      expectedRevision: 2,
     });
     const persisted = parseOtio(await readFile(path.join(workspacePath, identity.documentId)));
     expect(persisted).toMatchObject({ ok: true });
@@ -123,8 +121,8 @@ describe('DesktopCutRuntime', () => {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'project-view-1',
-      viewEpoch: 1,
-      endpointEpoch: 'endpoint-1',
+      viewInstanceId: 'view-instance-1',
+      rendererSessionId: 'endpoint-1',
     };
     const workspace = {
       workspaceId: 'workspace-1',
@@ -134,7 +132,7 @@ describe('DesktopCutRuntime', () => {
     };
     let workbench = openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
       viewId: 'canvas:project-view-1:board',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       kind: 'canvas',
@@ -151,42 +149,71 @@ describe('DesktopCutRuntime', () => {
       createdAt: '2026-07-29T00:00:00.000Z',
       updatedAt: '2026-07-29T00:00:00.000Z',
     };
-    const getProjection = (): DesktopShellProjection => ({
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
-      applicationInstanceId: 'application-1',
-      endpointEpoch: 'endpoint-1',
-      projectionRevision: workbench.revision,
-      catalog: {
-        revision: 1,
-        projects: [project],
+    const agentHome = {
+      conversations: [],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const catalog = { projects: [project] };
+    const sceneId = 'scene:window-1:workspace-1';
+    const scope = {
+      kind: 'workspace' as const,
+      draftId: 'draft:workspace-1',
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant:workspace-1',
+    };
+    const scene = parseDesktopWorkbenchSceneProjection({
+      sceneId,
+      windowId: 'window-1',
+      context: { kind: 'agent', agentViewId: 'project-view-1', scope },
+      slots: {
+        interaction: {
+          kind: 'agent',
+          agentSurfaceId: 'agent-surface:workspace-1',
+          agentViewId: 'project-view-1',
+          phase: 'draft',
+          scope,
+        },
+        rightManager: { kind: 'workspace-resources', workspaceId: 'workspace-1' },
+        status: { kind: 'scene-status', sceneId },
       },
+    });
+    const getProjection = (): DesktopShellProjection => ({
+      applicationInstanceId: 'application-1',
+      rendererSessionId: 'endpoint-1',
+      catalog,
       window: {
         windowId: 'window-1',
-        revision: workbench.revision,
         activeTarget: { kind: 'project', tabId: 'tab-1' },
         tabs: [
           {
             tabId: 'tab-1',
             projectId: 'project-1',
             viewId: 'project-view-1',
-            viewEpoch: 1,
+            viewInstanceId: 'view-instance-1',
           },
         ],
-        workbench,
+        workbench: (() => {
+          return createDesktopWindowComposition({
+            workbenchInstanceId: 'workbench:workspace-1',
+            layout: workbench,
+            scene,
+          });
+        })(),
+        applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
       },
-      agentHome: {
-        revision: 0,
-        conversations: [],
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-      },
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(
+        catalog,
+        agentHome,
+        catalog.projects.map((project) => project.projectId),
+      ),
       domains: [],
     });
     const updateWorkbench = vi.fn(
       async (
         _windowId: string,
-        _endpointEpoch: string,
-        _windowRevision: number,
-        _workbenchRevision: number,
+        _rendererSessionId: string,
+        _workbenchInstanceId: string,
         next: DesktopWorkbenchLayoutProjection,
       ) => {
         workbench = next;
@@ -205,7 +232,6 @@ describe('DesktopCutRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCutRuntimeFocusTest'),
       }),
     });
@@ -318,12 +344,10 @@ describe('DesktopCutRuntime', () => {
     await runtime.subscribe('window-1', identity, (event) => events.push(event));
 
     const next = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'request-1',
       commandId: 'command-1',
       route: CUT_HOST_RUNTIME_ROUTES.commandExecute,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'add-track',
         trackId: 'audio-1',
@@ -335,10 +359,8 @@ describe('DesktopCutRuntime', () => {
     expect(initial.document).toMatchObject({
       documentUri: documentId,
       sessionId: identity.sessionId,
-      revision: 0,
     });
     expect(next.snapshot.document).toMatchObject({
-      revision: 1,
       tracks: expect.arrayContaining([
         expect.objectContaining({ trackId: 'audio-1', kind: 'Audio' }),
       ]),
@@ -346,23 +368,22 @@ describe('DesktopCutRuntime', () => {
     expect(events).toEqual([
       expect.objectContaining({
         sequence: 1,
-        snapshot: expect.objectContaining({ revision: 1 }),
+        snapshot: expect.objectContaining({ dirty: true }),
       }),
     ]);
 
     const recoveredIdentity = {
       ...identity,
-      endpointEpoch: 'endpoint-2',
+      rendererSessionId: 'endpoint-2',
     };
     authority.current = recoveredIdentity;
     await expect(runtime.getSnapshot('window-1', recoveredIdentity)).resolves.toMatchObject({
-      identity: { endpointEpoch: 'endpoint-2' },
-      revision: 1,
+      identity: { rendererSessionId: 'endpoint-2' },
     });
     await expect(runtime.getSnapshot('window-1', identity)).rejects.toThrow('stale Cut authority');
   });
 
-  it('rejects stale revisions without mutating the session', async () => {
+  it('serializes operations inside the owning session', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-stale-'));
     roots.push(workspacePath);
     const documentId = 'story.otio';
@@ -382,17 +403,23 @@ describe('DesktopCutRuntime', () => {
     const runtime = createRuntime(workspacePath, identity);
     await runtime.getSnapshot('window-1', identity);
 
-    await expect(
-      runtime.execute('window-1', {
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
-        requestId: 'stale-request',
-        commandId: 'stale-command',
-        route: CUT_HOST_RUNTIME_ROUTES.undo,
-        identity,
-        expectedRevision: 3,
-      }),
-    ).rejects.toThrow('stale');
-    expect((await runtime.getSnapshot('window-1', identity)).revision).toBe(0);
+    const first = runtime.execute('window-1', {
+      requestId: 'presentation-request-1',
+      commandId: 'presentation-command-1',
+      route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
+      identity,
+      payload: { ...DEFAULT_CUT_HOST_PRESENTATION, previewVolume: 0.5 },
+    });
+    const second = runtime.execute('window-1', {
+      requestId: 'presentation-request-2',
+      commandId: 'presentation-command-2',
+      route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
+      identity,
+      payload: { ...DEFAULT_CUT_HOST_PRESENTATION, previewVolume: 0.25 },
+    });
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect((await runtime.getSnapshot('window-1', identity)).presentation.previewVolume).toBe(0.25);
   });
 
   it('owns command idempotency, history, dirty, save and presentation in one session', async () => {
@@ -418,12 +445,10 @@ describe('DesktopCutRuntime', () => {
     await runtime.subscribe('window-1', identity, (event) => events.push(event));
 
     const commandRequest = {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'command-request',
       commandId: 'command-idempotency-key',
       route: CUT_HOST_RUNTIME_ROUTES.commandExecute,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'add-track',
         trackId: 'audio-1',
@@ -437,7 +462,7 @@ describe('DesktopCutRuntime', () => {
       requestId: 'command-replay-request',
     });
     expect(replayed).toEqual(changed);
-    expect(changed.snapshot).toMatchObject({ revision: 1, dirty: true });
+    expect(changed.snapshot).toMatchObject({ dirty: true });
     expect(events).toHaveLength(1);
 
     const presentation = {
@@ -448,29 +473,24 @@ describe('DesktopCutRuntime', () => {
       overviewVisible: false,
     };
     const presented = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'presentation-request',
       commandId: 'presentation-command',
       route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
       identity,
-      expectedRevision: 1,
       payload: presentation,
     });
     expect(presented.snapshot).toMatchObject({
-      revision: 1,
       dirty: true,
       presentation,
     });
 
     const saved = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'save-request',
       commandId: 'save-command',
       route: CUT_HOST_RUNTIME_ROUTES.save,
       identity,
-      expectedRevision: 1,
     });
-    expect(saved.snapshot).toMatchObject({ revision: 1, dirty: false, presentation });
+    expect(saved.snapshot).toMatchObject({ dirty: false, presentation });
     const persisted = parseOtio(await readFile(documentPath));
     expect(persisted.ok).toBe(true);
     if (!persisted.ok) throw new Error('Saved OTIO fixture did not parse.');
@@ -479,28 +499,24 @@ describe('DesktopCutRuntime', () => {
     );
 
     const undone = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'undo-request',
       commandId: 'undo-command',
       route: CUT_HOST_RUNTIME_ROUTES.undo,
       identity,
-      expectedRevision: 1,
     });
-    expect(undone.snapshot).toMatchObject({ revision: 2, dirty: true });
+    expect(undone.snapshot).toMatchObject({ dirty: true });
     expect(
       (undone.snapshot.document as { readonly tracks: readonly { readonly name: string }[] })
         .tracks,
     ).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Audio 1' })]));
 
     const redone = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'redo-request',
       commandId: 'redo-command',
       route: CUT_HOST_RUNTIME_ROUTES.redo,
       identity,
-      expectedRevision: 2,
     });
-    expect(redone.snapshot).toMatchObject({ revision: 3, dirty: true });
+    expect(redone.snapshot).toMatchObject({ dirty: true });
     expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -530,26 +546,22 @@ describe('DesktopCutRuntime', () => {
 
     await runtime.getSnapshot('window-1', identity);
     const result = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'representation-request',
       commandId: 'representation-command',
       route: CUT_HOST_RUNTIME_ROUTES.representationResolve,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'cut:request-representations',
         documentUri: documentId,
         sessionId: identity.sessionId,
-        expectedRevision: 0,
         requests: [{ clipId: 'missing-clip', kind: 'thumbnail', density: 64, tileIndex: 0 }],
       },
     });
 
     expect(result).toMatchObject({
-      snapshot: { revision: 0 },
+      snapshot: expect.objectContaining({ dirty: false }),
       output: {
         type: 'representations',
-        revision: 0,
         results: [
           {
             clipId: 'missing-clip',
@@ -605,7 +617,6 @@ describe('DesktopCutRuntime', () => {
       startPreview: vi.fn(async () => ({
         sessionId: 'video-session-1',
         video: {
-          version: 1 as const,
           url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
           mimeType: 'video/mp4',
           preparationProfile: 'h264-mp4-direct' as const,
@@ -627,19 +638,16 @@ describe('DesktopCutRuntime', () => {
     await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'preview-request',
       commandId: 'preview-command',
       route: CUT_HOST_RUNTIME_ROUTES.previewStart,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'cut:preview-start',
         documentUri: documentId,
         sessionId: identity.sessionId,
-        expectedRevision: 0,
         timelineTimeSeconds: 0,
-        generation: 1,
+        previewRequestId: 'preview-request-1',
         playbackMode: 'playing',
       },
     });
@@ -648,7 +656,7 @@ describe('DesktopCutRuntime', () => {
       type: 'preview',
       message: {
         type: 'cut:preview-ready',
-        generation: 1,
+        previewRequestId: 'preview-request-1',
         video: {
           url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         },
@@ -710,8 +718,6 @@ describe('DesktopCutRuntime', () => {
       startPcmMix: vi.fn(async () => ({
         sessionId: 'pcm-session-1',
         stream: {
-          version: 1 as const,
-          protocol: 'neko-pcm-f32le-v1' as const,
           streamUrl: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           sampleRate: 48_000,
           channels: 2,
@@ -727,36 +733,31 @@ describe('DesktopCutRuntime', () => {
     const runtime = createRuntime(workspacePath, identity, undefined, () => mediaAdapter);
     await runtime.getSnapshot('window-1', identity);
     await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'preview-start-request',
       commandId: 'preview-start-command',
       route: CUT_HOST_RUNTIME_ROUTES.previewStart,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'cut:preview-start',
         documentUri: documentId,
         sessionId: identity.sessionId,
-        expectedRevision: 0,
         timelineTimeSeconds: 0,
-        generation: 1,
+        previewRequestId: 'preview-request-1',
         playbackMode: 'playing',
       },
     });
     await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'preview-activate-request',
       commandId: 'preview-activate-command',
       route: CUT_HOST_RUNTIME_ROUTES.previewActivate,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'cut:preview-activate',
-        generation: 1,
+        previewRequestId: 'preview-request-1',
       },
     });
 
-    runtime.reconcileWorkbench('window-1', createDefaultDesktopWorkbenchLayout('window-1'));
+    runtime.reconcileWindow('window-1', [createDefaultDesktopWorkbenchLayout('window-1')]);
     await vi.waitFor(() => expect(stopPcm).toHaveBeenCalledWith('pcm-session-1'));
     const disposeCallsBeforePcmSettled = dispose.mock.calls.length;
     failStopPcm?.();
@@ -810,8 +811,8 @@ describe('DesktopCutRuntime', () => {
       workspaceId: identity.workspaceId,
       windowId: identity.windowId,
       viewId: 'resource-browser:project-view-1',
-      viewEpoch: 1,
-      endpointEpoch: identity.endpointEpoch,
+      viewInstanceId: 'view-instance-1',
+      rendererSessionId: identity.rendererSessionId,
     };
     const item = {
       resourceId: 'content:clip',
@@ -825,17 +826,15 @@ describe('DesktopCutRuntime', () => {
     };
     const target = {
       viewId: identity.viewId,
-      viewEpoch: identity.viewEpoch,
+      viewInstanceId: identity.viewInstanceId,
       documentId: identity.documentId,
       sessionId: identity.sessionId,
-      expectedRevision: 0,
     };
 
     const changed = await runtime.addResource({ resourceIdentity, item, target });
     const replayed = await runtime.addResource({ resourceIdentity, item, target });
 
     expect(changed).toMatchObject({
-      revision: 1,
       document: {
         tracks: expect.arrayContaining([
           expect.objectContaining({
@@ -862,12 +861,10 @@ describe('DesktopCutRuntime', () => {
     ).tracks.find((track) => track.kind === 'Video');
     if (!videoTrack) throw new Error('Desktop Cut fixture has no Video Track.');
     const dropped = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'drop-media-request',
       commandId: 'drop-media-command',
       route: CUT_HOST_RUNTIME_ROUTES.mediaDrop,
       identity,
-      expectedRevision: 1,
       payload: {
         type: 'cut:drop-link-media',
         trackId: videoTrack.trackId,
@@ -876,7 +873,7 @@ describe('DesktopCutRuntime', () => {
         overlapPolicy: 'insert',
       },
     });
-    expect(dropped.snapshot).toMatchObject({ revision: 2 });
+    expect(dropped.snapshot).toMatchObject({ dirty: true });
     expect(probe).toHaveBeenCalledTimes(2);
     expect(dispose).toHaveBeenCalledTimes(2);
 
@@ -886,12 +883,11 @@ describe('DesktopCutRuntime', () => {
         item,
         target: {
           ...target,
-          sessionId: 'cut-session:another-view:1',
-          expectedRevision: 2,
+          sessionId: 'cut-session:another-view:view-instance-1',
         },
       }),
     ).rejects.toThrow('stale Cut authority');
-    expect((await runtime.getSnapshot('window-1', identity)).revision).toBe(2);
+    expect((await runtime.getSnapshot('window-1', identity)).dirty).toBe(true);
   });
 
   it('starts, projects and cancels the extracted package-owned ExportJob', async () => {
@@ -928,17 +924,14 @@ describe('DesktopCutRuntime', () => {
     await runtime.getSnapshot('window-1', identity);
 
     const started = await runtime.execute('window-1', {
-      schemaVersion: CUT_HOST_RUNTIME_VERSION,
       requestId: 'export-start-request',
       commandId: 'export-start-command',
       route: CUT_HOST_RUNTIME_ROUTES.exportStart,
       identity,
-      expectedRevision: 0,
       payload: {
         type: 'cut:export-start',
         documentUri: documentId,
         sessionId: identity.sessionId,
-        expectedRevision: 0,
         settings: {
           outputName: 'story-final',
           container: 'mp4',
@@ -956,7 +949,7 @@ describe('DesktopCutRuntime', () => {
     expect(task).toMatchObject({
       documentUri: documentId,
       sessionId: identity.sessionId,
-      sourceRevision: 0,
+      sourceSnapshotId: 'export-start-request',
       outputWorkspaceRelativePath: 'exports/story-final.mp4',
       status: 'running',
     });
@@ -973,17 +966,14 @@ describe('DesktopCutRuntime', () => {
 
     await vi.waitFor(async () => {
       const cancelled = await runtime.execute('window-1', {
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         requestId: 'export-cancel-request',
         commandId: 'export-cancel-command',
         route: CUT_HOST_RUNTIME_ROUTES.exportCancel,
         identity,
-        expectedRevision: 0,
         payload: {
           type: 'cut:export-cancel',
           documentUri: documentId,
           sessionId: identity.sessionId,
-          expectedRevision: 0,
           jobId: task.jobId,
         },
       });
@@ -1026,7 +1016,7 @@ function createRuntime(
       resolveCutViewGrant: vi.fn(async (_windowId, requestedIdentity) => {
         const authoritative = identityAuthority?.current ?? identity;
         if (
-          requestedIdentity.endpointEpoch !== authoritative.endpointEpoch ||
+          requestedIdentity.rendererSessionId !== authoritative.rendererSessionId ||
           requestedIdentity.sessionId !== authoritative.sessionId
         ) {
           throw new Error('Desktop fixture rejected stale Cut authority.');
@@ -1038,7 +1028,6 @@ function createRuntime(
       homedir: workspacePath,
       nekoHome: path.join(workspacePath, '.neko-home'),
       workspaceRoot: workspacePath,
-      version: 'test',
       logger: new ConsoleLogger('DesktopCutRuntimeTest'),
     }),
     ...(createMediaAdapter ? { createMediaAdapter } : {}),
@@ -1080,9 +1069,9 @@ function createIdentity(documentId: string): CutHostRuntimeIdentity {
     workspaceId: 'workspace-1',
     windowId: 'window-1',
     viewId: 'cut-view-1',
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     documentId,
-    sessionId: 'cut-session:cut-view-1:1',
-    endpointEpoch: 'endpoint-1',
+    sessionId: 'cut-session:cut-view-1:view-instance-1',
+    rendererSessionId: 'endpoint-1',
   };
 }

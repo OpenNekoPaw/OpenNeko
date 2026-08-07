@@ -27,22 +27,15 @@ export interface JobFailureSummary {
 export interface JobSnapshotBase<K extends string = string> {
   readonly ref: JobRef<K>;
   readonly phase: JobPhase;
-  readonly revision: number;
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly retryOf?: JobRef<K>;
   readonly failure?: JobFailureSummary;
 }
 
-export interface JobStoreCommit<S extends JobSnapshotBase> {
-  readonly ref: S['ref'];
-  readonly expectedRevision: number;
-  readonly next: S;
-}
-
-export interface VersionedJobStore<S extends JobSnapshotBase> {
+export interface JobStore<S extends JobSnapshotBase> {
   create(initial: S): Promise<S>;
   get(ref: S['ref']): Promise<S>;
-  commit(input: JobStoreCommit<S>): Promise<S>;
-  observe(ref: S['ref'], afterRevision: number): AsyncIterable<S>;
+  save(snapshot: S): Promise<S>;
+  observe(ref: S['ref']): AsyncIterable<S>;
 }

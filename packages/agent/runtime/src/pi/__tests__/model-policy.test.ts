@@ -20,7 +20,7 @@ function model(
     name: id,
     api: 'openai-completions',
     provider,
-    baseUrl: `https://${provider}.example.invalid/v1`,
+    baseUrl: `https://${provider}.example.invalid/api`,
     reasoning: false,
     input,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -236,7 +236,7 @@ describe('resolveAgentModelPolicy', () => {
       catalog: [
         catalogEntry('openai', 'main'),
         {
-          model: { provider: 'newapi-media', id: 'image-v1', name: 'Image v1' },
+          model: { provider: 'newapi-media', id: 'image-current', name: 'Image current' },
           execution: 'domain',
           capabilities: ['image.generate'],
           credentialState: 'ambient',
@@ -244,7 +244,7 @@ describe('resolveAgentModelPolicy', () => {
       ],
       userBindings: {
         'agent.main': { providerId: 'openai', modelId: 'main' },
-        'image.generate': { providerId: 'newapi-media', modelId: 'image-v1' },
+        'image.generate': { providerId: 'newapi-media', modelId: 'image-current' },
       },
       requirements: { 'image.generate': { capabilities: ['image.generate'] } },
     });
@@ -252,7 +252,7 @@ describe('resolveAgentModelPolicy', () => {
     expect(policy['image.generate']).toEqual({
       purpose: 'image.generate',
       execution: 'domain',
-      model: { provider: 'newapi-media', id: 'image-v1', name: 'Image v1' },
+      model: { provider: 'newapi-media', id: 'image-current', name: 'Image current' },
       parameters: { metadata: undefined },
     });
     expect(Object.isFrozen(policy['image.generate']?.model)).toBe(true);
@@ -306,18 +306,5 @@ describe('resolveAgentModelPolicy', () => {
         },
       }),
     ).toThrowError(expect.objectContaining({ code: 'credential-missing' }));
-  });
-
-  it('rejects legacy and unknown purpose keys instead of interpreting them', () => {
-    const legacyBindings = {
-      'agent.main': { providerId: 'openai', modelId: 'main' },
-      'llm.chat': { providerId: 'openai', modelId: 'main' },
-    };
-    expect(() =>
-      resolveAgentModelPolicy({
-        catalog: [catalogEntry('openai', 'main')],
-        userBindings: legacyBindings,
-      }),
-    ).toThrowError(expect.objectContaining({ code: 'unknown-purpose' }));
   });
 });

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import React, { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -10,26 +12,48 @@ import type {
   GlobalLibraryItem,
   GlobalMediaLibraryItem,
 } from '@neko/assets-domain/global-library/contract';
-import { GlobalLibraryController } from '@neko/assets-domain/global-library/controller';
-import { GlobalLibraryBrowserRoot } from './root';
+import { AssetCenterController } from '@neko/assets-domain/asset-center/controller';
+import { createDefaultAssetCenterFilter } from '@neko/assets-domain/asset-center/contract';
+import { AssetCenterSession } from '@neko/assets-domain/asset-center/session';
+import { AssetManagementRoot } from './root';
 
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', {
   configurable: true,
   value: true,
 });
 
-describe('GlobalLibraryBrowserRoot', () => {
+describe('AssetManagementRoot', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     document.body.replaceChildren();
   });
 
+  it('keeps the populated collection unframed', () => {
+    const globalLibraryStyles = readFileSync(resolve(import.meta.dirname, 'style.css'), 'utf8');
+    const collectionRule = globalLibraryStyles.match(
+      /\.global-library-browser__collection\s*\{(?<body>[^}]*)\}/u,
+    )?.groups?.['body'];
+
+    expect(collectionRule).toBeDefined();
+    expect(collectionRule).not.toMatch(/\bborder(?:-[a-z]+)?\s*:/u);
+    expect(collectionRule).toContain('outline: none');
+  });
+
   it('keeps its controller active across React StrictMode effect replay', async () => {
     vi.useFakeTimers();
-    const dispose = vi.spyOn(GlobalLibraryController.prototype, 'dispose');
     const library = createLibrary();
     const runtime = createRuntime(library);
+    const dispose = vi.spyOn(runtime.management, 'dispose');
+    const releaseSubscription = vi.fn();
+    const subscribe = runtime.management.subscribe.bind(runtime.management);
+    vi.spyOn(runtime.management, 'subscribe').mockImplementation((listener) => {
+      const release = subscribe(listener);
+      return () => {
+        releaseSubscription();
+        release();
+      };
+    });
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -37,18 +61,24 @@ describe('GlobalLibraryBrowserRoot', () => {
     await act(async () => {
       root.render(
         <StrictMode>
-          <GlobalLibraryBrowserRoot
-            runtime={runtime}
+          <AssetManagementRoot
+            runtime={runtime.management}
             locale="en"
-            defaultViewMode="grid"
             confirmAction={() => true}
           />
         </StrictMode>,
       );
     });
+    const connectButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Connect directory'),
+    );
+    expect(container.querySelector('[data-catalog-status="loading"]')).not.toBeNull();
+    expect(connectButton?.disabled).toBe(true);
     await act(async () => vi.advanceTimersByTimeAsync(160));
 
-    expect(runtime.searchMediaLibraries).toHaveBeenCalledTimes(1);
+    expect(runtime.source.searchMediaLibraries).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-catalog-status="ready"]')).not.toBeNull();
+    expect(connectButton?.disabled).toBe(false);
     expect(container.textContent).toContain('Footage');
     expect(
       container.querySelector('.global-library-browser__header-copy .section-label')?.textContent,
@@ -60,57 +90,92 @@ describe('GlobalLibraryBrowserRoot', () => {
       container.querySelector('.global-library-browser__header-copy p:not(.section-label)')
         ?.textContent,
     ).toBe('Manage reusable media connections without copying source files into every project.');
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent?.includes('Connect directory'))
+        ?.querySelector('svg')
+        ?.getAttribute('width'),
+    ).toBe('14');
+    expect(
+      container
+        .querySelector('input[aria-label="Search media libraries"]')
+        ?.closest('label')
+        ?.querySelector('svg')
+        ?.getAttribute('width'),
+    ).toBe('16');
+    expect(
+      container.querySelector('button[aria-label="List view"] svg')?.getAttribute('width'),
+    ).toBe('14');
+    expect(container.querySelector('button[aria-label="Refresh"] svg')?.getAttribute('width')).toBe(
+      '14',
+    );
     expect(container.textContent).not.toContain('Global Library controller is disposed.');
     expect(dispose).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
-    await Promise.resolve();
-    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(releaseSubscription).toHaveBeenCalled();
+    expect(dispose).not.toHaveBeenCalled();
   });
 
-  it('shares list/grid state and opens directories only through activation', async () => {
-    const library = createLibrary();
-    const runtime = createRuntime(library);
-    const onViewModeChange = vi.fn();
+  it('renders the shared fill empty state for a ready catalog without matching items', async () => {
+    const runtime = createRuntime(createLibrary());
+    runtime.source.searchMediaLibraries = vi.fn(async () => ({ items: [] }));
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-          onViewModeChange={onViewModeChange}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
+      );
+    });
+    await act(async () => wait(180));
+
+    expect(container.querySelector('[data-catalog-status="ready"]')).not.toBeNull();
+    const emptyState = container.querySelector('[data-neko-empty-state="fill"]');
+    expect(emptyState?.textContent).toContain('No matching content');
+    expect(emptyState?.querySelector('svg')).not.toBeNull();
+    expect(container.querySelector('.global-library-browser__empty')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('shares list/grid state and opens directories only through activation', async () => {
+    const library = createLibrary();
+    const runtime = createRuntime(library);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
 
     const collection = container.querySelector<HTMLElement>('.global-library-browser__collection');
-    expect(collection?.dataset['viewMode']).toBe('grid');
+    expect(collection?.dataset['viewMode']).toBe('list');
     expect(container.textContent).not.toContain('Browse');
     expect(container.textContent).not.toContain('Open folder');
 
-    const listButton = container.querySelector<HTMLButtonElement>('button[aria-label="List view"]');
-    await act(async () => listButton?.click());
-    expect(collection?.dataset['viewMode']).toBe('list');
-    expect(onViewModeChange).toHaveBeenCalledWith('list');
+    const gridButton = container.querySelector<HTMLButtonElement>('button[aria-label="Grid view"]');
+    await act(async () => gridButton?.click());
+    expect(collection?.dataset['viewMode']).toBe('grid');
+    expect(runtime.management.getSnapshot().filter.viewMode).toBe('grid');
 
     const entry = container.querySelector<HTMLElement>('article');
     await act(async () => {
       entry?.click();
       await wait(0);
     });
-    expect(runtime.readMediaLibraryChildren).not.toHaveBeenCalled();
+    expect(runtime.source.readMediaLibraryChildren).not.toHaveBeenCalled();
 
     await act(async () => {
       entry?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
     });
     await act(async () => wait(180));
-    expect(runtime.readMediaLibraryChildren).toHaveBeenCalledWith(
+    expect(runtime.source.readMediaLibraryChildren).toHaveBeenCalledWith(
       expect.objectContaining({
         libraryId: library.libraryId,
         relativePath: '',
@@ -131,7 +196,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       mediaType: 'image',
       thumbnail: {
         descriptorId: 'media-library:thumb123',
-        revision: '2026-07-31T00:00:00.000Z:50',
+        sourceFingerprint: '2026-07-31T00:00:00.000Z:50',
         mediaType: 'image',
       },
     };
@@ -142,16 +207,11 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => vi.advanceTimersByTimeAsync(160));
-    expect(runtime.resolveThumbnail).toHaveBeenCalledWith(
+    expect(runtime.source.resolveThumbnail).toHaveBeenCalledWith(
       expect.objectContaining({ itemId: item.id, variant: 'icon' }),
     );
 
@@ -162,7 +222,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       entry?.blur();
       await vi.advanceTimersByTimeAsync(100);
     });
-    expect(runtime.resolveThumbnail).not.toHaveBeenCalledWith(
+    expect(runtime.source.resolveThumbnail).not.toHaveBeenCalledWith(
       expect.objectContaining({ variant: 'hover' }),
     );
     expect(container.querySelector('.global-library-browser__hover-preview')).toBeNull();
@@ -171,7 +231,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       entry?.focus();
       await vi.advanceTimersByTimeAsync(190);
     });
-    expect(runtime.resolveThumbnail).toHaveBeenCalledWith(
+    expect(runtime.source.resolveThumbnail).toHaveBeenCalledWith(
       expect.objectContaining({ itemId: item.id, variant: 'hover' }),
     );
     expect(container.querySelector('.global-library-browser__hover-preview img')).not.toBeNull();
@@ -189,22 +249,17 @@ describe('GlobalLibraryBrowserRoot', () => {
       relativePath: 'shots',
     };
     const runtime = createRuntime(library);
-    runtime.readMediaLibraryChildren = vi
+    runtime.source.readMediaLibraryChildren = vi
       .fn()
-      .mockResolvedValueOnce({ revision: 0, items: [directory] })
-      .mockResolvedValue({ revision: 0, items: [] });
+      .mockResolvedValueOnce({ items: [directory] })
+      .mockResolvedValue({ items: [] });
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
@@ -214,7 +269,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       libraryEntry?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
     });
     await act(async () => wait(180));
-    expect(runtime.readMediaLibraryChildren).toHaveBeenLastCalledWith(
+    expect(runtime.source.readMediaLibraryChildren).toHaveBeenLastCalledWith(
       expect.objectContaining({ libraryId: library.libraryId, relativePath: '' }),
     );
 
@@ -223,7 +278,7 @@ describe('GlobalLibraryBrowserRoot', () => {
       nestedEntry?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
     });
     await act(async () => wait(180));
-    expect(runtime.readMediaLibraryChildren).toHaveBeenLastCalledWith(
+    expect(runtime.source.readMediaLibraryChildren).toHaveBeenLastCalledWith(
       expect.objectContaining({ libraryId: library.libraryId, relativePath: 'shots' }),
     );
 
@@ -236,7 +291,7 @@ describe('GlobalLibraryBrowserRoot', () => {
     );
     await act(async () => rootButton?.click());
     await act(async () => wait(180));
-    expect(runtime.searchMediaLibraries).toHaveBeenCalledTimes(2);
+    expect(runtime.source.searchMediaLibraries).toHaveBeenCalledTimes(2);
 
     await act(async () => root.unmount());
   });
@@ -251,23 +306,18 @@ describe('GlobalLibraryBrowserRoot', () => {
       relativePath: 'sequences/shots',
     };
     const runtime = createRuntime(library);
-    runtime.searchMediaLibraries = vi
+    runtime.source.searchMediaLibraries = vi
       .fn()
-      .mockResolvedValueOnce({ revision: 0, items: [library] })
-      .mockResolvedValueOnce({ revision: 0, items: [searchDirectory] });
-    runtime.readMediaLibraryChildren = vi.fn(async () => ({ revision: 0, items: [] }));
+      .mockResolvedValueOnce({ items: [library] })
+      .mockResolvedValueOnce({ items: [searchDirectory] });
+    runtime.source.readMediaLibraryChildren = vi.fn(async () => ({ items: [] }));
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
@@ -299,7 +349,7 @@ describe('GlobalLibraryBrowserRoot', () => {
     await act(async () => root.unmount());
   });
 
-  it('imports and confirms trash removal only in the Asset Library', async () => {
+  it('imports and confirms record-only removal in the Asset Library', async () => {
     const asset: GlobalAssetItem = {
       id: 'global-asset-library:asset123',
       owner: 'global-asset-library',
@@ -309,10 +359,9 @@ describe('GlobalLibraryBrowserRoot', () => {
       availability: 'available',
     };
     const runtime = createRuntime(asset);
-    runtime.searchAssets = vi.fn(async () => ({ revision: 4, items: [asset] }));
-    runtime.importAssets = vi.fn(async () => ({
+    runtime.source.searchAssets = vi.fn(async () => ({ items: [asset] }));
+    runtime.source.importAssets = vi.fn(async () => ({
       status: 'completed' as const,
-      revision: 4,
       outcomes: [{ status: 'added' as const, label: 'hero.png', assetId: asset.id }],
     }));
     const confirmAction = vi.fn(async () => true);
@@ -322,10 +371,9 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
+        <AssetManagementRoot
+          runtime={runtime.management}
           locale="en"
-          defaultViewMode="list"
           confirmAction={confirmAction}
         />,
       );
@@ -342,16 +390,62 @@ describe('GlobalLibraryBrowserRoot', () => {
     );
     await act(async () => importButton?.click());
     await act(async () => wait(180));
-    expect(runtime.importAssets).toHaveBeenCalledWith(4);
+    expect(runtime.source.importAssets).toHaveBeenCalledWith();
 
-    const removeButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Move asset to trash: hero.png"]',
+    await act(async () => container.querySelector<HTMLElement>('article')?.click());
+    const removeButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Remove selected records'),
     );
     await act(async () => removeButton?.click());
     await act(async () => wait(0));
-    expect(confirmAction).toHaveBeenCalledWith('Move "hero.png" to the system trash?');
-    expect(runtime.removeAsset).toHaveBeenCalledWith(asset.id, 4);
-    expect(runtime.removeMediaLibrary).not.toHaveBeenCalled();
+    expect(confirmAction).toHaveBeenCalledWith(
+      'Remove 1 selected records from the Asset Library? Source files will be preserved.',
+    );
+    expect(runtime.source.removeAssets).toHaveBeenCalledWith([asset.id]);
+    expect(runtime.source.removeMediaLibrary).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows unavailable source fields and removes the membership without preview selection', async () => {
+    const asset: GlobalAssetItem = {
+      id: 'global-asset-library:missing',
+      owner: 'global-asset-library',
+      label: 'missing.png',
+      description: 'missing/missing.png',
+      kind: 'asset',
+      mediaType: 'image',
+      availability: 'unavailable',
+      unavailable: {
+        fieldNames: ['sourceRelativePath'],
+        message: 'Asset source file is unavailable.',
+      },
+    };
+    const runtime = createRuntime(asset);
+    const select = vi.spyOn(runtime.management, 'select');
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
+      );
+    });
+    await act(async () => wait(180));
+
+    expect(container.textContent).toContain(
+      'sourceRelativePath: Asset source file is unavailable.',
+    );
+    await act(async () => container.querySelector<HTMLElement>('article')?.click());
+    expect(select).not.toHaveBeenCalled();
+    const removeButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Remove selected records'),
+    );
+    expect(removeButton?.disabled).toBe(false);
+    await act(async () => removeButton?.click());
+    await act(async () => wait(0));
+    expect(runtime.source.removeAssets).toHaveBeenCalledWith([asset.id]);
 
     await act(async () => root.unmount());
   });
@@ -367,13 +461,12 @@ describe('GlobalLibraryBrowserRoot', () => {
     };
     const refreshed = deferred<GlobalAssetProjection>();
     const runtime = createRuntime(asset);
-    runtime.searchAssets = vi
+    runtime.source.searchAssets = vi
       .fn()
-      .mockResolvedValueOnce({ revision: 4, items: [asset] })
+      .mockResolvedValueOnce({ items: [asset] })
       .mockImplementationOnce(() => refreshed.promise);
-    runtime.importAssets = vi.fn(async () => ({
+    runtime.source.importAssets = vi.fn(async () => ({
       status: 'completed' as const,
-      revision: 5,
       outcomes: [{ status: 'added' as const, label: 'hero.png', assetId: asset.id }],
     }));
     const container = document.createElement('div');
@@ -382,12 +475,7 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="list"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => wait(180));
@@ -408,11 +496,167 @@ describe('GlobalLibraryBrowserRoot', () => {
     expect(container.textContent).not.toContain('Asset import finished.');
 
     await act(async () => {
-      refreshed.resolve({ revision: 5, items: [asset] });
+      refreshed.resolve({ items: [asset] });
       await wait(0);
     });
     expect(importButton?.disabled).toBe(false);
     expect(container.textContent).toContain('Asset import finished.');
+
+    await act(async () => root.unmount());
+  });
+
+  it('supports desktop multi-selection and delegates complete batch mutations', async () => {
+    const assets = [assetItem('one'), assetItem('two'), assetItem('three')];
+    const runtime = createRuntime(assets);
+    const confirmAction = vi.fn(async () => true);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AssetManagementRoot
+          runtime={runtime.management}
+          locale="en"
+          confirmAction={confirmAction}
+        />,
+      );
+    });
+    await act(async () => wait(180));
+    await act(async () => findButton(container, 'Asset Library')?.click());
+    await act(async () => wait(180));
+
+    const entries = [...container.querySelectorAll<HTMLElement>('article')];
+    await act(async () => entries[0]?.click());
+    expect(entries[0]?.dataset['selected']).toBe('true');
+    expect(runtime.management.getSnapshot().selection?.itemId).toBe(assets[0]?.id);
+
+    await act(async () => {
+      entries[2]?.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+    });
+    expect(selectedItemIds(container)).toEqual([assets[0]?.id, assets[2]?.id]);
+    expect(runtime.management.getSnapshot().selection?.itemId).toBe(assets[0]?.id);
+
+    await act(async () => {
+      entries[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+    });
+    expect(selectedItemIds(container)).toEqual([assets[1]?.id, assets[2]?.id]);
+
+    const collection = requireCollection(container);
+    await act(async () => {
+      collection.dispatchEvent(
+        new KeyboardEvent('keydown', { bubbles: true, key: 'a', ctrlKey: true }),
+      );
+    });
+    expect(selectedItemIds(container)).toEqual(assets.map((item) => item.id));
+    await act(async () => {
+      collection.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    });
+    expect(selectedItemIds(container)).toEqual([]);
+
+    await act(async () => entries[0]?.click());
+    await act(async () => {
+      entries[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+    });
+    await act(async () => findButton(container, 'Move to')?.click());
+    await act(async () => wait(180));
+    expect(runtime.source.moveItems).toHaveBeenCalledWith([assets[0]!.id, assets[1]!.id]);
+    expect(selectedItemIds(container)).toEqual([]);
+
+    const refreshedEntries = [...container.querySelectorAll<HTMLElement>('article')];
+    await act(async () => refreshedEntries[0]?.click());
+    await act(async () => {
+      refreshedEntries[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+    });
+    await act(async () => findButton(container, 'Remove selected records')?.click());
+    await act(async () => wait(180));
+    expect(confirmAction).toHaveBeenCalledWith(
+      'Remove 2 selected records from the Asset Library? Source files will be preserved.',
+    );
+    expect(runtime.source.removeAssets).toHaveBeenCalledWith([assets[0]!.id, assets[1]!.id]);
+    expect(selectedItemIds(container)).toEqual([]);
+
+    await act(async () => root.unmount());
+  });
+
+  it('uses pointer capture for marquee and applies the right-click selection policy', async () => {
+    const assets = [assetItem('one'), assetItem('two'), assetItem('three')];
+    const runtime = createRuntime(assets);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
+      );
+    });
+    await act(async () => wait(180));
+    await act(async () => findButton(container, 'Asset Library')?.click());
+    await act(async () => wait(180));
+
+    const collection = requireCollection(container);
+    const entries = [...container.querySelectorAll<HTMLElement>('article')];
+    entries.forEach((entry, index) => {
+      const left = index * 100 + 10;
+      vi.spyOn(entry, 'getBoundingClientRect').mockReturnValue({
+        x: left,
+        y: 10,
+        left,
+        top: 10,
+        right: left + 60,
+        bottom: 70,
+        width: 60,
+        height: 60,
+        toJSON: () => undefined,
+      });
+    });
+    const setPointerCapture = vi.fn();
+    const releasePointerCapture = vi.fn();
+    Object.assign(collection, {
+      setPointerCapture,
+      releasePointerCapture,
+      hasPointerCapture: () => true,
+    });
+
+    await act(async () => {
+      collection.dispatchEvent(
+        pointerEvent('pointerdown', { pointerId: 7, clientX: 0, clientY: 0 }),
+      );
+      collection.dispatchEvent(
+        pointerEvent('pointermove', { pointerId: 7, clientX: 80, clientY: 80 }),
+      );
+    });
+    expect(container.querySelector('.global-library-browser__marquee')).not.toBeNull();
+    expect(selectedItemIds(container)).toEqual([assets[0]?.id]);
+    await act(async () => {
+      collection.dispatchEvent(
+        pointerEvent('pointerup', { pointerId: 7, clientX: 80, clientY: 80 }),
+      );
+    });
+    expect(setPointerCapture).toHaveBeenCalledWith(7);
+    expect(releasePointerCapture).toHaveBeenCalledWith(7);
+    expect(container.querySelector('.global-library-browser__marquee')).toBeNull();
+
+    await act(async () => {
+      entries[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+    });
+    await act(async () => {
+      entries[0]?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }));
+    });
+    expect(selectedItemIds(container)).toEqual([assets[0]?.id, assets[1]?.id]);
+    await act(async () => {
+      entries[2]?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }));
+      await wait(0);
+    });
+    expect(selectedItemIds(container)).toEqual([assets[2]?.id]);
+    const moveMenuItem = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent?.includes('Move to'),
+    );
+    expect(moveMenuItem).not.toBeUndefined();
+    await act(async () => moveMenuItem?.click());
+    await act(async () => wait(180));
+    expect(runtime.source.moveItems).toHaveBeenCalledWith([assets[2]!.id]);
 
     await act(async () => root.unmount());
   });
@@ -422,10 +666,9 @@ describe('GlobalLibraryBrowserRoot', () => {
     const hover = deferred<{
       readonly dataUrl: string;
       readonly descriptorId: string;
-      readonly expectedCatalogRevision: number;
       readonly itemId: string;
       readonly owner: 'media-library';
-      readonly thumbnailRevision: string;
+      readonly sourceFingerprint: string;
       readonly variant: 'hover';
     }>();
     const item: GlobalMediaLibraryItem = {
@@ -437,12 +680,12 @@ describe('GlobalLibraryBrowserRoot', () => {
       mediaType: 'image',
       thumbnail: {
         descriptorId: 'media-library:thumb123',
-        revision: 'revision:50',
+        sourceFingerprint: 'fingerprint:50',
         mediaType: 'image',
       },
     };
     const runtime = createRuntime(item);
-    runtime.resolveThumbnail = vi.fn(async (request) => {
+    runtime.source.resolveThumbnail = vi.fn(async (request) => {
       if (request.variant === 'hover') return hover.promise;
       return { ...request, dataUrl: 'data:image/png;base64,AA==' };
     });
@@ -452,12 +695,7 @@ describe('GlobalLibraryBrowserRoot', () => {
 
     await act(async () => {
       root.render(
-        <GlobalLibraryBrowserRoot
-          runtime={runtime}
-          locale="en"
-          defaultViewMode="grid"
-          confirmAction={() => true}
-        />,
+        <AssetManagementRoot runtime={runtime.management} locale="en" confirmAction={() => true} />,
       );
     });
     await act(async () => vi.advanceTimersByTimeAsync(160));
@@ -469,9 +707,8 @@ describe('GlobalLibraryBrowserRoot', () => {
       hover.resolve({
         owner: 'media-library',
         itemId: item.id,
-        expectedCatalogRevision: 0,
         descriptorId: item.thumbnail?.descriptorId ?? '',
-        thumbnailRevision: item.thumbnail?.revision ?? '',
+        sourceFingerprint: item.thumbnail?.sourceFingerprint ?? '',
         variant: 'hover',
         dataUrl: 'data:image/png;base64,LATE',
       });
@@ -493,10 +730,9 @@ describe('GlobalLibraryBrowserRoot', () => {
     const unsupportedRoot = createRoot(container);
     await act(async () => {
       unsupportedRoot.render(
-        <GlobalLibraryBrowserRoot
-          runtime={unsupportedRuntime}
+        <AssetManagementRoot
+          runtime={unsupportedRuntime.management}
           locale="zh-cn"
-          defaultViewMode="grid"
           confirmAction={() => true}
         />,
       );
@@ -504,7 +740,7 @@ describe('GlobalLibraryBrowserRoot', () => {
     await act(async () => vi.advanceTimersByTimeAsync(400));
     container.querySelector<HTMLElement>('article')?.focus();
     await act(async () => vi.advanceTimersByTimeAsync(200));
-    expect(unsupportedRuntime.resolveThumbnail).not.toHaveBeenCalled();
+    expect(unsupportedRuntime.source.resolveThumbnail).not.toHaveBeenCalled();
     expect(container.querySelector('select[aria-label="排序"]')).not.toBeNull();
     expect(container.querySelector('.global-library-browser__thumbnail svg')).not.toBeNull();
 
@@ -526,40 +762,111 @@ function createLibrary(): GlobalMediaLibraryItem {
   };
 }
 
-function createRuntime(item: GlobalLibraryItem): GlobalLibraryBrowserRuntime {
-  return {
+function createRuntime(itemOrItems: GlobalLibraryItem | readonly GlobalLibraryItem[]): {
+  readonly management: AssetCenterController;
+  readonly source: GlobalLibraryBrowserRuntime;
+} {
+  const items = Array.isArray(itemOrItems) ? itemOrItems : [itemOrItems];
+  const firstItem = items[0];
+  if (!firstItem) throw new Error('Asset Center fixture requires one catalog item.');
+  const source: GlobalLibraryBrowserRuntime = {
     searchAssets: vi.fn(async () => ({
-      revision: 0,
-      items: item.owner === 'global-asset-library' ? [item] : [],
+      items: items.filter((item) => item.owner === 'global-asset-library'),
     })),
     searchMediaLibraries: vi.fn(async () => ({
-      revision: 0,
-      items: item.owner === 'media-library' ? [item] : [],
+      items: items.filter((item) => item.owner === 'media-library'),
     })),
-    readMediaLibraryChildren: vi.fn(async () => ({ revision: 0, items: [] })),
+    readMediaLibraryChildren: vi.fn(async () => ({ items: [] })),
     resolveThumbnail: vi.fn(async (request) => ({
       ...request,
       dataUrl: 'data:image/png;base64,AA==',
     })),
-    importAssets: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
-    removeAsset: vi.fn(async (assetId: string) => ({
+    importAssets: vi.fn(async () => ({ status: 'cancelled' as const })),
+    removeAssets: vi.fn(async (assetIds: readonly string[]) => ({
       status: 'removed' as const,
-      assetId,
-      revision: 1,
+      assetIds,
     })),
-    addMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
-    relinkMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const, revision: 0 })),
+    moveItems: vi.fn(async (itemIds: readonly string[]) => ({
+      status: 'moved' as const,
+      itemIds,
+    })),
+    addMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),
+    relinkMediaLibrary: vi.fn(async () => ({ status: 'cancelled' as const })),
     removeMediaLibrary: vi.fn(async (libraryId: string) => ({
       status: 'removed' as const,
       libraryId,
-      revision: 1,
     })),
     revealMediaLibrary: vi.fn(async (libraryId: string) => ({
       status: 'revealed' as const,
       libraryId,
-      revision: 0,
     })),
   };
+  const session = new AssetCenterSession(
+    {
+      assetCenterSessionId: 'asset-center:window-1',
+      windowId: 'window-1',
+    },
+    { ...createDefaultAssetCenterFilter(), catalog: firstItem.owner },
+  );
+  return {
+    source,
+    management: new AssetCenterController(session, source, {
+      resolve: async ({ itemId }) => {
+        const item = items.find((candidate) => candidate.id === itemId);
+        if (!item) throw new Error(`Missing fixture item '${itemId}'.`);
+        return {
+          kind: 'workspace-file',
+          path:
+            item.owner === 'media-library' && item.kind === 'file'
+              ? item.relativePath
+              : `${itemId.replaceAll(':', '-')}.bin`,
+        };
+      },
+    }),
+  };
+}
+
+function assetItem(id: string): GlobalAssetItem {
+  return {
+    id: `global-asset-library:${id}`,
+    owner: 'global-asset-library',
+    label: `${id}.png`,
+    kind: 'asset',
+    mediaType: 'image',
+    availability: 'available',
+  };
+}
+
+function findButton(container: HTMLElement, label: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+    button.textContent?.includes(label),
+  );
+}
+
+function requireCollection(container: HTMLElement): HTMLElement {
+  const collection = container.querySelector<HTMLElement>('.global-library-browser__collection');
+  if (!collection) throw new Error('Expected the Asset Center collection.');
+  return collection;
+}
+
+function selectedItemIds(container: HTMLElement): readonly (string | undefined)[] {
+  return [
+    ...container.querySelectorAll<HTMLElement>('[data-library-item-id][data-selected="true"]'),
+  ].map((entry) => entry.dataset['libraryItemId']);
+}
+
+function pointerEvent(
+  type: string,
+  input: { readonly pointerId: number; readonly clientX: number; readonly clientY: number },
+): Event {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    button: 0,
+    clientX: input.clientX,
+    clientY: input.clientY,
+  });
+  Object.defineProperty(event, 'pointerId', { value: input.pointerId });
+  return event;
 }
 
 async function wait(milliseconds: number): Promise<void> {

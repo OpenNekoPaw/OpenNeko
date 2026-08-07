@@ -7,7 +7,7 @@ export interface CutExportTaskSnapshot {
   readonly jobId: string;
   readonly documentUri: string;
   readonly sessionId: string;
-  readonly sourceRevision: number;
+  readonly sourceSnapshotId: string;
   readonly settings: CutExportSettings;
   readonly outputWorkspaceRelativePath: string;
   readonly status: CutExportTaskStatus;

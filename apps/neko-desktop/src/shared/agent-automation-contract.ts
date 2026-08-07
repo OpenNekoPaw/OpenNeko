@@ -4,7 +4,8 @@ import {
   type DesktopAgentNeutralFacts,
 } from '@neko/agent-contracts';
 
-export const DESKTOP_AGENT_AUTOMATION_VERSION = 1 as const;
+export const DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT =
+  '--openneko-agent-automation' as const;
 export const DESKTOP_AGENT_AUTOMATION_CHANNEL =
   'openneko:desktop:agent:automation:execute' as const;
 
@@ -36,6 +37,10 @@ export type DesktopAgentAutomationOperation =
       readonly kind: 'wait-for-idle';
       readonly conversationId: string;
       readonly timeoutMs: number;
+      readonly afterIdentity?: {
+        readonly turnId: string;
+        readonly runId: string;
+      };
     }
   | {
       readonly kind: 'read-facts';
@@ -47,7 +52,6 @@ export type DesktopAgentAutomationOperation =
   | { readonly kind: 'close-application' };
 
 export interface DesktopAgentAutomationRequest {
-  readonly schemaVersion: typeof DESKTOP_AGENT_AUTOMATION_VERSION;
   readonly requestId: string;
   readonly connection: DesktopAgentConnectionIdentity;
   readonly operation: DesktopAgentAutomationOperation;
@@ -55,12 +59,10 @@ export interface DesktopAgentAutomationRequest {
 
 export type DesktopAgentAutomationResult =
   | {
-      readonly schemaVersion: typeof DESKTOP_AGENT_AUTOMATION_VERSION;
       readonly requestId: string;
       readonly status: 'accepted';
     }
   | {
-      readonly schemaVersion: typeof DESKTOP_AGENT_AUTOMATION_VERSION;
       readonly requestId: string;
       readonly status: 'idle';
       readonly identity: {
@@ -70,7 +72,6 @@ export type DesktopAgentAutomationResult =
       };
     }
   | {
-      readonly schemaVersion: typeof DESKTOP_AGENT_AUTOMATION_VERSION;
       readonly requestId: string;
       readonly status: 'facts';
       readonly facts: DesktopAgentNeutralFacts;
@@ -79,7 +80,10 @@ export type DesktopAgentAutomationResult =
 export interface OpenNekoDesktopAgentAutomationBridge {
   readonly agent: {
     readonly automation?: {
-      execute(operation: DesktopAgentAutomationOperation): Promise<DesktopAgentAutomationResult>;
+      execute(
+        connection: DesktopAgentConnectionIdentity,
+        operation: DesktopAgentAutomationOperation,
+      ): Promise<DesktopAgentAutomationResult>;
     };
   };
 }
@@ -90,7 +94,6 @@ export function createDesktopAgentAutomationRequest(
   operation: DesktopAgentAutomationOperation,
 ): DesktopAgentAutomationRequest {
   return parseDesktopAgentAutomationRequest({
-    schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
     requestId,
     connection,
     operation,
@@ -105,20 +108,17 @@ export function parseDesktopAgentAutomationResult(
   const status = source['status'];
   const keys =
     status === 'idle'
-      ? ['schemaVersion', 'requestId', 'status', 'identity']
+      ? ['requestId', 'status', 'identity']
       : status === 'facts'
-        ? ['schemaVersion', 'requestId', 'status', 'facts']
-        : ['schemaVersion', 'requestId', 'status'];
+        ? ['requestId', 'status', 'facts']
+        : ['requestId', 'status'];
   const record = requireExactRecord(source, keys, 'Desktop Agent automation result');
-  if (record['schemaVersion'] !== DESKTOP_AGENT_AUTOMATION_VERSION) {
-    throw new Error('Desktop Agent automation result version is unsupported.');
-  }
   const requestId = requireIdentity(record['requestId'], 'automation result request');
   if (requestId !== expectedRequestId) {
     throw new Error('Desktop Agent automation result request identity does not match.');
   }
   if (status === 'accepted') {
-    return { schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION, requestId, status };
+    return { requestId, status };
   }
   if (status === 'idle') {
     const identity = requireExactRecord(
@@ -127,7 +127,6 @@ export function parseDesktopAgentAutomationResult(
       'Desktop Agent automation idle identity',
     );
     return {
-      schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
       requestId,
       status,
       identity: {
@@ -139,7 +138,6 @@ export function parseDesktopAgentAutomationResult(
   }
   if (status === 'facts') {
     return {
-      schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
       requestId,
       status,
       facts: parseDesktopAgentNeutralFacts(record['facts']),
@@ -151,14 +149,10 @@ export function parseDesktopAgentAutomationResult(
 export function parseDesktopAgentAutomationRequest(input: unknown): DesktopAgentAutomationRequest {
   const record = requireExactRecord(
     input,
-    ['schemaVersion', 'requestId', 'connection', 'operation'],
+    ['requestId', 'connection', 'operation'],
     'Desktop Agent automation request',
   );
-  if (record['schemaVersion'] !== DESKTOP_AGENT_AUTOMATION_VERSION) {
-    throw new Error('Desktop Agent automation request version is unsupported.');
-  }
   return {
-    schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
     requestId: requireIdentity(record['requestId'], 'automation request'),
     connection: parseConnection(record['connection']),
     operation: parseOperation(record['operation']),
@@ -229,13 +223,34 @@ function parseOperation(input: unknown): DesktopAgentAutomationOperation {
     case 'wait-for-idle':
       requireExactKeys(
         record,
-        ['kind', 'conversationId', 'timeoutMs'],
+        [
+          'kind',
+          'conversationId',
+          'timeoutMs',
+          ...(record['afterIdentity'] === undefined ? [] : ['afterIdentity']),
+        ],
         'automation idle operation',
       );
+      const afterIdentity =
+        record['afterIdentity'] === undefined
+          ? undefined
+          : requireExactRecord(
+              record['afterIdentity'],
+              ['turnId', 'runId'],
+              'automation idle predecessor identity',
+            );
       return {
         kind: 'wait-for-idle',
         conversationId: requireIdentity(record['conversationId'], 'Conversation'),
         timeoutMs: requireTimeout(record['timeoutMs']),
+        ...(afterIdentity === undefined
+          ? {}
+          : {
+              afterIdentity: {
+                turnId: requireIdentity(afterIdentity['turnId'], 'prior turn'),
+                runId: requireIdentity(afterIdentity['runId'], 'prior run'),
+              },
+            }),
       };
     case 'read-facts':
       requireExactKeys(
@@ -259,16 +274,18 @@ function parseOperation(input: unknown): DesktopAgentAutomationOperation {
 }
 
 function parseConnection(input: unknown): DesktopAgentConnectionIdentity {
+  const source = requireRecord(input, 'Desktop Agent automation connection');
+  const ownerKey = 'assistantSpaceId' in source ? 'assistantSpaceId' : 'projectId';
   const record = requireExactRecord(
-    input,
+    source,
     [
       'applicationInstanceId',
       'windowId',
-      'projectId',
+      'workbenchInstanceId',
+      'agentSurfaceId',
+      ownerKey,
       'workspaceId',
       'viewId',
-      'viewEpoch',
-      'rendererEpoch',
       'connectionId',
     ],
     'Desktop Agent automation connection',
@@ -276,12 +293,14 @@ function parseConnection(input: unknown): DesktopAgentConnectionIdentity {
   return {
     applicationInstanceId: requireIdentity(record['applicationInstanceId'], 'application'),
     windowId: requireIdentity(record['windowId'], 'Window'),
-    projectId: requireIdentity(record['projectId'], 'Project'),
+    workbenchInstanceId: requireIdentity(record['workbenchInstanceId'], 'Workbench instance'),
+    agentSurfaceId: requireIdentity(record['agentSurfaceId'], 'Agent Surface'),
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     viewId: requireIdentity(record['viewId'], 'View'),
-    viewEpoch: requirePositiveInteger(record['viewEpoch'], 'View epoch'),
-    rendererEpoch: requirePositiveInteger(record['rendererEpoch'], 'renderer epoch'),
     connectionId: requireIdentity(record['connectionId'], 'connection'),
+    ...(ownerKey === 'assistantSpaceId'
+      ? { assistantSpaceId: requireIdentity(record[ownerKey], 'Assistant Space') }
+      : { projectId: requireIdentity(record[ownerKey], 'Project') }),
   };
 }
 
@@ -331,13 +350,6 @@ function requireIdentity(value: unknown, label: string): string {
 function requirePrompt(value: unknown): string {
   if (typeof value !== 'string' || value.trim().length === 0 || value.length > 100_000) {
     throw new Error('Desktop Agent automation prompt is invalid.');
-  }
-  return value;
-}
-
-function requirePositiveInteger(value: unknown, label: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`Desktop Agent ${label} must be a positive integer.`);
   }
   return value;
 }

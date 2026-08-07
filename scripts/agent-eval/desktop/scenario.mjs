@@ -8,6 +8,11 @@ import { createDesktopAgentDriver } from './driver.mjs';
 import { requiresOpenNekoResourceObservation } from './evidence.mjs';
 import { executeDesktopAgentWorkflow } from './workflow.mjs';
 
+const ACTIVE_AGENT_SURFACE_SELECTOR = '[data-primary-surface="agent"]';
+const ACTIVE_AGENT_TEXTAREA_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-textarea`;
+const ACTIVE_AGENT_SEND_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-send`;
+const ACTIVE_AGENT_APPROVE_SELECTOR = `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-inline-card.is-warning .neko-button:not(.neko-button-secondary)`;
+
 export function createDesktopAgentEvaluationScenario(executionCase, authorization) {
   const mediaObservationRequired = requiresOpenNekoResourceObservation(executionCase.assertions);
   return Object.freeze({
@@ -39,6 +44,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
       evaluate,
       waitForSelector,
       click,
+      type,
       waitForDesktopBridge,
       restartApplication,
       checkpoint,
@@ -54,34 +60,45 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         },
         restartApplication,
       });
-      const connected = await driver.connect({
-        projectId: opened.project.projectId,
-        viewId: opened.tab.viewId,
-        viewEpoch: opened.tab.viewEpoch,
-      });
-      const conversation = await driver.createConversation();
-      checkpoint('agent-conversation-created', { conversationId: conversation.conversationId });
-      const workflow = await executeDesktopAgentWorkflow({
+      const owner = resolveWorkspaceAgentOwner(opened);
+      const connected = await driver.connect(owner);
+      const visible = executionCase.execution?.evidenceLevel === 'visible-desktop';
+      const workflowDriver = createScenarioWorkflowDriver({
         driver,
-        conversationId: conversation.conversationId,
+        connection: connected.connection,
+        visible,
+        evaluate,
+        waitForSelector,
+        click,
+        type,
+      });
+      const conversation = visible ? undefined : await driver.createConversation();
+      if (conversation) {
+        checkpoint('agent-conversation-created', { conversationId: conversation.conversationId });
+      }
+      const workflow = await executeDesktopAgentWorkflow({
+        driver: workflowDriver,
+        conversationId: conversation?.conversationId,
         steps: executionCase.steps,
         defaultTimeoutMs: executionCase.budget.timeoutMs,
         checkpoint,
       });
+      const conversationId = workflow.conversationId;
       const identity = workflow.terminalIdle.identity;
       let resumed = await driver.resume({
-        conversationId: conversation.conversationId,
+        conversationId,
         timeoutMs: executionCase.budget.timeoutMs,
       });
-      const projection = await driver.readProjection(conversation.conversationId);
+      const projection = await driver.readProjection(conversationId);
       const pendingFacts = await driver.readFacts(identity);
       const lifecycle = {};
       if (executionCase.execution?.lifecycleChecks?.includes('renderer-reload')) {
         const restored = await driver.reloadAndRestore({
-          connection: connected.connection,
-          conversationId: conversation.conversationId,
+          connection: workflowDriver.getConnection(),
+          conversationId,
           timeoutMs: executionCase.budget.timeoutMs,
         });
+        workflowDriver.setConnection(restored.connection);
         resumed = { accepted: true, snapshot: restored.snapshot };
         lifecycle.rendererReload = {
           status: 'restored',
@@ -114,7 +131,7 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
         lifecycle.gracefulClose = { status: 'disposed' };
       }
       return {
-        conversationId: conversation.conversationId,
+        conversationId,
         identity,
         projection,
         snapshot: resumed.snapshot,
@@ -130,7 +147,99 @@ export function createDesktopAgentEvaluationScenario(executionCase, authorizatio
   });
 }
 
-async function readAuthorizedConfiguration(authorization) {
+function resolveWorkspaceAgentOwner(opened) {
+  const workbench = opened.projection.window.workbench;
+  const interaction = workbench.scene.slots.interaction;
+  if (!interaction) {
+    throw new Error('Desktop Agent Evaluation has no exact active Agent Surface.');
+  }
+  return {
+    workbenchInstanceId: workbench.workbenchInstanceId,
+    agentSurfaceId: interaction.agentSurfaceId,
+    projectId: opened.project.projectId,
+    viewId: opened.tab.viewId,
+  };
+}
+
+function createScenarioWorkflowDriver(input) {
+  let connection = input.connection;
+  return Object.freeze({
+    ...input.driver,
+    getConnection: () => connection,
+    setConnection: (next) => {
+      connection = next;
+    },
+    async submit(command) {
+      if (!input.visible) return input.driver.submit(command);
+      if (command.contextPayloads !== undefined) {
+        throw new Error(
+          'Visible Desktop Agent submission does not support hidden context injection.',
+        );
+      }
+      const { eventOffset } = await input.driver.markEventOffset();
+      await input.type(ACTIVE_AGENT_TEXTAREA_SELECTOR, command.prompt);
+      await waitForCondition(
+        input.evaluate,
+        `(() => {
+          const button = document.querySelector(${JSON.stringify(ACTIVE_AGENT_SEND_SELECTOR)});
+          return button instanceof HTMLButtonElement && !button.disabled;
+        })()`,
+        'Visible Desktop Agent composer did not enable its send control.',
+      );
+      await input.click(ACTIVE_AGENT_SEND_SELECTOR);
+      const conversationId =
+        command.conversationId ??
+        (await input.driver.waitForActiveConversation(eventOffset, command.timeoutMs ?? 30_000))
+          .conversationId;
+      return { accepted: true, eventOffset, conversationId };
+    },
+    async confirm(command) {
+      if (!input.visible) return input.driver.confirm(command);
+      await input.waitForSelector(ACTIVE_AGENT_APPROVE_SELECTOR, 30_000);
+      const confirmation = await input.evaluate(`(() => {
+        const root = document.querySelector(${JSON.stringify(ACTIVE_AGENT_SURFACE_SELECTOR)});
+        const cards = [...(root?.querySelectorAll('.agent-inline-card.is-warning') ?? [])];
+        const matches = cards.filter(
+          (card) => card.querySelector('.agent-badge')?.textContent?.trim() === ${JSON.stringify(command.toolName)},
+        );
+        return { cardCount: cards.length, matchingToolCount: matches.length };
+      })()`);
+      if (confirmation?.cardCount !== 1 || confirmation.matchingToolCount !== 1) {
+        throw new Error('Visible Desktop Agent approval control is not bound to one exact Tool.');
+      }
+      await input.click(ACTIVE_AGENT_APPROVE_SELECTOR);
+      return {
+        accepted: true,
+        identity: {
+          conversationId: command.conversationId,
+          turnId: command.turnId,
+          runId: command.runId,
+        },
+        toolCallId: command.toolCallId,
+      };
+    },
+    async restart(command) {
+      const restored = await input.driver.restartAndRestore({
+        connection,
+        conversationId: command.conversationId,
+        timeoutMs: command.timeoutMs,
+      });
+      connection = restored.connection;
+      return { accepted: true, connection, snapshot: restored.snapshot };
+    },
+  });
+}
+
+async function waitForCondition(evaluate, expression, message, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await evaluate(expression)) return;
+    await delay(100);
+  }
+  throw new Error(message);
+}
+
+export async function readAuthorizedConfiguration(authorization) {
   const configText = await readFile(authorization.configurationFile, 'utf8').catch(() => {
     throw authorizationError(
       'Authorized Desktop Agent configuration ~/.neko/config.toml is unavailable.',

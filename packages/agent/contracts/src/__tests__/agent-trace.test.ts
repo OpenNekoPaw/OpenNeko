@@ -4,7 +4,6 @@ import {
   createAgentTraceContext,
   createAgentTurnId,
   deriveAgentTraceContext,
-  UNKNOWN_AGENT_TRACE_ID,
   withAgentTrace,
 } from '../agent-trace';
 
@@ -28,11 +27,11 @@ describe('agent trace contracts', () => {
     expect(JSON.parse(JSON.stringify(trace))).toEqual(trace);
   });
 
-  it('uses a safe fallback conversation id for legacy callers', () => {
-    expect(createAgentTraceContext().conversationId).toBe(UNKNOWN_AGENT_TRACE_ID);
-    expect(createAgentTraceContext({ conversationId: '   ' }).conversationId).toBe(
-      UNKNOWN_AGENT_TRACE_ID,
+  it('requires an explicit non-empty conversation owner', () => {
+    expect(() => createAgentTraceContext({ conversationId: '   ' })).toThrow(
+      'Agent trace requires a non-empty conversationId.',
     );
+    expect(deriveAgentTraceContext(undefined)).toBeUndefined();
   });
 
   it('derives phase and request traces without mutating the parent', () => {
@@ -77,6 +76,9 @@ describe('agent trace contracts', () => {
 
     expect(withAgentTrace(trace, { trace: 'bad', messageCount: 3 })).toEqual({
       trace,
+      messageCount: 3,
+    });
+    expect(withAgentTrace(undefined, { trace: 'bad', messageCount: 3 })).toEqual({
       messageCount: 3,
     });
   });

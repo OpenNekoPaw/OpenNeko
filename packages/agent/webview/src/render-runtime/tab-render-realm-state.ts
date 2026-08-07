@@ -1,36 +1,58 @@
-import type { GenCategory, GenerationParams } from '../components/ChatView/InputArea/types';
-import type {
-  MediaModelSelection,
-  MediaUnderstandingSelection,
-} from '../components/ChatView/InputAreaContext';
 import type {
   TabRenderBinding,
   TabRenderRuntimeRegistry,
   TabRenderState,
   TabRenderStateUpdate,
 } from './tab-render-runtime';
-
-export const TAB_RENDER_REALM_STATE_VERSION = 'neko.agent.tab-render-realm-state.v1' as const;
-const LEGACY_TIMELINE_RECOVERY_STATE_KEY = 'agentTurnTimelineRecoveries';
+import {
+  parseAgentConversationContext,
+  type AgentContextPayload,
+  type AgentConversationContext,
+} from '@neko/agent-contracts';
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly inputValue: string;
+  readonly viewport: TabRenderState['viewport'];
+}
+
+export interface AgentEntryDraftSnapshot {
+  readonly draftId: string;
+  readonly inputValue: string;
+  readonly contextReferences: readonly AgentContextPayload[];
+  readonly workspaceTarget?: {
+    readonly label: string;
+    readonly context: Extract<AgentConversationContext, { readonly kind: 'workspace' }>;
+  };
   readonly selectedModel: string;
-  readonly mediaModelSelection: Readonly<MediaModelSelection>;
-  readonly mediaUnderstandingSelection: Readonly<MediaUnderstandingSelection>;
-  readonly sessionMode: TabRenderState['sessionMode'];
-  readonly executionMode: TabRenderState['executionMode'];
-  readonly generationCategory: GenCategory;
-  readonly generationParams: Readonly<GenerationParams>;
+  readonly executionMode: 'plan' | 'ask' | 'auto';
 }
 
 export interface TabRenderRealmState {
-  readonly schemaVersion: typeof TAB_RENDER_REALM_STATE_VERSION;
   readonly drafts: readonly TabRenderDraftSnapshot[];
+  readonly entryDraft?: AgentEntryDraftSnapshot;
+}
+
+export interface TabRenderRealmStateDiagnostic {
+  readonly code:
+    | 'invalid-realm-state'
+    | 'invalid-draft'
+    | 'invalid-entry-draft'
+    | 'duplicate-draft'
+    | 'draft-owner-mismatch'
+    | 'entry-draft-owner-mismatch';
+  readonly message: string;
+  readonly draftIndex?: number;
+  readonly tabId?: string;
+}
+
+export interface ParsedTabRenderRealmState {
+  readonly state: TabRenderRealmState;
+  readonly diagnostics: readonly TabRenderRealmStateDiagnostic[];
 }
 
 export interface TabRenderRealmStateCoordinator {
   reconcile(bindings: readonly TabRenderBinding[]): boolean;
+  getDiagnostics(): readonly TabRenderRealmStateDiagnostic[];
   flush(): void;
   dispose(): void;
 }
@@ -38,6 +60,12 @@ export interface TabRenderRealmStateCoordinator {
 export interface TabRenderRealmStateHost {
   getState(): unknown;
   setState(state: TabRenderRealmState): void;
+  reportStateDiagnostic?(diagnostic: TabRenderRealmStateDiagnostic): void;
+}
+
+export interface AgentEntryDraftSnapshotReadResult {
+  readonly snapshot?: AgentEntryDraftSnapshot;
+  readonly diagnostics: readonly TabRenderRealmStateDiagnostic[];
 }
 
 export function createTabRenderRealmStateCoordinator(
@@ -47,26 +75,93 @@ export function createTabRenderRealmStateCoordinator(
   return new DefaultTabRenderRealmStateCoordinator(host, registry);
 }
 
-export function parseTabRenderRealmState(value: unknown): TabRenderRealmState {
-  if (value === undefined) return { schemaVersion: TAB_RENDER_REALM_STATE_VERSION, drafts: [] };
-  if (isLegacyTimelineRecoveryState(value)) {
-    return { schemaVersion: TAB_RENDER_REALM_STATE_VERSION, drafts: [] };
-  }
-  if (!isRecord(value) || value.schemaVersion !== TAB_RENDER_REALM_STATE_VERSION) {
-    throw new Error('Unsupported Agent Tab render realm state schema.');
+export function parseTabRenderRealmState(value: unknown): ParsedTabRenderRealmState {
+  if (value === undefined) return { state: { drafts: [] }, diagnostics: [] };
+  if (!isRecord(value)) {
+    return invalidRealmState('Agent Tab render realm state must be an object.');
   }
   if (!Array.isArray(value.drafts)) {
-    throw new Error('Agent Tab render realm state drafts must be an array.');
+    return invalidRealmState('Agent Tab render realm state drafts must be an array.');
   }
-  const drafts = value.drafts.map((draft, index) => parseDraft(draft, index));
+  const drafts: TabRenderDraftSnapshot[] = [];
+  const diagnostics: TabRenderRealmStateDiagnostic[] = [];
   const tabIds = new Set<string>();
-  for (const draft of drafts) {
+  for (const [index, valueDraft] of value.drafts.entries()) {
+    let draft: TabRenderDraftSnapshot;
+    try {
+      draft = parseDraft(valueDraft, index);
+    } catch (error) {
+      diagnostics.push({
+        code: 'invalid-draft',
+        message: error instanceof Error ? error.message : `Agent Tab draft ${index} is invalid.`,
+        draftIndex: index,
+        ...(readTabId(valueDraft) ? { tabId: readTabId(valueDraft) } : {}),
+      });
+      continue;
+    }
     if (tabIds.has(draft.tabId)) {
-      throw new Error(`Duplicate persisted Agent Tab draft for ${draft.tabId}.`);
+      diagnostics.push({
+        code: 'duplicate-draft',
+        message: `Duplicate persisted Agent Tab draft for ${draft.tabId}.`,
+        draftIndex: index,
+        tabId: draft.tabId,
+      });
+      continue;
     }
     tabIds.add(draft.tabId);
+    drafts.push(draft);
   }
-  return { schemaVersion: TAB_RENDER_REALM_STATE_VERSION, drafts };
+  let entryDraft: AgentEntryDraftSnapshot | undefined;
+  if (value.entryDraft !== undefined) {
+    try {
+      entryDraft = parseEntryDraft(value.entryDraft);
+    } catch (error) {
+      diagnostics.push({
+        code: 'invalid-entry-draft',
+        message: error instanceof Error ? error.message : 'Agent entry draft snapshot is invalid.',
+      });
+    }
+  }
+  return {
+    state: { drafts, ...(entryDraft === undefined ? {} : { entryDraft }) },
+    diagnostics,
+  };
+}
+
+export function readAgentEntryDraftSnapshot(
+  host: Pick<TabRenderRealmStateHost, 'getState'>,
+  draftId: string,
+): AgentEntryDraftSnapshotReadResult {
+  const exactDraftId = nonEmptyString(draftId, 'Agent entry draft identity');
+  const parsed = parseTabRenderRealmState(host.getState());
+  const snapshot = parsed.state.entryDraft;
+  if (snapshot === undefined || snapshot.draftId === exactDraftId) {
+    return {
+      ...(snapshot === undefined ? {} : { snapshot }),
+      diagnostics: parsed.diagnostics,
+    };
+  }
+  return {
+    diagnostics: [
+      ...parsed.diagnostics,
+      {
+        code: 'entry-draft-owner-mismatch',
+        message: `Persisted Agent entry draft belongs to ${snapshot.draftId}, not ${exactDraftId}.`,
+      },
+    ],
+  };
+}
+
+export function writeAgentEntryDraftSnapshot(
+  host: Pick<TabRenderRealmStateHost, 'getState' | 'setState'>,
+  snapshot: AgentEntryDraftSnapshot | undefined,
+): void {
+  const current = parseTabRenderRealmState(host.getState()).state;
+  const entryDraft = snapshot === undefined ? undefined : parseEntryDraft(snapshot);
+  host.setState({
+    drafts: current.drafts,
+    ...(entryDraft === undefined ? {} : { entryDraft }),
+  });
 }
 
 class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordinator {
@@ -74,6 +169,7 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
   private readonly subscriptions = new Map<string, () => void>();
   private readonly restoredTabIds = new Set<string>();
   private readonly knownBindings = new Map<string, string>();
+  private readonly diagnostics: TabRenderRealmStateDiagnostic[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
 
@@ -82,11 +178,9 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
     private readonly registry: TabRenderRuntimeRegistry,
   ) {
     const persistedState = host.getState();
-    const state = parseTabRenderRealmState(persistedState);
-    if (isLegacyTimelineRecoveryState(persistedState)) {
-      host.setState(state);
-    }
-    for (const draft of state.drafts) {
+    const parsed = parseTabRenderRealmState(persistedState);
+    for (const diagnostic of parsed.diagnostics) this.reportDiagnostic(diagnostic);
+    for (const draft of parsed.state.drafts) {
       this.drafts.set(draft.tabId, draft);
     }
   }
@@ -100,11 +194,15 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
         throw new Error(`Duplicate Tab draft binding for ${binding.tabId}.`);
       }
       nextBindings.set(binding.tabId, binding.conversationId);
-      const persisted = this.drafts.get(binding.tabId);
+      let persisted = this.drafts.get(binding.tabId);
       if (persisted && persisted.conversationId !== binding.conversationId) {
-        throw new Error(
-          `Persisted Tab draft ${binding.tabId} belongs to ${persisted.conversationId}, not ${binding.conversationId}.`,
-        );
+        this.reportDiagnostic({
+          code: 'draft-owner-mismatch',
+          message: `Persisted Tab draft ${binding.tabId} belongs to ${persisted.conversationId}, not ${binding.conversationId}.`,
+          tabId: binding.tabId,
+        });
+        this.drafts.delete(binding.tabId);
+        persisted = undefined;
       }
       const runtime = this.registry.require(binding.tabId);
       if (!this.restoredTabIds.has(binding.tabId)) {
@@ -144,15 +242,20 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
     return changed;
   }
 
+  getDiagnostics(): readonly TabRenderRealmStateDiagnostic[] {
+    return this.diagnostics;
+  }
+
   flush(): void {
     this.assertActive();
     if (this.flushTimer !== undefined) {
       clearTimeout(this.flushTimer);
       this.flushTimer = undefined;
     }
+    const entryDraft = parseTabRenderRealmState(this.host.getState()).state.entryDraft;
     this.host.setState({
-      schemaVersion: TAB_RENDER_REALM_STATE_VERSION,
       drafts: [...this.drafts.values()],
+      ...(entryDraft === undefined ? {} : { entryDraft }),
     });
   }
 
@@ -172,32 +275,25 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
   private assertActive(): void {
     if (this.disposed) throw new Error('Agent Tab render realm state coordinator is disposed.');
   }
+
+  private reportDiagnostic(diagnostic: TabRenderRealmStateDiagnostic): void {
+    this.diagnostics.push(diagnostic);
+    this.host.reportStateDiagnostic?.(diagnostic);
+  }
 }
 
 function projectDraft(state: TabRenderState, binding: TabRenderBinding): TabRenderDraftSnapshot {
   return {
     ...binding,
     inputValue: state.inputValue,
-    selectedModel: state.selectedModel,
-    mediaModelSelection: { ...state.mediaModelSelection },
-    mediaUnderstandingSelection: { ...state.mediaUnderstandingSelection },
-    sessionMode: state.sessionMode,
-    executionMode: state.executionMode,
-    generationCategory: state.generationCategory,
-    generationParams: { ...state.generationParams },
+    viewport: { ...state.viewport },
   };
 }
 
 function toStateUpdate(draft: TabRenderDraftSnapshot): TabRenderStateUpdate {
   return {
     inputValue: draft.inputValue,
-    selectedModel: draft.selectedModel,
-    mediaModelSelection: draft.mediaModelSelection,
-    mediaUnderstandingSelection: draft.mediaUnderstandingSelection,
-    sessionMode: draft.sessionMode,
-    executionMode: draft.executionMode,
-    generationCategory: draft.generationCategory,
-    generationParams: draft.generationParams,
+    viewport: draft.viewport,
   };
 }
 
@@ -206,22 +302,9 @@ function hasSameDraft(left: TabRenderDraftSnapshot, right: TabRenderDraftSnapsho
     left.tabId === right.tabId &&
     left.conversationId === right.conversationId &&
     left.inputValue === right.inputValue &&
-    left.selectedModel === right.selectedModel &&
-    left.mediaModelSelection.image === right.mediaModelSelection.image &&
-    left.mediaModelSelection.video === right.mediaModelSelection.video &&
-    left.mediaModelSelection.audio === right.mediaModelSelection.audio &&
-    left.mediaUnderstandingSelection.image === right.mediaUnderstandingSelection.image &&
-    left.mediaUnderstandingSelection.video === right.mediaUnderstandingSelection.video &&
-    left.mediaUnderstandingSelection.audio === right.mediaUnderstandingSelection.audio &&
-    left.sessionMode === right.sessionMode &&
-    left.executionMode === right.executionMode &&
-    left.generationCategory === right.generationCategory &&
-    left.generationParams.ratio === right.generationParams.ratio &&
-    left.generationParams.resolution === right.generationParams.resolution &&
-    left.generationParams.videoDuration === right.generationParams.videoDuration &&
-    left.generationParams.videoFps === right.generationParams.videoFps &&
-    left.generationParams.audioDuration === right.generationParams.audioDuration &&
-    left.generationParams.audioType === right.generationParams.audioType
+    left.viewport.followMode === right.viewport.followMode &&
+    left.viewport.anchorMessageId === right.viewport.anchorMessageId &&
+    left.viewport.anchorOffset === right.viewport.anchorOffset
   );
 }
 
@@ -231,70 +314,95 @@ function parseDraft(value: unknown, index: number): TabRenderDraftSnapshot {
   const tabId = nonEmptyString(value.tabId, `${path}.tabId`);
   const conversationId = nonEmptyString(value.conversationId, `${path}.conversationId`);
   const inputValue = stringValue(value.inputValue, `${path}.inputValue`);
-  const selectedModel = stringValue(value.selectedModel, `${path}.selectedModel`);
   return {
     tabId,
     conversationId,
     inputValue,
-    selectedModel,
-    mediaModelSelection: parseMediaSelection(
-      value.mediaModelSelection,
-      `${path}.mediaModelSelection`,
-    ),
-    mediaUnderstandingSelection: parseMediaSelection(
-      value.mediaUnderstandingSelection,
-      `${path}.mediaUnderstandingSelection`,
-    ),
-    sessionMode: enumValue(
-      value.sessionMode,
-      ['agent', 'image', 'video', 'audio'],
-      `${path}.sessionMode`,
-    ),
-    executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
-    generationCategory: enumValue(
-      value.generationCategory,
-      ['image', 'video', 'audio'],
-      `${path}.generationCategory`,
-    ),
-    generationParams: parseGenerationParams(value.generationParams, `${path}.generationParams`),
+    viewport: parseViewport(value.viewport, `${path}.viewport`),
   };
 }
 
-function parseMediaSelection(value: unknown, path: string): MediaModelSelection {
+function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
+  const path = 'Agent entry draft snapshot';
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
-  return {
-    image: stringValue(value.image, `${path}.image`),
-    video: stringValue(value.video, `${path}.video`),
-    audio: stringValue(value.audio, `${path}.audio`),
-  };
-}
-
-function parseGenerationParams(value: unknown, path: string): GenerationParams {
-  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
-  return {
-    ratio: enumValue(
-      value.ratio,
-      ['16:9', '9:16', '1:1', '4:3', '3:2', '21:9', '2.39:1'],
-      `${path}.ratio`,
-    ),
-    resolution: enumValue(
-      value.resolution,
-      ['512', '720p', '1080p', '2K', '4K'],
-      `${path}.resolution`,
-    ),
-    videoDuration: durationValue(value.videoDuration, `${path}.videoDuration`),
-    videoFps: enumValue(value.videoFps, [24, 30], `${path}.videoFps`),
-    audioDuration: durationValue(value.audioDuration, `${path}.audioDuration`),
-    audioType: enumValue(value.audioType, ['sfx', 'ambient', 'voice'], `${path}.audioType`),
-  };
-}
-
-function durationValue(value: unknown, path: string): 'auto' | number {
-  if (value === 'auto') return value;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    throw new Error(`${path} must be 'auto' or a positive number.`);
+  const contextReferences = value.contextReferences;
+  if (!Array.isArray(contextReferences)) {
+    throw new Error(`${path}.contextReferences must be an array.`);
   }
-  return value;
+  const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
+  return {
+    draftId: nonEmptyString(value.draftId, `${path}.draftId`),
+    inputValue: stringValue(value.inputValue, `${path}.inputValue`),
+    contextReferences: contextReferences.map((reference, index) =>
+      parseEntryContextReference(reference, `${path}.contextReferences[${index}]`),
+    ),
+    ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
+    selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
+    executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
+  };
+}
+
+function parseEntryWorkspaceTarget(
+  value: unknown,
+  path: string,
+): AgentEntryDraftSnapshot['workspaceTarget'] {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`${path}.workspaceTarget must be an object.`);
+  const context = parseAgentConversationContext(value.context);
+  if (context.kind !== 'workspace') {
+    throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
+  }
+  return {
+    label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
+    context,
+  };
+}
+
+function parseEntryContextReference(value: unknown, path: string): AgentContextPayload {
+  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  const type = enumValue(
+    value.type,
+    [
+      'canvas-node',
+      'cut-clip',
+      'story-selection',
+      'character',
+      'scene',
+      'asset',
+      'media',
+      'entity',
+      'sketch-layer',
+      '3d-reference',
+      'audio-clip',
+      'file',
+      'image',
+      'document-selection',
+      'canvas-storyboard-action-intent',
+    ] as const,
+    `${path}.type`,
+  );
+  if (!('data' in value)) throw new Error(`${path}.data is required.`);
+  const intent = optionalString(value.intent, `${path}.intent`);
+  return {
+    type,
+    id: nonEmptyString(value.id, `${path}.id`),
+    label: nonEmptyString(value.label, `${path}.label`),
+    summary: stringValue(value.summary, `${path}.summary`),
+    data: value.data,
+    ...(intent === undefined ? {} : { intent }),
+  };
+}
+
+function parseViewport(value: unknown, path: string): TabRenderState['viewport'] {
+  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  const followMode = enumValue(value.followMode, ['follow-tail', 'detached'], `${path}.followMode`);
+  const anchorMessageId = optionalNonEmptyString(value.anchorMessageId, `${path}.anchorMessageId`);
+  const anchorOffset = optionalFiniteNumber(value.anchorOffset, `${path}.anchorOffset`);
+  return {
+    followMode,
+    ...(anchorMessageId === undefined ? {} : { anchorMessageId }),
+    ...(anchorOffset === undefined ? {} : { anchorOffset }),
+  };
 }
 
 function enumValue<const T extends string | number>(
@@ -319,39 +427,37 @@ function stringValue(value: unknown, path: string): string {
   return value;
 }
 
+function optionalNonEmptyString(value: unknown, path: string): string | undefined {
+  if (value === undefined) return undefined;
+  return nonEmptyString(value, path);
+}
+
+function optionalString(value: unknown, path: string): string | undefined {
+  if (value === undefined) return undefined;
+  return stringValue(value, path);
+}
+
+function optionalFiniteNumber(value: unknown, path: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${path} must be a finite number.`);
+  }
+  return value;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isLegacyTimelineRecoveryState(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  const keys = Object.keys(value);
-  return (
-    keys.length === 1 &&
-    keys[0] === LEGACY_TIMELINE_RECOVERY_STATE_KEY &&
-    Array.isArray(value[LEGACY_TIMELINE_RECOVERY_STATE_KEY]) &&
-    value[LEGACY_TIMELINE_RECOVERY_STATE_KEY].every(isLegacyTimelineRecoveryDescriptor)
-  );
+function invalidRealmState(message: string): ParsedTabRenderRealmState {
+  return {
+    state: { drafts: [] },
+    diagnostics: [{ code: 'invalid-realm-state', message }],
+  };
 }
 
-function isLegacyTimelineRecoveryDescriptor(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  const keys = Object.keys(value);
-  return (
-    keys.length === 5 &&
-    keys.includes('connectionEpoch') &&
-    keys.includes('conversationId') &&
-    keys.includes('turnId') &&
-    keys.includes('messageId') &&
-    keys.includes('lastAppliedDeliveryRevision') &&
-    isNonEmptyString(value.connectionEpoch) &&
-    isNonEmptyString(value.conversationId) &&
-    isNonEmptyString(value.turnId) &&
-    isNonEmptyString(value.messageId) &&
-    typeof value.lastAppliedDeliveryRevision === 'number' &&
-    Number.isInteger(value.lastAppliedDeliveryRevision) &&
-    value.lastAppliedDeliveryRevision > 0
-  );
+function readTabId(value: unknown): string | undefined {
+  return isRecord(value) && isNonEmptyString(value.tabId) ? value.tabId : undefined;
 }
 
 function isNonEmptyString(value: unknown): value is string {

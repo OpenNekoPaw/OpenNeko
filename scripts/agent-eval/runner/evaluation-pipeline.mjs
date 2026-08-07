@@ -109,7 +109,10 @@ export async function runEvaluationPipeline(input, options = {}) {
     artifacts,
     judge,
     baselineDiff,
-    modelIdentity: neutralFacts.configuration.effective.values.modelBinding,
+    modelIdentity: {
+      providerId: neutralFacts.configuration.effective.values.modelBinding.providerId,
+      modelId: neutralFacts.configuration.effective.values.modelBinding.modelId,
+    },
     effectiveConfiguration: {
       runtimeProfileId: input.executionCase.runtimeProfile.id,
       modelProfileId: input.executionCase.modelProfiles[0].id,

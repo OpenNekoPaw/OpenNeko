@@ -124,10 +124,11 @@
   --agent-composer-focus-border: color-mix(in srgb, var(--agent-accent) 50%, var(--agent-fg) 8%);
   --agent-composer-divider: color-mix(in srgb, var(--agent-fg) 7%, transparent);
   --agent-composer-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.12), inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 4%, transparent);
+    0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 5%, transparent);
   --agent-composer-focus-shadow:
     0 0 0 1px color-mix(in srgb, var(--agent-accent) 18%, transparent),
-    0 0 0 3px color-mix(in srgb, var(--agent-accent) 6%, transparent),
+    0 12px 34px rgba(0, 0, 0, 0.17), 0 3px 10px rgba(0, 0, 0, 0.09),
     inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 5%, transparent);
   --agent-control-muted-bg: color-mix(in srgb, var(--agent-fg) 7%, transparent);
   --agent-composer-send-bg: color-mix(in srgb, var(--agent-accent) 88%, var(--agent-fg) 12%);
@@ -189,15 +190,14 @@
 }
 
 [data-presentation='desktop-dock'] {
-  --agent-bg: var(
-    --neko-desktop-surface,
-    var(--neko-sideBar-background, var(--fallback-sidebar-bg))
-  );
+  --agent-bg: var(--neko-sideBar-background, var(--neko-desktop-main, var(--fallback-sidebar-bg)));
   --agent-elevated: var(
     --neko-desktop-surface-raised,
     var(--neko-editorWidget-background, var(--fallback-panel-bg))
   );
   --agent-input-bg: var(--neko-desktop-surface-raised, var(--agent-elevated));
+  --agent-composer-rail-bg: var(--agent-bg);
+  --agent-composer-rail-border: transparent;
   --agent-overlay-radius: var(--neko-desktop-radius-panel, 12px);
   --agent-overlay-shadow: var(--neko-desktop-shadow-overlay, var(--neko-shadow-lg));
   --agent-menu-row-min-height: 32px;
@@ -631,6 +631,12 @@ body {
   background: var(--agent-chat-row-hover);
 }
 
+.agent-transcript-rail {
+  width: calc(100% - 24px);
+  max-width: 820px;
+  margin-inline: auto;
+}
+
 .agent-assistant-document-row:hover {
   background: transparent;
 }
@@ -665,6 +671,31 @@ body {
   background: var(--agent-empty-panel-bg);
   box-shadow: var(--agent-empty-panel-shadow);
   overflow-wrap: anywhere;
+}
+
+.agent-empty-state--desktop-dock .agent-empty-panel {
+  max-width: 820px;
+  margin-inline: auto;
+}
+
+.agent-entry-composition {
+  justify-content: center;
+  overflow-y: auto;
+  padding-block: 16px;
+}
+
+.agent-entry-composition > .agent-empty-state--desktop-dock {
+  min-height: auto;
+  flex: 0 0 auto;
+  align-items: center;
+  padding-bottom: 12px;
+  overflow: visible;
+}
+
+@media (max-height: 640px) {
+  .agent-entry-composition {
+    justify-content: flex-start;
+  }
 }
 
 .agent-empty-title {
@@ -744,9 +775,12 @@ body {
 }
 
 .agent-composer-shell {
+  width: 100%;
+  max-width: 820px;
+  margin-inline: auto;
   background: var(--agent-composer-bg);
   border: 1px solid var(--agent-composer-border);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: var(--agent-composer-shadow);
   transition:
     background-color 0.15s ease,
@@ -763,7 +797,116 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  padding: 8px 10px 7px;
+  padding: 9px 12px 5px;
+}
+
+.agent-composer-workspace {
+  position: relative;
+  display: flex;
+  max-width: min(240px, 42%);
+  min-width: 0;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.agent-composer-workspace-button {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-workspace-button:hover,
+.agent-composer-workspace-button:focus-visible {
+  color: var(--agent-fg);
+  outline: none;
+}
+
+.agent-composer-workspace-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.agent-composer-workspace-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--agent-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-workspace-clear {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+  cursor: pointer;
+}
+
+.agent-composer-workspace-clear:hover,
+.agent-composer-workspace-clear:focus-visible {
+  background: var(--agent-control-hover-bg);
+  color: var(--agent-fg);
+  outline: none;
+}
+
+.agent-composer-workspace-menu {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  bottom: calc(100% + 6px);
+  display: grid;
+  width: min(280px, calc(100vw - 32px));
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--agent-overlay-border);
+  border-radius: var(--agent-overlay-radius);
+  background: var(--agent-overlay-bg);
+  box-shadow: var(--agent-overlay-shadow);
+}
+
+.agent-composer-workspace-menu button {
+  min-width: 0;
+  padding: 7px 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--agent-fg);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-workspace-menu button:hover,
+.agent-composer-workspace-menu button:focus-visible {
+  background: var(--agent-control-hover-bg);
+  outline: none;
+}
+
+.agent-composer-workspace-menu button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .agent-composer-queue-panel {
@@ -919,7 +1062,7 @@ body {
 
 .agent-composer-textarea {
   flex: 1 1 auto;
-  min-height: 32px;
+  min-height: 48px;
   max-height: 120px;
   min-width: 0;
   padding: 5px 4px;
@@ -2086,6 +2229,18 @@ body {
 }
 
 @media (max-width: 520px) {
+  .agent-composer-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .agent-composer-mode-controls {
+    flex: 1 1 auto;
+  }
+
+  .agent-composer-toolbar > .flex-1 {
+    display: none;
+  }
+
   .agent-canvas-reference-row {
     align-items: flex-start;
     flex-direction: column;
@@ -2097,7 +2252,8 @@ body {
 }
 
 .agent-composer-rail {
-  border-top: 1px solid var(--agent-composer-rail-border);
+  padding: 0 12px 12px;
+  border-top: 0;
   background: var(--agent-composer-rail-bg);
 }
 
@@ -2105,10 +2261,9 @@ body {
   display: flex;
   align-items: center;
   gap: 2px;
-  min-height: 37px;
-  padding: 4px 8px;
-  border-top: 1px solid var(--agent-composer-divider);
-  background: color-mix(in srgb, var(--agent-composer-bg) 82%, transparent);
+  min-height: 39px;
+  padding: 3px 8px 7px;
+  background: transparent;
 }
 
 .agent-composer-tool-button {

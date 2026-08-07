@@ -1,14 +1,48 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_HOST_ROUTE_AUTHORITY,
   ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
   ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS,
+  classifyAgentHostRoute,
   createAgentHostRouteCoverageDiagnostics,
   createAgentHostRouteUnavailableDiagnostic,
+  createAgentHostWorkspaceScopeRequiredDiagnostic,
   createElectronAgentHostRouteUnavailableDiagnostic,
 } from '../agent-host-runtime-adapter';
 import { AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES } from '../webview-protocol';
 
 describe('Agent host runtime adapter contracts', () => {
+  it('classifies every route by connection and authority scope', () => {
+    expect(Object.keys(AGENT_HOST_ROUTE_AUTHORITY).sort()).toEqual(
+      [...AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES].sort(),
+    );
+    expect(classifyAgentHostRoute('refreshConfigSnapshot')).toEqual({
+      connection: 'launch-or-session',
+      scope: 'any',
+    });
+    expect(classifyAgentHostRoute('searchProjectFiles')).toEqual({
+      connection: 'launch-or-session',
+      scope: 'workspace',
+    });
+    expect(classifyAgentHostRoute('requestCanvasAuthoringHandoff')).toEqual({
+      connection: 'session',
+      scope: 'workspace',
+    });
+  });
+
+  it('creates a fail-closed Workspace scope diagnostic for Assistant connections', () => {
+    expect(createAgentHostWorkspaceScopeRequiredDiagnostic('searchProjectFiles')).toEqual({
+      code: 'workspace-scope-required',
+      severity: 'error',
+      hostKind: 'electron',
+      messageType: 'searchProjectFiles',
+      requiredScope: 'workspace',
+      actualScope: 'assistant',
+      message:
+        "Agent route 'searchProjectFiles' requires an explicitly authorized Workspace scope.",
+    });
+  });
+
   it('lists route types exactly once', () => {
     expect(new Set(AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES).size).toBe(
       AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES.length,
@@ -57,7 +91,7 @@ describe('Agent host runtime adapter contracts', () => {
     );
 
     expect(supportCounts).toEqual({
-      implemented: 41,
+      implemented: 40,
       unsupported: 8,
       'host-inapplicable': 3,
     });

@@ -29,16 +29,12 @@ export type AgentProfileRelationship = (typeof AGENT_PROFILE_RELATIONSHIPS)[numb
 
 export type AgentProfileDiagnosticSeverity = (typeof AGENT_PROFILE_DIAGNOSTIC_SEVERITIES)[number];
 
-export type AgentProfileVersion = string | number;
-
 export type AgentProfilePathSegment = string | number;
 
 export type AgentProfileDiagnosticCode =
   | 'invalid-profile-root'
   | 'missing-profile-id'
   | 'invalid-profile-id'
-  | 'missing-profile-version'
-  | 'unsupported-profile-version'
   | 'invalid-profile-kind'
   | 'invalid-profile-source'
   | 'malformed-profile-descriptor'
@@ -50,25 +46,18 @@ export type AgentProfileDiagnosticCode =
   | 'profile-host-not-supported'
   | 'provider-expression-secrets-forbidden';
 
-export interface AgentProfileIdentity<
-  TKind extends AgentProfileKind = AgentProfileKind,
-  TVersion extends AgentProfileVersion = AgentProfileVersion,
-> {
+export interface AgentProfileIdentity<TKind extends AgentProfileKind = AgentProfileKind> {
   readonly profileId: string;
-  readonly version: TVersion;
   readonly kind: TKind;
   readonly source: AgentProfileSource;
   readonly sourceRef?: string;
   readonly packageId?: string;
   readonly publisherId?: string;
-  readonly override?: AgentProfileOverridePolicy<TVersion>;
+  readonly override?: AgentProfileOverridePolicy;
 }
 
-export interface AgentProfileOverridePolicy<
-  TVersion extends AgentProfileVersion = AgentProfileVersion,
-> {
+export interface AgentProfileOverridePolicy {
   readonly sources?: readonly AgentProfileSource[];
-  readonly version?: TVersion;
   readonly reason?: string;
 }
 
@@ -90,13 +79,9 @@ export interface AgentProfileValidationResult {
   readonly diagnostics: readonly AgentProfileDiagnostic[];
 }
 
-export interface AgentProfileFilter<
-  TKind extends AgentProfileKind = AgentProfileKind,
-  TVersion extends AgentProfileVersion = AgentProfileVersion,
-> {
+export interface AgentProfileFilter<TKind extends AgentProfileKind = AgentProfileKind> {
   readonly profileId?: string;
   readonly kind?: TKind;
-  readonly version?: TVersion;
   readonly source?: AgentProfileSource;
   readonly includeSkillLocal?: boolean;
 }
@@ -110,16 +95,15 @@ export interface IAgentProfileRegistry<
   TProfile extends AgentProfileIdentity = AgentProfileIdentity,
 > {
   register(profile: TProfile): AgentProfileRegistrationResult;
-  unregister(profileId: string, source?: AgentProfileSource, version?: TProfile['version']): void;
-  get(profileId: string, version?: TProfile['version']): TProfile | undefined;
-  list(filter?: AgentProfileFilter<TProfile['kind'], TProfile['version']>): readonly TProfile[];
+  unregister(profileId: string, source?: AgentProfileSource): void;
+  get(profileId: string): TProfile | undefined;
+  list(filter?: AgentProfileFilter<TProfile['kind']>): readonly TProfile[];
   getDiagnostics?(): readonly AgentProfileDiagnostic[];
 }
 
 export interface AgentProfileCatalogPackageProfile {
   readonly profileId: string;
   readonly kind: AgentProfileKind;
-  readonly version: AgentProfileVersion;
   readonly displayName?: string;
 }
 
@@ -148,7 +132,6 @@ export interface AgentProfilePackageCatalogProjectable {
 
 export interface AgentProfileIdentityValidationOptions {
   readonly expectedKind?: AgentProfileKind;
-  readonly supportedVersions?: readonly AgentProfileVersion[];
   readonly requirePersistableSource?: boolean;
   readonly path?: readonly AgentProfilePathSegment[];
 }
@@ -232,38 +215,6 @@ export function validateAgentProfileIdentity(
     });
   }
 
-  const version = descriptor['version'];
-  if (version === undefined) {
-    diagnostics.push({
-      severity: 'error',
-      code: 'missing-profile-version',
-      path: [...path, 'version'],
-      message: 'Agent profile descriptor must declare version.',
-    });
-  } else if (!isProfileVersion(version)) {
-    diagnostics.push({
-      severity: 'error',
-      code: 'unsupported-profile-version',
-      path: [...path, 'version'],
-      message: 'Agent profile version must be a non-empty string or integer.',
-      expected: 'non-empty string or integer',
-      actual: version,
-    });
-  } else if (
-    options.supportedVersions &&
-    !options.supportedVersions.some((supported) => supported === version)
-  ) {
-    diagnostics.push({
-      severity: 'error',
-      code: 'unsupported-profile-version',
-      path: [...path, 'version'],
-      profileId: typeof profileId === 'string' ? profileId : undefined,
-      message: 'Agent profile version is not supported by this host.',
-      expected: options.supportedVersions.map(String).join(', '),
-      actual: version,
-    });
-  }
-
   const kind = descriptor['kind'];
   if (!isAgentProfileKind(kind)) {
     diagnostics.push({
@@ -333,7 +284,7 @@ export function validateAgentProfileDescriptorSet<
     );
 
     if (options.allowDuplicateProfileIds) return;
-    const key = `${descriptor.kind}\u0000${descriptor.profileId}\u0000${String(descriptor.version)}`;
+    const key = `${descriptor.kind}\u0000${descriptor.profileId}`;
     const existing = seen.get(key);
     if (existing) {
       diagnostics.push({
@@ -343,11 +294,10 @@ export function validateAgentProfileDescriptorSet<
         profileId: descriptor.profileId,
         kind: descriptor.kind,
         source: descriptor.source,
-        message: 'Agent profile descriptor duplicates an existing profile id, kind, and version.',
+        message: 'Agent profile descriptor duplicates an existing profile id and kind.',
         details: {
           existingSource: existing.source,
           conflictingSource: descriptor.source,
-          version: descriptor.version,
         },
       });
       return;
@@ -399,27 +349,14 @@ function toAgentProfileCatalogPackageProfile(
   if (!isRecord(value)) return undefined;
   const profileId = value['profileId'];
   const kind = value['kind'];
-  const version = value['version'];
-  if (
-    !isValidAgentProfileId(profileId) ||
-    !isAgentProfileKind(kind) ||
-    !isProfileVersion(version)
-  ) {
+  if (!isValidAgentProfileId(profileId) || !isAgentProfileKind(kind)) {
     return undefined;
   }
   return {
     profileId,
     kind,
-    version,
     ...(typeof value['displayName'] === 'string' ? { displayName: value['displayName'] } : {}),
   };
-}
-
-function isProfileVersion(value: unknown): value is AgentProfileVersion {
-  if (typeof value === 'number') {
-    return Number.isInteger(value) && value >= 0;
-  }
-  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

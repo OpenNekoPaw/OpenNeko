@@ -1,5 +1,5 @@
 import type { EmbodyCharacterSessionProjection } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
 import { useTranslation } from '../../i18n/I18nContext';
 
 interface EmbodyCharacterHeaderProps {
@@ -7,6 +7,7 @@ interface EmbodyCharacterHeaderProps {
 }
 
 export function EmbodyCharacterHeader({ session }: EmbodyCharacterHeaderProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { t } = useTranslation();
   const active = session.status === 'active';
 
@@ -32,7 +33,7 @@ export function EmbodyCharacterHeader({ session }: EmbodyCharacterHeaderProps) {
         {active ? (
           <button
             type="button"
-            onClick={() => AgentHostMessages.exitEmbodyCharacterSession(session.sessionId)}
+            onClick={() => agentHostMessages.exitEmbodyCharacterSession(session.sessionId)}
             className="rounded px-2 py-1 text-[11px] text-[var(--neko-foreground)] hover:bg-[var(--neko-toolbar-hoverBackground)]"
           >
             {t('characterRole.action.exit')}

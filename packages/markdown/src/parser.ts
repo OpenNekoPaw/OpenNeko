@@ -6,11 +6,11 @@ import {
   validateNormalizedMarkdownDocument,
 } from './document';
 import {
-  createMarkdownRevision,
+  createMarkdownDocumentId,
   createMarkdownSessionId,
   deriveMarkdownAnnotationId,
   deriveMarkdownNodeId,
-  type MarkdownRevision,
+  type MarkdownDocumentId,
   type MarkdownSessionId,
 } from './identity';
 import type {
@@ -53,7 +53,7 @@ export const DEFAULT_MARKDOWN_PARSE_POLICY: MarkdownParsePolicy = Object.freeze(
 
 export interface ParseNormalizedMarkdownOptions {
   readonly sessionId?: MarkdownSessionId;
-  readonly revision?: MarkdownRevision;
+  readonly documentId?: MarkdownDocumentId;
   readonly promptSpans?: readonly MarkdownPromptSpanInput[];
   readonly creativeTableKnownColumns?: readonly string[];
   readonly policy?: MarkdownParsePolicy;
@@ -67,7 +67,7 @@ export interface MarkdownParseSuccess {
 export interface MarkdownParseFailure {
   readonly status: 'failed';
   readonly sessionId: MarkdownSessionId;
-  readonly revision: MarkdownRevision;
+  readonly documentId: MarkdownDocumentId;
   readonly source: string;
   readonly diagnostics: readonly MarkdownDiagnostic[];
 }
@@ -120,7 +120,7 @@ export function parseNormalizedMarkdown(
   options: ParseNormalizedMarkdownOptions = {},
 ): MarkdownParseResult {
   const sessionId = options.sessionId ?? createMarkdownSessionId();
-  const revision = options.revision ?? createMarkdownRevision(1);
+  const documentId = options.documentId ?? createMarkdownDocumentId();
   const policy = options.policy ?? DEFAULT_MARKDOWN_PARSE_POLICY;
   validateParsePolicy(policy);
 
@@ -128,7 +128,7 @@ export function parseNormalizedMarkdown(
     return {
       status: 'failed',
       sessionId,
-      revision,
+      documentId,
       source,
       diagnostics: [
         {
@@ -156,7 +156,7 @@ export function parseNormalizedMarkdown(
   const annotations = projectAnnotations(root, options, context);
   const document: NormalizedMarkdownDocument = {
     sessionId,
-    revision,
+    documentId,
     source,
     root,
     annotations,

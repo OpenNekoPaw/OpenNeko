@@ -6,39 +6,26 @@ import {
 } from '@neko/assets-domain/contracts';
 import type {
   LocalMetadataPartition,
-  LocalMetadataPartitionRevision,
   LocalMetadataRepositories,
   MediaMetadataRepository,
   TaskCheckpointRecord,
   TaskStateRecord,
 } from '@neko/local-metadata';
 
-export const WORKSPACE_MEDIA_LIBRARY_SYNC_METADATA_DOMAIN = 'workspace-media-library-sync' as const;
 export const WORKSPACE_MEDIA_LIBRARY_PROBE_METADATA_DOMAIN =
   'workspace-media-library-probe' as const;
 
 export interface WorkspaceMediaLibrarySyncMetadataBinding {
   readonly workspaceId: string;
-  readonly projectionPartition: LocalMetadataPartition;
   readonly mediaProbePartition: LocalMetadataPartition;
   readonly mediaMetadata: MediaMetadataRepository;
-  readProjectionRevision(): Promise<LocalMetadataPartitionRevision | null>;
-  recordProjection(input: {
-    readonly freshness: LocalMetadataPartitionRevision['freshness'];
-    readonly diagnostic: string | null;
-    readonly updatedAt: string;
-  }): Promise<LocalMetadataPartitionRevision>;
-  markProjectionStale(input: {
-    readonly diagnostic: string;
-    readonly updatedAt: string;
-  }): Promise<LocalMetadataPartitionRevision>;
   writeSnapshotTask(
     payload: PortableMediaLibrarySnapshotTaskPayload,
     timestamp: number,
   ): Promise<void>;
   readSnapshotTask(snapshotId: string): Promise<PortableMediaLibrarySnapshotTaskPayload | null>;
   findCompletedSnapshot(
-    requirementRevision: string,
+    requirementFingerprint: string,
   ): Promise<PortableMediaLibrarySnapshotTaskPayload | null>;
   findResumableSnapshot(): Promise<PortableMediaLibrarySnapshotTaskPayload | null>;
   writeSnapshotCheckpoint(
@@ -54,11 +41,6 @@ export function createWorkspaceMediaLibrarySyncMetadataBinding(input: {
   readonly workspaceId: string;
   readonly repositories: LocalMetadataRepositories;
 }): WorkspaceMediaLibrarySyncMetadataBinding {
-  const projectionPartition: LocalMetadataPartition = {
-    scope: 'workspace',
-    workspaceId: input.workspaceId,
-    domain: WORKSPACE_MEDIA_LIBRARY_SYNC_METADATA_DOMAIN,
-  };
   const mediaProbePartition: LocalMetadataPartition = {
     scope: 'workspace',
     workspaceId: input.workspaceId,
@@ -66,24 +48,8 @@ export function createWorkspaceMediaLibrarySyncMetadataBinding(input: {
   };
   return {
     workspaceId: input.workspaceId,
-    projectionPartition,
     mediaProbePartition,
     mediaMetadata: input.repositories.mediaMetadata,
-    readProjectionRevision: () => input.repositories.projectionVersions.get(projectionPartition),
-    recordProjection: ({ freshness, diagnostic, updatedAt }) =>
-      input.repositories.projectionVersions.increment({
-        partition: projectionPartition,
-        freshness,
-        diagnostic,
-        updatedAt,
-      }),
-    markProjectionStale: ({ diagnostic, updatedAt }) =>
-      input.repositories.projectionVersions.markStale({
-        partition: projectionPartition,
-        freshness: 'stale',
-        diagnostic,
-        updatedAt,
-      }),
     async writeSnapshotTask(payload, timestamp): Promise<void> {
       const parsed = parsePortableMediaLibrarySnapshotTaskPayload(payload);
       requireWorkspace(input.workspaceId, parsed.workspaceId);
@@ -110,7 +76,7 @@ export function createWorkspaceMediaLibrarySyncMetadataBinding(input: {
       return record ? parsePortableMediaLibrarySnapshotTaskPayload(record.payload) : null;
     },
     async findCompletedSnapshot(
-      requirementRevision,
+      requirementFingerprint,
     ): Promise<PortableMediaLibrarySnapshotTaskPayload | null> {
       const records = await input.repositories.tasks.list({
         workspaceId: input.workspaceId,
@@ -122,7 +88,7 @@ export function createWorkspaceMediaLibrarySyncMetadataBinding(input: {
           payload: parsePortableMediaLibrarySnapshotTaskPayload(record.payload),
           updatedAt: record.updatedAt,
         }))
-        .filter(({ payload }) => payload.requirementRevision === requirementRevision)
+        .filter(({ payload }) => payload.requirementFingerprint === requirementFingerprint)
         .sort((left, right) => right.updatedAt - left.updatedAt);
       return matches[0]?.payload ?? null;
     },

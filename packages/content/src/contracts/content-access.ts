@@ -1,4 +1,4 @@
-// Stable source identities retained for Agent/tool inputs during locator migration.
+// Stable source identities retained for Agent and tool inputs.
 // Runtime handles are accepted only so boundaries can reject them explicitly; they are not
 // durable identity and must never be persisted or projected as a successful source.
 
@@ -84,14 +84,9 @@ export function isRuntimeOnlyContentRef(ref: ContentSourceRef): ref is ContentRu
 export function isCacheOrRuntimeOnlyContentRef(ref: ContentSourceRef): boolean {
   if (isRuntimeOnlyContentRef(ref)) return ref.source === undefined;
   if ('kind' in ref && ref.kind === 'generated-asset') {
-    return ref.promoted !== true || isGeneratedCacheBackedSourceRef(ref);
+    return ref.promoted !== true;
   }
   return false;
-}
-
-export function isGeneratedCacheBackedSourceRef(ref: ContentSourceRef): boolean {
-  if (!('kind' in ref) || ref.kind !== 'generated-asset') return false;
-  return typeof ref.path === 'string' && isGeneratedCachePath(ref.path);
 }
 
 export function isContentRuntimeRefKind(value: unknown): value is ContentRuntimeRefKind {
@@ -108,26 +103,6 @@ export function isHostProjectedRuntimeValue(value: string): boolean {
     value.startsWith('data:') ||
     value.startsWith('object:')
   );
-}
-
-export function isPrivateCachePath(
-  filePath: string,
-  options: {
-    readonly projectRoot?: string;
-    readonly globalRoot?: string;
-    readonly extensionPrivateRoot?: string;
-  } = {},
-): boolean {
-  const normalizedPath = normalizePathForCategory(filePath);
-  return [
-    options.projectRoot
-      ? `${normalizePathForCategory(options.projectRoot)}/.neko/.cache`
-      : undefined,
-    options.globalRoot ? normalizePathForCategory(options.globalRoot) : undefined,
-    options.extensionPrivateRoot
-      ? normalizePathForCategory(options.extensionPrivateRoot)
-      : undefined,
-  ].some((root) => root !== undefined && isPathInside(normalizedPath, root));
 }
 
 export function isContentSourceRef(value: unknown): value is ContentSourceRef {
@@ -165,15 +140,6 @@ export function isContentSourceRef(value: unknown): value is ContentSourceRef {
   }
 }
 
-function isGeneratedCachePath(value: string): boolean {
-  const normalized = value.replace(/\\/g, '/').replace(/\/+$/g, '');
-  return (
-    normalized.includes('/.neko/.cache/') ||
-    normalized.startsWith('.neko/.cache/') ||
-    isPrivateCachePath(value)
-  );
-}
-
 function optionalString(value: unknown): boolean {
   return value === undefined || typeof value === 'string';
 }
@@ -184,15 +150,4 @@ function optionalBoolean(value: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function normalizePathForCategory(value: string): string {
-  const normalized = value.replace(/\\/g, '/').replace(/\/+$/g, '');
-  return /^[A-Z]:\//.test(normalized)
-    ? `${normalized[0]?.toLowerCase()}${normalized.slice(1)}`
-    : normalized;
-}
-
-function isPathInside(filePath: string, rootPath: string): boolean {
-  return filePath === rootPath || filePath.startsWith(`${rootPath}/`);
 }

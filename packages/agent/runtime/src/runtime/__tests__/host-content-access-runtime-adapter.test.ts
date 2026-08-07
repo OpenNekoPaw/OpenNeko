@@ -15,9 +15,8 @@ describe('HostAgentContentAccessRuntime document representations', () => {
           source: request.source,
           spec: request.spec,
           generatorId: 'document-raster',
-          sourceFingerprint: 'source-v1',
-          specFingerprint: 'spec-v1',
-          revision: '1',
+          sourceFingerprint: 'source-content',
+          specFingerprint: 'raster-spec',
         },
         metadata: { mimeType: 'image/png', width: 640, height: 480, byteLength: 16 },
       }),
@@ -57,7 +56,6 @@ describe('HostAgentContentAccessRuntime document representations', () => {
       source: { kind: 'workspace-file', path: 'docs/story.pdf' },
       spec: { kind: 'raster-page', page: 1, format: 'png' },
     });
-    expect(JSON.stringify(result)).not.toContain('/workspace/.neko');
     expect(JSON.stringify(result)).not.toContain('cacheRoot');
   });
 

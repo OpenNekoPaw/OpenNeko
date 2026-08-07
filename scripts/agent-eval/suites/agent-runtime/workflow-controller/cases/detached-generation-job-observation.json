@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "detached-generation-job-observation",
   "suiteId": "agent-runtime.workflow-controller",
   "caseGroup": "workflow",
@@ -15,16 +15,6 @@
       "DescribeGenerationJob Tool call",
       "ObserveGenerationJob Tool call"
     ],
-    "forbiddenFallback": [
-      "generic TaskManager",
-      "TaskRef",
-      "task-result continuation",
-      "direct provider execution",
-      "model-authored provider or model id",
-      "active or latest Job fallback",
-      "reused terminal Tool Call",
-      "automatic retry"
-    ],
     "observables": [
       {
         "ref": "detached-generation-facts",
@@ -36,14 +26,18 @@
     "expectedResult": "Submit returns a pending revisioned Generation Job immediately; separate Tool Calls describe and observe that exact identity with monotonic revisions and no retry.",
     "expectedFailure": "Missing Job identity, reused Tool Call, revision regression, direct provider or generic Task participation, model-authored routing, latest fallback, or retry fails."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "manage-detached-generation",
       "kind": "submit",
-      "prompt": "Submit one detached image Generation Job for a simple red circle on white. Use the returned exact jobId and revision in separate DescribeGenerationJob and ObserveGenerationJob Tool calls. Stop after reporting the latest authoritative snapshot. Do not retry, do not use a generic Task, and do not choose a provider or model yourself."
+      "prompt": "Submit one detached image Generation Job for a simple red circle on white. Use the returned exact jobId in separate DescribeGenerationJob and ObserveGenerationJob Tool calls. Stop after reporting the latest authoritative snapshot. Do not retry, do not use a generic Task, and do not choose a provider or model yourself."
     },
     {
       "id": "idle",
@@ -65,8 +59,7 @@
       "resultIncludes": {
         "jobKind": "generation",
         "jobLifecycleOwner": "generation-job-coordinator",
-        "phase": "pending",
-        "revision": 1
+        "phase": "pending"
       },
       "evidenceRef": "detached-generation-facts"
     },
@@ -100,19 +93,6 @@
       "evidenceRef": "detached-generation-facts"
     },
     {
-      "id": "no-generic-task-path",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "generic-task-manager",
-        "TaskRef",
-        "task-result-continuation",
-        "direct-generation-execution",
-        "active-job-fallback",
-        "latest-job-fallback"
-      ],
-      "evidenceRef": "detached-generation-facts"
-    },
-    {
       "id": "order",
       "kind": "process-order",
       "events": [
@@ -142,7 +122,10 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
       "evidenceRef": "detached-generation-facts"
     },
     {

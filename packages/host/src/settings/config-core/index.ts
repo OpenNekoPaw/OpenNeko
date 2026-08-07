@@ -5,7 +5,6 @@
  *
  * File locations:
  * - User config: ~/.neko/config.toml
- * - Workspace config: .neko/config.toml
  *
  * Node configuration reading is owned by @neko/host/settings.
  * @example
@@ -13,25 +12,18 @@
  * // In browser/webview - use types and normalizer only
  * import {
  *   type UnifiedConfig,
- *   processConfig,
+ *   normalizeConfig,
  * } from '@neko/host/settings';
  *
  * // In Node.js (extension, agent-cli) - import reader directly
  * import {
  *   readUserConfigResult,
- *   readWorkspaceConfigResult,
  * } from '@neko/host/settings';
  * ```
  */
 
 // Types (browser-safe)
-export type {
-  UnifiedConfig,
-  NormalizedConfig,
-  AuthConfigJson,
-  CredentialsConfig,
-  MarketConfig,
-} from './types';
+export type { UnifiedConfig, NormalizedConfig, ProviderDefinition } from './types';
 
 export type { ExternalResearchConfig, ExternalResearchConfigInput } from '@neko/agent-contracts';
 
@@ -43,7 +35,7 @@ export {
 } from './types';
 
 // Normalizer (browser-safe - pure functions, no Node.js dependencies)
-export { mergeConfigs, normalizeConfig, processConfig } from './config-normalizer';
+export { normalizeConfig } from './config-normalizer';
 
 export type {
   NekoTomlConfig,
@@ -58,12 +50,13 @@ export type {
   TomlExternalResearchMcpSearchToolBinding,
   TomlExternalResearchMcpFetchToolBinding,
   TomlConfigValidationIssue,
+  TomlConfigProjection,
+  ProviderCredentialDeclaration,
 } from './toml-config';
 
 export {
-  SUPPORTED_TOML_CONFIG_VERSION,
-  TomlConfigValidationError,
   parseTomlConfigText,
+  projectTomlConfig,
   serializeUnifiedConfigToToml,
   tomlToUnifiedConfig,
   unifiedConfigToToml,
@@ -83,10 +76,6 @@ export type {
 } from './config-adapter';
 
 export { BaseConfigAdapter } from './config-adapter';
-
-// Credential resolver (browser-safe — pure functions)
-export { resolveApiKey, getEnvKeyName, getEnvKeyMap } from './credential-resolver';
-export type { EnvGetter } from './credential-resolver';
 
 // NOTE: config-reader.ts is NOT exported here because it uses Node.js APIs.
 // Import directly from '@neko/host/settings' in Node.js environments.

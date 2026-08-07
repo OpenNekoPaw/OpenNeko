@@ -1,14 +1,20 @@
 {
   "name": "@neko/assets-domain",
-  "version": "0.0.1",
   "private": true,
   "description": "Desktop resource browser and media library copy contracts",
   "license": "AGPL-3.0-or-later",
   "exports": {
+    "./asset-center": "./src/asset-center/index.ts",
+    "./asset-center/contract": "./src/asset-center/contract.ts",
+    "./asset-center/controller": "./src/asset-center/controller.ts",
+    "./asset-center/host-contract": "./src/asset-center/host-contract.ts",
+    "./asset-center/preview-coordination": "./src/asset-center/preview-coordination.ts",
+    "./asset-center/session": "./src/asset-center/session.ts",
     "./contracts": "./src/contracts/index.ts",
     "./global-library": "./src/global-library/index.ts",
     "./global-library/contract": "./src/global-library/contract.ts",
     "./global-library/controller": "./src/global-library/controller.ts",
+    "./global-library/membership": "./src/global-library/membership.ts",
     "./media-library-copy": "./src/services/MediaLibraryCopyService.ts",
     "./resource-browser": "./src/resource-browser/index.ts",
     "./resource-browser/contract": "./src/resource-browser/contract.ts",
@@ -25,6 +31,7 @@
   "dependencies": {
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
+    "@neko/preview-domain": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "devDependencies": {

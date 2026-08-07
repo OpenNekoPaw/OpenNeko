@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CONFIG } from '../config-core/index';
 import {
   CUSTOM_NEWAPI_PROVIDER_ID,
   DEFAULT_USER_CONFIG,
@@ -11,17 +10,16 @@ import {
   NEKO_GATEWAY_DEFAULT_MUSIC_MODEL_ID,
   NEKO_GATEWAY_DEFAULT_VIDEO_MODEL_ID,
   NEKO_GATEWAY_PROVIDER_ID,
-  OLLAMA_LOCAL_DEFAULT_CHAT_MODEL_ID,
   OLLAMA_LOCAL_PROVIDER_ID,
 } from '../default-config';
 import { modelSupportsPurpose } from '../model-purpose-registry';
 
 describe('default agent provider configuration', () => {
   it('uses NewAPI gateway and local provider groups by default', () => {
-    expect(DEFAULT_USER_CONFIG.defaultProvider).toBe(OLLAMA_LOCAL_PROVIDER_ID);
-    expect(DEFAULT_USER_CONFIG.defaultModel).toBe(OLLAMA_LOCAL_DEFAULT_CHAT_MODEL_ID);
-    expect(DEFAULT_CONFIG.defaultProvider).toBe(OLLAMA_LOCAL_PROVIDER_ID);
-    expect(DEFAULT_CONFIG.defaultModel).toBe(OLLAMA_LOCAL_DEFAULT_CHAT_MODEL_ID);
+    expect(DEFAULT_USER_CONFIG.defaultModels?.llm).toEqual({
+      providerId: NEKO_GATEWAY_PROVIDER_ID,
+      modelId: NEKO_GATEWAY_DEFAULT_CHAT_MODEL_ID,
+    });
 
     const providers = new Map(
       DEFAULT_USER_CONFIG.providers?.map((provider) => [provider.id, provider]),

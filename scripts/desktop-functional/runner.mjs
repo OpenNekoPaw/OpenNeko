@@ -6,24 +6,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectDesktopCdp } from './cdp-client.mjs';
 import {
+  validateDesktopFunctionalStoragePaths,
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
 } from './scenario-contract.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const fixturePrefix = 'openneko-desktop-functional-';
-const LEGACY_RESOURCE_PATTERNS = Object.freeze([
-  'neko-app://*',
-  'neko-media://*',
-  'opennekomedia://*',
-  'http://127.0.0.1:*/v1/resources/*',
-  'http://127.0.0.1:*/v1/streams/*',
-  'http://127.0.0.1:*/v1/resource-sets/*',
-  'http://localhost:*/v1/resources/*',
-  'http://localhost:*/v1/streams/*',
-  'http://localhost:*/v1/resource-sets/*',
-]);
-
 export async function runAutomatedDesktopFunctional(options) {
   const scenario = validateDesktopFunctionalScenario(options.scenario);
   const createTemporaryRoot =
@@ -114,7 +103,7 @@ export async function runAutomatedDesktopFunctional(options) {
       return { restarted: true };
     };
     await launchRuntime();
-    const version = await cdp.send('Browser.getVersion');
+    const browserMetadata = await cdp.send('Browser.getVersion');
     const scenarioAbort = new AbortController();
     let screenshotSequence = 0;
     const evidence = await withTimeout(
@@ -129,6 +118,8 @@ export async function runAutomatedDesktopFunctional(options) {
           checkpoints.push({ label, elapsedMs: Date.now() - startedAt, detail });
         },
         evaluate: (expression) => abortable(evaluate(cdp, expression), scenarioAbort.signal),
+        measureRendererResources: () =>
+          abortable(readDesktopRendererResources(cdp), scenarioAbort.signal),
         click: (selector, index, position) =>
           abortable(clickElement(cdp, selector, index, position), scenarioAbort.signal),
         hover: (selector, index, position) =>
@@ -188,7 +179,6 @@ export async function runAutomatedDesktopFunctional(options) {
     }
     scenario.assertObservation?.(observed, evidence);
     report = {
-      schema: 'openneko.desktop-functional-report.v1',
       status: 'passed',
       scenario: { id: scenario.id, owner: scenario.owner },
       target: options.target ?? 'development',
@@ -202,8 +192,8 @@ export async function runAutomatedDesktopFunctional(options) {
       runtime: {
         platform: options.platform ?? process.platform,
         architecture: process.arch,
-        browserProduct: version.product,
-        userAgent: version.userAgent,
+        browserProduct: browserMetadata.product,
+        userAgent: browserMetadata.userAgent,
       },
       observation: observed,
       checkpoints,
@@ -213,7 +203,6 @@ export async function runAutomatedDesktopFunctional(options) {
     return { reportPath, report };
   } catch (error) {
     report = {
-      schema: 'openneko.desktop-functional-report.v1',
       status: 'failed',
       scenario: { id: scenario.id, owner: scenario.owner },
       target: options.target ?? 'development',
@@ -271,6 +260,7 @@ function mergeDesktopObservations(items) {
 }
 
 export function createAutomatedDesktopLaunch(input) {
+  validateDesktopFunctionalStoragePaths(input);
   const commonArgs = [
     '--openneko-functional-fixture',
     ...(input.windowMode === 'hidden' ? ['--openneko-functional-hidden'] : []),
@@ -372,7 +362,6 @@ function createDesktopObservation(cdp, fixtureHome) {
         cdp.send('Runtime.enable'),
         cdp.send('Page.enable'),
       ]);
-      await cdp.send('Network.setBlockedURLs', { urls: LEGACY_RESOURCE_PATTERNS });
     },
     openNekoResourceRequests() {
       return [...openNekoResourceRequests];
@@ -421,6 +410,32 @@ async function evaluate(cdp, expression) {
     );
   }
   return result.result?.value;
+}
+
+export async function readDesktopRendererResources(cdp) {
+  await cdp.send('Performance.enable');
+  const [domCounters, performance] = await Promise.all([
+    cdp.send('Memory.getDOMCounters'),
+    cdp.send('Performance.getMetrics'),
+  ]);
+  const metrics = Object.fromEntries(
+    (performance.metrics ?? []).map((metric) => [metric.name, metric.value]),
+  );
+  return Object.freeze({
+    documents: domCounters.documents,
+    nodes: domCounters.nodes,
+    jsEventListeners: domCounters.jsEventListeners,
+    jsHeapUsedBytes: requirePerformanceMetric(metrics, 'JSHeapUsedSize'),
+    jsHeapTotalBytes: requirePerformanceMetric(metrics, 'JSHeapTotalSize'),
+  });
+}
+
+function requirePerformanceMetric(metrics, name) {
+  const value = metrics[name];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`Desktop Renderer performance metric '${name}' is unavailable.`);
+  }
+  return value;
 }
 
 async function waitForSelector(cdp, selector, timeoutMs = 30_000) {
@@ -580,17 +595,17 @@ export async function scrollDesktopElement(cdp, selector, index = 0, options = {
 }
 
 export async function dragDesktopElement(cdp, sourceSelector, targetSelector, options = {}) {
-  const source = await waitForElementPoint(
-    cdp,
-    sourceSelector,
-    options.sourceIndex ?? 0,
-    options.sourcePosition ?? {},
-  );
   const target = await waitForElementPoint(
     cdp,
     targetSelector,
     options.targetIndex ?? 0,
     options.targetPosition ?? {},
+  );
+  const source = await waitForElementPoint(
+    cdp,
+    sourceSelector,
+    options.sourceIndex ?? 0,
+    options.sourcePosition ?? {},
   );
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -609,14 +624,20 @@ export async function dragDesktopElement(cdp, sourceSelector, targetSelector, op
     clickCount: 1,
     pointerType: 'mouse',
   });
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mouseMoved',
-    x: target.x,
-    y: target.y,
-    button: 'left',
-    buttons: 1,
-    pointerType: 'mouse',
-  });
+  await delayDesktopInputFrame();
+  const steps = 8;
+  for (let step = 1; step <= steps; step += 1) {
+    const progress = step / steps;
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: source.x + (target.x - source.x) * progress,
+      y: source.y + (target.y - source.y) * progress,
+      button: 'left',
+      buttons: 1,
+      pointerType: 'mouse',
+    });
+    await delayDesktopInputFrame();
+  }
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     x: target.x,
@@ -626,6 +647,10 @@ export async function dragDesktopElement(cdp, sourceSelector, targetSelector, op
     clickCount: 1,
     pointerType: 'mouse',
   });
+}
+
+function delayDesktopInputFrame() {
+  return new Promise((resolve) => setTimeout(resolve, 16));
 }
 
 export async function captureDesktopScreenshot(cdp) {
@@ -684,6 +709,7 @@ function describeKey(input) {
     ArrowUp: ['ArrowUp', 'ArrowUp', 38],
     Backspace: ['Backspace', 'Backspace', 8],
     Enter: ['Enter', 'Enter', 13],
+    End: ['End', 'End', 35],
     Escape: ['Escape', 'Escape', 27],
     Space: [' ', 'Space', 32],
     Tab: ['Tab', 'Tab', 9],

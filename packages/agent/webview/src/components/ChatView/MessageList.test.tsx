@@ -39,6 +39,17 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
+vi.mock('../../host-runtime-context', () => ({
+  useAgentHostMessages: () => ({
+    openFile: vi.fn(),
+    confirmTool: vi.fn(),
+    revealDocumentLocator: vi.fn(),
+    invokeAgentCapabilityLifecycle: vi.fn(),
+    sendToPlugin: vi.fn(),
+    requestCanvasAuthoringHandoff: vi.fn(),
+  }),
+}));
+
 describe('MessageList auto-scroll lifecycle', () => {
   beforeEach(() => {
     scrollToMock.mockClear();
@@ -362,7 +373,7 @@ describe('MessageList auto-scroll lifecycle', () => {
     );
 
     expect(screen.getByAltText('Page 1').getAttribute('src')).toBe(
-      'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+      'http://127.0.0.1:43125/resources/page-1.jpg',
     );
     expect(screen.queryByText(/no image resource context/)).toBeNull();
     expect(screen.queryByText('P1')).toBeNull();
@@ -419,6 +430,60 @@ describe('MessageList auto-scroll lifecycle', () => {
     const processRecordsButton = screen.getByRole('button', { name: /Process records/ });
 
     expect(processRecordsButton.querySelector('.animate-spin')).toBeNull();
+  });
+
+  it('renders temporary execution activity inside the transcript and removes it at idle', () => {
+    virtualItems = [{ index: 1, key: 'execution-activity', start: 80 }];
+    const props = {
+      messages: [createMessage('message-1')],
+      isThinking: true,
+      streamingMessageId: null,
+      activeConversationId: 'conv-1',
+    };
+    const { container, rerender } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList {...props} agentState={{ phase: 'thinking', startedAt: Date.now() }} />
+      </MessageActionsProvider>,
+    );
+
+    const transcript = container.querySelector('.agent-message-list');
+    const activity = screen.getByRole('status', { name: 'Agent execution in progress' });
+    expect(transcript?.contains(activity)).toBe(true);
+    expect(activity.textContent).toContain('Working');
+    expect(activity.textContent).not.toContain('Thinking');
+    expect(container.querySelector('.agent-run-status')).toBeNull();
+
+    rerender(
+      <MessageActionsProvider>
+        <MessageList {...props} isThinking={false} agentState={null} />
+      </MessageActionsProvider>,
+    );
+    expect(screen.queryByRole('status', { name: 'Agent execution in progress' })).toBeNull();
+  });
+
+  it('places every rendered transcript item inside the shared centered rail', () => {
+    virtualItems = [
+      { index: 0, key: 'message', start: 0 },
+      { index: 1, key: 'execution-activity', start: 80 },
+    ];
+    const { container } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createMessage('message-1')]}
+          isThinking
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+          agentState={{ phase: 'thinking', startedAt: Date.now() }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    const items = [...container.querySelectorAll('.agent-message-list-item')];
+    const rails = [...container.querySelectorAll('.agent-transcript-rail')];
+    expect(rails).toHaveLength(items.length);
+    expect(
+      items.every((item) => item.firstElementChild?.classList.contains('agent-transcript-rail')),
+    ).toBe(true);
   });
 
   it('does not render activation progress as a standalone row above messages', () => {
@@ -548,7 +613,7 @@ function createReadImageContextMessage(): Message {
             attachments: [
               {
                 type: 'image',
-                path: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+                path: 'http://127.0.0.1:43125/resources/page-1.jpg',
                 mimeType: 'image/jpeg',
               },
             ],

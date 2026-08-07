@@ -1,5 +1,4 @@
 import {
-  CUT_HOST_RUNTIME_VERSION,
   DEFAULT_CUT_HOST_PRESENTATION,
   createOtioTimeline,
   projectTimelineView,
@@ -15,10 +14,10 @@ const identity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'cut-view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'cuts/story.otio',
   sessionId: 'cut-session-1',
-  endpointEpoch: 'endpoint-1',
+  rendererSessionId: 'endpoint-1',
 } as const;
 
 describe('createCutHostRuntimeWebviewBridge', () => {
@@ -29,7 +28,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       identity,
       getSnapshot: vi.fn(async () => initial),
       execute: vi.fn(async (): Promise<CutHostRuntimeResult> => ({
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         snapshot: next,
       })),
       subscribe: vi.fn(() => () => undefined),
@@ -44,7 +42,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       type: 'cut:command',
       documentUri: identity.documentId,
       sessionId: identity.sessionId,
-      expectedRevision: 0,
       clientMutationId: 'mutation-1',
       command: { type: 'trim-trailing-gaps' },
     });
@@ -69,14 +66,12 @@ describe('createCutHostRuntimeWebviewBridge', () => {
         type: 'cut:mutation-result',
         clientMutationId: 'mutation-1',
         succeeded: true,
-        revision: 1,
       },
     ]);
     expect(runtime.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         route: 'command.execute',
         commandId: 'mutation-1',
-        expectedRevision: 0,
         payload: { type: 'trim-trailing-gaps' },
       }),
     );
@@ -89,11 +84,10 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       identity,
       getSnapshot: vi.fn(async () => initial),
       execute: vi.fn(async (): Promise<CutHostRuntimeResult> => ({
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         snapshot: initial,
         output: {
           type: 'representations',
-          revision: 0,
+          requestId: 'representation-request-1',
           results: [
             {
               clipId: 'clip-1',
@@ -117,7 +111,7 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       type: 'cut:request-representations',
       documentUri: identity.documentId,
       sessionId: identity.sessionId,
-      expectedRevision: 0,
+      requestId: 'representation-request-1',
       requests: [{ clipId: 'clip-1', kind: 'thumbnail', density: 64, tileIndex: 0 }],
     });
 
@@ -125,7 +119,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       expect(messages).toContainEqual(
         expect.objectContaining({
           type: 'cut:representations',
-          revision: 0,
           results: [expect.objectContaining({ clipId: 'clip-1', status: 'ready' })],
         }),
       ),
@@ -137,7 +130,7 @@ describe('createCutHostRuntimeWebviewBridge', () => {
     const initial = snapshot(0);
     const previewMessage = {
       type: 'cut:preview-ready' as const,
-      generation: 1,
+      previewRequestId: 'session-1:preview:1',
       videoClipId: 'clip-1',
       timelineTimeSeconds: 0,
       segmentEndSeconds: 5,
@@ -148,7 +141,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       height: 1080,
       framesPerSecond: 30,
       video: {
-        version: 1 as const,
         url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         mimeType: 'video/mp4',
         preparationProfile: 'h264-mp4-direct' as const,
@@ -164,7 +156,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       identity,
       getSnapshot: vi.fn(async () => initial),
       execute: vi.fn(async (): Promise<CutHostRuntimeResult> => ({
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         snapshot: initial,
         output: { type: 'preview', message: previewMessage },
       })),
@@ -178,9 +169,8 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       type: 'cut:preview-start',
       documentUri: identity.documentId,
       sessionId: identity.sessionId,
-      expectedRevision: 0,
       timelineTimeSeconds: 0,
-      generation: 1,
+      previewRequestId: 'session-1:preview:1',
       playbackMode: 'playing',
     });
 
@@ -199,7 +189,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       identity,
       getSnapshot: vi.fn(async () => initial),
       execute: vi.fn(async (request): Promise<CutHostRuntimeResult> => ({
-        schemaVersion: CUT_HOST_RUNTIME_VERSION,
         snapshot:
           request.route === 'presentation.update'
             ? { ...initial, presentation }
@@ -214,7 +203,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       type: 'cut:presentation-update',
       documentUri: identity.documentId,
       sessionId: identity.sessionId,
-      expectedRevision: 0,
       clientMutationId: 'presentation-command',
       presentation,
     });
@@ -222,7 +210,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       type: 'cut:save',
       documentUri: identity.documentId,
       sessionId: identity.sessionId,
-      expectedRevision: 0,
       clientMutationId: 'save-command',
     });
 
@@ -231,7 +218,6 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       expect.objectContaining({
         route: 'presentation.update',
         commandId: 'presentation-command',
-        expectedRevision: 0,
         payload: presentation,
       }),
     );
@@ -239,18 +225,15 @@ describe('createCutHostRuntimeWebviewBridge', () => {
       expect.objectContaining({
         route: 'document.save',
         commandId: 'save-command',
-        expectedRevision: 0,
       }),
     );
   });
 });
 
-function snapshot(revision: number): CutHostRuntimeSnapshot {
+function snapshot(state: number): CutHostRuntimeSnapshot {
   return {
-    schemaVersion: CUT_HOST_RUNTIME_VERSION,
     identity,
-    revision,
-    dirty: revision > 0,
+    dirty: state > 0,
     document: projectTimelineView({
       document: createOtioTimeline('Story', {
         profile: '1080p30',
@@ -261,7 +244,6 @@ function snapshot(revision: number): CutHostRuntimeSnapshot {
       }),
       documentUri: identity.documentId,
       sessionId: identity.sessionId,
-      revision,
     }),
     playback: { status: 'idle' },
     export: { tasks: [] },

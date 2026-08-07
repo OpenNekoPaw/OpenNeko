@@ -37,13 +37,12 @@ describe('engine-first preview shared contracts', () => {
       assetId: 'asset-1',
       role: 'source',
       token: 'token-1',
-      url: 'http://127.0.0.1:3000/v1/preview/file/token-1',
+      url: 'openneko://resource/token-1/source.jpg',
       mimeType: 'image/jpeg',
       dimensions: { width: 4096, height: 2048 },
       viewState,
     };
     const manifest: PreviewManifest = {
-      manifestVersion: 1,
       assetId: 'asset-1',
       token: 'token-1',
       kind: 'image',

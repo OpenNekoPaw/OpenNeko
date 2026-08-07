@@ -79,6 +79,9 @@ export type CreativeEntitySourceKind =
   | 'story'
   | 'canvas'
   | 'asset'
+  | 'workspace'
+  | 'media-library'
+  | 'managed-asset'
   | 'agent'
   | 'document'
   | 'importer'
@@ -128,7 +131,6 @@ export interface CreativeEntityCandidate {
 }
 
 export interface CreativeEntityCandidateFile {
-  readonly version: 1;
   readonly candidates: readonly CreativeEntityCandidate[];
 }
 
@@ -170,7 +172,6 @@ export interface CreativeEntityChangeEvent {
   readonly projectRoot: string;
   readonly reason: CreativeEntityLifecycleAction | 'provider-refresh' | 'store-refresh';
   readonly changedRefs: readonly CreativeEntityChangedRef[];
-  readonly generation: number;
   readonly freshness: CreativeEntitySourceFreshness;
   readonly updatedAt: string;
   readonly source?: CreativeEntitySourceMetadata;
@@ -182,7 +183,6 @@ export interface CreativeEntityOperationResult {
   readonly projectRoot: string;
   readonly affectedEntityRefs: readonly CreativeEntityRef[];
   readonly changedRefs: readonly CreativeEntityChangedRef[];
-  readonly generation: number;
   readonly freshness: CreativeEntitySourceFreshness;
   readonly updatedAt: string;
   readonly message?: string;
@@ -194,7 +194,6 @@ export interface CreativeEntityMergeResult extends CreativeEntityOperationResult
 }
 
 export interface ProjectCreativeEntityFile {
-  readonly version: 1;
   readonly kind: Exclude<CreativeEntityKind, 'character'>;
   readonly entities: readonly CreativeEntity[];
 }
@@ -386,7 +385,6 @@ export interface VisualIdentityDraft {
 }
 
 export interface VisualIdentityDraftFile {
-  readonly version: 1;
   readonly drafts: readonly VisualIdentityDraft[];
 }
 
@@ -406,7 +404,6 @@ export interface EntityAssetRequirement {
 }
 
 export interface EntityAssetRequirementFile {
-  readonly version: 1;
   readonly requirements: readonly EntityAssetRequirement[];
 }
 
@@ -481,6 +478,9 @@ export const CREATIVE_ENTITY_SOURCE_KINDS: readonly CreativeEntitySourceKind[] =
   'story',
   'canvas',
   'asset',
+  'workspace',
+  'media-library',
+  'managed-asset',
   'agent',
   'document',
   'importer',
@@ -649,7 +649,7 @@ export function isCreativeEntityCandidateFile(
 ): value is CreativeEntityCandidateFile {
   if (!isRecord(value)) return false;
   return (
-    value['version'] === 1 &&
+    hasOnlyKeys(value, ['candidates']) &&
     Array.isArray(value['candidates']) &&
     value['candidates'].every((candidate) => isCreativeEntityCandidate(candidate))
   );
@@ -658,7 +658,7 @@ export function isCreativeEntityCandidateFile(
 export function isProjectCreativeEntityFile(value: unknown): value is ProjectCreativeEntityFile {
   if (!isRecord(value)) return false;
   return (
-    value['version'] === 1 &&
+    hasOnlyKeys(value, ['kind', 'entities']) &&
     isCreativeEntityKind(value['kind']) &&
     value['kind'] !== 'character' &&
     Array.isArray(value['entities']) &&
@@ -679,11 +679,18 @@ export function isCreativeEntityChangedRef(value: unknown): value is CreativeEnt
 export function isCreativeEntityChangeEvent(value: unknown): value is CreativeEntityChangeEvent {
   if (!isRecord(value)) return false;
   return (
+    hasOnlyKeys(value, [
+      'projectRoot',
+      'reason',
+      'changedRefs',
+      'freshness',
+      'updatedAt',
+      'source',
+    ]) &&
     typeof value['projectRoot'] === 'string' &&
     isCreativeEntityChangeReason(value['reason']) &&
     Array.isArray(value['changedRefs']) &&
     value['changedRefs'].every((ref) => isCreativeEntityChangedRef(ref)) &&
-    typeof value['generation'] === 'number' &&
     isProjectIndexFreshnessValue(value['freshness']) &&
     typeof value['updatedAt'] === 'string' &&
     (value['source'] === undefined || isCreativeEntitySourceMetadata(value['source']))
@@ -695,6 +702,16 @@ export function isCreativeEntityOperationResult(
 ): value is CreativeEntityOperationResult {
   if (!isRecord(value)) return false;
   return (
+    hasOnlyKeys(value, [
+      'ok',
+      'action',
+      'projectRoot',
+      'affectedEntityRefs',
+      'changedRefs',
+      'freshness',
+      'updatedAt',
+      'message',
+    ]) &&
     typeof value['ok'] === 'boolean' &&
     isCreativeEntityLifecycleAction(value['action']) &&
     typeof value['projectRoot'] === 'string' &&
@@ -702,7 +719,6 @@ export function isCreativeEntityOperationResult(
     value['affectedEntityRefs'].every((ref) => isCreativeEntityRef(ref)) &&
     Array.isArray(value['changedRefs']) &&
     value['changedRefs'].every((ref) => isCreativeEntityChangedRef(ref)) &&
-    typeof value['generation'] === 'number' &&
     isProjectIndexFreshnessValue(value['freshness']) &&
     typeof value['updatedAt'] === 'string' &&
     (value['message'] === undefined || typeof value['message'] === 'string')
@@ -736,7 +752,6 @@ export function withCreativeEntityCandidateFileDefaults(
   file: CreativeEntityCandidateFile,
 ): CreativeEntityCandidateFile {
   return {
-    version: 1,
     candidates: file.candidates.map((candidate) => withCreativeEntityCandidateDefaults(candidate)),
   };
 }
@@ -744,7 +759,7 @@ export function withCreativeEntityCandidateFileDefaults(
 export function isVisualIdentityDraftFile(value: unknown): value is VisualIdentityDraftFile {
   if (!isRecord(value)) return false;
   return (
-    value['version'] === 1 &&
+    hasOnlyKeys(value, ['drafts']) &&
     Array.isArray(value['drafts']) &&
     value['drafts'].every((draft) => isVisualIdentityDraft(draft))
   );
@@ -753,7 +768,7 @@ export function isVisualIdentityDraftFile(value: unknown): value is VisualIdenti
 export function isEntityAssetRequirementFile(value: unknown): value is EntityAssetRequirementFile {
   if (!isRecord(value)) return false;
   return (
-    value['version'] === 1 &&
+    hasOnlyKeys(value, ['requirements']) &&
     Array.isArray(value['requirements']) &&
     value['requirements'].every((requirement) => isEntityAssetRequirement(requirement))
   );
@@ -852,4 +867,8 @@ function includesString<T extends string>(values: readonly T[], value: unknown):
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
 }

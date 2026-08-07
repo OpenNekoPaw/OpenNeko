@@ -1,6 +1,9 @@
 import { CanvasWebviewRoot } from '@neko/canvas-webview/root';
 import { useMemo } from 'react';
-import type { DesktopProjectCatalogItem, DesktopShellProjection } from '@neko/host/desktop-shell-contract';
+import type {
+  DesktopProjectCatalogItem,
+  DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
 import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createElectronCanvasHostRuntime } from './desktop-canvas-host-runtime';
@@ -22,18 +25,18 @@ export function DesktopCanvasSurface({
       workspaceId: project.workspaceId,
       windowId: projection.window.windowId,
       viewId: view.viewId,
-      viewEpoch: view.viewEpoch,
+      viewInstanceId: view.viewInstanceId,
       documentId,
-      sessionId: createCanvasHostSessionId(view.viewId, view.viewEpoch),
-      endpointEpoch: projection.endpointEpoch,
+      sessionId: createCanvasHostSessionId(view.viewId, view.viewInstanceId),
+      rendererSessionId: projection.rendererSessionId,
     }),
     [
       project.projectId,
       project.workspaceId,
-      projection.endpointEpoch,
+      projection.rendererSessionId,
       projection.window.windowId,
       documentId,
-      view.viewEpoch,
+      view.viewInstanceId,
       view.viewId,
     ],
   );
@@ -46,7 +49,12 @@ export function DesktopCanvasSurface({
       data-owner-view-id={view.viewId}
       aria-label="Canvas"
     >
-      <CanvasWebviewRoot delegate={delegate} locale="zh-cn" runtime={runtime} />
+      <CanvasWebviewRoot
+        delegate={delegate}
+        lifecyclePresentation="active"
+        locale="zh-cn"
+        runtime={runtime}
+      />
     </section>
   );
 }

@@ -14,7 +14,6 @@ function createContext(): AgentHostRouteEffectContext {
       windowId: 'window-1',
       viewId: 'view-1',
       workspaceId: 'workspace-1',
-      rendererEpoch: 'renderer-1',
       connectionId: 'connection-1',
     },
     post: vi.fn(),
@@ -27,7 +26,6 @@ function createEffects(): AgentConfigControllerEffectPort {
     readConfig: vi.fn(),
     refreshConfig: vi.fn(),
     openUserConfig: vi.fn(),
-    openHostConfig: vi.fn(),
     readTabState: vi.fn(),
     updateSettings: vi.fn(),
     updateTabState: vi.fn(),
@@ -55,14 +53,12 @@ describe('Agent config controller', () => {
       type: 'updateTabState' as const,
       openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conversation-1' }],
       activeTabId: 'tab-1',
-      expectedTabStateRevision: 4,
     };
 
     await dispatch({ type: 'getSettings', conversationId: 'conversation-1' }, effects, context);
     await dispatch({ type: 'getConfig' }, effects, context);
     await dispatch({ type: 'refreshConfigSnapshot' }, effects, context);
     await dispatch({ type: 'openUserConfigFile' }, effects, context);
-    await dispatch({ type: 'openConfigFile' }, effects, context);
     await dispatch({ type: 'getTabState' }, effects, context);
     await dispatch(
       { type: 'updateSettings', conversationId: 'conversation-1', settings },
@@ -75,7 +71,6 @@ describe('Agent config controller', () => {
     expect(effects.readConfig).toHaveBeenCalledWith(context);
     expect(effects.refreshConfig).toHaveBeenCalledWith(context);
     expect(effects.openUserConfig).toHaveBeenCalledWith(context);
-    expect(effects.openHostConfig).toHaveBeenCalledWith(context);
     expect(effects.readTabState).toHaveBeenCalledWith(context);
     expect(effects.updateSettings).toHaveBeenCalledWith(
       { conversationId: 'conversation-1', settings },

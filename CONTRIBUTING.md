@@ -40,6 +40,12 @@ Touch only files in the requested scope and preserve unrelated working-tree chan
 Webview code must not access Electron or Node APIs directly; Host capabilities must be exposed
 through minimal typed Desktop ports.
 
+Agent Evaluation uses strict declarative suite, Scenario, assertion, and ablation artifacts. A Skill
+may assist coverage decisions and draft authoring, but it must not generate per-case executable
+scripts or own runtime protocols. Deterministic resolution remains in the existing runner unless a
+new OpenSpec establishes a real standalone compiler boundary such as cross-process plans, multiple
+execution backends, or stable plan caching.
+
 ## Validation
 
 Select validation in proportion to the affected surface. Unit tests alone are not completion
@@ -52,9 +58,39 @@ pnpm gate:local
 pnpm package:desktop
 ```
 
-Documentation-only changes require formatting, local-link checks, and `git diff --check`. Desktop
-visual, interaction, CSP, IPC, focus, or media changes also require focused acceptance in the real
-Electron application.
+Documentation-only changes require formatting, local-link checks, and `git diff --check`. For
+Desktop visual, interaction, CSP, IPC, focus, or media changes, focused checks in the real Electron
+application are recommended as advisory evidence.
+
+Development work that adds or materially changes user-visible UI behavior should use
+[`.codex/skills/neko-ui-validation/SKILL.md`](.codex/skills/neko-ui-validation/SKILL.md) to build the
+affected-function inventory and perform separate functional, visual, and adjacent-regression
+checks. Evidence should use the authoritative runtime for every affected boundary. Desktop trust,
+preload, IPC, window or focus state, native resources, persistence, and lifecycle should use the real
+Electron product path; browser or component previews are supplemental only. UI acceptance must not
+pass while any required item is failed, blocked, missing, or unexecuted. Every required visual state
+must have its current image evidence directly inspected by an image-capable Agent with the state,
+observable findings, and uncertainty recorded. Screenshot existence, filenames, and scenario success
+do not replace visual review. Record changes with no user-visible impact as `not-applicable` and state
+the reason. UI validation is advisory and must not affect code-quality gates, task completion,
+commits, merges, or releases. Graphical execution, visual judgment, and their contract tests must not
+be added to `check:ci`, `gate:local`, `gate:remote`, `ci:*`, or GitHub Actions. Generic gates may keep
+only a negative orchestration check proving that these local entrypoints remain unreachable.
+
+Agent Evaluation harnesses, including `pnpm test:agent:eval`, real API runs, hidden or visible
+Desktop sessions, repeated matrices, ablations, and graphical Electron acceptance are explicit
+local-only developer operations. They must not be added to GitHub Actions or generic CI/gate
+commands. Key-free and dry-run results prove platform readiness only, not real Agent behavior. Real
+API Evaluation reads only `~/.neko/config.toml`; the path cannot be redirected, credentials remain
+owned by product configuration, and provider/model selection plus cost authorization stay explicit.
+
+Agent feature acceptance must drive actual controls in a visible Electron window and call a real
+provider API. Batch regression runs without a visible UI but retains the complete Desktop session
+owner, public Agent input path, and real API; it must not use a direct turn runner or mock. The
+foundational matrix covers real conversation, context compaction, transcript restoration after a
+complete reopen, restored generation records, conversation switching, and conversation isolation.
+Delivery evidence must list covered, unexecuted, and blocked cells with residual risk.
+See [`scripts/agent-eval/README.md`](scripts/agent-eval/README.md) for the local entrypoints.
 
 ## Change Description
 

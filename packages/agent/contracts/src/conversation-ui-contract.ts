@@ -8,7 +8,7 @@ export interface ConversationStreamingState {
   isThinking: boolean;
   queuedMessageCount?: number;
   queuedMessages?: readonly AgentQueuedMessageItem[];
-  messageQueueVersion?: number;
+  messageQueueSequence?: number;
 }
 
 export interface ActiveConversationPayload {

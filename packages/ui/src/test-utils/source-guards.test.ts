@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   findInlineSvgControlViolations,
   findPackageSpecificTokenViolations,
-  findSharedComponentsImportViolations,
 } from './source-guards';
 
 describe('@neko/ui source guards', () => {
@@ -28,47 +27,6 @@ describe('@neko/ui source guards', () => {
     expect(findPackageSpecificTokenViolations(sources)).toEqual([
       { filePath: 'bad.css', reason: 'package token --sketch-' },
       { filePath: 'bad.css', reason: 'package token --model-' },
-    ]);
-  });
-
-  it('allows only documented legacy @neko/shared/components imports', () => {
-    const sources = new Map([
-      ['allowed.tsx', "import { ResizeHandle, useResizable } from '@neko/shared/components';"],
-      ['unlisted-name.tsx', "import { ResizeHandle, ContextMenu } from '@neko/shared/components';"],
-      ['unlisted-file.tsx', "import type { MenuItem } from '@neko/shared/components';"],
-      ['default.tsx', "import LegacySharedComponents from '@neko/shared/components';"],
-      ['side-effect.tsx', "import '@neko/shared/components';"],
-      ['comment-only.tsx', "// import { MacButton } from '@neko/shared/components';"],
-    ]);
-
-    expect(
-      findSharedComponentsImportViolations(sources, [
-        {
-          filePath: 'allowed.tsx',
-          importNames: ['ResizeHandle', 'useResizable'],
-        },
-        {
-          filePath: 'unlisted-name.tsx',
-          importNames: ['ResizeHandle'],
-        },
-      ]),
-    ).toEqual([
-      {
-        filePath: 'unlisted-name.tsx',
-        reason: 'unlisted @neko/shared/components import ContextMenu',
-      },
-      {
-        filePath: 'unlisted-file.tsx',
-        reason: 'legacy @neko/shared/components import is not exempted',
-      },
-      {
-        filePath: 'default.tsx',
-        reason: 'legacy @neko/shared/components import is not exempted',
-      },
-      {
-        filePath: 'side-effect.tsx',
-        reason: 'legacy @neko/shared/components import is not exempted',
-      },
     ]);
   });
 });

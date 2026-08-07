@@ -348,7 +348,10 @@ function getToolRegistryLogger() {
   return getLogger('ToolRegistry');
 }
 
-function normalizeOrdinaryToolLogTrace(trace: AgentTraceContext): AgentTraceContext {
+function normalizeOrdinaryToolLogTrace(
+  trace: AgentTraceContext | undefined,
+): AgentTraceContext | undefined {
+  if (!trace) return undefined;
   if (trace.runId === undefined || trace.runId !== trace.turnId) {
     return trace;
   }

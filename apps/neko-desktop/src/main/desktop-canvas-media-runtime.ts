@@ -225,12 +225,7 @@ export class DesktopCanvasMediaRuntime {
     if (duration <= 0) {
       throw new Error('Desktop Canvas playback start is outside the media duration.');
     }
-    const playbackMedia = await this.createPlaybackMedia(
-      identity,
-      nodeId,
-      sourcePath,
-      contentLocator.path,
-    );
+    const playbackMedia = await this.createPlaybackMedia(identity, nodeId, sourcePath);
     const video =
       mediaType === 'video' ? await playbackMedia.media.prepareVideo(sourcePath) : undefined;
     let audio:
@@ -263,7 +258,6 @@ export class DesktopCanvasMediaRuntime {
           ? {
               audioSessionId: audio.sessionId,
               audio: {
-                version: 1,
                 url: audio.url,
                 mimeType: audioMimeType(sourcePath),
                 durationSeconds: mediaInfo.duration,
@@ -297,7 +291,6 @@ export class DesktopCanvasMediaRuntime {
     identity: CanvasHostRuntimeIdentity,
     nodeId: string,
     sourcePath: string,
-    locatorPath: string,
   ): Promise<{ readonly media: DesktopCanvasNodeMediaPort; readonly ownsMedia: boolean }> {
     if (this.options.media) return { media: this.options.media, ownsMedia: false };
     const resources = this.options.resources;
@@ -306,15 +299,13 @@ export class DesktopCanvasMediaRuntime {
     }
     const metadata = await stat(sourcePath);
     if (!metadata.isFile()) throw new Error('Desktop Canvas media source is not a file.');
-    const revision = `${metadata.mtimeMs}:${metadata.size}:${locatorPath}`;
     return {
       media: new NodeMediaRuntime({
         publisher: resources.createMediaPublisher({
           windowId: identity.windowId,
           viewId: identity.viewId,
           sessionId: `canvas-media:${identity.sessionId}:${nodeId}`,
-          endpointEpoch: identity.endpointEpoch,
-          revision,
+          rendererSessionId: identity.rendererSessionId,
         }),
       }),
       ownsMedia: true,
@@ -410,10 +401,10 @@ function streamKey(identity: CanvasHostRuntimeIdentity, nodeId: string): string 
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
     nodeId,
   ].join('\u0000');
 }

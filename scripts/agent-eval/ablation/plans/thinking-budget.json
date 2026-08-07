@@ -1,11 +1,11 @@
 {
-  "schema": "neko.agent-eval.ablation-plan.v1",
+  "schema": "neko.agent-eval.ablation-plan",
   "id": "thinking-budget-pilot",
   "mode": "configuration",
   "suiteId": "agent-runtime.model-binding",
   "caseId": "explicit-chat-model",
   "scenarioContract": {
-    "schema": "neko.agent-eval.scenario.v2",
+    "schema": "neko.agent-eval.scenario",
     "evidenceRefs": ["model-facts"],
     "assertionIds": ["runtime", "pi-runtime", "model", "answer"]
   },

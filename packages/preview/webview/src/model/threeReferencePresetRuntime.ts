@@ -13,11 +13,11 @@ export interface NeutralMannequinRuntime {
 export type NeutralMannequinVariant = 'female' | 'male' | 'child';
 
 export type BlockoutReferenceImplementationId =
-  | 'blockout-cube-v1'
-  | 'blockout-sphere-v1'
-  | 'blockout-cylinder-v1'
-  | 'studio-room-blockout-v1'
-  | 'neutral-panorama-grid-v1';
+  | 'blockout-cube'
+  | 'blockout-sphere'
+  | 'blockout-cylinder'
+  | 'studio-room-blockout'
+  | 'neutral-panorama-grid';
 
 interface MannequinBodyProfile {
   readonly rootName: string;
@@ -247,13 +247,13 @@ export function createBlockoutReferencePreset(
     metalness: 0,
   });
   switch (implementationId) {
-    case 'blockout-cube-v1':
+    case 'blockout-cube':
       addMesh(root, 'cube', new THREE.BoxGeometry(1, 1, 1), material, [0, 0.5, 0]);
       break;
-    case 'blockout-sphere-v1':
+    case 'blockout-sphere':
       addMesh(root, 'sphere', new THREE.SphereGeometry(0.55, 20, 14), material, [0, 0.55, 0]);
       break;
-    case 'blockout-cylinder-v1':
+    case 'blockout-cylinder':
       addMesh(
         root,
         'cylinder',
@@ -262,12 +262,12 @@ export function createBlockoutReferencePreset(
         [0, 0.5, 0],
       );
       break;
-    case 'studio-room-blockout-v1':
+    case 'studio-room-blockout':
       addMesh(root, 'floor', new THREE.BoxGeometry(4, 0.05, 4), material, [0, -0.025, 0]);
       addMesh(root, 'back-wall', new THREE.BoxGeometry(4, 2.6, 0.05), material, [0, 1.3, -2]);
       addMesh(root, 'side-wall', new THREE.BoxGeometry(0.05, 2.6, 4), material, [-2, 1.3, 0]);
       break;
-    case 'neutral-panorama-grid-v1': {
+    case 'neutral-panorama-grid': {
       const gridMaterial = new THREE.MeshBasicMaterial({
         color: 0x91a0b5,
         wireframe: true,

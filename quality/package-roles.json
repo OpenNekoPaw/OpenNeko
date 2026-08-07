@@ -1,5 +1,4 @@
 {
-  "version": 1,
   "packages": [
     {
       "path": "packages/agent/runtime",
@@ -164,6 +163,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/entity/webview",
+      "name": "@neko/entity-webview",
+      "family": "entity",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/generation",
       "name": "@neko/generation",
       "family": "generation",
@@ -259,7 +267,7 @@
       "family": "search",
       "roles": ["node"],
       "runtimes": ["node"],
-      "productStatus": "retained-kernel",
+      "productStatus": "active-product",
       "architectureState": "converged"
     },
     {

@@ -31,6 +31,7 @@ export {
   EditIcon,
   SendIcon,
   PlusIcon,
+  RemoveIcon,
   UploadIcon,
   PackageIcon,
   TrashIcon,
@@ -40,6 +41,7 @@ export {
   ClockIcon,
 } from './action';
 export { ErrorIcon, WarningIcon, SuccessIcon, LoadingIcon, InfoIcon } from './status';
+export { BotIcon, MessageIcon, UserIcon, UsersIcon } from './identity';
 export {
   CodeIcon,
   FileIcon,
@@ -55,6 +57,7 @@ export {
   ScissorsIcon,
   LayersIcon,
   StorylineIcon,
+  LeftPanelIcon,
   RightPanelIcon,
   RightPanelOffIcon,
   FullscreenIcon,

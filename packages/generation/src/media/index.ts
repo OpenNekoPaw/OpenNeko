@@ -38,16 +38,6 @@ export {
 
 export { MediaGenerationService } from './media-generation-service';
 export {
-  adoptWorkspaceGeneratedOutputs,
-  retainLegacyGeneratedOutput,
-  type GeneratedOutputAdoptionDiagnostic,
-  type GeneratedOutputAdoptionIndex,
-  type GeneratedOutputAdoptionReport,
-  type LegacyGeneratedOutputRetentionDiagnostic,
-  type LegacyGeneratedOutputRetentionIndex,
-  type LegacyGeneratedOutputRetentionResult,
-} from './generated-output-adoption';
-export {
   GeneratedOutputLifecycleService,
   type GeneratedOutputLifecycleIndex,
   type GeneratedOutputLifecycleResult,
@@ -92,7 +82,6 @@ export {
 export {
   GeneratedAssetIndex,
   generateAssetId,
-  migrateLegacyGeneratedAssetIndex,
   type AssetFilter,
   type GeneratedAssetCatalog,
 } from './generated-asset-index';

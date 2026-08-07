@@ -12,9 +12,10 @@ import { ConsoleLogger, LogLevel } from '@neko/shared';
 import {
   CONFIG_DIR_NAME,
   CONFIG_FILE_NAME,
-  tomlToUnifiedConfig,
+  projectTomlConfig,
   unifiedConfigToToml,
-  type NekoTomlConfig,
+  type ProviderCredentialDeclaration,
+  type TomlConfigValidationIssue,
   type UnifiedConfig,
 } from './config-core/index';
 
@@ -23,7 +24,7 @@ const logger = new ConsoleLogger('ConfigReader', LogLevel.Debug);
 export type ConfigReadErrorCode =
   | 'empty'
   | 'invalidToml'
-  | 'unsupportedVersion'
+  | 'invalidConfigField'
   | 'unsupportedProviderType'
   | 'unsupportedProviderConnectionKind'
   | 'unsupportedProviderProtocolProfile'
@@ -31,22 +32,23 @@ export type ConfigReadErrorCode =
   | 'unsupportedProtocolAuthType'
   | 'unsupportedProtocolStreamFormat'
   | 'unsupportedModelProtocolProfile'
-  | 'unsupportedModelProtocol'
   | 'duplicateProviderId'
   | 'duplicateModelId'
   | 'invalidDefaultMaxTokens'
   | 'invalidModelTokenMetadata'
-  | 'unsupportedProfileSchemaSection'
+  | 'invalidProviderApiKey'
   | 'unsupportedModelType'
-  | 'unsupportedDefaultMediaModelType'
   | 'unsupportedDefaultModelType'
   | 'unsupportedDefaultModelPurpose'
   | 'readError';
+
+export type ConfigReadBlockingErrorCode = 'empty' | 'invalidToml' | 'readError';
 
 export interface ConfigReadDiagnostic {
   readonly code: ConfigReadErrorCode;
   readonly filePath: string;
   readonly message: string;
+  readonly path?: string;
   readonly detail?: string;
 }
 
@@ -54,14 +56,14 @@ export type ConfigDocumentReadResult =
   | {
       readonly status: 'ok';
       readonly filePath: string;
-      readonly document: NekoTomlConfig;
+      readonly document: unknown;
     }
   | {
       readonly status: 'missing';
       readonly filePath: string;
     }
   | {
-      readonly status: ConfigReadErrorCode;
+      readonly status: ConfigReadBlockingErrorCode;
       readonly filePath: string;
       readonly diagnostic: ConfigReadDiagnostic;
     };
@@ -71,13 +73,15 @@ export type ConfigReadResult =
       readonly status: 'ok';
       readonly filePath: string;
       readonly config: UnifiedConfig;
+      readonly diagnostics: readonly ConfigReadDiagnostic[];
+      readonly providerCredentials: Readonly<Record<string, ProviderCredentialDeclaration>>;
     }
   | {
       readonly status: 'missing';
       readonly filePath: string;
     }
   | {
-      readonly status: ConfigReadErrorCode;
+      readonly status: ConfigReadBlockingErrorCode;
       readonly filePath: string;
       readonly diagnostic: ConfigReadDiagnostic;
     };
@@ -112,20 +116,6 @@ export function getUserConfigPath(): string {
   return path.join(getUserConfigDir(), CONFIG_FILE_NAME);
 }
 
-/**
- * Get workspace config directory (.neko in workDir)
- */
-export function getWorkspaceConfigDir(workDir: string): string {
-  return path.join(workDir, CONFIG_DIR_NAME);
-}
-
-/**
- * Get canonical workspace config file path (.neko/config.toml in workDir)
- */
-export function getWorkspaceConfigPath(workDir: string): string {
-  return path.join(getWorkspaceConfigDir(workDir), CONFIG_FILE_NAME);
-}
-
 // =============================================================================
 // Configuration Reading
 // =============================================================================
@@ -153,12 +143,12 @@ export function readConfigDocumentFileResult(filePath: string): ConfigDocumentRe
     return {
       status: 'ok',
       filePath,
-      document: parse(content) as NekoTomlConfig,
+      document: parse(content),
     };
   } catch (error) {
     const code = getConfigReadErrorCode(error);
-    const diagnostic = buildConfigReadDiagnostic(code, filePath, error);
-    logger.error(diagnostic.message, error);
+    const diagnostic = buildConfigReadDiagnostic(code, filePath);
+    logger.error(diagnostic.message);
     return { status: code, filePath, diagnostic };
   }
 }
@@ -166,18 +156,14 @@ export function readConfigDocumentFileResult(filePath: string): ConfigDocumentRe
 export function readConfigFileResult(filePath: string): ConfigReadResult {
   const result = readConfigDocumentFileResult(filePath);
   if (result.status !== 'ok') return result;
-  try {
-    return {
-      status: 'ok',
-      filePath,
-      config: tomlToUnifiedConfig(result.document),
-    };
-  } catch (error) {
-    const code = getConfigReadErrorCode(error);
-    const diagnostic = buildConfigReadDiagnostic(code, filePath, error);
-    logger.error(diagnostic.message, error);
-    return { status: code, filePath, diagnostic };
-  }
+  const projection = projectTomlConfig(result.document);
+  return {
+    status: 'ok',
+    filePath,
+    config: projection.config,
+    diagnostics: projection.diagnostics.map((issue) => projectLocalDiagnostic(issue, filePath)),
+    providerCredentials: projection.providerCredentials,
+  };
 }
 
 /**
@@ -187,33 +173,30 @@ export function readUserConfigDocumentResult(): ConfigDocumentReadResult {
   return readConfigDocumentFileResult(getUserConfigPath());
 }
 
-export function readWorkspaceConfigDocumentResult(workDir: string): ConfigDocumentReadResult {
-  return readConfigDocumentFileResult(getWorkspaceConfigPath(workDir));
-}
-
 export function readUserConfigResult(): ConfigReadResult {
   return readConfigFileResult(getUserConfigPath());
-}
-
-/**
- * Read workspace configuration with a typed result (.neko/config.toml)
- */
-export function readWorkspaceConfigResult(workDir: string): ConfigReadResult {
-  return readConfigFileResult(getWorkspaceConfigPath(workDir));
 }
 
 // =============================================================================
 // Configuration Writing
 // =============================================================================
 
-export function writeConfigFile(filePath: string, config: UnifiedConfig): void {
+export function writeConfigFile(
+  filePath: string,
+  config: UnifiedConfig,
+  providerCredentials: Readonly<Record<string, ProviderCredentialDeclaration>> = {},
+): void {
   const dir = path.dirname(filePath);
 
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  fs.writeFileSync(filePath, `${stringify(unifiedConfigToToml(config))}`, 'utf-8');
+  fs.writeFileSync(
+    filePath,
+    `${stringify(unifiedConfigToToml(config, providerCredentials))}`,
+    'utf-8',
+  );
 }
 
 /**
@@ -221,272 +204,52 @@ export function writeConfigFile(filePath: string, config: UnifiedConfig): void {
  *
  * @param config - Configuration to write
  */
-export function writeUserConfig(config: UnifiedConfig): void {
-  writeConfigFile(getUserConfigPath(), config);
+export function writeUserConfig(
+  config: UnifiedConfig,
+  providerCredentials: Readonly<Record<string, ProviderCredentialDeclaration>> = {},
+): void {
+  writeConfigFile(getUserConfigPath(), config, providerCredentials);
 }
 
-/**
- * Write workspace configuration (.neko/config.toml)
- *
- * @param workDir - Workspace directory path
- * @param config - Configuration to write
- */
-export function writeWorkspaceConfig(workDir: string, config: UnifiedConfig): void {
-  writeConfigFile(getWorkspaceConfigPath(workDir), config);
-}
-
-function getConfigReadErrorCode(error: unknown): ConfigReadErrorCode {
-  if (isTomlValidationError(error, 'unsupportedVersion')) return 'unsupportedVersion';
-  if (isTomlValidationError(error, 'unsupportedProviderType')) return 'unsupportedProviderType';
-  if (isTomlValidationError(error, 'unsupportedProviderConnectionKind')) {
-    return 'unsupportedProviderConnectionKind';
-  }
-  if (isTomlValidationError(error, 'unsupportedProviderProtocolProfile')) {
-    return 'unsupportedProviderProtocolProfile';
-  }
-  if (isTomlValidationError(error, 'unsupportedProviderSupportLevel')) {
-    return 'unsupportedProviderSupportLevel';
-  }
-  if (isTomlValidationError(error, 'unsupportedProtocolAuthType')) {
-    return 'unsupportedProtocolAuthType';
-  }
-  if (isTomlValidationError(error, 'unsupportedProtocolStreamFormat')) {
-    return 'unsupportedProtocolStreamFormat';
-  }
-  if (isTomlValidationError(error, 'unsupportedModelProtocolProfile')) {
-    return 'unsupportedModelProtocolProfile';
-  }
-  if (isTomlValidationError(error, 'unsupportedModelProtocol')) {
-    return 'unsupportedModelProtocol';
-  }
-  if (isTomlValidationError(error, 'duplicateProviderId')) return 'duplicateProviderId';
-  if (isTomlValidationError(error, 'duplicateModelId')) return 'duplicateModelId';
-  if (isTomlValidationError(error, 'invalidDefaultMaxTokens')) {
-    return 'invalidDefaultMaxTokens';
-  }
-  if (isTomlValidationError(error, 'invalidModelTokenMetadata')) {
-    return 'invalidModelTokenMetadata';
-  }
-  if (isTomlValidationError(error, 'unsupportedProfileSchemaSection')) {
-    return 'unsupportedProfileSchemaSection';
-  }
-  if (isTomlValidationError(error, 'unsupportedModelType')) return 'unsupportedModelType';
-  if (isTomlValidationError(error, 'unsupportedDefaultMediaModelType')) {
-    return 'unsupportedDefaultMediaModelType';
-  }
-  if (isTomlValidationError(error, 'unsupportedDefaultModelType')) {
-    return 'unsupportedDefaultModelType';
-  }
-  if (isTomlValidationError(error, 'unsupportedDefaultModelPurpose')) {
-    return 'unsupportedDefaultModelPurpose';
-  }
+function getConfigReadErrorCode(error: unknown): ConfigReadBlockingErrorCode {
   return error instanceof TomlError ? 'invalidToml' : 'readError';
 }
 
-function isTomlValidationError(error: unknown, code: ConfigReadErrorCode): boolean {
-  return (
-    error instanceof Error &&
-    error.name === 'TomlConfigValidationError' &&
-    'issues' in error &&
-    Array.isArray(error.issues) &&
-    error.issues.some((issue) => issue?.code === code)
-  );
+function projectLocalDiagnostic(
+  issue: TomlConfigValidationIssue,
+  filePath: string,
+): ConfigReadDiagnostic {
+  return {
+    code: issue.code,
+    filePath,
+    path: issue.path,
+    message: `Invalid configuration field ${issue.path}: ${filePath}`,
+    detail: issue.message,
+  };
 }
 
 function buildConfigReadDiagnostic(
-  code: ConfigReadErrorCode,
+  code: ConfigReadBlockingErrorCode,
   filePath: string,
-  error?: unknown,
 ): ConfigReadDiagnostic {
-  const detail =
-    error instanceof Error ? error.message : error === undefined ? undefined : String(error);
   switch (code) {
     case 'empty':
       return {
         code,
         filePath,
         message: `Configuration file is empty: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
       };
     case 'invalidToml':
       return {
         code,
         filePath,
         message: `Configuration file contains invalid TOML: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedVersion':
-      return {
-        code,
-        filePath,
-        message: `Configuration file uses an unsupported version: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedProviderType':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported provider type: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedProviderConnectionKind':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported provider connection_kind: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedProviderProtocolProfile':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported provider protocol_profile: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedProviderSupportLevel':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported provider support_level: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedProtocolAuthType':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported protocol_variant auth_type: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedProtocolStreamFormat':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported protocol_variant stream_format: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedModelProtocol':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported model protocol: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedModelProtocolProfile':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported model protocol_profile: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'duplicateProviderId':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains duplicate provider IDs: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'duplicateModelId':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains duplicate model IDs: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'invalidDefaultMaxTokens':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an invalid default max output token cap: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'invalidModelTokenMetadata':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains invalid model token metadata: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedProfileSchemaSection':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains unsupported Agent profile schema sections: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedModelType':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported model type: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedDefaultMediaModelType':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported default media model category: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedDefaultModelType':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported default model type: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
-      };
-    case 'unsupportedDefaultModelPurpose':
-      return {
-        code,
-        filePath,
-        message: `Configuration file contains an unsupported default model purpose binding: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
       };
     case 'readError':
       return {
         code,
         filePath,
         message: `Failed to read configuration file: ${filePath}`,
-        ...(detail !== undefined ? { detail } : {}),
       };
   }
-}
-
-// =============================================================================
-// Configuration Location Info
-// =============================================================================
-
-/**
- * Configuration location information
- */
-export interface ConfigLocationInfo {
-  dir: string;
-  file: string;
-  exists: boolean;
-}
-
-/**
- * Get configuration file locations info
- *
- * @param workDir - Workspace directory path (defaults to cwd)
- * @returns Information about user and workspace config locations
- */
-export function getConfigLocations(workDir: string = process.cwd()): {
-  user: ConfigLocationInfo;
-  workspace: ConfigLocationInfo;
-} {
-  const userFile = getUserConfigPath();
-  const workspaceFile = getWorkspaceConfigPath(workDir);
-
-  return {
-    user: {
-      dir: getUserConfigDir(),
-      file: userFile,
-      exists: fs.existsSync(userFile),
-    },
-    workspace: {
-      dir: getWorkspaceConfigDir(workDir),
-      file: workspaceFile,
-      exists: fs.existsSync(workspaceFile),
-    },
-  };
 }

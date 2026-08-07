@@ -1,48 +1,58 @@
 import { randomUUID } from 'node:crypto';
-import {
-  NEKO_APPLICATION_CONTRACT_VERSION,
-  type NekoApplicationIdentity,
-} from '@neko/host/application';
+import { type NekoApplicationIdentity } from '@neko/host/application';
 import type { NekoHostPorts } from '@neko/host/ports';
 import type { ILogger } from '@neko/shared/logger';
 import {
   parseDesktopAgentBootstrapRequest,
+  parseDesktopAgentDetachRequest,
   parseDesktopAgentMessageRequest,
   type DesktopAgentBootstrapProjection,
-  type DesktopAgentMessageEvent,
+  type DesktopAgentDetachResult,
+  type DesktopAgentEvent,
   type DesktopAgentMessageResult,
 } from '../shared/agent-contract';
 import {
-  DESKTOP_BRIDGE_CONTRACT_VERSION,
   parseDesktopBootstrapRequest,
   type DesktopBootstrapProjection,
 } from '../shared/bridge-contract';
 import {
-  DESKTOP_SHELL_CONTRACT_VERSION,
   parseDesktopConversationDeleteRequest,
   parseDesktopProfileRequest,
   parseDesktopProjectOpenRequest,
-  parseDesktopProjectRemoveRecentRequest,
+  parseDesktopProjectSelectionRequest,
   parseDesktopShellRequest,
   parseDesktopTabMutationRequest,
   parseDesktopWorkbenchMutationRequest,
   parseDesktopWindowMutationRequest,
+  resolveActiveDesktopWindowWorkbench,
   type DesktopOpenContentResult,
   type DesktopProfileRequestResult,
+  type DesktopShellProjection,
   type DesktopShellResponse,
 } from '@neko/host/desktop-shell-contract';
+import {
+  createDesktopSceneTransitionRequest,
+  parseDesktopApplicationSidebarMutationRequest,
+  parseDesktopSceneTransitionRequest,
+  type DesktopWorkbenchSceneProjection,
+  type DesktopSceneTransitionResult,
+} from '@neko/host/desktop-scene-contract';
 import { DesktopWindowRegistry, type DesktopSenderIdentity } from './window-registry';
 import type {
   AgentAppHost,
   AgentControllerComposition,
   AgentSkillCatalog,
+  AgentWorkspaceRuntime,
 } from '@neko/agent-runtime/application';
 import {
   createDesktopAgentBridgeRuntime,
   type DesktopAgentBridgeRuntime,
+  type DesktopAnyAgentConnectionGrant,
   type DesktopAgentConnectionGrant,
 } from './desktop-agent-bridge-runtime';
 import type { DesktopShellService } from '@neko/host/desktop-shell-service';
+import type { DesktopProjectManagementService } from '@neko/host/desktop-project-management-service';
+import { DESKTOP_DEFAULT_ASSISTANT_SPACE_ID } from '@neko/host/desktop-shell-state';
 import type {
   ResourceBrowserChildrenRequest,
   ResourceBrowserIntentRequest,
@@ -62,7 +72,13 @@ import type {
   ResourceBrowserThumbnailRequest,
   ResourceBrowserThumbnailResult,
 } from '@neko/assets-domain/resource-browser/contract';
-import type { ResourceBrowserNodeRuntime } from '@neko/assets-node';
+import type { AssetCenterNodeRuntime, ResourceBrowserNodeRuntime } from '@neko/assets-node';
+import {
+  parseAssetCenterHostRequest,
+  type AssetCenterHostResult,
+} from '@neko/assets-domain/asset-center/host-contract';
+import type { AssetCenterSessionProjection } from '@neko/assets-domain/asset-center/contract';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import type { PreviewProjection, PreviewRuntimeRequest } from '@neko/preview-domain';
 import type {
@@ -86,36 +102,6 @@ import type {
 import { parseDesktopCutHostIdentity } from '../shared/cut-bridge-contract';
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
-  DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-  parseDesktopHomeAssetImportRequest,
-  parseDesktopHomeAssetRemoveRequest,
-  parseDesktopHomeAssetSearchRequest,
-  parseDesktopHomeLibraryThumbnailRequest,
-  parseDesktopHomeMediaLibraryAddRequest,
-  parseDesktopHomeMediaLibraryChildrenRequest,
-  parseDesktopHomeMediaLibraryRequest,
-  parseDesktopHomeMediaLibrarySearchRequest,
-  parseDesktopHomeCatalogMutationRequest,
-  parseDesktopHomeExtensionsRequest,
-  parseDesktopHomePersonalSkillRemoveRequest,
-  parseDesktopHomePluginMutationRequest,
-  type DesktopHomeAssetImportResult,
-  type DesktopHomeAssetRemoveResult,
-  type DesktopHomeAssetSearchResult,
-  type DesktopHomeLibraryThumbnailResult,
-  type DesktopHomeMediaLibraryAddResult,
-  type DesktopHomeMediaLibraryChildrenResult,
-  type DesktopHomeMediaLibraryRelinkResult,
-  type DesktopHomeMediaLibraryRemoveResult,
-  type DesktopHomeMediaLibraryRevealResult,
-  type DesktopHomeMediaLibrarySearchResult,
-  type DesktopHomeExtensionsResult,
-  type DesktopHomeExtensionMutationKind,
-  type DesktopHomeExtensionMutationResult,
-  type DesktopHomeManagementRequest,
-} from '../shared/home-management-contract';
-import {
-  DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
   parseDesktopApplicationSettingsRequest,
   parseDesktopApplicationSettingsUpdateRequest,
   type DesktopAgentAdvancedSettingsResult,
@@ -123,6 +109,19 @@ import {
 } from '@neko/host/application-settings';
 import type { DesktopApplicationSettingsService } from '@neko/host/application-settings-service';
 import type { AgentExtensionManager } from '@neko/agent-runtime/extensions';
+import {
+  parseAgentLaunchHostRequest,
+  type AgentLaunchHostResult,
+} from '@neko/agent-contracts/agent-launch-host';
+import type { AgentAuthorityScopeProjection } from '@neko/agent-contracts';
+import {
+  parseAgentExtensionManagementHostRequest,
+  type AgentExtensionManagementHostResult,
+} from '@neko/agent-contracts/extension-management-host';
+import type {
+  AgentExtensionManagementProjection,
+  AgentExtensionManagementSessionIdentity,
+} from '@neko/agent-contracts/extension-management';
 import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { ProjectPortabilityRuntime } from '@neko/assets-node';
 import type {
@@ -133,19 +132,48 @@ import type {
   DesktopProjectPortabilityProgressEvent,
 } from '@neko/assets-domain/contracts';
 import {
-  DESKTOP_AGENT_AUTOMATION_VERSION,
   parseDesktopAgentAutomationRequest,
   type DesktopAgentAutomationResult,
 } from '../shared/agent-automation-contract';
+import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
+import {
+  parseDesktopWorkspaceGrantTargetRequest,
+  type DesktopWorkspaceGrantTargetResult,
+} from '@neko/host/desktop-workspace-grant-contract';
+import type { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
+import {
+  projectAgentConversationInitialMessage,
+  type AgentConversationLifecycleService,
+} from '@neko/agent-runtime/application';
+import type { AssistantResourceService } from '@neko/agent-runtime/application';
+import {
+  isSameAgentConversationOwner,
+  type AgentConversationContext,
+  type AgentConversationOwnerRef,
+} from '@neko/agent-contracts';
+import {
+  parseAssistantResourceHostRequest,
+  type AssistantResourceHostResult,
+} from '@neko/agent-contracts/assistant-resource-host';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
-  readonly version: string;
   readonly logger: ILogger;
   readonly shell: DesktopShellService;
+  readonly projectManagement: DesktopProjectManagementService;
   readonly agent: AgentAppHost;
+  readonly assistantWorkspace: AssetWorkspaceResolution;
   readonly agentControllerComposition?: AgentControllerComposition;
+  readonly agentLaunch: DesktopAgentLaunchRuntime;
+  readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
+  readonly conversationLifecycle: AgentConversationLifecycleService;
+  readonly assistantResources?: AssistantResourceService;
+  readonly assistantPreviewLifecycle?: {
+    detachWindow(windowId: string): void;
+    dispose(): void;
+  };
   readonly resourceBrowser?: ResourceBrowserNodeRuntime;
+  readonly assetCenter?: AssetCenterNodeRuntime;
   readonly projectPortability?: ProjectPortabilityRuntime;
   readonly preview?: DesktopPreviewRuntime;
   readonly canvas?: DesktopCanvasRuntime;
@@ -165,9 +193,15 @@ export class DesktopAppHost {
   readonly applicationIdentity: NekoApplicationIdentity;
   readonly windows = new DesktopWindowRegistry();
   readonly shell: DesktopShellService;
+  readonly projectManagement: DesktopProjectManagementService;
   readonly agent: AgentAppHost;
   readonly agentBridge: DesktopAgentBridgeRuntime;
+  readonly agentLaunch: DesktopAgentLaunchRuntime;
+  readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
+  readonly conversationLifecycle: AgentConversationLifecycleService;
+  readonly assistantResources: AssistantResourceService | undefined;
   readonly resourceBrowser: ResourceBrowserNodeRuntime | undefined;
+  readonly assetCenter: AssetCenterNodeRuntime | undefined;
   readonly projectPortability: ProjectPortabilityRuntime | undefined;
   readonly preview: DesktopPreviewRuntime | undefined;
   readonly canvas: DesktopCanvasRuntime | undefined;
@@ -180,19 +214,23 @@ export class DesktopAppHost {
 
   constructor(private readonly options: DesktopAppHostOptions) {
     this.applicationIdentity = {
-      schemaVersion: NEKO_APPLICATION_CONTRACT_VERSION,
       applicationId: 'neko-desktop',
       instanceId: options.instanceId ?? randomUUID(),
-      version: options.version,
     };
     this.shell = options.shell;
+    this.projectManagement = options.projectManagement;
     this.agent = options.agent;
     this.agentBridge = createDesktopAgentBridgeRuntime({
       ...(options.agentControllerComposition
         ? { controllerComposition: options.agentControllerComposition }
         : {}),
     });
+    this.agentLaunch = options.agentLaunch;
+    this.workspaceGrants = options.workspaceGrants;
+    this.conversationLifecycle = options.conversationLifecycle;
+    this.assistantResources = options.assistantResources;
     this.resourceBrowser = options.resourceBrowser;
+    this.assetCenter = options.assetCenter;
     this.projectPortability = options.projectPortability;
     this.preview = options.preview;
     this.canvas = options.canvas;
@@ -214,7 +252,6 @@ export class DesktopAppHost {
     const request = parseDesktopApplicationSettingsRequest(payload);
     this.windows.resolveSender(sender);
     return {
-      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
       requestId: request.requestId,
       projection: this.settings.current,
     };
@@ -228,9 +265,8 @@ export class DesktopAppHost {
     const request = parseDesktopApplicationSettingsUpdateRequest(payload);
     this.windows.resolveSender(sender);
     return {
-      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
       requestId: request.requestId,
-      projection: await this.settings.update(request.expectedRevision, request.preferences),
+      projection: await this.settings.update(request.preferences),
     };
   }
 
@@ -243,7 +279,6 @@ export class DesktopAppHost {
     this.windows.resolveSender(sender);
     await this.options.openAgentAdvancedSettings();
     return {
-      schemaVersion: DESKTOP_APPLICATION_SETTINGS_CONTRACT_VERSION,
       requestId: request.requestId,
       status: 'opened',
     };
@@ -264,14 +299,18 @@ export class DesktopAppHost {
       );
     }
     return {
-      schemaVersion: DESKTOP_BRIDGE_CONTRACT_VERSION,
       requestId: request.requestId,
       application: this.applicationIdentity,
       window: {
         windowId: window.windowId,
-        rendererEpoch: window.rendererEpoch,
+        rendererSessionId: window.rendererSessionId,
       },
-      host,
+      host: {
+        id: host.id,
+        kind: host.kind,
+        ui: host.ui,
+        ...(host.displayName ? { displayName: host.displayName } : {}),
+      },
       runtime: {
         platform: runtime.platform,
         ...(runtime.arch ? { arch: runtime.arch } : {}),
@@ -298,7 +337,6 @@ export class DesktopAppHost {
     const request = parseDesktopShellRequest(payload);
     const window = this.windows.resolveSender(sender);
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       projection: await this.shell.getProjection(window.windowId),
     };
@@ -307,20 +345,85 @@ export class DesktopAppHost {
   async createAgentBootstrap(
     sender: DesktopSenderIdentity,
     payload: unknown,
-    publish: (event: DesktopAgentMessageEvent) => void,
+    publish: (event: DesktopAgentEvent) => void,
   ): Promise<DesktopAgentBootstrapProjection> {
     this.requireActive();
     const request = parseDesktopAgentBootstrapRequest(payload);
     const window = this.windows.resolveSender(sender);
+    const surfaceGrant = await this.shell.resolveAgentSurfaceGrant(window.windowId, request);
+    const surfaceInteraction = surfaceGrant.interaction;
+    if (surfaceInteraction.agentViewId !== request.viewId) {
+      throw new Error('Desktop Agent bootstrap does not match its exact Agent Surface View.');
+    }
+    if ('assistantSpaceId' in request) {
+      if (
+        surfaceInteraction.phase !== 'session' ||
+        surfaceInteraction.scope.kind !== 'assistant' ||
+        surfaceInteraction.scope.assistantSpaceId !== request.assistantSpaceId ||
+        surfaceInteraction.scope.conversationId !== request.conversationId
+      ) {
+        throw new Error(
+          'Desktop Assistant Agent bootstrap does not match its exact Agent Surface.',
+        );
+      }
+      const [context, firstSubmitRecord] = await Promise.all([
+        this.conversationLifecycle.readConversationContext(request.conversationId),
+        this.conversationLifecycle.readFirstSubmitRecord(request.conversationId),
+      ]);
+      if (context.kind !== 'assistant' || context.assistantSpaceId !== request.assistantSpaceId) {
+        throw new Error(
+          'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
+        );
+      }
+      if (this.options.assistantWorkspace.workspaceId !== request.assistantSpaceId) {
+        throw new Error(
+          `Desktop Assistant Space '${request.assistantSpaceId}' does not match its configured Workspace authority.`,
+        );
+      }
+      const workspace =
+        this.agent.getWorkspace(request.assistantSpaceId) ??
+        (await this.agent.attachWorkspace(this.options.assistantWorkspace));
+      if (workspace.workspaceId !== request.assistantSpaceId) {
+        throw new Error(
+          `Desktop Assistant Space '${request.assistantSpaceId}' resolved to another Agent runtime.`,
+        );
+      }
+      return this.agentBridge.createBootstrap({
+        requestId: request.requestId,
+        grant: {
+          applicationInstanceId: this.applicationIdentity.instanceId,
+          windowId: window.windowId,
+          workbenchInstanceId: request.workbenchInstanceId,
+          agentSurfaceId: request.agentSurfaceId,
+          assistantSpaceId: request.assistantSpaceId,
+          workspaceId: workspace.workspaceId,
+          viewId: request.viewId,
+        },
+        workspace,
+        initialConversationId: request.conversationId,
+        ...(firstSubmitRecord === undefined
+          ? {}
+          : {
+              initialConversationMessage: projectAgentConversationInitialMessage(firstSubmitRecord),
+            }),
+        publish,
+      });
+    }
     const view = await this.shell.resolveAgentViewGrant(window.windowId, request);
+    if (
+      surfaceInteraction.scope.kind !== 'workspace' ||
+      surfaceInteraction.scope.workspaceId !== view.workspaceId
+    ) {
+      throw new Error('Desktop Workspace Agent bootstrap does not match its exact Agent Surface.');
+    }
     const grant: DesktopAgentConnectionGrant = {
       applicationInstanceId: this.applicationIdentity.instanceId,
       windowId: window.windowId,
+      workbenchInstanceId: request.workbenchInstanceId,
+      agentSurfaceId: request.agentSurfaceId,
       projectId: view.projectId,
       workspaceId: view.workspaceId,
       viewId: view.viewId,
-      viewEpoch: view.viewEpoch,
-      rendererEpoch: window.rendererEpoch,
     };
     let workspace = this.agent.getWorkspace(grant.workspaceId);
     if (!workspace && this.agentBridge.startup.ready) {
@@ -328,12 +431,397 @@ export class DesktopAppHost {
         await this.shell.resolveAgentWorkspace(grant.workspaceId),
       );
     }
+    const initialConversationId = request.conversationId ?? surfaceInteraction.scope.conversationId;
+    if (
+      initialConversationId !== surfaceInteraction.scope.conversationId ||
+      (initialConversationId === undefined && surfaceInteraction.phase !== 'draft') ||
+      (initialConversationId !== undefined && surfaceInteraction.phase !== 'session')
+    ) {
+      throw new Error('Desktop Workspace Agent bootstrap does not match its exact Agent Surface.');
+    }
+    const initialConversation =
+      initialConversationId === undefined
+        ? undefined
+        : await Promise.all([
+            this.conversationLifecycle.readConversationContext(initialConversationId),
+            this.conversationLifecycle.readFirstSubmitRecord(initialConversationId),
+          ]);
+    if (
+      initialConversation &&
+      (initialConversation[0].kind !== 'workspace' ||
+        initialConversation[0].workspaceId !== grant.workspaceId)
+    ) {
+      throw new Error('Desktop Workspace Agent bootstrap context belongs to another Workspace.');
+    }
+    const initialConversationRecord = initialConversation?.[1];
     return this.agentBridge.createBootstrap({
       requestId: request.requestId,
       grant,
       workspace,
+      ...(initialConversationId === undefined ? {} : { initialConversationId }),
+      ...(initialConversationRecord === undefined
+        ? {}
+        : {
+            initialConversationMessage:
+              projectAgentConversationInitialMessage(initialConversationRecord),
+          }),
       publish,
     });
+  }
+
+  async executeAgentLaunchRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<AgentLaunchHostResult> {
+    this.requireActive();
+    const request = parseAgentLaunchHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.operation === 'attach') {
+      const surfaceGrant = await this.shell.resolveAgentSurfaceGrant(window.windowId, request);
+      const interaction = surfaceGrant.interaction;
+      if (
+        interaction.agentViewId !== request.viewId ||
+        interaction.phase !== 'draft' ||
+        !sameAgentScope(interaction.scope, request.scope)
+      ) {
+        throw new Error('Agent launch attach does not match its exact Agent Surface.');
+      }
+      return {
+        requestId: request.requestId,
+        status: 'ready',
+        catalog: await this.agentLaunch.attach({
+          applicationInstanceId: this.applicationIdentity.instanceId,
+          windowId: window.windowId,
+          workbenchInstanceId: surfaceGrant.workbenchInstanceId,
+          agentSurfaceId: surfaceGrant.agentSurfaceId,
+          viewId: request.viewId,
+          scope: request.scope,
+        }),
+      };
+    }
+    const connection = request.connection;
+    if (
+      connection.applicationInstanceId !== this.applicationIdentity.instanceId ||
+      connection.windowId !== window.windowId
+    ) {
+      throw new Error('Agent launch connection does not match its sender-bound Desktop identity.');
+    }
+    if (request.operation === 'authorize-resource') {
+      const catalog = await this.agentLaunch.authorizeResource(connection, request.resourceKind);
+      return catalog
+        ? {
+            requestId: request.requestId,
+            status: 'ready',
+            catalog,
+          }
+        : {
+            requestId: request.requestId,
+            status: 'cancelled',
+          };
+    }
+    if (request.operation === 'submit-draft') {
+      const shellProjection = await this.shell.getProjection(window.windowId);
+      const target = request.input.target;
+      let context: AgentConversationContext;
+      let existingRecord:
+        | Awaited<ReturnType<AgentConversationLifecycleService['readFirstSubmitByRequest']>>
+        | undefined;
+      if (target.kind === 'automatic-assistant') {
+        if (connection.scope.kind !== 'unbound' || connection.scope.draftId !== target.draftId) {
+          throw new Error(
+            'Automatic Assistant draft submit does not match its unbound launch connection.',
+          );
+        }
+        const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
+        if (
+          scene.context.kind !== 'agent' ||
+          scene.context.scope.draftId !== target.draftId ||
+          scene.context.agentViewId !== connection.viewId
+        ) {
+          throw new Error('Automatic Assistant draft submit is not the exact active Entry Draft.');
+        }
+        const assistantSpaceId =
+          scene.context.scope.kind === 'unbound'
+            ? DESKTOP_DEFAULT_ASSISTANT_SPACE_ID
+            : scene.context.scope.kind === 'assistant'
+              ? scene.context.scope.assistantSpaceId
+              : undefined;
+        if (!assistantSpaceId) {
+          throw new Error('Automatic Assistant draft submit cannot use Workspace scope.');
+        }
+        context = {
+          kind: 'assistant',
+          assistantSpaceId,
+          baseGrantIds: request.input.resourceGrantIds,
+        };
+        await this.agentLaunch.bindResourceGrants(
+          connection,
+          { kind: 'assistant', assistantSpaceId },
+          request.input.resourceGrantIds,
+        );
+        if (scene.context.scope.kind === 'assistant' && scene.context.scope.conversationId) {
+          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
+            request.requestId,
+          );
+          if (
+            !existingRecord ||
+            existingRecord.conversationId !== scene.context.scope.conversationId ||
+            !conversationContextMatchesLaunchScope(existingRecord.context, {
+              kind: 'assistant',
+              assistantSpaceId,
+            })
+          ) {
+            throw new Error(
+              'Automatic Assistant draft submit request does not match the committed session.',
+            );
+          }
+        }
+      } else {
+        const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
+        const isExactActiveDraft =
+          scene.context.kind === 'agent' &&
+          scene.context.scope.draftId === target.draftId &&
+          scene.context.agentViewId === connection.viewId &&
+          scene.slots.interaction?.phase === 'draft';
+        if (isExactActiveDraft) {
+          context = target.context;
+          if (connection.scope.kind === 'unbound') {
+            if (
+              scene.context.kind !== 'agent' ||
+              scene.context.scope.kind !== 'unbound' ||
+              connection.scope.draftId !== target.draftId
+            ) {
+              throw new Error('Agent draft submit is not the exact active Entry Draft.');
+            }
+            if (context.kind !== 'workspace') {
+              throw new Error(
+                'Unbound Entry target must use automatic Assistant or exact Workspace.',
+              );
+            }
+            const resolution = await this.workspaceGrants.resolve(
+              window.windowId,
+              context.workspaceGrantId,
+            );
+            if (resolution.workspace.workspaceId !== context.workspaceId) {
+              throw new Error('Agent Workspace target grant resolves to another Workspace.');
+            }
+            await this.agentLaunch.bindResourceGrants(
+              connection,
+              {
+                kind: 'workspace',
+                workspaceId: context.workspaceId,
+                workspaceGrantId: context.workspaceGrantId,
+              },
+              request.input.resourceGrantIds,
+            );
+          } else if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
+            throw new Error(
+              'Agent draft submit context does not match its launch connection scope.',
+            );
+          }
+        } else {
+          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
+            request.requestId,
+          );
+          const connectionMatchesCommittedDraft =
+            connection.scope.kind === 'unbound'
+              ? connection.scope.draftId === target.draftId
+              : existingRecord !== undefined &&
+                conversationContextMatchesLaunchScope(existingRecord.context, connection.scope);
+          if (
+            !existingRecord ||
+            scene.context.kind !== 'agent' ||
+            scene.context.scope.kind === 'unbound' ||
+            scene.context.scope.draftId !== target.draftId ||
+            scene.context.scope.conversationId !== existingRecord.conversationId ||
+            scene.slots.interaction?.phase !== 'session' ||
+            !conversationContextMatchesLaunchScope(existingRecord.context, scene.context.scope) ||
+            !conversationContextMatchesLaunchScope(target.context, scene.context.scope) ||
+            !connectionMatchesCommittedDraft
+          ) {
+            throw new Error('Agent draft submit is not the exact active Draft presentation.');
+          }
+          context = existingRecord.context;
+        }
+      }
+      const record =
+        existingRecord ??
+        (await this.conversationLifecycle.firstSubmit({
+          requestId: request.requestId,
+          context,
+          messageText: request.input.messageText,
+          resourceGrantIds: request.input.resourceGrantIds,
+          configuration: request.input.configuration,
+        }));
+      await this.agentLaunch.commitResourceGrants(
+        connection,
+        record.conversationId,
+        record.initialMessage.resourceGrantIds,
+      );
+      await this.shell.attachAgentConversation({
+        windowId: window.windowId,
+        rendererSessionId: shellProjection.rendererSessionId,
+        agentViewId: connection.viewId,
+        draftId: target.draftId,
+        context: record.context,
+        conversationId: record.conversationId,
+      });
+      return {
+        requestId: request.requestId,
+        status: 'committed',
+        projection: {
+          conversationId: record.conversationId,
+          turnId: record.pendingTurn.turnId,
+          turnStatus: record.pendingTurn.status,
+          ...(record.pendingTurn.diagnostic === undefined
+            ? {}
+            : { diagnostic: record.pendingTurn.diagnostic }),
+        },
+      };
+    }
+    await this.agentLaunch.detach(connection);
+    return {
+      requestId: request.requestId,
+      status: 'detached',
+    };
+  }
+
+  async executeAssistantResourceRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<AssistantResourceHostResult> {
+    this.requireActive();
+    const resources = this.assistantResources;
+    if (!resources) throw new Error('Assistant Resource authority is unavailable.');
+    const request = parseAssistantResourceHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.identity.windowId !== window.windowId) {
+      throw new Error('Assistant Resource request belongs to another Window.');
+    }
+    const projection = await this.shell.getProjection(window.windowId);
+    const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
+    if (
+      scene.context.kind !== 'agent' ||
+      scene.context.scope.kind !== 'assistant' ||
+      scene.context.scope.assistantSpaceId !== request.identity.assistantSpaceId ||
+      scene.context.scope.conversationId !== request.identity.conversationId ||
+      scene.slots.interaction?.kind !== 'agent' ||
+      scene.slots.interaction.phase !== 'session'
+    ) {
+      throw new Error('Assistant Resource request does not match the exact active Scene.');
+    }
+    if (request.route === 'snapshot.get') {
+      return {
+        requestId: request.requestId,
+        route: 'snapshot.get',
+        projection: await resources.snapshot(request.identity),
+      };
+    }
+    if (request.route === 'preview.authorize') {
+      const preview = await resources.authorizePreview({
+        identity: request.identity,
+        scratchArtifactId: request.scratchArtifactId,
+      });
+      if (preview.identity.owner.kind !== 'assistant-scratch') {
+        throw new Error('Assistant Resource Preview returned a non-Assistant owner.');
+      }
+      await this.shell.projectAssistantPreview({
+        windowId: window.windowId,
+        rendererSessionId: projection.rendererSessionId,
+        assistantSpaceId: request.identity.assistantSpaceId,
+        conversationId: request.identity.conversationId,
+        previewSessionId: preview.identity.previewSessionId,
+        scratchArtifactId: preview.identity.owner.scratchArtifactId,
+      });
+      return {
+        requestId: request.requestId,
+        route: 'preview.authorize',
+        preview,
+      };
+    }
+    if (request.route === 'preview.get') {
+      if (
+        scene.slots.main?.kind !== 'assistant-preview' ||
+        scene.slots.main.previewSessionId !== request.previewSessionId
+      ) {
+        throw new Error('Assistant Preview request does not match the active Main Surface.');
+      }
+      return {
+        requestId: request.requestId,
+        route: 'preview.get',
+        preview: resources.readPreview(request),
+      };
+    }
+    resources.releasePreview(request);
+    await this.shell.projectAssistantPreview({
+      windowId: window.windowId,
+      rendererSessionId: projection.rendererSessionId,
+      assistantSpaceId: request.identity.assistantSpaceId,
+      conversationId: request.identity.conversationId,
+    });
+    return {
+      requestId: request.requestId,
+      route: 'preview.release',
+      status: 'released',
+    };
+  }
+
+  async resolveWorkspaceTarget(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+    selectWorkspace: () => Promise<
+      | {
+          readonly label: string;
+          readonly hostResource: string;
+        }
+      | undefined
+    >,
+  ): Promise<DesktopWorkspaceGrantTargetResult> {
+    this.requireActive();
+    const request = parseDesktopWorkspaceGrantTargetRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.windowId !== window.windowId) {
+      throw new Error('Desktop Workspace grant request belongs to another Window.');
+    }
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
+    if (request.operation === 'choose-directory') {
+      const selection = await selectWorkspace();
+      if (!selection) return { requestId: request.requestId, status: 'cancelled' };
+      await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
+      const grant = this.workspaceGrants.authorize({
+        windowId: window.windowId,
+        label: selection.label,
+        hostResource: selection.hostResource,
+      });
+      const resolution = await this.workspaceGrants.resolve(
+        window.windowId,
+        grant.workspaceGrantId,
+      );
+      return {
+        requestId: request.requestId,
+        status: 'authorized',
+        workspaceId: resolution.workspace.workspaceId,
+        grant,
+      };
+    }
+    const projection = await this.shell.getProjection(window.windowId);
+    const project = projection.catalog.projects.find(
+      (candidate) => candidate.projectId === request.projectId,
+    );
+    if (!project || project.unavailable) {
+      throw new Error(`Desktop Project '${request.projectId}' is unavailable as a Draft target.`);
+    }
+    const target = await this.workspaceGrants.authorizeWorkspace({
+      windowId: window.windowId,
+      workspaceId: project.workspaceId,
+    });
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
+    return {
+      requestId: request.requestId,
+      status: 'authorized',
+      workspaceId: target.workspace.workspaceId,
+      grant: target.grant,
+    };
   }
 
   async sendAgentMessage(
@@ -343,18 +831,49 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopAgentMessageRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const connection = request.connection;
-    const view = await this.shell.resolveAgentViewGrant(window.windowId, connection);
-    const grant: DesktopAgentConnectionGrant = {
+    if (isAgentProjectionControlMessage(request.message.type)) {
+      const result = await this.agentBridge.sendProjectionControl(request, {
+        applicationInstanceId: this.applicationIdentity.instanceId,
+        windowId: window.windowId,
+      });
+      if (request.message.type === 'projectionAttach') {
+        this.startCommittedAgentProviderExecution(request.message.key.conversationId);
+      }
+      return result;
+    }
+    const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
+    if (request.message.type === 'newConversation') {
+      const projection = await this.shell.getProjection(window.windowId);
+      const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
+      await this.shell.transitionScene(
+        createDesktopSceneTransitionRequest({
+          requestId: request.requestId,
+          rendererSessionId: projection.rendererSessionId,
+          windowId: window.windowId,
+          sceneId: scene.sceneId,
+          intent: { kind: 'new-agent-conversation' },
+        }),
+      );
+      return { requestId: request.requestId, status: 'accepted' };
+    }
+    return this.agentBridge.send(request, grant);
+  }
+
+  async detachAgentConnection(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopAgentDetachResult> {
+    this.requireActive();
+    const request = parseDesktopAgentDetachRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    this.agentBridge.detachConnection(request.connection, {
       applicationInstanceId: this.applicationIdentity.instanceId,
       windowId: window.windowId,
-      projectId: view.projectId,
-      workspaceId: view.workspaceId,
-      viewId: view.viewId,
-      viewEpoch: view.viewEpoch,
-      rendererEpoch: window.rendererEpoch,
+    });
+    return {
+      requestId: request.requestId,
+      status: 'detached',
     };
-    return this.agentBridge.send(request, grant);
   }
 
   async executeAgentAutomation(
@@ -368,20 +887,10 @@ export class DesktopAppHost {
     }
     const request = parseDesktopAgentAutomationRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const view = await this.shell.resolveAgentViewGrant(window.windowId, request.connection);
-    const grant: DesktopAgentConnectionGrant = {
-      applicationInstanceId: this.applicationIdentity.instanceId,
-      windowId: window.windowId,
-      projectId: view.projectId,
-      workspaceId: view.workspaceId,
-      viewId: view.viewId,
-      viewEpoch: view.viewEpoch,
-      rendererEpoch: window.rendererEpoch,
-    };
+    const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
     switch (request.operation.kind) {
       case 'wait-for-idle':
         return {
-          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
           requestId: request.requestId,
           status: 'idle',
           identity: await this.agentBridge.waitForIdle(
@@ -389,11 +898,11 @@ export class DesktopAppHost {
             grant,
             request.operation.conversationId,
             request.operation.timeoutMs,
+            request.operation.afterIdentity,
           ),
         };
       case 'read-facts':
         return {
-          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
           requestId: request.requestId,
           status: 'facts',
           facts: this.agentBridge.readFacts(request.connection, grant, request.operation),
@@ -405,7 +914,6 @@ export class DesktopAppHost {
         );
         automation.reloadRenderer(window.windowId);
         return {
-          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
           requestId: request.requestId,
           status: 'facts',
           facts,
@@ -418,7 +926,6 @@ export class DesktopAppHost {
         );
         automation.closeApplication(window.windowId);
         return {
-          schemaVersion: DESKTOP_AGENT_AUTOMATION_VERSION,
           requestId: request.requestId,
           status: 'facts',
           facts,
@@ -443,32 +950,38 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopWindowMutationRequest(payload);
     const window = this.windows.resolveSender(sender);
-    await this.shell.assertWindowMutationContext(
-      window.windowId,
-      request.expectedEndpointEpoch,
-      request.expectedWindowRevision,
-    );
+    await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
     const workspacePath = await selectWorkspace();
     if (!workspacePath) {
       return {
-        schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
         requestId: request.requestId,
         status: 'cancelled',
         projection: await this.shell.getProjection(window.windowId),
       };
     }
-    const opened = await this.shell.openContent(
-      window.windowId,
-      workspacePath,
-      request.expectedEndpointEpoch,
-      request.expectedWindowRevision,
+    const initial = await this.shell.getProjection(window.windowId);
+    const grant = this.workspaceGrants.authorize({
+      windowId: window.windowId,
+      label: workspacePath,
+      hostResource: workspacePath,
+    });
+    const transitioned = await this.transitionScene(
+      sender,
+      createDesktopSceneTransitionRequest({
+        requestId: request.requestId,
+        rendererSessionId: request.rendererSessionId,
+        windowId: window.windowId,
+        sceneId: resolveActiveDesktopWindowWorkbench(initial.window).scene.sceneId,
+        intent: { kind: 'open-workspace', workspaceGrantId: grant.workspaceGrantId },
+      }),
     );
-    await this.agent.attachWorkspace(opened.workspace);
+    if (transitioned.status !== 'transitioned') {
+      throw new Error('Authorized Workspace open did not activate its Workspace Scene.');
+    }
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       status: 'opened',
-      projection: opened.projection,
+      projection: await this.shell.getProjection(window.windowId),
     };
   }
 
@@ -479,339 +992,258 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopProjectOpenRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const opened = await this.shell.openCatalogProject(
-      window.windowId,
-      request.projectId,
-      request.expectedEndpointEpoch,
-      request.expectedWindowRevision,
+    const initial = await this.shell.getProjection(window.windowId);
+    const transitioned = await this.transitionScene(
+      sender,
+      createDesktopSceneTransitionRequest({
+        requestId: request.requestId,
+        rendererSessionId: request.rendererSessionId,
+        windowId: window.windowId,
+        sceneId: resolveActiveDesktopWindowWorkbench(initial.window).scene.sceneId,
+        intent: { kind: 'open-project-workspace', projectId: request.projectId },
+      }),
     );
-    await this.agent.attachWorkspace(opened.workspace);
+    if (transitioned.status !== 'transitioned') {
+      throw new Error('Catalog Project open did not activate its Workspace Scene.');
+    }
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       status: 'opened',
-      projection: opened.projection,
+      projection: await this.shell.getProjection(window.windowId),
     };
   }
 
-  async removeRecentProject(
+  async removeProjects(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<DesktopShellResponse> {
     this.requireActive();
-    const request = parseDesktopProjectRemoveRecentRequest(payload);
+    const request = parseDesktopProjectSelectionRequest(payload);
     const window = this.windows.resolveSender(sender);
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
-      projection: await this.shell.removeRecentProject(
+      projection: await this.projectManagement.removeProjects(
         window.windowId,
-        request.projectId,
-        request.expectedEndpointEpoch,
-        request.expectedWindowRevision,
-        request.expectedCatalogRevision,
+        request.rendererSessionId,
+        request.projectIds,
       ),
     };
   }
 
-  async deleteHomeConversation(
+  async deleteProjectConversations(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopShellResponse> {
+    this.requireActive();
+    const request = parseDesktopProjectSelectionRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    return {
+      requestId: request.requestId,
+      projection: await this.projectManagement.deleteProjectConversations(
+        window.windowId,
+        request.rendererSessionId,
+        request.projectIds,
+      ),
+    };
+  }
+
+  async deleteHomeConversations(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<DesktopShellResponse> {
     this.requireActive();
     const request = parseDesktopConversationDeleteRequest(payload);
     const window = this.windows.resolveSender(sender);
-    await this.shell.assertAgentHomeConversation(
-      window.windowId,
-      request.expectedEndpointEpoch,
-      request.expectedWindowRevision,
-      request.expectedAgentHomeRevision,
-      request.navigation,
-    );
-    const workspaceResolution = await this.shell.resolveAgentWorkspace(
-      request.navigation.workspaceId,
-    );
-    const workspace =
-      this.agent.getWorkspace(request.navigation.workspaceId) ??
-      (await this.agent.attachWorkspace(workspaceResolution));
-    await workspace.deleteConversation(request.navigation.conversationId);
+    for (const navigation of request.navigations) {
+      await this.shell.assertAgentHomeConversation(
+        window.windowId,
+        request.rendererSessionId,
+        navigation,
+      );
+    }
+    for (const navigation of request.navigations) {
+      await this.agent.deleteConversation(navigation.conversationId);
+    }
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       projection: await this.shell.getProjection(window.windowId),
     };
   }
 
-  async searchHomeAssets(
+  async executeAssetCenter(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<DesktopHomeAssetSearchResult> {
+  ): Promise<AssetCenterHostResult> {
     this.requireActive();
-    const request = parseDesktopHomeAssetSearchRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    try {
-      const catalog = await this.requireResourceBrowser().searchHomeAssets({
-        windowId: endpoint.windowId,
-        endpointEpoch: endpoint.endpointEpoch,
-        query: request.query,
-        sortBy: request.sortBy,
-        sortDirection: request.sortDirection,
-        limit: request.limit,
-      });
+    const request = parseAssetCenterHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.identity.windowId !== window.windowId) {
+      throw new Error('Asset Center request belongs to another Window.');
+    }
+    const shell = await this.shell.getProjection(window.windowId);
+    const runtime = this.requireAssetCenter();
+    if (request.route === 'preview.get') {
       return {
-        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
-        status: 'ready',
-        revision: catalog.revision,
-        items: catalog.items,
-      };
-    } catch (error: unknown) {
-      return {
-        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-        requestId: request.requestId,
-        status: 'error',
-        diagnostic: { message: describeError(error) },
+        route: request.route,
+        preview: runtime.getPreview(request.identity, request.previewSessionId),
       };
     }
-  }
-
-  async searchHomeMediaLibraries(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeMediaLibrarySearchResult> {
-    this.requireActive();
-    const request = parseDesktopHomeMediaLibrarySearchRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    try {
-      const catalog = await this.requireResourceBrowser().searchHomeMediaLibraries({
-        windowId: endpoint.windowId,
-        endpointEpoch: endpoint.endpointEpoch,
-        query: request.query,
-        sortBy: request.sortBy,
-        sortDirection: request.sortDirection,
-        limit: request.limit,
-      });
+    if (request.route === 'thumbnail.resolve') {
       return {
-        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
         requestId: request.requestId,
-        status: 'ready',
-        revision: catalog.revision,
-        items: catalog.items,
-      };
-    } catch (error: unknown) {
-      return {
-        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-        requestId: request.requestId,
-        status: 'error',
-        diagnostic: { message: describeError(error) },
+        route: request.route,
+        thumbnail: await runtime.resolveThumbnail(request),
       };
     }
-  }
-
-  async readHomeMediaLibraryChildren(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeMediaLibraryChildrenResult> {
-    this.requireActive();
-    const request = parseDesktopHomeMediaLibraryChildrenRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    try {
-      const catalog = await this.requireResourceBrowser().readHomeMediaLibraryChildren({
-        windowId: endpoint.windowId,
-        endpointEpoch: endpoint.endpointEpoch,
-        libraryId: request.libraryId,
-        relativePath: request.relativePath,
-        sortBy: request.sortBy,
-        sortDirection: request.sortDirection,
-        limit: request.limit,
-      });
-      return {
-        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-        requestId: request.requestId,
-        status: 'ready',
-        revision: catalog.revision,
-        items: catalog.items,
-      };
-    } catch (error: unknown) {
-      return {
-        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-        requestId: request.requestId,
-        status: 'error',
-        diagnostic: { message: describeError(error) },
-      };
+    let projection: AssetCenterSessionProjection;
+    switch (request.route) {
+      case 'attach':
+        projection = runtime.attach({
+          identity: request.identity,
+          initialViewMode: request.initialViewMode,
+        });
+        break;
+      case 'snapshot.get':
+        projection = runtime.getSnapshot(request.identity);
+        break;
+      case 'filter.update':
+        projection = await runtime.updateFilter(request);
+        break;
+      case 'catalog.refresh':
+        projection = await runtime.refresh(request);
+        break;
+      case 'selection.select':
+        projection = await runtime.select(request);
+        break;
+      case 'session.detach':
+        projection = await runtime.detachSession(request.identity);
+        break;
+      case 'asset.import':
+        projection = await runtime.importAssets(request);
+        break;
+      case 'assets.remove':
+        projection = await runtime.removeAssets(request);
+        break;
+      case 'items.move':
+        projection = await runtime.moveItems(request);
+        break;
+      case 'media-library.add':
+        projection = await runtime.addMediaLibrary(request);
+        break;
+      case 'media-library.relink':
+        projection = await runtime.relinkMediaLibrary(request);
+        break;
+      case 'media-library.remove':
+        projection = await runtime.removeMediaLibrary(request);
+        break;
+      case 'media-library.reveal':
+        projection = await runtime.revealMediaLibrary(request);
+        break;
     }
-  }
-
-  async addHomeMediaLibrary(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeMediaLibraryAddResult> {
-    this.requireActive();
-    const request = parseDesktopHomeMediaLibraryAddRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const result = await this.requireResourceBrowser().addHomeMediaLibrary({
-      windowId: endpoint.windowId,
-      endpointEpoch: endpoint.endpointEpoch,
-      locationKind: request.locationKind,
-      expectedRevision: request.expectedRevision,
-    });
+    if (
+      request.route === 'selection.select' ||
+      request.route === 'assets.remove' ||
+      request.route === 'items.move' ||
+      request.route === 'session.detach'
+    ) {
+      const currentScene = await this.shell.getSceneProjection(window.windowId);
+      if (
+        currentScene.context.kind === 'asset-center' &&
+        currentScene.context.assetCenterSessionId === request.identity.assetCenterSessionId
+      ) {
+        await this.shell.projectAssetCenterPreview({
+          windowId: window.windowId,
+          rendererSessionId: shell.rendererSessionId,
+          assetCenterSessionId: request.identity.assetCenterSessionId,
+          ...(projection.preview.status === 'ready'
+            ? { previewSessionId: projection.preview.previewSessionId }
+            : {}),
+        });
+      }
+    }
     return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
-      ...result,
+      route: request.route,
+      projection,
     };
   }
 
-  async relinkHomeMediaLibrary(
+  async executeExtensionManagement(
     sender: DesktopSenderIdentity,
     payload: unknown,
-  ): Promise<DesktopHomeMediaLibraryRelinkResult> {
+  ): Promise<AgentExtensionManagementHostResult> {
     this.requireActive();
-    const request = parseDesktopHomeMediaLibraryRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const result = await this.requireResourceBrowser().relinkHomeMediaLibrary({
-      windowId: endpoint.windowId,
-      endpointEpoch: endpoint.endpointEpoch,
-      libraryId: request.libraryId,
-      expectedRevision: request.expectedRevision,
-    });
+    const request = parseAgentExtensionManagementHostRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.identity.windowId !== window.windowId) {
+      throw new Error('Agent Extension Management request belongs to another Window.');
+    }
+    const shell = await this.shell.getProjection(window.windowId);
+    const activeScene = resolveActiveDesktopWindowWorkbench(shell.window).scene;
+    if (activeScene.context.kind !== 'extensions') {
+      throw new Error('Agent Extension Management request does not match the active Scene.');
+    }
+    switch (request.route) {
+      case 'snapshot.get':
+        break;
+      case 'plugin.install': {
+        this.requireAgentIdleForPluginMutation();
+        const snapshot = await this.options.extensionManager.installPlugin(request.pluginId);
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
+      case 'plugin.remove': {
+        this.requireAgentIdleForPluginMutation();
+        const snapshot = await this.options.extensionManager.removePlugin(request.pluginId);
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
+      case 'marketplaces.refresh': {
+        this.requireAgentIdleForPluginMutation();
+        const snapshot = await this.options.extensionManager.refreshMarketplaces();
+        await this.activatePluginSnapshot(snapshot);
+        break;
+      }
+      case 'skill.install': {
+        await this.options.personalSkillManager.install(window.windowId);
+        break;
+      }
+      case 'skill.remove': {
+        const skills = await this.agent.readGlobalSkillCatalog();
+        await this.options.personalSkillManager.remove(request.managementId, skills.records);
+        break;
+      }
+    }
     return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
       requestId: request.requestId,
-      ...result,
+      route: request.route,
+      projection: await this.projectExtensionManagement(request.identity),
     };
   }
 
-  async removeHomeMediaLibrary(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeMediaLibraryRemoveResult> {
-    this.requireActive();
-    const request = parseDesktopHomeMediaLibraryRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const revision = await this.requireResourceBrowser().removeHomeMediaLibrary({
-      windowId: endpoint.windowId,
-      endpointEpoch: endpoint.endpointEpoch,
-      libraryId: request.libraryId,
-      expectedRevision: request.expectedRevision,
-    });
-    return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: request.requestId,
-      status: 'removed',
-      libraryId: request.libraryId,
-      revision,
-    };
+  private async prepareExtensionCatalog() {
+    const snapshot = await this.options.extensionManager.readCatalog();
+    await this.activatePluginSnapshot(snapshot);
+    return this.options.extensionManager.readCatalog();
   }
 
-  async revealHomeMediaLibrary(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeMediaLibraryRevealResult> {
-    this.requireActive();
-    const request = parseDesktopHomeMediaLibraryRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const revision = await this.requireResourceBrowser().revealHomeMediaLibrary({
-      windowId: endpoint.windowId,
-      endpointEpoch: endpoint.endpointEpoch,
-      libraryId: request.libraryId,
-      expectedRevision: request.expectedRevision,
-    });
-    return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: request.requestId,
-      status: 'revealed',
-      libraryId: request.libraryId,
-      revision,
-    };
-  }
-
-  async importHomeAssets(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeAssetImportResult> {
-    this.requireActive();
-    const request = parseDesktopHomeAssetImportRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const result = await this.requireResourceBrowser().importHomeAssets({
-      windowId: endpoint.windowId,
-      endpointEpoch: endpoint.endpointEpoch,
-      expectedRevision: request.expectedRevision,
-    });
-    return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: request.requestId,
-      ...result,
-    };
-  }
-
-  async removeHomeAsset(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeAssetRemoveResult> {
-    this.requireActive();
-    const request = parseDesktopHomeAssetRemoveRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const result = await this.requireResourceBrowser().removeHomeAsset({
-      windowId: endpoint.windowId,
-      endpointEpoch: endpoint.endpointEpoch,
-      assetId: request.assetId,
-      expectedRevision: request.expectedRevision,
-    });
-    return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: request.requestId,
-      ...result,
-    };
-  }
-
-  async resolveHomeLibraryThumbnail(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeLibraryThumbnailResult> {
-    this.requireActive();
-    const request = parseDesktopHomeLibraryThumbnailRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const result = await this.requireResourceBrowser().resolveHomeLibraryThumbnail({
-      windowId: endpoint.windowId,
-      endpointEpoch: endpoint.endpointEpoch,
-      request: {
-        owner: request.owner,
-        itemId: request.itemId,
-        expectedCatalogRevision: request.expectedCatalogRevision,
-        descriptorId: request.descriptorId,
-        thumbnailRevision: request.thumbnailRevision,
-        variant: request.variant,
-      },
-    });
-    return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: request.requestId,
-      ...result,
-    };
-  }
-
-  async listHomeExtensions(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeExtensionsResult> {
-    this.requireActive();
-    const request = parseDesktopHomeExtensionsRequest(payload);
-    await this.resolveHomeRequest(sender, request);
+  private async projectExtensionManagement(
+    identity: AgentExtensionManagementSessionIdentity,
+  ): Promise<AgentExtensionManagementProjection> {
     const extensionCatalog = await this.prepareExtensionCatalog();
     const skillCatalog = await this.agent.readGlobalSkillCatalog();
     for (const skill of skillCatalog.records) {
       if (skill.source.kind === 'project') {
-        throw new Error('Desktop global Skill catalog returned a Project-scoped Skill.');
+        throw new Error('Agent global Skill catalog returned a Workspace-scoped Skill.');
       }
     }
     const skills = await Promise.all(
       skillCatalog.records
         .filter((skill) => skill.source.kind !== 'builtin')
         .map(async (skill) => {
-          const skillSource = skill.source;
-          const source = requireGlobalSkillSource(skillSource);
-          const sourceId = skillSource.kind === 'plugin' ? skillSource.pluginId : source;
+          const source = requireGlobalSkillSource(skill.source);
+          const sourceId = skill.source.kind === 'plugin' ? skill.source.pluginId : source;
           const managementId =
             source === 'personal'
               ? await this.options.personalSkillManager.resolveManagementId(skill)
@@ -828,146 +1260,19 @@ export class DesktopAppHost {
         }),
     );
     return {
-      schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-      requestId: request.requestId,
-      catalogRevision: extensionCatalog.revision,
+      identity,
       skills,
       skillDiscovery: projectSkillDiscovery(skillCatalog),
       extensions: extensionCatalog.records,
-      extensionDiscovery: {
-        diagnostics: extensionCatalog.diagnostics,
-      },
+      extensionDiscovery: { diagnostics: extensionCatalog.diagnostics },
     };
-  }
-
-  async installHomeExtensionPlugin(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeExtensionMutationResult> {
-    const request = parseDesktopHomePluginMutationRequest(payload);
-    await this.resolveHomeRequest(sender, request);
-    this.requireAgentIdleForPluginMutation();
-    const snapshot = await this.options.extensionManager.installPlugin(
-      request.pluginId,
-      request.expectedCatalogRevision,
-    );
-    await this.activatePluginSnapshot(snapshot);
-    return createExtensionMutationResult(
-      request.requestId,
-      'plugin-install',
-      request.pluginId,
-      snapshot.revision,
-    );
-  }
-
-  async removeHomeExtensionPlugin(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeExtensionMutationResult> {
-    const request = parseDesktopHomePluginMutationRequest(payload);
-    await this.resolveHomeRequest(sender, request);
-    this.requireAgentIdleForPluginMutation();
-    const snapshot = await this.options.extensionManager.removePlugin(
-      request.pluginId,
-      request.expectedCatalogRevision,
-    );
-    await this.activatePluginSnapshot(snapshot);
-    return createExtensionMutationResult(
-      request.requestId,
-      'plugin-remove',
-      request.pluginId,
-      snapshot.revision,
-    );
-  }
-
-  async refreshHomeExtensionMarketplaces(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeExtensionMutationResult> {
-    const request = parseDesktopHomeCatalogMutationRequest(payload);
-    await this.resolveHomeRequest(sender, request);
-    this.requireAgentIdleForPluginMutation();
-    const snapshot = await this.options.extensionManager.refreshMarketplaces(
-      request.expectedCatalogRevision,
-    );
-    await this.activatePluginSnapshot(snapshot);
-    return createExtensionMutationResult(
-      request.requestId,
-      'marketplaces-refresh',
-      '',
-      snapshot.revision,
-    );
-  }
-
-  async installHomePersonalSkill(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeExtensionMutationResult> {
-    const request = parseDesktopHomeCatalogMutationRequest(payload);
-    const endpoint = await this.resolveHomeRequest(sender, request);
-    const catalog = await this.options.extensionManager.readCatalog();
-    if (catalog.revision !== request.expectedCatalogRevision) {
-      throw new Error('Desktop extension catalog changed; refresh before retrying.');
-    }
-    const result = await this.options.personalSkillManager.install(endpoint.windowId);
-    if (result.status === 'cancelled') {
-      return {
-        schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-        requestId: request.requestId,
-        status: 'cancelled',
-        operation: 'personal-skill-install',
-        targetId: '',
-        catalogRevision: catalog.revision,
-      };
-    }
-    return createExtensionMutationResult(
-      request.requestId,
-      'personal-skill-install',
-      result.name,
-      catalog.revision,
-    );
-  }
-
-  async removeHomePersonalSkill(
-    sender: DesktopSenderIdentity,
-    payload: unknown,
-  ): Promise<DesktopHomeExtensionMutationResult> {
-    const request = parseDesktopHomePersonalSkillRemoveRequest(payload);
-    await this.resolveHomeRequest(sender, request);
-    const [catalog, skills] = await Promise.all([
-      this.options.extensionManager.readCatalog(),
-      this.agent.readGlobalSkillCatalog(),
-    ]);
-    if (catalog.revision !== request.expectedCatalogRevision) {
-      throw new Error('Desktop extension catalog changed; refresh before retrying.');
-    }
-    const removed = await this.options.personalSkillManager.remove(
-      request.managementId,
-      skills.records,
-    );
-    return createExtensionMutationResult(
-      request.requestId,
-      'personal-skill-remove',
-      removed.name,
-      catalog.revision,
-    );
-  }
-
-  private async prepareExtensionCatalog() {
-    const snapshot = await this.options.extensionManager.readCatalog();
-    await this.activatePluginSnapshot(snapshot);
-    const projected = await this.options.extensionManager.readCatalog();
-    if (projected.revision !== snapshot.revision) {
-      throw new Error('Desktop extension catalog changed during Agent runtime composition.');
-    }
-    return projected;
   }
 
   private async activatePluginSnapshot(
     snapshot: Awaited<ReturnType<AgentExtensionManager['readCatalog']>>,
   ): Promise<void> {
     const readiness = await this.agent.reconcilePluginRuntime(snapshot);
-    this.options.extensionManager.setRuntimeReadiness(snapshot.revision, readiness);
+    this.options.extensionManager.setRuntimeReadiness(snapshot, readiness);
   }
 
   private requireAgentIdleForPluginMutation(): void {
@@ -1008,13 +1313,8 @@ export class DesktopAppHost {
     }
     const window = this.windows.resolveSender(sender);
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
-      projection: await this.shell.activateHome(
-        window.windowId,
-        request.expectedEndpointEpoch,
-        request.expectedWindowRevision,
-      ),
+      projection: await this.shell.activateHome(window.windowId, request.rendererSessionId),
     };
   }
 
@@ -1034,19 +1334,113 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     const projection = await this.shell.updateWorkbench(
       window.windowId,
-      request.expectedEndpointEpoch,
-      request.expectedWindowRevision,
-      request.expectedWorkbenchRevision,
+      request.rendererSessionId,
+      request.workbenchInstanceId,
       request.workbench,
     );
-    this.preview?.reconcileWorkbench(window.windowId, projection.window.workbench);
-    this.canvas?.reconcileWorkbench(window.windowId, projection.window.workbench);
-    this.cut?.reconcileWorkbench(window.windowId, projection.window.workbench);
+    this.reconcileWindowWorkbenchResources(window.windowId, projection);
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       projection,
     };
+  }
+
+  async updateApplicationSidebar(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopShellResponse> {
+    this.requireActive();
+    const request = parseDesktopApplicationSidebarMutationRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.windowId !== window.windowId) {
+      throw new Error('Desktop Application Sidebar request belongs to another Window.');
+    }
+    return {
+      requestId: request.requestId,
+      projection: await this.shell.updateApplicationSidebar(request),
+    };
+  }
+
+  async transitionScene(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopSceneTransitionResult> {
+    this.requireActive();
+    const request = parseDesktopSceneTransitionRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    if (request.windowId !== window.windowId) {
+      throw new Error('Desktop Scene transition request belongs to another Window.');
+    }
+    const previous = await this.shell.getProjection(window.windowId);
+    if (request.intent.kind === 'restore-conversation') {
+      const navigation = request.intent.navigation;
+      const conversation = previous.agentHome.conversations.find(
+        (candidate) =>
+          candidate.navigation.conversationId === navigation.conversationId &&
+          isSameAgentConversationOwner(candidate.navigation.owner, navigation.owner),
+      );
+      if (!conversation) {
+        throw new Error(
+          `Desktop Conversation '${navigation.conversationId}' does not match its authoritative navigation owner.`,
+        );
+      }
+      if (conversation.unavailable) {
+        return unavailableConversationOwner(
+          request.requestId,
+          navigation.owner,
+          conversation.unavailable.message,
+        );
+      }
+      if (navigation.owner.kind === 'character' || navigation.owner.kind === 'room') {
+        return unavailableConversationOwner(request.requestId, navigation.owner);
+      }
+      const context = await this.conversationLifecycle.readConversationContext(
+        navigation.conversationId,
+      );
+      const contextOwner = conversationOwnerFromContext(context);
+      if (!isSameAgentConversationOwner(navigation.owner, contextOwner)) {
+        throw new Error(
+          `Desktop Conversation '${navigation.conversationId}' lifecycle context does not match its navigation owner.`,
+        );
+      }
+      if (context.kind === 'workspace') {
+        const resolution = await this.workspaceGrants.restore(
+          window.windowId,
+          context.workspaceGrantId,
+          context.workspaceId,
+        );
+        if (resolution.workspace.workspaceId !== context.workspaceId) {
+          throw new Error(
+            'Persisted Agent Conversation Workspace grant resolves to another Workspace.',
+          );
+        }
+      }
+      const result = await this.shell.restoreAgentConversation({ request, context });
+      if (result.status === 'transitioned') {
+        await this.attachWorkspaceAgentScene(result.scene);
+        this.releaseReplacedAssistantPreview(
+          resolveActiveDesktopWindowWorkbench(previous.window).scene,
+          result.scene,
+        );
+      }
+      return result;
+    }
+    const result = await this.shell.transitionScene(request);
+    if (result.status === 'transitioned') {
+      await this.attachWorkspaceAgentScene(result.scene);
+      this.releaseReplacedAssistantPreview(
+        resolveActiveDesktopWindowWorkbench(previous.window).scene,
+        result.scene,
+      );
+    }
+    return result;
+  }
+
+  private async attachWorkspaceAgentScene(scene: DesktopWorkbenchSceneProjection): Promise<void> {
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') return;
+    await this.agent.attachWorkspace(
+      await this.shell.resolveAgentWorkspace(scene.context.scope.workspaceId),
+    );
   }
 
   async getResourceBrowserSnapshot(
@@ -1303,10 +1697,20 @@ export class DesktopAppHost {
   detachWindowResources(windowId: string, webContentsId: number): void {
     this.detachRendererSubscriptions(webContentsId);
     this.resourceBrowser?.detachWindow(windowId);
+    this.assetCenter?.detachWindow(windowId);
     this.projectPortability?.detachWindow(windowId);
     this.preview?.detachWindow(windowId);
     this.canvas?.detachWindow(windowId);
     this.cut?.detachWindow(windowId);
+    this.options.assistantPreviewLifecycle?.detachWindow(windowId);
+    this.agentBridge.detachWindow(windowId);
+    void this.agentLaunch.detachWindow(windowId).catch((error: unknown) => {
+      this.reportError(
+        'desktop-agent-launch-detach-failed',
+        'Failed to detach Agent launch Window.',
+        error,
+      );
+    });
   }
 
   detachRendererSubscriptions(webContentsId: number): void {
@@ -1333,6 +1737,16 @@ export class DesktopAppHost {
     }
     try {
       this.agentBridge.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await this.agentLaunch.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.options.assistantPreviewLifecycle?.dispose();
     } catch (error) {
       errors.push(error);
     }
@@ -1365,6 +1779,11 @@ export class DesktopAppHost {
     }
     this.cutSubscriptions.clear();
     try {
+      this.assetCenter?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
       this.resourceBrowser?.dispose();
     } catch (error) {
       errors.push(error);
@@ -1381,6 +1800,11 @@ export class DesktopAppHost {
     }
     try {
       await this.cut?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await this.conversationLifecycle.waitForProviderIdle();
     } catch (error) {
       errors.push(error);
     }
@@ -1412,25 +1836,106 @@ export class DesktopAppHost {
     }
   }
 
+  private startCommittedAgentProviderExecution(conversationId: string): void {
+    void this.conversationLifecycle
+      .startProviderExecution(conversationId)
+      .catch((error: unknown) =>
+        this.reportError(
+          'desktop-agent-provider-execution-start-failed',
+          `Desktop Agent provider execution could not start for Conversation '${conversationId}'.`,
+          error,
+        ),
+      );
+  }
+
+  private async resolveAgentConnectionGrant(
+    windowId: string,
+    connection: import('@neko/agent-contracts').DesktopAgentConnectionIdentity,
+  ): Promise<DesktopAnyAgentConnectionGrant> {
+    const surfaceGrant = await this.shell.resolveAgentSurfaceGrant(windowId, connection);
+    const interaction = surfaceGrant.interaction;
+    if (interaction.agentViewId !== connection.viewId) {
+      throw new Error('Desktop Agent connection does not match its exact Agent Surface View.');
+    }
+    if ('assistantSpaceId' in connection) {
+      if (
+        connection.windowId !== windowId ||
+        interaction.phase !== 'session' ||
+        interaction.scope.kind !== 'assistant' ||
+        interaction.scope.assistantSpaceId !== connection.assistantSpaceId ||
+        !interaction.scope.conversationId
+      ) {
+        throw new Error(
+          'Desktop Assistant Agent connection does not match its exact Agent Surface.',
+        );
+      }
+      const context = await this.conversationLifecycle.readConversationContext(
+        interaction.scope.conversationId,
+      );
+      if (
+        context.kind !== 'assistant' ||
+        context.assistantSpaceId !== connection.assistantSpaceId
+      ) {
+        throw new Error(
+          'Desktop Assistant Agent connection does not match its persisted Conversation context.',
+        );
+      }
+      const workspace = this.requireAssistantAgentWorkspace(connection);
+      return {
+        applicationInstanceId: this.applicationIdentity.instanceId,
+        windowId,
+        workbenchInstanceId: surfaceGrant.workbenchInstanceId,
+        agentSurfaceId: surfaceGrant.agentSurfaceId,
+        assistantSpaceId: connection.assistantSpaceId,
+        workspaceId: workspace.workspaceId,
+        viewId: connection.viewId,
+      };
+    }
+    const view = await this.shell.resolveAgentViewGrant(windowId, connection);
+    if (
+      interaction.scope.kind !== 'workspace' ||
+      interaction.scope.workspaceId !== view.workspaceId
+    ) {
+      throw new Error('Desktop Workspace Agent connection does not match its exact Agent Surface.');
+    }
+    return {
+      applicationInstanceId: this.applicationIdentity.instanceId,
+      windowId,
+      workbenchInstanceId: surfaceGrant.workbenchInstanceId,
+      agentSurfaceId: surfaceGrant.agentSurfaceId,
+      projectId: view.projectId,
+      workspaceId: view.workspaceId,
+      viewId: view.viewId,
+    };
+  }
+
+  private requireAssistantAgentWorkspace(
+    connection: import('@neko/agent-contracts').DesktopAgentConnectionIdentity & {
+      readonly assistantSpaceId: string;
+    },
+  ): AgentWorkspaceRuntime {
+    const workspace = this.agent.getWorkspace(connection.workspaceId);
+    if (
+      !workspace ||
+      workspace.workspaceId !== connection.workspaceId ||
+      workspace.workspaceId !== connection.assistantSpaceId
+    ) {
+      throw new Error(
+        `Desktop Assistant Space '${connection.assistantSpaceId}' has no exact managed Agent runtime.`,
+      );
+    }
+    return workspace;
+  }
+
+  private requireAssetCenter(): AssetCenterNodeRuntime {
+    if (!this.assetCenter) throw new Error('Desktop Asset Center runtime is unavailable.');
+    return this.assetCenter;
+  }
+
   private requireActive(): void {
     if (this.disposed) {
       throw new Error('Desktop AppHost is disposed.');
     }
-  }
-
-  private async resolveHomeRequest(
-    sender: DesktopSenderIdentity,
-    request: DesktopHomeManagementRequest,
-  ): Promise<{ readonly windowId: string; readonly endpointEpoch: string }> {
-    const window = this.windows.resolveSender(sender);
-    const projection = await this.shell.getProjection(window.windowId);
-    if (request.endpointEpoch !== projection.endpointEpoch) {
-      throw new Error('Desktop Home endpoint identity is stale.');
-    }
-    return {
-      windowId: window.windowId,
-      endpointEpoch: projection.endpointEpoch,
-    };
   }
 
   private requireResourceBrowser(): ResourceBrowserNodeRuntime {
@@ -1461,6 +1966,32 @@ export class DesktopAppHost {
     return this.cut;
   }
 
+  private releaseReplacedAssistantPreview(
+    previous: DesktopWorkbenchSceneProjection,
+    next: DesktopWorkbenchSceneProjection,
+  ): void {
+    const main = previous.slots.main;
+    if (
+      main?.kind !== 'assistant-preview' ||
+      (next.slots.main?.kind === 'assistant-preview' &&
+        next.slots.main.previewSessionId === main.previewSessionId)
+    ) {
+      return;
+    }
+    const resources = this.assistantResources;
+    if (!resources) {
+      throw new Error('Assistant Preview Scene exists without its Resource authority.');
+    }
+    resources.releasePreview({
+      identity: {
+        assistantSpaceId: main.assistantSpaceId,
+        conversationId: main.conversationId,
+        windowId: previous.windowId,
+      },
+      previewSessionId: main.previewSessionId,
+    });
+  }
+
   private async mutateProjectTab(
     sender: DesktopSenderIdentity,
     payload: unknown,
@@ -1469,38 +2000,96 @@ export class DesktopAppHost {
     this.requireActive();
     const request = parseDesktopTabMutationRequest(payload);
     const window = this.windows.resolveSender(sender);
-    const closingView =
-      operation === 'close'
-        ? (await this.shell.getProjection(window.windowId)).window.tabs.find(
-            (tab) => tab.tabId === request.tabId,
-          )
-        : undefined;
-    const projection =
-      operation === 'activate'
-        ? await this.shell.activateTab(
-            window.windowId,
-            request.tabId,
-            request.expectedEndpointEpoch,
-            request.expectedWindowRevision,
-          )
-        : await this.shell.closeTab(
-            window.windowId,
-            request.tabId,
-            request.expectedEndpointEpoch,
-            request.expectedWindowRevision,
-          );
-    if (operation === 'close' && closingView) {
-      this.agentBridge.detachView(window.windowId, closingView.viewId);
+    const current = await this.shell.getProjection(window.windowId);
+    const targetTab = current.window.tabs.find((tab) => tab.tabId === request.tabId);
+    if (!targetTab) {
+      throw new Error(
+        `Unknown Desktop Project Tab '${request.tabId}' for Window '${window.windowId}'.`,
+      );
     }
-    this.preview?.reconcileWorkbench(window.windowId, projection.window.workbench);
-    this.canvas?.reconcileWorkbench(window.windowId, projection.window.workbench);
-    this.cut?.reconcileWorkbench(window.windowId, projection.window.workbench);
+    const targetProject = current.catalog.projects.find(
+      (project) => project.projectId === targetTab.projectId,
+    );
+    if (!targetProject) {
+      throw new Error(`Desktop Project Tab '${request.tabId}' has no Project catalog owner.`);
+    }
+    let projection: DesktopShellProjection;
+    if (operation === 'activate') {
+      const transitioned = await this.transitionScene(
+        sender,
+        createDesktopSceneTransitionRequest({
+          requestId: request.requestId,
+          rendererSessionId: request.rendererSessionId,
+          windowId: window.windowId,
+          sceneId: resolveActiveDesktopWindowWorkbench(current.window).scene.sceneId,
+          intent: { kind: 'open-project-workspace', projectId: targetTab.projectId },
+        }),
+      );
+      if (transitioned.status !== 'transitioned') {
+        throw new Error('Project Tab activation did not activate its Workspace Scene.');
+      }
+      projection = await this.shell.getProjection(window.windowId);
+    } else {
+      projection = await this.shell.closeTab(
+        window.windowId,
+        request.tabId,
+        request.rendererSessionId,
+      );
+    }
+    this.reconcileWindowWorkbenchResources(window.windowId, projection);
     return {
-      schemaVersion: DESKTOP_SHELL_CONTRACT_VERSION,
       requestId: request.requestId,
       projection,
     };
   }
+
+  private reconcileWindowWorkbenchResources(
+    windowId: string,
+    projection: DesktopShellProjection,
+  ): void {
+    const workbenches = [projection.window.workbench.layout];
+    this.preview?.reconcileWindow(windowId, workbenches);
+    this.canvas?.reconcileWindow(windowId, workbenches);
+    this.cut?.reconcileWindow(windowId, workbenches);
+  }
+}
+
+function isAgentProjectionControlMessage(type: string): boolean {
+  return (
+    type === 'projectionEndpointDiscover' ||
+    type === 'projectionAttach' ||
+    type === 'projectionSnapshotAck' ||
+    type === 'projectionDetach'
+  );
+}
+
+function conversationOwnerFromContext(
+  context: AgentConversationContext,
+): AgentConversationOwnerRef {
+  return context.kind === 'assistant'
+    ? { kind: 'assistant', assistantSpaceId: context.assistantSpaceId }
+    : { kind: 'workspace', workspaceId: context.workspaceId };
+}
+
+function unavailableConversationOwner(
+  requestId: string,
+  owner: AgentConversationOwnerRef,
+  message = `Desktop ${owner.kind} Conversation requires its qualified owner runtime.`,
+): DesktopSceneTransitionResult {
+  return {
+    status: 'unavailable',
+    requestId,
+    diagnostic: {
+      code: 'desktop-scene-owner-unavailable',
+      severity: 'error',
+      message,
+      metadata: {
+        owner: 'agent-conversation-authority',
+        intentKind: 'restore-conversation',
+        conversationOwnerKind: owner.kind,
+      },
+    },
+  };
 }
 
 export async function deliverCutAgentContext(
@@ -1522,10 +2111,10 @@ export async function deliverCutAgentContext(
 
 function projectSkillDiscovery(
   catalog: AgentSkillCatalog,
-): DesktopHomeExtensionsResult['skillDiscovery'] {
+): AgentExtensionManagementProjection['skillDiscovery'] {
   const grouped = new Map<
     string,
-    DesktopHomeExtensionsResult['skillDiscovery']['diagnostics'][number]
+    AgentExtensionManagementProjection['skillDiscovery']['diagnostics'][number]
   >();
   for (const diagnostic of catalog.diagnostics) {
     if (diagnostic.source === 'builtin') continue;
@@ -1545,8 +2134,8 @@ function projectSkillDiscovery(
       ),
     ),
     duplicateCount: catalog.warnings.filter((warning) => {
-      const selectedManageable = isHomeManageableSkillSourceKind(warning.selectedSource);
-      const shadowedManageable = isHomeManageableSkillSourceKind(warning.shadowedSource);
+      const selectedManageable = isAgentManageableSkillSourceKind(warning.selectedSource);
+      const shadowedManageable = isAgentManageableSkillSourceKind(warning.shadowedSource);
       return selectedManageable && shadowedManageable;
     }).length,
   };
@@ -1558,7 +2147,7 @@ function requireGlobalSkillSource(
   if (source.kind === 'personal' || source.kind === 'plugin') {
     return source.kind;
   }
-  throw new Error('Desktop Home Skill projection received an unmanaged Skill source.');
+  throw new Error('Agent Extension Management received an unmanaged Skill source.');
 }
 
 function requireGlobalSkillSourceKind(
@@ -1568,7 +2157,7 @@ function requireGlobalSkillSourceKind(
   throw new Error('Desktop global Skill catalog cannot contain Project source metadata.');
 }
 
-function isHomeManageableSkillSourceKind(
+function isAgentManageableSkillSourceKind(
   source: AgentSkillCatalog['warnings'][number]['selectedSource'],
 ): boolean {
   if (source === 'personal' || source === 'plugin') return true;
@@ -1576,34 +2165,48 @@ function isHomeManageableSkillSourceKind(
   throw new Error('Desktop global Skill catalog cannot contain Project source metadata.');
 }
 
-function createExtensionMutationResult(
-  requestId: string,
-  operation: DesktopHomeExtensionMutationKind,
-  targetId: string,
-  catalogRevision: string,
-): DesktopHomeExtensionMutationResult {
-  return {
-    schemaVersion: DESKTOP_HOME_MANAGEMENT_CONTRACT_VERSION,
-    requestId,
-    status: 'completed',
-    operation,
-    targetId,
-    catalogRevision,
-  };
-}
-
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function sameAgentScope(
+  left: AgentAuthorityScopeProjection,
+  right: AgentAuthorityScopeProjection,
+): boolean {
+  if (left.kind === 'unbound' || right.kind === 'unbound') {
+    return left.kind === 'unbound' && right.kind === 'unbound' && left.draftId === right.draftId;
+  }
+  if (left.kind === 'assistant' && right.kind === 'assistant') {
+    return left.assistantSpaceId === right.assistantSpaceId;
+  }
+  return (
+    left.kind === 'workspace' &&
+    right.kind === 'workspace' &&
+    left.workspaceId === right.workspaceId &&
+    left.workspaceGrantId === right.workspaceGrantId
+  );
+}
+
+function conversationContextMatchesLaunchScope(
+  context: AgentConversationContext,
+  scope: AgentAuthorityScopeProjection,
+): boolean {
+  if (scope.kind === 'unbound') return false;
+  return context.kind === 'assistant'
+    ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
+    : scope.kind === 'workspace' &&
+        context.workspaceId === scope.workspaceId &&
+        context.workspaceGrantId === scope.workspaceGrantId;
 }
 
 function canvasSubscriptionKey(identity: CanvasHostRuntimeIdentity): string {
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
   ].join(':');
 }
 
@@ -1611,9 +2214,9 @@ function cutSubscriptionKey(identity: ReturnType<typeof parseDesktopCutHostIdent
   return [
     identity.windowId,
     identity.viewId,
-    String(identity.viewEpoch),
+    String(identity.viewInstanceId),
     identity.documentId,
     identity.sessionId,
-    identity.endpointEpoch,
+    identity.rendererSessionId,
   ].join(':');
 }

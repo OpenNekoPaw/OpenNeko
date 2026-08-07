@@ -27,7 +27,6 @@ describe('Cut Core commands', () => {
         document,
         documentUri: 'file:///workspace/demo.otio',
         sessionId: 'session-canvas',
-        revision: 1,
       }).profile,
     ).toEqual({
       profile: 'short-video-1080p',
@@ -715,7 +714,6 @@ describe('Cut Core commands', () => {
         document,
         documentUri: 'file:///workspace/cut.otio',
         sessionId: 'session-1',
-        revision: 4,
       }).tracks[0],
     ).toMatchObject({ enabled: false, audioMuted: true });
 
@@ -814,7 +812,6 @@ describe('Cut Core commands', () => {
       document,
       documentUri: 'file:///workspace/cut.otio',
       sessionId: 'session-1',
-      revision: 1,
     }).tracks[0]?.items.filter((item) => item.kind === 'clip');
     expect(clips).toHaveLength(4);
     expect(clips?.map((clip) => clip.clipId)).toEqual(['clip-a', 'clip-b', 'copy-a', 'copy-b']);
@@ -920,7 +917,6 @@ describe('Cut Core commands', () => {
       document,
       documentUri: 'file:///workspace/cut.otio',
       sessionId: 'session-1',
-      revision: 2,
     });
 
     expect(view.tracks[0]?.items[0]).toMatchObject({
@@ -931,22 +927,22 @@ describe('Cut Core commands', () => {
     });
   });
 
-  it('preserves a legacy Clip source range when its first trim creates available range metadata', () => {
+  it('preserves a range-less Clip source when its first trim creates available range metadata', () => {
     let document = applyCutCommand(emptyTimeline(), {
       type: 'append-route',
       items: [
         {
           kind: 'media',
-          clipId: 'legacy-clip',
-          name: 'Legacy',
-          targetUrl: 'legacy.mp4',
+          clipId: 'range-less-clip',
+          name: 'Range-less',
+          targetUrl: 'range-less.mp4',
           durationFrames: 90,
           rate: 30,
         },
       ],
     });
     const clip = document.tracks.children[0]?.children[0];
-    if (!clip || clip.OTIO_SCHEMA !== 'Clip.2') throw new Error('Legacy Clip fixture missing.');
+    if (!clip || clip.OTIO_SCHEMA !== 'Clip.2') throw new Error('OTIO Clip fixture missing.');
     document = {
       ...document,
       tracks: {
@@ -971,7 +967,7 @@ describe('Cut Core commands', () => {
 
     document = applyCutCommand(document, {
       type: 'trim',
-      clipId: 'legacy-clip',
+      clipId: 'range-less-clip',
       startDeltaFrames: 0,
       endDeltaFrames: 15,
     });
@@ -979,7 +975,6 @@ describe('Cut Core commands', () => {
       document,
       documentUri: 'file:///workspace/cut.otio',
       sessionId: 'session-1',
-      revision: 1,
     });
     expect(view.tracks[0]?.items[0]).toMatchObject({
       durationSeconds: 2.5,
@@ -989,7 +984,7 @@ describe('Cut Core commands', () => {
 
     document = applyCutCommand(document, {
       type: 'trim',
-      clipId: 'legacy-clip',
+      clipId: 'range-less-clip',
       startDeltaFrames: 0,
       endDeltaFrames: -15,
     });
@@ -997,7 +992,6 @@ describe('Cut Core commands', () => {
       document,
       documentUri: 'file:///workspace/cut.otio',
       sessionId: 'session-1',
-      revision: 2,
     });
     expect(view.tracks[0]?.items[0]).toMatchObject({ durationSeconds: 3 });
   });
@@ -1090,7 +1084,7 @@ describe('Cut Core commands', () => {
 });
 
 describe('CutDocumentSession', () => {
-  it('applies a command batch as one serializable revision and one undo step', () => {
+  it('applies a command batch as one serialized mutation and one undo step', () => {
     const storage = new MemoryStorage();
     const session = CutDocumentSession.create('file:///workspace/batch.otio', emptyTimeline(), {
       storage,
@@ -1100,7 +1094,7 @@ describe('CutDocumentSession', () => {
     });
 
     const edited = session.applyBatch({
-      ...identity(session, 0),
+      ...identity(session),
       commands: [
         {
           type: 'link-media',
@@ -1127,14 +1121,13 @@ describe('CutDocumentSession', () => {
       ],
     });
 
-    expect(edited.revision).toBe(1);
     expect(edited.tracks[0]?.items).toHaveLength(2);
 
-    const undone = session.undo(identity(session, 1));
+    const undone = session.undo(identity(session));
     expect(undone.tracks[0]?.items).toHaveLength(0);
   });
 
-  it('does not mutate or advance revision when any batch command fails', () => {
+  it('does not mutate when any batch command fails', () => {
     const storage = new MemoryStorage();
     const session = CutDocumentSession.create('file:///workspace/batch.otio', emptyTimeline(), {
       storage,
@@ -1145,7 +1138,7 @@ describe('CutDocumentSession', () => {
 
     expect(() =>
       session.applyBatch({
-        ...identity(session, 0),
+        ...identity(session),
         commands: [
           linkCommand(),
           {
@@ -1156,12 +1149,11 @@ describe('CutDocumentSession', () => {
         ],
       }),
     ).toThrow(CutCommandError);
-    expect(session.revision).toBe(0);
     expect(session.view().tracks[0]?.items).toHaveLength(0);
     expect(session.canUndo).toBe(false);
   });
 
-  it('owns revision, projection, save, backup, undo/redo and Webview-independent state', async () => {
+  it('owns projection, save, backup, undo/redo and Webview-independent state', async () => {
     const storage = new MemoryStorage();
     const session = CutDocumentSession.create('file:///workspace/demo.otio', emptyTimeline(), {
       storage,
@@ -1173,7 +1165,6 @@ describe('CutDocumentSession', () => {
     const edited = session.apply({
       documentUri: session.documentUri,
       sessionId: session.sessionId,
-      expectedRevision: 0,
       command: {
         type: 'link-media',
         clipId: 'clip-1',
@@ -1186,14 +1177,14 @@ describe('CutDocumentSession', () => {
         overlapPolicy: 'reject',
       },
     });
-    expect(edited).toMatchObject({ revision: 1, durationSeconds: 2, tracks: [{ kind: 'Video' }] });
+    expect(edited).toMatchObject({ durationSeconds: 2, tracks: [{ kind: 'Video' }] });
     expect(session.dirty).toBe(true);
     Reflect.set(edited.tracks[0]?.items[0] ?? {}, 'name', 'Webview-only mutation');
     expect(session.view().tracks[0]?.items[0]).toMatchObject({ name: 'Shot' });
 
-    const undone = session.undo(identity(session, 1));
+    const undone = session.undo(identity(session));
     expect(undone.tracks[0]?.items).toHaveLength(0);
-    const redone = session.redo(identity(session, 2));
+    const redone = session.redo(identity(session));
     expect(redone.tracks[0]?.items).toHaveLength(1);
 
     await session.save();
@@ -1211,7 +1202,7 @@ describe('CutDocumentSession', () => {
     expect(reopened.view().sessionId).toBe('session-2');
   });
 
-  it('rejects stale/mismatched commands and dirty external changes without mutation', async () => {
+  it('rejects mismatched commands and dirty external changes without mutation', async () => {
     const storage = new MemoryStorage();
     const session = CutDocumentSession.create('file:///workspace/a.otio', emptyTimeline(), {
       storage,
@@ -1225,7 +1216,6 @@ describe('CutDocumentSession', () => {
       session.apply({
         documentUri: 'file:///workspace/b.otio',
         sessionId: session.sessionId,
-        expectedRevision: 0,
         command: linkCommand(),
       }),
     ).toThrowError(expect.objectContaining({ code: 'document-mismatch' }));
@@ -1233,13 +1223,12 @@ describe('CutDocumentSession', () => {
       session.apply({
         documentUri: session.documentUri,
         sessionId: 'stale-session',
-        expectedRevision: 0,
         command: linkCommand(),
       }),
     ).toThrowError(expect.objectContaining({ code: 'session-mismatch' }));
 
-    session.apply({ ...identity(session, 0), command: linkCommand() });
-    await expect(session.acceptExternalChange('external-v2')).rejects.toBeInstanceOf(
+    session.apply({ ...identity(session), command: linkCommand() });
+    await expect(session.acceptExternalChange('external-change-b')).rejects.toBeInstanceOf(
       CutDocumentSessionError,
     );
     expect(session.view().tracks[0]?.items).toHaveLength(1);
@@ -1253,7 +1242,7 @@ describe('CutDocumentSession', () => {
       createTrackId: sequence('track'),
       createSessionId: () => 'session-save-as',
     });
-    session.apply({ ...identity(session, 0), command: linkCommand() });
+    session.apply({ ...identity(session), command: linkCommand() });
 
     await session.saveAs({
       documentUri: 'file:///workspace/new/demo.otio',
@@ -1323,7 +1312,6 @@ function linkMediaForTest(document: OtioTimeline, command: LinkMediaTestCommand)
     document,
     documentUri: 'file:///workspace/test.otio',
     sessionId: 'test-session',
-    revision: 0,
   });
   const track = view.tracks.find((candidate) => candidate.trackId === command.trackId);
   if (!track) throw new Error(`Missing test Track ${command.trackId}.`);
@@ -1338,11 +1326,10 @@ function linkMediaForTest(document: OtioTimeline, command: LinkMediaTestCommand)
   });
 }
 
-function identity(session: CutDocumentSession, expectedRevision: number) {
+function identity(session: CutDocumentSession) {
   return {
     documentUri: session.documentUri,
     sessionId: session.sessionId,
-    expectedRevision,
   };
 }
 
@@ -1352,8 +1339,8 @@ function sequence(prefix: string): () => string {
 }
 
 class MemoryStorage implements CutDocumentStorage {
-  private readonly values = new Map<string, { bytes: Uint8Array; version: string }>();
-  private version = 0;
+  private readonly values = new Map<string, { bytes: Uint8Array; fingerprint: string }>();
+  private fingerprintSequence = 0;
 
   async read(documentUri: string) {
     return this.readSync(documentUri);
@@ -1368,15 +1355,15 @@ class MemoryStorage implements CutDocumentStorage {
   async write(
     documentUri: string,
     bytes: Uint8Array,
-    options: { readonly expectedVersion?: string },
+    options: { readonly expectedFingerprint?: string },
   ) {
     const existing = this.values.get(documentUri);
-    if (options.expectedVersion && existing?.version !== options.expectedVersion) {
-      throw new Error('version conflict');
+    if (options.expectedFingerprint && existing?.fingerprint !== options.expectedFingerprint) {
+      throw new Error('fingerprint conflict');
     }
-    const version = `v${(this.version += 1)}`;
-    this.values.set(documentUri, { bytes, version });
-    return { version };
+    const fingerprint = `fingerprint-${(this.fingerprintSequence += 1)}`;
+    this.values.set(documentUri, { bytes, fingerprint });
+    return { fingerprint };
   }
 
   has(documentUri: string): boolean {

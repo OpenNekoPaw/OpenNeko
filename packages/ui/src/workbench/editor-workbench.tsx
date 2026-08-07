@@ -123,6 +123,9 @@ export interface WorkbenchWebviewRuntimeFrameProps {
 
 export type ControlledWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
 export type ControlledWorkbenchMainSplit = 'none' | 'columns' | 'rows';
+export type ControlledWorkbenchMainComposition = 'continuous' | 'independent-shells';
+export type ControlledWorkbenchInteractionPresentation =
+  ControlledWorkbenchDockPresentation | 'main';
 
 export interface ControlledWorkbenchResizeBinding {
   readonly label: string;
@@ -137,9 +140,16 @@ export interface ControlledWorkbenchShellProps {
   readonly primarySidebarVisible?: boolean;
   readonly primarySidebarWidth?: number;
   readonly primarySidebarResize?: ControlledWorkbenchResizeBinding;
+  readonly interaction?: ReactNode;
+  readonly interactionPresentation?: ControlledWorkbenchInteractionPresentation;
+  readonly interactionPosition?: 'left' | 'right';
+  readonly interactionWidth?: number;
+  readonly interactionResize?: ControlledWorkbenchResizeBinding;
   readonly main: ReactNode;
   readonly secondaryMain?: ReactNode;
+  readonly secondaryMainVisible?: boolean;
   readonly mainSplit?: ControlledWorkbenchMainSplit;
+  readonly mainComposition?: ControlledWorkbenchMainComposition;
   readonly mainSplitRatio?: number;
   readonly mainSplitResize?: ControlledWorkbenchResizeBinding;
   readonly leftDock?: ReactNode;
@@ -202,11 +212,17 @@ export function EditorWorkbenchShell({
 
 export function ControlledWorkbenchShell({
   className,
+  interaction,
+  interactionPosition = 'left',
+  interactionPresentation = 'hidden',
+  interactionResize,
+  interactionWidth = 360,
   leftDock,
   leftDockPresentation = 'hidden',
   leftDockResize,
   leftDockWidth = 320,
   main,
+  mainComposition = 'continuous',
   mainSplit = 'none',
   mainSplitRatio = 0.5,
   mainSplitResize,
@@ -219,6 +235,7 @@ export function ControlledWorkbenchShell({
   rightDockResize,
   rightDockWidth = 320,
   secondaryMain,
+  secondaryMainVisible = Boolean(secondaryMain),
   statusBar,
   timeline,
   timelineHeight = 240,
@@ -226,10 +243,30 @@ export function ControlledWorkbenchShell({
   timelineVisible = false,
   titleBar,
 }: ControlledWorkbenchShellProps): React.ReactElement {
-  const hasSecondaryMain = Boolean(secondaryMain);
+  const interactionSide =
+    interaction && interactionPresentation !== 'hidden' && interactionPresentation !== 'main'
+      ? interactionPosition
+      : undefined;
+  if (interactionSide === 'left' && leftDock && leftDockPresentation !== 'hidden') {
+    throw new Error('Controlled Workbench Interaction and left Dock cannot share one side.');
+  }
+  if (interactionSide === 'right' && rightDock && rightDockPresentation !== 'hidden') {
+    throw new Error('Controlled Workbench Interaction and right Dock cannot share one side.');
+  }
+  const hasSecondaryMain = Boolean(secondaryMain) && secondaryMainVisible;
   const effectiveSplit = hasSecondaryMain ? mainSplit : 'none';
-  const leftPresentation = leftDock ? leftDockPresentation : 'hidden';
-  const rightPresentation = rightDock ? rightDockPresentation : 'hidden';
+  const effectiveLeftDockPresentation =
+    interactionSide === 'left' ? 'hidden' : leftDock ? leftDockPresentation : 'hidden';
+  const effectiveRightDockPresentation =
+    interactionSide === 'right' ? 'hidden' : rightDock ? rightDockPresentation : 'hidden';
+  const leftPresentation =
+    interactionSide === 'left' ? interactionPresentation : effectiveLeftDockPresentation;
+  const rightPresentation =
+    interactionSide === 'right' ? interactionPresentation : effectiveRightDockPresentation;
+  const leftColumnWidth = interactionSide === 'left' ? interactionWidth : leftDockWidth;
+  const rightColumnWidth = interactionSide === 'right' ? interactionWidth : rightDockWidth;
+  const leftResizeBinding = interactionSide === 'left' ? interactionResize : leftDockResize;
+  const rightResizeBinding = interactionSide === 'right' ? interactionResize : rightDockResize;
   const primaryResize = useControlledWorkbenchResize({
     binding: primarySidebarResize,
     edge: 'left',
@@ -237,16 +274,24 @@ export function ControlledWorkbenchShell({
     size: primarySidebarWidth,
   });
   const leftResize = useControlledWorkbenchResize({
-    binding: leftDockResize,
+    binding: leftResizeBinding,
     edge: 'left',
-    enabled: Boolean(leftDock && leftPresentation !== 'hidden'),
-    size: leftDockWidth,
+    enabled: Boolean(
+      interactionSide === 'left'
+        ? interaction && interactionPresentation !== 'hidden'
+        : leftDock && effectiveLeftDockPresentation !== 'hidden',
+    ),
+    size: leftColumnWidth,
   });
   const rightResize = useControlledWorkbenchResize({
-    binding: rightDockResize,
+    binding: rightResizeBinding,
     edge: 'right',
-    enabled: Boolean(rightDock && rightPresentation !== 'hidden'),
-    size: rightDockWidth,
+    enabled: Boolean(
+      interactionSide === 'right'
+        ? interaction && interactionPresentation !== 'hidden'
+        : rightDock && effectiveRightDockPresentation !== 'hidden',
+    ),
+    size: rightColumnWidth,
   });
   const timelineResizeState = useControlledWorkbenchResize({
     binding: timelineResize,
@@ -282,7 +327,10 @@ export function ControlledWorkbenchShell({
       data-primary-visible={primarySidebar && primarySidebarVisible ? 'true' : 'false'}
       data-left-presentation={leftPresentation}
       data-right-presentation={rightPresentation}
+      data-interaction-position={interactionPosition}
+      data-interaction-presentation={interaction ? interactionPresentation : 'hidden'}
       data-main-split={effectiveSplit}
+      data-main-composition={mainComposition}
       data-timeline-visible={timeline && timelineVisible ? 'true' : 'false'}
       style={shellStyle}
     >
@@ -305,17 +353,48 @@ export function ControlledWorkbenchShell({
           ) : null}
         </div>
       ) : null}
+      {interaction ? (
+        <aside
+          ref={(element) => {
+            if (interactionSide === 'left') leftResize.containerRef.current = element;
+            if (interactionSide === 'right') rightResize.containerRef.current = element;
+          }}
+          className="neko-controlled-workbench-interaction"
+          data-position={interactionPosition}
+          data-presentation={interactionPresentation}
+          data-resizing={
+            interactionSide === 'left'
+              ? leftResize.isResizing
+                ? 'true'
+                : 'false'
+              : rightResize.isResizing
+                ? 'true'
+                : 'false'
+          }
+        >
+          {interaction}
+          {interactionResize && interactionPresentation === 'docked' ? (
+            <ResizeHandle
+              className={`neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--${interactionPosition === 'left' ? 'right' : 'left'}`}
+              handleProps={
+                interactionPosition === 'left' ? leftResize.handleProps : rightResize.handleProps
+              }
+              label={interactionResize.label}
+            />
+          ) : null}
+        </aside>
+      ) : null}
       {leftDock ? (
         <aside
           ref={(element) => {
-            leftResize.containerRef.current = element;
+            if (interactionSide !== 'left') leftResize.containerRef.current = element;
           }}
           className="neko-controlled-workbench-dock neko-controlled-workbench-dock--left"
-          data-presentation={leftPresentation}
+          data-presentation={effectiveLeftDockPresentation}
           data-resizing={leftResize.isResizing ? 'true' : 'false'}
         >
           {leftDock}
-          {leftDockResize && leftPresentation !== 'hidden' ? (
+          {leftDockResize && effectiveLeftDockPresentation !== 'hidden' ? (
             <ResizeHandle
               className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--right"
               handleProps={leftResize.handleProps}
@@ -329,12 +408,31 @@ export function ControlledWorkbenchShell({
           mainSplitResizeState.containerRef.current = element;
         }}
         className="neko-controlled-workbench-main"
+        data-main-composition={mainComposition}
         data-resizing={mainSplitResizeState.isResizing ? 'true' : 'false'}
       >
-        <div className="neko-controlled-workbench-main__primary">{main}</div>
+        <div
+          className="neko-controlled-workbench-main__primary"
+          data-workbench-main-shell="primary"
+        >
+          {main}
+        </div>
         {secondaryMain ? (
           <>
-            <div className="neko-controlled-workbench-main__secondary">{secondaryMain}</div>
+            {mainComposition === 'independent-shells' && secondaryMainVisible ? (
+              <div
+                className="neko-controlled-workbench-main__gutter"
+                data-workbench-main-gutter="true"
+              />
+            ) : null}
+            <div
+              className="neko-controlled-workbench-main__secondary"
+              data-workbench-main-shell="secondary"
+              hidden={!secondaryMainVisible}
+              aria-hidden={!secondaryMainVisible}
+            >
+              {secondaryMain}
+            </div>
             {mainSplitResize && effectiveSplit !== 'none' ? (
               <ResizeHandle
                 className={`neko-controlled-workbench-main-split-handle neko-controlled-workbench-main-split-handle--${effectiveSplit}`}
@@ -348,14 +446,14 @@ export function ControlledWorkbenchShell({
       {rightDock ? (
         <aside
           ref={(element) => {
-            rightResize.containerRef.current = element;
+            if (interactionSide !== 'right') rightResize.containerRef.current = element;
           }}
           className="neko-controlled-workbench-dock neko-controlled-workbench-dock--right"
-          data-presentation={rightPresentation}
+          data-presentation={effectiveRightDockPresentation}
           data-resizing={rightResize.isResizing ? 'true' : 'false'}
         >
           {rightDock}
-          {rightDockResize && rightPresentation !== 'hidden' ? (
+          {rightDockResize && effectiveRightDockPresentation !== 'hidden' ? (
             <ResizeHandle
               className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--left"
               handleProps={rightResize.handleProps}

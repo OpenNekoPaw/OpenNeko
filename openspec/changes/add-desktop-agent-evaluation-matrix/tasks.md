@@ -15,7 +15,7 @@
 
 ## 3. Isolated Desktop automation path
 
-- [x] 3.1 Define a fixed typed fixture-only Desktop automation control/facts contract and poison arbitrary IPC, arbitrary command, filesystem, shell, credential and owner-selection paths.
+- [x] 3.1 Define a fixed typed fixture-only Desktop automation control/facts contract and prove arbitrary IPC, arbitrary command, filesystem, shell, credential and owner-selection paths are unavailable.
 - [x] 3.2 Extend Desktop functional launch to support hidden and visible modes with unique fixture home, Electron `userData`, Workspace and dynamic control/CDP port while preserving ordinary startup when the fixture flag is absent.
 - [x] 3.3 Implement the Desktop driver adapter that submits, queues, cancels, confirms, resumes and reads projections through the renderer/preload public Agent bridge instead of importing Main or Pi turn APIs.
 - [x] 3.4 Implement terminal-idle, reload/reconnect, conversation restore, application restart and disposal controls with exact identity, checkpoint, lease and cleanup evidence.
@@ -31,7 +31,7 @@
 - [x] 4.5 Restore deterministic hard-gate, artifact-check, owning-validator, Judge, baseline and report stages around Desktop facts without copying Evaluation outcome logic into Desktop.
 - [x] 4.6 Restore repeated samples and aggregate reports while retaining every attempt, effective identity, assertion result, artifact, usage/cost availability and residual risk.
 - [x] 4.7 Implement failure attribution and exit-code handling that keeps configuration-invalid, case-fail, infrastructure-blocked/fail and non-comparable distinct and never retries behavior failure into success.
-- [x] 4.8 Add canonical positive, unavailable/denied, Tool approval, cancellation and persistence/recovery runner tests with poisoned retired-host/direct-runtime fallbacks, plus authoring tests proving Skill-generated drafts cannot register code or bypass unsupported operations.
+- [x] 4.8 Add canonical positive, unavailable/denied, Tool approval, cancellation and persistence/recovery runner tests with retired-host/direct-runtime fallbacks absent, plus authoring tests proving Skill-generated drafts cannot register code or bypass unsupported operations.
 
 ## 5. Batch matrix scheduling
 
@@ -50,20 +50,22 @@
 - [x] 6.4 Freeze and validate comparability contracts across scenario, fixture, provider/model, runtime policy, Prompt/Skill/Tool identity, permission, validators, Judge, budget, sampling and target differences.
 - [x] 6.5 Randomize comparable baseline/candidate order, blind Judges and holdouts to target identity, retain uncertainty and make protected correctness failures dominate efficiency/quality deltas.
 - [ ] 6.6 Establish new Desktop baselines for migrated pilot plans and prove historical TUI baseline selection is rejected as non-comparable.
-  - Historical TUI baseline selection is covered by the migration ledger and rejection tests. New Desktop baseline approval remains blocked until real provider samples can be produced from the authorized `~/.neko/config.toml`; key-free or infrastructure-blocked samples are deliberately ineligible.
+  - Historical TUI baseline selection is covered by the migration ledger and rejection tests. A focused real-provider sample is now available, but no comparable repeated configuration/implementation sample set has been approved; key-free and single-sample evidence remain ineligible as a baseline.
 
 ## 7. Documentation and qualification
 
-- [x] 7.1 Update `scripts/agent-eval/README.md`, test-case authoring guidance, Desktop functional documentation and quality-gate policy with evidence levels, declarative Skill-assisted authoring, thin runner resolution, driver ownership, matrix/shard/budget usage, configuration versus implementation ablation, TUI migration rules and local-only execution boundaries.
+- [x] 7.1 Update `AGENTS.md`, the Chinese/English contribution guides, `scripts/agent-eval/README.md`, test-case authoring guidance, Desktop functional documentation and quality-gate policy with evidence levels, declarative Skill-assisted authoring, thin runner resolution, driver ownership, matrix/shard/budget usage, configuration versus implementation ablation, TUI migration rules, the canonical `~/.neko/config.toml` source and local-only execution boundaries.
 - [x] 7.2 Run `pnpm test:agent:eval`, all-suite dry-run and focused ablation dry-runs; record suite/case counts and key-free scope without claiming real Agent behavior acceptance.
   - 2026-08-03 key-free evidence: 45 Agent Evaluation test files / 284 tests passed; all-suite dry-run validated 22 suites / 53 cases; thinking-budget and media-production ablation plans completed dry-run only. No provider request, Electron launch or real ablation sample was executed.
 - [x] 7.3 Run focused real Desktop cases for canonical turn, Tool/Skill permission, cancellation and persistence/recovery with configured provider evidence, or record the exact infrastructure blocker.
-  - 2026-08-03 blocker: the user-authorized source is exactly `~/.neko/config.toml` and is available on the qualification host. Credentials remain owned by that product configuration, but the explicit provider/model and cost authorization variables are not set, so execution remains stopped before provider calls, Electron or cost, with no alternate user configuration, JSON/YAML or mock fallback. Key-free tests prove native TOML is validated and copied unchanged into the isolated fixture.
+  - 2026-08-05 evidence: `agent-runtime.workflow-controller/conversation-persistence-resume` completed two real-provider turns through the complete Desktop session using `nekoapi-chat / gpt-5.6-luna`; the same conversation restored four ordered transcript messages with zero runtime/fallback errors. This does not claim full application restart or the complete foundational matrix.
 - [ ] 7.4 Run a repeated hidden Desktop matrix with at least two isolated workers and verify sample/shard aggregation, budgets, no cross-sample state and complete cleanup.
-  - 2026-08-03 preflight evidence: the fingerprinted packaged executable expanded two repetitions with two Desktop/provider workers, retained two attempts and produced a comparable shard aggregate. Both samples stopped before Electron launch at incomplete explicit provider authorization; process/storage isolation and cleanup therefore remain unqualified.
+  - 2026-08-05 status: provider/model/cost authorization is available and focused real execution passes, but the repeated two-worker hidden matrix has not been rerun; process/storage isolation and cleanup remain unqualified by real API samples.
 - [ ] 7.5 Run one configuration and one isolated implementation ablation with new Desktop baselines, matching policies, repeated samples and assertion-level delta evidence.
-  - 2026-08-03 blocker: real configuration and implementation variants have the authorized TOML source but still require explicit provider/model and cost authorization, so no provider sample or valid Desktop baseline exists. Historical TUI evidence remains rejected and no synthetic baseline was created.
+  - 2026-08-05 status: authorization is available, but no repeated comparable configuration/implementation variants or approved Desktop baseline have been executed. Historical TUI evidence remains rejected and no synthetic baseline was created.
 - [x] 7.6 Run protected visible Electron acceptance, `pnpm check:legacy-debt`, `pnpm check:unused`, affected builds/tests and applicable `pnpm ci:local` gates; document unexecuted provider/platform cases and residual risk.
   - `pnpm check:legacy-debt`, `pnpm check:unused`, `pnpm test:agent:eval`, both ablation dry-runs, focused orchestration tests and `pnpm ci:local` passed. `pnpm ci:local` covered format, lint, strict typecheck, production build/package, all workspace tests, architecture/storage/orchestration/OpenSpec gates and proved local Evaluation/UI/API/ablation entrypoints remain CI-unreachable.
-  - Protected visible Electron/provider acceptance was not launched because explicit provider/model and cost authorization are unavailable. macOS arm64 package validation passed; no other platform claims are made.
+  - 2026-08-05 visible evidence: `desktop-agent-provider-ui` drove the actual Entry composer and send control with `nekoapi-chat / gpt-5.6-luna`, rendered the real response, activated the Assistant conversation in PrimarySidebar and reached UI plus persisted lifecycle terminal without console/renderer errors. macOS arm64 package validation passed; no other platform claims are made.
 - [x] 7.7 Add orchestration regression coverage proving Agent Evaluation, real API, graphical Desktop and all ablation entrypoints remain unreachable from GitHub Actions and generic CI script composition.
+- [x] 7.8 Update repository policy, Evaluation guidance and specs so visible feature acceptance requires actual UI + real API, hidden batch requires complete Desktop + real API, and neither lane substitutes direct runtime/mock execution.
+- [ ] 7.9 Add and run the foundational real-provider matrix for basic/multi-turn conversation, context compaction, complete reopen transcript restoration, generation-record restoration, conversation switching and conversation isolation; record visible/hidden disposition and exact blockers per cell.

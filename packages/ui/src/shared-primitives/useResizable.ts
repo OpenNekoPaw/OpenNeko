@@ -76,12 +76,21 @@ export interface ResizeState {
 export interface PersistedResizeOptions extends ResizeBounds {
   api?: ResizeStateStorage | null;
   persistDebounceMs?: number;
+  onDiagnostic?: ResizeStateDiagnosticReporter;
 }
 
 export interface ResizeStateStorage {
   getState(): unknown;
   setState(state: unknown): void;
 }
+
+export interface ResizeStateDiagnostic {
+  readonly code: 'invalid-root-state' | 'invalid-resize-state-map' | 'invalid-panel-state';
+  readonly message: string;
+  readonly panelId: string;
+}
+
+export type ResizeStateDiagnosticReporter = (diagnostic: ResizeStateDiagnostic) => void;
 
 export interface PersistedResizeReturn {
   state: ResizeState;
@@ -212,24 +221,79 @@ export function readPersistedResizeState(
   panelId: string,
   defaultSize: number,
   bounds: ResizeBounds = {},
+  onDiagnostic?: ResizeStateDiagnosticReporter,
 ): ResizeState {
-  const record = isRecord(rootState) ? rootState : {};
-  const resizeRecord = isRecord(record[RESIZE_STATE_KEY]) ? record[RESIZE_STATE_KEY] : {};
-  return normalizeResizeState(resizeRecord[panelId], defaultSize, bounds);
+  if (rootState === undefined) {
+    return normalizeResizeState(undefined, defaultSize, bounds);
+  }
+  if (!isRecord(rootState)) {
+    onDiagnostic?.({
+      code: 'invalid-root-state',
+      message: 'Persisted Webview state must be an object.',
+      panelId,
+    });
+    return normalizeResizeState(undefined, defaultSize, bounds);
+  }
+
+  const resizeState = rootState[RESIZE_STATE_KEY];
+  if (resizeState === undefined) {
+    return normalizeResizeState(undefined, defaultSize, bounds);
+  }
+  if (!isRecord(resizeState)) {
+    onDiagnostic?.({
+      code: 'invalid-resize-state-map',
+      message: 'Persisted resize state must be an object.',
+      panelId,
+    });
+    return normalizeResizeState(undefined, defaultSize, bounds);
+  }
+
+  const panelState = resizeState[panelId];
+  if (panelState === undefined) {
+    return normalizeResizeState(undefined, defaultSize, bounds);
+  }
+  if (!isPersistedResizeState(panelState)) {
+    onDiagnostic?.({
+      code: 'invalid-panel-state',
+      message: `Persisted resize state for panel '${panelId}' is invalid.`,
+      panelId,
+    });
+    return normalizeResizeState(undefined, defaultSize, bounds);
+  }
+
+  return normalizeResizeState(panelState, defaultSize, bounds);
 }
 
 export function writePersistedResizeState(
   rootState: unknown,
   panelId: string,
   state: ResizeState,
-): WebviewPersistedState {
-  const base = isRecord(rootState) ? { ...rootState } : {};
-  const resizeRecord = isRecord(base[RESIZE_STATE_KEY]) ? { ...base[RESIZE_STATE_KEY] } : {};
+  onDiagnostic?: ResizeStateDiagnosticReporter,
+): WebviewPersistedState | undefined {
+  if (rootState !== undefined && !isRecord(rootState)) {
+    onDiagnostic?.({
+      code: 'invalid-root-state',
+      message: 'Persisted Webview state must be an object.',
+      panelId,
+    });
+    return undefined;
+  }
+
+  const base = rootState ?? {};
+  const persistedResizeState = base[RESIZE_STATE_KEY];
+  if (persistedResizeState !== undefined && !isRecord(persistedResizeState)) {
+    onDiagnostic?.({
+      code: 'invalid-resize-state-map',
+      message: 'Persisted resize state must be an object.',
+      panelId,
+    });
+    return undefined;
+  }
 
   return {
     ...base,
     [RESIZE_STATE_KEY]: {
-      ...resizeRecord,
+      ...persistedResizeState,
       [panelId]: state,
     },
   };
@@ -302,15 +366,15 @@ export function useResizable<TElement extends HTMLElement = HTMLElement>(
     [commitPendingSize],
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       cancelScheduledSize();
       pendingSizeRef.current = null;
       mountedRef.current = false;
       activePointerIdRef.current = null;
-    },
-    [cancelScheduledSize],
-  );
+    };
+  }, [cancelScheduledSize]);
 
   const finishResize = useCallback(
     (event: React.PointerEvent<HTMLElement>, releaseCapture: boolean) => {
@@ -413,7 +477,13 @@ export function usePersistedResize(
 
   const [state, setState] = useState<ResizeState>(() =>
     api
-      ? readPersistedResizeState(api.getState(), panelId, defaultSizeRef.current, boundsRef.current)
+      ? readPersistedResizeState(
+          api.getState(),
+          panelId,
+          defaultSizeRef.current,
+          boundsRef.current,
+          options.onDiagnostic,
+        )
       : normalizeResizeState(undefined, defaultSizeRef.current, boundsRef.current),
   );
 
@@ -427,8 +497,16 @@ export function usePersistedResize(
     if (!api || nextState === null) {
       return;
     }
-    api.setState(writePersistedResizeState(api.getState(), panelId, nextState));
-  }, [api, panelId]);
+    const nextRootState = writePersistedResizeState(
+      api.getState(),
+      panelId,
+      nextState,
+      options.onDiagnostic,
+    );
+    if (nextRootState !== undefined) {
+      api.setState(nextRootState);
+    }
+  }, [api, options.onDiagnostic, panelId]);
 
   const persist = useCallback(
     (nextState: ResizeState, immediate = false) => {
@@ -510,6 +588,15 @@ function setPointerCaptureSafely(target: HTMLElement, pointerId: number): void {
 
 function isRecord(value: unknown): value is WebviewPersistedState {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPersistedResizeState(value: unknown): value is Partial<ResizeState> {
+  if (!isRecord(value)) return false;
+  if (Object.keys(value).some((key) => key !== 'size' && key !== 'collapsed')) return false;
+  if (value['size'] !== undefined) {
+    if (typeof value['size'] !== 'number' || !Number.isFinite(value['size'])) return false;
+  }
+  return value['collapsed'] === undefined || typeof value['collapsed'] === 'boolean';
 }
 
 function releasePointerCaptureSafely(target: HTMLElement, pointerId: number): void {

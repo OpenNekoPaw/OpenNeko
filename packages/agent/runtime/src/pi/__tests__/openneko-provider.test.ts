@@ -53,11 +53,7 @@ describe('OpenNeko provider projection to Pi', () => {
 
   it('registers the configured provider and resolves only its stored credential', async () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-    await credentials.replace(
-      'configured-provider',
-      { type: 'api_key', key: 'configured-secret' },
-      'user-config-import',
-    );
+    await credentials.replace('configured-provider', { type: 'api_key', key: 'configured-secret' });
     const models = createOpenNekoPiModels(credentials);
     const projection = registerOpenNekoPiProvider(models, config());
 
@@ -94,6 +90,56 @@ describe('OpenNeko provider projection to Pi', () => {
     await expect(remoteModels.getAuth(remoteModel)).resolves.toBeUndefined();
   });
 
+  it('dispatches a keyless Ollama request without inventing an API key', async () => {
+    let authorization: string | undefined;
+    const server = createServer((request, response) => {
+      authorization = request.headers.authorization;
+      response.writeHead(200, {
+        'content-type': 'text/event-stream',
+        connection: 'keep-alive',
+      });
+      response.end(
+        'data: {"id":"chatcmpl-local","object":"chat.completion.chunk","created":1,"model":"configured-model","choices":[{"index":0,"delta":{"role":"assistant","content":"local"},"finish_reason":null}]}\n\n' +
+          'data: {"id":"chatcmpl-local","object":"chat.completion.chunk","created":1,"model":"configured-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n' +
+          'data: [DONE]\n\n',
+      );
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    try {
+      const address = server.address();
+      if (address === null || typeof address === 'string') {
+        throw new Error('Expected a TCP test server address.');
+      }
+      const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
+      const models = createOpenNekoPiModels(credentials);
+      const projection = registerOpenNekoPiProvider(
+        models,
+        config({
+          baseUrl: `http://127.0.0.1:${address.port}/api`,
+          protocol: 'ollama',
+          requiresApiKey: false,
+        }),
+      );
+      const model = projection.models[0];
+      if (!model) throw new Error('Expected projected model.');
+
+      const result = await models.completeSimple(model, {
+        messages: [{ role: 'user', content: 'hello', timestamp: 1 }],
+      });
+
+      expect(result.stopReason).toBe('stop');
+      expect(result.content).toEqual([expect.objectContaining({ type: 'text', text: 'local' })]);
+      expect(authorization).toBeUndefined();
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
   it.each([
     ['bearer', { headers: { authorization: 'Bearer configured-secret' } }],
     ['api-key', { headers: { 'x-api-key': 'configured-secret' } }],
@@ -102,11 +148,10 @@ describe('OpenNeko provider projection to Pi', () => {
     'projects the explicit %s credential profile without GenericAdapter',
     async (type, auth) => {
       const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-      await credentials.replace(
-        'configured-provider',
-        { type: 'api_key', key: 'configured-secret' },
-        'user-config-import',
-      );
+      await credentials.replace('configured-provider', {
+        type: 'api_key',
+        key: 'configured-secret',
+      });
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
         models,
@@ -148,11 +193,10 @@ describe('OpenNeko provider projection to Pi', () => {
         throw new Error('Expected a TCP test server address.');
       }
       const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-      await credentials.replace(
-        'configured-provider',
-        { type: 'api_key', key: 'configured-secret' },
-        'user-config-import',
-      );
+      await credentials.replace('configured-provider', {
+        type: 'api_key',
+        key: 'configured-secret',
+      });
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
         models,
@@ -207,11 +251,10 @@ describe('OpenNeko provider projection to Pi', () => {
         throw new Error('Expected a TCP test server address.');
       }
       const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-      await credentials.replace(
-        'configured-provider',
-        { type: 'api_key', key: 'configured-secret' },
-        'user-config-import',
-      );
+      await credentials.replace('configured-provider', {
+        type: 'api_key',
+        key: 'configured-secret',
+      });
       const models = createOpenNekoPiModels(credentials);
       const projection = registerOpenNekoPiProvider(
         models,

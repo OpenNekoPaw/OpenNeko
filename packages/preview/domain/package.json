@@ -1,10 +1,10 @@
 {
   "name": "@neko/preview-domain",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./authorized-session": "./src/authorized-session.ts"
   },
   "scripts": {
     "test": "vitest run",

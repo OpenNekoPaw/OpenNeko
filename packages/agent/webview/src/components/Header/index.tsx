@@ -31,6 +31,7 @@ interface HeaderProps {
   configuredProviders: ConfiguredProvider[];
   onOpenOnboarding: () => void;
   showAccountBar?: boolean;
+  showConversationNavigation?: boolean;
 }
 
 export function Header({
@@ -53,49 +54,60 @@ export function Header({
   configuredProviders,
   onOpenOnboarding,
   showAccountBar = true,
+  showConversationNavigation = true,
 }: HeaderProps) {
   const { t } = useTranslation();
 
   return (
     <header className="agent-header flex flex-shrink-0 items-center justify-between gap-2 px-2 py-1">
       {/* Left: Tabs */}
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        activeView={activeView}
-        onSwitchTab={onSwitchTab}
-        onCloseTab={onCloseTab}
-      />
+      {showConversationNavigation ? (
+        <TabBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          activeView={activeView}
+          onSwitchTab={onSwitchTab}
+          onCloseTab={onCloseTab}
+        />
+      ) : (
+        <div aria-hidden="true" />
+      )}
 
       {/* Right: Action buttons */}
       <div className="agent-header-actions flex items-center gap-0.5 flex-shrink-0">
         {/* + New button */}
-        <button
-          type="button"
-          onClick={onNewChat}
-          className="agent-header-action"
-          aria-label={t('header.newChat')}
-          title={t('header.newChat')}
-        >
-          <PlusIcon className="w-4 h-4" />
-        </button>
+        {showConversationNavigation ? (
+          <button
+            type="button"
+            onClick={onNewChat}
+            className="agent-header-action"
+            aria-label={t('header.newChat')}
+            title={t('header.newChat')}
+          >
+            <PlusIcon className="w-4 h-4" />
+          </button>
+        ) : null}
 
-        <RoleplayMenu
-          items={roleplayItems}
-          onRequestItems={onRequestRoleplayItems}
-          onSelectItem={onSelectRoleplayItem}
-        />
+        {showConversationNavigation ? (
+          <RoleplayMenu
+            items={roleplayItems}
+            onRequestItems={onRequestRoleplayItems}
+            onSelectItem={onSelectRoleplayItem}
+          />
+        ) : null}
 
         {/* History dropdown */}
-        <HistoryMenu
-          conversations={historyConversations}
-          activeConversationId={activeConversationId}
-          onOpenConversation={onOpenConversation}
-          onDeleteConversation={onDeleteConversation}
-          onClearClosedConversations={onClearClosedConversations}
-          clearableConversationCount={clearableConversationCount}
-          protectedConversationCount={protectedConversationCount}
-        />
+        {showConversationNavigation ? (
+          <HistoryMenu
+            conversations={historyConversations}
+            activeConversationId={activeConversationId}
+            onOpenConversation={onOpenConversation}
+            onDeleteConversation={onDeleteConversation}
+            onClearClosedConversations={onClearClosedConversations}
+            clearableConversationCount={clearableConversationCount}
+            protectedConversationCount={protectedConversationCount}
+          />
+        ) : null}
 
         {showAccountBar ? (
           <AccountBar

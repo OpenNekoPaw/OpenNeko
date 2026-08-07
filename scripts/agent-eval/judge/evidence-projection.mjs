@@ -41,7 +41,7 @@ export function createJudgeEvidenceProjection(input) {
   const redactions = new Map();
   const redact = (value) => redactText(value, redactions);
   return {
-    schema: 'neko.agent-eval.judge-evidence.v2',
+    schema: 'neko.agent-eval.judge-evidence',
     userIntent: redact(input.userIntent),
     targetContract: {
       target: projectTarget(input.target, input.targetVisibility ?? 'full'),

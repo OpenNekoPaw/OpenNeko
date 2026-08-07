@@ -15,7 +15,7 @@ export const singleImageObservationFixture: AgentObservation = {
     providerId: 'agent-default',
     providerCardId: 'default-vision',
     trustLevel: 'core',
-    adaptationHash: 'fixture-adaptation-v1',
+    adaptationHash: 'fixture-adaptation',
   },
 };
 
@@ -30,7 +30,6 @@ export const lowConfidenceToolEvidenceFixture: PerceptionEvidence = {
   createdAt: 1_771_718_401_000,
   modelContext: {
     modelId: 'clip-zero-shot',
-    modelVersion: 'fixture',
     providerId: 'openneko-perception',
   },
 };

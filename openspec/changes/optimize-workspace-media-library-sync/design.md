@@ -31,12 +31,12 @@ needs from authoritative project references and keep physical paths in Desktop M
   machine-local connections; Desktop composition coordinates them; Assets owns presentation.
 - **Dependency:** shared L0 contracts contain no Node paths; Desktop Main performs filesystem,
   picker, content-access, and copy work; renderer receives target-free projections and typed intents.
-- **Interface:** requirement and recovery DTOs carry project identity, owner revision, library name,
-  relative descendants, counts, safe diagnostics, and operation revision only.
+- **Interface:** requirement and recovery DTOs carry project identity, owner/source fingerprint,
+  library name, relative descendants, counts, safe diagnostics, request identity, and plan identity only.
 - **Extension:** a future project-document type contributes one reference reader instead of adding
   another Media Library resolver or teaching Assets its file format.
 - **Testing:** producer/consumer tests prove reference derivation, exact-name planning, stale rejection,
-  path containment, cancellation, snapshot atomicity, legacy-path poisoning, and real Electron flows.
+  path containment, cancellation, snapshot atomicity, retired-path absence, and real Electron flows.
 
 ## Goals / Non-Goals
 
@@ -57,7 +57,7 @@ needs from authoritative project references and keep physical paths in Desktop M
 - Synchronizing Media Library bytes, credentials, mounts, or cloud-provider lifecycle.
 - Committing symlink objects, physical targets, absolute paths, or global library IDs into projects.
 - Reintroducing `library.json`, an Asset Source catalog, `${VAR}` paths, or a runtime mapping service.
-- Migrating unrelated Desktop shell/window state or application preferences as part of Media Library
+- Reading or rewriting unrelated Desktop shell/window state or application preferences as part of Media Library
   recovery.
 - Automatically authorizing a same-named directory or mutating links during project open.
 - Copying an entire Media Library merely because it is linked.
@@ -89,7 +89,7 @@ directly combines the fixed Canvas, Cut, Entity representation, and other curren
 scan arbitrary JSON, infer usage from file extensions, or introduce a feature-package registry.
 
 The host-neutral aggregator extracts canonical `neko/assets/<libraryName>/...` locators, groups them
-by portable library name, and retains owner identity plus revision internally. Renderer projection is
+by portable library name, and retains owner identity plus source fingerprint internally. Renderer projection is
 bounded to name, state, reference count, missing count, and safe diagnostic codes. The full locator
 set remains in Main for validation and snapshot planning.
 
@@ -100,22 +100,22 @@ linked root remains browsable but is not classified as required.
 
 There is no symlink-related JSON authority to retain or migrate. The storage contract is:
 
-| Data                                                                        | Canonical owner                  | Persistence                                            |
-| --------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------ |
-| Library name to physical target mapping                                     | OS symlink/junction              | `neko/assets/<name>` and the machine-global alias tree |
-| Project references and settings                                             | Owning project codecs            | Reviewable JSON, NKC, OTIO, and other project files    |
-| Workspace checkout identity                                                 | Workspace identity contract      | Git-ignored `.neko/workspace.json` descriptor          |
-| Requirement membership                                                      | Authoritative project references | Rebuilt into memory; no manifest or dedicated table    |
-| Requirement/provider revision, freshness, and current projection diagnostic | Local metadata projection owner  | `projection_versions` in user-level `~/.neko/neko.db`  |
-| Current link availability                                                   | Workspace link inspector         | Recomputed from OS inspection; process memory only     |
-| Referenced-media probe cache                                                | Local media metadata owner       | Existing `media_metadata` workspace partition          |
-| Cross-restart snapshot lifecycle and minimal recovery cursor                | Task owner                       | Existing `tasks` and `task_checkpoints` rows           |
-| Raw operational history                                                     | Logger/Journal owner             | Existing JSONL/log files                               |
-| Credentials or mount secrets                                                | Secret owner                     | SecretStorage or system keychain                       |
-| Media and retained artifact bytes                                           | File/artifact owner              | Managed files, never SQLite blobs                      |
+| Data                                                                           | Canonical owner                  | Persistence                                            |
+| ------------------------------------------------------------------------------ | -------------------------------- | ------------------------------------------------------ |
+| Library name to physical target mapping                                        | OS symlink/junction              | `neko/assets/<name>` and the machine-global alias tree |
+| Project references and settings                                                | Owning project codecs            | Reviewable JSON, NKC, OTIO, and other project files    |
+| Workspace checkout identity                                                    | Workspace identity contract      | Git-ignored `.neko/workspace.json` descriptor          |
+| Requirement membership                                                         | Authoritative project references | Rebuilt into memory; no manifest or dedicated table    |
+| Requirement/provider fingerprint, freshness, and current projection diagnostic | Local metadata projection owner  | Stable projection rows in user-level `~/.neko/neko.db` |
+| Current link availability                                                      | Workspace link inspector         | Recomputed from OS inspection; process memory only     |
+| Referenced-media probe cache                                                   | Local media metadata owner       | Existing `media_metadata` workspace partition          |
+| Cross-restart snapshot lifecycle and minimal recovery cursor                   | Task owner                       | Existing `tasks` and `task_checkpoints` rows           |
+| Raw operational history                                                        | Logger/Journal owner             | Existing JSONL/log files                               |
+| Credentials or mount secrets                                                   | Secret owner                     | SecretStorage or system keychain                       |
+| Media and retained artifact bytes                                              | File/artifact owner              | Managed files, never SQLite blobs                      |
 
 The actual requirement set and current link availability are cheap, deterministic, and
-safety-sensitive, so project open and every recovery plan rebuild them from current owner revisions
+safety-sensitive, so project open and every recovery plan computes them from current owner facts
 and OS inspection. SQLite can accelerate freshness and media probe work but never authorizes a link,
 supplies a target, or substitutes for re-reading current project facts. A stale or corrupt cache is
 marked stale and rebuilt from files plus OS inspection.
@@ -125,11 +125,9 @@ fallbacks, global registry roots, and symlink targets are forbidden. No workspac
 database is introduced. SQLite unavailable or incompatible fails visibly for durable projection/task
 operations; the implementation must not read or write a parallel JSON cache to simulate success.
 
-`desktop-shell-state.json` and `desktop-application-settings.v1.json` are genuine machine-local
-structured state that should be assessed for migration to the same user-level database. That work has
-different owners, transaction semantics, startup blast radius, and migration needs, so it belongs in
-a separate Desktop persistence OpenSpec change. `.neko/workspace.json` remains a deliberately small
-recovery descriptor, and secrets must move to SecretStorage/keychain rather than ordinary SQLite.
+Desktop Shell and application settings are separate machine-local authorities. Media Library does not
+read, import, rewrite or repair them. The canonical workspace identity descriptor remains deliberately
+small, and secrets belong to SecretStorage/keychain rather than ordinary SQLite.
 
 **Alternatives considered**
 
@@ -163,7 +161,7 @@ identity, and link loops fail visibly rather than becoming an empty library.
 Recovery first creates an immutable plan against:
 
 - exact project/workspace identity;
-- requirement snapshot revision and owner revisions;
+- requirement snapshot fingerprint and owner/source fingerprints;
 - current workspace link inspection;
 - an exact-name machine-global Media Library candidate;
 - contained existence checks for every referenced descendant, bounded by a declared limit.
@@ -173,10 +171,10 @@ candidate exists, the user may explicitly select a directory; Desktop registers 
 the requirement, and then points the project link at the global alias. Cancellation changes neither
 registry nor link. A failed second step rolls back only the newly created global connection.
 
-Applying a plan rechecks every revision and candidate identity, then atomically creates or replaces
+Applying a plan rechecks the exact source fingerprints, plan identity and candidate identity, then atomically creates or replaces
 the workspace link. New Desktop add/relink operations use the global alias as their target so a later
 global relink repairs all participating projects. Existing direct-to-physical project links remain
-readable and are converted only through an explicit confirmed relink; no startup migration mutates
+readable and are converted only through an explicit confirmed relink; no startup process mutates
 user state.
 
 ### 6. Portability readiness is result- and path-aware
@@ -239,7 +237,7 @@ credential-bearing values.
 - **[Owner coverage is initially incomplete]** → Gate portability claims on the declared provider
   set; an unsupported persisted project-document kind returns `coverage-incomplete` instead of a
   false ready result.
-- **[Large projects make descendant validation expensive]** → Use owner revisions, bounded
+- **[Large projects make descendant validation expensive]** → Use owner/source fingerprints, bounded
   concurrency, cancellation, and a rebuildable derived projection; do not hash bytes until collection.
 - **[A library is intentionally partial on another machine]** → Recovery reports exact missing counts
   and refuses to claim success; users may choose another directory or keep the project unresolved.
@@ -256,10 +254,10 @@ credential-bearing values.
   authorize recovery; rebuild from project facts and OS inspection, mark the projection stale, and
   fail visibly when a durable task/checkpoint cannot be committed.
 
-## Migration Plan
+## Replacement Plan
 
-1. Introduce and test the requirement/recovery/portability contracts with current runtime paths
-   poisoned against `library.json`, absolute target rows, workspace databases, and fallback lookup.
+1. Introduce and test the requirement/recovery/portability contracts and prove `library.json`, absolute
+   target rows, workspace databases, and fallback lookup are absent from the runtime path.
 2. Bind requirement freshness/diagnostics, referenced-media probe cache, and resumable task state to
    the existing user-level local metadata repositories; do not create a dedicated Media Library table
    or persist current link availability.
@@ -267,7 +265,7 @@ credential-bearing values.
 4. Project missing-required states without changing link mutation behavior.
 5. Route new add/relink operations through the global alias and add explicit recovery planning.
 6. Add portable snapshot staging and owner-specific staged rewrite implementations.
-7. Validate package/export and existing direct links; no project bytes or target contents are migrated
+7. Validate package/export and existing direct links; no project bytes or target contents are rewritten
    automatically.
 8. Remove any temporary dual route before release. The only successful new recovery route is
    plan/confirm/apply; direct legacy command aliases fail closed.
@@ -284,3 +282,11 @@ projects and remain usable.
   after the first correctness-focused implementation?
 - On Windows, must initial acceptance cover both local junction targets and a real UNC/NAS target, or
   can UNC remain a documented release blocker until a Windows host is available?
+
+## Resource Browser retained navigation
+
+Assets Webview may retain facet and navigation state by project identity, but a restored active container is valid
+only when the current root/children projection contains that owner. If a fresh search or remount returns a root
+projection without the retained container, the Resource Browser explicitly returns that facet to root before
+filtering items. It must not turn available linked libraries into a successful empty list. Replaying a deeper path
+requires an explicit Host children request and exact resource identities; no label/path guessing is permitted.

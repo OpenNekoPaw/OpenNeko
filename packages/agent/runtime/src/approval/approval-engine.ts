@@ -227,7 +227,7 @@ class ApprovalEngine implements IApprovalEngine {
     request: ApprovalRequest,
     response: ApprovalResponse,
     logContext: {
-      readonly trace: AgentTraceContext;
+      readonly trace: AgentTraceContext | undefined;
       readonly startedAt: number;
       readonly source: 'strategy' | 'user-prompt' | 'no-decision';
       readonly strategyPack?: string;

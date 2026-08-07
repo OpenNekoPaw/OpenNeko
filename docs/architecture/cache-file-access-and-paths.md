@@ -4,7 +4,8 @@
 
 更新日期：2026-07-22
 
-工作区关联媒体库、派生内容私有存储与 Content I/O 的当前收敛结果由本文记录。旧媒体库 `${VAR}` 和旧 ContentAccess cache contract 只可作为 migration/cleanup 输入。
+工作区关联媒体库、派生内容私有存储与 Content I/O 的当前收敛结果由本文记录。旧媒体库 `${VAR}`
+和旧 ContentAccess cache contract 不进入产品读取、启动或自动 cleanup 路径；原字节保持不变。
 
 本文定义 Desktop 产品中的工作区路径、内容读写、文档访问、runtime 投影和可重建派生物边界。Creative Entity 与 Media Library 的业务语义分别见 [`unified-entity.md`](unified-entity.md) 和 [`asset-library.md`](asset-library.md)。
 
@@ -16,7 +17,8 @@
 - 公共内容接口只表达 source read、runtime projection、authorized write 和 semantic representation；不暴露 cache、materialization、manifest、root、GC 或 physical path。
 - 产品子包不感知 ResourceCache。thumbnail、proxy、waveform、raster page 等是表现语义，是否生成、复用或存储由 Host 内容实现决定。
 - Cache 只保存可重建派生物，不能成为项目、Asset、Entity、Agent memory、原始 source 或 accepted output 的事实来源。
-- 未知 locator、越界路径、broken link、失效 token、缺失 representation generator 和未知 schema/version 必须 fail-visible。
+- 未知 locator、越界路径、broken link、失效 token、缺失 representation generator、未知字段和
+  非 canonical shape 必须 fail-visible。
 
 ## Locator 分类
 
@@ -44,23 +46,23 @@
 | Host derived store (`ResourceCacheService` internal) | fingerprint、生成复用、in-flight 去重、freshness、retention、quota、GC                                       | 产品子包协议、source identity、正式 Asset/输出      |
 | `@neko/content/document`                             | 文档 format、manifest/range/locator/cursor、native entry 读取语义                                            | cache root、Webview URI、Agent 解包协议             |
 | authorized workspace writer                          | 有界、原子、安全的 workspace bytes 写入 primitive                                                            | 决定 project/Asset/generated/export/cache ownership |
-| `ProjectFileStore` + domain codec                    | NK/JSON 项目事实 schema、诊断、原子保存和迁移                                                                | 二进制表现、runtime token、cache lifecycle          |
+| `ProjectFileStore` + domain codec                    | NK/JSON 项目事实 canonical shape、诊断与原子保存                                                             | 二进制表现、runtime token、cache lifecycle          |
 | Domain import/save service                           | Asset、generated output、package、export 的用户意图与 durable ownership                                      | 透明 cache destination、任意 absolute write         |
 
 Host 为不同 consumer 注入 capability-scoped port。调用方不能通过 `caller` 或 `intent` 字符串自行提升权限；公共 result 使用 discriminated union，只返回该操作的 bytes、metadata 或 opaque projection。
 
 ## 数据路由
 
-| 数据或动作                                                                             | Canonical path                                               |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 纯文本、Markdown、JSON/TOML/YAML、NKC/OTIO 项目事实                                    | `ProjectFileStore`、领域 codec、authorized writer            |
-| workspace/linked 原始图片、音视频、文档文件                                            | `ContentReadService` source read；不先创建 representation    |
-| EPUB/DOCX/CBZ 原生 archive entry                                                       | DocumentAccess + bounded entry read；不持久物化              |
-| PDF/CBZ Range、DOCX bounded full read、EPUB entry transport                            | DocumentAccess + Preview Node adapter                        |
-| thumbnail、proxy、preview transcode、waveform/loudness、raster page、OCR/ASR/embedding | `ContentRepresentationService`；Host 内部 derived store      |
-| 播放、seek、probe、decode、export encode                                               | Content projection + `@neko/media`                            |
-| Renderer 展示                                                                          | Content projection + Desktop/Node adapter                     |
-| Asset import、generated output、package、用户 export                                   | owning domain service + authorized writer                    |
+| 数据或动作                                                                             | Canonical path                                            |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 纯文本、Markdown、JSON/TOML/YAML、NKC/OTIO 项目事实                                    | `ProjectFileStore`、领域 codec、authorized writer         |
+| workspace/linked 原始图片、音视频、文档文件                                            | `ContentReadService` source read；不先创建 representation |
+| EPUB/DOCX/CBZ 原生 archive entry                                                       | DocumentAccess + bounded entry read；不持久物化           |
+| PDF/CBZ Range、DOCX bounded full read、EPUB entry transport                            | DocumentAccess + Preview Node adapter                     |
+| thumbnail、proxy、preview transcode、waveform/loudness、raster page、OCR/ASR/embedding | `ContentRepresentationService`；Host 内部 derived store   |
+| 播放、seek、probe、decode、export encode                                               | Content projection + `@neko/media`                        |
+| Renderer 展示                                                                          | Content projection + Desktop/Node adapter                 |
+| Asset import、generated output、package、用户 export                                   | owning domain service + authorized writer                 |
 
 ## 内容接口
 
@@ -122,13 +124,15 @@ ReadDocument 分别输出语义 `DocumentLocator` 与内容 `DocumentEntryConten
 - package/export 通过 ContentReadService 读取 link descendant 字节，不复制 symlink object 或序列化 target。
 - 普通 Git/folder sync 不包含 linked bytes；独立便携快照只复制权威引用的 bytes，并在
   sibling staging 中重写项目文档后 atomic publish，不修改 source workspace 或 external target。
-- legacy variable/original path/local override 仅由 migration reader 使用；正常读取和 authoring 不保留 fallback。
+- legacy variable/original path/local override 不由产品 runtime 读取、分类或转换；正常读取和 authoring
+  只有 canonical locator path。
 
 ## 派生物不变量
 
 - source/original/native document-entry 不进入派生物存储。
 - thumbnail、proxy、preview transcode、waveform/loudness、fov-crop、raster page、OCR/ASR/embedding、semantic/search projection 和 rebuildable processor intermediate 可以内部复用和 GC。
-- key 来自 source identity/fingerprint、representation spec、generator/profile/runtime revision，不能来自 absolute path、link target、Webview URL 或 temp path。
+- key 来自 source identity/fingerprint、representation spec、generator/profile identity 与影响输出的
+  外部 runtime fingerprint，不能来自 absolute path、link target、Webview URL、temp path 或内部数据代次。
 - derived failure 不能阻止可授权 source read；缺失 representation 也不能回退 source 后伪装成功。
 - GC 不能删除项目文件、正式 Asset、creator-visible generated output、accepted candidate、用户 export 或 Entity facts。
 - 产品子包 production code 不得 import ResourceCache contracts 或实现 package-local cache manager。
@@ -139,5 +143,6 @@ ReadDocument 分别输出语义 `DocumentLocator` 与内容 `DocumentEntryConten
 - content contract 测试覆盖 discriminated read/projection、Range/maxBytes/cancel、authorized writer 和无 cache/localPath public fields；
 - dependency guard 证明产品包不 import ResourceCache、manifest、root、GC 或 materialization protocol；
 - source/representation 路径测试证明原始文件和 native entry 直读，thumbnail/proxy/raster 命中内部 representation path；
-- NK/package 测试覆盖 save/reopen/workspace move/relink、legacy migrate/reject、link dereference 和无 fallback；
+- NK/package 测试覆盖 save/reopen/workspace move/relink、非 canonical record 局部拒绝、link dereference
+  和 canonical path 唯一性；
 - Renderer/Agent protocol 测试证明 payload 不含 absolute target、cache path、raw filesystem error 或 runtime identity 持久化。

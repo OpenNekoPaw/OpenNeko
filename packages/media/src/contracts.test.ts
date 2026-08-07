@@ -20,7 +20,6 @@ describe('media resource URL contract', () => {
     'media://desktop/token',
     'video://desktop/token',
     'audio://desktop/token',
-    'http://127.0.0.1:43125/v1/resources/token',
     'openneko://desktop/0123456789abcdefghijklmnopqrstuv',
     'openneko://resource/short',
   ])('rejects non-canonical media URL %s', (url) => {

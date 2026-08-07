@@ -54,7 +54,6 @@ describe('GroupNode', () => {
     const task = createGroup('workspace-process-task-1', {
       label: 'Agent Task task-1',
       provenance: {
-        version: 2,
         deliveryId: 'delivery:batch-1',
         taskId: 'task-1',
         sourceHost: 'headless',
@@ -64,7 +63,6 @@ describe('GroupNode', () => {
     });
     const freshTask = createGroup('workspace-process-task-3', {
       provenance: {
-        version: 2,
         deliveryId: 'delivery:batch-3',
         taskId: 'task-3',
       },
@@ -72,7 +70,6 @@ describe('GroupNode', () => {
     const authored = createGroup('workspace-process-authored', {
       label: '角色概念探索',
       provenance: {
-        version: 2,
         deliveryId: 'delivery:batch-2',
         taskId: 'task-2',
       },
@@ -102,7 +99,6 @@ describe('GroupNode', () => {
     setLocale('zh-cn');
     const group = createGroup('workspace-batch-generated', {
       provenance: {
-        version: 2,
         kind: 'generated-batch',
         deliveryId: 'delivery:generated-batch',
       },

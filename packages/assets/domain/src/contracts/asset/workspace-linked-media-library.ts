@@ -13,8 +13,7 @@ export type WorkspaceLinkedMediaLibraryDiagnosticCode =
   | 'library-entry-not-link'
   | 'library-link-operation-failed'
   | 'unmanaged-symlink'
-  | 'nested-link-escape'
-  | 'migration-required';
+  | 'nested-link-escape';
 
 export interface WorkspaceLinkedMediaLibraryDiagnostic {
   readonly code: WorkspaceLinkedMediaLibraryDiagnosticCode;

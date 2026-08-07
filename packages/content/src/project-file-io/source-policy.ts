@@ -91,7 +91,7 @@ export function applyPortableSourcePathPolicy<TDocument>(
     }
     if (classification.kind === 'variable') {
       if (!isKnownPathVariable(classification.variable, options.context)) {
-        diagnostics.push(createMigrationRequiredDiagnostic(descriptor, classification.variable));
+        diagnostics.push(createRelinkRequiredDiagnostic(descriptor, classification.variable));
       }
       continue;
     }
@@ -99,7 +99,7 @@ export function applyPortableSourcePathPolicy<TDocument>(
       continue;
     }
 
-    diagnostics.push(createMigrationRequiredDiagnostic(descriptor));
+    diagnostics.push(createRelinkRequiredDiagnostic(descriptor));
   }
 
   return {
@@ -148,14 +148,14 @@ export function resolveProjectSourceDiagnostics<TDocument>(
 
     const classification = classifyWorkspaceMediaPath(descriptor.path);
     if (classification.kind === 'absolute-local') {
-      diagnostics.push(createMigrationRequiredDiagnostic(descriptor));
+      diagnostics.push(createRelinkRequiredDiagnostic(descriptor));
       continue;
     }
     if (
       classification.kind === 'variable' &&
       !isKnownPathVariable(classification.variable, options.context)
     ) {
-      diagnostics.push(createMigrationRequiredDiagnostic(descriptor, classification.variable));
+      diagnostics.push(createRelinkRequiredDiagnostic(descriptor, classification.variable));
       continue;
     }
 
@@ -201,7 +201,6 @@ export function detectRuntimeOrCacheSourceHandle(
   }
 
   if (
-    hasPathSegmentSequence(lower, ['.neko', '.cache']) ||
     hasPathSegment(lower, 'cache') ||
     hasPathSegment(lower, 'proxy') ||
     hasPathSegment(lower, 'thumbnail') ||
@@ -231,13 +230,13 @@ function createNonPortableSourceDiagnostic(
   });
 }
 
-function createMigrationRequiredDiagnostic(
+function createRelinkRequiredDiagnostic(
   descriptor: ProjectSourceDescriptor,
   variable?: string,
 ): ProjectFileDiagnostic {
   return createProjectFileDiagnostic({
-    code: 'migration-required',
-    message: `Source ${descriptor.id} uses a retired local path shape and requires explicit migration.`,
+    code: 'non-portable-path',
+    message: `Source ${descriptor.id} is not portable and must be relinked explicitly.`,
     path: descriptor.fieldPath,
     sourceId: descriptor.id,
     recoverability: 'relink',
@@ -259,13 +258,6 @@ function hasParentTraversal(value: string): boolean {
 
 function hasPathSegment(value: string, segment: string): boolean {
   return normalizePathForSegmentChecks(value).split('/').includes(segment);
-}
-
-function hasPathSegmentSequence(value: string, sequence: readonly string[]): boolean {
-  const segments = normalizePathForSegmentChecks(value).split('/');
-  return segments.some((_, index) =>
-    sequence.every((segment, offset) => segments[index + offset] === segment),
-  );
 }
 
 function normalizePathForSegmentChecks(value: string): string {

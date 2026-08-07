@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PreviewAudioContextOwner, previewAudioStartTime } from './previewAudioContext';
 
 describe('PreviewAudioContextOwner', () => {
-  it('reuses one user-gesture-started context across preview generations', async () => {
+  it('reuses one user-gesture-started context across preview previewRequestIds', async () => {
     const context = {
       state: 'suspended',
       resume: vi.fn(async () => undefined),
@@ -21,7 +21,7 @@ describe('PreviewAudioContextOwner', () => {
     expect(context.close).toHaveBeenCalledOnce();
   });
 
-  it('fails visibly when a generation connects before the playback gesture', async () => {
+  it('fails visibly when a previewRequestId connects before the playback gesture', async () => {
     const owner = new PreviewAudioContextOwner(vi.fn());
 
     await expect(owner.contextForConnection()).rejects.toThrow(

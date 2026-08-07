@@ -3,7 +3,6 @@ import { normalizeStoryboardPlanOverlay, validateStoryboardPlanOverlay } from '.
 import type { StoryboardTable } from '@neko/canvas-domain';
 
 const table: StoryboardTable = {
-  schemaVersion: 1,
   kind: 'storyboard-table',
   title: 'Episode 1',
   scenes: [
@@ -82,6 +81,35 @@ describe('storyboard plan overlay contract', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
       'orphan-shot-overlay',
     );
+  });
+
+  it('rejects unknown fields while keeping a valid sibling overlay usable', () => {
+    const overlay = {
+      kind: 'animation-plan-overlay',
+      overlayType: 'AnimationPlan',
+      sourceStoryboardRef: { kind: 'artifact', artifactId: 'artifact-storyboard-1' },
+      shotOverlays: [{ shotId: 'scene-1-shot-1' }],
+    } as const;
+
+    expect(validateStoryboardPlanOverlay({ ...overlay, unexpectedField: 1 }).diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unsupported-field', path: ['unexpectedField'] }),
+      ]),
+    );
+    expect(
+      validateStoryboardPlanOverlay({
+        ...overlay,
+        sourceStoryboardRef: { ...overlay.sourceStoryboardRef, unexpectedField: 'value' },
+      }).diagnostics,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'unsupported-field',
+          path: ['sourceStoryboardRef', 'unexpectedField'],
+        }),
+      ]),
+    );
+    expect(validateStoryboardPlanOverlay(overlay, { sourceStoryboard: table }).ok).toBe(true);
   });
 
   it('rejects runtime URLs while preserving provider-neutral prompt intent', () => {

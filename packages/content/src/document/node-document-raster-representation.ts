@@ -62,7 +62,6 @@ export function createNodeDocumentRasterRepresentationGenerator(
   const loadPdfParse = options.loadPdfParse ?? loadPdfParseModule;
   return {
     id: 'neko-content.document-raster',
-    revision: '1',
     kinds: ['raster-page'],
     generate: async (input) => {
       const request = readRasterRequest(input);

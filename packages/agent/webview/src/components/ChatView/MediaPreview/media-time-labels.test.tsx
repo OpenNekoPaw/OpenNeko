@@ -1,19 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AudioCard } from './AudioCard';
 import { VideoCard } from './VideoCard';
-
-vi.mock('../../../messages', () => ({
-  AgentHostMessages: {
-    openFile: vi.fn(),
-    openUrl: vi.fn(),
-  },
-}));
 
 describe('Agent media preview time labels', () => {
   it('formats audio preview duration through the shared media formatter', () => {
     render(
-      <AudioCard src="http://127.0.0.1:43125/v1/resources/audio-token" title="clip.wav" inline />,
+      <AudioCard src="http://127.0.0.1:43125/resources/audio-token" title="clip.wav" inline />,
     );
 
     const audio = document.querySelector('audio');
@@ -30,7 +23,7 @@ describe('Agent media preview time labels', () => {
   });
 
   it('formats video preview duration through the shared media formatter', () => {
-    render(<VideoCard src="http://127.0.0.1:43125/v1/resources/video-token" title="clip.mp4" />);
+    render(<VideoCard src="http://127.0.0.1:43125/resources/video-token" title="clip.mp4" />);
 
     const video = document.querySelector('video');
     expect(video).toBeTruthy();

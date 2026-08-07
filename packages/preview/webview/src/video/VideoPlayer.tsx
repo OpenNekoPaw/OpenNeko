@@ -13,6 +13,7 @@ import { VideoControls } from './VideoControls';
 import { EmptyState } from '@neko/ui/primitives';
 import { InfoIcon, PlayIcon, WarningIcon } from '@neko/ui/icons';
 import type { PreviewOperationDiagnosticCode } from '../shared/types';
+import type { PreviewMediaViewerSnapshot } from '../root/viewer-snapshot';
 
 const CONTROLS_HIDE_DELAY = 3000;
 const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
@@ -23,6 +24,8 @@ export interface VideoPlayerProps {
   readonly autoPlay?: boolean;
   readonly compact?: boolean;
   readonly muted?: boolean;
+  readonly initialSnapshot?: PreviewMediaViewerSnapshot;
+  readonly onSnapshotChange?: (snapshot: PreviewMediaViewerSnapshot) => void;
 }
 
 export function VideoPlayer({
@@ -31,6 +34,8 @@ export function VideoPlayer({
   autoPlay = false,
   compact = false,
   muted = false,
+  initialSnapshot,
+  onSnapshotChange,
 }: VideoPlayerProps = {}) {
   return sourceUrl ? (
     <SourceVideoPlayer
@@ -39,6 +44,8 @@ export function VideoPlayer({
       autoPlay={autoPlay}
       compact={compact}
       muted={muted}
+      initialSnapshot={initialSnapshot}
+      onSnapshotChange={onSnapshotChange}
     />
   ) : (
     <EngineVideoPlayer />
@@ -50,16 +57,18 @@ function SourceVideoPlayer({
   autoPlay,
   compact,
   muted,
+  initialSnapshot,
+  onSnapshotChange,
 }: Required<Pick<VideoPlayerProps, 'sourceUrl' | 'autoPlay' | 'compact' | 'muted'>> &
-  Pick<VideoPlayerProps, 'displayName'>) {
+  Pick<VideoPlayerProps, 'displayName' | 'initialSnapshot' | 'onSnapshotChange'>) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(initialSnapshot?.currentTime ?? 0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
-  const [volume, setVolume] = useState(1);
+  const [speed, setSpeed] = useState(initialSnapshot?.playbackRate ?? 1);
+  const [volume, setVolume] = useState(initialSnapshot?.volume ?? 1);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPiPActive, setIsPiPActive] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -69,6 +78,8 @@ function SourceVideoPlayer({
     if (!video) return;
     video.muted = muted;
     video.defaultMuted = muted;
+    video.playbackRate = initialSnapshot?.playbackRate ?? 1;
+    video.volume = initialSnapshot?.volume ?? 1;
     if (autoPlay) {
       setFailed(false);
       void video.play().catch(() => {
@@ -81,11 +92,23 @@ function SourceVideoPlayer({
     video.addEventListener('enterpictureinpicture', entered);
     video.addEventListener('leavepictureinpicture', left);
     return () => {
+      onSnapshotChange?.({
+        currentTime: video.currentTime,
+        playbackRate: video.playbackRate,
+        volume: video.volume,
+      });
       video.pause();
       video.removeEventListener('enterpictureinpicture', entered);
       video.removeEventListener('leavepictureinpicture', left);
     };
-  }, [autoPlay, muted, sourceUrl]);
+  }, [
+    autoPlay,
+    initialSnapshot?.playbackRate,
+    initialSnapshot?.volume,
+    muted,
+    onSnapshotChange,
+    sourceUrl,
+  ]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -144,9 +167,19 @@ function SourceVideoPlayer({
             setDuration(
               Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0,
             );
+            const restoredTime = initialSnapshot?.currentTime ?? 0;
+            event.currentTarget.currentTime = Math.max(
+              0,
+              Math.min(event.currentTarget.duration || restoredTime, restoredTime),
+            );
+            setCurrentTime(event.currentTarget.currentTime);
             setFailed(false);
           }}
-          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+          onTimeUpdate={(event) => {
+            const nextTime = event.currentTarget.currentTime;
+            setCurrentTime(nextTime);
+            onSnapshotChange?.({ currentTime: nextTime, playbackRate: speed, volume });
+          }}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
@@ -217,7 +250,7 @@ function EngineVideoPlayer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<PcmAudioClient>();
   const audioContextRef = useRef<AudioContext>();
-  const generationRef = useRef(0);
+  const playbackRequestRef = useRef<object>({});
   const playbackEndedRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const volumeRef = useRef(1);
@@ -235,7 +268,7 @@ function EngineVideoPlayer() {
   const [isPiPActive, setIsPiPActive] = useState(false);
 
   const disposeClients = useCallback((resetVideo = true) => {
-    generationRef.current += 1;
+    playbackRequestRef.current = {};
     audioRef.current?.dispose();
     audioRef.current = undefined;
     const video = videoRef.current;
@@ -275,7 +308,7 @@ function EngineVideoPlayer() {
         existingVideo.src === descriptor.url &&
         existingVideo.hasAttribute('src');
       disposeClients(!reuseVideo);
-      const generation = generationRef.current;
+      const request = playbackRequestRef.current;
       let audioClient: PcmAudioClient | undefined;
       try {
         const element = videoRef.current;
@@ -305,7 +338,7 @@ function EngineVideoPlayer() {
             playbackRate,
             volume: volumeRef.current,
             onError: (_failure) => {
-              if (generation === generationRef.current && audioRef.current === audioClient) {
+              if (request === playbackRequestRef.current && audioRef.current === audioClient) {
                 setPlaybackDiagnostic('playback-failed');
               }
             },
@@ -313,7 +346,7 @@ function EngineVideoPlayer() {
           });
           await audioClient.connect(context);
         }
-        if (generation !== generationRef.current) {
+        if (request !== playbackRequestRef.current) {
           audioClient?.dispose();
           return;
         }
@@ -325,7 +358,7 @@ function EngineVideoPlayer() {
       } catch (error) {
         audioClient?.dispose();
         if (audioRef.current === audioClient) audioRef.current = undefined;
-        if (generation !== generationRef.current) return;
+        if (request !== playbackRequestRef.current) return;
         throw error;
       }
     },
@@ -634,7 +667,6 @@ function createVideoReadyMessage(): ReadyMessage {
   return {
     type: 'ready',
     nativeVideoCapabilities: {
-      version: 1,
       // Electron can report AV1 Main10 as playable while composing one frozen frame.
       // Direct AV1 requires source-specific frame-output qualification, not canPlayType().
       av1Mp4: false,

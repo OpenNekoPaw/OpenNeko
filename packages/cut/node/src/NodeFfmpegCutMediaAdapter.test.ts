@@ -184,7 +184,6 @@ function delayedAudioExportRequest(workspaceRoot: string): CutExportRequest {
     timeline: {
       documentUri: pathToFileURL(join(workspaceRoot, 'edits', 'story.otio')).href,
       sessionId: 'session-1',
-      revision: 1,
       name: 'Delayed audio',
       durationSeconds: 6,
       tracks: [

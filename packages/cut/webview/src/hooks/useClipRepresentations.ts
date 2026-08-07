@@ -66,9 +66,7 @@ export function useClipRepresentations(input: {
 
   useEffect(() => {
     if (!input.view || requests.length === 0) return;
-    const missing = requests.filter(
-      (request) => !received.has(representationKey(input.view!.revision, request)),
-    );
+    const missing = requests.filter((request) => !received.has(representationKey(request)));
     if (missing.length === 0) return;
     const timer = window.setTimeout(() => controller.requestRepresentations(missing), 80);
     return () => window.clearTimeout(timer);
@@ -80,7 +78,7 @@ export function useClipRepresentations(input: {
     if (!view) return states;
     const thumbnailTiles = new Map<string, ThumbnailTileState[]>();
     for (const request of requests) {
-      const result = received.get(representationKey(view.revision, request));
+      const result = received.get(representationKey(request));
       if (request.kind === 'thumbnail') {
         const tiles = thumbnailTiles.get(request.clipId) ?? [];
         const tile =

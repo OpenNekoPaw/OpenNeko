@@ -1,0 +1,139 @@
+.neko-entity-inspector {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--neko-border, #e2e5e3);
+  color: var(--neko-foreground, #26312c);
+  background: var(--neko-sideBar-background, #fff);
+  overflow: auto;
+}
+
+.neko-entity-inspector > header,
+.neko-entity-inspector > section {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--neko-border, #e2e5e3);
+}
+
+.neko-entity-inspector > header div,
+.neko-entity-inspector li div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.neko-entity-inspector strong,
+.neko-entity-inspector h3 {
+  font-size: 11px;
+}
+
+.neko-entity-inspector h3 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 6px;
+}
+
+.neko-entity-inspector span,
+.neko-entity-inspector dt,
+.neko-entity-inspector dd,
+.neko-entity-inspector p {
+  margin: 0;
+  color: var(--neko-descriptionForeground, #747d78);
+  font-size: 10px;
+}
+
+.neko-entity-inspector dl {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.35fr) minmax(0, 1fr);
+  gap: 4px 8px;
+  margin: 0;
+}
+
+.neko-entity-inspector dd {
+  overflow-wrap: anywhere;
+}
+
+.neko-entity-inspector ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.neko-entity-inspector li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.neko-entity-inspector li[data-attention='true'] strong {
+  color: var(--neko-warningForeground, #9a6418);
+}
+
+.neko-entity-inspector button,
+.neko-entity-inspector input {
+  min-height: 28px;
+  border: 1px solid var(--neko-border, #d7ddda);
+  border-radius: 6px;
+  color: inherit;
+  background: var(--neko-input-background, #f7f8f7);
+  font: inherit;
+  font-size: 10px;
+}
+
+.neko-entity-inspector button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.neko-entity-inspector button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.neko-entity-inspector input {
+  min-width: 0;
+  padding: 4px 7px;
+  outline: none;
+}
+
+.neko-entity-inspector input:focus-visible,
+.neko-entity-inspector button:focus-visible {
+  outline: 2px solid var(--neko-focusBorder, #397f68);
+  outline-offset: 1px;
+}
+
+.neko-entity-inspector__actions,
+.neko-entity-inspector__direct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.neko-entity-inspector__actions h3 {
+  flex-basis: 100%;
+}
+
+.neko-entity-inspector__input-action {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+}
+
+.neko-entity-inspector__direct-actions {
+  width: 100%;
+}
+
+.neko-entity-inspector__blockers {
+  color: var(--neko-warningForeground, #9a6418);
+}

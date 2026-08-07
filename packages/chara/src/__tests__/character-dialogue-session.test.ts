@@ -159,7 +159,6 @@ describe('CharacterDialogueSession', () => {
 
     expect(session.toArtifact({ profileHash: 'hash-1' })).toEqual(
       expect.objectContaining({
-        version: 1,
         createdAt: '2026-06-01T12:00:00.000Z',
         entityRef,
         mode: 'roleplay',

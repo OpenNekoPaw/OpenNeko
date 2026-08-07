@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 
 import { createSystemPromptBuilder } from '@neko/agent-runtime/prompt/system-prompt-builder';
-import { createConversationId } from '@neko/agent-runtime/session/conversation-id';
 import {
   PiToolConfirmationRegistry,
   registerOpenNekoPiProvider,
@@ -22,16 +21,11 @@ import {
   type AgentContentInteractionPort,
 } from '@neko/agent-runtime/runtime/host-controller';
 import {
-  createAgentConversationMessageQueue,
-  type AgentConversationMessageQueue,
-} from '@neko/agent-runtime/runtime/session/agent-message-queue';
-import {
   createConversationProjectionAttachmentServer,
   type ConversationProjectionAttachmentServer,
 } from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
 import { projectPiConversationEntries } from '@neko/agent-runtime/runtime/projection/pi-conversation-history-projector';
 import {
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildAgentStateSnapshotMessage,
   buildConfigStateMessage,
   buildGlobalErrorMessage,
@@ -42,7 +36,9 @@ import {
   buildTabStateMessage,
   type DesktopAgentNeutralFacts,
   type AgentContextPayload,
+  type AgentMessageQueueSnapshot,
   type OpenTab,
+  type Message,
   type ProjectionAttachmentKey,
   type SettingsDataMessage,
   type TabState,
@@ -53,6 +49,7 @@ import {
   buildAssistantSettingsDataMessage,
   buildAssistantSettingsUpdatedMessage,
   type AssistantConfigState,
+  type AssistantRuntimeSettingsPort,
   type AssistantSettingsData,
 } from '@neko/host/settings';
 import { projectLlmParameters } from '@neko/host/settings';
@@ -62,16 +59,20 @@ import {
 } from '@neko/host/settings';
 import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/ai-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
-import type {
-  AgentTurnConfigurationSnapshot,
-  AgentTurnInput,
-  AgentWorkspaceRuntime,
+import {
+  AgentQueuedTurnCancellationError,
+  type AgentTurnConfigurationSnapshot,
+  type AgentTurnInput,
+  type AgentVisiblePresentationBinding,
+  type AgentWorkspaceRuntime,
 } from './agent-app-host';
 import type { AgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
 import {
+  createAgentStateRuntime,
   createDesktopAgentFactsProjector,
   createAgentResourceDisplayProjector,
+  type AgentStateRuntime,
   type DesktopAgentFactsProjector,
   type AgentResourceDisplayRegistrationPort,
   type AgentResourceDisplayProjector,
@@ -83,6 +84,7 @@ export interface AgentControllerEffects extends AgentHostControllerEffectPorts {
     waitForIdle(
       conversationId: string,
       timeoutMs: number,
+      afterIdentity?: { readonly turnId: string; readonly runId: string },
     ): Promise<{
       readonly conversationId: string;
       readonly turnId: string;
@@ -126,16 +128,24 @@ export interface AgentControllerComposition {
   createEffects(input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
+    readonly initialConversationId?: string;
+    readonly initialConversationMessage?: Message;
   }): AgentControllerEffects;
+  readonly startInitialTurn?: (input: {
+    readonly workspace: AgentWorkspaceRuntime;
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly messageText: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly locale: 'en' | 'zh';
+    readonly contextPayloads?: readonly AgentContextPayload[];
+  }) => Promise<void>;
   dispose?(): Promise<void>;
 }
 
 export interface AgentConfigInteractionPort {
   openUserConfig(input: {
-    readonly identity: AgentHostRouteEffectContext['identity'];
-    readonly absolutePath: string;
-  }): Promise<void>;
-  openWorkspaceConfig(input: {
     readonly identity: AgentHostRouteEffectContext['identity'];
     readonly absolutePath: string;
   }): Promise<void>;
@@ -145,6 +155,7 @@ export interface CreateAgentControllerCompositionOptions {
   readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy' | 'external'>;
   readonly userHome: string;
   readonly credentialRuntime: AgentCredentialRuntime;
+  readonly runtimeSettings: AssistantRuntimeSettingsPort;
   readonly contentInteraction: AgentContentInteractionPort;
   readonly configInteraction: AgentConfigInteractionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
@@ -167,8 +178,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   } as const);
 
   private readonly configs = new Map<string, ConfigManager>();
-  private readonly queues = new Map<string, AgentConversationMessageQueue>();
   private readonly confirmations = new Map<string, PiToolConfirmationRegistry>();
+  private readonly agentStates = new Map<string, AgentStateRuntime>();
   private readonly pendingDisposals = new Set<Promise<void>>();
 
   constructor(private readonly options: CreateAgentControllerCompositionOptions) {}
@@ -176,14 +187,60 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   createEffects(input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly identity: DesktopAgentConnectionIdentity;
+    readonly initialConversationId?: string;
+    readonly initialConversationMessage?: Message;
   }): AgentControllerEffects {
     const config = this.getConfig(input.workspace);
+    const initialConversation =
+      input.initialConversationId === undefined
+        ? undefined
+        : input.workspace
+            .listConversations()
+            .find((record) => record.conversationId === input.initialConversationId);
+    if (input.initialConversationId !== undefined && initialConversation === undefined) {
+      throw new Error(
+        `Desktop Agent initial Conversation '${input.initialConversationId}' does not exist in Workspace '${input.workspace.workspaceId}'.`,
+      );
+    }
+    if (input.initialConversationMessage && input.initialConversationId === undefined) {
+      throw new Error('Desktop Agent initial message requires an initial Conversation identity.');
+    }
+    if (input.initialConversationMessage && input.initialConversationMessage.role !== 'user') {
+      throw new Error('Desktop Agent initial Conversation message must belong to the user.');
+    }
+    const initialConversationMessage = input.initialConversationMessage
+      ? { ...input.initialConversationMessage }
+      : undefined;
+    const initialTab = initialConversation
+      ? {
+          id: `tab-${initialConversation.conversationId}`,
+          title: initialConversation.title,
+          conversationId: initialConversation.conversationId,
+        }
+      : undefined;
     const state: ConnectionState = {
-      activeConversationId: null,
-      tabState: { openTabs: [], activeTabId: null },
-      tabStateRevision: 0,
+      activeConversationId: initialConversation?.conversationId ?? null,
+      tabState: initialTab
+        ? { openTabs: [initialTab], activeTabId: initialTab.id }
+        : { openTabs: [], activeTabId: null },
+      tabOperationTail: Promise.resolve(),
     };
+    const visiblePresentation = input.workspace.bindVisiblePresentation({
+      bindingId: input.identity.connectionId,
+      ...(input.initialConversationId === undefined
+        ? {}
+        : { conversationId: input.initialConversationId }),
+    });
     let post: AgentHostRouteEffectContext['post'] | undefined;
+    const agentStates = this.getAgentStates(input.workspace.workspaceId);
+    const unsubscribeAgentStates = agentStates.subscribe((snapshot) => {
+      if (!post) return;
+      this.track(
+        Promise.resolve()
+          .then(() => post?.(buildAgentStateSnapshotMessage([...snapshot])))
+          .then(() => undefined),
+      );
+    });
     const facts = createDesktopAgentFactsProjector({ connection: input.identity });
     const resourceDisplay = createAgentResourceDisplayProjector({
       identity: input.identity,
@@ -192,12 +249,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       recordProjection: (fact) => facts.recordResourceDisplayProjection(fact),
     });
     const projection = createConversationProjectionAttachmentServer({
-      endpointEpoch: input.identity.connectionId,
       resolveProjection: (conversationId) => ({
         conversationId,
-        get projectionVersion() {
-          return input.workspace.readConversationProjection(conversationId).projectionVersion;
-        },
         apply: () => {
           throw new Error('Desktop projection attachment exposes a read-only projection view.');
         },
@@ -245,8 +298,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const disposeOwned = (): Promise<void> => {
       disposal ??= Promise.resolve().then(async () => {
         try {
+          unsubscribeAgentStates();
           resourceDisplay.dispose();
           await projection.abandon();
+          await visiblePresentation.dispose();
           facts.dispose();
         } catch (error) {
           facts.failDisposal();
@@ -256,7 +311,20 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       return disposal;
     };
     const effects: AgentControllerEffects = {
-      conversation: this.createConversationEffects(input.workspace, config, state, bind, facts),
+      conversation: this.createConversationEffects(
+        input.workspace,
+        config,
+        state,
+        bind,
+        facts,
+        visiblePresentation,
+        input.initialConversationId === undefined
+          ? undefined
+          : {
+              conversationId: input.initialConversationId,
+              ...(initialConversationMessage ? { message: initialConversationMessage } : {}),
+            },
+      ),
       config: this.createConfigEffects(input.workspace, config, state, bind),
       skill: this.createSkillEffects(input.workspace, config, bind, facts),
       content: createAgentContentEffects({
@@ -284,28 +352,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         );
       },
       automation: {
-        waitForIdle: async (conversationId, timeoutMs) => {
-          const deadline = Date.now() + timeoutMs;
-          while (input.workspace.readActiveTurn(conversationId)) {
-            if (Date.now() >= deadline) {
-              throw new Error(
-                `Desktop Agent conversation '${conversationId}' did not reach terminal idle within ${timeoutMs}ms.`,
-              );
-            }
-            await waitForFactsPoll();
-          }
-          const identity = facts.readLatestIdentity(conversationId);
-          if (!identity) {
-            throw new Error(
-              `Desktop Agent conversation '${conversationId}' has no observed turn identity.`,
-            );
-          }
-          return {
-            conversationId: identity.conversationId,
-            turnId: identity.turnId,
-            runId: identity.runId,
-          };
-        },
+        waitForIdle: (conversationId, timeoutMs, afterIdentity) =>
+          waitForDesktopAgentIdle({
+            conversationId,
+            timeoutMs,
+            afterIdentity,
+            readActiveTurn: () => input.workspace.readActiveTurn(conversationId),
+            readLatestIdentity: () => facts.readLatestIdentity(conversationId),
+          }),
         readLatestTurnIdentity: (conversationId) => facts.readLatestIdentity(conversationId),
         readFacts: (identity) => facts.readFacts(identity),
         disposeAndReadFacts: async (identity) => {
@@ -320,10 +374,76 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return effects;
   }
 
+  readonly startInitialTurn = async (input: {
+    readonly workspace: AgentWorkspaceRuntime;
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly messageText: string;
+    readonly providerId: string;
+    readonly modelId: string;
+    readonly locale: 'en' | 'zh';
+    readonly contextPayloads?: readonly AgentContextPayload[];
+  }): Promise<void> => {
+    const facts = createDesktopAgentFactsProjector({
+      connection: {
+        applicationInstanceId: 'agent-conversation-authority',
+        windowId: `conversation:${input.conversationId}`,
+        workbenchInstanceId: `conversation:${input.conversationId}`,
+        agentSurfaceId: `initial-turn:${input.turnId}`,
+        projectId: `conversation:${input.conversationId}`,
+        workspaceId: input.workspace.workspaceId,
+        viewId: `conversation:${input.conversationId}`,
+        connectionId: `initial-turn:${input.turnId}`,
+      },
+    });
+    try {
+      try {
+        await this.executeTurn({
+          workspace: input.workspace,
+          config: this.getConfig(input.workspace),
+          request: {
+            source: 'user-message',
+            conversationId: input.conversationId,
+            messageText: input.messageText,
+            sessionMode: 'agent',
+            locale: input.locale,
+            chatModel: {
+              providerId: input.providerId,
+              modelId: input.modelId,
+              category: 'llm',
+            },
+            turnId: input.turnId,
+            ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
+          },
+          context: {
+            identity: {
+              hostKind: 'electron',
+              applicationId: 'agent-conversation-authority',
+              windowId: `conversation:${input.conversationId}`,
+              viewId: `conversation:${input.conversationId}`,
+              workspaceId: input.workspace.workspaceId,
+              connectionId: `initial-turn:${input.turnId}`,
+            },
+            post: () => undefined,
+          },
+          facts,
+        });
+      } catch (error) {
+        await input.workspace.checkpointFailedInitialTurn({
+          conversationId: input.conversationId,
+          turnId: input.turnId,
+          messageText: input.messageText,
+        });
+        throw error;
+      }
+    } finally {
+      facts.dispose();
+    }
+  };
+
   async dispose(): Promise<void> {
     for (const confirmation of this.confirmations.values()) confirmation.cancelAll();
     this.confirmations.clear();
-    this.queues.clear();
     this.configs.clear();
     const results = await Promise.allSettled(this.pendingDisposals);
     this.pendingDisposals.clear();
@@ -333,6 +453,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     if (errors.length > 0) {
       throw new AggregateError(errors, 'Failed to dispose Agent controller effects.');
     }
+    this.agentStates.clear();
   }
 
   private createConversationEffects(
@@ -341,6 +462,11 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     state: ConnectionState,
     bind: (context: AgentHostRouteEffectContext) => void,
     facts: DesktopAgentFactsProjector,
+    visiblePresentation: AgentVisiblePresentationBinding,
+    initialConversation?: {
+      readonly conversationId: string;
+      readonly message?: Message;
+    },
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -359,7 +485,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const postConversation = async (
       conversationId: string | null,
       context: AgentHostRouteEffectContext,
-      activation?: { readonly activationId: number; readonly tabStateRevision: number },
+      activation?: { readonly activationId: number },
     ): Promise<void> => {
       bind(context);
       if (!conversationId) {
@@ -374,14 +500,20 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         .find((candidate) => candidate.conversationId === conversationId);
       if (!record)
         throw new Error(`Desktop Agent conversation '${conversationId}' does not exist.`);
+      const projectedMessages = projectPiConversationEntries(
+        await workspace.readConversationEntries(conversationId),
+      );
       await context.post({
         type: 'activeConversation',
         ...(activation ? { activation } : {}),
         conversation: {
           id: conversationId,
           title: record.title,
-          messages: projectPiConversationEntries(
-            await workspace.readConversationEntries(conversationId),
+          messages: reconcileInitialConversationMessage(
+            conversationId,
+            projectedMessages,
+            initialConversation?.conversationId,
+            initialConversation?.message,
           ),
         },
       });
@@ -424,98 +556,79 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           throw new Error(`Desktop Agent conversation '${conversationId}' is not running.`);
         workspace.cancelTurn(conversationId, active);
       },
-      createConversation: async (context) => {
+      activateConversation: (message, context) => {
         bind(context);
-        const conversationId = createConversationId(workspace.workspace.workspacePath);
-        await workspace.createConversation(conversationId);
-        state.activeConversationId = conversationId;
-        const tab: OpenTab = {
-          id: `tab-${conversationId}`,
-          title: 'New conversation',
-          conversationId,
-        };
-        state.tabState = {
-          openTabs: [...state.tabState.openTabs, tab],
-          activeTabId: tab.id,
-        };
-        state.tabStateRevision += 1;
-        await postConversationList(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        await postConversation(conversationId, context);
-      },
-      activateConversation: async (message, context) => {
-        bind(context);
-        if (message.expectedTabStateRevision !== state.tabStateRevision) {
-          throw new Error(
-            `Desktop Agent Tab revision ${message.expectedTabStateRevision} is stale; current revision is ${state.tabStateRevision}.`,
-          );
-        }
-        const tab = message.tabState.openTabs.find((candidate) => candidate.id === message.tabId);
-        if (!tab || tab.conversationId !== message.conversationId) {
-          throw new Error('Desktop Agent conversation activation does not match its Tab identity.');
-        }
-        if (
-          !workspace
-            .listConversations()
-            .some((record) => record.conversationId === message.conversationId)
-        ) {
-          throw new Error(`Desktop Agent conversation '${message.conversationId}' does not exist.`);
-        }
-        state.activeConversationId = message.conversationId;
-        state.tabState = cloneTabState(message.tabState);
-        state.tabStateRevision += 1;
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        await postConversation(message.conversationId, context, {
-          activationId: message.activationId,
-          tabStateRevision: state.tabStateRevision,
+        return enqueueTabOperation(state, async () => {
+          const tab = message.tabState.openTabs.find((candidate) => candidate.id === message.tabId);
+          if (!tab || tab.conversationId !== message.conversationId) {
+            throw new Error(
+              'Desktop Agent conversation activation does not match its Tab identity.',
+            );
+          }
+          if (
+            !workspace
+              .listConversations()
+              .some((record) => record.conversationId === message.conversationId)
+          ) {
+            throw new Error(
+              `Desktop Agent conversation '${message.conversationId}' does not exist.`,
+            );
+          }
+          state.activeConversationId = message.conversationId;
+          state.tabState = cloneTabState(message.tabState);
+          await visiblePresentation.updateConversation(message.conversationId);
+          await context.post(buildTabStateMessage(state.tabState));
+          await postConversation(message.conversationId, context, {
+            activationId: message.activationId,
+          });
         });
       },
-      deleteConversation: async ({ conversationId, activateNext }, context) => {
+      deleteConversation: ({ conversationId, activateNext }, context) => {
         bind(context);
-        await workspace.deleteConversation(conversationId);
-        this.queues.delete(ownerKey(workspace.workspaceId, conversationId));
-        this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
-        this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
-        state.tabState = {
-          openTabs: state.tabState.openTabs.filter((tab) => tab.conversationId !== conversationId),
-          activeTabId:
-            state.tabState.openTabs.find((tab) => tab.id === state.tabState.activeTabId)
-              ?.conversationId === conversationId
-              ? null
-              : state.tabState.activeTabId,
-        };
-        if (state.activeConversationId === conversationId) {
-          state.activeConversationId =
-            activateNext === false ? null : (state.tabState.openTabs[0]?.conversationId ?? null);
+        return enqueueTabOperation(state, async () => {
+          await workspace.deleteConversation(conversationId);
+          this.getAgentStates(workspace.workspaceId).clear(conversationId);
+          this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
+          this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
           state.tabState = {
-            ...state.tabState,
+            openTabs: state.tabState.openTabs.filter(
+              (tab) => tab.conversationId !== conversationId,
+            ),
             activeTabId:
-              state.tabState.openTabs.find(
-                (tab) => tab.conversationId === state.activeConversationId,
-              )?.id ?? null,
+              state.tabState.openTabs.find((tab) => tab.id === state.tabState.activeTabId)
+                ?.conversationId === conversationId
+                ? null
+                : state.tabState.activeTabId,
           };
-        }
-        state.tabStateRevision += 1;
-        await postConversationList(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        if (activateNext !== false) {
-          await postConversation(state.activeConversationId, context);
-        }
+          if (state.activeConversationId === conversationId) {
+            state.activeConversationId =
+              activateNext === false ? null : (state.tabState.openTabs[0]?.conversationId ?? null);
+            state.tabState = {
+              ...state.tabState,
+              activeTabId:
+                state.tabState.openTabs.find(
+                  (tab) => tab.conversationId === state.activeConversationId,
+                )?.id ?? null,
+            };
+            await visiblePresentation.updateConversation(state.activeConversationId ?? undefined);
+          }
+          await postConversationList(context);
+          await context.post(buildTabStateMessage(state.tabState));
+          if (activateNext !== false) {
+            await postConversation(state.activeConversationId, context);
+          }
+        });
       },
       listConversations: postConversationList,
-      readActiveConversation: (context) => postConversation(state.activeConversationId, context),
+      readActiveConversation: async (context) => {
+        bind(context);
+        await state.tabOperationTail;
+        await postConversation(state.activeConversationId, context);
+      },
       readAgentStates: async (context) => {
         bind(context);
         await context.post(
-          buildAgentStateSnapshotMessage(
-            workspace
-              .listConversations()
-              .flatMap((record) =>
-                workspace.readActiveTurn(record.conversationId)
-                  ? [{ conversationId: record.conversationId, phase: 'thinking' as const }]
-                  : [],
-              ),
-          ),
+          buildAgentStateSnapshotMessage(this.getAgentStates(workspace.workspaceId).snapshot()),
         );
       },
       readConversationSnapshot: async (conversationId, context) => {
@@ -539,34 +652,37 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       readMessageQueue: async (conversationId, context) => {
         bind(context);
         await context.post(
-          buildMessageQueueSnapshotMessage(
-            this.getQueue(workspace.workspaceId, conversationId).snapshot(),
-          ),
+          buildMessageQueueSnapshotMessage(workspace.readMessageQueue(conversationId)),
         );
       },
       promoteQueuedMessage: async ({ conversationId, queueItemId }, context) => {
         bind(context);
-        const queue = this.getQueue(workspace.workspaceId, conversationId);
-        queue.promote(queueItemId);
-        await context.post(buildMessageQueueSnapshotMessage(queue.snapshot()));
+        await context.post(
+          buildMessageQueueSnapshotMessage(
+            workspace.promoteQueuedMessage(conversationId, queueItemId),
+          ),
+        );
       },
       cancelQueuedMessage: async ({ conversationId, queueItemId }, context) => {
         bind(context);
-        const queue = this.getQueue(workspace.workspaceId, conversationId);
-        queue.remove(queueItemId);
-        await context.post(buildMessageQueueSnapshotMessage(queue.snapshot()));
+        await context.post(
+          buildMessageQueueSnapshotMessage(
+            await workspace.cancelQueuedMessage(conversationId, queueItemId),
+          ),
+        );
       },
       editQueuedMessage: async ({ tabId, conversationId, queueItemId }, context) => {
         bind(context);
-        const queue = this.getQueue(workspace.workspaceId, conversationId);
-        const item = queue.snapshot().items.find((candidate) => candidate.id === queueItemId);
-        if (!item) throw new Error(`Queued message '${queueItemId}' does not exist.`);
+        const { item, snapshot } = await workspace.takeQueuedMessageForEdit(
+          conversationId,
+          queueItemId,
+        );
         await context.post(
           buildQueuedMessageEditRequestedMessage({
             tabId,
             conversationId,
             item,
-            snapshot: queue.snapshot(),
+            snapshot,
           }),
         );
       },
@@ -579,18 +695,20 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           );
         }
         await workspace.clearContext(conversationId);
-        this.getQueue(workspace.workspaceId, conversationId).clear();
+        await workspace.clearMessageQueue(conversationId);
         await context.post(buildHistoryClearedMessage(conversationId));
       },
-      clearAllConversations: async (context) => {
+      clearAllConversations: (context) => {
         bind(context);
-        await workspace.clearAllConversations();
-        state.activeConversationId = null;
-        state.tabState = { openTabs: [], activeTabId: null };
-        state.tabStateRevision += 1;
-        await postConversationList(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
-        await postConversation(null, context);
+        return enqueueTabOperation(state, async () => {
+          await workspace.clearAllConversations();
+          state.activeConversationId = null;
+          state.tabState = { openTabs: [], activeTabId: null };
+          await visiblePresentation.updateConversation();
+          await postConversationList(context);
+          await context.post(buildTabStateMessage(state.tabState));
+          await postConversation(null, context);
+        });
       },
     };
   }
@@ -617,7 +735,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       refreshConfig: async (context) => {
         bind(context);
         config.reloadConfig();
-        await context.post({ type: 'configChanged' });
         await context.post(buildConfigStateMessage(safeConfig()));
       },
       openUserConfig: async (context) => {
@@ -627,16 +744,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           absolutePath: join(this.options.userHome, '.neko', 'config.toml'),
         });
       },
-      openHostConfig: async (context) => {
-        bind(context);
-        await this.options.configInteraction.openWorkspaceConfig({
-          identity: context.identity,
-          absolutePath: join(workspace.workspace.workspacePath, '.neko', 'config.toml'),
-        });
-      },
       readTabState: async (context) => {
         bind(context);
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
+        await state.tabOperationTail;
+        await context.post(buildTabStateMessage(state.tabState));
       },
       updateSettings: async ({ conversationId, settings }, context) => {
         bind(context);
@@ -654,27 +765,23 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           throw error;
         }
       },
-      updateTabState: async (message, context) => {
+      updateTabState: (message, context) => {
         bind(context);
-        if (message.expectedTabStateRevision !== state.tabStateRevision) {
-          throw new Error(
-            `Desktop Agent Tab revision ${message.expectedTabStateRevision} is stale; current revision is ${state.tabStateRevision}.`,
-          );
-        }
-        const active = message.activeTabId
-          ? message.openTabs.find((tab) => tab.id === message.activeTabId)
-          : undefined;
-        if (active && active.conversationId !== state.activeConversationId) {
-          throw new Error(
-            'Desktop ordinary conversation activation must use activateConversation.',
-          );
-        }
-        state.tabState = {
-          openTabs: message.openTabs.map(cloneTab),
-          activeTabId: message.activeTabId,
-        };
-        state.tabStateRevision += 1;
-        await context.post(buildTabStateMessage(state.tabState, state.tabStateRevision));
+        return enqueueTabOperation(state, async () => {
+          const active = message.activeTabId
+            ? message.openTabs.find((tab) => tab.id === message.activeTabId)
+            : undefined;
+          if (active && active.conversationId !== state.activeConversationId) {
+            throw new Error(
+              'Desktop ordinary conversation activation must use activateConversation.',
+            );
+          }
+          state.tabState = {
+            openTabs: message.openTabs.map(cloneTab),
+            activeTabId: message.activeTabId,
+          };
+          await context.post(buildTabStateMessage(state.tabState));
+        });
       },
     };
   }
@@ -790,16 +897,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return {
       discoverEndpoint: async (message, context) => {
         bind(context);
-        if (message.protocolVersion !== AGENT_WEBVIEW_PROTOCOL_VERSION) {
-          throw new Error(
-            `Unsupported Desktop Agent projection protocol ${message.protocolVersion}.`,
-          );
-        }
         await context.post({
           type: 'projectionEndpointReady',
-          protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
           realmId: message.realmId,
-          endpointEpoch: context.identity.connectionId,
         });
       },
       attach: (message, context) => run(() => projection.attach(message), message.key, context),
@@ -875,6 +975,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const turnInput: AgentTurnInput = {
       conversationId: input.request.conversationId,
       prompt: input.request.messageText,
+      ...(input.request.turnId === undefined ? {} : { turnId: input.request.turnId }),
       modelPolicy: resolved.policy,
       configuration: resolved.configuration,
       permissionPolicy: (events) =>
@@ -902,11 +1003,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     };
     const operation = input.workspace.startTurn(observedTurnInput);
     factsEvents.bind(input.facts.beginTurn({ identity: operation.identity, systemPrompt }));
-    await input.context.post({
-      type: 'agentPhase',
+    this.postMessageQueueSnapshot(
+      input.context,
+      input.workspace.readMessageQueue(input.request.conversationId),
+    );
+    this.getAgentStates(input.workspace.workspaceId).update({
       conversationId: input.request.conversationId,
       phase: 'thinking',
-      timestamp: Date.now(),
+      startedAt: Date.now(),
     });
     try {
       const turn = await operation.completion;
@@ -914,12 +1018,22 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         conversation: input.workspace.readConversationEvidence(input.request.conversationId),
         turn,
       });
+    } catch (error) {
+      if (!(error instanceof AgentQueuedTurnCancellationError)) throw error;
     } finally {
-      await input.context.post({
-        type: 'agentPhase',
+      this.postMessageQueueSnapshot(
+        input.context,
+        input.workspace.readMessageQueue(input.request.conversationId),
+      );
+      const residency = input.workspace
+        .readRuntimeResidency()
+        .conversations.find(
+          (conversation) => conversation.conversationId === input.request.conversationId,
+        );
+      this.getAgentStates(input.workspace.workspaceId).update({
         conversationId: input.request.conversationId,
-        phase: 'idle',
-        timestamp: Date.now(),
+        phase: residency?.running === true || residency?.queued === true ? 'thinking' : 'idle',
+        startedAt: Date.now(),
       });
     }
   }
@@ -962,13 +1076,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     validateModelSelection(provider, model, selected.providerId, selected.modelId);
     if (!provider || !model)
       throw new Error('Validated Desktop Agent model selection disappeared.');
-    if (provider.apiKey) {
-      await this.options.credentialRuntime.credentials.replace(
-        provider.id,
-        { type: 'api_key', key: provider.apiKey },
-        'user-config-import',
-      );
-    }
     const projection = registerOpenNekoPiProvider(workspace.models, {
       id: provider.id,
       name: provider.displayName,
@@ -978,14 +1085,16 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       auth: resolveAuth(provider, model),
       models: [projectPiModel(model)],
     });
-    let credential = await this.options.credentialRuntime.credentials.read(provider.id);
-    if (provider.requiresApiKey !== false && credential === undefined) {
+    let credentialConfigured =
+      (await this.options.credentialRuntime.credentials.status(provider.id)) !== undefined;
+    if (provider.requiresApiKey !== false && !credentialConfigured) {
       await this.options.credentialRuntime.auth.login({
         provider: projection.provider,
         method: 'api-key',
         interaction: this.options.credentialRuntime.interaction,
       });
-      credential = await this.options.credentialRuntime.credentials.read(provider.id);
+      credentialConfigured =
+        (await this.options.credentialRuntime.credentials.status(provider.id)) !== undefined;
     }
     const projectedModel = projection.models.find((candidate) => candidate.id === model.name);
     if (!projectedModel) {
@@ -1013,9 +1122,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           credentialState:
             provider.requiresApiKey === false
               ? 'not-required'
-              : credential === undefined
-                ? 'missing'
-                : 'configured',
+              : credentialConfigured
+                ? 'configured'
+                : 'missing',
         },
       ],
       userBindings: {
@@ -1133,18 +1242,21 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         filePath: join(this.options.userHome, '.neko', 'config.toml'),
       }),
       workspacePath: workspace.workspace.workspacePath,
+      assistantRuntimeSettings: this.options.runtimeSettings,
     });
     this.configs.set(workspace.workspaceId, config);
     return config;
   }
 
-  private getQueue(workspaceId: string, conversationId: string): AgentConversationMessageQueue {
-    const key = ownerKey(workspaceId, conversationId);
-    const existing = this.queues.get(key);
-    if (existing) return existing;
-    const queue = createAgentConversationMessageQueue({ conversationId });
-    this.queues.set(key, queue);
-    return queue;
+  private postMessageQueueSnapshot(
+    context: AgentHostRouteEffectContext,
+    snapshot: AgentMessageQueueSnapshot,
+  ): void {
+    this.track(
+      Promise.resolve(context.post(buildMessageQueueSnapshotMessage(snapshot))).then(
+        () => undefined,
+      ),
+    );
   }
 
   private getConfirmation(workspaceId: string, conversationId: string): PiToolConfirmationRegistry {
@@ -1154,6 +1266,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const confirmations = new PiToolConfirmationRegistry();
     this.confirmations.set(key, confirmations);
     return confirmations;
+  }
+
+  private getAgentStates(workspaceId: string): AgentStateRuntime {
+    const existing = this.agentStates.get(workspaceId);
+    if (existing) return existing;
+    const created = createAgentStateRuntime();
+    this.agentStates.set(workspaceId, created);
+    return created;
   }
 
   private track(operation: Promise<void>): void {
@@ -1168,30 +1288,119 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   }
 }
 
+function reconcileInitialConversationMessage(
+  conversationId: string,
+  messages: readonly Message[],
+  initialConversationId: string | undefined,
+  initialMessage: Message | undefined,
+): Message[] {
+  if (conversationId !== initialConversationId || !initialMessage) return [...messages];
+  if (
+    messages.some(
+      (message) =>
+        message.role === 'user' &&
+        (message.id === initialMessage.id || message.content === initialMessage.content),
+    )
+  ) {
+    return [...messages];
+  }
+  const insertionIndex = messages.findIndex(
+    (message) => message.timestamp >= initialMessage.timestamp,
+  );
+  if (insertionIndex === -1) return [...messages, initialMessage];
+  return [...messages.slice(0, insertionIndex), initialMessage, ...messages.slice(insertionIndex)];
+}
+
+export async function waitForDesktopAgentIdle(input: {
+  readonly conversationId: string;
+  readonly timeoutMs: number;
+  readonly afterIdentity?: { readonly turnId: string; readonly runId: string };
+  readonly readActiveTurn: () => unknown;
+  readonly readLatestIdentity: () =>
+    | { readonly conversationId: string; readonly turnId: string; readonly runId: string }
+    | undefined;
+  readonly now?: () => number;
+  readonly waitForPoll?: () => Promise<void>;
+}): Promise<{ readonly conversationId: string; readonly turnId: string; readonly runId: string }> {
+  const now = input.now ?? Date.now;
+  const waitForPoll = input.waitForPoll ?? waitForFactsPoll;
+  const deadline = now() + input.timeoutMs;
+  for (;;) {
+    const identity = input.readLatestIdentity();
+    if (identity && !sameTurnIdentity(identity, input.afterIdentity) && !input.readActiveTurn()) {
+      return {
+        conversationId: identity.conversationId,
+        turnId: identity.turnId,
+        runId: identity.runId,
+      };
+    }
+    if (now() >= deadline) {
+      if (!identity) {
+        throw new Error(
+          `Desktop Agent conversation '${input.conversationId}' has no observed turn identity within ${input.timeoutMs}ms.`,
+        );
+      }
+      throw new Error(
+        `Desktop Agent conversation '${input.conversationId}' did not reach terminal idle within ${input.timeoutMs}ms.`,
+      );
+    }
+    await waitForPoll();
+  }
+}
+
+function sameTurnIdentity(
+  identity: { readonly turnId: string; readonly runId: string },
+  expected: { readonly turnId: string; readonly runId: string } | undefined,
+): boolean {
+  return (
+    expected !== undefined &&
+    identity.turnId === expected.turnId &&
+    identity.runId === expected.runId
+  );
+}
+
 interface ConnectionState {
   activeConversationId: string | null;
   tabState: TabState;
-  tabStateRevision: number;
+  tabOperationTail: Promise<void>;
+}
+
+function enqueueTabOperation<T>(state: ConnectionState, operation: () => Promise<T>): Promise<T> {
+  const result = state.tabOperationTail.then(operation);
+  state.tabOperationTail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
 export function projectAgentSecretSafeConfig(config: AssistantConfigState): AssistantConfigState {
   return {
-    ...config,
-    providers: config.providers.map((provider) => ({ ...provider })),
-    configuredProviders: config.configuredProviders.map(({ apiKey: _apiKey, ...provider }) => ({
-      ...provider,
-    })),
+    providers: config.providers.map(projectAssistantProviderView),
+    configuredProviders: config.configuredProviders.map(projectAssistantConfiguredProviderView),
+    selectedProviderId: config.selectedProviderId,
+    selectedModelId: config.selectedModelId,
+    customSystemPrompt: config.customSystemPrompt,
+    autoExecuteTools: config.autoExecuteTools,
+    streamResponses: config.streamResponses,
+    showToolCalls: config.showToolCalls,
+    temperature: config.temperature,
+    maxTokens: config.maxTokens,
+    executionMode: config.executionMode,
+    chatModelOptions: structuredClone(config.chatModelOptions),
+    modelGroups: structuredClone(config.modelGroups),
+    defaultMediaModels: { ...config.defaultMediaModels },
+    ...(config.mediaUnderstandingModels === undefined
+      ? {}
+      : { mediaUnderstandingModels: structuredClone(config.mediaUnderstandingModels) }),
+    ...(config.configDiagnostic === undefined
+      ? {}
+      : { configDiagnostic: { ...config.configDiagnostic } }),
   };
 }
 
 function projectAgentSecretSafeSettings(settings: AssistantSettingsData): AssistantSettingsData {
-  return {
-    ...settings,
-    providers: settings.providers.map((provider) => ({ ...provider })),
-    configuredProviders: settings.configuredProviders.map(({ apiKey: _apiKey, ...provider }) => ({
-      ...provider,
-    })),
-  };
+  return projectAgentSecretSafeConfig(settings);
 }
 
 function projectSettingsMessage(
@@ -1215,9 +1424,38 @@ function projectSettingsMessage(
         description: '',
       })),
     })),
-    configuredProviders: settings.configuredProviders.map(({ apiKey: _apiKey, ...provider }) => ({
-      ...provider,
+    configuredProviders: settings.configuredProviders.map(projectAssistantConfiguredProviderView),
+  };
+}
+
+function projectAssistantProviderView(
+  provider: AssistantConfigState['providers'][number],
+): AssistantConfigState['providers'][number] {
+  return {
+    id: provider.id,
+    name: provider.name,
+    type: provider.type,
+    enabled: provider.enabled,
+    models: provider.models.map((model) => ({
+      id: model.id,
+      name: model.name,
+      enabled: model.enabled,
     })),
+    ...(provider.connectionKind === undefined ? {} : { connectionKind: provider.connectionKind }),
+    ...(provider.protocolProfile === undefined
+      ? {}
+      : { protocolProfile: provider.protocolProfile }),
+    ...(provider.supportLevel === undefined ? {} : { supportLevel: provider.supportLevel }),
+    ...(provider.requiresApiKey === undefined ? {} : { requiresApiKey: provider.requiresApiKey }),
+  };
+}
+
+function projectAssistantConfiguredProviderView(
+  provider: AssistantConfigState['configuredProviders'][number],
+): AssistantConfigState['configuredProviders'][number] {
+  return {
+    ...projectAssistantProviderView(provider),
+    ...(provider.baseUrl === undefined ? {} : { baseUrl: provider.baseUrl }),
   };
 }
 

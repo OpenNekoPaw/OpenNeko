@@ -51,8 +51,8 @@ export function resolveCharacterMemoryPath(projectRoot: string): string {
 
 export function assertGitTrackedEntityFactPath(filePath: string): void {
   const normalized = normalizePath(filePath);
-  if (/(?:^|\/)\.neko\/\.cache(?:\/|$)/i.test(normalized)) {
-    throw new Error('Creative entity facts must not be stored under .neko/.cache');
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) {
+    throw new Error('Creative entity facts must not be stored under a hidden path.');
   }
 }
 

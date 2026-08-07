@@ -11,11 +11,13 @@ import {
 } from '@neko/canvas-domain';
 import type { LocalMetadataStore } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
-import { AGENT_STATE_MIGRATIONS, M1_LOCAL_METADATA_MIGRATIONS } from '@neko/local-metadata/sqlite';
+import {
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+} from '@neko/local-metadata/sqlite';
 import {
   WorkspaceBoardDeliveryCoordinator,
   WorkspaceBoardDeliveryLedger,
-  createCanvasWorkspaceBoardRevision,
   type CanvasWorkspaceBoardLoadedDocument,
   type CanvasWorkspaceBoardMutationPort,
 } from '../index';
@@ -23,6 +25,9 @@ import {
 const WORKSPACE_ID = 'workspace-board-domain-test';
 const stores: LocalMetadataStore[] = [];
 const directories: string[] = [];
+let identitySequence = 0;
+
+const createIdentity = (): string => `writer-lease-${(identitySequence += 1)}`;
 
 afterEach(async () => {
   await Promise.all(stores.splice(0).map((store) => store.dispose()));
@@ -118,19 +123,20 @@ describe('Workspace Board delivery coordinator', () => {
     await editorOwner.releaseWriterOwnership();
   });
 
-  it('rejects a stale epoch after lease takeover', async () => {
+  it('rejects a stale lease identity after takeover', async () => {
     let now = 1_000;
     const store = await createStore();
     const ledger = new WorkspaceBoardDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
+      createIdentity,
       now: () => now,
     });
     const first = await ledger.acquireWriter({ holderId: 'host-a', leaseDurationMs: 10 });
     expect(first).toBeDefined();
     now = 2_000;
     const second = await ledger.acquireWriter({ holderId: 'host-b', leaseDurationMs: 10 });
-    expect(second?.epoch).toBeGreaterThan(first?.epoch ?? 0);
+    expect(second?.leaseId).not.toBe(first?.leaseId);
     await expect(ledger.assertWriter(first!)).rejects.toThrow('stale-writer');
   });
 
@@ -141,6 +147,7 @@ describe('Workspace Board delivery coordinator', () => {
     const ledger = new WorkspaceBoardDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
+      createIdentity,
       now: () => now,
     });
     const request = delivery('delivery:crash-window');
@@ -156,7 +163,6 @@ describe('Workspace Board delivery coordinator', () => {
     const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
     await mutation.saveAtomic({
       documentUri: loaded.documentUri,
-      expectedRevision: loaded.revision,
       canvasData: plan.canvasData,
     });
     await ledger.releaseWriter(claim!);
@@ -187,20 +193,6 @@ describe('Workspace Board delivery coordinator', () => {
       { status: 'projected', deliveryId: request.process.deliveryId },
     ]);
     expect(mutation.saveCount).toBe(1);
-  });
-
-  it('reloads and re-plans once when the Canvas revision changes before save', async () => {
-    const store = await createStore();
-    const mutation = new MemoryMutationPort();
-    mutation.changeRevisionBeforeNextSave = true;
-    const coordinator = createCoordinator(store, mutation, 'host-a');
-
-    await expect(coordinator.enqueue(delivery('delivery:replan'))).resolves.toMatchObject([
-      { status: 'projected' },
-    ]);
-    expect(mutation.saveAttempts).toBe(2);
-    expect(mutation.saveCount).toBe(1);
-    expect(mutation.canvasData.nodes.some((node) => node.id === 'user-edit')).toBe(true);
   });
 
   it('returns a conflict without writing when a deterministic delivery node is occupied', async () => {
@@ -239,7 +231,6 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
   saveCount = 0;
   saveAttempts = 0;
   failBeforeSave?: Error;
-  changeRevisionBeforeNextSave = false;
 
   async loadLatest(input: {
     readonly documentUri: string;
@@ -248,43 +239,20 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
     return {
       documentUri: input.documentUri,
       canvasData: this.canvasData,
-      revision: createCanvasWorkspaceBoardRevision(this.canvasData),
       exists: this.canvasData.nodes.length > 0,
     };
   }
 
   async saveAtomic(input: {
     readonly documentUri: string;
-    readonly expectedRevision: string;
     readonly canvasData: CanvasData;
     readonly assertWriter?: () => Promise<void>;
-  }): Promise<{ readonly revision: string }> {
+  }): Promise<void> {
     this.saveAttempts += 1;
     if (this.failBeforeSave) throw this.failBeforeSave;
-    if (this.changeRevisionBeforeNextSave) {
-      this.changeRevisionBeforeNextSave = false;
-      this.canvasData = {
-        ...this.canvasData,
-        nodes: [
-          ...this.canvasData.nodes,
-          {
-            id: 'user-edit',
-            type: 'markdown',
-            position: { x: 8, y: 8 },
-            size: { width: 320, height: 180 },
-            zIndex: 1,
-            data: { content: 'edit' },
-          },
-        ],
-      };
-    }
-    const current = createCanvasWorkspaceBoardRevision(this.canvasData);
-    if (current !== input.expectedRevision)
-      throw new Error('stale-revision: memory document changed.');
     await input.assertWriter?.();
     this.canvasData = input.canvasData;
     this.saveCount += 1;
-    return { revision: createCanvasWorkspaceBoardRevision(this.canvasData) };
   }
 }
 
@@ -298,6 +266,7 @@ function createCoordinator(
     ledger: new WorkspaceBoardDeliveryLedger({
       metadataStore: store,
       workspaceId: WORKSPACE_ID,
+      createIdentity,
       ...(now ? { now } : {}),
     }),
     mutation,
@@ -315,10 +284,10 @@ async function createStore(): Promise<LocalMetadataStore> {
     databasePath: resolveGlobalStorageLayout(homedir).database,
     busyTimeoutMs: 1_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: WORKSPACE_ID },
+    identity: { workspaceId: WORKSPACE_ID },
     locator: { kind: 'variable', value: '${HOME}/workspace' },
     seenAt: '2026-07-15T00:00:00.000Z',
   });
@@ -327,7 +296,6 @@ async function createStore(): Promise<LocalMetadataStore> {
 
 function delivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
   return {
-    version: 2,
     target: { workspaceId: WORKSPACE_ID, workspaceUri: 'file:///workspace/project/' },
     process: { deliveryId, sourceHost: 'headless', createdAt: '2026-07-15T00:00:00.000Z' },
     artifacts: [
@@ -336,10 +304,9 @@ function delivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
         title: 'Analysis',
         markdown: '# Analysis\n\nA durable finding.',
         provenance: {
-          version: 2,
           deliveryId,
           artifactId: `${deliveryId}:analysis`,
-          revision: `${deliveryId}:revision-1`,
+          contentFingerprint: `sha256:${deliveryId}:analysis`,
           kind: 'markdown',
           role: 'analysis',
           sourceId: `artifact:${deliveryId}`,
@@ -355,7 +322,6 @@ function generatedBatchDelivery(
   count: number,
 ): CanvasWorkspaceProjectionRequest {
   return {
-    version: 2,
     target: { workspaceId: WORKSPACE_ID, workspaceUri: 'file:///workspace/project/' },
     process: {
       deliveryId,
@@ -371,7 +337,6 @@ function generatedBatchDelivery(
         contentLocator: {
           kind: 'generated-output' as const,
           outputId,
-          revision: `revision:${outputId}`,
           digest,
           path: `neko/generated/image/${outputId}.png`,
         },
@@ -386,10 +351,9 @@ function generatedBatchDelivery(
           },
         },
         provenance: {
-          version: 2 as const,
           deliveryId,
           artifactId: outputId,
-          revision: digest,
+          contentFingerprint: digest,
           kind: 'image' as const,
           role: 'output' as const,
           sourceId: `artifact:${outputId}`,

@@ -1,6 +1,6 @@
 import type { MarkdownAnnotation } from './annotations';
 import type { MarkdownDiagnostic } from './diagnostics';
-import type { MarkdownRevision, MarkdownSessionId } from './identity';
+import type { MarkdownDocumentId, MarkdownSessionId } from './identity';
 import type { MarkdownNode, MarkdownRootNode } from './nodes';
 import {
   assertMarkdownRangeContained,
@@ -11,7 +11,7 @@ import {
 
 export interface NormalizedMarkdownDocument {
   readonly sessionId: MarkdownSessionId;
-  readonly revision: MarkdownRevision;
+  readonly documentId: MarkdownDocumentId;
   readonly source: string;
   readonly root: MarkdownRootNode;
   readonly annotations: readonly MarkdownAnnotation[];

@@ -62,13 +62,12 @@ describe('Desktop Agent resource display projector', () => {
       windowId: 'window-1',
       viewId: 'view-1',
       sessionId: 'agent-display:conversation-1:attachment-1',
-      endpointEpoch: 'connection-1',
-      revision: expect.any(String),
-      generation: '3',
+      connectionId: 'connection-1',
+      sourceFingerprint: expect.any(String),
     });
     expect(source).toMatchObject({
       mediaType: 'video/mp4',
-      revision: expect.any(String),
+      sourceFingerprint: expect.any(String),
     });
     expect(source?.absolutePath).toMatch(/[/\\]media[/\\]clip\.mp4$/u);
     expect(recordProjection).toHaveBeenCalledWith({
@@ -98,7 +97,7 @@ describe('Desktop Agent resource display projector', () => {
           kind: 'workspace-file',
           path: 'missing/video.mp4',
         },
-        url: 'neko-media://desktop/legacy-video',
+        url: 'neko-media://desktop/unsupported-video',
         videoUrl: 'file:///private/tmp/video.mp4',
         audioUrl: 'data:audio/wav;base64,AA==',
         mimeType: 'video/mp4',
@@ -159,7 +158,7 @@ describe('Desktop Agent resource display projector', () => {
     await expect(projector.project(snapshotFrame({}))).rejects.toThrow('disposed');
   });
 
-  it('isolates display leases across renderer connection epochs', async () => {
+  it('isolates display leases across exact renderer connections', async () => {
     const fixture = await createFixture('media/clip.mp4');
     const releaseOld = vi.fn();
     const releaseCurrent = vi.fn();
@@ -189,7 +188,7 @@ describe('Desktop Agent resource display projector', () => {
     expect(releaseOld).toHaveBeenCalledOnce();
     expect(releaseCurrent).not.toHaveBeenCalled();
     expect(currentResources.registerFile).toHaveBeenCalledWith(
-      expect.objectContaining({ endpointEpoch: 'connection-2' }),
+      expect.objectContaining({ connectionId: 'connection-2' }),
       expect.any(Object),
     );
     currentProjector.dispose();
@@ -210,8 +209,6 @@ function createProjector(
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       viewId: 'view-1',
-      viewEpoch: 1,
-      rendererEpoch: 1,
       connectionId,
     },
     workspace: {
@@ -233,7 +230,6 @@ function snapshotFrame(data: unknown): ConversationProjectionAttachmentHostFrame
     messageId: 'message-1',
     itemId: 'tool-item-1',
     sequence: 1,
-    itemRevision: 1,
     status: 'complete',
     createdAt: 1,
     updatedAt: 1,
@@ -259,16 +255,13 @@ function snapshotFrame(data: unknown): ConversationProjectionAttachmentHostFrame
   return {
     type: 'projectionSnapshot',
     key: {
-      endpointEpoch: 'connection-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: 'conversation-1',
     },
     sequence: 0,
-    projectionVersion: 3,
     projection: {
       conversationId: 'conversation-1',
-      projectionVersion: 3,
       turns: [
         {
           turnId: 'turn-1',

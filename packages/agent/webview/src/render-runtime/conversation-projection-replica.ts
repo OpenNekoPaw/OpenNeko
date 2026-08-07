@@ -10,7 +10,6 @@ import {
 export interface ConversationProjectionReplicaSnapshot {
   readonly conversationId: string;
   readonly projection: ConversationProjectionSnapshot | null;
-  readonly revision: number;
 }
 
 export interface ConversationProjectionReplicaPublication {
@@ -46,7 +45,6 @@ class DefaultConversationProjectionReplica implements ConversationProjectionRepl
     this.snapshot = Object.freeze({
       conversationId,
       projection: null,
-      revision: 0,
     });
   }
 
@@ -65,7 +63,6 @@ class DefaultConversationProjectionReplica implements ConversationProjectionRepl
   ): ConversationProjectionReplicaPublication {
     this.assertActive();
     this.assertOwner(snapshot.conversationId);
-    assertProjectionVersion(snapshot.projectionVersion);
     return this.prepareCommit(cloneConversationProjectionSnapshot(snapshot));
   }
 
@@ -98,7 +95,7 @@ class DefaultConversationProjectionReplica implements ConversationProjectionRepl
   private prepareCommit(
     projection: ConversationProjectionSnapshot,
   ): ConversationProjectionReplicaPublication {
-    const expectedRevision = this.snapshot.revision;
+    const expectedSnapshot = this.snapshot;
     let published = false;
     return {
       publish: (): void => {
@@ -108,9 +105,9 @@ class DefaultConversationProjectionReplica implements ConversationProjectionRepl
             'Conversation projection replica publication may only be published once.',
           );
         }
-        if (this.snapshot.revision !== expectedRevision) {
+        if (this.snapshot !== expectedSnapshot) {
           throw new Error(
-            `Conversation projection replica ${this.conversationId} prepared revision ${expectedRevision} is stale; current revision is ${this.snapshot.revision}.`,
+            `Conversation projection replica ${this.conversationId} rejected a stale prepared publication.`,
           );
         }
         published = true;
@@ -123,7 +120,6 @@ class DefaultConversationProjectionReplica implements ConversationProjectionRepl
     this.snapshot = Object.freeze({
       conversationId: this.conversationId,
       projection,
-      revision: this.snapshot.revision + 1,
     });
     for (const listener of this.listeners) listener();
   }
@@ -140,12 +136,6 @@ class DefaultConversationProjectionReplica implements ConversationProjectionRepl
     if (this.disposed) {
       throw new Error(`Conversation projection replica ${this.conversationId} is disposed.`);
     }
-  }
-}
-
-function assertProjectionVersion(version: number): void {
-  if (!Number.isInteger(version) || version < 0) {
-    throw new Error(`Conversation projection snapshot has invalid version ${version}.`);
   }
 }
 

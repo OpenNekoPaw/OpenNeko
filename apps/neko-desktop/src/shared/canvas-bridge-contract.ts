@@ -34,10 +34,10 @@ export function parseDesktopCanvasHostIdentity(value: unknown): CanvasHostRuntim
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
     windowId: requireIdentity(record['windowId'], 'Window'),
     viewId: requireIdentity(record['viewId'], 'View'),
-    viewEpoch: requirePositiveInteger(record['viewEpoch'], 'View epoch'),
+    viewInstanceId: requireIdentity(record['viewInstanceId'], 'View instance'),
     documentId: requireIdentity(record['documentId'], 'document'),
     sessionId: requireIdentity(record['sessionId'], 'session'),
-    endpointEpoch: requireIdentity(record['endpointEpoch'], 'endpoint epoch'),
+    rendererSessionId: requireIdentity(record['rendererSessionId'], 'renderer session identity'),
   };
 }
 
@@ -322,23 +322,16 @@ export function isSameCanvasHostIdentity(
     left.workspaceId === right.workspaceId &&
     left.windowId === right.windowId &&
     left.viewId === right.viewId &&
-    left.viewEpoch === right.viewEpoch &&
+    left.viewInstanceId === right.viewInstanceId &&
     left.documentId === right.documentId &&
     left.sessionId === right.sessionId &&
-    left.endpointEpoch === right.endpointEpoch
+    left.rendererSessionId === right.rendererSessionId
   );
 }
 
 function requireIdentity(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`Desktop Canvas ${label} identity is required.`);
-  }
-  return value;
-}
-
-function requirePositiveInteger(value: unknown, label: string): number {
-  if (!Number.isSafeInteger(value) || typeof value !== 'number' || value < 1) {
-    throw new Error(`Desktop Canvas ${label} must be a positive integer.`);
   }
   return value;
 }
@@ -403,7 +396,6 @@ function parseOptionalVideoDescriptor(value: unknown): HtmlVideoDescriptor | und
   if (value === undefined) return undefined;
   if (
     !isRecord(value) ||
-    value['version'] !== 1 ||
     typeof value['url'] !== 'string' ||
     !isMediaResourceUrl(value['url']) ||
     typeof value['mimeType'] !== 'string' ||
@@ -413,7 +405,6 @@ function parseOptionalVideoDescriptor(value: unknown): HtmlVideoDescriptor | und
     throw new Error('Desktop Canvas video descriptor is invalid.');
   }
   return {
-    version: 1,
     url: value['url'],
     mimeType: value['mimeType'],
     preparationProfile: value['preparationProfile'],
@@ -428,7 +419,6 @@ function parseOptionalAudioDescriptor(value: unknown): HtmlAudioDescriptor | und
   if (value === undefined) return undefined;
   if (
     !isRecord(value) ||
-    value['version'] !== 1 ||
     typeof value['url'] !== 'string' ||
     !isMediaResourceUrl(value['url']) ||
     typeof value['mimeType'] !== 'string' ||
@@ -437,7 +427,6 @@ function parseOptionalAudioDescriptor(value: unknown): HtmlAudioDescriptor | und
     throw new Error('Desktop Canvas audio descriptor is invalid.');
   }
   return {
-    version: 1,
     url: value['url'],
     mimeType: value['mimeType'],
     durationSeconds: requireNonNegativeNumber(

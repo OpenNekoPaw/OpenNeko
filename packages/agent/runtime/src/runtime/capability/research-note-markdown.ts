@@ -40,8 +40,8 @@ function assertUserSelectedMarkdownPath(path: string): void {
   if (!normalized.endsWith('.md')) {
     throw new Error('ResearchNote must be saved as a Markdown file.');
   }
-  if (normalized === '.neko/memory.md' || normalized.includes('/.neko/memory.md')) {
-    throw new Error('ResearchNote must not be saved into .neko project memory.');
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) {
+    throw new Error('ResearchNote must not be saved into managed project-local storage.');
   }
 }
 

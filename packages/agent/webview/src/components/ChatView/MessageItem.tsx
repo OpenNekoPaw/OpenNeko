@@ -27,7 +27,7 @@ import {
   projectAttachmentReferenceToken,
   projectMessageContextReferenceToken,
 } from '../../presenters/reference-token-presenter';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
 import { projectMarkdownResourceRendering } from '../../presenters/markdown-resource-rendering-presenter';
 import { selectMessageIdentity, type MessageIdentityMap } from './message-identity';
 import { ReferenceToken } from './InputArea/ReferenceToken';
@@ -95,6 +95,7 @@ function AttachmentDisplay({ projection }: { projection: MessageAttachmentProjec
 }
 
 function MessageContextReferenceDisplay({ reference }: { reference: MessageContextReference }) {
+  const agentHostMessages = useAgentHostMessages();
   const token = projectMessageContextReferenceToken(reference);
   return (
     <ReferenceToken
@@ -104,7 +105,7 @@ function MessageContextReferenceDisplay({ reference }: { reference: MessageConte
       meta={token.meta}
       thumbnailSrc={token.thumbnailSrc}
       onClick={() =>
-        AgentHostMessages.revealContextSource(
+        agentHostMessages.revealContextSource(
           reference.type,
           reference.id,
           reference.contentLocator,

@@ -12,17 +12,16 @@ const identity = {
   messageId: 'message-a',
 } as const;
 
-function append(content: string, itemRevision: number): AgentTurnTimelineOperation {
+function append(content: string, updatedAt: number): AgentTurnTimelineOperation {
   const item = {
     ...identity,
     itemId: 'text-1',
     sequence: 1,
-    itemRevision,
     kind: 'assistant_text',
     status: 'streaming',
-    payload: { content, format: 'markdown', sourceGeneration: 1 },
+    payload: { content, format: 'markdown' },
     createdAt: 1,
-    updatedAt: itemRevision,
+    updatedAt,
   } satisfies AgentTurnTimelineAssistantTextItem;
   return { operation: 'append', item };
 }
@@ -52,7 +51,7 @@ describe('ConversationProjectionOperationBuffer', () => {
     if (operation?.operation !== 'append' || operation.item.kind !== 'assistant_text') {
       throw new Error('Expected coalesced assistant text append.');
     }
-    expect(operation.item.itemRevision).toBe(4_000);
+    expect(operation.item.updatedAt).toBe(4_000);
     expect(operation.item.payload.content).toHaveLength(4_000);
     expect(buffer.operationCount).toBe(0);
     expect(buffer.textBytes).toBe(0);
@@ -77,18 +76,19 @@ describe('ConversationProjectionOperationBuffer', () => {
     ).toEqual([{ percent: 10 }, { percent: 40 }, { percent: 90 }]);
   });
 
-  it('preserves semantic boundaries between different text generations', () => {
+  it('preserves semantic boundaries between different text items', () => {
     const buffer = createConversationProjectionOperationBuffer();
     buffer.push(append('before', 1));
-    const nextGeneration = append('after', 2);
-    if (nextGeneration.operation !== 'append' || nextGeneration.item.kind !== 'assistant_text') {
+    const nextItem = append('after', 2);
+    if (nextItem.operation !== 'append' || nextItem.item.kind !== 'assistant_text') {
       throw new Error('Expected assistant text append.');
     }
     buffer.push({
-      ...nextGeneration,
+      ...nextItem,
       item: {
-        ...nextGeneration.item,
-        payload: { ...nextGeneration.item.payload, sourceGeneration: 2 },
+        ...nextItem.item,
+        itemId: 'text-2',
+        sequence: 2,
       },
     });
 
@@ -96,14 +96,13 @@ describe('ConversationProjectionOperationBuffer', () => {
   });
 });
 
-function toolProgress(itemRevision: number, percent: number): AgentTurnTimelineOperation {
+function toolProgress(updatedAt: number, percent: number): AgentTurnTimelineOperation {
   return {
     operation: 'upsert',
     item: {
       ...identity,
       itemId: 'tool-1',
       sequence: 2,
-      itemRevision,
       kind: 'tool_call',
       status: 'pending',
       parentAnchor: 'turn',
@@ -116,7 +115,7 @@ function toolProgress(itemRevision: number, percent: number): AgentTurnTimelineO
         progress: { summary: `${percent}%`, data: { percent } },
       },
       createdAt: 1,
-      updatedAt: itemRevision,
+      updatedAt,
     },
   };
 }

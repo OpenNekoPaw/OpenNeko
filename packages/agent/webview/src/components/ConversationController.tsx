@@ -24,17 +24,17 @@ import {
   useSyncExternalStore,
 } from 'react';
 import {
-  NEKO_AGENT_HOST_MESSAGE_EVENT,
   type AgentHostToWebviewMessage,
   SettingsState,
   AgentState,
   type AgentSessionDiagnosticMessage,
+  type AgentRootPresentation,
   Message,
   OpenTab,
   SessionMode,
   TabType,
+  requireAgentDraftHostRuntimeAdapter,
 } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../messages';
 import type {
   SkillSummary,
   EntryPromptMenu,
@@ -67,6 +67,7 @@ import type { ActivationProgressTimeline } from '../presenters/activation-progre
 import { shouldActivateForegroundConversation } from '../handlers/foreground-activation';
 import { ConversationTabRuntimeView } from './ConversationTabRuntimeView';
 import { useRetainedTabComponents } from '../render-runtime/useRetainedTabComponents';
+import { useAgentHostMessages, useAgentHostRuntimeAdapter } from '../host-runtime-context';
 import { isCharacterRoleConversationKind } from '../presenters/character-role-session-presenter';
 import type {
   ConversationStreamingSnapshot,
@@ -96,10 +97,19 @@ import {
 } from '../presenters/conversation-session-state-presenter';
 import { DEFAULT_GENERATION_PARAMS } from './ChatView/InputArea/types';
 import { useTabRenderRuntimeRegistry } from '../render-runtime/useTabRenderRuntimeRegistry';
+import {
+  readAgentEntryDraftSnapshot,
+  writeAgentEntryDraftSnapshot,
+} from '../render-runtime/tab-render-realm-state';
 import { useProjectionEndpoint } from '../render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
 import { submitRoleplayEntrySelection } from './ChatView/roleplay-entry-action';
+import { AgentDiagnosticToast } from './AgentDiagnosticToast';
+import {
+  useComposerWorkspacePresentation,
+  type AgentComposerWorkspaceTarget,
+} from './ComposerWorkspaceContext';
 
 // =============================================================================
 // Props
@@ -129,6 +139,7 @@ export interface ConversationControllerProps {
   initialConversation?: { readonly id: string; readonly title: string };
   initialInput?: { readonly id: string; readonly value: string };
   emptyStatePresentation?: 'default' | 'desktop-dock';
+  agentPresentation?: AgentRootPresentation;
   settings: SettingsState;
   hasConfigSnapshot: boolean;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
@@ -176,6 +187,7 @@ function applyConversationSettingsSnapshot(
 }
 
 export function ConversationController({
+  agentPresentation,
   emptyStatePresentation = 'default',
   initialConversation,
   initialInput,
@@ -199,6 +211,10 @@ export function ConversationController({
   renderHeader,
 }: ConversationControllerProps) {
   const { t } = useTranslation();
+  const hostRuntimeAdapter = useAgentHostRuntimeAdapter();
+  const agentHostMessages = useAgentHostMessages();
+  const composerWorkspace = useComposerWorkspacePresentation();
+  const isDraftPresentation = agentPresentation?.kind === 'draft';
   // ---- Conversation state ----
   const conversation = useConversationState();
   const {
@@ -244,6 +260,7 @@ export function ConversationController({
   );
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [initialNavigationHydration, setInitialNavigationHydration] = useState({
+    runtimeId: hostRuntimeAdapter.runtimeId,
     conversationList: false,
     tabState: false,
   });
@@ -254,15 +271,22 @@ export function ConversationController({
   const [entryInputValue, setEntryInputValue] = useState('');
   const entryInputValueRef = useRef('');
   const [entryContextReferences, setEntryContextReferences] = useState<AgentContextPayload[]>([]);
+  const [entryWorkspaceTarget, setEntryWorkspaceTarget] = useState<AgentComposerWorkspaceTarget>();
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
+  const [entryExecutionMode, setEntryExecutionMode] = useState<SettingsState['executionMode']>(
+    settings.executionMode,
+  );
   const [entryGenCategory, setEntryGenCategory] = useState<GenCategory>('image');
   const [entryGenParams, setEntryGenParams] = useState<GenerationParams>(DEFAULT_GENERATION_PARAMS);
+  const activeDraftIdRef = useRef<string>();
+  const skipEntryDraftWriteRef = useRef<string>();
+  const committedEntryDraftIdRef = useRef<string>();
 
   // ---- Per-conversation ref Maps ----
   const conversationTokenCountRef = useRef<Map<string, number>>(new Map());
   const conversationCompressingRef = useRef<Map<string, boolean>>(new Map());
   const conversationMediaCallCountRef = useRef<Map<string, number>>(new Map());
-  const [projectionVersion, forceUpdate] = useState(0);
+  const [renderSignal, setRenderSignal] = useState(false);
 
   const mentionSearchFilterRef = useRef(mentionSearchFilter);
   useEffect(() => {
@@ -314,12 +338,16 @@ export function ConversationController({
   // ---- Agent state ----
   const [, setAgentState] = useState<AgentState | null>(null);
   const conversationAgentStateRef = useRef<Map<string, AgentState>>(new Map());
-  const forceAgentStateUpdate = useCallback(() => forceUpdate((n) => n + 1), []);
+  const forceAgentStateUpdate = useCallback(() => setRenderSignal((current) => !current), []);
   const isTablessConversationViewRef = useRef(false);
   const pendingForegroundConversationActivationRef =
     useRef<PendingForegroundConversationActivation | null>(null);
-  const tabStateRevisionRef = useRef(0);
   const restoredConversationIdsRef = useRef(new Set<string>());
+  const navigationRuntimeOwnerRef = useRef(hostRuntimeAdapter.runtimeId);
+  if (navigationRuntimeOwnerRef.current !== hostRuntimeAdapter.runtimeId) {
+    navigationRuntimeOwnerRef.current = hostRuntimeAdapter.runtimeId;
+    restoredConversationIdsRef.current.clear();
+  }
   const [isForegroundConversationActivationPending, setIsForegroundConversationActivationPending] =
     useState(false);
   const reportConversationDiagnostic = useCallback(
@@ -369,6 +397,72 @@ export function ConversationController({
   } | null>(null);
   const [entryPromptMenu, setEntryPromptMenu] = useState<EntryPromptMenu | null>(null);
   const nextQueuedEditRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    if (agentPresentation?.kind !== 'draft') return;
+    if (activeDraftIdRef.current === agentPresentation.draftId) return;
+    activeDraftIdRef.current = agentPresentation.draftId;
+    committedEntryDraftIdRef.current = undefined;
+    skipEntryDraftWriteRef.current = agentPresentation.draftId;
+    const restored = readAgentEntryDraftSnapshot(hostRuntimeAdapter, agentPresentation.draftId);
+    const entryDraft = restored.snapshot;
+
+    setOpenTabs([]);
+    setActiveTabId(null);
+    setActiveConversationId(null);
+    clearVisibleState();
+    setActiveTab('chat');
+    setEntryAction('start-chat');
+    updateEntryInputValue(entryDraft?.inputValue ?? '');
+    setEntryContextReferences(entryDraft ? [...entryDraft.contextReferences] : []);
+    setEntryWorkspaceTarget(entryDraft?.workspaceTarget);
+    setEntrySelectedModel((current) => entryDraft?.selectedModel ?? current);
+    setEntryExecutionMode(entryDraft?.executionMode ?? settings.executionMode);
+    setGlobalError(restored.diagnostics[0]?.message ?? null);
+    setPendingSendRequest(null);
+    setInitialInputRequest(null);
+    setInitialSessionModeRequest(null);
+    setEntryPromptMenu(null);
+    pendingForegroundConversationActivationRef.current = null;
+    setIsForegroundConversationActivationPending(false);
+    setForegroundAvailabilityByConversation(new Map());
+    isTablessConversationViewRef.current = true;
+  }, [
+    agentPresentation,
+    clearVisibleState,
+    setActiveConversationId,
+    setActiveTabId,
+    setOpenTabs,
+    updateEntryInputValue,
+    hostRuntimeAdapter,
+    settings.executionMode,
+  ]);
+
+  useEffect(() => {
+    if (agentPresentation?.kind !== 'draft') return;
+    if (activeDraftIdRef.current !== agentPresentation.draftId) return;
+    if (committedEntryDraftIdRef.current === agentPresentation.draftId) return;
+    if (skipEntryDraftWriteRef.current === agentPresentation.draftId) {
+      skipEntryDraftWriteRef.current = undefined;
+      return;
+    }
+    writeAgentEntryDraftSnapshot(hostRuntimeAdapter, {
+      draftId: agentPresentation.draftId,
+      inputValue: entryInputValue,
+      contextReferences: entryContextReferences,
+      ...(entryWorkspaceTarget === undefined ? {} : { workspaceTarget: entryWorkspaceTarget }),
+      selectedModel: entrySelectedModel,
+      executionMode: entryExecutionMode,
+    });
+  }, [
+    agentPresentation,
+    entryContextReferences,
+    entryExecutionMode,
+    entryInputValue,
+    entrySelectedModel,
+    entryWorkspaceTarget,
+    hostRuntimeAdapter,
+  ]);
 
   // ---- Context chips & ambient nodes ----
   const [ambientNodesByConversation, setAmbientNodesByConversation] = useState<
@@ -450,7 +544,7 @@ export function ConversationController({
     ambientNodesByConversation,
     conversationRenderCoordinator,
     openTabs,
-    projectionVersion,
+    renderSignal,
     visibleConversationId,
     workItemsByConversation,
   ]);
@@ -537,7 +631,7 @@ export function ConversationController({
       const selectedProviderId = selectedOption.providerId;
       const selectedModelId = selectedOption.modelId;
 
-      AgentHostMessages.updateSettings(
+      agentHostMessages.updateSettings(
         {
           providerId: selectedProviderId,
           modelId: selectedModelId,
@@ -545,7 +639,7 @@ export function ConversationController({
         conversationId,
       );
     },
-    [activeSettings.chatModelOptions],
+    [activeSettings.chatModelOptions, agentHostMessages],
   );
   const handleEntryModelSelect = useCallback(
     (modelId: string) => {
@@ -554,20 +648,12 @@ export function ConversationController({
       );
       if (!selectedOption?.providerId || !selectedOption.modelId) return;
       setEntrySelectedModel(modelId);
-      updateSettings({
-        selectedProviderId: selectedOption.providerId,
-        selectedModelId: selectedOption.modelId,
-      });
     },
-    [activeSettings.chatModelOptions, updateSettings],
-  );
-  const updateEntrySettings = useCallback(
-    (partial: Partial<SettingsState>) => updateSettings(partial),
-    [updateSettings],
+    [activeSettings.chatModelOptions],
   );
   const conversationKind = activeOpenTab?.kind ?? 'chat';
 
-  const triggerForceUpdate = useCallback(() => forceUpdate((n) => n + 1), []);
+  const triggerForceUpdate = useCallback(() => setRenderSignal((current) => !current), []);
   const updateConversationRenderState = useCallback(
     (conversationId: string, updater: ConversationRenderStateUpdater) => {
       commitConversationRenderState(conversationId, updater);
@@ -576,13 +662,16 @@ export function ConversationController({
     [commitConversationRenderState, triggerForceUpdate],
   );
   const requestConfigSnapshot = useCallback(() => {
-    AgentHostMessages.refreshConfigSnapshot();
-  }, []);
-  const requestConversationResourceSnapshot = useCallback((conversationId: string) => {
-    AgentHostMessages.getSettings(conversationId);
-    AgentHostMessages.getContextTokenCount(conversationId);
-    AgentHostMessages.getMessageQueue(conversationId);
-  }, []);
+    agentHostMessages.refreshConfigSnapshot();
+  }, [agentHostMessages]);
+  const requestConversationResourceSnapshot = useCallback(
+    (conversationId: string) => {
+      agentHostMessages.getSettings(conversationId);
+      agentHostMessages.getContextTokenCount(conversationId);
+      agentHostMessages.getMessageQueue(conversationId);
+    },
+    [agentHostMessages],
+  );
 
   const handleUserMessageSent = useCallback(
     (event: { conversationId: string; message: Message }) => {
@@ -706,6 +795,7 @@ export function ConversationController({
 
   // ---- Message handler ----
   const { handleMessage, disposeConversationRendering } = useMessageHandler({
+    agentHostMessages,
     messages,
     isThinking,
     activeConversationId,
@@ -716,7 +806,6 @@ export function ConversationController({
     activeTabId,
     isTablessConversationViewRef,
     pendingForegroundConversationActivationRef,
-    tabStateRevisionRef,
     restoredConversationIdsRef,
     reconcileTabRenderRuntimes: (bindings, nextActiveTabId) => {
       tabRenderRuntimeRegistry.reconcile(bindings, nextActiveTabId);
@@ -801,6 +890,30 @@ export function ConversationController({
     controllerMessageHandlerRef.current = handleMessage;
   }, [handleMessage]);
 
+  const markInitialNavigationHydrated = useCallback(
+    (type: 'conversationList' | 'tabState') => {
+      setInitialNavigationHydration((current) => ({
+        runtimeId: hostRuntimeAdapter.runtimeId,
+        conversationList:
+          type === 'conversationList' ||
+          (current.runtimeId === hostRuntimeAdapter.runtimeId && current.conversationList),
+        tabState:
+          type === 'tabState' ||
+          (current.runtimeId === hostRuntimeAdapter.runtimeId && current.tabState),
+      }));
+    },
+    [hostRuntimeAdapter.runtimeId],
+  );
+
+  useEffect(() => {
+    restoredConversationIdsRef.current.clear();
+    setInitialNavigationHydration({
+      runtimeId: hostRuntimeAdapter.runtimeId,
+      conversationList: false,
+      tabState: false,
+    });
+  }, [hostRuntimeAdapter.runtimeId]);
+
   useEffect(() => {
     const handleControllerMessage = (event: MessageEvent) => {
       const type = (event.data as { type?: string } | undefined)?.type;
@@ -808,50 +921,41 @@ export function ConversationController({
         return;
       }
       if (type === 'conversationList' || type === 'tabState') {
-        setInitialNavigationHydration((current) => ({
-          ...current,
-          [type]: true,
-        }));
+        markInitialNavigationHydrated(type);
       }
       controllerMessageHandlerRef.current(event);
     };
 
     window.addEventListener('message', handleControllerMessage);
     return () => window.removeEventListener('message', handleControllerMessage);
-  }, []);
+  }, [markInitialNavigationHydrated]);
 
   useEffect(() => {
-    const handleScopedDesktopHostMessage = (event: Event) => {
-      const message = (event as CustomEvent<AgentHostToWebviewMessage>).detail;
-      if (!message?.type) return;
+    const subscription = hostRuntimeAdapter.subscribe((message) => {
       if (message.type === 'conversationList' || message.type === 'tabState') {
-        setInitialNavigationHydration((current) => ({
-          ...current,
-          [message.type]: true,
-        }));
+        markInitialNavigationHydrated(message.type);
       }
       controllerMessageHandlerRef.current({
         data: message,
       } as MessageEvent<AgentHostToWebviewMessage>);
-    };
-
-    window.addEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, handleScopedDesktopHostMessage);
-    return () =>
-      window.removeEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, handleScopedDesktopHostMessage);
-  }, []);
+    });
+    return () => subscription.dispose();
+  }, [hostRuntimeAdapter, markInitialNavigationHydrated]);
 
   // ---- Request data on mount ----
   useEffect(() => {
     isTablessConversationViewRef.current = true;
-    AgentHostMessages.getConversations();
-    AgentHostMessages.getActiveConversation();
-    // Desktop keeps same-process tab state across Webview reloads. Request it
-    // explicitly because Developer: Reload Webviews does not trigger a visibility change.
-    AgentHostMessages.getTabState();
+    if (!isDraftPresentation) {
+      agentHostMessages.getConversations();
+      agentHostMessages.getActiveConversation();
+      // Desktop keeps same-process tab state across Webview reloads. Request it
+      // explicitly because Developer: Reload Webviews does not trigger a visibility change.
+      agentHostMessages.getTabState();
+    }
     requestConfigSnapshot();
-    AgentHostMessages.getAgentStates();
-    AgentHostMessages.getSkills();
-  }, [requestConfigSnapshot]);
+    agentHostMessages.getAgentStates();
+    agentHostMessages.getSkills();
+  }, [agentHostMessages, isDraftPresentation, requestConfigSnapshot]);
 
   // ---- Context token count on conversation change ----
   useEffect(() => {
@@ -875,27 +979,34 @@ export function ConversationController({
     isTablessConversationViewRef.current = false;
     beginForegroundConversationActivation();
     requestConfigSnapshot();
-    AgentHostMessages.newConversation();
+    agentHostMessages.newConversation();
     setActiveTab('chat');
-  }, [beginForegroundConversationActivation, requestConfigSnapshot]);
+  }, [agentHostMessages, beginForegroundConversationActivation, requestConfigSnapshot]);
 
   const handleNewChat = useCallback(() => {
+    if (isCharacterRoleConversationKind(conversationKind)) {
+      setGlobalError('Character and Room new conversations are not available in this Scene.');
+      return;
+    }
     setPendingSendRequest(null);
     setInitialInputRequest(null);
     setInitialSessionModeRequest(null);
     setEntryPromptMenu(null);
     startNewForegroundConversation();
-  }, [startNewForegroundConversation]);
+  }, [conversationKind, startNewForegroundConversation]);
 
   const handleRequestRoleplayItems = useCallback(() => {
     setMentionItems([]);
     updateMentionSearchFilter('');
-    AgentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
-  }, [setMentionItems, updateMentionSearchFilter]);
+    agentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
+  }, [agentHostMessages, setMentionItems, updateMentionSearchFilter]);
 
-  const handleSelectRoleplayItem = useCallback((item: MentionItem) => {
-    submitRoleplayEntrySelection(item);
-  }, []);
+  const handleSelectRoleplayItem = useCallback(
+    (item: MentionItem) => {
+      submitRoleplayEntrySelection(agentHostMessages, item);
+    },
+    [agentHostMessages],
+  );
 
   const startNewForegroundConversationWithGenerationMode = useCallback(
     (mode: Extract<SessionMode, GenCategory>, messageText?: string) => {
@@ -928,6 +1039,7 @@ export function ConversationController({
           setInitialSessionModeRequest(null);
           setEntryPromptMenu(null);
           updateEntryInputValue('');
+          if (agentPresentation?.kind === 'draft') return;
           startNewForegroundConversation();
           return;
         case 'generate-assets':
@@ -940,12 +1052,22 @@ export function ConversationController({
           setPendingSendRequest(null);
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
+          if (agentPresentation?.kind === 'draft') {
+            setEntryPromptMenu(null);
+            setGlobalError('Character and Room scope is not available.');
+            return;
+          }
           setEntryPromptMenu('roleplay');
           handleRequestRoleplayItems();
           return;
       }
     },
-    [handleRequestRoleplayItems, startNewForegroundConversation, updateEntryInputValue],
+    [
+      agentPresentation,
+      handleRequestRoleplayItems,
+      startNewForegroundConversation,
+      updateEntryInputValue,
+    ],
   );
 
   const handleSendWithoutConversation = useCallback(
@@ -966,6 +1088,68 @@ export function ConversationController({
       const messageText = (input?.messageText ?? entryInputValue).trim();
       if (!messageText) return;
       const contextPayloads = input?.contextPayloads ?? entryContextReferences;
+
+      if (isDraftPresentation) {
+        const draftHostRuntimeAdapter = requireAgentDraftHostRuntimeAdapter(hostRuntimeAdapter);
+        if (!agentPresentation) throw new Error('Agent Draft presentation is unavailable.');
+        const selectedModel = activeSettings.chatModelOptions.find(
+          (option) => option.id === entrySelectedModel,
+        );
+        if (!selectedModel?.providerId || !selectedModel.modelId) {
+          setGlobalError('Choose a configured provider and model before sending.');
+          return;
+        }
+        const resourceGrantIds = contextPayloads.map((payload) => payload.id);
+        const target = entryWorkspaceTarget
+          ? {
+              kind: 'bound-context' as const,
+              draftId: agentPresentation.draftId,
+              context: entryWorkspaceTarget.context,
+            }
+          : agentPresentation.scope.kind === 'unbound'
+            ? { kind: 'automatic-assistant' as const, draftId: agentPresentation.draftId }
+            : {
+                kind: 'bound-context' as const,
+                draftId: agentPresentation.draftId,
+                context:
+                  agentPresentation.scope.kind === 'assistant'
+                    ? {
+                        kind: 'assistant' as const,
+                        assistantSpaceId: agentPresentation.scope.assistantSpaceId,
+                        baseGrantIds: resourceGrantIds,
+                      }
+                    : {
+                        kind: 'workspace' as const,
+                        workspaceId: agentPresentation.scope.workspaceId,
+                        workspaceGrantId: agentPresentation.scope.workspaceGrantId,
+                      },
+              };
+        setIsForegroundConversationActivationPending(true);
+        void draftHostRuntimeAdapter
+          .submitDraft({
+            target,
+            messageText,
+            resourceGrantIds,
+            configuration: {
+              providerId: selectedModel.providerId,
+              modelId: selectedModel.modelId,
+              executionMode: entryExecutionMode,
+            },
+          })
+          .then((projection) => {
+            committedEntryDraftIdRef.current = agentPresentation.draftId;
+            writeAgentEntryDraftSnapshot(hostRuntimeAdapter, undefined);
+            updateEntryInputValue('');
+            setEntryContextReferences([]);
+            setEntryWorkspaceTarget(undefined);
+            if (projection.turnStatus === 'failed' && projection.diagnostic) {
+              setGlobalError(projection.diagnostic);
+            }
+          })
+          .catch((error: unknown) => setGlobalError(describeError(error)))
+          .finally(() => setIsForegroundConversationActivationPending(false));
+        return;
+      }
 
       switch (entryAction) {
         case 'start-chat': {
@@ -999,11 +1183,18 @@ export function ConversationController({
     },
     [
       entryAction,
+      activeSettings.chatModelOptions,
+      agentPresentation,
       entryContextReferences,
       entryInputValue,
       entrySessionMode,
+      entrySelectedModel,
+      entryExecutionMode,
+      entryWorkspaceTarget,
       handleSendWithoutConversation,
       handleRequestRoleplayItems,
+      hostRuntimeAdapter,
+      isDraftPresentation,
       updateEntryInputValue,
     ],
   );
@@ -1038,6 +1229,11 @@ export function ConversationController({
 
   const handleEntryGenerationModeSelect = useCallback(
     (mode: Extract<SessionMode, GenCategory>) => {
+      if (isDraftPresentation) {
+        handleEntrySessionModeChange(mode);
+        setEntryPromptMenu(null);
+        return;
+      }
       const messageText = entryInputValueRef.current.trim();
       handleEntrySessionModeChange(mode);
       startNewForegroundConversationWithGenerationMode(mode, messageText);
@@ -1045,6 +1241,7 @@ export function ConversationController({
     },
     [
       handleEntrySessionModeChange,
+      isDraftPresentation,
       startNewForegroundConversationWithGenerationMode,
       updateEntryInputValue,
     ],
@@ -1069,11 +1266,7 @@ export function ConversationController({
   }, []);
 
   const handleBeforeConversationActivation = useCallback(
-    (request: {
-      conversationId: string;
-      activationId: number;
-      expectedTabStateRevision: number;
-    }) => {
+    (request: { conversationId: string; activationId: number }) => {
       const { conversationId } = request;
       setPendingSendRequest(null);
       setInitialInputRequest(null);
@@ -1083,7 +1276,6 @@ export function ConversationController({
         reason: 'switch-conversation',
         conversationId,
         activationId: request.activationId,
-        tabStateRevision: request.expectedTabStateRevision + 1,
       };
       setIsForegroundConversationActivationPending(true);
       isTablessConversationViewRef.current = false;
@@ -1148,9 +1340,9 @@ export function ConversationController({
       }
 
       cleanupClosedConversation(conversationId);
-      AgentHostMessages.deleteConversation(conversationId);
+      agentHostMessages.deleteConversation(conversationId);
     },
-    [cleanupClosedConversation, isProtectedConversation],
+    [agentHostMessages, cleanupClosedConversation, isProtectedConversation],
   );
 
   const handleClearClosedConversations = useCallback(() => {
@@ -1173,7 +1365,7 @@ export function ConversationController({
     const cleanup = projectHistoryCleanup({ historyItems });
     for (const conversationId of cleanup.deletableConversationIds) {
       cleanupClosedConversation(conversationId);
-      AgentHostMessages.deleteConversation(conversationId);
+      agentHostMessages.deleteConversation(conversationId);
     }
   }, [
     activeConversationId,
@@ -1201,10 +1393,6 @@ export function ConversationController({
     onConversationActivated: requestConversationResourceSnapshot,
     onActivateCharacterRoleTab: activateCharacterRoleTab,
     onConfigSnapshotRequested: requestConfigSnapshot,
-    tabStateRevision: tabStateRevisionRef.current,
-    onTabStateRevisionAllocated: (revision) => {
-      tabStateRevisionRef.current = revision;
-    },
     hasLocalConversationActivity: (conversationId) => {
       const cached = conversationRenderCoordinator.read(conversationId);
       const cachedAgentState = conversationAgentStateRef.current.get(conversationId);
@@ -1220,12 +1408,13 @@ export function ConversationController({
   useEffect(() => {
     if (
       !initialConversation ||
+      initialNavigationHydration.runtimeId !== hostRuntimeAdapter.runtimeId ||
       !initialNavigationHydration.conversationList ||
       !initialNavigationHydration.tabState
     ) {
       return;
     }
-    const navigationKey = `${initialConversation.id}\u0000${initialConversation.title}`;
+    const navigationKey = `${hostRuntimeAdapter.runtimeId}\u0000${initialConversation.id}\u0000${initialConversation.title}`;
     if (activatedInitialConversationRef.current === navigationKey) return;
     activatedInitialConversationRef.current = navigationKey;
     const conversation = conversations.find((candidate) => candidate.id === initialConversation.id);
@@ -1237,6 +1426,7 @@ export function ConversationController({
   }, [
     conversations,
     handleOpenTab,
+    hostRuntimeAdapter.runtimeId,
     initialConversation,
     initialNavigationHydration.conversationList,
     initialNavigationHydration.tabState,
@@ -1247,10 +1437,10 @@ export function ConversationController({
     () => [...new Set(openTabs.map((tab) => tab.conversationId))],
     [openTabs],
   );
-  const subscribeTabRenderRevisions = useCallback(
+  const subscribeTabRenderSnapshots = useCallback(
     (listener: () => void) => {
       const unsubscribe = tabConversationIds.map((conversationId) =>
-        conversationRenderCoordinator.subscribeRevision(conversationId, listener),
+        conversationRenderCoordinator.subscribe(conversationId, listener),
       );
       return () => {
         for (const dispose of unsubscribe) dispose();
@@ -1258,30 +1448,23 @@ export function ConversationController({
     },
     [conversationRenderCoordinator, tabConversationIds],
   );
-  const readTabRenderRevisionSignature = useCallback(
-    () =>
-      tabConversationIds
-        .map(
-          (conversationId) =>
-            `${conversationId}:${conversationRenderCoordinator.revision(conversationId)}`,
-        )
-        .join('|'),
+  const readTabRenderSnapshots = useCallback(
+    () => conversationRenderCoordinator.readMany(tabConversationIds),
     [conversationRenderCoordinator, tabConversationIds],
   );
-  const tabRenderRevisionSignature = useSyncExternalStore(
-    subscribeTabRenderRevisions,
-    readTabRenderRevisionSignature,
-    readTabRenderRevisionSignature,
+  const subscribedTabRenderSnapshots = useSyncExternalStore(
+    subscribeTabRenderSnapshots,
+    readTabRenderSnapshots,
+    readTabRenderSnapshots,
   );
   const tabRenderSnapshots = useMemo(
     () =>
       new Map(
-        tabConversationIds.flatMap((conversationId) => {
-          const snapshot = conversationRenderCoordinator.read(conversationId);
-          return snapshot ? [[conversationId, snapshot] as const] : [];
-        }),
+        subscribedTabRenderSnapshots.map(
+          (snapshot) => [snapshot.conversationId, snapshot] as const,
+        ),
       ),
-    [conversationRenderCoordinator, tabConversationIds, tabRenderRevisionSignature],
+    [subscribedTabRenderSnapshots],
   );
   const historyStreamingByConversation = useMemo(
     () =>
@@ -1289,7 +1472,7 @@ export function ConversationController({
         conversationRenderCoordinator,
         conversations.map((conversation) => conversation.id),
       ),
-    [conversationRenderCoordinator, conversations, projectionVersion],
+    [conversationRenderCoordinator, conversations, renderSignal],
   );
 
   const displayTabs = useMemo(
@@ -1305,7 +1488,7 @@ export function ConversationController({
       conversations,
       visibleConversationId,
       visibleSessionState,
-      projectionVersion,
+      renderSignal,
       tabRenderSnapshots,
     ],
   );
@@ -1334,30 +1517,39 @@ export function ConversationController({
 
   return (
     <>
-      {renderHeader({
-        tabs: displayTabs,
-        activeTabId,
-        activeView: activeTab,
-        historyConversations,
-        activeConversationId: visibleConversationId,
-        roleplayItems: mentionItems,
-        onSwitchTab: handleSwitchTab,
-        onCloseTab: handleCloseTab,
-        onNewChat: handleNewChat,
-        onRequestRoleplayItems: handleRequestRoleplayItems,
-        onSelectRoleplayItem: handleSelectRoleplayItem,
-        onOpenConversation: handleOpenTab,
-        onDeleteConversation: handleDeleteConversation,
-        onClearClosedConversations: handleClearClosedConversations,
-        clearableConversationCount: historyCleanup.deletableConversationIds.length,
-        protectedConversationCount: historyCleanup.protectedConversationCount,
-      })}
+      {!isDraftPresentation
+        ? renderHeader({
+            tabs: displayTabs,
+            activeTabId,
+            activeView: activeTab,
+            historyConversations,
+            activeConversationId: visibleConversationId,
+            roleplayItems: mentionItems,
+            onSwitchTab: handleSwitchTab,
+            onCloseTab: handleCloseTab,
+            onNewChat: handleNewChat,
+            onRequestRoleplayItems: handleRequestRoleplayItems,
+            onSelectRoleplayItem: handleSelectRoleplayItem,
+            onOpenConversation: handleOpenTab,
+            onDeleteConversation: handleDeleteConversation,
+            onClearClosedConversations: handleClearClosedConversations,
+            clearableConversationCount: historyCleanup.deletableConversationIds.length,
+            protectedConversationCount: historyCleanup.protectedConversationCount,
+          })
+        : null}
 
       {activeTab === 'chat' ? (
         openTabs.length === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div
+            className={`flex min-h-0 flex-1 flex-col ${
+              isDraftPresentation ? 'agent-entry-composition' : ''
+            }`}
+          >
             <EmptyState
               presentation={emptyStatePresentation}
+              draftScope={
+                agentPresentation?.kind === 'draft' ? agentPresentation.scope.kind : undefined
+              }
               selectedAction={entryAction}
               disabled={isForegroundConversationActivationPending}
               onEntryAction={handleEntryAction}
@@ -1378,8 +1570,8 @@ export function ConversationController({
               mediaUnderstandingSelection={{ image: 'auto', video: 'auto', audio: 'auto' }}
               onMediaModelSelect={handleEntryMediaModelSelect}
               onMediaUnderstandingModelSelect={() => undefined}
-              executionMode={activeSettings.executionMode}
-              onExecutionModeChange={(mode) => updateEntrySettings({ executionMode: mode })}
+              executionMode={entryExecutionMode}
+              onExecutionModeChange={setEntryExecutionMode}
               maxContextTokens={entryModelState.selectedEffectiveInputBudget}
               outputTokenCap={entryModelState.selectedOutputTokenCap}
               modelMaxOutputTokens={entryModelState.selectedMaxOutputTokens}
@@ -1389,7 +1581,7 @@ export function ConversationController({
               mentionItems={mentionItems}
               onRequestFiles={(filter) => {
                 updateMentionSearchFilter(filter);
-                AgentHostMessages.searchProjectFiles(filter, undefined, { purpose: 'entry' });
+                agentHostMessages.searchProjectFiles(filter, undefined, { purpose: 'entry' });
               }}
               genCategory={entryGenCategory}
               genParams={entryGenParams}
@@ -1404,10 +1596,29 @@ export function ConversationController({
               conversationKind="chat"
             >
               <InputArea
+                presentation={isDraftPresentation ? 'entry' : 'conversation'}
                 inputValue={entryInputValue}
                 isThinking={false}
                 onInputChange={updateEntryInputValue}
                 onSend={handleEntryInputSend}
+                onAuthorizeResource={
+                  isDraftPresentation
+                    ? async () => {
+                        try {
+                          return await requireAgentDraftHostRuntimeAdapter(
+                            hostRuntimeAdapter,
+                          ).authorizeResource('file');
+                        } catch (error) {
+                          setGlobalError(describeError(error));
+                          return undefined;
+                        }
+                      }
+                    : undefined
+                }
+                draftWorkspaceTarget={entryWorkspaceTarget}
+                onDraftWorkspaceTargetChange={
+                  composerWorkspace?.kind === 'entry' ? setEntryWorkspaceTarget : undefined
+                }
                 disabled={isForegroundConversationActivationPending || !hasConfigSnapshot}
                 entryPromptMenu={entryPromptMenu}
                 onEntryPromptMenuChange={setEntryPromptMenu}
@@ -1435,6 +1646,7 @@ export function ConversationController({
             tab={tab}
             runtime={runtime}
             visible={visible}
+            composerPresentation={emptyStatePresentation === 'desktop-dock' ? 'compact' : 'default'}
             messages={[...sessionState.messages]}
             setMessages={(value) =>
               updateConversationRenderState(tab.conversationId, (currentMessages, streaming) => ({
@@ -1513,16 +1725,14 @@ export function ConversationController({
       })}
 
       {globalError ? (
-        <div
-          role="alert"
-          className="fixed right-4 top-12 z-50 max-w-[360px] rounded-lg border border-[var(--neko-inputValidation-errorBorder,var(--agent-border))] bg-[var(--neko-inputValidation-errorBackground,var(--agent-elevated))] px-3 py-2 text-sm text-[var(--neko-inputValidation-errorForeground,var(--agent-fg))] shadow-lg animate-slide-in"
-        >
-          <div className="font-medium">全局错误</div>
-          <div className="mt-1 opacity-90">{globalError}</div>
-        </div>
+        <AgentDiagnosticToast title="全局错误">{globalError}</AgentDiagnosticToast>
       ) : null}
     </>
   );
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function projectStreamingSnapshots(

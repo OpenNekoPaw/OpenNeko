@@ -34,8 +34,6 @@ export type CharacterMemoryArtifactReference =
       readonly contentLocator?: import('@neko/content').ContentLocator;
     };
 
-export const CHARACTER_MEMORY_FILE_VERSION = 1 as const;
-
 export const CHARACTER_MEMORY_OBSERVATION_SOURCES = [
   'story',
   'comic',
@@ -139,7 +137,6 @@ export type CharacterMemoryPathSegment = string | number;
 
 export type CharacterMemoryDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-version'
   | 'missing-required-field'
   | 'invalid-required-field'
   | 'invalid-source-ref'
@@ -294,7 +291,6 @@ export interface CharacterObservation {
 }
 
 export interface CharacterEvidenceLedger {
-  readonly version: typeof CHARACTER_MEMORY_FILE_VERSION;
   readonly projectRoot?: string;
   readonly observations: readonly CharacterObservation[];
   readonly updatedAt?: string;
@@ -363,7 +359,6 @@ export interface CharacterChangeEvent {
 }
 
 export interface CharacterMemoryFile {
-  readonly version: typeof CHARACTER_MEMORY_FILE_VERSION;
   readonly ledger: CharacterEvidenceLedger;
   readonly drafts?: readonly CharacterProfileDraft[];
   readonly snapshots?: readonly CharacterStateSnapshot[];
@@ -426,12 +421,10 @@ export interface CharacterEvidenceLedgerStore {
 
 export function createEmptyCharacterMemoryFile(projectRoot?: string): CharacterMemoryFile {
   const ledger: CharacterEvidenceLedger = {
-    version: CHARACTER_MEMORY_FILE_VERSION,
     ...(projectRoot ? { projectRoot } : {}),
     observations: [],
   };
   return {
-    version: CHARACTER_MEMORY_FILE_VERSION,
     ledger,
   };
 }
@@ -455,7 +448,12 @@ export function validateCharacterMemoryFile(
     };
   }
 
-  validateVersion(value['version'], [], diagnostics);
+  rejectUnknownFields(
+    value,
+    new Set(['ledger', 'drafts', 'snapshots', 'changes', 'updatedAt']),
+    [],
+    diagnostics,
+  );
   validateLedger(value['ledger'], ['ledger'], diagnostics, options);
   validateArray(value['drafts'], ['drafts'], diagnostics, (draft, path) =>
     validateProfileDraft(draft, path, diagnostics, options),
@@ -783,7 +781,12 @@ function validateLedger(
     );
     return;
   }
-  validateVersion(value['version'], [...path, 'version'], diagnostics);
+  rejectUnknownFields(
+    value,
+    new Set(['projectRoot', 'observations', 'updatedAt', 'diagnostics']),
+    path,
+    diagnostics,
+  );
   validateArray(
     value['observations'],
     [...path, 'observations'],
@@ -1236,22 +1239,21 @@ function isAllowedCharacterMemoryDimension(value: string): boolean {
   return isCharacterMemoryDimension(value) || value.startsWith('neko.');
 }
 
-function validateVersion(
-  value: unknown,
+function rejectUnknownFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
   path: readonly CharacterMemoryPathSegment[],
   diagnostics: CharacterMemoryDiagnostic[],
 ): void {
-  if (value !== CHARACTER_MEMORY_FILE_VERSION) {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
     diagnostics.push(
       characterMemoryDiagnostic(
         'error',
-        'invalid-version',
-        path.length > 0 ? path : ['version'],
-        'Character memory version must be 1.',
-        {
-          expected: String(CHARACTER_MEMORY_FILE_VERSION),
-          actual: serializableDiagnosticValue(value),
-        },
+        'invalid-required-field',
+        [...path, field],
+        `Character memory contains unsupported field ${field}.`,
+        { actual: serializableDiagnosticValue(value[field]) },
       ),
     );
   }

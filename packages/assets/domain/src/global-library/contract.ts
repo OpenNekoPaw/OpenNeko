@@ -11,7 +11,7 @@ export type GlobalLibraryViewMode = 'list' | 'grid';
 
 export interface GlobalLibraryThumbnailDescriptor {
   readonly descriptorId: string;
-  readonly revision: string;
+  readonly sourceFingerprint: string;
   readonly mediaType: 'image' | 'video';
 }
 
@@ -24,6 +24,10 @@ interface GlobalLibraryItemBase {
   readonly byteLength?: number;
   readonly modifiedAt?: string;
   readonly availability: 'available' | 'unavailable';
+  readonly unavailable?: {
+    readonly fieldNames: readonly string[];
+    readonly message: string;
+  };
   readonly thumbnail?: GlobalLibraryThumbnailDescriptor;
 }
 
@@ -44,12 +48,10 @@ export interface GlobalMediaLibraryItem extends GlobalLibraryItemBase {
 export type GlobalLibraryItem = GlobalAssetItem | GlobalMediaLibraryItem;
 
 export interface GlobalAssetProjection {
-  readonly revision: number;
   readonly items: readonly GlobalAssetItem[];
 }
 
 export interface GlobalMediaLibraryProjection {
-  readonly revision: number;
   readonly items: readonly GlobalMediaLibraryItem[];
 }
 
@@ -63,9 +65,8 @@ export interface GlobalLibrarySearchInput {
 export interface GlobalLibraryThumbnailRequest {
   readonly owner: GlobalLibraryOwner;
   readonly itemId: string;
-  readonly expectedCatalogRevision: number;
   readonly descriptorId: string;
-  readonly thumbnailRevision: string;
+  readonly sourceFingerprint: string;
   readonly variant: GlobalLibraryThumbnailVariant;
 }
 
@@ -88,46 +89,42 @@ export type GlobalAssetImportOutcome =
 export type GlobalAssetImportResult =
   | {
       readonly status: 'cancelled';
-      readonly revision: number;
     }
   | {
       readonly status: 'completed';
-      readonly revision: number;
       readonly outcomes: readonly GlobalAssetImportOutcome[];
     };
 
 export interface GlobalAssetRemoveResult {
   readonly status: 'removed';
-  readonly assetId: string;
-  readonly revision: number;
+  readonly assetIds: readonly string[];
 }
+
+export type GlobalLibraryMoveResult =
+  | { readonly status: 'cancelled' }
+  | { readonly status: 'moved'; readonly itemIds: readonly string[] };
 
 export type GlobalMediaLibraryAddResult =
   | {
       readonly status: 'added';
       readonly libraryId: string;
-      readonly revision: number;
     }
   | {
       readonly status: 'cancelled';
-      readonly revision: number;
     };
 
 export type GlobalMediaLibraryRelinkResult =
   | {
       readonly status: 'relinked';
       readonly libraryId: string;
-      readonly revision: number;
     }
   | {
       readonly status: 'cancelled';
-      readonly revision: number;
     };
 
 export interface GlobalMediaLibraryMutationResult {
   readonly status: 'removed' | 'revealed';
   readonly libraryId: string;
-  readonly revision: number;
 }
 
 export interface GlobalLibraryBrowserRuntime {
@@ -140,24 +137,15 @@ export interface GlobalLibraryBrowserRuntime {
     },
   ): Promise<GlobalMediaLibraryProjection>;
   resolveThumbnail(request: GlobalLibraryThumbnailRequest): Promise<GlobalLibraryThumbnailResult>;
-  importAssets(expectedRevision: number): Promise<GlobalAssetImportResult>;
-  removeAsset(assetId: string, expectedRevision: number): Promise<GlobalAssetRemoveResult>;
+  importAssets(): Promise<GlobalAssetImportResult>;
+  removeAssets(assetIds: readonly string[]): Promise<GlobalAssetRemoveResult>;
+  moveItems(itemIds: readonly string[]): Promise<GlobalLibraryMoveResult>;
   addMediaLibrary(
     locationKind: GlobalMediaLibraryLocationKind,
-    expectedRevision: number,
   ): Promise<GlobalMediaLibraryAddResult>;
-  relinkMediaLibrary(
-    libraryId: string,
-    expectedRevision: number,
-  ): Promise<GlobalMediaLibraryRelinkResult>;
-  removeMediaLibrary(
-    libraryId: string,
-    expectedRevision: number,
-  ): Promise<GlobalMediaLibraryMutationResult>;
-  revealMediaLibrary(
-    libraryId: string,
-    expectedRevision: number,
-  ): Promise<GlobalMediaLibraryMutationResult>;
+  relinkMediaLibrary(libraryId: string): Promise<GlobalMediaLibraryRelinkResult>;
+  removeMediaLibrary(libraryId: string): Promise<GlobalMediaLibraryMutationResult>;
+  revealMediaLibrary(libraryId: string): Promise<GlobalMediaLibraryMutationResult>;
 }
 
 export function createGlobalLibraryOpaqueId(
@@ -187,7 +175,7 @@ export function createGlobalLibraryThumbnailDescriptor(input: {
   if (input.mediaType !== 'image' && input.mediaType !== 'video') return undefined;
   return {
     descriptorId: createGlobalLibraryOpaqueId(input.owner, `thumbnail:${input.itemId}`),
-    revision: `${input.modifiedAt ?? 'unknown'}:${input.byteLength ?? 0}`,
+    sourceFingerprint: `${input.modifiedAt ?? 'unknown'}:${input.byteLength ?? 0}`,
     mediaType: input.mediaType,
   };
 }
@@ -205,6 +193,7 @@ export function parseGlobalAssetItem(value: unknown): GlobalAssetItem {
       'byteLength',
       'modifiedAt',
       'availability',
+      'unavailable',
       'thumbnail',
     ],
     'Global Asset Library item is invalid.',
@@ -232,6 +221,7 @@ export function parseGlobalMediaLibraryItem(value: unknown): GlobalMediaLibraryI
       'byteLength',
       'modifiedAt',
       'availability',
+      'unavailable',
       'thumbnail',
       'libraryId',
       'libraryLabel',
@@ -271,20 +261,19 @@ export function parseGlobalMediaLibraryItem(value: unknown): GlobalMediaLibraryI
 export function parseGlobalLibraryThumbnailRequest(value: unknown): GlobalLibraryThumbnailRequest {
   const record = requireExactRecord(
     value,
-    ['owner', 'itemId', 'expectedCatalogRevision', 'descriptorId', 'thumbnailRevision', 'variant'],
+    ['owner', 'itemId', 'descriptorId', 'sourceFingerprint', 'variant'],
     'Global Library thumbnail request is invalid.',
   );
   return {
     owner: requireOneOf(record['owner'], GLOBAL_LIBRARY_OWNERS, 'owner'),
     itemId: requireNonEmptyString(record['itemId'], 'Global Library itemId is required.'),
-    expectedCatalogRevision: requireRevision(record['expectedCatalogRevision']),
     descriptorId: requireNonEmptyString(
       record['descriptorId'],
       'Global Library descriptorId is required.',
     ),
-    thumbnailRevision: requireNonEmptyString(
-      record['thumbnailRevision'],
-      'Global Library thumbnail revision is required.',
+    sourceFingerprint: requireNonEmptyString(
+      record['sourceFingerprint'],
+      'Global Library thumbnail source fingerprint is required.',
     ),
     variant: requireOneOf(
       record['variant'],
@@ -297,24 +286,15 @@ export function parseGlobalLibraryThumbnailRequest(value: unknown): GlobalLibrar
 export function parseGlobalLibraryThumbnailResult(value: unknown): GlobalLibraryThumbnailResult {
   const record = requireExactRecord(
     value,
-    [
-      'owner',
-      'itemId',
-      'expectedCatalogRevision',
-      'descriptorId',
-      'thumbnailRevision',
-      'variant',
-      'dataUrl',
-    ],
+    ['owner', 'itemId', 'descriptorId', 'sourceFingerprint', 'variant', 'dataUrl'],
     'Global Library thumbnail result is invalid.',
   );
   return {
     ...parseGlobalLibraryThumbnailRequest({
       owner: record['owner'],
       itemId: record['itemId'],
-      expectedCatalogRevision: record['expectedCatalogRevision'],
       descriptorId: record['descriptorId'],
-      thumbnailRevision: record['thumbnailRevision'],
+      sourceFingerprint: record['sourceFingerprint'],
       variant: record['variant'],
     }),
     dataUrl: requireDataUrl(record['dataUrl']),
@@ -342,16 +322,39 @@ function parseGlobalLibraryItemBase(
       ['available', 'unavailable'] as const,
       'availability',
     ),
+    ...(record['unavailable'] === undefined
+      ? {}
+      : { unavailable: parseUnavailableFields(record['unavailable']) }),
     ...(record['thumbnail'] === undefined
       ? {}
       : { thumbnail: parseGlobalLibraryThumbnailDescriptor(record['thumbnail']) }),
   };
 }
 
+function parseUnavailableFields(value: unknown): NonNullable<GlobalLibraryItemBase['unavailable']> {
+  const record = requireExactRecord(
+    value,
+    ['fieldNames', 'message'],
+    'Global Library unavailable fields are invalid.',
+  );
+  if (!Array.isArray(record['fieldNames']) || record['fieldNames'].length === 0) {
+    throw new Error('Global Library unavailable fieldNames are required.');
+  }
+  return {
+    fieldNames: record['fieldNames'].map((fieldName) =>
+      requireNonEmptyString(fieldName, 'Global Library unavailable field name is required.'),
+    ),
+    message: requireNonEmptyString(
+      record['message'],
+      'Global Library unavailable message is required.',
+    ),
+  };
+}
+
 function parseGlobalLibraryThumbnailDescriptor(value: unknown): GlobalLibraryThumbnailDescriptor {
   const record = requireExactRecord(
     value,
-    ['descriptorId', 'revision', 'mediaType'],
+    ['descriptorId', 'sourceFingerprint', 'mediaType'],
     'Global Library thumbnail descriptor is invalid.',
   );
   return {
@@ -359,9 +362,9 @@ function parseGlobalLibraryThumbnailDescriptor(value: unknown): GlobalLibraryThu
       record['descriptorId'],
       'Global Library descriptorId is required.',
     ),
-    revision: requireNonEmptyString(
-      record['revision'],
-      'Global Library thumbnail revision is required.',
+    sourceFingerprint: requireNonEmptyString(
+      record['sourceFingerprint'],
+      'Global Library thumbnail source fingerprint is required.',
     ),
     mediaType: requireOneOf(
       record['mediaType'],
@@ -404,10 +407,6 @@ function requireOneOf<const T extends readonly string[]>(
   const matched = allowed.find((candidate) => candidate === value);
   if (!matched) throw new Error(`Global Library ${field} is invalid.`);
   return matched;
-}
-
-function requireRevision(value: unknown): number {
-  return requireNonNegativeInteger(value, 'catalog revision');
 }
 
 function requireNonNegativeInteger(value: unknown, field: string): number {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildInjectContextMessage,
   buildQueuedMessageEditRequestedMessage,
   parseAmbientCanvasUpdateNodes,
@@ -31,11 +30,43 @@ describe('webview protocol parser', () => {
     ]);
 
     expect(() =>
-      parseAmbientCanvasUpdateNodes([{ nodeId: 'shot-1', type: 'shot', summary: 'Legacy shot' }]),
+      parseAmbientCanvasUpdateNodes([
+        { nodeId: 'shot-1', type: 'shot', summary: 'Storyboard shot' },
+      ]),
     ).toThrow('not a canonical Canvas node type');
   });
 
-  it('preserves explicit Cut target identity and revision in plugin transfers', () => {
+  it('preserves complete explicit Cut target identity in plugin transfers', () => {
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'sendToPlugin',
+        target: 'cut',
+        payload: {
+          kind: 'singleAsset',
+          asset: { path: '/workspace/neko/generated/video/shot.mp4', mediaType: 'video' },
+          target: {
+            projectId: 'project-1',
+            workspaceId: 'workspace-1',
+            kind: 'file',
+            documentUri: 'file:///workspace/edit.otio',
+            trackId: 'track-1',
+            clipId: 'clip-1',
+          },
+        },
+      }),
+    ).toMatchObject({
+      payload: {
+        target: {
+          projectId: 'project-1',
+          workspaceId: 'workspace-1',
+          kind: 'file',
+          documentUri: 'file:///workspace/edit.otio',
+          trackId: 'track-1',
+          clipId: 'clip-1',
+        },
+      },
+    });
+
     expect(
       parseAgentWebviewToHostMessage({
         type: 'sendToPlugin',
@@ -46,45 +77,34 @@ describe('webview protocol parser', () => {
           target: {
             kind: 'file',
             documentUri: 'file:///workspace/edit.otio',
-            expectedProjectRevision: 'revision-1',
+            unexpectedField: 'x',
           },
         },
       }),
-    ).toMatchObject({
-      payload: {
-        target: {
-          kind: 'file',
-          documentUri: 'file:///workspace/edit.otio',
-          expectedProjectRevision: 'revision-1',
-        },
-      },
-    });
+    ).toBeNull();
   });
 
   it('accepts explicit projection endpoint discovery', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
-        protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
         realmId: 'realm-1',
       }),
     ).toEqual({
       type: 'projectionEndpointDiscover',
-      protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
       realmId: 'realm-1',
     });
     expect(parseAgentWebviewToHostMessage({ type: 'projectionEndpointDiscover' })).toBeNull();
     expect(
       parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
-        protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION + 1,
+        [['protocol', 'Version'].join('')]: 1,
         realmId: 'realm-1',
       }),
     ).toBeNull();
     expect(
       parseAgentWebviewToHostMessage({
         type: 'projectionEndpointDiscover',
-        protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
         realmId: '',
       }),
     ).toBeNull();
@@ -92,7 +112,6 @@ describe('webview protocol parser', () => {
 
   it('accepts projection attachment lifecycle messages with complete identity', () => {
     const key = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: 'conv-1',
@@ -107,13 +126,11 @@ describe('webview protocol parser', () => {
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
-        projectionVersion: 3,
       }),
     ).toEqual({
       type: 'projectionSnapshotAck',
       key,
       sequence: 0,
-      projectionVersion: 3,
     });
     expect(
       parseAgentWebviewToHostMessage({
@@ -128,26 +145,21 @@ describe('webview protocol parser', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'requestAgentTurnTimelineSnapshot',
-        schemaVersion: 2,
-        connectionEpoch: 'epoch-1',
         conversationId: 'conv-1',
         turnId: 'turn-1',
         messageId: 'msg-1',
-        reason: 'revision-gap',
-        lastAppliedDeliveryRevision: 1,
       }),
     ).toBeNull();
   });
 
   it('rejects malformed projection attachment lifecycle messages', () => {
     const key = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: 'conv-1',
     };
 
-    for (const field of ['endpointEpoch', 'attachmentId', 'tabId', 'conversationId'] as const) {
+    for (const field of ['attachmentId', 'tabId', 'conversationId'] as const) {
       expect(
         parseAgentWebviewToHostMessage({
           type: 'projectionAttach',
@@ -160,7 +172,6 @@ describe('webview protocol parser', () => {
         type: 'projectionSnapshotAck',
         key,
         sequence: 1,
-        projectionVersion: 3,
       }),
     ).toBeNull();
     expect(
@@ -168,15 +179,7 @@ describe('webview protocol parser', () => {
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
-        projectionVersion: -1,
-      }),
-    ).toBeNull();
-    expect(
-      parseAgentWebviewToHostMessage({
-        type: 'projectionSnapshotAck',
-        key,
-        sequence: 0,
-        projectionVersion: 1.5,
+        [['projection', 'Version'].join('')]: 1,
       }),
     ).toBeNull();
     expect(
@@ -385,7 +388,7 @@ describe('webview protocol parser', () => {
         snapshot: {
           conversationId: 'conv-1',
           pendingCount: 0,
-          version: 2,
+          sequence: 2,
           items: [],
         },
       }),
@@ -408,22 +411,11 @@ describe('webview protocol parser', () => {
         snapshot: {
           conversationId: 'conv-1',
           pendingCount: 0,
-          version: 2,
+          sequence: 2,
           items: [],
         },
       }),
     ).toThrow('queuedMessageEditRequested requires non-empty tabId');
-  });
-
-  it('rejects legacy Task action identities even when conversationId is present', () => {
-    expect(
-      parseAgentWebviewToHostMessage({
-        type: 'cancelTask',
-        conversationId: 'conv-1',
-        taskId: 'task-1',
-      }),
-    ).toBeNull();
-    expect(parseAgentWebviewToHostMessage({ type: 'cancelTask', taskId: 'task-1' })).toBeNull();
   });
 
   it('rejects message queue commands without required explicit scope', () => {
@@ -601,18 +593,6 @@ describe('webview protocol parser', () => {
     ).toBeNull();
   });
 
-  it('rejects legacy raw LLM parameter fields at the sendMessage boundary', () => {
-    expect(
-      parseSendMessageWebviewMessage({
-        type: 'sendMessage',
-        conversationId: 'conv-1',
-        message: 'hello',
-        sessionMode: 'agent',
-        temperature: 0.7,
-      }),
-    ).toBeNull();
-  });
-
   it('accepts structured context payloads on sendMessage', () => {
     expect(
       parseSendMessageWebviewMessage({
@@ -685,7 +665,7 @@ describe('webview protocol parser', () => {
     }
   });
 
-  it('accepts canonical content routes and rejects legacy path authority', () => {
+  it('accepts canonical content routes and rejects unsafe locators', () => {
     const contentLocator = { kind: 'workspace-file', path: 'books/a.pdf' };
     const locator = { kind: 'page', pageNumber: 2, pageIndex: 1 };
     expect(
@@ -721,9 +701,6 @@ describe('webview protocol parser', () => {
     });
 
     for (const payload of [
-      { type: 'openFile', filePath: '/tmp/a.pdf' },
-      { type: 'revealFile', filePath: 'books/a.pdf' },
-      { type: 'revealDocumentLocator', filePath: 'books/a.pdf', locator },
       {
         type: 'openFile',
         contentLocator: { kind: 'workspace-file', path: '/tmp/a.pdf' },
@@ -737,20 +714,11 @@ describe('webview protocol parser', () => {
     }
   });
 
-  it('rejects legacy file references and unknown message types', () => {
-    expect(
-      parseSendMessageWebviewMessage({
-        type: 'sendMessage',
-        conversationId: 'conv-1',
-        message: 'inspect',
-        sessionMode: 'agent',
-        fileReferences: [{ id: 'ref-1', label: 'a.txt', path: 'a.txt' }],
-      }),
-    ).toBeNull();
+  it('rejects unknown message types', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'futureAgentRoute',
-        schemaVersion: 2,
+        unsupportedField: true,
       }),
     ).toBeNull();
   });
@@ -791,15 +759,11 @@ describe('webview protocol parser', () => {
 
   it('accepts a validated purpose-aware 3D reference context', () => {
     const data = {
-      contractVersion: 1,
       staging: {
-        schemaVersion: 1,
         sessionId: 'session-1',
-        revision: 2,
         subject: {
           kind: 'builtin-preset',
           presetId: 'guide-neutral-mannequin',
-          presetVersion: 1,
           fingerprint: 'preset-fingerprint',
           presetKind: 'mannequin',
           appearancePolicy: 'guide-only',
@@ -822,7 +786,7 @@ describe('webview protocol parser', () => {
         {
           kind: 'pose',
           sessionId: 'session-1',
-          revision: 2,
+          requestId: 'request-pose',
           controlImage: contentLocator,
           controlMode: 'pose',
           joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
@@ -839,7 +803,7 @@ describe('webview protocol parser', () => {
         contextPayloads: [
           {
             type: '3d-reference',
-            id: '3d-reference:session-1:2',
+            id: '3d-reference:session-1',
             label: 'Neutral mannequin',
             summary: 'Pose reference',
             data,
@@ -867,7 +831,6 @@ describe('webview protocol parser', () => {
             summary: 'Canvas storyboard action generate-video for shot-1',
             data: {
               intent: {
-                version: 1,
                 actionId: 'generate-video',
                 target: { nodeId: 'shot-1', sceneNodeId: 'scene-1', shotNumber: 1 },
               },
@@ -893,12 +856,18 @@ describe('webview protocol parser', () => {
       message: 'Use this model',
       sessionMode: 'agent',
     };
-    const legacyContext = legacyModelPreviewContextData();
+    const unsupportedContext = unsupportedModelPreviewContextData();
     expect(
       parseSendMessageWebviewMessage({
         ...base,
         contextPayloads: [
-          { type: 'model-scene', id: 'legacy', label: 'Legacy', summary: '', data: {} },
+          {
+            type: 'model-scene',
+            id: 'unsupported',
+            label: 'Unsupported',
+            summary: '',
+            data: {},
+          },
         ],
       }),
     ).toBeNull();
@@ -911,7 +880,7 @@ describe('webview protocol parser', () => {
             id: 'model',
             label: 'Model',
             summary: '',
-            data: legacyContext,
+            data: unsupportedContext,
           },
         ],
       }),
@@ -949,7 +918,7 @@ describe('webview protocol parser', () => {
             id: 'bad',
             label: 'Bad storyboard action',
             summary: 'Bad storyboard action',
-            data: { intent: { version: 1, actionId: 'future-action', target: { nodeId: 'shot' } } },
+            data: { intent: { actionId: 'future-action', target: { nodeId: 'shot' } } },
           },
         ],
       }),
@@ -971,19 +940,6 @@ describe('webview protocol parser', () => {
         type: 'sendMessage',
         message: 'hello',
         sessionMode: 'agent',
-      }),
-    ).toBeNull();
-  });
-
-  it('rejects legacy provider/model fields at the shared boundary', () => {
-    expect(
-      parseSendMessageWebviewMessage({
-        type: 'sendMessage',
-        conversationId: 'conv-1',
-        message: 'hello',
-        sessionMode: 'agent',
-        providerId: 'openai',
-        modelId: 'gpt-4.1',
       }),
     ).toBeNull();
   });
@@ -1118,13 +1074,11 @@ describe('webview protocol parser', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'updateTabState',
-        expectedTabStateRevision: 3,
         openTabs,
         activeTabId: 'tab-embody',
       }),
     ).toEqual({
       type: 'updateTabState',
-      expectedTabStateRevision: 3,
       openTabs: [
         expect.objectContaining({
           kind: 'embody-character',
@@ -1137,7 +1091,6 @@ describe('webview protocol parser', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'updateTabState',
-        expectedTabStateRevision: 3,
         openTabs: [
           {
             id: 'tab-embody',
@@ -1145,7 +1098,7 @@ describe('webview protocol parser', () => {
             conversationId: 'embody-session-1',
             kind: 'embody-character',
             embodyCharacterContext: {
-              contextId: 'legacy-hidden-context',
+              contextId: 'removed-hidden-context',
             },
           },
         ],
@@ -1153,7 +1106,6 @@ describe('webview protocol parser', () => {
       }),
     ).toEqual({
       type: 'updateTabState',
-      expectedTabStateRevision: 3,
       openTabs: [
         {
           id: 'tab-embody',
@@ -1165,63 +1117,65 @@ describe('webview protocol parser', () => {
       activeTabId: 'tab-embody',
     });
   });
+
+  it('rejects unknown Tab fields without rejecting canonical sibling messages', () => {
+    const tabState = {
+      openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conversation-1' }],
+      activeTabId: 'tab-1',
+    };
+
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'activateConversation',
+        activationId: 1,
+        conversationId: 'conversation-1',
+        tabId: 'tab-1',
+        tabState,
+        unsupportedField: true,
+      }),
+    ).toBeNull();
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'updateTabState',
+        openTabs: tabState.openTabs,
+        activeTabId: tabState.activeTabId,
+        unsupportedField: true,
+      }),
+    ).toBeNull();
+
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'activateConversation',
+        activationId: 2,
+        conversationId: 'conversation-1',
+        tabId: 'tab-1',
+        tabState,
+      }),
+    ).toEqual({
+      type: 'activateConversation',
+      activationId: 2,
+      conversationId: 'conversation-1',
+      tabId: 'tab-1',
+      tabState,
+    });
+    expect(
+      parseAgentWebviewToHostMessage({
+        type: 'updateTabState',
+        openTabs: tabState.openTabs,
+        activeTabId: tabState.activeTabId,
+      }),
+    ).toEqual({
+      type: 'updateTabState',
+      openTabs: tabState.openTabs,
+      activeTabId: tabState.activeTabId,
+    });
+  });
 });
 
-function legacyModelPreviewContextData(): Record<string, unknown> {
-  const camera = {
-    id: 'camera-default',
-    label: 'Default',
-    position: { x: 3, y: 2, z: 3 },
-    target: { x: 0, y: 0, z: 0 },
-    fieldOfViewDeg: 45,
-  };
-  const staging = {
-    schemaVersion: 3,
-    sessionId: 'session-legacy',
-    sourceFingerprint: 'legacy-fingerprint',
-    revision: 1,
-    transformPatches: [],
-    cameraPresets: [camera],
-    activeCameraId: camera.id,
-    lightRig: {
-      environmentIntensity: 1,
-      lights: [
-        { id: 'key', color: '#fff', intensity: 3, position: { x: 1, y: 2, z: 3 } },
-        { id: 'fill', color: '#fff', intensity: 1, position: { x: -1, y: 1, z: 2 } },
-        { id: 'rim', color: '#fff', intensity: 2, position: { x: 0, y: 2, z: -2 } },
-      ],
-    },
-    background: '#1e1e1e',
-    capture: { width: 1024, height: 1024 },
-  };
+function unsupportedModelPreviewContextData(): Record<string, unknown> {
   return {
-    contractVersion: 1,
     source: contentLocator,
-    sourceFingerprint: 'legacy-fingerprint',
     format: 'glb',
-    facts: {
-      bounds: {
-        min: { x: -1, y: -1, z: -1 },
-        max: { x: 1, y: 1, z: 1 },
-        center: { x: 0, y: 0, z: 0 },
-        size: { x: 2, y: 2, z: 2 },
-        radius: 1.7,
-      },
-      nodeCount: 2,
-      meshCount: 1,
-      materialCount: 1,
-      animationCount: 0,
-    },
-    staging,
-    previewImage: contentLocator,
-    capture: {
-      sessionId: staging.sessionId,
-      sourceFingerprint: staging.sourceFingerprint,
-      revision: staging.revision,
-      mimeType: 'image/png',
-      width: 1024,
-      height: 1024,
-      cameraId: camera.id,
-    },
+    unsupportedField: true,
   };
 }

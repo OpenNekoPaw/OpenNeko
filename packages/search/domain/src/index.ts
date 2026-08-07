@@ -6,6 +6,5 @@ export * from './semantic/document';
 export * from './semantic/occurrence-context';
 export * from './semantic/fountain-script-index';
 export * from './entity/text-entity-analyzer';
-export * from './entity/contribution-automation';
 export * from './entity/project-search-projection';
 export * from './entity/entity-search-adapter';

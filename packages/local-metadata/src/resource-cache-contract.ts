@@ -130,8 +130,6 @@ export interface ResourceCacheLifecycleMetadata {
 }
 
 export interface ResourceCacheManifest {
-  readonly version: 2;
-  readonly projectRoot?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly entries: Record<string, ResourceCacheEntry>;
@@ -150,7 +148,6 @@ export interface ResourceCacheManifestStore {
       manifest: ResourceCacheManifest,
     ) => ResourceCacheManifest | Promise<ResourceCacheManifest>,
   ): Promise<ResourceCacheManifest>;
-  invalidateCache(): void;
 }
 
 export interface ResourceCacheStats {
@@ -200,14 +197,14 @@ export interface ResourceVariantRequest {
 export type BrandedPath<TBrand extends string> = string & { readonly __pathBrand: TBrand };
 
 export type ProjectFactPath = BrandedPath<'project-fact'>;
-export type ProjectCachePath = BrandedPath<'project-cache'>;
+export type WorkspaceCachePath = BrandedPath<'workspace-cache'>;
 export type GlobalCachePath = BrandedPath<'global-cache'>;
 export type ExtensionPrivateCachePath = BrandedPath<'extension-private-cache'>;
 export type SourceAssetPath = BrandedPath<'source-asset'>;
 
 export type ResourcePathCategory =
   | 'project-fact'
-  | 'project-cache'
+  | 'workspace-cache'
   | 'global-cache'
   | 'extension-private-cache'
   | 'source-asset'
@@ -508,9 +505,8 @@ export function isResourceCacheVariantDescriptor(
 }
 
 export function isResourceCacheManifest(value: unknown): value is ResourceCacheManifest {
-  if (!isRecord(value) || value['version'] !== 2 || !isRecord(value['entries'])) return false;
+  if (!isRecord(value) || !isRecord(value['entries'])) return false;
   return (
-    optionalString(value['projectRoot']) &&
     typeof value['createdAt'] === 'string' &&
     typeof value['updatedAt'] === 'string' &&
     Object.values(value['entries']).every((entry) => isResourceCacheEntry(entry)) &&
@@ -522,6 +518,7 @@ export function getResourcePathCategory(
   filePath: string,
   options: {
     readonly projectRoot?: string;
+    readonly workspaceCacheRoot?: string;
     readonly globalRoot?: string;
     readonly extensionPrivateRoot?: string;
   } = {},
@@ -530,13 +527,16 @@ export function getResourcePathCategory(
   const projectRoot = options.projectRoot
     ? normalizePathForCategory(options.projectRoot)
     : undefined;
+  const workspaceCacheRoot = options.workspaceCacheRoot
+    ? normalizePathForCategory(options.workspaceCacheRoot)
+    : undefined;
   const globalRoot = options.globalRoot ? normalizePathForCategory(options.globalRoot) : undefined;
   const extensionRoot = options.extensionPrivateRoot
     ? normalizePathForCategory(options.extensionPrivateRoot)
     : undefined;
 
-  if (projectRoot && isPathInside(normalizedPath, `${projectRoot}/.neko/.cache`)) {
-    return 'project-cache';
+  if (workspaceCacheRoot && isPathInside(normalizedPath, workspaceCacheRoot)) {
+    return 'workspace-cache';
   }
   if (projectRoot && isPathInside(normalizedPath, `${projectRoot}/neko`)) {
     return 'project-fact';
@@ -550,11 +550,11 @@ export function getResourcePathCategory(
   return 'source-asset';
 }
 
-export function isProjectCachePath(
+export function isWorkspaceCachePath(
   filePath: string,
-  options: { readonly projectRoot?: string } = {},
-): filePath is ProjectCachePath {
-  return getResourcePathCategory(filePath, options) === 'project-cache';
+  options: { readonly workspaceCacheRoot?: string } = {},
+): filePath is WorkspaceCachePath {
+  return getResourcePathCategory(filePath, options) === 'workspace-cache';
 }
 
 export function isProjectFactPath(
@@ -564,11 +564,11 @@ export function isProjectFactPath(
   return getResourcePathCategory(filePath, options) === 'project-fact';
 }
 
-export function asProjectCachePath(
+export function asWorkspaceCachePath(
   filePath: string,
-  options: { readonly projectRoot?: string } = {},
-): ProjectCachePath | undefined {
-  return isProjectCachePath(filePath, options) ? (filePath as ProjectCachePath) : undefined;
+  options: { readonly workspaceCacheRoot?: string } = {},
+): WorkspaceCachePath | undefined {
+  return isWorkspaceCachePath(filePath, options) ? (filePath as WorkspaceCachePath) : undefined;
 }
 
 export function asProjectFactPath(
@@ -580,7 +580,7 @@ export function asProjectFactPath(
 
 export function isManagedCachePathCategory(category: ResourcePathCategory): boolean {
   return (
-    category === 'project-cache' ||
+    category === 'workspace-cache' ||
     category === 'global-cache' ||
     category === 'extension-private-cache'
   );

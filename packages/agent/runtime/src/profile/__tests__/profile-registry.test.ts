@@ -14,7 +14,7 @@ describe('Agent profile registries', () => {
         expect.objectContaining({ code: 'duplicate-profile-id', severity: 'warning' }),
       ]),
     );
-    expect(registry.get('studio.shot-review', 1)).toEqual(
+    expect(registry.get('studio.shot-review')).toEqual(
       expect.objectContaining({ source: 'package' }),
     );
     expect(registry.getDiagnostics()).toEqual(
@@ -32,17 +32,17 @@ describe('Agent profile registries', () => {
       }),
     );
 
-    expect(registry.get('studio.shot-review', 1)).toEqual(
+    expect(registry.get('studio.shot-review')).toEqual(
       expect.objectContaining({ source: 'project' }),
     );
 
     registry.register(makeArtifactProfile({ source: 'personal', profileId: 'studio.alt-review' }));
-    registry.unregister('studio.shot-review', 'project', 1);
+    registry.unregister('studio.shot-review', 'project');
 
-    expect(registry.get('studio.shot-review', 1)).toEqual(
+    expect(registry.get('studio.shot-review')).toEqual(
       expect.objectContaining({ source: 'builtin' }),
     );
-    expect(registry.get('studio.alt-review', 1)).toEqual(
+    expect(registry.get('studio.alt-review')).toEqual(
       expect.objectContaining({ source: 'personal' }),
     );
   });
@@ -55,7 +55,6 @@ describe('Agent profile registries', () => {
       source: 'package',
       providerId: 'flux',
       displayName: 'Flux',
-      version: '1.0.0',
       sourceLayer: 'builtin',
       capabilities: ['image.generate'],
       syntaxProfile: { notes: [] },
@@ -76,7 +75,6 @@ function makeArtifactProfile(
     profileId: 'studio.shot-review',
     kind: 'artifact',
     protocol: 'GenericTable',
-    version: 1,
     source: 'package',
     columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
     ...overrides,

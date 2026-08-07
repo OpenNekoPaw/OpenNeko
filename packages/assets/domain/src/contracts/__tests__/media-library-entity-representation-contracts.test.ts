@@ -28,7 +28,6 @@ const representations = [
   {
     kind: 'generated-output',
     outputId: 'generated-alice',
-    revision: 'revision-1',
     digest: 'sha256:generated-alice',
     path: 'neko/generated/images/alice.png',
   },
@@ -76,36 +75,6 @@ describe('Media Library projection contract', () => {
     }
   });
 
-  it('rejects legacy identity, routing, cache, runtime, and physical-path fields', () => {
-    const poisonedEntries: readonly unknown[] = [
-      { ...mediaEntry, assetId: 'asset-alice' },
-      { ...mediaEntry, sourceKind: 'linked-local' },
-      { ...mediaEntry, cachePath: '.neko/.cache/alice.png' },
-      { ...mediaEntry, runtimeToken: 'engine-token' },
-      { ...mediaEntry, linkTarget: '/Users/private/Characters' },
-      {
-        ...mediaEntry,
-        locator: { ...representations[0], localPath: '/Users/private/Characters/alice.png' },
-      },
-      { ...mediaEntry, locator: { kind: 'workspace-file', path: 'project://assets/alice' } },
-      {
-        ...mediaEntry,
-        locator: { kind: 'resource-ref', uri: 'project://assets/alice', cacheKey: 'legacy' },
-      },
-    ];
-
-    expect(poisonedEntries.map(isMediaLibraryProjectionEntry)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-    ]);
-  });
-
   it('requires safe diagnostics only for unavailable entries', () => {
     expect(
       isMediaLibraryProjectionEntry({
@@ -138,42 +107,15 @@ describe('Creative Entity representation binding contract', () => {
     }
   });
 
-  it('rejects legacy identity, dual refs, ResourceCacheSource, routing, and internal storage fields', () => {
-    const poisonedBindings: readonly unknown[] = [
-      { ...binding, assetRef: 'project://assets/alice' },
-      { ...binding, assetEntityId: 'asset-alice' },
-      { ...binding, resourceRef: { uri: 'project://assets/alice' } },
-      { ...binding, cachePath: '.neko/.cache/alice.png' },
-      { ...binding, runtimeToken: 'webview-token' },
-      { ...binding, linkTarget: '/Users/private/Characters/alice.png' },
-      { ...binding, sourceKind: 'generated' },
-      { ...binding, representation: 'project://assets/alice' },
-      {
-        ...binding,
-        representation: { ...representations[0], cacheKey: 'thumbnail:alice' },
-      },
-      { ...binding, role: 'puppet-bone' },
-      { ...binding, source: 'generated' },
-    ];
-
-    expect(poisonedBindings.map(isEntityRepresentationBinding)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-    ]);
+  it('rejects unsupported fields', () => {
+    expect(isEntityRepresentationBinding({ ...binding, unexpectedField: true })).toBe(false);
   });
 
-  it('enforces v2 persistence and visible orphan/default state', () => {
-    expect(isEntityRepresentationBindingFile({ version: 2, bindings: [binding] })).toBe(true);
-    expect(isEntityRepresentationBindingFile({ version: 1, bindings: [binding] })).toBe(false);
+  it('enforces strict persistence and visible orphan/default state', () => {
+    expect(isEntityRepresentationBindingFile({ bindings: [binding] })).toBe(true);
+    expect(isEntityRepresentationBindingFile({ unexpectedField: 1, bindings: [binding] })).toBe(
+      false,
+    );
     expect(
       isEntityRepresentationBinding({
         ...binding,
@@ -197,38 +139,19 @@ describe('Creative Entity representation binding contract', () => {
     ).toBe(false);
   });
 
-  it('decodes only canonical v2 files and fails closed for legacy or unknown versions', () => {
-    const file = { version: 2 as const, bindings: [binding] };
+  it('decodes only the canonical file and rejects unknown fields', () => {
+    const file = { bindings: [binding] };
     expect(decodeEntityRepresentationBindingFile(file)).toMatchObject({ ok: true });
-    expect(decodeEntityRepresentationBindingFile({ version: 1, bindings: [] })).toEqual({
+    expect(
+      decodeEntityRepresentationBindingFile({ unexpectedField: 1, bindings: [] }),
+    ).toMatchObject({
       ok: false,
-      code: 'legacy-version',
-      message: 'Legacy Entity Asset bindings require explicit inspection and migration.',
+      code: 'invalid-file',
     });
-    expect(decodeEntityRepresentationBindingFile({ version: 3, bindings: [] })).toMatchObject({
-      ok: false,
-      code: 'unsupported-version',
-    });
-    expect(() => assertEntityRepresentationBindingFile({ version: 1, bindings: [] })).toThrow(
-      'explicit inspection and migration',
-    );
-    expect(createEmptyEntityRepresentationBindingFile()).toEqual({ version: 2, bindings: [] });
+    expect(() =>
+      assertEntityRepresentationBindingFile({ unexpectedField: 1, bindings: [] }),
+    ).toThrow('binding data is invalid');
+    expect(createEmptyEntityRepresentationBindingFile()).toEqual({ bindings: [] });
     expect(JSON.parse(encodeEntityRepresentationBindingFile(file))).toEqual(file);
   });
 });
-
-// Compile-time poison fixtures complement runtime validation for literal producers.
-const compileTimeMediaEntry: MediaLibraryProjectionEntry = {
-  ...mediaEntry,
-  // @ts-expect-error Media Library projections cannot carry catalog identity.
-  assetId: 'asset-alice',
-};
-
-const compileTimeBinding: EntityRepresentationBinding = {
-  ...binding,
-  // @ts-expect-error Direct representation bindings cannot carry a legacy assetRef.
-  assetRef: 'project://assets/alice',
-};
-
-void compileTimeMediaEntry;
-void compileTimeBinding;

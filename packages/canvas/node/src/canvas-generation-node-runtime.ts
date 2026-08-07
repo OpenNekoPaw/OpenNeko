@@ -5,15 +5,14 @@ import {
   type MediaGenerationResult,
 } from '@neko/generation';
 import {
-  GENERATION_JOB_MIGRATIONS,
   GenerationJobCoordinator,
   createPersistentGenerationJobStore,
+  initializeGenerationJobTables,
 } from '@neko/generation/job';
 import {
   GeneratedAssetIndex,
   createContentReadMediaRequestAssetMaterializer,
   finalizeMediaGenerationOutputs,
-  migrateLegacyGeneratedAssetIndex,
   createMediaPlatform,
   type GeneratedMediaKind,
 } from '@neko/generation/media';
@@ -93,7 +92,6 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     const owner = (await this.requireWorkspaceOwner(input.workspace)).owner;
     const started = await owner.jobs.regenerateGeneration({
       ref: current.ref,
-      expectedRevision: current.revision,
     });
     const completed = await waitForTerminalGeneration(owner.jobs, started);
     return projectGenerationSnapshot(completed, input.target.mediaKind);
@@ -206,7 +204,7 @@ async function createDefaultWorkspaceOwner(input: {
         `Desktop Canvas Generation Workspace identity mismatch: expected '${input.workspace.workspaceId}', received '${metadata.workspaceId}'.`,
       );
     }
-    await metadata.metadataStore.migrateNamespace(GENERATION_JOB_MIGRATIONS);
+    await initializeGenerationJobTables(metadata.metadataStore);
     const generatedAssetStore = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: metadata.manifestStore,
       workspaceRoot: input.workspace.workspacePath,
@@ -217,15 +215,6 @@ async function createDefaultWorkspaceOwner(input: {
         ]),
       ),
     });
-    const migration = await migrateLegacyGeneratedAssetIndex({
-      indexPath: path.join(input.workspace.workspacePath, 'neko', 'generated', 'index.json'),
-      store: generatedAssetStore,
-    });
-    if (migration.sourceStatus === 'quarantined') {
-      throw new Error(
-        `Desktop Canvas generated asset index was quarantined: ${migration.sourceDiagnostic ?? 'invalid index'}.`,
-      );
-    }
     const generatedAssets = new GeneratedAssetIndex(generatedAssetStore);
     await generatedAssets.load();
     configManager = new ConfigManager({
@@ -317,7 +306,7 @@ async function waitForTerminalGeneration(
   initial: GenerationJobSnapshot,
 ): Promise<GenerationJobSnapshot> {
   if (isTerminalJobPhase(initial.phase)) return initial;
-  for await (const snapshot of jobs.observeGeneration(initial.ref, initial.revision)) {
+  for await (const snapshot of jobs.observeGeneration(initial.ref)) {
     if (isTerminalJobPhase(snapshot.phase)) return snapshot;
   }
   throw new Error(
@@ -334,7 +323,6 @@ function projectGenerationSnapshot(
     ...(snapshot.retryOf ? { retryOf: snapshot.retryOf } : {}),
     ...(snapshot.regenerateOf ? { regenerateOf: snapshot.regenerateOf } : {}),
     phase: snapshot.phase,
-    revision: snapshot.revision,
     title: `Regenerate ${mediaKind}`,
     inputNodeIds: [],
     mediaKind,

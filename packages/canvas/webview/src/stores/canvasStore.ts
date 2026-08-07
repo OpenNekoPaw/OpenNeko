@@ -363,8 +363,7 @@ function createCanvasState(
         canvasData: normalizeCanvasData({
           ...canvasData,
           playback: {
-            ...(canvasData.playback ?? { version: 1 }),
-            version: 1,
+            ...canvasData.playback,
             entryIds: [nodeId],
           },
         }),

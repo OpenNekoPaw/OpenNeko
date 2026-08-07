@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "generated-output-workspace-board",
   "suiteId": "agent-runtime.creative-media-workflow",
   "caseGroup": "workflow",
@@ -14,18 +14,11 @@
       "Node Workspace Board projection",
       "neko/boards/workspace.nkc"
     ],
-    "forbiddenFallback": [
-      "AssetLibrary identity or import",
-      "multi-Board resolver or active Board selection",
-      "runtime generated-draft projection",
-      "direct Agent turn runner",
-      "retired resource-reference field, localPath, provider URL, data URL, or base64 handoff"
-    ],
     "observables": [
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Workspace Board projection, no-fallback, and terminal idle facts from the canonical Desktop owner.",
+        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Workspace Board projection, and terminal idle facts from the canonical Desktop owner.",
         "required": true
       },
       {
@@ -38,19 +31,31 @@
     "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid generated-output ContentLocator, and projects an ordinary locator-backed node into the Workspace Board.",
     "expectedFailure": "Missing file, invalid resource identity, blocked or missing Workspace Board projection, incomplete facts, Asset participation, multi-Board routing, runtime draft participation, or non-idle delivery fails visibly."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result and report the delivered generated-output ContentLocator. Do not use retired resource-reference fields, localPath, provider URL, data URL, base64, import it into the Asset library, select another Canvas, or create a runtime draft."
+      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result, report the delivered generated-output ContentLocator, and keep the result attached to this conversation and its current Workspace Board."
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 300000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 300000
+    }
   ],
   "assertions": [
-    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "workflow-facts" },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "workflow-facts"
+    },
     {
       "id": "tool",
       "kind": "tool-call",
@@ -74,33 +79,16 @@
       "status": "projected",
       "targetKind": "workspace",
       "minNodeIds": 1,
-      "revisionRequired": true,
+      "sourceFingerprintRequired": true,
       "diagnosticsEmpty": true,
       "evidenceRef": "workflow-facts"
     },
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": ["turnIdle", "continuationQueueIdle"],
-      "evidenceRef": "workflow-facts"
-    },
-    {
-      "id": "forbidden-paths",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "ListAssets",
-        "GetAsset",
-        "ImportAsset",
-        "AssetEntity",
-        "CanvasBoardIndexService",
-        "AgentCanvasBoardWorkRuntime",
-        "CanvasGeneratedDraftProjectionService",
-        "GeneratedDraftLayer",
-        "active-canvas",
-        ".neko/generated-drafts",
-        "generic-task-manager",
-        "TaskRef",
-        "task-result-continuation"
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
       ],
       "evidenceRef": "workflow-facts"
     }
@@ -114,5 +102,8 @@
       "minFiles": 1
     }
   ],
-  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 300000,
+    "repetitions": 1
+  }
 }

@@ -53,8 +53,8 @@ CredentialStore and authoritative Timeline projection. It MUST NOT create or res
 
 ### Requirement: Agent IPC is fixed, sender-bound and path-safe
 
-Desktop preload MUST expose only a fixed versioned Agent namespace. Main MUST derive application,
-Window, View, workspace and renderer epoch from the registered sender. Renderer messages and
+Desktop preload MUST expose only one fixed Agent namespace. Main MUST derive application,
+Window, View instance, workspace and renderer session identity from the registered sender. Renderer messages and
 projections MUST use stable content/resource identities and MUST NOT expose or trust absolute paths,
 credentials, SQLite details, Host objects, runtime handles, raw IPC channels or arbitrary commands.
 
@@ -67,23 +67,25 @@ credentials, SQLite details, Host objects, runtime handles, raw IPC channels or 
 
 #### Scenario: Renderer forges an owner identity
 
-- **WHEN** a renderer message names another Window, View, workspace, conversation or stale renderer epoch
+- **WHEN** a renderer message names another Window, View, workspace, conversation or stale renderer session identity
 - **THEN** Main rejects it with a typed identity diagnostic
 - **AND** it does not use the active Project, active Tab or current conversation as fallback
 
-### Requirement: Desktop renders package-owned Agent and Home projections
+### Requirement: Desktop renders package-owned Agent and application summaries
 
 Content Project MUST render the complete package-owned `AgentWebviewRoot` with an Electron
-`AgentHostRuntimeAdapter`. Home MUST render conversation and Activity summaries derived from Agent
-owner projections, while full Timeline, Tool Call, Approval, Skill and Job details remain owned by
-their authoritative projections.
+`AgentHostRuntimeAdapter`. Application navigation MAY render conversation and Activity summaries derived
+from Agent owner projections, while full Timeline, Tool Call, Approval, Skill and Job details remain owned
+by their authoritative projections. Product placement, entry draft and Workbench scene composition are
+owned by `compose-desktop-workbench-scenes`; this capability MUST NOT retain a standalone Home composer or
+handoff.
 
 #### Scenario: Tool execution needs approval
 
 - **WHEN** Pi projects a Tool Call requiring creator confirmation
 - **THEN** the Agent Root renders the canonical Tool confirmation state and sends approval bound to
   conversation and tool-call identity
-- **AND** Home Attention reflects the needs-input summary without owning or duplicating the Tool Call
+- **AND** application Attention reflects the needs-input summary without owning or duplicating the Tool Call
 
 #### Scenario: Existing GenerationJob link is displayed
 
@@ -94,19 +96,19 @@ their authoritative projections.
 ### Requirement: Agent presentation and runtime recover by their owners
 
 Renderer reload, Project Tab close, Window close, explicit cancellation and app quit MUST have distinct
-lifecycle behavior. Attachments and View presentation state MUST be isolated by View epoch; conversation
+lifecycle behavior. Attachments and View presentation state MUST be isolated by exact View instance identity; conversation
 runtime and durable facts MUST remain owned by AppHost/Pi/domain authorities.
 
 #### Scenario: Renderer reloads during an active conversation
 
-- **WHEN** the renderer reconnects with a new renderer and View epoch
+- **WHEN** the renderer reconnects with a new renderer session and View instance identity
 - **THEN** the old connection detaches and the new View obtains a snapshot before accepting patches
 - **AND** the Pi conversation is not duplicated, restarted or hydrated from renderer state
 
-#### Scenario: Renderer repeats bootstrap within the same owner epoch
+#### Scenario: Renderer repeats bootstrap for the same exact owner
 
 - **WHEN** React lifecycle replay or another equivalent retry repeats Agent bootstrap for the exact
-  same Application, Window, Project, Workspace, View, View epoch and renderer epoch
+  same Application, Window, Project, Workspace, View instance and renderer session
 - **THEN** Host returns the existing connection identity and refreshes its event publisher
 - **AND** it does not dispose the shared controller effects or make the already-mounted Agent Root
   send through an unknown connection
@@ -127,7 +129,7 @@ accessibility labels, status text and dates MUST use the shared i18n runtime wit
 
 #### Scenario: Desktop starts without persisted presentation settings
 
-- **WHEN** Electron mounts Home or a Content Project without an explicit future theme preference
+- **WHEN** Electron mounts the Agent or a Content Project without an explicit future theme preference
 - **THEN** the document and embedded Agent Root use the shared light theme tokens
 - **AND** no dark fallback palette flashes or remains after renderer bootstrap
 
@@ -137,73 +139,23 @@ accessibility labels, status text and dates MUST use the shared i18n runtime wit
 - **THEN** Shell copy, accessibility labels, status text and dates render in that locale
 - **AND** the same normalized locale is passed to the package-owned Agent Root
 
-### Requirement: Home and Content Project use a creator-first workbench layout
+### Requirement: Agent runtime behavior is independent of product placement
 
-Home MUST provide persistent product navigation, recent Project access and a focused start-creation
-surface. Content Project MUST compose a collapsible primary navigation rail, package-owned Agent Root
-as a Chat dock/workspace region outside the Main Creative Surface, and independent creative/resource
-regions through existing shared Workbench primitives. Desktop MUST own configuration entry points;
-the embedded Agent Root MUST NOT auto-open onboarding or render provider/config-file controls.
-The layout MUST NOT claim Canvas, Assets or another future domain is ready before its owning slice is
-connected. Content Project MUST NOT render a global Header or unified workspace Tab row; Conversation
-tabs remain package-owned inside the Agent Root.
+The package-owned Agent Root and runtime SHALL preserve conversation, Tab, Timeline, Tool, Approval and
+Skill behavior when composed by the unified Workbench. This capability MUST NOT own a page shell,
+PrimarySidebar, entry composer, scene selection or Workspace fallback.
 
-#### Scenario: User enters Home
+#### Scenario: Desktop composes the Agent Root
 
-- **WHEN** no Project Tab is active
-- **THEN** Home shows persistent navigation, recent Projects/Conversations and one focused start action
-- **AND** unavailable quick starts remain disabled or visibly diagnosed
+- **WHEN** the unified Workbench mounts the package-owned Agent Root in an allowed scene
+- **THEN** the Root renders its conversation UI and sends messages through the canonical runtime adapter
+- **AND** Agent onboarding, provider file controls and an extra Desktop-owned Agent header remain absent
 
-#### Scenario: User opens a Content Project before P1.4
+#### Scenario: Application restores a scoped conversation
 
-- **WHEN** the Window activates a Content Project while Canvas and Assets remain unavailable
-- **THEN** the workspace keeps the Agent Chat dock, primary navigation rail and unavailable domain
-  regions stable
-- **AND** the future-domain regions show their owning slice and diagnostic instead of mock content or
-  successful controls
-
-#### Scenario: Desktop renders the Agent Chat dock
-
-- **WHEN** Desktop mounts the package-owned Agent Root
-- **THEN** the Root renders Conversation tabs, messages and composer directly inside the Chat region
-- **AND** Agent onboarding, provider connection, config-file actions and an extra Desktop Agent
-  wrapper header are absent
-
-#### Scenario: Agent navigation remains local to the Chat dock
-
-- **WHEN** Desktop composes Agent with another creative surface
-- **THEN** Conversation tabs and actions render inside the package-owned Agent Root
-- **AND** Desktop does not mirror them into a global Header or unified workbench Tab row
-
-#### Scenario: UX refinement preserves core Desktop capabilities
-
-- **WHEN** Home and Content Project adapt their density, navigation and panel presentation
-- **THEN** real Project open/activate/close, Home conversation navigation, Agent Root mounting,
-  owner projection rendering, locale and diagnostics remain reachable and testable
-- **AND** unavailable Agent, Canvas and Assets regions do not render simulated prompt, authoring,
-  search or success controls that could be mistaken for connected capabilities
-
-#### Scenario: Home Agent composer is visually refined without simulated controls
-
-- **WHEN** Desktop renders the Home start-creation surface
-- **THEN** one focused composer contains the existing creation-intent input, one unified Project
-  control for selecting an existing Project or opening another Project, and the submit action with
-  responsive shared-theme presentation
-- **AND** Project open and selection are not rendered as duplicate adjacent controls
-- **AND** the creation-intent input exposes no manual resize affordance, grows and shrinks with its
-  content within the composer layout bounds, and scrolls internally only after reaching its maximum
-  height
-- **AND** Home does not add model, Skill, version or attachment controls that are not connected to the
-  canonical Agent contract
-
-#### Scenario: Home opens the selected conversation in its owning workspace
-
-- **WHEN** the user selects a Home conversation owned by another attached or catalogued Project
-- **THEN** Desktop activates that Project View, or reopens it from the Host-owned persisted Workspace
-  locator when its Tab was closed, and passes the explicit Conversation identity to the package-owned
-  Agent Root
-- **AND** Agent waits for conversation catalog and Tab state hydration before activation
-- **AND** a missing or mismatched target fails visibly instead of opening the current active conversation
+- **WHEN** the user selects a durable conversation summary
+- **THEN** Agent runtime resolves its exact persisted scope and waits for catalog/Tab projection hydration
+- **AND** a missing or mismatched scope fails visibly instead of using the active Workspace or conversation
 
 #### Scenario: Restored Project lazily reconnects its Agent workspace
 
@@ -270,4 +222,4 @@ workspace.
 - **THEN** user-visible state and durable recovery succeed
 - **AND** path evidence proves the shared controller, Pi conversation runtime, Pi Session, Product Turn
   Bridge and authoritative projection were used while VS Code, legacy AgentSession, demo/mock and
-  active-object fallbacks remained poisoned
+  active-object fallbacks were absent and did not participate

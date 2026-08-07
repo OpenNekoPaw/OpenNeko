@@ -5,9 +5,10 @@
  * Uses shared configuration module from @neko/shared for unified format.
  */
 
-import type { Provider, Model } from './types/provider';
+import type { Model } from './types/provider';
 import type { MCPServerPreset } from './types/config';
-import type { UnifiedConfig } from './config-core/index';
+import type { ProviderDefinition, UnifiedConfig } from './config-core/index';
+import type { ProviderCredentialDeclaration } from './config-core/index';
 // Node.js config reader - direct import
 import {
   readConfigFileResult,
@@ -23,26 +24,17 @@ import {
  */
 export interface UserConfig {
   /** Custom providers */
-  providers: Provider[];
+  providers: ProviderDefinition[];
   /** Custom models */
   models: Model[];
   /** Custom MCP servers */
   mcpServers: MCPServerPreset[];
-  /** Provider overrides (e.g., API keys) */
-  providerOverrides: Record<string, Partial<Provider>>;
-  /** Model overrides */
-  modelOverrides: Record<string, Partial<Model>>;
-  /** MCP server overrides */
-  mcpServerOverrides: Record<string, Partial<MCPServerPreset>>;
 }
 
 const DEFAULT_USER_CONFIG: UserConfig = {
   providers: [],
   models: [],
   mcpServers: [],
-  providerOverrides: {},
-  modelOverrides: {},
-  mcpServerOverrides: {},
 };
 
 // =============================================================================
@@ -58,21 +50,22 @@ function unifiedToUserConfig(unified: UnifiedConfig | null): UserConfig {
   }
 
   return {
-    providers: (unified.providers as Provider[]) ?? [],
-    models: (unified.models as Model[]) ?? [],
-    mcpServers: (unified.mcpServers as MCPServerPreset[]) ?? [],
-    providerOverrides: (unified.providerOverrides as Record<string, Partial<Provider>>) ?? {},
-    modelOverrides: (unified.modelOverrides as Record<string, Partial<Model>>) ?? {},
-    mcpServerOverrides:
-      (unified.mcpServerOverrides as Record<string, Partial<MCPServerPreset>>) ?? {},
+    providers: unified.providers ?? [],
+    models: unified.models ?? [],
+    mcpServers: unified.mcpServers ?? [],
   };
 }
 
 /**
  * Convert user config to unified config for saving.
- * Preserves scalar fields (defaultProvider, maxTokens, etc.) from the existing file.
+ * Preserves settings fields not managed by UserConfig from the existing file.
  */
-function userToUnifiedConfig(user: UserConfig, configPath?: string): UnifiedConfig {
+interface WritableUserConfigDocument {
+  readonly config: UnifiedConfig;
+  readonly providerCredentials: Readonly<Record<string, ProviderCredentialDeclaration>>;
+}
+
+function userToUnifiedConfig(user: UserConfig, configPath?: string): WritableUserConfigDocument {
   // Read existing file to preserve scalar fields not managed by UserConfig
   const existingResult = configPath ? readConfigFileResult(configPath) : readUserConfigResult();
   const existing = existingResult.status === 'ok' ? existingResult.config : {};
@@ -81,13 +74,13 @@ function userToUnifiedConfig(user: UserConfig, configPath?: string): UnifiedConf
   }
 
   return {
-    ...existing,
-    providers: user.providers,
-    models: user.models,
-    mcpServers: user.mcpServers,
-    providerOverrides: user.providerOverrides,
-    modelOverrides: user.modelOverrides,
-    mcpServerOverrides: user.mcpServerOverrides,
+    config: {
+      ...existing,
+      providers: user.providers,
+      models: user.models,
+      mcpServers: user.mcpServers,
+    },
+    providerCredentials: existingResult.status === 'ok' ? existingResult.providerCredentials : {},
   };
 }
 
@@ -102,19 +95,17 @@ export interface IUserConfigManager {
   load(): UserConfig;
   loadResult?(): UserConfigReadResult;
   save(config: UserConfig): Promise<void>;
-  updateProviderOverride(providerId: string, override: Partial<Provider>): Promise<void>;
-  addProvider(provider: Provider): Promise<void>;
+  addProvider(provider: ProviderDefinition): Promise<void>;
   removeProvider(providerId: string): Promise<void>;
   addModel(model: Model): Promise<void>;
   removeModel(modelId: string): Promise<void>;
-  updateMCPServerOverride(serverId: string, override: Partial<MCPServerPreset>): Promise<void>;
   addMCPServer(server: MCPServerPreset): Promise<void>;
   removeMCPServer(serverId: string): Promise<void>;
   clear(): Promise<void>;
 
   /** Load raw UnifiedConfig (includes scalar fields like temperature, maxTokens, etc.) */
   loadRaw(): UnifiedConfig;
-  loadRawResult?(): ConfigReadResult;
+  loadRawResult(): ConfigReadResult;
   /** Update a single scalar field in the config file */
   updateScalar<K extends keyof UnifiedConfig>(key: K, value: UnifiedConfig[K]): Promise<void>;
   /** Update multiple scalar fields in the config file */
@@ -187,13 +178,15 @@ export class FileUserConfigManager implements IUserConfigManager {
    * Save user configuration to file
    */
   async save(config: UserConfig): Promise<void> {
-    const unified = userToUnifiedConfig(config, this.filePath);
-    this.writeRawConfig(unified);
+    const document = userToUnifiedConfig(config, this.filePath);
+    this.writeRawConfig(document);
     this.cachedConfig = config;
     this.cachedReadResult = {
       status: 'ok',
       filePath: this.filePath,
-      config: unified,
+      config: document.config,
+      diagnostics: [],
+      providerCredentials: document.providerCredentials,
     };
   }
 
@@ -201,16 +194,7 @@ export class FileUserConfigManager implements IUserConfigManager {
   // Provider Methods
   // ==========================================================================
 
-  async updateProviderOverride(providerId: string, override: Partial<Provider>): Promise<void> {
-    const config = this.load();
-    config.providerOverrides[providerId] = {
-      ...config.providerOverrides[providerId],
-      ...override,
-    };
-    await this.save(config);
-  }
-
-  async addProvider(provider: Provider): Promise<void> {
+  async addProvider(provider: ProviderDefinition): Promise<void> {
     const config = this.load();
     const existing = config.providers.findIndex((p) => p.id === provider.id);
     if (existing >= 0) {
@@ -224,7 +208,6 @@ export class FileUserConfigManager implements IUserConfigManager {
   async removeProvider(providerId: string): Promise<void> {
     const config = this.load();
     config.providers = config.providers.filter((p) => p.id !== providerId);
-    delete config.providerOverrides[providerId];
     await this.save(config);
   }
 
@@ -246,25 +229,12 @@ export class FileUserConfigManager implements IUserConfigManager {
   async removeModel(modelId: string): Promise<void> {
     const config = this.load();
     config.models = config.models.filter((m) => m.id !== modelId);
-    delete config.modelOverrides[modelId];
     await this.save(config);
   }
 
   // ==========================================================================
   // MCP Server Methods
   // ==========================================================================
-
-  async updateMCPServerOverride(
-    serverId: string,
-    override: Partial<MCPServerPreset>,
-  ): Promise<void> {
-    const config = this.load();
-    config.mcpServerOverrides[serverId] = {
-      ...config.mcpServerOverrides[serverId],
-      ...override,
-    };
-    await this.save(config);
-  }
 
   async addMCPServer(server: MCPServerPreset): Promise<void> {
     const config = this.load();
@@ -280,7 +250,6 @@ export class FileUserConfigManager implements IUserConfigManager {
   async removeMCPServer(serverId: string): Promise<void> {
     const config = this.load();
     config.mcpServers = config.mcpServers.filter((s) => s.id !== serverId);
-    delete config.mcpServerOverrides[serverId];
     await this.save(config);
   }
 
@@ -312,16 +281,18 @@ export class FileUserConfigManager implements IUserConfigManager {
     key: K,
     value: UnifiedConfig[K],
   ): Promise<void> {
-    const raw = this.loadRawForWrite();
-    (raw as Record<string, unknown>)[key] = value;
-    this.writeRawConfig(raw);
+    const document = this.loadRawForWrite();
+    this.writeRawConfig({
+      ...document,
+      config: { ...document.config, [key]: value },
+    });
     this.reload();
   }
 
   async updateScalars(updates: Partial<UnifiedConfig>): Promise<void> {
-    const raw = this.loadRawForWrite();
-    Object.assign(raw, updates);
-    this.writeRawConfig(raw);
+    const document = this.loadRawForWrite();
+    Object.assign(document.config, updates);
+    this.writeRawConfig(document);
     this.reload();
   }
 
@@ -343,23 +314,26 @@ export class FileUserConfigManager implements IUserConfigManager {
    */
   dispose(): void {}
 
-  private loadRawForWrite(): UnifiedConfig {
+  private loadRawForWrite(): WritableUserConfigDocument {
     const result = this.loadRawResult();
     if (result.status === 'ok') {
-      return { ...result.config };
+      return {
+        config: { ...result.config },
+        providerCredentials: result.providerCredentials,
+      };
     }
     if (result.status === 'missing') {
-      return {};
+      return { config: {}, providerCredentials: {} };
     }
     throw new Error(result.diagnostic.message);
   }
 
-  private writeRawConfig(config: UnifiedConfig): void {
+  private writeRawConfig(document: WritableUserConfigDocument): void {
     if (this.filePath === getUserConfigPath()) {
-      writeUserConfigFile(config);
+      writeUserConfigFile(document.config, document.providerCredentials);
       return;
     }
-    writeConfigFile(this.filePath, config);
+    writeConfigFile(this.filePath, document.config, document.providerCredentials);
   }
 }
 

@@ -3,8 +3,6 @@ import type { CanvasAgentProvenance, CanvasAgentTargetRef } from './canvas-agent
 import type { JsonPointerPath } from './canvas-layered';
 import { isHostProjectedRuntimeValue } from '@neko/content';
 
-export const CANVAS_AUTHORING_CATALOG_VERSION = 1 as const;
-
 export const CANVAS_AUTHORING_CATALOG_SECTIONS = [
   'nodeTypes',
   'presets',
@@ -17,8 +15,6 @@ export const CANVAS_AUTHORING_CATALOG_SECTIONS = [
   'fieldProfiles',
   'semanticPrompts',
 ] as const;
-
-export type CanvasAuthoringCatalogVersion = typeof CANVAS_AUTHORING_CATALOG_VERSION;
 
 export type CanvasAuthoringCatalogSection = (typeof CANVAS_AUTHORING_CATALOG_SECTIONS)[number];
 
@@ -171,7 +167,6 @@ export interface CanvasAuthoringValidationResult {
 }
 
 export interface CanvasAuthoringCatalogRequest {
-  readonly version?: CanvasAuthoringCatalogVersion;
   readonly sections?: readonly CanvasAuthoringCatalogSection[];
   readonly includeDetails?: boolean;
   readonly filters?: Readonly<Record<string, unknown>>;
@@ -286,7 +281,6 @@ export interface CanvasAuthoringOperationDescriptor {
 }
 
 export interface CanvasAuthoringCatalog {
-  readonly version: CanvasAuthoringCatalogVersion;
   readonly sections: readonly CanvasAuthoringCatalogSection[];
   readonly nodeTypes?: readonly CanvasAuthoringNodeTypeDescriptor[];
   readonly presets?: readonly CanvasAuthoringPresetDescriptor[];
@@ -304,7 +298,6 @@ export interface CanvasAuthoringCatalog {
 export interface CanvasAuthoringFieldProfileDescriptor {
   readonly id: string;
   readonly namespace: string;
-  readonly version: number;
   readonly aliases?: readonly string[];
   readonly label?: CanvasAuthoringLocalizedText;
   readonly unknownFieldPolicy?: 'preserve-custom' | 'diagnose' | 'reject';
@@ -446,7 +439,6 @@ export interface CanvasAuthoringSemanticPromptValidationOptions {
 }
 
 export interface CanvasAuthoringResultEnvelope {
-  readonly version: CanvasAuthoringCatalogVersion;
   readonly status: CanvasAuthoringResultStatus;
   readonly refs: readonly CanvasAuthoringRef[];
   readonly diagnostics: readonly CanvasAuthoringDiagnostic[];
@@ -464,7 +456,7 @@ const RUNTIME_RESOURCE_IDENTITY_PATTERNS: readonly RegExp[] = [
   /^data:/i,
   /^https?:\/\/127\.0\.0\.1(?::|\/)/i,
   /^https?:\/\/localhost(?::|\/)/i,
-  /(?:^|\/)\.neko\/\.cache(?:\/|$)/i,
+  /(?:^|\/)\.[^/]+(?:\/|$)/,
   /^\/tmp(?:\/|$)/i,
   /^\/var\/folders(?:\/|$)/i,
 ];
@@ -480,21 +472,6 @@ export function validateCanvasAuthoringCatalogRequest(
         diagnostic('error', 'malformed-catalog-request', 'Catalog request must be an object.'),
       ],
     };
-  }
-  const version = value['version'];
-  if (version !== undefined && version !== CANVAS_AUTHORING_CATALOG_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'unsupported-catalog-version',
-        'Unsupported Canvas authoring catalog version.',
-        {
-          target: 'version',
-          expected: CANVAS_AUTHORING_CATALOG_VERSION,
-          received: version,
-        },
-      ),
-    );
   }
   const sections = value['sections'];
   if (sections !== undefined) {
@@ -536,20 +513,6 @@ export function validateCanvasAuthoringCatalog(value: unknown): CanvasAuthoringV
         diagnostic('error', 'malformed-catalog', 'Canvas authoring catalog must be an object.'),
       ],
     };
-  }
-  if (value['version'] !== CANVAS_AUTHORING_CATALOG_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'unsupported-catalog-version',
-        'Unsupported Canvas authoring catalog version.',
-        {
-          target: 'version',
-          expected: CANVAS_AUTHORING_CATALOG_VERSION,
-          received: value['version'],
-        },
-      ),
-    );
   }
   const sections = value['sections'];
   if (!Array.isArray(sections) || !sections.every(isCanvasAuthoringCatalogSection)) {
@@ -624,20 +587,6 @@ export function validateCanvasAuthoringResultEnvelope(
         ),
       ],
     };
-  }
-  if (value['version'] !== CANVAS_AUTHORING_CATALOG_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'unsupported-catalog-version',
-        'Unsupported Canvas authoring result version.',
-        {
-          target: 'version',
-          expected: CANVAS_AUTHORING_CATALOG_VERSION,
-          received: value['version'],
-        },
-      ),
-    );
   }
   if (!includesString(CANVAS_AUTHORING_RESULT_STATUSES, value['status'])) {
     diagnostics.push(
@@ -731,14 +680,6 @@ export function validateCanvasAuthoringFieldProfileDescriptor(
       diagnostic('error', 'malformed-field-profile', 'Field profile namespace is required.', {
         target: 'namespace',
         received: value['namespace'],
-      }),
-    );
-  }
-  if (typeof value['version'] !== 'number' || value['version'] < 1) {
-    diagnostics.push(
-      diagnostic('error', 'malformed-field-profile', 'Field profile version must be positive.', {
-        target: 'version',
-        received: value['version'],
       }),
     );
   }

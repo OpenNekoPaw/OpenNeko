@@ -7,7 +7,6 @@ import {
 } from '..';
 
 const key = {
-  endpointEpoch: 'endpoint-1',
   attachmentId: 'attachment-1',
   tabId: 'tab-1',
   conversationId: 'conversation-1',
@@ -21,7 +20,6 @@ function createContext(): AgentHostRouteEffectContext {
       windowId: 'window-1',
       viewId: 'view-1',
       workspaceId: 'workspace-1',
-      rendererEpoch: 'renderer-1',
       connectionId: 'connection-1',
     },
     post: vi.fn(),
@@ -55,7 +53,6 @@ describe('Agent projection controller', () => {
     const context = createContext();
     const discovery = {
       type: 'projectionEndpointDiscover' as const,
-      protocolVersion: 1 as const,
       realmId: 'realm-1',
     };
     const attach = { type: 'projectionAttach' as const, key };
@@ -63,7 +60,6 @@ describe('Agent projection controller', () => {
       type: 'projectionSnapshotAck' as const,
       key,
       sequence: 0 as const,
-      projectionVersion: 2,
     };
     const detach = {
       type: 'projectionDetach' as const,
@@ -93,7 +89,6 @@ describe('Agent projection controller', () => {
         type: 'projectionSnapshotAck',
         key,
         sequence: 0,
-        projectionVersion: 2,
       },
       effects,
       context,

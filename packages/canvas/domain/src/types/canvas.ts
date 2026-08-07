@@ -145,7 +145,7 @@ export interface CanvasNodeBase<TType extends string = CanvasNodeType> {
   rotation?: number;
   /** Whether node is locked from editing */
   locked?: boolean;
-  /** Port definitions for data-flow connections (optional, backward compatible) */
+  /** Optional port definitions for data-flow connections. */
   ports?: PortDefinition[];
   /** Optional composable content tree. Nodes without it use the registered default renderer. */
   content?: ContainerSection;
@@ -217,7 +217,7 @@ export function isCanvasMaterialGenerationContext(
 export interface MediaCanvasNode extends CanvasNodeBase {
   type: 'media';
   data: {
-    /** Runtime or legacy relative path. Canonical persisted nodes use contentLocator. */
+    /** Runtime relative path. Canonical persisted nodes use contentLocator. */
     assetPath: string;
     /** Canonical durable content location. */
     contentLocator?: ContentLocator;
@@ -235,8 +235,6 @@ export interface MediaCanvasNode extends CanvasNodeBase {
     title?: string;
     /** Stable projection lineage. Runtime locations are forbidden. */
     provenance?: CanvasSerializableRecord;
-    /** Portable generation provenance shown by Canvas material action surfaces. */
-    generationContext?: CanvasMaterialGenerationContext;
     /** Canonical immutable Generation Job evidence for a generated-output locator. */
     generation?: CanvasGenerationEvidence;
     /** Optional stable Entity identity separate from the representation locator. */
@@ -288,9 +286,8 @@ export type CanvasJobArtifactRef =
 export interface JobCanvasNode extends CanvasNodeBase {
   type: 'job';
   data: {
-    /** Stable owner identity. `kind: legacy` is inspection-only migrated data. */
+    /** Stable owner identity. */
     jobRef: JobRef;
-    revision: number;
     title: string;
     objective?: string;
     status: CanvasJobStatus;
@@ -316,8 +313,6 @@ export interface FileCanvasNode extends CanvasNodeBase {
     contentLocator?: ContentLocator;
     /** Canonical immutable Generation Job evidence for a generated-output locator. */
     generation?: CanvasGenerationEvidence;
-    /** Legacy display-only summary accepted only by explicit NKC migration. */
-    generationContext?: CanvasMaterialGenerationContext;
     /** Optional stable Entity identity separate from the representation locator. */
     entityRepresentation?: CanvasEntityRepresentationEvidence;
     documentResourceStatus?: DocumentResourceStatus;
@@ -505,8 +500,6 @@ export interface CanvasViewport {
  * Canvas data structure - persisted to .nkc file
  */
 export interface CanvasData {
-  /** File format version */
-  version: string;
   /** Canvas name */
   name: string;
   /** Whether this Canvas is projected from an external source of truth. */
@@ -531,12 +524,8 @@ export interface CanvasData {
 // Canvas Constants
 // =============================================================================
 
-/** Current canvas file format version */
-export const CANVAS_VERSION = '3.0';
-
 /** Default canvas data for new files */
 export const DEFAULT_CANVAS_DATA: CanvasData = {
-  version: CANVAS_VERSION,
   name: 'Untitled Canvas',
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   nodes: [],

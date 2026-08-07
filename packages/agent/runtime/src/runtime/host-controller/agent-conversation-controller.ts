@@ -57,9 +57,6 @@ export function tryHandleAgentConversationControllerRoute(
         effects.cancelTurn(conversationId, context),
       );
 
-    case 'newConversation':
-      return runAgentHostRouteEffect(() => effects.createConversation(context));
-
     case 'activateConversation':
       return runRequiredConversationRoute(message, 'activate conversation', context, () =>
         effects.activateConversation(message, context),

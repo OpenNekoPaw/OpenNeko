@@ -409,7 +409,6 @@ function requireExecutionMetadataId(
 interface LinkedGenerationJobResult {
   readonly jobKind: 'generation';
   readonly jobId: string;
-  readonly jobRevision: number;
   readonly jobLifecycleOwner: 'generation-job-coordinator';
   readonly providerId: string;
   readonly modelId: string;
@@ -442,7 +441,6 @@ async function executeLinkedGenerationJob(
   return {
     jobKind: terminal.ref.kind,
     jobId: terminal.ref.jobId,
-    jobRevision: terminal.revision,
     jobLifecycleOwner: 'generation-job-coordinator',
     providerId: terminal.request.providerId,
     modelId: terminal.request.modelId,
@@ -457,7 +455,7 @@ async function waitForGenerationJobTerminal(
 ): Promise<GenerationJobSnapshot> {
   if (isGenerationJobTerminal(initial)) return initial;
   let latest = initial;
-  const iterator = jobs.observeGeneration(initial.ref, initial.revision)[Symbol.asyncIterator]();
+  const iterator = jobs.observeGeneration(initial.ref)[Symbol.asyncIterator]();
   try {
     while (true) {
       const update = await nextGenerationJobUpdate(iterator, options?.signal);
@@ -487,7 +485,6 @@ function projectGenerationJobProgress(snapshot: GenerationJobSnapshot) {
   return {
     kind: 'generation-job' as const,
     jobId: snapshot.ref.jobId,
-    revision: snapshot.revision,
     phase: snapshot.phase,
     stage: snapshot.progress.stage,
     percent: snapshot.progress.percent,
@@ -525,10 +522,7 @@ async function cancelLinkedGenerationJob(
   if (isGenerationJobTerminal(latest)) return;
   const current = await jobs.describeGeneration(latest.ref);
   if (isGenerationJobTerminal(current)) return;
-  await jobs.cancelGeneration({
-    ref: current.ref,
-    expectedRevision: current.revision,
-  });
+  await jobs.cancelGeneration({ ref: current.ref });
 }
 
 function abortReason(signal: AbortSignal): Error {
@@ -556,7 +550,7 @@ function createMediaToolAttachments(
 }
 
 function readImageReferenceInputs(args: Record<string, unknown>): Partial<ImageGenerationRequest> {
-  rejectLegacyMediaInputFields(args, [
+  rejectUnsupportedMediaInputFields(args, [
     'referenceImageUrl',
     'referenceImageUri',
     'referenceImageBase64',
@@ -583,7 +577,7 @@ function readImageReferenceInputs(args: Record<string, unknown>): Partial<ImageG
 }
 
 function readImageControlInputs(args: Record<string, unknown>): Partial<ImageGenerationRequest> {
-  rejectLegacyMediaInputFields(args, ['controlImageUri', 'controlImageBase64']);
+  rejectUnsupportedMediaInputFields(args, ['controlImageUri', 'controlImageBase64']);
   const controlImageLocator = readOptionalContentLocator(
     args.controlImageLocator,
     'controlImageLocator',
@@ -600,7 +594,7 @@ function readImageControlInputs(args: Record<string, unknown>): Partial<ImageGen
 }
 
 function readVideoReferenceInputs(args: Record<string, unknown>): Partial<VideoGenerationRequest> {
-  rejectLegacyMediaInputFields(args, [
+  rejectUnsupportedMediaInputFields(args, [
     'startFrameRef',
     'endFrameRef',
     'referenceVideoRef',
@@ -740,15 +734,13 @@ function hasResolvedTransformSource(args: Record<string, unknown>): boolean {
   );
 }
 
-function rejectLegacyMediaInputFields(
+function rejectUnsupportedMediaInputFields(
   args: Record<string, unknown>,
   fields: readonly string[],
 ): void {
-  const legacyField = fields.find((field) => Object.hasOwn(args, field));
-  if (legacyField) {
-    throw new Error(
-      `${legacyField} is a runtime-only or legacy media field; pass a ContentLocator instead.`,
-    );
+  const unsupportedField = fields.find((field) => Object.hasOwn(args, field));
+  if (unsupportedField) {
+    throw new Error(`${unsupportedField} is not supported; pass a ContentLocator instead.`);
   }
 }
 
@@ -1203,7 +1195,6 @@ export function registerMediaAgentTools(
               status: 'completed',
               jobKind: result.jobKind,
               jobId: result.jobId,
-              jobRevision: result.jobRevision,
               jobLifecycleOwner: result.jobLifecycleOwner,
               message: resolved.prompt,
               outputs: result.outputs,
@@ -1391,7 +1382,7 @@ export function registerMediaAgentTools(
           };
         }
         try {
-          rejectLegacyMediaInputFields(args, [
+          rejectUnsupportedMediaInputFields(args, [
             'sourceImageRef',
             'sourceImageUri',
             'referenceImageRef',
@@ -1463,7 +1454,6 @@ export function registerMediaAgentTools(
               status: 'completed',
               jobKind: result.jobKind,
               jobId: result.jobId,
-              jobRevision: result.jobRevision,
               jobLifecycleOwner: result.jobLifecycleOwner,
               message: resolved.prompt,
               outputs: result.outputs,
@@ -1689,7 +1679,6 @@ export function registerMediaAgentTools(
               status: 'completed',
               jobKind: result.jobKind,
               jobId: result.jobId,
-              jobRevision: result.jobRevision,
               jobLifecycleOwner: result.jobLifecycleOwner,
               message: resolved.prompt,
               outputs: result.outputs,
@@ -1801,7 +1790,6 @@ export function registerMediaAgentTools(
               status: 'completed',
               jobKind: result.jobKind,
               jobId: result.jobId,
-              jobRevision: result.jobRevision,
               jobLifecycleOwner: result.jobLifecycleOwner,
               message: prompt,
               outputs: result.outputs,
@@ -1923,7 +1911,6 @@ export function registerMediaAgentTools(
               status: 'completed',
               jobKind: result.jobKind,
               jobId: result.jobId,
-              jobRevision: result.jobRevision,
               jobLifecycleOwner: result.jobLifecycleOwner,
               message: text,
               outputs: result.outputs,
@@ -1953,7 +1940,7 @@ function registerDetachedGenerationJobTool(
     createTool({
       name: 'SubmitGenerationJob',
       description:
-        'Submit one explicit detached Generation Job and return its authoritative identity immediately. Use later Generation Job Tools with the returned jobId and revision.',
+        'Submit one explicit detached Generation Job and return its authoritative identity immediately. Use later Generation Job Tools with the returned jobId.',
       category: 'generation',
       safetyKind: 'non-destructive-mutation',
       requirements: { generationJob: true },
@@ -2043,23 +2030,21 @@ function registerGenerationJobManagementTools(
   toolRegistry.register(
     createTool({
       name: 'ObserveGenerationJob',
-      description:
-        'Wait for the next committed revision of one Generation Job after an exact revision.',
+      description: 'Read the current state and then observe one exact Generation Job identity.',
       category: 'generation',
       isReadOnly: true,
       isConcurrencySafe: true,
       requirements: { generationJob: true },
-      parameters: generationJobIdentityParameters('afterRevision'),
+      parameters: generationJobIdentityParameters(),
       execute: async (args, options) =>
         executeGenerationJobCommand(async () => {
           const ref = requireGenerationJobRef(args);
-          const afterRevision = requireGenerationJobRevision(args, 'afterRevision');
-          const iterator = jobs.observeGeneration(ref, afterRevision)[Symbol.asyncIterator]();
+          const iterator = jobs.observeGeneration(ref)[Symbol.asyncIterator]();
           try {
             const next = await nextGenerationJobUpdate(iterator, options?.signal);
             if (next.done) {
               throw new Error(
-                `Generation Job ${ref.jobId} observation ended before the next revision.`,
+                `Generation Job ${ref.jobId} observation ended before a snapshot was available.`,
               );
             }
             options?.onProgress?.({
@@ -2076,19 +2061,19 @@ function registerGenerationJobManagementTools(
   for (const command of [
     {
       name: 'CancelGenerationJob',
-      description: 'Cancel one exact non-terminal Generation Job revision.',
+      description: 'Cancel one exact non-terminal Generation Job.',
       execute: (input: GenerationJobCommandInput) => jobs.cancelGeneration(input),
     },
     {
       name: 'RetryGenerationJob',
       description:
-        'Create a new Generation Job retry from one exact failed, cancelled, or outcome-unknown revision.',
+        'Create a new Generation Job retry from one exact failed, cancelled, or outcome-unknown Job.',
       execute: (input: GenerationJobCommandInput) => jobs.retryGeneration(input),
     },
     {
       name: 'ReconcileGenerationJob',
       description:
-        'Query the owning provider through the Generation coordinator for one exact recoverable revision.',
+        'Query the owning provider through the Generation coordinator for one exact recoverable Job.',
       execute: (input: GenerationJobCommandInput) => jobs.reconcileGeneration(input),
     },
   ] as const) {
@@ -2106,13 +2091,12 @@ function registerGenerationJobManagementTools(
           locality: 'network',
           impactLevel: 'low',
         },
-        parameters: generationJobIdentityParameters('expectedRevision'),
+        parameters: generationJobIdentityParameters(),
         execute: async (args) =>
           executeGenerationJobCommand(async () =>
             summarizeGenerationJob(
               await command.execute({
                 ref: requireGenerationJobRef(args),
-                expectedRevision: requireGenerationJobRevision(args, 'expectedRevision'),
               }),
             ),
           ),
@@ -2133,7 +2117,7 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
-function generationJobIdentityParameters(revisionField?: 'afterRevision' | 'expectedRevision') {
+function generationJobIdentityParameters() {
   return {
     type: 'object' as const,
     properties: {
@@ -2141,17 +2125,8 @@ function generationJobIdentityParameters(revisionField?: 'afterRevision' | 'expe
         type: 'string' as const,
         description: 'Exact Generation Job ID',
       },
-      ...(revisionField
-        ? {
-            [revisionField]: {
-              type: 'number' as const,
-              description:
-                'Exact last observed revision for Observe, or expected current revision for commands',
-            },
-          }
-        : {}),
     },
-    required: revisionField ? ['jobId', revisionField] : ['jobId'],
+    required: ['jobId'],
   };
 }
 
@@ -2161,17 +2136,6 @@ function requireGenerationJobRef(args: Record<string, unknown>) {
     throw new Error('Generation Job command requires a non-empty jobId.');
   }
   return { kind: 'generation' as const, jobId: jobId.trim() };
-}
-
-function requireGenerationJobRevision(
-  args: Record<string, unknown>,
-  field: 'afterRevision' | 'expectedRevision',
-): number {
-  const revision = args[field];
-  if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0) {
-    throw new Error('Generation Job command requires a non-negative integer revision.');
-  }
-  return revision;
 }
 
 async function executeGenerationJobCommand(
@@ -2193,7 +2157,6 @@ function summarizeGenerationJob(snapshot: GenerationJobSnapshot) {
     jobId: snapshot.ref.jobId,
     jobLifecycleOwner: 'generation-job-coordinator' as const,
     phase: snapshot.phase,
-    revision: snapshot.revision,
     progress: snapshot.progress,
     providerId: snapshot.request.providerId,
     modelId: snapshot.request.modelId,

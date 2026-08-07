@@ -46,6 +46,6 @@ describe('resolvePerceptionContextPacket', () => {
       workspaceRoot: '/workspace',
     });
     expect(packet.perceptionInputs[0]?.uri).toBe('resource://perception/input-1');
-    expect(JSON.stringify(packet)).not.toContain('.neko/.cache');
+    expect(JSON.stringify(packet)).not.toContain('.runtime/cache');
   });
 });

@@ -4,6 +4,15 @@ import { describe, expect, it } from 'vitest';
 const styles = readFileSync(new URL('./renderer/styles.css', import.meta.url), 'utf8');
 
 describe('Desktop renderer styles', () => {
+  it('scopes package-owned Workbench roots to the pure-white Main surface', () => {
+    expect(styles).toMatch(
+      /\.desktop-agent-root\s*\{[^}]*--neko-sideBar-background:\s*var\(--neko-desktop-main\)/u,
+    );
+    expect(styles).toMatch(
+      /\.desktop-resource-browser-root\s*\{[^}]*--neko-sideBar-background:\s*var\(--neko-desktop-main\)/u,
+    );
+  });
+
   it('keeps the temporary primary-sidebar hover hit region continuous', () => {
     const frameRule = styles.match(
       /\.application-primary-sidebar-frame\s*>\s*\.home-navigation\s*\{(?<body>[\s\S]*?)\n\}/u,
@@ -19,6 +28,41 @@ describe('Desktop renderer styles', () => {
 
     expect(navigationRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*no-drag/u);
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
+  });
+
+  it('reserves stable Project-group columns while actions use the overlay track', () => {
+    const projectGroupRule = styles.match(
+      /\.primary-conversation-group__header\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(projectGroupRule?.groups?.body).toMatch(
+      /grid-template-columns\s*:\s*24px minmax\(0, 1fr\) auto minmax\(24px, auto\)/u,
+    );
+  });
+
+  it('uses icon-only status markers and reveals stable row actions on hover or focus', () => {
+    const statusRule = styles.match(/\.home-conversation-status\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const unavailableRule = styles.match(
+      /\.primary-navigation-unavailable\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const actionsRule = styles.match(/\.primary-navigation-row-actions\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(statusRule?.groups?.body).toMatch(/display\s*:\s*inline-flex/u);
+    expect(statusRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(statusRule?.groups?.body).toMatch(/justify-content\s*:\s*center/u);
+    expect(unavailableRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(unavailableRule?.groups?.body).toMatch(/justify-content\s*:\s*center/u);
+    expect(actionsRule?.groups?.body).toMatch(/position\s*:\s*absolute/u);
+    expect(actionsRule?.groups?.body).toMatch(/opacity\s*:\s*0/u);
+    expect(actionsRule?.groups?.body).toMatch(/pointer-events\s*:\s*none/u);
+    expect(styles).toMatch(
+      /\.primary-recent-project-row:is\(\s*:hover,\s*:focus-within\s*\)\s*>\s*\.primary-navigation-row-actions\s*\{[\s\S]*?opacity\s*:\s*1/u,
+    );
+    expect(styles).toMatch(
+      /\.primary-recent-project-row:is\(\s*:hover,\s*:focus-within\s*\)\s*>\s*\.primary-navigation-state\s*\{[\s\S]*?opacity\s*:\s*0/u,
+    );
+    expect(styles).not.toContain('.home-conversation-status__label');
+    expect(styles).not.toContain('.primary-navigation-unavailable > span');
   });
 
   it('centers a bounded Settings control column without centering its text', () => {
@@ -41,13 +85,32 @@ describe('Desktop renderer styles', () => {
     expect(settingsSearchRule?.groups?.body).toMatch(/width\s*:\s*100%/u);
   });
 
-  it('hides the visibility control on the idle compact rail and reveals it with the sidebar', () => {
+  it('uses a text-only primary brand action without icon chrome', () => {
+    const titleRule = styles.match(/\.home-brand-title\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(titleRule?.groups?.body).toMatch(/background\s*:\s*transparent/u);
+    expect(titleRule?.groups?.body).toMatch(/border\s*:\s*0/u);
+    expect(styles).not.toContain('.home-brand-toggle');
+  });
+
+  it('centers the Home Agent launchpad with a constrained-height safety rule', () => {
+    const overviewRule = styles.match(/\.home-overview\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(overviewRule?.groups?.body).toMatch(/display\s*:\s*grid/u);
+    expect(overviewRule?.groups?.body).toMatch(/place-items\s*:\s*center/u);
+    expect(overviewRule?.groups?.body).toMatch(/box-sizing\s*:\s*border-box/u);
     expect(styles).toMatch(
-      /\.home-navigation--compact\s+\.home-brand-toggle\s*\{[\s\S]*?display\s*:\s*none/u,
+      /@media \(max-height: 720px\)[\s\S]*?\.home-overview\s*\{[\s\S]*?place-items\s*:\s*start center/u,
     );
-    expect(styles).toMatch(
-      /data-primary-sidebar-hover-reveal='true'[\s\S]*?:is\(\s*:hover,\s*:focus-within\s*\)[\s\S]*?\.home-brand-toggle\s*\{[\s\S]*?display\s*:\s*inline-flex/u,
-    );
+  });
+
+  it('centers the Agent heading text without a decorative icon tile', () => {
+    const headingRule = styles.match(/\.home-launchpad-heading\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(headingRule?.groups?.body).toMatch(/display\s*:\s*grid/u);
+    expect(headingRule?.groups?.body).toMatch(/justify-items\s*:\s*center/u);
+    expect(headingRule?.groups?.body).toMatch(/text-align\s*:\s*center/u);
+    expect(styles).not.toContain('.home-launchpad-heading-icon');
   });
 
   it('presents the Home Agent handoff as one focused responsive composer', () => {
@@ -76,12 +139,28 @@ describe('Desktop renderer styles', () => {
     expect(styles).not.toContain('.home-composer-divider');
   });
 
-  it('keeps project layout controls in the primary-sidebar footer rather than over Main content', () => {
-    expect(styles).toMatch(/\.home-navigation-footer__actions\s*\{[\s\S]*?display\s*:\s*flex/u);
+  it('keeps VS Code-style region controls in PrimarySidebar top chrome rather than Main content', () => {
+    expect(styles).toContain("@import '@neko/ui/icons/codicon.css';");
     expect(styles).toMatch(
-      /\.home-navigation--compact\s+\.home-navigation-footer__actions\s*\{[\s\S]*?flex-direction\s*:\s*column/u,
+      /\.primary-sidebar-brand__controls\s*\{[\s\S]*?position\s*:\s*absolute[\s\S]*?top\s*:\s*12px[\s\S]*?right\s*:\s*8px/u,
+    );
+    expect(styles).toMatch(
+      /\.primary-sidebar-brand__controls \.workbench-region-toggle\s*\{[\s\S]*?width\s*:\s*22px[\s\S]*?height\s*:\s*22px[\s\S]*?border\s*:\s*0[\s\S]*?background\s*:\s*transparent/u,
+    );
+    expect(styles).not.toMatch(
+      /\.workbench-region-toggle\[aria-pressed='true'\]\s*\{[^}]*background/u,
+    );
+    expect(styles).toMatch(
+      /\.workbench-region-toggle:active:not\(:disabled\)\s*\{[^}]*background\s*:\s*var\(--neko-desktop-control-pressed\)/u,
+    );
+    expect(styles).toMatch(/\.workspace-region-controls\s*\{[\s\S]*?display\s*:\s*flex/u);
+    expect(styles).toMatch(
+      /\.home-navigation--compact \.primary-sidebar-brand__controls\s*\{[\s\S]*?left\s*:\s*90px[\s\S]*?flex-direction\s*:\s*row/u,
     );
     expect(styles).not.toMatch(/\.project-workbench-controls\s*\{/u);
+    expect(styles).not.toContain('.project-main-group__actions');
+    expect(styles).not.toContain('.project-main-chat-host__controls');
+    expect(styles).not.toContain('.project-display-menu');
   });
 
   it('projects opaque shared Popover tokens for Desktop portals', () => {
@@ -90,13 +169,55 @@ describe('Desktop renderer styles', () => {
     expect(styles).toMatch(/--neko-popover-foreground\s*:\s*var\(--neko-fg\)/u);
   });
 
-  it('gives the package-owned Global Library its complete Home viewport', () => {
+  it('gives the package-owned Asset Management Root its complete Workbench viewport', () => {
     const globalLibraryRootRule = styles.match(
-      /\.desktop-global-library-root\s*\{(?<body>[\s\S]*?)\n\}/u,
+      /\.desktop-asset-management-root\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
 
     expect(globalLibraryRootRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
     expect(globalLibraryRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+  });
+
+  it('keeps structural Workbench frames neutral at their top and bottom edges', () => {
+    const mainRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-main\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const independentMainRule = styles.match(
+      /> \.neko-controlled-workbench-main__secondary\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const timelineRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-timeline\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const dockPanelRule = styles.match(/\.project-dock-panel\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    for (const rule of [mainRule, independentMainRule, timelineRule, dockPanelRule]) {
+      expect(rule?.groups?.body).toMatch(/box-shadow\s*:\s*none/u);
+      expect(rule?.groups?.body).not.toMatch(/--neko-desktop-shadow-surface/u);
+    }
+    expect(dockPanelRule?.groups?.body).toMatch(
+      /border\s*:\s*1px solid var\(--neko-desktop-border\)/u,
+    );
+  });
+
+  it('expands Agent-only interaction into the business area and collapses both docks', () => {
+    const shellRule = styles.match(
+      /\.desktop-scene-workbench--agent-only\.neko-controlled-workbench-shell\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const dockedInteractionRule = styles.match(
+      /\.project-workspace > \.neko-controlled-workbench-interaction\[data-presentation='docked'\]\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const interactionRule = styles.match(
+      /\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(shellRule?.groups?.body).toMatch(
+      /grid-template-columns\s*:[\s\S]*?var\(--neko-controlled-primary-width\)[\s\S]*?0[\s\S]*?minmax\(420px, 1fr\)[\s\S]*?0/u,
+    );
+    expect(dockedInteractionRule?.groups?.body).toMatch(/margin-block\s*:\s*8px/u);
+    expect(interactionRule?.groups?.body).toMatch(/margin\s*:\s*8px 8px 8px 0/u);
+    expect(styles).toMatch(
+      /@media \(max-width: 720px\)[\s\S]*?\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{[\s\S]*?margin\s*:\s*4px/u,
+    );
   });
 
   it('gives the package-owned Preview Root its complete Workbench viewport', () => {
@@ -108,12 +229,59 @@ describe('Desktop renderer styles', () => {
     expect(previewSurfaceRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
   });
 
+  it('keeps Asset names visible in a compact management panel', () => {
+    expect(styles).toMatch(
+      /\.desktop-workbench-main-panel\[data-panel-size='compact'\][\s\S]*?\.global-library-browser__collection\[data-view-mode='list'\][\s\S]*?\.global-library-browser__entry\s*\{[\s\S]*?grid-template-columns\s*:\s*40px minmax\(0, 1fr\) 28px/u,
+    );
+    expect(styles).toMatch(
+      /\.desktop-workbench-main-panel\[data-panel-size='compact'\]\s+\.global-library-browser__size\s*\{[\s\S]*?display\s*:\s*none/u,
+    );
+  });
+
+  it('styles owner-qualified management Roots without superseded Home management selectors', () => {
+    const rootRule = styles.match(
+      /\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const managementListRule = styles.match(/\.management-surface-list\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const projectRootRule = styles.match(
+      /\.project-management-catalog\s*\{\n(?<body>\s+height\s*:\s*100%;[\s\S]*?)\n\}/u,
+    );
+    const projectListRule = styles.match(
+      /\.project-management-catalog\s*>\s*\.management-surface-list\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    expect(rootRule?.groups?.body).toMatch(/width\s*:\s*min\(1020px, calc\(100% - 64px\)\)/u);
+    expect(rootRule?.groups?.body).toMatch(/margin\s*:\s*0 auto/u);
+    expect(rootRule?.groups?.body).toMatch(/padding\s*:\s*clamp\(66px, 10vh, 104px\) 0 52px/u);
+    expect(styles).toMatch(/\.management-surface-list\s*\{[\s\S]*?display\s*:\s*grid/u);
+    expect(managementListRule?.groups?.body).toMatch(/padding\s*:\s*0/u);
+    expect(managementListRule?.groups?.body).not.toMatch(/border|background|border-radius/u);
+    expect(projectRootRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(projectRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+    expect(projectRootRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
+    expect(projectListRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+    expect(projectListRule?.groups?.body).toMatch(/flex\s*:\s*1 1 auto/u);
+    expect(projectListRule?.groups?.body).toMatch(/align-content\s*:\s*start/u);
+    expect(projectListRule?.groups?.body).toMatch(/overflow-y\s*:\s*auto/u);
+    expect(styles).toMatch(
+      /\.project-management-catalog\s*>\s*\.management-surface-header,[\s\S]*?\.project-management-catalog\s*>\s*\.management-surface-toolbar\s*\{[\s\S]*?flex\s*:\s*0 0 auto/u,
+    );
+    expect(styles).toMatch(
+      /\.desktop-workbench-main-panel\[data-panel-role='management'\]\s*>\s*\.project-main-group__content\s*\{[\s\S]*?height\s*:\s*100%/u,
+    );
+    expect(styles).toMatch(
+      /\.management-surface-list\[data-empty='true'\]\s*\{[\s\S]*?display\s*:\s*grid[\s\S]*?grid-template-columns\s*:\s*minmax\(0, 1fr\)[\s\S]*?flex\s*:\s*1/u,
+    );
+    expect(styles).toMatch(/\.management-surface-row-actions button\s*\{[\s\S]*?width\s*:\s*28px/u);
+    expect(styles).not.toMatch(/\.management-surface-empty/u);
+    expect(styles).not.toMatch(/\.project-management-detail(?:__content)?\s*\{/u);
+    expect(styles).not.toMatch(
+      /\.home-(?:management|project-(?:selector|list|grid|card)|sort-control|search-field|segmented-control|status-badge)/u,
+    );
+  });
+
   it('keeps the Global Library as an aligned unframed workbench surface', () => {
     const packageStyles = readFileSync(
-      new URL(
-        '../../../packages/assets/webview/src/global-library/style.css',
-        import.meta.url,
-      ),
+      new URL('../../../packages/assets/webview/src/global-library/style.css', import.meta.url),
       'utf8',
     );
     const browserRule = packageStyles.match(/\.global-library-browser\s*\{(?<body>[\s\S]*?)\n\}/u);
@@ -144,10 +312,23 @@ describe('Desktop renderer styles', () => {
       /\.global-library-browser__search\s*\{[\s\S]*?width\s*:\s*min\(420px, 55%\)/u,
     );
     expect(packageStyles).toMatch(
-      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?min-height\s*:\s*160px/u,
+      /\.global-library-browser__loading\s*\{[\s\S]*?min-height\s*:\s*160px/u,
+    );
+    expect(packageStyles).not.toMatch(/\.global-library-browser__empty/u);
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__loading\s*\{[\s\S]*?place-items\s*:\s*center/u,
     );
     expect(packageStyles).toMatch(
-      /\.global-library-browser__loading,[\s\S]*?\.global-library-browser__empty\s*\{[\s\S]*?place-items\s*:\s*center/u,
+      /\.global-library-browser__toolbar\s*>\s*button\s*\{[\s\S]*?width\s*:\s*36px[\s\S]*?min-width\s*:\s*36px/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser__commands button\s*\{[\s\S]*?background\s*:\s*var\(--neko-accent/u,
+    );
+    expect(packageStyles).toMatch(
+      /\.global-library-browser button\[aria-pressed='true'\]\s*\{[\s\S]*?var\(--neko-list-activeSelectionBackground/u,
+    );
+    expect(packageStyles).not.toMatch(
+      /var\(--neko-(?:text-(?:primary|secondary|tertiary)|surface-(?:subtle|muted)|border-strong)/u,
     );
   });
 });

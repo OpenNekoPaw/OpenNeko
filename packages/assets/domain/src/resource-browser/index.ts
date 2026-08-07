@@ -1,5 +1,4 @@
 export {
-  RESOURCE_BROWSER_CONTRACT_VERSION,
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserContractError,
   assertResourceBrowserIdentity,
@@ -22,6 +21,7 @@ export type {
   ResourceBrowserCapability,
   ResourceBrowserChildrenRequest,
   ResourceBrowserContentItem,
+  ResourceBrowserDiagnostic,
   ResourceBrowserEntityItem,
   ResourceBrowserEntityRef,
   ResourceBrowserFacet,

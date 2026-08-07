@@ -17,11 +17,7 @@ import { useHostMessage, postMessage } from '../shared/useHostMessage';
 import { useDocumentSelection, type DocumentSelection } from '../shared/useDocumentSelection';
 import { DocumentContextMenu, useDocumentContextActions } from '../shared/DocumentContextMenu';
 import { imgSrcToBase64 } from '../shared/imageToBase64';
-import {
-  usePersistedState,
-  initPersistedStore,
-  notifySubscribers,
-} from '../shared/usePersistedState';
+import { usePersistedState, usePersistedStateRestore } from '../shared/usePersistedState';
 
 /** Minimal section interface — epubjs doesn't export Section from its main entry.
  *  The actual runtime returns Promises despite the .d.ts saying otherwise. */
@@ -71,6 +67,25 @@ interface SpineEntry {
 interface WaterfallPageMetrics {
   currentPage: number;
   pageCount: number;
+}
+
+export function getChapterNeighborhood<T extends { readonly index: number }>(
+  entries: readonly T[],
+  targetIndex: number,
+  radius: number,
+): readonly T[] {
+  const center = entries.findIndex((entry) => entry.index === targetIndex);
+  if (center < 0) return [];
+
+  const neighborhood: T[] = [];
+  for (let distance = 0; distance <= radius; distance++) {
+    const candidateIndexes = distance === 0 ? [center] : [center - distance, center + distance];
+    for (const candidateIndex of candidateIndexes) {
+      const candidate = entries[candidateIndex];
+      if (candidate) neighborhood.push(candidate);
+    }
+  }
+  return neighborhood;
 }
 
 /** Max characters forwarded to agent — stays within message size budget */
@@ -259,8 +274,9 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   const [currentChapter, setCurrentChapter] = usePersistedState('currentChapter', '');
   const [currentChapterHref, setCurrentChapterHref] = usePersistedState('currentChapterHref', '');
   const [viewMode, setViewMode] = usePersistedState<ViewMode>('viewMode', 'waterfall');
+  const restorePersistedState = usePersistedStateRestore();
   const [chapterCount, setChapterCount] = useState(0);
-  const [chapterLayoutVersion, setChapterLayoutVersion] = useState(0);
+  const [chapterLayoutToken, setChapterLayoutToken] = useState<object>({});
   const [waterfallPageMetrics, setWaterfallPageMetrics] = useState<WaterfallPageMetrics>({
     currentPage: 1,
     pageCount: 1,
@@ -279,7 +295,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   // Rendition mode refs (paginated)
   const viewerRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<Book | null>(null);
-  const bookLoadEpochRef = useRef(0);
+  const bookLoadRequestRef = useRef<object>({});
   const renditionRef = useRef<Rendition | null>(null);
   const restoreChapterRef = useRef<() => void>(() => undefined);
   const tocRef = useRef<TocItem[]>([]);
@@ -288,7 +304,6 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
   // Waterfall mode refs
   const waterfallContainerRef = useRef<HTMLDivElement>(null);
-  const measureContainerRef = useRef<HTMLDivElement>(null);
   const spineEntriesRef = useRef<SpineEntry[]>([]);
   const chapterRefsMap = useRef<Map<number, HTMLElement>>(new Map());
   const loadedChaptersRef = useRef<Set<number>>(new Set());
@@ -296,10 +311,6 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   const waterfallObserverRef = useRef<IntersectionObserver | null>(null);
   const [waterfallReady, setWaterfallReady] = useState(false);
   const chapterHeightsRef = useRef<Map<number, number>>(new Map());
-  const resolvedChapterHeightsRef = useRef<Set<number>>(new Set());
-  const measuringChaptersRef = useRef<Map<number, Promise<number>>>(new Map());
-  const measurementQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const measurementSessionRef = useRef(0);
   const chapterLayoutFrameRef = useRef<number | null>(null);
 
   const buildCurrentChapterLocator = useCallback(() => {
@@ -342,7 +353,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     if (chapterLayoutFrameRef.current !== null) return;
     chapterLayoutFrameRef.current = window.requestAnimationFrame(() => {
       chapterLayoutFrameRef.current = null;
-      setChapterLayoutVersion((version) => version + 1);
+      setChapterLayoutToken({});
     });
   }, []);
 
@@ -465,10 +476,10 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   }, []);
 
   const settleLoadedChapterHeight = useCallback(
-    async (entry: SpineEntry, el: HTMLElement, loadEpoch: number) => {
+    async (entry: SpineEntry, el: HTMLElement, loadRequest: object) => {
       await waitForChapterResources(el);
       if (
-        bookLoadEpochRef.current !== loadEpoch ||
+        bookLoadRequestRef.current !== loadRequest ||
         chapterRefsMap.current.get(entry.index) !== el ||
         !loadedChaptersRef.current.has(entry.index)
       ) {
@@ -476,7 +487,6 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
       }
 
       const height = commitChapterHeight(entry.index, measureRenderedChapterHeight(el));
-      resolvedChapterHeightsRef.current.add(entry.index);
       el.style.minHeight = `${height}px`;
       updateWaterfallPageMetrics();
     },
@@ -488,113 +498,6 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     ],
   );
 
-  const measureChapterHeight = useCallback(
-    async (entry: SpineEntry): Promise<number> => {
-      const cachedHeight = chapterHeightsRef.current.get(entry.index);
-      if (cachedHeight != null && resolvedChapterHeightsRef.current.has(entry.index)) {
-        return cachedHeight;
-      }
-
-      const pendingMeasurement = measuringChaptersRef.current.get(entry.index);
-      if (pendingMeasurement) return pendingMeasurement;
-
-      const sessionId = measurementSessionRef.current;
-      const task = measurementQueueRef.current.then(async () => {
-        const latestHeight = chapterHeightsRef.current.get(entry.index);
-        if (latestHeight != null && resolvedChapterHeightsRef.current.has(entry.index)) {
-          return latestHeight;
-        }
-
-        const liveChapter = chapterRefsMap.current.get(entry.index);
-        if (liveChapter && loadedChaptersRef.current.has(entry.index)) {
-          await waitForChapterResources(liveChapter);
-          if (
-            chapterRefsMap.current.get(entry.index) === liveChapter &&
-            loadedChaptersRef.current.has(entry.index)
-          ) {
-            const liveHeight = commitChapterHeight(
-              entry.index,
-              measureRenderedChapterHeight(liveChapter),
-            );
-            resolvedChapterHeightsRef.current.add(entry.index);
-            liveChapter.style.minHeight = `${liveHeight}px`;
-            updateWaterfallPageMetrics();
-            return liveHeight;
-          }
-        }
-
-        const book = bookRef.current;
-        const measureContainer = measureContainerRef.current;
-        if (!book || !measureContainer || sessionId !== measurementSessionRef.current) {
-          return getEstimatedChapterHeight();
-        }
-
-        try {
-          measureContainer.replaceChildren();
-          measureContainer.style.width = `${Math.max(
-            1,
-            waterfallContainerRef.current?.clientWidth ?? measureContainer.clientWidth,
-          )}px`;
-
-          const article = document.createElement('article');
-          article.className = 'epub-chapter-content';
-          article.style.maxWidth = `${WATERFALL_CHAPTER_MAX_WIDTH_PX}px`;
-          article.style.padding = `${WATERFALL_CHAPTER_PADDING_PX}px`;
-          article.style.boxSizing = 'border-box';
-          article.style.borderBottom = '1px solid var(--neko-panel-border)';
-          article.style.marginInline = 'auto';
-
-          const html = await entry.section.render(book.load.bind(book));
-          if (sessionId !== measurementSessionRef.current) return getEstimatedChapterHeight();
-
-          article.innerHTML = html;
-          rewriteSectionResources(article, entry.section.url ?? '');
-          applyEpubImageLayout(article);
-          measureContainer.appendChild(article);
-
-          await waitForChapterResources(article);
-          if (sessionId !== measurementSessionRef.current) return getEstimatedChapterHeight();
-
-          const measuredHeight = commitChapterHeight(
-            entry.index,
-            measureRenderedChapterHeight(article),
-          );
-          resolvedChapterHeightsRef.current.add(entry.index);
-          updateWaterfallPageMetrics();
-          return measuredHeight;
-        } catch (err) {
-          logger.error(`Failed to measure chapter ${entry.index}:`, err);
-          return chapterHeightsRef.current.get(entry.index) ?? getEstimatedChapterHeight();
-        } finally {
-          entry.section.unload();
-          if (measureContainerRef.current === measureContainer) {
-            measureContainer.replaceChildren();
-          }
-        }
-      });
-
-      measuringChaptersRef.current.set(entry.index, task);
-      measurementQueueRef.current = task.then(
-        () => undefined,
-        () => undefined,
-      );
-
-      return task.finally(() => {
-        if (measuringChaptersRef.current.get(entry.index) === task) {
-          measuringChaptersRef.current.delete(entry.index);
-        }
-      });
-    },
-    [
-      commitChapterHeight,
-      getEstimatedChapterHeight,
-      measureRenderedChapterHeight,
-      rewriteSectionResources,
-      updateWaterfallPageMetrics,
-      waitForChapterResources,
-    ],
-  );
-
   // =========================================================================
   // Desktop host and renderer messaging
   // =========================================================================
@@ -602,8 +505,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   useHostMessage((msg) => {
     const m = msg as unknown as { type: string; payload: Record<string, unknown> };
     if (m.type === 'document:restoreState') {
-      initPersistedStore(m.payload as Record<string, unknown>);
-      notifySubscribers();
+      restorePersistedState(m.payload);
     } else if (!sourceUrl && msg.type === 'document:data') {
       void loadEpubFromUrl(msg.payload.url);
     } else if (msg.type === 'epub:navigate') {
@@ -658,7 +560,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     return () => {
-      bookLoadEpochRef.current += 1;
+      bookLoadRequestRef.current = {};
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       if (chapterLayoutFrameRef.current !== null) {
         cancelAnimationFrame(chapterLayoutFrameRef.current);
@@ -825,17 +727,12 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         // Destroy any existing rendition
         renditionRef.current?.destroy();
         renditionRef.current = null;
-        measurementSessionRef.current += 1;
-        measurementQueueRef.current = Promise.resolve();
-        measuringChaptersRef.current.clear();
         loadedChaptersRef.current.clear();
         loadingChaptersRef.current.clear();
         chapterHeightsRef.current.clear();
-        resolvedChapterHeightsRef.current.clear();
-        measureContainerRef.current?.replaceChildren();
         setWaterfallPageMetrics({ currentPage: 1, pageCount: 1 });
         setWaterfallReady(true);
-        setChapterLayoutVersion((version) => version + 1);
+        setChapterLayoutToken({});
       } else {
         await renderBook(book, tocItems);
       }
@@ -884,8 +781,8 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   /** Load EPUB from either the Preview Node host or an embeddable archive URL. */
   const loadEpubFromUrl = useCallback(
     async (url: string) => {
-      const loadEpoch = bookLoadEpochRef.current + 1;
-      bookLoadEpochRef.current = loadEpoch;
+      const loadRequest = {};
+      bookLoadRequestRef.current = loadRequest;
       renditionRef.current?.destroy();
       renditionRef.current = null;
       bookRef.current?.destroy();
@@ -905,7 +802,8 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
           ) => Promise<object>,
         });
         bookRef.current = book;
-        const isCurrent = () => bookLoadEpochRef.current === loadEpoch && bookRef.current === book;
+        const isCurrent = () =>
+          bookLoadRequestRef.current === loadRequest && bookRef.current === book;
         const initialized = await initBook(book, isCurrent);
         if (!initialized) {
           book.destroy();
@@ -915,7 +813,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         loadingRef.current = false;
         restoreChapterRef.current();
       } catch (err) {
-        if (bookLoadEpochRef.current !== loadEpoch) return;
+        if (bookLoadRequestRef.current !== loadRequest) return;
         setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
         loadingRef.current = false;
@@ -961,7 +859,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     async (entry: SpineEntry) => {
       const book = bookRef.current;
       if (!book) return;
-      const loadEpoch = bookLoadEpochRef.current;
+      const loadRequest = bookLoadRequestRef.current;
       if (loadedChaptersRef.current.has(entry.index) || loadingChaptersRef.current.has(entry.index))
         return;
 
@@ -974,7 +872,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         const html = await entry.section.render(book.load.bind(book));
 
         if (
-          bookLoadEpochRef.current !== loadEpoch ||
+          bookLoadRequestRef.current !== loadRequest ||
           bookRef.current !== book ||
           chapterRefsMap.current.get(entry.index) !== el
         ) {
@@ -993,9 +891,9 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         const height = commitChapterHeight(entry.index, measureRenderedChapterHeight(el));
         el.style.minHeight = `${height}px`;
         updateWaterfallPageMetrics();
-        void settleLoadedChapterHeight(entry, el, loadEpoch).catch((error: unknown) => {
+        void settleLoadedChapterHeight(entry, el, loadRequest).catch((error: unknown) => {
           if (
-            bookLoadEpochRef.current !== loadEpoch ||
+            bookLoadRequestRef.current !== loadRequest ||
             bookRef.current !== book ||
             chapterRefsMap.current.get(entry.index) !== el ||
             !loadedChaptersRef.current.has(entry.index)
@@ -1034,25 +932,6 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
       updateWaterfallPageMetrics();
     },
     [commitChapterHeight, measureRenderedChapterHeight, updateWaterfallPageMetrics],
-  );
-
-  const prefetchChapterNeighborhood = useCallback(
-    (targetEntry: SpineEntry, radius = 1) => {
-      const entries = spineEntriesRef.current;
-      const center = entries.findIndex((entry) => entry.index === targetEntry.index);
-      if (center < 0) return;
-
-      for (let distance = 0; distance <= radius; distance++) {
-        const candidateIndexes = distance === 0 ? [center] : [center - distance, center + distance];
-
-        for (const candidateIndex of candidateIndexes) {
-          const candidate = entries[candidateIndex];
-          if (!candidate) continue;
-          void loadChapterContent(candidate);
-        }
-      }
-    },
-    [loadChapterContent],
   );
 
   /** Update current chapter title based on scroll position */
@@ -1138,7 +1017,9 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
       const el = chapterRefsMap.current.get(entry.index);
       if (!container || !el) return;
 
-      prefetchChapterNeighborhood(entry, 2);
+      await Promise.all(
+        getChapterNeighborhood(spineEntriesRef.current, entry.index, 2).map(loadChapterContent),
+      );
 
       const targetTop = el.offsetTop;
       const distance = Math.abs(container.scrollTop - targetTop);
@@ -1158,7 +1039,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         updateWaterfallPageMetrics();
       });
     },
-    [prefetchChapterNeighborhood, updateWaterfallPageMetrics],
+    [loadChapterContent, updateWaterfallPageMetrics],
   );
 
   useEffect(() => {
@@ -1191,7 +1072,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
   useEffect(() => {
     if (viewMode !== 'waterfall' || !waterfallReady) return;
     updateWaterfallPageMetrics();
-  }, [viewMode, waterfallReady, chapterLayoutVersion, updateWaterfallPageMetrics]);
+  }, [viewMode, waterfallReady, chapterLayoutToken, updateWaterfallPageMetrics]);
 
   useEffect(() => {
     if (viewMode !== 'waterfall' || !waterfallReady) return;
@@ -1206,26 +1087,6 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
 
     return () => observer.disconnect();
   }, [viewMode, waterfallReady, updateWaterfallPageMetrics]);
-
-  useEffect(() => {
-    if (viewMode !== 'waterfall' || !waterfallReady || loading) return;
-
-    let cancelled = false;
-    const sessionId = measurementSessionRef.current;
-
-    const warmChapterHeights = async () => {
-      for (const entry of spineEntriesRef.current) {
-        if (cancelled || sessionId !== measurementSessionRef.current) return;
-        await measureChapterHeight(entry);
-      }
-    };
-
-    void warmChapterHeights();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [viewMode, waterfallReady, loading, measureChapterHeight]);
 
   const setChapterRef = useCallback((index: number, el: HTMLElement | null) => {
     if (el) {
@@ -1573,22 +1434,6 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
               {t('preview.epub.loading')}
             </div>
           )}
-
-          <div
-            ref={measureContainerRef}
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: '-20000px',
-              height: 0,
-              overflow: 'hidden',
-              pointerEvents: 'none',
-              visibility: 'hidden',
-            }}
-          >
-            <style>{WATERFALL_THEME_CSS}</style>
-          </div>
 
           {/* Waterfall mode: custom DOM container */}
           <div

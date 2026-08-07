@@ -20,7 +20,6 @@ describe('DesktopResourceRegistry', () => {
     const lease = await registry.registerFile(owner(), {
       absolutePath: source,
       mediaType: 'video/mp4',
-      revision: 'revision-1',
     });
 
     expect(lease.url).toMatch(/^openneko:\/\/resource\/[A-Za-z0-9_-]{32}$/u);
@@ -84,8 +83,7 @@ describe('DesktopResourceRegistry', () => {
       windowId: 'window-1',
       viewId: 'cut-1',
       sessionId: 'cut-session-1',
-      endpointEpoch: 'endpoint-1',
-      revision: 'revision-1',
+      rendererSessionId: 'endpoint-1',
     });
     const stdout = new PassThrough();
     const terminate = vi.fn(() => stdout.end());
@@ -115,8 +113,7 @@ describe('DesktopResourceRegistry', () => {
       windowId: 'window-1',
       viewId: 'cut-1',
       sessionId: 'cut-session-1',
-      endpointEpoch: 'endpoint-1',
-      revision: 'revision-1',
+      rendererSessionId: 'endpoint-1',
     });
     const createStream = vi.fn();
     const pcm = await publisher.registerPcm(createStream);
@@ -172,7 +169,6 @@ describe('DesktopResourceRegistry', () => {
       registry.registerFile(owner(), {
         absolutePath: 'relative/video.mp4',
         mediaType: 'video/mp4',
-        revision: 'revision-1',
       }),
     ).rejects.toThrow('absolute file path');
 
@@ -206,9 +202,7 @@ function owner(overrides: Partial<DesktopResourceOwner> = {}): DesktopResourceOw
     windowId: 'window-1',
     viewId: 'view-1',
     sessionId: 'session-1',
-    endpointEpoch: 'endpoint-1',
-    revision: 'revision-1',
-    generation: 'generation-1',
+    rendererSessionId: 'endpoint-1',
     ...overrides,
   };
 }
@@ -217,6 +211,5 @@ function fileSource(absolutePath: string) {
   return {
     absolutePath,
     mediaType: 'audio/wav',
-    revision: 'revision-1',
   };
 }

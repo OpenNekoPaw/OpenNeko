@@ -4,7 +4,8 @@ export interface ResourceBrowserLabels {
   readonly title: string;
   readonly files: string;
   readonly media: string;
-  readonly materials: string;
+  readonly assets: string;
+  readonly entities: string;
   readonly search: string;
   readonly searchPlaceholder: string;
   readonly refresh: string;
@@ -14,6 +15,12 @@ export interface ResourceBrowserLabels {
   readonly relinkSource: string;
   readonly removeSource: string;
   readonly removeSourceConfirm: string;
+  readonly createDirectory: string;
+  readonly directoryName: string;
+  readonly importFiles: string;
+  readonly trashContent: string;
+  readonly trashContentConfirm: string;
+  readonly confirm: string;
   readonly recoverSource: string;
   readonly recoveryTitle: string;
   readonly recoveryUseGlobal: string;
@@ -51,10 +58,11 @@ export interface ResourceBrowserLabels {
 
 const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
   en: {
-    title: 'Resources',
+    title: 'Resource management',
     files: 'Files',
-    media: 'Media',
-    materials: 'Materials',
+    media: 'Media library',
+    assets: 'Asset library',
+    entities: 'Entities',
     search: 'Search',
     searchPlaceholder: 'Search project resources…',
     refresh: 'Refresh',
@@ -65,6 +73,12 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     removeSource: 'Remove media library',
     removeSourceConfirm:
       'Remove this workspace link? Referenced items will remain visible as missing.',
+    createDirectory: 'New folder',
+    directoryName: 'Folder name',
+    importFiles: 'Import files',
+    trashContent: 'Move to Trash',
+    trashContentConfirm: 'Move this workspace item to Trash?',
+    confirm: 'Create',
     recoverSource: 'Recover media library',
     recoveryTitle: 'Recover media library',
     recoveryUseGlobal: 'Use global connection',
@@ -100,10 +114,11 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     mediaLibraries: 'Media libraries',
   },
   'zh-cn': {
-    title: '资源',
+    title: '资源管理',
     files: '目录',
-    media: '媒体',
-    materials: '素材',
+    media: '媒体库',
+    assets: '素材库',
+    entities: '实体',
     search: '搜索',
     searchPlaceholder: '搜索项目资源…',
     refresh: '刷新',
@@ -113,6 +128,12 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     relinkSource: '重新链接媒体库',
     removeSource: '移除媒体库',
     removeSourceConfirm: '确认移除此工作区链接？项目引用仍会保留，并显示为缺失。',
+    createDirectory: '新建目录',
+    directoryName: '目录名称',
+    importFiles: '导入文件',
+    trashContent: '移到废纸篓',
+    trashContentConfirm: '确认将此工作区项目移到废纸篓？',
+    confirm: '创建',
     recoverSource: '恢复媒体库',
     recoveryTitle: '恢复媒体库',
     recoveryUseGlobal: '使用全局连接',

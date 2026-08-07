@@ -1,6 +1,6 @@
 # 资源库架构：媒体库与素材库
 
-更新日期：2026-08-02
+更新日期：2026-08-05
 
 > 当前稳定约束仍是：普通文件通过 **Media Library / 媒体库** 和 `ContentLocator`
 > 直接访问，不需要 catalog membership。独立 **Asset Library / 素材库** 仅管理显式导入、
@@ -115,6 +115,30 @@ staging 中只收集权威引用的 linked bytes，校验 fingerprint，重写 s
 当前项目、投影缺失需求并提交恢复 intent。两者不得共享 selection、filter、layout 或 active
 state；便携快照进度属于项目生命周期 surface。
 
+项目 Resource Browser 固定提供 `files`、`media`、`assets` 和 `entities` 四个 owner-preserving
+facet。`assets` 结果始终保留精确 Asset identity，不因选择、预览或搜索而复制成 Project Entity；
+`entities` 结果保留 Project Entity 或 candidate identity。facet 切换只是 Resource Browser 展示状态，
+不得创建第二个 Workbench/Inspector tab strip。
+
+全局资源中心由 Assets-owned `AssetCenterSession` 独立拥有 catalog、filter、selection 和 revision。
+在统一 Desktop Workbench 中，Asset Management Root 始终位于 Main；选择可预览内容后，Assets
+application service 通过 Host port 授权 exact `ContentLocator` 并创建短生命周期 PreviewSession，
+Preview Root 只进入可选 Secondary Main。Desktop 不拥有 selection，不从扩展名推断 preview kind，
+renderer 不接收 raw path。scene switch、renderer reload、Window teardown 或 selection replacement
+必须释放旧 Preview handle，同时保留 Assets session facts。项目 Workspace 的右侧 Resources manager
+继续使用自己的 workspace-scoped state，不得复用全局资源中心 session。
+
+Asset Management 与 authorized Preview 使用两个独立、无单项 tab strip 的共享 Workbench panel shell，
+并由共享 resize primitive 组合。Preview viewer 只能来自 canonical `@neko/preview-webview` presentation
+和 viewer registry；Asset Center 与 Workspace Preview 都必须使用 content-only chrome，不在 Workbench
+panel shell 内重复 descriptor header。Preview 内容背景保持透明并继承所在 shell 的主题；Desktop 和
+Assets management 均不得实现第二套 viewer 或复制 Preview 主题。
+
+普通删除按钮只执行“从素材库移除记录”：它更新用户级 SQLite 中的 mutable membership state，
+不得移动源文件到系统废纸篓，也不得卸载 immutable revision、删除 blob 或修改项目引用。首次升级时可将
+现有 flat managed files 原子登记为 membership；初始化完成后，文件扫描不得把已移除记录自动恢复。
+真正的 uninstall 和无引用字节回收必须是独立、显式且可报告 blocker 的操作。
+
 ### 素材云同步（目标）
 
 素材云同步复制的是 manifest-backed immutable package revision，不是文件夹双向同步：
@@ -193,6 +217,12 @@ three-way diff 与显式 apply。完整目标由
 [`manage-project-entities-as-publishable-assets`](../../openspec/changes/manage-project-entities-as-publishable-assets/)
 跟踪。
 
+Entity owner 已提供 instantiate、publish、diff 和 apply-update 的 typed intent/service contract，
+Resource Browser 也能按 capability 投影这些操作；但在 manifest-backed package runtime、精确 revision
+reader、publication lifecycle 和 remote provider 接入前，生产 Inspector 必须隐藏这些 capability 并
+显示 owner-qualified blocker。当前 flat global Asset 文件不能作为兼容 provider，也不能让这些操作
+返回成功。
+
 ## 存储归属
 
 | 数据                                                         | Canonical owner / persistence | 不迁入 SQLite 的原因                                                        |
@@ -205,6 +235,7 @@ three-way diff 与显式 apply。完整目标由
 | Credential、mount secret                                     | SecretStorage/system keychain | 普通 SQLite 不具备对应安全与信任边界                                        |
 | Requirement freshness、probe cache、snapshot task/checkpoint | 用户级 `~/.neko/neko.db`      | 可重建 projection 与最小跨重启状态；不得包含 target、绝对路径或 media bytes |
 | 已安装 Asset manifest 与 package bytes                       | Asset Library managed storage | 用户可离线使用的素材内容，不是可删除重建的 metadata                         |
+| Asset Library mutable membership / removed state             | 用户级 `~/.neko/neko.db`      | 有价值的用户选择；普通移除只更新记录，文件扫描不得重建                      |
 | remote head、cursor、transfer checkpoint、Asset search rows  | 用户级 `~/.neko/neko.db`      | 可重建同步/查询状态；不得包含 credential 或充当 installed package authority |
 
 ## 已知限制与发布风险

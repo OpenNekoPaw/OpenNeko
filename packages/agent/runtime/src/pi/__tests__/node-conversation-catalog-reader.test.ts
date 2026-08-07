@@ -20,18 +20,35 @@ describe('NodePiConversationCatalogReader', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('lists only the requested workspaces without acquiring an execution lease', async () => {
+  it('enumerates every stable Workspace without acquiring an execution lease', async () => {
     const workspaceA = await createConversation('workspace-a', 'conversation-a');
     await createConversation('workspace-b', 'conversation-b');
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
     readers.push(reader);
 
-    expect(reader.listConversations(['workspace-a'])).toEqual([
-      expect.objectContaining({
-        workspaceId: 'workspace-a',
-        conversationId: 'conversation-a',
-      }),
-    ]);
+    expect(reader.listConversations()).toEqual({
+      records: expect.arrayContaining([
+        expect.objectContaining({
+          workspaceId: 'workspace-a',
+          conversationId: 'conversation-a',
+        }),
+        expect.objectContaining({
+          workspaceId: 'workspace-b',
+          conversationId: 'conversation-b',
+        }),
+      ]),
+      diagnostics: [],
+    });
+    expect(reader.listConversations().records).toHaveLength(2);
+    expect(reader.findConversation('conversation-a')).toMatchObject({
+      workspaceId: 'workspace-a',
+      conversationId: 'conversation-a',
+    });
+    expect(reader.findConversation('conversation-b')).toMatchObject({
+      workspaceId: 'workspace-b',
+      conversationId: 'conversation-b',
+    });
+    expect(reader.findConversation('conversation-missing')).toBeUndefined();
 
     const lease = workspaceA.acquireLease('conversation-a');
     expect(lease.holderId).toBe('host:workspace-a');
@@ -41,11 +58,78 @@ describe('NodePiConversationCatalogReader', () => {
   it('returns an empty cold-start catalog before Pi storage exists and fails after disposal', async () => {
     const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
 
-    expect(reader.listConversations(['workspace-a'])).toEqual([]);
+    expect(reader.listConversations()).toEqual({ records: [], diagnostics: [] });
+    expect(reader.findConversation('conversation-a')).toBeUndefined();
     reader.dispose();
-    expect(() => reader.listConversations(['workspace-a'])).toThrow(
-      'Pi conversation catalog reader is disposed',
+    expect(() => reader.listConversations()).toThrow('Pi conversation catalog reader is disposed');
+  });
+
+  it('joins the exact persisted conversation context from the canonical SQLite snapshot', async () => {
+    await createConversation('assistant-space:local-user', 'conversation-assistant');
+    await writeConversationContext('conversation-assistant', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant-space:local-user',
+      baseGrantIds: [],
+    });
+    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
+    readers.push(reader);
+
+    expect(reader.findConversation('conversation-assistant')).toMatchObject({
+      conversationId: 'conversation-assistant',
+      context: {
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+      },
+    });
+  });
+
+  it('isolates an invalid context from a valid sibling Conversation', async () => {
+    await createConversation('workspace-a', 'conversation-invalid');
+    await createConversation('workspace-a', 'conversation-valid');
+    await writeConversationContext('conversation-invalid', {
+      unexpectedField: 1,
+      kind: 'workspace',
+      workspaceId: 'workspace-a',
+      workspaceGrantId: 'grant-a',
+    });
+    await writeConversationContext('conversation-valid', {
+      kind: 'workspace',
+      workspaceId: 'workspace-a',
+      workspaceGrantId: 'grant-valid',
+    });
+    const reader = await NodePiConversationCatalogReader.create({ userDataRoot: root });
+    readers.push(reader);
+
+    expect(() => reader.findConversation('conversation-invalid')).toThrow(
+      "unknown field 'unexpectedField'",
     );
+    expect(reader.findConversation('conversation-valid')).toMatchObject({
+      context: { workspaceGrantId: 'grant-valid' },
+    });
+    expect(reader.listConversations()).toEqual({
+      records: expect.arrayContaining([
+        expect.objectContaining({
+          conversationId: 'conversation-invalid',
+        }),
+        expect.objectContaining({
+          conversationId: 'conversation-valid',
+          context: expect.objectContaining({ workspaceGrantId: 'grant-valid' }),
+        }),
+      ]),
+      diagnostics: [
+        expect.objectContaining({
+          code: 'invalid-conversation-record',
+          workspaceId: 'workspace-a',
+          conversationId: 'conversation-invalid',
+          message: expect.stringContaining("unknown field 'unexpectedField'"),
+        }),
+      ],
+    });
+    expect(
+      reader
+        .listConversations()
+        .records.find((record) => record.conversationId === 'conversation-invalid'),
+    ).not.toHaveProperty('context');
   });
 
   async function createConversation(
@@ -67,5 +151,24 @@ describe('NodePiConversationCatalogReader', () => {
     });
     authority.releaseLease(lease);
     return authority;
+  }
+
+  async function writeConversationContext(conversationId: string, context: object): Promise<void> {
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
+    try {
+      database.exec(`CREATE TABLE IF NOT EXISTS agent_conversation_authority (
+        conversation_id TEXT PRIMARY KEY,
+        context_json TEXT NOT NULL
+      ) STRICT`);
+      database
+        .prepare(
+          `INSERT INTO agent_conversation_authority(conversation_id, context_json)
+           VALUES (?, ?)`,
+        )
+        .run(conversationId, JSON.stringify(context));
+    } finally {
+      database.close();
+    }
   }
 });

@@ -116,7 +116,7 @@ describe('shot image prep contracts', () => {
   });
 
   it('defines a shared media-production.shot-image-prep table profile', () => {
-    const table = buildShotImagePrepTable([makePlan()], { includeProfileVersion: true });
+    const table = buildShotImagePrepTable([makePlan()]);
 
     expect(SHOT_IMAGE_PREP_PROFILE.profileId).toBe(MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID);
     expect(table.profile).toBe(MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID);
@@ -155,7 +155,7 @@ describe('shot image prep contracts', () => {
   });
 
   it('diagnoses malformed prep profile tables', () => {
-    const table = buildShotImagePrepTable([makePlan()], { includeProfileVersion: true });
+    const table = buildShotImagePrepTable([makePlan()]);
     const result = validateGenericTable(
       {
         ...table,
@@ -255,7 +255,7 @@ describe('shot image prep contracts', () => {
       shotId: 'shot-transform',
       imageStrategy: 'transform-original',
       operationPlan: ['crop-panel', 'remove-text', 'inpaint'],
-      perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-v1' }],
+      perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-current' }],
       metadata: {
         regenerationRecommendation: {
           decision: 'transform-source',
@@ -389,7 +389,6 @@ const sourceRef: StoryboardMediaRef = {
 
 function makePlan(overrides: Partial<ShotImagePrepPlan> = {}): ShotImagePrepPlan {
   return {
-    schemaVersion: 1,
     kind: 'shot-image-prep-plan',
     planId: 'shot-1-image-prep',
     sceneId: 'scene-1',
@@ -422,7 +421,6 @@ function makePlan(overrides: Partial<ShotImagePrepPlan> = {}): ShotImagePrepPlan
 
 function makeStoryboard(): StoryboardTable {
   return {
-    schemaVersion: 1,
     kind: 'storyboard-table',
     profile: 'from-comic',
     sourceProfile: 'from-comic',
@@ -440,7 +438,7 @@ function makeStoryboard(): StoryboardTable {
             characterAction: 'Rin looks back.',
             imageStrategy: 'transform-original',
             sourceMediaRefs: [sourceRef],
-            generationPrompt: 'clean anime keyframe',
+            imagePrompt: 'clean anime keyframe',
             characters: [
               {
                 name: 'Rin',
@@ -449,7 +447,7 @@ function makeStoryboard(): StoryboardTable {
             ],
             extensions: {
               'neko.perception': {
-                perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-v1' }],
+                perceptionCardRefs: [{ assetId: 'asset-panel-1', cacheKey: 'panel-current' }],
               },
             },
           },
@@ -460,7 +458,7 @@ function makeStoryboard(): StoryboardTable {
             visualDescription: 'A new establishing shot.',
             characterAction: 'The city appears.',
             imageStrategy: 'generate-new',
-            generationPrompt: 'wide city establishing shot',
+            imagePrompt: 'wide city establishing shot',
           },
         ],
       },
@@ -470,7 +468,6 @@ function makeStoryboard(): StoryboardTable {
 
 function makeStoryboardWithComicImageAudit(): StoryboardTable {
   return {
-    schemaVersion: 1,
     kind: 'storyboard-table',
     profile: 'from-comic',
     sourceProfile: 'from-comic',

@@ -3,7 +3,7 @@ import { callJudgeProvider } from './provider-adapter.mjs';
 
 const PROFILE = {
   id: 'quality-judge',
-  adapter: 'openai-chat-completions-v1',
+  adapter: 'openai-chat-completions',
   providerId: 'judge-provider',
   modelId: 'judge-model',
   endpointEnv: 'JUDGE_ENDPOINT',

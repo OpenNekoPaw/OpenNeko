@@ -15,7 +15,6 @@ import { useHistoryStore } from '../stores/historyStore';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const DEFAULT_CANVAS_DATA: CanvasData = {
-  version: '1.0',
   name: 'Test Canvas',
   nodes: [],
   connections: [],

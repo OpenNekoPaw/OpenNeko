@@ -76,7 +76,7 @@ export class CanvasMediaLibraryCopyService {
   }): Promise<CanvasMediaLibraryCopyResult> {
     if (!isCanvasMediaLibraryCopyRequest(input.request)) {
       throw new CanvasMediaLibraryCopyContractError(
-        'migration-required',
+        'invalid-request',
         'Canvas Media Library copy requires an explicit project-linked or global destination.',
       );
     }
@@ -119,7 +119,7 @@ export class CanvasMediaLibraryCopyService {
 
 class CanvasMediaLibraryCopyContractError extends Error {
   constructor(
-    readonly code: 'migration-required' | 'canvas-media-library-identity-mismatch',
+    readonly code: 'invalid-request' | 'canvas-media-library-identity-mismatch',
     message: string,
   ) {
     super(message);

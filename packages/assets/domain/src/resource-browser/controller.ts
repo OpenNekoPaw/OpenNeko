@@ -1,5 +1,4 @@
 import {
-  RESOURCE_BROWSER_CONTRACT_VERSION,
   RESOURCE_BROWSER_ROUTES,
   ResourceBrowserContractError,
   assertResourceBrowserIdentity,
@@ -15,6 +14,7 @@ import {
   type ResourceBrowserHostRuntime,
   type ResourceBrowserIdentity,
   type ResourceBrowserIntentRequest,
+  type ResourceBrowserItem,
   type ResourceBrowserProjection,
   type ResourceBrowserProjectionEvent,
   type ResourceBrowserQuickPreviewReleaseRequest,
@@ -30,7 +30,11 @@ import {
   type ResourceBrowserThumbnailRequest,
   type ResourceBrowserThumbnailResult,
 } from './contract';
-import { presentResourceBrowserContentItem, presentResourceBrowserEntityItem } from './presenter';
+import {
+  presentResourceBrowserAssetItem,
+  presentResourceBrowserContentItem,
+  presentResourceBrowserEntityItem,
+} from './presenter';
 import type { ResourceBrowserInteractionPort, ResourceBrowserProjectionSource } from './ports';
 
 export interface ResourceBrowserControllerOptions {
@@ -44,21 +48,24 @@ export interface ResourceBrowserControllerOptions {
 export class ResourceBrowserController implements ResourceBrowserHostRuntime {
   readonly identity: ResourceBrowserIdentity;
   private readonly listeners = new Set<(event: ResourceBrowserProjectionEvent) => void>();
-  private projection: ResourceBrowserProjection | undefined;
+  private readonly projections = new Map<ResourceBrowserFacet, ResourceBrowserProjection>();
+  private activeFacet: ResourceBrowserFacet;
+  private activeSearchRequestId: string | undefined;
   private sequence = 0;
-  private searchGeneration = 0;
   private disposed = false;
 
   constructor(private readonly options: ResourceBrowserControllerOptions) {
     this.identity = options.identity;
+    this.activeFacet = options.initialFacet ?? 'files';
   }
 
   async getSnapshot(): Promise<ResourceBrowserProjection> {
     this.requireActive();
-    if (!this.projection) {
-      this.projection = await this.readProjection(this.options.initialFacet ?? 'files', '', 100, 0);
-    }
-    return this.projection;
+    const existing = this.projections.get(this.activeFacet);
+    if (existing) return existing;
+    const projection = await this.readProjection(this.activeFacet, '', 100);
+    this.projections.set(this.activeFacet, projection);
+    return projection;
   }
 
   subscribe(listener: (event: ResourceBrowserProjectionEvent) => void): () => void {
@@ -74,26 +81,31 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     const parsed = parseResourceBrowserSearchRequest(request);
     assertResourceBrowserIdentity(this.identity, parsed.identity);
     const current = await this.getSnapshot();
-    const generation = ++this.searchGeneration;
-    const nextProjection = await this.readProjection(
-      parsed.facet,
-      parsed.query,
-      parsed.limit,
-      current.revision + 1,
-    );
-    if (generation !== this.searchGeneration) {
-      return this.projection ?? current;
+    this.activeSearchRequestId = parsed.requestId;
+    const retained = this.projections.get(parsed.facet);
+    if (retained?.query === parsed.query) {
+      this.activeFacet = parsed.facet;
+      this.publish(retained);
+      return retained;
     }
-    this.projection = nextProjection;
-    this.publish(this.projection);
-    return this.projection;
+    const nextProjection = await this.readProjection(parsed.facet, parsed.query, parsed.limit);
+    if (parsed.requestId !== this.activeSearchRequestId) {
+      return this.projections.get(this.activeFacet) ?? current;
+    }
+    return this.commitProjection(nextProjection);
   }
 
   async children(request: ResourceBrowserChildrenRequest): Promise<ResourceBrowserProjection> {
     this.requireActive();
     const parsed = parseResourceBrowserChildrenRequest(request);
     assertResourceBrowserIdentity(this.identity, parsed.identity);
-    const current = await this.getSnapshot();
+    const current = this.projections.get(parsed.facet);
+    if (!current) {
+      throw new ResourceBrowserContractError(
+        'resource-browser-stale-identity',
+        'Resource Browser children request targets a facet that is not open.',
+      );
+    }
     if (current.facet !== parsed.facet || current.query.length > 0) {
       throw new ResourceBrowserContractError(
         'resource-browser-stale-identity',
@@ -136,13 +148,12 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       if (index >= 0) nextItems[index] = child;
       else nextItems.push(child);
     }
-    this.projection = parseResourceBrowserProjection({
-      ...current,
-      revision: current.revision + 1,
-      items: nextItems,
-    });
-    this.publish(this.projection);
-    return this.projection;
+    return this.commitProjection(
+      parseResourceBrowserProjection({
+        ...current,
+        items: nextItems,
+      }),
+    );
   }
 
   async resolveThumbnail(
@@ -156,7 +167,7 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     if (
       !item?.thumbnail ||
       item.thumbnail.descriptorId !== parsed.descriptorId ||
-      item.thumbnail.revision !== parsed.revision
+      item.thumbnail.sourceFingerprint !== parsed.sourceFingerprint
     ) {
       throw new ResourceBrowserContractError(
         'resource-browser-stale-identity',
@@ -164,12 +175,11 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       );
     }
     return parseResourceBrowserThumbnailResult({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: parsed.requestId,
       identity: this.identity,
       resourceId: item.resourceId,
       descriptorId: item.thumbnail.descriptorId,
-      revision: item.thumbnail.revision,
+      sourceFingerprint: item.thumbnail.sourceFingerprint,
       dataUrl: await this.options.interactions.resolveThumbnail({
         identity: this.identity,
         item,
@@ -213,28 +223,10 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     const parsed = parseResourceBrowserIntentRequest(request);
     assertResourceBrowserIdentity(this.identity, parsed.identity);
     const current = await this.getSnapshot();
-    if (
-      (parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
-        parsed.route === RESOURCE_BROWSER_ROUTES.addDirectoryLibrary ||
-        parsed.route === RESOURCE_BROWSER_ROUTES.relinkSource ||
-        parsed.route === RESOURCE_BROWSER_ROUTES.removeSource) &&
-      parsed.expectedRevision !== current.revision
-    ) {
-      throw new ResourceBrowserContractError(
-        'resource-browser-stale-identity',
-        `Resource Browser source mutation expected revision ${String(parsed.expectedRevision)} but current revision is ${current.revision}.`,
-      );
-    }
     if (parsed.route === RESOURCE_BROWSER_ROUTES.refresh) {
       await this.options.source.refresh(this.identity);
-      this.projection = await this.readProjection(
-        current.facet,
-        current.query,
-        100,
-        current.revision + 1,
-      );
-      this.publish(this.projection);
-      return this.projection;
+      const projection = await this.readProjection(current.facet, current.query, 100);
+      return this.commitProjection(projection);
     }
     if (
       parsed.route === RESOURCE_BROWSER_ROUTES.linkGlobalLibrary ||
@@ -246,14 +238,54 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
           : await this.options.interactions.addDirectoryLibrary({ identity: this.identity });
       if (result === 'cancelled') return current;
       await this.options.source.refresh(this.identity);
-      this.projection = await this.readProjection(
-        current.facet,
-        current.query,
-        100,
-        current.revision + 1,
-      );
-      this.publish(this.projection);
-      return this.projection;
+      const projection = await this.readProjection(current.facet, current.query, 100);
+      return this.commitProjection(projection);
+    }
+    if (
+      parsed.route === RESOURCE_BROWSER_ROUTES.createDirectory ||
+      parsed.route === RESOURCE_BROWSER_ROUTES.importFiles
+    ) {
+      if (current.facet !== 'files' || current.query.length > 0) {
+        throw new ResourceBrowserContractError(
+          'invalid-resource-browser-payload',
+          'Resource Browser Workspace File creation requires the unfiltered Files facet.',
+        );
+      }
+      const parent = parsed.resourceId
+        ? current.items.find(
+            (candidate): candidate is ResourceBrowserContentItem =>
+              candidate.resourceId === parsed.resourceId &&
+              candidate.facet === 'files' &&
+              candidate.kind === 'directory',
+          )
+        : undefined;
+      if (parsed.resourceId && !parent) {
+        throw new ResourceBrowserContractError(
+          'resource-browser-stale-identity',
+          'Resource Browser Workspace File parent is stale or not a directory.',
+        );
+      }
+      if (parsed.route === RESOURCE_BROWSER_ROUTES.createDirectory) {
+        if (!parsed.directoryName) {
+          throw new ResourceBrowserContractError(
+            'invalid-resource-browser-payload',
+            'Resource Browser directory name is required.',
+          );
+        }
+        await this.options.interactions.createDirectory({
+          identity: this.identity,
+          ...(parent ? { parent } : {}),
+          name: parsed.directoryName,
+        });
+      } else {
+        const result = await this.options.interactions.importFiles({
+          identity: this.identity,
+          ...(parent ? { parent } : {}),
+        });
+        if (result === 'cancelled') return current;
+      }
+      await this.options.source.refresh(this.identity);
+      return this.commitProjection(await this.readProjection('files', '', 100));
     }
     const item = current.items.find((candidate) => candidate.resourceId === parsed.resourceId);
     if (!item) {
@@ -285,14 +317,38 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
         });
       }
       await this.options.source.refresh(this.identity);
-      this.projection = await this.readProjection(
-        current.facet,
-        current.query,
-        100,
-        current.revision + 1,
-      );
-      this.publish(this.projection);
-      return this.projection;
+      const projection = await this.readProjection(current.facet, current.query, 100);
+      return this.commitProjection(projection);
+    }
+    if (parsed.route === RESOURCE_BROWSER_ROUTES.manageEntity) {
+      if (item.facet !== 'entities' || !parsed.entityIntent) {
+        throw new ResourceBrowserContractError(
+          'invalid-resource-browser-payload',
+          'Resource Browser Entity management requires an Entity item and intent.',
+        );
+      }
+      assertEntityIntentMatchesItem(item, parsed.entityIntent);
+      await this.options.interactions.manageEntity({
+        identity: this.identity,
+        item,
+        intent: parsed.entityIntent,
+      });
+      const projection = await this.readProjection('entities', current.query, 100);
+      return this.commitProjection(projection);
+    }
+    if (parsed.route === RESOURCE_BROWSER_ROUTES.trashContent) {
+      if (item.facet !== 'files') {
+        throw new ResourceBrowserContractError(
+          'invalid-resource-browser-payload',
+          'Resource Browser Trash is available only for Workspace Files.',
+        );
+      }
+      await this.options.interactions.trashContent({
+        identity: this.identity,
+        item,
+      });
+      await this.options.source.refresh(this.identity);
+      return this.commitProjection(await this.readProjection('files', '', 100));
     }
     switch (parsed.route) {
       case RESOURCE_BROWSER_ROUTES.preview:
@@ -347,15 +403,24 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.projections.clear();
+    this.activeSearchRequestId = undefined;
     this.listeners.clear();
+  }
+
+  private commitProjection(projection: ResourceBrowserProjection): ResourceBrowserProjection {
+    this.projections.set(projection.facet, projection);
+    this.activeFacet = projection.facet;
+    this.publish(projection);
+    return projection;
   }
 
   private async readProjection(
     facet: ResourceBrowserFacet,
     query: string,
     limit: number,
-    revision: number,
   ): Promise<ResourceBrowserProjection> {
+    const entityResult = facet === 'entities' ? await this.readEntities(query, limit) : undefined;
     const items =
       facet === 'files'
         ? (await this.options.source.files.list({ identity: this.identity, query, limit })).map(
@@ -376,44 +441,65 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
                 canvasAvailable: this.options.canvasAvailable,
               }),
             )
-          : await this.readMaterials(query, limit);
+          : facet === 'assets'
+            ? (
+                await this.options.source.assets.list({
+                  identity: this.identity,
+                  query,
+                  limit,
+                })
+              ).map(presentResourceBrowserAssetItem)
+            : (entityResult?.items ?? []);
     return parseResourceBrowserProjection({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       identity: this.identity,
-      revision,
       facet,
       query,
       items,
+      ...(entityResult?.diagnostics.length ? { diagnostics: entityResult.diagnostics } : {}),
     });
   }
 
-  private async readMaterials(query: string, limit: number) {
+  private async readEntities(query: string, limit: number) {
     const result = await this.options.source.entities.list({
       identity: this.identity,
       query,
       limit,
     });
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return result.entities
-      .filter((entity) =>
-        normalizedQuery.length === 0
+    const items = result.projections
+      .filter((projection) => {
+        const names =
+          projection.status === 'candidate'
+            ? projection.candidate.proposedNames
+            : projection.entity.names;
+        return normalizedQuery.length === 0
           ? true
-          : [entity.canonicalName, entity.displayName, ...entity.aliases]
+          : [names.canonical, names.display, ...names.aliases]
               .filter((value): value is string => typeof value === 'string')
-              .some((value) => value.toLocaleLowerCase().includes(normalizedQuery)),
-      )
+              .some((value) => value.toLocaleLowerCase().includes(normalizedQuery));
+      })
       .slice(0, limit)
-      .map((entity) =>
-        presentResourceBrowserEntityItem(entity, result.bindings, {
+      .map((projection) =>
+        presentResourceBrowserEntityItem(projection, {
           canvasAvailable: this.options.canvasAvailable,
+          capabilities: result.inspectorCapabilities?.find(
+            (candidate) => candidate.projectionId === projection.projectionId,
+          )?.capabilities,
         }),
       );
+    return {
+      items,
+      diagnostics: (result.diagnostics ?? []).map((diagnostic) => ({
+        code: diagnostic.code,
+        message: diagnostic.message,
+        ...(diagnostic.entityId ? { recordId: diagnostic.entityId } : {}),
+      })),
+    };
   }
 
   private publish(projection: ResourceBrowserProjection): void {
     this.sequence += 1;
     const event: ResourceBrowserProjectionEvent = {
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       sequence: this.sequence,
       projection,
     };
@@ -424,5 +510,29 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
     if (this.disposed) {
       throw new Error('Resource Browser controller is disposed.');
     }
+  }
+}
+
+function assertEntityIntentMatchesItem(
+  item: Extract<ResourceBrowserItem, { readonly facet: 'entities' }>,
+  intent: NonNullable<ResourceBrowserIntentRequest['entityIntent']>,
+): void {
+  if (!item.inspector.operations.includes(intent.type)) {
+    throw new ResourceBrowserContractError(
+      'invalid-resource-browser-payload',
+      `Resource Browser Entity operation '${intent.type}' is not available.`,
+    );
+  }
+  const intentEntityId = 'entityId' in intent ? intent.entityId : undefined;
+  const intentCandidateId = 'candidateId' in intent ? intent.candidateId : undefined;
+  if (
+    item.entityStatus === 'candidate'
+      ? intentCandidateId !== item.candidateRef.candidateId
+      : intentEntityId !== item.entityRef.entityId
+  ) {
+    throw new ResourceBrowserContractError(
+      'resource-browser-stale-identity',
+      'Resource Browser Entity intent identity is stale.',
+    );
   }
 }

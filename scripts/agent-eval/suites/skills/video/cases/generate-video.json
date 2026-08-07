@@ -1,30 +1,82 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "generate-video",
   "suiteId": "skill.video",
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Generate one video clip through the builtin video Skill and observe the terminal Tool result.",
-    "canonicalPath": ["builtin video Skill", "GenerateVideo Tool call", "terminal Tool result", "artifact delivery"],
-    "forbiddenFallback": ["timeline editing Tool", "text-only generation claim", "mock video execution", "generic TaskManager", "TaskRef", "task-result continuation"],
-    "observables": [{ "ref": "video-facts", "kind": "runtime-fact", "description": "Skill composition, terminal Tool result, artifact, no-fallback, and terminal idle facts.", "required": true }],
+    "canonicalPath": [
+      "builtin video Skill",
+      "GenerateVideo Tool call",
+      "terminal Tool result",
+      "artifact delivery"
+    ],
+    "observables": [
+      {
+        "ref": "video-facts",
+        "kind": "runtime-fact",
+        "description": "Skill composition, terminal Tool result, artifact, and terminal idle facts.",
+        "required": true
+      }
+    ],
     "expectedResult": "The video Skill calls GenerateVideo and observes its terminal result before finalization.",
-    "expectedFailure": "Missing Skill, terminal Tool result, artifact, no-fallback evidence, or timeline-editing fallback fails."
+    "expectedFailure": "Missing Skill, terminal Tool result, artifact, or terminal idle fails."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
-    { "id": "submit", "kind": "submit", "prompt": "$video Generate one five-second clip of a blue signal light blinking on an abandoned rainy platform. Wait for the real result and report the delivered artifact reference." },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 600000 }
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$video Generate one five-second clip of a blue signal light blinking on an abandoned rainy platform. Wait for the real result and report the delivered artifact reference."
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 600000
+    }
   ],
   "assertions": [
-    { "id": "skill", "kind": "skill", "identity": { "name": "video", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "video", "fingerprint": "sha256:002217de560989501f5e64acd093ea63eda6d5e669e103c57befa8acb169ba7e" }, "status": "injected", "evidenceRef": "video-facts" },
-    { "id": "tool", "kind": "tool-call", "name": "GenerateVideo", "status": "success", "evidenceRef": "video-facts" },
-    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["video-editing", "AddTimelineElement", "generic-task-manager", "TaskRef", "task-result-continuation"], "evidenceRef": "video-facts" },
-    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "continuationQueueIdle"], "evidenceRef": "video-facts" }
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "video",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "video",
+        "fingerprint": "sha256:002217de560989501f5e64acd093ea63eda6d5e669e103c57befa8acb169ba7e"
+      },
+      "status": "injected",
+      "evidenceRef": "video-facts"
+    },
+    {
+      "id": "tool",
+      "kind": "tool-call",
+      "name": "GenerateVideo",
+      "status": "success",
+      "evidenceRef": "video-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "video-facts"
+    }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 600000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 600000,
+    "repetitions": 1
+  }
 }

@@ -1,11 +1,11 @@
 {
   "name": "@neko/preview-webview",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     "./epubjs-vite-patch-plugin": "./epubjs-vite-patch-plugin.ts",
     "./host-adapter": "./src/host-adapter/index.tsx",
+    "./presentation-snapshot": "./src/root/viewer-snapshot-context.tsx",
     "./root": "./src/root/index.tsx"
   },
   "scripts": {

@@ -19,7 +19,7 @@
 export type ProxyStatus = 'pending' | 'generating' | 'ready' | 'failed' | 'stale';
 
 // =============================================================================
-// Proxy Manifest (persisted in .neko/proxies/manifest.json)
+// Proxy Manifest
 // =============================================================================
 
 /** Single proxy entry in the manifest */
@@ -44,8 +44,6 @@ export interface ProxyEntry {
 
 /** Proxy manifest file structure */
 export interface ProxyManifest {
-  /** Manifest format version */
-  version: 1;
   /** Map of resourceId → ProxyEntry */
   proxies: Record<string, ProxyEntry>;
 }

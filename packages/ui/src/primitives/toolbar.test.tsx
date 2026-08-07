@@ -27,7 +27,7 @@ describe('@neko/ui toolbar primitives', () => {
     host.remove();
   });
 
-  it('renders the legacy vertical toolbar shell class and width', () => {
+  it('renders the vertical toolbar shell class and width', () => {
     act(() => {
       root.render(
         <VerticalToolbar className="custom-toolbar" width={56}>

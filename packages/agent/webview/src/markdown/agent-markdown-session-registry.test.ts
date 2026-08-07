@@ -10,14 +10,14 @@ import {
 } from './agent-markdown-session-registry';
 
 describe('agent markdown session registry', () => {
-  it('coalesces one projection patch into one Markdown revision and publication', () => {
+  it('coalesces one projection patch into one Markdown update and publication', () => {
     const registry = createAgentMarkdownSessionRegistry();
     const key = sessionKey();
     const listener = vi.fn();
     registry.subscribe(key, listener);
 
     const publication = registry.commitProjectionPatch({
-      ...projectionPatch('', 1, 1),
+      ...projectionPatch('', 1),
       operations: [
         appendOperation('| A', 1),
         appendOperation(' | B |\n', 2),
@@ -29,7 +29,7 @@ describe('agent markdown session registry', () => {
       source: '| A | B |\n| - | - |\n',
       isFinal: false,
     });
-    expect(registry.metrics()).toMatchObject({ renderRevisions: 1, activeSessions: 1 });
+    expect(registry.metrics()).toMatchObject({ renderUpdates: 1, activeSessions: 1 });
     expect(listener).not.toHaveBeenCalled();
     publication.publish();
     expect(listener).toHaveBeenCalledTimes(1);
@@ -42,18 +42,18 @@ describe('agent markdown session registry', () => {
     const registry = createAgentMarkdownSessionRegistry();
     const key = sessionKey();
 
-    registry.commitProjectionPatch(projectionPatch('| Shot | Prompt |\n', 1, 1)).publish();
+    registry.commitProjectionPatch(projectionPatch('| Shot | Prompt |\n', 1)).publish();
     const first = registry.getSnapshot(key);
-    registry.commitProjectionPatch(projectionPatch('| --- | --- |\n', 2, 2)).publish();
-    registry.commitProjectionPatch(projectionPatch('| 1 | Pan right |', 3, 3)).publish();
+    registry.commitProjectionPatch(projectionPatch('| --- | --- |\n', 2)).publish();
+    registry.commitProjectionPatch(projectionPatch('| 1 | Pan right |', 3)).publish();
     const final = registry.getSnapshot(key);
 
     expect(final).toMatchObject({
       sessionId: first?.sessionId,
-      revision: 3,
       source: '| Shot | Prompt |\n| --- | --- |\n| 1 | Pan right |',
       isFinal: false,
     });
+    expect(final?.documentId).not.toBe(first?.documentId);
     expect(final?.document.root.children.some((node) => node.type === 'table')).toBe(true);
   });
 
@@ -89,7 +89,7 @@ describe('agent markdown session registry', () => {
     expect(registry.metrics()).toMatchObject({
       createdSessions: metricsBefore.createdSessions,
       disposedSessions: metricsBefore.disposedSessions,
-      renderRevisions: metricsBefore.renderRevisions,
+      renderUpdates: metricsBefore.renderUpdates,
       notifications: metricsBefore.notifications,
     });
   });
@@ -101,14 +101,12 @@ describe('agent markdown session registry', () => {
 
     registry
       .commitProjectionPatch({
-        ...projectionPatch('', 2, 2),
+        ...projectionPatch('', 2),
         operations: [
           {
             operation: 'complete',
             itemId: 'text-1',
-            itemRevision: 2,
             kind: 'assistant_text',
-            sourceGeneration: 1,
             status: 'complete',
             updatedAt: 2,
           },
@@ -118,9 +116,7 @@ describe('agent markdown session registry', () => {
       .publish();
 
     expect(registry.getSnapshot(key)).toMatchObject({ source: 'final', isFinal: true });
-    registry
-      .commitProjectionSnapshot({ conversationId: 'conv-1', projectionVersion: 3, turns: [] })
-      .publish();
+    registry.commitProjectionSnapshot({ conversationId: 'conv-1', turns: [] }).publish();
     expect(registry.getSnapshot(key)).toBeUndefined();
   });
 
@@ -161,45 +157,41 @@ function sessionKey(conversationId = 'conv-1'): string {
 
 function projectionPatch(
   content: string,
-  projectionVersion: number,
-  itemRevision: number,
+  updatedAt: number,
   conversationId = 'conv-1',
 ): ConversationProjectionPatch {
   return {
     type: 'conversationProjectionPatch',
     conversationId,
-    projectionVersion,
-    baseProjectionVersion: projectionVersion - 1,
     turnId: 'turn-1',
 
     runId: 'run-a',
     messageId: 'message-1',
-    operations: [appendOperation(content, itemRevision, conversationId)],
+    operations: [appendOperation(content, updatedAt, conversationId)],
   };
 }
 
-function appendOperation(content: string, itemRevision: number, conversationId = 'conv-1') {
+function appendOperation(content: string, updatedAt: number, conversationId = 'conv-1') {
   return {
     operation: 'append' as const,
-    item: textItem(content, itemRevision, conversationId),
+    item: textItem(content, updatedAt, conversationId),
   };
 }
 
 function projectionSnapshot(
   content: string,
-  itemRevision: number,
+  updatedAt: number,
   conversationId = 'conv-1',
 ): ConversationProjectionSnapshot {
   return {
     conversationId,
-    projectionVersion: itemRevision,
     turns: [
       {
         turnId: 'turn-1',
 
         runId: 'run-a',
         messageId: 'message-1',
-        items: [textItem(content, itemRevision, conversationId)],
+        items: [textItem(content, updatedAt, conversationId)],
       },
     ],
   };
@@ -207,7 +199,7 @@ function projectionSnapshot(
 
 function textItem(
   content: string,
-  itemRevision: number,
+  updatedAt: number,
   conversationId: string,
 ): AgentTurnTimelineAssistantTextItem {
   return {
@@ -218,11 +210,10 @@ function textItem(
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,
-    itemRevision,
     kind: 'assistant_text',
     status: 'streaming',
-    payload: { content, format: 'markdown', sourceGeneration: 1 },
+    payload: { content, format: 'markdown' },
     createdAt: 1,
-    updatedAt: itemRevision,
+    updatedAt,
   };
 }

@@ -1,7 +1,7 @@
 import type { WorkspaceIdentityDescriptor, WorkspacePortableLocator } from './storage';
 import type { ResourceCacheEntry } from '@neko/local-metadata/resource-cache';
 import type { MediaFileMetadata } from '@neko/media';
-import type { CompactMediaSemanticIndex, SemanticEvidenceProjection } from '@neko/search-domain';
+import type { CompactMediaSemanticIndex } from '@neko/search-domain';
 import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
 import type {
   ProjectIndexFreshness,
@@ -11,7 +11,8 @@ import type {
   ProjectSearchPartitionKind,
   ProjectSearchSourceRef,
 } from '@neko/search-domain';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from './model';
+import type { LocalMetadataPartition } from './model';
+import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 
 export interface WorkspaceRegistryRecord {
   readonly workspaceId: string;
@@ -35,6 +36,8 @@ export interface WorkspaceRebindRequest {
 
 export interface WorkspaceRegistryRepository {
   get(workspaceId: string): Promise<WorkspaceRegistryRecord | null>;
+  listAll(): Promise<readonly WorkspaceRegistryRecord[]>;
+  remove(workspaceId: string): Promise<boolean>;
   findByCurrentLocator(
     locator: WorkspacePortableLocator,
   ): Promise<readonly WorkspaceRegistryRecord[]>;
@@ -68,7 +71,6 @@ export interface ConversationCatalogQuery {
 export interface ConversationProjectionReplaceRequest {
   readonly workspaceId: string | null;
   readonly conversations: readonly ConversationCatalogRecord[];
-  readonly authorityRevision: string;
 }
 
 export interface ConversationCatalogRepository {
@@ -78,19 +80,6 @@ export interface ConversationCatalogRepository {
   delete(conversationId: string): Promise<boolean>;
   replaceProjection(request: ConversationProjectionReplaceRequest): Promise<void>;
   deleteWorkspaceProjection(workspaceId: string): Promise<void>;
-}
-
-export interface ProjectionVersionUpdate {
-  readonly partition: LocalMetadataPartition;
-  readonly freshness: LocalMetadataPartitionRevision['freshness'];
-  readonly diagnostic: string | null;
-  readonly updatedAt: string;
-}
-
-export interface ProjectionVersionRepository {
-  get(partition: LocalMetadataPartition): Promise<LocalMetadataPartitionRevision | null>;
-  increment(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision>;
-  markStale(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision>;
 }
 
 export interface TaskStateRecord {
@@ -220,7 +209,6 @@ export interface SemanticProjectionRecord {
   readonly coverage: readonly ProjectSemanticCoverageAnalysisKind[];
   readonly freshness: ProjectIndexFreshness;
   readonly index: CompactMediaSemanticIndex;
-  readonly evidence: readonly SemanticEvidenceProjection[];
   readonly updatedAt: string;
 }
 
@@ -241,8 +229,19 @@ export interface SemanticProjectionInsertMissingResult {
   readonly preservedSourceIds: readonly string[];
 }
 
+export interface SemanticProjectionReadDiagnostic {
+  readonly code: 'invalid-semantic-projection-record';
+  readonly sourceId: string;
+  readonly message: string;
+}
+
+export interface SemanticProjectionListResult {
+  readonly records: readonly SemanticProjectionRecord[];
+  readonly diagnostics: readonly SemanticProjectionReadDiagnostic[];
+}
+
 export interface SemanticProjectionRepository {
-  list(partition: LocalMetadataPartition): Promise<readonly SemanticProjectionRecord[]>;
+  list(partition: LocalMetadataPartition): Promise<SemanticProjectionListResult>;
   get(
     partition: LocalMetadataPartition,
     sourceId: string,
@@ -254,10 +253,6 @@ export interface SemanticProjectionRepository {
     sourceId: string,
     updatedAt: string,
   ): Promise<boolean>;
-  clearBodyBearingSources(
-    partition: LocalMetadataPartition,
-    updatedAt: string,
-  ): Promise<readonly string[]>;
   insertMissing(
     request: SemanticProjectionReplaceRequest,
   ): Promise<SemanticProjectionInsertMissingResult>;
@@ -382,8 +377,8 @@ export function evaluateLocalMetadataCacheQuota(
 }
 
 export interface LocalMetadataRepositories {
+  readonly assetLibraryMemberships: AssetLibraryMembershipRepository;
   readonly workspaces: WorkspaceRegistryRepository;
-  readonly projectionVersions: ProjectionVersionRepository;
   readonly conversations: ConversationCatalogRepository;
   readonly tasks: TaskStateRepository;
   readonly taskCheckpoints: TaskCheckpointRepository;

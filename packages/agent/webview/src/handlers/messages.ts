@@ -1,8 +1,8 @@
 /**
  * Desktop host → Webview message contracts
  *
- * Shared protocol definitions live in @neko/agent-contracts. This module remains
- * as a local compatibility barrel for existing handler imports.
+ * Shared protocol definitions live in @neko/agent-contracts. Handlers import
+ * their package-owned message types through this barrel.
  */
 
 export type {
@@ -15,7 +15,6 @@ export type {
   AmbientCanvasUpdateMessage,
   CompressionErrorMessage,
   CompressionResultMessage,
-  ConfigChangedMessage,
   ConfigStateMessage,
   ContextTokenCountMessage,
   ConversationListMessage,

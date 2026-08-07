@@ -10,10 +10,34 @@ and the codebase. Phase 1 domain integration is still in progress and Desktop is
 release product. The sole native package/release target is `darwin-arm64`; macOS has a verified
 ad-hoc DMG prerelease path, while Developer ID/notarization remains a Phase 2 gate. Windows x64 and Linux are
 deterministic test hosts only and produce no Desktop artifact. Intel Mac and other architectures are
-unsupported, and Desktop professional-tool/plugin integrations are not implemented.
+unsupported. Desktop already has an OpenNeko-owned Skill and extension catalog with supported
+Skill/MCP contribution wiring; a general extension ecosystem and professional-tool integrations are
+not implemented.
 
 Each phase must be split into bounded OpenSpec changes. Shell, cross-platform work, the plugin
 runtime, and every professional-tool adapter must not be developed as one permanent umbrella change.
+
+## Product focus and experimental promotion
+
+The current roadmap prioritizes general AI-assisted content creators and closes a real path from
+local project context through Agent planning/generation, source and result management,
+Canvas/Cut/Preview lightweight processing, and export or professional-tool handoff. “General” means
+a portable, cross-media, cross-model path for common individual creation work; it does not mean
+recreating a complete NLE, DCC, image editor, or every creative-industry workflow inside OpenNeko.
+
+Chara and Interactive World are independent experiments rather than committed current-phase
+deliverables. Boundary design, synthetic fixtures, and minimum prototypes may continue, but either
+direction can become a core navigation, release capability, or current product claim only when:
+
+- a concrete audience and repeated job appear across independent users;
+- users already solve that job inefficiently in real projects rather than merely expressing interest;
+- a minimum prototype produces repeated creation, return experience, save, or sharing behavior; and
+- a smallest creation-to-experience loop works through real owners, models, and durable facts.
+
+Before promotion, Character projects/rooms/Play and World projects/Experiences/Runs/Saves/branches
+remain fail-visibly unavailable. Multi-character Play, VLA/game control, complete 3D or realtime-video
+presentation, and social distribution must not expand the validation baseline. OpenSpec designs and
+task inventories do not by themselves commit roadmap delivery.
 
 ## Phase 1: Desktop UI and retained-package integration
 
@@ -53,11 +77,12 @@ are unsupported.
 Platform differences must stay behind narrow Host adapters and capability policies. Cross-compiling
 or launching Electron alone is not platform qualification.
 
-## Phase 3: MCP, plugins, and professional tools
+## Phase 3: Extension ecosystem and professional tools
 
-Reuse the single MCP Manager, Agent Tool Call/Approval path, Skills, and capability catalog. Add a
-versioned plugin manifest, isolated Node extension process, sandboxed panel partition, controlled
-contribution slots, permission lifecycle, and fail-visible unload/crash behavior.
+Extend the existing OpenNeko Skill/extension catalog and its supported Skill/MCP contribution path
+through the single MCP Manager, Agent Tool Call/Approval path, Skills, and capability catalog. Add
+the remaining versioned lifecycle, isolation, controlled contribution slots, permission handling,
+and fail-visible unload/crash behavior needed for a general extension ecosystem.
 
 Professional integrations use explicit capability levels:
 

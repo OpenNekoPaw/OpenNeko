@@ -71,22 +71,21 @@ describe('Agent runtime isolation contracts', () => {
       modelId: 'model-a',
       temperature: 0.2,
     });
-    expect(updated.revision).toBe(1);
+    expect(updated).not.toBe(initial);
     expect(updated.config.modelId).toBe('model-b');
     expect(Object.isFrozen(turn)).toBe(true);
     expect(Object.isFrozen(turn.config)).toBe(true);
   });
 
-  it('treats endpoint, attachment, tab, and conversation as one attachment identity', () => {
+  it('treats attachment, tab, and conversation as one attachment identity', () => {
     const key = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: 'conversation-1',
     };
     expect(isSameProjectionAttachment(key, { ...key })).toBe(true);
     expect(isSameProjectionAttachment(key, { ...key, tabId: 'tab-2' })).toBe(false);
-    expect(isSameProjectionAttachment(key, { ...key, endpointEpoch: 'endpoint-2' })).toBe(false);
+    expect(isSameProjectionAttachment(key, { ...key, attachmentId: 'attachment-2' })).toBe(false);
   });
 
   it('keeps Layer-0 isolation contracts free of host and renderer dependencies', () => {

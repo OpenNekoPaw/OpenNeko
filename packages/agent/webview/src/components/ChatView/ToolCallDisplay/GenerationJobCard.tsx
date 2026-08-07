@@ -65,7 +65,7 @@ export function GenerationJobCard({
               {t('toolCalls.generation.job')}
             </span>
             <span className="truncate font-mono text-[var(--agent-fg)]" title={job.jobId}>
-              {job.jobId} · r{job.revision}
+              {job.jobId}
             </span>
             {prompt && (
               <>

@@ -1,6 +1,6 @@
 ## Why
 
-Electron Desktop Phase 1 已完成 foundation、Shell 与主要 package composition，但 Agent/Home、
+Electron Desktop Phase 1 已完成 foundation、Shell 与主要 package composition，但 Agent/Workbench、
 Assets/Canvas、Cut/Preview/resource、support domains 和 packaged qualification 仍需按唯一依赖链
 闭合。本 program 只协调 current child changes，不重复实现 runtime。
 
@@ -8,8 +8,8 @@ Assets/Canvas、Cut/Preview/resource、support domains 和 packaged qualificatio
 
 - 以 Electron Desktop 为唯一薄 product composition root；业务事实、workflow 和 Job 由 owning
   packages 持有，Desktop 只做信任边界、native adapter、wiring 与 projection。
-- 固定 Home → Content Project → Agent/Media Library/Canvas/Cut/Preview → Generation/Export 的
-  Phase 1 vertical workflow。
+- 固定 Unified Workbench Agent → 显式目录 Workspace → Media Library/Canvas/Cut/Preview →
+  Generation/Export 的 Phase 1 vertical workflow；不保留独立 Home 页面或默认 Project handoff。
 - 将每个剩余 gate 分配给一个 focused child change；program 只记录依赖和完成条件。
 - ContentLocator 是 durable public identity；Main-owned resource gateway 是 renderer media 的
   唯一 materialization path。

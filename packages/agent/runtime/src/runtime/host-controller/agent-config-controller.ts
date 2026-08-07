@@ -31,9 +31,6 @@ export function tryHandleAgentConfigControllerRoute(
     case 'openUserConfigFile':
       return runAgentHostRouteEffect(() => effects.openUserConfig(context));
 
-    case 'openConfigFile':
-      return runAgentHostRouteEffect(() => effects.openHostConfig(context));
-
     case 'getTabState':
       return runAgentHostRouteEffect(() => effects.readTabState(context));
 

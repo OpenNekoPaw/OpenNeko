@@ -16,11 +16,6 @@ import type {
   CanvasAuthoringResultStatus,
 } from './canvas-authoring-contracts';
 
-export const CANVAS_HEADLESS_AUTHORING_CONTRACT_VERSION = 1 as const;
-
-export type CanvasHeadlessAuthoringContractVersion =
-  typeof CANVAS_HEADLESS_AUTHORING_CONTRACT_VERSION;
-
 export type CanvasHeadlessAuthoringTargetKind = 'active' | 'file' | 'new';
 
 export interface CanvasHeadlessAuthoringTarget {
@@ -28,7 +23,6 @@ export interface CanvasHeadlessAuthoringTarget {
   readonly documentUri?: string;
   readonly title?: string;
   readonly reveal?: boolean;
-  readonly expectedRevision?: string;
 }
 
 export interface ResolvedCanvasHeadlessAuthoringTarget {
@@ -65,7 +59,6 @@ export type CanvasHeadlessAuthoringOperation =
   | { readonly kind: 'connection.create'; readonly connection: CanvasConnection };
 
 export interface CanvasHeadlessAuthoringOperationBatch {
-  readonly version: CanvasHeadlessAuthoringContractVersion;
   readonly operations: readonly CanvasHeadlessAuthoringOperation[];
   readonly createdNodes?: readonly CanvasHeadlessAuthoringCreatedNodeRef[];
   readonly createdConnections?: readonly CanvasHeadlessAuthoringCreatedConnectionRef[];
@@ -73,7 +66,6 @@ export interface CanvasHeadlessAuthoringOperationBatch {
 }
 
 export interface CanvasHeadlessAuthoringResultBase {
-  readonly version: CanvasHeadlessAuthoringContractVersion;
   readonly status: CanvasAuthoringResultStatus;
   readonly documentUri: string;
   readonly target: ResolvedCanvasHeadlessAuthoringTarget;

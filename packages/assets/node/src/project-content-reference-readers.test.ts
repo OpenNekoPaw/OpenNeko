@@ -8,11 +8,7 @@ import {
   serializeOtio,
   type OtioTimeline,
 } from '@neko/cut-domain';
-import {
-  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-  encodeEntityRepresentationBindingFile,
-} from '@neko/entity-domain';
-import { CURRENT_NKC_VERSION, loadNkc, type CanvasData } from '@neko/canvas-domain';
+import { loadNkc, type CanvasData } from '@neko/canvas-domain';
 import { describe, expect, it } from 'vitest';
 import {
   readProjectContentReferences,
@@ -30,30 +26,9 @@ describe('Desktop project content reference readers', () => {
       JSON.stringify(canvasFixture(), null, 2),
     );
     await writeFile(path.join(workspace, 'cuts', 'story.otio'), serializeOtio(cutFixture()));
-    await writeFile(
-      path.join(workspace, 'neko', 'entity-representation-bindings.json'),
-      encodeEntityRepresentationBindingFile({
-        version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-        bindings: [
-          {
-            id: 'binding-a',
-            entityId: 'character-a',
-            entityKind: 'character',
-            representation: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Portraits/character-a.png',
-            },
-            role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
-            source: 'user',
-            updatedAt: '2026-08-01T00:00:00.000Z',
-          },
-        ],
-      }),
-    );
+    await writeCanonicalEntities(workspace);
 
-    const result = await readProjectContentReferences(workspace);
+    const result = await readReferences(workspace);
 
     expect(result.owners.map((owner) => owner.ownerKind)).toEqual([
       'canvas',
@@ -78,12 +53,11 @@ describe('Desktop project content reference readers', () => {
     await writeFile(path.join(external, 'external.nkc'), JSON.stringify(canvasFixture()));
     await symlink(external, path.join(workspace, 'linked-documents'), 'dir');
 
-    const result = await readProjectContentReferences(workspace);
+    const result = await readReferences(workspace);
 
     expect(result.owners).toEqual([
       expect.objectContaining({
         ownerKind: 'entity-representation',
-        revision: 'absent',
         references: [],
       }),
     ]);
@@ -95,7 +69,6 @@ describe('Desktop project content reference readers', () => {
     await writeFile(
       path.join(workspace, 'broken.nkc'),
       JSON.stringify({
-        version: CURRENT_NKC_VERSION,
         name: 'Broken',
         viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
         nodes: [
@@ -115,12 +88,12 @@ describe('Desktop project content reference readers', () => {
       }),
     );
 
-    const result = await readProjectContentReferences(workspace);
+    const result = await readReferences(workspace);
 
     expect(result.owners).toEqual([
       expect.objectContaining({
         ownerKind: 'entity-representation',
-        revision: 'absent',
+        references: [],
       }),
     ]);
     expect(result.diagnostics).toEqual([
@@ -148,32 +121,12 @@ describe('Desktop project content reference readers', () => {
       JSON.stringify(canvasFixture(), null, 2),
     );
     await writeFile(path.join(workspace, 'cuts', 'story.otio'), serializeOtio(cutFixture()));
-    await writeFile(
-      path.join(workspace, 'neko', 'entity-representation-bindings.json'),
-      encodeEntityRepresentationBindingFile({
-        version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-        bindings: [
-          {
-            id: 'binding-a',
-            entityId: 'character-a',
-            entityKind: 'character',
-            representation: {
-              kind: 'workspace-file',
-              path: 'neko/assets/Portraits/character-a.png',
-            },
-            role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
-            source: 'user',
-            updatedAt: '2026-08-01T00:00:00.000Z',
-          },
-        ],
-      }),
-    );
+    await writeCanonicalEntities(workspace);
     await cp(workspace, stagedWorkspace, { recursive: true });
 
     const rewritten = await rewriteProjectContentReferences({
       stagedWorkspacePath: stagedWorkspace,
+      projectId: 'project-neko',
       replacements: new Map([
         ['neko/assets/References/board.png', 'media/collected/References/board.png'],
         ['neko/assets/Footage/shot.mov', 'media/collected/Footage/shot.mov'],
@@ -205,31 +158,68 @@ describe('Desktop project content reference readers', () => {
       });
     }
     expect(
-      JSON.parse(
-        await readFile(
-          path.join(stagedWorkspace, 'neko', 'entity-representation-bindings.json'),
-          'utf8',
-        ),
-      ),
+      JSON.parse(await readFile(path.join(stagedWorkspace, 'neko', 'entities.json'), 'utf8')),
     ).toMatchObject({
-      bindings: [
+      projectId: 'project-neko',
+      entities: [
         {
-          representation: {
-            kind: 'workspace-file',
-            path: 'media/collected/Portraits/character-a.png',
-          },
+          representations: [
+            {
+              target: {
+                kind: 'workspace-file',
+                path: 'media/collected/Portraits/character-a.png',
+              },
+            },
+          ],
         },
       ],
     });
-    expect((await readProjectContentReferences(workspace)).requirements.requirements).toHaveLength(
-      3,
-    );
+    expect((await readReferences(workspace)).requirements.requirements).toHaveLength(3);
   });
 });
 
+function readReferences(workspacePath: string) {
+  return readProjectContentReferences({ workspacePath, projectId: 'project-neko' });
+}
+
+async function writeCanonicalEntities(workspacePath: string): Promise<void> {
+  await writeFile(
+    path.join(workspacePath, 'neko', 'entities.json'),
+    `${JSON.stringify(
+      {
+        projectId: 'project-neko',
+        entities: [
+          {
+            entityId: 'character-a',
+            kind: 'character',
+            names: { canonical: 'Character A', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-a',
+                target: {
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Portraits/character-a.png',
+                },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-08-01T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
 function canvasFixture(): CanvasData {
   return {
-    version: CURRENT_NKC_VERSION,
     name: 'Story',
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
     nodes: [

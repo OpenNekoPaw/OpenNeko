@@ -11,10 +11,6 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import {
-  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-  encodeEntityRepresentationBindingFile,
-} from '@neko/entity-domain';
 import { type ContentReadService } from '@neko/content';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import {
@@ -24,9 +20,9 @@ import {
 import { createWorkspaceMediaLibrarySyncMetadataBinding } from '@neko/assets-node';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
-  AGENT_STATE_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+  initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
 import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -84,7 +80,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).resolves.toMatchObject({ status: 'completed', snapshotId: plan.snapshotId });
 
@@ -100,21 +96,24 @@ describe('Desktop portable Media Library snapshot', () => {
       code: 'ENOENT',
     });
     await expect(
-      readFile(path.join(destination, '.neko', 'workspace.json'), 'utf8'),
+      readFile(path.join(destination, '.private', 'workspace.json'), 'utf8'),
     ).rejects.toMatchObject({
       code: 'ENOENT',
     });
     expect(
-      JSON.parse(
-        await readFile(path.join(destination, 'neko/entity-representation-bindings.json'), 'utf8'),
-      ),
+      JSON.parse(await readFile(path.join(destination, 'neko/entities.json'), 'utf8')),
     ).toMatchObject({
-      bindings: [
+      projectId: 'workspace-a',
+      entities: [
         {
-          representation: {
-            kind: 'workspace-file',
-            path: 'media/collected/Footage/shot.mov',
-          },
+          representations: [
+            {
+              target: {
+                kind: 'workspace-file',
+                path: 'media/collected/Footage/shot.mov',
+              },
+            },
+          ],
         },
       ],
     });
@@ -143,7 +142,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-source-stale',
@@ -168,7 +167,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
         onProgress: (progress) => {
           if (progress.completedEntryCount === 1) {
             void fixture.snapshot.cancel({
@@ -202,7 +201,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-publish-conflict',
@@ -228,7 +227,7 @@ describe('Desktop portable Media Library snapshot', () => {
       fixture.snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-source-stale',
@@ -268,7 +267,7 @@ describe('Desktop portable Media Library snapshot', () => {
       snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-content-unavailable',
@@ -330,7 +329,7 @@ describe('Desktop portable Media Library snapshot', () => {
       snapshot.execute({
         workspace: fixture.workspace,
         snapshotId: plan.snapshotId,
-        expectedOperationRevision: plan.operationRevision,
+        expectedOperationFingerprint: plan.operationFingerprint,
       }),
     ).rejects.toMatchObject({
       code: 'snapshot-checkpoint-unavailable',
@@ -361,10 +360,9 @@ describe('Desktop portable Media Library snapshot', () => {
     });
     await binding.writeSnapshotCheckpoint(
       {
-        version: 1,
         workspaceId: fixture.workspace.workspaceId,
         snapshotId: firstPlan.snapshotId,
-        requirementRevision: firstPlan.requirementRevision,
+        requirementFingerprint: firstPlan.requirementFingerprint,
         completedEntryKeys: ['media/collected/Footage/shot.mov'],
       },
       Date.now(),
@@ -395,7 +393,7 @@ describe('Desktop portable Media Library snapshot', () => {
     await resumed.execute({
       workspace: fixture.workspace,
       snapshotId: resumedPlan.snapshotId,
-      expectedOperationRevision: resumedPlan.operationRevision,
+      expectedOperationFingerprint: resumedPlan.operationFingerprint,
     });
 
     expect(planningReadCount).toBeGreaterThan(0);
@@ -429,13 +427,13 @@ async function createFixture(): Promise<{
     mkdir(globalRoot, { recursive: true }),
     mkdir(path.join(workspacePath, 'notes'), { recursive: true }),
     mkdir(path.join(workspacePath, 'dist'), { recursive: true }),
-    mkdir(path.join(workspacePath, '.neko'), { recursive: true }),
+    mkdir(path.join(workspacePath, '.private'), { recursive: true }),
   ]);
   await Promise.all([
     writeFile(mediaPath, 'linked-media'),
     writeFile(path.join(workspacePath, 'notes', 'project.txt'), 'project note'),
     writeFile(path.join(workspacePath, 'dist', 'generated.txt'), 'generated'),
-    writeFile(path.join(workspacePath, '.neko', 'workspace.json'), '{"workspaceId":"local"}'),
+    writeFile(path.join(workspacePath, '.private', 'workspace.json'), '{"private":true}'),
     writeBinding(workspacePath, '2026-08-01T00:00:00.000Z'),
   ]);
   await createWorkspaceLinkedMediaLibrary({
@@ -449,9 +447,9 @@ async function createFixture(): Promise<{
     databasePath: path.join(home, '.neko', 'neko.db'),
     busyTimeoutMs: 2_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
-  await store.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
+  await initializeMediaMetadataTables(store);
   const workspace: AssetWorkspaceResolution = {
     workspaceId: 'workspace-a',
     workspacePath,
@@ -459,7 +457,7 @@ async function createFixture(): Promise<{
     locator: { kind: 'relative', value: 'workspace' },
   };
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: workspace.workspaceId },
+    identity: { workspaceId: workspace.workspaceId },
     locator: workspace.locator,
     seenAt: '2026-08-01T00:00:00.000Z',
   });
@@ -475,7 +473,7 @@ async function createFixture(): Promise<{
   return {
     root,
     workspace,
-    bindingPath: path.join(workspacePath, 'neko/entity-representation-bindings.json'),
+    bindingPath: path.join(workspacePath, 'neko/entities.json'),
     mediaPath,
     repositories: store.repositories,
     createReader: (targetWorkspacePath) => snapshotReader(targetWorkspacePath),
@@ -491,26 +489,34 @@ async function writeBinding(
 ): Promise<void> {
   await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
   await writeFile(
-    path.join(workspacePath, 'neko/entity-representation-bindings.json'),
-    encodeEntityRepresentationBindingFile({
-      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-      bindings: [
-        {
-          id: 'binding-a',
-          entityId: 'character-a',
-          entityKind: 'character',
-          representation: {
-            kind: 'workspace-file',
-            path: locatorPath,
+    path.join(workspacePath, 'neko/entities.json'),
+    `${JSON.stringify(
+      {
+        projectId: 'workspace-a',
+        entities: [
+          {
+            entityId: 'character-a',
+            kind: 'character',
+            names: { canonical: 'Character A', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-a',
+                target: { kind: 'workspace-file', path: locatorPath },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: updatedAt,
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: updatedAt,
+            updatedAt,
           },
-          role: 'portrait',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          updatedAt,
-        },
-      ],
-    }),
+        ],
+      },
+      null,
+      2,
+    )}\n`,
   );
 }
 

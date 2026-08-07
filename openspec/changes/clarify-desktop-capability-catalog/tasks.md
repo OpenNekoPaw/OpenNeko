@@ -1,6 +1,6 @@
 ## 1. Contract and owner
 
-- [x] 1.1 Replace the Home builtin capability DTO/channel with a versioned extension catalog contract, safe discovery diagnostics and rejection coverage for the removed capability payload.
+- [x] 1.1 Replace the Home builtin capability DTO/channel with a canonical extension catalog contract, safe discovery diagnostics and rejection coverage for the removed capability payload.
 - [x] 1.2 Add a Desktop Main extension catalog reader that projects only valid OpenNeko package
       manifests and safe MCP Server/Skill/App contribution summaries.
 
@@ -30,7 +30,7 @@
 ## 5. Management contract and OpenNeko owner
 
 - [x] 5.1 Replace the manifest-only extension result with installed/available, compatibility,
-      runtime readiness, catalog revision and typed plugin/Skill mutation contracts.
+      runtime readiness, catalog fingerprint and typed plugin/Skill mutation contracts.
 - [x] 5.2 Replace the manifest-only reader with an injected OpenNeko repository adapter for list,
       install, remove and catalog refresh, preserving safe manifest projection and diagnostics.
 - [x] 5.3 Add a personal Skill manager with staged Pi validation, contained atomic install and
@@ -58,7 +58,7 @@
       content-creation-first recommended sorting without hiding installed unsupported plugins.
 - [x] 7.5 Replace the Codex/OpenAI marketplace and `.codex-plugin` path with an OpenNeko-owned
       repository snapshot, `.openneko-plugin` package contract and isolated OpenNeko install root;
-      poison foreign application marketplace/config/cache access.
+      prove foreign application marketplace/config/cache access is absent.
 - [x] 7.6 Exclude builtin Skills and builtin-only diagnostics from the Home management contract,
       cards and counts while preserving builtin discovery for Pi Agent turns.
 - [x] 7.7 Remove the low-value Skill source and extension status/category/sort selectors while
@@ -68,8 +68,8 @@
 
 - [ ] 8.1 Define the `@neko/agent-runtime/extensions` public application contract for catalog, support policy, mutation, personal Skill and plugin runtime-generation lifecycle without Electron or Desktop DTO ownership.
 - [ ] 8.2 Move extension manifest/repository validation, contained install/remove planning, personal Skill validation and Plugin Skill/MCP contribution/readiness logic from Desktop Main to the Agent runtime entry with producer tests.
-- [ ] 8.3 Reduce `desktop-extension-manager.ts` and `desktop-plugin-runtime.ts` to bundled-resource/install-root, native trash/picker, process/env/credential adapters, typed IPC composition and disposal; delete or poison app-owned policy/state paths.
-- [ ] 8.4 Add Desktop consumer/delegation and path-poison tests proving all catalog/mutation/generation outcomes come from the Agent package and no foreign marketplace or app-owned fallback returns success.
+- [ ] 8.3 Reduce `desktop-extension-manager.ts` and `desktop-plugin-runtime.ts` to bundled-resource/install-root, native trash/picker, process/env/credential adapters, typed IPC composition and disposal; delete app-owned policy/state paths.
+- [ ] 8.4 Add Desktop consumer/delegation and path-absence tests proving all catalog/mutation/instance outcomes come from the Agent package and no foreign marketplace or app-owned fallback returns success.
 
 ## 9. Agent evaluation and verification
 

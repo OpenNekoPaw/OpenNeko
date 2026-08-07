@@ -1,4 +1,4 @@
-# Agent Evaluation v2 测试设计指南
+# Agent Evaluation 测试设计指南
 
 本文说明如何把 Prompt、Skill、Capability/Tool、Provider/Model、Desktop Agent 工作流、
 任务恢复、产物或 Desktop 行为变更转成可执行 Evaluation。
@@ -19,7 +19,7 @@
 先用 `authoring/change-selector.mjs` 检查 changed path 的确定性 owner。selector
 无法映射时应补充 ownership/coverage，而不是选择最接近的默认 suite。
 
-Authoring decision 使用 `neko.agent-eval.authoring-decision.v2`，并包含：
+Authoring decision 使用 `neko.agent-eval.authoring-decision`，并包含：
 
 - `behaviorId` 与 target；
 - `decision` 以及既有或拟建 suite id；
@@ -39,10 +39,9 @@ package id、semver、发布或安装状态替代。
 
 1. 用户能观察到什么行为？
 2. 哪条 canonical runtime path 必须执行？
-3. 哪些 legacy、默认值、替代 Skill/Tool/model 或 fallback 禁止参与？
-4. 哪些 runtime facts、post-check、artifact validator 或 output contract 能证明路径？
-5. 成功结果是什么？
-6. 失败时应如何 fail-visible？
+3. 哪些 runtime facts、post-check、artifact validator 或 output contract 能证明路径？
+4. 成功结果是什么？
+5. 失败时应如何 fail-visible？
 
 至少一个 observable 必须是 required。仅有最终回答文本、退出码、Judge 分数或
 人工判断不构成 path evidence。需要的 facts 或公开 validator 不存在时，case 状态是
@@ -74,7 +73,7 @@ assertion refs，再交给通用 workflow interpreter。内部 resolved case 不
 | 输入规范        | 空值、边界、歧义、locale、多轮顺序、非法配置是否明确处理                       | schema、diagnostic、workflow trace   |
 | 输出规范        | 格式、字段、表格、引用、locale、禁止字段是否满足                               | structured-output hard gate          |
 | Skill 激活      | 正向、改写、邻近负向请求是否触发正确 Host identity                             | Skill trigger/injection facts        |
-| Tool/capability | 正确 Tool、参数/结果状态、错误路径、无 fallback                                | Tool facts、no-fallback              |
+| Tool/capability | 正确 Tool、参数/结果状态和错误路径                                             | Tool facts                            |
 | 模型与开关      | requested profile 是否等于 effective provider/model/runtime config             | configuration digest、model facts    |
 | 流程进度        | queue、turn、Tool、continuation、cancel/resume/recovery 是否有序并最终 idle    | workflow/process assertions          |
 | 产物规范        | 稳定 identity、格式、digest/revision、provenance、delivery、validator 是否成立 | artifact facts、contained post-check |
@@ -98,7 +97,7 @@ runtime 添加测试专用开关。需要移除某个内部实现的消融实验
 
 ### Ablation authoring
 
-Ablation plan 使用严格 `neko.agent-eval.ablation-plan.v1`，默认只允许一个 baseline
+Ablation plan 使用严格 `neko.agent-eval.ablation-plan`，默认只允许一个 baseline
 和单维 variants，最多 20 个 variant。多维 interaction 必须附证据；未知字段、笛卡尔积、
 `__ablation`/eval-only flag、缺失 expected config/build identity 会在启动 Desktop driver 前失败。
 
@@ -145,14 +144,14 @@ Tool/retry 和适用的真实输出内容 quality，不得用效率收益覆盖 
 
 ## 5. Suite 与 Scenario v2
 
-`suite.json` 声明 owner、target identity/hash、repository revision、runtime/model
+`suite.json` 声明 owner、target identity/hash、runtime/model
 profiles、Judge profiles、isolated fixtures、case index、rubric refs、baseline policy
 和 report policy。Skill suites 位于 `suites/skills/<skill-id>/`；其他 Prompt、
 Capability、Tool、Model、Runtime、Workflow suites 位于
 `suites/agent-runtime/<owner>/`。新增 suite 后必须同步对应严格 index 和
 `coverage-index.json`。
 
-每个 case 文件使用 `neko.agent-eval.scenario.v2`，并声明：
+每个 case 文件使用 `neko.agent-eval.scenario`，并声明：
 
 - suite/case id、case group 与 public/holdout visibility；
 - evidence contract；
@@ -171,10 +170,10 @@ Desktop Agent input queue，不能直接注入 Agent turn 或 history。当前�
 evidence adapter 时同样不得添加 per-case adapter 绕过。
 
 当前 hard gates 覆盖 runtime error、fully idle、canonical turn、final answer、
-Skill identity/status、prompt composition、Markdown path、model/no-fallback、Tool call、
+Skill identity/status、prompt composition、Markdown path、model、Tool call、
 process order、queue state、cancellation、recovery、retry、terminal
 concerns、Timeline、脱敏 resource display projection、structured output、artifact 和
-forbidden refs。`resource-display-projection` 只接受 locator kind、授权状态和
+current path refs。`resource-display-projection` 只接受 locator kind、授权状态和
 `openneko-resource`/`none` transport 分类；fact 出现 URL、token、路径或未知字段时必须失败。
 新增 assertion kind 前必须先
 实现 evaluator 与 key-free 失败测试；metadata-only 字段会被 strict validation 拒绝。
@@ -193,7 +192,7 @@ QualityEvidence 与 hard-gate result；不得读取 hidden prompt、credential�
 
 报告必须记录 Judge provider/model/profile、rubric/version、prompt hash、sampling、
 evidence refs、评分理由与 uncertainty。Judge 不可用或响应非法属于 infrastructure
-failure；高分不能覆盖 path、权限、schema、任务终态、产物或 no-fallback 失败。
+failure；高分不能覆盖 path、权限、schema、任务终态或产物失败。
 
 重复采样保留全部 sample，并汇总 pass rate、hard gates、score distribution/variance、
 token、cost availability、mean/p50/p95 latency、iterations、Tool calls/success 和 retries。
@@ -228,6 +227,29 @@ Agent-runtime suites：
 case 也必须记录排除原因，不能假装已迁移。
 
 ## 8. 渐进验证与报告判读
+
+### 8.1 真实 API 双 lane 与基础矩阵
+
+单功能验收使用可见 Electron UI + 真实 API：必须从实际 composer、PrimarySidebar、审批或领域
+控件发起，验证消息、终态、导航/Scene identity 和错误展示。不得通过 automation bridge 直接创建
+目标会话或写入成功 fixture。
+
+批量回归使用无可见 UI 的完整 Desktop session + 真实 API：继续走公开 Agent input path、生产
+provider/model 配置、Pi Session、SQLite 和 projection；不得切换成 direct turn runner、mock provider
+或第二套 session assembly。
+
+基础矩阵如下；测试 artifact 应为每项记录 case、lane、provider/model、identity、terminal state、
+canonical evidence 和结果：
+
+1. 基础对话：首轮和多轮回复可见，turn terminal，composer 恢复可用；
+2. 上下文压缩：压缩命中 canonical compaction，conversation identity 不变，压缩后可继续对话；
+3. 重开恢复：销毁并重建 owner/应用后，transcript 顺序、内容和 continuation 正常；
+4. 生成记录：生成 Tool、Job、进度、终态、artifact identity 在恢复后仍正常投影；
+5. 会话切换：两个以上会话切换时只展示目标 transcript、运行态与 owner-qualified Scene；
+6. 会话隔离：交错提交时 transcript、queue、配置、context、artifact、取消和异步终态不串线。
+
+受影响开发可运行矩阵子集，但必须记录其余项为何不受影响或尚未执行；AgentSession、持久化、
+projection 或发布验收不得以单一 happy-path case 代替整套适用矩阵。
 
 先运行 key-free 全量 harness：
 

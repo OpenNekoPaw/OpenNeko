@@ -1,5 +1,4 @@
 import {
-  PROJECT_QUALITY_CONTRACT_VERSION,
   validateProjectQualityResult,
   type ProjectQualityFacade,
   type ProjectQualityRequest,
@@ -7,7 +6,6 @@ import {
 } from './project-quality-contract';
 import { type ContentLocator } from '@neko/content';
 import {
-  MEDIA_QUALITY_CONTRACT_VERSION,
   type QualityDiagnostic,
   type QualityEvidence,
   type QualityEvaluatorClass,
@@ -46,7 +44,6 @@ export async function collectProjectQualityEvidence(
   const now = options.now ?? (() => new Date().toISOString());
   const createId = options.createId ?? ((prefix) => `${prefix}-${crypto.randomUUID()}`);
   const request: ProjectQualityRequest = {
-    version: PROJECT_QUALITY_CONTRACT_VERSION,
     requestId: createId('project-quality-request'),
     project,
     target,
@@ -118,11 +115,9 @@ function createEvidence(
   metric: QualityEvidence['metrics'][number],
 ): QualityEvidence {
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
     evidenceId: createId('project-quality-evidence'),
     evaluator: {
       id: `owning-project-quality/${target.projectRef?.domain ?? 'unknown'}/${evaluatorClass}`,
-      version: String(PROJECT_QUALITY_CONTRACT_VERSION),
       evaluatorClass,
     },
     target,

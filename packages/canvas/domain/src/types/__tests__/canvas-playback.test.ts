@@ -70,14 +70,13 @@ function connection(
 }
 
 function canvas(nodes: CanvasNode[], connections: CanvasConnection[] = []): CanvasData {
-  return { version: '3.0', name: 'Playback', nodes, connections };
+  return { name: 'Playback', nodes, connections };
 }
 
 describe('canonical Canvas playback', () => {
   it('normalizes generic metadata and ignores unknown adapter values', () => {
     const data = canvas([markdown('a')]);
     data.playback = {
-      version: 1,
       adapterId: 'generic',
       mode: 'linear',
       entryIds: ['a'],
@@ -93,7 +92,6 @@ describe('canonical Canvas playback', () => {
     const nodes = [container, markdown('a', 'group'), media('b', 'group')];
     const data = canvas(nodes);
     data.playback = {
-      version: 1,
       nodeOverrides: { a: { order: 0 } },
       edgeOverrides: { second: { order: 0 } },
     };
@@ -283,7 +281,6 @@ describe('canonical Canvas playback', () => {
         zIndex: 1,
         data: {
           jobRef: { kind: 'generation', jobId: 'job' },
-          revision: 1,
           title: 'Job',
           status: 'draft',
           inputRefs: [],

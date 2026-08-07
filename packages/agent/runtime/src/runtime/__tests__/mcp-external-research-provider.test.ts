@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMcpExternalResearchProvider } from '../capability/mcp-external-research-provider';
 
 const searchEnvelope = JSON.stringify({
-  schema: 'neko.externalResearch.search.v1',
+  schema: 'neko.externalResearch.search',
   result: {
     sources: [
       {
@@ -16,7 +16,7 @@ const searchEnvelope = JSON.stringify({
 });
 
 const fetchEnvelope = JSON.stringify({
-  schema: 'neko.externalResearch.fetch.v1',
+  schema: 'neko.externalResearch.fetch',
   result: {
     url: 'https://example.com/source',
     finalUrl: 'https://example.com/source',
@@ -36,13 +36,13 @@ function createConfig() {
       maxResultsArg: 'limit',
       allowedDomainsArg: 'allowed',
       blockedDomainsArg: 'blocked',
-      outputSchema: 'neko.externalResearch.search.v1' as const,
+      outputSchema: 'neko.externalResearch.search' as const,
     },
     fetchTool: {
       name: 'fetch_url',
       urlArg: 'target',
       maxContentTokensArg: 'max_tokens',
-      outputSchema: 'neko.externalResearch.fetch.v1' as const,
+      outputSchema: 'neko.externalResearch.fetch' as const,
     },
   };
 }
@@ -144,7 +144,7 @@ describe('createMcpExternalResearchProvider', () => {
     await expect(
       provider.search({ query: 'x', mode: 'indexed', maxResults: 1 }, new AbortController().signal),
     ).rejects.toThrow(
-      'MCP external research output must be a neko.externalResearch.search.v1 object.',
+      'MCP external research output must be a neko.externalResearch.search object.',
     );
   });
 
@@ -155,7 +155,7 @@ describe('createMcpExternalResearchProvider', () => {
         callTool: vi.fn(async () => ({
           success: true,
           data: JSON.stringify({
-            schema: 'neko.externalResearch.search.v1',
+            schema: 'neko.externalResearch.search',
             result: { sources: [{ title: 'Missing URL' }] },
           }),
         })),

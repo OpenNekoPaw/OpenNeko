@@ -1,13 +1,12 @@
 export * from './contracts';
 export * from './model';
 export * from './repositories';
-export * from './revision-cursor';
 export * from './resource-cache-manifest-store';
 export * from './resource-cache-contract';
 export * from './maintenance-report';
-export * from './migration-planner';
 export * from './user-diagnostic';
 export * from './secret-boundary';
 export * from './storage';
-export * from './versioned-json-state-repository';
-export * from './desktop-state-migration';
+export * from './table-initialization';
+export * from './json-state-repository';
+export { initializeAssetLibraryMembershipTables } from './sqlite/asset-library-membership-schema';

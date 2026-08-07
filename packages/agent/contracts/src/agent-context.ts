@@ -9,11 +9,9 @@ import {
   type CreativeEntityKind,
 } from '@neko/entity-domain';
 
-export const AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION = 1 as const;
 export const AGENT_RESOLVED_ENTITY_CONTEXT_KIND = 'resolved-entity-context' as const;
 
 export interface AgentResolvedEntityContextData {
-  readonly schemaVersion: typeof AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION;
   readonly kind: typeof AGENT_RESOLVED_ENTITY_CONTEXT_KIND;
   readonly entityRef: {
     readonly entityId: string;
@@ -30,7 +28,8 @@ export function isAgentResolvedEntityContextData(
   const entity = value['entity'];
   if (!isRecord(entityRef) || !isCreativeEntity(entity)) return false;
   return (
-    value['schemaVersion'] === AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION &&
+    hasOnlyFields(value, new Set(['kind', 'entityRef', 'entity'])) &&
+    hasOnlyFields(entityRef, new Set(['entityId', 'entityKind'])) &&
     value['kind'] === AGENT_RESOLVED_ENTITY_CONTEXT_KIND &&
     typeof entityRef['entityId'] === 'string' &&
     entityRef['entityId'].length > 0 &&
@@ -109,4 +108,11 @@ export interface CanvasAmbientContext {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

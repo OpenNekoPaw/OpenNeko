@@ -36,15 +36,15 @@ VS Code 或其他 Host 而改变。一级 `packages/*` 按领域和运行时边�
 
 对当时全部 28 个 package 的 manifest、exports、消费者、运行环境和源码职责审计确认了以下系统性漂移：
 
-| 当前区域                                | 证据                                                                                                                  | 目标判断                                                                |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 当前区域                           | 证据                                                                                                                  | 目标判断                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `@neko/shared` (`packages/shared`) | 约 7.8 万行生产源码；同时包含领域 types、local metadata、React components、Node IO 和 config；23 个 package consumer  | 收缩为最小跨领域基础层；领域、React、Node 和 config 职责按 owner 迁出   |
-| `@neko/platform`                        | 约 1.6 万行；混合 Agent config、AI provider、Generation media lifecycle 和 files；只有 Desktop consumer               | 完全解体，不保留新的 Platform facade                                    |
-| `neko-assets`                           | contract/controller/service/React root 同包且 Main/Renderer 共同消费                                                  | 拆分 Assets domain/application、Node adapter 和 Webview                 |
-| Agent family                            | runtime 为 `@neko/agent-runtime`，contracts 为 `@neko/agent-contracts`，Webview/test-utils 使用另一 scope；多个 `./*` | 保留真实 runtime split，统一 family 名称并把 `types` 收敛为 contracts   |
-| Cut/Preview family                      | Cut Webview 名为通用 `@neko/cut-webview`；Preview contracts 与 Webview scope 不一致                                   | 保持运行环境分离，统一 domain family identity                           |
-| Tools family                            | contracts 只有 dormant Webview consumer；Webview 无 exports、无产品 consumer                                          | 由 Tools OpenSpec 接通 domain/node/webview 全路径，否则保持未激活或退役 |
-| package gates                           | 默认 `check:deps` 只列出部分 source roots；若手工巡检全部 `packages` 当前无 cycle/规则违规                            | 门禁必须从 workspace 自动发现全部 package，不能依赖手写闭集             |
+| `@neko/platform`                   | 约 1.6 万行；混合 Agent config、AI provider、Generation media lifecycle 和 files；只有 Desktop consumer               | 完全解体，不保留新的 Platform facade                                    |
+| `neko-assets`                      | contract/controller/service/React root 同包且 Main/Renderer 共同消费                                                  | 拆分 Assets domain/application、Node adapter 和 Webview                 |
+| Agent family                       | runtime 为 `@neko/agent-runtime`，contracts 为 `@neko/agent-contracts`，Webview/test-utils 使用另一 scope；多个 `./*` | 保留真实 runtime split，统一 family 名称并把 `types` 收敛为 contracts   |
+| Cut/Preview family                 | Cut Webview 名为通用 `@neko/cut-webview`；Preview contracts 与 Webview scope 不一致                                   | 保持运行环境分离，统一 domain family identity                           |
+| Tools family                       | contracts 只有 dormant Webview consumer；Webview 无 exports、无产品 consumer                                          | 由 Tools OpenSpec 接通 domain/node/webview 全路径，否则保持未激活或退役 |
+| package gates                      | 默认 `check:deps` 只列出部分 source roots；若手工巡检全部 `packages` 当前无 cycle/规则违规                            | 门禁必须从 workspace 自动发现全部 package，不能依赖手写闭集             |
 
 运行环境隔离本身已有有效基础：全量 dependency-cruiser 对 1,504 个模块和 4,503 条依赖未发现 cycle，
 Webview boundary 检查覆盖六个 browser root 且通过。问题主要是 package ownership、命名、exports 和
@@ -131,7 +131,7 @@ ownership 和依赖方向，不等同于发布给第三方的通用库。
 | `application` / `runtime` | use case、session/job 生命周期、业务事务、consumer/provider ports         | 只有依赖或生命周期明显区别于 domain 时才独立 package，否则使用显式 subpath |
 | `node`                    | Node/FFmpeg/SQLite/文件/外部进程的 concrete adapter                       | browser/domain consumer 不能安全继承其依赖闭包时必须独立                   |
 | `webview`                 | React/DOM、交互、可恢复 presentation state、typed Host port consumer      | 与 Main/Node/domain 物理隔离，生产源码禁止 Node/Electron                   |
-| `testing`                 | 跨 package fixture、harness、poison path、contract test kit               | 至少两个真实外部测试 consumer；否则留在 owning package `./testing`         |
+| `testing`                 | 跨 package fixture、harness、removed-path assertion、contract test kit    | 至少两个真实外部测试 consumer；否则留在 owning package `./testing`         |
 | content package           | Skill、模板、静态资源和 package metadata                                  | 无 TypeScript runtime；由打包/资源 owner 显式消费                          |
 
 `types` 不再作为新增 package role；类型必须属于 contracts、domain、application 或 adapter 的语义
@@ -160,7 +160,7 @@ owner。`contracts` 可以包含纯 codec/validator，但不得包含状态、�
 | Cut family                             | 保留 domain/node/webview，只修正 `@neko/cut-webview` identity 并收紧 exports                                                                                                          |
 | Assets family                          | 建立 domain/application、node、webview 三个 dependency closure，Desktop 只保留 native selection/trash/path authorization adapter                                                      |
 | Preview family                         | 将现有 contracts 中的 MIME、staging 和状态策略识别为 domain；保留 browser Webview，Node 内容解析按真实依赖建立 entry/package                                                          |
-| Tools family                           | 当前产品路径已退役且不保留空 package；未来只有新 OpenSpec 建立真实 owner/producer/consumer/Electron 路径后才能重新引入                                                             |
+| Tools family                           | 当前产品路径已退役且不保留空 package；未来只有新 OpenSpec 建立真实 owner/producer/consumer/Electron 路径后才能重新引入                                                                |
 | Media                                  | 保留单 package 的 root contract + `./node` + `./browser` 模式；规模小、无 feature dependency，不为形式拆包                                                                            |
 | Content                                | 保留一个 owner，但用显式 core/document/node entries 隔离 Node reader，删除 wildcard export                                                                                            |
 | Entity/Generation/Chara/Search/Quality | 同依赖闭包的 core/application/provider 继续用单 package 显式 subpath；无 Desktop consumer 的包标记 retained kernel，不创建空 node/webview package                                     |
@@ -183,8 +183,8 @@ Desktop IPC / native event
 ```
 
 contract、业务测试和 application service 先落到 owning package；Desktop adapter 只实现 Electron 或
-本地产品绑定。迁移必须一次性切换本次边界内调用方，并删除、poison 或 fail-closed 隔离旧 app-owned
-path。禁止 compatibility shim、双写、fallback 或 adapter 套 adapter 长期维持两份事实来源。
+本地产品绑定。迁移必须一次性切换本次边界内调用方，并删除旧 app-owned path，以 import、export 和
+registration absence 证明其不可达。禁止 compatibility shim、双写、fallback 或 adapter 套 adapter 长期维持两份事实来源。
 
 ### 6. Public entry 是依赖边界的一部分
 
@@ -211,9 +211,9 @@ OpenSpec 中记录 owner、阻塞和迁移任务，且不得继续扩大 app-own
 门禁还需要维护 Application root 的允许职责/例外清单，识别新增 host-neutral service、领域 contract
 副本和业务状态 owner。自动静态检查不能替代语义审计，因此 PR/OpenSpec 必须给出五层分析。
 
-迁移验收既断言 package-owned service 的业务结果，也断言 Desktop adapter 命中该 public port；将旧
-app path poison 成抛错，证明 canonical path 没有 fallback。涉及 IPC、窗口或用户路径时继续运行真实
-Electron 验收。
+迁移验收既断言 package-owned service 的业务结果，也断言 Desktop adapter 命中该 public port；通过
+import、export、registration 和 path-spy 断言证明旧 app path 不存在且 canonical path 没有 fallback。
+涉及 IPC、窗口或用户路径时继续运行真实 Electron 验收。
 
 dependency-cruiser、strict tsconfig、Webview、application、exports 和 unused dependency 检查必须从
 workspace/package manifests 自动发现目标，不能维护遗漏新 package 的手写 source-root 列表。门禁还要
@@ -242,7 +242,7 @@ no-fallback gate；本变更不复制其 case、provider、codec 或 UI 任务�
   mapping 和 gate；按 dependency 顺序协调，不建立临时 facade。
 - **[把 Electron IO 与业务事务一起机械移动]** → 先拆 contract 和 port；Electron 授权、sender 和
   native handle 留在 app，host-neutral transaction 下沉。
-- **[迁移期间出现双路径]** → 每批定义唯一 canonical path，旧路径 poison/delete，不保留成功 fallback。
+- **[迁移期间出现双路径]** → 每批定义唯一 canonical path，删除旧路径并断言其不可达，不保留成功 fallback。
 - **[现有活跃变更继续修改候选文件]** → 触碰即审计并把 owner 决策写入对应 OpenSpec，避免大爆炸迁移。
 - **[用户本地数据受影响]** → persistence schema、settings、workspace 和 credential 迁移必须单独定义
   迁移/重建/保留策略；本治理变更不直接移动数据。
@@ -254,8 +254,8 @@ no-fallback gate；本变更不复制其 case、provider、codec 或 UI 任务�
    owner inventory。
 3. 先建立目标 package entry 和 contract，把无 Electron import、依赖闭包清晰的低风险 service 按
    domain slice 迁出 Desktop/Shared/Platform。
-4. 按顺序完成 Generation/Agent config、Canvas/Assets、Preview/Tools 等 family；每批切换全部调用方并
-   poison/delete 旧 path，不保留成功 fallback。
+4. 按顺序完成 Generation/Agent config、Canvas/Assets、Preview/Tools 等 family；每批切换全部调用方、
+   删除旧 path 并断言其不可达，不保留成功 fallback。
 5. 在各 family ownership 稳定后统一 package/目录名称、显式 exports、Vite aliases、workspace
    manifests、quality ownership 和 lockfile。
 6. 删除 `@neko/platform`、Shared legacy UI/feature exports、无消费者 test-utils 和临时 gate exception。

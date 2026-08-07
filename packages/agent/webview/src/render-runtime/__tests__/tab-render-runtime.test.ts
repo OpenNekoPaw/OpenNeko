@@ -20,7 +20,7 @@ describe('TabRenderRuntime', () => {
       selectedModel: 'model-a',
       generationParams: { ...state.generationParams, resolution: '4K' },
       composition: { isComposing: true },
-      focus: { target: 'input', requestRevision: state.focus.requestRevision + 1 },
+      focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
       menus: { ...state.menus, entryPrompt: 'generate-assets' },
       diagnostics: [diagnostic],
@@ -31,7 +31,7 @@ describe('TabRenderRuntime', () => {
       selectedModel: 'model-a',
       generationParams: { resolution: '4K' },
       composition: { isComposing: true },
-      focus: { target: 'input', requestRevision: 1 },
+      focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
       menus: { entryPrompt: 'generate-assets' },
     });
@@ -40,7 +40,7 @@ describe('TabRenderRuntime', () => {
       attachedFiles: [],
       selectedModel: '',
       composition: { isComposing: false },
-      focus: { target: 'none', requestRevision: 0 },
+      focus: { target: 'none' },
       viewport: { followMode: 'follow-tail' },
       menus: {
         entryPrompt: null,
@@ -68,7 +68,6 @@ describe('TabRenderRuntime', () => {
     expect(runtime.store.getRetentionSnapshot()).toEqual({
       isComposing: false,
       hasDirtyInput: false,
-      revision: 0,
     });
 
     runtime.store.updateState({ selectedModel: 'model-a' });
@@ -80,7 +79,6 @@ describe('TabRenderRuntime', () => {
     expect(runtime.store.getRetentionSnapshot()).toEqual({
       isComposing: true,
       hasDirtyInput: true,
-      revision: 2,
     });
 
     runtime.store.updateState({ inputValue: '', composition: { isComposing: false } });
@@ -88,7 +86,6 @@ describe('TabRenderRuntime', () => {
     expect(runtime.store.getRetentionSnapshot()).toEqual({
       isComposing: false,
       hasDirtyInput: false,
-      revision: 3,
     });
   });
 
@@ -106,13 +103,11 @@ describe('TabRenderRuntime', () => {
       tabId: 'tab-a',
       conversationId: 'conv-a',
       visibility: 'visible',
-      revision: 1,
     });
     expect(runtimeB.store.getSnapshot()).toMatchObject({
       tabId: 'tab-b',
       conversationId: 'conv-b',
       visibility: 'hidden',
-      revision: 0,
     });
   });
 
@@ -121,13 +116,13 @@ describe('TabRenderRuntime', () => {
     const listener = vi.fn();
     runtime.subscribeRetention(listener);
 
-    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching', revision: 0 });
+    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching' });
     runtime.markReady();
     runtime.detach();
     runtime.beginAttach();
 
     expect(listener).toHaveBeenCalledTimes(3);
-    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching', revision: 3 });
+    expect(runtime.getRetentionSnapshot()).toMatchObject({ lifecycle: 'attaching' });
   });
 
   it('fails visibly for invalid lifecycle transitions and disposed store mutation', () => {
@@ -196,7 +191,7 @@ describe('TabRenderRuntimeRegistry', () => {
       selectedModel: 'model-a',
       generationParams: { ...state.generationParams, resolution: '4K' },
       composition: { isComposing: true },
-      focus: { target: 'input', requestRevision: 3 },
+      focus: { target: 'input', requestId: 'focus-a' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-a', anchorOffset: 12 },
     }));
     runtimeB.store.updateState((state) => ({
@@ -204,7 +199,7 @@ describe('TabRenderRuntimeRegistry', () => {
       attachedFiles: [{ id: 'asset-b', name: 'b.wav', type: 'audio', data: 'data-b' }],
       selectedModel: 'model-b',
       generationParams: { ...state.generationParams, resolution: '1080p' },
-      focus: { target: 'input', requestRevision: 7 },
+      focus: { target: 'input', requestId: 'focus-b' },
       viewport: { followMode: 'detached', anchorMessageId: 'message-b', anchorOffset: 24 },
     }));
     runtimeC.store.updateState({
@@ -313,13 +308,11 @@ describe('TabRenderRuntimeRegistry', () => {
     const messagesA: unknown[] = [];
     const messagesB: unknown[] = [];
     runtimeA.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: (message) => messagesA.push(message),
       reportError: vi.fn(),
     });
     runtimeB.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-b',
       send: (message) => messagesB.push(message),
       reportError: vi.fn(),
@@ -328,16 +321,13 @@ describe('TabRenderRuntimeRegistry', () => {
     runtimeA.acceptProjectionFrame({
       type: 'projectionSnapshot',
       key: {
-        endpointEpoch: 'endpoint-1',
         attachmentId: 'attachment-a',
         tabId: 'tab-a',
         conversationId: 'conversation-shared',
       },
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -352,19 +342,14 @@ describe('TabRenderRuntimeRegistry', () => {
     runtimeA.acceptProjectionFrame({
       type: 'projectionPatch',
       key: {
-        endpointEpoch: 'endpoint-1',
         attachmentId: 'attachment-a',
         tabId: 'tab-a',
         conversationId: 'conversation-shared',
       },
       sequence: 1,
-      baseProjectionVersion: 0,
-      projectionVersion: 1,
       patch: {
         type: 'conversationProjectionPatch',
         conversationId: 'conversation-shared',
-        baseProjectionVersion: 0,
-        projectionVersion: 1,
         turnId: 'turn-1',
 
         runId: 'run-a',
@@ -380,7 +365,7 @@ describe('TabRenderRuntimeRegistry', () => {
     });
     expect(runtimeA.projectionReplica).not.toBe(runtimeB.projectionReplica);
     expect(runtimeA.markdownSessions).not.toBe(runtimeB.markdownSessions);
-    expect(runtimeA.projectionReplica.getSnapshot().projection?.projectionVersion).toBe(1);
+    expect(runtimeA.projectionReplica.getSnapshot().projection?.turns).toHaveLength(1);
     expect(runtimeB.projectionReplica.getSnapshot().projection).toBeNull();
     expect(runtimeA.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial update');
     expect(runtimeB.markdownSessions.getSnapshot(markdownKey)).toBeUndefined();
@@ -402,25 +387,21 @@ describe('TabRenderRuntimeRegistry', () => {
     const markdownA = runtimeA.markdownSessions;
     const markdownB = runtimeB.markdownSessions;
     const keyA = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       tabId: 'tab-a',
       conversationId: 'conversation-shared',
     } as const;
     const keyB = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-b',
       tabId: 'tab-b',
       conversationId: 'conversation-shared',
     } as const;
     runtimeA.attachProjection({
-      endpointEpoch: keyA.endpointEpoch,
       attachmentId: keyA.attachmentId,
       send: vi.fn(),
       reportError: vi.fn(),
     });
     runtimeB.attachProjection({
-      endpointEpoch: keyB.endpointEpoch,
       attachmentId: keyB.attachmentId,
       send: vi.fn(),
       reportError: vi.fn(),
@@ -429,10 +410,8 @@ describe('TabRenderRuntimeRegistry', () => {
       type: 'projectionSnapshot',
       key: keyA,
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -447,10 +426,8 @@ describe('TabRenderRuntimeRegistry', () => {
       type: 'projectionSnapshot',
       key: keyB,
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -462,8 +439,8 @@ describe('TabRenderRuntimeRegistry', () => {
       },
     });
 
-    for (let revision = 1; revision <= 20; revision += 1) {
-      registry.reconcile(bindings, revision % 2 === 0 ? 'tab-b' : 'tab-a');
+    for (let updateIndex = 1; updateIndex <= 20; updateIndex += 1) {
+      registry.reconcile(bindings, updateIndex % 2 === 0 ? 'tab-b' : 'tab-a');
       for (const [runtime, key, prefix] of [
         [runtimeA, keyA, 'A'],
         [runtimeB, keyB, 'B'],
@@ -471,14 +448,10 @@ describe('TabRenderRuntimeRegistry', () => {
         runtime.acceptProjectionFrame({
           type: 'projectionPatch',
           key,
-          sequence: revision,
-          baseProjectionVersion: revision - 1,
-          projectionVersion: revision,
+          sequence: updateIndex,
           patch: {
             type: 'conversationProjectionPatch',
             conversationId: 'conversation-shared',
-            baseProjectionVersion: revision - 1,
-            projectionVersion: revision,
             turnId: 'turn-1',
 
             runId: 'run-a',
@@ -486,7 +459,7 @@ describe('TabRenderRuntimeRegistry', () => {
             operations: [
               {
                 operation: 'append',
-                item: projectionTextItem(` ${prefix}${revision}`, revision + 1),
+                item: projectionTextItem(` ${prefix}${updateIndex}`, updateIndex + 1),
               },
             ],
           },
@@ -522,13 +495,11 @@ describe('TabRenderRuntimeRegistry', () => {
     });
     const reportError = vi.fn();
     runtime.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: vi.fn(),
       reportError,
     });
     const key = {
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       tabId: 'tab-a',
       conversationId: 'conversation-shared',
@@ -537,10 +508,8 @@ describe('TabRenderRuntimeRegistry', () => {
       type: 'projectionSnapshot',
       key,
       sequence: 0,
-      projectionVersion: 0,
       projection: {
         conversationId: 'conversation-shared',
-        projectionVersion: 0,
         turns: [
           {
             turnId: 'turn-1',
@@ -563,13 +532,9 @@ describe('TabRenderRuntimeRegistry', () => {
         type: 'projectionPatch',
         key,
         sequence: 1,
-        baseProjectionVersion: 0,
-        projectionVersion: 1,
         patch: {
           type: 'conversationProjectionPatch',
           conversationId: 'conversation-shared',
-          baseProjectionVersion: 0,
-          projectionVersion: 1,
           turnId: 'turn-1',
 
           runId: 'run-a',
@@ -588,7 +553,9 @@ describe('TabRenderRuntimeRegistry', () => {
     ).toThrow(/rejected its live patch/);
 
     expect(runtime.markdownSessions.getSnapshot(markdownKey)?.source).toBe('initial');
-    expect(runtime.projectionReplica.getSnapshot().projection?.projectionVersion).toBe(0);
+    expect(runtime.projectionReplica.getSnapshot().projection?.turns[0]?.items[0]).toMatchObject({
+      payload: { content: 'initial' },
+    });
     expect(runtime.projectionAttachment?.getSnapshot().phase).toBe('fatal');
     expect(reportError).toHaveBeenCalledOnce();
   });
@@ -606,7 +573,6 @@ describe('TabRenderRuntimeRegistry', () => {
     const runtimeB = registry.require('tab-b');
     const messagesA: unknown[] = [];
     runtimeA.attachProjection({
-      endpointEpoch: 'endpoint-1',
       attachmentId: 'attachment-a',
       send: (message) => messagesA.push(message),
       reportError: vi.fn(),
@@ -621,7 +587,7 @@ describe('TabRenderRuntimeRegistry', () => {
   });
 });
 
-function projectionTextItem(content: string, itemRevision: number) {
+function projectionTextItem(content: string, updatedAt: number) {
   return {
     conversationId: 'conversation-shared',
     turnId: 'turn-1',
@@ -630,11 +596,10 @@ function projectionTextItem(content: string, itemRevision: number) {
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,
-    itemRevision,
     kind: 'assistant_text' as const,
     status: 'streaming' as const,
-    payload: { content, format: 'markdown' as const, sourceGeneration: 1 },
+    payload: { content, format: 'markdown' as const },
     createdAt: 1,
-    updatedAt: itemRevision,
+    updatedAt,
   };
 }

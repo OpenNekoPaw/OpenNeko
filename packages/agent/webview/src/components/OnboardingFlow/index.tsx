@@ -1,14 +1,14 @@
 /**
  * OnboardingFlow — full-screen overlay for first-time AI service setup.
  *
- * Opens the local user config file where providers and API keys are configured.
+ * Opens the local user config file where provider and model definitions are configured.
  *
  * Closes when onComplete() is called or when isAiConfigured becomes true (auto-dismiss
  * handled by the parent via onComplete).
  */
 import { useState } from 'react';
 import { useTranslation } from '../../i18n/I18nContext';
-import { AgentHostMessages } from '../../messages';
+import { useAgentHostMessages } from '../../host-runtime-context';
 
 type Step = 'choose' | 'fileOpened';
 
@@ -17,11 +17,12 @@ interface OnboardingFlowProps {
 }
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('choose');
 
   const handleOpenConfigFile = () => {
-    AgentHostMessages.openUserConfigFile();
+    agentHostMessages.openUserConfigFile();
     setStep('fileOpened');
   };
 

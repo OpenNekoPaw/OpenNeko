@@ -16,12 +16,12 @@ const VISIBLE_CAPABILITY_TAGS_BY_CATEGORY = {
     ['streaming', ['streaming']],
   ],
   image: [
-    ['text_to_image', ['text_to_image', 'image.generate', 'image_generation']],
+    ['text_to_image', ['text_to_image', 'image.generate']],
     ['image_to_image', ['image_to_image', 'image.edit']],
     ['image_edit', ['image_edit']],
   ],
   video: [
-    ['text_to_video', ['text_to_video', 'video.generate', 'video_generation']],
+    ['text_to_video', ['text_to_video', 'video.generate']],
     ['image_to_video', ['image_to_video']],
     ['video_to_video', ['video_to_video']],
     ['video_edit', ['video_edit']],

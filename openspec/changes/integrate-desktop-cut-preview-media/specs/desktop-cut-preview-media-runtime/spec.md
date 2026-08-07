@@ -2,8 +2,8 @@
 
 ### Requirement: Cut Root consumes one injected owning runtime
 
-The system MUST render the complete package-owned Cut Root through a versioned, browser-safe runtime
-whose identity includes Project, Workspace, Window, View epoch, document, session and endpoint epoch.
+The system MUST render the complete package-owned Cut Root through one canonical browser-safe runtime
+whose identity includes Project, Workspace, Window, View instance, document, session and request.
 The Cut Stage and Timeline MUST consume the same document/session projection and MUST NOT use a
 global VS Code API, fixed demo timeline or renderer-owned OTIO store.
 
@@ -60,10 +60,23 @@ Canvas-node or Cut-clip embedded previews.
 - **THEN** Preview returns an explicit unsupported diagnostic
 - **AND** it does not open the raw file through a renderer fallback
 
+### Requirement: EPUB waterfall preview loads chapters incrementally
+
+The EPUB waterfall viewer SHALL render stable estimated placeholders and SHALL load/measure only visible chapters
+plus a bounded neighboring prefetch range. It SHALL NOT perform an all-spine background measurement during initial
+preview.
+
+#### Scenario: A large EPUB first opens
+
+- **WHEN** the spine contains many chapters and only the first viewport is visible
+- **THEN** initial readiness does not render or measure every chapter
+- **AND** scrolling loads newly visible chapters and releases chapters outside the retention range
+- **AND** the UI remains responsive while page metrics refine incrementally
+
 ### Requirement: Media transport is opaque, scoped and releasable
 
 The system MUST resolve thumbnails and preview media through Host-authorized descriptors scoped to
-the real WebContents, Window/View/document session, endpoint epoch and content revision. Renderer
+the real WebContents, Window/View/document session, exact request identity and source content fingerprint. Renderer
 payloads MUST retain the source ContentLocator and MAY contain only the short-lived
 `openneko://resource` URL issued by the Desktop exact-resource registry. They MUST NOT contain absolute
 paths, `file://` URLs, arbitrary localhost URLs, cache paths, private media schemes, Engine/client

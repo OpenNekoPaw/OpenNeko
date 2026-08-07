@@ -16,6 +16,17 @@ const translations: Record<string, string> = {
   'chat.emptyState.desktopDockTitle': 'Hi, create with chat',
   'chat.emptyState.desktopDockDescription': 'Describe an idea or mention a resource.',
   'chat.emptyState.desktopDockSkills': 'Try a Skill',
+  'chat.emptyState.scope.title': 'Choose a creative space',
+  'chat.emptyState.scope.description': 'Choose an owner.',
+  'chat.emptyState.scope.assistant': 'Assistant',
+  'chat.emptyState.scope.assistantHelper': 'Assistant helper',
+  'chat.emptyState.scope.workspace': 'Workspace',
+  'chat.emptyState.scope.workspaceHelper': 'Workspace helper',
+  'chat.emptyState.scope.characterRoom': 'Character / Room',
+  'chat.emptyState.scope.characterRoomHelper': 'Character helper',
+  'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
+  'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+  'chat.emptyState.scope.activeDescription': 'Start a conversation.',
 };
 
 vi.mock('../../i18n/I18nContext', () => ({
@@ -66,6 +77,20 @@ describe('EmptyState', () => {
     expect(onEntryAction).toHaveBeenCalledWith('generate-assets');
   });
 
+  it('does not block an unbound Entry Draft with owner choices', () => {
+    const view = render(<EmptyState draftScope="unbound" presentation="desktop-dock" />);
+
+    expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Workspace' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Character / Room' })).toBeNull();
+    expect(document.querySelector('.agent-empty-actions')).toBeNull();
+
+    view.rerender(<EmptyState draftScope="workspace" presentation="desktop-dock" />);
+    expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
+    expect(document.querySelector('.agent-empty-actions')).toBeNull();
+  });
+
   it('renders the selected entry helper', () => {
     render(<EmptyState selectedAction="roleplay" />);
 
@@ -95,7 +120,9 @@ describe('EmptyState', () => {
     expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
     expect(screen.getByText('Describe an idea or mention a resource.')).toBeTruthy();
     expect(screen.getByText('Try a Skill')).toBeTruthy();
-    expect(screen.getAllByRole('button')).toHaveLength(4);
+    expect(document.querySelectorAll('.agent-empty-skill-button')).toHaveLength(4);
+    expect(document.querySelector('.agent-empty-state--desktop-dock')).toBeTruthy();
+    expect(document.querySelector('.agent-empty-state--desktop-dock')?.className).toContain('px-3');
     expect(screen.queryByRole('button', { name: 'disabled' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'e' })).toBeNull();
 
@@ -108,7 +135,7 @@ describe('EmptyState', () => {
     render(<EmptyState presentation="desktop-dock" skills={[skill('disabled', false)]} />);
 
     expect(screen.queryByText('Try a Skill')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(document.querySelector('.agent-empty-skill-button')).toBeNull();
   });
 });
 

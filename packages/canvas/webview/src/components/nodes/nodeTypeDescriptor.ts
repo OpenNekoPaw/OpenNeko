@@ -2,12 +2,9 @@
  * Node Type Descriptor — unified metadata for each canvas node type.
  *
  * Converges three previously scattered definitions into a single source of truth:
- *   - Display label i18n key (was in PropertyPanel.tsx:getNodeTypeLabel)
- *   - Toolbar icon           (was in CanvasToolbar.tsx inline emoji)
- *   - Default creation size  (was in nodeFactory.ts switch cases)
- *
- * Property panel renderers remain in PropertyPanel.tsx to avoid circular imports
- * (PropertyPanel depends on i18n + form helpers that would create a cycle).
+ *   - Display label i18n key
+ *   - Toolbar icon
+ *   - Default creation size
  */
 
 import type React from 'react';

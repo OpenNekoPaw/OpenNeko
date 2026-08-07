@@ -41,16 +41,16 @@ export function DesktopResourceBrowserSurface({
           workspaceId: project.workspaceId,
           windowId: projection.window.windowId,
           projectViewId: tab.viewId,
-          projectViewEpoch: tab.viewEpoch,
-          endpointEpoch: projection.endpointEpoch,
+          projectViewInstanceId: tab.viewInstanceId,
+          rendererSessionId: projection.rendererSessionId,
         }),
       }),
     [
       project.projectId,
       project.workspaceId,
-      projection.endpointEpoch,
+      projection.rendererSessionId,
       projection.window.windowId,
-      tab.viewEpoch,
+      tab.viewInstanceId,
       tab.viewId,
     ],
   );
@@ -64,16 +64,21 @@ export function DesktopResourceBrowserSurface({
         }
       >
         <ResourceBrowserRoot
+          chrome="embedded"
           runtime={runtime}
           locale={locale}
+          lifecyclePresentation="active"
+          refreshControl="hidden"
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
           previewTarget={{
             viewId: `preview:${tab.viewId}:temporary`,
             presentation: 'temporary',
-            expectedWorkbenchRevision: projection.window.workbench.revision,
           }}
           onOpenCanvas={(item, presentation) => {
-            if (item.facet === 'materials' || item.locator.kind !== 'workspace-file') {
+            if (
+              (item.facet !== 'files' && item.facet !== 'media') ||
+              item.locator.kind !== 'workspace-file'
+            ) {
               throw new Error('Canvas documents require a workspace-file ContentLocator.');
             }
             onOpenCanvasDocument(item.locator.path, presentation);

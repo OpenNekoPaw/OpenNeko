@@ -60,17 +60,7 @@ export function normalizeRelativePath(filePath: string): string {
   return filePath.replace(/\\/g, '/').replace(/^\/+/, '');
 }
 
-const DEFAULT_WORKSPACE_MANAGED_DIRECTORY_SEGMENTS = [
-  '.neko',
-  '.neko/.cache',
-  '.neko/.runtime',
-  '.neko/logs',
-  '.neko/tmp',
-  '.neko/drafts',
-  '.neko/plans',
-  '.neko/tasks',
-  '.cache',
-] as const;
+const DEFAULT_WORKSPACE_MANAGED_DIRECTORY_SEGMENTS = ['.cache'] as const;
 
 function matchesGitignoreRule(filePath: string, rawRule: string): boolean {
   const directoryOnly = rawRule.endsWith('/');
@@ -95,6 +85,9 @@ function matchesManagedDirectoryRule(
   filePath: string,
   configuredRules: readonly string[] | undefined,
 ): boolean {
+  if (filePath.split('/').some((segment) => segment.startsWith('.'))) {
+    return true;
+  }
   const rules = configuredRules ?? DEFAULT_WORKSPACE_MANAGED_DIRECTORY_SEGMENTS;
   for (const rawRule of rules) {
     const rule = normalizeRelativePath(rawRule).replace(/\/+$/, '');

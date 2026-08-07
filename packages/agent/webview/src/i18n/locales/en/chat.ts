@@ -5,12 +5,8 @@ export const chat = {
   'chat.placeholderWithAgent': 'Chat with {agent}... (Shift+Enter for new line)',
   'chat.send': 'Send',
   'chat.thinking': 'Thinking...',
-  'chat.agentRun.phase.thinking': 'Thinking',
-  'chat.agentRun.phase.acting': 'Acting',
-  'chat.agentRun.phase.streaming': 'Writing',
-  'chat.agentRun.phase.idle': 'Ready',
-  'chat.agentRun.actingWithTool': '{phase}: {tool}',
-  'chat.agentRun.elapsedLabel': 'Elapsed time for this run',
+  'chat.agentRun.activity': 'Working',
+  'chat.agentRun.activityLabel': 'Agent execution in progress',
   'chat.autoMode': 'Auto',
   'chat.selectModel': 'Select model',
   'chat.modelsLoading': 'Loading models...',
@@ -66,6 +62,20 @@ export const chat = {
   'chat.emptyState.entry.startChat': 'Start Chat',
   'chat.emptyState.entry.generateAssets': 'Generate Assets',
   'chat.emptyState.entry.roleplay': 'Roleplay',
+  'chat.emptyState.scope.title': 'Choose a creative space',
+  'chat.emptyState.scope.description': 'Choose Assistant, a Workspace, or Character and Room.',
+  'chat.emptyState.scope.assistant': 'Assistant',
+  'chat.emptyState.scope.assistantHelper':
+    'Start a new Assistant session with user-space resources.',
+  'chat.emptyState.scope.workspace': 'Workspace',
+  'chat.emptyState.scope.workspaceHelper':
+    'Choose a folder and enable canvas, preview, and project resources.',
+  'chat.emptyState.scope.characterRoom': 'Character / Room',
+  'chat.emptyState.scope.characterRoomHelper':
+    'Character and Room capabilities are not available yet.',
+  'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
+  'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+  'chat.emptyState.scope.activeDescription': 'Enter a message to start a new conversation.',
   'chat.emptyState.entry.startChatHelper':
     'Develop story, character, world, or creative direction directly with the Agent.',
   'chat.emptyState.entry.generateAssetsHelper':
@@ -220,6 +230,7 @@ export const chat = {
 
   'chat.input.placeholder':
     'Ask anything... (/ for commands, @ for files, Shift+Enter for new line)',
+  'chat.input.entryPlaceholder': 'Describe what you want to create...',
   'chat.input.thinkingPlaceholder': 'Responding... wait or cancel before sending again',
   'chat.input.queuePlaceholder': 'Responding... {count} queued message(s)',
   'chat.input.queuedMessages': 'Message queue ({count} pending)',
@@ -243,6 +254,10 @@ export const chat = {
   'chat.input.cancel': 'Cancel (Esc)',
   'chat.input.attach': 'Attach file',
   'chat.input.attachFile': 'Attach file',
+  'chat.input.workspace.label': 'Working directory',
+  'chat.input.workspace.openProject': 'Open project',
+  'chat.input.workspace.chooseDirectory': 'Choose from system directories',
+  'chat.input.workspace.clear': 'Clear project selection',
   'chat.input.commands': 'Commands',
   'chat.input.skills': 'Skills',
   'chat.input.mediaModelCalls': 'Media model calls: {count}',

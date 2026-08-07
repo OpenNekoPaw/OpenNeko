@@ -7,6 +7,7 @@ import { activationProgressHandlers } from '../activation-progress-handlers';
 import type { MessageHandlerContext } from '../types';
 import type { ActivationProgressTimeline } from '../../presenters/activation-progress-presenter';
 import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
+import { createTestAgentHostMessageSender } from '../../test-utils/agent-host-messages';
 
 describe('activationProgressHandlers', () => {
   it('merges activation progress events into per-conversation timelines', () => {
@@ -77,6 +78,7 @@ function createActivationEvent(
 
 function createContext(): MessageHandlerContext {
   return {
+    agentHostMessages: createTestAgentHostMessageSender(),
     messages: [],
     isThinking: false,
     streamingMessageId: null,

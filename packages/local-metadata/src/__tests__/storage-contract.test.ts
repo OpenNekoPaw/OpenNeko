@@ -3,14 +3,15 @@ import {
   assertCanonicalMetadataDatabasePath,
   createWorkspacePortableLocator,
   diagnoseDuplicateWorkspaceIdentity,
-  diagnoseWorkspaceContentPlacement,
   decideNekoStorageAuthority,
   ensureWorkspaceIdentityDescriptor,
   getNekoStorageClassification,
   listNekoStorageClassifications,
   markWorkspaceIdentityOrphaned,
   parseWorkspaceIdentityJson,
+  resolveManagedLogFile,
   resolveStorageLayout,
+  resolveWorkspaceCachePartition,
   serializeWorkspaceIdentityDescriptor,
   updateWorkspaceIdentityBinding,
   type WorkspaceIdentityBinding,
@@ -41,6 +42,7 @@ describe('storage classification', () => {
       sqliteRole: 'prohibited',
     });
     expect(getNekoStorageClassification('raw-logs')).toMatchObject({
+      owner: 'logger',
       authorityKind: 'log-file',
       sqliteRole: 'prohibited',
       tracking: 'outside-workspace',
@@ -146,46 +148,16 @@ describe('canonical storage layout', () => {
 
     expect(layout.global.database).toBe('/Users/feng/.neko/neko.db');
     expect(layout.global.assets).toBe('/Users/feng/.neko/assets');
-    expect(layout.project.local.workspaceIdentity).toBe('/workspace/demo/.neko/workspace.json');
-    expect('database' in layout.project.local.cache).toBe(false);
-  });
-
-  it('diagnoses deprecated hooks and explicitly personal workspace content', () => {
-    expect(
-      diagnoseWorkspaceContentPlacement([
-        {
-          relativePath: '.neko/hooks/preflight.md',
-          kind: 'hook',
-          intendedScope: 'project',
-        },
-        {
-          relativePath: '.neko/prompts/reviewer.md',
-          kind: 'prompt',
-          intendedScope: 'personal',
-        },
-        {
-          relativePath: '.neko/prompts/project-review.md',
-          kind: 'prompt',
-          intendedScope: 'project',
-        },
-      ]),
-    ).toEqual([
-      {
-        code: 'deprecated-hook-catalog',
-        kind: 'hook',
-        relativePath: '.neko/hooks/preflight.md',
-        suggestedTarget: '.neko/settings.local.json',
-        message:
-          'Deprecated .neko/hooks content must be converted to settings-based hook configuration.',
-      },
-      {
-        code: 'misplaced-personal-content',
-        kind: 'prompt',
-        relativePath: '.neko/prompts/reviewer.md',
-        suggestedTarget: '~/.neko/prompts',
-        message: 'Personal prompt content is misplaced in workspace-local storage.',
-      },
-    ]);
+    expect(layout.project.facts.identity).toBe('/workspace/demo/neko/project.json');
+    expect(layout.global.workspaceCaches).toBe('/Users/feng/.neko/workspace-cache');
+    expect(resolveWorkspaceCachePartition('/Users/feng', WORKSPACE_ID)).toBe(
+      `/Users/feng/.neko/workspace-cache/${WORKSPACE_ID}`,
+    );
+    expect(layout.global).toMatchObject({
+      desktopLogs: '/Users/feng/.neko/logs/desktop',
+      workspaceLogs: '/Users/feng/.neko/logs/workspaces',
+      agentLogs: '/Users/feng/.neko/logs/agent',
+    });
   });
 
   it('routes user-authored Agent content to canonical editable file roots', () => {
@@ -199,24 +171,31 @@ describe('canonical storage layout', () => {
       config: '/Users/feng/.neko/config.toml',
       processors: '/Users/feng/.neko/processors',
     });
-    expect(layout.project.local).toMatchObject({
-      skills: '/workspace/demo/.agents/skills',
-      commands: '/workspace/demo/.neko/commands',
-      prompts: '/workspace/demo/.neko/prompts',
-      agentsMd: '/workspace/demo/.neko/AGENTS.md',
-      config: '/workspace/demo/.neko/config.toml',
-      processors: '/workspace/demo/.neko/processors',
-    });
     expect('config' in layout.project.facts).toBe(false);
   });
 
-  it('poisons retired workspace and package-local database paths', () => {
+  it('resolves exact owner-partitioned managed log files', () => {
+    expect(resolveManagedLogFile('/Users/feng', { kind: 'desktop' })).toBe(
+      '/Users/feng/.neko/logs/desktop/desktop.ndjson',
+    );
+    expect(resolveManagedLogFile('/Users/feng', { kind: 'agent' })).toBe(
+      '/Users/feng/.neko/logs/agent/agent.ndjson',
+    );
+    expect(
+      resolveManagedLogFile('/Users/feng', {
+        kind: 'workspace',
+        workspaceId: WORKSPACE_ID,
+      }),
+    ).toBe(`/Users/feng/.neko/logs/workspaces/${WORKSPACE_ID}/workspace.ndjson`);
     expect(() =>
-      assertCanonicalMetadataDatabasePath(
-        '/workspace/demo/.neko/.cache/neko-cache.db',
-        '/Users/feng',
-      ),
-    ).toThrowError(expect.objectContaining({ code: 'retired-workspace-database' }));
+      resolveManagedLogFile('/Users/feng', { kind: 'workspace', workspaceId: '../escape' }),
+    ).toThrow('valid workspaceId');
+  });
+
+  it('accepts only the canonical metadata database path', () => {
+    expect(() =>
+      assertCanonicalMetadataDatabasePath('/workspace/demo/neko/neko-cache.db', '/Users/feng'),
+    ).toThrowError(expect.objectContaining({ code: 'unknown-managed-storage' }));
     expect(() =>
       assertCanonicalMetadataDatabasePath('/Users/feng/.neko/neko.db', '/Users/feng'),
     ).not.toThrow();
@@ -226,7 +205,7 @@ describe('canonical storage layout', () => {
 describe('workspace identity', () => {
   it('atomically creates and then reuses the workspace identity descriptor', async () => {
     const workspaceRoot = '/workspace/demo';
-    const descriptorPath = '/workspace/demo/.neko/workspace.json';
+    const descriptorPath = '/workspace/demo/neko/project.json';
     const files = new Map<string, string>();
     let nextWorkspaceId = WORKSPACE_ID;
     const filePort = {
@@ -241,43 +220,37 @@ describe('workspace identity', () => {
     };
 
     await expect(ensureWorkspaceIdentityDescriptor(workspaceRoot, filePort)).resolves.toEqual({
-      version: 1,
       workspaceId: WORKSPACE_ID,
     });
     nextWorkspaceId = 'bd82b3ee-b9d9-4aa0-a635-23fa356e67df';
     await expect(ensureWorkspaceIdentityDescriptor(workspaceRoot, filePort)).resolves.toEqual({
-      version: 1,
       workspaceId: WORKSPACE_ID,
     });
     expect(files.get(descriptorPath)).toBe(
       `{
-  "version": 1,
   "workspaceId": "${WORKSPACE_ID}"
 }
 `,
     );
   });
 
-  it('parses and serializes the versioned UUID descriptor', () => {
+  it('parses the UUID descriptor and preserves unknown root metadata', () => {
     const descriptor = parseWorkspaceIdentityJson(
-      JSON.stringify({ version: 1, workspaceId: WORKSPACE_ID }),
+      JSON.stringify({ unexpectedField: 2, workspaceId: WORKSPACE_ID }),
     );
 
-    expect(descriptor).toEqual({ version: 1, workspaceId: WORKSPACE_ID });
+    expect(descriptor).toEqual({ unexpectedField: 2, workspaceId: WORKSPACE_ID });
     expect(serializeWorkspaceIdentityDescriptor(descriptor)).toBe(
-      `{\n  "version": 1,\n  "workspaceId": "${WORKSPACE_ID}"\n}\n`,
+      `{\n  "unexpectedField": 2,\n  "workspaceId": "${WORKSPACE_ID}"\n}\n`,
     );
   });
 
-  it('rejects malformed, unknown-version, and invalid UUID descriptors', () => {
+  it('rejects malformed JSON and invalid UUID descriptors', () => {
     expect(() => parseWorkspaceIdentityJson('')).toThrowError(
       expect.objectContaining({ code: 'invalid-workspace-identity' }),
     );
     expect(() =>
-      parseWorkspaceIdentityJson(JSON.stringify({ version: 2, workspaceId: WORKSPACE_ID })),
-    ).toThrowError(expect.objectContaining({ code: 'workspace-identity-version-mismatch' }));
-    expect(() =>
-      parseWorkspaceIdentityJson(JSON.stringify({ version: 1, workspaceId: 'current' })),
+      parseWorkspaceIdentityJson(JSON.stringify({ workspaceId: 'current' })),
     ).toThrowError(expect.objectContaining({ code: 'invalid-workspace-identity' }));
   });
 

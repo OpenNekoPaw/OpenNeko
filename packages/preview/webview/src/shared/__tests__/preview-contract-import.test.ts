@@ -6,13 +6,12 @@ describe('preview shared contracts in Webview-facing code', () => {
   it('imports preview DTOs without VSCode or React dependencies', () => {
     const state: PanoramaViewState = { ...DEFAULT_PANORAMA_VIEW_STATE, yawDeg: 12 };
     const manifest: PreviewManifest = {
-      manifestVersion: 1,
       assetId: 'asset-webview',
       token: 'token-webview',
       kind: 'image',
       status: 'ready',
       sourceName: 'room_360.jpg',
-      sourceUrl: 'http://127.0.0.1:3000/v1/preview/file/token-webview',
+      sourceUrl: 'openneko://resource/token-webview/source.jpg',
       projection: {
         type: 'equirectangular',
         confidence: 'trusted-filename',

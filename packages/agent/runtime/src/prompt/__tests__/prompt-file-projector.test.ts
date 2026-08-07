@@ -32,7 +32,7 @@ describe('prompt-file-projector', () => {
     expect(ensurePromptFileExtension('storyboard')).toBe('storyboard.md');
     expect(ensurePromptFileExtension('storyboard.md')).toBe('storyboard.md');
     expect(generatePromptFileName('分镜 Prompt!')).toBe('分镜-prompt.md');
-    expect(generatePromptFileId('project', '/repo/.neko/prompts/story.md')).toBe(
+    expect(generatePromptFileId('project', '/repo/neko/prompts/story.md')).toBe(
       'project-prompt-story',
     );
   });
@@ -53,8 +53,8 @@ describe('prompt-file-projector', () => {
       }),
     ).toEqual({
       ok: true,
-      dirPath: '/repo/.neko',
-      filePath: '/repo/.neko/AGENTS.md',
+      dirPath: '/repo/neko',
+      filePath: '/repo/neko/AGENTS.md',
       template: DEFAULT_AGENTS_FILE_CONTENT,
     });
 
@@ -66,7 +66,7 @@ describe('prompt-file-projector', () => {
 
   it('builds AGENTS.md load candidates in override order', () => {
     expect(buildAgentsFileLoadPlan({ homeDir: '/home/me', workspaceRoot: '/repo' })).toEqual([
-      { source: 'project', filePath: '/repo/.neko/AGENTS.md' },
+      { source: 'project', filePath: '/repo/neko/AGENTS.md' },
       { source: 'personal', filePath: '/home/me/.neko/AGENTS.md' },
     ]);
 
@@ -92,8 +92,8 @@ describe('prompt-file-projector', () => {
       }),
     ).toEqual({
       ok: true,
-      dirPath: '/repo/.neko/prompts',
-      filePath: '/repo/.neko/prompts/分镜-prompt.md',
+      dirPath: '/repo/neko/prompts',
+      filePath: '/repo/neko/prompts/分镜-prompt.md',
       template: buildPromptFileContent('分镜 Prompt!'),
     });
 
@@ -116,13 +116,13 @@ describe('prompt-file-projector', () => {
       projectPromptFileInfo({
         source: 'project',
         fileName: 'story.md',
-        filePath: '/repo/.neko/prompts/story.md',
+        filePath: '/repo/neko/prompts/story.md',
         content: 'intro\n# Story Prompt\nbody',
       }),
     ).toEqual({
       id: 'project-prompt-story',
       name: 'Story Prompt',
-      filePath: '/repo/.neko/prompts/story.md',
+      filePath: '/repo/neko/prompts/story.md',
       source: 'project',
       content: 'intro\n# Story Prompt\nbody',
     });
@@ -171,7 +171,7 @@ describe('prompt-file-projector', () => {
         description: '',
         systemPrompt: '',
         source: 'project',
-        filePath: '/repo/.neko/prompts/same-name.md',
+        filePath: '/repo/neko/prompts/same-name.md',
         builtin: false,
         enabled: true,
       },

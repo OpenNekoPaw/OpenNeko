@@ -6,9 +6,8 @@ export interface ClassTokenAssertion {
 export {
   findInlineSvgControlViolations,
   findPackageSpecificTokenViolations,
-  findSharedComponentsImportViolations,
 } from './source-guards';
-export type { SharedComponentsImportAllowance, SourceGuardViolation } from './source-guards';
+export type { SourceGuardViolation } from './source-guards';
 
 export function hasAccessibleName(element: Element): boolean {
   const ariaLabel = element.getAttribute('aria-label');

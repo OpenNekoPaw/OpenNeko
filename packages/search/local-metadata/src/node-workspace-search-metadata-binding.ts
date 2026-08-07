@@ -1,19 +1,11 @@
-import * as path from 'node:path';
-import { PathResolver, type PathVariableMap } from '@neko/shared/path';
-import { resolveGlobalStorageLayout, resolveStorageLayout } from '@neko/local-metadata';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '@neko/local-metadata';
-import {
-  migrateLegacyMediaSearchIndex,
-  migrateLegacySemanticIndexSidecars,
-  type MediaSearchIndexMigrationReport,
-  type SemanticIndexSidecarMigrationReport,
-} from './node-search-projection-migration';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
+import type { LocalMetadataPartition } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/local-metadata/node-workspace-identity';
 import type { SearchDocumentRepository, SemanticProjectionRepository } from '@neko/local-metadata';
 import {
-  M1_LOCAL_METADATA_MIGRATIONS,
-  SEARCH_PROJECTION_MIGRATIONS,
+  initializeCoreLocalMetadataTables,
+  initializeSearchProjectionTables,
 } from '@neko/local-metadata/sqlite';
 
 export interface NodeWorkspaceSearchMetadataBinding {
@@ -22,16 +14,12 @@ export interface NodeWorkspaceSearchMetadataBinding {
   readonly semanticPartition: LocalMetadataPartition;
   readonly searchDocuments: SearchDocumentRepository;
   readonly semanticProjections: SemanticProjectionRepository;
-  readonly mediaSearchMigrationReport: MediaSearchIndexMigrationReport;
-  readonly semanticMigrationReport: SemanticIndexSidecarMigrationReport;
-  readSearchRevision(): Promise<LocalMetadataPartitionRevision | null>;
   dispose(): Promise<void>;
 }
 
 export async function createNodeWorkspaceSearchMetadataBinding(options: {
   readonly homedir: string;
   readonly workDir: string;
-  readonly pathVariables?: PathVariableMap;
   readonly createWorkspaceId?: () => string;
   readonly now?: () => string;
 }): Promise<NodeWorkspaceSearchMetadataBinding> {
@@ -41,8 +29,8 @@ export async function createNodeWorkspaceSearchMetadataBinding(options: {
       databasePath: resolveGlobalStorageLayout(options.homedir).database,
       busyTimeoutMs: 2_000,
     });
-    await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeSearchProjectionTables(metadataStore);
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -61,39 +49,16 @@ export async function createNodeWorkspaceSearchMetadataBinding(options: {
       workspaceId: identity.workspaceId,
       domain: 'semantic-projection',
     };
-    const pathVariables = new Map(options.pathVariables ?? []);
-    pathVariables.set('HOME', normalizePath(options.homedir));
-    pathVariables.set('WORKSPACE', normalizePath(options.workDir));
-    const layout = resolveStorageLayout(options.workDir, options.homedir);
-    const mediaSearchMigrationReport = await migrateLegacyMediaSearchIndex({
-      indexPath: layout.project.local.cache.searchIndex,
-      partition: searchPartition,
-      repository: metadataStore.repositories.searchDocuments,
-      pathResolver: new PathResolver(pathVariables),
-    });
-    const semanticMigrationReport = await migrateLegacySemanticIndexSidecars({
-      semanticIndexRoot: path.join(options.workDir, '.neko', 'semantic-index'),
-      partition: semanticPartition,
-      repository: metadataStore.repositories.semanticProjections,
-    });
     return {
       workspaceId: identity.workspaceId,
       searchPartition,
       semanticPartition,
       searchDocuments: metadataStore.repositories.searchDocuments,
       semanticProjections: metadataStore.repositories.semanticProjections,
-      mediaSearchMigrationReport,
-      semanticMigrationReport,
-      readSearchRevision: () => metadataStore.readPartitionRevision(searchPartition),
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {
     await metadataStore.dispose();
     throw error;
   }
-}
-
-function normalizePath(value: string): string {
-  const normalized = value.replace(/\\/gu, '/');
-  return normalized.length > 1 ? normalized.replace(/\/+$/u, '') : normalized;
 }

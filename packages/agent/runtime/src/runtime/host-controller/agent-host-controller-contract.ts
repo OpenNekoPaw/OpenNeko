@@ -18,7 +18,6 @@ export interface AgentHostConnectionIdentity {
   readonly windowId: string;
   readonly viewId: string;
   readonly workspaceId: string;
-  readonly rendererEpoch: string;
   readonly connectionId: string;
 }
 
@@ -45,6 +44,7 @@ export interface AgentHostRouteEffectPort<Message extends AgentWebviewToHostMess
 
 export interface AgentConversationControllerTurnRequest extends AgentMessageRuntimeRequest {
   readonly source: 'user-message' | 'mermaid-feedback';
+  readonly turnId?: string;
 }
 
 export interface AgentConversationControllerEffectPort {
@@ -61,7 +61,6 @@ export interface AgentConversationControllerEffectPort {
     context: AgentHostRouteEffectContext,
   ): void | Promise<void>;
   cancelTurn(conversationId: string, context: AgentHostRouteEffectContext): void | Promise<void>;
-  createConversation(context: AgentHostRouteEffectContext): void | Promise<void>;
   activateConversation(
     message: ActivateConversationWebviewMessage,
     context: AgentHostRouteEffectContext,
@@ -115,7 +114,6 @@ export interface AgentConfigControllerEffectPort {
   readConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
   refreshConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
   openUserConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
-  openHostConfig(context: AgentHostRouteEffectContext): void | Promise<void>;
   readTabState(context: AgentHostRouteEffectContext): void | Promise<void>;
   updateSettings(
     input: {
@@ -224,7 +222,6 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'mermaidError',
   'confirmTool',
   'cancelMessage',
-  'newConversation',
   'activateConversation',
   'deleteConversation',
   'getConversations',
@@ -239,12 +236,15 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'clearAllConversations',
 ] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
+export const AGENT_WINDOW_NAVIGATION_ROUTE_TYPES = [
+  'newConversation',
+] as const satisfies readonly AgentWebviewToHostMessage['type'][];
+
 export const AGENT_CONFIG_CONTROLLER_ROUTE_TYPES = [
   'getSettings',
   'getConfig',
   'refreshConfigSnapshot',
   'openUserConfigFile',
-  'openConfigFile',
   'getTabState',
   'updateSettings',
   'updateTabState',
@@ -324,7 +324,10 @@ type ElectronImplementedRouteType = {
 }[keyof typeof ELECTRON_AGENT_HOST_ROUTE_COVERAGE];
 type AssertNever<Value extends never> = Value;
 export type AgentSharedControllerMissingRouteCoverage = AssertNever<
-  Exclude<ElectronImplementedRouteType, SharedControllerRouteType>
+  Exclude<
+    ElectronImplementedRouteType,
+    SharedControllerRouteType | (typeof AGENT_WINDOW_NAVIGATION_ROUTE_TYPES)[number]
+  >
 >;
 export type AgentSharedControllerUnexpectedRouteCoverage = AssertNever<
   Exclude<SharedControllerRouteType, ElectronImplementedRouteType>

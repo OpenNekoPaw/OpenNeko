@@ -117,7 +117,7 @@ export async function writeBlindMapping(comparison, input, options = {}) {
     throw blindError('blind-mapping-path-escape', 'Blind mapping path escapes report root');
   }
   const document = {
-    schema: 'neko.agent-eval.blind-mapping.v1',
+    schema: 'neko.agent-eval.blind-mapping',
     planId: input.planId,
     runId: input.runId,
     orderDigest: comparison.orderDigest,
@@ -183,7 +183,6 @@ function assertBlindProjection(projection) {
   const forbiddenKeys = new Set([
     'baseline',
     'candidate',
-    'repositoryrevision',
     'buildidentity',
     'patch',
     'fingerprint',

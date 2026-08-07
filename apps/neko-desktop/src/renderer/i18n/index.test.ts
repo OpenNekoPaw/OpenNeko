@@ -11,6 +11,12 @@ describe('Desktop renderer i18n', () => {
     expect(en.t('home.start.title')).toBe('Create with OpenNeko');
     expect(zhCN.t('home.start.title')).toBe('与 OpenNeko 一起创作');
     expect(zhCN.t('workspace.canvas.unavailable')).toBe('画布尚不可用');
+    expect(
+      en.t('shell.conversationRecordInvalid', { conversationId: 'conversation:invalid' }),
+    ).toContain("Saved conversation 'conversation:invalid'");
+    expect(
+      zhCN.t('shell.conversationRecordInvalid', { conversationId: 'conversation:invalid' }),
+    ).toContain('旧会话“conversation:invalid”');
     expect(zhCN.t('shell.openProject')).not.toBe('shell.openProject');
   });
 

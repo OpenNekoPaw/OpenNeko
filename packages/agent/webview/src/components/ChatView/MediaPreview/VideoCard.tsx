@@ -8,8 +8,6 @@ interface VideoPlayerProps {
   poster?: string;
   title?: string;
   className?: string;
-  /** @deprecated Display cards never open Host paths or transient display URLs. */
-  localPath?: string;
   /** Inline mode uses compact native video controls. */
   inline?: boolean;
 }

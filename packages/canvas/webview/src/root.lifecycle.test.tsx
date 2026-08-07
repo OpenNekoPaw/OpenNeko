@@ -3,7 +3,9 @@
 import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CANVAS_HOST_RUNTIME_CONTRACT_VERSION, type CanvasHostRuntime } from '@neko/canvas-domain';
+import type { CanvasHostRuntime } from '@neko/canvas-domain';
+
+const canvasAppDisposed = vi.hoisted(() => vi.fn());
 
 vi.mock('./CanvasApp', async () => {
   const ReactRuntime = await import('react');
@@ -20,10 +22,11 @@ vi.mock('./CanvasApp', async () => {
         const unsubscribe = host.subscribe(() => undefined);
         return () => {
           unsubscribe();
+          canvasAppDisposed();
           host.postMessage({ type: 'canvasDataReady' });
         };
       }, [host]);
-      return null;
+      return <div data-canvas-app="mounted" />;
     },
   };
 });
@@ -37,6 +40,7 @@ describe('CanvasWebviewRoot lifetime', () => {
   let root: Root;
 
   beforeEach(() => {
+    canvasAppDisposed.mockClear();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -54,10 +58,10 @@ describe('CanvasWebviewRoot lifetime', () => {
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'neko/boards/workspace.nkc',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       },
       async getSnapshot() {
         throw new Error('Snapshot is not used by the lifetime fixture.');
@@ -70,7 +74,6 @@ describe('CanvasWebviewRoot lifetime', () => {
       },
       async executeIntent(request) {
         return {
-          schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
           requestId: request.requestId,
           commandId: request.commandId,
           status: 'rejected',
@@ -106,10 +109,10 @@ describe('CanvasWebviewRoot lifetime', () => {
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'neko/boards/workspace.nkc',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       },
       async getSnapshot() {
         throw new Error('Snapshot is not used by the lifetime fixture.');
@@ -120,7 +123,6 @@ describe('CanvasWebviewRoot lifetime', () => {
       subscribe,
       async executeIntent(request) {
         return {
-          schemaVersion: CANVAS_HOST_RUNTIME_CONTRACT_VERSION,
           requestId: request.requestId,
           commandId: request.commandId,
           status: 'rejected',
@@ -151,4 +153,71 @@ describe('CanvasWebviewRoot lifetime', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
+
+  it('suspends the high-memory Canvas child while retaining its owner Host', async () => {
+    const dispose = vi.fn();
+    const unsubscribe = vi.fn();
+    const subscribe = vi.fn(() => unsubscribe);
+    const runtime = createRuntime({ dispose, subscribe });
+
+    act(() => {
+      root.render(<CanvasWebviewRoot lifecyclePresentation="active" runtime={runtime} />);
+    });
+    expect(container.querySelector('[data-canvas-app="mounted"]')).not.toBeNull();
+
+    act(() => {
+      root.render(<CanvasWebviewRoot lifecyclePresentation="suspended" runtime={runtime} />);
+    });
+    expect(container.querySelector('[data-canvas-app="mounted"]')).toBeNull();
+    expect(container.querySelector('[data-canvas-suspended="true"]')).not.toBeNull();
+    expect(canvasAppDisposed).toHaveBeenCalledOnce();
+    expect(dispose).not.toHaveBeenCalled();
+
+    act(() => {
+      root.render(<CanvasWebviewRoot lifecyclePresentation="active" runtime={runtime} />);
+    });
+    expect(container.querySelector('[data-canvas-app="mounted"]')).not.toBeNull();
+    expect(subscribe).toHaveBeenCalledOnce();
+
+    act(() => root.unmount());
+    await Promise.resolve();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
 });
+
+function createRuntime(input: {
+  readonly dispose: () => void;
+  readonly subscribe: () => () => void;
+}): CanvasHostRuntime {
+  return {
+    identity: {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    },
+    async getSnapshot() {
+      throw new Error('Snapshot is not used by the lifetime fixture.');
+    },
+    async resolveMaterialActions() {
+      throw new Error('Material actions are not used by the lifetime fixture.');
+    },
+    subscribe: input.subscribe,
+    async executeIntent(request) {
+      return {
+        requestId: request.requestId,
+        commandId: request.commandId,
+        status: 'rejected',
+        diagnostic: {
+          code: 'canvas-runtime-unsupported-intent',
+          message: 'Intent is not used by the lifetime fixture.',
+        },
+      };
+    },
+    dispose: input.dispose,
+  };
+}

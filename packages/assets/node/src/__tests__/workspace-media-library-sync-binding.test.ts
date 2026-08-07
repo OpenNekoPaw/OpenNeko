@@ -4,9 +4,9 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
-  AGENT_STATE_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+  initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
 import { createWorkspaceMediaLibrarySyncMetadataBinding } from '../workspace-media-library-sync-binding';
 
@@ -21,23 +21,17 @@ afterEach(async () => {
 });
 
 describe('Workspace Media Library sync metadata binding', () => {
-  it('uses existing partitions and keeps state committed when a later cache write fails', async () => {
+  it('keeps task state committed when a later cache write fails', async () => {
     const fixture = await createFixture();
     const binding = createWorkspaceMediaLibrarySyncMetadataBinding({
       workspaceId: fixture.workspaceId,
       repositories: fixture.store.repositories,
     });
-    await binding.recordProjection({
-      freshness: 'fresh',
-      diagnostic: null,
-      updatedAt: '2026-08-01T00:00:00.000Z',
-    });
     await binding.writeSnapshotTask(
       {
-        version: 1,
         workspaceId: fixture.workspaceId,
         snapshotId: 'snapshot-a',
-        requirementRevision: 'revision-a',
+        requirementFingerprint: 'revision-a',
         status: 'running',
         completedEntryCount: 0,
         totalEntryCount: 1,
@@ -46,10 +40,9 @@ describe('Workspace Media Library sync metadata binding', () => {
     );
     await binding.writeSnapshotTask(
       {
-        version: 1,
         workspaceId: fixture.workspaceId,
         snapshotId: 'snapshot-completed',
-        requirementRevision: 'revision-a',
+        requirementFingerprint: 'revision-a',
         status: 'completed',
         completedEntryCount: 1,
         totalEntryCount: 1,
@@ -85,11 +78,6 @@ describe('Workspace Media Library sync metadata binding', () => {
       status: 'running',
       snapshotId: 'snapshot-a',
     });
-    await expect(binding.readProjectionRevision()).resolves.toMatchObject({
-      partition: { domain: 'workspace-media-library-sync' },
-      freshness: 'fresh',
-    });
-
     const tableNames = await fixture.store.transaction(
       { mode: 'read', ownership: 'system', operation: 'inspect-media-library-schema' },
       async ({ sql }) =>
@@ -115,10 +103,9 @@ describe('Workspace Media Library sync metadata binding', () => {
     await expect(
       binding.writeSnapshotCheckpoint(
         {
-          version: 1,
           workspaceId: fixture.workspaceId,
           snapshotId: 'snapshot-a',
-          requirementRevision: 'revision-a',
+          requirementFingerprint: 'revision-a',
           completedEntryKeys: [],
         },
         1,
@@ -138,12 +125,12 @@ async function createFixture() {
     databasePath: path.join(home, '.neko', 'neko.db'),
     busyTimeoutMs: 2_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
-  await store.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
+  await initializeMediaMetadataTables(store);
   const workspaceId = 'workspace-a';
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId },
+    identity: { workspaceId },
     locator: { kind: 'relative', value: 'workspace' },
     seenAt: '2026-08-01T00:00:00.000Z',
   });

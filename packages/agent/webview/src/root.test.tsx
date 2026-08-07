@@ -1,9 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { WebviewFoundationProvider, createWebviewFoundation } from '@neko/ui/foundation';
-import type { AgentHostRuntimeAdapter } from '@neko/agent-contracts';
-import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko/agent-contracts/host-message-event';
+import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
 import { AgentWebviewRoot } from './root';
 
 vi.mock('./components/ChatView/RichContent', () => ({
@@ -17,26 +16,36 @@ vi.mock('./components/ErrorBoundary', () => ({
 vi.mock('./components/AppShell', async () => {
   const { useWebviewFoundation } =
     await vi.importActual<typeof import('@neko/ui/foundation')>('@neko/ui/foundation');
-  const { useAgentHostRuntimeAdapter } =
+  const { useAgentHostMessages, useAgentHostRuntimeAdapter } =
     await vi.importActual<typeof import('./host-runtime-context')>('./host-runtime-context');
   return {
-    AppShell: ({ presentation }: { readonly presentation?: string }) => {
+    AppShell: ({
+      agentPresentation,
+      presentation,
+    }: {
+      readonly agentPresentation?: AgentRootPresentation;
+      readonly presentation?: string;
+    }) => {
       const foundation = useWebviewFoundation();
       const adapter = useAgentHostRuntimeAdapter();
+      const messages = useAgentHostMessages();
+      const [hostMessageType, setHostMessageType] = useState('none');
       useEffect(() => {
-        const listener = (event: Event): void => {
-          const message = (event as CustomEvent<{ readonly type: string }>).detail;
-          document.body.setAttribute('data-synchronous-host-message', message.type);
-        };
-        window.addEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, listener);
-        adapter.send({ type: 'getConversations' });
-        return () => window.removeEventListener(NEKO_AGENT_HOST_MESSAGE_EVENT, listener);
-      }, [adapter]);
+        const subscription = adapter.subscribe((message) => setHostMessageType(message.type));
+        messages.getConversations();
+        return () => subscription.dispose();
+      }, [adapter, messages]);
       return (
         <>
           <span data-testid="foundation-runtime">{foundation.runtimeId}</span>
           <span data-testid="adapter-runtime">{adapter.runtimeId}</span>
+          <span data-testid={`host-message-${adapter.runtimeId}`}>{hostMessageType}</span>
           <span data-testid="presentation">{presentation}</span>
+          <span data-testid="agent-presentation">
+            {agentPresentation
+              ? `${agentPresentation.kind}:${agentPresentation.scope.kind}`
+              : 'none'}
+          </span>
         </>
       );
     },
@@ -96,6 +105,22 @@ describe('AgentWebviewRoot foundation wiring', () => {
     expect(screen.getByTestId('presentation').textContent).toBe('desktop-dock');
   });
 
+  it('forwards the exact Agent draft presentation to the package-owned shell', () => {
+    render(
+      <AgentWebviewRoot
+        agentPresentation={{
+          kind: 'draft',
+          draftId: 'draft-1',
+          scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+        }}
+        hostRuntimeAdapter={createAdapter('assistant-draft-adapter')}
+        locale="en"
+      />,
+    );
+
+    expect(screen.getByTestId('agent-presentation').textContent).toBe('draft:assistant');
+  });
+
   it('subscribes before a descendant initialization request receives a synchronous response', () => {
     let listener:
       ((message: { readonly type: 'conversationList'; conversations: [] }) => void) | undefined;
@@ -110,7 +135,26 @@ describe('AgentWebviewRoot foundation wiring', () => {
 
     render(<AgentWebviewRoot hostRuntimeAdapter={adapter} locale="en" />);
 
-    expect(document.body.getAttribute('data-synchronous-host-message')).toBe('conversationList');
+    expect(screen.getByTestId('host-message-synchronous-adapter').textContent).toBe(
+      'conversationList',
+    );
+  });
+
+  it('keeps inbound and outbound traffic isolated across simultaneously mounted Roots', () => {
+    const adapterA = createLoopbackAdapter('adapter-a', 'conversationList');
+    const adapterB = createLoopbackAdapter('adapter-b', 'tabState');
+
+    render(
+      <>
+        <AgentWebviewRoot hostRuntimeAdapter={adapterA} locale="en" />
+        <AgentWebviewRoot hostRuntimeAdapter={adapterB} locale="en" />
+      </>,
+    );
+
+    expect(adapterA.send).toHaveBeenCalledWith({ type: 'getConversations' });
+    expect(adapterB.send).toHaveBeenCalledWith({ type: 'getConversations' });
+    expect(screen.getByTestId('host-message-adapter-a').textContent).toBe('conversationList');
+    expect(screen.getByTestId('host-message-adapter-b').textContent).toBe('tabState');
   });
 });
 
@@ -123,4 +167,24 @@ function createAdapter(runtimeId: string): AgentHostRuntimeAdapter {
     getState: vi.fn(),
     setState: vi.fn(),
   };
+}
+
+function createLoopbackAdapter(
+  runtimeId: string,
+  responseType: 'conversationList' | 'tabState',
+): AgentHostRuntimeAdapter {
+  let listener: Parameters<AgentHostRuntimeAdapter['subscribe']>[0] | undefined;
+  const adapter = createAdapter(runtimeId);
+  vi.mocked(adapter.subscribe).mockImplementation((nextListener) => {
+    listener = nextListener;
+    return { dispose: vi.fn() };
+  });
+  vi.mocked(adapter.send).mockImplementation(() => {
+    if (responseType === 'conversationList') {
+      listener?.({ type: 'conversationList', conversations: [] });
+      return;
+    }
+    listener?.({ type: 'tabState', tabState: { openTabs: [], activeTabId: null } });
+  });
+  return adapter;
 }

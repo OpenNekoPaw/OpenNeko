@@ -1,7 +1,5 @@
-import type { NekoApplicationIdentity } from '@neko/host/application';
+import { parseNekoApplicationIdentity, type NekoApplicationIdentity } from '@neko/host/application';
 import type { NekoHostIdentity } from '@neko/host/ports';
-
-export const DESKTOP_BRIDGE_CONTRACT_VERSION = 1 as const;
 
 export const DESKTOP_BRIDGE_CHANNELS = {
   bootstrapGet: 'openneko:desktop:bootstrap:get',
@@ -12,13 +10,12 @@ export type DesktopBridgeChannel =
   (typeof DESKTOP_BRIDGE_CHANNELS)[keyof typeof DESKTOP_BRIDGE_CHANNELS];
 
 export interface DesktopBootstrapRequest {
-  readonly schemaVersion: typeof DESKTOP_BRIDGE_CONTRACT_VERSION;
   readonly requestId: string;
 }
 
 export interface DesktopWindowProjection {
   readonly windowId: string;
-  readonly rendererEpoch: number;
+  readonly rendererSessionId: string;
 }
 
 export interface DesktopRuntimeProjection {
@@ -28,7 +25,6 @@ export interface DesktopRuntimeProjection {
 }
 
 export interface DesktopBootstrapProjection {
-  readonly schemaVersion: typeof DESKTOP_BRIDGE_CONTRACT_VERSION;
   readonly requestId: string;
   readonly application: NekoApplicationIdentity;
   readonly window: DesktopWindowProjection;
@@ -40,10 +36,9 @@ export interface DesktopBootstrapProjection {
 export type DesktopLifecycleEventType = 'renderer-loading' | 'renderer-ready' | 'window-closing';
 
 export interface DesktopLifecycleEvent {
-  readonly schemaVersion: typeof DESKTOP_BRIDGE_CONTRACT_VERSION;
   readonly applicationInstanceId: string;
   readonly windowId: string;
-  readonly rendererEpoch: number;
+  readonly rendererSessionId: string;
   readonly sequence: number;
   readonly type: DesktopLifecycleEventType;
 }
@@ -57,11 +52,8 @@ export interface OpenNekoDesktopBridge {
   };
 }
 
-export class DesktopBridgeContractError extends Error {
-  readonly code:
-    | 'invalid-desktop-bridge-payload'
-    | 'unsupported-desktop-bridge-version'
-    | 'desktop-bridge-request-mismatch';
+class DesktopBridgeContractError extends Error {
+  readonly code: 'invalid-desktop-bridge-payload' | 'desktop-bridge-request-mismatch';
 
   constructor(code: DesktopBridgeContractError['code'], message: string) {
     super(message);
@@ -72,14 +64,13 @@ export class DesktopBridgeContractError extends Error {
 
 export function createDesktopBootstrapRequest(requestId: string): DesktopBootstrapRequest {
   return {
-    schemaVersion: DESKTOP_BRIDGE_CONTRACT_VERSION,
     requestId: requireNonEmptyString(requestId, 'Desktop bootstrap requestId is required.'),
   };
 }
 
 export function parseDesktopBootstrapRequest(value: unknown): DesktopBootstrapRequest {
   const record = requireRecord(value, 'Desktop bootstrap request must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(record, ['requestId'], 'Desktop bootstrap request');
   return createDesktopBootstrapRequest(
     requireNonEmptyString(record['requestId'], 'Desktop bootstrap requestId is required.'),
   );
@@ -90,7 +81,11 @@ export function parseDesktopBootstrapProjection(
   expectedRequestId?: string,
 ): DesktopBootstrapProjection {
   const record = requireRecord(value, 'Desktop bootstrap projection must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(
+    record,
+    ['requestId', 'application', 'window', 'host', 'runtime', 'status'],
+    'Desktop bootstrap projection',
+  );
   const requestId = requireNonEmptyString(
     record['requestId'],
     'Desktop bootstrap projection requestId is required.',
@@ -108,38 +103,26 @@ export function parseDesktopBootstrapProjection(
   const window = requireRecord(record['window'], 'Desktop bootstrap window identity is required.');
   const host = requireRecord(record['host'], 'Desktop bootstrap host identity is required.');
   const runtime = requireRecord(record['runtime'], 'Desktop bootstrap runtime is required.');
+  requireExactKeys(window, ['windowId', 'rendererSessionId'], 'Desktop bootstrap window');
+  requireExactKeys(host, ['id', 'kind', 'ui', 'displayName'], 'Desktop bootstrap host', true);
+  requireExactKeys(runtime, ['platform', 'arch', 'locale'], 'Desktop bootstrap runtime', true);
   if (record['status'] !== 'foundation-ready') {
     throw invalidPayload('Desktop bootstrap status must be foundation-ready.');
   }
-  const applicationId = application['applicationId'];
-  if (applicationId !== 'neko-desktop') {
-    throw invalidPayload('Desktop bootstrap applicationId must be neko-desktop.');
-  }
-  if (application['schemaVersion'] !== 1) {
-    throw invalidPayload('Desktop bootstrap application schemaVersion must be 1.');
-  }
+  const parsedApplication = parseNekoApplicationIdentity(application);
   const hostKind = host['kind'];
   const hostUi = host['ui'];
   if (hostKind !== 'electron' || hostUi !== 'graphical') {
     throw invalidPayload('Desktop bootstrap host must be a graphical Electron host.');
   }
   return {
-    schemaVersion: DESKTOP_BRIDGE_CONTRACT_VERSION,
     requestId,
-    application: {
-      schemaVersion: 1,
-      applicationId,
-      instanceId: requireNonEmptyString(
-        application['instanceId'],
-        'Application instanceId is required.',
-      ),
-      version: requireNonEmptyString(application['version'], 'Application version is required.'),
-    },
+    application: parsedApplication,
     window: {
       windowId: requireNonEmptyString(window['windowId'], 'Desktop windowId is required.'),
-      rendererEpoch: requireNonNegativeInteger(
-        window['rendererEpoch'],
-        'Desktop rendererEpoch must be a non-negative integer.',
+      rendererSessionId: requireNonEmptyString(
+        window['rendererSessionId'],
+        'Desktop renderer session identity is required.',
       ),
     },
     host: {
@@ -147,7 +130,6 @@ export function parseDesktopBootstrapProjection(
       kind: hostKind,
       ui: hostUi,
       ...readOptionalString(host, 'displayName'),
-      ...readOptionalString(host, 'version'),
     },
     runtime: {
       platform: requireRuntimePlatform(runtime['platform']),
@@ -160,21 +142,24 @@ export function parseDesktopBootstrapProjection(
 
 export function parseDesktopLifecycleEvent(value: unknown): DesktopLifecycleEvent {
   const record = requireRecord(value, 'Desktop lifecycle event must be an object.');
-  requireVersion(record['schemaVersion']);
+  requireExactKeys(
+    record,
+    ['applicationInstanceId', 'windowId', 'rendererSessionId', 'sequence', 'type'],
+    'Desktop lifecycle event',
+  );
   const type = record['type'];
   if (type !== 'renderer-loading' && type !== 'renderer-ready' && type !== 'window-closing') {
     throw invalidPayload(`Unknown Desktop lifecycle event '${String(type)}'.`);
   }
   return {
-    schemaVersion: DESKTOP_BRIDGE_CONTRACT_VERSION,
     applicationInstanceId: requireNonEmptyString(
       record['applicationInstanceId'],
       'Desktop lifecycle applicationInstanceId is required.',
     ),
     windowId: requireNonEmptyString(record['windowId'], 'Desktop lifecycle windowId is required.'),
-    rendererEpoch: requireNonNegativeInteger(
-      record['rendererEpoch'],
-      'Desktop lifecycle rendererEpoch must be a non-negative integer.',
+    rendererSessionId: requireNonEmptyString(
+      record['rendererSessionId'],
+      'Desktop lifecycle renderer session identity is required.',
     ),
     sequence: requireNonNegativeInteger(
       record['sequence'],
@@ -182,15 +167,6 @@ export function parseDesktopLifecycleEvent(value: unknown): DesktopLifecycleEven
     ),
     type,
   };
-}
-
-function requireVersion(value: unknown): void {
-  if (value !== DESKTOP_BRIDGE_CONTRACT_VERSION) {
-    throw new DesktopBridgeContractError(
-      'unsupported-desktop-bridge-version',
-      `Unsupported Desktop bridge version '${String(value)}'.`,
-    );
-  }
 }
 
 function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {
@@ -202,6 +178,20 @@ function requireRecord(value: unknown, message: string): Readonly<Record<string,
 
 function isUnknownRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+  label: string,
+  optional = false,
+): void {
+  const allowed = new Set(keys);
+  const unknown = Object.keys(record).find((key) => !allowed.has(key));
+  if (unknown) throw invalidPayload(`${label} contains unknown field '${unknown}'.`);
+  if (optional) return;
+  const missing = keys.find((key) => !(key in record));
+  if (missing) throw invalidPayload(`${label} is missing field '${missing}'.`);
 }
 
 function requireNonEmptyString(value: unknown, message: string): string {

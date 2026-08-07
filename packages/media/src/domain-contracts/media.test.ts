@@ -110,7 +110,7 @@ describe('detectMediaType', () => {
 
     it('does not detect images with fewer than 3 digits as sequence', () => {
       expect(detectMediaType('photo_01.png')).toBe('image');
-      expect(detectMediaType('v2.png')).toBe('image');
+      expect(detectMediaType('take2.png')).toBe('image');
     });
 
     it('does not detect non-image files as sequence', () => {
@@ -120,7 +120,7 @@ describe('detectMediaType', () => {
 
     it('ignores digits in directory path', () => {
       // Digits in directory names should not trigger sequence detection
-      expect(detectMediaType('/project/v001/photo.png')).toBe('image');
+      expect(detectMediaType('/project/batch001/photo.png')).toBe('image');
     });
   });
 
@@ -232,12 +232,12 @@ describe('isImageSequence', () => {
   });
 
   it('rejects fewer than 3 digits', () => {
-    expect(isImageSequence('v01.png')).toBe(false);
+    expect(isImageSequence('take01.png')).toBe(false);
     expect(isImageSequence('photo_12.jpg')).toBe(false);
   });
 
   it('ignores digits in directory path', () => {
-    expect(isImageSequence('/v001/photo.png')).toBe(false);
+    expect(isImageSequence('/batch001/photo.png')).toBe(false);
   });
 
   it('checks filename only, not extension', () => {

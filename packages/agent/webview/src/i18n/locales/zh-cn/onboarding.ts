@@ -7,6 +7,6 @@ export const onboarding = {
   'onboarding.or': '或',
   'onboarding.openConfigButton': '打开配置文件',
   'onboarding.fileOpenedTitle': '配置文件已打开',
-  'onboarding.fileOpenedHint': '将 API Key 添加到配置文件，更改将被自动检测。',
+  'onboarding.fileOpenedHint': '添加 Provider 与模型定义；需要凭据时，系统会通过受保护输入框请求。',
   'onboarding.gotIt': '好的',
 } as const satisfies MessageBundle;

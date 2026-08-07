@@ -10,7 +10,6 @@ const DOCUMENT_VIEWPORT = {
 
 function createCanvasData(): CanvasData {
   return {
-    version: '1.0',
     name: 'Viewport Test',
     viewport: DOCUMENT_VIEWPORT,
     nodes: [],

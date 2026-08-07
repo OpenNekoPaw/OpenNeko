@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { copyFile, link, lstat, mkdir, realpath, rm } from 'node:fs/promises';
+import { COPYFILE_EXCL } from 'node:constants';
 import * as path from 'node:path';
 import type { NekoHostPorts } from '@neko/host/ports';
 import { detectPreviewContentKind, type PreviewContentKind } from '@neko/preview-domain';
@@ -25,9 +28,11 @@ import {
   type GlobalLibrarySortDirection,
   type GlobalMediaLibraryItem,
 } from '@neko/assets-domain/global-library/contract';
+import type { AssetLibraryMembershipRepository } from '@neko/assets-domain/global-library/membership';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { resolveWorkspaceContentLocator } from './workspace-content-locator';
-import { readConfirmedEntityResources } from '@neko/entity-node';
+import { readProjectEntityManagementResources } from '@neko/entity-node';
+import type { EntityAssetProjectionRepository } from '@neko/entity-domain';
 import {
   listGlobalMediaLibraryConnections,
   type GlobalMediaLibraryConnection,
@@ -37,7 +42,6 @@ import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
   '.git',
-  '.neko',
   '.turbo',
   '.vite',
   'coverage',
@@ -47,9 +51,13 @@ const EXCLUDED_DIRECTORIES = new Set([
 ]);
 
 export interface ResourceBrowserNodeSourceOptions {
+  readonly globalAssetRoot: string;
+  readonly assetLibraryMemberships?: AssetLibraryMembershipRepository;
   readonly globalMediaLibraryRoot: string;
   readonly workspaceMediaLibrarySync?: WorkspaceMediaLibrarySyncService;
   readonly workspace: AssetWorkspaceResolution;
+  readonly entityProjections?: Pick<EntityAssetProjectionRepository, 'list'>;
+  readonly refreshEntityProjections?: (workspace: AssetWorkspaceResolution) => Promise<void>;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: (input: {
     readonly identity: ResourceBrowserIdentity;
@@ -63,6 +71,8 @@ export interface ResourceBrowserNodeSourceOptions {
     readonly absolutePath: string;
   }) => Promise<void>;
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
+  readonly selectWorkspaceFiles: (windowId: string) => Promise<readonly string[] | undefined>;
+  readonly trashWorkspaceItem: (absolutePath: string) => Promise<void>;
   readonly selectGlobalLibrary: (input: {
     readonly windowId: string;
     readonly libraries: readonly {
@@ -74,26 +84,34 @@ export interface ResourceBrowserNodeSourceOptions {
   readonly mutateGlobalMediaLibraries: <Result>(
     operation: () => Promise<Result>,
   ) => Promise<Result>;
-  readonly didMutateGlobalMediaLibraries: () => void;
   readonly createThumbnail: (absolutePath: string) => Promise<string>;
   readonly addToCanvas: ResourceBrowserInteractionPort['addToCanvas'];
   readonly addToCut: ResourceBrowserInteractionPort['addToCut'];
+  readonly manageEntity: ResourceBrowserInteractionPort['manageEntity'];
 }
 
 export type ResourceBrowserNodeReadSourceOptions = Pick<
   ResourceBrowserNodeSourceOptions,
-  'workspace' | 'host' | 'workspaceMediaLibrarySync'
+  | 'globalAssetRoot'
+  | 'assetLibraryMemberships'
+  | 'workspace'
+  | 'host'
+  | 'workspaceMediaLibrarySync'
+  | 'entityProjections'
+  | 'refreshEntityProjections'
 >;
 
 export async function searchGlobalAssetCatalog(input: {
   readonly globalAssetRoot: string;
   readonly files: NekoHostPorts['files'];
+  readonly memberships: AssetLibraryMembershipRepository;
   readonly query: string;
   readonly sortBy: GlobalLibraryCatalogSort;
   readonly sortDirection: GlobalLibrarySortDirection;
   readonly limit: number;
 }): Promise<readonly GlobalAssetItem[]> {
   await input.files.createDirectory(input.globalAssetRoot);
+  await initializeGlobalAssetMembershipInventory(input);
   return (await readGlobalAssets(input))
     .sort((left, right) => compareGlobalCatalogItems(left, right, input))
     .slice(0, input.limit);
@@ -101,28 +119,40 @@ export async function searchGlobalAssetCatalog(input: {
 
 export async function resolveGlobalAssetItemPath(input: {
   readonly globalAssetRoot: string;
-  readonly files: NekoHostPorts['files'];
+  readonly memberships: AssetLibraryMembershipRepository;
   readonly itemId: string;
 }): Promise<string> {
-  const entries = await readGlobalAssetEntries({
-    globalAssetRoot: input.globalAssetRoot,
-    files: input.files,
-    query: '',
-  });
-  const entry = entries.find(
-    (candidate) =>
-      candidate.locator.kind === 'workspace-file' &&
-      createGlobalLibraryOpaqueId('global-asset-library', candidate.locator.path) === input.itemId,
-  );
-  if (!entry || entry.locator.kind !== 'workspace-file') {
+  const membership = await input.memberships.get(input.itemId);
+  if (!membership || membership.state !== 'active') {
     throw new Error('Desktop global Asset identity is stale or unavailable.');
   }
-  const resolved = path.resolve(input.globalAssetRoot, ...entry.locator.path.split('/'));
+  const resolved = path.resolve(input.globalAssetRoot, ...membership.sourceRelativePath.split('/'));
   const relative = path.relative(input.globalAssetRoot, resolved);
-  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+  if (
+    relative === '' ||
+    relative === '..' ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
     throw new Error('Desktop global Asset path escapes its owned root.');
   }
-  return resolved;
+  const [root, target, entry] = await Promise.all([
+    realpath(input.globalAssetRoot),
+    realpath(resolved),
+    lstat(resolved),
+  ]);
+  const realRelative = path.relative(root, target);
+  if (
+    !entry.isFile() ||
+    entry.isSymbolicLink() ||
+    realRelative === '' ||
+    realRelative === '..' ||
+    realRelative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(realRelative)
+  ) {
+    throw new Error('Desktop global Asset path escapes its owned root.');
+  }
+  return target;
 }
 
 export function isSupportedGlobalAssetPath(filePath: string): boolean {
@@ -231,18 +261,68 @@ export function createResourceBrowserNodeReadSource(
       search: async ({ query, limit }) => listWorkspaceProjection(options, query, limit, true),
       children: async ({ parent, limit }) => readMediaLibraryChildren(options, parent, limit),
     },
-    entities: {
-      list: async () =>
-        readConfirmedEntityResources({
-          workspace: options.workspace,
-          host: options.host,
+    assets: {
+      list: async ({ query, limit }) =>
+        searchGlobalAssetCatalog({
+          globalAssetRoot: options.globalAssetRoot,
+          files: options.host.files,
+          memberships: requireAssetLibraryMemberships(options.assetLibraryMemberships),
+          query,
+          sortBy: 'name',
+          sortDirection: 'ascending',
+          limit,
         }),
+    },
+    entities: {
+      list: async () => {
+        await options.refreshEntityProjections?.(options.workspace);
+        const result = await readProjectEntityManagementResources({
+          workspace: options.workspace,
+          ...(options.entityProjections
+            ? {
+                derivedProjection: {
+                  repository: options.entityProjections,
+                  partition: {
+                    scope: 'workspace',
+                    workspaceId: options.workspace.workspaceId,
+                    domain: 'entity-asset-projection',
+                  },
+                },
+              }
+            : {}),
+        });
+        return {
+          ...result,
+          inspectorCapabilities: result.projections.map((projection) => ({
+            projectionId: projection.projectionId,
+            capabilities: {
+              blockers:
+                projection.status === 'candidate'
+                  ? [REFERENCE_REWRITE_BLOCKERS[0]]
+                  : REFERENCE_REWRITE_BLOCKERS,
+            },
+          })),
+        };
+      },
     },
     async refresh(): Promise<void> {
       // Sources are read-through; refresh invalidates no package-local catalog or cache.
     },
   };
 }
+
+const REFERENCE_REWRITE_BLOCKERS = [
+  {
+    code: 'reference-owners-not-configured',
+    message: 'Project reference owners are not configured for a complete rewrite.',
+    operation: 'merge' as const,
+  },
+  {
+    code: 'reference-owners-not-configured',
+    message: 'Project reference owners are not configured for a complete rewrite.',
+    operation: 'deprecate' as const,
+  },
+] as const;
 
 export function createResourceBrowserNodeProjectionSource(
   options: ResourceBrowserNodeSourceOptions,
@@ -256,6 +336,27 @@ export function createResourceBrowserNodeProjectionSource(
     new WorkspaceMediaLibrarySyncService(options.globalMediaLibraryRoot);
 
   const interactions: ResourceBrowserInteractionPort = {
+    async createDirectory({ parent, name }): Promise<void> {
+      const absoluteParent = await resolveWorkspaceFileParent(options.workspace, parent);
+      const target = path.join(absoluteParent, name);
+      await mkdir(target);
+    },
+    async importFiles({ identity, parent }): Promise<'imported' | 'cancelled'> {
+      const selectedFiles = await options.selectWorkspaceFiles(identity.windowId);
+      if (!selectedFiles || selectedFiles.length === 0) return 'cancelled';
+      const absoluteParent = await resolveWorkspaceFileParent(options.workspace, parent);
+      await importWorkspaceFiles(selectedFiles, absoluteParent);
+      return 'imported';
+    },
+    async trashContent({ item }): Promise<void> {
+      const absolutePath = await resolveWorkspaceContentLocator(options.workspace, item.locator);
+      const workspaceRoot = await realpath(options.workspace.workspacePath);
+      if (absolutePath === workspaceRoot || !isPathInside(absolutePath, workspaceRoot)) {
+        throw new Error('Resource Browser Trash target escapes the authorized Workspace.');
+      }
+      await options.trashWorkspaceItem(absolutePath);
+    },
+    manageEntity: options.manageEntity,
     async linkGlobalLibrary({ identity }): Promise<'linked' | 'cancelled'> {
       const linkedNames = new Set(
         (await listWorkspaceLinkedMediaLibraries(options.workspace.workspacePath)).map((library) =>
@@ -301,7 +402,6 @@ export function createResourceBrowserNodeProjectionSource(
           locationKind: 'local',
         });
       });
-      options.didMutateGlobalMediaLibraries();
       return 'added';
     },
     async relinkSource({ identity, item }): Promise<'relinked' | 'cancelled'> {
@@ -316,7 +416,6 @@ export function createResourceBrowserNodeProjectionSource(
           locationKind: 'local',
         }),
       );
-      options.didMutateGlobalMediaLibraries();
       return 'relinked';
     },
     async removeSource({ item }): Promise<void> {
@@ -326,15 +425,30 @@ export function createResourceBrowserNodeProjectionSource(
       });
     },
     async preview({ identity, item, target }): Promise<void> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        memberships: options.assetLibraryMemberships,
+        item,
+      });
       await options.openPreview({ identity, item, absolutePath, target });
     },
     async openCut({ identity, item }): Promise<void> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        memberships: options.assetLibraryMemberships,
+        item,
+      });
       await options.openCut({ identity, item, absolutePath });
     },
     async reveal({ item }): Promise<void> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        memberships: options.assetLibraryMemberships,
+        item,
+      });
       const external = options.host.external;
       if (!external?.revealPath) {
         throw new Error('Desktop Resource Browser reveal capability is unavailable.');
@@ -342,13 +456,111 @@ export function createResourceBrowserNodeProjectionSource(
       await external.revealPath(absolutePath);
     },
     async resolveThumbnail({ item }): Promise<string> {
-      const absolutePath = await resolveResourceBrowserItemPath(options.workspace, item);
+      const absolutePath = await resolveResourceBrowserItemPath({
+        workspace: options.workspace,
+        globalAssetRoot: options.globalAssetRoot,
+        memberships: options.assetLibraryMemberships,
+        item,
+      });
       return options.createThumbnail(absolutePath);
     },
     addToCanvas: options.addToCanvas,
     addToCut: options.addToCut,
   };
   return { source, interactions };
+}
+
+async function resolveWorkspaceFileParent(
+  workspace: AssetWorkspaceResolution,
+  parent: ResourceBrowserContentItem | undefined,
+): Promise<string> {
+  const workspaceRoot = await realpath(workspace.workspacePath);
+  if (!parent) return workspaceRoot;
+  if (parent.facet !== 'files' || parent.kind !== 'directory') {
+    throw new Error('Resource Browser Workspace File parent must be a Files directory.');
+  }
+  const absoluteParent = await resolveWorkspaceContentLocator(workspace, parent.locator);
+  const entry = await lstat(absoluteParent);
+  if (
+    !entry.isDirectory() ||
+    entry.isSymbolicLink() ||
+    !isPathInside(absoluteParent, workspaceRoot)
+  ) {
+    throw new Error('Resource Browser Workspace File parent is outside the authorized Workspace.');
+  }
+  return absoluteParent;
+}
+
+async function importWorkspaceFiles(
+  selectedFiles: readonly string[],
+  absoluteParent: string,
+): Promise<void> {
+  const sources = await Promise.all(
+    selectedFiles.map(async (selectedPath) => {
+      const entry = await lstat(selectedPath);
+      if (!entry.isFile() || entry.isSymbolicLink()) {
+        throw new Error('Resource Browser import accepts regular files only.');
+      }
+      const source = await realpath(selectedPath);
+      const name = path.basename(source);
+      if (!isPortableVisibleEntryName(name)) {
+        throw new Error('Resource Browser import requires a visible portable file name.');
+      }
+      return { source, name, destination: path.join(absoluteParent, name) };
+    }),
+  );
+  if (new Set(sources.map((source) => source.name)).size !== sources.length) {
+    throw new Error('Resource Browser import contains duplicate file names.');
+  }
+  await Promise.all(sources.map((source) => assertPathAbsent(source.destination)));
+
+  const staging = path.join(absoluteParent, `.neko-import-${randomUUID()}.tmp`);
+  const published: string[] = [];
+  await mkdir(staging);
+  try {
+    for (const source of sources) {
+      await copyFile(source.source, path.join(staging, source.name), COPYFILE_EXCL);
+    }
+    for (const source of sources) {
+      await link(path.join(staging, source.name), source.destination);
+      published.push(source.destination);
+    }
+  } catch (error: unknown) {
+    await Promise.all(published.map((target) => rm(target, { force: true })));
+    throw error;
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
+}
+
+function isPortableVisibleEntryName(name: string): boolean {
+  return (
+    Boolean(name) &&
+    name !== '.' &&
+    name !== '..' &&
+    !name.startsWith('.') &&
+    !/[\\/\0]/u.test(name)
+  );
+}
+
+async function assertPathAbsent(target: string): Promise<void> {
+  try {
+    await lstat(target);
+  } catch (error: unknown) {
+    if (readErrorCode(error) === 'ENOENT') return;
+    throw error;
+  }
+  throw new Error(`Resource Browser destination '${path.basename(target)}' already exists.`);
+}
+
+function isPathInside(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative.length > 0 &&
+    relative !== '..' &&
+    !relative.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relative)
+  );
 }
 
 function requireLibraryName(item: ResourceBrowserItem): string {
@@ -512,37 +724,100 @@ function classifyContent(locatorPath: string, mediaOnly: boolean) {
 async function readGlobalAssets(
   input: Parameters<typeof searchGlobalAssetCatalog>[0],
 ): Promise<GlobalAssetItem[]> {
-  const entries = await readGlobalAssetEntries(input);
-  return entries.flatMap((entry) => {
-    if (entry.role !== 'content') return [];
-    if (entry.locator.kind !== 'workspace-file') {
-      throw new Error('Desktop global asset catalog produced a non-file locator.');
-    }
-    const id = createGlobalLibraryOpaqueId('global-asset-library', entry.locator.path);
-    const modifiedAt = entry.metadata?.modifiedAt;
-    const byteLength = entry.metadata?.byteLength;
-    const thumbnail = createGlobalLibraryThumbnailDescriptor({
-      owner: 'global-asset-library',
-      itemId: id,
-      mediaType: entry.metadata?.mediaType,
-      modifiedAt,
-      byteLength,
-    });
-    return [
-      {
-        id,
+  const normalizedQuery = input.query.trim().toLocaleLowerCase();
+  const memberships = await input.memberships.listActive();
+  const items = await Promise.all(
+    memberships.map(async (membership) => {
+      if (
+        normalizedQuery.length > 0 &&
+        !membership.label.toLocaleLowerCase().includes(normalizedQuery) &&
+        !membership.sourceRelativePath.toLocaleLowerCase().includes(normalizedQuery)
+      ) {
+        return undefined;
+      }
+      const absolutePath = path.resolve(
+        input.globalAssetRoot,
+        ...membership.sourceRelativePath.split('/'),
+      );
+      const current = await readAssetFileMetadata(absolutePath);
+      const modifiedAt = current?.modifiedAt ?? membership.modifiedAt ?? undefined;
+      const byteLength = current?.byteLength ?? membership.byteLength ?? undefined;
+      const mediaType =
+        membership.mediaType ?? detectGlobalAssetMediaType(membership.sourceRelativePath);
+      const thumbnail = current
+        ? createGlobalLibraryThumbnailDescriptor({
+            owner: 'global-asset-library',
+            itemId: membership.membershipId,
+            mediaType,
+            modifiedAt,
+            byteLength,
+          })
+        : undefined;
+      return {
+        id: membership.membershipId,
         owner: 'global-asset-library' as const,
-        label: entry.label,
-        ...(entry.description ? { description: entry.description } : {}),
+        label: membership.label,
+        description: membership.sourceRelativePath,
         kind: 'asset' as const,
-        ...(entry.metadata?.mediaType ? { mediaType: entry.metadata.mediaType } : {}),
+        ...(mediaType ? { mediaType } : {}),
         ...(byteLength === undefined ? {} : { byteLength }),
         ...(modifiedAt ? { modifiedAt } : {}),
-        availability: entry.availability,
+        availability: current ? ('available' as const) : ('unavailable' as const),
+        ...(current
+          ? {}
+          : {
+              unavailable: {
+                fieldNames: ['sourceRelativePath'],
+                message: 'Asset source file is unavailable.',
+              },
+            }),
         ...(thumbnail ? { thumbnail } : {}),
-      },
-    ];
+      };
+    }),
+  );
+  return items.flatMap((item) => (item ? [item] : []));
+}
+
+async function initializeGlobalAssetMembershipInventory(input: {
+  readonly globalAssetRoot: string;
+  readonly files: NekoHostPorts['files'];
+  readonly memberships: AssetLibraryMembershipRepository;
+}): Promise<void> {
+  const entries = await readGlobalAssetEntries({
+    globalAssetRoot: input.globalAssetRoot,
+    files: input.files,
+    query: '',
   });
+  const registeredAt = new Date().toISOString();
+  await input.memberships.registerDiscovered(
+    entries.flatMap((entry) => {
+      if (entry.role !== 'content' || entry.locator.kind !== 'workspace-file') return [];
+      return [
+        {
+          membershipId: randomUUID(),
+          sourceRelativePath: entry.locator.path,
+          label: entry.label,
+          mediaType: entry.metadata?.mediaType ?? null,
+          byteLength: entry.metadata?.byteLength ?? null,
+          modifiedAt: entry.metadata?.modifiedAt ?? null,
+          registeredAt,
+        },
+      ];
+    }),
+  );
+}
+
+async function readAssetFileMetadata(
+  absolutePath: string,
+): Promise<{ readonly byteLength: number; readonly modifiedAt: string } | undefined> {
+  try {
+    const entry = await lstat(absolutePath);
+    if (!entry.isFile() || entry.isSymbolicLink()) return undefined;
+    return { byteLength: entry.size, modifiedAt: entry.mtime.toISOString() };
+  } catch (error: unknown) {
+    if (readErrorCode(error) === 'ENOENT') return undefined;
+    throw error;
+  }
 }
 
 async function readGlobalAssetEntries(input: {
@@ -669,15 +944,47 @@ function isCutDocument(locatorPath: string): boolean {
   return path.posix.extname(locatorPath).toLocaleLowerCase() === '.otio';
 }
 
-export async function resolveResourceBrowserItemPath(
-  workspace: AssetWorkspaceResolution,
-  item: Parameters<ResourceBrowserInteractionPort['preview']>[0]['item'],
-): Promise<string> {
-  const locator = item.facet === 'materials' ? item.representationLocator : item.locator;
+export async function resolveResourceBrowserItemPath(input: {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly globalAssetRoot: string;
+  readonly memberships?: AssetLibraryMembershipRepository;
+  readonly item: Parameters<ResourceBrowserInteractionPort['preview']>[0]['item'];
+}): Promise<string> {
+  if (input.item.facet === 'assets') {
+    return resolveGlobalAssetItemPath({
+      globalAssetRoot: input.globalAssetRoot,
+      memberships: requireAssetLibraryMemberships(input.memberships),
+      itemId: input.item.assetRef.assetId,
+    });
+  }
+  const locator =
+    input.item.facet === 'entities'
+      ? input.item.entityStatus === 'candidate'
+        ? undefined
+        : input.item.representationLocator
+      : input.item.locator;
   if (!locator) {
     throw new Error('Desktop Resource Browser item has no local presentation.');
   }
-  return resolveWorkspaceContentLocator(workspace, locator);
+  return resolveWorkspaceContentLocator(input.workspace, locator);
+}
+
+function requireAssetLibraryMemberships(
+  memberships: AssetLibraryMembershipRepository | undefined,
+): AssetLibraryMembershipRepository {
+  if (!memberships) throw new Error('Asset Library membership repository is unavailable.');
+  return memberships;
+}
+
+export function detectGlobalAssetMediaType(filePath: string): string | undefined {
+  const classification = classifyContent(filePath, true);
+  return classification.include ? classification.mediaType : undefined;
+}
+
+function readErrorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String(Reflect.get(error, 'code'))
+    : undefined;
 }
 
 function dedupeProjection(

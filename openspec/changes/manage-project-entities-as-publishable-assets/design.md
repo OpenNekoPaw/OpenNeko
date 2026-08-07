@@ -19,7 +19,7 @@ a real cloud provider exists.
 
 **Goals:**
 
-- Establish one versioned project Entity fact authority and make derived state rebuildable.
+- Establish one canonical project Entity fact authority and make derived state rebuildable.
 - Make inferred candidates searchable immediately while requiring explicit intent for stable Entities.
 - Provide Entity management in Resource Browser and an Entity Inspector.
 - Define safe instantiate, bind, publish, update, diff, and apply workflows for Entity Assets.
@@ -39,8 +39,8 @@ a real cloud provider exists.
 ### 1. Separate Project Entity from Entity Asset
 
 A Project Entity is a mutable semantic aggregate owned by the workspace. It contains stable project ID,
-kind, names/aliases, accepted facts, lifecycle state, accepted representation intent, provenance, and
-revision. An Entity Asset is an immutable Asset package revision containing a frozen semantic snapshot
+kind, names/aliases, accepted facts, lifecycle state, accepted representation intent, and provenance.
+An Entity Asset is an immutable user-managed Asset package revision containing a frozen semantic snapshot
 and package-owned resources suitable for reuse.
 
 Instantiating an Entity Asset creates a new Project Entity ID and records `originAssetId`, applied Asset
@@ -119,18 +119,68 @@ decisions and cannot distinguish local customization from upstream correction.
 
 ### 7. Package ownership and runtime boundaries
 
-| Owner                     | Package role and canonical public entry                                         | Producer                                                    | Consumer                                             | Runtime boundary                     | Replaced path                                     | User-data impact                                      |
-| ------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------ | ------------------------------------------------- | ----------------------------------------------------- |
-| Entity semantics          | `packages/entity/domain` via `@neko/entity-domain`                              | Entity codec, lifecycle, diff/apply, publication conversion | Node, Search, Webview, Agent effects, Assets adapter | Host-neutral TypeScript              | Fragmented character/per-kind/binding authority   | Defines the only canonical semantic model             |
-| Workspace persistence     | `packages/entity/node` via `@neko/entity-node`                                  | Atomic `neko/entities.json` repository and migration        | Desktop composition                                  | Node filesystem                      | Multiple normal readers/writers                   | Archives, migrates, and atomically commits user facts |
-| Entity search projections | `packages/search/domain` and `packages/search/local-metadata` public entries    | Candidate/occurrence/index projections                      | Entity Webview and Agent query                       | Host-neutral + Node/SQLite adapter   | Ad hoc candidate files and mixed `materials` rows | Rebuildable; never semantic authority                 |
-| Entity presentation       | Entity-owned Webview surface consumed through Resource Browser public contracts | Entity facet and Inspector intents                          | Desktop renderer                                     | Renderer sandbox                     | `materials` facet                                 | No durable facts; projects status and operations      |
-| Asset distribution        | `@neko/assets-domain` public lifecycle ports                                    | Installed/published Entity Asset revisions                  | Entity adapter                                       | Host-neutral contract + Node adapter | Separate Entity catalog/sync idea                 | Does not read mutable project facts                   |
-| Application composition   | `apps/neko-desktop` typed preload/IPC and composition root                      | Sender-bound ports and window lifecycle                     | Renderer/package services                            | Electron                             | App-owned Entity business logic                   | No Entity authority; only Desktop-specific wiring     |
+| Owner                     | Package role and canonical public entry                                         | Producer                                                    | Consumer                                             | Runtime boundary                     | Replaced path                                     | User-data impact                                                |
+| ------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------- |
+| Entity semantics          | `packages/entity/domain` via `@neko/entity-domain`                              | Entity codec, lifecycle, diff/apply, publication conversion | Node, Search, Webview, Agent effects, Assets adapter | Host-neutral TypeScript              | Fragmented character/per-kind/binding authority   | Defines the only canonical semantic model                       |
+| Workspace persistence     | `packages/entity/node` via `@neko/entity-node`                                  | Atomic `neko/entities.json` repository                      | Desktop composition                                  | Node filesystem                      | Multiple normal readers/writers                   | Preserves invalid bytes and atomically commits valid user facts |
+| Entity search projections | `packages/search/domain` and `packages/search/local-metadata` public entries    | Candidate/occurrence/index projections                      | Entity Webview and Agent query                       | Host-neutral + Node/SQLite adapter   | Ad hoc candidate files and mixed `materials` rows | Rebuildable; never semantic authority                           |
+| Entity presentation       | Entity-owned Webview surface consumed through Resource Browser public contracts | Entity facet and Inspector intents                          | Desktop renderer                                     | Renderer sandbox                     | `materials` facet                                 | No durable facts; projects status and operations                |
+| Asset distribution        | `@neko/assets-domain` public lifecycle ports                                    | Installed/published Entity Asset revisions                  | Entity adapter                                       | Host-neutral contract + Node adapter | Separate Entity catalog/sync idea                 | Does not read mutable project facts                             |
+| Application composition   | `apps/neko-desktop` typed preload/IPC and composition root                      | Sender-bound ports and window lifecycle                     | Renderer/package services                            | Electron                             | App-owned Entity business logic                   | No Entity authority; only Desktop-specific wiring               |
 
 Production logic remains in `apps/neko-desktop` only for Electron sender authorization, preload
 projection, window/workspace lifecycle, and composition. Entity semantics, persistence, search projection,
 and publication conversion stay package-owned.
+
+### 8. Resource Browser facets are owner-preserving projections
+
+Workspace Resource management exposes exactly four peer facets: `files`, `media`, `assets`, and
+`entities`. They are views over different authorities, not copied catalogs:
+
+- `files` browses workspace-owned directory and file locators.
+- `media` browses workspace links into Media Library and preserves link availability.
+- `assets` browses reusable Asset Library items by exact Asset identity; selecting one does not
+  instantiate an Entity or copy bytes into the workspace.
+- `entities` browses Project Entity semantic identity and derives representation availability from
+  its owning resources.
+
+Facet switching is Resource Browser display state, not Workbench navigation and not a second tab bar in
+the preview/detail shell. Each facet retains its own selection and navigation state. Cross-owner search
+results must retain their facet, owner identity, lifecycle, availability, and supported operations.
+
+The Entity Inspector is the single semantic management surface. Preview and management intents remain
+Entity/resource operations. Referencing an Entity in the active Agent context, starting Character
+dialogue, opening a Room, or embodying a Character are capability-gated integration intents. Their
+owning package must provide a typed handler and exact Conversation/Character/Room identity; the
+Resource Browser must not synthesize an Agent slash command, mutate Agent Webview state, or restore the
+removed Agent Header roleplay selector.
+
+### 9. Retired authority and consumer inventory
+
+The retirement boundary covers every former producer of Entity semantic facts rather than only the
+Resource Browser reader. The following sources were audited before defining the canonical document:
+
+| Current source                                                                      | Current producer / reader                                                                          | Classification and target                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| root `characters.json`                                                              | `ProjectEntityStore`, character registry adapters, Character profile assembly                      | Retired input remains untouched and product-unreachable; new accepted character facts enter only through canonical Entity operations, while character runtime projections remain owned by Chara.                           |
+| `neko/entities/scenes.json`, `locations.json`, `objects.json`, `styles.json`        | `ProjectEntityStore`, `CreativeEntityService`, Agent core tools                                    | Retired inputs remain untouched; per-kind normal readers are deleted.                                                                                                                                                      |
+| `neko/entities/candidates.json`                                                     | `CandidateStore`, `CreativeEntityService`, Search Entity adapter                                   | Evidence, confidence, source references, freshness, rejection and dismissal are rebuildable/workflow projection state; an explicitly confirmed or merged result becomes a canonical operation, not a copied candidate row. |
+| `neko/entity-representation-bindings.json`                                          | `EntityRepresentationBindingService`, Resource Browser, Canvas/Cut/Agent representation resolution | Retired bindings remain untouched; new confirmed target, role, default selection, source and acceptance enter only through canonical operations, while availability remains derived.                                       |
+| `neko/entity-asset-requirements.json`                                               | `EntityAssetRequirementService`, Chara profile assembly                                            | Current missing/suggested/generated/bound/dismissed rows are workflow state. Explicitly accepted representation intent is represented by canonical bindings; unresolved rows are archived for inspection.                  |
+| `neko/visual-identity-drafts.json`                                                  | `VisualIdentityDraftService`, Chara profile assembly                                               | Prompts, generated output selections and extracted suggestions are authoring workflow state and remain outside canonical identity facts; accepted semantic values or bindings enter only through typed Entity operations.  |
+| Entity Asset projection records in local metadata                                   | `EntityAssetMetadataProjector`, Search local metadata binding                                      | Candidate, occurrence, binding availability and freshness remain rebuildable projections; they never become a second fact authority.                                                                                       |
+| Asset manifests and installed packages                                              | Assets manifest/lifecycle readers                                                                  | Immutable Entity Asset snapshots and exact package resources are import/publication inputs. Install, uninstall and sync never mutate Project Entity facts.                                                                 |
+| Canvas/NKC, Agent context, Chara memory/dialogue and project portability references | Canvas contracts, Agent content effects/tools, Chara runtimes, Assets reference readers            | These are typed reference consumers. Merge/deprecate/delete must obtain a complete rewrite or blocker response from each owner; they do not own Entity facts.                                                              |
+
+The normal consumer switch includes `CreativeEntityService`, Search `creative-entities`, Resource Browser,
+Agent Entity capability/content effects, Canvas material Entity refs, Chara profile/dialogue projection,
+and Assets project-reference/portability readers. Product tests prove retired inputs are unreachable;
+only an explicitly authorized offline repair tool outside the product graph may inspect them.
+
+`scene` is a valid Project Entity kind in the canonical document. The current generic Asset manifest
+`IdentityMetadata.identityKind` does not yet include `scene`; therefore scene Entity Asset publication
+must fail with a typed unsupported-kind diagnostic until task 4.2 expands and tests that public Asset
+contract. Project Entity storage and management must not omit or remap scene identity in the meantime.
 
 ## Risks / Trade-offs
 
@@ -144,30 +194,93 @@ and publication conversion stay package-owned.
   require package copy or installable Asset dependency.
 - **[Risk] Merge leaves dangling references** → Require a complete typed reference rewrite plan and fail
   before commit when any owner cannot participate.
-- **[Trade-off] One JSON authority increases write contention** → Use expected revision and atomic replace;
-  the local Desktop product has bounded writers and benefits from atomic cross-Entity operations.
+- **[Trade-off] One JSON authority increases write contention** → Serialize mutations in the workspace
+  Entity owner and use atomic replace with exact request identity.
 
-## Migration Plan
+## Replacement Plan
 
-1. Add the canonical Entity codec/repository and a read-only inventory of all current Entity-related
-   files and known project references.
-2. Produce a migration plan and immutable archive with input digests; require confirmation for ambiguous
-   facts, identity merges, or unknown fields.
-3. Write `neko/entities.json` atomically under expected workspace revision, rebuild candidate/search/
+1. Add the canonical Entity codec/repository and identify all product-reachable Entity producers.
+2. Delete fragmented readers/writers and prove retired files remain untouched and product-unreachable.
+3. Write `neko/entities.json` atomically through the workspace Entity owner, compute candidate/search/
    availability projections, and verify reference resolution.
 4. Switch Entity consumers, Resource Browser, Agent effects, and bindings to the canonical public ports.
-5. Poison fragmented normal readers/writers; retain old files only in the explicit recovery archive.
+5. Prove fragmented normal readers/writers, fallback mappings and product recovery archives are absent.
 6. Enable Entity Asset instantiate/publish/update workflows over the generic Asset adapter and verify that
    cloud sync never reads the project Entity document.
 
-Before the canonical switch, rollback leaves existing files untouched. After a successful switch,
-rollback exports from the canonical document or restores the immutable archive with explicit user intent;
-normal legacy readers are not re-enabled.
+Rollback is source-level and leaves all existing files untouched; normal retired readers are not re-enabled.
 
 ## Open Questions
 
-- Which existing Entity-related fields are true accepted project facts versus workflow drafts requiring
-  archive-only preservation?
-- Which project reference owners must participate in the first merge/rewrite transaction?
-- Should `scene` be added to the current `IdentityMetadata.identityKind` in the same implementation or in
-  a prerequisite contract cleanup?
+- Which Canvas, Agent, Chara, document, and portability reference owners can participate atomically in
+  the first merge/rewrite transaction, and which must initially return a typed blocker?
+
+## Implementation Dependency Status
+
+As of 2026-08-05, the canonical `neko/entities.json` repository, retired-path removal, candidate and
+availability projections, Resource Browser Inspector, package-owned `entity.manage` route, and basic
+confirm/edit/bind/unbind Desktop delegation are implemented. The Desktop application root only injects
+the exact workspace and public repositories; Entity IDs, timestamps, operation semantics, canonical
+commit, candidate decision, and interruption recovery remain package-owned.
+
+Production merge/deprecate remains capability-blocked because the complete Canvas, Agent, Chara,
+document, portability, and other reference-owner participant set is not yet configured. The dependency
+change `establish-manifest-backed-asset-library` remains 0/25: there is no production immutable package
+runtime, exact-revision reader, publication lifecycle, cloud provider, or tombstone path. Entity Asset
+services and typed ports are deterministic and tested, but instantiate/publish/diff/apply-update must not
+be exposed as successful production operations until that owner is implemented and wired.
+
+## Verification Status
+
+On 2026-08-05, affected package tests/typechecks, `pnpm build`, `pnpm test`, `pnpm check`,
+`pnpm check:legacy-debt`, `pnpm check:unused`, and the complete `pnpm ci:local` gate passed. Canonical
+resource and path tests prove fragmented readers are absent, serialize owner mutations, and keep
+interrupted candidate decisions local without returning partial success.
+
+The real Electron `resource-browser-entity-management` scenario passed and produced canonical revision 2
+after candidate confirmation, then projected a missing binding as needs-attention and retained two exact
+reference blockers. Unsupported Asset lifecycle operations were absent, and the run recorded no console
+errors, warnings, or exceptions. The report is stored under the gitignored local evidence root at
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T23-22-38.720Z-resource-browser-entity-management-development/report.json`.
+
+Unknown legacy fields remain classified as `unresolved-archive`; ambiguous identity or binding values
+remain explicit confirmation items. Residual user-data risk is limited to real heterogeneous workspace
+migration coverage, not an unclassified deletion path. Complete reference-owner participation and the
+manifest-backed publication/provider/tombstone runtime remain capability blockers, so tasks 5.3, 5.4,
+and 6.3 stay open.
+
+## Project-open invalid-data containment
+
+`@neko/entity-node` reads only the canonical document and refreshes Entity/candidate/occurrence projections from
+independently valid current facts. Unsupported document metadata remains an exact diagnostic and blocks mutation
+without hiding valid records or rewriting bytes. A document owned by another Project identity is not adopted as
+current authority; the Entity facet reports the mismatch while other resource facets, Workspaces and Desktop Shell
+remain usable. Desktop Main only injects authorized workspace and local-metadata ports. No migration, compatibility
+reader, retired-source inspection or fallback participates in project open.
+
+## Resource context-menu ownership
+
+Resource Browser owns one presentation-level context menu whose commands are derived from the selected
+facet, item role, and declared capabilities. Workspace Files may create directories, import picker-authorized
+local files, and move files or directories to the OS Trash through Assets Node operations with expected
+projection revision and contained workspace locators. Import copies bytes in Node and never transports large
+file bodies through Renderer IPC.
+
+Media exposes library-link management and existing content actions, but deleting a linked content item is not
+offered because the physical library may be shared by multiple projects. Assets remain read-only until the
+manifest-backed Asset lifecycle owner exists. Entity lifecycle changes remain typed Entity Inspector intents.
+The menu must not infer a generic delete operation across these owners or turn unsupported operations into a
+successful no-op.
+
+## Component-local data lifecycle
+
+Resource Browser presentation state is rebuildable component-local memory. It has no schema/version field and no
+migration path. A stale selection, expanded container, query, or view preference is discarded or reconciled only
+inside the exact project Resource Browser instance; it never invalidates Project Entity facts, workspace content,
+Canvas, Agent, or the surrounding Desktop scene.
+
+Main/preload/Renderer messages are ephemeral typed wire contracts rather than component data. They remain strict
+and fail-visible, but every runtime must load their canonical package source instead of a copied dependency
+prebundle. Development reload does not add old/new-version compatibility branches: a changed contract rebuilds the
+participating runtimes together. A Resource Browser snapshot or operation failure renders the owner-local
+unavailable state and must not replace or disable sibling product surfaces.

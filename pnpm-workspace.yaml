@@ -31,6 +31,10 @@ packageExtensions:
     peerDependencies:
       '@electron/fuses': ^1.0.0 || ^2.0.0
 
+patchedDependencies:
+  # Remove after Vite bundles the fix from https://github.com/rollup/plugins/pull/1876.
+  vite@6.4.2: patches/vite@6.4.2.patch
+
 ignoredBuiltDependencies:
   - esbuild
   - sharp

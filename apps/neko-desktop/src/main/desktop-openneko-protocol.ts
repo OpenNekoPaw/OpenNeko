@@ -19,6 +19,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
   '.json': 'application/json; charset=utf-8',
   '.map': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.ttf': 'font/ttf',
   '.woff2': 'font/woff2',
 };
 

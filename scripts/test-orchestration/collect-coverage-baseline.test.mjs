@@ -45,7 +45,6 @@ async function createFixture(options = {}) {
   await writeFile(
     join(root, 'quality/test-ownership.json'),
     JSON.stringify({
-      schemaVersion: 'neko.test-ownership.v1',
       workspaces: [
         {
           path: 'packages/example',

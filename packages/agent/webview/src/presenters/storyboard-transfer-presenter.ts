@@ -188,7 +188,7 @@ function isCanvasReferenceImagePathUsable(value: string): boolean {
   if (/^(?:p|page|image|img|panel)[_-]?\d{1,4}$/i.test(value.trim())) return false;
   if (/^p\d{1,4}$/i.test(value.trim())) return false;
   const normalized = value.replace(/\\/g, '/').toLowerCase();
-  if (normalized.includes('/.neko/.cache/')) return false;
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) return false;
   if (value.startsWith('data:') || value.startsWith('http://') || value.startsWith('https://')) {
     return true;
   }

@@ -7,9 +7,21 @@ import type {
   PreviewProjection,
   PreviewHostRuntimeRoute,
 } from '@neko/preview-domain';
-import { PREVIEW_HOST_RUNTIME_ROUTES, PREVIEW_HOST_RUNTIME_VERSION } from '@neko/preview-domain';
+import type {
+  AuthorizedPreviewSessionProjection,
+  AuthorizedPreviewSessionRuntime,
+} from '@neko/preview-domain/authorized-session';
+import { PREVIEW_HOST_RUNTIME_ROUTES } from '@neko/preview-domain';
 import type { SupportedLocale } from '@neko/ui/i18n';
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService, setLocale } from '../i18n';
 import { ModelViewer } from '../model/ModelViewer';
@@ -20,6 +32,9 @@ import { EpubViewer } from '../epub/EpubViewer';
 import { PdfViewer } from '../pdf/PdfViewer';
 import { AudioPlayer } from '../audio/AudioPlayer';
 import { VideoPlayer } from '../video/VideoPlayer';
+import { PersistedStateProvider } from '../shared/usePersistedState';
+import type { PreviewViewerSnapshot, PreviewViewerSnapshotStore } from './viewer-snapshot';
+import { useOptionalPreviewViewerSnapshotStore } from './viewer-snapshot-context';
 import '../model/model.css';
 import '../styles/player.css';
 import './style.css';
@@ -27,10 +42,33 @@ import './style.css';
 export interface PreviewRootProps {
   readonly runtime: PreviewHostRuntime;
   readonly locale: SupportedLocale;
+  readonly chrome?: PreviewChrome;
+  readonly lifecyclePresentation?: 'active' | 'suspended';
+  readonly snapshotStore?: PreviewViewerSnapshotStore;
+}
+
+export type PreviewChrome = 'default' | 'content-only';
+
+export interface AuthorizedPreviewRootProps {
+  readonly runtime: AuthorizedPreviewSessionRuntime;
+  readonly locale: SupportedLocale;
+  readonly chrome?: PreviewChrome;
+  readonly lifecyclePresentation?: 'active' | 'suspended';
+  readonly snapshotStore?: PreviewViewerSnapshotStore;
 }
 
 export interface QuickPreviewSurfaceProps {
-  readonly descriptor: PreviewMediaDescriptor;
+  readonly descriptor: Pick<
+    PreviewMediaDescriptor,
+    | 'byteLength'
+    | 'contentKind'
+    | 'contentLocator'
+    | 'descriptorId'
+    | 'displayName'
+    | 'mediaType'
+    | 'url'
+  > &
+    Partial<Pick<PreviewMediaDescriptor, 'sourceFingerprint'>>;
   readonly locale: SupportedLocale;
 }
 
@@ -85,6 +123,8 @@ export interface PreviewViewerProps {
   readonly descriptor: PreviewMediaDescriptor;
   readonly sourceUrl: string;
   readonly locale: SupportedLocale;
+  readonly snapshot?: PreviewViewerSnapshot;
+  readonly onSnapshotChange: (update: Partial<PreviewViewerSnapshot>) => void;
 }
 
 export interface PreviewViewerRegistration {
@@ -105,7 +145,86 @@ export function getPreviewViewerRegistry(): readonly PreviewViewerRegistration[]
   return VIEWERS;
 }
 
-export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement {
+export function PreviewPresentation({
+  actions,
+  authorizedPreviewSessionId,
+  chrome = 'default',
+  descriptor,
+  locale,
+  lifecyclePresentation = 'active',
+  snapshotStore: explicitSnapshotStore,
+}: {
+  readonly actions?: ReactNode;
+  readonly authorizedPreviewSessionId?: string;
+  readonly chrome?: PreviewChrome;
+  readonly descriptor: PreviewMediaDescriptor;
+  readonly locale: SupportedLocale;
+  readonly lifecyclePresentation?: 'active' | 'suspended';
+  readonly snapshotStore?: PreviewViewerSnapshotStore;
+}): ReactElement {
+  const contextSnapshotStore = useOptionalPreviewViewerSnapshotStore();
+  const snapshotStore = explicitSnapshotStore ?? contextSnapshotStore;
+  if (!snapshotStore) {
+    throw new Error('Preview Viewer snapshot owner is missing.');
+  }
+  const updateSnapshot = useCallback(
+    (update: Partial<PreviewViewerSnapshot>) =>
+      snapshotStore.update(descriptor.descriptorId, update),
+    [descriptor.descriptorId, snapshotStore],
+  );
+  const viewer = VIEWERS.find((candidate) => candidate.kind === descriptor.contentKind);
+  if (!viewer) {
+    return (
+      <PreviewStatus
+        chrome={chrome}
+        message={label(locale, '没有可用的预览器', 'No viewer is available')}
+      />
+    );
+  }
+  return (
+    <section
+      className="neko-preview-root"
+      data-authorized-preview-session-id={authorizedPreviewSessionId}
+      data-preview-chrome={chrome}
+      data-preview-kind={descriptor.contentKind}
+      data-preview-presentation-owner="preview-webview"
+      data-lifecycle-presentation={lifecyclePresentation}
+    >
+      {chrome === 'default' ? (
+        <header>
+          <div className="neko-preview-root__heading">
+            <strong>{descriptor.displayName}</strong>
+            <span>{descriptor.mediaType}</span>
+          </div>
+          {actions}
+        </header>
+      ) : null}
+      {lifecyclePresentation === 'active' ? (
+        <div className="neko-preview-root__viewer">
+          {viewer.render({
+            descriptor,
+            sourceUrl: descriptor.url,
+            locale,
+            ...(snapshotStore.read(descriptor.descriptorId)
+              ? { snapshot: snapshotStore.read(descriptor.descriptorId) }
+              : {}),
+            onSnapshotChange: updateSnapshot,
+          })}
+        </div>
+      ) : (
+        <div data-preview-suspended="true" hidden />
+      )}
+    </section>
+  );
+}
+
+export function PreviewRoot({
+  chrome = 'default',
+  lifecyclePresentation = 'active',
+  locale,
+  runtime,
+  snapshotStore,
+}: PreviewRootProps): ReactElement {
   const [state, setState] = useState<PreviewRootState>({ kind: 'loading' });
   const [pendingRoute, setPendingRoute] = useState<PreviewHostRuntimeRoute>();
   const sequence = useRef(0);
@@ -146,46 +265,38 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
 
   if (state.kind === 'loading') {
     return (
-      <div className="neko-preview-root__status">
-        {label(locale, '正在载入预览…', 'Loading preview…')}
-      </div>
+      <PreviewStatus chrome={chrome} message={label(locale, '正在载入预览…', 'Loading preview…')} />
     );
   }
   if (state.kind === 'error') {
     return (
-      <div className="neko-preview-root__status is-error" role="alert">
-        <strong>{label(locale, '预览不可用', 'Preview unavailable')}</strong>
-        <span>{state.message}</span>
-      </div>
+      <PreviewStatus
+        chrome={chrome}
+        error
+        message={state.message}
+        title={label(locale, '预览不可用', 'Preview unavailable')}
+      />
     );
   }
   const projection = state.projection;
   if (projection.status !== 'ready') {
     return (
-      <div className="neko-preview-root__status is-error" role="status">
-        <strong>
-          {projection.status === 'unsupported'
+      <PreviewStatus
+        chrome={chrome}
+        error
+        message={projection.diagnostic.message}
+        title={
+          projection.status === 'unsupported'
             ? label(locale, '暂不支持此文件', 'Unsupported file')
-            : label(locale, '预览不可用', 'Preview unavailable')}
-        </strong>
-        <span>{projection.diagnostic.message}</span>
-      </div>
+            : label(locale, '预览不可用', 'Preview unavailable')
+        }
+      />
     );
   }
-  const viewer = VIEWERS.find((candidate) => candidate.kind === projection.descriptor.contentKind);
-  if (!viewer) {
-    return (
-      <div className="neko-preview-root__status is-error" role="status">
-        {label(locale, '没有可用的预览器', 'No viewer is available')}
-      </div>
-    );
-  }
-  const sourceUrl = projection.descriptor.url;
   const executeViewRoute = async (route: PreviewHostRuntimeRoute): Promise<void> => {
     setPendingRoute(route);
     try {
       const next = await runtime.execute({
-        schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
         requestId: globalThis.crypto.randomUUID(),
         route,
         identity: projection.identity,
@@ -198,12 +309,13 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
     }
   };
   return (
-    <section className="neko-preview-root" data-preview-kind={projection.descriptor.contentKind}>
-      <header>
-        <div className="neko-preview-root__heading">
-          <strong>{projection.descriptor.displayName}</strong>
-          <span>{projection.descriptor.mediaType}</span>
-        </div>
+    <PreviewPresentation
+      chrome={chrome}
+      lifecyclePresentation={lifecyclePresentation}
+      descriptor={projection.descriptor}
+      locale={locale}
+      snapshotStore={snapshotStore}
+      actions={
         <div
           className="neko-preview-root__actions"
           aria-label={label(locale, '预览布局', 'Preview layout')}
@@ -231,11 +343,84 @@ export function PreviewRoot({ locale, runtime }: PreviewRootProps): ReactElement
             onClick={() => void executeViewRoute(PREVIEW_HOST_RUNTIME_ROUTES.viewClose)}
           />
         </div>
-      </header>
-      <div className="neko-preview-root__viewer">
-        {viewer.render({ descriptor: projection.descriptor, sourceUrl, locale })}
-      </div>
-    </section>
+      }
+    />
+  );
+}
+
+export function AuthorizedPreviewRoot({
+  chrome = 'default',
+  lifecyclePresentation = 'active',
+  locale,
+  runtime,
+  snapshotStore,
+}: AuthorizedPreviewRootProps): ReactElement {
+  const [projection, setProjection] = useState<AuthorizedPreviewSessionProjection>();
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    setLocale(locale);
+  }, [locale]);
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = runtime.subscribe((next) => {
+      if (active) setProjection(next);
+    });
+    void runtime.getSnapshot().then(
+      (next) => {
+        if (active) setProjection(next);
+      },
+      (reason: unknown) => {
+        if (active) setError(describeError(reason));
+      },
+    );
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [runtime]);
+  if (error) {
+    return <PreviewStatus chrome={chrome} error message={error} />;
+  }
+  if (!projection) {
+    return (
+      <PreviewStatus chrome={chrome} message={label(locale, '正在载入预览…', 'Loading preview…')} />
+    );
+  }
+  if (projection.status !== 'ready') {
+    return <PreviewStatus chrome={chrome} error message={projection.diagnostic.message} />;
+  }
+  return (
+    <PreviewPresentation
+      authorizedPreviewSessionId={projection.identity.previewSessionId}
+      chrome={chrome}
+      descriptor={projection.descriptor}
+      locale={locale}
+      lifecyclePresentation={lifecyclePresentation}
+      snapshotStore={snapshotStore}
+    />
+  );
+}
+
+function PreviewStatus({
+  chrome = 'default',
+  error = false,
+  message,
+  title,
+}: {
+  readonly chrome?: PreviewChrome;
+  readonly error?: boolean;
+  readonly message: string;
+  readonly title?: string;
+}): ReactElement {
+  return (
+    <div
+      className={`neko-preview-root__status${error ? ' is-error' : ''}`}
+      data-preview-chrome={chrome}
+      role={error ? 'alert' : 'status'}
+    >
+      {title ? <strong>{title}</strong> : null}
+      <span>{message}</span>
+    </div>
   );
 }
 
@@ -267,18 +452,38 @@ function ImagePreview({ descriptor, sourceUrl }: PreviewViewerProps): ReactEleme
   return <img className="neko-preview-root__image" src={sourceUrl} alt={descriptor.displayName} />;
 }
 
-function VideoPreview({ descriptor, sourceUrl }: PreviewViewerProps): ReactElement {
+function VideoPreview({
+  descriptor,
+  onSnapshotChange,
+  snapshot,
+  sourceUrl,
+}: PreviewViewerProps): ReactElement {
   return (
     <I18nProvider service={i18nService}>
-      <VideoPlayer sourceUrl={sourceUrl} displayName={descriptor.displayName} />
+      <VideoPlayer
+        sourceUrl={sourceUrl}
+        displayName={descriptor.displayName}
+        initialSnapshot={snapshot?.media}
+        onSnapshotChange={(media) => onSnapshotChange({ media })}
+      />
     </I18nProvider>
   );
 }
 
-function AudioPreview({ descriptor, sourceUrl }: PreviewViewerProps): ReactElement {
+function AudioPreview({
+  descriptor,
+  onSnapshotChange,
+  snapshot,
+  sourceUrl,
+}: PreviewViewerProps): ReactElement {
   return (
     <I18nProvider service={i18nService}>
-      <AudioPlayer sourceUrl={sourceUrl} displayName={descriptor.displayName} />
+      <AudioPlayer
+        sourceUrl={sourceUrl}
+        displayName={descriptor.displayName}
+        initialSnapshot={snapshot?.media}
+        onSnapshotChange={(media) => onSnapshotChange({ media })}
+      />
     </I18nProvider>
   );
 }
@@ -308,7 +513,13 @@ function TextPreview({ sourceUrl, locale }: PreviewViewerProps): ReactElement {
   return <pre className="neko-preview-root__text">{state.text}</pre>;
 }
 
-function DocumentPreview({ descriptor, locale, sourceUrl }: PreviewViewerProps): ReactElement {
+function DocumentPreview({
+  descriptor,
+  locale,
+  onSnapshotChange,
+  snapshot,
+  sourceUrl,
+}: PreviewViewerProps): ReactElement {
   let viewer: ReactElement;
   switch (descriptor.mediaType) {
     case 'application/pdf':
@@ -330,21 +541,39 @@ function DocumentPreview({ descriptor, locale, sourceUrl }: PreviewViewerProps):
         </div>
       );
   }
-  return <I18nProvider service={i18nService}>{viewer}</I18nProvider>;
+  return (
+    <PersistedStateProvider
+      key={descriptor.descriptorId}
+      initialState={snapshot?.documentState}
+      onStateChange={(documentState) => onSnapshotChange({ documentState })}
+    >
+      <I18nProvider service={i18nService}>{viewer}</I18nProvider>
+    </PersistedStateProvider>
+  );
 }
 
-function ModelPreview({ descriptor, locale, sourceUrl }: PreviewViewerProps): ReactElement {
+function ModelPreview({
+  descriptor,
+  locale,
+  onSnapshotChange,
+  snapshot,
+  sourceUrl,
+}: PreviewViewerProps): ReactElement {
   const source = useMemo(
     () => createModelSourceDescriptor(descriptor, sourceUrl),
     [descriptor, sourceUrl],
   );
-  const host = useMemo(
-    () =>
-      createSourceModelViewerHost({
-        sessionId: descriptor.descriptorId,
-        source,
-      }),
-    [descriptor.descriptorId, source],
+  const host = useMemo(() => {
+    const next = createSourceModelViewerHost({
+      sessionId: descriptor.descriptorId,
+      source,
+    });
+    if (snapshot?.modelState !== undefined) next.setState(snapshot.modelState);
+    return next;
+  }, [descriptor.descriptorId, snapshot?.modelState, source]);
+  useEffect(
+    () => () => onSnapshotChange({ modelState: host.getState() }),
+    [host, onSnapshotChange],
   );
   useEffect(() => {
     setLocale(locale);
@@ -363,7 +592,7 @@ function createModelSourceDescriptor(
   const format = modelFormat(descriptor.displayName);
   return {
     source: descriptor.contentLocator,
-    sourceFingerprint: descriptor.revision,
+    sourceFingerprint: descriptor.sourceFingerprint,
     format,
     entryUri: sourceUrl,
     uriMap: descriptor.resourceUris ?? { [descriptor.displayName]: sourceUrl },

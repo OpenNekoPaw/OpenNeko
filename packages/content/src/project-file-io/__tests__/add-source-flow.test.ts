@@ -301,30 +301,16 @@ describe('Project source add Extension Host adapter', () => {
         requestId: 'cache-1',
         kind: 'drag-drop',
         formatId: 'nkc',
-        sourcePath: '/workspace/project/.neko/.cache/proxy/clip.mp4',
+        sourcePath: '/home/user/.neko/workspace-cache/workspace-id/proxy/clip.mp4',
         assetDirectory: 'media',
       },
       { postMessage: vi.fn(), storagePort: { store } },
     );
-    const retiredHost = await handleProjectSourceAddHostRequest(
-      {
-        requestId: 'retired-host-runtime-1',
-        kind: 'drag-drop',
-        formatId: 'nkc',
-        sourcePath: 'vscode-webview-resource://panel/clip.mp4',
-        assetDirectory: 'media',
-      },
-      { postMessage: vi.fn(), storagePort: { store } },
-    );
-
     expect(runtime.diagnostics).toEqual([
       expect.objectContaining({ code: 'runtime-handle-persisted' }),
     ]);
     expect(cache.diagnostics).toEqual([
       expect.objectContaining({ code: 'cache-source-persisted' }),
-    ]);
-    expect(retiredHost.diagnostics).toEqual([
-      expect.objectContaining({ code: 'runtime-handle-persisted' }),
     ]);
     expect(store).not.toHaveBeenCalled();
   });

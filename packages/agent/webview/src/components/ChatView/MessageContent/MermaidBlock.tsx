@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { AgentHostMessages } from '../../../messages';
+import { useAgentHostMessages } from '../../../host-runtime-context';
 import { useMessageActions } from '../MessageActionsContext';
 import { getLogger } from '../../../utils/logger';
 import {
@@ -173,6 +173,7 @@ function getErrorHints(error: string, code: string): string[] {
 
 function MermaidBlockComponent({ code }: MermaidBlockProps) {
   const { activeConversationId } = useMessageActions();
+  const agentHostMessages = useAgentHostMessages();
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -246,8 +247,8 @@ function MermaidBlockComponent({ code }: MermaidBlockProps) {
   const handleDownload = useCallback(() => {
     if (!svg) return;
 
-    AgentHostMessages.downloadSvg(svg, 'mermaid-diagram.svg');
-  }, [svg]);
+    agentHostMessages.downloadSvg(svg, 'mermaid-diagram.svg');
+  }, [agentHostMessages, svg]);
 
   // Send feedback to LLM about the error
   const handleReportError = useCallback(() => {
@@ -268,10 +269,10 @@ Please fix the Mermaid syntax. Common issues:
 2. Escape special characters in node labels
 3. Ensure all brackets and quotes are properly matched`;
 
-    AgentHostMessages.mermaidError(error, code, feedbackMessage, activeConversationId);
+    agentHostMessages.mermaidError(error, code, feedbackMessage, activeConversationId);
 
     setFeedbackSent(true);
-  }, [error, code, feedbackSent, activeConversationId]);
+  }, [activeConversationId, agentHostMessages, code, error, feedbackSent]);
 
   const toggleSource = useCallback(() => {
     setShowSource((prev) => !prev);

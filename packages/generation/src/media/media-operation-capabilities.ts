@@ -1,6 +1,5 @@
 import type { ProviderType } from '@neko/ai-contracts';
 import {
-  CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION,
   type CreativeMediaControlId,
   type CreativeMediaOperationDiagnostic,
   type CreativeMediaOperationSupport,
@@ -99,7 +98,6 @@ export function getProviderVideoOperationSupport(
     });
   }
   return {
-    version: CREATIVE_MEDIA_OPERATION_CONTRACT_VERSION,
     mediaKind: 'video',
     operationId,
     level: profile.level,
@@ -279,8 +277,7 @@ function providerThreeReferenceImageControls(
     return ['pose-control', 'depth-control'];
   }
   const usesChatImageRuntime =
-    modelCapabilities.includes('chat') &&
-    (modelCapabilities.includes('image_generation') || modelCapabilities.includes('text_to_image'));
+    modelCapabilities.includes('chat') && modelCapabilities.includes('text_to_image');
   if (
     !usesChatImageRuntime &&
     ['generic', 'newapi', 'oneapi', 'xai', 'kling'].includes(providerType)

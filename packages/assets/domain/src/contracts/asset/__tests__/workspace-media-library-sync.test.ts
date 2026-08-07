@@ -14,7 +14,7 @@ describe('Workspace Media Library sync contracts', () => {
         {
           ownerKind: 'canvas',
           ownerId: 'board-a',
-          revision: 'revision-2',
+          sourceFingerprint: 'sourceFingerprint-2',
           references: [
             { kind: 'workspace-file', path: 'neko/assets/Footage/shots/a.mov' },
             { kind: 'workspace-file', path: 'neko/assets/Footage/shots/a.mov' },
@@ -29,7 +29,7 @@ describe('Workspace Media Library sync contracts', () => {
         {
           ownerKind: 'cut',
           ownerId: 'timeline-a',
-          revision: 'revision-1',
+          sourceFingerprint: 'sourceFingerprint-1',
           references: [{ kind: 'workspace-file', path: 'neko/assets/Footage/audio/a.wav' }],
         },
       ],
@@ -40,7 +40,7 @@ describe('Workspace Media Library sync contracts', () => {
     });
 
     expect(snapshot).toMatchObject({
-      revision: expect.stringMatching(/^requirements:[a-f0-9]+$/),
+      fingerprint: expect.stringMatching(/^requirements:[a-f0-9]+$/),
       coverage: 'incomplete',
       missingOwnerKinds: ['entity-representation'],
     });
@@ -71,7 +71,7 @@ describe('Workspace Media Library sync contracts', () => {
           {
             ownerKind: 'canvas',
             ownerId: 'board-a',
-            revision: 'revision-1',
+            sourceFingerprint: 'sourceFingerprint-1',
             references: [{ kind: 'workspace-file', path: 'neko/assets/Footage' }],
           },
         ],
@@ -90,10 +90,9 @@ describe('Workspace Media Library sync contracts', () => {
   ])('rejects target-bearing task payload fields: %o', (extra) => {
     expect(() =>
       parsePortableMediaLibrarySnapshotTaskPayload({
-        version: 1,
         workspaceId: 'workspace-a',
         snapshotId: 'snapshot-a',
-        requirementRevision: 'revision-a',
+        requirementFingerprint: 'sourceFingerprint-a',
         status: 'planned',
         completedEntryCount: 0,
         totalEntryCount: 1,
@@ -104,10 +103,9 @@ describe('Workspace Media Library sync contracts', () => {
 
   it('rejects unknown durable task states and diagnostics', () => {
     const payload = {
-      version: 1,
       workspaceId: 'workspace-a',
       snapshotId: 'snapshot-a',
-      requirementRevision: 'revision-a',
+      requirementFingerprint: 'sourceFingerprint-a',
       completedEntryCount: 0,
       totalEntryCount: 1,
     };
@@ -136,11 +134,10 @@ describe('Workspace Media Library sync contracts', () => {
   ])('rejects target-bearing portable plan fields: %o', (extra) => {
     expect(() =>
       parsePortableMediaLibrarySnapshotPlan({
-        version: 1,
         snapshotId: 'snapshot-a',
         workspaceId: 'workspace-a',
-        requirementRevision: 'requirements:abc',
-        operationRevision: 'operation-a',
+        requirementFingerprint: 'requirements:abc',
+        operationFingerprint: 'operation-a',
         entryCount: 1,
         totalByteLength: 12,
         libraries: [
@@ -158,11 +155,10 @@ describe('Workspace Media Library sync contracts', () => {
   it('validates portable plan totals and progress bounds', () => {
     expect(
       parsePortableMediaLibrarySnapshotPlan({
-        version: 1,
         snapshotId: 'snapshot-a',
         workspaceId: 'workspace-a',
-        requirementRevision: 'requirements:abc',
-        operationRevision: 'operation-a',
+        requirementFingerprint: 'requirements:abc',
+        operationFingerprint: 'operation-a',
         entryCount: 1,
         totalByteLength: 12,
         libraries: [
@@ -177,11 +173,10 @@ describe('Workspace Media Library sync contracts', () => {
 
     expect(() =>
       parsePortableMediaLibrarySnapshotPlan({
-        version: 1,
         snapshotId: 'snapshot-a',
         workspaceId: 'workspace-a',
-        requirementRevision: 'requirements:abc',
-        operationRevision: 'operation-a',
+        requirementFingerprint: 'requirements:abc',
+        operationFingerprint: 'operation-a',
         entryCount: 2,
         totalByteLength: 12,
         libraries: [
@@ -196,10 +191,9 @@ describe('Workspace Media Library sync contracts', () => {
 
     expect(() =>
       parsePortableMediaLibrarySnapshotProgress({
-        version: 1,
         snapshotId: 'snapshot-a',
         workspaceId: 'workspace-a',
-        requirementRevision: 'requirements:abc',
+        requirementFingerprint: 'requirements:abc',
         status: 'running',
         completedEntryCount: 1,
         totalEntryCount: 1,
@@ -210,10 +204,9 @@ describe('Workspace Media Library sync contracts', () => {
 
     expect(() =>
       parsePortableMediaLibrarySnapshotProgress({
-        version: 1,
         snapshotId: 'snapshot-a',
         workspaceId: 'workspace-a',
-        requirementRevision: 'requirements:abc',
+        requirementFingerprint: 'requirements:abc',
         status: 'running',
         completedEntryCount: 0,
         totalEntryCount: 1,
@@ -227,20 +220,18 @@ describe('Workspace Media Library sync contracts', () => {
   it('accepts only portable minimal checkpoint entry keys', () => {
     expect(
       parsePortableMediaLibrarySnapshotCheckpointPayload({
-        version: 1,
         workspaceId: 'workspace-a',
         snapshotId: 'snapshot-a',
-        requirementRevision: 'revision-a',
+        requirementFingerprint: 'sourceFingerprint-a',
         completedEntryKeys: ['media/collected/Footage/a.mov'],
       }),
     ).toMatchObject({ completedEntryKeys: ['media/collected/Footage/a.mov'] });
 
     expect(() =>
       parsePortableMediaLibrarySnapshotCheckpointPayload({
-        version: 1,
         workspaceId: 'workspace-a',
         snapshotId: 'snapshot-a',
-        requirementRevision: 'revision-a',
+        requirementFingerprint: 'sourceFingerprint-a',
         completedEntryKeys: ['/Volumes/Media/a.mov'],
       }),
     ).toThrow('entry key is invalid');

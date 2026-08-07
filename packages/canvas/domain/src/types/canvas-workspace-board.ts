@@ -9,7 +9,6 @@ import {
 } from './canvas-material-contracts';
 import { hashStableValue } from '@neko/shared';
 
-export const CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION = 2 as const;
 export const CANVAS_WORKSPACE_BOARD_PATH = 'neko/boards/workspace.nkc' as const;
 
 export type CanvasWorkspaceProjectionKind = 'markdown' | 'file-reference' | GeneratedAssetMediaKind;
@@ -36,10 +35,9 @@ export interface CanvasWorkspaceDeliveryProcess {
 }
 
 export interface CanvasWorkspaceProjectionProvenance {
-  readonly version: typeof CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION;
   readonly deliveryId: string;
   readonly artifactId: string;
-  readonly revision: string;
+  readonly contentFingerprint: string;
   readonly kind: CanvasWorkspaceProjectionKind;
   readonly role: CanvasWorkspaceArtifactRole;
   readonly sourceId: string;
@@ -79,7 +77,6 @@ export type CanvasWorkspaceProjectionArtifact =
   CanvasWorkspaceMarkdownProjectionArtifact | CanvasWorkspaceResourceProjectionArtifact;
 
 export interface CanvasWorkspaceProjectionRequest {
-  readonly version: typeof CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION;
   readonly target: CanvasWorkspaceProjectionTarget;
   readonly process: CanvasWorkspaceDeliveryProcess;
   readonly artifacts: readonly CanvasWorkspaceProjectionArtifact[];
@@ -96,7 +93,6 @@ export interface CanvasWorkspaceProjectionResolvedTarget {
 }
 
 export type CanvasWorkspaceProjectionDiagnosticCode =
-  | 'invalid-contract-version'
   | 'workspace-required'
   | 'invalid-canvas-target'
   | 'invalid-canvas-extension'
@@ -105,13 +101,10 @@ export type CanvasWorkspaceProjectionDiagnosticCode =
   | 'invalid-artifact-relation'
   | 'unsupported-projection-kind'
   | 'invalid-content-locator'
-  | 'content-locator-migration-required'
   | 'runtime-value-forbidden'
-  | 'legacy-routing-forbidden'
   | 'delivery-ledger-unavailable'
   | 'delivery-claim-conflict'
   | 'stale-writer'
-  | 'stale-revision'
   | 'projection-conflict'
   | 'projection-write-failed';
 
@@ -126,7 +119,6 @@ export function createSafeCanvasWorkspaceProjectionDiagnostic(
   code: CanvasWorkspaceProjectionDiagnosticCode,
 ): CanvasWorkspaceProjectionDiagnostic {
   const messages: Readonly<Record<CanvasWorkspaceProjectionDiagnosticCode, string>> = {
-    'invalid-contract-version': 'Workspace Board delivery uses an unsupported contract version.',
     'workspace-required': 'Workspace Board delivery requires one resolved workspace.',
     'invalid-canvas-target': 'Workspace Board delivery target is invalid.',
     'invalid-canvas-extension': 'The Canvas extension cannot accept Workspace Board delivery.',
@@ -138,14 +130,10 @@ export function createSafeCanvasWorkspaceProjectionDiagnostic(
       'Workspace Board delivery contains an unsupported artifact kind.',
     'invalid-content-locator':
       'Workspace Board delivery contains an invalid durable content locator.',
-    'content-locator-migration-required':
-      'Workspace Board delivery uses a removed content reference and must be delivered again.',
     'runtime-value-forbidden': 'Workspace Board delivery contains a forbidden runtime-only value.',
-    'legacy-routing-forbidden': 'Workspace Board delivery contains a removed routing field.',
     'delivery-ledger-unavailable': 'Workspace Board delivery state is unavailable.',
     'delivery-claim-conflict': 'Workspace Board delivery is queued behind another writer.',
     'stale-writer': 'Workspace Board writer ownership changed before the delivery completed.',
-    'stale-revision': 'Workspace Board changed before the delivery could be saved.',
     'projection-conflict': 'Workspace Board has user changes that cannot be overwritten safely.',
     'projection-write-failed':
       'Workspace Board could not be updated; durable artifacts remain available.',
@@ -154,21 +142,19 @@ export function createSafeCanvasWorkspaceProjectionDiagnostic(
 }
 
 export interface CanvasWorkspaceProjectionResult {
-  readonly version: typeof CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION;
   readonly deliveryId?: string;
   readonly status: Exclude<CanvasWorkspaceDeliveryState, 'discarded'>;
   readonly target?: CanvasWorkspaceProjectionResolvedTarget;
-  readonly revision?: string;
   readonly nodeIds?: readonly string[];
   readonly connectionIds?: readonly string[];
   readonly artifactRoleCounts?: Readonly<Record<CanvasWorkspaceArtifactRole, number>>;
-  readonly writerEpoch?: number;
+  readonly writerLeaseId?: string;
   readonly diagnostics: readonly CanvasWorkspaceProjectionDiagnostic[];
 }
 
 export interface CanvasWorkspaceDeliveryClaim {
   readonly holderId: string;
-  readonly epoch: number;
+  readonly leaseId: string;
   readonly expiresAt: number;
 }
 
@@ -180,14 +166,13 @@ export interface CanvasWorkspaceDeliveryReceipt {
   >;
   readonly artifactIdentities: readonly {
     readonly artifactId: string;
-    readonly revision: string;
+    readonly contentFingerprint: string;
     readonly role: CanvasWorkspaceArtifactRole;
   }[];
   readonly target?: CanvasWorkspaceProjectionResolvedTarget;
-  readonly revision?: string;
   readonly nodeIds?: readonly string[];
   readonly connectionIds?: readonly string[];
-  readonly writerEpoch: number;
+  readonly writerLeaseId: string;
   readonly diagnostics: readonly CanvasWorkspaceProjectionDiagnostic[];
   readonly completedAt: number;
 }
@@ -216,7 +201,6 @@ export function createGeneratedAssetsWorkspaceDeliveryRequest(
     target.jobRef,
   );
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     target: { workspaceId: target.workspaceId, workspaceUri: target.workspaceUri },
     ...batch,
   };
@@ -241,7 +225,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
   }
   const identities = assets.map((asset) => ({
     assetId: asset.id,
-    revision: requireGeneratedAssetLifecycle(asset).revision,
+    contentFingerprint: requireGeneratedAssetLifecycle(asset).revision,
   }));
   const deliveryId = `generated-output-batch:${hashGeneratedAssetIdentities(identities)}`;
   const operationId = sharedString(
@@ -275,10 +259,9 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
         contentLocator: lifecycle.contentLocator,
         generation: { jobRef, summary: generationContext },
         provenance: {
-          version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
           deliveryId,
           artifactId: asset.id,
-          revision: lifecycle.revision,
+          contentFingerprint: lifecycle.revision,
           kind: lifecycle.mediaKind,
           role: 'output' as const,
           sourceId: lifecycle.contentLocator.outputId,
@@ -292,13 +275,15 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
 }
 
 function hashGeneratedAssetIdentities(
-  identities: readonly { readonly assetId: string; readonly revision: string }[],
+  identities: readonly { readonly assetId: string; readonly contentFingerprint: string }[],
 ): string {
   return hashStableValue(
     identities
-      .map(({ assetId, revision }) => ({ assetId, revision }))
+      .map(({ assetId, contentFingerprint }) => ({ assetId, contentFingerprint }))
       .sort((left, right) =>
-        `${left.assetId}:${left.revision}`.localeCompare(`${right.assetId}:${right.revision}`),
+        `${left.assetId}:${left.contentFingerprint}`.localeCompare(
+          `${right.assetId}:${right.contentFingerprint}`,
+        ),
       ),
   ).slice(0, 32);
 }
@@ -363,22 +348,6 @@ const PROJECTION_KINDS = new Set<string>([
 
 const ARTIFACT_ROLES = new Set<string>(['source', 'analysis', 'output']);
 
-const LEGACY_ROUTING_KEYS = new Set([
-  'activeCanvas',
-  'artifact',
-  'binding',
-  'conversationId',
-  'exactIndex',
-  'filter',
-  'professionalCanvas',
-  'provenance',
-  'query',
-  'recentCanvas',
-  'resolutionSource',
-  'scopeKind',
-  'suggestedTitle',
-]);
-
 const RUNTIME_KEYS = new Set([
   'assetMembership',
   'base64',
@@ -415,8 +384,7 @@ export function resolveCanvasWorkspaceBoardDocumentUri(workspaceUri: string): st
 export function isCanvasWorkspaceProjectionRequest(
   value: unknown,
 ): value is CanvasWorkspaceProjectionRequest {
-  if (!isRecord(value) || value['version'] !== CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION)
-    return false;
+  if (!isRecord(value)) return false;
   const target = value['target'];
   const process = value['process'];
   const artifacts = value['artifacts'];
@@ -456,7 +424,7 @@ export function isCanvasWorkspaceProjectionRequest(
           artifact['localPath'] === undefined) &&
       typeof provenance['deliveryId'] === 'string' &&
       typeof provenance['artifactId'] === 'string' &&
-      typeof provenance['revision'] === 'string' &&
+      typeof provenance['contentFingerprint'] === 'string' &&
       typeof provenance['kind'] === 'string' &&
       typeof provenance['role'] === 'string' &&
       typeof provenance['sourceId'] === 'string' &&
@@ -473,9 +441,7 @@ export function validateCanvasWorkspaceProjectionRequest(
 ): readonly CanvasWorkspaceProjectionDiagnostic[] {
   const diagnostics: CanvasWorkspaceProjectionDiagnostic[] = [];
   if (!isRecord(request)) {
-    return [
-      diagnostic('invalid-contract-version', 'Canvas Workspace Board delivery must be an object.'),
-    ];
+    return [diagnostic('workspace-required', 'Canvas Workspace Board delivery must be an object.')];
   }
   if (!isRecord(request.target)) {
     diagnostics.push(
@@ -505,15 +471,6 @@ export function validateCanvasWorkspaceProjectionRequest(
   ) {
     visitForbiddenValues(request, [], diagnostics);
     return diagnostics;
-  }
-  if (request.version !== CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'invalid-contract-version',
-        'Unsupported Canvas Workspace Board contract version.',
-        ['version'],
-      ),
-    );
   }
   if (!isNonEmptyString(request.target.workspaceId)) {
     diagnostics.push(
@@ -717,7 +674,13 @@ function validateArtifact(
 ): void {
   const path = ['artifacts', index] as const;
   const provenance = artifact.provenance;
-  for (const key of ['deliveryId', 'artifactId', 'revision', 'sourceId', 'createdAt'] as const) {
+  for (const key of [
+    'deliveryId',
+    'artifactId',
+    'contentFingerprint',
+    'sourceId',
+    'createdAt',
+  ] as const) {
     if (!isNonEmptyString(provenance[key])) {
       diagnostics.push(
         diagnostic('missing-projection-identity', `Canvas artifact ${key} is required.`, [
@@ -760,9 +723,9 @@ function validateArtifact(
     );
   }
   const artifactId = provenance['artifactId'];
-  const revision = provenance['revision'];
-  if (typeof artifactId === 'string' && typeof revision === 'string') {
-    const identity = `${artifactId}:${revision}`;
+  const contentFingerprint = provenance['contentFingerprint'];
+  if (typeof artifactId === 'string' && typeof contentFingerprint === 'string') {
+    const identity = `${artifactId}:${contentFingerprint}`;
     if (identities.has(identity)) {
       diagnostics.push(
         diagnostic(
@@ -775,15 +738,6 @@ function validateArtifact(
     identities.add(identity);
   }
 
-  if (artifact['kind'] !== 'markdown' && artifact['generationContext'] !== undefined) {
-    diagnostics.push(
-      diagnostic(
-        'runtime-value-forbidden',
-        'Legacy generationContext is forbidden; use immutable Generation Job evidence.',
-        [...path, 'generationContext'],
-      ),
-    );
-  }
   if (artifact['kind'] !== 'markdown') {
     const locator = validateContentLocator(artifact['contentLocator']);
     const hasGeneration = isCanvasGenerationEvidence(artifact['generation']);
@@ -839,8 +793,8 @@ function validateArtifact(
   ) {
     diagnostics.push(
       diagnostic(
-        'content-locator-migration-required',
-        'Canvas file and media artifacts must be delivered again with contentLocator.',
+        'invalid-content-locator',
+        'Canvas file and media artifacts require contentLocator.',
         path,
       ),
     );
@@ -849,9 +803,7 @@ function validateArtifact(
     if (!locator.ok) {
       diagnostics.push(
         diagnostic(
-          artifact['contentLocator'] === undefined
-            ? 'content-locator-migration-required'
-            : 'invalid-content-locator',
+          'invalid-content-locator',
           artifact['contentLocator'] === undefined
             ? 'File and media projection requires exactly one contentLocator.'
             : locator.diagnostics.map((entry) => entry.message).join('; '),
@@ -866,13 +818,6 @@ export function validateCanvasWorkspaceProjectionResult(
   result: CanvasWorkspaceProjectionResult,
 ): readonly CanvasWorkspaceProjectionDiagnostic[] {
   const diagnostics: CanvasWorkspaceProjectionDiagnostic[] = [];
-  if (result.version !== CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION) {
-    diagnostics.push(
-      diagnostic('invalid-contract-version', 'Unsupported Canvas Workspace Board result version.', [
-        'version',
-      ]),
-    );
-  }
   if ((result.status === 'blocked' || result.status === 'conflict') && result.target) {
     diagnostics.push(
       diagnostic(
@@ -917,16 +862,6 @@ function visitForbiddenValues(
     return;
   }
   for (const [key, entry] of Object.entries(value)) {
-    if (path.length === 0 && LEGACY_ROUTING_KEYS.has(key)) {
-      diagnostics.push(
-        diagnostic(
-          'legacy-routing-forbidden',
-          `Canvas projection contracts must not contain legacy routing field ${key}.`,
-          [key],
-        ),
-      );
-      continue;
-    }
     if (RUNTIME_KEYS.has(key)) {
       diagnostics.push(
         diagnostic(
@@ -990,8 +925,7 @@ function uriPathname(value: string): string | undefined {
 function isRuntimeValue(value: string): boolean {
   const normalized = value.trim().replace(/\\/g, '/');
   return (
-    normalized.includes('/.neko/.cache/') ||
-    normalized.startsWith('.neko/.cache/') ||
+    normalized.split('/').some((segment) => segment.startsWith('.')) ||
     isHostProjectedRuntimeValue(normalized) ||
     /^(?:render|preview):/i.test(normalized)
   );

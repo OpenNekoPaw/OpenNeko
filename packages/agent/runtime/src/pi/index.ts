@@ -63,8 +63,16 @@ export {
   type PiTurnDurabilityState,
 } from './node-conversation-authority';
 export {
+  parsePortablePiConversationManifest,
+  parsePortablePiConversationManifestJson,
+  serializePortablePiConversationManifest,
+  type PortablePiConversationBranch,
+  type PortablePiConversationManifest,
+} from './conversation-portability';
+export {
   NodePiConversationCatalogReader,
   type CreateNodePiConversationCatalogReaderOptions,
+  type PiConversationCatalogSnapshot,
   type PiConversationCatalogReader,
 } from './node-conversation-catalog-reader';
 export {
@@ -101,11 +109,13 @@ export {
   type ExecutePiConversationSkillInput,
   type ExecutePiConversationTurnInput,
   type OpenPiConversationRuntimeOptions,
+  type PiProviderTurnAdmission,
+  type PiProviderTurnAdmissionInput,
   type PiCompactionPolicy,
   type PiConversationCompactionResult,
 } from './conversation-runtime';
 export {
-  migratePiConversationSchema,
+  initializePiConversationTables,
   openNodePiConversationStorage,
   type NodePiConversationStorage,
 } from './node-conversation-storage';

@@ -7,22 +7,12 @@
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
 import type { TabStateMessage } from './messages';
-import { AgentHostMessages } from '../messages';
 import { isCharacterRoleTab } from '../presenters/character-role-session-presenter';
 
 /**
  * Handle 'tabState' message - Restore tab state from extension
  */
 const handleTabState: MessageHandler<'tabState'> = (message: TabStateMessage, context) => {
-  const revisionRef = context.tabStateRevisionRef;
-  if (!revisionRef) {
-    throw new Error('Tab state handling requires a Webview-owned revision ref.');
-  }
-  if (message.revision < revisionRef.current) {
-    return;
-  }
-  revisionRef.current = message.revision;
-
   if (message.tabState) {
     const openTabs = message.tabState.openTabs ?? [];
     const { activeTabId } = message.tabState;
@@ -57,8 +47,8 @@ const handleTabState: MessageHandler<'tabState'> = (message: TabStateMessage, co
     for (const conversationId of ordinaryConversationIds) {
       if (restoredConversationIds.current.has(conversationId)) continue;
       restoredConversationIds.current.add(conversationId);
-      AgentHostMessages.getConversationSnapshot(conversationId);
-      AgentHostMessages.getSettings(conversationId);
+      context.agentHostMessages.getConversationSnapshot(conversationId);
+      context.agentHostMessages.getSettings(conversationId);
     }
 
     if (isEmptyTabState) {

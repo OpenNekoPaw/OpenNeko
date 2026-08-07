@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "workspace-board-material-analysis",
   "suiteId": "agent-runtime.creative-media-workflow",
   "caseGroup": "workflow",
@@ -14,34 +14,35 @@
       "Canvas-owned batch coordinator",
       "neko/boards/workspace.nkc"
     ],
-    "forbiddenFallback": [
-      "ordinary final-answer promotion",
-      "unselected fixture inference",
-      "active or recent Canvas routing",
-      "generic Send to Canvas",
-      "direct .nkc writer"
-    ],
     "observables": [
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Successful ReadImage evidence, native-image-analysis artifact provenance, delivery ledger receipt, top-level content node identities, creative relation identity, and no-fallback facts.",
+        "description": "Successful ReadImage evidence, native-image-analysis artifact provenance, delivery ledger receipt, top-level content node identities, and creative relation identity.",
         "required": true
       }
     ],
     "expectedResult": "The selected image and finalized Markdown analysis appear as deduplicated top-level Workspace Board nodes connected by one creative dependency; unrelated fixture files, visual processing Groups, and generic handoff paths are absent.",
     "expectedFailure": "Missing ReadImage evidence, missing native-image-analysis provenance, omitted analysis, active-target routing, duplicate delivery, or missing receipt fails."
   },
-  "fixtureRefs": ["creative-planning-workspace"],
+  "fixtureRefs": [
+    "creative-planning-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "analyze",
       "kind": "submit",
       "prompt": "Analyze only station-illustration.svg from the fixture workspace as a storyboard image. Call ReadImage directly with analysis=storyboard and images=[{\"alias\":\"station-frame\",\"locator\":{\"kind\":\"workspace-file\",\"path\":\"station-illustration.svg\"}}]; do not search for or pass the file through ReadDocument. Then return a concise Markdown analysis of composition, subjects, environment, action, and visual continuity. Do not explicitly create a composite artifact, and do not treat screenplay.fountain or plan.md as used material."
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 240000
+    }
   ],
   "assertions": [
     {
@@ -74,28 +75,23 @@
       "targetKind": "workspace",
       "minNodeIds": 2,
       "minConnectionIds": 1,
-      "revisionRequired": true,
+      "sourceFingerprintRequired": true,
       "diagnosticsEmpty": true,
-      "evidenceRef": "workflow-facts"
-    },
-    {
-      "id": "no-fallback",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "generic-send-to-canvas",
-        "active-canvas",
-        "recentCanvas",
-        "NodeWorkspaceBoardProjector"
-      ],
       "evidenceRef": "workflow-facts"
     },
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
       "evidenceRef": "workflow-facts"
     }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 240000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 240000,
+    "repetitions": 1
+  }
 }

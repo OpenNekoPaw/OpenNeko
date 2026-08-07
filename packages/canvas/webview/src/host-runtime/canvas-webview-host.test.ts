@@ -1,5 +1,6 @@
 import {
   CanvasHostRuntimeSession,
+  createCanvasHostPresentationSnapshotStore,
   createCanvasHostIntentRequest,
   type CanvasHostRuntime,
 } from '@neko/canvas-domain';
@@ -18,10 +19,10 @@ describe('createCanvasWebviewHost', () => {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'view-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       documentId: 'neko/boards/workspace.nkc',
       sessionId: 'session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
     };
     const requestSource = vi.fn(async () => ({
       kind: 'direct-reference' as const,
@@ -79,7 +80,8 @@ describe('createCanvasWebviewHost', () => {
         }),
       }),
     );
-    expect(dragged.revision).toBe(snapshot.revision + 1);
+    expect(dragged.canvas.name).toBe('Projected source');
+    expect(authorMaterial).toHaveBeenCalledTimes(2);
     host.dispose();
     runtime.dispose();
   });
@@ -90,15 +92,14 @@ describe('createCanvasWebviewHost', () => {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'view-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       documentId: 'neko/boards/workspace.nkc',
       sessionId: 'session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
     };
     const requestGenerationDraft = vi.fn(async () => ({
       ref: { kind: 'generation' as const, jobId: 'generation-1' },
       phase: 'pending' as const,
-      revision: 1,
       title: 'Generate image',
       inputNodeIds: [],
       mediaKind: 'image' as const,
@@ -132,16 +133,16 @@ describe('createCanvasWebviewHost', () => {
     runtime.dispose();
   });
 
-  it('projects owner descriptors and dispatches the exact revisioned material action', async () => {
+  it('projects owner descriptors and dispatches the exact identity-bound material action', async () => {
     const identity = {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'view-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       documentId: 'neko/boards/workspace.nkc',
       sessionId: 'session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
     };
     const node: MediaCanvasNode = {
       id: 'media-image',
@@ -182,7 +183,7 @@ describe('createCanvasWebviewHost', () => {
     });
     const snapshot = await host.executeMaterialAction(descriptor.id, [node.id]);
 
-    expect(snapshot).toMatchObject({ revision: 0 });
+    expect(snapshot.identity).toEqual(identity);
     expect(executeMaterialAction).toHaveBeenCalledWith(
       expect.objectContaining({
         identity,
@@ -194,7 +195,6 @@ describe('createCanvasWebviewHost', () => {
             canvasSessionId: identity.sessionId,
           },
           actionId: descriptor.id,
-          expectedCanvasRevision: 0,
           selectedNodeIds: [node.id],
           payload: {},
         },
@@ -219,10 +219,10 @@ describe('createCanvasWebviewHost', () => {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'view-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       documentId: 'neko/boards/workspace.nkc',
       sessionId: 'session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
     };
     const node: MediaCanvasNode = {
       id: 'media-image',
@@ -307,10 +307,10 @@ describe('createCanvasWebviewHost', () => {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'view-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       documentId: 'neko/boards/workspace.nkc',
       sessionId: 'session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
     };
     const node: MediaCanvasNode = {
       id: 'media-image',
@@ -340,12 +340,12 @@ describe('createCanvasWebviewHost', () => {
         resolveMaterialActions: vi.fn(async () => [descriptor]),
       },
     });
-    const requestedRevisions: number[] = [];
+    const requestIds: string[] = [];
     const runtime: CanvasHostRuntime = {
       identity,
       getSnapshot: () => session.getSnapshot(),
       resolveMaterialActions(request) {
-        requestedRevisions.push(request.expectedRevision);
+        requestIds.push(request.requestId);
         return session.resolveMaterialActions(request);
       },
       subscribe: (listener) => session.subscribe(listener),
@@ -373,23 +373,23 @@ describe('createCanvasWebviewHost', () => {
     });
 
     await expect(resolution).resolves.toEqual([descriptor]);
-    expect(requestedRevisions).toEqual([1]);
+    expect(requestIds).toEqual(['canvas-webview-material-actions:1']);
     host.dispose();
     session.dispose();
   });
 
-  it.each(['stale rejection', 'stale response'] as const)(
-    'keeps a content-unavailable node open after a concurrent move returns a %s',
+  it.each(['delayed request', 'delayed response'] as const)(
+    'keeps a content-unavailable node open when a concurrent move overlaps a %s',
     async (concurrencyResult) => {
       const identity = {
         projectId: 'project-1',
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'neko/boards/workspace.nkc',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       };
       const node: MediaCanvasNode = {
         id: 'media-image',
@@ -402,31 +402,33 @@ describe('createCanvasWebviewHost', () => {
           mediaType: 'image',
         },
       };
+      const presentationSnapshots = createCanvasHostPresentationSnapshotStore();
+      presentationSnapshots.write(identity, {
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        selectedNodeIds: [node.id],
+      });
       const session = new CanvasHostRuntimeSession({
         identity,
         initialCanvas: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
-        initialPresentation: {
-          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
-          selectedNodeIds: [node.id],
-        },
+        presentationSnapshots,
         effects: {},
       });
       let releaseFirstResolution = (): void => {};
       const firstResolutionGate = new Promise<void>((resolve) => {
         releaseFirstResolution = resolve;
       });
-      const requestedRevisions: number[] = [];
+      const requestIds: string[] = [];
       const runtime: CanvasHostRuntime = {
         identity,
         getSnapshot: () => session.getSnapshot(),
         async resolveMaterialActions(request) {
-          requestedRevisions.push(request.expectedRevision);
-          if (requestedRevisions.length === 1 && concurrencyResult === 'stale response') {
+          requestIds.push(request.requestId);
+          if (requestIds.length === 1 && concurrencyResult === 'delayed response') {
             const resolution = await session.resolveMaterialActions(request);
             await firstResolutionGate;
             return resolution;
           }
-          if (requestedRevisions.length === 1) await firstResolutionGate;
+          if (requestIds.length === 1) await firstResolutionGate;
           return session.resolveMaterialActions(request);
         },
         subscribe: (listener) => session.subscribe(listener),
@@ -445,7 +447,7 @@ describe('createCanvasWebviewHost', () => {
 
       const resolution = host.resolveMaterialActions([node.id]);
       await vi.waitFor(() => {
-        expect(requestedRevisions).toEqual([0]);
+        expect(requestIds).toEqual(['canvas-webview-material-actions:1']);
       });
       host.postMessage({
         type: 'canvasStatus',
@@ -456,12 +458,12 @@ describe('createCanvasWebviewHost', () => {
         },
       });
       await vi.waitFor(async () => {
-        expect((await session.getSnapshot()).revision).toBe(1);
+        expect((await session.getSnapshot()).canvas.nodes[0]?.position).toEqual({ x: 160, y: 90 });
       });
       releaseFirstResolution();
 
       await expect(resolution).resolves.toEqual([]);
-      expect(requestedRevisions).toEqual([0, 1]);
+      expect(requestIds).toEqual(['canvas-webview-material-actions:1']);
       expect(messages).not.toContainEqual(
         expect.objectContaining({
           type: 'canvas.loadFailed',
@@ -472,16 +474,16 @@ describe('createCanvasWebviewHost', () => {
     },
   );
 
-  it('does not let a delayed startup snapshot regress the material action revision', async () => {
+  it('does not let a delayed startup snapshot replace a newer session projection', async () => {
     const identity = {
       projectId: 'project-1',
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'view-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       documentId: 'neko/boards/workspace.nkc',
       sessionId: 'session-1',
-      endpointEpoch: 'endpoint-1',
+      rendererSessionId: 'endpoint-1',
     };
     const node: MediaCanvasNode = {
       id: 'media-image',
@@ -541,7 +543,7 @@ describe('createCanvasWebviewHost', () => {
       },
     });
     await vi.waitFor(async () => {
-      expect((await session.getSnapshot()).revision).toBe(1);
+      expect((await session.getSnapshot()).presentation.selectedNodeIds).toEqual([node.id]);
     });
 
     releaseStartupSnapshot();
@@ -550,9 +552,6 @@ describe('createCanvasWebviewHost', () => {
     expect(messages).not.toContainEqual(
       expect.objectContaining({
         type: 'canvas.loadFailed',
-        diagnostic: expect.objectContaining({
-          message: expect.stringContaining('revision is stale'),
-        }),
       }),
     );
     host.dispose();
@@ -567,10 +566,10 @@ describe('createCanvasWebviewHost', () => {
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'neko/boards/workspace.nkc',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       },
       initialCanvas: DEFAULT_CANVAS_DATA,
       effects: { saveDocument },
@@ -625,22 +624,25 @@ describe('createCanvasWebviewHost', () => {
       ...DEFAULT_CANVAS_DATA,
       viewport: { pan: { x: 3, y: 4 }, zoom: 0.8 },
     };
+    const runtimeIdentity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    const presentationSnapshots = createCanvasHostPresentationSnapshotStore();
+    presentationSnapshots.write(runtimeIdentity, {
+      viewport: { pan: { x: 20, y: 30 }, zoom: 1.2 },
+      selectedNodeIds: ['node-a'],
+    });
     const runtime = new CanvasHostRuntimeSession({
-      identity: {
-        projectId: 'project-1',
-        workspaceId: 'workspace-1',
-        windowId: 'window-1',
-        viewId: 'view-1',
-        viewEpoch: 1,
-        documentId: 'neko/boards/workspace.nkc',
-        sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
-      },
+      identity: runtimeIdentity,
       initialCanvas,
-      initialPresentation: {
-        viewport: { pan: { x: 20, y: 30 }, zoom: 1.2 },
-        selectedNodeIds: ['node-a'],
-      },
+      presentationSnapshots,
       effects: {},
     });
     const host = createCanvasWebviewHost(runtime);
@@ -659,7 +661,7 @@ describe('createCanvasWebviewHost', () => {
     });
     expect(host.getState()).toEqual({
       canvasViewportSnapshots: {
-        [`${initialCanvas.name}:${initialCanvas.version}`]: {
+        [runtime.identity.documentId]: {
           pan: { x: 20, y: 30 },
           zoom: 1.2,
         },
@@ -695,10 +697,10 @@ describe('createCanvasWebviewHost', () => {
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'neko/boards/workspace.nkc',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       },
       initialCanvas: DEFAULT_CANVAS_DATA,
       effects: {},
@@ -740,7 +742,6 @@ describe('createCanvasWebviewHost', () => {
       createCanvasHostIntentRequest({
         requestId: 'external-request',
         commandId: 'external-agent-command',
-        expectedRevision: current.revision,
         identity: runtime.identity,
         intent: {
           type: 'update-presentation',
@@ -772,10 +773,10 @@ describe('createCanvasWebviewHost', () => {
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'neko/boards/workspace.nkc',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       },
       initialCanvas: DEFAULT_CANVAS_DATA,
       effects: {},
@@ -802,27 +803,38 @@ describe('createCanvasWebviewHost', () => {
     runtime.dispose();
   });
 
-  it('routes delegate responses only through this Canvas Host instance', () => {
+  it('routes delegate state and responses only through this Canvas Host instance', async () => {
     const runtime = new CanvasHostRuntimeSession({
       identity: {
         projectId: 'project-1',
         workspaceId: 'workspace-1',
         windowId: 'window-1',
         viewId: 'view-1',
-        viewEpoch: 1,
+        viewInstanceId: 'view-instance-1',
         documentId: 'neko/boards/workspace.nkc',
         sessionId: 'session-1',
-        endpointEpoch: 'endpoint-1',
+        rendererSessionId: 'endpoint-1',
       },
       initialCanvas: DEFAULT_CANVAS_DATA,
       effects: {},
     });
     let delegateListener: ((message: unknown) => void) | undefined;
     const unsubscribeDelegate = vi.fn();
+    const reportStateDiagnostic = vi.fn();
+    let delegateState: unknown = {
+      canvasViewportSnapshots: {
+        'neko/boards/sibling.nkc': { pan: { x: 7, y: 8 }, zoom: 0.75 },
+        malformed: { unsupportedField: true },
+      },
+    };
+    const setState = vi.fn((nextState: unknown) => {
+      delegateState = nextState;
+    });
     const host = createCanvasWebviewHost(runtime, {
       postMessage: vi.fn(),
-      getState: () => undefined,
-      setState: () => undefined,
+      getState: () => delegateState,
+      setState,
+      reportStateDiagnostic,
       subscribe(listener) {
         delegateListener = listener;
         return unsubscribeDelegate;
@@ -830,6 +842,16 @@ describe('createCanvasWebviewHost', () => {
     });
     const listener = vi.fn();
     host.subscribe(listener);
+    host.postMessage({ type: 'ready' });
+
+    await vi.waitFor(() => expect(setState).toHaveBeenCalled());
+    expect(delegateState).toEqual({
+      canvasViewportSnapshots: {
+        'neko/boards/sibling.nkc': { pan: { x: 7, y: 8 }, zoom: 0.75 },
+        malformed: { unsupportedField: true },
+        'neko/boards/workspace.nkc': DEFAULT_CANVAS_DATA.viewport,
+      },
+    });
 
     delegateListener?.({
       type: 'preview:variantResolved',
@@ -842,6 +864,15 @@ describe('createCanvasWebviewHost', () => {
       requestId: 'preview-1',
       url: 'data:image/png;base64,Y2F0',
     });
+
+    host.setState({ canvasViewportSnapshots: 'corrupt' });
+    await vi.waitFor(() => expect(reportStateDiagnostic).toHaveBeenCalled());
+    expect(reportStateDiagnostic).toHaveBeenCalledWith({
+      code: 'invalid-viewport-map',
+      message: 'Canvas viewport snapshot map must be an object.',
+      documentId: 'neko/boards/workspace.nkc',
+    });
+
     host.dispose();
     expect(unsubscribeDelegate).toHaveBeenCalledTimes(1);
     runtime.dispose();

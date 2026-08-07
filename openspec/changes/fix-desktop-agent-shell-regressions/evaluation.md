@@ -1,6 +1,6 @@
 # Agent Evaluation
 
-Date: 2026-07-31
+Date: 2026-08-03
 
 ## Evaluation Scope
 
@@ -69,6 +69,47 @@ Date: 2026-07-31
   mounted exactly one `data-owner-root="agent"` for the exact View identity with no
   `.desktop-agent-status` loading surface. Canvas, Assets and Agent owner Roots remained distinct,
   confirming that startup preload did not create a global Project/View adapter.
+- Restored Canvas regression evidence (2026-08-03): a user-visible packaged-state report proved the
+  earlier fresh-Project check did not cover restart from a persisted empty Main group. Two
+  `DesktopShellService` tests reproduced both an empty Main restore and a temporary Preview cleanup;
+  both failed before the Host restore fix and passed afterward as part of 33 `@neko/host` test files
+  and 281 tests. `pnpm typecheck:desktop` and `pnpm package:desktop` passed.
+- Packaged empty-Main and restart acceptance (2026-08-03):
+  `pnpm test:local:ui --scenario canvas-openneko-consumer --target packaged` passed against one
+  isolated Electron/SQLite fixture. The scenario closed every Main View, verified both Canvas media
+  resources were released, and observed the Chinese empty surface “没有打开的创作文档” with guidance
+  text but no `<code>` diagnostic or `desktop-canvas-not-mounted`. It then set
+  `startupTarget=restore`, restarted the same packaged application, and observed one package-owned
+  Canvas Root for the sole `neko/boards/workspace.nkc` View. No console error or renderer exception
+  was observed. The gitignored report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T03-17-20.412Z-canvas-openneko-consumer-packaged/report.json`; its screenshot artifacts are
+  `screenshots/01-empty-main-after-last-tab-closed.png` and
+  `screenshots/02-default-workspace-canvas-restored.png`.
+- Packaged resize lifecycle acceptance (2026-08-03): the same production Electron scenario dragged
+  the shared left Dock resize handle from `360px` to `447.6796875px` after the restart path. The
+  resulting DOM contained zero `[data-resizing="true"]` owners, with no console error or renderer
+  exception. The screenshot artifact is
+  `screenshots/03-left-dock-resize-indicator-cleared.png` under the report above. Focused hook and
+  Workbench tests additionally ran the pointerdown/pointerup lifecycle under React StrictMode and
+  proved `onResizeEnd` was emitted once while the owning surface returned to
+  `data-resizing="false"`.
+- Packaged Workbench surface and Resource management acceptance (2026-08-03): the rebuilt packaged
+  Electron scenario computed `rgb(255, 255, 255)` for the Agent package Root, Agent composer rail,
+  Resource Browser Root and resource search input. The composer rail top border resolved to
+  transparent, the Resource Browser contained zero package header rows, and the Desktop Dock
+  contained exactly one “资源管理” title. The embedded content toolbar still exposed “配置媒体库”、
+  “刷新”、“列表视图”和“网格视图”, proving the duplicate title row was removed without losing
+  package-owned actions. The passed report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T03-57-05.458Z-canvas-openneko-consumer-packaged/report.json`; the inspected screenshot is
+  `screenshots/05-desktop-dock-theme-surfaces.png` under that report.
+- Packaged Home brand and launchpad acceptance (2026-08-03): the production Electron Home fixture
+  rendered one `OpenNeko` brand child with zero `svg`/`.brand-mark` descendants while retaining the
+  localized sidebar action label. The Agent heading contained zero decorative icons and used centered
+  text while its common-task actions retained four functional icons. The launchpad center differed
+  from the available Home Main center by `0px` horizontally and `0.00390625px` vertically. The passed
+  report is
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-03T03-50-29.088Z-canvas-openneko-consumer-packaged/report.json`; the inspected screenshot is
+  `screenshots/01-home-agent-entry-centered.png` under that report.
 - Blocked or unexecuted cases: `agent-runtime.workflow-controller` real execution remains
   `infrastructure-blocked` because no local Agent provider credential environment variable is
   available. Provider-backed send, Tool approval and checkpoint/cleanup are therefore not claimed
@@ -77,7 +118,7 @@ Date: 2026-07-31
 ## Interpretation
 
 - Deterministic producer/consumer tests cover the five reported regressions at their owning
-  boundaries and poison the relevant wrong paths. Production Electron evidence additionally covers
+  boundaries and prove the relevant wrong paths are absent or cannot participate. Production Electron evidence additionally covers
   default Canvas mounting, Resource Browser Main ownership, Chat/Main layout modes and Popover
   opacity.
 - Key-free Evaluation success cannot establish real model, Tool, checkpoint or renderer behavior.
@@ -89,3 +130,164 @@ Date: 2026-07-31
   input.
 - Provider-backed Agent execution, Tool approval and checkpoint/cleanup remain unverified until
   credentials or a Desktop complete-session driver with explicit cost authorization are available.
+
+## 2026-08-05 Sent-message and transcript-rail update
+
+### Evaluation Scope
+
+- Change/feature: Entry Draft initial user-message projection across draft → session Surface
+  replacement, centered transcript rail, and removal of Desktop Dock roleplay Header chrome.
+- Decision and owning suite: `update` the existing visible `desktop-agent-provider-ui` scenario for
+  exact sent-text and computed-layout assertions; `reuse`
+  `agent-runtime.workflow-controller/conversation-persistence-resume` for non-UI real-provider
+  persistence and owner-reopen coverage.
+- Canonical path: visible composer → Agent launch first-submit → persisted lifecycle initial message
+  → Desktop session bootstrap → Agent controller active-conversation projection → Webview
+  coordinator/MessageList. The forbidden fallback is retaining the replaced draft Webview,
+  synthesizing a second transcript in Renderer, or relying on final assistant text alone.
+
+### Verification
+
+- Visible real-provider Desktop: `desktop-agent-provider-ui` passed with
+  `nekoapi-chat / gpt-5.6-luna`. The exact submitted prompt was visible while the initial turn was
+  running and after completion; the real response marker rendered; lifecycle status was
+  `completed`; no console error, renderer exception, legacy run status or roleplay Header action was
+  present. MessageList width was `1190px`; both visible transcript rails were `820px` with equal
+  `185px` inline gutters. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-04T18-47-01.962Z-desktop-agent-provider-ui-development/report.json`.
+- Hidden real-provider Desktop: focused
+  `agent-runtime.workflow-controller/conversation-persistence-resume` passed with the same provider
+  and model. It disposed the first Desktop session owner, restored the same Pi/SQLite conversation,
+  observed persisted history, and completed a continuation turn. Aggregate:
+  `reports/agent-eval/agent-runtime.workflow-controller/conversation-persistence-resume/focused-1-msf0hp7j/aggregate.json`.
+- Deterministic coverage: Agent runtime tests cover lifecycle projection and bootstrap history merge;
+  Desktop bridge/AppHost tests assert the package-owned initial message reaches the exact session
+  effects owner; Webview tests cover Host reconciliation, rail ownership and Header visibility.
+
+### Foundational matrix and residual risk
+
+- Basic conversation: covered by visible real-provider Desktop.
+- Multi-turn, owner/application reopen and transcript persistence: covered by the focused hidden
+  real-provider resume case.
+- Context compaction, generation-record restoration, cross-conversation switching and isolation:
+  unchanged by this initial-message/bootstrap and layout delta; existing indexed suites and
+  deterministic conversation-scoped tests remain authoritative and were not rerun as provider-backed
+  cases for this focused change.
+- The visible scenario uses a wide `1440px` Desktop viewport. Narrow-panel behavior is covered by
+  CSS/DOM contract tests, not a second real-provider screenshot.
+
+## 2026-08-05 Agent diagnostic portal update
+
+### Evaluation Scope
+
+- Change/feature: Agent global/session diagnostic presentation inside a clipped Desktop Workbench
+  Dock next to Main and Resource management surfaces.
+- Decision: deterministic renderer layout behavior does not require provider-backed Agent
+  Evaluation. The canonical path is package-owned global/session diagnostic state → one
+  `AgentDiagnosticToast` → renderer `document.body` portal. The forbidden paths are duplicated
+  fixed blocks, relaxed Workbench overflow, hidden-Tab projection and a Desktop-owned copy of Agent
+  error state.
+
+### Verification
+
+- Red-capable tests: the new component test first failed because the canonical portal component did
+  not exist; the hidden-Tab integration test first failed because the retained `ChatWorkspace`
+  still rendered its alert. After implementation, the three focused component/controller files
+  passed with 71 tests.
+- Package checks: `pnpm --filter @neko/agent-webview build` passed and
+  `pnpm package:desktop` produced the verified darwin-arm64 package.
+- Packaged visible Electron: `pnpm test:local:ui --scenario desktop-agent-diagnostic-portal
+--target packaged` passed against an isolated fixture. A real workspace composer click triggered
+  the visible global diagnostic while Agent, Canvas Main and Resource management were present.
+  The alert was a direct `document.body` child, was outside the Agent Root, measured `360px` at
+  `left=824/right=1184` in a `1200px` viewport, extended beyond the Agent Dock boundary, resolved
+  `position=fixed` and `z-index=60`, and won the center-point hit test. No console error, renderer
+  exception or rejected retired resource request was observed. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T09-25-20.768Z-desktop-agent-diagnostic-portal-packaged/report.json`;
+  screenshot: `screenshots/01-agent-diagnostic-portal-visible.png` under that report.
+- The full Agent Webview run completed 711 tests with 697 passing. Fourteen tests across nine
+  unrelated UI files exceeded the shared 5-second timeout under concurrent repository load; all
+  failures were timeouts rather than assertion failures. The focused changed-path tests passed
+  before and after that run.
+
+### Residual Risk
+
+- The packaged scenario validates the global diagnostic through a real visible composer and the
+  session diagnostic uses the same canonical portal component with deterministic visible/hidden
+  Tab coverage. It does not wait for a provider-backed session failure, because model behavior is
+  outside this layout-only delta.
+
+## 2026-08-05 Same-Workspace retained conversation update
+
+### Evaluation Scope
+
+- Change/feature: create or restore another Agent conversation for an already open Workspace while
+  retaining the Workspace layout/Main resources and every open conversation's independent Webview
+  Root, connection and projection state.
+- Decision and owning suite: `update`
+  `agent-runtime.workflow-controller/conversation-persistence-resume` for real multi-conversation
+  switching and reopen behavior; deterministic Host/Desktop tests own identity, lifecycle and
+  visibility mechanics.
+- Canonical path: exact Workspace conversation owner → existing Project Tab/Workbench → distinct
+  Agent connection and Surface Root → active-Surface visibility selection. Forbidden paths are
+  opening a second same-Workspace Workbench, rebuilding the Workspace panel tree, routing hidden
+  events through the active conversation, or accepting a forged/stale attachment.
+
+### Verification
+
+- Host regressions prove a fresh same-Workspace draft, new conversation attach and second
+  conversation restore preserve exact Tabs, Workbench layout/revision and Main Views.
+- Desktop renderer regressions prove two same-Workspace Agent Roots stay mounted and only visibility
+  changes. Main/preload tests prove connection-scoped cursors and exact projection attachment
+  ownership, including retired detach and forged-key rejection.
+- `pnpm test:agent:eval` passed key-free harness validation with `45 files / 288 tests` and selected
+  `22 suites / 53 cases` in dry-run. This is runner/schema evidence only.
+- The rebuilt packaged `desktop-workbench-scenes` scenario passed with no console errors, warnings or
+  renderer exceptions:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T10-08-20.185Z-desktop-workbench-scenes-packaged/report.json`.
+
+### Residual Risk
+
+- A visible real-provider case across two conversations and two Workspaces remains unexecuted because
+  this environment lacks explicit provider/model/cost authorization. No model behavior claim is made
+  from the deterministic or packaged no-provider scenario.
+- The current retained deck is scoped to one active Workspace. Full Window-owned Workbench/Agent
+  Surface catalogs, cross-Workspace retained panel trees and close/archive release remain open in
+  `compose-desktop-workbench-scenes` tasks 11.1-11.7.
+
+## 2026-08-05 Pi-only conversation restore update
+
+### Evaluation Scope
+
+- Change/feature: restore exact Assistant and Workspace Pi conversations whose immutable context
+  exists but which predate Entry Draft first-submit lifecycle metadata.
+- Decision: deterministic producer/consumer and Desktop projection tests cover this ownership-only
+  correction. Pi remains the conversation/catalog/transcript authority; lifecycle owns optional
+  first-submit metadata, and Renderer owns only mounted presentation state and visibility.
+- Canonical path: exact Scene conversation identity -> lifecycle context owner validation -> Pi
+  workspace catalog lookup -> target Pi transcript projection. Forbidden paths are requiring or
+  synthesizing a lifecycle record, creating a replacement conversation, selecting the active/recent
+  conversation, or storing transcript facts in Renderer.
+
+### Verification
+
+- Agent Runtime regression proves an exact Pi-only context returns no first-submit record while the
+  existing required lifecycle read remains fail-visible.
+- Desktop AppHost regressions prove Pi-only Workspace and Assistant conversations bootstrap with the
+  exact `initialConversationId`, omit synthetic `initialConversationMessage`, reject owner mismatch,
+  and keep subsequent Assistant business messages bound to the exact restored Scene.
+- Focused Main/Bridge/preload/Renderer projection tests passed with `4 files / 61 tests`; full Agent
+  Runtime passed `116 files / 1089 tests`, full Desktop passed `65 files / 367 tests`, both affected
+  typechecks passed, and `pnpm test:agent:eval` passed key-free validation with `45 files / 288 tests`
+  plus `22 suites / 53 cases` in dry-run.
+- Repository `pnpm build`, `pnpm test` and `pnpm check` passed. The production darwin-arm64 Desktop
+  package was rebuilt, and the isolated packaged `desktop-workbench-scenes` scenario completed
+  Workspace/Assistant activation, application restart, exact Assistant restore and a second visible
+  send without console errors, renderer exceptions or attachment identity diagnostics. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T10-33-38.961Z-desktop-workbench-scenes-packaged/report.json`.
+
+### Residual Risk
+
+- A visible two-conversation provider-backed switch/restart case remains task 5.9 and requires an
+  explicit provider, model and cost authorization. Configuration availability alone is not treated
+  as permission to invoke the provider.

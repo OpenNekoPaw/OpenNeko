@@ -1,7 +1,13 @@
-import { type CreativeEntity, type EntityRepresentationBinding } from '@neko/entity-domain';
+import {
+  projectEntityInspector,
+  type ProjectEntityInspectorOwnerCapabilities,
+  type ProjectEntityManagementProjection,
+} from '@neko/entity-domain';
 import { contentLocatorKey } from '@neko/content';
 import { type MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
+import type { GlobalAssetItem } from '../global-library/contract';
 import type {
+  ResourceBrowserAssetItem,
   ResourceBrowserCapability,
   ResourceBrowserContentItem,
   ResourceBrowserEntityItem,
@@ -45,36 +51,69 @@ export function presentResourceBrowserContentItem(
 }
 
 export function presentResourceBrowserEntityItem(
-  entity: CreativeEntity,
-  bindings: readonly EntityRepresentationBinding[],
-  options: { readonly canvasAvailable?: boolean } = {},
+  projection: ProjectEntityManagementProjection,
+  options: {
+    readonly canvasAvailable?: boolean;
+    readonly capabilities?: ProjectEntityInspectorOwnerCapabilities;
+  },
 ): ResourceBrowserEntityItem {
-  const binding = bindings.find(
-    (candidate) =>
-      candidate.entityId === entity.id &&
-      candidate.entityKind === entity.kind &&
-      candidate.status === 'confirmed' &&
-      candidate.availability === 'active',
-  );
-  const representationLocator = binding?.representation;
+  const inspector = projectEntityInspector({
+    projection,
+    capabilities: options.capabilities,
+  });
+  if (projection.status === 'candidate') {
+    const candidate = projection.candidate;
+    return {
+      resourceId: stableResourceId('candidate', candidate.candidateId),
+      facet: 'entities',
+      kind: candidate.kind,
+      label: candidate.proposedNames.display ?? candidate.proposedNames.canonical,
+      ...(candidate.proposedNames.aliases.length > 0
+        ? { description: candidate.proposedNames.aliases.join(', ') }
+        : {}),
+      candidateRef: { candidateId: candidate.candidateId, entityKind: candidate.kind },
+      entityStatus: 'candidate',
+      sourceOwners: projection.sourceOwners,
+      evidenceCount: candidate.evidence.length,
+      inspector,
+      role: 'entity',
+      depth: 0,
+      capabilities: [],
+    };
+  }
+  const entity = projection.entity;
+  const binding =
+    entity.representations.find((candidate) => candidate.isDefault) ?? entity.representations[0];
+  const representationLocator = binding?.target;
+  const attentionBindingIds = projection.bindingAvailability
+    .filter((candidate) => candidate.availability === 'needs-attention')
+    .map((candidate) => candidate.bindingId);
   return {
-    resourceId: stableResourceId('entity', `${entity.kind}:${entity.id}`),
-    facet: 'materials',
+    resourceId: stableResourceId('entity', `${entity.kind}:${entity.entityId}`),
+    facet: 'entities',
     kind: entity.kind,
-    label: entity.displayName ?? entity.canonicalName,
-    ...(entity.aliases.length > 0 ? { description: entity.aliases.join(', ') } : {}),
+    label: entity.names.display ?? entity.names.canonical,
+    ...(entity.names.aliases.length > 0 ? { description: entity.names.aliases.join(', ') } : {}),
     entityRef: {
-      entityId: entity.id,
+      entityId: entity.entityId,
       entityKind: entity.kind,
     },
-    entityStatus: 'confirmed',
-    representationAvailability: representationLocator ? 'active' : 'unbound',
+    entityStatus: projection.status,
+    sourceOwners: projection.sourceOwners,
+    attentionBindingIds,
+    inspector,
+    representationAvailability:
+      attentionBindingIds.length > 0
+        ? 'needs-attention'
+        : representationLocator
+          ? 'active'
+          : 'unbound',
     role: 'entity',
     depth: 0,
     ...(representationLocator ? { representationLocator } : {}),
     ...(binding
       ? {
-          representationBindingId: binding.id,
+          representationBindingId: binding.bindingId,
           representationRole: binding.role,
         }
       : {}),
@@ -82,18 +121,39 @@ export function presentResourceBrowserEntityItem(
       ? {
           thumbnail: {
             descriptorId: stableResourceId('thumbnail', contentLocatorKey(representationLocator)),
-            revision: binding?.updatedAt ?? 'unknown',
+            sourceFingerprint: binding?.acceptedAt ?? 'unknown',
             mediaType: 'entity-representation',
           },
         }
       : {}),
-    capabilities: representationLocator
-      ? [
-          'preview',
-          ...(options.canvasAvailable ? (['add-to-canvas'] as const) : []),
-          'add-to-agent',
-        ]
-      : ['add-to-agent'],
+    capabilities:
+      representationLocator && projection.status !== 'deprecated'
+        ? ['preview', ...(options.canvasAvailable ? (['add-to-canvas'] as const) : [])]
+        : [],
+  };
+}
+
+export function presentResourceBrowserAssetItem(asset: GlobalAssetItem): ResourceBrowserAssetItem {
+  return {
+    resourceId: stableResourceId('asset', asset.id),
+    facet: 'assets',
+    kind: 'asset',
+    label: asset.label,
+    ...(asset.description ? { description: asset.description } : {}),
+    role: 'asset',
+    depth: 0,
+    assetRef: { assetId: asset.id },
+    availability: asset.availability,
+    ...(asset.thumbnail
+      ? {
+          thumbnail: {
+            descriptorId: asset.thumbnail.descriptorId,
+            sourceFingerprint: asset.thumbnail.sourceFingerprint,
+            mediaType: asset.thumbnail.mediaType,
+          },
+        }
+      : {}),
+    capabilities: [],
   };
 }
 
@@ -107,7 +167,7 @@ function presentThumbnail(
   return {
     thumbnail: {
       descriptorId: stableResourceId('thumbnail', locatorKey),
-      revision: `${modifiedAt ?? 'unknown'}:${byteLength ?? 0}`,
+      sourceFingerprint: `${modifiedAt ?? 'unknown'}:${byteLength ?? 0}`,
       mediaType,
     },
   };

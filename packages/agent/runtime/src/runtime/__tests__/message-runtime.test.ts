@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
-  AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
   type AgentContextPayload,
 } from '@neko/agent-contracts';
 import { contentLocatorKey, type ContentLocator } from '@neko/content';
@@ -134,7 +133,10 @@ describe('message runtime helpers', () => {
             id: 'selection-1',
             label: 'Selection',
             summary: 'Selected text',
-            data: { selectedText: 'hello world' },
+            data: {
+              source: { filePath: 'docs/selection.md', format: 'markdown' },
+              excerpt: { contentKind: 'text', text: 'hello world' },
+            },
           },
         ],
         fileContents: [{ path: 'src/app.ts', content: 'export const app = true;' }],
@@ -144,16 +146,6 @@ describe('message runtime helpers', () => {
   });
 
   it('formats structured context payloads inside the agent runtime', () => {
-    expect(
-      formatAgentContextPayload({
-        type: 'document-selection',
-        id: 'selection-1',
-        label: 'Selection',
-        summary: 'Selected text',
-        data: { selectedText: 'hello world' },
-      }),
-    ).toBe('[Content: Selection]\nhello world');
-
     expect(
       formatAgentContextPayload({
         type: 'file',
@@ -220,7 +212,6 @@ describe('message runtime helpers', () => {
         label: '小橘',
         summary: 'thin search summary',
         data: {
-          schemaVersion: AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
           kind: AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
           entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
           entity: {
@@ -255,9 +246,6 @@ describe('message runtime helpers', () => {
         label: 'book.epub · Chapter 1',
         summary: 'Selected text',
         data: {
-          filePath: '/books/book.epub',
-          text: 'selected paragraph',
-          contentKind: 'text',
           source: { filePath: '/books/book.epub', format: 'epub', fileId: 'book-1' },
           locator: { kind: 'chapter', chapterHref: 'chapter-1.xhtml', spineIndex: 0 },
           excerpt: { contentKind: 'text', text: 'selected paragraph', truncated: false },
@@ -298,9 +286,6 @@ describe('message runtime helpers', () => {
         label: 'book.epub · Chapter 1',
         summary: 'Selected text',
         data: {
-          filePath: '/books/book.epub',
-          text: 'selected paragraph',
-          contentKind: 'text',
           source: { filePath: '/books/book.epub', format: 'epub', fileId: 'book-1' },
           locator: { kind: 'chapter', chapterHref: 'chapter-1.xhtml', spineIndex: 0 },
           excerpt: { contentKind: 'text', text: 'selected paragraph', truncated: false },
@@ -945,7 +930,7 @@ describe('message runtime helpers', () => {
           controlImage: {
             imageRef: contentLocator('pose-control'),
             mode: 'depth',
-            identity: { sessionId: 'session-1', revision: 2 },
+            identity: { sessionId: 'session-1', requestId: 'request-pose' },
           },
           camera: {
             value: {
@@ -955,7 +940,7 @@ describe('message runtime helpers', () => {
               fieldOfViewDeg: 45,
               aspectRatio: 1,
             },
-            identity: { sessionId: 'session-1', revision: 2 },
+            identity: { sessionId: 'session-1', requestId: 'request-camera' },
           },
         },
       }),
@@ -1965,19 +1950,15 @@ function contentLocator(path: string): ContentLocator {
 function threeReferencePayload(): AgentContextPayload {
   return {
     type: '3d-reference',
-    id: '3d-reference:session-1:2',
+    id: '3d-reference:session-1',
     label: 'Neutral mannequin',
     summary: 'Pose and camera guide',
     data: {
-      contractVersion: 1,
       staging: {
-        schemaVersion: 1,
         sessionId: 'session-1',
-        revision: 2,
         subject: {
           kind: 'builtin-preset',
           presetId: 'guide-neutral-mannequin',
-          presetVersion: 1,
           fingerprint: 'preset-fingerprint',
           presetKind: 'mannequin',
           appearancePolicy: 'guide-only',
@@ -1997,7 +1978,7 @@ function threeReferencePayload(): AgentContextPayload {
         {
           kind: 'pose',
           sessionId: 'session-1',
-          revision: 2,
+          requestId: 'request-pose',
           controlImage: contentLocator('pose-control'),
           controlMode: 'depth',
           joints: [],
@@ -2005,7 +1986,7 @@ function threeReferencePayload(): AgentContextPayload {
         {
           kind: 'camera',
           sessionId: 'session-1',
-          revision: 2,
+          requestId: 'request-camera',
           camera: {
             cameraId: 'front',
             position: { x: 0, y: 1, z: 3 },

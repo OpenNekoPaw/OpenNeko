@@ -1,10 +1,16 @@
 # 统一实体架构
 
-更新日期：2026-08-02
+更新日期：2026-08-05
 
-> Project Entity 单一文档、Entity 管理面板和 Entity Asset 发布/更新仍由活跃 OpenSpec
+> Project Entity 单一文档、候选/可用性投影、Resource Browser Entity Inspector 与基础
+> confirm/edit/bind/unbind Desktop 路径已经建立。引用安全的 merge/deprecate 只有在全部 reference
+> owner 可参与时才开放。Entity Asset 发布/安装的领域 contract 和确定性 service 已建立，但生产
+> Asset provider 仍由活跃 OpenSpec
 > [`manage-project-entities-as-publishable-assets`](../../openspec/changes/manage-project-entities-as-publishable-assets/)
-> 跟踪。本文明确目标边界，但不得据此把尚未迁移的 `neko/entities.json` 或云分发描述为当前能力。
+> 与 [`establish-manifest-backed-asset-library`](../../openspec/changes/establish-manifest-backed-asset-library/)
+> 跟踪；不得据此把 Asset publish/install/cloud sync 描述为当前可用能力。
+
+[English](unified-entity.en.md)
 
 本文定义 Creative Entity 的身份、候选、representation binding、requirement、视觉草案和搜索投影。媒体文件入口见 [`asset-library.md`](asset-library.md)，跨领域决策见 [`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md)。
 
@@ -47,8 +53,8 @@ Alice 不是一张图片或一个模型文件。Alice 是稳定实体；立绘�
 | `ProjectEntity`                          | 稳定 project identity、kind、名称、alias、status、accepted semantic metadata、Asset provenance | `neko/entities.json` canonical project facts               |
 | `CreativeEntityCandidate`                | 自动发现但未经确认的身份候选                                                                   | user SQLite projection；显式决策才进入 project fact        |
 | `EntityRepresentationBinding`            | Entity 与 durable representation 的关系                                                        | canonical `neko/entities.json` fact                        |
-| `EntityAssetRequirement`                 | portrait/live2d/voice 等缺失需求；名称暂保留为领域术语                                         | owning project fact                                        |
-| `VisualIdentityDraft`                    | AI 视觉草案与可审阅建议                                                                        | owning project fact                                        |
+| `EntityAssetRequirement`                 | portrait/live2d/voice 等缺失需求；名称暂保留为领域术语                                         | owning authoring workflow；不是 identity fact              |
+| `VisualIdentityDraft`                    | AI 视觉草案与可审阅建议                                                                        | owning authoring workflow；接受后才进入 fact/binding       |
 | occurrence / relationship / availability | 可重建 read model                                                                              | user SQLite projection                                     |
 | `EntityAsset`                            | immutable semantic snapshot、package representation、revision/digest/dependencies              | Asset Library managed package / optional cloud replication |
 
@@ -80,7 +86,7 @@ Observation
 | `workspace-file`   | normalized workspace-relative path + optional fingerprint                       |
 | `document-entry`   | stable workspace document source + normalized entry path + optional fingerprint |
 | `generated-output` | owner output ID + revision + digest + durable workspace path                    |
-| `package-resource` | package ID + revision + member path + optional digest/manifest path             |
+| `package-resource` | package ID + exact revision/digest + package-relative member                    |
 
 binding 还保存 role、status、default、source、confidence 与 durable precondition；availability 和
 attention 是可重建 projection。普通文件 binding 不保存 Asset ID；package binding 保存精确的现代
@@ -134,6 +140,18 @@ Agent `@` mention 先使用 Search projection，再在 turn boundary 通过 Enti
 Resource Browser 的 Entity source 使用 `entities`，不再使用语义模糊的 `materials`。它统一投影
 confirmed、candidate、needs-attention 和 deprecated，但必须显示其不同 lifecycle；candidate
 可搜索，不可在未 confirm/import 前作为稳定 Entity reference。
+
+Resource Browser 只有一个 package-owned `entity.manage` intent path。Webview 提交版本化 intent，
+controller 在调用 owner 前校验当前 item capability、Entity/candidate identity 和 project revision；
+Node application runtime 生成 Entity/binding ID、时间和 binding source，再通过 canonical operation
+service 提交。Desktop Main 只注入 workspace 与 local-metadata public repository，不解释 Entity
+语义。缺失 Asset、Character、Room、Conversation 或完整 reference-rewrite owner 时，Inspector 必须
+显示 blocker 并隐藏对应操作，不能合成 Agent 命令或 fallback 会话。
+
+candidate confirmation 跨 `neko/entities.json` 与可重建 SQLite projection 时使用 workspace-scoped
+operation journal。调用只在 canonical commit 与 candidate decision 都完成后返回成功；进程在两步
+之间退出时，下一次 Entity operation 先恢复 journal。journal 是短生命周期 workflow recovery state，
+不是第二份 Entity authority；损坏、未知版本或与 canonical revision 冲突必须 fail-visible。
 
 ## 与 Asset Library 的关系
 

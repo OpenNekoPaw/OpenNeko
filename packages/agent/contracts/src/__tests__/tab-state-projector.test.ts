@@ -122,16 +122,12 @@ describe('tab state projector', () => {
 
   it('builds a tabState webview message', () => {
     expect(
-      buildTabStateMessage(
-        {
-          openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conv-1' }],
-          activeTabId: 'tab-1',
-        },
-        7,
-      ),
+      buildTabStateMessage({
+        openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conv-1' }],
+        activeTabId: 'tab-1',
+      }),
     ).toEqual({
       type: 'tabState',
-      revision: 7,
       tabState: {
         openTabs: [{ id: 'tab-1', title: 'Chat', conversationId: 'conv-1' }],
         activeTabId: 'tab-1',

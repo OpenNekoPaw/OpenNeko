@@ -44,7 +44,6 @@ function buildConfigTemplateHeader(): string {
     '# Model fields:',
     `# - type: ${formatValues(MODEL_TYPES)}`,
     '# - protocol_profile: optional request protocol override for gateway models',
-    '# - protocol: older adapter override; prefer protocol_profile for new configs',
     '# - capabilities: examples include "chat", "function_calling", "streaming", "json_mode", "code",',
     '#   "text_to_image", "image.generate", "image.edit", "vision",',
     '#   "text_to_video", "vision_video", "audio.tts", "audio", "text_to_music"',

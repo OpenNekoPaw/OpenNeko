@@ -2,10 +2,10 @@
 
 状态：Accepted
 
-更新日期：2026-08-02
+更新日期：2026-08-05
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
 `enforce-thin-desktop-application-root`、`normalize-package-naming-topology`、
-`define-character-chatroom-play-use`
+`define-character-chatroom-play-use`、`compose-desktop-workbench-scenes`
 
 本文定义当前一级 workspace 的依赖方向、公共能力 owner，以及 Electron Desktop 和
 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前 Electron Desktop 实现。
@@ -99,7 +99,18 @@ provider、下载、输出落盘与生命周期实现只能从 `@neko/generation
 实体和搜索是 host-neutral 跨领域服务。
 
 - core/projection 通过 port 注入文件、锁、日志和事件能力，不依赖 Electron、React 或功能包内部实现。
-- Desktop Main 组合 Entity runtime、Media Library、metadata binding 和 Inspector 所需 host ports。
+- `@neko/entity-node` 拥有 canonical repository、Host-owned Entity/binding identity materialization，
+  以及 candidate confirmation 跨 canonical fact 与 rebuildable projection 的 workspace-scoped recovery
+  journal；Desktop Main 不解释这些 operation 或恢复规则。
+- `@neko/assets-node` 的 Resource Browser runtime 通过 package-owned `entity.manage` typed intent
+  委托 exact Entity owner；它读取 canonical Entity snapshot 与 local-metadata candidate/availability
+  projection，但不复制 Entity 语义或写项目文件。
+- Desktop Main 组合 Entity runtime、Media Library、metadata binding 和 Inspector 所需 host ports；
+  复用既有 sender-bound Resource Browser bridge，只注入 exact workspace identity、canonical
+  repository 与 local-metadata public repository。
+- `@neko/search-local-metadata` 已由生产 Resource Browser Entity projection 路径直接使用，因此是
+  `active-product` Node package；它只持有可重建 candidate/occurrence/availability rows，不得升级为
+  Project Entity fact authority。
 - Canvas、Assets 和 Agent 通过 canonical facade/contract 访问 Entity；不存在 Dashboard fallback。
 - projection 不泄露 store/cache/index 绝对路径、token、Webview URI 或 manifest path。
 - `@neko/search-domain` 的 semantic source coordinator 拥有 source scope、fingerprint、freshness、reconciliation 和 analyzer scheduling；`@neko/entity-domain` 提供 host-neutral deterministic text analyzer，二者通过共享 semantic-source contract 组合。
@@ -112,7 +123,9 @@ provider、下载、输出落盘与生命周期实现只能从 `@neko/generation
 
 - 只拥有无业务 UI primitive、viewport/layout、foundation、keyboard/focus、hooks 和测试辅助。
 - 不拥有 contribution registry、产品生命周期、宿主权限、媒体执行 operation 或 Agent runtime。
-- `workbench` UI 若保留，只是 render-only primitive；它不得依赖已移除 Workbench Core，也不得成为第二套 runtime registry。
+- `workbench` UI 是所有 Desktop scene 复用的 render-only layout primitive；它不得依赖已移除
+  Workbench Core、解释领域 Surface ref 或成为第二套 runtime registry。Desktop 只通过 slot 组合
+  package-owned Root，并复用同一 Workspace layout/style scope。
 - 新增组件前先审计公共 primitive、同包 components/hooks/shared 和相邻保留包；跨两个以上 Webview 的无业务 UI 才适合提升到公共层。
 - 生产 Renderer/Webview 不直接访问 Electron/Node 或建立本地 mock/fallback transport，应使用
   package-owned typed Desktop host port。
@@ -150,6 +163,20 @@ Desktop app-owned Canvas、Assets、Application Settings 与 Agent 业务 owner 
 `enforce-thin-desktop-application-root` 收敛到 package public entry。Main 中保留的大型 runtime
 是 Electron trust/resource adapter 与 package session composition，不构成领域实现先例；新增或触碰
 时仍必须通过五层审计和 application boundary gate。
+
+Desktop Window scene 与 PrimarySidebar projection 由 `@neko/host` 拥有。Desktop renderer 只将
+validated Interaction/Main/Secondary Main/Manager/Timeline/Status refs 映射到 package public Root；
+不得把 Asset/Extension management Root 放入 manager dock，不得让 Preview/Detail 取代 management
+Main，也不得通过 active/first/recent Project fallback 决定 Workspace scope。目录授权只由 preload
+投影 sender-bound opaque grant，raw path 不进入 renderer contract。
+
+`@neko/agent-contracts` 拥有 closed conversation owner 与 canonical Agent Home codec；
+`@neko/agent-runtime` 从 Pi catalog 和同库 immutable lifecycle context 产生 exact Assistant/Workspace
+owner；`@neko/host` 拥有 Project + standalone owner 的 grouped navigation、排序和 identity validation。
+Desktop Main 只组合 sender/Window、Workspace grant 与 concrete runtime，renderer 只展示分组并发送
+exact intent。Project grouping、Agent Tab 或当前 selection 都不得成为 transcript、capability、memory
+或 Scene owner；Character/Room 只有在 owning package 提供 qualified run/runtime 后才能进入 executable
+context。
 
 文件发现边界：
 
@@ -208,6 +235,13 @@ Desktop 的产品级组合位于 `apps/neko-desktop`。Agent contracts/runtime �
 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Desktop Main。Prompt、Skill、
 capability/tool schema 和宿主副作用按各自边界维护。Pi 只接收已经解析好的
 model/prompt/tool snapshot，不接收 `ConfigManager`、领域 service 或 Host process adapter。
+
+Entry Draft first-submit 的 context、initial message、pending intent、provider claim 和 session
+materialization 顺序由 `@neko/agent-runtime` application service 拥有。Desktop 只注入精确
+Assistant/Workspace runtime resolver；不得把 `workspace.createConversation` 隐藏在 provider adapter
+中。Agent renderer adapter、preload 和 Main message route 必须携带同一显式 connection identity，
+旧 projection attachment 只能通过其创建时 binding 释放，不能使用全局 active connection 切换参数
+模拟多个 session instance。
 
 `@neko/shared/job-lifecycle` 只提供 typed Job identity、phase、revision/CAS、终态不可变和
 versioned observation。Generation、Cut 等 owning domain 各自拥有 submit、具体 snapshot
@@ -368,7 +402,7 @@ provenance 文本、历史 prompt 和运行时 URL 都不得成为来源 authori
 展示；重新生成必须用稳定 `JobRef<'generation'>` 向 Generation owner 解析权威 recipe，
 并创建新的 Job、output identity 和 lineage，不能覆盖旧结果。
 
-Canvas selection toolbar 只投影 Host 在精确 project/Canvas/revision/selection 上解析出的
+Canvas selection toolbar 只投影 Host 在精确 project/Canvas session/request/selection 上解析出的
 owner capability descriptors。Preview、Cut、媒体/模型和 Generation 继续由各自 package
 执行；Canvas 不导入或复制其 viewer、editor、codec、provider 或文件写入实现。普通引用节点
 只得到适用的读取、复制、交接和非破坏派生动作；生成结果节点在 Generation authority 仍可

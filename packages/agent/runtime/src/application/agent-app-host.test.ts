@@ -22,7 +22,7 @@ import {
   type Tool,
   type EffectiveAgentConfigurationProjection,
 } from '@neko/agent-contracts';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createAgentAppHost,
   projectAgentHomeConversationSummary,
@@ -32,13 +32,14 @@ import {
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { AgentExtensionCatalogSnapshot } from '@neko/agent-contracts';
+import { CapturedLogTransport, ConsoleLogger, LogLevel, type ILogger } from '@neko/shared/logger';
 
 const MODEL: Model<'openai-completions'> = {
   id: 'main',
   name: 'Main',
   api: 'openai-completions',
   provider: 'fixture',
-  baseUrl: 'https://fixture.invalid/v1',
+  baseUrl: 'https://fixture.invalid/api',
   reasoning: false,
   input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -55,6 +56,45 @@ describe('AgentAppHost', () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
+  it('emits Workspace lifecycle records through the exact injected owner logger', async () => {
+    const transport = new CapturedLogTransport();
+    const fixture = await createFixture(
+      () => new ConsoleLogger('Workspace', LogLevel.Info, [transport]),
+    );
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    await workspace.createConversation('conversation-log-1');
+    await workspace.deleteConversation('conversation-log-1');
+    await fixture.composition.dispose();
+
+    expect(transport.list().map((entry) => entry.message)).toEqual([
+      'Workspace runtime attached.',
+      'Conversation created.',
+      'Conversation deleted.',
+      'Workspace runtime disposed.',
+    ]);
+    expect(transport.list().every((entry) => entry.source === 'Workspace')).toBe(true);
+  });
+
+  it('deletes a persisted catalog conversation without attaching its Workspace runtime', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.createConversation('conversation-unavailable-workspace');
+    await workspace.createConversation('conversation-valid-sibling');
+    await fixture.composition.dispose();
+
+    const replacement = await createComposition(fixture, 'desktop-host-cleanup');
+    compositions.push(replacement);
+    expect(replacement.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(replacement.findConversation('conversation-unavailable-workspace')).toBeDefined();
+
+    await replacement.deleteConversation('conversation-unavailable-workspace');
+
+    expect(replacement.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(replacement.findConversation('conversation-unavailable-workspace')).toBeUndefined();
+    expect(replacement.findConversation('conversation-valid-sibling')).toBeDefined();
+  });
+
   it('runs the canonical Pi Session, Skill, projection and terminal checkpoint path', async () => {
     const fixture = await createFixture();
     const prompts: string[] = [];
@@ -65,11 +105,10 @@ describe('AgentAppHost', () => {
     const policy = fixturePolicy();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
     const protectedSecret = 'must-not-enter-pi-storage';
-    await fixture.composition.credentialRuntime.credentials.replace(
-      'fixture',
-      { type: 'api_key', key: protectedSecret },
-      'interactive',
-    );
+    await fixture.composition.credentialRuntime.credentials.replace('fixture', {
+      type: 'api_key',
+      key: protectedSecret,
+    });
     workspace.tools.register(fixtureTool());
     expect(await fixture.composition.attachWorkspace(fixture.workspace)).toBe(workspace);
     expect(workspace.tools.list().map((tool) => tool.name)).toEqual([
@@ -96,12 +135,10 @@ describe('AgentAppHost', () => {
           label: 'Opening shot',
           summary: 'Video Clip “Opening shot” at 0.000s–3.000s.',
           data: {
-            schemaVersion: 1,
             kind: 'cut-clip-selection',
             document: {
               locator: { kind: 'workspace-file', path: 'projects/cut/demo.otio' },
               sessionId: 'cut-session-1',
-              revision: 7,
             },
           },
         },
@@ -132,7 +169,7 @@ describe('AgentAppHost', () => {
       workspaceId: fixture.workspace.workspaceId,
       conversationId: 'conversation-1',
       branchId: 'main',
-      writerEpoch: 1,
+      writerLeaseId: expect.any(String),
     });
     expect(evidence.piSessionId).toBeTruthy();
     expect(first.path).toEqual({
@@ -176,6 +213,33 @@ describe('AgentAppHost', () => {
       )),
     ];
     expect(piStorage.every((content) => !content.includes(protectedSecret))).toBe(true);
+  });
+
+  it('checkpoints the exact initial user message when execution fails before Pi starts', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.createConversation('conversation-preflight-failed');
+    await workspace.checkpointFailedInitialTurn({
+      conversationId: 'conversation-preflight-failed',
+      turnId: 'turn-preflight-failed',
+      messageText: 'retain the locally committed prompt',
+    });
+    await workspace.checkpointFailedInitialTurn({
+      conversationId: 'conversation-preflight-failed',
+      turnId: 'turn-preflight-failed',
+      messageText: 'retain the locally committed prompt',
+    });
+
+    expect(
+      (await workspace.readConversationEntries('conversation-preflight-failed'))
+        .filter((entry) => entry.type === 'message')
+        .map((entry) => entry.message),
+    ).toMatchObject([
+      {
+        role: 'user',
+        content: 'retain the locally committed prompt',
+      },
+    ]);
   });
 
   it('discovers project, personal and builtin Skills through one sanitized catalog path', async () => {
@@ -349,9 +413,11 @@ describe('AgentAppHost', () => {
       expect.arrayContaining([
         expect.objectContaining({
           navigation: {
-            projectId: `content:${fixture.workspace.workspaceId}`,
-            workspaceId: fixture.workspace.workspaceId,
             conversationId: 'conversation-a',
+            owner: {
+              kind: 'workspace',
+              workspaceId: fixture.workspace.workspaceId,
+            },
           },
           attention: 'none',
           lastActivity: expect.objectContaining({ kind: 'turn-completed' }),
@@ -363,7 +429,579 @@ describe('AgentAppHost', () => {
     expect(JSON.stringify(home)).not.toContain(fixture.workspace.workspacePath);
   });
 
-  it('projects scoped persisted conversations before a workspace runtime is attached', async () => {
+  it('releases an idle invisible Conversation and Workspace without changing durable history', async () => {
+    const fixture = await createFixture();
+    const models = createFixtureModels(() => completedStream(assistant('durable reply')));
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    const provider = models.getProvider(MODEL.provider);
+    if (!provider) throw new Error('Fixture provider is unavailable.');
+    workspace.models.setProvider(provider);
+    await workspace.openConversation({
+      conversationId: 'conversation-release-idle',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const binding = workspace.bindVisiblePresentation({
+      bindingId: 'visible-idle',
+      conversationId: 'conversation-release-idle',
+    });
+    await workspace.executeTurn({
+      conversationId: 'conversation-release-idle',
+      prompt: 'persist before release',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    const before = workspace.readConversationEvidence('conversation-release-idle');
+
+    await binding.dispose();
+
+    expect(fixture.composition.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(workspace.tools.list()).toEqual([]);
+    expect(workspace.models.getProviders()).toEqual([]);
+    expect(() => workspace.readConversationProjection('conversation-release-idle')).toThrow(
+      'disposed',
+    );
+    expect(fixture.composition.findConversation('conversation-release-idle')).toBeDefined();
+    expect(fixture.composition.readHomeProjection().conversations).toContainEqual(
+      expect.objectContaining({
+        navigation: expect.objectContaining({ conversationId: 'conversation-release-idle' }),
+      }),
+    );
+    const reopened = await fixture.composition.attachWorkspace(fixture.workspace);
+    await reopened.openConversation({
+      conversationId: 'conversation-release-idle',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const after = reopened.readConversationEvidence('conversation-release-idle');
+    expect(after.piSessionId).toBe(before.piSessionId);
+    expect(after.writerLeaseId).not.toBe(before.writerLeaseId);
+    expect(
+      JSON.stringify(await reopened.readConversationEntries('conversation-release-idle')),
+    ).toContain('persist before release');
+    await binding.dispose();
+    expect(fixture.composition.getWorkspace(fixture.workspace.workspaceId)).toBe(reopened);
+  });
+
+  it('keeps an invisible running Conversation protected until its exact turn completes', async () => {
+    const fixture = await createFixture();
+    let startedResolve: (() => void) | undefined;
+    let finish: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      startedResolve = resolve;
+    });
+    const models = createFixtureModels(() => {
+      const stream = createAssistantMessageEventStream();
+      queueMicrotask(() => {
+        const message = assistant('background reply');
+        stream.push({ type: 'start', partial: message });
+        startedResolve?.();
+        finish = () => {
+          stream.push({ type: 'done', reason: 'stop', message });
+          stream.end();
+        };
+      });
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-background',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const binding = workspace.bindVisiblePresentation({
+      bindingId: 'visible-background',
+      conversationId: 'conversation-background',
+    });
+    const operation = workspace.startTurn({
+      conversationId: 'conversation-background',
+      prompt: 'continue while invisible',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    await started;
+
+    await binding.dispose();
+
+    expect(fixture.composition.getWorkspace(fixture.workspace.workspaceId)).toBe(workspace);
+    expect(fixture.composition.readRuntimeResidency()).toEqual([
+      expect.objectContaining({
+        visibleBindingCount: 0,
+        releaseRequested: true,
+        releasable: false,
+        conversations: [
+          expect.objectContaining({
+            conversationId: 'conversation-background',
+            running: true,
+            releasable: false,
+          }),
+        ],
+      }),
+    ]);
+
+    finish?.();
+    const result = await operation.completion;
+
+    expect(result.durability).toBe('durable');
+    expect(fixture.composition.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(fixture.composition.findConversation('conversation-background')).toBeDefined();
+  });
+
+  it('releases only after queued and approval protection leases leave the invisible Conversation', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.createConversation('conversation-protected');
+    const binding = workspace.bindVisiblePresentation({
+      bindingId: 'visible-protected',
+      conversationId: 'conversation-protected',
+    });
+    const queued = workspace.protectConversationRuntime({
+      protectionId: 'queued:conversation-protected',
+      conversationId: 'conversation-protected',
+      reason: 'queued',
+    });
+    const approval = workspace.protectConversationRuntime({
+      protectionId: 'approval:conversation-protected',
+      conversationId: 'conversation-protected',
+      reason: 'approval',
+    });
+
+    await binding.dispose();
+
+    expect(workspace.readRuntimeResidency().conversations).toEqual([
+      expect.objectContaining({
+        conversationId: 'conversation-protected',
+        queued: true,
+        waitingForInput: true,
+        releasable: false,
+      }),
+    ]);
+    await approval.dispose();
+    expect(fixture.composition.getWorkspace(fixture.workspace.workspaceId)).toBe(workspace);
+    expect(workspace.readRuntimeResidency().conversations[0]).toMatchObject({
+      queued: true,
+      waitingForInput: false,
+    });
+
+    await queued.dispose();
+
+    expect(fixture.composition.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
+    expect(fixture.composition.findConversation('conversation-protected')).toBeDefined();
+  });
+
+  it('admits at most two Pi provider turns across independent Workspaces', async () => {
+    const fixture = await createFixture();
+    const secondWorkspaceResolution: AssetWorkspaceResolution = {
+      workspaceId: '22222222-2222-4222-8222-222222222222',
+      workspacePath: join(fixture.root, 'workspace-2'),
+      displayName: 'Fixture 2',
+      locator: { kind: 'variable', value: '${HOME}/workspace-2' },
+    };
+    await mkdir(secondWorkspaceResolution.workspacePath, { recursive: true });
+    let active = 0;
+    let maximumActive = 0;
+    const started: string[] = [];
+    const finish = new Map<string, () => void>();
+    const models = createFixtureModels((_model, context) => {
+      const prompt = lastUserPrompt(context);
+      const stream = createAssistantMessageEventStream();
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      started.push(prompt);
+      const message = assistant(`completed ${prompt}`);
+      stream.push({ type: 'start', partial: message });
+      finish.set(prompt, () => {
+        active -= 1;
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      });
+      return stream;
+    });
+    const firstWorkspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    const secondWorkspace = await fixture.composition.attachWorkspace(secondWorkspaceResolution);
+    await Promise.all([
+      firstWorkspace.openConversation({
+        conversationId: 'conversation-provider-1',
+        models,
+        initialModelPolicy: fixturePolicy(),
+        baseSystemPrompt: 'Desktop Agent fixture',
+      }),
+      firstWorkspace.openConversation({
+        conversationId: 'conversation-provider-2',
+        models,
+        initialModelPolicy: fixturePolicy(),
+        baseSystemPrompt: 'Desktop Agent fixture',
+      }),
+      secondWorkspace.openConversation({
+        conversationId: 'conversation-provider-3',
+        models,
+        initialModelPolicy: fixturePolicy(),
+        baseSystemPrompt: 'Desktop Agent fixture',
+      }),
+    ]);
+    const inputs = [
+      [firstWorkspace, 'conversation-provider-1', 'provider turn 1'],
+      [firstWorkspace, 'conversation-provider-2', 'provider turn 2'],
+      [secondWorkspace, 'conversation-provider-3', 'provider turn 3'],
+    ] as const;
+    const operations = inputs.map(([workspace, conversationId, prompt]) =>
+      workspace.startTurn({
+        conversationId,
+        prompt,
+        modelPolicy: fixturePolicy(),
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    );
+
+    await vi.waitFor(() => expect(started).toHaveLength(2));
+    expect(maximumActive).toBe(2);
+    finish.get(started[0] ?? '')?.();
+    await vi.waitFor(() => expect(started).toHaveLength(3));
+    expect(maximumActive).toBe(2);
+    for (const prompt of started.slice(1)) finish.get(prompt)?.();
+
+    await expect(
+      Promise.all(operations.map((operation) => operation.completion)),
+    ).resolves.toHaveLength(3);
+  });
+
+  it('releases the provider slot while a Conversation waits for tool approval', async () => {
+    const fixture = await createFixture();
+    const providerStarts: string[] = [];
+    const finish = new Map<string, () => void>();
+    let resolveApproval: ((allowed: boolean) => void) | undefined;
+    let approvalRequested = false;
+    const approval = new Promise<boolean>((resolve) => {
+      resolveApproval = resolve;
+    });
+    const models = createFixtureModels((_model, context) => {
+      const prompt = lastUserPrompt(context);
+      const hasToolResult = context.messages.some((message) => message.role === 'toolResult');
+      providerStarts.push(`${prompt}:${hasToolResult ? 'continuation' : 'initial'}`);
+      if (prompt === 'approval turn') {
+        if (hasToolResult) return completedStream(assistant('approval completed'));
+        const tool = context.tools?.find(
+          (candidate) =>
+            candidate.description === 'Proves the workspace-scoped canonical Tool registry owner.',
+        );
+        if (!tool) throw new Error('Approval fixture Tool was not projected to Pi.');
+        return completedStream(assistantToolCall(tool.name));
+      }
+      const stream = createAssistantMessageEventStream();
+      const message = assistant(`completed ${prompt}`);
+      stream.push({ type: 'start', partial: message });
+      finish.set(prompt, () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      });
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    workspace.tools.register(fixtureTool());
+    for (const conversationId of [
+      'conversation-approval',
+      'conversation-blocking',
+      'conversation-after-yield',
+    ]) {
+      await workspace.openConversation({
+        conversationId,
+        models,
+        initialModelPolicy: fixturePolicy(),
+        baseSystemPrompt: 'Desktop Agent fixture',
+      });
+    }
+    const common = {
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      workspaceTrusted: true,
+      locale: 'en' as const,
+    };
+    const approvalTurn = workspace.startTurn({
+      ...common,
+      conversationId: 'conversation-approval',
+      prompt: 'approval turn',
+      permissionPolicy: {
+        preflight: async ({ signal }) => {
+          approvalRequested = true;
+          if (signal?.aborted) return { allowed: false, reason: 'cancelled' };
+          return {
+            allowed: await Promise.race([
+              approval,
+              new Promise<false>((resolve) =>
+                signal?.addEventListener('abort', () => resolve(false), { once: true }),
+              ),
+            ]),
+          };
+        },
+      },
+    });
+    await vi.waitFor(() => expect(approvalRequested).toBe(true));
+    const blockingTurn = workspace.startTurn({
+      ...common,
+      conversationId: 'conversation-blocking',
+      prompt: 'blocking turn',
+      permissionPolicy: allowTools(),
+    });
+    const afterYieldTurn = workspace.startTurn({
+      ...common,
+      conversationId: 'conversation-after-yield',
+      prompt: 'after yield turn',
+      permissionPolicy: allowTools(),
+    });
+
+    await vi.waitFor(() => expect(providerStarts).toContain('after yield turn:initial'));
+    expect(providerStarts[0]).toBe('approval turn:initial');
+    expect(providerStarts.slice(1)).toEqual(
+      expect.arrayContaining(['blocking turn:initial', 'after yield turn:initial']),
+    );
+    expect(providerStarts).toHaveLength(3);
+    expect(workspace.readRuntimeResidency().conversations).toContainEqual(
+      expect.objectContaining({
+        conversationId: 'conversation-approval',
+        running: true,
+        releasable: false,
+      }),
+    );
+
+    resolveApproval?.(true);
+    finish.get('blocking turn')?.();
+    await vi.waitFor(() => expect(providerStarts).toContain('approval turn:continuation'));
+    finish.get('after yield turn')?.();
+    await expect(
+      Promise.all([approvalTurn.completion, blockingTurn.completion, afterYieldTurn.completion]),
+    ).resolves.toHaveLength(3);
+  });
+
+  it('queues a second turn under its Conversation and persists both turns in order', async () => {
+    const fixture = await createFixture();
+    const started: string[] = [];
+    const finish = new Map<string, () => void>();
+    const models = createFixtureModels((_model, context) => {
+      const prompt = lastUserPrompt(context);
+      const stream = createAssistantMessageEventStream();
+      started.push(prompt);
+      const message = assistant(`completed ${prompt}`);
+      stream.push({ type: 'start', partial: message });
+      finish.set(prompt, () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      });
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-turn-queue',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const binding = workspace.bindVisiblePresentation({
+      bindingId: 'visible-turn-queue',
+      conversationId: 'conversation-turn-queue',
+    });
+    const first = workspace.startTurn({
+      conversationId: 'conversation-turn-queue',
+      prompt: 'queued first',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+    const second = workspace.startTurn({
+      conversationId: 'conversation-turn-queue',
+      prompt: 'queued second',
+      modelPolicy: fixturePolicy(),
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+
+    await vi.waitFor(() => expect(started).toEqual(['queued first']));
+    expect(workspace.readRuntimeResidency().conversations[0]).toMatchObject({
+      running: true,
+      queued: true,
+      releasable: false,
+    });
+    finish.get('queued first')?.();
+    await vi.waitFor(() => expect(started).toEqual(['queued first', 'queued second']));
+    finish.get('queued second')?.();
+
+    await expect(Promise.all([first.completion, second.completion])).resolves.toHaveLength(2);
+    const transcript = JSON.stringify(
+      await workspace.readConversationEntries('conversation-turn-queue'),
+    );
+    expect(transcript.indexOf('queued first')).toBeGreaterThanOrEqual(0);
+    expect(transcript.indexOf('queued second')).toBeGreaterThan(transcript.indexOf('queued first'));
+    await binding.dispose();
+  });
+
+  it('uses the Conversation execution queue as the only read, promote, cancel and edit owner', async () => {
+    const fixture = await createFixture();
+    const started: string[] = [];
+    const finish = new Map<string, () => void>();
+    const models = createFixtureModels((_model, context) => {
+      const prompt = lastUserPrompt(context);
+      const stream = createAssistantMessageEventStream();
+      started.push(prompt);
+      const message = assistant(`completed ${prompt}`);
+      stream.push({ type: 'start', partial: message });
+      finish.set(prompt, () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      });
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-owned-queue',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const binding = workspace.bindVisiblePresentation({
+      bindingId: 'visible-owned-queue',
+      conversationId: 'conversation-owned-queue',
+    });
+    const turn = (prompt: string) =>
+      workspace.startTurn({
+        conversationId: 'conversation-owned-queue',
+        prompt,
+        modelPolicy: fixturePolicy(),
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      });
+    const active = turn('active turn');
+    const cancelled = turn('cancel queued turn');
+    const edited = turn('edit queued turn');
+    const promoted = turn('promote queued turn');
+    const cancelledCompletion = expect(cancelled.completion).rejects.toMatchObject({
+      name: 'AgentQueuedTurnCancellationError',
+      reason: 'cancelled',
+    });
+    const editedCompletion = expect(edited.completion).rejects.toMatchObject({
+      name: 'AgentQueuedTurnCancellationError',
+      reason: 'edit',
+    });
+
+    await vi.waitFor(() => expect(started).toEqual(['active turn']));
+    const initial = workspace.readMessageQueue('conversation-owned-queue');
+    expect(initial.items.map((item) => item.content)).toEqual([
+      'cancel queued turn',
+      'edit queued turn',
+      'promote queued turn',
+    ]);
+    const cancelItem = initial.items[0];
+    const editItem = initial.items[1];
+    const promoteItem = initial.items[2];
+    if (!cancelItem || !editItem || !promoteItem) {
+      throw new Error('Conversation queue fixture did not create all pending items.');
+    }
+
+    expect(
+      workspace
+        .promoteQueuedMessage('conversation-owned-queue', promoteItem.id)
+        .items.map((item) => item.content),
+    ).toEqual(['promote queued turn', 'cancel queued turn', 'edit queued turn']);
+    const editedResult = await workspace.takeQueuedMessageForEdit(
+      'conversation-owned-queue',
+      editItem.id,
+    );
+    expect(editedResult.item.content).toBe('edit queued turn');
+    expect(editedResult.snapshot.items.map((item) => item.content)).toEqual([
+      'promote queued turn',
+      'cancel queued turn',
+    ]);
+    expect(
+      (await workspace.cancelQueuedMessage('conversation-owned-queue', cancelItem.id)).items.map(
+        (item) => item.content,
+      ),
+    ).toEqual(['promote queued turn']);
+    await Promise.all([cancelledCompletion, editedCompletion]);
+
+    finish.get('active turn')?.();
+    await vi.waitFor(() => expect(started).toEqual(['active turn', 'promote queued turn']));
+    finish.get('promote queued turn')?.();
+    await expect(Promise.all([active.completion, promoted.completion])).resolves.toHaveLength(2);
+    expect(started).not.toContain('cancel queued turn');
+    expect(started).not.toContain('edit queued turn');
+    expect(workspace.readMessageQueue('conversation-owned-queue')).toMatchObject({
+      items: [],
+      pendingCount: 0,
+    });
+    await binding.dispose();
+  });
+
+  it('cancels the active provider turn and rejects queued turns during application disposal', async () => {
+    const fixture = await createFixture();
+    const started: string[] = [];
+    let providerAborted = false;
+    const models = createFixtureModels((_model, context, options) => {
+      const prompt = lastUserPrompt(context);
+      const stream = createAssistantMessageEventStream();
+      started.push(prompt);
+      stream.push({ type: 'start', partial: assistant(`started ${prompt}`) });
+      options?.signal?.addEventListener(
+        'abort',
+        () => {
+          providerAborted = true;
+          const message = { ...assistant('cancelled by disposal'), stopReason: 'aborted' as const };
+          stream.push({ type: 'error', reason: 'aborted', error: message });
+          stream.end();
+        },
+        { once: true },
+      );
+      return stream;
+    });
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-disposal-queue',
+      models,
+      initialModelPolicy: fixturePolicy(),
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+    const turn = (prompt: string) =>
+      workspace.startTurn({
+        conversationId: 'conversation-disposal-queue',
+        prompt,
+        modelPolicy: fixturePolicy(),
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      });
+    const active = turn('active before disposal');
+    const queued = turn('queued before disposal');
+    const queuedCompletion = expect(queued.completion).rejects.toMatchObject({
+      name: 'AgentQueuedTurnCancellationError',
+      reason: 'disposed',
+    });
+    await vi.waitFor(() => expect(started).toEqual(['active before disposal']));
+
+    await fixture.composition.dispose();
+
+    await queuedCompletion;
+    await expect(active.completion).resolves.toMatchObject({ durability: 'durable' });
+    expect(providerAborted).toBe(true);
+    expect(started).toEqual(['active before disposal']);
+  });
+
+  it('projects persisted conversations before a workspace runtime is attached', async () => {
     const fixture = await createFixture();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
     await workspace.createConversation('conversation-cold-start');
@@ -378,15 +1016,84 @@ describe('AgentAppHost', () => {
       conversations: [
         {
           navigation: {
-            workspaceId: fixture.workspace.workspaceId,
             conversationId: 'conversation-cold-start',
+            owner: {
+              kind: 'workspace',
+              workspaceId: fixture.workspace.workspaceId,
+            },
           },
           attention: 'none',
         },
       ],
     });
-    restored.setHomeWorkspaceScope([]);
-    expect(restored.readHomeProjection().conversations).toEqual([]);
+  });
+
+  it('idempotently materializes one exact conversation for lifecycle replay', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    await Promise.all([
+      workspace.ensureConversation('conversation-materialized'),
+      workspace.ensureConversation('conversation-materialized'),
+    ]);
+    await workspace.ensureConversation('conversation-materialized');
+
+    expect(
+      workspace
+        .listConversations()
+        .filter((record) => record.conversationId === 'conversation-materialized'),
+    ).toHaveLength(1);
+    expect(workspace.readConversationProjection('conversation-materialized')).toMatchObject({
+      conversationId: 'conversation-materialized',
+    });
+    await expect(workspace.createConversation('conversation-materialized')).rejects.toMatchObject({
+      code: 'conversation-exists',
+    });
+  });
+
+  it('enumerates Assistant and Workspace conversations from one stable catalog', async () => {
+    const fixture = await createFixture();
+    const assistantSpaceId = 'assistant-space:local-user';
+    const conversations = [
+      {
+        workspaceId: assistantSpaceId,
+        conversationId: 'conversation-assistant',
+        title: 'Assistant conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-04T00:00:00.000Z',
+        updatedAt: '2026-08-04T00:02:00.000Z',
+      },
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-project',
+        title: 'Project conversation',
+        activeBranchId: 'main',
+        createdAt: '2026-08-04T00:00:00.000Z',
+        updatedAt: '2026-08-04T00:01:00.000Z',
+      },
+    ] as const;
+    const listConversations = vi.fn(() => ({ records: conversations, diagnostics: [] }));
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-assistant-home-scope',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations,
+        findConversation: (conversationId) =>
+          conversations.find((record) => record.conversationId === conversationId),
+        dispose: () => undefined,
+      },
+      assistantSpaceIds: [assistantSpaceId],
+    });
+    compositions.push(composition);
+
+    expect(
+      composition
+        .readHomeProjection()
+        .conversations.map((conversation) => conversation.navigation.conversationId),
+    ).toEqual(['conversation-assistant', 'conversation-project']);
+    expect(listConversations).toHaveBeenCalledWith();
   });
 
   it('fails visibly when the persisted Home catalog cannot be read', async () => {
@@ -400,13 +1107,220 @@ describe('AgentAppHost', () => {
         listConversations: () => {
           throw new Error('catalog fixture failed');
         },
+        findConversation: () => undefined,
         dispose: () => undefined,
       },
     });
-    composition.setHomeWorkspaceScope([fixture.workspace.workspaceId]);
     compositions.push(composition);
 
     expect(() => composition.readHomeProjection()).toThrow('catalog fixture failed');
+  });
+
+  it('projects a valid Home Conversation beside an entry-local catalog diagnostic', async () => {
+    const fixture = await createFixture();
+    const validRecord = {
+      workspaceId: fixture.workspace.workspaceId,
+      conversationId: 'conversation-valid',
+      title: 'Valid conversation',
+      activeBranchId: 'main',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:01:00.000Z',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: fixture.workspace.workspaceId,
+        workspaceGrantId: 'grant-valid',
+      },
+    };
+    const invalidRecord = {
+      workspaceId: validRecord.workspaceId,
+      conversationId: 'conversation-invalid',
+      title: 'Invalid conversation',
+      activeBranchId: validRecord.activeBranchId,
+      createdAt: validRecord.createdAt,
+      updatedAt: '2026-08-05T00:02:00.000Z',
+    };
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-local-catalog-failure',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: () => ({
+          records: [invalidRecord, validRecord],
+          diagnostics: [
+            {
+              code: 'invalid-conversation-record',
+              workspaceId: fixture.workspace.workspaceId,
+              conversationId: 'conversation-invalid',
+              message: "Agent Conversation context contains unknown field 'unexpectedField'.",
+            },
+          ],
+        }),
+        findConversation: (conversationId) =>
+          conversationId === validRecord.conversationId ? validRecord : undefined,
+        dispose: () => undefined,
+      },
+    });
+    compositions.push(composition);
+
+    expect(composition.readHomeProjection()).toMatchObject({
+      conversations: [
+        {
+          navigation: { conversationId: 'conversation-invalid' },
+          unavailable: {
+            fieldNames: ['context'],
+            message: expect.stringContaining("unknown field 'unexpectedField'"),
+          },
+        },
+        {
+          navigation: { conversationId: 'conversation-valid' },
+        },
+      ],
+      diagnostics: [],
+    });
+  });
+
+  it('retains an unavailable Workspace context beside valid siblings without global failure', async () => {
+    const fixture = await createFixture();
+    const assistantSpaceId = 'assistant-space:local-user';
+    const records = [
+      {
+        workspaceId: assistantSpaceId,
+        conversationId: 'conversation-invalid-workspace-owner',
+        title: 'Invalid workspace owner',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:03:00.000Z',
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: assistantSpaceId,
+          workspaceGrantId: 'workspace-grant:invalid',
+        },
+      },
+      {
+        workspaceId: assistantSpaceId,
+        conversationId: 'conversation-valid-assistant',
+        title: 'Valid assistant',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:02:00.000Z',
+        context: {
+          kind: 'assistant' as const,
+          assistantSpaceId,
+          baseGrantIds: [],
+        },
+      },
+      {
+        workspaceId: fixture.workspace.workspaceId,
+        conversationId: 'conversation-valid-workspace',
+        title: 'Valid workspace',
+        activeBranchId: 'main',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:01:00.000Z',
+        context: {
+          kind: 'workspace' as const,
+          workspaceId: fixture.workspace.workspaceId,
+          workspaceGrantId: 'workspace-grant:valid',
+        },
+      },
+    ];
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-invalid-owner-scope',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: () => ({ records, diagnostics: [] }),
+        findConversation: (conversationId) =>
+          records.find((record) => record.conversationId === conversationId),
+        dispose: () => undefined,
+      },
+      assistantSpaceIds: [assistantSpaceId],
+    });
+    compositions.push(composition);
+
+    expect(composition.readHomeProjection()).toMatchObject({
+      conversations: [
+        {
+          navigation: {
+            conversationId: 'conversation-invalid-workspace-owner',
+            owner: { kind: 'workspace', workspaceId: assistantSpaceId },
+          },
+          unavailable: {
+            fieldNames: ['context'],
+            message: expect.stringContaining('Workspace context resolves to an Assistant Space'),
+          },
+        },
+        {
+          navigation: {
+            conversationId: 'conversation-valid-assistant',
+            owner: { kind: 'assistant', assistantSpaceId },
+          },
+        },
+        {
+          navigation: {
+            conversationId: 'conversation-valid-workspace',
+            owner: { kind: 'workspace', workspaceId: fixture.workspace.workspaceId },
+          },
+        },
+      ],
+      diagnostics: [],
+    });
+  });
+
+  it('retains a missing-context Conversation as unavailable without opening a runtime', async () => {
+    const fixture = await createFixture();
+    const missingContext = {
+      workspaceId: fixture.workspace.workspaceId,
+      conversationId: 'conversation-missing-context',
+      title: 'Missing context',
+      activeBranchId: 'main',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:02:00.000Z',
+    };
+    const valid = {
+      ...missingContext,
+      conversationId: 'conversation-valid-context',
+      title: 'Valid context',
+      updatedAt: '2026-08-05T00:01:00.000Z',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: fixture.workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant:valid',
+      },
+    };
+    const composition = createAgentAppHost({
+      userDataRoot: fixture.userDataRoot,
+      userHome: fixture.userHome,
+      hostId: 'desktop-host-missing-context',
+      credentialRuntime: createTestCredentialRuntime(),
+      catalogReader: {
+        listConversations: () => ({ records: [missingContext, valid], diagnostics: [] }),
+        findConversation: (conversationId) =>
+          [missingContext, valid].find((record) => record.conversationId === conversationId),
+        dispose: () => undefined,
+      },
+    });
+    compositions.push(composition);
+
+    expect(composition.readHomeProjection()).toMatchObject({
+      conversations: [
+        {
+          navigation: { conversationId: missingContext.conversationId },
+          attention: 'none',
+          unavailable: {
+            fieldNames: ['context'],
+            message: expect.stringContaining('context is not present'),
+          },
+        },
+        {
+          navigation: { conversationId: valid.conversationId },
+        },
+      ],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+      diagnostics: [],
+    });
+    expect(composition.getWorkspace(fixture.workspace.workspaceId)).toBeUndefined();
   });
 
   it('reports no active turn for a durable conversation that has not opened a Pi runtime', async () => {
@@ -483,9 +1397,9 @@ describe('AgentAppHost', () => {
         createdAt: '2026-07-28T00:00:00.000Z',
         updatedAt: '2026-07-28T00:01:00.000Z',
       },
+      { kind: 'workspace', workspaceId: 'workspace-1' },
       {
         conversationId: 'conversation-generation',
-        projectionVersion: 1,
         turns: [
           {
             turnId: 'turn-1',
@@ -499,7 +1413,6 @@ describe('AgentAppHost', () => {
                 messageId: 'message-1',
                 itemId: 'tool-generation-1',
                 sequence: 1,
-                itemRevision: 2,
                 kind: 'tool_call',
                 status: 'succeeded',
                 payload: {
@@ -513,7 +1426,6 @@ describe('AgentAppHost', () => {
                         generationJob: {
                           kind: 'generation-job',
                           jobId: 'generation-1',
-                          revision: 4,
                           phase: 'succeeded',
                         },
                       },
@@ -533,7 +1445,6 @@ describe('AgentAppHost', () => {
 
     expect(summary.lastActivity.generationJob).toEqual({
       jobId: 'generation-1',
-      revision: 4,
       phase: 'succeeded',
     });
     expect(JSON.stringify(summary)).not.toContain('CancelGenerationJob');
@@ -549,9 +1460,9 @@ describe('AgentAppHost', () => {
         createdAt: '2026-07-28T00:00:00.000Z',
         updatedAt: '2026-07-28T00:01:00.000Z',
       },
+      { kind: 'workspace', workspaceId: 'workspace-1' },
       {
         conversationId: 'conversation-confirmation',
-        projectionVersion: 1,
         turns: [
           {
             turnId: 'turn-1',
@@ -565,7 +1476,6 @@ describe('AgentAppHost', () => {
                 messageId: 'message-1',
                 itemId: 'tool-confirmation-1',
                 sequence: 1,
-                itemRevision: 2,
                 kind: 'tool_call',
                 status: 'pending',
                 payload: {
@@ -712,7 +1622,7 @@ describe('AgentAppHost', () => {
     });
 
     expect(secondEvidence.piSessionId).toBe(firstEvidence.piSessionId);
-    expect(secondEvidence.writerEpoch).toBe(1);
+    expect(secondEvidence.writerLeaseId).not.toBe(firstEvidence.writerLeaseId);
     expect(secondWorkspace.listConversations()).toHaveLength(1);
     expect(JSON.stringify(observedContexts)).toContain('before restart');
     expect(JSON.stringify(observedContexts).match(/before restart/g)).toHaveLength(1);
@@ -802,7 +1712,9 @@ describe('AgentAppHost', () => {
         baseSystemPrompt: 'Desktop Agent fixture',
       }),
     ).rejects.toMatchObject({ code: 'lease-held' });
-    expect(firstWorkspace.readConversationEvidence('conversation-fenced').writerEpoch).toBe(1);
+    expect(
+      firstWorkspace.readConversationEvidence('conversation-fenced').writerLeaseId,
+    ).not.toHaveLength(0);
   });
 
   it('releases owned runtime, lease, projection and SQLite handles on disposal', async () => {
@@ -919,7 +1831,6 @@ describe('AgentAppHost', () => {
 
     await expect(
       fixture.composition.reconcilePluginRuntime({
-        revision: `sha256:${'c'.repeat(64)}`,
         records: [],
         runtimeDescriptors: [
           {
@@ -941,7 +1852,7 @@ describe('AgentAppHost', () => {
     );
   });
 
-  it('atomically projects plugin Skill generations into global and workspace Pi discovery', async () => {
+  it('atomically projects plugin Skills into global and workspace Pi discovery', async () => {
     const fixture = await createFixture();
     const pluginRoot = join(fixture.root, 'plugin');
     const skillRoot = join(pluginRoot, 'skills');
@@ -959,7 +1870,6 @@ describe('AgentAppHost', () => {
       'utf8',
     );
     const installed: AgentExtensionCatalogSnapshot = {
-      revision: `sha256:${'a'.repeat(64)}`,
       records: [],
       runtimeDescriptors: [
         {
@@ -1003,7 +1913,6 @@ describe('AgentAppHost', () => {
     });
 
     await fixture.composition.reconcilePluginRuntime({
-      revision: `sha256:${'b'.repeat(64)}`,
       records: [],
       runtimeDescriptors: [],
       diagnostics: [],
@@ -1015,7 +1924,9 @@ describe('AgentAppHost', () => {
     ).toBe(false);
   });
 
-  async function createFixture() {
+  async function createFixture(
+    createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger,
+  ) {
     const root = await mkdtemp(join(tmpdir(), 'neko-desktop-agent-'));
     roots.push(root);
     const userHome = join(root, 'home');
@@ -1050,8 +1961,8 @@ describe('AgentAppHost', () => {
       credentialRuntime: createTestCredentialRuntime(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       createIdentity: () => `identity-${(identity += 1)}`,
+      ...(createWorkspaceLogger ? { createWorkspaceLogger } : {}),
     });
-    composition.setHomeWorkspaceScope([workspace.workspaceId]);
     compositions.push(composition);
     return { root, userHome, userDataRoot, workspace, composition };
   }
@@ -1073,7 +1984,6 @@ async function createComposition(
       userDataRoot: fixture.userDataRoot,
     }),
   });
-  composition.setHomeWorkspaceScope(['11111111-1111-4111-8111-111111111111']);
   return composition;
 }
 
@@ -1089,6 +1999,7 @@ function createTestCredentialRuntime() {
         secrets.delete(key);
       },
     },
+    configCredentials: { read: async () => undefined },
     prompt: {
       text: async () => null,
       select: async () => null,
@@ -1169,7 +2080,6 @@ function createFixtureModels(
 
 function fixtureConfiguration(): AgentTurnConfigurationSnapshot {
   const projection: EffectiveAgentConfigurationProjection = Object.freeze({
-    schemaVersion: 1,
     profileId: 'effective-agent-aaaaaaaaaaaaaaaa',
     digest: `sha256:${'a'.repeat(64)}`,
     values: Object.freeze({
@@ -1214,6 +2124,14 @@ function assistant(text: string): AssistantMessage {
     },
     stopReason: 'stop',
     timestamp: Date.now(),
+  };
+}
+
+function assistantToolCall(name: string): AssistantMessage {
+  return {
+    ...assistant(''),
+    content: [{ type: 'toolCall', id: 'fixture-tool-call', name, arguments: {} }],
+    stopReason: 'toolUse',
   };
 }
 

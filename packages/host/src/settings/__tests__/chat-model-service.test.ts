@@ -8,7 +8,6 @@ const provider: Provider = {
   displayName: 'Anthropic',
   type: 'anthropic',
   apiUrl: 'https://api.anthropic.com',
-  apiKey: 'sk-ant',
   enabled: true,
 };
 
@@ -132,8 +131,7 @@ describe('ChatModelService', () => {
       name: 'mixed-gateway',
       displayName: 'Mixed Gateway',
       type: 'newapi',
-      apiUrl: 'https://gateway.example.com/v1',
-      apiKey: 'sk-gateway',
+      apiUrl: 'https://gateway.example.com/api',
       enabled: true,
       connectionKind: 'gateway',
       protocolProfile: 'newapi',
@@ -193,7 +191,6 @@ describe('ChatModelService', () => {
       displayName: 'DeepSeek',
       type: 'generic',
       apiUrl: 'https://api.deepseek.com',
-      apiKey: 'sk-deepseek',
       enabled: true,
       connectionKind: 'direct',
       protocolProfile: 'openai-chat',

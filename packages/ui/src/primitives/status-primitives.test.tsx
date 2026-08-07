@@ -57,5 +57,26 @@ describe('@neko/ui status primitives', () => {
     expect(host.textContent).toContain('No assets');
     expect(host.textContent).toContain('Import media to begin.');
     expect(host.querySelector('button')?.textContent).toBe('Import');
+    const emptyState = host.querySelector('[data-neko-empty-state="compact"]');
+    expect(emptyState?.className).toContain('min-h-24');
+    expect(emptyState?.className).not.toContain('flex-1');
+    expect(emptyState?.className).not.toContain('col-span-full');
+  });
+
+  it('fills the available flex and grid collection lane when requested', () => {
+    act(() => {
+      root.render(<EmptyState fill title="No matching items" />);
+    });
+
+    const emptyState = host.querySelector('[data-neko-empty-state="fill"]');
+    expect(emptyState?.className).toContain('min-h-48');
+    expect(emptyState?.className).toContain('w-full');
+    expect(emptyState?.className).toContain('flex-1');
+    expect(emptyState?.className).toContain('self-stretch');
+    expect(emptyState?.className).toContain('col-span-full');
+    expect(emptyState?.querySelector('div:last-child')?.className).toContain('font-normal');
+    expect(emptyState?.querySelector('div:last-child')?.className).toContain(
+      'neko-descriptionForeground',
+    );
   });
 });

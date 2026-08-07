@@ -77,7 +77,7 @@ describe('agent input triggers', () => {
     });
   });
 
-  it('normalizes trigger names consistently with legacy slash normalization', () => {
+  it('normalizes trigger names consistently across input utilities', () => {
     expect(normalizeAgentInputTriggerName('$Quality-Review')).toBe('quality-review');
     expect(normalizeSlashCommandName('/Status')).toBe('status');
   });

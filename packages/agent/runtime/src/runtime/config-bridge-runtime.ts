@@ -1,8 +1,6 @@
 import {
-  buildConfigChangedMessage,
   buildConfigStateMessage,
   buildGlobalErrorMessage,
-  type ConfigChangedMessage,
   type ConfigStateMessage,
   type GlobalErrorMessage,
 } from '@neko/agent-contracts';
@@ -24,10 +22,6 @@ export interface ConfigBridgeQueryRuntimeDeps<
 export interface ConfigBridgeQueryRuntimeResult {
   handled: boolean;
   message?: ConfigBridgeQueryMessage;
-}
-
-export function buildConfigChangedRuntimeMessage(): ConfigChangedMessage {
-  return buildConfigChangedMessage();
 }
 
 export function buildConfigBridgeGlobalErrorMessage(input: {

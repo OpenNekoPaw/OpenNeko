@@ -4,11 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import {
-  MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
-  assertRuntimeDirectory,
-  stagePackagedMediaRuntime,
-} from '../media-runtime-closure.mjs';
+import { assertRuntimeDirectory, stagePackagedMediaRuntime } from '../media-runtime-closure.mjs';
 
 describe('OpenNeko media runtime closure', () => {
   it('verifies target, checksums, and descriptor identity without PATH discovery', () => {
@@ -29,11 +25,11 @@ describe('OpenNeko media runtime closure', () => {
     );
   });
 
-  it('rejects the pre-accelerator v1 descriptor schema', () => {
+  it('rejects an unknown descriptor field', () => {
     const root = createFixtureRuntime();
     const descriptorPath = join(root, 'descriptor.json');
     const descriptor = JSON.parse(readFileSync(descriptorPath, 'utf8'));
-    descriptor.schemaVersion = 'openneko.media-runtime.v1';
+    descriptor.unexpectedField = 1;
     writeFileSync(descriptorPath, JSON.stringify(descriptor), 'utf8');
 
     assert.throws(() => assertRuntimeDirectory(root, 'darwin-arm64'), /descriptor is invalid/u);
@@ -79,7 +75,6 @@ function createFixtureRuntime() {
   writeFileSync(
     join(root, 'descriptor.json'),
     `${JSON.stringify({
-      schemaVersion: MEDIA_RUNTIME_DESCRIPTOR_SCHEMA,
       target,
       ffmpegVersion: '8.1.2',
       ffprobeVersion: '8.1.2',

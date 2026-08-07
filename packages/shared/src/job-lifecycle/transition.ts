@@ -25,8 +25,6 @@ export type JobLifecycleErrorCode =
   | 'invalid-snapshot'
   | 'job-already-exists'
   | 'job-not-found'
-  | 'stale-revision'
-  | 'revision-gap'
   | 'identity-mismatch'
   | 'invalid-transition'
   | 'terminal-mutation';
@@ -57,12 +55,6 @@ export function assertJobRef(ref: JobRef): void {
 
 export function assertInitialJobSnapshot(snapshot: JobSnapshotBase): void {
   assertSnapshot(snapshot);
-  if (snapshot.revision !== 1) {
-    throw new JobLifecycleError(
-      'invalid-snapshot',
-      `Initial Job snapshot ${formatJobRef(snapshot.ref)} must use revision 1.`,
-    );
-  }
   if (snapshot.createdAt !== snapshot.updatedAt) {
     throw new JobLifecycleError(
       'invalid-snapshot',
@@ -71,32 +63,14 @@ export function assertInitialJobSnapshot(snapshot: JobSnapshotBase): void {
   }
 }
 
-export function assertJobTransition(
-  current: JobSnapshotBase,
-  next: JobSnapshotBase,
-  expectedRevision: number,
-): void {
+export function assertJobTransition(current: JobSnapshotBase, next: JobSnapshotBase): void {
   assertSnapshot(current);
   assertSnapshot(next);
-  assertNonNegativeInteger(expectedRevision, 'Expected revision');
   assertSameRef(current.ref, next.ref);
-
-  if (expectedRevision !== current.revision) {
-    throw new JobLifecycleError(
-      'stale-revision',
-      `Job ${formatJobRef(current.ref)} is at revision ${current.revision}, not ${expectedRevision}.`,
-    );
-  }
   if (isTerminalJobPhase(current.phase)) {
     throw new JobLifecycleError(
       'terminal-mutation',
       `Terminal Job ${formatJobRef(current.ref)} cannot transition from ${current.phase}.`,
-    );
-  }
-  if (next.revision !== current.revision + 1) {
-    throw new JobLifecycleError(
-      'revision-gap',
-      `Job ${formatJobRef(current.ref)} must advance from revision ${current.revision} to ${current.revision + 1}, received ${next.revision}.`,
     );
   }
   if (next.createdAt !== current.createdAt || next.updatedAt < current.updatedAt) {
@@ -123,7 +97,6 @@ function assertSnapshot(snapshot: JobSnapshotBase): void {
       `Job ${formatJobRef(snapshot.ref)} has unknown phase ${snapshot.phase}.`,
     );
   }
-  assertPositiveInteger(snapshot.revision, 'Job revision');
   assertTimestamp(snapshot.createdAt, 'createdAt');
   assertTimestamp(snapshot.updatedAt, 'updatedAt');
   if (snapshot.updatedAt < snapshot.createdAt) {
@@ -194,24 +167,6 @@ function assertSameOptionalRef(
 function assertNonEmpty(value: string, label: string): void {
   if (value.trim().length === 0) {
     throw new JobLifecycleError('invalid-identity', `${label} must be non-empty.`);
-  }
-}
-
-function assertPositiveInteger(value: number, label: string): void {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new JobLifecycleError(
-      'invalid-snapshot',
-      `${label} must be a positive integer, received ${value}.`,
-    );
-  }
-}
-
-function assertNonNegativeInteger(value: number, label: string): void {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new JobLifecycleError(
-      'invalid-snapshot',
-      `${label} must be a non-negative integer, received ${value}.`,
-    );
   }
 }
 

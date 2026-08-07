@@ -62,7 +62,7 @@ function isSameIdentity(left: ResourceBrowserIdentity, right: ResourceBrowserIde
     left.workspaceId === right.workspaceId &&
     left.windowId === right.windowId &&
     left.viewId === right.viewId &&
-    left.viewEpoch === right.viewEpoch &&
-    left.endpointEpoch === right.endpointEpoch
+    left.viewInstanceId === right.viewInstanceId &&
+    left.rendererSessionId === right.rendererSessionId
   );
 }

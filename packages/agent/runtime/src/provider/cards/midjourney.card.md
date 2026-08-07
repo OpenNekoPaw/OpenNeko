@@ -1,6 +1,5 @@
 ---
 providerId: midjourney
-version: 1.0.0
 displayName: Midjourney
 capabilities: [image.generate]
 ---

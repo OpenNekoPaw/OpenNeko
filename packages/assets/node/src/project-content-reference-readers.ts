@@ -2,11 +2,8 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { parseOtio, serializeOtio, type OtioTimeline } from '@neko/cut-domain';
-import {
-  ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
-  assertEntityRepresentationBindingFile,
-  encodeEntityRepresentationBindingFile,
-} from '@neko/entity-domain';
+import { PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH } from '@neko/entity-domain';
+import { NodeProjectEntityRepresentationReferenceService } from '@neko/entity-node';
 import {
   normalizeWorkspaceContentPath,
   validateContentLocator,
@@ -22,7 +19,6 @@ import { loadNkc, saveNkc } from '@neko/canvas-domain';
 const PROJECT_DOCUMENT_EXTENSIONS = new Set(['.nkc', '.otio']);
 const EXCLUDED_DIRECTORIES = new Set([
   '.git',
-  '.neko',
   '.turbo',
   '.vite',
   'coverage',
@@ -43,10 +39,11 @@ export interface ProjectContentReferenceDiagnostic {
   readonly ownerId: string;
 }
 
-export async function readProjectContentReferences(
-  workspacePath: string,
-): Promise<ProjectContentReferenceSnapshot> {
-  const projectDocuments = await listProjectDocuments(workspacePath);
+export async function readProjectContentReferences(input: {
+  readonly workspacePath: string;
+  readonly projectId: string;
+}): Promise<ProjectContentReferenceSnapshot> {
+  const projectDocuments = await listProjectDocuments(input.workspacePath);
   const owners: ProjectContentReferenceOwnerSnapshot[] = [];
   const diagnostics: ProjectContentReferenceDiagnostic[] = [];
   const incompleteOwnerKinds = new Set<ProjectContentReferenceOwnerSnapshot['ownerKind']>();
@@ -54,9 +51,9 @@ export async function readProjectContentReferences(
     const extension = path.extname(documentPath).toLocaleLowerCase('en-US');
     try {
       if (extension === '.nkc') {
-        owners.push(await readCanvasReferences(workspacePath, documentPath));
+        owners.push(await readCanvasReferences(input.workspacePath, documentPath));
       } else if (extension === '.otio') {
-        owners.push(await readCutReferences(workspacePath, documentPath));
+        owners.push(await readCutReferences(input.workspacePath, documentPath));
       }
     } catch (error: unknown) {
       if (!(error instanceof InvalidProjectDocumentError)) throw error;
@@ -65,7 +62,7 @@ export async function readProjectContentReferences(
     }
   }
   try {
-    owners.push(await readEntityRepresentationReferences(workspacePath));
+    owners.push(await readEntityRepresentationReferences(input));
   } catch (error: unknown) {
     if (!(error instanceof InvalidProjectDocumentError)) throw error;
     diagnostics.push(error.diagnostic);
@@ -85,6 +82,7 @@ export async function readProjectContentReferences(
 
 export async function rewriteProjectContentReferences(input: {
   readonly stagedWorkspacePath: string;
+  readonly projectId: string;
   readonly replacements: ReadonlyMap<string, string>;
 }): Promise<ProjectContentReferenceSnapshot> {
   const projectDocuments = await listProjectDocuments(input.stagedWorkspacePath);
@@ -96,8 +94,15 @@ export async function rewriteProjectContentReferences(input: {
       await rewriteCutReferences(input.stagedWorkspacePath, documentPath, input.replacements);
     }
   }
-  await rewriteEntityRepresentationReferences(input.stagedWorkspacePath, input.replacements);
-  return readProjectContentReferences(input.stagedWorkspacePath);
+  await rewriteEntityRepresentationReferences(
+    input.stagedWorkspacePath,
+    input.projectId,
+    input.replacements,
+  );
+  return readProjectContentReferences({
+    workspacePath: input.stagedWorkspacePath,
+    projectId: input.projectId,
+  });
 }
 
 async function readCanvasReferences(
@@ -120,7 +125,7 @@ async function readCanvasReferences(
   return {
     ownerKind: 'canvas',
     ownerId,
-    revision: fingerprint(bytes),
+    sourceFingerprint: fingerprint(bytes),
     references,
   };
 }
@@ -175,7 +180,7 @@ async function readCutReferences(
   return {
     ownerKind: 'cut',
     ownerId,
-    revision: fingerprint(bytes),
+    sourceFingerprint: fingerprint(bytes),
     references,
   };
 }
@@ -228,96 +233,36 @@ async function rewriteCutReferences(
   }
 }
 
-async function readEntityRepresentationReferences(
-  workspacePath: string,
-): Promise<ProjectContentReferenceOwnerSnapshot> {
-  const documentPath = path.join(
-    workspacePath,
-    ...ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH.split('/'),
-  );
-  let bytes: Buffer;
+async function readEntityRepresentationReferences(input: {
+  readonly workspacePath: string;
+  readonly projectId: string;
+}): Promise<ProjectContentReferenceOwnerSnapshot> {
+  let snapshot: Awaited<ReturnType<NodeProjectEntityRepresentationReferenceService['inspect']>>;
   try {
-    bytes = await fs.readFile(documentPath);
-  } catch (error: unknown) {
-    if (!isNodeError(error, 'ENOENT')) throw error;
-    return {
-      ownerKind: 'entity-representation',
-      ownerId: ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
-      revision: 'absent',
-      references: [],
-    };
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(bytes.toString('utf8')) as unknown;
+    snapshot = await new NodeProjectEntityRepresentationReferenceService(input).inspect();
   } catch {
-    throw invalidProjectDocument(
-      'entity-representation',
-      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
-    );
-  }
-  let file: ReturnType<typeof assertEntityRepresentationBindingFile>;
-  try {
-    file = assertEntityRepresentationBindingFile(value);
-  } catch {
-    throw invalidProjectDocument(
-      'entity-representation',
-      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
-    );
+    throw invalidProjectDocument('entity-representation', PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH);
   }
   return {
     ownerKind: 'entity-representation',
-    ownerId: ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
-    revision: fingerprint(bytes),
-    references: file.bindings
-      .filter((binding) => binding.status === 'confirmed' && binding.availability === 'active')
-      .map((binding) => binding.representation),
+    ownerId: PROJECT_ENTITY_DOCUMENT_WORKSPACE_PATH,
+    sourceFingerprint: snapshot.fingerprint,
+    references: snapshot.references,
   };
 }
 
 async function rewriteEntityRepresentationReferences(
   workspacePath: string,
+  projectId: string,
   replacements: ReadonlyMap<string, string>,
 ): Promise<void> {
-  const documentPath = path.join(
+  const service = new NodeProjectEntityRepresentationReferenceService({
     workspacePath,
-    ...ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH.split('/'),
-  );
-  let bytes: Buffer;
-  try {
-    bytes = await fs.readFile(documentPath);
-  } catch (error: unknown) {
-    if (isNodeError(error, 'ENOENT')) return;
-    throw error;
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(bytes.toString('utf8')) as unknown;
-  } catch {
-    throw invalidProjectDocument(
-      'entity-representation',
-      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
-    );
-  }
-  let file: ReturnType<typeof assertEntityRepresentationBindingFile>;
-  try {
-    file = assertEntityRepresentationBindingFile(value);
-  } catch {
-    throw invalidProjectDocument(
-      'entity-representation',
-      ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
-    );
-  }
-  let rewrittenCount = 0;
-  const bindings = file.bindings.map((binding) => {
-    const representation = replaceContentLocator(binding.representation, replacements);
-    if (representation === binding.representation) return binding;
-    rewrittenCount += 1;
-    return { ...binding, representation };
+    projectId,
   });
-  if (rewrittenCount > 0) {
-    await fs.writeFile(documentPath, encodeEntityRepresentationBindingFile({ ...file, bindings }));
-  }
+  await service.rewriteWorkspacePaths({
+    replacements,
+  });
 }
 
 function collectNamedContentLocators(value: unknown): readonly ContentLocator[] {
@@ -449,8 +394,4 @@ function invalidProjectDocument(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isNodeError(error: unknown, code: string): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }

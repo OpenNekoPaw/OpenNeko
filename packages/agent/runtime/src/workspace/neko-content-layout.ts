@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
-export const NEKO_CONTENT_DIR = '.neko' as const;
+export const PERSONAL_NEKO_CONTENT_DIR = '.neko' as const;
+export const PROJECT_NEKO_CONTENT_DIR = 'neko' as const;
 export const NEKO_AGENTS_FILE_NAME = 'AGENTS.md' as const;
 
 export const NEKO_CONTENT_SUBDIRS = {
@@ -13,7 +14,7 @@ export type NekoContentSubdir = keyof typeof NEKO_CONTENT_SUBDIRS;
 export type NekoContentSource = 'personal' | 'project';
 
 export function resolvePersonalNekoContentDir(homeDir: string, subdir: NekoContentSubdir): string {
-  return path.join(homeDir, NEKO_CONTENT_DIR, NEKO_CONTENT_SUBDIRS[subdir]);
+  return path.join(homeDir, PERSONAL_NEKO_CONTENT_DIR, NEKO_CONTENT_SUBDIRS[subdir]);
 }
 
 export function resolveProjectNekoContentDir(
@@ -21,7 +22,7 @@ export function resolveProjectNekoContentDir(
   subdir: NekoContentSubdir,
 ): string | null {
   if (!workspaceRoot) return null;
-  return path.join(workspaceRoot, NEKO_CONTENT_DIR, NEKO_CONTENT_SUBDIRS[subdir]);
+  return path.join(workspaceRoot, PROJECT_NEKO_CONTENT_DIR, NEKO_CONTENT_SUBDIRS[subdir]);
 }
 
 export function resolveNekoContentDir(input: {
@@ -36,12 +37,12 @@ export function resolveNekoContentDir(input: {
 }
 
 export function resolvePersonalAgentsFile(homeDir: string): string {
-  return path.join(homeDir, NEKO_CONTENT_DIR, NEKO_AGENTS_FILE_NAME);
+  return path.join(homeDir, PERSONAL_NEKO_CONTENT_DIR, NEKO_AGENTS_FILE_NAME);
 }
 
 export function resolveProjectAgentsFile(workspaceRoot: string | null | undefined): string | null {
   if (!workspaceRoot) return null;
-  return path.join(workspaceRoot, NEKO_CONTENT_DIR, NEKO_AGENTS_FILE_NAME);
+  return path.join(workspaceRoot, PROJECT_NEKO_CONTENT_DIR, NEKO_AGENTS_FILE_NAME);
 }
 
 export function resolveAgentsFile(input: {

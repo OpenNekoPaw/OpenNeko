@@ -50,7 +50,6 @@ export class ProjectCacheSearchService implements ProjectSearchDisposable {
       items: result.items,
       partitions: result.partitions,
       freshness: result.freshness,
-      generation: result.generation,
     };
   }
 

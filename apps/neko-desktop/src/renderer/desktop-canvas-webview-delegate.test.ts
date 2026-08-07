@@ -8,10 +8,10 @@ const identity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'canvas:view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'boards/main.nkc',
-  sessionId: 'canvas-session:canvas:view-1:1',
-  endpointEpoch: 'endpoint-1',
+  sessionId: 'canvas-session:canvas:view-1:view-instance-1',
+  rendererSessionId: 'endpoint-1',
 };
 
 describe('Desktop Canvas Webview delegate', () => {

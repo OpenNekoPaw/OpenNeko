@@ -67,17 +67,14 @@ function deferred<T>(): {
 
 function createBootstrap(): DesktopBootstrapProjection {
   return {
-    schemaVersion: 1,
     requestId: 'bootstrap-1',
     application: {
-      schemaVersion: 1,
       applicationId: 'neko-desktop',
       instanceId: 'application-1',
-      version: '0.0.1',
     },
     window: {
       windowId: 'window-1',
-      rendererEpoch: 1,
+      rendererSessionId: 'renderer-session-1',
     },
     host: {
       id: 'electron',
@@ -93,8 +90,6 @@ function createBootstrap(): DesktopBootstrapProjection {
 
 function createSettings(): DesktopApplicationSettingsProjection {
   return {
-    schemaVersion: 2,
-    revision: 0,
     eventSequence: 0,
     preferences: {
       theme: 'light',

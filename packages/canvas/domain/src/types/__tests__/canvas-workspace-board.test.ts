@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   CANVAS_WORKSPACE_BOARD_PATH,
   createGeneratedAssetsWorkspaceDeliveryRequest,
   resolveCanvasWorkspaceBoardDocumentUri,
@@ -18,7 +17,6 @@ import type { GeneratedOutputContentLocator } from '@neko/content';
 const generatedLocator: GeneratedOutputContentLocator = {
   kind: 'generated-output',
   outputId: 'shot-1',
-  revision: 'rev-shot-1',
   digest: 'sha256:shot-1',
   path: 'neko/generated/image/shot-1.png',
 };
@@ -149,7 +147,7 @@ describe('Canvas Workspace Board delivery contract', () => {
           ...sourceArtifact(),
           provenance: {
             ...sourceArtifact().provenance,
-            revision: 'source:sha256:shot-2',
+            contentFingerprint: 'sha256:shot-2',
           },
         },
       ],
@@ -185,8 +183,8 @@ describe('Canvas Workspace Board delivery contract', () => {
     const second = request();
 
     expect(first.process.deliveryId).toBe(second.process.deliveryId);
-    expect(first.artifacts.map(({ provenance }) => provenance.revision)).toEqual(
-      second.artifacts.map(({ provenance }) => provenance.revision),
+    expect(first.artifacts.map(({ provenance }) => provenance.contentFingerprint)).toEqual(
+      second.artifacts.map(({ provenance }) => provenance.contentFingerprint),
     );
     expect(JSON.stringify(first)).not.toMatch(/activeCanvas|recentCanvas|conversationId|binding/iu);
   });
@@ -200,7 +198,6 @@ describe('Canvas Workspace Board delivery contract', () => {
     });
 
     expect(delivery).toMatchObject({
-      version: 2,
       target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
       process: { sourceHost: 'desktop', operationId: 'operation-1', runId: 'run-1' },
       artifacts: [
@@ -214,7 +211,7 @@ describe('Canvas Workspace Board delivery contract', () => {
             jobRef: { kind: 'generation', jobId: 'operation-1' },
             summary: {
               prompt: 'A silent megastructure under hard light',
-              model: 'image-model-v2',
+              model: 'image-model',
               sourceNodeId: 'shot-node-1',
               aspectRatio: '16:9',
               width: 2048,
@@ -250,18 +247,14 @@ describe('Canvas Workspace Board delivery contract', () => {
     ).toContain('invalid-content-locator');
   });
 
-  it('poisons legacy routing, runtime handles, cache values, and malformed refs', () => {
+  it('rejects runtime handles, cache values, and malformed refs', () => {
     const invalid = {
       ...request(),
-      activeCanvas: 'file:///workspace/project/active.nkc',
-      recentCanvas: 'file:///workspace/project/recent.nkc',
-      conversationId: 'conversation-1',
-      binding: { scopeKind: 'storyboard' },
       token: 'secret',
       renderUri: 'neko-media://preview/shot-1',
-      cachePath: '.neko/.cache/generated/shot-1.png',
+      cachePath: '.cache/generated/shot-1.png',
     } as unknown as CanvasWorkspaceProjectionRequest;
-    const legacyRef = request({
+    const invalidRef = request({
       artifacts: [
         {
           ...outputArtifact(),
@@ -271,10 +264,9 @@ describe('Canvas Workspace Board delivery contract', () => {
     } as never);
 
     const invalidCodes = validateCanvasWorkspaceProjectionRequest(invalid).map(({ code }) => code);
-    expect(invalidCodes.filter((code) => code === 'legacy-routing-forbidden')).toHaveLength(4);
     expect(invalidCodes.filter((code) => code === 'runtime-value-forbidden')).toHaveLength(3);
-    expect(validateCanvasWorkspaceProjectionRequest(legacyRef).map(({ code }) => code)).toContain(
-      'content-locator-migration-required',
+    expect(validateCanvasWorkspaceProjectionRequest(invalidRef).map(({ code }) => code)).toContain(
+      'invalid-content-locator',
     );
   });
 
@@ -282,7 +274,6 @@ describe('Canvas Workspace Board delivery contract', () => {
     for (const status of ['blocked', 'conflict'] as const) {
       expect(
         validateCanvasWorkspaceProjectionResult({
-          version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
           status,
           target: {
             kind: 'workspace',
@@ -303,7 +294,6 @@ function request(
   } = {},
 ): CanvasWorkspaceProjectionRequest {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     target: {
       workspaceId: input.workspaceId ?? 'workspace-1',
       workspaceUri: 'file:///workspace/project/',
@@ -348,7 +338,7 @@ function outputArtifact(): CanvasWorkspaceResourceProjectionArtifact {
       jobRef: { kind: 'generation', jobId: 'operation-1' },
       summary: {
         prompt: 'A silent megastructure under hard light',
-        model: 'image-model-v2',
+        model: 'image-model',
         sourceNodeId: 'shot-node-1',
         aspectRatio: '16:9',
       },
@@ -359,15 +349,14 @@ function outputArtifact(): CanvasWorkspaceResourceProjectionArtifact {
 
 function provenance(
   artifactId: string,
-  revision: string,
+  contentFingerprint: string,
   kind: CanvasWorkspaceProjectionArtifact['kind'],
   role: 'source' | 'analysis' | 'output',
 ) {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     deliveryId: 'delivery:material-analysis:1',
     artifactId,
-    revision,
+    contentFingerprint,
     kind,
     role,
     sourceId: `artifact:${artifactId}`,
@@ -385,7 +374,7 @@ function generatedImage(): GeneratedImage {
     mimeType: 'image/png',
     generatedAt: '2026-07-15T00:00:00.000Z',
     prompt: 'A silent megastructure under hard light',
-    model: 'image-model-v2',
+    model: 'image-model',
     sourceNodeId: 'shot-node-1',
     width: 2048,
     height: 1152,
@@ -400,7 +389,7 @@ function generatedImage(): GeneratedImage {
         operationId: 'operation-1',
         runId: 'run-1',
         providerId: 'image-provider',
-        modelId: 'image-model-v2',
+        modelId: 'image-model',
       },
     }),
   };

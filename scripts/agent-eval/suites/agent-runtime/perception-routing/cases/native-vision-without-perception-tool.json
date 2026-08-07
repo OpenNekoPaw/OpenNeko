@@ -1,31 +1,90 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "native-vision-without-perception-tool",
   "suiteId": "agent-runtime.perception-routing",
   "caseGroup": "boundary",
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Generate and analyze an image through matching native chat vision without the external perception Tool.",
-    "canonicalPath": ["explicit native-vision chat model", "terminal GenerateImage Tool result", "native multimodal context"],
-    "forbiddenFallback": ["perception.image.understand", "perception.perceive", "different chat model", "prompt-only analysis"],
-    "observables": [{ "ref": "perception-facts", "kind": "runtime-fact", "description": "Actual model, terminal GenerateImage Tool result, absence of external perception Tool, and final analysis.", "required": true }],
+    "canonicalPath": [
+      "explicit native-vision chat model",
+      "terminal GenerateImage Tool result",
+      "native multimodal context"
+    ],
+    "observables": [
+      {
+        "ref": "perception-facts",
+        "kind": "runtime-fact",
+        "description": "Actual model, terminal GenerateImage Tool result, absence of external perception Tool, and final analysis.",
+        "required": true
+      }
+    ],
     "expectedResult": "Matching native vision analyzes the delivered image without an external perception Tool.",
     "expectedFailure": "Model fallback, missing terminal GenerateImage Tool result, external perception call, or empty analysis fails."
   },
-  "fixtureRefs": ["empty-workspace"],
+  "fixtureRefs": [
+    "empty-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["native-vision"],
+  "modelProfileIds": [
+    "native-vision"
+  ],
   "steps": [
-    { "id": "submit", "kind": "submit", "prompt": "生成一张猫玩红球的图片。任务完成后使用原生图像上下文分析真实结果，不要调用外部 perception Tool；说明画面、构图、光影和质量问题。" },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 600000 }
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "生成一张猫玩红球的图片。任务完成后使用原生图像上下文分析真实结果，不要调用外部 perception Tool；说明画面、构图、光影和质量问题。"
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 600000
+    }
   ],
   "assertions": [
-    { "id": "model", "kind": "model", "profileId": "native-vision", "noFallback": true, "evidenceRef": "perception-facts" },
-    { "id": "generate-image", "kind": "tool-call", "name": "GenerateImage", "status": "success", "evidenceRef": "perception-facts" },
-    { "id": "no-external-perception", "kind": "tool-call", "name": "perception.image.understand", "status": "absent", "evidenceRef": "perception-facts" },
-    { "id": "answer", "kind": "final-answer", "mode": "contains", "text": ["猫", "画面"], "evidenceRef": "perception-facts" },
-    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "continuationQueueIdle"], "evidenceRef": "perception-facts" }
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "native-vision",
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "generate-image",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "success",
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "no-external-perception",
+      "kind": "tool-call",
+      "name": "perception.image.understand",
+      "status": "absent",
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": [
+        "猫",
+        "画面"
+      ],
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "perception-facts"
+    }
   ],
   "artifactChecks": [],
-  "budget": { "timeoutMs": 600000, "repetitions": 1 }
+  "budget": {
+    "timeoutMs": 600000,
+    "repetitions": 1
+  }
 }

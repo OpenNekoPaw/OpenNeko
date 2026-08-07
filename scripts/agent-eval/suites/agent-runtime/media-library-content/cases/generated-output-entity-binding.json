@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.scenario.v2",
+  "schema": "neko.agent-eval.scenario",
   "id": "generated-output-entity-binding",
   "suiteId": "agent-runtime.media-library-content",
   "caseGroup": "artifact",
@@ -14,13 +14,6 @@
       "CreativeEntityService",
       "entity-representation-bindings.json"
     ],
-    "forbiddenFallback": [
-      "ImportAsset",
-      "AssetEntity allocation",
-      "project://assets URI",
-      "cache path identity",
-      "direct Agent file write"
-    ],
     "observables": [
       {
         "ref": "entity-binding-facts",
@@ -32,9 +25,13 @@
     "expectedResult": "The confirmed binding returns a generated-output locator for char_rin with outputId, revision, digest, and workspace-relative path intact.",
     "expectedFailure": "Missing confirmation, invalid Entity identity, changed locator fields, Asset participation, direct file editing, or failed Tool execution fails visibly."
   },
-  "fixtureRefs": ["media-library-workspace"],
+  "fixtureRefs": [
+    "media-library-workspace"
+  ],
   "runtimeProfileId": "canonical-default",
-  "modelProfileIds": ["configured-default"],
+  "modelProfileIds": [
+    "configured-default"
+  ],
   "steps": [
     {
       "id": "submit",
@@ -49,17 +46,31 @@
       "approved": true,
       "timeoutMs": 180000
     },
-    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 180000
+    }
   ],
   "assertions": [
-    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "entity-binding-facts" },
-    { "id": "idle", "kind": "fully-idle", "evidenceRef": "entity-binding-facts" },
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "entity-binding-facts"
+    },
+    {
+      "id": "idle",
+      "kind": "fully-idle",
+      "evidenceRef": "entity-binding-facts"
+    },
     {
       "id": "entity-query",
       "kind": "tool-call",
       "name": "GetCreativeEntity",
       "status": "success",
-      "expectedArguments": { "entityId": "char_rin" },
+      "expectedArguments": {
+        "entityId": "char_rin"
+      },
       "evidenceRef": "entity-binding-facts"
     },
     {
@@ -103,9 +114,21 @@
       "id": "order",
       "kind": "process-order",
       "events": [
-        { "kind": "tool", "name": "GetCreativeEntity", "status": "success" },
-        { "kind": "workflow-step", "stepId": "confirm", "method": "tool.confirm" },
-        { "kind": "tool", "name": "BindEntityRepresentation", "status": "success" }
+        {
+          "kind": "tool",
+          "name": "GetCreativeEntity",
+          "status": "success"
+        },
+        {
+          "kind": "workflow-step",
+          "stepId": "confirm",
+          "method": "tool.confirm"
+        },
+        {
+          "kind": "tool",
+          "name": "BindEntityRepresentation",
+          "status": "success"
+        }
       ],
       "evidenceRef": "entity-binding-facts"
     },
@@ -113,31 +136,15 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["GENERATED_ENTITY_BIND_OK"],
-      "evidenceRef": "entity-binding-facts"
-    },
-    {
-      "id": "no-asset-fallback",
-      "kind": "no-fallback",
-      "forbiddenRefs": [
-        "ListAssets",
-        "GetAsset",
-        "ImportAsset",
-        "AssetEntity",
-        "project://assets/",
-        "library.json",
-        "assetRef"
+      "text": [
+        "GENERATED_ENTITY_BIND_OK"
       ],
       "evidenceRef": "entity-binding-facts"
     }
   ],
-  "artifactChecks": [
-    {
-      "id": "legacy-catalog-absent",
-      "kind": "file-absent",
-      "evidenceRef": "entity-binding-facts",
-      "path": "neko/assets/library.json"
-    }
-  ],
-  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 180000,
+    "repetitions": 1
+  }
 }

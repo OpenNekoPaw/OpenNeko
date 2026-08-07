@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -17,6 +17,10 @@ import {
   type SelectedFileReference,
 } from './types';
 import { InputArea } from './InputArea';
+import {
+  ComposerWorkspaceProvider,
+  type AgentComposerWorkspacePresentation,
+} from '../../ComposerWorkspaceContext';
 
 const hostMocks = vi.hoisted(() => ({
   invokeSkill: vi.fn(),
@@ -24,17 +28,22 @@ const hostMocks = vi.hoisted(() => ({
   startCharacterDialogueFromSlash: vi.fn(),
 }));
 
-vi.mock('../../../messages', () => ({
-  AgentHostMessages: hostMocks,
+vi.mock('../../../host-runtime-context', () => ({
+  useAgentHostMessages: () => hostMocks,
 }));
 
 const translations: Record<string, string> = {
   'chat.input.control.mode': '模式、模型与参数',
   'chat.input.control.params': '工具参数',
   'chat.input.placeholder': '输入任何问题...',
+  'chat.input.entryPlaceholder': '描述你想要完成的内容...',
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
   'chat.input.attach': '添加附件',
   'chat.input.attachFile': '添加附件',
+  'chat.input.workspace.label': '工作目录',
+  'chat.input.workspace.openProject': '打开项目',
+  'chat.input.workspace.chooseDirectory': '从系统目录选择',
+  'chat.input.workspace.clear': '清除项目选择',
   'chat.input.send': '发送',
   'chat.input.queue': '加入队列',
   'chat.input.skills': '技能',
@@ -526,7 +535,6 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           focusRequestOwner="tab-a"
           focusRequestTarget="none"
-          focusRequestRevision={0}
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -543,7 +551,7 @@ describe('InputArea composer controls', () => {
           focusRequestOwner="tab-a"
           focusRequestEnabled={false}
           focusRequestTarget="input"
-          focusRequestRevision={1}
+          focusRequestId="focus-a"
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -559,7 +567,7 @@ describe('InputArea composer controls', () => {
           focusRequestOwner="tab-a"
           focusRequestEnabled
           focusRequestTarget="input"
-          focusRequestRevision={1}
+          focusRequestId="focus-a"
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -575,7 +583,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           focusRequestOwner="tab-b"
           focusRequestTarget="input"
-          focusRequestRevision={1}
+          focusRequestId="focus-b"
           onInputChange={vi.fn()}
           onSend={vi.fn()}
         />
@@ -584,12 +592,11 @@ describe('InputArea composer controls', () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it('does not show creation staged creation controls just because the control callback exists', () => {
-    const legacyControlProps: Record<string, unknown> = { onControlIdcWorkflow: vi.fn() };
+  it('keeps unconfigured conversations on the locked Agent mode with an empty LLM selector only', () => {
     render(
-      <Harness>
+      <Harness selectedModel="" availableModels={[]} availableMediaModels={[]}>
         <InputArea
-          {...legacyControlProps}
+          composerPresentation="compact"
           inputValue=""
           isThinking={false}
           onInputChange={vi.fn()}
@@ -598,62 +605,128 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    expect(screen.queryByLabelText('阶段创作控制')).toBeNull();
-  });
-
-  it('keeps unconfigured conversations on Agent with an empty LLM selector only', () => {
-    render(
-      <Harness selectedModel="" availableModels={[]} availableMediaModels={[]}>
-        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
-      </Harness>,
-    );
-
     const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
-    expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
+    expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
     const modelTrigger = within(modeGroup).getByRole('button', {
       name: '配置模型',
     });
     expect(modelTrigger.textContent).toContain('无可用模型');
     expect(within(modeGroup).queryByRole('button', { name: '配置参数' })).toBeNull();
 
-    fireEvent.click(within(modeGroup).getByRole('button', { name: 'Agent' }));
-    expect(screen.queryByRole('menuitem', { name: /图片生成/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /视频生成/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /声音生成/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: '生音乐' })).toBeNull();
-
     fireEvent.click(modelTrigger);
     const dialog = screen.getByRole('dialog', { name: '创作配置' });
     expect(dialog).toBeTruthy();
+    expect(within(dialog).queryByRole('tablist', { name: '配置类型' })).toBeNull();
+    expect(within(dialog).getByRole('heading', { name: '主模型' })).toBeTruthy();
     expect(within(dialog).getByText('无可用模型')).toBeTruthy();
     expect(screen.queryByText('全选')).toBeNull();
   });
 
-  it('hides legacy LLM/generation labels and omits Agent parameters', () => {
+  it('renders the current Agent composer controls', () => {
     render(
       <Harness>
-        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+        <InputArea
+          composerPresentation="compact"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
       </Harness>,
     );
 
-    expect(screen.queryByText('生成')).toBeNull();
     const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
     expect(modeGroup.className).toContain('agent-composer-mode-controls');
-    expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
+    expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
     const modelTrigger = within(modeGroup).getByRole('button', { name: '配置模型' });
     expect(modelTrigger).toBeTruthy();
     expect(modelTrigger.textContent).toBe('gpt-5.5');
-    expect(screen.queryByRole('button', { name: '对话' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '思考' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '详略' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '创意' })).toBeNull();
-    expect(within(modeGroup).queryByRole('button', { name: '配置参数' })).toBeNull();
     expect(screen.getByRole('button', { name: '审批' })).toBeTruthy();
     expect(within(modeGroup).getByTitle(/gpt-5.5/)).toBeTruthy();
     expect(screen.getByTitle('添加附件').className).toContain('agent-composer-tool-button');
-    expect(screen.getByTitle('命令').className).toContain('agent-composer-tool-button');
+    expect(screen.queryByTitle('命令')).toBeNull();
+    expect(screen.queryByTitle('技能')).toBeNull();
     expect(document.querySelector('.agent-composer-toolbar')).toBeTruthy();
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
+  });
+
+  it('omits the locked Workspace label from the conversation composer', () => {
+    render(
+      <Harness composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}>
+        <InputArea
+          composerPresentation="compact"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
+      </Harness>,
+    );
+
+    expect(screen.queryByLabelText('工作目录')).toBeNull();
+    expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
+  });
+
+  it('keeps the Entry composer model-only while reusing the conversation composer shell', () => {
+    render(
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
+      </Harness>,
+    );
+
+    const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
+    expect(within(modeGroup).getByRole('button', { name: '配置模型' })).toBeTruthy();
+    expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '审批' })).toBeNull();
+    expect(screen.queryByTitle('命令')).toBeNull();
+    expect(screen.queryByTitle('技能')).toBeNull();
+    expect(screen.queryByTitle('chat.usage.clickToCompress')).toBeNull();
+    expect(document.querySelector('.agent-composer-shell')).toBeTruthy();
+    expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('描述你想要完成的内容...');
+  });
+
+  it('keeps Entry Workspace target selection in the package-owned composer', async () => {
+    const target = {
+      label: 'OpenNeko',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    };
+    const onSelectProject = vi.fn().mockResolvedValue(target);
+    const onTargetChange = vi.fn();
+    render(
+      <Harness
+        composerWorkspace={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
+          onChooseDirectory: vi.fn().mockResolvedValue(undefined),
+          onSelectProject,
+        }}
+      >
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          onDraftWorkspaceTargetChange={onTargetChange}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'OpenNeko' }));
+
+    await waitFor(() => expect(onTargetChange).toHaveBeenCalledWith(target));
+    expect(onSelectProject).toHaveBeenCalledWith('project-1');
   });
 
   it('sends the primary Agent model without composer LLM parameters', () => {
@@ -882,12 +955,8 @@ describe('InputArea composer controls', () => {
     expect(
       within(screen.getByRole('tablist', { name: '内容类型' })).getAllByRole('tab'),
     ).toHaveLength(4);
-    expect(
-      within(screen.getByRole('tablist', { name: '配置类型' })).getAllByRole('tab'),
-    ).toHaveLength(1);
-    expect(
-      within(configDialog).getByRole('tab', { name: '模型' }).getAttribute('aria-selected'),
-    ).toBe('true');
+    expect(within(configDialog).queryByRole('tablist', { name: '配置类型' })).toBeNull();
+    expect(within(configDialog).getByRole('heading', { name: '主模型' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('radio', { name: /Gemini Flash/ }));
     expect(onModelSelect).toHaveBeenCalledWith('google:gemini-flash');
@@ -1195,7 +1264,6 @@ describe('InputArea composer controls', () => {
             tags: [],
             source: 'project',
             enabled: true,
-            slashCommand: 'legacy-review',
           },
         ]}
       >
@@ -1206,7 +1274,6 @@ describe('InputArea composer controls', () => {
     const textarea = screen.getByPlaceholderText('输入任何问题...') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: '/' } });
 
-    expect(screen.queryByRole('menuitem', { name: /legacy-review/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /\$quality-review/ })).toBeNull();
 
     fireEvent.change(textarea, { target: { value: '$qual' } });
@@ -1584,6 +1651,34 @@ describe('InputArea composer controls', () => {
     expect(onRemoveContextChip).toHaveBeenCalledWith('scene-1');
     fireEvent.click(screen.getByRole('button', { name: 'Remove brief.md' }));
     expect(onAttachedFilesChange).toHaveBeenCalledWith([]);
+  });
+
+  it('uses Host authorization for draft attachments and adds only the opaque context payload', async () => {
+    const payload: AgentContextPayload = {
+      type: 'file',
+      id: 'grant-1',
+      label: 'notes.txt',
+      summary: 'Authorized file: notes.txt',
+      data: { resourceGrantId: 'grant-1', resourceKind: 'file' },
+    };
+    const onAuthorizeResource = vi.fn(async () => payload);
+    const onAddContextChip = vi.fn();
+    render(
+      <Harness onAddContextChip={onAddContextChip}>
+        <InputArea
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          onAuthorizeResource={onAuthorizeResource}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByTitle('添加附件'));
+    await vi.waitFor(() => expect(onAddContextChip).toHaveBeenCalledWith(payload));
+    expect(onAuthorizeResource).toHaveBeenCalledOnce();
+    expect(JSON.stringify(onAddContextChip.mock.calls)).not.toContain('/Users');
   });
 
   it('moves completed @file mentions into reference tokens and preserves @path on send', () => {
@@ -2230,6 +2325,7 @@ function Harness({
   selectedFileReferences = [],
   onSelectedFileReferencesChange = vi.fn(),
   isBusy = false,
+  composerWorkspace,
   children,
 }: {
   readonly ambientNodes?: import('@neko/agent-contracts').AmbientCanvasNode[];
@@ -2237,7 +2333,7 @@ function Harness({
   readonly conversationKind?: ConversationKind;
   readonly onRemoveContextChip?: (id: string) => void;
   readonly onAddContextChip?: React.ComponentProps<typeof InputAreaProvider>['onAddContextChip'];
-  readonly mentionItems?: readonly LegacyMentionItem[];
+  readonly mentionItems?: readonly MentionItemFixture[];
   readonly onRequestFiles?: React.ComponentProps<typeof InputAreaProvider>['onRequestFiles'];
   readonly onModelSelect?: React.ComponentProps<typeof InputAreaProvider>['onModelSelect'];
   readonly onMediaModelSelect?: React.ComponentProps<
@@ -2262,14 +2358,15 @@ function Harness({
     typeof InputAreaProvider
   >['mediaModelSelection'];
   readonly mediaUnderstandingModels?: MediaUnderstandingModels;
-  readonly selectedFileReferences?: readonly LegacySelectedFileReference[];
+  readonly selectedFileReferences?: readonly SelectedFileReferenceFixture[];
   readonly onSelectedFileReferencesChange?: React.ComponentProps<
     typeof InputArea
   >['onSelectedFileReferencesChange'];
   readonly isBusy?: boolean;
+  readonly composerWorkspace?: AgentComposerWorkspacePresentation;
   readonly children: React.ReactNode;
 }) {
-  return (
+  const inputArea = (
     <InputAreaProvider
       isBusy={isBusy}
       selectedModel={selectedModel}
@@ -2308,19 +2405,24 @@ function Harness({
       })}
     </InputAreaProvider>
   );
+  return composerWorkspace ? (
+    <ComposerWorkspaceProvider value={composerWorkspace}>{inputArea}</ComposerWorkspaceProvider>
+  ) : (
+    inputArea
+  );
 }
 
-type LegacyMentionItem = Omit<MentionItem, 'contentLocator'> & {
+type MentionItemFixture = Omit<MentionItem, 'contentLocator'> & {
   readonly contentLocator?: MentionItem['contentLocator'];
   readonly filePath?: string;
 };
 
-type LegacySelectedFileReference = Omit<SelectedFileReference, 'contentLocator'> & {
+type SelectedFileReferenceFixture = Omit<SelectedFileReference, 'contentLocator'> & {
   readonly contentLocator?: SelectedFileReference['contentLocator'];
   readonly path?: string;
 };
 
-function normalizeMentionItem(item: LegacyMentionItem): MentionItem {
+function normalizeMentionItem(item: MentionItemFixture): MentionItem {
   const { filePath, ...rest } = item;
   return {
     ...rest,
@@ -2333,7 +2435,7 @@ function normalizeMentionItem(item: LegacyMentionItem): MentionItem {
 }
 
 function normalizeSelectedFileReference(
-  reference: LegacySelectedFileReference,
+  reference: SelectedFileReferenceFixture,
 ): SelectedFileReference {
   const { path, ...rest } = reference;
   if (rest.contentLocator) return { ...rest, contentLocator: rest.contentLocator };

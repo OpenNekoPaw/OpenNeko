@@ -16,6 +16,7 @@ import {
   projectAgentSecretSafeConfig,
 } from '@neko/agent-runtime/application';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
+import type { AssistantRuntimeSettingsPort } from '@neko/host/settings';
 
 const temporaryRoots: string[] = [];
 
@@ -26,13 +27,14 @@ afterEach(async () => {
 });
 
 describe('Agent controller composition', () => {
-  it('advertises the complete base effect composition and routes through workspace owners', async () => {
+  it('checkpoints the initial message when provider preflight fails before a Pi turn starts', async () => {
     const workspace = createWorkspace();
-    const posted: AgentHostToWebviewMessage[] = [];
+    await workspace.createConversation('conversation-1');
     const composition = createAgentControllerComposition({
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -46,7 +48,96 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+
+    await expect(
+      composition.startInitialTurn?.({
+        workspace,
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        messageText: 'retain this prompt',
+        providerId: 'provider-missing',
+        modelId: 'model-missing',
+        locale: 'en',
+      }),
+    ).rejects.toThrow('Effective Agent configuration is blocked: missingConfig');
+    expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      messageText: 'retain this prompt',
+    });
+    await composition.dispose?.();
+  });
+
+  it('keeps the initial-turn application port bound across a composition boundary', async () => {
+    const workspace = createWorkspace();
+    await workspace.createConversation('conversation-bound-port');
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+    const startInitialTurn = composition.startInitialTurn;
+    if (!startInitialTurn) throw new Error('Initial-turn application port is unavailable.');
+
+    await expect(
+      startInitialTurn({
+        workspace,
+        conversationId: 'conversation-bound-port',
+        turnId: 'turn-bound-port',
+        messageText: 'retain this prompt',
+        providerId: 'provider-missing',
+        modelId: 'model-missing',
+        locale: 'en',
+      }),
+    ).rejects.toThrow('Effective Agent configuration is blocked: missingConfig');
+    expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
+      conversationId: 'conversation-bound-port',
+      turnId: 'turn-bound-port',
+      messageText: 'retain this prompt',
+    });
+    await composition.dispose?.();
+  });
+
+  it('bootstraps the exact persisted Conversation as the active Tab', async () => {
+    const workspace = createWorkspace();
+    await workspace.createConversation('conversation-1');
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -55,11 +146,281 @@ describe('Agent controller composition', () => {
       identity: {
         applicationInstanceId: 'app-1',
         windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
         projectId: 'project-1',
         workspaceId: workspace.workspaceId,
         viewId: 'view-1',
-        viewEpoch: 1,
-        rendererEpoch: 1,
+        connectionId: 'connection-1',
+      },
+      initialConversationId: 'conversation-1',
+      initialConversationMessage: {
+        id: 'message-initial-1',
+        role: 'user',
+        content: 'retain this prompt',
+        timestamp: Date.parse('2026-07-28T00:00:00.000Z'),
+      },
+    });
+    const posted: AgentHostToWebviewMessage[] = [];
+    const context = {
+      identity: {
+        hostKind: 'electron' as const,
+        applicationId: 'neko-desktop',
+        windowId: 'window-1',
+        viewId: 'view-1',
+        workspaceId: workspace.workspaceId,
+        connectionId: 'connection-1',
+      },
+      post: async (message: AgentHostToWebviewMessage) => {
+        posted.push(message);
+      },
+    };
+
+    await effects.config.readTabState(context);
+    await effects.conversation.readActiveConversation(context);
+
+    expect(posted).toEqual([
+      {
+        type: 'tabState',
+        tabState: {
+          openTabs: [
+            {
+              id: 'tab-conversation-1',
+              title: 'New conversation',
+              conversationId: 'conversation-1',
+            },
+          ],
+          activeTabId: 'tab-conversation-1',
+        },
+      },
+      {
+        type: 'activeConversation',
+        conversation: {
+          id: 'conversation-1',
+          title: 'New conversation',
+          messages: [
+            {
+              id: 'message-initial-1',
+              role: 'user',
+              content: 'retain this prompt',
+              timestamp: Date.parse('2026-07-28T00:00:00.000Z'),
+            },
+          ],
+        },
+      },
+    ]);
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('rejects a bootstrap Conversation that is absent from the exact Workspace runtime', async () => {
+    const workspace = createWorkspace();
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+
+    expect(() =>
+      composition.createEffects({
+        workspace,
+        identity: {
+          applicationInstanceId: 'app-1',
+          windowId: 'window-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'agent-surface-1',
+          projectId: 'project-1',
+          workspaceId: workspace.workspaceId,
+          viewId: 'view-1',
+          connectionId: 'connection-1',
+        },
+        initialConversationId: 'conversation-missing',
+      }),
+    ).toThrow(
+      "Desktop Agent initial Conversation 'conversation-missing' does not exist in Workspace 'workspace-1'.",
+    );
+    await composition.dispose?.();
+  });
+
+  it('serializes Tab mutations per connection and continues after a rejected mutation', async () => {
+    const workspace = createWorkspace();
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+    });
+    const identity = {
+      hostKind: 'electron' as const,
+      applicationId: 'neko-desktop',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      workspaceId: workspace.workspaceId,
+      connectionId: 'connection-1',
+    };
+    const events: string[] = [];
+    let releaseFirstPost: (() => void) | undefined;
+    const firstPostGate = new Promise<void>((resolve) => {
+      releaseFirstPost = resolve;
+    });
+    const first = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-a', title: 'A', conversationId: 'conversation-a' }],
+        activeTabId: null,
+      },
+      {
+        identity,
+        post: async () => {
+          events.push('first-start');
+          await firstPostGate;
+          events.push('first-complete');
+        },
+      },
+    );
+    const second = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-b', title: 'B', conversationId: 'conversation-b' }],
+        activeTabId: null,
+      },
+      {
+        identity,
+        post: async () => {
+          events.push('second');
+        },
+      },
+    );
+
+    await vi.waitFor(() => expect(events).toEqual(['first-start']));
+    releaseFirstPost?.();
+    await Promise.all([first, second]);
+    expect(events).toEqual(['first-start', 'first-complete', 'second']);
+
+    const rejected = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-failed', title: 'Failed', conversationId: 'conversation-failed' }],
+        activeTabId: null,
+      },
+      {
+        identity,
+        post: async () => {
+          throw new Error('Tab projection delivery failed.');
+        },
+      },
+    );
+    const recovered = effects.config.updateTabState(
+      {
+        type: 'updateTabState',
+        openTabs: [{ id: 'tab-final', title: 'Final', conversationId: 'conversation-final' }],
+        activeTabId: null,
+      },
+      { identity, post: vi.fn(async () => undefined) },
+    );
+
+    await expect(rejected).rejects.toThrow('Tab projection delivery failed.');
+    await expect(recovered).resolves.toBeUndefined();
+    const finalMessages: AgentHostToWebviewMessage[] = [];
+    await effects.config.readTabState({
+      identity,
+      post: async (message) => {
+        finalMessages.push(message);
+      },
+    });
+    expect(finalMessages).toEqual([
+      {
+        type: 'tabState',
+        tabState: {
+          openTabs: [{ id: 'tab-final', title: 'Final', conversationId: 'conversation-final' }],
+          activeTabId: null,
+        },
+      },
+    ]);
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('advertises the complete base effect composition and routes through workspace owners', async () => {
+    const workspace = createWorkspace();
+    const posted: AgentHostToWebviewMessage[] = [];
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: '/Users/fixture',
+      credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: {
+        openUserConfig: vi.fn(),
+      },
+      reportError: vi.fn(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
         connectionId: 'connection-1',
       },
     });
@@ -70,7 +431,6 @@ describe('Agent controller composition', () => {
         windowId: 'window-1',
         viewId: 'view-1',
         workspaceId: workspace.workspaceId,
-        rendererEpoch: '1',
         connectionId: 'connection-1',
       },
       post: async (message: AgentHostToWebviewMessage) => {
@@ -87,21 +447,52 @@ describe('Agent controller composition', () => {
     });
     expect(auditDesktopAgentStartup(composition)).toEqual({ ready: true });
 
-    await effects.conversation.createConversation(context);
+    await workspace.createConversation('conversation-owner-1');
+    const activeTab = {
+      id: 'tab-conversation-owner-1',
+      title: 'Owner conversation',
+      conversationId: 'conversation-owner-1',
+    };
+    await effects.conversation.listConversations(context);
+    await effects.conversation.activateConversation(
+      {
+        type: 'activateConversation',
+        activationId: 1,
+        conversationId: activeTab.conversationId,
+        tabId: activeTab.id,
+        tabState: { openTabs: [activeTab], activeTabId: activeTab.id },
+      },
+      context,
+    );
     expect(workspace.createConversation).toHaveBeenCalledOnce();
     expect(posted.map((message) => message.type)).toEqual([
       'conversationList',
       'tabState',
       'activeConversation',
     ]);
-    const tabState = posted.find((message) => message.type === 'tabState');
-    if (!tabState || tabState.type !== 'tabState' || !tabState.tabState) {
-      throw new Error('Expected Agent tab state.');
-    }
-    const { activeTabId, openTabs } = tabState.tabState;
-    if (!openTabs || activeTabId === undefined) throw new Error('Expected complete Agent tab state.');
-    const activeTab = openTabs.find((tab) => tab.id === activeTabId);
-    if (!activeTab) throw new Error('Expected an active Agent conversation Tab.');
+    await effects.conversation.readMessageQueue(activeTab.conversationId, context);
+    await effects.conversation.promoteQueuedMessage(
+      { conversationId: activeTab.conversationId, queueItemId: 'queued-turn-1' },
+      context,
+    );
+    await effects.conversation.cancelQueuedMessage(
+      { conversationId: activeTab.conversationId, queueItemId: 'queued-turn-1' },
+      context,
+    );
+    expect(workspace.readMessageQueue).toHaveBeenCalledWith(activeTab.conversationId);
+    expect(workspace.promoteQueuedMessage).toHaveBeenCalledWith(
+      activeTab.conversationId,
+      'queued-turn-1',
+    );
+    expect(workspace.cancelQueuedMessage).toHaveBeenCalledWith(
+      activeTab.conversationId,
+      'queued-turn-1',
+    );
+    expect(posted.slice(-3).map((message) => message.type)).toEqual([
+      'messageQueueSnapshot',
+      'messageQueueSnapshot',
+      'messageQueueSnapshot',
+    ]);
     const cutContext = {
       type: 'cut-clip' as const,
       id: 'cut:clip-1',
@@ -120,20 +511,19 @@ describe('Agent controller composition', () => {
     await effects.projection.discoverEndpoint(
       {
         type: 'projectionEndpointDiscover',
-        protocolVersion: 1,
         realmId: 'realm-1',
       },
       context,
     );
     expect(posted.at(-1)).toEqual({
       type: 'projectionEndpointReady',
-      protocolVersion: 1,
       realmId: 'realm-1',
-      endpointEpoch: 'connection-1',
     });
 
     effects.dispose();
     await composition.dispose?.();
+    expect(workspace.cancelTurn).not.toHaveBeenCalled();
+    expect(workspace.dispose).not.toHaveBeenCalled();
   });
 
   it('removes credential material from renderer config projection', () => {
@@ -145,7 +535,6 @@ describe('Agent controller composition', () => {
           name: 'Provider',
           type: 'openai',
           enabled: true,
-          apiKey: 'must-not-cross-renderer',
           baseUrl: 'https://example.test',
           models: [],
         },
@@ -181,6 +570,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
+      runtimeSettings: createRuntimeSettings(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -194,18 +584,17 @@ describe('Agent controller composition', () => {
       },
       configInteraction: {
         openUserConfig: vi.fn(),
-        openWorkspaceConfig: vi.fn(),
       },
       reportError,
     });
     const identity = {
       applicationInstanceId: 'app-1',
       windowId: 'window-1',
+      workbenchInstanceId: 'workbench-1',
+      agentSurfaceId: 'agent-surface-1',
       projectId: 'project-1',
       workspaceId: workspace.workspaceId,
       viewId: 'view-1',
-      viewEpoch: 1,
-      rendererEpoch: 1,
       connectionId: 'connection-1',
     };
     const effects = composition.createEffects({ workspace, identity });
@@ -217,7 +606,6 @@ describe('Agent controller composition', () => {
         windowId: 'window-1',
         viewId: 'view-1',
         workspaceId: workspace.workspaceId,
-        rendererEpoch: '1',
         connectionId: 'connection-1',
       },
       post: async (message: AgentHostToWebviewMessage) => {
@@ -228,7 +616,6 @@ describe('Agent controller composition', () => {
       },
     };
     const key = {
-      endpointEpoch: 'connection-1',
       attachmentId: 'attachment-1',
       tabId: 'tab-1',
       conversationId: projection.conversationId,
@@ -256,11 +643,12 @@ function createWorkspace(
   workspacePath = '/workspace/demo',
   projection: ConversationProjectionSnapshot = {
     conversationId: 'conversation-1',
-    projectionVersion: 0,
     turns: [],
   },
 ): AgentWorkspaceRuntime & {
   readonly createConversation: ReturnType<typeof vi.fn>;
+  readonly ensureConversation: ReturnType<typeof vi.fn>;
+  readonly checkpointFailedInitialTurn: ReturnType<typeof vi.fn>;
 } {
   const records: Array<{
     workspaceId: string;
@@ -280,6 +668,27 @@ function createWorkspace(
       updatedAt: '2026-07-28T00:00:00.000Z',
     });
   });
+  const bindVisiblePresentation: AgentWorkspaceRuntime['bindVisiblePresentation'] = ({
+    bindingId,
+    conversationId: initialConversationId,
+  }) => {
+    let conversationId = initialConversationId;
+    let disposed = false;
+    return {
+      bindingId,
+      workspaceId: 'workspace-1',
+      get conversationId() {
+        return conversationId;
+      },
+      updateConversation: async (nextConversationId?: string) => {
+        if (disposed) throw new Error(`Agent visible binding '${bindingId}' is disposed.`);
+        conversationId = nextConversationId;
+      },
+      dispose: async () => {
+        disposed = true;
+      },
+    };
+  };
   return {
     workspaceId: 'workspace-1',
     workspace: {
@@ -295,11 +704,42 @@ function createWorkspace(
     }),
     tools: createToolRegistry(),
     createConversation,
+    ensureConversation: vi.fn(async (conversationId: string) => {
+      if (!records.some((record) => record.conversationId === conversationId)) {
+        await createConversation(conversationId);
+      }
+    }),
+    checkpointFailedInitialTurn: vi.fn(async () => undefined),
     deleteConversation: vi.fn(),
     clearAllConversations: vi.fn(),
     openConversation: vi.fn(),
     startTurn: vi.fn(),
     executeTurn: vi.fn(),
+    readMessageQueue: vi.fn((conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
+    promoteQueuedMessage: vi.fn((conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
+    cancelQueuedMessage: vi.fn(async (conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
+    takeQueuedMessageForEdit: vi.fn(),
+    clearMessageQueue: vi.fn(async (conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
     cancelTurn: vi.fn(),
     readActiveTurn: vi.fn(),
     readConversationEntries: vi.fn(async () => []),
@@ -315,6 +755,15 @@ function createWorkspace(
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(() => projection),
     subscribeConversationProjection: vi.fn(() => () => undefined),
+    bindVisiblePresentation,
+    protectConversationRuntime: vi.fn(),
+    readRuntimeResidency: vi.fn(() => ({
+      workspaceId: 'workspace-1',
+      visibleBindingCount: 1,
+      releaseRequested: false,
+      releasable: false,
+      conversations: [],
+    })),
     dispose: vi.fn(),
   };
 }
@@ -327,7 +776,6 @@ function createLocatorBackedProjection(): ConversationProjectionSnapshot {
     messageId: 'message-1',
     itemId: 'tool-item-1',
     sequence: 1,
-    itemRevision: 1,
     status: 'complete',
     createdAt: 1,
     updatedAt: 1,
@@ -352,7 +800,6 @@ function createLocatorBackedProjection(): ConversationProjectionSnapshot {
   };
   return {
     conversationId: 'conversation-1',
-    projectionVersion: 1,
     turns: [
       {
         turnId: 'turn-1',
@@ -404,10 +851,25 @@ function createCredentialRuntime() {
       set: async () => undefined,
       delete: async () => undefined,
     },
+    configCredentials: { read: async () => undefined },
     prompt: {
       text: async () => null,
       select: async () => null,
       notify: () => undefined,
     },
   });
+}
+
+function createRuntimeSettings(): AssistantRuntimeSettingsPort {
+  let settings: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = {};
+  return {
+    snapshot: () => settings,
+    commit: async (next) => {
+      settings = { ...next };
+    },
+    reset: async () => {
+      settings = {};
+    },
+    diagnostic: () => undefined,
+  };
 }

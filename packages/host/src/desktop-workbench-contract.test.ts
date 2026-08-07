@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   DESKTOP_SECONDARY_MAIN_GROUP_ID,
-  DESKTOP_WORKBENCH_CONTRACT_VERSION,
   DesktopWorkbenchContractError,
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
-  migrateDesktopWorkbenchV2,
   openOrFocusMainView,
   parseDesktopWorkbenchLayout,
   reorderMainView,
@@ -18,11 +16,8 @@ import {
 describe('Desktop Workbench contract', () => {
   it('creates an orthogonal Chat-first default without Agent Main state', () => {
     expect(createDefaultDesktopWorkbenchLayout('window-1')).toEqual({
-      schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
       windowId: 'window-1',
-      revision: 0,
-      primarySidebar: { visible: true, width: 240 },
-      resourceDock: { presentation: 'hidden', width: 320 },
+      resourceDock: { presentation: 'docked', width: 320 },
       display: { mode: 'chat-only', chatPosition: 'left', chatWidth: 360 },
       main: {
         views: [],
@@ -31,6 +26,15 @@ describe('Desktop Workbench contract', () => {
       },
       timeline: { presentation: 'hidden', height: 240 },
     });
+  });
+
+  it('rejects an unknown field without affecting canonical layouts', () => {
+    const current = createDefaultDesktopWorkbenchLayout('window-1');
+
+    expect(() => parseDesktopWorkbenchLayout({ ...current, unexpectedField: 0 })).toThrow(
+      'Desktop Workbench layout has unexpected fields',
+    );
+    expect(parseDesktopWorkbenchLayout(current)).toEqual(current);
   });
 
   it('opens, focuses and splits Main Views without changing Chat presentation', () => {
@@ -60,72 +64,6 @@ describe('Desktop Workbench contract', () => {
     expect(preview.main.split).toEqual({ axis: 'columns', ratio: 0.5 });
     expect(focused.main.activeGroupId).toBe('main:primary');
     expect(focused.main.views).toHaveLength(2);
-  });
-
-  it('rejects Resource Browser as a v3 Main View', () => {
-    const initial = createDefaultDesktopWorkbenchLayout('window-1');
-    const resourceBrowser = legacyResourceViewRef('resources-1');
-
-    expect(() => Reflect.apply(openOrFocusMainView, undefined, [initial, resourceBrowser])).toThrow(
-      'Desktop Workbench Main View kind is invalid.',
-    );
-    expect(() =>
-      parseDesktopWorkbenchLayout({
-        ...initial,
-        main: {
-          ...initial.main,
-          views: [resourceBrowser],
-          groups: [
-            {
-              groupId: 'main:primary',
-              viewIds: ['resources-1'],
-              activeViewId: 'resources-1',
-            },
-          ],
-        },
-      }),
-    ).toThrow('Desktop Workbench Main View kind is invalid.');
-  });
-
-  it('migrates v2 Resource Browser Main Views into the visible right Dock', () => {
-    const canvas = viewRef('canvas-1', 'canvas');
-    const resources = legacyResourceViewRef('resources-1');
-
-    const migrated = migrateDesktopWorkbenchV2({
-      ...createDefaultDesktopWorkbenchLayout('window-1'),
-      schemaVersion: 2,
-      revision: 7,
-      resourceDock: { presentation: 'hidden', position: 'left', width: 404 },
-      main: {
-        views: [canvas, resources],
-        groups: [
-          {
-            groupId: 'main:primary',
-            viewIds: ['canvas-1', 'resources-1'],
-            activeViewId: 'resources-1',
-          },
-        ],
-        activeGroupId: 'main:primary',
-      },
-    });
-
-    expect(migrated).toMatchObject({
-      schemaVersion: DESKTOP_WORKBENCH_CONTRACT_VERSION,
-      revision: 7,
-      resourceDock: { presentation: 'docked', width: 404 },
-      main: {
-        views: [canvas],
-        groups: [
-          {
-            groupId: 'main:primary',
-            viewIds: ['canvas-1'],
-            activeViewId: 'canvas-1',
-          },
-        ],
-        activeGroupId: 'main:primary',
-      },
-    });
-    expect(migrated.resourceDock).not.toHaveProperty('position');
   });
 
   it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
@@ -248,35 +186,29 @@ describe('Desktop Workbench contract', () => {
     });
   });
 
-  it('rejects unknown versions and does not retain unknown path fields', () => {
+  it('rejects unknown renderer/path fields', () => {
     expect(() =>
       parseDesktopWorkbenchLayout({
         ...createDefaultDesktopWorkbenchLayout('window-1'),
-        schemaVersion: 1,
+        workspacePath: '/Users/private/project',
       }),
-    ).toThrowError(
-      expect.objectContaining<Partial<DesktopWorkbenchContractError>>({
-        code: 'unsupported-desktop-workbench-version',
+    ).toThrow('Desktop Workbench layout has unexpected fields');
+    expect(() =>
+      parseDesktopWorkbenchLayout({
+        ...createDefaultDesktopWorkbenchLayout('window-1'),
+        display: {
+          ...createDefaultDesktopWorkbenchLayout('window-1').display,
+          conversation: { secret: 'renderer-owned-state' },
+        },
       }),
-    );
-    const projection = parseDesktopWorkbenchLayout({
-      ...createDefaultDesktopWorkbenchLayout('window-1'),
-      workspacePath: '/Users/private/project',
-      display: {
-        ...createDefaultDesktopWorkbenchLayout('window-1').display,
-        conversation: { secret: 'renderer-owned-state' },
-      },
-    });
-    expect(projection).not.toHaveProperty('workspacePath');
-    expect(projection.display).not.toHaveProperty('conversation');
-    expect(JSON.stringify(projection)).not.toContain('/Users/private');
+    ).toThrow('Desktop Workbench display projection has unexpected fields');
   });
 });
 
 function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
   return {
     viewId,
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     kind,
@@ -289,18 +221,5 @@ function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
           previewContentKind: 'model' as const,
         }
       : {}),
-  } as const;
-}
-
-function legacyResourceViewRef(viewId: string) {
-  return {
-    viewId,
-    viewEpoch: 1,
-    projectId: 'project-1',
-    workspaceId: 'workspace-1',
-    kind: 'resource-browser',
-    ownerId: 'resource-browser-owner-1',
-    displayLabel: `${viewId}.document`,
-    documentId: `documents/${viewId}`,
   } as const;
 }

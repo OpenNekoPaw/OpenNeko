@@ -173,7 +173,7 @@ export interface StarterMetadata {
 }
 
 export interface IdentityMetadata {
-  identityKind: 'character' | 'location' | 'object' | 'style';
+  identityKind: 'character' | 'scene' | 'location' | 'object' | 'style';
   identityId: string;
   forms: Array<{
     role: '3d-rigged' | '2d-rigged' | 'portrait' | 'voice' | 'bio' | 'reference';
@@ -915,7 +915,7 @@ export function validateAssetManifest(manifest: unknown): AssetManifestValidatio
   requireNumber(manifest, 'updatedAt', issues);
 
   if (!isAssetType(manifest['type'])) {
-    issues.push({ field: 'type', message: 'must be one of AssetType v4 values' });
+    issues.push({ field: 'type', message: 'must be a supported AssetType value' });
   }
 
   if (!isDistributionKind(manifest['distributionKind'])) {

@@ -86,19 +86,12 @@ export interface ProviderTrainingProfile {
   readonly captionConvention?: string;
 }
 
-export interface ProviderCard {
-  /**
-   * Optional compatibility identity. Runtime registries normalize older
-   * ProviderCards into ProviderExpressionProfileDescriptor before treating them
-   * as first-class Agent profiles.
-   */
-  readonly profileId?: string;
-  readonly kind?: 'provider-expression';
-  readonly source?: ProviderExpressionProfileSource;
+export interface ProviderCard extends AgentProfileIdentity<'provider-expression'> {
+  readonly kind: 'provider-expression';
+  readonly source: ProviderExpressionProfileSource;
   readonly providerId: ProviderId;
   readonly modelId?: ProviderModelId;
   readonly displayName: string;
-  readonly version: string;
   readonly capabilities: readonly ProviderGenerationCapability[];
   readonly inputModalities?: Partial<ProviderInputModalities>;
   readonly sourceLayer: ProviderCardLayer;
@@ -109,21 +102,7 @@ export interface ProviderCard {
   readonly rawMarkdown?: string;
 }
 
-export interface ProviderExpressionProfileDescriptor
-  extends
-    Omit<ProviderCard, 'profileId' | 'kind' | 'source'>,
-    AgentProfileIdentity<'provider-expression', string> {
-  readonly kind: 'provider-expression';
-  readonly source: ProviderExpressionProfileSource;
-}
-
-/**
- * Compatibility alias: ProviderCard remains the public contribution shape, and
- * ProviderExpressionProfileDescriptor is the normalized profile contract.
- */
-export type ProviderModelExpressionProfile = ProviderExpressionProfileDescriptor;
-
-export type ProviderCardExpressionProfile = ProviderExpressionProfileDescriptor;
+export interface ProviderExpressionProfileDescriptor extends ProviderCard {}
 
 export interface ProviderTarget {
   readonly providerId: ProviderId;
@@ -247,9 +226,8 @@ export interface IProviderRouter {
 }
 
 export function getProviderExpressionProfileId(
-  card: Pick<ProviderCard, 'providerId' | 'modelId' | 'profileId'>,
+  card: Pick<ProviderCard, 'providerId' | 'modelId'>,
 ): string {
-  if (card.profileId) return card.profileId;
   return card.modelId
     ? `provider-expression:${card.providerId}:${card.modelId}`
     : `provider-expression:${card.providerId}`;
@@ -268,49 +246,17 @@ export function providerCardLayerToAgentProfileSource(
   }
 }
 
-export function toProviderExpressionProfile(
-  card: ProviderCard,
-): ProviderExpressionProfileDescriptor {
-  return {
-    ...card,
-    profileId: getProviderExpressionProfileId(card),
-    kind: 'provider-expression',
-    source: card.source ?? providerCardLayerToAgentProfileSource(card.sourceLayer),
-  };
-}
-
 export function validateProviderExpressionProfileDescriptor(
   descriptor: unknown,
 ): AgentProfileValidationResult {
-  const normalized = isRecord(descriptor)
-    ? {
-        ...descriptor,
-        profileId:
-          typeof descriptor['profileId'] === 'string'
-            ? descriptor['profileId']
-            : descriptor['providerId'] !== undefined
-              ? getProviderExpressionProfileId({
-                  providerId: String(descriptor['providerId']),
-                  modelId:
-                    typeof descriptor['modelId'] === 'string' ? descriptor['modelId'] : undefined,
-                })
-              : undefined,
-        kind: descriptor['kind'] ?? 'provider-expression',
-        source:
-          descriptor['source'] ??
-          (isProviderCardLayer(descriptor['sourceLayer'])
-            ? providerCardLayerToAgentProfileSource(descriptor['sourceLayer'])
-            : undefined),
-      }
-    : descriptor;
   const diagnostics: AgentProfileDiagnostic[] = [
-    ...validateAgentProfileIdentity(normalized, {
+    ...validateAgentProfileIdentity(descriptor, {
       expectedKind: 'provider-expression',
     }).diagnostics,
   ];
   const normalizedProfileId =
-    isRecord(normalized) && typeof normalized['profileId'] === 'string'
-      ? normalized['profileId']
+    isRecord(descriptor) && typeof descriptor['profileId'] === 'string'
+      ? descriptor['profileId']
       : undefined;
 
   if (!isRecord(descriptor)) {
@@ -365,10 +311,6 @@ export function validateProviderExpressionProfileDescriptor(
   }
 
   return toAgentProfileValidationResult(diagnostics);
-}
-
-function isProviderCardLayer(value: unknown): value is ProviderCardLayer {
-  return value === 'builtin' || value === 'personal' || value === 'project';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

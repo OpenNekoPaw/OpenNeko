@@ -1,21 +1,16 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import {
-  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-  encodeEntityRepresentationBindingFile,
-} from '@neko/entity-domain';
 import type { LocalMetadataRepositories } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
 import {
-  AGENT_STATE_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
-  MEDIA_METADATA_MIGRATIONS,
+  initializeAgentStateTables,
+  initializeCoreLocalMetadataTables,
+  initializeMediaMetadataTables,
 } from '@neko/local-metadata/sqlite';
 import { createWorkspaceLinkedMediaLibrary } from '@neko/assets-node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
   type DesktopProjectPortabilityIdentity,
   type DesktopProjectPortabilityProgressEvent,
 } from '@neko/assets-domain/contracts';
@@ -37,7 +32,7 @@ describe('Desktop project portability runtime', () => {
       globalMediaLibraryRoot: fixture.globalRoot,
       metadataRepositories: fixture.repositories,
       shell: {
-        getProjection: async () => ({ endpointEpoch: 'endpoint-a' }),
+        getProjection: async () => ({ rendererSessionId: 'endpoint-a' }),
         resolveProjectWorkspace: async () => fixture.workspace,
       },
       selectDestination,
@@ -46,7 +41,7 @@ describe('Desktop project portability runtime', () => {
       projectId: 'project-a',
       workspaceId: fixture.workspace.workspaceId,
       windowId: 'window-a',
-      endpointEpoch: 'endpoint-a',
+      rendererSessionId: 'endpoint-a',
     };
 
     const inspection = await runtime.inspect('window-a', request('inspect-a', identity));
@@ -73,7 +68,7 @@ describe('Desktop project portability runtime', () => {
       {
         ...request('execute-a', identity),
         snapshotId: planned.plan.snapshotId,
-        expectedOperationRevision: planned.plan.operationRevision,
+        expectedOperationFingerprint: planned.plan.operationFingerprint,
       },
       (event) => events.push(event),
     );
@@ -98,7 +93,7 @@ describe('Desktop project portability runtime', () => {
     await expect(
       runtime.inspect(
         'window-a',
-        request('inspect-stale', { ...identity, endpointEpoch: 'stale-endpoint' }),
+        request('inspect-stale', { ...identity, rendererSessionId: 'stale-endpoint' }),
       ),
     ).rejects.toThrow('Project portability project identity is stale.');
     expect(selectDestination).toHaveBeenCalledWith({
@@ -110,7 +105,6 @@ describe('Desktop project portability runtime', () => {
 
 function request(requestId: string, identity: DesktopProjectPortabilityIdentity) {
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId,
     identity,
   };
@@ -148,9 +142,9 @@ async function createFixture(): Promise<{
     databasePath: path.join(home, '.neko', 'neko.db'),
     busyTimeoutMs: 2_000,
   });
-  await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-  await store.migrateNamespace(AGENT_STATE_MIGRATIONS);
-  await store.migrateNamespace(MEDIA_METADATA_MIGRATIONS);
+  await initializeCoreLocalMetadataTables(store);
+  await initializeAgentStateTables(store);
+  await initializeMediaMetadataTables(store);
   const workspace: AssetWorkspaceResolution = {
     workspaceId: 'workspace-a',
     workspacePath,
@@ -158,7 +152,7 @@ async function createFixture(): Promise<{
     locator: { kind: 'relative', value: 'workspace' },
   };
   await store.repositories.workspaces.bind({
-    identity: { version: 1, workspaceId: workspace.workspaceId },
+    identity: { workspaceId: workspace.workspaceId },
     locator: workspace.locator,
     seenAt: '2026-08-01T00:00:00.000Z',
   });
@@ -177,25 +171,36 @@ async function createFixture(): Promise<{
 async function writeBinding(workspacePath: string): Promise<void> {
   await mkdir(path.join(workspacePath, 'neko'), { recursive: true });
   await writeFile(
-    path.join(workspacePath, 'neko/entity-representation-bindings.json'),
-    encodeEntityRepresentationBindingFile({
-      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
-      bindings: [
-        {
-          id: 'binding-a',
-          entityId: 'character-a',
-          entityKind: 'character',
-          representation: {
-            kind: 'workspace-file',
-            path: 'neko/assets/Footage/shot.mov',
+    path.join(workspacePath, 'neko/entities.json'),
+    `${JSON.stringify(
+      {
+        projectId: 'workspace-a',
+        entities: [
+          {
+            entityId: 'character-a',
+            kind: 'character',
+            names: { canonical: 'Character A', aliases: [] },
+            facts: {},
+            representations: [
+              {
+                bindingId: 'binding-a',
+                target: {
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Footage/shot.mov',
+                },
+                role: 'portrait',
+                source: 'user',
+                acceptedAt: '2026-08-01T00:00:00.000Z',
+              },
+            ],
+            lifecycle: { state: 'active' },
+            createdAt: '2026-08-01T00:00:00.000Z',
+            updatedAt: '2026-08-01T00:00:00.000Z',
           },
-          role: 'portrait',
-          status: 'confirmed',
-          availability: 'active',
-          source: 'user',
-          updatedAt: '2026-08-01T00:00:00.000Z',
-        },
-      ],
-    }),
+        ],
+      },
+      null,
+      2,
+    )}\n`,
   );
 }

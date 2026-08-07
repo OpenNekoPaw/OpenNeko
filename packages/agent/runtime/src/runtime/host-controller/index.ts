@@ -5,6 +5,7 @@ export {
   AGENT_PROJECTION_CONTROLLER_ROUTE_TYPES,
   AGENT_SHARED_CONTROLLER_ROUTE_TYPES,
   AGENT_SKILL_CONTROLLER_ROUTE_TYPES,
+  AGENT_WINDOW_NAVIGATION_ROUTE_TYPES,
   type AgentConfigControllerMessage,
   type AgentConfigControllerEffectPort,
   type AgentConversationControllerEffectPort,

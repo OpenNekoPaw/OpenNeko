@@ -30,16 +30,16 @@ describe('FileUserConfigManager', () => {
   it('loads an explicit config.toml path without reading the default location', () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     writeConfigFile(filePath, {
-      defaultProvider: 'profile-provider',
-      defaultModel: 'profile-chat',
+      defaultModels: {
+        llm: { providerId: 'profile-provider', modelId: 'profile-chat' },
+      },
       providers: [
         {
           id: 'profile-provider',
           name: 'Profile Provider',
           displayName: 'Profile Provider',
           type: 'newapi',
-          apiUrl: 'https://example.invalid/v1',
-          apiKey: '${PROFILE_API_KEY}',
+          apiUrl: 'https://example.invalid/api',
           enabled: true,
           connectionKind: 'gateway',
           protocolProfile: 'newapi',
@@ -68,21 +68,24 @@ describe('FileUserConfigManager', () => {
     expect(config.models.map((model) => model.id)).toEqual(['profile-chat']);
   });
 
-  it('writes scalar updates to the explicit config.toml path', async () => {
+  it('writes model binding updates to the explicit config.toml path', async () => {
     const filePath = path.join(createTempRoot(), 'config.toml');
     const manager = new FileUserConfigManager({ filePath });
 
     await manager.updateScalars({
-      defaultProvider: 'local-provider',
-      defaultModel: 'local-chat',
+      defaultModels: {
+        llm: { providerId: 'local-provider', modelId: 'local-chat' },
+      },
     });
 
     const raw = manager.loadRawResult();
     expect(raw.status).toBe('ok');
     if (raw.status !== 'ok') throw new Error('Expected explicit config to be written');
     expect(raw.filePath).toBe(filePath);
-    expect(raw.config.defaultProvider).toBe('local-provider');
-    expect(raw.config.defaultModel).toBe('local-chat');
+    expect(raw.config.defaultModels?.llm).toEqual({
+      providerId: 'local-provider',
+      modelId: 'local-chat',
+    });
     expect(fs.existsSync(filePath)).toBe(true);
   });
 });

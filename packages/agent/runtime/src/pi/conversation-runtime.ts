@@ -50,6 +50,18 @@ export interface OpenPiConversationRuntimeOptions {
   readonly models: Models;
   readonly initialModelPolicy: AgentModelPolicy;
   readonly baseSystemPrompt: string;
+  readonly providerTurnAdmission?: PiProviderTurnAdmission;
+}
+
+export interface PiProviderTurnAdmissionInput {
+  readonly identity: PiToolRunIdentity;
+  readonly model: Model<Api>;
+  readonly signal?: AbortSignal;
+  readonly start: () => AssistantMessageEventStream;
+}
+
+export interface PiProviderTurnAdmission {
+  stream(input: PiProviderTurnAdmissionInput): AssistantMessageEventStream;
 }
 
 export interface ExecutePiConversationTurnInput {
@@ -355,19 +367,22 @@ export class PiConversationRuntime {
       input.systemPrompt ?? this.options.baseSystemPrompt,
       input.skillSnapshot,
     );
-    this.agent.streamFn = createPolicyStream(this.options.models, main.parameters);
+    this.agent.streamFn = createPolicyStream(
+      this.options.models,
+      main.parameters,
+      this.options.providerTurnAdmission,
+      identity,
+    );
     this.agent.beforeToolCall = toolBridge.beforeToolCall;
     this.activeTurn = { identity, projector, skills: input.skillSnapshot };
     const turnMessages: AgentMessage[] = [];
+    let terminalListenerError: unknown;
     const unsubscribe = this.agent.subscribe(async (event) => {
       if (event.type === 'message_end') turnMessages.push(structuredClone(event.message));
-      await projector.project(event);
-      if (event.type === 'agent_start') {
-        await projector.persistenceChanged('volatile');
-      }
       if (event.type === 'agent_end') {
-        await projector.persistenceChanged('persisting');
         try {
+          await projector.project(event);
+          await projector.persistenceChanged('persisting');
           await this.options.authority.checkpointTurn({
             lease: this.lease,
             conversationId: this.options.conversationId,
@@ -378,16 +393,34 @@ export class PiConversationRuntime {
           });
           await projector.persistenceChanged('durable');
         } catch (error) {
-          await projector.persistenceChanged(
-            'persistence-delayed',
-            'Pi turn checkpoint failed; the completed turn is not durable.',
-          );
-          throw error;
+          terminalListenerError = error;
+          if (
+            this.options.authority.getTurnDurability(this.options.conversationId, input.turnId) ===
+            'persistence-delayed'
+          ) {
+            try {
+              await projector.persistenceChanged(
+                'persistence-delayed',
+                'Pi turn checkpoint failed; the completed turn is not durable.',
+              );
+            } catch (diagnosticError) {
+              terminalListenerError = new AggregateError(
+                [error, diagnosticError],
+                'Pi turn checkpoint failed and its persistence diagnostic could not be projected.',
+              );
+            }
+          }
         }
+        return;
+      }
+      await projector.project(event);
+      if (event.type === 'agent_start') {
+        await projector.persistenceChanged('volatile');
       }
     });
     try {
       await this.agent.prompt(prompt, images === undefined ? undefined : [...images]);
+      if (terminalListenerError !== undefined) throw terminalListenerError;
       const renewalError = this.leaseRenewal.error();
       if (renewalError !== undefined) throw renewalError;
     } finally {
@@ -456,7 +489,12 @@ function startLeaseRenewal(
   };
 }
 
-function createPolicyStream(models: Models, parameters: Readonly<AgentModelParameters>) {
+function createPolicyStream(
+  models: Models,
+  parameters: Readonly<AgentModelParameters>,
+  admission?: PiProviderTurnAdmission,
+  identity?: PiToolRunIdentity,
+) {
   return (
     model: Model<Api>,
     context: Parameters<Models['streamSimple']>[1],
@@ -466,28 +504,33 @@ function createPolicyStream(models: Models, parameters: Readonly<AgentModelParam
     const timeoutController =
       parameters.timeoutMs === undefined ? undefined : new AbortController();
     const signal = composeProviderRequestSignal(options?.signal, timeoutController?.signal);
-    const source = models.streamSimple(model, context, {
-      ...(parameters.temperature === undefined ? {} : { temperature: parameters.temperature }),
-      ...(parameters.maxTokens === undefined ? {} : { maxTokens: parameters.maxTokens }),
-      ...(parameters.transport === undefined ? {} : { transport: parameters.transport }),
-      ...(parameters.cacheRetention === undefined
-        ? {}
-        : { cacheRetention: parameters.cacheRetention }),
-      ...(parameters.timeoutMs === undefined ? {} : { timeoutMs: parameters.timeoutMs }),
-      ...(parameters.maxRetries === undefined ? {} : { maxRetries: parameters.maxRetries }),
-      ...(parameters.maxRetryDelayMs === undefined
-        ? {}
-        : { maxRetryDelayMs: parameters.maxRetryDelayMs }),
-      ...(parameters.headers === undefined ? {} : { headers: { ...parameters.headers } }),
-      ...(parameters.metadata === undefined ? {} : { metadata: { ...parameters.metadata } }),
-      ...(options?.reasoning === undefined ? {} : { reasoning: options.reasoning }),
-      ...(signal === undefined ? {} : { signal }),
-      ...(options?.sessionId === undefined ? {} : { sessionId: options.sessionId }),
-      ...(onPayload === undefined ? {} : { onPayload }),
-    });
-    return parameters.timeoutMs === undefined || timeoutController === undefined
-      ? source
-      : enforceProviderStreamIdleTimeout(source, model, parameters.timeoutMs, timeoutController);
+    const start = (): AssistantMessageEventStream => {
+      const source = models.streamSimple(model, context, {
+        ...(parameters.temperature === undefined ? {} : { temperature: parameters.temperature }),
+        ...(parameters.maxTokens === undefined ? {} : { maxTokens: parameters.maxTokens }),
+        ...(parameters.transport === undefined ? {} : { transport: parameters.transport }),
+        ...(parameters.cacheRetention === undefined
+          ? {}
+          : { cacheRetention: parameters.cacheRetention }),
+        ...(parameters.timeoutMs === undefined ? {} : { timeoutMs: parameters.timeoutMs }),
+        ...(parameters.maxRetries === undefined ? {} : { maxRetries: parameters.maxRetries }),
+        ...(parameters.maxRetryDelayMs === undefined
+          ? {}
+          : { maxRetryDelayMs: parameters.maxRetryDelayMs }),
+        ...(parameters.headers === undefined ? {} : { headers: { ...parameters.headers } }),
+        ...(parameters.metadata === undefined ? {} : { metadata: { ...parameters.metadata } }),
+        ...(options?.reasoning === undefined ? {} : { reasoning: options.reasoning }),
+        ...(signal === undefined ? {} : { signal }),
+        ...(options?.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+        ...(onPayload === undefined ? {} : { onPayload }),
+      });
+      return parameters.timeoutMs === undefined || timeoutController === undefined
+        ? source
+        : enforceProviderStreamIdleTimeout(source, model, parameters.timeoutMs, timeoutController);
+    };
+    return admission === undefined || identity === undefined
+      ? start()
+      : admission.stream({ identity, model, ...(signal === undefined ? {} : { signal }), start });
   };
 }
 

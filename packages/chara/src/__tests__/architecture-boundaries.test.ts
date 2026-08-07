@@ -3,7 +3,6 @@ import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(__dirname, '../..');
-const workspaceRoot = resolve(packageRoot, '../..');
 
 describe('neko-chara architecture boundaries', () => {
   it('keeps core and application independent from Host, UI, and Agent implementations', () => {
@@ -40,24 +39,6 @@ describe('neko-chara architecture boundaries', () => {
         /host-vscode|from ['"]vscode['"]|@neko-agent\/extension/,
       );
     }
-  });
-
-  it('removes the retired Entity and Agent Character implementation paths', () => {
-    const retired = [
-      'packages/entity/domain/src/character-runtime-policy.ts',
-      'packages/entity/domain/src/character-evidence.ts',
-      'packages/entity/domain/src/character-dialogue-profile-projector.ts',
-      'packages/entity/domain/src/character-dialogue-session.ts',
-      'packages/entity/domain/src/character-dialogue-runtime.ts',
-      'packages/entity/domain/src/characterPurposeOperations.ts',
-      'packages/entity/domain/src/embody-character-session.ts',
-      'packages/entity/domain/src/projections/npcProfileAssembler.ts',
-      'packages/neko-agent/packages/extension/src/chat/characterDialogueController.ts',
-      'packages/neko-agent/packages/extension/src/chat/embodyCharacterController.ts',
-      'packages/neko-agent/packages/extension/src/evidence/characterEvidenceLoader.ts',
-    ];
-
-    expect(retired.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);
   });
 });
 

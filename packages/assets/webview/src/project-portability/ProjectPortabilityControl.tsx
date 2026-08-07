@@ -17,13 +17,13 @@ import type {
 
 export function ProjectPortabilityControl({
   disabled,
-  endpointEpoch,
+  rendererSessionId,
   project,
   port,
   windowId,
 }: {
   readonly disabled: boolean;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
   readonly project: {
     readonly projectId: string;
     readonly workspaceId: string;
@@ -47,9 +47,9 @@ export function ProjectPortabilityControl({
       projectId: project.projectId,
       workspaceId: project.workspaceId,
       windowId,
-      endpointEpoch,
+      rendererSessionId,
     }),
-    [endpointEpoch, project.projectId, project.workspaceId, windowId],
+    [rendererSessionId, project.projectId, project.workspaceId, windowId],
   );
 
   const nextRequestId = (operation: string): string => {
@@ -126,7 +126,7 @@ export function ProjectPortabilityControl({
           requestId: nextRequestId('execute'),
           identity,
           snapshotId: plan.snapshotId,
-          expectedOperationRevision: plan.operationRevision,
+          expectedOperationFingerprint: plan.operationFingerprint,
         }),
       );
       setPlan(undefined);
@@ -238,8 +238,8 @@ export function ProjectPortabilityControl({
         ) : (
           <div className="project-portability-panel__actions">
             {inspection?.resumableSnapshot &&
-            inspection.resumableSnapshot.requirementRevision ===
-              inspection.portability.requirementRevision ? (
+            inspection.resumableSnapshot.requirementFingerprint ===
+              inspection.portability.requirementFingerprint ? (
               <button
                 type="button"
                 disabled={pending || executing}

@@ -19,7 +19,6 @@ export type ConversationProjectionAttachmentHostFrame = ProjectionAttachmentHost
 >;
 
 export interface ConversationProjectionAttachmentServerOptions {
-  readonly endpointEpoch: string;
   readonly resolveProjection: (conversationId: string) => ConversationProjectionStore;
   readonly postMessage: (frame: ConversationProjectionAttachmentHostFrame) => Promise<boolean>;
   readonly reportError: (error: Error, key: ProjectionAttachmentKey) => void;
@@ -57,13 +56,10 @@ class DefaultConversationProjectionAttachmentServer implements ConversationProje
   private readonly attachmentIdByTabId = new Map<string, string>();
   private disposed = false;
 
-  constructor(private readonly options: ConversationProjectionAttachmentServerOptions) {
-    assertRequiredIdentity('endpointEpoch', options.endpointEpoch);
-  }
+  constructor(private readonly options: ConversationProjectionAttachmentServerOptions) {}
 
   async attach(request: ProjectionAttachRequest): Promise<void> {
     this.assertActive();
-    this.assertEndpoint(request.key);
     assertRequiredIdentity('attachmentId', request.key.attachmentId);
     assertRequiredIdentity('tabId', request.key.tabId);
     assertRequiredIdentity('conversationId', request.key.conversationId);
@@ -152,7 +148,6 @@ class DefaultConversationProjectionAttachmentServer implements ConversationProje
   }
 
   private requireAttachment(key: ProjectionAttachmentKey): ProjectionAttachment {
-    this.assertEndpoint(key);
     const attachment = this.attachmentsById.get(key.attachmentId);
     if (!attachment) {
       throw protocolError(
@@ -180,16 +175,6 @@ class DefaultConversationProjectionAttachmentServer implements ConversationProje
     }
   }
 
-  private assertEndpoint(key: ProjectionAttachmentKey): void {
-    if (key.endpointEpoch !== this.options.endpointEpoch) {
-      throw protocolError(
-        'attachment-identity-mismatch',
-        key,
-        `Projection attachment endpoint mismatch: expected ${this.options.endpointEpoch}, received ${key.endpointEpoch}.`,
-      );
-    }
-  }
-
   private assertActive(): void {
     if (this.disposed) {
       throw new Error('Projection attachment server is disposed.');
@@ -207,8 +192,6 @@ interface ProjectionAttachmentOptions {
 class ProjectionAttachment {
   readonly key: ProjectionAttachmentKey;
   private phase: AttachmentPhase = 'attaching';
-  private snapshotVersion: number | undefined;
-  private deliveredProjectionVersion: number | undefined;
   private nextPatchSequence = 1;
   private pendingPatches: ConversationProjectionPatch[] = [];
   private unsubscribe: (() => void) | undefined;
@@ -222,13 +205,10 @@ class ProjectionAttachment {
   start(): Promise<void> {
     this.unsubscribe = this.options.projection.subscribe((patch) => this.acceptPatch(patch));
     const snapshot = this.options.projection.snapshot();
-    this.snapshotVersion = snapshot.projectionVersion;
-    this.deliveredProjectionVersion = snapshot.projectionVersion;
     const frame: ProjectionSnapshotFrame<ConversationProjectionSnapshot> = {
       type: 'projectionSnapshot',
       key: this.key,
       sequence: 0,
-      projectionVersion: snapshot.projectionVersion,
       projection: snapshot,
     };
     return this.enqueue(async () => {
@@ -260,10 +240,7 @@ class ProjectionAttachment {
           `Projection attachment ${this.key.attachmentId} cannot acknowledge a snapshot while ${this.phase}.`,
         );
       }
-      if (
-        acknowledgement.sequence !== 0 ||
-        acknowledgement.projectionVersion !== this.snapshotVersion
-      ) {
+      if (acknowledgement.sequence !== 0) {
         throw protocolError(
           'attachment-stale-ack',
           acknowledgement.key,
@@ -331,24 +308,14 @@ class ProjectionAttachment {
   private async deliverPatch(patch: ConversationProjectionPatch): Promise<void> {
     this.assertHealthy();
     if (this.phase !== 'live') return;
-    if (patch.baseProjectionVersion !== this.deliveredProjectionVersion) {
-      throw protocolError(
-        'attachment-patch-base-mismatch',
-        this.key,
-        `Projection attachment ${this.key.attachmentId} patch base mismatch: expected ${this.deliveredProjectionVersion}, received ${patch.baseProjectionVersion}.`,
-      );
-    }
     const frame: ProjectionPatchFrame<ConversationProjectionPatch> = {
       type: 'projectionPatch',
       key: this.key,
       sequence: this.nextPatchSequence,
-      baseProjectionVersion: patch.baseProjectionVersion,
-      projectionVersion: patch.projectionVersion,
       patch,
     };
     await this.deliver(frame);
     this.nextPatchSequence += 1;
-    this.deliveredProjectionVersion = patch.projectionVersion;
   }
 
   private async deliver(frame: ConversationProjectionAttachmentHostFrame): Promise<void> {

@@ -10,19 +10,15 @@ describe('AgentContextChip', () => {
   it('projects the canonical context discriminator for functional evidence', () => {
     const payload: AgentContextPayload = {
       type: '3d-reference',
-      id: '3d-reference:fixture:1',
+      id: '3d-reference:fixture',
       label: 'Neutral mannequin',
       summary: 'Pose and camera reference',
       data: {
-        contractVersion: 1,
         staging: {
-          schemaVersion: 1,
           sessionId: 'fixture',
-          revision: 1,
           subject: {
             kind: 'builtin-preset',
             presetId: 'guide-neutral-mannequin',
-            presetVersion: 1,
             fingerprint: 'preset-fingerprint',
             presetKind: 'mannequin',
             appearancePolicy: 'guide-only',
@@ -42,7 +38,7 @@ describe('AgentContextChip', () => {
           {
             kind: 'pose',
             sessionId: 'fixture',
-            revision: 1,
+            requestId: 'request-pose',
             controlImage: contentLocator('pose-control'),
             controlMode: 'pose',
             joints: [],
@@ -50,7 +46,7 @@ describe('AgentContextChip', () => {
           {
             kind: 'camera',
             sessionId: 'fixture',
-            revision: 1,
+            requestId: 'request-camera',
             camera: {
               cameraId: 'front',
               position: { x: 0, y: 1, z: 3 },

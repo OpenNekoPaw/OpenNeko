@@ -7,6 +7,7 @@
 import { useState, useCallback, memo } from 'react';
 import { ChevronDownIcon as ChevronIcon, ErrorIcon, OpenIcon } from '@neko/ui/icons';
 import { openMediaTarget } from './openMediaTarget';
+import { useAgentHostMessages } from '../../../host-runtime-context';
 
 interface ImagePreviewProps {
   src: string;
@@ -43,6 +44,7 @@ function ImagePreviewComponent({
   inline = false,
   openOnClick = true,
 }: ImagePreviewProps) {
+  const agentHostMessages = useAgentHostMessages();
   const [isExpanded, setIsExpanded] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -66,8 +68,8 @@ function ImagePreviewComponent({
   const handleOpenFile = useCallback(() => {
     if (!openOnClick) return;
     const pathToOpen = localPath || src;
-    openMediaTarget(pathToOpen);
-  }, [localPath, openOnClick, src]);
+    openMediaTarget(agentHostMessages, pathToOpen);
+  }, [agentHostMessages, localPath, openOnClick, src]);
 
   // Inline mode: show only the image without header
   if (inline) {

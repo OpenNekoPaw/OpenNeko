@@ -11,9 +11,6 @@ const translations: Record<string, string> = {
   'chat.emptyState.entry.startChat': 'Start Chat',
   'chat.emptyState.entry.generateAssets': 'Generate Assets',
   'chat.emptyState.entry.roleplay': 'Roleplay',
-  'chat.agentRun.phase.acting': 'Acting',
-  'chat.agentRun.actingWithTool': '{phase}: {tool}',
-  'chat.agentRun.elapsedLabel': 'Elapsed time for this run',
   'chat.conversation.loading': 'Loading conversation history...',
   'chat.workItems.attentionTitle': 'Tasks requiring attention',
 };
@@ -34,19 +31,23 @@ vi.mock('./InputArea', () => ({
     isComposing?: boolean;
     focusRequestOwner?: string;
     focusRequestTarget?: 'none' | 'input';
-    focusRequestRevision?: number;
+    focusRequestId?: string;
   }) => (
     <div data-testid="input-area">
       {String(props.isComposing ?? false)}:{props.focusRequestOwner ?? 'none'}:
-      {props.focusRequestTarget ?? 'none'}:{props.focusRequestRevision ?? 0}
+      {props.focusRequestTarget ?? 'none'}:{props.focusRequestId ?? 'none'}
     </div>
   ),
 }));
 
 vi.mock('./MessageList', () => ({
-  MessageList: ({ activeSkillNotice }: { activeSkillNotice?: { skillName: string } | null }) => (
+  MessageList: ({ agentState }: { agentState?: { phase: string; toolName?: string } | null }) => (
     <div data-testid="message-list">
-      {activeSkillNotice ? <span>{activeSkillNotice.skillName}</span> : null}
+      {agentState ? (
+        <div className="agent-execution-activity" role="status">
+          {agentState.toolName ?? agentState.phase}
+        </div>
+      ) : null}
     </div>
   ),
 }));
@@ -113,19 +114,36 @@ describe('ChatView empty state', () => {
       isComposing: true,
       focusRequestOwner: 'tab-a',
       focusRequestTarget: 'input',
-      focusRequestRevision: 2,
+      focusRequestId: 'focus-a',
     });
 
-    expect(screen.getByTestId('input-area').textContent).toContain('true:tab-a:input:2');
+    expect(screen.getByTestId('input-area').textContent).toContain('true:tab-a:input:focus-a');
   });
 
-  it('renders the active conversation run status next to the composer', () => {
-    renderChatView({
+  it('renders active execution inside the transcript without a composer-adjacent status', () => {
+    const { container, rerender } = renderChatView({
       isThinking: true,
       agentState: { phase: 'acting', toolName: 'ReadDocument', startedAt: Date.now() },
     });
 
-    expect(screen.getByRole('status').textContent).toContain('Acting: ReadDocument');
+    const activity = screen.getByRole('status');
+    expect(screen.getByTestId('message-list').contains(activity)).toBe(true);
+    expect(activity.textContent).toContain('ReadDocument');
+    expect(container.querySelector('.agent-run-status')).toBeNull();
+
+    rerender(
+      <ChatView
+        messages={[]}
+        inputValue=""
+        isThinking={false}
+        streamingMessageId={null}
+        activeConversationId="conv-b"
+        agentState={null}
+        onInputChange={vi.fn()}
+        onSend={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('shows only unanchored work items that still require attention', () => {

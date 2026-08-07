@@ -7,6 +7,9 @@ import {
 } from '../../../../scripts/desktop-functional/desktop-operations.mjs';
 import { createDesktopMediaFixtureSet } from '../../../../scripts/desktop-functional/media-fixtures.mjs';
 
+const VISUAL_SETTLE_MILLISECONDS = 1_000;
+const MEDIA_HAVE_CURRENT_DATA = 2;
+
 const VIEWERS = Object.freeze([
   { key: 'image', kind: 'image', pathKey: 'image' },
   { key: 'audio', kind: 'audio', pathKey: 'audio' },
@@ -24,14 +27,21 @@ export const previewOpenNekoConsumerScenario = Object.freeze({
     await mkdir(workspacePath, { recursive: true });
     return { workspacePath, media: await createDesktopMediaFixtureSet(workspacePath) };
   },
-  async run({ click, evaluate, prepared, readOpenNekoResourceRequests }) {
+  async run({ click, evaluate, prepared, readOpenNekoResourceRequests, screenshot }) {
     await openFixtureWorkspace(evaluate);
     const viewers = [];
+    const screenshots = [];
     for (const definition of VIEWERS) {
       const path = prepared.media[definition.pathKey];
       const before = readOpenNekoResourceRequests();
       await openPreviewResource(evaluate, path);
-      const detail = await waitForViewer(click, evaluate, definition);
+      let detail = await waitForViewer(click, evaluate, definition);
+      if (definition.key === 'video') {
+        detail = { ...detail, ...(await positionPreviewVideoAtMidpoint(click, evaluate)) };
+      }
+      screenshots.push(
+        await captureSettledScreenshot(screenshot, `preview-${definition.key}-ready`),
+      );
       const after = readOpenNekoResourceRequests();
       const sessionUrls = [
         ...(detail.sourceUrl ? [detail.sourceUrl] : []),
@@ -40,7 +50,9 @@ export const previewOpenNekoConsumerScenario = Object.freeze({
       if (sessionUrls.length === 0) {
         throw new Error(`Preview ${definition.key} did not expose an OpenNeko resource request.`);
       }
-      await click('.neko-preview-root__actions button:last-child');
+      await click(
+        '[data-workbench-slot="main"] [data-workbench-main-panel][data-active="true"] .neko-workbench-editor-tab[data-active="true"] .neko-workbench-editor-tab__close',
+      );
       await waitForPreviewClosed(evaluate);
       const releasedStatuses = [];
       for (const url of sessionUrls) {
@@ -62,6 +74,7 @@ export const previewOpenNekoConsumerScenario = Object.freeze({
     return {
       ownerRoot: 'preview',
       viewers,
+      screenshots,
       gltfDependencyRequested:
         viewers.find((viewer) => viewer.key === 'gltf')?.resourceRequestCount >= 2,
     };
@@ -159,13 +172,77 @@ async function waitForViewer(click, evaluate, definition) {
   );
 }
 
+async function positionPreviewVideoAtMidpoint(click, evaluate) {
+  const initial = await readPreviewVideoState(evaluate);
+  if (!initial || !Number.isFinite(initial.duration) || initial.duration <= 0) {
+    throw new Error(
+      `Preview video duration is not available for midpoint capture: ${JSON.stringify(initial)}`,
+    );
+  }
+  if (!initial.paused) {
+    await click('[data-testid="preview-video-toggle-playback"]');
+    await waitForPreviewVideoPaused(evaluate);
+  }
+  await click('.neko-preview-root[data-preview-kind="video"] div[role="slider"]', 0, {
+    xRatio: 0.5,
+  });
+  const midpoint = initial.duration / 2;
+  const deadline = Date.now() + 15_000;
+  let last;
+  while (Date.now() < deadline) {
+    const state = await readPreviewVideoState(evaluate);
+    last = state;
+    const tolerance = Math.max(0.1, midpoint * 0.02);
+    if (
+      state?.paused &&
+      state.readyState >= MEDIA_HAVE_CURRENT_DATA &&
+      Math.abs(state.currentTime - midpoint) <= tolerance
+    ) {
+      return {
+        videoDuration: state.duration,
+        videoMidpoint: midpoint,
+        videoTime: state.currentTime,
+        videoPaused: state.paused,
+      };
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `Preview video did not present its duration midpoint before capture: ${JSON.stringify(last)}`,
+  );
+}
+
+async function waitForPreviewVideoPaused(evaluate) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if ((await readPreviewVideoState(evaluate))?.paused) return;
+    await delay(100);
+  }
+  throw new Error('Preview video did not pause before midpoint seek.');
+}
+
+function readPreviewVideoState(evaluate) {
+  return evaluate(`(() => {
+    const video = document.querySelector(
+      '.neko-preview-root[data-preview-kind="video"] video',
+    );
+    if (!(video instanceof HTMLVideoElement)) return undefined;
+    return {
+      currentTime: video.currentTime,
+      duration: video.duration,
+      paused: video.paused,
+      readyState: video.readyState,
+    };
+  })()`);
+}
+
 async function waitForPreviewClosed(evaluate) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     if (!(await evaluate(`Boolean(document.querySelector('.neko-preview-root'))`))) return;
     await delay(100);
   }
-  throw new Error('Preview Root remained mounted after its package-owned close action.');
+  throw new Error('Preview Root remained mounted after its Desktop Workbench tab was closed.');
 }
 
 async function waitForReleasedUrl(evaluate, url) {
@@ -180,4 +257,9 @@ async function waitForReleasedUrl(evaluate, url) {
 
 function delay(milliseconds) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+}
+
+async function captureSettledScreenshot(screenshot, label) {
+  await delay(VISUAL_SETTLE_MILLISECONDS);
+  return screenshot(label);
 }

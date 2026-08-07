@@ -25,7 +25,7 @@ const allowedProductStatuses = new Set([
   'content-only',
 ]);
 const allowedArchitectureStates = new Set(['converged', 'drift']);
-const rootKeys = ['packages', 'version'];
+const rootKeys = ['packages'];
 const packageKeys = [
   'architectureState',
   'family',
@@ -40,7 +40,6 @@ export function validatePackageRoleCatalog(catalog, workspacePackages) {
   const findings = [];
 
   validateExactKeys('catalog', catalog, rootKeys, findings);
-  if (catalog.version !== 1) findings.push('catalog.version must equal 1');
   if (!Array.isArray(catalog.packages)) {
     findings.push('catalog.packages must be an array');
     return findings;

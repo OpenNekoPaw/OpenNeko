@@ -33,7 +33,6 @@ function evidenceContract() {
       'Pi Conversation runtime and Pi Session',
       'facts',
     ],
-    forbiddenFallback: ['direct Agent turn runner'],
     observables: [
       {
         ref: 'turn-facts',
@@ -69,13 +68,12 @@ function suite() {
     id: 'agent-runtime.single-turn',
     owner: { kind: 'agent-runtime', id: 'session-runtime' },
     target: target(),
-    repositoryRevision: 'test-revision',
     runtimeProfiles: [{ id: 'default', settings: { temperature: 0.7 }, configurationHash: HASH }],
     modelProfiles: [
       {
         id: 'chat-default',
         selection: 'explicit',
-        chat: { providerId: 'openai', modelId: 'org/model-v1' },
+        chat: { providerId: 'openai', modelId: 'org/model-chat' },
         configurationHash: HASH_B,
       },
     ],
@@ -134,7 +132,7 @@ function scenario() {
   };
 }
 
-describe('agent evaluation v2 strict authoring contracts', () => {
+describe('agent evaluation strict authoring contracts', () => {
   it('accepts a complete create decision and rejects invalid decision fields', () => {
     const decision = {
       schema: SCHEMAS.authoringDecision,
@@ -214,7 +212,7 @@ describe('agent evaluation v2 strict authoring contracts', () => {
   });
 });
 
-describe('agent evaluation v2 suite and scenario contracts', () => {
+describe('agent evaluation suite and scenario contracts', () => {
   it('accepts a strict suite and executable M1 scenario', () => {
     expect(validateSuite(suite())).toEqual(suite());
     expect(validateScenarioForExecution(scenario())).toEqual(scenario());
@@ -242,6 +240,7 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
       { id: 'cancel', kind: 'cancel', afterStepId: 'feedback' },
       { id: 'cancel-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
       { id: 'resume', kind: 'resume', conversationRef: 'current' },
+      { id: 'restart', kind: 'restart', conversationRef: 'current' },
       { id: 'final-idle', kind: 'wait-for-idle', timeoutMs: 120_000 },
     ];
     expect(validateScenarioForExecution(workflow)).toBe(workflow);
@@ -275,9 +274,9 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
     expect(() => validateScenarioForExecution(noTerminalIdle)).toThrow('end with wait-for-idle');
   });
 
-  it('rejects unknown schema versions, fields, and kinds', () => {
-    expect(() => validateSuite({ ...suite(), schema: 'neko.agent-eval.suite.v3' })).toThrow(
-      'must equal "neko.agent-eval.suite.v2"',
+  it('rejects unknown schema identities, fields, and kinds', () => {
+    expect(() => validateSuite({ ...suite(), schema: 'neko.agent-eval.unknown-suite' })).toThrow(
+      'must equal "neko.agent-eval.suite"',
     );
     expect(() => validateSuite({ ...suite(), metadata: { ignored: true } })).toThrow(
       'unknown field(s): metadata',
@@ -290,7 +289,7 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
   it('rejects the committed unsupported-field pilot as configuration invalid', async () => {
     const fixture = JSON.parse(
       await fs.readFile(
-        'scripts/agent-eval/test-fixtures/v2/unsupported-field.scenario.json',
+        'scripts/agent-eval/test-fixtures/strict/unsupported-field.scenario.json',
         'utf8',
       ),
     );
@@ -368,7 +367,6 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
         id: 'model',
         kind: 'model',
         profileId: 'chat-default',
-        noFallback: true,
         evidenceRef: 'turn-facts',
       },
       {
@@ -393,12 +391,6 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
         validatorStatus: 'valid',
         evidenceRef: 'turn-facts',
       },
-      {
-        id: 'fallback',
-        kind: 'no-fallback',
-        forbiddenRefs: ['legacy:skill', 'legacy.tool'],
-        evidenceRef: 'turn-facts',
-      },
     ];
     expect(validateScenarioForExecution(executable)).toBe(executable);
 
@@ -417,7 +409,7 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
         evidenceRef: 'turn-facts',
         path: 'output/result.json',
         digest: HASH,
-        validatorId: 'json-document-v1',
+        validatorId: 'json-document',
         validatorModule: '@neko/agent-runtime/validation',
       },
     ];
@@ -439,7 +431,6 @@ describe('agent evaluation domain rubric contract', () => {
       schema: SCHEMAS.rubric,
       id: 'storyboard-quality',
       domain: 'storyboard',
-      version: 'v1',
       minimumScore: 4,
       maximumUncertainty: 0.3,
       criteria: [
@@ -453,7 +444,7 @@ describe('agent evaluation domain rubric contract', () => {
   });
 });
 
-describe('agent evaluation v2 report contracts', () => {
+describe('agent evaluation report contracts', () => {
   it('validates result, evidence, artifact, baseline, and comparison documents', () => {
     expect(() =>
       validateResult({
@@ -464,8 +455,7 @@ describe('agent evaluation v2 report contracts', () => {
         runId: 'run-1',
         outcome: 'pass',
         target: target(),
-        repositoryRevision: 'abc123',
-        modelIdentity: { providerId: 'openai', modelId: 'org/model-v1' },
+        modelIdentity: { providerId: 'openai', modelId: 'org/model-chat' },
         effectiveConfiguration: {
           runtimeProfileId: 'default',
           modelProfileId: 'chat-default',
@@ -525,14 +515,13 @@ describe('agent evaluation v2 report contracts', () => {
       schema: SCHEMAS.baseline,
       id: 'baseline-1',
       target: target(),
-      repositoryRevision: 'abc123',
       fixtureDigest: HASH,
       runtimeProfileId: 'default',
       modelProfileIds: ['chat-default'],
-      samplingPolicy: { id: 'single-sample', version: 'v1', digest: HASH },
+      samplingPolicy: { id: 'single-sample', digest: HASH },
       budget: { timeoutMs: 120_000, repetitions: 1 },
-      validatorPolicy: { id: 'hard-gates', version: 'v1', digest: HASH },
-      judgePolicy: { id: 'no-judge', version: 'v1', digest: HASH },
+      validatorPolicy: { id: 'hard-gates', digest: HASH },
+      judgePolicy: { id: 'no-judge', digest: HASH },
       hardGateIds: ['runtime'],
       scoreDistribution: { samples: 1, passRate: 1, mean: 1, variance: 0 },
       reportId: 'report-1',

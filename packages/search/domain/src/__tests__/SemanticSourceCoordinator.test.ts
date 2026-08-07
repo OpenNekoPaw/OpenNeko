@@ -23,7 +23,7 @@ const scope: SemanticSourceRuntimeScope = {
 
 describe('SemanticSourceCoordinator', () => {
   it('deduplicates event and reconciliation work by fingerprint', async () => {
-    const fixture = createFixture([file('story.md', 'sha256:v1')]);
+    const fixture = createFixture([file('story.md', 'sha256:story-content')]);
     const coordinator = fixture.coordinator;
     coordinator.setScopes([scope]);
     await coordinator.reconcile('workspace');
@@ -33,7 +33,7 @@ describe('SemanticSourceCoordinator', () => {
   });
 
   it('reconciliation discovers missed copies and deletes disappeared sources', async () => {
-    const fixture = createFixture([file('copied.fountain', 'sha256:v1')]);
+    const fixture = createFixture([file('copied.fountain', 'sha256:copied-content')]);
     fixture.stored.set('workspace:old.md', descriptor('old.md', 'sha256:old'));
     fixture.storedFingerprints.set('workspace:old.md', 'sha256:old');
     fixture.coordinator.setScopes([scope]);
@@ -54,8 +54,8 @@ describe('SemanticSourceCoordinator', () => {
   });
 
   it('suppresses overlapping roots and rejects stale analyzer output', async () => {
-    const fixture = createFixture([file('story.md', 'sha256:v1')]);
-    fixture.currentFingerprint = 'sha256:v2';
+    const fixture = createFixture([file('story.md', 'sha256:original-content')]);
+    fixture.currentFingerprint = 'sha256:changed-content';
     const diagnostics = fixture.coordinator.setScopes([
       scope,
       {
@@ -101,7 +101,7 @@ describe('SemanticSourceCoordinator', () => {
       file('config.json', 'sha256:config'),
       {
         ...file('story.json', 'sha256:story'),
-        creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+        creativeSchema: { schemaId: 'openneko.story' },
       },
     ]);
     fixture.coordinator.setScopes([scope]);
@@ -115,7 +115,7 @@ describe('SemanticSourceCoordinator', () => {
       expect.objectContaining({
         source: expect.objectContaining({
           relativePath: 'story.json',
-          creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+          creativeSchema: { schemaId: 'openneko.story' },
         }),
       }),
     );
@@ -131,9 +131,7 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
     async (input: SemanticSourceAnalysisInput): Promise<SemanticSourceAnalysisResult> => ({
       sourceId: input.source.sourceId,
       sourceFingerprint: input.source.fingerprint,
-      entityRevision: input.entities.revision,
       index: {
-        version: 1,
         assetId: input.source.sourceId,
         sourceRef: { kind: 'file', path: input.source.portablePath },
         updatedAt: input.analyzedAt,
@@ -184,8 +182,10 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
           const sourceFingerprint = storedFingerprints.get(sourceId);
           return sourceFingerprint ? { sourceId, sourceFingerprint } : null;
         },
-        listSources: async (rootId) =>
-          [...stored.values()].filter((source) => source.rootId === rootId),
+        listSources: async (rootId) => ({
+          sources: [...stored.values()].filter((source) => source.rootId === rootId),
+          diagnostics: [],
+        }),
         replaceSource,
         deleteSource: async (sourceId) => {
           const existed = stored.delete(sourceId);
@@ -196,7 +196,6 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
         markSourceStale: markStale,
       },
       getEntitySnapshot: async (): Promise<SemanticEntitySnapshot> => ({
-        revision: 'entities-v1',
         entities: [],
       }),
       extractText: ({ source }) => [

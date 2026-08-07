@@ -11,8 +11,12 @@ const forbiddenHostNeutralPatterns = [
     replacement: 'use the injected AgentHostRuntimeAdapter facade',
   },
   {
-    pattern: /\bLegacyHostMessages\b/u,
-    replacement: 'use AgentHostMessages or useAgentHostRuntime',
+    pattern: /\bAgentHostMessages\b/u,
+    replacement: 'use useAgentHostMessages from the exact Root provider',
+  },
+  {
+    pattern: /NEKO_AGENT_HOST_MESSAGE_EVENT/u,
+    replacement: 'subscribe through the exact Root adapter',
   },
 ] as const;
 
@@ -34,8 +38,9 @@ describe('Agent Webview host runtime boundary', () => {
   it('keeps the Desktop transport adapter behind the host-neutral facade', () => {
     const messagesSource = readFileSync(join(srcRoot, 'messages/index.ts'), 'utf8');
 
-    expect(messagesSource).toContain('setAgentHostRuntimeAdapter');
-    expect(messagesSource).toContain('requires an injected Desktop host runtime adapter');
+    expect(messagesSource).toContain('createAgentHostMessages');
+    expect(messagesSource).toContain('permanently bound to one Root-owned runtime adapter');
+    expect(messagesSource).not.toContain('currentAgentHostRuntimeAdapter');
   });
 });
 

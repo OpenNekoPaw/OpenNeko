@@ -37,7 +37,7 @@ function identity(fingerprint = HASH_A) {
 function selection() {
   const value = {
     schema: OPTIMIZATION_SCHEMAS.holdoutSelection,
-    policyId: 'creation-persona-holdout-v1',
+    policyId: 'creation-persona-holdout',
     suiteId: 'skill.creation-persona',
     caseIds: ['draft-coastal-radio-concept'],
     selectionDigest: HASH_A,

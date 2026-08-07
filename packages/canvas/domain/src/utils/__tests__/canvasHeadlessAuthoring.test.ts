@@ -60,7 +60,6 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
         type: 'job' as const,
         data: {
           jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-          revision: 2,
           title: 'Generate key art',
           status: 'running',
         },
@@ -97,21 +96,20 @@ describe('canvasHeadlessAuthoring canonical planner', () => {
     });
     expect(canvas.nodes.find((node) => node.type === 'job')?.data).toMatchObject({
       jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-      revision: 2,
       status: 'running',
       inputRefs: [],
       outputRefs: [],
     });
   });
 
-  it('rejects removed domain node types', () => {
+  it('rejects unsupported domain node types', () => {
     expect(() =>
       planCanvasNodeCreation(
         { canvasData: emptyCanvas(), generateId: ids() },
-        // @ts-expect-error Runtime validation must reject removed legacy node types.
-        { type: 'shot', data: {} },
+        // @ts-expect-error Runtime validation must reject unsupported node types.
+        { type: 'unsupported', data: {} },
       ),
-    ).toThrow('Unsupported Canvas node type "shot"');
+    ).toThrow('Unsupported Canvas node type "unsupported"');
   });
 
   it('rejects incomplete Job projections and missing source bindings', () => {

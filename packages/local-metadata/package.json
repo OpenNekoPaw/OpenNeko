@@ -2,7 +2,6 @@
   "name": "@neko/local-metadata",
   "description": "Host-neutral local metadata ports and Node SQLite adapters for OpenNeko",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -18,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neko/assets-domain": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/media": "workspace:*",

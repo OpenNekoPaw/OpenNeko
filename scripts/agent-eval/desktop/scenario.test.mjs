@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { validateDesktopFunctionalScenario } from '../../desktop-functional/scenario-contract.mjs';
 import {
   createDesktopAgentEvaluationScenario,
+  readAuthorizedConfiguration,
   validateAuthorizedUserConfiguration,
 } from './scenario.mjs';
 
@@ -40,7 +44,6 @@ default_model = "model-1"
 
 [[providers]]
 id = "provider-1"
-api_key = "fixture-secret"
 
 [[models]]
 id = "model-1"
@@ -56,11 +59,30 @@ provider_id = "provider-1"
       validateAuthorizedUserConfiguration('default_provider = "provider-1"', authorization()),
     ).toThrow('does not declare the approved provider/model identity');
   });
+
+  it('accepts a readable user configuration without requiring mode 0600', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'neko-agent-eval-config-'));
+    const configurationFile = join(root, 'config.toml');
+    const source = `default_provider = "provider-1"
+default_model = "model-1"
+    `;
+    try {
+      await writeFile(configurationFile, source, 'utf8');
+      await chmod(configurationFile, 0o644);
+
+      await expect(
+        readAuthorizedConfiguration({ ...authorization(), configurationFile }),
+      ).resolves.toBe(source);
+      await expect(readFile(configurationFile, 'utf8')).resolves.toBe(source);
+    } finally {
+      await rm(root, { recursive: true });
+    }
+  });
 });
 
 function executionCase() {
   return {
-    schema: 'neko.agent-eval.execution-case.v1',
+    schema: 'neko.agent-eval.execution-case',
     caseId: 'ordinary-new-case',
     fixture: { root: 'shared-fixtures/empty-workspace' },
     steps: [

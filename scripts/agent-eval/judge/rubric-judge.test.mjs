@@ -11,7 +11,6 @@ const PROFILE = {
 const RUBRIC = {
   id: 'storyboard-quality',
   domain: 'storyboard',
-  version: 'v1',
   minimumScore: 4,
   maximumUncertainty: 0.3,
   criteria: [
@@ -134,7 +133,7 @@ function baseInput() {
     runId: 'run-1',
     profile: PROFILE,
     rubric: RUBRIC,
-    evidence: { schema: 'neko.agent-eval.judge-evidence.v2', assistantOutput: 'Public output.' },
+    evidence: { schema: 'neko.agent-eval.judge-evidence', assistantOutput: 'Public output.' },
     hardGates: [{ id: 'path', status: 'pass', evidenceRefs: ['runtime-facts'] }],
   };
 }

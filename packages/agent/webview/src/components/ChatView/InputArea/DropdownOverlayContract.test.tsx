@@ -54,26 +54,26 @@ const translations: Record<string, string> = {
 
 const models: ChatModelOption[] = [
   {
-    id: 'deepseek-chat:deepseek-v4-flash',
+    id: 'deepseek-chat:deepseek-flash',
     label: 'DeepSeek Chat / DeepSeek V4 Flash',
     providerLabel: 'DeepSeek Chat',
     source: 'explicit-config',
     connectionKind: 'direct',
     supportLevel: 'verified',
     providerId: 'deepseek-chat',
-    modelId: 'deepseek-v4-flash',
+    modelId: 'deepseek-flash',
     category: 'llm',
     capabilities: ['chat', 'function_calling', 'json_mode', 'streaming', 'code'],
   },
   {
-    id: 'deepseek-chat:deepseek-v4-pro',
+    id: 'deepseek-chat:deepseek-pro',
     label: 'DeepSeek Chat / DeepSeek V4 Pro',
     providerLabel: 'DeepSeek Chat',
     source: 'explicit-config',
     connectionKind: 'direct',
     supportLevel: 'verified',
     providerId: 'deepseek-chat',
-    modelId: 'deepseek-v4-pro',
+    modelId: 'deepseek-pro',
     category: 'llm',
     capabilities: ['chat', 'function_calling', 'json_mode', 'streaming', 'code'],
   },
@@ -117,7 +117,7 @@ describe('dropdown overlay presentation contract', () => {
   it('keeps the chat model menu on the shared model overlay shell', () => {
     render(
       <ModelSelector
-        selectedModel="deepseek-chat:deepseek-v4-pro"
+        selectedModel="deepseek-chat:deepseek-pro"
         models={models}
         onSelect={vi.fn()}
       />,
@@ -247,6 +247,32 @@ describe('dropdown overlay presentation contract', () => {
     expect(controlsRule).toContain('align-items: center');
     expect(triggerRule).toBeTruthy();
     expect(triggerRule).toContain('max-width: 144px');
+  });
+
+  it('keeps the Desktop composer centered and elevated above the Main conversation surface', () => {
+    const css = readFileSync(resolve(__dirname, '../../../index.css'), 'utf8');
+    const desktopDockRule = css.match(/\[data-presentation='desktop-dock'\]\s*\{(?<body>[^}]+)\}/)
+      ?.groups?.body;
+    const shellRule = css.match(/\.agent-composer-shell\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const railRule = css.match(/\.agent-composer-rail\s*\{(?<body>[^}]+)\}/)?.groups?.body;
+    const transcriptRailRule = css.match(/\.agent-transcript-rail\s*\{(?<body>[^}]+)\}/)?.groups
+      ?.body;
+    const narrowRule = css.match(/@media \(max-width: 520px\)\s*\{(?<body>[\s\S]+?)\n\}/)?.groups
+      ?.body;
+
+    expect(desktopDockRule).toMatch(
+      /--agent-bg:\s*var\(\s*--neko-sideBar-background,\s*var\(--neko-desktop-main/u,
+    );
+    expect(desktopDockRule).toContain('--agent-composer-rail-bg: var(--agent-bg)');
+    expect(desktopDockRule).toContain('--agent-composer-rail-border: transparent');
+    expect(shellRule).toContain('max-width: 820px');
+    expect(shellRule).toContain('margin-inline: auto');
+    expect(transcriptRailRule).toContain('width: calc(100% - 24px)');
+    expect(transcriptRailRule).toContain('max-width: 820px');
+    expect(transcriptRailRule).toContain('margin-inline: auto');
+    expect(railRule).toContain('padding:');
+    expect(narrowRule).toContain('.agent-composer-toolbar');
+    expect(narrowRule).toContain('flex-wrap: wrap');
   });
 
   it('keeps preset and generation parameter dialogs bounded with field headers', () => {

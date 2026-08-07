@@ -1,6 +1,6 @@
 # Agent 横切架构
 
-更新日期：2026-07-31
+更新日期：2026-08-04
 
 本文件定义 OpenNeko Agent 的系统级边界。运行时包级边界见
 [`packages/agent/runtime/src/runtime/README.md`](../../packages/agent/runtime/src/runtime/README.md)，
@@ -35,7 +35,7 @@ Agent 不拥有：
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 职责 | Pi 拥有 generic Agent execution、Tool scheduling、Skill read 和 transcript/context；OpenNeko Agent 拥有产品 identity、policy 与 projection；领域包拥有执行和事实；Host 拥有 IO、trust、credential interaction 与 UI transport。 |
 | 依赖 | Renderer 只依赖共享 contract；Desktop Main composition 依赖 host-neutral runtime 和具体领域 port；Agent core 不依赖 Electron、React 或具体领域实现；领域包不反向依赖 Agent。                                                    |
-| 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ContentLocator 分层定义；禁止自由 JSON 和 active-state fallback。                |
+| 接口 | conversation/branch/turn/run/tool-call identity、Tool schema、model-purpose snapshot、Capability contribution、domain Job port、Timeline patch 和 ContentLocator 分层定义；禁止自由 JSON 和 active-state fallback。             |
 | 扩展 | 新 provider 通过 Pi registration 或 owning media runtime 接入；新 Skill 使用 Pi `SKILL.md`；新领域能力先由 owning package 定义 contract，再通过 contribution 注入。                                                             |
 | 测试 | deterministic path/schema/identity/permission 测试证明 canonical path；key-free evaluation 验证 harness；真实 Desktop complete-session 场景证明模型与 UI 行为。                                                                 |
 
@@ -118,11 +118,45 @@ SQLite listing preview、message count 等字段是可重建投影，不是第�
 不得存放 Pi transcript；旧 Journal、history hydration 或 workspace transcript importer 不能
 恢复正常会话。
 
-Desktop Home 冷启动只通过 Pi owning package 的只读 catalog reader 投影当前 Desktop Project
-catalog scope 内的 conversation metadata。该读取不 attach workspace runtime、不打开 Pi
-Session、不读取 transcript，也不获取 execution lease；只有已 attach workspace 可以按精确
-workspace/conversation identity 覆盖实时 attention。catalog 缺失表示尚无历史数据，catalog
-损坏或 schema 不匹配必须 fail-visible，不能伪装成成功空列表。
+Desktop 统一 Workbench 冷启动通过 Pi owning package 的只读 catalog reader 投影最近 Agent
+conversation metadata。该读取不 attach workspace runtime、不打开 Pi Session、不读取 transcript，
+也不获取 execution lease；只有显式 attach 的 exact conversation 可以覆盖实时 attention。catalog
+缺失表示尚无历史数据，catalog 损坏或 schema 不匹配必须 fail-visible，不能伪装成成功空列表。
+
+Conversation 导航必须区分三种正交身份：`conversationId` 选择 AgentSession transcript；closed
+`assistant | workspace | character + characterRun | room + roomRun` owner 选择 capability、memory 和
+Scene authority；可选 `groupedProjectId` 只决定 PrimarySidebar 中的放置位置。不得用四个 nullable ID、
+synthetic `content:<workspaceId>` Project、active/recent Project 或 UI Tab 表达 owner。Workspace owner
+由 Host 与唯一 Project 的 `workspaceId` 精确匹配；Assistant/Character/Room 可以不绑定 Project，绑定
+Project 也不会获得 Workspace 文件权限、记忆或 Scene scope。
+
+Agent Home projection 是 owner-qualified conversation catalog 的唯一 producer，Host 将其与 Project
+catalog 组合成唯一 grouped navigation projection。Project header 只打开 exact Workspace-bound Draft，
+conversation child 才恢复 exact `conversationId + owner` session。PrimarySidebar 是 Desktop 用户可见的
+会话切换入口；Desktop dock 隐藏 Agent package 内部 Tab、新建和 History 导航，但保留独立 runtime
+state。Character/Room owner contract 在其 public runtime/Scene 尚未组合前只可返回带 exact owner kind
+的 unavailable，不得读取为 executable Assistant/Workspace context。
+
+同一个 `AgentWebviewRoot` 同时承载 `draft | session` presentation；phase 只决定是否已有 conversation，
+不更换 controller、composer 或 Root identity。`assistant | workspace` scope 与 phase 正交：Assistant
+使用用户级授权资源和 conversation scratch；Workspace 必须来自 exact persisted identity 或显式
+sender-bound directory grant。draft 编辑不创建 conversation/scratch，第一条提交由 Agent application
+authority 原子提交 context、conversation、initial message 和 pending turn，并以稳定 request/turn
+identity 幂等启动 provider。任何 Workspace-only capability 在 Assistant scope 下必须返回
+`workspace-scope-required`，不得回退到 active/first/recent Project。
+
+每次 Start Creating 都创建新的 `unbound` draft identity，入口不显示强制 owner 选择卡。未选择 owner
+而直接提交时，draft-submit target 由 Agent entry contract 确定性绑定 Assistant 用户区；显式选择
+Project/directory grant 时绑定 Workspace；未来显式选择 Character/Room 时绑定对应 owner。对话内容只在
+已绑定 scope 内决定能力或生成模式，不能发明 owner identity、目录授权或权限范围。owner 绑定后，同一
+Root 立即显示 owner-qualified activated presentation，清除旧 Tabs、transcript、输入引用和瞬态错误，
+同时保留模型目录与用户设置。Desktop 只投影 Host 已提交的 phase/scope，不通过 active Project、组件
+状态或 React key 推断或重建 Agent；尚不存在的 Character/Room owner 必须 fail-visible。
+
+Entry Draft 显式授权的资源 grant 绑定到 exact launch connection 与 `draftId`。直接提交切换到
+Assistant 时，Desktop Main 必须先完整验证请求中的 grant 集合，再将匹配 grants 原子绑定到 exact
+AssistantSpace；缺失、跨 connection、跨 draft 或已绑定其他 scope/conversation 的 grant 必须失败且
+不能产生部分修改。相同 AssistantSpace 的首次提交重试保持幂等。
 
 turn terminal checkpoint 具有 `volatile`、`persisting`、`durable`、
 `persistence-delayed` 状态。持久化失败必须暴露 diagnostic；process-local backfill 不能伪装成
@@ -261,6 +295,17 @@ DAG、plan authorization 或领域 project state。Canvas、Cut、Preview 等 su
 Agent 行为。真实行为结论需要 configured-provider Desktop complete-session case，并记录
 effective model、usage/cost、artifact/path fact 与 no-fallback evidence。Desktop UI 行为必须
 使用打包 Electron 与合成 fixture workspace 验收。
+
+Agent 开发验收固定分为两个互补 lane：单个用户功能必须在可见 Electron 中通过真实 UI 控件
+提交并调用真实 API，验证回复、运行终态、导航/Scene identity 与错误展示；批量行为回归使用
+无可见 UI 的完整 Desktop session owner 和同一公开 input path 调用真实 API。hidden batch 不是
+headless/direct turn runtime，visible UI 也不能用 automation bridge 预建会话来替代用户操作。
+
+AgentSession、持久化或 projection 的基线矩阵至少覆盖：基础多轮对话；压缩前后 continuation 与
+identity 不变；完整 owner/应用重开后 transcript 顺序和内容恢复；生成 Tool/Job/产物记录恢复；
+两个以上会话切换后只显示目标 transcript/Scene；以及 conversation-scoped queue、配置、context、
+artifact 和异步状态不串线。每项同时断言 canonical path、真实 provider identity、terminal state
+和 no-fallback，不能只匹配最终文本。
 
 ## 禁止恢复的路径
 

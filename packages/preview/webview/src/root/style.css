@@ -15,6 +15,15 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.neko-preview-root[data-preview-chrome='content-only'] {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.neko-preview-root[data-preview-chrome='content-only'],
+.neko-preview-root__status[data-preview-chrome='content-only'] {
+  background: transparent;
+}
+
 .neko-preview-root > header {
   display: flex;
   align-items: center;

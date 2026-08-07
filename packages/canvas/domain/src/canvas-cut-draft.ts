@@ -15,17 +15,13 @@ import type {
 import { isContentLocator, type ContentLocator } from '@neko/content';
 import type { StoryboardTextCue, StoryboardVoiceCue } from './types/storyboard-table';
 
-export const CANVAS_CUT_DRAFT_SCHEMA_VERSION = 1 as const;
 export const CANVAS_CUT_DRAFT_KIND = 'canvas-cut-draft' as const;
 export const CANVAS_CUT_DRAFT_DEFAULT_EXTENSION_NAMESPACES = ['neko.canvas'] as const;
-
-export type CanvasCutDraftSchemaVersion = typeof CANVAS_CUT_DRAFT_SCHEMA_VERSION;
 
 export type CanvasCutDraftDiagnosticSeverity = 'info' | 'warning' | 'error';
 
 export type CanvasCutDraftDiagnosticCode =
   | 'draft-invalid-root'
-  | 'draft-invalid-schema-version'
   | 'draft-stale-source'
   | 'draft-missing-route'
   | 'draft-invalid-route'
@@ -50,13 +46,9 @@ export interface CanvasCutDraftDiagnostic {
   readonly path?: readonly (string | number)[];
 }
 
-export type CanvasCutDraftSourceRevision = string | number;
-
 export interface CanvasCutDraftSource {
   readonly canvasUri: string;
-  readonly revision?: CanvasCutDraftSourceRevision;
-  readonly hash?: string;
-  readonly resourceProjectionRevision?: CanvasCutDraftSourceRevision;
+  readonly contentFingerprint?: string;
   readonly createdAt?: string;
 }
 
@@ -127,7 +119,6 @@ export type CanvasCutDraftExtensions = Readonly<Record<string, CanvasSerializabl
 
 export interface CanvasCutDraftPayload {
   readonly kind: typeof CANVAS_CUT_DRAFT_KIND;
-  readonly schemaVersion: CanvasCutDraftSchemaVersion;
   readonly source: CanvasCutDraftSource;
   readonly route: CanvasCutDraftRoute;
   readonly projectName: string;
@@ -137,7 +128,7 @@ export interface CanvasCutDraftPayload {
 }
 
 export interface ValidateCanvasCutDraftPayloadOptions {
-  readonly currentSourceRevision?: CanvasCutDraftSourceRevision;
+  readonly currentSourceFingerprint?: string;
   readonly allowedExtensionNamespaces?: readonly string[];
   readonly requireMediaSource?: boolean;
   readonly allowAbsoluteAssetPaths?: boolean;
@@ -152,10 +143,8 @@ export interface CanvasCutDraftValidationResult {
 export interface CreateCanvasCutDraftPayloadInput {
   readonly plan: CanvasPlaybackPlan;
   readonly sourceCanvasUri: string;
-  readonly sourceRevision?: CanvasCutDraftSourceRevision;
-  readonly sourceHash?: string;
-  readonly currentSourceRevision?: CanvasCutDraftSourceRevision;
-  readonly resourceProjectionRevision?: CanvasCutDraftSourceRevision;
+  readonly sourceContentFingerprint?: string;
+  readonly currentSourceFingerprint?: string;
   readonly routeId?: string;
   readonly projectName?: string;
   readonly createdAt?: string;
@@ -202,9 +191,8 @@ export function projectCanvasPlaybackRouteToCutDraft(
   }
 
   if (
-    input.currentSourceRevision !== undefined &&
-    input.sourceRevision !== undefined &&
-    input.currentSourceRevision !== input.sourceRevision
+    input.currentSourceFingerprint !== undefined &&
+    input.currentSourceFingerprint !== input.sourceContentFingerprint
   ) {
     return {
       ok: false,
@@ -213,7 +201,7 @@ export function projectCanvasPlaybackRouteToCutDraft(
         diagnostic(
           'draft-stale-source',
           'error',
-          `Canvas draft source revision "${input.sourceRevision}" is stale; current revision is "${input.currentSourceRevision}".`,
+          'Canvas draft source content changed before the Cut draft could be created.',
           { routeId: selectedRoute.id },
         ),
       ],
@@ -239,13 +227,10 @@ export function projectCanvasPlaybackRouteToCutDraft(
 
   const payload: CanvasCutDraftPayload = {
     kind: CANVAS_CUT_DRAFT_KIND,
-    schemaVersion: CANVAS_CUT_DRAFT_SCHEMA_VERSION,
     source: {
       canvasUri: input.sourceCanvasUri,
-      ...(input.sourceRevision !== undefined ? { revision: input.sourceRevision } : {}),
-      ...(input.sourceHash ? { hash: input.sourceHash } : {}),
-      ...(input.resourceProjectionRevision !== undefined
-        ? { resourceProjectionRevision: input.resourceProjectionRevision }
+      ...(input.sourceContentFingerprint
+        ? { contentFingerprint: input.sourceContentFingerprint }
         : {}),
       ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     },
@@ -257,7 +242,7 @@ export function projectCanvasPlaybackRouteToCutDraft(
   };
 
   const validation = validateCanvasCutDraftPayload(payload, {
-    currentSourceRevision: input.currentSourceRevision,
+    currentSourceFingerprint: input.currentSourceFingerprint,
     allowedExtensionNamespaces: input.allowedExtensionNamespaces,
     requireMediaSource: input.requireMediaSource,
     allowAbsoluteAssetPaths: input.allowAbsoluteAssetPaths,
@@ -290,17 +275,6 @@ export function validateCanvasCutDraftPayload(
       }),
     );
   }
-  if (value['schemaVersion'] !== CANVAS_CUT_DRAFT_SCHEMA_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'draft-invalid-schema-version',
-        'error',
-        `CanvasCutDraftPayload schemaVersion must be ${CANVAS_CUT_DRAFT_SCHEMA_VERSION}.`,
-        { path: ['schemaVersion'] },
-      ),
-    );
-  }
-
   validateSource(value['source'], options, diagnostics);
   validateRoute(value['route'], diagnostics);
   validateDraftUnits(value['units'], options, diagnostics);
@@ -568,6 +542,20 @@ function validateSource(
     );
     return;
   }
+  const allowedKeys = new Set(['canvasUri', 'contentFingerprint', 'createdAt']);
+  for (const key of Object.keys(value)) {
+    if (allowedKeys.has(key)) continue;
+    diagnostics.push(
+      diagnostic(
+        'draft-invalid-root',
+        'error',
+        `CanvasCutDraftPayload source.${key} is unsupported.`,
+        {
+          path: ['source', key],
+        },
+      ),
+    );
+  }
   if (!readString(value['canvasUri'])) {
     diagnostics.push(
       diagnostic(
@@ -580,20 +568,37 @@ function validateSource(
       ),
     );
   }
-  const revision = value['revision'];
+  if (value['contentFingerprint'] !== undefined && !readString(value['contentFingerprint'])) {
+    diagnostics.push(
+      diagnostic(
+        'draft-invalid-root',
+        'error',
+        'CanvasCutDraftPayload source.contentFingerprint must be a non-empty string.',
+        { path: ['source', 'contentFingerprint'] },
+      ),
+    );
+  }
+  if (value['createdAt'] !== undefined && !readString(value['createdAt'])) {
+    diagnostics.push(
+      diagnostic(
+        'draft-invalid-root',
+        'error',
+        'CanvasCutDraftPayload source.createdAt must be a non-empty string.',
+        { path: ['source', 'createdAt'] },
+      ),
+    );
+  }
+  const contentFingerprint = readString(value['contentFingerprint']);
   if (
-    revision !== undefined &&
-    options.currentSourceRevision !== undefined &&
-    revision !== options.currentSourceRevision
+    options.currentSourceFingerprint !== undefined &&
+    contentFingerprint !== options.currentSourceFingerprint
   ) {
     diagnostics.push(
       diagnostic(
         'draft-stale-source',
         'error',
-        `Canvas draft source revision "${String(revision)}" is stale; current revision is "${String(
-          options.currentSourceRevision,
-        )}".`,
-        { path: ['source', 'revision'] },
+        'Canvas draft source content no longer matches the current Canvas document.',
+        { path: ['source', 'contentFingerprint'] },
       ),
     );
   }

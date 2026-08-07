@@ -9,10 +9,32 @@
 和代码为准。Phase 1 领域接入仍在进行，因此 Desktop 尚不是受支持发布产品。原生 package /
 release 目标已收敛为 `darwin-arm64`；macOS 已有通过验证的 ad-hoc DMG prerelease 路径，
 Developer ID/公证仍是阶段 2 门禁。Windows x64 与 Linux 只运行确定性测试，不生成 Desktop
-artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop MCP 集成也尚未实现。
+artifact；Intel Mac 和其他架构不支持。Desktop 已有 OpenNeko 自有的 Skill/扩展目录及受支持
+Skill/MCP contribution 的 Agent 接入路径；通用扩展生态与专业工具集成尚未实现。
 
 每个阶段必须拆成边界明确的 OpenSpec change，不允许用一个长期巨型 change 同时开发 Shell、
 跨平台、插件和全部专业工具。
+
+## 产品重点与实验晋级
+
+当前路线优先服务通用的 AI 辅助内容创作者，闭合“本地项目上下文 → Agent 规划/生成 →
+素材与结果管理 → Canvas/Cut/Preview 轻量处理 → 导出或专业工具交接”的真实工作流。
+“通用”指跨媒体、跨模型和可移植的高频个人创作路径，不表示在 OpenNeko 内复制完整
+NLE、DCC、图像编辑器或覆盖所有创作行业。
+
+Chara 与 Interactive World 是独立实验方向，不是当前阶段的承诺交付项。允许继续进行边界设计、
+合成 fixture 和最小原型验证，但在满足以下条件前不得将它们提升为核心导航、发布能力或当前产品
+卖点：
+
+- 存在能够明确描述的目标用户和跨多个独立用户重复出现的任务；
+- 用户已经在真实项目中以低效方式解决该问题，而不只是表达概念兴趣；
+- 最小原型出现持续创建、再次体验、保存或分享等重复行为；
+- 能定义并验证一条使用真实 owner、模型和持久事实的最小创作—体验闭环。
+
+实验未晋级时，CharacterProject/Version、Character room/Play、WorldProject、WorldExperience、
+Run/Save/Branch 及其 Desktop 入口必须保持 fail-visible unavailable。多角色 Play、VLA、游戏控制、
+完整 3D/实时视频表现和社交分发不得作为验证基础需求提前扩大范围。OpenSpec 中存在设计或任务
+不表示路线图已经承诺交付。
 
 ## 总体顺序
 
@@ -23,7 +45,7 @@ artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop
 阶段 2：macOS 发布资格验证
   -> macOS 的真实安装、媒体、GPU、文件、签名、公证与发布证据
 
-阶段 3：MCP、插件与专业工具生态
+阶段 3：扩展生态与专业工具接入
   -> ComfyUI / NLE / Blender / Unity / Photoshop / Live2D 等受控集成
 ```
 
@@ -55,9 +77,9 @@ artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop
 | Cut                              | 接入完整 Cut Root、OTIO、预览、音频、代理和 ExportJob；不恢复 Engine/client                                                                  |
 | Preview / Media                  | 接入文档、图片、音视频和标准 3D 只读预览，使用 `@neko/media`、Node/FFmpeg 和安全 Range/PCM transport                                         |
 | Generation / Quality             | 接入 GenerationJob、candidate/review、质量检查和明确失败诊断                                                                                 |
-| Chara / Entity                   | 只接入已经实现的角色对话、表现、证据和 representation binding；未实现的 CharacterProject/Version 明确标为 unavailable                        |
+| Chara / Entity                   | 只保留现有角色内核、证据和 representation binding，并允许有界实验；未晋级的 CharacterProject/Version 明确标为 unavailable                    |
 | Tools / Diagnostics              | 接入日志、诊断、能力状态和可恢复错误，不增加运行时控制台式产品表面                                                                           |
-| Interactive World                | 在 `neko-world` canonical owner、project/run/save contract 实现前保持 unavailable；不得用 Canvas/Preview 空壳冒充                            |
+| Interactive World                | 只允许边界设计、合成 fixture 和最小原型验证；用户证据晋级前保持 unavailable，不得用 Canvas/Preview 空壳冒充                                  |
 
 ### 建议实施切片
 
@@ -66,7 +88,7 @@ artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop
 3. Agent + Home Conversation/Activity 首条纵向路径。
 4. Media Library + Canvas 首条创作与 candidate 路径。
 5. Cut + Preview + Generation/Quality 的预览、生成、导出闭环。
-6. Chara/Entity 当前能力和 Tools/Diagnostics 接入。
+6. Chara/Entity 现有内核投影、实验隔离和 Tools/Diagnostics 接入。
 7. Content Project 端到端验收、资源释放、崩溃恢复与可访问性收口。
 
 每个切片使用独立或边界清晰的一组 OpenSpec；子包接入必须先完成公共 UI/host adapter
@@ -92,9 +114,9 @@ artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop
 
 ### 平台顺序
 
-| 目标           | 计划         | 资格边界                                                     |
-| -------------- | ------------ | ------------------------------------------------------------ |
-| `darwin-arm64` | 唯一发布平台 | 签名、公证、Keychain、GPU/媒体、文件关联和真实创作流程       |
+| 目标           | 计划         | 资格边界                                               |
+| -------------- | ------------ | ------------------------------------------------------ |
+| `darwin-arm64` | 唯一发布平台 | 签名、公证、Keychain、GPU/媒体、文件关联和真实创作流程 |
 
 当前原生 package/release 闭集只有 `darwin-arm64`。Windows/Linux 只允许运行确定性 CI，
 不得恢复 Desktop artifact、native runtime 或 fallback；Intel Mac 和其他架构不支持。
@@ -117,13 +139,13 @@ artifact；Intel Mac 和其他架构不支持。专业工具、插件和 Desktop
 - unsupported OS/architecture/version fail-visible，不尝试其他平台 artifact 或静默降级。
 - 每个发布 artifact 有平台身份、依赖闭包、签名和校验信息。
 
-## 阶段 3：MCP、插件和专业工具生态
+## 阶段 3：扩展生态与专业工具接入
 
 ### 目标
 
-在稳定 Desktop Host、状态协议和跨平台基线上，建立受控扩展与专业工具集成。内置子包继续
-承担 AI 原生轻量创作；高级剪辑、调色、分层图像、Live2D、3D、游戏工程和复杂节点工作流
-交给外部专业软件。
+在稳定 Desktop Host、状态协议和发布基线上，扩展现有 OpenNeko Skill/扩展目录及其受支持的
+Skill/MCP contribution 路径，并建立受控专业工具集成。内置子包继续承担 AI 原生轻量创作；
+高级剪辑、调色、分层图像、Live2D、3D、游戏工程和复杂节点工作流交给外部专业软件。
 
 ### 3.1 MCP 与贡献契约
 
@@ -189,5 +211,5 @@ L5 Round-trip import / relink / review with evidence
 - 云端多租户控制面、团队同步和远程执行平台；
 - 复制 DaVinci、Photoshop、Blender、Unity 或 ComfyUI 的完整内置专业能力；
 - Code OSS Workbench、任意 DOM 插件或第二套 Extension Host；
-- 未经独立领域设计的空壳 Interactive World；
+- 未通过用户证据晋级门槛的完整 Chara/Interactive World 产品化，或任何空壳 World surface；
 - 仅依据 mock、截图、交叉编译或开发机偶然成功作出的支持声明。

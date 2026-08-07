@@ -161,7 +161,7 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/timelineEndSeconds: prepared\.playbackEndSeconds/);
     expect(app).toMatch(/controller\.startPreview\(\s*playheadSeconds,/);
     expect(app).toMatch(/controller\.preparePreview\(playheadSeconds\)/);
-    expect(app).toMatch(/controller\.activatePreview\(generation\)/);
+    expect(app).toMatch(/controller\.activatePreview\(previewRequestId\)/);
     expect(app.match(/controller\.startPreview\(/g)).toHaveLength(2);
     expect(app).toMatch(/previewVideoClientRef\.current\?\.pause\(\)/);
     expect(app).toMatch(/activeVideoClient\.seek\(/);
@@ -171,12 +171,14 @@ describe('Cut OTIO Webview boundary', () => {
     expect(timeline).toMatch(/onSeek=\{props\.onSeek\}/);
     expect(timeline).not.toMatch(/actions\.seek\(/);
     expect(app).toMatch(/controller\.pausePreview\(\)/);
-    expect(app).toMatch(/controller\.pausePreview\(generation\)/);
+    expect(app).toMatch(/controller\.pausePreview\(previewRequestId\)/);
     expect(app).toMatch(/preparePreviewVideoClient\(message, attempt\)/);
     expect(app).toMatch(/preparePreviewAudioClients\(\s*message,/);
-    expect(app).toMatch(/onEnded: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.generation\)/);
     expect(app).toMatch(
-      /onPlaybackEnd: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.generation\)/,
+      /onEnded: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.previewRequestId\)/,
+    );
+    expect(app).toMatch(
+      /onPlaybackEnd: \(\) => mediaPlaybackEndRef\.current\?\.\(message\.previewRequestId\)/,
     );
     expect(app).toMatch(/finishPreviewPlaybackSegment\(segment\)/);
     expect(app).toMatch(/secondaryVideoRef=\{secondaryPreviewVideoRef\}/);
@@ -204,7 +206,7 @@ describe('Cut OTIO Webview boundary', () => {
     expect(
       app.slice(
         app.indexOf('const preparePreviewVideoClient'),
-        app.indexOf('const disposePreparedVideoGeneration'),
+        app.indexOf('const disposePreparedVideoRequestId'),
       ),
     ).toContain('primeForSynchronizedStart()');
     expect(activation).not.toContain('primeForSynchronizedStart()');

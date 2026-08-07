@@ -56,8 +56,7 @@ describe('canvas ambient context runtime', () => {
     expect(
       summarizeCanvasNode(
         makeNode('job-1', 'job', {
-          jobId: 'job-1',
-          revision: 1,
+          jobRef: { kind: 'generation', jobId: 'job-1' },
           title: 'Generate trailer',
           objective: 'Create a short trailer',
           status: 'running',

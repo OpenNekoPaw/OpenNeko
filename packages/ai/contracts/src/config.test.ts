@@ -16,7 +16,7 @@ describe('AI configuration contracts', () => {
       name: 'fixture-provider',
       displayName: 'Fixture Provider',
       type: 'openai',
-      apiUrl: 'https://fixture.invalid/v1',
+      apiUrl: 'https://fixture.invalid/api',
       enabled: true,
       connectionKind: 'direct',
     };

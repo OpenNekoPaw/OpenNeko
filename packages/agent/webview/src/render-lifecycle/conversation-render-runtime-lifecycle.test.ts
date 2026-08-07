@@ -85,7 +85,6 @@ function hostSnapshot(conversationId: string) {
   return {
     kind: 'host-snapshot' as const,
     conversationId,
-    baseRevision: 0,
     messages: [],
     streaming: createIdleConversationStreamingSnapshot(),
   };
@@ -94,7 +93,6 @@ function hostSnapshot(conversationId: string) {
 function projectionSnapshot(conversationId: string, messageId: string) {
   return {
     conversationId,
-    projectionVersion: 1,
     turns: [
       {
         turnId: `turn-${messageId}`,
@@ -110,10 +108,9 @@ function projectionSnapshot(conversationId: string, messageId: string) {
             messageId,
             itemId: 'text-1',
             sequence: 1,
-            itemRevision: 1,
             kind: 'assistant_text' as const,
             status: 'streaming' as const,
-            payload: { content: conversationId, format: 'markdown' as const, sourceGeneration: 1 },
+            payload: { content: conversationId, format: 'markdown' as const },
             createdAt: 1,
             updatedAt: 1,
           },

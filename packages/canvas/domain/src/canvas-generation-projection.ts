@@ -7,6 +7,7 @@ import {
   isCanvasMaterialGenerationContext,
   type CanvasConnection,
   type CanvasData,
+  type CanvasJobStatus,
   type CanvasMaterialGenerationContext,
   type JobCanvasNode,
 } from './types/canvas';
@@ -24,7 +25,6 @@ export interface CanvasGenerationProjectionSnapshot {
   readonly retryOf?: CanvasGenerationJobRef;
   readonly regenerateOf?: CanvasGenerationJobRef;
   readonly phase: JobPhase;
-  readonly revision: number;
   readonly title: string;
   readonly inputNodeIds: readonly string[];
   readonly mediaKind: CanvasMaterialMediaKind;
@@ -52,11 +52,7 @@ export function projectGenerationSnapshotToCanvas(
   assertProjectionSnapshot(input.canvas, input.snapshot);
 
   const existingJob = findJobNode(input.canvas, input.snapshot.ref);
-  if (existingJob && existingJob.data.revision > input.snapshot.revision) {
-    throw new Error(
-      `Canvas Generation projection rejected stale revision ${input.snapshot.revision}; current revision is ${existingJob.data.revision}.`,
-    );
-  }
+  if (existingJob) assertJobProjectionTransition(existingJob.data.status, input.snapshot.phase);
 
   let canvas = upsertJobNode(input.canvas, input.snapshot, existingJob);
   const job = requireJobNode(canvas, input.snapshot.ref);
@@ -140,9 +136,6 @@ function assertProjectionSnapshot(
   if (snapshot.ref.kind !== 'generation' || !snapshot.ref.jobId.trim()) {
     throw new Error('Canvas Generation projection requires a canonical Generation JobRef.');
   }
-  if (!Number.isInteger(snapshot.revision) || snapshot.revision < 0) {
-    throw new Error('Canvas Generation projection revision must be a non-negative integer.');
-  }
   if (!snapshot.title.trim()) {
     throw new Error('Canvas Generation projection title must be non-empty.');
   }
@@ -200,7 +193,6 @@ function jobNodeData(
 ): JobCanvasNode['data'] {
   return {
     jobRef: snapshot.ref,
-    revision: snapshot.revision,
     title: snapshot.title,
     objective: snapshot.summary.prompt,
     status: projectJobStatus(snapshot.phase),
@@ -210,6 +202,22 @@ function jobNodeData(
       ? { diagnostic: `${snapshot.failure.code}: ${snapshot.failure.message}` }
       : {}),
   };
+}
+
+function assertJobProjectionTransition(current: CanvasJobStatus, nextPhase: JobPhase): void {
+  const next = projectJobStatus(nextPhase);
+  const allowed: Readonly<Record<CanvasJobStatus, ReadonlySet<CanvasJobStatus>>> = {
+    draft: new Set(['queued']),
+    queued: new Set(['queued', 'running', 'waiting', 'completed', 'failed', 'cancelled']),
+    running: new Set(['running', 'waiting', 'completed', 'failed', 'cancelled']),
+    waiting: new Set(['waiting', 'running', 'completed', 'failed', 'cancelled']),
+    completed: new Set(['completed']),
+    failed: new Set(['failed']),
+    cancelled: new Set(['cancelled']),
+  };
+  if (!allowed[current].has(next)) {
+    throw new Error(`Canvas Generation projection cannot move from ${current} to ${next}.`);
+  }
 }
 
 function projectJobStatus(phase: JobPhase): JobCanvasNode['data']['status'] {
@@ -318,7 +326,7 @@ function jobNodeId(ref: CanvasGenerationJobRef): string {
 }
 
 function outputNodeId(ref: CanvasGenerationJobRef, locator: GeneratedOutputContentLocator): string {
-  return `generation-output:${encodeURIComponent(ref.jobId)}:${encodeURIComponent(locator.outputId)}:${encodeURIComponent(locator.revision)}`;
+  return `generation-output:${encodeURIComponent(ref.jobId)}:${encodeURIComponent(locator.outputId)}:${encodeURIComponent(locator.digest)}`;
 }
 
 function jobPosition(canvas: CanvasData): { readonly x: number; readonly y: number } {

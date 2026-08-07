@@ -8,7 +8,6 @@ import type {
 } from '@neko/canvas-domain';
 import { isContentLocator } from '@neko/content';
 import {
-  isCanvasMaterialGenerationContext,
   isCanvasMaterialMediaKind,
   isCanvasNodeType,
   parseDocumentResourceStatus,
@@ -70,9 +69,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
     case 'media': {
       const mediaType = readMediaType(data.mediaType);
       const assetPath = asString(data.assetPath);
-      if (data.resourceRef !== undefined || data.documentResourceRef !== undefined) {
-        throw new Error('Canvas Media creation rejects retired resource-reference fields');
-      }
       const contentLocator = isContentLocator(data.contentLocator)
         ? data.contentLocator
         : undefined;
@@ -96,9 +92,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
           mediaType,
           title: optionalString(data.title),
           provenance: asSerializableRecord(data.provenance),
-          generationContext: isCanvasMaterialGenerationContext(data.generationContext)
-            ? data.generationContext
-            : undefined,
           duration: optionalFiniteNumber(data.duration),
         },
       };
@@ -128,7 +121,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
         type,
         data: {
           jobRef: data.jobRef,
-          revision: readRequiredRevision(data.revision),
           title: requiredString(data.title, 'title'),
           objective: optionalString(data.objective),
           status: readRequiredJobStatus(data.status),
@@ -139,9 +131,6 @@ export function buildCanvasNode(options: BuildCanvasNodeOptions): CanvasNodeDraf
       };
     case 'file': {
       const path = asString(data.path);
-      if (data.resourceRef !== undefined || data.documentResourceRef !== undefined) {
-        throw new Error('Canvas File creation rejects retired resource-reference fields');
-      }
       const contentLocator = isContentLocator(data.contentLocator)
         ? data.contentLocator
         : undefined;
@@ -207,13 +196,6 @@ function requiredString(value: unknown, field: string): string {
 
 function optionalFiniteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function readRequiredRevision(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new Error('Canvas Job revision must be a non-negative integer');
-  }
-  return value;
 }
 
 function readMediaType(value: unknown): 'image' | 'video' | 'audio' {

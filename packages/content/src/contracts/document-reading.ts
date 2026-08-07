@@ -240,15 +240,6 @@ export interface DocumentReadResult {
 }
 
 export interface DocumentContextData {
-  readonly filePath?: string;
-  readonly text?: string;
-  readonly imageData?: string;
-  readonly contentKind?: DocumentContentKind;
-  readonly context?: {
-    readonly page?: number;
-    readonly chapter?: string;
-    readonly region?: DocumentRegion;
-  };
   readonly source?: DocumentSourceRef;
   readonly locator?: DocumentLocator;
   readonly range?: DocumentRange;

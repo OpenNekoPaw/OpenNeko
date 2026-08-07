@@ -209,7 +209,7 @@ export class PcmAudioClient {
     }
     assertNonNegativeFinite(fadeDurationSeconds, 'PCM retirement fade duration');
     this.disposed = true;
-    const stopped = new Error('PCM audio client was retired.');
+    const stopped = new Error('PCM audio client was stopped.');
     this.rejectPendingPreparation(stopped);
     this.rejectPendingStart(stopped);
     this.rejectPendingFirstScheduled(stopped);
@@ -498,9 +498,6 @@ function parsePacket(
 }
 
 function validateDescriptor(descriptor: PcmStreamDescriptor): void {
-  if (descriptor.version !== 1 || descriptor.protocol !== 'neko-pcm-f32le-v1') {
-    throw new Error('Unsupported PCM descriptor version.');
-  }
   if (!isMediaResourceUrl(descriptor.streamUrl)) {
     throw new Error('PCM descriptor resource URL is invalid.');
   }

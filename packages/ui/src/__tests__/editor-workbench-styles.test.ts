@@ -16,10 +16,17 @@ describe('Workbench editor tab styles', () => {
     );
   });
 
-  it('uses a restrained active indicator and subordinate inactive tabs', () => {
-    expect(styles).toMatch(
-      /\.neko-workbench-editor-tab\[data-active='true'\]::after\s*\{[\s\S]*?height\s*:\s*2px/u,
-    );
+  it('uses compact pill tabs without table-like dividers or an active underline', () => {
+    const strip = styles.match(/\.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const tab = styles.match(/\.neko-workbench-editor-tab\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(strip?.groups?.body).toMatch(/gap\s*:\s*4px/u);
+    expect(strip?.groups?.body).toMatch(/padding\s*:\s*7px 10px/u);
+    expect(strip?.groups?.body).not.toMatch(/border-bottom/u);
+    expect(tab?.groups?.body).toMatch(/height\s*:\s*30px/u);
+    expect(tab?.groups?.body).toMatch(/border-radius\s*:\s*10px/u);
+    expect(tab?.groups?.body).not.toMatch(/border-right/u);
+    expect(styles).not.toMatch(/\.neko-workbench-editor-tab\[data-active='true'\]::after/u);
     expect(styles).toMatch(/\.neko-workbench-editor-tab:not\(\[data-active='true'\]\):hover\s*\{/u);
     expect(styles).toMatch(/\.neko-workbench-editor-tab:focus-visible\s*\{[\s\S]*?outline/u);
   });
@@ -29,5 +36,26 @@ describe('Workbench editor tab styles', () => {
     expect(styles).toMatch(
       /\.neko-workbench-editor-tab:is\([\s\S]*?\)\s+\.neko-workbench-editor-tab__close\s*\{[\s\S]*?opacity\s*:\s*1/u,
     );
+  });
+
+  it('keeps controlled Workbench resize handles inside clipped owner regions', () => {
+    const leftHandle = styles.match(
+      /\.neko-controlled-workbench-resize-handle--left\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const rightHandle = [
+      ...styles.matchAll(
+        /\.neko-controlled-workbench-resize-handle--right\s*\{(?<body>[\s\S]*?)\n\}/gu,
+      ),
+    ].find((match) => /right\s*:/u.test(match.groups?.['body'] ?? ''));
+    const topHandle = styles.match(
+      /\.neko-controlled-workbench-resize-handle--top\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(leftHandle?.groups?.body).toMatch(/left\s*:\s*0/u);
+    expect(rightHandle?.groups?.body).toMatch(/right\s*:\s*0/u);
+    expect(topHandle?.groups?.body).toMatch(/top\s*:\s*0/u);
+    expect(leftHandle?.groups?.body).not.toMatch(/-4px/u);
+    expect(rightHandle?.groups?.body).not.toMatch(/-4px/u);
+    expect(topHandle?.groups?.body).not.toMatch(/-4px/u);
   });
 });

@@ -1,6 +1,5 @@
 ---
 providerId: runway
-version: 1.0.0
 displayName: Runway
 capabilities: [video.generate]
 ---

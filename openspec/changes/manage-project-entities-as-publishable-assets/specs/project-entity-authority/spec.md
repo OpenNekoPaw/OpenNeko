@@ -1,22 +1,23 @@
 ## ADDED Requirements
 
-### Requirement: Confirmed Project Entities use one versioned fact authority
+### Requirement: Confirmed Project Entities use one canonical fact authority
 
-Confirmed character, scene, object, location, and style Entities SHALL be persisted in one versioned
-project Entity document with atomic expected-revision commits. The document SHALL own stable project ID,
+Confirmed character, scene, object, location, and style Entities SHALL be persisted in one canonical
+project Entity document with owner-serialized atomic commits. The document SHALL own stable project ID,
 kind, accepted names and facts, lifecycle, accepted representation bindings, and Asset provenance; it MUST
 NOT contain rebuildable candidate scores, occurrences, availability, search rows, cache paths, or workflow
 drafts.
 
 #### Scenario: Commit a confirmed Entity change
 
-- **WHEN** an authorized operation updates accepted facts against the current document revision
-- **THEN** the repository atomically commits the new document revision and projects the resulting changes
+- **WHEN** an authorized operation with exact request identity updates accepted facts
+- **THEN** the workspace Entity owner serializes and atomically commits the change, then projects the result
 
 #### Scenario: Concurrent fact change
 
-- **WHEN** the document revision changed after an editor or Agent prepared an update
-- **THEN** the commit fails with a revision conflict and does not overwrite newer facts
+- **WHEN** two editor or Agent operations overlap
+- **THEN** the workspace Entity owner serializes them and each operation reads current authoritative facts
+- **AND** neither operation overwrites another through a stale client snapshot
 
 ### Requirement: Detection produces searchable candidates without semantic authority
 
@@ -42,7 +43,7 @@ committing rather than leave a dangling or silently redirected reference.
 
 #### Scenario: Merge two confirmed Entities
 
-- **WHEN** every reference owner accepts a rewrite from the source Entity to the target Entity under the expected project revision
+- **WHEN** every reference owner accepts a rewrite from the source Entity to the target Entity under the exact operation/request identity
 - **THEN** the system atomically rewrites references, merges accepted facts, and marks the source lifecycle according to the plan
 
 #### Scenario: Unknown reference blocks deletion
@@ -66,25 +67,58 @@ or unavailable accounts MUST NOT delete or mutate Project Entity facts.
 - **WHEN** the exact target and fingerprint become available again
 - **THEN** availability is rebuilt without editing the canonical Entity document
 
-### Requirement: Fragmented legacy authorities are migrated or poisoned
+### Requirement: Fragmented retired authorities are product-unreachable
 
-Migration SHALL inventory and archive current character, per-kind, candidate, binding, visual draft, and
-requirement files before writing the canonical Entity document. Every field MUST be classified as a
-canonical fact, rebuildable projection, workflow-owned state, unresolved archived value, or explicit
-user-confirmation item. After migration, normal readers and writers for fragmented semantic authority MUST
-fail closed.
+Product startup, public entries, build output and ordinary tests MUST NOT inspect, classify, migrate,
+archive or repair current character, per-kind, candidate, binding, visual draft and requirement files as
+retired semantic authorities. Existing bytes remain untouched. Normal readers and writers for fragmented
+semantic authority MUST be absent.
 
-#### Scenario: Migrate unambiguous accepted facts
+#### Scenario: Retired file remains beside canonical facts
 
-- **WHEN** source digests and project revision match the approved migration plan
-- **THEN** the repository atomically commits the canonical document and records the immutable recovery archive
+- **WHEN** a retired file exists beside `neko/entities.json`
+- **THEN** product runtime reads only the canonical document
+- **AND** it leaves the retired file unchanged
 
 #### Scenario: Encounter ambiguous or unknown data
 
-- **WHEN** a value cannot be safely classified or merged
-- **THEN** migration preserves it in the archive and requires explicit resolution without silently discarding it
+- **WHEN** a retired file contains an ambiguous or unknown value
+- **THEN** product runtime does not inspect or discard it
+- **AND** any repair requires a separately authorized exact offline tool
 
-#### Scenario: Legacy reader is invoked after migration
+#### Scenario: Retired reader is referenced
 
 - **WHEN** a normal runtime path attempts to load semantic facts from a replaced fragmented file
-- **THEN** it fails with a migration diagnostic and does not return legacy success
+- **THEN** repository reachability checks fail and the path cannot return success
+
+### Requirement: Project open uses only the canonical Entity owner
+
+The Entity Node application service SHALL read the canonical Entity document and publish valid records
+with record-local diagnostics. Desktop SHALL only compose the service and SHALL NOT implement a retired
+renderer, migration reader or app-local fallback.
+
+#### Scenario: Canonical project contains valid character and candidate facts
+
+- **WHEN** a project with canonical Entity facts is opened
+- **THEN** the Entity owner validates records independently and refreshes the derived projection
+- **AND** Resource Browser displays the valid Entity facts in the same opening flow
+
+#### Scenario: One canonical Entity record is invalid
+
+- **WHEN** one record reports an identity, binding or unknown-field blocker
+- **THEN** project Entity projection exposes an exact record diagnostic
+- **AND** valid sibling Entities remain available without reading retired files
+
+#### Scenario: Canonical document metadata is unsupported
+
+- **WHEN** the canonical document has valid structural fields plus unsupported document metadata
+- **THEN** the Entity owner projects independently valid records with an exact document diagnostic
+- **AND** strict mutation remains blocked while the original bytes remain untouched
+- **AND** no version dispatch, compatibility reader or migration runs
+
+#### Scenario: Canonical document belongs to another Project identity
+
+- **WHEN** the canonical document declares a Project identity different from the active Workspace
+- **THEN** the Entity facet exposes an exact owner-local diagnostic without adopting its records as current Project facts
+- **AND** Files, Media, Assets, sibling Workspaces and the Desktop Shell remain usable
+- **AND** only explicit user repair may change the original document

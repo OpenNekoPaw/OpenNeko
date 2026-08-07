@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
 import { createOpenNekoPiModels } from '@neko/agent-runtime/pi';
-import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
+import type {
+  AgentHostToWebviewMessage,
+  DesktopAgentConnectionIdentity,
+} from '@neko/agent-contracts';
 import {
   createDesktopAgentMessageRequest,
   DesktopAgentContractError,
@@ -15,6 +18,7 @@ import {
   auditDesktopAgentStartup,
   createDesktopAgentBridgeRuntime,
   type DesktopAgentConnectionGrant,
+  type DesktopAssistantAgentConnectionGrant,
 } from './desktop-agent-bridge-runtime';
 
 describe('Desktop Agent bridge runtime', () => {
@@ -76,16 +80,96 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-1', projection.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         grant(),
       ),
     ).resolves.toEqual({
-      schemaVersion: 1,
       requestId: 'message-1',
       status: 'accepted',
     });
-    expect(effects.conversation.createConversation).toHaveBeenCalledOnce();
+    expect(effects.conversation.listConversations).toHaveBeenCalledOnce();
+  });
+
+  it('routes an Assistant session through the same controller without a synthetic Project grant', async () => {
+    const effects = createEffects();
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(effects),
+      createIdentity: () => 'assistant-connection-1',
+    });
+    const projection = runtime.createBootstrap({
+      requestId: 'assistant-bootstrap-1',
+      grant: assistantGrant(),
+      workspace: workspace('assistant-space:local-user'),
+      publish: vi.fn(),
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Assistant bootstrap.');
+
+    expect(projection.connection).toMatchObject({
+      assistantSpaceId: 'assistant-space:local-user',
+      workspaceId: 'assistant-space:local-user',
+      connectionId: 'assistant-connection-1',
+    });
+    expect(JSON.stringify(projection.connection)).not.toContain('projectId');
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('assistant-message-1', projection.connection, {
+          type: 'getConversations',
+        }),
+        assistantGrant(),
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    expect(effects.conversation.listConversations).toHaveBeenCalledOnce();
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('assistant-message-wrong-owner', projection.connection, {
+          type: 'getConversations',
+        }),
+        {
+          applicationInstanceId: 'app-1',
+          windowId: 'window-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'agent-surface-1',
+          projectId: 'project-forbidden',
+          workspaceId: 'assistant-space:local-user',
+          viewId: 'agent-view:window-1',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
+  });
+
+  it('passes the persisted initial user message into the exact session effects owner', () => {
+    const effects = createEffects();
+    const createEffectsForSession = vi.fn(() => effects);
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: {
+        ...createComposition(effects),
+        createEffects: createEffectsForSession,
+      },
+      createIdentity: () => 'assistant-connection-initial-message',
+    });
+    const initialConversationMessage = {
+      id: 'message-initial-1',
+      role: 'user' as const,
+      content: 'retain this prompt',
+      timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
+    };
+
+    runtime.createBootstrap({
+      requestId: 'assistant-bootstrap-initial-message',
+      grant: assistantGrant(),
+      workspace: workspace('assistant-space:local-user'),
+      initialConversationId: 'conversation-1',
+      initialConversationMessage,
+      publish: vi.fn(),
+    });
+
+    expect(createEffectsForSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialConversationId: 'conversation-1',
+        initialConversationMessage,
+      }),
+    );
   });
 
   it('returns the exhaustive typed diagnostic for unsupported routes', async () => {
@@ -158,7 +242,7 @@ describe('Desktop Agent bridge runtime', () => {
     expect(effects.injectContext).toHaveBeenCalledOnce();
   });
 
-  it('rejects forged owner identity and stale renderer/View epochs before effects', async () => {
+  it('rejects forged owner and connection identities before effects', async () => {
     const effects = createEffects();
     const runtime = createDesktopAgentBridgeRuntime({
       controllerComposition: createComposition(effects),
@@ -181,28 +265,24 @@ describe('Desktop Agent bridge runtime', () => {
         expectedCode: 'desktop-agent-identity-mismatch',
       },
       {
-        connection: { ...projection.connection, rendererEpoch: 1 },
-        expectedCode: 'desktop-agent-stale-renderer-epoch',
-      },
-      {
-        connection: { ...projection.connection, viewEpoch: 1 },
-        expectedCode: 'desktop-agent-stale-view-epoch',
+        connection: { ...projection.connection, connectionId: 'connection-forged' },
+        expectedCode: 'desktop-agent-identity-mismatch',
       },
     ];
     for (const fixture of cases) {
       await expect(
         runtime.send(
           createDesktopAgentMessageRequest('message-1', fixture.connection, {
-            type: 'newConversation',
+            type: 'getConversations',
           }),
           grant(),
         ),
       ).rejects.toMatchObject({ code: fixture.expectedCode });
     }
-    expect(effects.conversation.createConversation).not.toHaveBeenCalled();
+    expect(effects.conversation.listConversations).not.toHaveBeenCalled();
   });
 
-  it('reuses the exact connection when StrictMode repeats bootstrap for the same owner epoch', async () => {
+  it('reuses and reference-counts the exact connection when StrictMode repeats bootstrap', async () => {
     let nextIdentity = 0;
     const firstEffects = createEffects();
     const duplicateEffects = createEffects();
@@ -237,17 +317,212 @@ describe('Desktop Agent bridge runtime', () => {
     expect(firstEffects.dispose).not.toHaveBeenCalled();
     expect(duplicateEffects.dispose).not.toHaveBeenCalled();
 
+    runtime.detachConnection(first.connection, {
+      applicationInstanceId: first.connection.applicationInstanceId,
+      windowId: first.connection.windowId,
+    });
+    expect(firstEffects.dispose).not.toHaveBeenCalled();
+
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-current', first.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         grant(),
       ),
     ).resolves.toMatchObject({ status: 'accepted' });
+
+    runtime.detachConnection(second.connection, {
+      applicationInstanceId: second.connection.applicationInstanceId,
+      windowId: second.connection.windowId,
+    });
+    expect(firstEffects.dispose).toHaveBeenCalledOnce();
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('message-detached', second.connection, {
+          type: 'getConversations',
+        }),
+        grant(),
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
   });
 
-  it('replaces the connection when the renderer epoch advances', async () => {
+  it('detaches only the exact sender-bound connection and preserves its sibling', async () => {
+    let nextIdentity = 0;
+    const firstEffects = createEffects();
+    const siblingEffects = createEffects();
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: {
+        ...createComposition(firstEffects),
+        createEffects: vi
+          .fn()
+          .mockReturnValueOnce(firstEffects)
+          .mockReturnValueOnce(siblingEffects),
+      },
+      createIdentity: () => `connection-${++nextIdentity}`,
+    });
+    const firstGrant = grant();
+    const siblingGrant = { ...firstGrant, agentSurfaceId: 'agent-surface-2' };
+    const firstPublish = vi.fn();
+    const first = runtime.createBootstrap({
+      requestId: 'bootstrap-first',
+      grant: firstGrant,
+      workspace: workspace(),
+      publish: firstPublish,
+    });
+    const sibling = runtime.createBootstrap({
+      requestId: 'bootstrap-sibling',
+      grant: siblingGrant,
+      workspace: workspace(),
+      publish: vi.fn(),
+    });
+    if (first.status !== 'ready' || sibling.status !== 'ready') {
+      throw new Error('Expected ready Agent bootstraps.');
+    }
+
+    expect(() =>
+      runtime.detachConnection(
+        { ...first.connection, workspaceId: 'workspace-forged' },
+        {
+          applicationInstanceId: first.connection.applicationInstanceId,
+          windowId: first.connection.windowId,
+        },
+      ),
+    ).toThrow(expect.objectContaining({ code: 'desktop-agent-identity-mismatch' }));
+    expect(() =>
+      runtime.detachConnection(first.connection, {
+        applicationInstanceId: first.connection.applicationInstanceId,
+        windowId: 'window-forged',
+      }),
+    ).toThrow(expect.objectContaining({ code: 'desktop-agent-identity-mismatch' }));
+    expect(firstEffects.dispose).not.toHaveBeenCalled();
+
+    runtime.detachConnection(first.connection, {
+      applicationInstanceId: first.connection.applicationInstanceId,
+      windowId: first.connection.windowId,
+    });
+
+    expect(firstEffects.dispose).toHaveBeenCalledOnce();
+    expect(firstPublish).toHaveBeenCalledWith({
+      connection: first.connection,
+      sequence: 1,
+      status: 'detached',
+    });
+    expect(siblingEffects.dispose).not.toHaveBeenCalled();
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('sibling-message', sibling.connection, {
+          type: 'getConversations',
+        }),
+        siblingGrant,
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+  });
+
+  it('stops connection event publication before background effects finish', async () => {
+    const effects = createEffects();
+    let latePost: ((message: AgentHostToWebviewMessage) => void | Promise<void>) | undefined;
+    vi.mocked(effects.conversation.listConversations).mockImplementation((context) => {
+      latePost = context.post;
+    });
+    const publish = vi.fn();
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(effects),
+      createIdentity: () => 'connection-background',
+    });
+    const projection = runtime.createBootstrap({
+      requestId: 'bootstrap-background',
+      grant: grant(),
+      workspace: workspace(),
+      publish,
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+    await runtime.send(
+      createDesktopAgentMessageRequest('message-background', projection.connection, {
+        type: 'getConversations',
+      }),
+      grant(),
+    );
+    if (!latePost) throw new Error('Expected the controller post port to be captured.');
+
+    runtime.detachConnection(projection.connection, {
+      applicationInstanceId: projection.connection.applicationInstanceId,
+      windowId: projection.connection.windowId,
+    });
+    await latePost({ type: 'globalError', message: 'late background projection' });
+
+    expect(publish).toHaveBeenCalledOnce();
+    expect(publish).toHaveBeenCalledWith({
+      connection: projection.connection,
+      sequence: 1,
+      status: 'detached',
+    });
+  });
+
+  it('keeps exact Workspace View connections when their bootstrap Conversations differ', async () => {
+    let nextIdentity = 0;
+    const firstEffects = createEffects();
+    const nextEffects = createEffects();
+    const createEffectsForConnection = vi
+      .fn()
+      .mockReturnValueOnce(firstEffects)
+      .mockReturnValueOnce(nextEffects);
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: {
+        ...createComposition(firstEffects),
+        createEffects: createEffectsForConnection,
+      },
+      createIdentity: () => `connection-${++nextIdentity}`,
+    });
+    const firstGrant = grant();
+    const nextGrant = { ...firstGrant, agentSurfaceId: 'agent-surface-2' };
+    const first = runtime.createBootstrap({
+      requestId: 'bootstrap-1',
+      grant: firstGrant,
+      workspace: workspace(),
+      initialConversationId: 'conversation-1',
+      publish: vi.fn(),
+    });
+    const next = runtime.createBootstrap({
+      requestId: 'bootstrap-2',
+      grant: nextGrant,
+      workspace: workspace(),
+      initialConversationId: 'conversation-2',
+      publish: vi.fn(),
+    });
+    if (first.status !== 'ready' || next.status !== 'ready') {
+      throw new Error('Expected ready Agent bootstraps.');
+    }
+
+    expect(next.connection.connectionId).not.toBe(first.connection.connectionId);
+    expect(createEffectsForConnection).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ initialConversationId: 'conversation-1' }),
+    );
+    expect(createEffectsForConnection).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ initialConversationId: 'conversation-2' }),
+    );
+    expect(firstEffects.dispose).not.toHaveBeenCalled();
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('message-stale', first.connection, {
+          type: 'getConversations',
+        }),
+        firstGrant,
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+    await expect(
+      runtime.send(
+        createDesktopAgentMessageRequest('message-current', next.connection, {
+          type: 'getConversations',
+        }),
+        nextGrant,
+      ),
+    ).resolves.toMatchObject({ status: 'accepted' });
+  });
+
+  it('replaces the connection after its owning Window detaches', async () => {
     let nextIdentity = 0;
     const firstEffects = createEffects();
     const nextEffects = createEffects();
@@ -259,16 +534,16 @@ describe('Desktop Agent bridge runtime', () => {
       createIdentity: () => `connection-${++nextIdentity}`,
     });
     const firstGrant = grant();
-    const nextGrant = { ...firstGrant, rendererEpoch: firstGrant.rendererEpoch + 1 };
     const first = runtime.createBootstrap({
       requestId: 'bootstrap-1',
       grant: firstGrant,
       workspace: workspace(),
       publish: vi.fn(),
     });
+    runtime.detachWindow(firstGrant.windowId);
     const next = runtime.createBootstrap({
       requestId: 'bootstrap-2',
-      grant: nextGrant,
+      grant: firstGrant,
       workspace: workspace(),
       publish: vi.fn(),
     });
@@ -281,7 +556,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-stale', first.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         firstGrant,
       ),
@@ -289,9 +564,9 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-current', next.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
-        nextGrant,
+        firstGrant,
       ),
     ).resolves.toMatchObject({ status: 'accepted' });
   });
@@ -340,7 +615,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-old', first.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         firstGrant,
       ),
@@ -348,7 +623,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-current', second.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         secondGrant,
       ),
@@ -390,15 +665,15 @@ describe('Desktop Agent bridge runtime', () => {
       turnId: 'turn-1',
       runId: 'run-1',
     });
-    expect(waitForIdle).toHaveBeenCalledWith('conversation-1', 30_000);
+    expect(waitForIdle).toHaveBeenCalledWith('conversation-1', 30_000, undefined);
     expect(() =>
       runtime.waitForIdle(
         projection.connection,
-        { ...grant(), rendererEpoch: grant().rendererEpoch + 1 },
+        { ...grant(), workspaceId: 'workspace-forged' },
         'conversation-1',
         30_000,
       ),
-    ).toThrow(expect.objectContaining({ code: 'desktop-agent-stale-renderer-epoch' }));
+    ).toThrow(expect.objectContaining({ code: 'desktop-agent-identity-mismatch' }));
   });
 });
 
@@ -434,7 +709,6 @@ function createEffects(
       submitTurn: vi.fn(),
       confirmTool: vi.fn(),
       cancelTurn: vi.fn(),
-      createConversation: vi.fn(),
       activateConversation: vi.fn(),
       deleteConversation: vi.fn(),
       listConversations: vi.fn(),
@@ -453,7 +727,6 @@ function createEffects(
       readConfig: vi.fn(),
       refreshConfig: vi.fn(),
       openUserConfig: vi.fn(),
-      openHostConfig: vi.fn(),
       readTabState: vi.fn(),
       updateSettings: vi.fn(),
       updateTabState: vi.fn(),
@@ -487,19 +760,19 @@ function grant(): DesktopAgentConnectionGrant {
   return {
     applicationInstanceId: 'app-1',
     windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     viewId: 'view-1',
-    viewEpoch: 2,
-    rendererEpoch: 2,
   };
 }
 
-function workspace(): AgentWorkspaceRuntime {
+function workspace(workspaceId = 'workspace-1'): AgentWorkspaceRuntime {
   return {
-    workspaceId: 'workspace-1',
+    workspaceId,
     workspace: {
-      workspaceId: 'workspace-1',
+      workspaceId,
       workspacePath: '/workspace/demo',
       displayName: 'Demo',
       locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
@@ -511,11 +784,18 @@ function workspace(): AgentWorkspaceRuntime {
     }),
     tools: createToolRegistry(),
     createConversation: vi.fn(),
+    ensureConversation: vi.fn(),
+    checkpointFailedInitialTurn: vi.fn(),
     deleteConversation: vi.fn(),
     clearAllConversations: vi.fn(),
     openConversation: vi.fn(),
     startTurn: vi.fn(),
     executeTurn: vi.fn(),
+    readMessageQueue: vi.fn(),
+    promoteQueuedMessage: vi.fn(),
+    cancelQueuedMessage: vi.fn(),
+    takeQueuedMessageForEdit: vi.fn(),
+    clearMessageQueue: vi.fn(),
     cancelTurn: vi.fn(),
     readActiveTurn: vi.fn(),
     readConversationEntries: vi.fn(),
@@ -527,6 +807,27 @@ function workspace(): AgentWorkspaceRuntime {
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(),
     subscribeConversationProjection: vi.fn(),
+    bindVisiblePresentation: vi.fn(),
+    protectConversationRuntime: vi.fn(),
+    readRuntimeResidency: vi.fn(() => ({
+      workspaceId,
+      visibleBindingCount: 0,
+      releaseRequested: false,
+      releasable: false,
+      conversations: [],
+    })),
     dispose: vi.fn(),
+  };
+}
+
+function assistantGrant(): DesktopAssistantAgentConnectionGrant {
+  return {
+    applicationInstanceId: 'app-1',
+    windowId: 'window-1',
+    workbenchInstanceId: 'workbench-assistant-1',
+    agentSurfaceId: 'agent-surface-assistant-1',
+    assistantSpaceId: 'assistant-space:local-user',
+    workspaceId: 'assistant-space:local-user',
+    viewId: 'agent-view:window-1',
   };
 }

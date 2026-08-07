@@ -1,10 +1,13 @@
-import type { JobRef, JobSnapshotBase, VersionedJobStore } from '@neko/shared/job-lifecycle';
+import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
 
 // Host-neutral Export Job contracts composed by Desktop Main.
 
 export const EXPORT_JOB_KIND = 'export' as const;
 
-export type ExportJobRef = JobRef<typeof EXPORT_JOB_KIND>;
+export interface ExportJobRef {
+  readonly kind: typeof EXPORT_JOB_KIND;
+  readonly jobId: string;
+}
 
 export interface ExportConfig {
   readonly outputPath: string;
@@ -47,14 +50,24 @@ export interface ExportJobResult {
   readonly elapsedMs: number;
 }
 
-export interface ExportJobSnapshot extends JobSnapshotBase<typeof EXPORT_JOB_KIND> {
+export interface ExportJobSnapshot {
+  readonly ref: ExportJobRef;
+  readonly phase: JobPhase;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+  readonly retryOf?: ExportJobRef;
+  readonly failure?: JobFailureSummary;
   readonly request: ExportJobRequest;
   readonly progress: ExportJobProgress;
   readonly executionId?: string;
   readonly result?: ExportJobResult;
 }
 
-export interface ExportJobStore extends VersionedJobStore<ExportJobSnapshot> {
+export interface ExportJobStore {
+  create(initial: ExportJobSnapshot): Promise<ExportJobSnapshot>;
+  get(ref: ExportJobRef): Promise<ExportJobSnapshot>;
+  save(snapshot: ExportJobSnapshot): Promise<ExportJobSnapshot>;
+  observe(ref: ExportJobRef): AsyncIterable<ExportJobSnapshot>;
   listRecoverable(): Promise<readonly ExportJobSnapshot[]>;
 }
 
@@ -64,7 +77,6 @@ export interface SubmitExportJobInput extends ExportJobRequest {
 
 export interface ExportJobCommandInput {
   readonly ref: ExportJobRef;
-  readonly expectedRevision: number;
 }
 
 export interface ExportExecutionProgress {
@@ -109,7 +121,7 @@ export interface ExportJobResultCommitter {
 export interface ExportJobPort {
   submitExport(input: SubmitExportJobInput): Promise<ExportJobSnapshot>;
   describeExport(ref: ExportJobRef): Promise<ExportJobSnapshot>;
-  observeExport(ref: ExportJobRef, afterRevision: number): AsyncIterable<ExportJobSnapshot>;
+  observeExport(ref: ExportJobRef): AsyncIterable<ExportJobSnapshot>;
   cancelExport(input: ExportJobCommandInput): Promise<ExportJobSnapshot>;
   retryExport(input: ExportJobCommandInput): Promise<ExportJobSnapshot>;
   reconcileExport(input: ExportJobCommandInput): Promise<ExportJobSnapshot>;

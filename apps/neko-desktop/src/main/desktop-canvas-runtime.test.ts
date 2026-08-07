@@ -20,7 +20,10 @@ import {
 } from '@neko/canvas-domain';
 import { createGlobalMediaLibraryConnection } from '@neko/assets-node';
 import type { DesktopCanvasViewGrant } from '@neko/host/desktop-shell-service';
-import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
+import {
+  createDefaultDesktopWorkbenchLayout,
+  openOrFocusMainView,
+} from '@neko/host/desktop-workbench-contract';
 
 const roots: string[] = [];
 
@@ -38,27 +41,26 @@ describe('DesktopCanvasRuntime', () => {
     await writeFile(
       documentPath,
       JSON.stringify({
-        version: '3.0',
         name: 'Degraded materials',
         viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
         nodes: [
           {
-            id: 'legacy-media',
+            id: 'path-only-media',
             type: 'media',
             position: { x: 40, y: 60 },
             size: { width: 300, height: 180 },
             zIndex: 1,
-            data: { assetPath: 'media/legacy.mp4', mediaType: 'video' },
+            data: { assetPath: 'media/path-only.mp4', mediaType: 'video' },
           },
           {
-            id: 'legacy-file',
+            id: 'path-only-file',
             type: 'file',
             position: { x: 420, y: 60 },
             size: { width: 260, height: 180 },
             zIndex: 2,
             data: {
-              path: 'documents/legacy.md',
-              title: 'Legacy notes',
+              path: 'documents/path-only.md',
+              title: 'Path-only notes',
               mediaKind: 'document',
               mediaType: 'text/markdown',
             },
@@ -66,11 +68,11 @@ describe('DesktopCanvasRuntime', () => {
         ],
         connections: [
           {
-            id: 'legacy-reference',
-            sourceId: 'legacy-file',
-            targetId: 'legacy-media',
-            sourceEndpoint: { nodeId: 'legacy-file', scope: 'node' },
-            targetEndpoint: { nodeId: 'legacy-media', scope: 'node' },
+            id: 'path-only-reference',
+            sourceId: 'path-only-file',
+            targetId: 'path-only-media',
+            sourceEndpoint: { nodeId: 'path-only-file', scope: 'node' },
+            targetEndpoint: { nodeId: 'path-only-media', scope: 'node' },
             type: 'reference',
           },
         ],
@@ -93,7 +95,6 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasDegradedContentTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
@@ -102,16 +103,17 @@ describe('DesktopCanvasRuntime', () => {
 
     const snapshot = await runtime.getSnapshot('window-1', identity);
 
-    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual(['legacy-media', 'legacy-file']);
+    expect(snapshot.canvas.nodes.map((node) => node.id)).toEqual([
+      'path-only-media',
+      'path-only-file',
+    ]);
     expect(snapshot.canvas.connections.map((connection) => connection.id)).toEqual([
-      'legacy-reference',
+      'path-only-reference',
     ]);
     for (const node of snapshot.canvas.nodes) {
       expect(node.data).not.toHaveProperty('contentLocator');
       const actions = await runtime.resolveMaterialActions('window-1', {
-        schemaVersion: 5,
         requestId: `resolve-${node.id}`,
-        expectedRevision: snapshot.revision,
         identity,
         selectedNodeIds: [node.id],
       });
@@ -124,7 +126,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'save-degraded-content',
         commandId: 'save-degraded-content',
-        expectedRevision: snapshot.revision,
         identity,
         intent: { type: 'save' },
       }),
@@ -144,7 +145,7 @@ describe('DesktopCanvasRuntime', () => {
     await writeFixtureFile(workspacePath, 'media/cat.png', 'image');
     const identity = createIdentity();
     const runtime = createRuntime(workspacePath, identity);
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const projectionEvents: unknown[] = [];
     const unsubscribe = await runtime.subscribe('window-1', identity, (event) =>
       projectionEvents.push(event),
@@ -155,7 +156,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-project-content',
         commandId: 'command-project-content',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -182,7 +182,6 @@ describe('DesktopCanvasRuntime', () => {
       }),
     ]);
     expect(result.snapshot.dirty).toBe(true);
-    expect(result.snapshot.revision).toBe(initial.revision + 1);
     expect(projectionEvents).toEqual([
       expect.objectContaining({ originCommandId: 'command-project-content' }),
     ]);
@@ -211,19 +210,17 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasPreviewActionTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       previewResource,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-preview-material',
         commandId: 'command-preview-material',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -241,9 +238,7 @@ describe('DesktopCanvasRuntime', () => {
     const node = authored.snapshot.canvas.nodes[0];
     if (!node) throw new Error('Authored material node is missing.');
     const resolution = await runtime.resolveMaterialActions('window-1', {
-      schemaVersion: 5,
       requestId: 'resolve-preview-action',
-      expectedRevision: authored.snapshot.revision,
       identity,
       selectedNodeIds: [node.id],
     });
@@ -261,14 +256,12 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-preview-action',
         commandId: 'command-preview-action',
-        expectedRevision: authored.snapshot.revision,
         identity,
         intent: {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
             actionId: CANVAS_PREVIEW_ACTION_ID,
-            expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
           },
@@ -319,19 +312,17 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasMediaLibraryActionTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       requestProjectMediaLibraryCopy,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-library-copy-material',
         commandId: 'command-library-copy-material',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -350,9 +341,7 @@ describe('DesktopCanvasRuntime', () => {
     if (!node) throw new Error('Authored Media Library source node is missing.');
 
     const resolution = await runtime.resolveMaterialActions('window-1', {
-      schemaVersion: 5,
       requestId: 'resolve-library-copy-action',
-      expectedRevision: authored.snapshot.revision,
       identity,
       selectedNodeIds: [node.id],
     });
@@ -371,14 +360,12 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-library-copy-action',
         commandId: 'command-library-copy-action',
-        expectedRevision: authored.snapshot.revision,
         identity,
         intent: {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
             actionId: CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
-            expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
           },
@@ -430,20 +417,18 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasCutActionTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       resolveCut,
       openInCut,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-cut-material',
         commandId: 'command-cut-material',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -469,9 +454,7 @@ describe('DesktopCanvasRuntime', () => {
     const absolutePath = await realpath(path.join(workspacePath, 'cuts/story.otio'));
 
     const resolution = await runtime.resolveMaterialActions('window-1', {
-      schemaVersion: 5,
       requestId: 'resolve-cut-action',
-      expectedRevision: authored.snapshot.revision,
       identity,
       selectedNodeIds: [node.id],
     });
@@ -494,14 +477,12 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-open-in-cut',
         commandId: 'command-open-in-cut',
-        expectedRevision: authored.snapshot.revision,
         identity,
         intent: {
           type: 'execute-material-action',
           action: {
             identity: materialIdentity(identity),
             actionId: CANVAS_OPEN_IN_CUT_ACTION_ID,
-            expectedCanvasRevision: authored.snapshot.revision,
             selectedNodeIds: [node.id],
             payload: {},
           },
@@ -546,20 +527,18 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasModelSourceTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       requestSource,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-model-source',
         commandId: 'command-model-source',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-source',
@@ -621,20 +600,18 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasReferenceSourceTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       requestSource,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-workspace-reference',
         commandId: 'command-workspace-reference',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-source',
@@ -677,7 +654,6 @@ describe('DesktopCanvasRuntime', () => {
       requestDraft: vi.fn(async () => ({
         ref: { kind: 'generation' as const, jobId: 'generation-desktop-1' },
         phase: 'pending' as const,
-        revision: 0,
         title: 'Generate image',
         inputNodeIds: [],
         mediaKind: 'image' as const,
@@ -702,20 +678,18 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasGenerationTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       generation,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-generation-draft',
         commandId: 'command-generation-draft',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-generation-draft',
@@ -794,14 +768,13 @@ describe('DesktopCanvasRuntime', () => {
     await symlink(outsidePath, path.join(workspacePath, 'escape'));
     const identity = createIdentity();
     const runtime = createRuntime(workspacePath, identity);
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-project-escape',
         commandId: 'command-project-escape',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'author-material',
@@ -898,7 +871,6 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasMediaRouteTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
@@ -924,13 +896,93 @@ describe('DesktopCanvasRuntime', () => {
       expect.objectContaining({ workspaceId: 'workspace-1', workspacePath }),
     );
 
-    runtime.reconcileWorkbench('window-1', createDefaultDesktopWorkbenchLayout('window-1'));
+    runtime.reconcileWindow('window-1', [createDefaultDesktopWorkbenchLayout('window-1')]);
     expect(media.detachView).toHaveBeenCalledWith('window-1', identity.viewId);
 
     runtime.detachWindow('window-1');
     expect(media.detachWindow).toHaveBeenCalledWith('window-1');
     await runtime.dispose();
     expect(media.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('reconciles all retained Workbenches before disposing only an absent Canvas session', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-multi-workbench-'));
+    roots.push(workspacePath);
+    const firstIdentity = createIdentity();
+    const secondIdentity: CanvasHostRuntimeIdentity = {
+      ...firstIdentity,
+      projectId: 'project-2',
+      workspaceId: 'workspace-2',
+      viewId: 'canvas:view-2',
+      documentId: 'neko/boards/second.nkc',
+      sessionId: 'canvas-session:canvas:view-2:view-instance-1',
+    };
+    for (const identity of [firstIdentity, secondIdentity]) {
+      const documentPath = path.join(workspacePath, identity.documentId);
+      await mkdir(path.dirname(documentPath), { recursive: true });
+      await writeFile(
+        documentPath,
+        JSON.stringify({
+          name: identity.workspaceId,
+          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+          nodes: [],
+          connections: [],
+        }),
+      );
+    }
+    const detachView = vi.fn();
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (_windowId, identity) => ({
+          identity,
+          workspace: {
+            workspaceId: identity.workspaceId,
+            workspacePath,
+            displayName: identity.workspaceId,
+            locator: { kind: 'relative' as const, value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasMultiWorkbenchTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      media: {
+        execute: vi.fn(async () => {
+          throw new Error('Media execution is not expected.');
+        }),
+        detachWindow: vi.fn(),
+        detachView,
+        dispose: vi.fn(async () => undefined),
+      },
+    });
+    await runtime.getSnapshot('window-1', firstIdentity);
+    await runtime.getSnapshot('window-1', secondIdentity);
+    const layoutFor = (identity: CanvasHostRuntimeIdentity) =>
+      openOrFocusMainView(createDefaultDesktopWorkbenchLayout(identity.workspaceId), {
+        viewId: identity.viewId,
+        viewInstanceId: identity.viewInstanceId,
+        projectId: identity.projectId,
+        workspaceId: identity.workspaceId,
+        kind: 'canvas',
+        ownerId: identity.sessionId,
+        displayLabel: path.basename(identity.documentId),
+        documentId: identity.documentId,
+      });
+    const firstLayout = layoutFor(firstIdentity);
+    const secondLayout = layoutFor(secondIdentity);
+
+    runtime.reconcileWindow('window-1', [firstLayout, secondLayout]);
+    expect(detachView).not.toHaveBeenCalled();
+
+    runtime.reconcileWindow('window-1', [secondLayout]);
+    expect(detachView).toHaveBeenCalledOnce();
+    expect(detachView).toHaveBeenCalledWith('window-1', firstIdentity.viewId);
+
+    await runtime.dispose();
   });
 
   it('loads one owner-bound Canvas session, applies revisioned edits and atomically saves .nkc', async () => {
@@ -941,10 +993,10 @@ describe('DesktopCanvasRuntime', () => {
       workspaceId: 'workspace-1',
       windowId: 'window-1',
       viewId: 'canvas:view-1',
-      viewEpoch: 1,
+      viewInstanceId: 'view-instance-1',
       documentId: 'neko/boards/workspace.nkc',
-      sessionId: 'canvas-session:canvas:view-1:1',
-      endpointEpoch: 'app-1:window-1:1',
+      sessionId: 'canvas-session:canvas:view-1:view-instance-1',
+      rendererSessionId: 'app-1:window-1:1',
     };
     const runtime = new DesktopCanvasRuntime({
       shell: {
@@ -962,7 +1014,6 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasRuntimeTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
@@ -970,7 +1021,6 @@ describe('DesktopCanvasRuntime', () => {
 
     const initial = await runtime.getSnapshot('window-1', identity);
     expect(initial.canvas.name).toBe('Fixture Canvas');
-    expect(initial.revision).toBe(0);
 
     const editedCanvas = {
       ...initial.canvas,
@@ -981,7 +1031,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-edit',
         commandId: 'command-edit',
-        expectedRevision: initial.revision,
         identity,
         intent: { type: 'replace-document', canvas: editedCanvas },
       }),
@@ -994,7 +1043,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'request-save',
         commandId: 'command-save',
-        expectedRevision: edit.snapshot.revision,
         identity,
         intent: { type: 'save' },
       }),
@@ -1022,7 +1070,6 @@ describe('DesktopCanvasRuntime', () => {
     const generationSnapshot = {
       ref: { kind: 'generation' as const, jobId: 'generation-restart-1' },
       phase: 'succeeded' as const,
-      revision: 3,
       title: 'Generate concept frame',
       inputNodeIds: [],
       mediaKind: 'image' as const,
@@ -1035,7 +1082,6 @@ describe('DesktopCanvasRuntime', () => {
         {
           kind: 'generated-output' as const,
           outputId: 'output-frame-1',
-          revision: '1',
           digest: 'sha256:generated-frame-1',
           path: 'neko/generated/frame-1.png',
         },
@@ -1052,14 +1098,13 @@ describe('DesktopCanvasRuntime', () => {
       dispose: vi.fn(async () => undefined),
     };
     const runtime = createRuntimeWithGeneration(workspacePath, identity, generation);
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const projected = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
         requestId: 'request-generation-restart',
         commandId: 'command-generation-restart',
-        expectedRevision: initial.revision,
         identity,
         intent: {
           type: 'request-generation-draft',
@@ -1083,7 +1128,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'save-generation-restart',
         commandId: 'save-generation-restart',
-        expectedRevision: projected.snapshot.revision,
         identity,
         intent: { type: 'save' },
       }),
@@ -1132,7 +1176,6 @@ describe('DesktopCanvasRuntime', () => {
           type: 'job',
           data: expect.objectContaining({
             jobRef: { kind: 'generation', jobId: 'generation-restart-1' },
-            revision: 3,
             status: 'completed',
           }),
         }),
@@ -1160,9 +1203,7 @@ describe('DesktopCanvasRuntime', () => {
     );
 
     const resolution = await restartedRuntime.resolveMaterialActions('window-1', {
-      schemaVersion: 5,
       requestId: 'resolve-restarted-generation-actions',
-      expectedRevision: restarted.revision,
       identity,
       selectedNodeIds: [generatedNode.id],
     });
@@ -1224,7 +1265,6 @@ describe('DesktopCanvasRuntime', () => {
           ? {
               ref: { kind: 'generation' as const, jobId: 'generation-phase-1-success' },
               phase: 'succeeded' as const,
-              revision: 2,
               title: 'Generate concept frame',
               inputNodeIds: [...input.inputNodeIds],
               mediaKind: 'image' as const,
@@ -1236,7 +1276,6 @@ describe('DesktopCanvasRuntime', () => {
                 {
                   kind: 'generated-output' as const,
                   outputId: 'concept-frame',
-                  revision: '2',
                   digest: 'sha256:phase-1-generated',
                   path: 'neko/generated/concept-frame.png',
                 },
@@ -1245,7 +1284,6 @@ describe('DesktopCanvasRuntime', () => {
           : {
               ref: { kind: 'generation' as const, jobId: 'generation-phase-1-failure' },
               phase: 'failed' as const,
-              revision: 1,
               title: 'Generate video',
               inputNodeIds: [...input.inputNodeIds],
               mediaKind: 'video' as const,
@@ -1286,7 +1324,6 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasPhase1LifecycleTest'),
       }),
       globalMediaLibraryRoot,
@@ -1521,7 +1558,6 @@ describe('DesktopCanvasRuntime', () => {
       workspacePath,
       'boards/first.nkc',
       JSON.stringify({
-        version: 1,
         name: 'First',
         viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
         nodes: [],
@@ -1532,7 +1568,6 @@ describe('DesktopCanvasRuntime', () => {
       workspacePath,
       'boards/second.nkc',
       JSON.stringify({
-        version: 1,
         name: 'Second',
         viewport: { pan: { x: 20, y: 30 }, zoom: 1.5 },
         nodes: [],
@@ -1543,13 +1578,13 @@ describe('DesktopCanvasRuntime', () => {
       ...createIdentity(),
       viewId: 'canvas:first',
       documentId: 'boards/first.nkc',
-      sessionId: 'canvas-session:canvas:first:1',
+      sessionId: 'canvas-session:canvas:first:view-instance-1',
     };
     const second = {
       ...createIdentity(),
       viewId: 'canvas:second',
       documentId: 'boards/second.nkc',
-      sessionId: 'canvas-session:canvas:second:1',
+      sessionId: 'canvas-session:canvas:second:view-instance-1',
     };
     const runtime = new DesktopCanvasRuntime({
       shell: {
@@ -1569,7 +1604,6 @@ describe('DesktopCanvasRuntime', () => {
         homedir: workspacePath,
         nekoHome: path.join(workspacePath, '.neko-home'),
         workspaceRoot: workspacePath,
-        version: 'test',
         logger: new ConsoleLogger('DesktopCanvasRuntimeMultiTest'),
       }),
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
@@ -1584,7 +1618,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'second-presentation',
         commandId: 'second-presentation',
-        expectedRevision: secondSnapshot.revision,
         identity: second,
         intent: {
           type: 'update-presentation',
@@ -1610,7 +1643,6 @@ describe('DesktopCanvasRuntime', () => {
       createCanvasHostIntentRequest({
         requestId: 'multi-edit',
         commandId: 'multi-edit',
-        expectedRevision: firstSnapshot.revision,
         identity: first,
         intent: {
           type: 'replace-document',
@@ -1632,10 +1664,10 @@ function createIdentity(): CanvasHostRuntimeIdentity {
     workspaceId: 'workspace-1',
     windowId: 'window-1',
     viewId: 'canvas:view-1',
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     documentId: 'neko/boards/workspace.nkc',
-    sessionId: 'canvas-session:canvas:view-1:1',
-    endpointEpoch: 'app-1:window-1:1',
+    sessionId: 'canvas-session:canvas:view-1:view-instance-1',
+    rendererSessionId: 'app-1:window-1:1',
   };
 }
 
@@ -1663,7 +1695,6 @@ function createRuntime(
       homedir: workspacePath,
       nekoHome: path.join(workspacePath, '.neko-home'),
       workspaceRoot: workspacePath,
-      version: 'test',
       logger: new ConsoleLogger('DesktopCanvasRuntimeTest'),
     }),
     globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
@@ -1693,7 +1724,6 @@ function createRuntimeWithGeneration(
       homedir: workspacePath,
       nekoHome: path.join(workspacePath, '.neko-home'),
       workspaceRoot: workspacePath,
-      version: 'test',
       logger: new ConsoleLogger('DesktopCanvasGenerationRestartTest'),
     }),
     globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
@@ -1721,7 +1751,6 @@ async function executeAcceptedIntent(
     createCanvasHostIntentRequest({
       requestId: `request-${commandId}`,
       commandId,
-      expectedRevision: snapshot.revision,
       identity,
       intent,
     }),

@@ -5,7 +5,6 @@ import type {
   AgentProfileRegistrationResult,
   AgentProfileSource,
   AgentProfileValidationResult,
-  AgentProfileVersion,
   IAgentProfileRegistry,
   ProviderExpressionProfileDescriptor,
 } from '@neko/agent-contracts';
@@ -51,7 +50,7 @@ export class AgentProfileRegistry<
       return { ok: false, diagnostics };
     }
 
-    const key = toProfileKey(profile.profileId, profile.version);
+    const key = profile.profileId;
     const entries = this.entriesByProfileKey.get(key) ?? [];
     const duplicateDiagnostic = this.createDuplicateDiagnostic(profile, entries);
     if (duplicateDiagnostic) {
@@ -67,38 +66,23 @@ export class AgentProfileRegistry<
     };
   }
 
-  unregister(profileId: string, source?: AgentProfileSource, version?: TProfile['version']): void {
-    const keys =
-      version === undefined
-        ? this.findKeysForProfileId(profileId)
-        : [toProfileKey(profileId, version)];
-    for (const key of keys) {
-      const entries = this.entriesByProfileKey.get(key);
-      if (!entries) continue;
-      const remaining =
-        source === undefined ? [] : entries.filter((entry) => entry.profile.source !== source);
-      if (remaining.length === 0) {
-        this.entriesByProfileKey.delete(key);
-      } else {
-        this.entriesByProfileKey.set(key, remaining);
-      }
+  unregister(profileId: string, source?: AgentProfileSource): void {
+    const entries = this.entriesByProfileKey.get(profileId);
+    if (!entries) return;
+    const remaining =
+      source === undefined ? [] : entries.filter((entry) => entry.profile.source !== source);
+    if (remaining.length === 0) {
+      this.entriesByProfileKey.delete(profileId);
+    } else {
+      this.entriesByProfileKey.set(profileId, remaining);
     }
   }
 
-  get(profileId: string, version?: TProfile['version']): TProfile | undefined {
-    if (version !== undefined) {
-      return this.resolveEntries(this.entriesByProfileKey.get(toProfileKey(profileId, version)));
-    }
-
-    const candidates = this.findKeysForProfileId(profileId)
-      .flatMap((key) => this.entriesByProfileKey.get(key) ?? [])
-      .sort((left, right) => compareProfileVersions(left.profile.version, right.profile.version));
-    return this.resolveEntries(candidates);
+  get(profileId: string): TProfile | undefined {
+    return this.resolveEntries(this.entriesByProfileKey.get(profileId));
   }
 
-  list(
-    filter: AgentProfileFilter<TProfile['kind'], TProfile['version']> = {},
-  ): readonly TProfile[] {
+  list(filter: AgentProfileFilter<TProfile['kind']> = {}): readonly TProfile[] {
     return Array.from(this.entriesByProfileKey.values())
       .map((entries) => this.resolveEntries(entries))
       .filter((profile): profile is TProfile => profile !== undefined)
@@ -134,7 +118,6 @@ export class AgentProfileRegistry<
         message: 'Agent profile registration explicitly overrides an existing source layer.',
         details: {
           overrideSources: profile.override?.sources ?? [],
-          version: profile.version,
         },
       };
     }
@@ -145,11 +128,10 @@ export class AgentProfileRegistry<
       kind: profile.kind,
       source: profile.source,
       message:
-        'Agent profile id is already registered for this kind and version; source-layer resolution is diagnostic-visible.',
+        'Agent profile id is already registered for this kind; source-layer resolution is diagnostic-visible.',
       details: {
         existingSources: entries.map((entry) => entry.profile.source),
         conflictingSource: profile.source,
-        version: profile.version,
       },
     };
   }
@@ -159,12 +141,6 @@ export class AgentProfileRegistry<
   ): TProfile | undefined {
     if (!entries || entries.length === 0) return undefined;
     return [...entries].sort(compareRegistryEntries).at(-1)?.profile;
-  }
-
-  private findKeysForProfileId(profileId: string): string[] {
-    return Array.from(this.entriesByProfileKey.keys()).filter((key) =>
-      key.startsWith(`${profileId}\u0000`),
-    );
   }
 }
 
@@ -202,11 +178,10 @@ export function createProviderExpressionProfileRegistry(
 
 function matchesProfileFilter<TProfile extends AgentProfileIdentity>(
   profile: TProfile,
-  filter: AgentProfileFilter<TProfile['kind'], TProfile['version']>,
+  filter: AgentProfileFilter<TProfile['kind']>,
 ): boolean {
   if (filter.profileId && profile.profileId !== filter.profileId) return false;
   if (filter.kind && profile.kind !== filter.kind) return false;
-  if (filter.version !== undefined && profile.version !== filter.version) return false;
   if (filter.source && profile.source !== filter.source) return false;
   if (!filter.includeSkillLocal && profile.source === 'skill-local') return false;
   return true;
@@ -225,7 +200,6 @@ function doesProfileOverride<TProfile extends AgentProfileIdentity>(
 ): boolean {
   const override = profile.override;
   if (!override) return false;
-  if (override.version !== undefined && override.version !== existing.version) return false;
   if (override.sources && !override.sources.includes(existing.source)) return false;
   return profile.profileId === existing.profileId && profile.kind === existing.kind;
 }
@@ -236,9 +210,7 @@ function compareRegistryEntries<TProfile extends AgentProfileIdentity>(
 ): number {
   return (
     SOURCE_LAYER_ORDER.indexOf(left.profile.source) -
-      SOURCE_LAYER_ORDER.indexOf(right.profile.source) ||
-    compareProfileVersions(left.profile.version, right.profile.version) ||
-    left.order - right.order
+      SOURCE_LAYER_ORDER.indexOf(right.profile.source) || left.order - right.order
   );
 }
 
@@ -249,18 +221,6 @@ function compareProfiles<TProfile extends AgentProfileIdentity>(
   return (
     left.kind.localeCompare(right.kind) ||
     left.profileId.localeCompare(right.profileId) ||
-    compareProfileVersions(left.version, right.version) ||
     SOURCE_LAYER_ORDER.indexOf(left.source) - SOURCE_LAYER_ORDER.indexOf(right.source)
   );
-}
-
-function compareProfileVersions(left: AgentProfileVersion, right: AgentProfileVersion): number {
-  if (typeof left === 'number' && typeof right === 'number') {
-    return left - right;
-  }
-  return String(left).localeCompare(String(right));
-}
-
-function toProfileKey(profileId: string, version: AgentProfileVersion): string {
-  return `${profileId}\u0000${String(version)}`;
 }

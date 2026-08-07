@@ -2,20 +2,20 @@ import { schema as s, validateStrict } from './strict-schema.mjs';
 import { assertSupportedArtifactValidators } from './artifact-validator-policy.mjs';
 
 export const SCHEMAS = Object.freeze({
-  authoringDecision: 'neko.agent-eval.authoring-decision.v2',
-  coverageDelta: 'neko.agent-eval.coverage-delta.v2',
-  suite: 'neko.agent-eval.suite.v2',
-  scenario: 'neko.agent-eval.scenario.v2',
-  result: 'neko.agent-eval.result.v2',
-  evidence: 'neko.agent-eval.evidence.v2',
-  artifactManifest: 'neko.agent-eval.artifact-manifest.v2',
-  baseline: 'neko.agent-eval.baseline.v2',
-  comparison: 'neko.agent-eval.comparison.v2',
-  rubric: 'neko.agent-eval.rubric.v2',
-  judge: 'neko.agent-eval.judge.v2',
-  aggregate: 'neko.agent-eval.aggregate.v2',
-  failureAttribution: 'neko.agent-eval.failure-attribution.v2',
-  suiteIndex: 'neko.agent-eval.suite-index.v2',
+  authoringDecision: 'neko.agent-eval.authoring-decision',
+  coverageDelta: 'neko.agent-eval.coverage-delta',
+  suite: 'neko.agent-eval.suite',
+  scenario: 'neko.agent-eval.scenario',
+  result: 'neko.agent-eval.result',
+  evidence: 'neko.agent-eval.evidence',
+  artifactManifest: 'neko.agent-eval.artifact-manifest',
+  baseline: 'neko.agent-eval.baseline',
+  comparison: 'neko.agent-eval.comparison',
+  rubric: 'neko.agent-eval.rubric',
+  judge: 'neko.agent-eval.judge',
+  aggregate: 'neko.agent-eval.aggregate',
+  failureAttribution: 'neko.agent-eval.failure-attribution',
+  suiteIndex: 'neko.agent-eval.suite-index',
 });
 
 const TARGET_KINDS = Object.freeze([
@@ -107,7 +107,6 @@ export const TARGET_SCHEMA = s.union([
 const EVIDENCE_CONTRACT_SCHEMA = s.object({
   userBehavior: TEXT,
   canonicalPath: STRING_LIST,
-  forbiddenFallback: STRING_LIST,
   observables: s.array(
     s.object({
       ref: ID,
@@ -249,14 +248,13 @@ const SUITE_SCHEMA = s.object({
   id: ID,
   owner: s.object({ kind: s.enum(['skill', 'agent-runtime']), id: ID }),
   target: TARGET_SCHEMA,
-  repositoryRevision: SHORT_TEXT,
   runtimeProfiles: s.array(RUNTIME_PROFILE_SCHEMA, { minLength: 1, maxLength: 50 }),
   modelProfiles: s.array(MODEL_PROFILE_SCHEMA, { minLength: 1, maxLength: 50 }),
   judgeProfiles: s.array(
     s.object(
       {
         id: ID,
-        adapter: s.literal('openai-chat-completions-v1'),
+        adapter: s.literal('openai-chat-completions'),
         providerId: ID,
         modelId: EXTERNAL_ID,
         endpointEnv: ENV_NAME,
@@ -310,6 +308,7 @@ const STEP_SCHEMA = s.union([
     timeoutMs: s.integer({ min: 1, max: 600_000 }),
   }),
   s.object({ id: ID, kind: s.literal('resume'), conversationRef: s.literal('current') }),
+  s.object({ id: ID, kind: s.literal('restart'), conversationRef: s.literal('current') }),
   s.object({ id: ID, kind: s.literal('feedback'), prompt: TEXT, afterStepId: ID }),
   s.object({
     id: ID,
@@ -322,7 +321,7 @@ const STEP_SCHEMA = s.union([
 const ASSERTION_COMMON = { id: ID, evidenceRef: ID };
 const PROMPT_FRAGMENT_SELECTOR_SCHEMA = s.object(
   { id: EXTERNAL_ID, source: EXTERNAL_ID },
-  { version: ID, hash: HASH },
+  { hash: HASH },
 );
 const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
   s.object(
@@ -380,17 +379,14 @@ const ASSERTION_SCHEMA = s.union([
     identity: HOST_SKILL_IDENTITY_SCHEMA,
     status: s.enum(['triggered', 'injected']),
   }),
-  s.object(
-    {
-      ...ASSERTION_COMMON,
-      kind: s.literal('prompt-composition'),
-      requiredFragments: s.array(PROMPT_FRAGMENT_SELECTOR_SCHEMA, {
-        minLength: 1,
-        maxLength: 100,
-      }),
-    },
-    { forbiddenFragmentIds: EXTERNAL_ID_LIST },
-  ),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('prompt-composition'),
+    requiredFragments: s.array(PROMPT_FRAGMENT_SELECTOR_SCHEMA, {
+      minLength: 1,
+      maxLength: 100,
+    }),
+  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -403,14 +399,12 @@ const ASSERTION_SCHEMA = s.union([
         minLength: 1,
         maxLength: 20,
       }),
-      sameRevisionForViewportWidths: s.boolean(),
     },
   ),
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('model'),
     profileId: ID,
-    noFallback: s.boolean(),
   }),
   s.object(
     {
@@ -566,11 +560,6 @@ const ASSERTION_SCHEMA = s.union([
     provenanceSource: EXTERNAL_ID,
     validatorId: ID,
   }),
-  s.object({
-    ...ASSERTION_COMMON,
-    kind: s.literal('no-fallback'),
-    forbiddenRefs: EXTERNAL_ID_LIST,
-  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -578,7 +567,7 @@ const ASSERTION_SCHEMA = s.union([
       status: s.enum(['projected', 'noop']),
       targetKind: s.literal('workspace'),
       minNodeIds: s.integer({ min: 1 }),
-      revisionRequired: s.boolean(),
+      sourceFingerprintRequired: s.boolean(),
       diagnosticsEmpty: s.boolean(),
     },
     {
@@ -645,7 +634,6 @@ const RUBRIC_DEFINITION_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.rubric),
   id: ID,
   domain: ID,
-  version: ID,
   minimumScore: s.number({ min: 0, max: 5 }),
   maximumUncertainty: s.number({ min: 0, max: 1 }),
   criteria: s.array(RUBRIC_CRITERION_SCHEMA, { minLength: 1, maxLength: 50 }),
@@ -729,7 +717,6 @@ const RESULT_SCHEMA = s.object({
   runId: ID,
   outcome: s.enum(OUTCOMES),
   target: TARGET_SCHEMA,
-  repositoryRevision: SHORT_TEXT,
   modelIdentity: MODEL_BINDING_SCHEMA,
   effectiveConfiguration: CONFIG_IDENTITY_SCHEMA,
   fixtureDigest: HASH,
@@ -801,7 +788,7 @@ const ARTIFACT_MANIFEST_SCHEMA = s.object({
   artifacts: s.array(ARTIFACT_MANIFEST_ENTRY_SCHEMA, { maxLength: 1_000 }),
 });
 
-const POLICY_IDENTITY_SCHEMA = s.object({ id: ID, version: ID, digest: HASH });
+const POLICY_IDENTITY_SCHEMA = s.object({ id: ID, digest: HASH });
 const DISTRIBUTION_SCHEMA = s.object({
   samples: s.integer({ min: 1 }),
   passRate: s.number({ min: 0, max: 1 }),
@@ -812,7 +799,6 @@ const BASELINE_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.baseline),
   id: ID,
   target: TARGET_SCHEMA,
-  repositoryRevision: SHORT_TEXT,
   fixtureDigest: HASH,
   runtimeProfileId: ID,
   modelProfileIds: ID_LIST,
@@ -861,7 +847,6 @@ const JUDGE_RESULT_SCHEMA = s.object({
   modelId: EXTERNAL_ID,
   profileId: ID,
   rubricId: ID,
-  rubricVersion: ID,
   promptHash: HASH,
   sampling: s.object({
     temperature: s.number({ min: 0, max: 2 }),
@@ -975,6 +960,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'cancel',
     'confirm',
     'resume',
+    'restart',
     'feedback',
     'resize',
   ]),
@@ -1002,7 +988,6 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'artifact',
     'content-locator-handoff',
     'workspace-board-projection',
-    'no-fallback',
   ]),
   artifactCheckKinds: new Set([
     'file',
@@ -1194,11 +1179,11 @@ function validateWorkflowSteps(steps) {
       if (state !== 'idle') throw new Error(`feedback ${step.id} requires idle state`);
       state = 'active';
       hasSessionTurn = true;
-    } else if (step.kind === 'resume') {
+    } else if (step.kind === 'resume' || step.kind === 'restart') {
       if (!hasSessionTurn) {
-        throw new Error(`resume ${step.id} cannot reference current before a session turn`);
+        throw new Error(`${step.kind} ${step.id} cannot reference current before a session turn`);
       }
-      if (state !== 'idle') throw new Error(`resume ${step.id} requires idle state`);
+      if (state !== 'idle') throw new Error(`${step.kind} ${step.id} requires idle state`);
     } else if (step.kind === 'resize') {
       if (state !== 'idle') throw new Error(`resize ${step.id} requires idle state`);
     }

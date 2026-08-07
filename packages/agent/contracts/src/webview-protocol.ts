@@ -76,8 +76,6 @@ import type {
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
 } from './conversation-projection';
-export { NEKO_AGENT_HOST_MESSAGE_EVENT } from './host-message-event';
-
 export type ProtocolModelCategory = ModelType;
 
 export type MediaModelCategory = Exclude<ProtocolModelCategory, 'llm'>;
@@ -209,7 +207,6 @@ export interface EmptyWebviewMessage {
     | 'refreshConfigSnapshot'
     | 'getSkills'
     | 'openUserConfigFile'
-    | 'openConfigFile'
     | 'getTabState';
 }
 
@@ -234,7 +231,6 @@ export interface ActivateConversationWebviewMessage {
   activationId: number;
   conversationId: string;
   tabId: string;
-  expectedTabStateRevision: number;
   tabState: TabState;
 }
 
@@ -242,7 +238,6 @@ export interface UpdateTabStateWebviewMessage {
   type: 'updateTabState';
   openTabs: OpenTab[];
   activeTabId: string | null;
-  expectedTabStateRevision: number;
 }
 
 export interface OpenFileWebviewMessage {
@@ -437,18 +432,13 @@ export type ConversationProjectionAttachmentHostFrame = ProjectionAttachmentHost
 
 export interface ProjectionEndpointDiscoverRequest {
   readonly type: 'projectionEndpointDiscover';
-  readonly protocolVersion: typeof AGENT_WEBVIEW_PROTOCOL_VERSION;
   readonly realmId: string;
 }
 
 export interface ProjectionEndpointReadyMessage {
   readonly type: 'projectionEndpointReady';
-  readonly protocolVersion: typeof AGENT_WEBVIEW_PROTOCOL_VERSION;
   readonly realmId: string;
-  readonly endpointEpoch: string;
 }
-
-export const AGENT_WEBVIEW_PROTOCOL_VERSION = 1 as const;
 
 export type AgentWebviewToHostMessage =
   | SendMessageWebviewMessage
@@ -568,8 +558,8 @@ export interface AgentMessageQueueSnapshot {
   conversationId: string;
   items: readonly AgentQueuedMessageItem[];
   pendingCount: number;
-  /** Conversation-local monotonic version used to ignore stale Webview queue snapshots. */
-  version: number;
+  /** Live event order owned by one in-memory Conversation queue. */
+  sequence: number;
 }
 
 export type AgentMessageQueueErrorCode =
@@ -679,7 +669,6 @@ export interface ActiveConversationMessage {
   type: 'activeConversation';
   activation?: {
     activationId: number;
-    tabStateRevision: number;
   };
   conversation?: {
     id: string;
@@ -751,10 +740,6 @@ export interface ConfigStateMessage {
   };
 }
 
-export interface ConfigChangedMessage {
-  type: 'configChanged';
-}
-
 export interface SettingsUpdatedMessage {
   type: 'settingsUpdated';
   success: boolean;
@@ -793,7 +778,6 @@ export interface SubAgentEventMessage {
 
 export interface TabStateMessage {
   type: 'tabState';
-  revision: number;
   tabState?: Partial<TabState>;
 }
 
@@ -919,7 +903,6 @@ export type AgentHostToWebviewMessage =
   | SettingsDataMessage
   | ProjectFilesMessage
   | ConfigStateMessage
-  | ConfigChangedMessage
   | SettingsUpdatedMessage
   | ProviderMutationResultMessage
   | PluginCommandsMessage
@@ -993,7 +976,6 @@ const EMPTY_MESSAGE_TYPES: readonly EmptyWebviewMessage['type'][] = [
   'refreshConfigSnapshot',
   'getSkills',
   'openUserConfigFile',
-  'openConfigFile',
   'getTabState',
 ];
 const QUEUED_MESSAGE_ACTION_TYPES: readonly QueuedMessageActionWebviewMessage['type'][] = [
@@ -1300,14 +1282,9 @@ export function buildConfigStateMessage(config: ConfigStateMessage['config']): C
   return { type: 'configState', config };
 }
 
-export function buildConfigChangedMessage(): ConfigChangedMessage {
-  return { type: 'configChanged' };
-}
-
-export function buildTabStateMessage(tabState: TabState, revision: number): TabStateMessage {
+export function buildTabStateMessage(tabState: TabState): TabStateMessage {
   return {
     type: 'tabState',
-    revision,
     tabState: {
       openTabs: tabState.openTabs.map((tab) => ({ ...tab })),
       activeTabId: tabState.activeTabId,
@@ -1336,7 +1313,7 @@ function cloneAgentMessageQueueSnapshot(
   return {
     conversationId,
     pendingCount: snapshot.pendingCount,
-    version: snapshot.version,
+    sequence: snapshot.sequence,
     items: snapshot.items.map((item) =>
       cloneAgentQueuedMessageItem(item, conversationId, messageType),
     ),
@@ -1363,8 +1340,8 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
 
   const type = raw.type;
   if (type === 'projectionEndpointDiscover') {
-    return raw.protocolVersion === AGENT_WEBVIEW_PROTOCOL_VERSION && isNonEmptyString(raw.realmId)
-      ? { type, protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION, realmId: raw.realmId }
+    return hasOnlyKeys(raw, ['type', 'realmId']) && isNonEmptyString(raw.realmId)
+      ? { type, realmId: raw.realmId }
       : null;
   }
   if (type === 'projectionAttach') {
@@ -1373,9 +1350,8 @@ export function parseAgentWebviewToHostMessage(raw: unknown): AgentWebviewToHost
   }
   if (type === 'projectionSnapshotAck') {
     const key = parseProjectionAttachmentKey(raw.key);
-    const projectionVersion = nonNegativeInteger(raw.projectionVersion);
-    if (!key || raw.sequence !== 0 || projectionVersion === null) return null;
-    return { type, key, sequence: 0, projectionVersion };
+    if (!key || !hasOnlyKeys(raw, ['type', 'key', 'sequence']) || raw.sequence !== 0) return null;
+    return { type, key, sequence: 0 };
   }
   if (type === 'projectionDetach') {
     const key = parseProjectionAttachmentKey(raw.key);
@@ -1755,17 +1731,13 @@ function parseUpdateSettingsMessage(
 function parseActivateConversationMessage(
   raw: Record<string, unknown>,
 ): ActivateConversationWebviewMessage | null {
+  if (!hasExactKeys(raw, ['type', 'activationId', 'conversationId', 'tabId', 'tabState'])) {
+    return null;
+  }
   const activationId = nonNegativeInteger(raw.activationId);
   const conversationId = requiredString(raw.conversationId);
   const tabId = requiredString(raw.tabId);
-  const expectedTabStateRevision = nonNegativeInteger(raw.expectedTabStateRevision);
-  if (
-    activationId === null ||
-    !conversationId ||
-    !tabId ||
-    expectedTabStateRevision === null ||
-    !isRecord(raw.tabState)
-  ) {
+  if (activationId === null || !conversationId || !tabId || !isRecord(raw.tabState)) {
     return null;
   }
   const openTabs = parseOpenTabs(raw.tabState.openTabs);
@@ -1776,7 +1748,6 @@ function parseActivateConversationMessage(
     activationId,
     conversationId,
     tabId,
-    expectedTabStateRevision,
     tabState: { openTabs, activeTabId },
   };
 }
@@ -1784,18 +1755,17 @@ function parseActivateConversationMessage(
 function parseUpdateTabStateMessage(
   raw: Record<string, unknown>,
 ): UpdateTabStateWebviewMessage | null {
+  if (!hasExactKeys(raw, ['type', 'openTabs', 'activeTabId'])) return null;
   const openTabs = parseOpenTabs(raw.openTabs);
-  const expectedTabStateRevision = nonNegativeInteger(raw.expectedTabStateRevision);
-  if (!openTabs || expectedTabStateRevision === null) return null;
+  if (!openTabs) return null;
   if (raw.activeTabId === null) {
-    return { type: 'updateTabState', openTabs, activeTabId: null, expectedTabStateRevision };
+    return { type: 'updateTabState', openTabs, activeTabId: null };
   }
   if (typeof raw.activeTabId !== 'string') return null;
   return {
     type: 'updateTabState',
     openTabs,
     activeTabId: raw.activeTabId,
-    expectedTabStateRevision,
   };
 }
 
@@ -2245,9 +2215,35 @@ function parseOptionalPluginTransferTargetRef(
 ): PluginTransferTargetRef | undefined | null {
   if (value === undefined) return undefined;
   if (!isRecord(value)) return null;
+  if (
+    !hasOnlyKeys(value, [
+      'plugin',
+      'projectId',
+      'workspaceId',
+      'canvasId',
+      'nodeId',
+      'trackId',
+      'clipId',
+      'containerId',
+      'slotId',
+      'fieldPath',
+      'mode',
+      'kind',
+      'documentUri',
+      'title',
+      'reveal',
+      'insertionPoint',
+    ])
+  ) {
+    return null;
+  }
   const plugin = optionalStringStrict(value.plugin);
+  const projectId = optionalStringStrict(value.projectId);
+  const workspaceId = optionalStringStrict(value.workspaceId);
   const canvasId = optionalStringStrict(value.canvasId);
   const nodeId = optionalStringStrict(value.nodeId);
+  const trackId = optionalStringStrict(value.trackId);
+  const clipId = optionalStringStrict(value.clipId);
   const containerId = optionalStringStrict(value.containerId);
   const slotId = optionalStringStrict(value.slotId);
   const fieldPath = optionalStringStrict(value.fieldPath);
@@ -2255,13 +2251,16 @@ function parseOptionalPluginTransferTargetRef(
   const kind = optionalStringStrict(value.kind);
   const documentUri = optionalStringStrict(value.documentUri);
   const title = optionalStringStrict(value.title);
-  const expectedProjectRevision = optionalStringStrict(value.expectedProjectRevision);
   const reveal = value.reveal;
   const insertionPoint = parseOptionalTransferInsertionPoint(value.insertionPoint);
   if (
     plugin === null ||
+    projectId === null ||
+    workspaceId === null ||
     canvasId === null ||
     nodeId === null ||
+    trackId === null ||
+    clipId === null ||
     containerId === null ||
     slotId === null ||
     fieldPath === null ||
@@ -2269,7 +2268,6 @@ function parseOptionalPluginTransferTargetRef(
     kind === null ||
     documentUri === null ||
     title === null ||
-    expectedProjectRevision === null ||
     (reveal !== undefined && typeof reveal !== 'boolean') ||
     insertionPoint === null
   ) {
@@ -2284,8 +2282,12 @@ function parseOptionalPluginTransferTargetRef(
   const parsedMode = mode as PluginTransferTargetMode | undefined;
   return {
     ...(parsedPlugin !== undefined ? { plugin: parsedPlugin } : {}),
+    ...(projectId !== undefined ? { projectId } : {}),
+    ...(workspaceId !== undefined ? { workspaceId } : {}),
     ...(canvasId !== undefined ? { canvasId } : {}),
     ...(nodeId !== undefined ? { nodeId } : {}),
+    ...(trackId !== undefined ? { trackId } : {}),
+    ...(clipId !== undefined ? { clipId } : {}),
     ...(containerId !== undefined ? { containerId } : {}),
     ...(slotId !== undefined ? { slotId } : {}),
     ...(parsedFieldPath !== undefined ? { fieldPath: parsedFieldPath } : {}),
@@ -2294,7 +2296,6 @@ function parseOptionalPluginTransferTargetRef(
     ...(kind !== undefined ? { kind } : {}),
     ...(documentUri !== undefined ? { documentUri } : {}),
     ...(title !== undefined ? { title } : {}),
-    ...(expectedProjectRevision !== undefined ? { expectedProjectRevision } : {}),
     ...(typeof reveal === 'boolean' ? { reveal } : {}),
   };
 }
@@ -3169,12 +3170,11 @@ function nonNegativeInteger(value: unknown): number | null {
 
 function parseProjectionAttachmentKey(value: unknown): ProjectionAttachmentKey | null {
   if (!isRecord(value)) return null;
-  const endpointEpoch = requiredString(value.endpointEpoch);
   const attachmentId = requiredString(value.attachmentId);
   const tabId = requiredString(value.tabId);
   const conversationId = requiredString(value.conversationId);
-  if (!endpointEpoch || !attachmentId || !tabId || !conversationId) return null;
-  return { endpointEpoch, attachmentId, tabId, conversationId };
+  if (!attachmentId || !tabId || !conversationId) return null;
+  return { attachmentId, tabId, conversationId };
 }
 
 function isProjectionDetachReason(value: unknown): value is ProjectionDetachMessage['reason'] {
@@ -3222,6 +3222,11 @@ function optionalSearchProjectFilesPurpose(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(record: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean {
+  const actual = Object.keys(record);
+  return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {

@@ -3,10 +3,130 @@ import type { ContentBlock } from '@neko/agent-contracts';
 import { projectMessageList, projectMessageListItems } from '../message-list-presenter';
 
 describe('message-list-presenter', () => {
+  it('projects one transcript activity while a run has no canonical live record', () => {
+    const state = { phase: 'thinking' as const, startedAt: 1_000 };
+    const projection = projectMessageList({
+      messages: [],
+      agentState: state,
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
+    expect(projection.items).toEqual([
+      {
+        kind: 'execution_activity',
+        agentState: state,
+        ownerMessageId: null,
+        estimatedHeight: 34,
+      },
+    ]);
+  });
+
+  it('lets canonical streaming and pending tool records replace generic activity', () => {
+    const state = { phase: 'acting' as const, toolName: 'ReadDocument', startedAt: 1_000 };
+    const pendingToolMessage = {
+      id: 'assistant-tool',
+      role: 'assistant' as const,
+      content: '',
+      timestamp: 1_100,
+      contentBlocks: [
+        {
+          id: 'tool-block',
+          type: 'tool_call' as const,
+          timestamp: 1_100,
+          toolCall: { id: 'tool-1', name: 'ReadDocument', arguments: {} },
+        },
+      ],
+    };
+
+    expect(
+      projectMessageList({
+        messages: [pendingToolMessage],
+        agentState: state,
+        streamingMessageId: null,
+      }).showExecutionActivity,
+    ).toBe(false);
+    expect(
+      projectMessageList({
+        messages: [
+          {
+            id: 'assistant-stream',
+            role: 'assistant',
+            content: 'Visible response',
+            timestamp: 1_100,
+            isStreaming: true,
+          },
+        ],
+        agentState: state,
+        streamingMessageId: 'assistant-stream',
+      }).showExecutionActivity,
+    ).toBe(false);
+  });
+
+  it('keeps activity visible for an empty streaming message shell', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'assistant-stream',
+          role: 'assistant',
+          content: '',
+          timestamp: 1_100,
+          isStreaming: true,
+        },
+      ],
+      agentState: { phase: 'thinking', startedAt: 1_000 },
+      streamingMessageId: 'assistant-stream',
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
+    expect(projection.items.at(-1)?.kind).toBe('execution_activity');
+  });
+
+  it('does not let a historical pending tool suppress a later turn activity', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'historical-tool',
+          role: 'assistant',
+          content: '',
+          timestamp: 1_000,
+          contentBlocks: [
+            {
+              id: 'historical-tool-block',
+              type: 'tool_call',
+              timestamp: 1_000,
+              toolCall: { id: 'tool-old', name: 'ReadDocument', arguments: {} },
+            },
+          ],
+        },
+        {
+          id: 'current-user',
+          role: 'user',
+          content: 'Start another turn',
+          timestamp: 2_000,
+        },
+      ],
+      agentState: { phase: 'thinking', startedAt: 2_000 },
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
+  });
+
+  it('requires AgentState before projecting execution activity', () => {
+    const projection = projectMessageList({
+      messages: [],
+      agentState: null,
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(false);
+    expect(projection.items).toEqual([]);
+  });
+
   it('does not project activation progress as a standalone conversation-level list item', () => {
     const projection = projectMessageList({
       messages: [],
-      isThinking: false,
       streamingMessageId: null,
       activationProgress: [
         {

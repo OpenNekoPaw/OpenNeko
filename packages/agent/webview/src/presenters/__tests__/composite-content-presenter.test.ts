@@ -29,9 +29,9 @@ describe('composite content presenter', () => {
           {
             toolCallId: 'call-1',
             type: 'image',
-            src: 'http://127.0.0.1:43125/v1/resources/asset-1.png',
+            src: 'http://127.0.0.1:43125/resources/asset-1.png',
             assetId: 'asset-1',
-            stableUri: '${WORKSPACE}/.neko/generated/image/out.png',
+            stableUri: '${WORKSPACE}/neko/generated/image/out.png',
             caption: 'Wide',
             role: 'shot',
           },
@@ -79,7 +79,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Ordered Images',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Ordered Images',
           scenes: [
@@ -116,12 +115,12 @@ describe('composite content presenter', () => {
             data: {
               images: [
                 {
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/image-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/image-1.jpg',
                   label: 'Image #1',
                   mimeType: 'image/jpeg',
                 },
                 {
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/image-2.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/image-2.jpg',
                   label: 'Image #2',
                   mimeType: 'image/jpeg',
                 },
@@ -153,7 +152,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image-current-result',
         assetIndex: 1,
-        src: 'http://127.0.0.1:43125/v1/resources/image-2.jpg',
+        src: 'http://127.0.0.1:43125/resources/image-2.jpg',
       }),
     ]);
     expect(projection.data.diagnostics).toEqual([]);
@@ -186,7 +185,6 @@ describe('composite content presenter', () => {
     };
     const composites = parseCompositeContentJson(
       JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'artifact-storyboard',
         title: 'Comic artifact',
@@ -199,9 +197,7 @@ describe('composite content presenter', () => {
             kind: 'domain',
             title: 'Storyboard Payload',
             domainKind: 'StoryboardTable',
-            schemaVersion: 1,
             payload: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Opening',
               scenes: [
@@ -296,7 +292,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -368,7 +363,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -419,7 +413,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
@@ -452,7 +446,7 @@ describe('composite content presenter', () => {
     expect(projection.data.sections[0]?.media).toEqual([
       expect.objectContaining({
         toolCallId: 'read-image',
-        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-1.jpg',
       }),
     ]);
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
@@ -491,105 +485,12 @@ describe('composite content presenter', () => {
     expect(projection.data.entityMemoryContribution?.metadata).toBeUndefined();
   });
 
-  it('uses model-authored page alias fields to infer storyboard media refs', () => {
-    const compositeInput = {
-      composite: {
-        template: 'storyboard-table',
-        title: 'Opening',
-        storyboardTable: {
-          schemaVersion: 1,
-          kind: 'storyboard-table',
-          title: 'Opening',
-          scenes: [
-            {
-              sceneId: 'scene-1',
-              sceneTitle: 'Scene',
-              shots: [
-                {
-                  shotNumber: 1,
-                  duration: 2,
-                  visualDescription: 'Use page 2 as the reference frame.',
-                  characterAction: 'The character turns back.',
-                  imageStrategy: 'use-as-reference',
-                  page_2: true,
-                },
-              ],
-            },
-          ],
-        },
-        sections: [
-          {
-            heading: 'Shot 1',
-            content: 'Use the second page.',
-            layout: 'table-row',
-          },
-        ],
-      },
-      siblingBlocks: [
-        toolBlock({
-          id: 'read-doc',
-          name: 'ReadDocument',
-          arguments: {},
-          result: {
-            success: true,
-            data: {
-              imageInfo: [
-                {
-                  mimeType: 'image/jpeg',
-                  locator: { kind: 'page', pageNumber: 1 },
-                  contentLocator: makeDocumentEntryContentLocator('OPS/page-1.jpg'),
-                },
-                {
-                  mimeType: 'image/jpeg',
-                  locator: { kind: 'page', pageNumber: 2 },
-                  contentLocator: makeDocumentEntryContentLocator('OPS/page-2.jpg'),
-                },
-              ],
-            },
-          },
-        }),
-      ],
-    };
-    const decodedInput = JSON.parse(JSON.stringify(compositeInput)) as Parameters<
-      typeof projectCompositeBlockRichContent
-    >[0];
-    const projection = projectCompositeBlockRichContent(decodedInput);
-
-    expect(projection.kind).toBe('storyboard-table');
-    if (projection.kind !== 'storyboard-table') {
-      throw new Error('expected storyboard table projection');
-    }
-    expect(projection.data.storyboardTable?.scenes[0]?.shots[0]).toMatchObject({
-      sourceMediaRefs: [
-        {
-          locator: { type: 'tool-result', toolCallId: 'read-doc', assetIndex: 1 },
-          label: 'page 2',
-          mimeType: 'image/jpeg',
-        },
-      ],
-      extensions: {
-        'neko.storyboardImageAlias': {
-          kind: 'page',
-          number: 2,
-          key: 'page_2',
-        },
-      },
-    });
-    expect(projection.data.sections[0]?.media[0]).toMatchObject({
-      toolCallId: 'read-doc',
-      assetIndex: 1,
-      contentLocator: makeDocumentEntryContentLocator('OPS/page-2.jpg'),
-    });
-    expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
-  });
-
   it('preserves explicit sourceMediaRefs when duplicate readable aliases exist', () => {
     const projection = projectCompositeBlockRichContent({
       composite: {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -695,7 +596,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -740,13 +640,13 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
                 {
                   path: '/cache/page-2.jpg',
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/page-2.jpg',
                   label: 'Page 2',
                   mimeType: 'image/jpeg',
                 },
@@ -778,7 +678,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image-real',
         assetIndex: 1,
-        src: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-2.jpg',
       }),
     ]);
     expect(projection.data.sections[0]?.media[0]).not.toHaveProperty('localPath');
@@ -791,7 +691,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -841,12 +740,12 @@ describe('composite content presenter', () => {
             data: {
               images: [
                 {
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
                   label: 'Image #1',
                   mimeType: 'image/jpeg',
                 },
                 {
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/page-2.jpg',
                   label: 'Image #2',
                   mimeType: 'image/jpeg',
                 },
@@ -865,7 +764,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'real-read-image-call',
         assetIndex: 1,
-        src: 'http://127.0.0.1:43125/v1/resources/page-2.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-2.jpg',
       }),
     ]);
     expect(projection.data.diagnostics).toEqual([]);
@@ -878,7 +777,6 @@ describe('composite content presenter', () => {
         template: 'storyboard-table',
         title: 'Opening',
         storyboardTable: {
-          schemaVersion: 1,
           kind: 'storyboard-table',
           title: 'Opening',
           scenes: [
@@ -929,7 +827,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/cache/page-1.jpg',
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+                  renderUri: 'http://127.0.0.1:43125/resources/page-1.jpg',
                   label: 'Page 1',
                   mimeType: 'image/jpeg',
                 },
@@ -945,7 +843,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image',
         type: 'image',
-        src: 'http://127.0.0.1:43125/v1/resources/page-1.jpg',
+        src: 'http://127.0.0.1:43125/resources/page-1.jpg',
         caption: 'Page 1',
         role: 'source',
       }),
@@ -973,8 +871,8 @@ describe('composite content presenter', () => {
 
     expect(projection.kind).toBe('comparison-grid');
     expect(projection.data.sections.map((section) => section.media[0]?.src)).toEqual([
-      'http://127.0.0.1:43125/v1/resources/asset-1.png',
-      'http://127.0.0.1:43125/v1/resources/asset-2.png',
+      'http://127.0.0.1:43125/resources/asset-1.png',
+      'http://127.0.0.1:43125/resources/asset-2.png',
     ]);
   });
 
@@ -1032,13 +930,13 @@ describe('composite content presenter', () => {
           },
         }),
         toolBlock(
-          makeImageToolCall('colorize', 'color-1', 'http://127.0.0.1:43125/v1/resources/color.png'),
+          makeImageToolCall('colorize', 'color-1', 'http://127.0.0.1:43125/resources/color.png'),
         ),
         toolBlock(
           makeImageToolCall(
             'generate',
             'generated-1',
-            'http://127.0.0.1:43125/v1/resources/generated.png',
+            'http://127.0.0.1:43125/resources/generated.png',
           ),
         ),
       ],
@@ -1056,13 +954,13 @@ describe('composite content presenter', () => {
       },
       {
         toolCallId: 'colorize',
-        src: 'http://127.0.0.1:43125/v1/resources/color.png',
+        src: 'http://127.0.0.1:43125/resources/color.png',
         caption: '上色图',
         role: 'colorized',
       },
       {
         toolCallId: 'generate',
-        src: 'http://127.0.0.1:43125/v1/resources/generated.png',
+        src: 'http://127.0.0.1:43125/resources/generated.png',
         caption: '生成图',
         role: 'generated',
       },
@@ -1092,7 +990,7 @@ describe('composite content presenter', () => {
               images: [
                 {
                   path: '/images/reference.png',
-                  renderUri: 'http://127.0.0.1:43125/v1/resources/reference.png',
+                  renderUri: 'http://127.0.0.1:43125/resources/reference.png',
                   label: 'reference',
                   mimeType: 'image/png',
                   byteSize: 100,
@@ -1108,7 +1006,7 @@ describe('composite content presenter', () => {
       expect.objectContaining({
         toolCallId: 'read-image',
         type: 'image',
-        src: 'http://127.0.0.1:43125/v1/resources/reference.png',
+        src: 'http://127.0.0.1:43125/resources/reference.png',
         caption: 'reference',
       }),
     ]);
@@ -1158,7 +1056,7 @@ describe('composite content presenter', () => {
                 {
                   id: 'model-1',
                   type: 'generated-model',
-                  path: '/repo/.neko/generated/model/character.glb',
+                  path: '/repo/neko/generated/model/character.glb',
                   mimeType: 'model/gltf-binary',
                 },
               ],
@@ -1252,7 +1150,7 @@ describe('composite content presenter', () => {
               urls: [
                 'file:///repo/out.png',
                 'data:image/png;base64,abc',
-                'http://127.0.0.1:43125/v1/resources/safe.png',
+                'http://127.0.0.1:43125/resources/safe.png',
               ],
               localPaths: ['/repo/out.png'],
             },
@@ -1265,14 +1163,13 @@ describe('composite content presenter', () => {
     expect(JSON.stringify(projection)).not.toContain('file://');
     expect(JSON.stringify(projection)).not.toContain('base64');
     expect(projection.data.sections[0]?.media).toEqual([
-      expect.objectContaining({ src: 'http://127.0.0.1:43125/v1/resources/safe.png' }),
+      expect.objectContaining({ src: 'http://127.0.0.1:43125/resources/safe.png' }),
     ]);
   });
 
   it('projects AnimationPlan domain blocks as storyboard shot overlays', () => {
     const composites = parseCompositeContentJson(
       JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'artifact-1',
         title: 'Storyboard With Plan',
@@ -1282,7 +1179,6 @@ describe('composite content presenter', () => {
             kind: 'domain',
             domainKind: 'StoryboardTable',
             payload: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Storyboard',
               scenes: [
@@ -1341,7 +1237,7 @@ describe('composite content presenter', () => {
 function makeImageToolCall(
   id = 'call-1',
   assetId = 'asset-1',
-  renderUri = 'http://127.0.0.1:43125/v1/resources/asset-1.png',
+  renderUri = 'http://127.0.0.1:43125/resources/asset-1.png',
 ): ToolCall {
   return {
     id,
@@ -1354,7 +1250,7 @@ function makeImageToolCall(
           {
             id: assetId,
             type: 'generated-image',
-            path: '/repo/.neko/generated/image/out.png',
+            path: '/repo/neko/generated/image/out.png',
             renderUri,
             mimeType: 'image/png',
             generatedAt: '2026-01-01T00:00:00.000Z',
@@ -1363,15 +1259,15 @@ function makeImageToolCall(
             ratio: '1:1',
             assetRef: {
               assetId,
-              uri: '${WORKSPACE}/.neko/generated/image/out.png',
+              uri: '${WORKSPACE}/neko/generated/image/out.png',
               mimeType: 'image/png',
             },
           },
           {
             id: 'asset-2',
             type: 'generated-image',
-            path: '/repo/.neko/generated/image/out-2.png',
-            renderUri: 'http://127.0.0.1:43125/v1/resources/asset-2.png',
+            path: '/repo/neko/generated/image/out-2.png',
+            renderUri: 'http://127.0.0.1:43125/resources/asset-2.png',
             mimeType: 'image/png',
             generatedAt: '2026-01-01T00:00:00.000Z',
             width: 1024,

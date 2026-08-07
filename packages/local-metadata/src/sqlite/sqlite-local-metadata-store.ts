@@ -1,12 +1,8 @@
 import {
   LocalMetadataError,
-  validateLocalMetadataMigrationSequence,
   type LocalMetadataBackupRequest,
   type LocalMetadataBackupResult,
   type LocalMetadataIntegrityReport,
-  type LocalMetadataMigration,
-  type LocalMetadataMigrationOptions,
-  type LocalMetadataMigrationResult,
   type LocalMetadataOpenOptions,
   type LocalMetadataRestoreRequest,
   type LocalMetadataRestoreResult,
@@ -16,7 +12,7 @@ import {
   type LocalMetadataTransactionMode,
   type LocalMetadataTransactionOptions,
 } from '../contracts';
-import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from '../model';
+import type { LocalMetadataPartition } from '../model';
 import type {
   CatalogItemKind,
   CatalogItemQuery,
@@ -37,8 +33,6 @@ import type {
   MediaMetadataRecord,
   MediaMetadataRepository,
   MediaMetadataUpsertRequest,
-  ProjectionVersionRepository,
-  ProjectionVersionUpdate,
   ResourceCacheMetadataRepository,
   ResourceCacheProjectionReplaceRequest,
   SearchDocumentInsertMissingResult,
@@ -48,6 +42,8 @@ import type {
   SearchDocumentRecord,
   SearchDocumentRepository,
   SemanticProjectionInsertMissingResult,
+  SemanticProjectionListResult,
+  SemanticProjectionReadDiagnostic,
   SemanticProjectionRecord,
   SemanticProjectionReplaceRequest,
   SemanticProjectionReplaceSourceRequest,
@@ -63,20 +59,20 @@ import type {
   WorkspaceRegistryRepository,
 } from '../repositories';
 import type {
+  EntityAssetProjectionDiagnostic,
   EntityAssetProjectionInsertMissingResult,
   EntityAssetProjectionKind,
   EntityAssetProjectionQuery,
+  EntityAssetProjectionQueryResult,
   EntityAssetProjectionRecord,
   EntityAssetProjectionReplaceSourceRequest,
   EntityAssetProjectionRepository,
-  EntityBindingAvailabilityProjectionValue,
 } from '@neko/entity-domain';
-import { isCreativeEntityCandidate, isCreativeEntityKind } from '@neko/entity-domain';
 import {
-  isEntityRepresentationBindingAvailability,
-  isEntityRepresentationRole,
+  isCreativeEntityKind,
+  isEntityBindingAvailabilityProjectionValue,
+  isProjectEntityCandidateProjection,
 } from '@neko/entity-domain';
-import { isContentLocator } from '@neko/content';
 import type { MediaFileMetadata } from '@neko/media';
 import {
   isResourceCacheEntry,
@@ -87,11 +83,11 @@ import {
 import {
   isProjectIndexFreshness,
   isProjectSemanticCoverageAnalysisKind,
+  isProjectSemanticProviderMetadata,
   isProjectSearchItemKind,
   isProjectSearchPartitionKind,
 } from '@neko/search-domain';
-import { isMediaSemanticIndex } from '@neko/search-domain';
-import { isCompactMediaSemanticIndex, isSemanticEvidenceProjection } from '@neko/search-domain';
+import { isCompactMediaSemanticIndex } from '@neko/search-domain';
 import {
   NekoStorageContractError,
   createWorkspacePortableLocator,
@@ -104,16 +100,14 @@ import type {
   SqliteRow,
 } from './driver';
 import { serializeLocalMetadataJson } from '../secret-boundary';
-
-const MIGRATION_REGISTRY_SQL = `CREATE TABLE IF NOT EXISTS schema_migrations (
-  namespace TEXT NOT NULL,
-  version INTEGER NOT NULL CHECK (version > 0),
-  name TEXT NOT NULL,
-  checksum TEXT NOT NULL,
-  ownership TEXT NOT NULL CHECK (ownership IN ('system', 'state', 'cache')),
-  applied_at TEXT NOT NULL,
-  PRIMARY KEY (namespace, version)
-) STRICT`;
+import {
+  assertAssetLibraryMembershipRelocations,
+  assertAssetLibraryMembershipRegistration,
+  type AssetLibraryMembershipRelocation,
+  type AssetLibraryMembershipRecord,
+  type AssetLibraryMembershipRegistration,
+  type AssetLibraryMembershipRepository,
+} from '@neko/assets-domain/global-library/membership';
 
 export interface SqliteLocalMetadataStoreOptions {
   readonly expectedDatabasePath: string;
@@ -181,15 +175,6 @@ function readFiniteNumber(row: SqliteRow, column: string): number {
     });
   }
   return result;
-}
-
-function requireRow(row: SqliteRow | undefined, operation: string): SqliteRow {
-  if (row) return row;
-  throw new LocalMetadataError({
-    code: 'metadata-integrity-failed',
-    operation,
-    message: `Expected ${operation} to return a row`,
-  });
 }
 
 function parseLocator(kind: string, value: string): WorkspacePortableLocator {
@@ -282,6 +267,39 @@ function decodeConversation(row: SqliteRow): ConversationCatalogRecord {
   };
 }
 
+function decodeAssetLibraryMembership(row: SqliteRow): AssetLibraryMembershipRecord {
+  const state = readString(row, 'membership_state');
+  if (state !== 'active' && state !== 'removed') {
+    throw new LocalMetadataError({
+      code: 'metadata-integrity-failed',
+      operation: 'decode-asset-library-membership',
+      message: `Unknown Asset Library membership state: ${state}`,
+    });
+  }
+  const byteLength = row['byte_length'];
+  if (
+    byteLength !== null &&
+    (typeof byteLength !== 'number' || !Number.isSafeInteger(byteLength))
+  ) {
+    throw new LocalMetadataError({
+      code: 'metadata-integrity-failed',
+      operation: 'decode-asset-library-membership',
+      message: 'Stored Asset Library membership byteLength is invalid.',
+    });
+  }
+  return {
+    membershipId: readString(row, 'membership_id'),
+    sourceRelativePath: readString(row, 'source_relative_path'),
+    label: readString(row, 'label'),
+    mediaType: readNullableString(row, 'media_type'),
+    byteLength,
+    modifiedAt: readNullableString(row, 'modified_at'),
+    state,
+    createdAt: readString(row, 'created_at'),
+    updatedAt: readString(row, 'updated_at'),
+  };
+}
+
 function decodeTaskState(row: SqliteRow): TaskStateRecord {
   return {
     workspaceId: readString(row, 'workspace_id'),
@@ -365,21 +383,9 @@ function decodeSearchDocument(row: SqliteRow): SearchDocumentRecord {
   return document;
 }
 
-type SemanticEvidenceKind = 'text-segment' | 'entity-mention' | 'semantic-tag' | 'perception-ref';
-
-interface EncodedSemanticEvidence {
-  readonly kind: SemanticEvidenceKind;
-  readonly evidenceId: string;
-  readonly ordinal: number;
-  readonly payload: unknown;
-}
-
-function decodeSemanticProjection(
-  sourceRow: SqliteRow,
-  evidenceRows: readonly SqliteRow[],
-): SemanticProjectionRecord {
+function decodeSemanticProjection(sourceRow: SqliteRow): SemanticProjectionRecord {
   const sourceId = readString(sourceRow, 'source_id');
-  const indexMetadata = parseJsonColumn(
+  const index = parseJsonColumn(
     readString(sourceRow, 'index_json'),
     'decode-semantic-source-index',
   );
@@ -396,9 +402,9 @@ function decodeSemanticProjection(
     'decode-semantic-coverage',
   );
   if (
-    !isRecord(indexMetadata) ||
-    JSON.stringify(indexMetadata['sourceRef']) !== JSON.stringify(sourceRef) ||
-    !isSemanticProviderMetadata(provider) ||
+    !isCompactMediaSemanticIndex(index) ||
+    JSON.stringify(index.sourceRef) !== JSON.stringify(sourceRef) ||
+    !isProjectSemanticProviderMetadata(provider) ||
     !Array.isArray(coverage) ||
     !coverage.every(isProjectSemanticCoverageAnalysisKind)
   ) {
@@ -406,39 +412,6 @@ function decodeSemanticProjection(
       code: 'metadata-integrity-failed',
       operation: 'decode-semantic-projection',
       message: `Stored semantic source metadata is invalid: ${sourceId}`,
-    });
-  }
-  const evidence = evidenceRows.map(decodeSemanticEvidence);
-  const compactEvidence = evidence
-    .filter((item) => item.kind === 'text-segment')
-    .map((item) => item.payload);
-  if (!compactEvidence.every(isSemanticEvidenceProjection)) {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-semantic-projection',
-      message: `Stored semantic evidence contains an incompatible body-bearing payload: ${sourceId}`,
-    });
-  }
-  const entityMentions = evidence
-    .filter((item) => item.kind === 'entity-mention')
-    .map((item) => item.payload);
-  const semanticTags = evidence
-    .filter((item) => item.kind === 'semantic-tag')
-    .map((item) => item.payload);
-  const perceptionRefs = evidence
-    .filter((item) => item.kind === 'perception-ref')
-    .map((item) => item.payload);
-  const index: unknown = {
-    ...indexMetadata,
-    ...(entityMentions.length > 0 ? { entityMentions } : {}),
-    ...(semanticTags.length > 0 ? { semanticTags } : {}),
-    ...(perceptionRefs.length > 0 ? { perceptionRefs } : {}),
-  };
-  if (!isCompactMediaSemanticIndex(index)) {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-semantic-projection',
-      message: `Stored semantic evidence does not reconstruct a valid compact index: ${sourceId}`,
     });
   }
   const freshness = readString(sourceRow, 'freshness');
@@ -456,25 +429,7 @@ function decodeSemanticProjection(
     coverage,
     freshness,
     index,
-    evidence: compactEvidence,
     updatedAt: readString(sourceRow, 'updated_at'),
-  };
-}
-
-function decodeSemanticEvidence(row: SqliteRow): EncodedSemanticEvidence {
-  const kind = readString(row, 'evidence_kind');
-  if (!isSemanticEvidenceKind(kind)) {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-semantic-evidence',
-      message: `Stored semantic evidence kind is invalid: ${kind}`,
-    });
-  }
-  return {
-    kind,
-    evidenceId: readString(row, 'evidence_id'),
-    ordinal: readNumber(row, 'ordinal'),
-    payload: parseJsonColumn(readString(row, 'evidence_json'), 'decode-semantic-evidence'),
   };
 }
 
@@ -508,36 +463,6 @@ function parseMetadataTimestamp(value: string | null, operation: string): number
   return timestamp;
 }
 
-function decodeProjectionVersion(row: SqliteRow): LocalMetadataPartitionRevision {
-  const scope = readString(row, 'partition_scope');
-  const freshness = readString(row, 'freshness');
-  if (scope !== 'global' && scope !== 'workspace') {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-projection-version',
-      message: `Unknown partition scope: ${scope}`,
-    });
-  }
-  if (freshness !== 'fresh' && freshness !== 'stale' && freshness !== 'rebuilding') {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-projection-version',
-      message: `Unknown projection freshness: ${freshness}`,
-    });
-  }
-  return {
-    partition: {
-      scope,
-      workspaceId: readNullableString(row, 'workspace_id'),
-      domain: readString(row, 'domain'),
-    },
-    revision: readNumber(row, 'revision'),
-    freshness,
-    diagnostic: readNullableString(row, 'diagnostic'),
-    updatedAt: readString(row, 'updated_at'),
-  };
-}
-
 class ExclusiveCoordinator {
   private tail: Promise<void> = Promise.resolve();
 
@@ -563,6 +488,23 @@ class RawWorkspaceRegistryRepository implements WorkspaceRegistryRepository {
     );
     const row = rows[0];
     return row ? decodeWorkspace(row) : null;
+  }
+
+  async listAll(): Promise<readonly WorkspaceRegistryRecord[]> {
+    const rows = await this.connection().all(
+      `SELECT workspace_id, current_locator_kind, current_locator_value,
+              locator_history_json, last_seen_at, orphaned_at
+         FROM workspaces
+        ORDER BY last_seen_at DESC, workspace_id`,
+    );
+    return rows.map(decodeWorkspace);
+  }
+
+  async remove(workspaceId: string): Promise<boolean> {
+    const result = await this.connection().run('DELETE FROM workspaces WHERE workspace_id = ?', [
+      workspaceId,
+    ]);
+    return result.changes === 1;
   }
 
   async findByCurrentLocator(
@@ -622,7 +564,7 @@ class RawWorkspaceRegistryRepository implements WorkspaceRegistryRepository {
         request.identity.workspaceId,
         request.locator.kind,
         request.locator.value,
-        JSON.stringify([request.locator]),
+        serializeLocalMetadataJson([request.locator], 'bind-workspace-locator-history'),
         request.seenAt,
       ],
     );
@@ -653,7 +595,7 @@ class RawWorkspaceRegistryRepository implements WorkspaceRegistryRepository {
       [
         request.locator.kind,
         request.locator.value,
-        JSON.stringify(locatorHistory),
+        serializeLocalMetadataJson(locatorHistory, 'rebind-workspace-locator-history'),
         request.reboundAt,
         request.workspaceId,
       ],
@@ -808,6 +750,223 @@ class RawConversationCatalogRepository implements ConversationCatalogRepository 
   }
 }
 
+class RawAssetLibraryMembershipRepository implements AssetLibraryMembershipRepository {
+  constructor(private readonly connection: () => SqliteConnection) {}
+
+  async get(membershipId: string): Promise<AssetLibraryMembershipRecord | null> {
+    const rows = await this.connection().all(
+      `${ASSET_LIBRARY_MEMBERSHIP_SELECT} WHERE membership_id = ?`,
+      [membershipId],
+    );
+    return rows[0] ? decodeAssetLibraryMembership(rows[0]) : null;
+  }
+
+  async findBySourceRelativePath(
+    sourceRelativePath: string,
+  ): Promise<AssetLibraryMembershipRecord | null> {
+    const rows = await this.connection().all(
+      `${ASSET_LIBRARY_MEMBERSHIP_SELECT} WHERE source_relative_path = ?`,
+      [sourceRelativePath],
+    );
+    return rows[0] ? decodeAssetLibraryMembership(rows[0]) : null;
+  }
+
+  async listActive(): Promise<readonly AssetLibraryMembershipRecord[]> {
+    const rows = await this.connection().all(
+      `${ASSET_LIBRARY_MEMBERSHIP_SELECT}
+       WHERE membership_state = 'active'
+       ORDER BY label, membership_id`,
+    );
+    return rows.map(decodeAssetLibraryMembership);
+  }
+
+  async registerDiscovered(
+    registrations: readonly AssetLibraryMembershipRegistration[],
+  ): Promise<void> {
+    for (const registration of registrations) {
+      assertAssetLibraryMembershipRegistration(registration);
+      const existing = await this.findBySourceRelativePath(registration.sourceRelativePath);
+      if (existing?.state === 'removed') continue;
+      await this.writeActive(registration);
+    }
+  }
+
+  async activate(
+    registration: AssetLibraryMembershipRegistration,
+  ): Promise<AssetLibraryMembershipRecord> {
+    await this.writeActive(registration);
+    const membership = await this.findBySourceRelativePath(registration.sourceRelativePath);
+    if (!membership) {
+      throw new LocalMetadataError({
+        code: 'metadata-transaction-failed',
+        operation: 'activate-asset-library-membership',
+        message: `Asset membership was not committed: ${registration.membershipId}`,
+      });
+    }
+    return membership;
+  }
+
+  async removeMany(
+    membershipIds: readonly string[],
+    removedAt: string,
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
+    assertUniqueMembershipIds(membershipIds, 'remove');
+    parseMetadataTimestamp(removedAt, 'remove-asset-library-memberships');
+    const memberships = await Promise.all(
+      membershipIds.map((membershipId) => this.get(membershipId)),
+    );
+    const staleIndex = memberships.findIndex((membership) => membership?.state !== 'active');
+    if (staleIndex >= 0) {
+      throw new LocalMetadataError({
+        code: 'metadata-transaction-failed',
+        operation: 'remove-asset-library-memberships',
+        message: `Active Asset membership does not exist: ${membershipIds[staleIndex]}`,
+      });
+    }
+    for (const membershipId of membershipIds) {
+      const result = await this.connection().run(
+        `UPDATE asset_library_memberships
+         SET membership_state = 'removed', updated_at = ?
+         WHERE membership_id = ? AND membership_state = 'active'`,
+        [removedAt, membershipId],
+      );
+      if (result.changes !== 1) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'remove-asset-library-memberships',
+          message: `Asset membership changed during removal: ${membershipId}`,
+        });
+      }
+    }
+    return Promise.all(
+      membershipIds.map(async (membershipId) => {
+        const membership = await this.get(membershipId);
+        if (!membership) {
+          throw new LocalMetadataError({
+            code: 'metadata-integrity-failed',
+            operation: 'remove-asset-library-memberships',
+            message: `Removed Asset membership disappeared: ${membershipId}`,
+          });
+        }
+        return membership;
+      }),
+    );
+  }
+
+  async relocateMany(
+    relocations: readonly AssetLibraryMembershipRelocation[],
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
+    assertAssetLibraryMembershipRelocations(relocations);
+    const current = await Promise.all(
+      relocations.map((relocation) => this.get(relocation.membershipId)),
+    );
+    for (const [index, relocation] of relocations.entries()) {
+      const membership = current[index];
+      if (
+        !membership ||
+        membership.state !== 'active' ||
+        membership.sourceRelativePath !== relocation.expectedSourceRelativePath
+      ) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'relocate-asset-library-memberships',
+          message: `Asset membership changed before relocation: ${relocation.membershipId}`,
+        });
+      }
+      const target = await this.findBySourceRelativePath(relocation.sourceRelativePath);
+      if (target && target.membershipId !== relocation.membershipId) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'relocate-asset-library-memberships',
+          message: `Asset membership target already exists: ${relocation.sourceRelativePath}`,
+        });
+      }
+    }
+    for (const relocation of relocations) {
+      const result = await this.connection().run(
+        `UPDATE asset_library_memberships
+         SET source_relative_path = ?, label = ?, updated_at = ?
+         WHERE membership_id = ? AND source_relative_path = ? AND membership_state = 'active'`,
+        [
+          relocation.sourceRelativePath,
+          relocation.label,
+          relocation.relocatedAt,
+          relocation.membershipId,
+          relocation.expectedSourceRelativePath,
+        ],
+      );
+      if (result.changes !== 1) {
+        throw new LocalMetadataError({
+          code: 'metadata-transaction-failed',
+          operation: 'relocate-asset-library-memberships',
+          message: `Asset membership changed during relocation: ${relocation.membershipId}`,
+        });
+      }
+    }
+    return Promise.all(
+      relocations.map(async ({ membershipId }) => {
+        const membership = await this.get(membershipId);
+        if (!membership) {
+          throw new LocalMetadataError({
+            code: 'metadata-integrity-failed',
+            operation: 'relocate-asset-library-memberships',
+            message: `Relocated Asset membership disappeared: ${membershipId}`,
+          });
+        }
+        return membership;
+      }),
+    );
+  }
+
+  private async writeActive(registration: AssetLibraryMembershipRegistration): Promise<void> {
+    assertAssetLibraryMembershipRegistration(registration);
+    await this.connection().run(
+      `INSERT INTO asset_library_memberships (
+        membership_id, source_relative_path, label, media_type, byte_length, modified_at,
+        membership_state, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
+      ON CONFLICT(source_relative_path) DO UPDATE SET
+        label = excluded.label,
+        media_type = excluded.media_type,
+        byte_length = excluded.byte_length,
+        modified_at = excluded.modified_at,
+        membership_state = 'active',
+        updated_at = excluded.updated_at`,
+      [
+        registration.membershipId,
+        registration.sourceRelativePath,
+        registration.label,
+        registration.mediaType,
+        registration.byteLength,
+        registration.modifiedAt,
+        registration.registeredAt,
+        registration.registeredAt,
+      ],
+    );
+  }
+}
+
+const ASSET_LIBRARY_MEMBERSHIP_SELECT = `SELECT
+  membership_id, source_relative_path, label, media_type, byte_length, modified_at,
+  membership_state, created_at, updated_at
+  FROM asset_library_memberships`;
+
+function assertUniqueMembershipIds(membershipIds: readonly string[], operation: string): void {
+  if (membershipIds.length === 0) {
+    throw new Error(`Asset membership ${operation} requires at least one item.`);
+  }
+  const unique = new Set<string>();
+  for (const membershipId of membershipIds) {
+    if (membershipId.trim().length === 0) {
+      throw new Error(`Asset membership ${operation} identity is required.`);
+    }
+    if (unique.has(membershipId)) {
+      throw new Error(`Duplicate Asset membership ${operation}: ${membershipId}`);
+    }
+    unique.add(membershipId);
+  }
+}
+
 class RawTaskStateRepository implements TaskStateRepository {
   constructor(private readonly connection: () => SqliteConnection) {}
 
@@ -947,10 +1106,7 @@ class RawTaskCheckpointRepository implements TaskCheckpointRepository {
 }
 
 class RawResourceCacheMetadataRepository implements ResourceCacheMetadataRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async get(
     partition: LocalMetadataPartition,
@@ -1044,20 +1200,11 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
         );
       }
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      freshness: 'fresh',
-      diagnostic: null,
-      updatedAt: request.updatedAt,
-    });
   }
 }
 
 class RawMediaMetadataRepository implements MediaMetadataRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async get(
     partition: LocalMetadataPartition,
@@ -1108,12 +1255,6 @@ class RawMediaMetadataRepository implements MediaMetadataRepository {
         request.record.updatedAt,
       ],
     );
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      freshness: 'fresh',
-      diagnostic: null,
-      updatedAt: request.record.updatedAt,
-    });
   }
 
   async delete(partition: LocalMetadataPartition, sourceKey: string): Promise<boolean> {
@@ -1123,23 +1264,12 @@ class RawMediaMetadataRepository implements MediaMetadataRepository {
       'DELETE FROM media_metadata WHERE partition_key = ? AND source_key = ?',
       [partitionKey(partition), sourceKey],
     );
-    if (result.changes > 0) {
-      await this.projectionVersions.increment({
-        partition,
-        freshness: 'fresh',
-        diagnostic: null,
-        updatedAt: new Date().toISOString(),
-      });
-    }
     return result.changes === 1;
   }
 }
 
 class RawSearchDocumentRepository implements SearchDocumentRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async list(partition: LocalMetadataPartition): Promise<readonly SearchDocumentRecord[]> {
     assertSearchDocumentPartition(partition);
@@ -1208,11 +1338,6 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
         ],
       );
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(request.documents, 'search-documents-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async replaceSearchPartition(request: SearchDocumentPartitionReplaceRequest): Promise<void> {
@@ -1237,11 +1362,6 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
     for (const document of request.documents) {
       await this.insertDocument(request.partition, document);
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(request.documents, 'search-documents-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async insertMissingSearchPartition(
@@ -1265,14 +1385,6 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
     for (const document of request.documents) {
       const inserted = await this.insertDocument(request.partition, document, true);
       (inserted ? insertedDocumentIds : preservedDocumentIds).push(document.documentId);
-    }
-    if (insertedDocumentIds.length > 0) {
-      const currentDocuments = await this.list(request.partition);
-      await this.projectionVersions.increment({
-        partition: request.partition,
-        ...projectionFreshnessUpdate(currentDocuments, 'search-documents-not-fresh'),
-        updatedAt: request.updatedAt,
-      });
     }
     return { insertedDocumentIds, preservedDocumentIds };
   }
@@ -1308,12 +1420,9 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
 }
 
 class RawSemanticProjectionRepository implements SemanticProjectionRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
-  async list(partition: LocalMetadataPartition): Promise<readonly SemanticProjectionRecord[]> {
+  async list(partition: LocalMetadataPartition): Promise<SemanticProjectionListResult> {
     assertSemanticProjectionPartition(partition);
     const key = partitionKey(partition);
     const sourceRows = await this.connection().all(
@@ -1324,23 +1433,21 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         ORDER BY source_id`,
       [key],
     );
-    const evidenceRows = await this.connection().all(
-      `SELECT source_id, evidence_kind, evidence_id, ordinal, evidence_json
-         FROM semantic_evidence
-        WHERE partition_key = ?
-        ORDER BY source_id, ordinal, evidence_kind, evidence_id`,
-      [key],
-    );
-    const evidenceBySource = new Map<string, SqliteRow[]>();
-    for (const row of evidenceRows) {
+    const records: SemanticProjectionRecord[] = [];
+    const diagnostics: SemanticProjectionReadDiagnostic[] = [];
+    for (const row of sourceRows) {
       const sourceId = readString(row, 'source_id');
-      const rows = evidenceBySource.get(sourceId) ?? [];
-      rows.push(row);
-      evidenceBySource.set(sourceId, rows);
+      try {
+        records.push(decodeSemanticProjection(row));
+      } catch (error) {
+        diagnostics.push({
+          code: 'invalid-semantic-projection-record',
+          sourceId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
-    return sourceRows.map((row) =>
-      decodeSemanticProjection(row, evidenceBySource.get(readString(row, 'source_id')) ?? []),
-    );
+    return { records, diagnostics };
   }
 
   async get(
@@ -1359,14 +1466,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     );
     const sourceRow = sourceRows[0];
     if (!sourceRow) return null;
-    const evidenceRows = await this.connection().all(
-      `SELECT source_id, evidence_kind, evidence_id, ordinal, evidence_json
-         FROM semantic_evidence
-        WHERE partition_key = ? AND source_id = ?
-        ORDER BY ordinal, evidence_kind, evidence_id`,
-      [key, sourceId],
-    );
-    return decodeSemanticProjection(sourceRow, evidenceRows);
+    return decodeSemanticProjection(sourceRow);
   }
 
   async replacePartition(request: SemanticProjectionReplaceRequest): Promise<void> {
@@ -1375,7 +1475,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     const sourceIds = new Set<string>();
     const prepared = request.sources.map((source) => {
       assertSemanticProjectionRecord(source, sourceIds);
-      return { source, ...splitSemanticProjection(source) };
+      return source;
     });
     await this.connection().run('DELETE FROM semantic_sources WHERE partition_key = ?', [
       partitionKey(request.partition),
@@ -1383,11 +1483,6 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     for (const item of prepared) {
       await this.insertSource(request.partition, item);
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(request.sources, 'semantic-sources-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async replaceSource(request: SemanticProjectionReplaceSourceRequest): Promise<void> {
@@ -1400,22 +1495,12 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         message: 'Semantic source replacement timestamp must match its source record',
       });
     }
-    const prepared = {
-      source: request.source,
-      ...splitSemanticProjection(request.source),
-    };
     assertSemanticProjectionRecord(request.source, new Set<string>());
     await this.connection().run(
       'DELETE FROM semantic_sources WHERE partition_key = ? AND source_id = ?',
       [partitionKey(request.partition), request.source.sourceId],
     );
-    await this.insertSource(request.partition, prepared);
-    const currentSources = await this.list(request.partition);
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
+    await this.insertSource(request.partition, request.source);
   }
 
   async deleteSource(
@@ -1431,65 +1516,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
       [partitionKey(partition), sourceId],
     );
     if (result.changes === 0) return false;
-    const currentSources = await this.list(partition);
-    await this.projectionVersions.increment({
-      partition,
-      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
-      updatedAt,
-    });
     return true;
-  }
-
-  async clearBodyBearingSources(
-    partition: LocalMetadataPartition,
-    updatedAt: string,
-  ): Promise<readonly string[]> {
-    assertSemanticProjectionPartition(partition);
-    parseMetadataTimestamp(updatedAt, 'clear-body-bearing-semantic-sources');
-    const rows = await this.connection().all(
-      `SELECT source_id
-         FROM semantic_sources
-        WHERE partition_key = ?
-          AND EXISTS (
-            SELECT 1
-              FROM semantic_evidence
-             WHERE semantic_evidence.partition_key = semantic_sources.partition_key
-               AND semantic_evidence.source_id = semantic_sources.source_id
-               AND semantic_evidence.evidence_kind = 'text-segment'
-               AND json_type(semantic_evidence.evidence_json, '$.text') IS NOT NULL
-          )
-        ORDER BY source_id`,
-      [partitionKey(partition)],
-    );
-    const sourceIds = rows.map((row) => readString(row, 'source_id'));
-    if (sourceIds.length === 0) return [];
-    const result = await this.connection().run(
-      `DELETE FROM semantic_sources
-        WHERE partition_key = ?
-          AND EXISTS (
-            SELECT 1
-              FROM semantic_evidence
-             WHERE semantic_evidence.partition_key = semantic_sources.partition_key
-               AND semantic_evidence.source_id = semantic_sources.source_id
-               AND semantic_evidence.evidence_kind = 'text-segment'
-               AND json_type(semantic_evidence.evidence_json, '$.text') IS NOT NULL
-          )`,
-      [partitionKey(partition)],
-    );
-    if (result.changes !== sourceIds.length) {
-      throw new LocalMetadataError({
-        code: 'metadata-transaction-failed',
-        operation: 'clear-body-bearing-semantic-sources',
-        message: 'Body-bearing semantic cache cleanup changed an unexpected number of sources',
-      });
-    }
-    const currentSources = await this.list(partition);
-    await this.projectionVersions.increment({
-      partition,
-      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
-      updatedAt,
-    });
-    return sourceIds;
   }
 
   async insertMissing(
@@ -1500,33 +1527,23 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     const sourceIds = new Set<string>();
     const prepared = request.sources.map((source) => {
       assertSemanticProjectionRecord(source, sourceIds);
-      return { source, ...splitSemanticProjection(source) };
+      return source;
     });
     const insertedSourceIds: string[] = [];
     const preservedSourceIds: string[] = [];
     for (const item of prepared) {
       if (!(await this.insertSource(request.partition, item, true))) {
-        preservedSourceIds.push(item.source.sourceId);
+        preservedSourceIds.push(item.sourceId);
         continue;
       }
-      insertedSourceIds.push(item.source.sourceId);
-    }
-    if (insertedSourceIds.length > 0) {
-      const currentSources = await this.list(request.partition);
-      await this.projectionVersions.increment({
-        partition: request.partition,
-        ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
-        updatedAt: request.updatedAt,
-      });
+      insertedSourceIds.push(item.sourceId);
     }
     return { insertedSourceIds, preservedSourceIds };
   }
 
   private async insertSource(
     partition: LocalMetadataPartition,
-    item: { readonly source: SemanticProjectionRecord } & ReturnType<
-      typeof splitSemanticProjection
-    >,
+    source: SemanticProjectionRecord,
     preserveExisting = false,
   ): Promise<boolean> {
     const key = partitionKey(partition);
@@ -1541,47 +1558,26 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         key,
         partition.scope,
         partition.workspaceId,
-        item.source.sourceId,
-        item.source.index.assetId,
-        serializeLocalMetadataJson(item.source.index.sourceRef, 'write-semantic-source-ref'),
-        item.source.sourceFingerprint,
-        serializeLocalMetadataJson(item.source.provider, 'write-semantic-provider'),
-        serializeLocalMetadataJson(item.source.coverage, 'write-semantic-coverage'),
-        item.source.freshness,
-        serializeLocalMetadataJson(item.indexMetadata, 'write-semantic-source-index'),
-        item.source.updatedAt,
+        source.sourceId,
+        source.index.assetId,
+        serializeLocalMetadataJson(source.index.sourceRef, 'write-semantic-source-ref'),
+        source.sourceFingerprint,
+        serializeLocalMetadataJson(source.provider, 'write-semantic-provider'),
+        serializeLocalMetadataJson(source.coverage, 'write-semantic-coverage'),
+        source.freshness,
+        serializeLocalMetadataJson(source.index, 'write-semantic-source-index'),
+        source.updatedAt,
       ],
     );
     if (result.changes === 0) return false;
-    for (const evidence of item.evidence) {
-      await this.connection().run(
-        `INSERT INTO semantic_evidence (
-          partition_key, partition_scope, workspace_id, source_id,
-          evidence_kind, evidence_id, ordinal, evidence_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          key,
-          partition.scope,
-          partition.workspaceId,
-          item.source.sourceId,
-          evidence.kind,
-          evidence.evidenceId,
-          evidence.ordinal,
-          serializeLocalMetadataJson(evidence.payload, 'write-semantic-evidence'),
-        ],
-      );
-    }
     return true;
   }
 }
 
 class RawEntityAssetProjectionRepository implements EntityAssetProjectionRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
-  async list(query: EntityAssetProjectionQuery): Promise<readonly EntityAssetProjectionRecord[]> {
+  async list(query: EntityAssetProjectionQuery): Promise<EntityAssetProjectionQueryResult> {
     assertEntityAssetProjectionPartition(query.partition);
     const clauses = ['partition_key = ?'];
     const parameters: SqliteBindingValue[] = [partitionKey(query.partition)];
@@ -1615,7 +1611,21 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
         ORDER BY projection_kind, projection_id`,
       parameters,
     );
-    return rows.map(decodeEntityAssetProjection);
+    const records: EntityAssetProjectionRecord[] = [];
+    const diagnostics: EntityAssetProjectionDiagnostic[] = [];
+    for (const row of rows) {
+      try {
+        records.push(decodeEntityAssetProjection(row));
+      } catch (error) {
+        diagnostics.push({
+          code: 'invalid-entity-asset-projection',
+          projectionId: readString(row, 'projection_id'),
+          sourceId: readString(row, 'source_id'),
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return { records, diagnostics };
   }
 
   async replaceSource(request: EntityAssetProjectionReplaceSourceRequest): Promise<void> {
@@ -1662,12 +1672,6 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
         ],
       );
     }
-    const current = await this.list({ partition: request.partition });
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      ...projectionFreshnessUpdate(current, 'entity-asset-projections-not-fresh'),
-      updatedAt: request.updatedAt,
-    });
   }
 
   async insertMissing(
@@ -1717,23 +1721,12 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
       const projectionKey = `${record.kind}:${record.projectionId}`;
       (result.changes === 0 ? preservedProjectionKeys : insertedProjectionKeys).push(projectionKey);
     }
-    if (insertedProjectionKeys.length > 0) {
-      const current = await this.list({ partition: request.partition });
-      await this.projectionVersions.increment({
-        partition: request.partition,
-        ...projectionFreshnessUpdate(current, 'entity-asset-projections-not-fresh'),
-        updatedAt: request.updatedAt,
-      });
-    }
     return { insertedProjectionKeys, preservedProjectionKeys };
   }
 }
 
 class RawCatalogProjectionRepository implements CatalogProjectionRepository {
-  constructor(
-    private readonly connection: () => SqliteConnection,
-    private readonly projectionVersions: ProjectionVersionRepository,
-  ) {}
+  constructor(private readonly connection: () => SqliteConnection) {}
 
   async list(query: CatalogItemQuery): Promise<readonly CatalogItemRecord[]> {
     assertCatalogPartition(query.partition);
@@ -1797,17 +1790,11 @@ class RawCatalogProjectionRepository implements CatalogProjectionRepository {
           item.relativePath,
           item.fingerprint,
           item.enabled ? 1 : 0,
-          JSON.stringify(item.diagnosticCodes),
+          serializeLocalMetadataJson(item.diagnosticCodes, 'replace-catalog-diagnostic-codes'),
           item.updatedAt,
         ],
       );
     }
-    await this.projectionVersions.increment({
-      partition: request.partition,
-      freshness: 'fresh',
-      diagnostic: null,
-      updatedAt: request.updatedAt,
-    });
   }
 }
 
@@ -1955,8 +1942,7 @@ function isPortableCatalogPath(value: string): boolean {
     normalized !== '..' &&
     !normalized.startsWith('../') &&
     !normalized.includes('/../') &&
-    !normalized.startsWith('.neko/.cache/') &&
-    !normalized.includes('/.neko/.cache/')
+    !hasHiddenPathSegment(normalized)
   );
 }
 
@@ -2114,8 +2100,7 @@ function assertPortableProjectionPath(value: string, field: string): void {
     normalized === '..' ||
     normalized.startsWith('../') ||
     normalized.includes('/../') ||
-    normalized.includes('/.neko/.cache/') ||
-    normalized.startsWith('.neko/.cache/')
+    hasHiddenPathSegment(normalized)
   ) {
     throw new LocalMetadataError({
       code: 'metadata-transaction-failed',
@@ -2132,18 +2117,6 @@ function createFtsMatchQuery(text: string): string | null {
     .filter(Boolean)
     .map((term) => `"${term.replace(/"/gu, '""')}"*`);
   return terms.length > 0 ? terms.join(' AND ') : null;
-}
-
-function projectionFreshnessUpdate(
-  records: readonly { readonly freshness: string }[],
-  staleDiagnostic: string,
-): {
-  readonly freshness: 'fresh' | 'stale';
-  readonly diagnostic: string | null;
-} {
-  return records.every((record) => record.freshness === 'fresh')
-    ? { freshness: 'fresh', diagnostic: null }
-    : { freshness: 'stale', diagnostic: staleDiagnostic };
 }
 
 function assertSemanticProjectionPartition(partition: LocalMetadataPartition): void {
@@ -2165,13 +2138,10 @@ function assertSemanticProjectionRecord(
     !record.sourceId.trim() ||
     sourceIds.has(record.sourceId) ||
     !record.sourceFingerprint.trim() ||
-    !isSemanticProviderMetadata(record.provider) ||
+    !isProjectSemanticProviderMetadata(record.provider) ||
     !record.coverage.every(isProjectSemanticCoverageAnalysisKind) ||
     !isProjectIndexFreshness(record.freshness) ||
-    !isMediaSemanticIndex(record.index) ||
-    Object.prototype.hasOwnProperty.call(record.index, 'textSegments') ||
-    !Array.isArray(record.evidence) ||
-    !record.evidence.every(isSemanticEvidenceProjection) ||
+    !isCompactMediaSemanticIndex(record.index) ||
     !Number.isFinite(Date.parse(record.updatedAt))
   ) {
     throw new LocalMetadataError({
@@ -2181,86 +2151,6 @@ function assertSemanticProjectionRecord(
     });
   }
   sourceIds.add(record.sourceId);
-}
-
-function splitSemanticProjection(record: SemanticProjectionRecord): {
-  readonly indexMetadata: Omit<
-    SemanticProjectionRecord['index'],
-    'entityMentions' | 'semanticTags' | 'perceptionRefs'
-  >;
-  readonly evidence: readonly EncodedSemanticEvidence[];
-} {
-  const { entityMentions, semanticTags, perceptionRefs, ...indexMetadata } = record.index;
-  const evidence: EncodedSemanticEvidence[] = [];
-  let ordinal = 0;
-  for (const item of record.evidence) {
-    evidence.push({
-      kind: 'text-segment',
-      evidenceId: item.evidenceId,
-      ordinal: ordinal++,
-      payload: item,
-    });
-  }
-  for (const mention of entityMentions ?? []) {
-    evidence.push({
-      kind: 'entity-mention',
-      evidenceId: mention.mentionId,
-      ordinal: ordinal++,
-      payload: mention,
-    });
-  }
-  for (const tag of semanticTags ?? []) {
-    evidence.push({
-      kind: 'semantic-tag',
-      evidenceId: tag.tagId,
-      ordinal: ordinal++,
-      payload: tag,
-    });
-  }
-  for (const [refIndex, ref] of (perceptionRefs ?? []).entries()) {
-    evidence.push({
-      kind: 'perception-ref',
-      evidenceId: ref.cacheKey ?? ref.sourceToolCallId ?? `${ref.assetId}:${refIndex}`,
-      ordinal: ordinal++,
-      payload: ref,
-    });
-  }
-  const identities = new Set<string>();
-  for (const item of evidence) {
-    const identity = `${item.kind}:${item.evidenceId}`;
-    if (!item.evidenceId.trim() || identities.has(identity)) {
-      throw new LocalMetadataError({
-        code: 'metadata-transaction-failed',
-        operation: 'replace-semantic-evidence',
-        message: `Semantic evidence identity is empty or duplicated: ${identity}`,
-      });
-    }
-    identities.add(identity);
-  }
-  return { indexMetadata, evidence };
-}
-
-function isSemanticProviderMetadata(value: unknown): value is SemanticProjectionRecord['provider'] {
-  if (!isRecord(value) || typeof value['providerId'] !== 'string') return false;
-  return [
-    value['model'],
-    value['modelVersion'],
-    value['chunkingVersion'],
-    value['sourceIdentity'],
-    value['indexVersion'],
-    value['schemaVersion'],
-    value['skillId'],
-    value['skillVersion'],
-  ].every(optionalStringValue);
-}
-
-function isSemanticEvidenceKind(value: string): value is SemanticEvidenceKind {
-  return (
-    value === 'text-segment' ||
-    value === 'entity-mention' ||
-    value === 'semantic-tag' ||
-    value === 'perception-ref'
-  );
 }
 
 function assertEntityAssetProjectionPartition(partition: LocalMetadataPartition): void {
@@ -2378,9 +2268,8 @@ function isEntityAssetProjectionRecord(value: unknown): value is EntityAssetProj
       return isCreativeEntityRelationshipProjection(value['value']);
     case 'entity-candidate':
       return (
-        isCreativeEntityCandidate(value['value']) &&
-        value['candidateId'] === value['value'].id &&
-        isCandidateProjectionPortable(value['value'])
+        isProjectEntityCandidateProjection(value['value']) &&
+        value['candidateId'] === value['value'].candidateId
       );
     case 'binding-availability':
       return (
@@ -2490,6 +2379,9 @@ function isCreativeEntitySourceMetadata(value: unknown): boolean {
       value['sourceKind'] === 'story' ||
       value['sourceKind'] === 'canvas' ||
       value['sourceKind'] === 'asset' ||
+      value['sourceKind'] === 'workspace' ||
+      value['sourceKind'] === 'media-library' ||
+      value['sourceKind'] === 'managed-asset' ||
       value['sourceKind'] === 'agent' ||
       value['sourceKind'] === 'document' ||
       value['sourceKind'] === 'importer' ||
@@ -2504,29 +2396,6 @@ function isCreativeEntitySourceMetadata(value: unknown): boolean {
   );
 }
 
-function isEntityBindingAvailabilityProjectionValue(
-  value: unknown,
-): value is EntityBindingAvailabilityProjectionValue {
-  return (
-    isRecord(value) &&
-    typeof value['bindingId'] === 'string' &&
-    value['bindingId'].trim().length > 0 &&
-    typeof value['entityId'] === 'string' &&
-    value['entityId'].trim().length > 0 &&
-    isCreativeEntityKind(value['entityKind']) &&
-    isContentLocator(value['representation']) &&
-    isEntityRepresentationRole(value['role']) &&
-    (value['status'] === 'suggested' ||
-      value['status'] === 'confirmed' ||
-      value['status'] === 'rejected') &&
-    isEntityRepresentationBindingAvailability(value['availability']) &&
-    (value['orphanedAt'] === undefined ||
-      (typeof value['orphanedAt'] === 'string' &&
-        Number.isFinite(Date.parse(value['orphanedAt'])))) &&
-    (value['isDefault'] === undefined || typeof value['isDefault'] === 'boolean')
-  );
-}
-
 function optionalNonEmptyString(value: unknown): boolean {
   return value === undefined || (typeof value === 'string' && value.trim().length > 0);
 }
@@ -2535,11 +2404,7 @@ function optionalPortableAssetRef(value: unknown): boolean {
   if (value === undefined) return true;
   if (typeof value !== 'string' || !value.trim()) return false;
   const normalized = value.replace(/\\/gu, '/');
-  return (
-    !/^([A-Za-z]:\/|\/)/u.test(normalized) &&
-    !normalized.includes('/.neko/.cache/') &&
-    !normalized.startsWith('.neko/.cache/')
-  );
+  return !/^([A-Za-z]:\/|\/)/u.test(normalized) && !hasHiddenPathSegment(normalized);
 }
 
 function optionalPortableProjectionRef(value: unknown): boolean {
@@ -2549,48 +2414,11 @@ function optionalPortableProjectionRef(value: unknown): boolean {
 function isPortableProjectionRef(value: string): boolean {
   if (!value.trim()) return false;
   const normalized = value.replace(/\\/gu, '/');
-  return (
-    !/^([A-Za-z]:\/|\/)/u.test(normalized) &&
-    !normalized.includes('/.neko/.cache/') &&
-    !normalized.startsWith('.neko/.cache/')
-  );
+  return !/^([A-Za-z]:\/|\/)/u.test(normalized) && !hasHiddenPathSegment(normalized);
 }
 
-function isCandidateProjectionPortable(
-  candidate: Extract<EntityAssetProjectionRecord, { readonly kind: 'entity-candidate' }>['value'],
-): boolean {
-  return (
-    candidate.sourceRefs.every(isPortableProjectionRef) &&
-    candidate.provenance.every(
-      (item) =>
-        (item.sourceRef === undefined || isPortableProjectionRef(item.sourceRef)) &&
-        !containsForbiddenProjectionMetadataPath(item.metadata),
-    ) &&
-    (candidate.resolvedEntityRef?.projectRoot === undefined ||
-      isPortableProjectionRef(candidate.resolvedEntityRef.projectRoot)) &&
-    !containsForbiddenProjectionMetadataPath(candidate.metadata)
-  );
-}
-
-function containsForbiddenProjectionMetadataPath(
-  value: Record<string, unknown> | undefined,
-): boolean {
-  if (!value) return false;
-  return Object.entries(value).some(([key, entry]) => {
-    if (
-      (key === 'projectRoot' || key === 'absolutePath' || key === 'cachePath') &&
-      typeof entry === 'string' &&
-      !isPortableProjectionRef(entry)
-    ) {
-      return true;
-    }
-    if (Array.isArray(entry)) {
-      return entry.some((item) =>
-        isRecord(item) ? containsForbiddenProjectionMetadataPath(item) : false,
-      );
-    }
-    return isRecord(entry) ? containsForbiddenProjectionMetadataPath(entry) : false;
-  });
+function hasHiddenPathSegment(value: string): boolean {
+  return value.split('/').some((segment) => segment.startsWith('.'));
 }
 
 function isMediaFileMetadata(value: unknown): value is MediaFileMetadata {
@@ -2673,65 +2501,10 @@ function assertResourceCacheVariant(
   variantKeys.add(variant.key);
 }
 
-class RawProjectionVersionRepository implements ProjectionVersionRepository {
-  constructor(private readonly connection: () => SqliteConnection) {}
-
-  async get(partition: LocalMetadataPartition): Promise<LocalMetadataPartitionRevision | null> {
-    const rows = await this.connection().all(
-      `SELECT partition_scope, workspace_id, domain, revision, freshness, diagnostic, updated_at
-         FROM projection_versions WHERE partition_key = ?`,
-      [partitionKey(partition)],
-    );
-    const row = rows[0];
-    return row ? decodeProjectionVersion(row) : null;
-  }
-
-  async increment(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    return this.write(update);
-  }
-
-  async markStale(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    if (update.freshness !== 'stale') {
-      throw new LocalMetadataError({
-        code: 'metadata-transaction-failed',
-        operation: 'mark-projection-stale',
-        message: 'markStale requires stale freshness',
-      });
-    }
-    return this.write(update);
-  }
-
-  private async write(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    const rows = await this.connection().all(
-      `INSERT INTO projection_versions (
-        partition_key, partition_scope, workspace_id, domain,
-        revision, freshness, diagnostic, updated_at
-      ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
-      ON CONFLICT(partition_key) DO UPDATE SET
-        revision = projection_versions.revision + 1,
-        freshness = excluded.freshness,
-        diagnostic = excluded.diagnostic,
-        updated_at = excluded.updated_at
-      RETURNING partition_scope, workspace_id, domain, revision, freshness, diagnostic, updated_at`,
-      [
-        partitionKey(update.partition),
-        update.partition.scope,
-        update.partition.workspaceId,
-        update.partition.domain,
-        update.freshness,
-        update.diagnostic,
-        update.updatedAt,
-      ],
-    );
-    return decodeProjectionVersion(requireRow(rows[0], 'write-projection-version'));
-  }
-}
-
 class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepository {
   constructor(
     private readonly connection: () => SqliteConnection,
     private readonly workspaces: WorkspaceRegistryRepository,
-    private readonly projectionVersions: ProjectionVersionRepository,
   ) {}
 
   async clearPartition(
@@ -2787,12 +2560,6 @@ class RawCacheMaintenanceRepository implements LocalMetadataCacheMaintenanceRepo
                       'DELETE FROM catalog_items WHERE partition_key = ?',
                       [partitionKey(request.partition)],
                     );
-    await this.projectionVersions.markStale({
-      partition: request.partition,
-      freshness: 'stale',
-      diagnostic: `cache-cleared:${request.reason}`,
-      updatedAt: request.updatedAt,
-    });
     return { deletedRows: result.changes };
   }
 
@@ -2869,6 +2636,12 @@ class ExclusiveWorkspaceRegistryRepository implements WorkspaceRegistryRepositor
   get(workspaceId: string): Promise<WorkspaceRegistryRecord | null> {
     return this.exclusive.run(() => this.raw.get(workspaceId));
   }
+  listAll(): Promise<readonly WorkspaceRegistryRecord[]> {
+    return this.exclusive.run(() => this.raw.listAll());
+  }
+  remove(workspaceId: string): Promise<boolean> {
+    return this.exclusive.run(() => this.raw.remove(workspaceId));
+  }
   findByCurrentLocator(
     locator: WorkspacePortableLocator,
   ): Promise<readonly WorkspaceRegistryRecord[]> {
@@ -2920,6 +2693,62 @@ class ExclusiveConversationCatalogRepository implements ConversationCatalogRepos
   }
   deleteWorkspaceProjection(workspaceId: string): Promise<void> {
     return this.exclusive.run(() => this.raw.deleteWorkspaceProjection(workspaceId));
+  }
+}
+
+class ExclusiveAssetLibraryMembershipRepository implements AssetLibraryMembershipRepository {
+  constructor(
+    private readonly raw: AssetLibraryMembershipRepository,
+    private readonly exclusive: ExclusiveCoordinator,
+    private readonly transaction: <T>(
+      mode: LocalMetadataTransactionMode,
+      operation: () => Promise<T>,
+    ) => Promise<T>,
+  ) {}
+
+  get(membershipId: string): Promise<AssetLibraryMembershipRecord | null> {
+    return this.exclusive.run(() => this.raw.get(membershipId));
+  }
+
+  findBySourceRelativePath(
+    sourceRelativePath: string,
+  ): Promise<AssetLibraryMembershipRecord | null> {
+    return this.exclusive.run(() => this.raw.findBySourceRelativePath(sourceRelativePath));
+  }
+
+  listActive(): Promise<readonly AssetLibraryMembershipRecord[]> {
+    return this.exclusive.run(() => this.raw.listActive());
+  }
+
+  registerDiscovered(registrations: readonly AssetLibraryMembershipRegistration[]): Promise<void> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () => this.raw.registerDiscovered(registrations)),
+    );
+  }
+
+  activate(
+    registration: AssetLibraryMembershipRegistration,
+  ): Promise<AssetLibraryMembershipRecord> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () => this.raw.activate(registration)),
+    );
+  }
+
+  removeMany(
+    membershipIds: readonly string[],
+    removedAt: string,
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () => this.raw.removeMany(membershipIds, removedAt)),
+    );
+  }
+
+  relocateMany(
+    relocations: readonly AssetLibraryMembershipRelocation[],
+  ): Promise<readonly AssetLibraryMembershipRecord[]> {
+    return this.exclusive.run(() =>
+      this.transaction('state-write', () => this.raw.relocateMany(relocations)),
+    );
   }
 }
 
@@ -3090,7 +2919,7 @@ class ExclusiveSemanticProjectionRepository implements SemanticProjectionReposit
     ) => Promise<T>,
   ) {}
 
-  list(partition: LocalMetadataPartition): Promise<readonly SemanticProjectionRecord[]> {
+  list(partition: LocalMetadataPartition): Promise<SemanticProjectionListResult> {
     return this.exclusive.run(() => this.raw.list(partition));
   }
 
@@ -3123,15 +2952,6 @@ class ExclusiveSemanticProjectionRepository implements SemanticProjectionReposit
     );
   }
 
-  clearBodyBearingSources(
-    partition: LocalMetadataPartition,
-    updatedAt: string,
-  ): Promise<readonly string[]> {
-    return this.exclusive.run(() =>
-      this.transaction('cache-write', () => this.raw.clearBodyBearingSources(partition, updatedAt)),
-    );
-  }
-
   insertMissing(
     request: SemanticProjectionReplaceRequest,
   ): Promise<SemanticProjectionInsertMissingResult> {
@@ -3151,7 +2971,7 @@ class ExclusiveEntityAssetProjectionRepository implements EntityAssetProjectionR
     ) => Promise<T>,
   ) {}
 
-  list(query: EntityAssetProjectionQuery): Promise<readonly EntityAssetProjectionRecord[]> {
+  list(query: EntityAssetProjectionQuery): Promise<EntityAssetProjectionQueryResult> {
     return this.exclusive.run(() => this.raw.list(query));
   }
 
@@ -3188,23 +3008,6 @@ class ExclusiveCatalogProjectionRepository implements CatalogProjectionRepositor
     return this.exclusive.run(() =>
       this.transaction('cache-write', () => this.raw.replaceSlice(request)),
     );
-  }
-}
-
-class ExclusiveProjectionVersionRepository implements ProjectionVersionRepository {
-  constructor(
-    private readonly raw: ProjectionVersionRepository,
-    private readonly exclusive: ExclusiveCoordinator,
-  ) {}
-
-  get(partition: LocalMetadataPartition): Promise<LocalMetadataPartitionRevision | null> {
-    return this.exclusive.run(() => this.raw.get(partition));
-  }
-  increment(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    return this.exclusive.run(() => this.raw.increment(update));
-  }
-  markStale(update: ProjectionVersionUpdate): Promise<LocalMetadataPartitionRevision> {
-    return this.exclusive.run(() => this.raw.markStale(update));
   }
 }
 
@@ -3248,29 +3051,20 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
 
   constructor(private readonly options: SqliteLocalMetadataStoreOptions) {
     const getConnection = (): SqliteConnection => this.requireConnection('repository-operation');
+    const assetLibraryMemberships = new RawAssetLibraryMembershipRepository(getConnection);
     const workspaces = new RawWorkspaceRegistryRepository(getConnection);
     const conversations = new RawConversationCatalogRepository(getConnection);
     const tasks = new RawTaskStateRepository(getConnection);
     const taskCheckpoints = new RawTaskCheckpointRepository(getConnection);
-    const projectionVersions = new RawProjectionVersionRepository(getConnection);
-    const resourceCache = new RawResourceCacheMetadataRepository(getConnection, projectionVersions);
-    const mediaMetadata = new RawMediaMetadataRepository(getConnection, projectionVersions);
-    const searchDocuments = new RawSearchDocumentRepository(getConnection, projectionVersions);
-    const semanticProjections = new RawSemanticProjectionRepository(
-      getConnection,
-      projectionVersions,
-    );
-    const entityAssetProjections = new RawEntityAssetProjectionRepository(
-      getConnection,
-      projectionVersions,
-    );
-    const catalogItems = new RawCatalogProjectionRepository(getConnection, projectionVersions);
-    const cacheMaintenance = new RawCacheMaintenanceRepository(
-      getConnection,
-      workspaces,
-      projectionVersions,
-    );
+    const resourceCache = new RawResourceCacheMetadataRepository(getConnection);
+    const mediaMetadata = new RawMediaMetadataRepository(getConnection);
+    const searchDocuments = new RawSearchDocumentRepository(getConnection);
+    const semanticProjections = new RawSemanticProjectionRepository(getConnection);
+    const entityAssetProjections = new RawEntityAssetProjectionRepository(getConnection);
+    const catalogItems = new RawCatalogProjectionRepository(getConnection);
+    const cacheMaintenance = new RawCacheMaintenanceRepository(getConnection, workspaces);
     this.rawRepositories = {
+      assetLibraryMemberships,
       workspaces,
       conversations,
       tasks,
@@ -3281,10 +3075,14 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       semanticProjections,
       entityAssetProjections,
       catalogItems,
-      projectionVersions,
       cacheMaintenance,
     };
     this.repositories = {
+      assetLibraryMemberships: new ExclusiveAssetLibraryMembershipRepository(
+        assetLibraryMemberships,
+        this.exclusive,
+        (mode, operation) => this.executeTransaction(mode, operation),
+      ),
       workspaces: new ExclusiveWorkspaceRegistryRepository(workspaces, this.exclusive),
       conversations: new ExclusiveConversationCatalogRepository(
         conversations,
@@ -3329,10 +3127,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
         this.exclusive,
         (mode, operation) => this.executeTransaction(mode, operation),
       ),
-      projectionVersions: new ExclusiveProjectionVersionRepository(
-        projectionVersions,
-        this.exclusive,
-      ),
       cacheMaintenance: new ExclusiveCacheMaintenanceRepository(
         cacheMaintenance,
         this.exclusive,
@@ -3357,8 +3151,9 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       });
     }
     if (options.databasePath !== this.options.expectedDatabasePath) {
-      throw new NekoStorageContractError({
-        code: 'retired-workspace-database',
+      throw new LocalMetadataError({
+        code: 'metadata-store-open-failed',
+        operation: 'open',
         message: `Local metadata database must use ${this.options.expectedDatabasePath}`,
       });
     }
@@ -3403,101 +3198,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
         }),
       ),
     );
-  }
-
-  readPartitionRevision(
-    partition: LocalMetadataPartition,
-  ): Promise<LocalMetadataPartitionRevision | null> {
-    return this.repositories.projectionVersions.get(partition);
-  }
-
-  migrateNamespace(
-    migrations: readonly LocalMetadataMigration[],
-    options?: LocalMetadataMigrationOptions,
-  ): Promise<LocalMetadataMigrationResult> {
-    validateLocalMetadataMigrationSequence(migrations);
-    return this.exclusive.run(async () => {
-      const connection = this.requireConnection('migrate-namespace');
-      await connection.exec(MIGRATION_REGISTRY_SQL);
-      const namespace = migrations[0]?.namespace;
-      if (!namespace) {
-        return { namespace: '', previousVersion: 0, currentVersion: 0, appliedVersions: [] };
-      }
-      const appliedRows = await connection.all(
-        `SELECT version, checksum FROM schema_migrations
-          WHERE namespace = ? ORDER BY version`,
-        [namespace],
-      );
-      const applied = new Map<number, string>();
-      for (const row of appliedRows) {
-        applied.set(readNumber(row, 'version'), readString(row, 'checksum'));
-      }
-      const previousVersion = Math.max(0, ...applied.keys());
-      const pending = migrations.filter((migration) => {
-        const checksum = applied.get(migration.version);
-        if (checksum !== undefined && checksum !== migration.checksum) {
-          throw new LocalMetadataError({
-            code: 'metadata-migration-checksum-mismatch',
-            operation: 'migrate-namespace',
-            message: `Migration checksum mismatch for ${namespace}/${migration.version}`,
-          });
-        }
-        return checksum === undefined;
-      });
-      const appliedVersions: number[] = [];
-      if (pending.length > 0) {
-        if (pending.some((migration) => migration.destructive)) {
-          const backupRequest = options?.destructiveBackup;
-          if (!backupRequest || backupRequest.reason !== 'migration') {
-            throw new LocalMetadataError({
-              code: 'metadata-backup-failed',
-              operation: 'backup-before-destructive-migration',
-              message: `Destructive migration for ${namespace} requires a migration backup`,
-            });
-          }
-          await this.createBackup(backupRequest, connection);
-        }
-        try {
-          await this.executeTransaction('system-write', async () => {
-            for (const migration of pending) {
-              for (const statement of migration.statements) {
-                await connection.exec(statement);
-              }
-              await connection.run(
-                `INSERT INTO schema_migrations (
-                  namespace, version, name, checksum, ownership, applied_at
-                ) VALUES (?, ?, ?, ?, ?, ?)`,
-                [
-                  migration.namespace,
-                  migration.version,
-                  migration.name,
-                  migration.checksum,
-                  migration.ownership,
-                  this.now(),
-                ],
-              );
-              appliedVersions.push(migration.version);
-            }
-          });
-        } catch (error) {
-          throw new LocalMetadataError({
-            code: 'metadata-migration-failed',
-            operation: 'migrate-namespace',
-            message: `Failed to migrate local metadata namespace ${namespace}`,
-            cause: error,
-          });
-        }
-      }
-      return {
-        namespace,
-        previousVersion,
-        currentVersion: Math.max(
-          previousVersion,
-          ...migrations.map((migration) => migration.version),
-        ),
-        appliedVersions,
-      };
-    });
   }
 
   backup(request: LocalMetadataBackupRequest): Promise<LocalMetadataBackupResult> {

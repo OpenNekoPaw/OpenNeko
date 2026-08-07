@@ -26,7 +26,6 @@ export interface ProjectionAttachmentClientSnapshot {
   readonly phase: ProjectionAttachmentClientPhase;
   readonly key: ProjectionAttachmentKey | null;
   readonly lastSequence: number;
-  readonly projectionVersion: number | null;
 }
 
 export interface ProjectionAttachmentClientOptions {
@@ -49,10 +48,9 @@ class ProjectionAttachmentClientProtocolError extends Error {
 
 export interface ProjectionAttachmentClient {
   getSnapshot(): ProjectionAttachmentClientSnapshot;
-  attach(identity: Pick<ProjectionAttachmentKey, 'endpointEpoch' | 'attachmentId'>): void;
+  attach(identity: Pick<ProjectionAttachmentKey, 'attachmentId'>): void;
   accept(frame: ConversationProjectionAttachmentFrame): void;
   detach(reason: ProjectionDetachMessage['reason']): void;
-  abandon(): void;
   dispose(): void;
 }
 
@@ -67,7 +65,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
     phase: 'detached',
     key: null,
     lastSequence: -1,
-    projectionVersion: null,
   });
 
   constructor(private readonly options: ProjectionAttachmentClientOptions) {
@@ -79,14 +76,13 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
     return this.snapshot;
   }
 
-  attach(identity: Pick<ProjectionAttachmentKey, 'endpointEpoch' | 'attachmentId'>): void {
+  attach(identity: Pick<ProjectionAttachmentKey, 'attachmentId'>): void {
     this.assertNotDisposed();
     if (this.snapshot.phase !== 'detached') {
       throw new Error(
         `Projection attachment for Tab ${this.options.tabId} cannot attach from ${this.snapshot.phase}.`,
       );
     }
-    assertRequiredIdentity('endpointEpoch', identity.endpointEpoch);
     assertRequiredIdentity('attachmentId', identity.attachmentId);
     const key: ProjectionAttachmentKey = Object.freeze({
       ...identity,
@@ -97,7 +93,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
       phase: 'awaiting-snapshot',
       key,
       lastSequence: -1,
-      projectionVersion: null,
     });
     try {
       this.options.send({ type: 'projectionAttach', key });
@@ -128,7 +123,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
         phase: 'detached',
         key: null,
         lastSequence: -1,
-        projectionVersion: null,
       });
       return;
     }
@@ -145,17 +139,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
       phase: 'detached',
       key: null,
       lastSequence: -1,
-      projectionVersion: null,
-    });
-  }
-
-  abandon(): void {
-    this.assertNotDisposed();
-    this.snapshot = Object.freeze({
-      phase: 'detached',
-      key: null,
-      lastSequence: -1,
-      projectionVersion: null,
     });
   }
 
@@ -169,7 +152,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
       phase: 'disposed',
       key: null,
       lastSequence: -1,
-      projectionVersion: null,
     });
   }
 
@@ -195,14 +177,11 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
         key,
       );
     }
-    if (
-      frame.projection.conversationId !== key.conversationId ||
-      frame.projectionVersion !== frame.projection.projectionVersion
-    ) {
+    if (frame.projection.conversationId !== key.conversationId) {
       this.fail(
         new ProjectionAttachmentClientProtocolError(
           'attachment-identity-mismatch',
-          `Projection attachment ${key.attachmentId} snapshot identity/version mismatch.`,
+          `Projection attachment ${key.attachmentId} snapshot owner mismatch.`,
         ),
         key,
       );
@@ -223,13 +202,11 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
       type: 'projectionSnapshotAck',
       key,
       sequence: 0,
-      projectionVersion: frame.projectionVersion,
     });
     this.snapshot = Object.freeze({
       phase: 'live',
       key,
       lastSequence: 0,
-      projectionVersion: frame.projectionVersion,
     });
   }
 
@@ -256,16 +233,11 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
         key,
       );
     }
-    if (
-      frame.baseProjectionVersion !== this.snapshot.projectionVersion ||
-      frame.baseProjectionVersion !== frame.patch.baseProjectionVersion ||
-      frame.projectionVersion !== frame.patch.projectionVersion ||
-      frame.patch.conversationId !== key.conversationId
-    ) {
+    if (frame.patch.conversationId !== key.conversationId) {
       this.fail(
         new ProjectionAttachmentClientProtocolError(
-          'attachment-patch-base-mismatch',
-          `Projection attachment ${key.attachmentId} patch base/version mismatch.`,
+          'attachment-patch-rejected',
+          `Projection attachment ${key.attachmentId} patch owner mismatch.`,
         ),
         key,
       );
@@ -276,7 +248,7 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
     } catch (error: unknown) {
       this.fail(
         new ProjectionAttachmentClientProtocolError(
-          'attachment-patch-base-mismatch',
+          'attachment-patch-rejected',
           `Projection attachment ${key.attachmentId} rejected its live patch: ${toError(error).message}`,
         ),
         key,
@@ -286,7 +258,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
       phase: 'live',
       key,
       lastSequence: frame.sequence,
-      projectionVersion: frame.projectionVersion,
     });
   }
 
@@ -295,7 +266,6 @@ class DefaultProjectionAttachmentClient implements ProjectionAttachmentClient {
       phase: 'fatal',
       key,
       lastSequence: this.snapshot.lastSequence,
-      projectionVersion: this.snapshot.projectionVersion,
     });
     this.options.reportError(error, key);
     throw error;
@@ -323,7 +293,7 @@ function assertRequiredIdentity(name: string, value: string): void {
 }
 
 function formatKey(key: ProjectionAttachmentKey): string {
-  return `${key.endpointEpoch}/${key.attachmentId}/${key.tabId}/${key.conversationId}`;
+  return `${key.attachmentId}/${key.tabId}/${key.conversationId}`;
 }
 
 function toError(error: unknown): Error {

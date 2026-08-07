@@ -89,7 +89,7 @@ export function createOpenSpecApplicationHandoff(input) {
   }
   return assertOptimizationArtifactSafe(
     {
-      schema: 'neko.agent-eval.openspec-application-handoff.v1',
+      schema: 'neko.agent-eval.openspec-application-handoff',
       kind: 'openspec-apply-required',
       planId: plan.id,
       candidateId: candidate.id,

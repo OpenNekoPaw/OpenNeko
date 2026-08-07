@@ -16,10 +16,10 @@ The system MUST use a conversation-scoped Pi Agent for main-model streaming, too
 
 Active Webview Markdown streaming MUST be owned by the Tab Timeline projection and its normalized Markdown session registry. An empty or historical-only snapshot does not establish ownership of a newer active shared message. The registry commit MUST precede publication of the render projection. A Tab MUST NOT render active Markdown from shared message state, create a renderer-local streaming session, or fall back to a second stream path while the matching Timeline item is pending.
 
-#### Scenario: Legacy path is poisoned
+#### Scenario: Retired path is absent
 
-- **WHEN** the legacy Executor or chat-adapter entry point is configured to throw during a Pi-targeted turn
-- **THEN** the turn still succeeds through Pi and the poisoned entry point is never called
+- **WHEN** a Pi-targeted turn runs after the retired Executor and chat-adapter entries are deleted
+- **THEN** the turn succeeds through Pi and import/registration assertions prove the retired entries did not participate
 
 ### Requirement: Product boundaries remain OpenNeko-owned
 

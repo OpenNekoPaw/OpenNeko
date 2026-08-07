@@ -43,7 +43,10 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 - 不破坏 TypeScript `strict`、`noUncheckedIndexedAccess`、`noImplicitOverride`。
 - 设计复杂度符合本地 Electron Desktop + Node/FFmpeg 的产品边界；避免为了假想云端多租户、分布式服务治理、远程规模或未知未来需求引入无调用方的 interface、factory、registry、strategy、plugin hook、feature flag、配置层或协议层。
 - 防御性代码只覆盖真实运行边界：Main/preload/renderer 隔离、CSP、typed IPC、本地文件与路径、媒体 codec/Range、异步取消与资源释放、外部 AI/market provider、用户数据和安全/信任边界；宽泛 `try/catch`、静默默认值、fallback、重复校验、no-op guard 或吞错不能掩盖本应失败的开发错误。
-- 默认采用 fail-visible：contract mismatch、不可达状态、未实现路径、缺失依赖、非法 message、未知 schema/version、错误配置或未注册 handler/renderer/adapter 应直接抛错、返回明确 diagnostic 或让测试失败；只有保护用户数据、外部 provider、发布兼容或安全/信任边界时，才允许显式恢复、迁移或降级。
+- 默认采用 fail-visible：contract mismatch、不可达状态、未实现路径、缺失依赖、非法 message、
+  未知字段、非 canonical shape、不受支持的外部协议版本、错误配置或未注册
+  handler/renderer/adapter 应直接抛错、返回明确 diagnostic 或让测试失败；只有保护用户数据、
+  外部 provider、发布兼容或安全/信任边界时，才允许显式恢复或降级，内部数据修复必须位于产品外。
 - Renderer/Webview 不导入 Electron、Node API 或 Desktop Main/preload 实现。
 - Desktop Main 不导入 React/ReactDOM 或 Webview 实现；preload 不暴露通用 IPC/Node 能力。
 - TypeScript domain 层不重复 Node/FFmpeg adapter 已拥有的媒体执行职责。
@@ -65,7 +68,7 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 | --------------------- | ------------------------------------------------------------------------------------------------ |
 | Owning responsibility | 谁拥有规则、状态、生命周期、错误和数据；不能只写当前文件或 Desktop                               |
 | Package role          | contracts/domain/application/runtime/node/webview/infrastructure/testing/content-only 中的哪一类 |
-| Canonical path        | 唯一 public export、port、handler/adapter 和调用链；旧路径如何删除、poison 或 fail-closed        |
+| Canonical path        | 唯一 public export、port、handler/adapter 和调用链；旧路径如何删除或 fail-closed                 |
 | Producer / consumer   | 哪个模块产生 contract/事实，哪些真实生产调用方消费，依赖是否在 manifest 声明                     |
 | Runtime boundary      | host-neutral、Node、browser、Electron Main/preload/renderer 的能力与资源 owner                   |
 | Verification          | producer test、consumer/delegation test、路径断言，以及适用的 Node/Electron 运行态命令           |
@@ -117,7 +120,6 @@ coverage 和静态质量；不得启动 Electron GUI、依赖真实用户 fixtur
 | Desktop headless 功能路径      | `pnpm test:functional:headless`                                     |
 | Desktop 图形化 UI 验收         | `pnpm test:local:ui`                                                |
 | 残留/债务关键词扫描            | `pnpm check:legacy-debt`                                            |
-| 代码债务台账                   | `pnpm check:legacy-debt:ledger`                                     |
 | 质量门禁组合                   | `pnpm check:quality`                                                |
 | Webview build smoke            | `pnpm smoke:webview`                                                |
 | Desktop production package     | `pnpm package:desktop`                                              |
@@ -157,6 +159,17 @@ Desktop 已为 `locator-backed-display-projection` 提供首个 complete-session
 若尚无 owning Desktop scenario adapter，runner 必须返回 `infrastructure-blocked` 并记录缺失 owner；
 不得回退到已移除的 TUI/headless driver、单元 runner 或只凭最终文本宣称通过。
 
+Agent 验收使用两条本地专用 lane。功能级验收必须从可见 Electron UI 的 composer、PrimarySidebar、
+审批或领域控件发起真实 API 行为，并断言用户可见终态；批量回归必须以无可见 UI 的完整 Desktop
+session owner 驱动同一公开 Agent input path 和真实 API。hidden lane 不等于 direct/headless Agent
+runtime，不能跳过 Desktop composition、持久化或 projection。
+
+基础回归矩阵包含：正常对话、上下文压缩后 continuation、完整重开后的 transcript 恢复、生成
+Job/Tool/产物记录恢复、会话切换展示、会话隔离。AgentSession、持久化、生成 workflow 或 Desktop
+projection 变更必须运行受影响子集并记录整套矩阵 disposition；发布验收必须关闭全部适用项。UI
+报告与 batch report 均需记录 provider/model、conversation/turn/run identity、terminal state、
+canonical/no-fallback evidence 和脱敏 artifact refs。
+
 原始 Evaluation 报告写入 gitignored `reports/agent-eval/`。长期文档只提交脱敏摘要，保留
 suite/case/run、identity、assertion/artifact refs、failure classification 和 residual risk，
 并移除 credential、hidden prompt、raw provider config、绝对用户路径与未授权内容。
@@ -181,7 +194,9 @@ OpenSpec design/tasks；若无法运行，必须记录原因、风险和后续�
 - 兼容 shim 只有在保护有价值本地数据、已记录公共契约或外部信任边界时才保留，并且有 owner、replacement、验证命令、移除条件和到期任务。
 - 开发和测试新路径时默认禁用兼容 fallback；若执行流命中旧路径，必须立即抛错、返回 fail-closed diagnostic 或触发可断言的 telemetry/log failure，不得继续返回旧路径成功结果；只有明确标记为迁移、拒绝或诊断测试时才可观测旧路径。
 - 代码缺陷不得被兜底或兼容逻辑吞掉：缺失新实现、contract mismatch、非法状态、未知消息、错误配置、未注册 handler/renderer/adapter 时，应 fail-visible；不能回退旧实现、默认空数据、默认成功状态或 no-op。
-- 新路径验收必须是路径级验收，不得只断言最终结果成功；review 必须确认测试断言 canonical path、新 handler、新 renderer、新 adapter 或新 contract 被命中，并通过 spy、counter、log assertion 或将 legacy path poison 成抛错来证明旧路径未参与。
+- 新路径验收必须是路径级验收，不得只断言最终结果成功；review 必须确认测试断言 canonical path、新
+  handler、新 renderer、新 adapter 或新 contract 被命中，并通过 spy、counter、log assertion 以及
+  import/export/registration absence 证明旧路径未参与。
 - 验证必须证明 canonical path 默认命中；如果 legacy path 仍可触发，必须有显式 feature flag、迁移入口、fail-closed diagnostic、telemetry/log assertion 或测试覆盖，并断言旧路径不会为新路径请求返回成功结果。
 - legacy fixture、旧字段 fallback、旧 message handler、旧 renderer 或旧 command alias 的测试不能作为新路径完成证据，只能作为迁移/诊断证据。
 - Electron、Node、pnpm、OS、renderer sandbox、CSP、codec、Range、FFmpeg、Proto、marketplace trust 和安全边界不能以“未发布”为由忽略。
@@ -198,6 +213,17 @@ loopback file-access 测试和真实 Electron 场景。UI 运行态测试不得�
 普通浏览器、Chrome、Browser 插件或 Vite/localhost 只能作为热重载和显式浏览器兼容性
 辅助；它们不经过 preload、sender-bound IPC、Electron CSP、窗口/焦点和应用资源生命周期，
 不能替代 Desktop 验收。
+
+任何已实现的新增或实质变更用户可见 UI 行为，推荐使用
+`.codex/skills/neko-ui-validation/SKILL.md` 作为唯一 UI 参考验证流程 owner。检查受影响功能清单时，分别记录
+功能、视觉和适用的相邻回归证据；涉及 Desktop 边界时，真实 Electron 产品路径是权威运行时，
+较窄的浏览器或组件运行时不得替代。任何必需项失败、阻塞、缺失或未执行时，该 UI 报告不得标记为通过；
+无用户可见影响时必须记录 `not-applicable` 及原因。详细清单构建、执行和报告方法由该 Skill 单一维护，
+本文不建立第二套流程。每个必需视觉状态必须由具备图像理解能力的 Agent 实际读取当前图像证据，并记录
+对应状态、可观察结论与不确定性；截图存在、文件名、场景成功、DOM 数据或历史证据均不能替代视觉审阅。
+UI 结果仅作非阻塞参考，不得影响代码质量门禁、任务完成、提交、合并或发布，也不得成为 required check。
+图形化执行、视觉判断及其契约测试不得进入 `check:ci`、`gate:local`、`gate:remote`、`ci:*` 或 GitHub
+Actions；通用门禁只可保留验证这些本地入口不可达的反向编排约束。
 
 场景必须使用隔离合成 fixture，并通过可见 UI、public Desktop port 和 owning project/media
 service 完成；不得读取真实用户工作区、配置、凭据或增加 test-only 成功入口。OpenSpec/PR
@@ -277,5 +303,9 @@ proposal / spec scenario
 ## 自动化与人工边界
 
 机器检查负责格式、类型、依赖、台账、契约和可重复测试。人工 review 负责架构取舍、功能偏离、UX、专业创作工作流、性能解释和残余风险判断。
+
+UI 参考验证可以组合自动化功能证据和人工视觉判断，并遵守 `neko-ui-validation` 的同一受影响功能清单、
+权威运行时和 fail-visible 报告语义。其结果不参与代码完成判定；图形化 Electron 执行、视觉判断及相关
+契约测试不纳入 CI 或通用 gate。
 
 新增质量工具时，应优先接入现有脚本或 OpenSpec validation tasks，避免形成只靠口头约定的并行流程。

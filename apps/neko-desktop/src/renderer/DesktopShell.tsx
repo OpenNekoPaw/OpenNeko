@@ -1,41 +1,44 @@
 import {
-  CameraIcon,
-  CheckIcon,
+  BotIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ClockIcon,
   CloseIcon,
+  ContextMenu,
   ControlledWorkbenchShell,
   FolderIcon,
   GridIcon,
   IconButton,
-  InfoIcon,
-  LayersIcon,
+  LoadingIcon,
+  MessageIcon,
+  OpenIcon,
   PackageIcon,
   PlusIcon,
-  Popover,
-  RightPanelIcon,
-  ScissorsIcon,
+  RemoveIcon,
   SearchIcon,
-  SendIcon,
   SettingsIcon,
-  StorylineIcon,
-  TrashIcon,
   Tooltip,
   TooltipProvider,
+  TrashIcon,
+  UserIcon,
+  UsersIcon,
   WarningIcon,
   WorkbenchEditorTabs,
+  toCodiconClassName,
   type ControlledWorkbenchResizeBinding,
+  type ControlledWorkbenchShellProps,
+  type ContextMenuItem,
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   DesktopAgentHomeConversationSummary,
+  DesktopConversationNavigationGroup,
   DesktopProjectCatalogItem,
   DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
-import type {
-  DesktopHomeExtensionItem,
-  DesktopHomeExtensionsResult,
-  DesktopHomeSkillItem,
-} from '../shared/home-management-contract';
+import { resolveActiveDesktopWindowWorkbench } from '@neko/host/desktop-shell-contract';
 import {
   DESKTOP_WORKBENCH_LIMITS,
   closeMainView,
@@ -43,24 +46,48 @@ import {
   reorderMainView,
   resizeMainSplit,
   setWorkbenchDisplayMode,
-  splitMainView,
   type DesktopWorkbenchLayoutProjection,
   type DesktopWorkbenchMainGroup,
 } from '@neko/host/desktop-workbench-contract';
-import { DesktopAgentSurface } from './DesktopAgentSurface';
+import {
+  DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS,
+  type DesktopAgentInteractionSurfaceRef,
+  type DesktopApplicationSidebarProjection,
+  type DesktopSceneTransitionIntent,
+  type DesktopWorkbenchSceneProjection,
+} from '@neko/host/desktop-scene-contract';
+import { DesktopAgentSurface, type DesktopAgentSurfaceProps } from './DesktopAgentSurface';
 import { DesktopResourceBrowserSurface } from './DesktopResourceBrowserSurface';
 import { DesktopPreviewSurface } from './DesktopPreviewSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
-import { DesktopSettingsSurface } from './DesktopSettingsSurface';
-import { DesktopGlobalLibrarySurface } from './DesktopGlobalLibrarySurface';
+import {
+  DesktopSettingsMainSurface,
+  DesktopSettingsNavigationSurface,
+  parseDesktopSettingsSection,
+} from './DesktopSettingsSurface';
+import { DesktopAssetManagementSurface } from './DesktopAssetManagementSurface';
+import { DesktopExtensionManagementSurface } from './DesktopExtensionManagementSurface';
+import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
+import { DesktopProjectCatalogSurface } from './DesktopProjectManagementSurface';
+import { DesktopAssetCenterMainSurface } from './DesktopAssetCenterMainSurface';
+import { DesktopAssistantPreviewSurface } from './DesktopAssistantPreviewSurface';
+import { DesktopAssetCenterRuntime } from './desktop-asset-center-runtime';
+import type { AssetCenterSessionProjection } from '@neko/assets-domain/asset-center/contract';
+import { useDesktopApplicationSettings } from './application-settings-context';
 import { ProjectPortabilityControl } from '@neko/assets-webview/project-portability/control';
 import type { OpenNekoDesktopProjectPortabilityBridge } from '@neko/assets-domain/contracts';
 import {
   DesktopApplicationBrand,
   DesktopApplicationNavigationButton,
-  DesktopApplicationSidebarFrame,
 } from './DesktopApplicationSidebar';
+import {
+  createAgentDraftPresentation,
+  createAgentSessionPresentation,
+  type AgentRootPresentation,
+} from '@neko/agent-contracts';
+import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
+import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
 
 type ShellState =
   | { readonly kind: 'loading' }
@@ -69,59 +96,88 @@ type ShellState =
 
 type HomeSection = 'create' | 'assets' | 'extensions' | 'projects';
 type TranslationFunction = ReturnType<typeof useTranslation>['t'];
+type RetainedMetadataDiagnostic = Extract<
+  NonNullable<DesktopShellProjection['stateDiagnostics']>[number],
+  { readonly code: 'desktop-stored-state-metadata-retained' }
+>;
+
+interface ShellDiagnosticPresentation {
+  readonly key: string;
+  readonly message: string;
+  readonly title: string;
+}
+
+export const MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO = 0.5;
+export const MANAGEMENT_MAIN_SPLIT_MIN_RATIO = 0.5;
+const SHELL_DIAGNOSTIC_DURATION_MS = 6_000;
 
 interface ShellActions {
-  readonly onHome: (section?: HomeSection) => void;
-  readonly onOpenProject: () => void;
-  readonly onOpenRecent: (projectId: string) => void;
+  readonly onSelectProject: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onStartConversation: (projectId: string | undefined, input: string) => void;
-  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
-  readonly onUpdateWorkbench: (workbench: DesktopWorkbenchLayoutProjection) => void;
-  readonly onOpenSettings: () => void;
+  readonly onDeleteConversations: (
+    conversations: readonly DesktopAgentHomeConversationSummary[],
+  ) => void;
+  readonly onRemoveProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onDeleteProjectConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onUpdateWorkbench: (
+    workbenchInstanceId: string,
+    workbench: DesktopWorkbenchLayoutProjection,
+  ) => void;
+  readonly onUpdateApplicationSidebar: (sidebar: DesktopApplicationSidebarProjection) => void;
+  readonly onTransitionScene: (intent: DesktopSceneTransitionIntent) => void;
+  readonly onChooseWorkspaceTarget: () => Promise<
+    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
+  >;
+  readonly onSelectWorkspaceProjectTarget: (
+    projectId: string,
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
 }
 
 export function DesktopApplication(): JSX.Element {
   const { t } = useTranslation();
   const [state, setState] = useState<ShellState>({ kind: 'loading' });
-  const [homeSection, setHomeSection] = useState<HomeSection>('create');
-  const [applicationSurface, setApplicationSurface] = useState<'workspace' | 'settings'>(
-    'workspace',
-  );
   const [pending, setPending] = useState(false);
   const [diagnostic, setDiagnostic] = useState<string>();
-  const [agentNavigationTarget, setAgentNavigationTarget] =
-    useState<DesktopAgentHomeConversationSummary>();
-  const [agentInitialInput, setAgentInitialInput] = useState<{
-    readonly handoffId: string;
-    readonly projectId: string;
-    readonly value: string;
-  }>();
-  const nextAgentHandoffId = useRef(0);
+  const [startupMetadataDiagnostic, setStartupMetadataDiagnostic] =
+    useState<RetainedMetadataDiagnostic>();
+  const [dismissedPersistedDiagnosticKey, setDismissedPersistedDiagnosticKey] = useState<string>();
   const lastSequence = useRef<number | null>(null);
-  const endpointEpoch = useRef<string>();
-  const projectionRevision = useRef(-1);
+  const rendererSessionId = useRef<string>();
+  const pendingProjectionRequest = useRef<object>();
+  const startupProjectionCaptured = useRef(false);
+
+  const captureStartupMetadataDiagnostic = useCallback((projection: DesktopShellProjection) => {
+    if (startupProjectionCaptured.current) return;
+    startupProjectionCaptured.current = true;
+    setStartupMetadataDiagnostic(
+      projection.stateDiagnostics?.find(
+        (candidate): candidate is RetainedMetadataDiagnostic =>
+          candidate.code === 'desktop-stored-state-metadata-retained',
+      ),
+    );
+  }, []);
 
   const refresh = useCallback(async (): Promise<void> => {
+    const request = {};
+    pendingProjectionRequest.current = request;
     const projection = await window.openNekoDesktop.shell.getSnapshot();
-    if (
-      endpointEpoch.current === projection.endpointEpoch &&
-      projection.projectionRevision < projectionRevision.current
-    ) {
-      return;
-    }
-    endpointEpoch.current = projection.endpointEpoch;
-    projectionRevision.current = projection.projectionRevision;
+    if (pendingProjectionRequest.current !== request) return;
+    rendererSessionId.current = projection.rendererSessionId;
+    pendingProjectionRequest.current = undefined;
     lastSequence.current = null;
+    captureStartupMetadataDiagnostic(projection);
     setState({ kind: 'ready', projection });
-  }, []);
+  }, [captureStartupMetadataDiagnostic]);
 
   useEffect(() => {
     let active = true;
     const unsubscribe = window.openNekoDesktop.shell.subscribe((event) => {
       if (!active) return;
-      if (endpointEpoch.current && event.projection.endpointEpoch !== endpointEpoch.current) {
+      pendingProjectionRequest.current = undefined;
+      if (
+        rendererSessionId.current &&
+        event.projection.rendererSessionId !== rendererSessionId.current
+      ) {
         setState({ kind: 'error', message: t('shell.endpointChanged') });
         void refresh().catch((error: unknown) => {
           if (active) setState({ kind: 'error', message: describeError(error) });
@@ -136,12 +192,10 @@ export function DesktopApplication(): JSX.Element {
         });
         return;
       }
-      endpointEpoch.current = event.projection.endpointEpoch;
+      rendererSessionId.current = event.projection.rendererSessionId;
       lastSequence.current = event.sequence;
-      if (event.projection.projectionRevision >= projectionRevision.current) {
-        projectionRevision.current = event.projection.projectionRevision;
-        setState({ kind: 'ready', projection: event.projection });
-      }
+      captureStartupMetadataDiagnostic(event.projection);
+      setState({ kind: 'ready', projection: event.projection });
     });
     void refresh().catch((error: unknown) => {
       if (active) setState({ kind: 'error', message: describeError(error) });
@@ -150,19 +204,55 @@ export function DesktopApplication(): JSX.Element {
       active = false;
       unsubscribe();
     };
-  }, [refresh, t]);
+  }, [captureStartupMetadataDiagnostic, refresh, t]);
+
+  const persistedDiagnostic = useMemo(
+    () =>
+      state.kind === 'ready'
+        ? createPersistedDiagnosticPresentation(state.projection, t)
+        : undefined,
+    [state, t],
+  );
+  const persistedDiagnosticKey = persistedDiagnostic?.key;
+
+  useEffect(() => {
+    if (!startupMetadataDiagnostic) return;
+    const timeout = window.setTimeout(
+      () => setStartupMetadataDiagnostic(undefined),
+      SHELL_DIAGNOSTIC_DURATION_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [startupMetadataDiagnostic]);
+
+  useEffect(() => {
+    if (!diagnostic) return;
+    const timeout = window.setTimeout(() => setDiagnostic(undefined), SHELL_DIAGNOSTIC_DURATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [diagnostic]);
+
+  useEffect(() => {
+    if (!persistedDiagnosticKey || persistedDiagnosticKey === dismissedPersistedDiagnosticKey)
+      return;
+    const timeout = window.setTimeout(
+      () => setDismissedPersistedDiagnosticKey(persistedDiagnosticKey),
+      SHELL_DIAGNOSTIC_DURATION_MS,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [dismissedPersistedDiagnosticKey, persistedDiagnosticKey]);
 
   const runMutation = useCallback(
     async (operation: () => Promise<DesktopShellProjection>): Promise<void> => {
       setPending(true);
       setDiagnostic(undefined);
       try {
+        const request = {};
+        pendingProjectionRequest.current = request;
         const projection = await operation();
-        if (endpointEpoch.current !== projection.endpointEpoch) {
+        if (rendererSessionId.current !== projection.rendererSessionId) {
           throw new Error(t('shell.staleCommand'));
         }
-        if (projection.projectionRevision >= projectionRevision.current) {
-          projectionRevision.current = projection.projectionRevision;
+        if (pendingProjectionRequest.current === request) {
+          pendingProjectionRequest.current = undefined;
           setState({ kind: 'ready', projection });
         }
       } catch (error: unknown) {
@@ -183,242 +273,214 @@ export function DesktopApplication(): JSX.Element {
   }
 
   const projection = state.projection;
-  const activeProject = resolveActiveProject(projection);
+  const visiblePersistedDiagnostic =
+    persistedDiagnostic?.key === dismissedPersistedDiagnosticKey ? undefined : persistedDiagnostic;
+  const startupMetadataMessage = startupMetadataDiagnostic
+    ? t(
+        startupMetadataDiagnostic.authorityKey === 'desktop.application-settings'
+          ? 'shell.settingsMetadataRetained'
+          : 'shell.workspaceMetadataRetained',
+        { fields: startupMetadataDiagnostic.fieldNames.join(', ') },
+      )
+    : undefined;
+  const visibleDiagnostic =
+    diagnostic ?? visiblePersistedDiagnostic?.message ?? startupMetadataMessage;
+  const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
+  const transitionScene = (intent: DesktopSceneTransitionIntent): void => {
+    setPending(true);
+    setDiagnostic(undefined);
+    void window.openNekoDesktop.scenes
+      .transition(projection.window.windowId, intent, activeWorkbench.scene.sceneId)
+      .then((result) => {
+        if (result.status !== 'transitioned') {
+          setDiagnostic(result.diagnostic.message);
+        }
+      })
+      .catch(async (error: unknown) => {
+        setDiagnostic(describeError(error));
+        await refresh();
+      })
+      .finally(() => setPending(false));
+  };
   const actions: ShellActions = {
-    onHome: (section = 'create') => {
-      setApplicationSurface('workspace');
-      setHomeSection(section);
-      setAgentNavigationTarget(undefined);
-      setAgentInitialInput(undefined);
-      void runMutation(() => window.openNekoDesktop.tabs.activateHome(projection.window.revision));
-    },
-    onOpenProject: () => {
-      setApplicationSurface('workspace');
-      setAgentNavigationTarget(undefined);
-      setAgentInitialInput(undefined);
-      void runMutation(async () => {
-        const result = await window.openNekoDesktop.projects.openContent();
-        return result.projection;
-      });
-    },
-    onOpenRecent: (projectId) => {
-      setApplicationSurface('workspace');
-      const tab = projection.window.tabs.find((candidate) => candidate.projectId === projectId);
-      if (tab) {
-        setAgentNavigationTarget(undefined);
-        setAgentInitialInput(undefined);
-        void runMutation(() =>
-          window.openNekoDesktop.tabs.activate(tab.tabId, projection.window.revision),
-        );
+    onSelectProject: (projectId) => transitionScene({ kind: 'open-project-workspace', projectId }),
+    onOpenConversation: (conversation) =>
+      transitionScene({
+        kind: 'restore-conversation',
+        navigation: conversation.navigation,
+      }),
+    onDeleteConversations: (conversations) => {
+      if (conversations.length === 0) {
+        throw new Error('At least one Conversation is required for deletion.');
+      }
+      const confirmation =
+        conversations.length === 1 && conversations[0]
+          ? t('shell.deleteConversationConfirm', { conversation: conversations[0].title })
+          : t('shell.deleteConversationsConfirm', { count: conversations.length });
+      if (!globalThis.confirm(confirmation)) {
         return;
       }
-      setAgentNavigationTarget(undefined);
-      setAgentInitialInput(undefined);
-      void runMutation(async () => {
-        const result = await window.openNekoDesktop.projects.open(projectId);
-        return result.projection;
-      });
-    },
-    onOpenConversation: (conversation) => {
-      setApplicationSurface('workspace');
-      const { navigation } = conversation;
-      const tab = projection.window.tabs.find(
-        (candidate) =>
-          candidate.projectId === navigation.projectId &&
-          projection.catalog.projects.some(
-            (project) =>
-              project.projectId === candidate.projectId &&
-              project.workspaceId === navigation.workspaceId,
-          ),
-      );
-      setAgentNavigationTarget(conversation);
-      setAgentInitialInput(undefined);
-      if (tab) {
-        void runMutation(() =>
-          window.openNekoDesktop.tabs.activate(tab.tabId, projection.window.revision),
-        );
-        return;
-      }
-      void runMutation(async () => {
-        const result = await window.openNekoDesktop.projects.open(navigation.projectId);
-        const project = result.projection.catalog.projects.find(
-          (candidate) =>
-            candidate.projectId === navigation.projectId &&
-            candidate.workspaceId === navigation.workspaceId,
-        );
-        const openedTab = result.projection.window.tabs.find(
-          (candidate) => candidate.projectId === navigation.projectId,
-        );
-        if (!project || !openedTab) {
-          setAgentNavigationTarget(undefined);
-          throw new Error(
-            t('shell.conversationDetached', {
-              conversationId: navigation.conversationId,
-            }),
-          );
-        }
-        return result.projection;
-      });
-    },
-    onDeleteConversation: (conversation) => {
-      if (
-        !globalThis.confirm(
-          t('shell.deleteConversationConfirm', {
-            conversation: conversation.title,
-          }),
-        )
-      ) {
-        return;
-      }
-      void runMutation(async () => {
-        const nextProjection = await window.openNekoDesktop.conversations.delete(
-          conversation.navigation,
-          projection.window.revision,
-          projection.agentHome.revision,
-        );
-        if (
-          agentNavigationTarget?.navigation.conversationId ===
-            conversation.navigation.conversationId &&
-          agentNavigationTarget.navigation.workspaceId === conversation.navigation.workspaceId
-        ) {
-          setAgentNavigationTarget(undefined);
-        }
-        return nextProjection;
-      });
-    },
-    onStartConversation: (projectId, input) => {
-      const value = input.trim();
-      if (!value) return;
-      setAgentNavigationTarget(undefined);
-      void runMutation(async () => {
-        nextAgentHandoffId.current += 1;
-        const handoffId = `home-agent-input:${nextAgentHandoffId.current}`;
-        if (projectId) {
-          const tab = projection.window.tabs.find((candidate) => candidate.projectId === projectId);
-          const nextProjection = tab
-            ? await window.openNekoDesktop.tabs.activate(tab.tabId, projection.window.revision)
-            : (await window.openNekoDesktop.projects.open(projectId)).projection;
-          setAgentInitialInput({
-            handoffId,
-            projectId,
-            value,
-          });
-          return nextProjection;
-        }
-        const result = await window.openNekoDesktop.projects.openContent();
-        if (result.status === 'opened') {
-          const activeTarget = result.projection.window.activeTarget;
-          const openedTab =
-            activeTarget.kind === 'project'
-              ? result.projection.window.tabs.find(
-                  (candidate) => candidate.tabId === activeTarget.tabId,
-                )
-              : undefined;
-          if (!openedTab) {
-            throw new Error(t('home.start.projectHandoffFailed'));
-          }
-          setAgentInitialInput({
-            handoffId,
-            projectId: openedTab.projectId,
-            value,
-          });
-        }
-        return result.projection;
-      });
-    },
-    onRemoveRecentProject: (project) => {
-      if (
-        !globalThis.confirm(
-          t('shell.removeRecentProjectConfirm', {
-            project: project.displayName,
-          }),
-        )
-      ) {
-        return;
-      }
-      void runMutation(async () => {
-        const nextProjection = await window.openNekoDesktop.projects.removeRecent(
-          project.projectId,
-          projection.window.revision,
-          projection.catalog.revision,
-        );
-        if (activeProject?.projectId === project.projectId) {
-          setAgentNavigationTarget(undefined);
-          setAgentInitialInput(undefined);
-        }
-        return nextProjection;
-      });
-    },
-    onUpdateWorkbench: (workbench) =>
       void runMutation(() =>
-        window.openNekoDesktop.workbench.update(
-          workbench,
-          projection.window.revision,
-          projection.window.workbench.revision,
+        window.openNekoDesktop.conversations.delete(
+          conversations.map((conversation) => conversation.navigation),
+        ),
+      );
+    },
+    onRemoveProjects: (projects) => {
+      if (projects.length === 0) {
+        throw new Error('At least one Project is required for removal.');
+      }
+      const confirmation =
+        projects.length === 1 && projects[0]
+          ? t('shell.removeProjectConfirm', { project: projects[0].displayName })
+          : t('shell.removeProjectsConfirm', { count: projects.length });
+      if (!globalThis.confirm(confirmation)) {
+        return;
+      }
+      void runMutation(() =>
+        window.openNekoDesktop.projects.remove(projects.map((project) => project.projectId)),
+      );
+    },
+    onDeleteProjectConversations: (projects) => {
+      if (projects.length === 0) {
+        throw new Error('At least one Project is required for conversation cleanup.');
+      }
+      const conversationCount = projects.reduce(
+        (count, project) =>
+          count +
+          projection.agentHome.conversations.filter(
+            (conversation) =>
+              conversation.navigation.owner.kind === 'workspace' &&
+              conversation.navigation.owner.workspaceId === project.workspaceId,
+          ).length,
+        0,
+      );
+      if (conversationCount === 0) {
+        throw new Error('Selected Projects have no Workspace conversations to delete.');
+      }
+      const confirmation =
+        projects.length === 1 && projects[0]
+          ? t('shell.deleteProjectConversationsConfirm', {
+              project: projects[0].displayName,
+              count: conversationCount,
+            })
+          : t('shell.deleteProjectsConversationsConfirm', {
+              projectCount: projects.length,
+              conversationCount,
+            });
+      if (!globalThis.confirm(confirmation)) return;
+      void runMutation(() =>
+        window.openNekoDesktop.projects.deleteConversations(
+          projects.map((project) => project.projectId),
+        ),
+      );
+    },
+    onUpdateWorkbench: (workbenchInstanceId, workbench) => {
+      if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
+        throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
+      }
+      void runMutation(() =>
+        window.openNekoDesktop.workbench.update(workbenchInstanceId, workbench),
+      );
+    },
+    onUpdateApplicationSidebar: (sidebar) =>
+      void runMutation(() =>
+        window.openNekoDesktop.applicationSidebar.update(
+          sidebar.windowId,
+          sidebar.visible,
+          sidebar.width,
         ),
       ),
-    onOpenSettings: () => {
+    onTransitionScene: transitionScene,
+    onChooseWorkspaceTarget: async () => {
+      setPending(true);
       setDiagnostic(undefined);
-      setApplicationSurface('settings');
+      try {
+        const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
+          projection.window.windowId,
+        );
+        if (result.status === 'cancelled') return undefined;
+        return {
+          label: result.grant.label,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: result.workspaceId,
+            workspaceGrantId: result.grant.workspaceGrantId,
+          },
+        };
+      } catch (error: unknown) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        return undefined;
+      } finally {
+        setPending(false);
+      }
+    },
+    onSelectWorkspaceProjectTarget: async (projectId) => {
+      setPending(true);
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.workspaceGrants.selectProject(
+          projection.window.windowId,
+          projectId,
+        );
+        if (result.status === 'cancelled') return undefined;
+        return {
+          label: result.grant.label,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: result.workspaceId,
+            workspaceGrantId: result.grant.workspaceGrantId,
+          },
+        };
+      } catch (error: unknown) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        return undefined;
+      } finally {
+        setPending(false);
+      }
     },
   };
 
   return (
     <TooltipProvider>
       <div className="desktop-shell">
-        {diagnostic ? (
-          <div className="shell-diagnostic" role="alert">
+        {visibleDiagnostic ? (
+          <div
+            className="shell-diagnostic"
+            role="alert"
+            title={
+              diagnostic === undefined
+                ? (visiblePersistedDiagnostic?.title ?? startupMetadataDiagnostic?.message)
+                : undefined
+            }
+          >
             <WarningIcon size={15} />
-            <span>{diagnostic}</span>
+            <span>{visibleDiagnostic}</span>
+            <IconButton
+              className="shell-diagnostic__dismiss"
+              icon={<CloseIcon size={14} />}
+              label={t('shell.dismissNotification')}
+              title={t('shell.dismissNotification')}
+              onClick={() => {
+                if (diagnostic !== undefined) {
+                  setDiagnostic(undefined);
+                } else if (visiblePersistedDiagnostic) {
+                  setDismissedPersistedDiagnosticKey(visiblePersistedDiagnostic.key);
+                } else {
+                  setStartupMetadataDiagnostic(undefined);
+                }
+              }}
+            />
           </div>
         ) : null}
-        {applicationSurface === 'settings' ? (
-          <DesktopSettingsSurface
-            onBack={() => setApplicationSurface('workspace')}
-            sidebarResize={createApplicationPrimarySidebarResizeBinding({
-              actions,
-              disabled: pending,
-              t,
-              workbench: projection.window.workbench,
-            })}
-            sidebarWidth={projection.window.workbench.primarySidebar.width}
-          />
-        ) : activeProject ? (
-          <ContentProjectWorkspace
-            actions={actions}
-            pending={pending}
-            projection={projection}
-            project={activeProject}
-            projectPortabilityPort={window.openNekoDesktop.projectPortability}
-            initialConversation={
-              agentNavigationTarget?.navigation.projectId === activeProject.projectId &&
-              agentNavigationTarget.navigation.workspaceId === activeProject.workspaceId
-                ? {
-                    id: agentNavigationTarget.navigation.conversationId,
-                    title: agentNavigationTarget.title,
-                  }
-                : undefined
-            }
-            initialInput={
-              agentInitialInput?.projectId === activeProject.projectId
-                ? {
-                    id: agentInitialInput.handoffId,
-                    value: agentInitialInput.value,
-                  }
-                : undefined
-            }
-          />
-        ) : (
-          <HomeWorkspace
-            projection={projection}
-            section={homeSection}
-            pending={pending}
-            actions={actions}
-            onSectionChange={setHomeSection}
-            onOpenRecent={actions.onOpenRecent}
-            onOpenConversation={actions.onOpenConversation}
-          />
-        )}
+        <DesktopSceneWorkbench
+          actions={actions}
+          pending={pending}
+          projection={projection}
+          projectPortabilityPort={window.openNekoDesktop.projectPortability}
+        />
       </div>
     </TooltipProvider>
   );
@@ -426,904 +488,913 @@ export function DesktopApplication(): JSX.Element {
 
 export function DesktopShellView({
   projection,
-  homeSection = 'create',
 }: {
   readonly projection: DesktopShellProjection;
-  readonly homeSection?: HomeSection;
 }): JSX.Element {
-  const activeProject = resolveActiveProject(projection);
   const actions: ShellActions = {
-    onHome: () => undefined,
-    onOpenProject: () => undefined,
-    onOpenRecent: () => undefined,
+    onSelectProject: () => undefined,
     onOpenConversation: () => undefined,
-    onDeleteConversation: () => undefined,
-    onStartConversation: () => undefined,
-    onRemoveRecentProject: () => undefined,
+    onDeleteConversations: () => undefined,
+    onRemoveProjects: () => undefined,
+    onDeleteProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
-    onOpenSettings: () => undefined,
+    onUpdateApplicationSidebar: () => undefined,
+    onTransitionScene: () => undefined,
+    onChooseWorkspaceTarget: async () => undefined,
+    onSelectWorkspaceProjectTarget: async () => undefined,
   };
-  return activeProject ? (
-    <ContentProjectWorkspace
+  return (
+    <DesktopSceneWorkbench
       actions={actions}
       pending={false}
       projection={projection}
-      project={activeProject}
-    />
-  ) : (
-    <HomeWorkspace
-      actions={actions}
-      projection={projection}
-      section={homeSection}
-      pending={false}
-      onSectionChange={() => undefined}
-      onOpenRecent={() => undefined}
-      onOpenConversation={() => undefined}
       interactive={false}
     />
   );
 }
 
-function HomeWorkspace({
+function DesktopSceneWorkbench({
   actions,
   interactive = true,
-  projection,
-  section,
-  pending,
-  onSectionChange,
-  onOpenRecent,
-  onOpenConversation,
-}: {
-  readonly actions: ShellActions;
-  readonly interactive?: boolean;
-  readonly projection: DesktopShellProjection;
-  readonly section: HomeSection;
-  readonly pending: boolean;
-  readonly onSectionChange: (section: HomeSection) => void;
-  readonly onOpenRecent: (projectId: string) => void;
-  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-}): JSX.Element {
-  const { t } = useTranslation();
-  const workbench = projection.window.workbench;
-  const navigationCollapsed = !workbench.primarySidebar.visible;
-  return (
-    <div className="home-layout" data-navigation-collapsed={navigationCollapsed ? 'true' : 'false'}>
-      <DesktopApplicationSidebarFrame
-        compact={navigationCollapsed}
-        expandedWidth={workbench.primarySidebar.width}
-        resize={createApplicationPrimarySidebarResizeBinding({
-          actions,
-          disabled: pending || navigationCollapsed,
-          t,
-          workbench,
-        })}
-      >
-        <ApplicationPrimarySidebar
-          activeSection={section}
-          compact={navigationCollapsed}
-          onNavigate={onSectionChange}
-          onDeleteConversation={actions.onDeleteConversation}
-          onOpenConversation={onOpenConversation}
-          onOpenRecent={onOpenRecent}
-          onRemoveRecentProject={actions.onRemoveRecentProject}
-          onOpenSettings={actions.onOpenSettings}
-          onToggle={() => actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench))}
-          projection={projection}
-        />
-      </DesktopApplicationSidebarFrame>
-      <main className="home-main" data-home-surface="application">
-        {section === 'create' ? (
-          <HomeStartCreating actions={actions} pending={pending} projection={projection} />
-        ) : section === 'assets' ? (
-          <HomeAssetCenter interactive={interactive} />
-        ) : section === 'extensions' ? (
-          <HomeExtensions interactive={interactive} />
-        ) : (
-          <HomeAllProjects onOpenRecent={onOpenRecent} projection={projection} />
-        )}
-      </main>
-    </div>
-  );
-}
-
-function HomeStartCreating({
-  actions,
-  projection,
-  pending,
-}: {
-  readonly actions: ShellActions;
-  readonly projection: DesktopShellProjection;
-  readonly pending: boolean;
-}): JSX.Element {
-  const { t } = useTranslation();
-  const [projectId, setProjectId] = useState(projection.catalog.projects[0]?.projectId ?? '');
-  const [input, setInput] = useState('');
-  return (
-    <div className="home-overview">
-      <section
-        className="home-start"
-        aria-labelledby="home-start-title"
-        data-home-composition="task-launchpad"
-      >
-        <header className="home-launchpad-heading">
-          <span className="home-launchpad-heading-icon" aria-hidden="true">
-            <StorylineIcon size={24} />
-          </span>
-          <div>
-            <h1 id="home-start-title">{t('home.start.title')}</h1>
-            <p>{t('home.start.subtitle')}</p>
-          </div>
-        </header>
-        <form
-          className="home-task-composer"
-          data-agent-entry="project-handoff"
-          data-home-agent-panel="composer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            actions.onStartConversation(projectId || undefined, input);
-          }}
-        >
-          <textarea
-            aria-label={t('home.start.inputLabel')}
-            placeholder={t('home.start.inputPlaceholder')}
-            rows={1}
-            value={input}
-            onChange={(event) => setInput(event.currentTarget.value)}
-          />
-          <div className="home-task-composer-footer">
-            <div className="home-task-composer-scope">
-              {projection.catalog.projects.length === 0 ? (
-                <button
-                  type="button"
-                  className="home-project-handoff home-project-handoff-button"
-                  onClick={actions.onOpenProject}
-                  disabled={pending}
-                >
-                  <FolderIcon size={16} />
-                  {t('home.openProject')}
-                </button>
-              ) : (
-                <label className="home-project-handoff">
-                  <FolderIcon size={16} />
-                  <select
-                    aria-label={t('home.start.projectLabel')}
-                    value={projectId}
-                    disabled={pending}
-                    onChange={(event) => {
-                      const nextProjectId = event.currentTarget.value;
-                      if (nextProjectId.length === 0) {
-                        actions.onOpenProject();
-                        return;
-                      }
-                      setProjectId(nextProjectId);
-                    }}
-                  >
-                    <option value="">{t('home.openProject')}</option>
-                    {projection.catalog.projects.map((project) => (
-                      <option key={project.projectId} value={project.projectId}>
-                        {project.displayName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-            <IconButton
-              className="home-agent-submit"
-              disabled={pending || input.trim().length === 0}
-              label={t('home.start.submit')}
-              icon={<SendIcon size={16} />}
-              size="md"
-              type="submit"
-              variant="default"
-            />
-          </div>
-        </form>
-        <section className="home-common-intents" aria-labelledby="home-common-intents-title">
-          <h2 id="home-common-intents-title">{t('home.start.commonTasks')}</h2>
-          <div className="home-intent-actions">
-            <HomeIntentButton
-              icon={<StorylineIcon size={16} />}
-              label={t('home.start.shortcut.plan')}
-              onClick={() => setInput(t('home.start.prompt.plan'))}
-              pending={pending}
-            />
-            <HomeIntentButton
-              icon={<PackageIcon size={16} />}
-              label={t('home.start.shortcut.assets')}
-              onClick={() => setInput(t('home.start.prompt.assets'))}
-              pending={pending}
-            />
-            <HomeIntentButton
-              icon={<LayersIcon size={16} />}
-              label={t('home.start.shortcut.character')}
-              onClick={() => setInput(t('home.start.prompt.character'))}
-              pending={pending}
-            />
-            <HomeIntentButton
-              icon={<ScissorsIcon size={16} />}
-              label={t('home.start.shortcut.video')}
-              onClick={() => setInput(t('home.start.prompt.video'))}
-              pending={pending}
-            />
-          </div>
-        </section>
-        <section className="home-quick-starts" aria-labelledby="home-quick-starts-title">
-          <header>
-            <div>
-              <h2 id="home-quick-starts-title">{t('home.start.quickStarts')}</h2>
-              <p>{t('home.start.quickStartsDescription')}</p>
-            </div>
-          </header>
-          <div className="home-template-grid">
-            <HomeTemplateButton
-              description={t('home.start.template.storyboard.description')}
-              icon={<CameraIcon size={18} />}
-              label={t('home.start.template.storyboard.title')}
-              onClick={() => setInput(t('home.start.prompt.storyboard'))}
-              pending={pending}
-            />
-            <HomeTemplateButton
-              description={t('home.start.template.character.description')}
-              icon={<LayersIcon size={18} />}
-              label={t('home.start.template.character.title')}
-              onClick={() => setInput(t('home.start.prompt.characterKit'))}
-              pending={pending}
-            />
-            <HomeTemplateButton
-              description={t('home.start.template.video.description')}
-              icon={<ScissorsIcon size={18} />}
-              label={t('home.start.template.video.title')}
-              onClick={() => setInput(t('home.start.prompt.videoPlan'))}
-              pending={pending}
-            />
-          </div>
-        </section>
-      </section>
-    </div>
-  );
-}
-
-function HomeIntentButton({
-  icon,
-  label,
-  onClick,
-  pending,
-}: {
-  readonly icon: JSX.Element;
-  readonly label: string;
-  readonly onClick: () => void;
-  readonly pending: boolean;
-}): JSX.Element {
-  return (
-    <button type="button" onClick={onClick} disabled={pending}>
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function HomeTemplateButton({
-  description,
-  icon,
-  label,
-  onClick,
-  pending,
-}: {
-  readonly description: string;
-  readonly icon: JSX.Element;
-  readonly label: string;
-  readonly onClick: () => void;
-  readonly pending: boolean;
-}): JSX.Element {
-  return (
-    <button type="button" onClick={onClick} disabled={pending}>
-      <span className="home-template-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span>
-        <strong>{label}</strong>
-        <small>{description}</small>
-      </span>
-    </button>
-  );
-}
-
-type HomeAssetSortOption = 'name-ascending' | 'name-descending' | 'modified-descending';
-type HomeProjectSortOption =
-  'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
-
-function HomeAssetCenter({ interactive }: { readonly interactive: boolean }): JSX.Element {
-  return <DesktopGlobalLibrarySurface interactive={interactive} />;
-}
-
-function HomeExtensions({ interactive }: { readonly interactive: boolean }): JSX.Element {
-  const { t } = useTranslation();
-  const [tab, setTab] = useState<'skills' | 'extensions'>('skills');
-  const [query, setQuery] = useState('');
-  const [catalogRevision, setCatalogRevision] = useState(0);
-  const [result, setResult] = useState<DesktopHomeExtensionsResult>();
-  const [error, setError] = useState<string>();
-  const [operationKey, setOperationKey] = useState<string>();
-  useEffect(() => {
-    if (!interactive) return;
-    let active = true;
-    setError(undefined);
-    void window.openNekoDesktop.home.extensions
-      .list()
-      .then((value) => {
-        if (active) setResult(value);
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(describeError(reason));
-      });
-    return () => {
-      active = false;
-    };
-  }, [catalogRevision, interactive]);
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const skills = useMemo(
-    () => searchAndOrderHomeSkills(result?.skills ?? [], normalizedQuery),
-    [normalizedQuery, result?.skills],
-  );
-  const extensions = useMemo(
-    () => searchAndOrderHomeExtensions(result?.extensions ?? [], normalizedQuery),
-    [normalizedQuery, result?.extensions],
-  );
-  const runMutation = useCallback(
-    async (key: string, operation: () => Promise<unknown>): Promise<void> => {
-      if (operationKey) return;
-      setOperationKey(key);
-      setError(undefined);
-      try {
-        await operation();
-        setCatalogRevision((revision) => revision + 1);
-      } catch (reason) {
-        setError(describeError(reason));
-      } finally {
-        setOperationKey(undefined);
-      }
-    },
-    [operationKey],
-  );
-  const expectedRevision = result?.catalogRevision;
-  const discoveryIssueCount =
-    (result?.skillDiscovery.diagnostics.reduce(
-      (total, diagnostic) => total + diagnostic.count,
-      0,
-    ) ?? 0) +
-    (result?.skillDiscovery.duplicateCount ?? 0) +
-    (result?.extensionDiscovery.diagnostics.reduce(
-      (total, diagnostic) => total + diagnostic.count,
-      0,
-    ) ?? 0);
-  return (
-    <div className="home-management-page">
-      <header className="home-management-header">
-        <div>
-          <p className="section-label">{t('home.capabilities.eyebrow')}</p>
-          <h1>{t('home.capabilities')}</h1>
-          <p>{t('home.capabilities.description')}</p>
-        </div>
-        <div className="home-management-header-actions">
-          <button
-            type="button"
-            className="home-management-refresh"
-            disabled={!interactive || !expectedRevision || operationKey !== undefined}
-            onClick={() => {
-              if (!expectedRevision) return;
-              void runMutation('marketplaces-refresh', () =>
-                window.openNekoDesktop.home.extensions.refreshMarketplaces(expectedRevision),
-              );
-            }}
-          >
-            {operationKey === 'marketplaces-refresh'
-              ? t('home.capabilities.refreshing')
-              : t('home.capabilities.refresh')}
-          </button>
-          {tab === 'skills' ? (
-            <button
-              type="button"
-              className="home-management-primary-action"
-              disabled={!interactive || !expectedRevision || operationKey !== undefined}
-              onClick={() => {
-                if (!expectedRevision) return;
-                void runMutation('personal-skill-install', () =>
-                  window.openNekoDesktop.home.extensions.installPersonalSkill(expectedRevision),
-                );
-              }}
-            >
-              <PlusIcon size={14} />
-              {operationKey === 'personal-skill-install'
-                ? t('home.capabilities.installing')
-                : t('home.capabilities.addSkill')}
-            </button>
-          ) : null}
-        </div>
-      </header>
-      <div className="home-management-toolbar">
-        <label className="home-search-field">
-          <SearchIcon size={16} />
-          <input
-            aria-label={t('home.capabilities.search')}
-            placeholder={t('home.capabilities.search')}
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div className="home-management-toolbar-actions">
-          <div className="home-segmented-control" aria-label={t('home.capabilities.tabs')}>
-            <button
-              type="button"
-              className={tab === 'skills' ? 'is-active' : ''}
-              onClick={() => setTab('skills')}
-            >
-              {t('home.capabilities.skills')}
-            </button>
-            <button
-              type="button"
-              className={tab === 'extensions' ? 'is-active' : ''}
-              onClick={() => setTab('extensions')}
-            >
-              {t('home.capabilities.extensions')}
-            </button>
-          </div>
-        </div>
-      </div>
-      {error ? (
-        <div className="home-management-diagnostic" role="alert">
-          <WarningIcon size={17} />
-          <span>{error}</span>
-        </div>
-      ) : (
-        <>
-          {discoveryIssueCount > 0 ? (
-            <div className="home-management-diagnostic" role="alert">
-              <WarningIcon size={17} />
-              <span>{t('home.capabilities.discoveryIssues', { count: discoveryIssueCount })}</span>
-            </div>
-          ) : null}
-          {tab === 'skills' ? (
-            <div className="home-management-grid">
-              {skills.map((skill) => (
-                <article className="home-management-card" key={skill.id}>
-                  <span className="home-management-card-icon">
-                    <PackageIcon size={18} />
-                  </span>
-                  <span>
-                    <strong>{skill.name}</strong>
-                    <small>{skill.description || skill.source}</small>
-                  </span>
-                  <span className="home-management-card-actions">
-                    <span className="home-status-badge">
-                      {t(`home.capabilities.source.${skill.source}`)}
-                    </span>
-                    {skill.canRemove ? (
-                      <button
-                        type="button"
-                        className="is-danger"
-                        disabled={!expectedRevision || operationKey !== undefined}
-                        title={t('home.capabilities.removeSkill')}
-                        onClick={() => {
-                          if (
-                            !expectedRevision ||
-                            !window.confirm(
-                              t('home.capabilities.confirmRemoveSkill', {
-                                name: skill.name,
-                              }),
-                            )
-                          ) {
-                            return;
-                          }
-                          void runMutation(`skill-remove:${skill.id}`, () =>
-                            window.openNekoDesktop.home.extensions.removePersonalSkill(
-                              skill.managementId,
-                              expectedRevision,
-                            ),
-                          );
-                        }}
-                      >
-                        <TrashIcon size={13} />
-                        {t('home.capabilities.remove')}
-                      </button>
-                    ) : null}
-                  </span>
-                </article>
-              ))}
-              {result && skills.length === 0 ? (
-                <HomeManagementEmpty
-                  icon={<PackageIcon size={22} />}
-                  label={t('home.capabilities.noSkills')}
-                />
-              ) : null}
-            </div>
-          ) : (
-            <div className="home-management-grid">
-              {extensions.map((extension) => (
-                <article className="home-management-card" key={extension.id}>
-                  <span className="home-management-card-icon">
-                    {extension.iconDataUrl ? (
-                      <img alt="" src={extension.iconDataUrl} />
-                    ) : (
-                      <PackageIcon size={18} />
-                    )}
-                  </span>
-                  <span>
-                    <strong>{extension.displayName}</strong>
-                    <small>{extension.description || extension.id}</small>
-                    <small>
-                      {extension.developer || extension.marketplace} · {extension.version} ·{' '}
-                      {t(
-                        extension.installed
-                          ? 'home.capabilities.status.installed'
-                          : 'home.capabilities.status.available',
-                      )}
-                    </small>
-                    <small title={formatHomeExtensionContributions(extension, t)}>
-                      {formatHomeExtensionContributions(extension, t)}
-                    </small>
-                  </span>
-                  <span className="home-management-card-actions">
-                    <span
-                      className={`home-status-badge ${
-                        extension.agentStatus === 'ready' ? 'is-ready' : ''
-                      }`}
-                      title={extension.runtimeDiagnosticCode}
-                    >
-                      {t(`home.capabilities.agentStatus.${extension.agentStatus}`)}
-                    </span>
-                    {extension.canInstall ? (
-                      <button
-                        type="button"
-                        disabled={!expectedRevision || operationKey !== undefined}
-                        onClick={() => {
-                          if (
-                            !expectedRevision ||
-                            !window.confirm(
-                              t('home.capabilities.confirmInstallPlugin', {
-                                name: extension.displayName,
-                              }),
-                            )
-                          ) {
-                            return;
-                          }
-                          void runMutation(`plugin-install:${extension.id}`, () =>
-                            window.openNekoDesktop.home.extensions.installPlugin(
-                              extension.id,
-                              expectedRevision,
-                            ),
-                          );
-                        }}
-                      >
-                        <PlusIcon size={13} />
-                        {t('home.capabilities.install')}
-                      </button>
-                    ) : null}
-                    {extension.canRemove ? (
-                      <button
-                        type="button"
-                        className="is-danger"
-                        disabled={!expectedRevision || operationKey !== undefined}
-                        onClick={() => {
-                          if (
-                            !expectedRevision ||
-                            !window.confirm(
-                              t('home.capabilities.confirmRemovePlugin', {
-                                name: extension.displayName,
-                              }),
-                            )
-                          ) {
-                            return;
-                          }
-                          void runMutation(`plugin-remove:${extension.id}`, () =>
-                            window.openNekoDesktop.home.extensions.removePlugin(
-                              extension.id,
-                              expectedRevision,
-                            ),
-                          );
-                        }}
-                      >
-                        <TrashIcon size={13} />
-                        {t('home.capabilities.remove')}
-                      </button>
-                    ) : null}
-                  </span>
-                </article>
-              ))}
-              {result && extensions.length === 0 ? (
-                <HomeManagementEmpty
-                  icon={<PackageIcon size={22} />}
-                  label={t('home.capabilities.noExtensions')}
-                />
-              ) : null}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function HomeAllProjects({
-  onOpenRecent,
-  projection,
-}: {
-  readonly onOpenRecent: (projectId: string) => void;
-  readonly projection: DesktopShellProjection;
-}): JSX.Element {
-  const { locale, t } = useTranslation();
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<HomeProjectSortOption>('updated-descending');
-  const [view, setView] = useState<'grid' | 'list'>('grid');
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const projects = useMemo(
-    () => filterAndSortHomeProjects(projection.catalog.projects, normalizedQuery, sort),
-    [normalizedQuery, projection.catalog.projects, sort],
-  );
-  return (
-    <div className="home-management-page">
-      <header className="home-management-header">
-        <div>
-          <p className="section-label">{t('home.projects.eyebrow')}</p>
-          <h1>{t('home.allProjects')}</h1>
-          <p>{t('home.projects.description')}</p>
-        </div>
-      </header>
-      <div className="home-management-toolbar">
-        <label className="home-search-field">
-          <SearchIcon size={16} />
-          <input
-            aria-label={t('home.projects.search')}
-            placeholder={t('home.projects.search')}
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div className="home-management-toolbar-actions">
-          <label className="home-sort-control">
-            <span>{t('home.sort.label')}</span>
-            <select
-              aria-label={t('home.projects.sort')}
-              value={sort}
-              onChange={(event) => setSort(parseHomeProjectSortOption(event.currentTarget.value))}
-            >
-              <option value="updated-descending">{t('home.sort.newest')}</option>
-              <option value="updated-ascending">{t('home.sort.oldest')}</option>
-              <option value="name-ascending">{t('home.sort.nameAscending')}</option>
-              <option value="name-descending">{t('home.sort.nameDescending')}</option>
-            </select>
-          </label>
-          <div className="home-segmented-control" aria-label={t('home.projects.view')}>
-            <button
-              type="button"
-              className={view === 'grid' ? 'is-active' : ''}
-              aria-pressed={view === 'grid'}
-              onClick={() => setView('grid')}
-            >
-              {t('home.view.grid')}
-            </button>
-            <button
-              type="button"
-              className={view === 'list' ? 'is-active' : ''}
-              aria-pressed={view === 'list'}
-              onClick={() => setView('list')}
-            >
-              {t('home.view.list')}
-            </button>
-          </div>
-        </div>
-      </div>
-      {projects.length === 0 ? (
-        <HomeManagementEmpty icon={<FolderIcon size={22} />} label={t('home.projects.noResults')} />
-      ) : view === 'list' ? (
-        <div className="recent-projects home-project-list">
-          {projects.map((project) => (
-            <button
-              type="button"
-              className="recent-project-row"
-              key={project.projectId}
-              onClick={() => onOpenRecent(project.projectId)}
-            >
-              <FolderIcon size={17} />
-              <span className="recent-project-name">{project.displayName}</span>
-              <span className="recent-project-kind">{t('home.content')}</span>
-              <span className="recent-project-date">
-                {formatProjectDate(project.updatedAt, locale)}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="home-management-grid home-project-grid">
-          {projects.map((project) => (
-            <button
-              type="button"
-              className="home-management-card home-project-card"
-              key={project.projectId}
-              onClick={() => onOpenRecent(project.projectId)}
-            >
-              <span className="home-management-card-icon">
-                <FolderIcon size={18} />
-              </span>
-              <span>
-                <strong>{project.displayName}</strong>
-                <small>
-                  {t('home.content')} · {formatProjectDate(project.updatedAt, locale)}
-                </small>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function searchAndOrderHomeSkills(
-  skills: readonly DesktopHomeSkillItem[],
-  query: string,
-): readonly DesktopHomeSkillItem[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  return [...skills]
-    .filter((skill) =>
-      `${skill.name} ${skill.description} ${skill.source}`
-        .toLocaleLowerCase()
-        .includes(normalizedQuery),
-    )
-    .sort((left, right) => {
-      const sourceCompared = homeSkillSourceRank(left.source) - homeSkillSourceRank(right.source);
-      if (sourceCompared !== 0) return sourceCompared;
-      return left.name.localeCompare(right.name);
-    });
-}
-
-export function searchAndOrderHomeExtensions(
-  extensions: readonly DesktopHomeExtensionItem[],
-  query: string,
-): readonly DesktopHomeExtensionItem[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  return [...extensions]
-    .filter((extension) =>
-      [
-        extension.id,
-        extension.name,
-        extension.displayName,
-        extension.description,
-        extension.developer,
-        extension.marketplace,
-        extension.category,
-        ...extension.mcpServerIds,
-        ...extension.appIds,
-      ]
-        .join(' ')
-        .toLocaleLowerCase()
-        .includes(normalizedQuery),
-    )
-    .sort((left, right) => {
-      const relevanceCompared =
-        homeExtensionCategoryRank(left.category) - homeExtensionCategoryRank(right.category);
-      if (relevanceCompared !== 0) return relevanceCompared;
-      if (left.installed !== right.installed) return left.installed ? -1 : 1;
-      return left.displayName.localeCompare(right.displayName) || left.id.localeCompare(right.id);
-    });
-}
-
-function homeExtensionCategoryRank(category: string): number {
-  switch (category.trim().toLocaleLowerCase()) {
-    case 'creativity':
-      return 0;
-    case 'productivity':
-      return 1;
-    case 'data & analytics':
-    case 'education & research':
-      return 2;
-    default:
-      return 3;
-  }
-}
-
-export function filterAndSortHomeProjects(
-  projects: readonly DesktopProjectCatalogItem[],
-  query: string,
-  sort: HomeProjectSortOption,
-): readonly DesktopProjectCatalogItem[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  return [...projects]
-    .filter((project) => project.displayName.toLocaleLowerCase().includes(normalizedQuery))
-    .sort((left, right) => {
-      if (sort === 'name-ascending' || sort === 'name-descending') {
-        const compared =
-          left.displayName.localeCompare(right.displayName) ||
-          left.projectId.localeCompare(right.projectId);
-        return sort === 'name-ascending' ? compared : -compared;
-      }
-      const compared =
-        Date.parse(left.updatedAt) - Date.parse(right.updatedAt) ||
-        left.projectId.localeCompare(right.projectId);
-      return sort === 'updated-ascending' ? compared : -compared;
-    });
-}
-
-function formatHomeExtensionContributions(
-  extension: DesktopHomeExtensionItem,
-  t: TranslationFunction,
-): string {
-  const contributions = [
-    extension.mcpServerIds.length > 0
-      ? t('home.capabilities.extensionMcp', { ids: extension.mcpServerIds.join(', ') })
-      : undefined,
-    extension.hasSkills ? t('home.capabilities.extensionSkills') : undefined,
-    extension.appIds.length > 0
-      ? t('home.capabilities.extensionApps', { ids: extension.appIds.join(', ') })
-      : undefined,
-  ].filter((value): value is string => value !== undefined);
-  return contributions.length > 0
-    ? contributions.join(' · ')
-    : t('home.capabilities.extensionNoContributions');
-}
-
-function homeSkillSourceRank(source: DesktopHomeSkillItem['source']): number {
-  return source === 'personal' ? 0 : 1;
-}
-
-export function parseHomeAssetSortOption(value: string): HomeAssetSortOption {
-  switch (value) {
-    case 'name-ascending':
-    case 'name-descending':
-    case 'modified-descending':
-      return value;
-    default:
-      throw new Error(`Unknown Home asset sort option: ${value}`);
-  }
-}
-
-export function parseHomeProjectSortOption(value: string): HomeProjectSortOption {
-  switch (value) {
-    case 'updated-descending':
-    case 'updated-ascending':
-    case 'name-ascending':
-    case 'name-descending':
-      return value;
-    default:
-      throw new Error(`Unknown Home project sort option: ${value}`);
-  }
-}
-
-function HomeManagementEmpty({
-  icon,
-  label,
-}: {
-  readonly icon: JSX.Element;
-  readonly label: string;
-}): JSX.Element {
-  return (
-    <div className="home-management-empty">
-      {icon}
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function ContentProjectWorkspace({
-  actions,
-  initialConversation,
-  initialInput,
   pending,
   projection,
-  project,
   projectPortabilityPort,
 }: {
   readonly actions: ShellActions;
-  readonly initialConversation?: { readonly id: string; readonly title: string };
-  readonly initialInput?: { readonly id: string; readonly value: string };
+  readonly interactive?: boolean;
   readonly pending: boolean;
   readonly projection: DesktopShellProjection;
-  readonly project: DesktopProjectCatalogItem;
   readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
 }): JSX.Element {
   const { t } = useTranslation();
+  const settings = useDesktopApplicationSettings();
+  const activeWorkbench = resolveActiveDesktopWindowWorkbench(projection.window);
+  const scene = activeWorkbench.scene;
+  const [managementSplitRatios, setManagementSplitRatios] = useState<ReadonlyMap<string, number>>(
+    () => new Map(),
+  );
+  const [portalTargets, setPortalTargets] = useState<ReadonlyMap<string, HTMLDivElement>>(
+    () => new Map(),
+  );
+  const registerPortalTarget = useCallback(
+    (
+      workbenchInstanceId: string,
+      slot: DesktopWorkbenchPortalSlot,
+      target: HTMLDivElement | null,
+    ) => {
+      const key = createDesktopWorkbenchPortalTargetKey(workbenchInstanceId, slot);
+      setPortalTargets((current) => {
+        if (target && current.get(key) === target) return current;
+        if (!target && !current.has(key)) return current;
+        const next = new Map(current);
+        if (target) next.set(key, target);
+        else next.delete(key);
+        return next;
+      });
+    },
+    [],
+  );
+  const sidebar = projection.window.applicationSidebar;
+  const compact = !sidebar.visible;
+  const activeSection: HomeSection =
+    scene.context.kind === 'asset-center'
+      ? 'assets'
+      : scene.context.kind === 'extensions'
+        ? 'extensions'
+        : scene.context.kind === 'project-management'
+          ? 'projects'
+          : 'create';
+  const workspaceProject = resolveWorkspaceSceneProject(projection, activeWorkbench);
+  const workspaceScene = scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace';
+  const launchScope =
+    scene.context.kind === 'agent' && scene.context.scope.kind !== 'workspace'
+      ? scene.context.scope
+      : undefined;
+  const assistantPreviewVisible =
+    launchScope?.kind === 'assistant' && scene.slots.main?.kind === 'assistant-preview';
+  const assetPreviewVisible =
+    scene.context.kind === 'asset-center' && scene.slots.secondaryMain?.kind === 'asset-preview';
+  const activeResourcePresentation = useResourceDockPresentation(
+    activeWorkbench.layout.resourceDock.presentation,
+  );
+  const workspaceAgentVisible =
+    workspaceScene && activeWorkbench.layout.display.mode !== 'main-only';
+  const interactionVisible = Boolean(launchScope) || workspaceAgentVisible;
+  const interactionPresentation = launchScope
+    ? assistantPreviewVisible
+      ? ('docked' as const)
+      : ('main' as const)
+    : workspaceScene && activeWorkbench.layout.display.mode === 'chat-only'
+      ? ('main' as const)
+      : workspaceAgentVisible
+        ? ('docked' as const)
+        : ('hidden' as const);
+  const interactionPosition =
+    workspaceScene &&
+    activeResourcePresentation !== 'hidden' &&
+    activeWorkbench.layout.display.chatPosition === 'right'
+      ? ('left' as const)
+      : activeWorkbench.layout.display.chatPosition;
+  const agentSurfaceProps = scene.slots.interaction
+    ? createDesktopAgentSurfaceProps({
+        projection,
+        workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+        interaction: scene.slots.interaction,
+        onChooseWorkspaceTarget: actions.onChooseWorkspaceTarget,
+        onSelectWorkspaceProjectTarget: actions.onSelectWorkspaceProjectTarget,
+        workspaceSelectionDisabled: pending || !interactive,
+      })
+    : undefined;
+  const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
+  const interaction = (
+    <DesktopSurfaceErrorBoundary surfaceIdentity="agent-interaction">
+      <div className="project-dock-panel" data-dock-owner="agent">
+        <section
+          className="agent-workspace desktop-assistant-agent"
+          data-agent-scope={scene.context.kind === 'agent' ? scene.context.scope.kind : undefined}
+          data-primary-surface="agent"
+        >
+          {projectCatalogUnavailable && !agentSurfaceProps ? (
+            <SceneSurfaceUnavailable owner="workspace-authority" />
+          ) : agentSurfaceProps && interactionVisible ? (
+            <DesktopSurfaceErrorBoundary
+              surfaceIdentity={`agent:${agentSurfaceProps.agentSurfaceId}`}
+            >
+              <DesktopAgentSurface key={agentSurfaceProps.agentSurfaceId} {...agentSurfaceProps} />
+            </DesktopSurfaceErrorBoundary>
+          ) : null}
+        </section>
+      </div>
+    </DesktopSurfaceErrorBoundary>
+  );
+  const sceneShape = launchScope
+    ? assistantPreviewVisible
+      ? 'assistant'
+      : 'agent-only'
+    : workspaceScene
+      ? 'workspace'
+      : 'management';
+  const managementSplitRatio =
+    managementSplitRatios.get(activeWorkbench.workbenchInstanceId) ??
+    MANAGEMENT_MAIN_SPLIT_DEFAULT_RATIO;
+  const mainSplit = assetPreviewVisible
+    ? ('columns' as const)
+    : workspaceScene
+      ? (activeWorkbench.layout.main.split?.axis ?? 'none')
+      : 'none';
+  const secondaryMainVisible =
+    assetPreviewVisible || Boolean(workspaceScene && activeWorkbench.layout.main.groups[1]);
+  const mainSplitResize: ControlledWorkbenchResizeBinding | undefined = assetPreviewVisible
+    ? createManagementMainSplitResizeBinding({
+        label: t('workspace.resizeMainSplit'),
+        onResizeEnd: (ratio) => {
+          setManagementSplitRatios((current) => {
+            const next = new Map(current);
+            next.set(activeWorkbench.workbenchInstanceId, ratio);
+            return next;
+          });
+        },
+      })
+    : workspaceScene && activeWorkbench.layout.main.split && !pending
+      ? {
+          label: t('workspace.resizeMainSplit'),
+          minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
+          maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
+          onResizeEnd: (ratio) => {
+            if (ratio === activeWorkbench.layout.main.split?.ratio) return;
+            actions.onUpdateWorkbench(
+              activeWorkbench.workbenchInstanceId,
+              resizeMainSplit(activeWorkbench.layout, ratio),
+            );
+          },
+        }
+      : undefined;
+  const resourceDockVisible = workspaceScene && activeResourcePresentation !== 'hidden';
+  const interactionResize =
+    workspaceScene && interactionPresentation === 'docked' && !pending
+      ? createProjectDockResizeBinding({
+          actions,
+          dock: {
+            owner: 'agent',
+            presentation: 'docked',
+            width: activeWorkbench.layout.display.chatWidth,
+            content: <></>,
+          },
+          workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+          label: t('workspace.resizeAgent'),
+          workbench: activeWorkbench.layout,
+        })
+      : undefined;
+  const resourceDockResize =
+    resourceDockVisible && !pending
+      ? createProjectDockResizeBinding({
+          actions,
+          dock: {
+            owner: 'resources',
+            presentation: activeResourcePresentation,
+            width: activeWorkbench.layout.resourceDock.width,
+            content: <></>,
+          },
+          workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+          label: t('workspace.resizeRightDock'),
+          workbench: activeWorkbench.layout,
+        })
+      : undefined;
+  const portalDeck = (slot: DesktopWorkbenchPortalSlot, visible = true): JSX.Element => (
+    <>
+      {visible ? (
+        <DesktopWorkbenchPortalTarget
+          instanceId={activeWorkbench.workbenchInstanceId}
+          onTarget={registerPortalTarget}
+          slot={slot}
+        />
+      ) : null}
+    </>
+  );
+
+  return (
+    <>
+      <ControlledWorkbenchShell
+        className={`project-workspace desktop-scene-workbench desktop-scene-workbench--${sceneShape}`}
+        primarySidebar={
+          <ApplicationPrimarySidebar
+            activeSection={activeSection}
+            compact={compact}
+            disabled={pending}
+            activeProjectId={workspaceProject?.projectId}
+            onDeleteConversations={actions.onDeleteConversations}
+            onDeleteProjectConversations={(project) =>
+              actions.onDeleteProjectConversations([project])
+            }
+            onManageProjects={() => actions.onTransitionScene({ kind: 'open-project-management' })}
+            onNavigate={(section) => actions.onTransitionScene(sceneIntentForSection(section))}
+            onOpenConversation={actions.onOpenConversation}
+            onOpenRecent={actions.onSelectProject}
+            onRemoveProject={(project) => actions.onRemoveProjects([project])}
+            onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
+            onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
+            projection={projection}
+            layoutControl={
+              workspaceProject ? (
+                <WorkspaceRegionControls
+                  actions={actions}
+                  disabled={pending}
+                  projection={projection}
+                />
+              ) : undefined
+            }
+            lifecycleControl={
+              workspaceProject && projectPortabilityPort ? (
+                <ProjectPortabilityControl
+                  disabled={pending}
+                  rendererSessionId={projection.rendererSessionId}
+                  project={workspaceProject}
+                  port={projectPortabilityPort}
+                  windowId={projection.window.windowId}
+                />
+              ) : undefined
+            }
+          />
+        }
+        primarySidebarVisible
+        primarySidebarWidth={compact ? 64 : sidebar.width}
+        primarySidebarResize={createApplicationPrimarySidebarResizeBinding({
+          actions,
+          disabled: pending || compact,
+          t,
+          sidebar,
+        })}
+        interaction={interaction}
+        interactionPresentation={interactionPresentation}
+        interactionPosition={interactionPosition}
+        interactionWidth={activeWorkbench.layout.display.chatWidth}
+        interactionResize={interactionResize}
+        main={portalDeck('main')}
+        secondaryMain={portalDeck('secondaryMain', secondaryMainVisible)}
+        secondaryMainVisible={secondaryMainVisible}
+        mainComposition={assetPreviewVisible ? 'independent-shells' : 'continuous'}
+        mainSplit={mainSplit}
+        mainSplitRatio={
+          assetPreviewVisible ? managementSplitRatio : activeWorkbench.layout.main.split?.ratio
+        }
+        mainSplitResize={mainSplitResize}
+        leftDock={portalDeck('leftDock', scene.context.kind === 'settings')}
+        leftDockPresentation={scene.context.kind === 'settings' ? 'docked' : 'hidden'}
+        leftDockWidth={scene.context.kind === 'settings' ? 300 : undefined}
+        rightDock={portalDeck('rightDock', resourceDockVisible)}
+        rightDockPresentation={resourceDockVisible ? activeResourcePresentation : 'hidden'}
+        rightDockWidth={activeWorkbench.layout.resourceDock.width}
+        rightDockResize={resourceDockResize}
+        timeline={portalDeck(
+          'timeline',
+          workspaceScene && activeWorkbench.layout.timeline.presentation === 'docked',
+        )}
+        timelineVisible={
+          workspaceScene && activeWorkbench.layout.timeline.presentation === 'docked'
+        }
+        timelineHeight={activeWorkbench.layout.timeline.height}
+        timelineResize={
+          workspaceScene && !pending
+            ? {
+                label: t('workspace.resizeTimeline'),
+                minSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.min,
+                maxSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.max,
+                onResizeEnd: (height) => {
+                  if (height === activeWorkbench.layout.timeline.height) return;
+                  actions.onUpdateWorkbench(
+                    activeWorkbench.workbenchInstanceId,
+                    resizeTimelineWorkbench(activeWorkbench.layout, height),
+                  );
+                },
+              }
+            : undefined
+        }
+      />
+      <DesktopSurfaceErrorBoundary
+        key={activeWorkbench.workbenchInstanceId}
+        surfaceIdentity={`workbench:${activeWorkbench.workbenchInstanceId}`}
+      >
+        <DesktopWorkbenchRuntimePortals
+          actions={actions}
+          composition={activeWorkbench}
+          interactive={interactive}
+          pending={pending}
+          portalTargets={portalTargets}
+          projection={projection}
+          resourceBrowserView={settings.projection.preferences.resourceBrowserView}
+        />
+      </DesktopSurfaceErrorBoundary>
+    </>
+  );
+}
+
+type DesktopWorkbenchPortalSlot = 'main' | 'secondaryMain' | 'leftDock' | 'rightDock' | 'timeline';
+
+function createDesktopWorkbenchPortalTargetKey(
+  workbenchInstanceId: string,
+  slot: DesktopWorkbenchPortalSlot,
+): string {
+  return `${workbenchInstanceId}:${slot}`;
+}
+
+function DesktopWorkbenchPortalTarget({
+  instanceId,
+  onTarget,
+  slot,
+}: {
+  readonly instanceId: string;
+  readonly onTarget: (
+    workbenchInstanceId: string,
+    slot: DesktopWorkbenchPortalSlot,
+    target: HTMLDivElement | null,
+  ) => void;
+  readonly slot: DesktopWorkbenchPortalSlot;
+}): JSX.Element {
+  const setTarget = useCallback(
+    (target: HTMLDivElement | null) => onTarget(instanceId, slot, target),
+    [instanceId, onTarget, slot],
+  );
+  return (
+    <div ref={setTarget} className="desktop-workbench-slot-target" data-workbench-slot={slot} />
+  );
+}
+
+function DesktopWorkbenchRuntimePortals({
+  actions,
+  composition,
+  interactive,
+  pending,
+  portalTargets,
+  projection,
+  resourceBrowserView,
+}: {
+  readonly actions: ShellActions;
+  readonly composition: DesktopWindowCompositionProjection;
+  readonly interactive: boolean;
+  readonly pending: boolean;
+  readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
+  readonly projection: DesktopShellProjection;
+  readonly resourceBrowserView: 'list' | 'grid';
+}): JSX.Element {
+  const { t } = useTranslation();
+  const scene = composition.scene;
+  const assetCenter = useDesktopAssetCenterScene({
+    active: true,
+    scene,
+    viewMode: resourceBrowserView,
+  });
+  const extensionManagement = useDesktopExtensionManagementScene(scene);
+  const workspaceProject = resolveWorkspaceSceneProject(projection, composition);
+  const workspaceSlots = useContentProjectWorkbenchSlots({
+    actions,
+    instance: composition,
+    pending,
+    projection,
+    project: workspaceProject,
+  });
+  const settingsSection =
+    scene.context.kind === 'settings'
+      ? parseDesktopSettingsSection(scene.context.settingsSectionId)
+      : undefined;
+  const assistantScope =
+    scene.context.kind === 'agent' && scene.context.scope.kind === 'assistant'
+      ? scene.context.scope
+      : undefined;
+  const assistantPreviewRef =
+    assistantScope && scene.slots.main?.kind === 'assistant-preview' ? scene.slots.main : undefined;
+  const assistantPreview =
+    assistantPreviewRef && assistantScope?.conversationId ? (
+      <DesktopAssistantPreviewSurface
+        assistantSpaceId={assistantScope.assistantSpaceId}
+        conversationId={assistantScope.conversationId}
+        previewSessionId={assistantPreviewRef.previewSessionId}
+        scratchArtifactId={assistantPreviewRef.scratchArtifactId}
+        windowId={scene.windowId}
+      />
+    ) : undefined;
+  const assetPreviewSession =
+    scene.context.kind === 'asset-center' && assetCenter.projection
+      ? resolveAssetCenterPreviewSession(scene, assetCenter.projection)
+      : undefined;
+  const assetPreview =
+    typeof assetPreviewSession === 'string' && assetCenter.projection ? (
+      <DesktopAssetCenterMainSurface projection={assetCenter.projection} />
+    ) : undefined;
+  const mainContent =
+    settingsSection !== undefined ? (
+      <DesktopSettingsMainSurface section={settingsSection} />
+    ) : scene.context.kind === 'asset-center' ? (
+      assetCenter.runtime ? (
+        <DesktopAssetManagementSurface interactive={interactive} runtime={assetCenter.runtime} />
+      ) : null
+    ) : scene.context.kind === 'extensions' ? (
+      extensionManagement ? (
+        <DesktopExtensionManagementSurface
+          interactive={interactive}
+          runtime={extensionManagement}
+        />
+      ) : null
+    ) : scene.context.kind === 'project-management' ? (
+      <DesktopProjectCatalogSurface
+        conversations={projection.agentHome.conversations}
+        interactive={interactive}
+        onOpen={actions.onSelectProject}
+        onDeleteConversations={actions.onDeleteProjectConversations}
+        onRemove={actions.onRemoveProjects}
+        projects={projection.catalog.projects}
+      />
+    ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
+      workspaceSlots.main
+    ) : assistantScope ? (
+      (assistantPreview ?? null)
+    ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'unbound' ? null : (
+      <SceneSurfaceUnavailable owner="agent" />
+    );
+  const main =
+    scene.context.kind === 'asset-center' ? (
+      <StaticWorkbenchMainPanelSurface
+        label={t('home.mediaLibrary')}
+        panelId="asset-management"
+        role="management"
+        size={assetPreview ? 'compact' : 'full'}
+      >
+        {mainContent}
+      </StaticWorkbenchMainPanelSurface>
+    ) : scene.context.kind === 'extensions' ? (
+      <StaticWorkbenchMainPanelSurface
+        label={t('home.capabilities')}
+        panelId="extension-management"
+        role="management"
+      >
+        {mainContent}
+      </StaticWorkbenchMainPanelSurface>
+    ) : scene.context.kind === 'project-management' ? (
+      <StaticWorkbenchMainPanelSurface
+        label={t('home.allProjects')}
+        panelId="project-management"
+        role="management"
+      >
+        {mainContent}
+      </StaticWorkbenchMainPanelSurface>
+    ) : (
+      mainContent
+    );
+  const secondaryMain = assetPreview ? (
+    <StaticWorkbenchMainPanelSurface
+      label={t('workspace.preview')}
+      panelId="asset-preview"
+      role="detail"
+    >
+      {assetPreview}
+    </StaticWorkbenchMainPanelSurface>
+  ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
+    workspaceSlots.secondaryMain
+  ) : undefined;
+  const leftDock =
+    settingsSection === undefined ? undefined : (
+      <DesktopSettingsNavigationSurface
+        activeSection={settingsSection}
+        onSectionChange={(section) =>
+          actions.onTransitionScene({ kind: 'open-settings', sectionId: section })
+        }
+      />
+    );
+  const rightDock =
+    scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace'
+      ? workspaceSlots.rightDock
+      : undefined;
+  const timeline =
+    scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace'
+      ? workspaceSlots.timeline
+      : undefined;
+  const contentBySlot: Readonly<Record<DesktopWorkbenchPortalSlot, ReactNode>> = {
+    main,
+    secondaryMain,
+    leftDock,
+    rightDock,
+    timeline,
+  };
+
+  return (
+    <>
+      {(Object.entries(contentBySlot) as readonly [DesktopWorkbenchPortalSlot, ReactNode][]).map(
+        ([slot, content]) => {
+          const target = portalTargets.get(
+            createDesktopWorkbenchPortalTargetKey(composition.workbenchInstanceId, slot),
+          );
+          return target
+            ? createPortal(
+                <DesktopSurfaceErrorBoundary
+                  key={`${scene.sceneId}:${slot}`}
+                  surfaceIdentity={`${composition.workbenchInstanceId}:${slot}`}
+                >
+                  {content}
+                </DesktopSurfaceErrorBoundary>,
+                target,
+                slot,
+              )
+            : null;
+        },
+      )}
+    </>
+  );
+}
+
+function StaticWorkbenchMainPanelSurface({
+  children,
+  label,
+  panelId,
+  role,
+  size = 'full',
+}: {
+  readonly children: ReactNode;
+  readonly label: string;
+  readonly panelId: string;
+  readonly role: 'management' | 'detail';
+  readonly size?: 'compact' | 'full';
+}): JSX.Element {
+  return (
+    <WorkbenchMainPanelSurface label={label} panelId={panelId} role={role} size={size}>
+      {children}
+    </WorkbenchMainPanelSurface>
+  );
+}
+
+function WorkbenchMainPanelSurface({
+  active,
+  children,
+  mainGroupId,
+  label,
+  panelId,
+  role = 'workspace',
+  size = 'full',
+  tabs,
+}: {
+  readonly active?: boolean;
+  readonly children: ReactNode;
+  readonly mainGroupId?: string;
+  readonly label?: string;
+  readonly panelId: string;
+  readonly role?: 'workspace' | 'management' | 'detail';
+  readonly size?: 'compact' | 'full';
+  readonly tabs?: ReactNode;
+}): JSX.Element {
+  return (
+    <section
+      className="project-main-group desktop-workbench-main-panel"
+      data-active={active === undefined ? undefined : active ? 'true' : 'false'}
+      data-main-group={mainGroupId}
+      data-panel-role={role}
+      data-panel-size={size}
+      data-workbench-main-panel={panelId}
+      aria-label={label}
+    >
+      {tabs ? <header className="project-main-group__tabs">{tabs}</header> : null}
+      <div className="project-main-group__content">{children}</div>
+    </section>
+  );
+}
+
+function createLaunchAgentPresentation(
+  scope: Extract<DesktopWorkbenchSceneProjection['context'], { readonly kind: 'agent' }>['scope'],
+): AgentRootPresentation {
+  if (scope.kind === 'workspace') {
+    throw new Error('Launch Agent presentation cannot use Workspace scope.');
+  }
+  if (scope.kind === 'unbound') {
+    return createAgentDraftPresentation(scope.draftId, {
+      kind: 'unbound',
+      draftId: scope.draftId,
+    });
+  }
+  const authorityScope = { kind: 'assistant' as const, assistantSpaceId: scope.assistantSpaceId };
+  return scope.conversationId
+    ? createAgentSessionPresentation(authorityScope, scope.conversationId)
+    : createAgentDraftPresentation(scope.draftId, authorityScope);
+}
+
+function createDesktopAgentSurfaceProps(input: {
+  readonly projection: DesktopShellProjection;
+  readonly workbenchInstanceId: string;
+  readonly project?: DesktopProjectCatalogItem;
+  readonly interaction: DesktopAgentInteractionSurfaceRef;
+  readonly onChooseWorkspaceTarget?: () => Promise<
+    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
+  >;
+  readonly onSelectWorkspaceProjectTarget?: (
+    projectId: string,
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
+  readonly workspaceSelectionDisabled?: boolean;
+}): DesktopAgentSurfaceProps | undefined {
+  const { interaction } = input;
+  const scope = interaction.scope;
+  if (scope.kind === 'workspace') {
+    const project =
+      input.project ??
+      input.projection.catalog.projects.find(
+        (candidate) => candidate.workspaceId === scope.workspaceId,
+      );
+    if (!project) {
+      if (hasProjectCatalogDiagnostic(input.projection)) return undefined;
+      throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace Project.`);
+    }
+    const tab = input.projection.window.tabs.find(
+      (candidate) => candidate.projectId === project.projectId,
+    );
+    if (!tab || tab.viewId !== interaction.agentViewId) {
+      throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no exact Workspace View.`);
+    }
+    const authorityScope = {
+      kind: 'workspace' as const,
+      workspaceId: scope.workspaceId,
+      workspaceGrantId: scope.workspaceGrantId,
+    };
+    const agentPresentation = scope.conversationId
+      ? createAgentSessionPresentation(authorityScope, scope.conversationId)
+      : createAgentDraftPresentation(scope.draftId, authorityScope);
+    return {
+      binding: 'workspace',
+      workbenchInstanceId: input.workbenchInstanceId,
+      agentSurfaceId: interaction.agentSurfaceId,
+      tab,
+      agentPresentation,
+      composerWorkspace: { kind: 'workspace', label: project.displayName },
+    };
+  }
+  if (!input.onChooseWorkspaceTarget || !input.onSelectWorkspaceProjectTarget) {
+    throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace chooser.`);
+  }
+  const agentPresentation = createLaunchAgentPresentation(scope);
+  return {
+    binding: 'launch',
+    workbenchInstanceId: input.workbenchInstanceId,
+    agentSurfaceId: interaction.agentSurfaceId,
+    viewId: interaction.agentViewId,
+    agentPresentation,
+    ...(agentPresentation.kind === 'draft' && agentPresentation.scope.kind === 'unbound'
+      ? {
+          composerWorkspace: {
+            kind: 'entry' as const,
+            projects: input.projection.catalog.projects.map((project) => ({
+              projectId: project.projectId,
+              label: project.displayName,
+              ...(project.unavailable ? { disabled: true } : {}),
+            })),
+            onChooseDirectory: input.onChooseWorkspaceTarget,
+            onSelectProject: input.onSelectWorkspaceProjectTarget,
+            ...(input.workspaceSelectionDisabled === undefined
+              ? {}
+              : { disabled: input.workspaceSelectionDisabled }),
+          },
+        }
+      : {}),
+  };
+}
+
+function hasProjectCatalogDiagnostic(projection: DesktopShellProjection): boolean {
+  return Boolean(
+    projection.stateDiagnostics?.some(
+      (diagnostic) =>
+        diagnostic.code === 'desktop-shell-component-invalid' &&
+        diagnostic.component === 'project-catalog',
+    ),
+  );
+}
+
+export function resolveAssetCenterPreviewSession(
+  scene: DesktopWorkbenchSceneProjection,
+  projection: AssetCenterSessionProjection,
+): string | undefined | null {
+  if (
+    scene.context.kind !== 'asset-center' ||
+    scene.context.assetCenterSessionId !== projection.identity.assetCenterSessionId ||
+    scene.windowId !== projection.identity.windowId
+  ) {
+    throw new Error('Asset Center management projection does not match its Scene.');
+  }
+  if (projection.preview.status !== 'ready') return undefined;
+  if (
+    scene.slots.secondaryMain?.kind !== 'asset-preview' ||
+    scene.slots.secondaryMain.assetCenterSessionId !== projection.identity.assetCenterSessionId ||
+    scene.slots.secondaryMain.previewSessionId !== projection.preview.previewSessionId
+  ) {
+    return null;
+  }
+  return projection.preview.previewSessionId;
+}
+
+function resolveWorkspaceSceneProject(
+  projection: DesktopShellProjection,
+  instance: DesktopWindowCompositionProjection,
+): DesktopProjectCatalogItem | undefined {
+  const { context, slots } = instance.scene;
+  if (context.kind !== 'agent' || context.scope.kind !== 'workspace') return undefined;
+  if (slots.main && slots.main.kind !== 'workspace-main') {
+    throw new Error('Workspace Scene Main Surface must use its exact Workspace View ref.');
+  }
+  const workspaceMain = slots.main;
+  const workspaceScope = context.scope;
+  if (workspaceMain && workspaceMain.workspaceId !== workspaceScope.workspaceId) {
+    throw new Error('Workspace Scene Main Surface does not match its scope.');
+  }
+  const project = projection.catalog.projects.find(
+    (candidate) => candidate.workspaceId === workspaceScope.workspaceId,
+  );
+  if (!project) return undefined;
+  const tab = projection.window.tabs.find((candidate) => candidate.projectId === project.projectId);
+  if (!tab) {
+    throw new Error('Workspace Scene has no matching Agent Window View.');
+  }
+  if (
+    context.agentViewId !== tab.viewId ||
+    slots.interaction?.kind !== 'agent' ||
+    slots.interaction.agentViewId !== tab.viewId
+  ) {
+    throw new Error('Workspace Scene Agent Surface does not match its exact Window View.');
+  }
+  if (workspaceMain) {
+    const mainView = instance.layout.main.views.find(
+      (candidate) =>
+        candidate.viewId === workspaceMain.viewId &&
+        candidate.viewInstanceId === workspaceMain.viewInstanceId &&
+        candidate.workspaceId === workspaceScope.workspaceId &&
+        candidate.projectId === project.projectId,
+    );
+    if (!mainView) throw new Error('Workspace Scene Main Surface has no exact Workbench View.');
+  } else if (instance.layout.main.views.length > 0) {
+    throw new Error('Workspace Scene without Main cannot retain Workbench Views.');
+  }
+  return project;
+}
+
+function sceneIntentForSection(section: HomeSection): DesktopSceneTransitionIntent {
+  switch (section) {
+    case 'create':
+      return { kind: 'open-agent-entry' };
+    case 'assets':
+      return { kind: 'open-asset-center' };
+    case 'extensions':
+      return { kind: 'open-extensions' };
+    case 'projects':
+      return { kind: 'open-project-management' };
+  }
+}
+
+function SceneSurfaceUnavailable({ owner }: { readonly owner: string }): JSX.Element {
+  return (
+    <section className="scene-surface-unavailable" data-scene-surface-unavailable={owner}>
+      <WarningIcon size={18} />
+      <span>{owner}</span>
+    </section>
+  );
+}
+
+function useDesktopAssetCenterScene(input: {
+  readonly active: boolean;
+  readonly scene: DesktopWorkbenchSceneProjection;
+  readonly viewMode: 'list' | 'grid';
+}): {
+  readonly runtime?: DesktopAssetCenterRuntime;
+  readonly projection?: AssetCenterSessionProjection;
+} {
+  const assetCenterSessionId =
+    input.scene.context.kind === 'asset-center'
+      ? input.scene.context.assetCenterSessionId
+      : undefined;
+  const runtime = useMemo(() => {
+    if (!input.active || !assetCenterSessionId || typeof window === 'undefined') return undefined;
+    return new DesktopAssetCenterRuntime(
+      { assetCenterSessionId, windowId: input.scene.windowId },
+      input.viewMode,
+      window.openNekoDesktop,
+    );
+  }, [assetCenterSessionId, input.active, input.scene.windowId, input.viewMode]);
+  const [sessionState, setSessionState] = useState<{
+    readonly runtime: DesktopAssetCenterRuntime;
+    readonly projection: AssetCenterSessionProjection;
+  }>();
+  useDisposeRuntime(runtime);
+  useEffect(() => {
+    setSessionState(undefined);
+    if (!runtime) return;
+    let active = true;
+    const unsubscribe = runtime.subscribe((next) => {
+      if (active) setSessionState({ runtime, projection: next });
+    });
+    void runtime.getSnapshot().then((next) => {
+      if (active) setSessionState({ runtime, projection: next });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [runtime]);
+  const projection =
+    sessionState && sessionState.runtime === runtime ? sessionState.projection : undefined;
+  return {
+    ...(runtime ? { runtime } : {}),
+    ...(projection ? { projection } : {}),
+  };
+}
+
+function useDesktopExtensionManagementScene(
+  scene: DesktopWorkbenchSceneProjection,
+): DesktopExtensionManagementRuntime | undefined {
+  const active = scene.context.kind === 'extensions';
+  const runtime = useMemo(() => {
+    if (!active || typeof window === 'undefined') return undefined;
+    return new DesktopExtensionManagementRuntime(
+      { windowId: scene.windowId },
+      window.openNekoDesktop,
+    );
+  }, [active, scene.windowId]);
+  useDisposeRuntime(runtime);
+  return runtime;
+}
+
+function useDisposeRuntime<T extends { dispose(): void }>(runtime: T | undefined): void {
+  const disposalTokens = useRef(new Map<T, symbol>());
+  useEffect(() => {
+    if (!runtime) return;
+    const tokens = disposalTokens.current;
+    const token = Symbol('desktop-runtime-disposal');
+    tokens.set(runtime, token);
+    return () => {
+      // StrictMode remounts effects without recreating the memoized runtime.
+      queueMicrotask(() => {
+        if (!Object.is(tokens.get(runtime), token)) return;
+        tokens.delete(runtime);
+        runtime.dispose();
+      });
+    };
+  }, [runtime]);
+}
+
+type ContentProjectWorkbenchSlots = Pick<
+  ControlledWorkbenchShellProps,
+  'main' | 'secondaryMain' | 'rightDock' | 'timeline'
+>;
+
+function useContentProjectWorkbenchSlots({
+  actions,
+  instance,
+  pending,
+  projection,
+  project,
+}: {
+  readonly actions: ShellActions;
+  readonly instance: DesktopWindowCompositionProjection;
+  readonly pending: boolean;
+  readonly projection: DesktopShellProjection;
+  readonly project?: DesktopProjectCatalogItem;
+}): ContentProjectWorkbenchSlots {
+  const { t } = useTranslation();
   const [cutTimelineTarget, setCutTimelineTarget] = useState<HTMLDivElement | null>(null);
-  const agentCapability = projection.domains.find((candidate) => candidate.surface === 'agent');
+  const workbench = instance.layout;
+  const resourceDockPresentation = useResourceDockPresentation(workbench.resourceDock.presentation);
+  if (!project) {
+    return { main: <SceneSurfaceUnavailable owner="workspace-authority" /> };
+  }
   const canvasCapability = projection.domains.find((candidate) => candidate.surface === 'canvas');
   const assetsCapability = projection.domains.find(
     (candidate) => candidate.surface === 'media-library',
@@ -1334,7 +1405,6 @@ function ContentProjectWorkspace({
   if (!tab) {
     throw new Error(`Content Project '${project.projectId}' has no Window-owned View.`);
   }
-  const workbench = projection.window.workbench;
   const primaryGroup = workbench.main.groups[0];
   if (!primaryGroup) {
     throw new Error('Desktop Workbench requires a primary Main Group.');
@@ -1351,17 +1421,6 @@ function ContentProjectWorkspace({
       `Desktop Timeline owner '${timelineOwner.viewId}' is not attached to a Main group.`,
     );
   }
-  const agentMain = workbench.display.mode === 'chat-only';
-  const agentDock = (
-    <AgentWorkspaceSurface
-      agentReady={agentCapability?.status === 'ready'}
-      initialConversation={initialConversation}
-      initialInput={initialInput}
-      project={project}
-      tab={tab}
-    />
-  );
-  const resourceDockPresentation = useResourceDockPresentation(workbench.resourceDock.presentation);
   const resourceDock =
     resourceDockPresentation === 'hidden'
       ? undefined
@@ -1381,6 +1440,7 @@ function ContentProjectWorkspace({
                 title={t('workspace.closeProjectResources')}
                 onClick={() =>
                   actions.onUpdateWorkbench(
+                    instance.workbenchInstanceId,
                     setResourceDockPresentationWorkbench(workbench, 'hidden'),
                   )
                 }
@@ -1391,6 +1451,7 @@ function ContentProjectWorkspace({
                 <DesktopResourceBrowserSurface
                   onOpenCanvasDocument={(documentId, presentation) =>
                     actions.onUpdateWorkbench(
+                      instance.workbenchInstanceId,
                       openCanvasDocumentWorkbench({
                         documentId,
                         presentation,
@@ -1416,214 +1477,102 @@ function ContentProjectWorkspace({
             </div>
           </div>,
         );
-  const effectiveAgentPosition =
-    resourceDock && workbench.display.mode === 'chat-main'
-      ? ('left' as const)
-      : workbench.display.chatPosition;
-  const leftDock = createAgentDock(workbench, 'left', effectiveAgentPosition, agentDock);
-  const rightAgentDock = createAgentDock(workbench, 'right', effectiveAgentPosition, agentDock);
-  const rightDock = resourceDock ?? rightAgentDock;
-  const resourceControl = (
-    <WorkbenchIconButton
-      active={workbench.resourceDock.presentation !== 'hidden'}
-      disabled={pending}
-      icon={<RightPanelIcon size={15} />}
-      label={t('workspace.projectResources')}
-      onClick={() =>
-        actions.onUpdateWorkbench(
-          setResourceDockPresentationWorkbench(
-            workbench,
-            workbench.resourceDock.presentation === 'hidden' ? 'docked' : 'hidden',
-          ),
-        )
-      }
-    />
-  );
-  const mainSurface = agentMain ? (
-    <div className="project-main-chat-host">
-      {agentDock}
-      <div className="project-main-chat-host__controls">{resourceControl}</div>
-    </div>
-  ) : (
+  const mainSurface = (
     <MainViewGroupSurface
+      visible={workbench.display.mode !== 'chat-only'}
       actions={actions}
-      allowCutRuntime
       canvasCapability={canvasCapability}
       cutCapability={cutCapability}
       group={primaryGroup}
-      pending={pending}
       previewCapability={previewCapability}
       project={project}
       projection={projection}
+      workbenchInstanceId={instance.workbenchInstanceId}
       timelineOwnerViewId={
         timelineOwnerGroup?.groupId === primaryGroup.groupId ? timelineOwner?.viewId : undefined
       }
       timelineTarget={cutTimelineTarget ?? undefined}
       workbench={workbench}
-      resourceControl={resourceControl}
     />
   );
   const timelineOwnerRenderedInMain =
     timelineOwner?.kind === 'cut' && timelineOwnerGroup?.groupId === primaryGroup.groupId;
 
-  return (
-    <ControlledWorkbenchShell
-      className="project-workspace"
-      primarySidebar={
-        <ProjectPrimarySidebar
-          actions={actions}
-          pending={pending}
-          project={project}
-          projection={projection}
-          projectPortabilityPort={projectPortabilityPort}
-          compact={!workbench.primarySidebar.visible}
-        />
-      }
-      primarySidebarVisible
-      primarySidebarWidth={workbench.primarySidebar.visible ? workbench.primarySidebar.width : 64}
-      primarySidebarResize={createApplicationPrimarySidebarResizeBinding({
-        actions,
-        disabled: pending || !workbench.primarySidebar.visible,
-        t,
-        workbench,
-      })}
-      main={
-        <div className="project-main-host">
-          <div className="project-main-host__content">{mainSurface}</div>
-        </div>
-      }
-      secondaryMain={
-        !agentMain && secondaryGroup ? (
-          <MainViewGroupSurface
-            actions={actions}
-            allowCutRuntime={false}
-            canvasCapability={canvasCapability}
-            cutCapability={cutCapability}
-            group={secondaryGroup}
-            pending={pending}
-            previewCapability={previewCapability}
-            project={project}
-            projection={projection}
-            timelineOwnerViewId={
-              timelineOwnerGroup?.groupId === secondaryGroup.groupId
-                ? timelineOwner?.viewId
-                : undefined
-            }
-            timelineTarget={cutTimelineTarget ?? undefined}
-            workbench={workbench}
+  return {
+    main: (
+      <div className="project-main-host">
+        <div className="project-main-host__content">{mainSurface}</div>
+      </div>
+    ),
+    secondaryMain: secondaryGroup ? (
+      <MainViewGroupSurface
+        visible={workbench.display.mode !== 'chat-only'}
+        actions={actions}
+        canvasCapability={canvasCapability}
+        cutCapability={cutCapability}
+        group={secondaryGroup}
+        previewCapability={previewCapability}
+        project={project}
+        projection={projection}
+        workbenchInstanceId={instance.workbenchInstanceId}
+        timelineOwnerViewId={
+          timelineOwnerGroup?.groupId === secondaryGroup.groupId ? timelineOwner?.viewId : undefined
+        }
+        timelineTarget={cutTimelineTarget ?? undefined}
+        workbench={workbench}
+      />
+    ) : undefined,
+    rightDock: resourceDock?.content,
+    timeline:
+      timelineOwner?.kind === 'cut' && cutCapability?.status === 'ready' ? (
+        timelineOwnerRenderedInMain ? (
+          <div
+            className="desktop-cut-timeline-slot"
+            data-testid="desktop-cut-timeline-slot"
+            ref={setCutTimelineTarget}
           />
-        ) : undefined
-      }
-      mainSplit={workbench.main.split?.axis ?? 'none'}
-      mainSplitRatio={workbench.main.split?.ratio}
-      mainSplitResize={
-        pending || !workbench.main.split
-          ? undefined
-          : {
-              label: t('workspace.resizeMainSplit'),
-              minSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.min,
-              maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
-              onResizeEnd: (ratio) => {
-                if (ratio === workbench.main.split?.ratio) return;
-                actions.onUpdateWorkbench(resizeMainSplit(workbench, ratio));
-              },
-            }
-      }
-      leftDock={leftDock?.content}
-      leftDockPresentation={leftDock?.presentation}
-      leftDockWidth={leftDock?.width}
-      leftDockResize={
-        pending || !leftDock
-          ? undefined
-          : createProjectDockResizeBinding({
-              actions,
-              dock: leftDock,
-              label: t('workspace.resizeLeftDock'),
-              workbench,
-            })
-      }
-      rightDock={rightDock?.content}
-      rightDockPresentation={rightDock?.presentation}
-      rightDockWidth={rightDock?.width}
-      rightDockResize={
-        pending || !rightDock
-          ? undefined
-          : createProjectDockResizeBinding({
-              actions,
-              dock: rightDock,
-              label: t('workspace.resizeRightDock'),
-              workbench,
-            })
-      }
-      timeline={
-        timelineOwner?.kind === 'cut' && cutCapability?.status === 'ready' ? (
-          timelineOwnerRenderedInMain ? (
-            <div
-              className="desktop-cut-timeline-slot"
-              data-testid="desktop-cut-timeline-slot"
-              ref={setCutTimelineTarget}
-            />
-          ) : (
-            <TimelinePlaceholder diagnostic="desktop-cut-timeline-owner-not-mounted-in-primary-main" />
-          )
         ) : (
-          <TimelinePlaceholder
-            diagnostic={
-              projection.domains.find((candidate) => candidate.surface === 'cut')?.status ===
-              'unavailable'
-                ? 'desktop-domain-surface-unavailable'
-                : 'desktop-cut-timeline-not-mounted'
-            }
-          />
+          <TimelinePlaceholder diagnostic="desktop-cut-timeline-owner-not-mounted-in-primary-main" />
         )
-      }
-      timelineVisible={workbench.timeline.presentation === 'docked'}
-      timelineHeight={workbench.timeline.height}
-      timelineResize={
-        pending
-          ? undefined
-          : {
-              label: t('workspace.resizeTimeline'),
-              minSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.min,
-              maxSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.max,
-              onResizeEnd: (height) => {
-                if (height === workbench.timeline.height) return;
-                actions.onUpdateWorkbench(resizeTimelineWorkbench(workbench, height));
-              },
-            }
-      }
-    />
-  );
+      ) : (
+        <TimelinePlaceholder
+          diagnostic={
+            projection.domains.find((candidate) => candidate.surface === 'cut')?.status ===
+            'unavailable'
+              ? 'desktop-domain-surface-unavailable'
+              : 'desktop-cut-timeline-not-mounted'
+          }
+        />
+      ),
+  };
 }
 
 function MainViewGroupSurface({
   actions,
-  allowCutRuntime,
   canvasCapability,
   cutCapability,
   group,
-  pending,
   previewCapability,
   project,
   projection,
+  workbenchInstanceId,
   timelineOwnerViewId,
   timelineTarget,
+  visible,
   workbench,
-  resourceControl,
 }: {
   readonly actions: ShellActions;
-  readonly allowCutRuntime: boolean;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly group: DesktopWorkbenchMainGroup;
-  readonly pending: boolean;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
+  readonly workbenchInstanceId: string;
   readonly timelineOwnerViewId?: string;
   readonly timelineTarget?: Element;
+  readonly visible: boolean;
   readonly workbench: DesktopWorkbenchLayoutProjection;
-  readonly resourceControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
   const views = group.viewIds.map((viewId) => {
@@ -1634,14 +1583,12 @@ function MainViewGroupSurface({
     return view;
   });
   const activeView = views.find((view) => view.viewId === group.activeViewId);
-  const canSplit = Boolean(activeView && activeView.kind !== 'cut' && group.viewIds.length > 1);
   return (
-    <section
-      className="project-main-group"
-      data-main-group={group.groupId}
-      data-active={workbench.main.activeGroupId === group.groupId ? 'true' : 'false'}
-    >
-      <header className="project-main-group__tabs">
+    <WorkbenchMainPanelSurface
+      active={workbench.main.activeGroupId === group.groupId}
+      mainGroupId={group.groupId}
+      panelId={`workspace:${group.groupId}`}
+      tabs={
         <WorkbenchEditorTabs
           activeId={group.activeViewId}
           emptyLabel={t('workspace.mainTabs.empty')}
@@ -1652,83 +1599,42 @@ function MainViewGroupSurface({
             closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
           }))}
           onClose={(viewId) => {
-            actions.onUpdateWorkbench(closeMainView(workbench, viewId));
+            actions.onUpdateWorkbench(workbenchInstanceId, closeMainView(workbench, viewId));
           }}
           onReorder={(sourceViewId, targetViewId) => {
             actions.onUpdateWorkbench(
+              workbenchInstanceId,
               reorderMainView(workbench, group.groupId, sourceViewId, targetViewId),
             );
           }}
           onSelect={(viewId) => {
             const view = views.find((candidate) => candidate.viewId === viewId);
             if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
-            actions.onUpdateWorkbench(openOrFocusMainView(workbench, view));
+            actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusMainView(workbench, view));
           }}
         />
-        <div className="project-main-group__actions">
-          {resourceControl}
-          <WorkbenchIconButton
-            disabled={pending || !canSplit}
-            icon={<RightPanelIcon size={15} />}
-            label={t('workspace.mainTabs.splitRight')}
-            onClick={() => {
-              if (!activeView) throw new Error('Desktop Main split requires an active View.');
-              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'columns'));
-            }}
-          />
-          <WorkbenchIconButton
-            disabled={pending || !canSplit}
-            icon={<GridIcon size={15} />}
-            label={t('workspace.mainTabs.splitDown')}
-            onClick={() => {
-              if (!activeView) throw new Error('Desktop Main split requires an active View.');
-              actions.onUpdateWorkbench(splitMainView(workbench, activeView.viewId, 'rows'));
-            }}
-          />
+      }
+    >
+      {views.length === 0 ? (
+        <EmptyMainSurface />
+      ) : activeView && visible ? (
+        <div className="project-main-view-stack__item" data-main-view-id={activeView.viewId}>
+          {renderWorkbenchMainView({
+            canvasCapability,
+            previewCapability,
+            cutCapability,
+            project,
+            projection,
+            timelineTarget: activeView.viewId === timelineOwnerViewId ? timelineTarget : undefined,
+            view: activeView,
+          })}
         </div>
-      </header>
-      <div className="project-main-group__content">
-        {views.length === 0
-          ? renderWorkbenchMainView({
-              allowCutRuntime,
-              canvasCapability,
-              previewCapability,
-              cutCapability,
-              project,
-              projection,
-              view: undefined,
-            })
-          : views.map((view) => {
-              const active = view.viewId === activeView?.viewId;
-              return (
-                <div
-                  className="project-main-view-stack__item"
-                  data-active={active ? 'true' : 'false'}
-                  data-main-view-id={view.viewId}
-                  hidden={!active}
-                  key={`${view.viewId}:${view.viewEpoch}`}
-                >
-                  {renderWorkbenchMainView({
-                    allowCutRuntime,
-                    canvasCapability,
-                    previewCapability,
-                    cutCapability,
-                    project,
-                    projection,
-                    timelineTarget:
-                      view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
-                    view,
-                  })}
-                </div>
-              );
-            })}
-      </div>
-    </section>
+      ) : null}
+    </WorkbenchMainPanelSurface>
   );
 }
 
 function renderWorkbenchMainView({
-  allowCutRuntime,
   canvasCapability,
   previewCapability,
   cutCapability,
@@ -1737,30 +1643,21 @@ function renderWorkbenchMainView({
   timelineTarget,
   view,
 }: {
-  readonly allowCutRuntime: boolean;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly timelineTarget?: Element;
-  readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number] | undefined;
+  readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number];
 }): JSX.Element {
-  if (view?.kind === 'preview' && previewCapability?.status === 'ready') {
+  if (view.kind === 'preview' && previewCapability?.status === 'ready') {
     return <DesktopPreviewSurface project={project} projection={projection} view={view} />;
   }
-  if (view?.kind === 'canvas' && canvasCapability?.status === 'ready') {
+  if (view.kind === 'canvas' && canvasCapability?.status === 'ready') {
     return <DesktopCanvasSurface project={project} projection={projection} view={view} />;
   }
-  if (view?.kind === 'cut' && cutCapability?.status === 'ready') {
-    if (!allowCutRuntime) {
-      return (
-        <CreativeMainPlaceholder
-          canvasDiagnostic="desktop-cut-inactive-session-not-rendered"
-          project={project}
-        />
-      );
-    }
+  if (view.kind === 'cut' && cutCapability?.status === 'ready') {
     return (
       <DesktopCutSurface
         project={project}
@@ -1782,38 +1679,9 @@ function renderWorkbenchMainView({
   );
 }
 
-function WorkbenchIconButton({
-  active,
-  disabled,
-  icon,
-  label,
-  onClick,
-}: {
-  readonly active?: boolean;
-  readonly disabled: boolean;
-  readonly icon: JSX.Element;
-  readonly label: string;
-  readonly onClick: () => void;
-}): JSX.Element {
-  return (
-    <Tooltip content={label}>
-      <button
-        type="button"
-        className="project-layout-icon-button"
-        disabled={disabled}
-        aria-label={label}
-        aria-pressed={active}
-        onClick={onClick}
-      >
-        {icon}
-      </button>
-    </Tooltip>
-  );
-}
-
 type WorkbenchDisplayMode = 'chat-main-left' | 'chat-main-right' | 'chat-only' | 'main-only';
 
-function WorkbenchDisplayMenu({
+function WorkspaceRegionControls({
   actions,
   disabled,
   projection,
@@ -1823,177 +1691,67 @@ function WorkbenchDisplayMenu({
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const workbench = projection.window.workbench;
-  const mode = getWorkbenchDisplayMode(workbench);
-  const hasCreativeMain = workbench.main.views.length > 0;
-  const selectMode = (nextMode: WorkbenchDisplayMode): void => {
-    actions.onUpdateWorkbench(applyWorkbenchDisplayMode(workbench, nextMode));
-    setOpen(false);
-  };
+  const instance = resolveActiveDesktopWindowWorkbench(projection.window);
+  const workbench = instance.layout;
+  const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
+  const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
+  const managementVisible = isWorkbenchRegionVisible(workbench, 'management');
   return (
-    <Popover
-      align="end"
-      open={open}
-      onOpenChange={setOpen}
-      side="right"
-      trigger={
-        <IconButton
-          className="project-display-menu-trigger"
-          data-workbench-display-control="primary-sidebar"
-          disabled={disabled}
-          icon={<RightPanelIcon size={16} />}
-          label={t('workspace.displayMode')}
-          title={t('workspace.displayMode')}
-          aria-expanded={open}
-        />
-      }
+    <div
+      className="workspace-region-controls"
+      role="group"
+      aria-label={t('workspace.layoutControls')}
     >
-      <div className="project-display-menu" role="menu" aria-label={t('workspace.displayMode')}>
-        <strong>{t('workspace.displayMode')}</strong>
-        <DisplayMenuButton
-          checked={mode === 'chat-main-left' || mode === 'chat-main-right'}
-          label={t('workspace.chatAndMain')}
-          onClick={() =>
-            selectMode(mode === 'chat-main-right' ? 'chat-main-right' : 'chat-main-left')
-          }
-        />
-        <div className="project-display-menu__nested">
-          <DisplayMenuButton
-            checked={mode === 'chat-main-left'}
-            label={t('workspace.chatLeft')}
-            onClick={() => selectMode('chat-main-left')}
-          />
-          <DisplayMenuButton
-            checked={mode === 'chat-main-right'}
-            label={t('workspace.chatRight')}
-            onClick={() => selectMode('chat-main-right')}
-          />
-        </div>
-        <DisplayMenuButton
-          checked={mode === 'chat-only'}
-          label={t('workspace.chatOnly')}
-          onClick={() => selectMode('chat-only')}
-        />
-        <DisplayMenuButton
-          checked={mode === 'main-only'}
-          disabled={!hasCreativeMain}
-          label={t('workspace.mainOnly')}
-          onClick={() => selectMode('main-only')}
-        />
-      </div>
-    </Popover>
-  );
-}
-
-function DisplayMenuButton({
-  checked,
-  disabled = false,
-  label,
-  onClick,
-}: {
-  readonly checked: boolean;
-  readonly disabled?: boolean;
-  readonly label: string;
-  readonly onClick: () => void;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      className="project-display-menu__item"
-      role="menuitemradio"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <RightPanelIcon size={16} />
-      <span>{label}</span>
-      {checked ? <CheckIcon size={15} /> : <span aria-hidden="true" />}
-    </button>
-  );
-}
-
-function ProjectPrimarySidebar({
-  actions,
-  pending,
-  project,
-  projection,
-  compact,
-  projectPortabilityPort,
-}: {
-  readonly actions: ShellActions;
-  readonly pending: boolean;
-  readonly project: DesktopProjectCatalogItem;
-  readonly projection: DesktopShellProjection;
-  readonly compact: boolean;
-  readonly projectPortabilityPort?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
-}): JSX.Element {
-  const workbench = projection.window.workbench;
-  const togglePrimarySidebar = (): void => {
-    actions.onUpdateWorkbench(togglePrimarySidebarWorkbench(workbench));
-  };
-  return (
-    <DesktopApplicationSidebarFrame
-      compact={compact}
-      expandedWidth={workbench.primarySidebar.width}
-    >
-      <ApplicationPrimarySidebar
-        activeProjectId={project.projectId}
-        compact={compact}
-        disabled={pending}
-        onNavigate={actions.onHome}
-        onDeleteConversation={actions.onDeleteConversation}
-        onOpenConversation={actions.onOpenConversation}
-        onOpenRecent={actions.onOpenRecent}
-        onRemoveRecentProject={actions.onRemoveRecentProject}
-        onOpenSettings={actions.onOpenSettings}
-        onToggle={togglePrimarySidebar}
-        projection={projection}
-        layoutControl={
-          <WorkbenchDisplayMenu actions={actions} disabled={pending} projection={projection} />
-        }
-        lifecycleControl={
-          projectPortabilityPort ? (
-            <ProjectPortabilityControl
-              disabled={pending}
-              endpointEpoch={projection.endpointEpoch}
-              project={project}
-              port={projectPortabilityPort}
-              windowId={projection.window.windowId}
-            />
-          ) : undefined
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="agent"
+        disabled={disabled || (agentVisible && !mainVisible)}
+        icon={<span className={toCodiconClassName('layout')} aria-hidden="true" />}
+        label={t('workspace.agent')}
+        size="xs"
+        title={t('workspace.agent')}
+        aria-pressed={agentVisible}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'agent'),
+          )
         }
       />
-    </DesktopApplicationSidebarFrame>
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="main"
+        disabled={disabled || workbench.main.views.length === 0 || (mainVisible && !agentVisible)}
+        icon={<span className={toCodiconClassName('layout-panel')} aria-hidden="true" />}
+        label={t('workspace.mainPanel')}
+        size="xs"
+        title={t('workspace.mainPanel')}
+        aria-pressed={mainVisible}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'main'),
+          )
+        }
+      />
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="management"
+        disabled={disabled}
+        icon={<span className={toCodiconClassName('layout-sidebar-right')} aria-hidden="true" />}
+        label={t('workspace.projectResources')}
+        size="xs"
+        title={t('workspace.projectResources')}
+        aria-pressed={managementVisible}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'management'),
+          )
+        }
+      />
+    </div>
   );
-}
-
-function createAgentDock(
-  workbench: DesktopWorkbenchLayoutProjection,
-  position: 'left' | 'right',
-  effectivePosition: 'left' | 'right',
-  agent: JSX.Element,
-):
-  | {
-      readonly content: JSX.Element;
-      readonly owner: 'agent';
-      readonly presentation: 'docked' | 'overlay';
-      readonly width: number;
-    }
-  | undefined {
-  if (workbench.display.mode !== 'chat-main' || effectivePosition !== position) {
-    return undefined;
-  }
-  return {
-    content: (
-      <div className="project-dock-panel" data-dock-owner="agent">
-        {agent}
-      </div>
-    ),
-    owner: 'agent',
-    presentation: 'docked',
-    width: workbench.display.chatWidth,
-  };
 }
 
 function createResourceDock(
@@ -2037,12 +1795,18 @@ function createProjectDockResizeBinding({
   dock,
   label,
   workbench,
+  workbenchInstanceId,
 }: {
   readonly actions: ShellActions;
-  readonly dock:
-    NonNullable<ReturnType<typeof createAgentDock>> | ReturnType<typeof createResourceDock>;
+  readonly dock: {
+    readonly owner: 'agent' | 'resources';
+    readonly presentation: 'docked' | 'overlay';
+    readonly width: number;
+    readonly content: JSX.Element;
+  };
   readonly label: string;
   readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly workbenchInstanceId: string;
 }) {
   return {
     label,
@@ -2052,22 +1816,36 @@ function createProjectDockResizeBinding({
       const currentWidth =
         dock.owner === 'agent' ? workbench.display.chatWidth : workbench.resourceDock.width;
       if (currentWidth === width) return;
-      actions.onUpdateWorkbench(resizeProjectDockWorkbench(workbench, dock.owner, width));
+      actions.onUpdateWorkbench(
+        workbenchInstanceId,
+        resizeProjectDockWorkbench(workbench, dock.owner, width),
+      );
     },
   };
 }
 
-export function resizePrimarySidebarWorkbench(
-  workbench: DesktopWorkbenchLayoutProjection,
-  width: number,
-): DesktopWorkbenchLayoutProjection {
+export function createManagementMainSplitResizeBinding({
+  label,
+  onResizeEnd,
+}: {
+  readonly label: string;
+  readonly onResizeEnd: (ratio: number) => void;
+}): ControlledWorkbenchResizeBinding {
   return {
-    ...workbench,
-    revision: workbench.revision + 1,
-    primarySidebar: {
-      ...workbench.primarySidebar,
-      width,
-    },
+    label,
+    minSize: MANAGEMENT_MAIN_SPLIT_MIN_RATIO,
+    maxSize: DESKTOP_WORKBENCH_LIMITS.mainSplitRatio.max,
+    onResizeEnd,
+  };
+}
+
+export function resizeApplicationSidebar(
+  sidebar: DesktopApplicationSidebarProjection,
+  width: number,
+): DesktopApplicationSidebarProjection {
+  return {
+    ...sidebar,
+    width,
   };
 }
 
@@ -2075,35 +1853,31 @@ function createApplicationPrimarySidebarResizeBinding({
   actions,
   disabled,
   t,
-  workbench,
+  sidebar,
 }: {
   readonly actions: ShellActions;
   readonly disabled: boolean;
   readonly t: TranslationFunction;
-  readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly sidebar: DesktopApplicationSidebarProjection;
 }): ControlledWorkbenchResizeBinding | undefined {
   if (disabled) return undefined;
   return {
     label: t('workspace.resizePrimarySidebar'),
-    minSize: DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth.min,
-    maxSize: DESKTOP_WORKBENCH_LIMITS.primarySidebarWidth.max,
+    minSize: DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS.min,
+    maxSize: DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS.max,
     onResizeEnd: (width) => {
-      if (width === workbench.primarySidebar.width) return;
-      actions.onUpdateWorkbench(resizePrimarySidebarWorkbench(workbench, width));
+      if (width === sidebar.width) return;
+      actions.onUpdateApplicationSidebar(resizeApplicationSidebar(sidebar, width));
     },
   };
 }
 
-function togglePrimarySidebarWorkbench(
-  workbench: DesktopWorkbenchLayoutProjection,
-): DesktopWorkbenchLayoutProjection {
+function toggleApplicationSidebar(
+  sidebar: DesktopApplicationSidebarProjection,
+): DesktopApplicationSidebarProjection {
   return {
-    ...workbench,
-    revision: workbench.revision + 1,
-    primarySidebar: {
-      ...workbench.primarySidebar,
-      visible: !workbench.primarySidebar.visible,
-    },
+    ...sidebar,
+    visible: !sidebar.visible,
   };
 }
 
@@ -2113,7 +1887,6 @@ export function resizeTimelineWorkbench(
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
-    revision: workbench.revision + 1,
     timeline: {
       ...workbench.timeline,
       height,
@@ -2128,7 +1901,6 @@ export function resizeProjectDockWorkbench(
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
-    revision: workbench.revision + 1,
     display:
       owner === 'agent'
         ? {
@@ -2152,20 +1924,10 @@ export function setResourceDockPresentationWorkbench(
 ): DesktopWorkbenchLayoutProjection {
   return {
     ...workbench,
-    revision: workbench.revision + 1,
     resourceDock: {
       ...workbench.resourceDock,
       presentation,
     },
-    display:
-      presentation !== 'hidden' &&
-      workbench.display.mode === 'chat-main' &&
-      workbench.display.chatPosition === 'right'
-        ? {
-            ...workbench.display,
-            chatPosition: 'left',
-          }
-        : workbench.display,
   };
 }
 
@@ -2176,12 +1938,49 @@ export function activateWorkbenchMainView(
   return openOrFocusMainView(workbench, view);
 }
 
-function getWorkbenchDisplayMode(
+type WorkbenchRegion = 'agent' | 'main' | 'management';
+
+function isWorkbenchRegionVisible(
   workbench: DesktopWorkbenchLayoutProjection,
-): WorkbenchDisplayMode {
-  if (workbench.display.mode === 'chat-only') return 'chat-only';
-  if (workbench.display.mode === 'main-only') return 'main-only';
-  return workbench.display.chatPosition === 'left' ? 'chat-main-left' : 'chat-main-right';
+  region: WorkbenchRegion,
+): boolean {
+  if (region === 'agent') return workbench.display.mode !== 'main-only';
+  if (region === 'main') {
+    return workbench.main.views.length > 0 && workbench.display.mode !== 'chat-only';
+  }
+  return workbench.resourceDock.presentation !== 'hidden';
+}
+
+export function toggleWorkbenchRegion(
+  workbench: DesktopWorkbenchLayoutProjection,
+  region: WorkbenchRegion,
+): DesktopWorkbenchLayoutProjection {
+  const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
+  const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
+  if (region === 'agent') {
+    if (agentVisible && !mainVisible) {
+      throw new Error('Desktop Workbench cannot hide Agent while Main is unavailable.');
+    }
+    return setWorkbenchDisplayMode(
+      workbench,
+      agentVisible ? 'main-only' : 'chat-main',
+      workbench.display.chatPosition,
+    );
+  }
+  if (region === 'main') {
+    if (mainVisible && !agentVisible) {
+      throw new Error('Desktop Workbench cannot hide Main while Agent is unavailable.');
+    }
+    return setWorkbenchDisplayMode(
+      workbench,
+      mainVisible ? 'chat-only' : 'chat-main',
+      workbench.display.chatPosition,
+    );
+  }
+  return setResourceDockPresentationWorkbench(
+    workbench,
+    isWorkbenchRegionVisible(workbench, 'management') ? 'hidden' : 'docked',
+  );
 }
 
 export function applyWorkbenchDisplayMode(
@@ -2191,9 +1990,7 @@ export function applyWorkbenchDisplayMode(
   if (mode === 'chat-only') return setWorkbenchDisplayMode(workbench, 'chat-only');
   if (mode === 'main-only') return setWorkbenchDisplayMode(workbench, 'main-only');
   const requestedPosition = mode === 'chat-main-left' ? 'left' : 'right';
-  const chatPosition =
-    workbench.resourceDock.presentation === 'hidden' ? requestedPosition : 'left';
-  return setWorkbenchDisplayMode(workbench, 'chat-main', chatPosition);
+  return setWorkbenchDisplayMode(workbench, 'chat-main', requestedPosition);
 }
 
 export function openCanvasDocumentWorkbench(input: {
@@ -2219,7 +2016,7 @@ export function openCanvasDocumentWorkbench(input: {
     existing ??
     ({
       viewId: `canvas:${tab.viewId}:${stableViewSuffix(documentId)}`,
-      viewEpoch: tab.viewEpoch,
+      viewInstanceId: tab.viewInstanceId,
       projectId: project.projectId,
       workspaceId: project.workspaceId,
       kind: 'canvas' as const,
@@ -2264,6 +2061,23 @@ function CreativeMainPlaceholder({
         <h2>{t('workspace.creativeMain')}</h2>
         <p>{t('workspace.creativeMainDetail', { project: project.displayName })}</p>
         <code>{canvasDiagnostic}</code>
+      </div>
+    </section>
+  );
+}
+
+function EmptyMainSurface(): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <section
+      aria-label={t('workspace.mainTabs.empty')}
+      className="creative-main-placeholder dotted-surface"
+      data-empty-main="true"
+    >
+      <div>
+        <GridIcon size={24} />
+        <h2>{t('workspace.mainTabs.empty')}</h2>
+        <p>{t('workspace.mainTabs.emptyDetail')}</p>
       </div>
     </section>
   );
@@ -2318,54 +2132,18 @@ function TimelinePlaceholder({ diagnostic }: { readonly diagnostic: string }): J
   );
 }
 
-function AgentWorkspaceSurface({
-  agentReady,
-  initialConversation,
-  initialInput,
-  project,
-  tab,
-}: {
-  readonly agentReady: boolean;
-  readonly initialConversation?: { readonly id: string; readonly title: string };
-  readonly initialInput?: { readonly id: string; readonly value: string };
-  readonly project: DesktopProjectCatalogItem;
-  readonly tab: DesktopShellProjection['window']['tabs'][number];
-}): JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <section
-      className="agent-workspace"
-      data-primary-surface="agent"
-      aria-label={`${t('workspace.agent')} · ${project.displayName}`}
-    >
-      {agentReady ? (
-        <DesktopAgentSurface
-          initialConversation={initialConversation}
-          initialInput={initialInput}
-          tab={tab}
-        />
-      ) : (
-        <div className="agent-unavailable-card">
-          <InfoIcon size={18} />
-          <strong>{t('workspace.agent.unavailable')}</strong>
-          <p>{t('workspace.agent.unavailableDetail')}</p>
-          <code>desktop-domain-surface-unavailable</code>
-        </div>
-      )}
-    </section>
-  );
-}
-
 function ApplicationPrimarySidebar({
   activeProjectId,
   activeSection,
   compact,
   disabled = false,
-  onDeleteConversation,
+  onDeleteConversations,
+  onDeleteProjectConversations,
+  onManageProjects,
   onNavigate,
   onOpenConversation,
   onOpenRecent,
-  onRemoveRecentProject,
+  onRemoveProject,
   onOpenSettings,
   onToggle,
   projection,
@@ -2376,11 +2154,15 @@ function ApplicationPrimarySidebar({
   readonly activeSection?: HomeSection;
   readonly compact: boolean;
   readonly disabled?: boolean;
+  readonly onDeleteConversations: (
+    conversations: readonly DesktopAgentHomeConversationSummary[],
+  ) => void;
+  readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onManageProjects: () => void;
   readonly onNavigate: (section: HomeSection) => void;
-  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
-  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
+  readonly onRemoveProject: (project: DesktopProjectCatalogItem) => void;
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
@@ -2395,7 +2177,12 @@ function ApplicationPrimarySidebar({
       }`}
       data-primary-sidebar="application"
     >
-      <PrimarySidebarBrand compact={compact} disabled={disabled} onToggle={onToggle} />
+      <PrimarySidebarBrand
+        compact={compact}
+        disabled={disabled}
+        layoutControl={layoutControl}
+        onToggle={onToggle}
+      />
       <nav className="home-primary-navigation" aria-label={t('workspace.primaryNavigation')}>
         <DesktopApplicationNavigationButton
           active={activeSection === 'create'}
@@ -2429,15 +2216,16 @@ function ApplicationPrimarySidebar({
       <PrimaryRecentNavigation
         activeProjectId={activeProjectId}
         disabled={disabled}
-        onDeleteConversation={onDeleteConversation}
+        onDeleteConversations={onDeleteConversations}
+        onDeleteProjectConversations={onDeleteProjectConversations}
+        onManageProjects={onManageProjects}
         onOpenConversation={onOpenConversation}
         onOpenRecent={onOpenRecent}
-        onRemoveRecentProject={onRemoveRecentProject}
+        onRemoveProject={onRemoveProject}
         projection={projection}
       />
       <PrimarySidebarFooter
         lifecycleControl={lifecycleControl}
-        layoutControl={layoutControl}
         onOpenSettings={onOpenSettings}
         projection={projection}
       />
@@ -2445,39 +2233,661 @@ function ApplicationPrimarySidebar({
   );
 }
 
-function PrimarySidebarBrand({
-  compact,
+function PrimaryRecentNavigation({
+  activeProjectId,
   disabled = false,
+  onDeleteConversations,
+  onDeleteProjectConversations,
+  onManageProjects,
+  onOpenConversation,
+  onOpenRecent,
+  onRemoveProject,
+  projection,
+}: {
+  readonly activeProjectId?: string;
+  readonly disabled?: boolean;
+  readonly onDeleteConversations: (
+    conversations: readonly DesktopAgentHomeConversationSummary[],
+  ) => void;
+  readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onManageProjects: () => void;
+  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onOpenRecent: (projectId: string) => void;
+  readonly onRemoveProject: (project: DesktopProjectCatalogItem) => void;
+  readonly projection: DesktopShellProjection;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const [showAllGroups, setShowAllGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const activeScene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
+  const activeConversationId =
+    activeScene.context.kind === 'agent' && activeScene.context.scope.kind !== 'unbound'
+      ? activeScene.context.scope.conversationId
+      : undefined;
+  const toggleCollapsed = (group: DesktopConversationNavigationGroup) => {
+    const key = conversationGroupKey(group);
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const toggleShowAll = (group: DesktopConversationNavigationGroup) => {
+    const key = conversationGroupKey(group);
+    setShowAllGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  return (
+    <div className="home-recent-navigation">
+      <div className="home-sidebar-heading">
+        <span>{t('home.conversationGroups')}</span>
+        <span>{projection.conversationNavigation.groups.length}</span>
+      </div>
+      {projection.conversationNavigation.groups.map((group) => {
+        const key = conversationGroupKey(group);
+        const collapsed = collapsedGroups.has(key);
+        const showAll = showAllGroups.has(key);
+        const conversations = showAll
+          ? group.conversations
+          : group.conversations.slice(0, INITIAL_CONVERSATIONS_PER_GROUP);
+        const project =
+          group.kind === 'project'
+            ? projection.catalog.projects.find(
+                (candidate) => candidate.projectId === group.projectId,
+              )
+            : undefined;
+        const projectUnavailable = project?.unavailable;
+        const workspaceConversationCount =
+          group.kind === 'project'
+            ? group.conversations.filter(
+                (conversation) =>
+                  conversation.navigation.owner.kind === 'workspace' &&
+                  conversation.navigation.owner.workspaceId === group.workspaceId,
+              ).length
+            : 0;
+        if (group.kind === 'project' && !project) {
+          throw new Error(
+            `Conversation navigation references missing Project '${group.projectId}'.`,
+          );
+        }
+        return (
+          <section
+            className="primary-conversation-group"
+            data-group-id={key}
+            data-group-kind={group.kind}
+            key={key}
+          >
+            {group.kind === 'project' && project ? (
+              <ContextMenu
+                items={createProjectNavigationMenuItems({
+                  disabled,
+                  onDeleteConversations: () => onDeleteProjectConversations(project),
+                  onManageProjects,
+                  onOpen: () => onOpenRecent(project.projectId),
+                  onRemove: () => onRemoveProject(project),
+                  project,
+                  t,
+                  workspaceConversationCount,
+                })}
+                trigger={
+                  <div
+                    className="primary-recent-project-row primary-conversation-group__header"
+                    data-active={project.projectId === activeProjectId ? 'true' : 'false'}
+                  >
+                    {group.conversations.length > 0 ? (
+                      <IconButton
+                        className="primary-conversation-group__collapse"
+                        disabled={disabled}
+                        size="xs"
+                        label={
+                          collapsed
+                            ? t('home.expandConversationGroup', { group: project.displayName })
+                            : t('home.collapseConversationGroup', { group: project.displayName })
+                        }
+                        aria-expanded={!collapsed}
+                        icon={
+                          collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />
+                        }
+                        onClick={() => toggleCollapsed(group)}
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="primary-conversation-group__collapse-spacer"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      className="home-project-link primary-conversation-group__project-link"
+                      disabled={disabled || projectUnavailable !== undefined}
+                      title={projectUnavailable?.message}
+                      onClick={() => onOpenRecent(project.projectId)}
+                    >
+                      {conversationGroupIcon(group)}
+                      <span>{project.displayName}</span>
+                    </button>
+                    <span className="primary-conversation-group__count">
+                      {group.conversations.length}
+                    </span>
+                    <span className="primary-navigation-state">
+                      {projectUnavailable ? (
+                        <NavigationUnavailableStatus message={projectUnavailable.message} />
+                      ) : null}
+                    </span>
+                    <span className="primary-navigation-row-actions">
+                      {!projectUnavailable ? (
+                        <IconButton
+                          disabled={disabled}
+                          size="xs"
+                          label={t('home.newProjectConversation', { project: project.displayName })}
+                          title={t('home.newProjectConversation', { project: project.displayName })}
+                          icon={<PlusIcon size={13} />}
+                          onClick={() => onOpenRecent(project.projectId)}
+                        />
+                      ) : null}
+                      <IconButton
+                        disabled={disabled || workspaceConversationCount === 0}
+                        size="xs"
+                        label={t('shell.deleteProjectConversations', {
+                          project: project.displayName,
+                        })}
+                        title={t('shell.deleteProjectConversations', {
+                          project: project.displayName,
+                        })}
+                        icon={<TrashIcon size={13} />}
+                        onClick={() => onDeleteProjectConversations(project)}
+                      />
+                      <IconButton
+                        disabled={disabled}
+                        size="xs"
+                        label={t('shell.removeProject', { project: project.displayName })}
+                        title={t('shell.removeProject', { project: project.displayName })}
+                        icon={<RemoveIcon size={13} />}
+                        onClick={() => onRemoveProject(project)}
+                      />
+                    </span>
+                  </div>
+                }
+              />
+            ) : (
+              <StandaloneConversationGroupHeader
+                collapsed={collapsed}
+                disabled={disabled}
+                group={group}
+                onDeleteConversations={() => onDeleteConversations(group.conversations)}
+                onToggle={() => toggleCollapsed(group)}
+              />
+            )}
+            {!collapsed ? (
+              <div className="primary-conversation-group__children">
+                {conversations.map((conversation) => (
+                  <ConversationNavigationRow
+                    active={conversation.navigation.conversationId === activeConversationId}
+                    conversation={conversation}
+                    disabled={disabled}
+                    key={conversation.navigation.conversationId}
+                    navigationDisabled={
+                      disabled || group.kind === 'workspace' || projectUnavailable !== undefined
+                    }
+                    onDelete={(conversation) => onDeleteConversations([conversation])}
+                    onOpen={onOpenConversation}
+                  />
+                ))}
+                {group.conversations.length > INITIAL_CONVERSATIONS_PER_GROUP ? (
+                  <button
+                    type="button"
+                    className="primary-conversation-group__expand"
+                    disabled={disabled}
+                    onClick={() => toggleShowAll(group)}
+                  >
+                    {showAll ? t('home.collapseConversations') : t('home.expandConversations')}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function StandaloneConversationGroupHeader({
+  collapsed,
+  disabled,
+  group,
+  onDeleteConversations,
   onToggle,
 }: {
-  readonly compact: boolean;
-  readonly disabled?: boolean;
+  readonly collapsed: boolean;
+  readonly disabled: boolean;
+  readonly group: DesktopConversationNavigationGroup;
+  readonly onDeleteConversations: () => void;
   readonly onToggle: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  if (group.kind === 'project') {
+    throw new Error(`Project group '${group.projectId}' requires a Project navigation header.`);
+  }
+  const label = formatStandaloneConversationGroup(group, t);
+  const header = (
+    <div
+      className={`primary-conversation-group__standalone-heading ${
+        group.kind === 'workspace' ? 'primary-recent-project-row' : ''
+      }`}
+    >
+      <IconButton
+        className="primary-conversation-group__collapse"
+        disabled={disabled}
+        size="xs"
+        label={
+          collapsed
+            ? t('home.expandConversationGroup', { group: label })
+            : t('home.collapseConversationGroup', { group: label })
+        }
+        aria-expanded={!collapsed}
+        icon={collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
+        onClick={onToggle}
+      />
+      {conversationGroupIcon(group)}
+      <span className="primary-conversation-group__label">{label}</span>
+      <span className="primary-conversation-group__count">{group.conversations.length}</span>
+      <span className="primary-navigation-state">
+        {group.kind === 'workspace' ? (
+          <NavigationUnavailableStatus message={group.message} />
+        ) : null}
+      </span>
+      {group.kind === 'workspace' ? (
+        <span className="primary-navigation-row-actions">
+          <IconButton
+            disabled={disabled}
+            size="xs"
+            label={t('shell.deleteWorkspaceConversations')}
+            title={t('shell.deleteWorkspaceConversations')}
+            icon={<TrashIcon size={13} />}
+            onClick={onDeleteConversations}
+          />
+        </span>
+      ) : null}
+    </div>
+  );
+  return group.kind === 'workspace' ? (
+    <ContextMenu
+      items={createWorkspaceNavigationMenuItems({
+        disabled,
+        onDeleteConversations,
+        t,
+      })}
+      trigger={header}
+    />
+  ) : (
+    header
+  );
+}
+
+const INITIAL_CONVERSATIONS_PER_GROUP = 5;
+
+function ConversationNavigationRow({
+  active,
+  conversation,
+  disabled,
+  navigationDisabled,
+  onDelete,
+  onOpen,
+}: {
+  readonly active: boolean;
+  readonly conversation: DesktopAgentHomeConversationSummary;
+  readonly disabled: boolean;
+  readonly navigationDisabled: boolean;
+  readonly onDelete: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onOpen: (conversation: DesktopAgentHomeConversationSummary) => void;
+}): JSX.Element {
+  const { t } = useTranslation();
   return (
-    <DesktopApplicationBrand
-      control={
-        <IconButton
-          className="home-brand-toggle"
-          disabled={disabled}
-          label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
-          icon={<RightPanelIcon size={16} />}
-          onClick={onToggle}
-        />
+    <ContextMenu
+      items={createConversationNavigationMenuItems({
+        conversation,
+        disabled,
+        navigationDisabled,
+        onDelete: () => onDelete(conversation),
+        onOpen: () => onOpen(conversation),
+        t,
+      })}
+      trigger={
+        <div
+          className="primary-recent-project-row primary-recent-conversation-row"
+          data-active={active ? 'true' : 'false'}
+        >
+          <button
+            type="button"
+            className="home-project-link home-conversation-link"
+            disabled={navigationDisabled || conversation.unavailable !== undefined}
+            title={conversation.unavailable?.message}
+            onClick={() => onOpen(conversation)}
+          >
+            <MessageIcon
+              className="primary-conversation-group__identity-icon is-conversation"
+              size={13}
+            />
+            <span>{conversation.title}</span>
+          </button>
+          <span className="primary-navigation-state">
+            {conversation.unavailable ? (
+              <NavigationUnavailableStatus message={conversation.unavailable.message} />
+            ) : conversation.attention !== 'none' ? (
+              <ConversationAttentionStatus attention={conversation.attention} />
+            ) : null}
+          </span>
+          <span className="primary-navigation-row-actions">
+            <IconButton
+              disabled={disabled}
+              size="xs"
+              label={t('shell.deleteConversation', { conversation: conversation.title })}
+              icon={<TrashIcon size={13} />}
+              onClick={() => onDelete(conversation)}
+            />
+          </span>
+        </div>
       }
     />
   );
 }
 
+function ConversationAttentionStatus({
+  attention,
+}: {
+  readonly attention: Exclude<DesktopAgentHomeConversationSummary['attention'], 'none'>;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const label = formatAttention(attention, t);
+  return (
+    <Tooltip content={label} side="right">
+      <span
+        className={`home-conversation-status is-${attention}`}
+        role="status"
+        title={label}
+        aria-label={label}
+      >
+        {conversationAttentionIcon(attention)}
+      </span>
+    </Tooltip>
+  );
+}
+
+function conversationAttentionIcon(
+  attention: Exclude<DesktopAgentHomeConversationSummary['attention'], 'none'>,
+): JSX.Element {
+  switch (attention) {
+    case 'running':
+      return <LoadingIcon size={12} />;
+    case 'needs-input':
+      return <WarningIcon size={12} />;
+    case 'needs-review':
+      return <ClockIcon size={12} />;
+  }
+}
+
+function createProjectNavigationMenuItems(input: {
+  readonly disabled: boolean;
+  readonly onDeleteConversations: () => void;
+  readonly onManageProjects: () => void;
+  readonly onOpen: () => void;
+  readonly onRemove: () => void;
+  readonly project: DesktopProjectCatalogItem;
+  readonly t: TranslationFunction;
+  readonly workspaceConversationCount: number;
+}): readonly ContextMenuItem[] {
+  const unavailable = input.project.unavailable !== undefined;
+  return [
+    {
+      id: 'open-project',
+      label: (
+        <NavigationMenuLabel icon={<OpenIcon size={14} />} text={input.t('home.openProject')} />
+      ),
+      disabled: input.disabled || unavailable,
+      onSelect: input.onOpen,
+    },
+    {
+      id: 'new-project-conversation',
+      label: (
+        <NavigationMenuLabel
+          icon={<PlusIcon size={14} />}
+          text={input.t('home.newProjectConversation', { project: input.project.displayName })}
+        />
+      ),
+      disabled: input.disabled || unavailable,
+      onSelect: input.onOpen,
+    },
+    {
+      id: 'manage-projects',
+      label: (
+        <NavigationMenuLabel
+          icon={<FolderIcon size={14} />}
+          text={input.t('home.projectManagement')}
+        />
+      ),
+      disabled: input.disabled,
+      onSelect: input.onManageProjects,
+    },
+    { id: 'project-destructive-separator', type: 'separator' },
+    {
+      id: 'delete-project-conversations',
+      label: (
+        <NavigationMenuLabel
+          icon={<TrashIcon size={14} />}
+          text={input.t('shell.deleteProjectConversations', {
+            project: input.project.displayName,
+          })}
+        />
+      ),
+      disabled: input.disabled || input.workspaceConversationCount === 0,
+      danger: true,
+      onSelect: input.onDeleteConversations,
+    },
+    {
+      id: 'remove-project',
+      label: (
+        <NavigationMenuLabel
+          icon={<RemoveIcon size={14} />}
+          text={input.t('shell.removeProject', { project: input.project.displayName })}
+        />
+      ),
+      disabled: input.disabled,
+      danger: true,
+      onSelect: input.onRemove,
+    },
+  ];
+}
+
+function createConversationNavigationMenuItems(input: {
+  readonly conversation: DesktopAgentHomeConversationSummary;
+  readonly disabled: boolean;
+  readonly navigationDisabled: boolean;
+  readonly onDelete: () => void;
+  readonly onOpen: () => void;
+  readonly t: TranslationFunction;
+}): readonly ContextMenuItem[] {
+  return [
+    {
+      id: 'open-conversation',
+      label: (
+        <NavigationMenuLabel
+          icon={<OpenIcon size={14} />}
+          text={input.t('home.openConversation')}
+        />
+      ),
+      disabled:
+        input.navigationDisabled || input.conversation.unavailable !== undefined || input.disabled,
+      onSelect: input.onOpen,
+    },
+    { id: 'conversation-destructive-separator', type: 'separator' },
+    {
+      id: 'delete-conversation',
+      label: (
+        <NavigationMenuLabel
+          icon={<TrashIcon size={14} />}
+          text={input.t('home.deleteConversation')}
+        />
+      ),
+      disabled: input.disabled,
+      danger: true,
+      onSelect: input.onDelete,
+    },
+  ];
+}
+
+function createWorkspaceNavigationMenuItems(input: {
+  readonly disabled: boolean;
+  readonly onDeleteConversations: () => void;
+  readonly t: TranslationFunction;
+}): readonly ContextMenuItem[] {
+  return [
+    {
+      id: 'delete-workspace-conversations',
+      label: (
+        <NavigationMenuLabel
+          icon={<TrashIcon size={14} />}
+          text={input.t('shell.deleteWorkspaceConversations')}
+        />
+      ),
+      disabled: input.disabled,
+      danger: true,
+      onSelect: input.onDeleteConversations,
+    },
+  ];
+}
+
+function NavigationMenuLabel({
+  icon,
+  text,
+}: {
+  readonly icon: JSX.Element;
+  readonly text: string;
+}): JSX.Element {
+  return (
+    <span className="desktop-navigation-menu-label">
+      {icon}
+      <span>{text}</span>
+    </span>
+  );
+}
+
+function NavigationUnavailableStatus({ message }: { readonly message: string }): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <Tooltip content={message} side="right">
+      <span
+        className="primary-navigation-unavailable"
+        role="status"
+        title={message}
+        aria-label={`${t('home.unavailable')}: ${message}`}
+      >
+        <WarningIcon size={12} />
+      </span>
+    </Tooltip>
+  );
+}
+
+function conversationGroupKey(group: DesktopConversationNavigationGroup): string {
+  switch (group.kind) {
+    case 'project':
+      return `project:${group.projectId}`;
+    case 'workspace':
+      return `workspace:${group.workspaceId}`;
+    case 'assistant':
+      return `assistant:${group.assistantSpaceId}`;
+    case 'character':
+      return `character:${group.characterId}`;
+    case 'room':
+      return `room:${group.roomId}`;
+  }
+}
+
+function conversationGroupIcon(group: DesktopConversationNavigationGroup): JSX.Element {
+  switch (group.kind) {
+    case 'project':
+      return (
+        <FolderIcon className="primary-conversation-group__identity-icon is-project" size={15} />
+      );
+    case 'workspace':
+      return (
+        <FolderIcon className="primary-conversation-group__identity-icon is-workspace" size={15} />
+      );
+    case 'assistant':
+      return (
+        <BotIcon className="primary-conversation-group__identity-icon is-assistant" size={14} />
+      );
+    case 'character':
+      return (
+        <UserIcon className="primary-conversation-group__identity-icon is-character" size={14} />
+      );
+    case 'room':
+      return <UsersIcon className="primary-conversation-group__identity-icon is-room" size={14} />;
+  }
+}
+
+function formatStandaloneConversationGroup(
+  group: DesktopConversationNavigationGroup,
+  t: TranslationFunction,
+): string {
+  switch (group.kind) {
+    case 'project':
+      return group.displayName;
+    case 'workspace':
+      return t('home.unavailableWorkspace');
+    case 'assistant':
+      return t('home.personalAssistant');
+    case 'character':
+      return t('home.characterConversations');
+    case 'room':
+      return t('home.roomConversations');
+  }
+}
+
+function PrimarySidebarBrand({
+  compact,
+  disabled = false,
+  layoutControl,
+  onToggle,
+}: {
+  readonly compact: boolean;
+  readonly disabled?: boolean;
+  readonly layoutControl?: JSX.Element;
+  readonly onToggle: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="primary-sidebar-brand">
+      <DesktopApplicationBrand showMark={compact} />
+      <div className="primary-sidebar-brand__controls">
+        <IconButton
+          className="primary-sidebar-toggle workbench-region-toggle"
+          data-workbench-region-control="primary-sidebar"
+          disabled={disabled}
+          icon={<span className={toCodiconClassName('layout-sidebar-left')} aria-hidden="true" />}
+          label={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+          size="xs"
+          title={compact ? t('workspace.expandSidebar') : t('workspace.collapseSidebar')}
+          aria-pressed={!compact}
+          onClick={onToggle}
+        />
+        {layoutControl}
+      </div>
+    </div>
+  );
+}
+
 function PrimarySidebarFooter({
   lifecycleControl,
-  layoutControl,
   onOpenSettings,
   projection,
 }: {
   readonly lifecycleControl?: JSX.Element;
-  readonly layoutControl?: JSX.Element;
   readonly onOpenSettings: () => void;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
@@ -2487,7 +2897,6 @@ function PrimarySidebarFooter({
       <AttentionSummary projection={projection} />
       <div className="home-navigation-footer__actions">
         {lifecycleControl}
-        {layoutControl}
         <Tooltip content={t('shell.settingsLabel')}>
           <IconButton
             label={t('shell.settingsLabel')}
@@ -2496,97 +2905,6 @@ function PrimarySidebarFooter({
           />
         </Tooltip>
       </div>
-    </div>
-  );
-}
-
-function PrimaryRecentNavigation({
-  activeProjectId,
-  disabled = false,
-  onDeleteConversation,
-  onOpenConversation,
-  onOpenRecent,
-  onRemoveRecentProject,
-  projection,
-}: {
-  readonly activeProjectId?: string;
-  readonly disabled?: boolean;
-  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onOpenRecent: (projectId: string) => void;
-  readonly onRemoveRecentProject: (project: DesktopProjectCatalogItem) => void;
-  readonly projection: DesktopShellProjection;
-}): JSX.Element {
-  const { t } = useTranslation();
-  return (
-    <div className="home-recent-navigation">
-      <div className="home-sidebar-heading">
-        <span>{t('home.recentProjects')}</span>
-        <span>{projection.catalog.projects.length}</span>
-      </div>
-      {projection.catalog.projects.slice(0, 6).map((project) => {
-        return (
-          <div
-            className="primary-recent-project-row"
-            data-active={project.projectId === activeProjectId ? 'true' : 'false'}
-            key={project.projectId}
-          >
-            <button
-              type="button"
-              className="home-project-link"
-              disabled={disabled}
-              onClick={() => onOpenRecent(project.projectId)}
-            >
-              <FolderIcon size={15} />
-              <span>{project.displayName}</span>
-            </button>
-            <IconButton
-              disabled={disabled}
-              size="xs"
-              label={t('shell.removeRecentProject', {
-                project: project.displayName,
-              })}
-              icon={<TrashIcon size={13} />}
-              onClick={() => onRemoveRecentProject(project)}
-            />
-          </div>
-        );
-      })}
-      <div className="home-sidebar-heading home-sidebar-conversation-heading">
-        <span>{t('home.recentConversations')}</span>
-        <span>{projection.agentHome.conversations.length}</span>
-      </div>
-      {projection.agentHome.conversations.slice(0, 8).map((conversation) => (
-        <div
-          className="primary-recent-project-row primary-recent-conversation-row"
-          key={`${conversation.navigation.workspaceId}:${conversation.navigation.conversationId}`}
-        >
-          <button
-            type="button"
-            className="home-project-link home-conversation-link"
-            disabled={disabled}
-            onClick={() => onOpenConversation(conversation)}
-          >
-            <StorylineIcon size={15} />
-            <span>{conversation.title}</span>
-            {conversation.attention !== 'none' ? (
-              <span
-                className={`home-conversation-attention is-${conversation.attention}`}
-                aria-label={formatAttention(conversation.attention, t)}
-              />
-            ) : null}
-          </button>
-          <IconButton
-            disabled={disabled}
-            size="xs"
-            label={t('shell.deleteConversation', {
-              conversation: conversation.title,
-            })}
-            icon={<TrashIcon size={13} />}
-            onClick={() => onDeleteConversation(conversation)}
-          />
-        </div>
-      ))}
     </div>
   );
 }
@@ -2612,7 +2930,7 @@ function AttentionSummary({
 }
 
 function formatAttention(
-  attention: DesktopShellProjection['agentHome']['conversations'][number]['attention'],
+  attention: DesktopAgentHomeConversationSummary['attention'],
   t: TranslationFunction,
 ): string {
   return t(`attention.${attention === 'none' ? 'none' : camelCase(attention)}`);
@@ -2642,30 +2960,42 @@ function ShellStatus({
   );
 }
 
-function resolveActiveProject(
-  projection: DesktopShellProjection,
-): DesktopProjectCatalogItem | undefined {
-  const activeTarget = projection.window.activeTarget;
-  if (activeTarget.kind === 'home') return undefined;
-  const tab = projection.window.tabs.find((candidate) => candidate.tabId === activeTarget.tabId);
-  if (!tab) throw new Error('Desktop Shell active Tab is missing from its projection.');
-  const project = projection.catalog.projects.find(
-    (candidate) => candidate.projectId === tab.projectId,
-  );
-  if (!project) throw new Error('Desktop Shell active Project is missing from its catalog.');
-  return project;
-}
-
-function formatProjectDate(value: string, locale: 'en' | 'zh-cn'): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(locale === 'zh-cn' ? 'zh-CN' : 'en', {
-        month: 'short',
-        day: 'numeric',
-      }).format(date);
-}
-
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function createPersistedDiagnosticPresentation(
+  projection: DesktopShellProjection,
+  t: TranslationFunction,
+): ShellDiagnosticPresentation | undefined {
+  const stateDiagnostic = projection.stateDiagnostics?.find(
+    (candidate) => candidate.severity === 'error',
+  );
+  if (stateDiagnostic) {
+    const message =
+      stateDiagnostic.code === 'desktop-shell-component-invalid'
+        ? t('shell.projectCatalogInvalid')
+        : stateDiagnostic.code === 'desktop-stored-window-invalid'
+          ? t('shell.storedWindowInvalid', { windowId: stateDiagnostic.windowId })
+          : stateDiagnostic.authorityKey === 'desktop.application-settings'
+            ? t('shell.storedSettingsInvalid')
+            : t('shell.storedStateInvalid');
+    return {
+      key: `state:${stateDiagnostic.code}:${stateDiagnostic.message}`,
+      message,
+      title: stateDiagnostic.message,
+    };
+  }
+
+  const conversationDiagnostic = projection.agentHome.diagnostics?.[0];
+  if (!conversationDiagnostic) return undefined;
+  return {
+    key: `conversation:${conversationDiagnostic.workspaceId}:${conversationDiagnostic.conversationId ?? ''}:${conversationDiagnostic.message}`,
+    message: conversationDiagnostic.conversationId
+      ? t('shell.conversationRecordInvalid', {
+          conversationId: conversationDiagnostic.conversationId,
+        })
+      : t('shell.conversationRecordInvalidUnknown'),
+    title: conversationDiagnostic.message,
+  };
 }

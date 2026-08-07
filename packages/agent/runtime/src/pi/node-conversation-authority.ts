@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
 import {
@@ -10,12 +11,19 @@ import {
   type SessionTreeEntry,
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import type { AgentConversationContext } from '@neko/agent-contracts';
+import { serializeLocalMetadataJson } from '@neko/local-metadata';
+import {
+  parsePortablePiConversationManifest,
+  type PortablePiConversationBranch,
+  type PortablePiConversationManifest,
+} from './conversation-portability';
 import { openNodePiConversationStorage } from './node-conversation-storage';
 
 export interface ConversationExecutionLease {
   readonly conversationId: string;
   readonly holderId: string;
-  readonly epoch: number;
+  readonly leaseId: string;
   readonly expiresAt: number;
 }
 
@@ -26,6 +34,7 @@ export interface PiConversationCatalogRecord {
   readonly activeBranchId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly context?: AgentConversationContext;
 }
 
 export interface PiConversationBranchRecord {
@@ -47,7 +56,7 @@ export interface PiTurnCheckpointRecord {
   readonly branchId: string;
   readonly piSessionId: string;
   readonly leafId: string | null;
-  readonly writerEpoch: number;
+  readonly writerLeaseId: string;
   readonly terminalState: 'completed' | 'cancelled' | 'failed';
   readonly committedAt: string;
 }
@@ -69,6 +78,7 @@ export type PiConversationAuthorityErrorCode =
   | 'branch-exists'
   | 'lease-held'
   | 'lease-stale'
+  | 'portability-blocked'
   | 'workspace-mismatch'
   | 'invalid-identity';
 
@@ -133,6 +143,7 @@ export interface AppendPiCompactionInput {
 }
 
 const DEFAULT_LEASE_TTL_MS = 30_000;
+const MAX_LEASE_TOKEN_EXCLUSIVE = 2 ** 48;
 
 export class NodePiConversationAuthority {
   private readonly durability = new Map<string, PiTurnDurabilityState>();
@@ -191,26 +202,26 @@ export class NodePiConversationAuthority {
           .prepare('SELECT * FROM pi_execution_leases WHERE conversation_id = ?')
           .get(conversationId),
       );
-      let epoch: number;
+      let leaseId: string;
       if (current === undefined) {
-        epoch = 1;
+        leaseId = createLeaseId();
         this.database
           .prepare(
             'INSERT INTO pi_execution_leases (conversation_id, holder_id, epoch, expires_at) VALUES (?, ?, ?, ?)',
           )
-          .run(conversationId, this.hostId, epoch, expiresAt);
+          .run(conversationId, this.hostId, requireLeaseToken(leaseId), expiresAt);
       } else if (current.holderId === this.hostId && current.expiresAt > now) {
-        epoch = current.epoch;
+        leaseId = current.leaseId;
         this.database
           .prepare('UPDATE pi_execution_leases SET expires_at = ? WHERE conversation_id = ?')
           .run(expiresAt, conversationId);
       } else if (current.expiresAt <= now || options?.takeover === true) {
-        epoch = current.epoch + 1;
+        leaseId = createLeaseId(current.leaseId);
         this.database
           .prepare(
             'UPDATE pi_execution_leases SET holder_id = ?, epoch = ?, expires_at = ? WHERE conversation_id = ?',
           )
-          .run(this.hostId, epoch, expiresAt, conversationId);
+          .run(this.hostId, requireLeaseToken(leaseId), expiresAt, conversationId);
       } else {
         throw new PiConversationAuthorityError(
           'lease-held',
@@ -218,7 +229,7 @@ export class NodePiConversationAuthority {
         );
       }
       this.database.exec('COMMIT');
-      return Object.freeze({ conversationId, holderId: this.hostId, epoch, expiresAt });
+      return Object.freeze({ conversationId, holderId: this.hostId, leaseId, expiresAt });
     } catch (error) {
       this.database.exec('ROLLBACK');
       throw error;
@@ -246,7 +257,7 @@ export class NodePiConversationAuthority {
     if (lease.holderId !== this.hostId) {
       throw new PiConversationAuthorityError(
         'lease-stale',
-        `Conversation writer lease ${lease.conversationId}@${lease.epoch} belongs to another Host.`,
+        `Conversation writer lease '${lease.leaseId}' belongs to another Host.`,
       );
     }
     const remaining = lease.expiresAt - this.now();
@@ -261,7 +272,7 @@ export class NodePiConversationAuthority {
         .prepare(
           'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
         )
-        .run(lease.conversationId, lease.holderId, lease.epoch);
+        .run(lease.conversationId, lease.holderId, requireLeaseToken(lease.leaseId));
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -469,7 +480,7 @@ export class NodePiConversationAuthority {
         .prepare(
           'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
         )
-        .run(conversationId, lease.holderId, lease.epoch);
+        .run(conversationId, lease.holderId, requireLeaseToken(lease.leaseId));
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -523,7 +534,6 @@ export class NodePiConversationAuthority {
     const branch = this.requireBranch(input.conversationId, input.branchId);
     const session = await this.sessions.open(branch.session);
     const previousLeafId = await session.getLeafId();
-    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(input.lease, this.now());
       await session.appendCompaction(
@@ -532,18 +542,25 @@ export class NodePiConversationAuthority {
         input.tokensBefore,
         input.details,
       );
+      const leafId = await session.getLeafId();
       const updatedAt = new Date(this.now()).toISOString();
-      this.database
-        .prepare(
-          'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
-        )
-        .run(await session.getLeafId(), updatedAt, input.conversationId, input.branchId);
-      this.database
-        .prepare('UPDATE pi_conversations SET updated_at = ? WHERE conversation_id = ?')
-        .run(updatedAt, input.conversationId);
-      this.database.exec('COMMIT');
+      this.database.exec('BEGIN IMMEDIATE');
+      try {
+        this.assertLease(input.lease, this.now());
+        this.database
+          .prepare(
+            'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
+          )
+          .run(leafId, updatedAt, input.conversationId, input.branchId);
+        this.database
+          .prepare('UPDATE pi_conversations SET updated_at = ? WHERE conversation_id = ?')
+          .run(updatedAt, input.conversationId);
+        this.database.exec('COMMIT');
+      } catch (error) {
+        this.database.exec('ROLLBACK');
+        throw error;
+      }
     } catch (error) {
-      this.database.exec('ROLLBACK');
       try {
         if ((await session.getLeafId()) !== previousLeafId) {
           await session.moveTo(previousLeafId);
@@ -567,21 +584,14 @@ export class NodePiConversationAuthority {
       const branch = this.requireBranch(input.conversationId, input.branchId);
       const session = await this.sessions.open(branch.session);
       const previousLeafId = await session.getLeafId();
-      this.database.exec('BEGIN IMMEDIATE');
+      const existing = this.readCheckpoint(input.conversationId, input.turnId);
+      if (existing !== undefined) {
+        assertCheckpointIdentity(existing, input, branch.session.id);
+        this.durability.set(key, 'durable');
+        return existing;
+      }
       try {
         this.assertLease(input.lease, this.now());
-        const existing = this.readCheckpoint(input.conversationId, input.turnId);
-        if (existing !== undefined) {
-          if (existing.branchId !== input.branchId || existing.piSessionId !== branch.session.id) {
-            throw new PiConversationAuthorityError(
-              'invalid-identity',
-              `Turn checkpoint ${input.conversationId}/${input.turnId} targets a different branch or Pi Session.`,
-            );
-          }
-          this.database.exec('COMMIT');
-          this.durability.set(key, 'durable');
-          return existing;
-        }
         for (const message of input.messages ?? []) {
           await session.appendMessage(message);
         }
@@ -593,36 +603,50 @@ export class NodePiConversationAuthority {
           branchId: input.branchId,
           piSessionId: branch.session.id,
           leafId,
-          writerEpoch: input.lease.epoch,
+          writerLeaseId: input.lease.leaseId,
           terminalState: input.terminalState,
           committedAt,
         };
-        this.database
-          .prepare(
-            `INSERT INTO pi_turn_checkpoints
-              (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_epoch, terminal_state, committed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(
-            record.conversationId,
-            record.turnId,
-            record.branchId,
-            record.piSessionId,
-            record.leafId,
-            record.writerEpoch,
-            record.terminalState,
-            record.committedAt,
-          );
-        this.database
-          .prepare(
-            'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
-          )
-          .run(leafId, committedAt, input.conversationId, input.branchId);
-        this.database.exec('COMMIT');
+        this.database.exec('BEGIN IMMEDIATE');
+        try {
+          this.assertLease(input.lease, this.now());
+          const concurrent = this.readCheckpoint(input.conversationId, input.turnId);
+          if (concurrent !== undefined) {
+            assertCheckpointIdentity(concurrent, input, branch.session.id);
+            throw new PiConversationAuthorityError(
+              'invalid-identity',
+              `Turn checkpoint ${input.conversationId}/${input.turnId} was committed concurrently by the same writer lease.`,
+            );
+          }
+          this.database
+            .prepare(
+              `INSERT INTO pi_turn_checkpoints
+                (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_epoch, terminal_state, committed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              record.conversationId,
+              record.turnId,
+              record.branchId,
+              record.piSessionId,
+              record.leafId,
+              requireLeaseToken(record.writerLeaseId),
+              record.terminalState,
+              record.committedAt,
+            );
+          this.database
+            .prepare(
+              'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
+            )
+            .run(leafId, committedAt, input.conversationId, input.branchId);
+          this.database.exec('COMMIT');
+        } catch (error) {
+          this.database.exec('ROLLBACK');
+          throw error;
+        }
         this.durability.set(key, 'durable');
         return Object.freeze(record);
       } catch (error) {
-        this.database.exec('ROLLBACK');
         try {
           if ((await session.getLeafId()) !== previousLeafId) {
             await session.moveTo(previousLeafId);
@@ -707,6 +731,114 @@ export class NodePiConversationAuthority {
       .map((row) => requireParsed(readBranchRow(row), 'branch'));
   }
 
+  async exportConversationManifest(
+    conversationId: string,
+  ): Promise<PortablePiConversationManifest> {
+    validateIdentity('conversationId', conversationId);
+    const conversation = this.readConversation(conversationId);
+    if (conversation === undefined) {
+      throw new PiConversationAuthorityError(
+        'conversation-not-found',
+        `Conversation ${conversationId} does not exist.`,
+      );
+    }
+    this.assertConversationPortabilityIdle(conversationId);
+    const lease = this.acquireLease(conversationId);
+    try {
+      const branches = await Promise.all(
+        this.listBranches(conversationId).map(async (branch) => ({
+          branchId: branch.branchId,
+          ...(branch.parentBranchId === undefined ? {} : { parentBranchId: branch.parentBranchId }),
+          state: branch.state,
+          createdAt: branch.createdAt,
+          updatedAt: branch.updatedAt,
+          entries: await this.readBranchEntries(conversationId, branch.branchId),
+        })),
+      );
+      return parsePortablePiConversationManifest({ ...conversation, branches });
+    } finally {
+      this.releaseLease(lease);
+    }
+  }
+
+  async importConversationManifest(value: unknown): Promise<PiConversationCatalogRecord> {
+    const manifest = parsePortablePiConversationManifest(value);
+    if (manifest.workspaceId !== this.workspaceId) {
+      throw new PiConversationAuthorityError(
+        'workspace-mismatch',
+        `Conversation ${manifest.conversationId} belongs to workspace ${manifest.workspaceId}.`,
+      );
+    }
+    if (this.readConversation(manifest.conversationId) !== undefined) {
+      throw new PiConversationAuthorityError(
+        'conversation-exists',
+        `Conversation ${manifest.conversationId} already exists.`,
+      );
+    }
+    this.assertConversationPortabilityIdle(manifest.conversationId);
+    const lease = this.acquireLease(manifest.conversationId);
+    let imported: readonly {
+      readonly branch: PortablePiConversationBranch;
+      readonly metadata: JsonlSessionMetadata;
+      readonly leafId: string | null;
+    }[] = [];
+    try {
+      imported = await this.createImportedSessions(manifest);
+      this.database.exec('BEGIN IMMEDIATE');
+      try {
+        this.assertLease(lease, this.now());
+        this.database
+          .prepare(
+            `INSERT INTO pi_conversations
+              (workspace_id, conversation_id, title, active_branch_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            manifest.workspaceId,
+            manifest.conversationId,
+            manifest.title,
+            manifest.activeBranchId,
+            manifest.createdAt,
+            manifest.updatedAt,
+          );
+        for (const item of imported) {
+          insertBranch(this.database, {
+            conversationId: manifest.conversationId,
+            branchId: item.branch.branchId,
+            ...(item.branch.parentBranchId === undefined
+              ? {}
+              : { parentBranchId: item.branch.parentBranchId }),
+            state: item.branch.state,
+            session: item.metadata,
+            leafId: item.leafId,
+            createdAt: item.branch.createdAt,
+            updatedAt: item.branch.updatedAt,
+          });
+        }
+        this.database.exec('COMMIT');
+      } catch (error) {
+        this.database.exec('ROLLBACK');
+        throw error;
+      }
+    } catch (error) {
+      const cleanupFailures = await this.deleteImportedSessions(imported);
+      try {
+        this.releaseLease(lease);
+      } catch (releaseError) {
+        cleanupFailures.push(releaseError);
+      }
+      if (cleanupFailures.length > 0) {
+        throw new AggregateError(
+          [error, ...cleanupFailures],
+          `Conversation ${manifest.conversationId} import failed and cleanup was incomplete.`,
+        );
+      }
+      throw error;
+    }
+    this.releaseLease(lease);
+    return requireParsed(this.readConversation(manifest.conversationId), 'imported conversation');
+  }
+
   async projectCatalog(projector: PiConversationCatalogProjector): Promise<void> {
     const conversations = this.listConversations();
     const branches = conversations.flatMap((record) => this.listBranches(record.conversationId));
@@ -746,6 +878,95 @@ export class NodePiConversationAuthority {
     this.assertLease(lease, this.now());
   }
 
+  private assertConversationPortabilityIdle(conversationId: string): void {
+    const currentLease = readLeaseRow(
+      this.database
+        .prepare('SELECT * FROM pi_execution_leases WHERE conversation_id = ?')
+        .get(conversationId),
+    );
+    if (currentLease !== undefined && currentLease.expiresAt > this.now()) {
+      throw new PiConversationAuthorityError(
+        'portability-blocked',
+        `Conversation ${conversationId} has an active execution lease.`,
+      );
+    }
+    for (const [key, state] of this.durability) {
+      if (key.startsWith(`${conversationId}\u0000`) && state !== 'durable') {
+        throw new PiConversationAuthorityError(
+          'portability-blocked',
+          `Conversation ${conversationId} has turn state '${state}' that is not durable.`,
+        );
+      }
+    }
+  }
+
+  private async createImportedSessions(manifest: PortablePiConversationManifest): Promise<
+    readonly {
+      readonly branch: PortablePiConversationBranch;
+      readonly metadata: JsonlSessionMetadata;
+      readonly leafId: string | null;
+    }[]
+  > {
+    const imported: {
+      readonly branch: PortablePiConversationBranch;
+      readonly metadata: JsonlSessionMetadata;
+      leafId: string | null;
+    }[] = [];
+    const metadataByBranchId = new Map<string, JsonlSessionMetadata>();
+    try {
+      for (const branch of orderPortableBranches(manifest.branches)) {
+        const parentSessionPath =
+          branch.parentBranchId === undefined
+            ? undefined
+            : metadataByBranchId.get(branch.parentBranchId)?.path;
+        if (branch.parentBranchId !== undefined && parentSessionPath === undefined) {
+          throw new TypeError(
+            `Conversation branch '${branch.branchId}' parent Session is unavailable.`,
+          );
+        }
+        const session = await this.sessions.create({
+          cwd: this.virtualWorkspaceCwd(),
+          id: uuidv7(),
+          ...(parentSessionPath === undefined ? {} : { parentSessionPath }),
+          metadata: {
+            workspaceId: manifest.workspaceId,
+            conversationId: manifest.conversationId,
+            branchId: branch.branchId,
+          },
+        });
+        const metadata = await session.getMetadata();
+        const importedBranch: {
+          readonly branch: PortablePiConversationBranch;
+          readonly metadata: JsonlSessionMetadata;
+          leafId: string | null;
+        } = { branch, metadata, leafId: null };
+        imported.push(importedBranch);
+        for (const entry of branch.entries) await session.getStorage().appendEntry(entry);
+        metadataByBranchId.set(branch.branchId, metadata);
+        importedBranch.leafId = await session.getLeafId();
+      }
+      return imported;
+    } catch (error) {
+      const cleanupFailures = await this.deleteImportedSessions(imported);
+      if (cleanupFailures.length > 0) {
+        throw new AggregateError(
+          [error, ...cleanupFailures],
+          `Conversation ${manifest.conversationId} Session import cleanup was incomplete.`,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async deleteImportedSessions(
+    imported: readonly { readonly metadata: JsonlSessionMetadata }[],
+  ): Promise<unknown[]> {
+    const results = await Promise.allSettled(
+      imported.map((item) => this.sessions.delete(item.metadata)),
+    );
+    return results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []));
+  }
+
   private assertLease(
     lease: ConversationExecutionLease,
     now: number,
@@ -759,13 +980,13 @@ export class NodePiConversationAuthority {
     if (
       current === undefined ||
       current.holderId !== lease.holderId ||
-      current.epoch !== lease.epoch ||
+      current.leaseId !== lease.leaseId ||
       lease.holderId !== this.hostId ||
       (requireUnexpired && current.expiresAt <= now)
     ) {
       throw new PiConversationAuthorityError(
         'lease-stale',
-        `Conversation writer lease ${lease.conversationId}@${lease.epoch} is stale.`,
+        `Conversation writer lease '${lease.leaseId}' is stale.`,
       );
     }
   }
@@ -792,6 +1013,25 @@ export class NodePiConversationAuthority {
   }
 }
 
+function orderPortableBranches(
+  branches: readonly PortablePiConversationBranch[],
+): readonly PortablePiConversationBranch[] {
+  const pending = [...branches];
+  const ordered: PortablePiConversationBranch[] = [];
+  const emitted = new Set<string>();
+  while (pending.length > 0) {
+    const index = pending.findIndex(
+      (branch) => branch.parentBranchId === undefined || emitted.has(branch.parentBranchId),
+    );
+    if (index < 0) throw new TypeError('Conversation branch topology cannot be ordered.');
+    const [branch] = pending.splice(index, 1);
+    if (branch === undefined) throw new TypeError('Conversation branch ordering failed.');
+    ordered.push(branch);
+    emitted.add(branch.branchId);
+  }
+  return ordered;
+}
+
 function insertBranch(database: DatabaseSync, branch: PiConversationBranchRecord): void {
   database
     .prepare(
@@ -811,11 +1051,17 @@ function insertBranch(database: DatabaseSync, branch: PiConversationBranchRecord
       branch.session.cwd,
       branch.session.path,
       branch.session.parentSessionPath ?? null,
-      branch.session.metadata === undefined ? null : JSON.stringify(branch.session.metadata),
+      branch.session.metadata === undefined
+        ? null
+        : serializePiBranchMetadata(branch.session.metadata),
       branch.leafId,
       branch.createdAt,
       branch.updatedAt,
     );
+}
+
+export function serializePiBranchMetadata(metadata: unknown): string {
+  return serializeLocalMetadataJson(metadata, 'write-pi-branch-metadata');
 }
 
 function readConversationRow(value: unknown): PiConversationCatalogRecord | undefined {
@@ -866,7 +1112,7 @@ function readLeaseRow(value: unknown): ConversationExecutionLease | undefined {
   return Object.freeze({
     conversationId: requireString(row, 'conversation_id'),
     holderId: requireString(row, 'holder_id'),
-    epoch: requireInteger(row, 'epoch'),
+    leaseId: String(requireInteger(row, 'epoch')),
     expiresAt: requireInteger(row, 'expires_at'),
   });
 }
@@ -888,10 +1134,29 @@ function readCheckpointRow(value: unknown): PiTurnCheckpointRecord | undefined {
     branchId: requireString(row, 'branch_id'),
     piSessionId: requireString(row, 'pi_session_id'),
     leafId: optionalString(row, 'leaf_id') ?? null,
-    writerEpoch: requireInteger(row, 'writer_epoch'),
+    writerLeaseId: String(requireInteger(row, 'writer_epoch')),
     terminalState,
     committedAt: requireString(row, 'committed_at'),
   });
+}
+
+function createLeaseId(replacedLeaseId?: string): string {
+  let leaseId: string;
+  do {
+    leaseId = String(randomInt(1, MAX_LEASE_TOKEN_EXCLUSIVE));
+  } while (leaseId === replacedLeaseId);
+  return leaseId;
+}
+
+function requireLeaseToken(leaseId: string): number {
+  const token = Number(leaseId);
+  if (!Number.isSafeInteger(token) || token <= 0 || String(token) !== leaseId) {
+    throw new PiConversationAuthorityError(
+      'invalid-identity',
+      `Conversation writer lease '${leaseId}' is not a canonical identity.`,
+    );
+  }
+  return token;
 }
 
 function requireRow(value: unknown): Readonly<Record<string, unknown>> {
@@ -949,4 +1214,17 @@ function validateIdentity(field: string, value: string): void {
 
 function checkpointKey(conversationId: string, turnId: string): string {
   return `${conversationId}\u0000${turnId}`;
+}
+
+function assertCheckpointIdentity(
+  checkpoint: PiTurnCheckpointRecord,
+  input: CheckpointPiTurnInput,
+  piSessionId: string,
+): void {
+  if (checkpoint.branchId !== input.branchId || checkpoint.piSessionId !== piSessionId) {
+    throw new PiConversationAuthorityError(
+      'invalid-identity',
+      `Turn checkpoint ${input.conversationId}/${input.turnId} targets a different branch or Pi Session.`,
+    );
+  }
 }

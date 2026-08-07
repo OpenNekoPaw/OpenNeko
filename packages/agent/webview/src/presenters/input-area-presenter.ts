@@ -2,6 +2,7 @@ import type { ConversationKind, SessionMode } from '@neko/agent-contracts';
 import type { AmbientCanvasNodeProjection } from './plugin-transfer-presenter';
 
 export interface InputAreaUiProjectionInput {
+  presentation?: 'entry' | 'conversation';
   inputValue: string;
   attachedFileCount: number;
   contextChipCount: number;
@@ -13,6 +14,7 @@ export interface InputAreaUiProjectionInput {
   sessionMode: SessionMode;
   conversationKind?: ConversationKind;
   currentSessionMediaModelCount: number;
+  compactControls?: boolean;
 }
 
 export interface InputAreaUiProjection {
@@ -33,7 +35,10 @@ export interface InputAreaUiProjection {
   showModelConfig: boolean;
   showSessionModeSelector: boolean;
   inputPlaceholderKey:
-    'chat.input.placeholder' | 'chat.input.thinkingPlaceholder' | 'chat.input.queuePlaceholder';
+    | 'chat.input.entryPlaceholder'
+    | 'chat.input.placeholder'
+    | 'chat.input.thinkingPlaceholder'
+    | 'chat.input.queuePlaceholder';
   sendTitleKey: 'chat.input.send' | 'chat.input.queue';
 }
 
@@ -63,6 +68,7 @@ export interface AmbientCanvasContextProjection {
 }
 
 export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputAreaUiProjection {
+  const isEntry = input.presentation === 'entry';
   const hasText = input.inputValue.trim().length > 0;
   const hasAttachments = input.attachedFileCount > 0;
   const hasContextChips = input.contextChipCount > 0;
@@ -99,11 +105,12 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     showContextChips: hasContextChips,
     showAmbientNodes: hasAmbientNodes,
     showMediaCallCount: !isCharacterRoleSession && input.mediaModelCallCount > 0,
-    showExecutionModeSelector: !isCharacterRoleSession && isAgentMode,
+    showExecutionModeSelector: !isEntry && !isCharacterRoleSession && isAgentMode,
     showModelConfig: !isCharacterRoleSession && (isAgentMode || hasCurrentSessionMediaModels),
-    showSessionModeSelector: !isCharacterRoleSession,
-    inputPlaceholderKey:
-      queuedMessageCount > 0
+    showSessionModeSelector: !isEntry && !isCharacterRoleSession && !input.compactControls,
+    inputPlaceholderKey: isEntry
+      ? 'chat.input.entryPlaceholder'
+      : queuedMessageCount > 0
         ? 'chat.input.queuePlaceholder'
         : input.isThinking
           ? 'chat.input.thinkingPlaceholder'

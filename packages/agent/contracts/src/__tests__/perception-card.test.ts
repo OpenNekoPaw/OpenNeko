@@ -9,7 +9,6 @@ import {
 describe('perception card contracts', () => {
   it('keeps PerceptionCard JSON-serializable with stable asset refs', () => {
     const card: PerceptionCard = {
-      version: 1,
       assetId: 'asset-1',
       modality: 'image',
       sourceToolCallId: 'call-1',
@@ -39,7 +38,7 @@ describe('perception card contracts', () => {
       perceptual: {
         thumbnailRef: {
           assetId: 'asset-1-thumb',
-          uri: '${WORKSPACE}/.neko/generated/image/thumb.png',
+          uri: '${WORKSPACE}/neko/generated/image/thumb.png',
           mimeType: 'image/png',
         },
       },
@@ -68,7 +67,7 @@ describe('perception card contracts', () => {
         status: 'completed',
         thumbnailAssetRef: {
           assetId: 'asset-1',
-          uri: '${WORKSPACE}/.neko/generated/image/out.png',
+          uri: '${WORKSPACE}/neko/generated/image/out.png',
           mimeType: 'image/png',
         },
       },
@@ -81,7 +80,6 @@ describe('perception card contracts', () => {
 
 function makeCard(assetId: string, createdAt: number): PerceptionCard {
   return {
-    version: 1,
     assetId,
     modality: 'image',
     createdAt,

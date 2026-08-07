@@ -19,9 +19,9 @@ function plan() {
     suiteId: 'skill.media-production',
     caseId: 'animation-production-plan',
     scenarioContract: {
-      schema: 'neko.agent-eval.scenario.v2',
+      schema: 'neko.agent-eval.scenario',
       evidenceRefs: ['production-facts'],
-      assertionIds: ['skill', 'model', 'output', 'no-image', 'no-video', 'fallback'],
+      assertionIds: ['skill', 'model', 'output', 'no-image', 'no-video'],
     },
     baselineVariantId: 'base-guidance',
     matrix: { strategy: 'focused', maxVariants: 2 },
@@ -47,12 +47,12 @@ function plan() {
         fingerprint: index === 0 ? HASH_A : HASH_B,
       },
       developmentCheckpoint: {
-        kind: index === 0 ? 'git-revision' : 'working-tree-patch',
+        kind: index === 0 ? 'git-commit' : 'working-tree-patch',
         ref: index === 0 ? 'base-revision' : 'without-rationale.patch',
         fingerprint: index === 0 ? HASH_A : HASH_B,
       },
       buildTarget: {
-        sourceRevision: index === 0 ? 'base-revision' : 'variant-revision',
+        sourceCommit: index === 0 ? 'base-revision' : 'variant-revision',
         sourceFingerprint: index === 0 ? HASH_A : HASH_B,
         buildRecipeFingerprint: HASH_C,
         buildCommands: [{ command: 'pnpm', args: ['build'], timeoutMs: 600_000 }],
@@ -69,7 +69,6 @@ function fakeRun(selected, executableFingerprint) {
     outcome: 'pass',
     result: {
       target: selected.suite.target,
-      repositoryRevision: selected.suite.repositoryRevision,
       fixtureDigest: `sha256:${'e'.repeat(64)}`,
       modelIdentity: { providerId: 'openai', modelId: 'gpt-5' },
       effectiveConfiguration: {
@@ -116,7 +115,7 @@ describe('implementation ablation runner', () => {
       const index = preparedIndex++;
       return {
         workspace: `/tmp/worktree-${index}`,
-        revision: `revision-${index}`,
+        commit: `commit-${index}`,
         sourceFingerprint: index === 0 ? HASH_A : HASH_B,
         buildRecipeFingerprint: HASH_C,
         executableFingerprint: index === 0 ? HASH_A : HASH_B,
@@ -173,7 +172,7 @@ describe('implementation ablation runner', () => {
         random: () => 0.999,
         prepareBuild: async () => ({
           workspace: '/tmp/worktree',
-          revision: 'revision',
+          commit: 'commit',
           sourceFingerprint: HASH_A,
           buildRecipeFingerprint: HASH_C,
           executableFingerprint: HASH_A,
@@ -196,7 +195,7 @@ describe('implementation ablation runner', () => {
       random: () => 0.999,
       prepareBuild: async () => ({
         workspace: `/tmp/worktree-${index}`,
-        revision: `revision-${index++}`,
+        commit: `commit-${index++}`,
         sourceFingerprint: HASH_A,
         buildRecipeFingerprint: HASH_C,
         executableFingerprint: HASH_A,

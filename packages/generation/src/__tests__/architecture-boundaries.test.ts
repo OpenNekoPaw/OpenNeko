@@ -43,92 +43,7 @@ describe('@neko/generation architecture boundaries', () => {
     }
   });
 
-  it('keeps the retired Platform package physically absent and unimportable', () => {
-    const retiredPaths = [
-      'packages/platform/src/media/generation-job-contracts.ts',
-      'packages/platform/src/media/generation-job-coordinator.ts',
-      'packages/platform/src/media/generation-job-codec.ts',
-      'packages/platform/src/media/generation-job-migrations.ts',
-      'packages/platform/src/media/generation-job-store.ts',
-    ];
-    expect(retiredPaths.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);
-
-    expect(existsSync(resolve(workspaceRoot, 'packages/platform'))).toBe(false);
-    const violations = ['apps', 'packages'].flatMap((root) =>
-      sourceFiles(resolve(workspaceRoot, root))
-        .filter((file) => !file.includes('/__tests__/') && !file.includes('.test.'))
-        .flatMap((file) =>
-          readFileSync(file, 'utf8').includes("from '@neko/platform")
-            ? [relative(workspaceRoot, file)]
-            : [],
-        ),
-    );
-    expect(violations).toEqual([]);
-  });
-
-  it('keeps the retired cross-domain Activity authority physically absent', () => {
-    const retiredPaths = [
-      'apps/neko-vscode/src/domain-activity-host.ts',
-      'packages/shared/src/domain-activity/contracts.ts',
-      'packages/shared/src/domain-activity/index.ts',
-      'packages/shared/src/domain-activity/projector.ts',
-      'packages/generation/src/job/activity.ts',
-      'packages/generation/src/job/activity-port.ts',
-      'packages/agent/contracts/src/domain-activity-protocol.ts',
-      'packages/neko-agent/packages/extension/src/chat/activity/domainActivityAttachmentServer.ts',
-      'packages/neko-agent/packages/extension/src/chat/router/domainActivityRoutes.ts',
-      'packages/agent/webview/src/components/DomainActivityView.tsx',
-      'packages/agent/webview/src/hooks/useDomainActivity.ts',
-    ];
-    expect(retiredPaths.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);
-
-    const productionRoots = [
-      'apps/neko-vscode/src',
-      'packages/shared/src/domain-activity',
-      'packages/generation/src',
-      'packages/agent/contracts/src',
-      'packages/neko-agent/packages/extension/src',
-      'packages/agent/webview/src',
-      'packages/neko-cut/packages/extension/src',
-    ];
-    const forbidden = [
-      /@neko\/shared\/domain-activity/u,
-      /\bDomainActivity(?:Source|Summary|Projector|Publisher|Tracker|Snapshot|Patch|Command)?\b/u,
-      /['"]domainJob\.command['"]/u,
-      /\b(?:attach|acknowledge|detach)DomainActivity\b/u,
-      /\bdomainActivity(?:Routes|Attachment|Host|Projector)\b/iu,
-    ];
-    const violations = productionRoots.flatMap((root) =>
-      sourceFiles(resolve(workspaceRoot, root))
-        .filter(
-          (file) =>
-            !file.includes('/__tests__/') &&
-            !file.endsWith('.test.ts') &&
-            !file.endsWith('.test.tsx'),
-        )
-        .flatMap((file) => {
-          const source = readFileSync(file, 'utf8');
-          return forbidden
-            .filter((pattern) => pattern.test(source))
-            .map((pattern) => `${relative(workspaceRoot, file)} matches ${pattern}`);
-        }),
-    );
-    expect(violations).toEqual([]);
-  });
-
   it('keeps Desktop and domain entry points on the canonical GenerationJob path', () => {
-    const retiredCanvasGenerationPaths = [
-      'packages/canvas/domain/src/canvas-generation-runtime.ts',
-      'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
-      'packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts',
-      'packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts',
-      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-      'packages/neko-cut/packages/extension/src/extension.ts',
-    ];
-    expect(
-      retiredCanvasGenerationPaths.filter((file) => existsSync(resolve(workspaceRoot, file))),
-    ).toEqual([]);
-
     const sources = new Map(
       [
         'packages/agent/runtime/src/tools/generation/media-agent-tools.ts',
@@ -173,8 +88,8 @@ describe('@neko/generation architecture boundaries', () => {
     expect(allEntrySource).not.toContain('allowCreateBackgroundConversation');
   });
 
-  it('keeps migrated creator-visible contracts independent from Resource Cache types', () => {
-    const migratedFiles = [
+  it('keeps creator-visible contract owners independent from Resource Cache types', () => {
+    const ownedContractFiles = [
       'packages/generation/src/contracts.ts',
       'packages/generation/src/job/contracts.ts',
       'packages/canvas/domain/src/types/canvas-workspace-board.ts',
@@ -186,7 +101,7 @@ describe('@neko/generation architecture boundaries', () => {
       /from ['"][^'"]*resource-cache['"]/u,
       /from ['"]@neko\/shared\/resource-cache['"]/u,
     ];
-    const violations = migratedFiles.flatMap((file) => {
+    const violations = ownedContractFiles.flatMap((file) => {
       const source = readFileSync(resolve(workspaceRoot, file), 'utf8');
       return forbiddenImports
         .filter((pattern) => pattern.test(source))

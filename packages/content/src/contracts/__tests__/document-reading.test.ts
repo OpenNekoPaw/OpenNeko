@@ -102,7 +102,7 @@ describe('document reading contracts', () => {
     const source: DocumentSourceRef = {
       filePath: '${BOOKS}/comic.epub',
       format: 'epub',
-      fileId: 'comic-v1',
+      fileId: 'comic-edition',
       contentLocator: { kind: 'workspace-file', path: 'books/comic.epub' },
     };
     const contentLocator = createDocumentEntryContentLocator({
@@ -150,11 +150,8 @@ describe('document reading contracts', () => {
     expect(isDocumentFormat('zip')).toBe(false);
   });
 
-  it('allows preview context to carry source locator and legacy excerpt data together', () => {
+  it('carries document selection context through source, locator, and excerpt', () => {
     const context: DocumentContextData = {
-      filePath: '/docs/demo.pdf',
-      text: 'Selected text',
-      contentKind: 'text',
       source: { filePath: '/docs/demo.pdf', format: 'pdf', fileId: 'pdf-1' },
       locator: { kind: 'page', pageNumber: 1, pageIndex: 0 },
       excerpt: { contentKind: 'text', text: 'Selected text', truncated: false },
@@ -162,6 +159,6 @@ describe('document reading contracts', () => {
 
     expect(context.source?.format).toBe('pdf');
     expect(context.locator?.kind).toBe('page');
-    expect(context.text).toBe(context.excerpt?.text);
+    expect(context.excerpt?.text).toBe('Selected text');
   });
 });

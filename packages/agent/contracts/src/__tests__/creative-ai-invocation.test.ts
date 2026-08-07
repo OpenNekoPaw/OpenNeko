@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
   type CreativeAiDocumentRef,
   type CreativeAiSourceRef,
   type CreativeAiTargetRef,
@@ -32,7 +31,6 @@ const sourceRef: CreativeAiSourceRef = {
   id: 'canvas-node:node-1',
   documentRef,
   entityId: 'node-1',
-  revision: 'source-rev-1',
 };
 
 const targetRef: CreativeAiTargetRef = {
@@ -42,12 +40,10 @@ const targetRef: CreativeAiTargetRef = {
   documentRef,
   entityId: 'node-1',
   fieldPath: '/data/prompt',
-  revision: 'target-rev-1',
 };
 
 function validExternalInvocation() {
   return {
-    schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
     domain: 'external-creative-package',
     invocationId: 'invoke-1',
     sourcePackage: 'neko-canvas',
@@ -59,21 +55,17 @@ function validExternalInvocation() {
     writeback: {
       kind: 'mutating',
       atomicity: 'per-target',
-      requiresRevisionMatch: true,
     },
-    documentRevision: 'doc-rev-1',
-    targetRevision: 'target-rev-1',
     routing: {
       associationKey: 'neko-canvas:doc-1',
     },
-    idempotencyKey: 'neko-canvas:doc-1:node-1:prompt:edit:doc-rev-1',
+    idempotencyKey: 'neko-canvas:doc-1:node-1:prompt:edit:invoke-1',
   } as const;
 }
 
 describe('creative AI invocation contracts', () => {
   it('validates Agent-internal invocations against the selected conversation', () => {
     const valid = {
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       domain: 'agent-internal',
       invocationId: 'agent-action-1',
       conversationId: 'conversation-1',
@@ -119,6 +111,22 @@ describe('creative AI invocation contracts', () => {
         target: 'sourceRef',
       }),
     ]);
+  });
+
+  it('rejects an unknown field without invalidating a valid sibling invocation', () => {
+    const rejected = validateExternalCreativeAiInvocation({
+      ...validExternalInvocation(),
+      unexpectedField: 1,
+    });
+
+    expect(rejected.valid).toBe(false);
+    expect(rejected.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'creative-ai-unsupported-field',
+        target: 'unexpectedField',
+      }),
+    ]);
+    expect(validateExternalCreativeAiInvocation(validExternalInvocation()).valid).toBe(true);
   });
 
   it('rejects unknown routing fields', () => {
@@ -172,7 +180,7 @@ describe('creative AI invocation contracts', () => {
 
   it('rejects runtime handles and cache paths as durable invocation identity', () => {
     expect(isRuntimeOnlyCreativeAiIdentityValue('blob:neko-media/preview')).toBe(true);
-    expect(isRuntimeOnlyCreativeAiIdentityValue('.neko/.cache/generated/image.png')).toBe(true);
+    expect(isRuntimeOnlyCreativeAiIdentityValue('.runtime/generated/image.png')).toBe(true);
     expect(isRuntimeOnlyCreativeAiIdentityValue('boards/intro.nkc')).toBe(false);
 
     const runtimeSource = validateExternalCreativeAiInvocation({
@@ -197,7 +205,7 @@ describe('creative AI invocation contracts', () => {
       documentRef: {
         ...documentRef,
         documentId: undefined,
-        projectRelativePath: '.neko/.cache/generated/image.png',
+        projectRelativePath: '.runtime/generated/image.png',
       },
     });
 
@@ -226,7 +234,6 @@ describe('creative AI invocation contracts', () => {
 
     expect(
       validateConversationLifecycleCommand({
-        schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
         commandId: 'archive-1',
         conversationId: 'conversation-1',
         action: 'stop-and-delete',
@@ -235,7 +242,6 @@ describe('creative AI invocation contracts', () => {
     ).toBe(true);
 
     const runSnapshot = validateCreativeAiRunSnapshot({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       runId: 'run-1',
       conversationId: 'conversation-1',
       invocationId: 'invoke-1',
@@ -248,10 +254,8 @@ describe('creative AI invocation contracts', () => {
       targetRef,
       intent: 'Improve prompt.',
       mode: 'edit',
-      writeback: { kind: 'mutating', requiresRevisionMatch: true },
-      documentRevision: 'doc-rev-1',
-      targetRevision: 'target-rev-1',
-      idempotencyKey: 'neko-canvas:doc-1:node-1:prompt:edit:doc-rev-1',
+      writeback: { kind: 'mutating' },
+      idempotencyKey: 'neko-canvas:doc-1:node-1:prompt:edit:run-1',
       status: 'accepted',
       createdAt: '2026-07-07T00:00:00.000Z',
       workItems: [
@@ -275,7 +279,6 @@ describe('creative AI invocation contracts', () => {
       candidateOnly: true,
     };
     const candidateApply = validateCreativeAiCandidateApplyRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'candidate-apply-1',
       conversationId: 'conversation-1',
       runId: 'run-1',
@@ -283,23 +286,20 @@ describe('creative AI invocation contracts', () => {
       sourcePackage: 'neko-canvas',
       candidateTargetRef,
       outputRefs: [{ kind: 'text', id: 'candidate-text-1' }],
-      writeback: { kind: 'candidate', requiresRevisionMatch: true },
-      targetRevision: 'target-rev-1',
+      writeback: { kind: 'candidate' },
       idempotencyKey: 'candidate-apply:run-1:work-1',
     });
 
     expect(candidateApply.valid).toBe(true);
 
     const wrongWriteback = validateCreativeAiCandidateApplyRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'candidate-apply-2',
       conversationId: 'conversation-1',
       runId: 'run-1',
       sourcePackage: 'neko-canvas',
       candidateTargetRef,
       outputRefs: [{ kind: 'text', id: 'candidate-text-1' }],
-      writeback: { kind: 'mutating', requiresRevisionMatch: true },
-      targetRevision: 'target-rev-1',
+      writeback: { kind: 'mutating' },
       idempotencyKey: 'candidate-apply:run-1:work-2',
     });
 
@@ -312,12 +312,10 @@ describe('creative AI invocation contracts', () => {
     ]);
 
     const promotion = validateCreativeAiCandidatePromotionRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'promote-1',
       sourcePackage: 'neko-canvas',
       targetRef,
       candidateTargetRef,
-      targetRevision: 'target-rev-1',
       runId: 'run-1',
       workItemId: 'work-1',
       conversationId: 'conversation-1',
@@ -330,26 +328,27 @@ describe('creative AI invocation contracts', () => {
 
     expect(promotion.valid).toBe(true);
 
-    const missingRevision = validateCreativeAiCandidatePromotionRequest({
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
+    const removedField = ['target', 'Revision'].join('');
+    const rejected = validateCreativeAiCandidatePromotionRequest({
       requestId: 'promote-2',
       sourcePackage: 'neko-canvas',
       targetRef,
       candidateTargetRef,
       actor: 'user',
       idempotencyKey: 'promote:run-1:work-2',
+      [removedField]: 'removed-target-token',
     });
 
-    expect(missingRevision.valid).toBe(false);
-    expect(missingRevision.diagnostics).toEqual([
+    expect(rejected.valid).toBe(false);
+    expect(rejected.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'creative-ai-missing-revision',
-        target: 'targetRevision',
+        code: 'creative-ai-unsupported-field',
+        target: removedField,
       }),
     ]);
   });
 
-  it('requires ContentLocator for media outputs and poisons legacy output references', () => {
+  it('requires ContentLocator for media outputs and rejects unsupported output fields', () => {
     const candidateTargetRef: CreativeAiTargetRef = {
       ...targetRef,
       kind: 'candidate-target',
@@ -357,14 +356,12 @@ describe('creative AI invocation contracts', () => {
       candidateOnly: true,
     };
     const base = {
-      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
       requestId: 'candidate-image-1',
       conversationId: 'conversation-1',
       runId: 'run-1',
       sourcePackage: 'neko-canvas',
       candidateTargetRef,
-      writeback: { kind: 'candidate', requiresRevisionMatch: true },
-      targetRevision: 'target-rev-1',
+      writeback: { kind: 'candidate' },
       idempotencyKey: 'candidate-image:run-1',
     } as const;
 
@@ -378,7 +375,6 @@ describe('creative AI invocation contracts', () => {
             contentLocator: {
               kind: 'generated-output',
               outputId: 'generated-image-1',
-              revision: 'rev-generated-image-1',
               digest: 'sha256:generated-image-1',
               path: 'neko/generated/image/generated-image-1.png',
             },
@@ -387,28 +383,28 @@ describe('creative AI invocation contracts', () => {
       }).valid,
     ).toBe(true);
 
-    const legacy = validateCreativeAiCandidateApplyRequest({
+    const unsupported = validateCreativeAiCandidateApplyRequest({
       ...base,
       outputRefs: [
         {
           kind: 'generated-asset',
           id: 'generated-image-1',
           resourceRef: {
-            id: 'legacy-generated-image-1',
+            id: 'removed-generated-image-1',
             scope: 'project',
-            provider: 'legacy',
+            provider: 'removed-provider',
             kind: 'generated',
             source: { kind: 'generated-asset', generatedAssetId: 'generated-image-1' },
-            fingerprint: { strategy: 'none', value: 'legacy-generated-image-1' },
+            fingerprint: { strategy: 'none', value: 'removed-generated-image-1' },
           },
         },
       ],
     });
 
-    expect(legacy.valid).toBe(false);
-    expect(legacy.diagnostics).toEqual(
+    expect(unsupported.valid).toBe(false);
+    expect(unsupported.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'creative-ai-output-locator-migration-required' }),
+        expect.objectContaining({ code: 'creative-ai-unsupported-field' }),
         expect.objectContaining({ code: 'creative-ai-missing-content-locator' }),
       ]),
     );

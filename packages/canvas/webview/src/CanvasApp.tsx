@@ -6,7 +6,7 @@ import {
   useReportWebviewKeyboardFocus,
 } from '@neko/ui/keyboard';
 import { CreativeWorkbenchShell } from '@neko/ui/workbench';
-import { CANVAS_VERSION, validateCanvasBoardRef } from '@neko/canvas-domain';
+import { validateCanvasBoardRef } from '@neko/canvas-domain';
 import type { CanvasDroppedAsset, ProjectedCanvasStatus } from '@neko/canvas-domain';
 import type { ContentLocator } from '@neko/content';
 import type {
@@ -76,7 +76,6 @@ import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAut
 // =============================================================================
 
 const DEFAULT_CANVAS_DATA: CanvasData = {
-  version: CANVAS_VERSION,
   name: 'Untitled Canvas',
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   nodes: [],
@@ -433,7 +432,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       });
     },
     onCanvasDataLoaded: (data) => {
-      const documentKey = createCanvasViewportSnapshotKey(data);
+      const documentKey = createCanvasViewportSnapshotKey(hostPort.documentId);
       seedViewportFromDocument(
         documentKey,
         readCanvasViewportSnapshot(hostPort, documentKey) ??
@@ -725,7 +724,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       return;
     }
 
-    const documentKey = createCanvasViewportSnapshotKey(canvasData);
+    const documentKey = createCanvasViewportSnapshotKey(hostPort.documentId);
     viewportSnapshotPolicyRef.current?.cancel();
     viewportSnapshotPolicyRef.current = createViewportSnapshotPolicy({
       writer: {
@@ -788,7 +787,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
     hostPort.postMessage({
       type: 'canvasStatus',
       data: {
-        version: canvasData.version,
         name: canvasData.name,
         nodes: canvasData.nodes,
         connections: canvasData.connections,

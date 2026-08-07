@@ -57,7 +57,6 @@ export type AgentCapabilityApprovalSource = (typeof AGENT_CAPABILITY_APPROVAL_SO
 
 export interface AgentCapabilitySchemaRef {
   readonly id: string;
-  readonly version?: number;
 }
 
 export interface AgentCapabilityLifecycleDescriptor {
@@ -176,7 +175,6 @@ const RUNTIME_ONLY_RESOURCE_PATTERNS: readonly RegExp[] = [
   /^data:/i,
   /^https?:\/\/127\.0\.0\.1(?::|\/)/i,
   /^https?:\/\/localhost(?::|\/)/i,
-  /(?:^|\/)\.neko\/\.cache(?:\/|$)/i,
   /^\/tmp(?:\/|$)/i,
   /^\/var\/folders(?:\/|$)/i,
 ];
@@ -502,13 +500,17 @@ export function isRuntimeOnlyAgentCapabilityResourceValue(value: string): boolea
   const normalized = value.trim();
   return (
     isHostProjectedRuntimeValue(normalized) ||
+    normalized
+      .replaceAll('\\', '/')
+      .split('/')
+      .some((segment) => segment.startsWith('.')) ||
     RUNTIME_ONLY_RESOURCE_PATTERNS.some((pattern) => pattern.test(normalized))
   );
 }
 
 function isAgentCapabilitySchemaRef(value: unknown): value is AgentCapabilitySchemaRef {
   if (!isRecord(value)) return false;
-  return isNonEmptyString(value['id']) && optionalNumber(value['version']);
+  return isNonEmptyString(value['id']);
 }
 
 function isAgentCapabilityLifecycleTargetRef(

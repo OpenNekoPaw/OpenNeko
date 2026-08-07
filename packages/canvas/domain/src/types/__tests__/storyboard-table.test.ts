@@ -15,7 +15,6 @@ import {
   STORYBOARD_TABLE_REQUIRED_FIELDS,
   classifyStoryboardMediaIdentity,
   interpretStoryboardImageStrategies,
-  normalizeCanonicalStoryboardTable,
   normalizeStoryboardTable,
   projectStoryboardTableToCutPayload,
   validateStoryboardTable,
@@ -24,7 +23,7 @@ import {
 
 describe('storyboard table contract', () => {
   it('defines stable-core required fields as shared constants', () => {
-    expect(STORYBOARD_TABLE_REQUIRED_FIELDS).toEqual(['schemaVersion', 'kind', 'title', 'scenes']);
+    expect(STORYBOARD_TABLE_REQUIRED_FIELDS).toEqual(['kind', 'title', 'scenes']);
     expect(STORYBOARD_SCENE_REQUIRED_FIELDS).toEqual(['sceneId', 'sceneTitle', 'shots']);
     expect(STORYBOARD_SHOT_REQUIRED_FIELDS).toEqual([
       'shotNumber',
@@ -40,7 +39,6 @@ describe('storyboard table contract', () => {
   it('rejects removed puppet representations from active voice cue requests', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Removed representation',
         scenes: [
@@ -85,7 +83,6 @@ describe('storyboard table contract', () => {
   it('accepts a strict semantic storyboard table with layered media refs', () => {
     const profile: StoryboardTableProfile = 'from-comic';
     const table: StoryboardTable = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
       profile,
       sourceProfile: STORYBOARD_FROM_COMIC_SOURCE_PROFILE_ID,
@@ -111,7 +108,7 @@ describe('storyboard table contract', () => {
               emotion: ['curious'],
               sceneTags: ['dusk', 'radio'],
               imageStrategy: 'use-as-reference',
-              generationPrompt: 'anime dusk field, broken radio, cinematic wide shot',
+              imagePrompt: 'anime dusk field, broken radio, cinematic wide shot',
               decisionReason: 'The source panel is useful for layout, but needs a video keyframe.',
               sourceMediaRefs: [
                 {
@@ -133,7 +130,7 @@ describe('storyboard table contract', () => {
                   locator: {
                     type: 'asset',
                     assetId: 'asset-keyframe-1',
-                    uri: '${WORKSPACE}/.neko/generated/image/keyframe-1.png',
+                    uri: '${WORKSPACE}/neko/generated/image/keyframe-1.png',
                   },
                   metadata: { provider: 'test-provider', selected: true },
                 },
@@ -183,7 +180,6 @@ describe('storyboard table contract', () => {
 
   it('reports stable-core required field errors as projection blockers', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Broken',
       scenes: [
@@ -196,7 +192,7 @@ describe('storyboard table contract', () => {
               duration: 3,
               characterAction: 'Rin looks up.',
               imageStrategy: 'generate-new',
-              generationPrompt: 'wide frame',
+              imagePrompt: 'wide frame',
             },
           ],
         },
@@ -215,158 +211,8 @@ describe('storyboard table contract', () => {
     );
   });
 
-  it('rejects flat scene rows at the canonical Storyboard handoff boundary', () => {
-    const result = normalizeCanonicalStoryboardTable({
-      value: {
-        schemaVersion: 1,
-        kind: 'storyboard-table',
-        title: 'Flat canonical input',
-        scenes: [
-          {
-            sceneId: 'scene-1',
-            sceneTitle: 'Scene',
-            shotNumber: 1,
-            duration: 3,
-            visualDescription: 'A cat enters.',
-            characterAction: 'The cat walks.',
-            imageStrategy: 'generate-new',
-          },
-        ],
-      },
-    });
-
-    expect(result.table).toBeUndefined();
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({
-        severity: 'error',
-        code: 'canonical-scene-shot-hierarchy-required',
-        path: ['scenes', 0, 'shots'],
-      }),
-    ]);
-  });
-
-  it('normalizes flat storyboard shot rows mistakenly placed in scenes', () => {
-    const result = normalizeStoryboardTable({
-      value: {
-        schemaVersion: 1,
-        kind: 'storyboard-table',
-        profile: 'from-comic',
-        sourceProfile: STORYBOARD_FROM_COMIC_SOURCE_PROFILE_ID,
-        title: 'P11-P20',
-        scenes: [
-          {
-            sceneId: 'page-11',
-            sceneTitle: 'P11',
-            shotNumber: 1,
-            duration: 3,
-            sourcePage: 'P11',
-            visualDescription: 'Panel P11 establishes the street.',
-            characterAction: 'The character enters the street.',
-            imageStrategy: 'use-as-reference',
-            sourceMediaRefs: [
-              {
-                refId: 'source-p11',
-                role: 'source',
-                locator: {
-                  type: 'tool-result',
-                  toolCallId: 'readimage-current-result',
-                  assetIndex: 0,
-                },
-                mimeType: 'image/png',
-              },
-            ],
-          },
-          {
-            sceneId: 'page-11',
-            sceneTitle: 'P11',
-            shotNumber: 2,
-            duration: 2,
-            sourcePage: 'P11',
-            visualDescription: 'Panel P11 close-up reaction.',
-            characterAction: 'The character reacts.',
-            imageStrategy: 'reuse-original',
-            sourceMediaRefs: [
-              {
-                refId: 'source-p11-close',
-                role: 'source',
-                locator: {
-                  type: 'tool-result',
-                  toolCallId: 'readimage-current-result',
-                  assetIndex: 0,
-                },
-                mimeType: 'image/png',
-              },
-            ],
-          },
-          {
-            sceneId: 'page-12',
-            sceneTitle: 'P12',
-            shotNumber: 3,
-            duration: 3,
-            sourcePage: 'P12',
-            visualDescription: 'Panel P12 shows the next beat.',
-            characterAction: 'The character turns around.',
-            imageStrategy: 'use-as-reference',
-            sourceMediaRefs: [
-              {
-                refId: 'source-p12',
-                role: 'source',
-                locator: {
-                  type: 'tool-result',
-                  toolCallId: 'readimage-current-result',
-                  assetIndex: 1,
-                },
-                mimeType: 'image/png',
-              },
-            ],
-          },
-        ],
-      },
-    });
-
-    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
-    expect(result.table?.scenes).toHaveLength(2);
-    expect(result.table?.scenes[0]).toMatchObject({
-      sceneId: 'page-11',
-      sceneTitle: 'P11',
-      shots: [
-        {
-          shotNumber: 1,
-          visualDescription: 'Panel P11 establishes the street.',
-          sourceMediaRefs: [
-            {
-              locator: {
-                type: 'tool-result',
-                toolCallId: 'readimage-current-result',
-                assetIndex: 0,
-              },
-            },
-          ],
-        },
-        {
-          shotNumber: 2,
-          visualDescription: 'Panel P11 close-up reaction.',
-        },
-      ],
-    });
-    expect(result.table?.scenes[1]?.shots[0]).toMatchObject({
-      shotNumber: 3,
-      sourceMediaRefs: [
-        {
-          locator: {
-            type: 'tool-result',
-            toolCallId: 'readimage-current-result',
-            assetIndex: 1,
-          },
-        },
-      ],
-    });
-    expect(validateStoryboardTable(result.table).ok).toBe(true);
-  });
-
   it('keeps profile recommendations non-blocking', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       profile: 'script-breakdown',
       title: 'Profile hints',
@@ -381,7 +227,7 @@ describe('storyboard table contract', () => {
               visualDescription: 'Rin looks up.',
               characterAction: 'Rin looks up.',
               imageStrategy: 'generate-new',
-              generationPrompt: 'wide frame',
+              imagePrompt: 'wide frame',
             },
           ],
         },
@@ -402,7 +248,6 @@ describe('storyboard table contract', () => {
 
   it('treats source-based image strategies without source refs as projection blockers', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Missing source',
       scenes: [
@@ -437,7 +282,6 @@ describe('storyboard table contract', () => {
 
   it('keeps decisionReason as display metadata, not validation input', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Reason only',
       scenes: [
@@ -472,7 +316,6 @@ describe('storyboard table contract', () => {
 
   it('rejects scene-level video prompts duplicated or stored on later shots', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Invalid scene video prompts',
       scenes: [
@@ -496,7 +339,7 @@ describe('storyboard table contract', () => {
               characterAction: 'Rin turns toward the signal.',
               imageStrategy: 'generate-new',
               imagePrompt: 'Create the second frame.',
-              videoPrompt: 'Legacy per-shot video prompt must be rejected.',
+              videoPrompt: 'Per-shot video prompt must be rejected.',
             },
           ],
         },
@@ -522,7 +365,6 @@ describe('storyboard table contract', () => {
 
   it('rejects unsafe media references in structured storyboard payloads', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Unsafe refs',
       scenes: [
@@ -610,7 +452,7 @@ describe('storyboard table contract', () => {
         role: 'source',
         locator: {
           type: 'workspace-path',
-          path: '${WORKSPACE}/.neko/.cache/resources/documents/doc_1/page.jpg',
+          path: '${WORKSPACE}/.cache/resources/documents/doc_1/page.jpg',
         },
       }),
     ).toMatchObject({ kind: 'unsafe-cache-path' });
@@ -629,12 +471,12 @@ describe('storyboard table contract', () => {
 
     expect(
       classifyStoryboardMediaIdentity({
-        refId: 'retired-host-runtime-uri',
+        refId: 'browser-runtime-uri',
         role: 'source',
         locator: {
           type: 'asset',
-          assetId: 'asset-retired-host',
-          uri: 'vscode-webview://neko/page.jpg',
+          assetId: 'asset-browser-runtime',
+          uri: 'blob:https://desktop.invalid/runtime-resource',
         },
       }),
     ).toMatchObject({ kind: 'runtime-only' });
@@ -651,7 +493,6 @@ describe('storyboard table contract', () => {
   it('rejects runtime handles and fabricated tool ids as storyboard media identity', () => {
     const result = validateStoryboardTable(
       {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         sourceProfile: 'from-comic',
         title: 'Runtime refs',
@@ -734,7 +575,6 @@ describe('storyboard table contract', () => {
   it('reports ambiguous aliases when validation receives request-scoped alias context', () => {
     const result = validateStoryboardTable(
       {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Ambiguous alias',
         scenes: [
@@ -781,7 +621,7 @@ describe('storyboard table contract', () => {
 
   it('blocks generation when confirmation policy is pending', () => {
     const result = interpretStoryboardImageStrategies({
-      table: storyboardTable({ imageStrategy: 'generate-new', generationPrompt: 'frame' }),
+      table: storyboardTable({ imageStrategy: 'generate-new', imagePrompt: 'frame' }),
       availableTools: [{ toolName: 'GenerateImage', supportsReferences: true }],
       userOverride: {
         generationPolicy: 'confirm',
@@ -804,7 +644,6 @@ describe('storyboard table contract', () => {
 
   it('rejects unsafe media refs and layered role drift', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Unsafe refs',
       scenes: [
@@ -851,156 +690,8 @@ describe('storyboard table contract', () => {
     );
   });
 
-  it('rejects pre-schema storyboard section payloads', () => {
-    const result = normalizeStoryboardTable({
-      value: {
-        template: 'storyboard-table',
-        title: 'Old sections',
-        sections: [
-          {
-            heading: 'Shot 1',
-            content: 'Use original panel, then generated keyframe.',
-            mediaRefs: [
-              { toolCallId: 'read-panel', assetIndex: 0, role: 'original', caption: '原图' },
-              { toolCallId: 'generate-shot', assetIndex: 1, role: 'generated' },
-            ],
-          },
-        ],
-      },
-    });
-
-    expect(result.table).toBeUndefined();
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({
-        severity: 'error',
-        code: 'invalid-root',
-        path: [],
-      }),
-    ]);
-  });
-
-  it('splits schema v1 mediaRefs when layered refs are absent', () => {
-    const result = normalizeStoryboardTable({
-      value: {
-        schemaVersion: 1,
-        kind: 'storyboard-table',
-        title: 'Mixed',
-        scenes: [
-          {
-            sceneId: 'scene-1',
-            sceneTitle: 'Scene',
-            shots: [
-              {
-                shotNumber: 1,
-                duration: 3,
-                visualDescription: 'Rin looks up.',
-                characterAction: 'Rin looks up.',
-                imageStrategy: 'reuse-original',
-                mediaRefs: [
-                  {
-                    refId: 'source-1',
-                    role: 'source',
-                    locator: { type: 'tool-result', toolCallId: 'read-1', assetIndex: 0 },
-                  },
-                  {
-                    refId: 'generated-1',
-                    role: 'generated',
-                    locator: { type: 'asset', assetId: 'asset-1' },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    });
-
-    expect(result.table?.scenes[0]?.shots[0]?.sourceMediaRefs?.map((ref) => ref.refId)).toEqual([
-      'source-1',
-    ]);
-    expect(result.table?.scenes[0]?.shots[0]?.generatedMediaRefs?.map((ref) => ref.refId)).toEqual([
-      'generated-1',
-    ]);
-  });
-
-  it('preserves model-authored image alias fields as extension metadata', () => {
-    const result = normalizeStoryboardTable({
-      value: {
-        schemaVersion: 1,
-        kind: 'storyboard-table',
-        title: 'Alias',
-        scenes: [
-          {
-            sceneId: 'scene-1',
-            sceneTitle: 'Scene',
-            shots: [
-              {
-                shotNumber: 1,
-                duration: 3,
-                visualDescription: 'Use the first page.',
-                characterAction: 'The character looks up.',
-                imageStrategy: 'use-as-reference',
-                page_1: true,
-                panel2: 'selected',
-                image_3: false,
-              },
-            ],
-          },
-        ],
-      },
-    });
-
-    expect(result.table?.scenes[0]?.shots[0]?.extensions).toMatchObject({
-      'neko.storyboardImageAlias': {
-        kind: 'page',
-        number: 1,
-        key: 'page_1',
-        aliases: [
-          { kind: 'page', number: 1, key: 'page_1' },
-          { kind: 'panel', number: 2, key: 'panel2' },
-        ],
-      },
-    });
-  });
-
-  it('preserves model-authored source page fields as extension metadata', () => {
-    const result = normalizeStoryboardTable({
-      value: {
-        schemaVersion: 1,
-        kind: 'storyboard-table',
-        title: 'Source Page',
-        scenes: [
-          {
-            sceneId: 'scene-1',
-            sceneTitle: 'Scene',
-            shots: [
-              {
-                shotNumber: 1,
-                duration: 3,
-                visualDescription: 'Use page six.',
-                characterAction: 'The character walks through the village.',
-                imageStrategy: 'use-as-reference',
-                sourcePage: 'P6',
-              },
-            ],
-          },
-        ],
-      },
-    });
-
-    expect(result.table?.scenes[0]?.shots[0]?.extensions).toMatchObject({
-      'neko.storyboardSourceImage': {
-        kind: 'page',
-        number: 6,
-        key: 'P6',
-        sourceField: 'sourcePage',
-      },
-    });
-  });
-
   it('rejects non-serializable or un-namespaced extensions', () => {
     const result = validateStoryboardTable({
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Extensions',
       extensions: {
@@ -1018,7 +709,7 @@ describe('storyboard table contract', () => {
               visualDescription: 'Rin looks up.',
               characterAction: 'Rin looks up.',
               imageStrategy: 'generate-new',
-              generationPrompt: 'wide frame',
+              imagePrompt: 'wide frame',
             },
           ],
         },
@@ -1045,7 +736,6 @@ describe('storyboard table contract', () => {
   it('normalizes classified OCR text cues and warns on conflicting speaker ids', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Text Cues',
         scenes: [
@@ -1059,7 +749,7 @@ describe('storyboard table contract', () => {
                 visualDescription: 'Rin reads a glowing sign.',
                 characterAction: 'Rin reacts to a warning.',
                 imageStrategy: 'generate-new',
-                generationPrompt: 'manga panel',
+                imagePrompt: 'manga panel',
                 textCues: [
                   {
                     cueId: 'text-1',
@@ -1119,7 +809,6 @@ describe('storyboard table contract', () => {
 
   it('projects valid semantic tables to Cut payloads', () => {
     const table: StoryboardTable = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Projection',
       scenes: [
@@ -1184,11 +873,10 @@ describe('storyboard table contract', () => {
               ],
               voiceOver: 'The signal returns.',
               soundCue: 'Radio static.',
-              generationPrompt: 'close-up anime frame',
+              imagePrompt: 'close-up anime frame',
               imageStrategy: 'generate-new',
               extensions: {
                 'neko.shotImagePrep': {
-                  schemaVersion: 1,
                   kind: 'shot-image-prep-plan',
                   planId: 'shot-1-image-prep',
                   sceneId: 'scene-1',
@@ -1205,7 +893,7 @@ describe('storyboard table contract', () => {
                   role: 'generated',
                   locator: {
                     type: 'workspace-path',
-                    path: '${WORKSPACE}/.neko/generated/image/shot-1.png',
+                    path: '${WORKSPACE}/neko/generated/image/shot-1.png',
                   },
                   mimeType: 'image/png',
                 },
@@ -1259,7 +947,7 @@ describe('storyboard table contract', () => {
           voiceOver: 'The signal returns.',
           soundCue: 'Radio static.',
           label: '#001 Scene',
-          imagePath: '${WORKSPACE}/.neko/generated/image/shot-1.png',
+          imagePath: '${WORKSPACE}/neko/generated/image/shot-1.png',
         },
       ],
     });
@@ -1268,7 +956,6 @@ describe('storyboard table contract', () => {
   it('normalizes and projects shot character candidate ids without requiring entity refs', () => {
     const result = normalizeStoryboardTable({
       value: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Candidate projection',
         scenes: [
@@ -1358,7 +1045,7 @@ describe('storyboard table contract', () => {
     });
 
     const missingSource = interpretStoryboardImageStrategies({
-      table: storyboardTable({ imageStrategy: 'use-as-reference', generationPrompt: 'frame' }),
+      table: storyboardTable({ imageStrategy: 'use-as-reference', imagePrompt: 'frame' }),
       availableTools: [{ toolName: 'GenerateImage', supportsReferences: true }],
     });
     expect(missingSource.blockedActions[0]).toMatchObject({
@@ -1367,7 +1054,7 @@ describe('storyboard table contract', () => {
     });
 
     const missingCapability = interpretStoryboardImageStrategies({
-      table: storyboardTable({ imageStrategy: 'generate-new', generationPrompt: 'frame' }),
+      table: storyboardTable({ imageStrategy: 'generate-new', imagePrompt: 'frame' }),
       availableTools: [],
     });
     expect(missingCapability.blockedActions[0]).toMatchObject({
@@ -1376,7 +1063,7 @@ describe('storyboard table contract', () => {
     });
 
     const denied = interpretStoryboardImageStrategies({
-      table: storyboardTable({ imageStrategy: 'generate-new', generationPrompt: 'frame' }),
+      table: storyboardTable({ imageStrategy: 'generate-new', imagePrompt: 'frame' }),
       availableTools: [{ toolName: 'GenerateImage', supportsReferences: true }],
       userOverride: {
         generationPolicy: 'deny',
@@ -1391,7 +1078,6 @@ describe('storyboard table contract', () => {
 
   it('routes generate and transform strategies through available tool capabilities', () => {
     const table: StoryboardTable = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
       title: 'Strategies',
       scenes: [
@@ -1407,7 +1093,6 @@ describe('storyboard table contract', () => {
               characterAction: 'Rin looks up.',
               imageStrategy: 'generate-new',
               imagePrompt: 'new canonical frame',
-              generationPrompt: 'legacy frame must not execute',
             },
             {
               shotId: 'shot-transform',
@@ -1453,7 +1138,6 @@ function storyboardTable(
   shot: Partial<StoryboardTable['scenes'][number]['shots'][number]>,
 ): StoryboardTable {
   return {
-    schemaVersion: 1,
     kind: 'storyboard-table',
     title: 'Strategies',
     scenes: [
@@ -1489,28 +1173,21 @@ function sourceMediaRef(refId: string) {
 }
 
 describe('canonical storyboard contract', () => {
-  it('requires source profile, stable trace, revision, and revision-bound projections', () => {
+  it('requires source profile, stable trace, and content-bound projections', () => {
     const sourceLocator = {
       kind: 'workspace-file',
       path: 'story/script.md',
-      fingerprint: { strategy: 'sha256', value: 'sha256:script-v1' },
+      fingerprint: { strategy: 'sha256', value: 'sha256:script-content' },
     } as const;
     const table = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
-      contractVersion: 1,
       sourceProfile: 'from-script',
-      revision: {
-        revisionId: 'storyboard-revision-1',
-        sequence: 1,
-        contentDigest: 'sha256:storyboard-v1',
-        createdAt: '2026-07-11T00:00:00.000Z',
-      },
+      contentFingerprint: 'sha256:storyboard-content',
       sourceTrace: [{ traceId: 'trace-1', sourceProfile: 'from-script', sourceLocator }],
       projections: [
         {
           target: 'cut',
-          storyboardRevisionId: 'storyboard-revision-1',
+          storyboardFingerprint: 'sha256:storyboard-content',
           mode: 'one-way-handoff',
           createdAt: '2026-07-11T00:00:00.000Z',
         },
@@ -1528,7 +1205,7 @@ describe('canonical storyboard contract', () => {
               visualDescription: 'A door opens.',
               characterAction: 'The hero enters.',
               imageStrategy: 'generate-new',
-              generationPrompt: 'A cinematic door opens as the hero enters.',
+              imagePrompt: 'A cinematic door opens as the hero enters.',
             },
           ],
         },
@@ -1539,7 +1216,7 @@ describe('canonical storyboard contract', () => {
     expect(
       validateCanonicalStoryboardTable({
         ...table,
-        projections: [{ ...table.projections[0], storyboardRevisionId: 'old-revision' }],
+        projections: [{ ...table.projections[0], storyboardFingerprint: 'sha256:other-content' }],
       }).diagnostics,
     ).toEqual([expect.objectContaining({ code: 'invalid-projection-handoff' })]);
 
@@ -1556,16 +1233,9 @@ describe('canonical storyboard contract', () => {
 
   it('rejects unsupported source profiles and runtime-only source refs', () => {
     const table = {
-      schemaVersion: 1,
       kind: 'storyboard-table',
-      contractVersion: 1,
       sourceProfile: 'from-prompt',
-      revision: {
-        revisionId: 'storyboard-revision-1',
-        sequence: 1,
-        contentDigest: 'sha256:storyboard-v1',
-        createdAt: '2026-07-11T00:00:00.000Z',
-      },
+      contentFingerprint: 'sha256:storyboard-content',
       sourceTrace: [
         {
           traceId: 'trace-1',

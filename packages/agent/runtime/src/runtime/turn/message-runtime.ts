@@ -1200,10 +1200,13 @@ export function formatAgentContextPayload(
     }
     return formatThreeReferenceContext(payload, payload.data, locale);
   }
-  if (documentContext) {
+  if (payload.type === 'document-selection') {
+    if (!documentContext) {
+      throw new Error(`Agent document selection context is invalid: ${payload.id}`);
+    }
     const lines = [`[${labels.document}: ${payload.label}]`];
     const source = documentContext.source;
-    lines.push(`${labels.source}: ${source?.filePath ?? filePath ?? labels.unknown}`);
+    lines.push(`${labels.source}: ${source?.filePath ?? labels.unknown}`);
     if (source?.format) {
       lines.push(`${labels.format}: ${source.format}`);
     }
@@ -1211,11 +1214,11 @@ export function formatAgentContextPayload(
     if (locatorText) {
       lines.push(`${labels.locator}: ${locatorText}`);
     }
-    const excerptText = documentContext.excerpt?.text ?? text;
+    const excerptText = documentContext.excerpt?.text;
     if (excerptText) {
       lines.push(`${labels.excerpt}:\n${excerptText}`);
     }
-    if (imageData || documentContext.excerpt?.imageData) {
+    if (documentContext.excerpt?.imageData) {
       lines.push(`[${labels.imageAttached}]`);
     }
     lines.push(labels.followUpReadDocument);
@@ -1252,7 +1255,7 @@ function formatThreeReferenceContext(
     data.staging.subject.appearancePolicy === 'guide-only';
   const lines = [
     `[${isZh ? '3D 参考' : '3D Reference'}: ${payload.label}]`,
-    `${isZh ? '会话版本' : 'Session revision'}: ${data.staging.sessionId}:${data.staging.revision}`,
+    `${isZh ? '会话' : 'Session'}: ${data.staging.sessionId}`,
     `${isZh ? '用途角色' : 'Purpose roles'}: ${data.outputs.map((output) => output.kind).join(', ')}`,
   ];
   if (guideOnly) {
@@ -1767,10 +1770,10 @@ export function selectAgentTurnProvider<TProvider extends AgentProviderCandidate
 const RUNTIME_MODEL_PURPOSE_CAPABILITIES: Readonly<Record<string, readonly string[]>> = {
   'llm.chat': ['llm.chat', 'chat'],
   'llm.vision': ['llm.vision', 'vision'],
-  'image.generate': ['image.generate', 'text_to_image', 'image_generation'],
+  'image.generate': ['image.generate', 'text_to_image'],
   'image.edit': ['image.edit', 'image_edit'],
   'image.understand': ['image.understand'],
-  'video.generate': ['video.generate', 'text_to_video', 'video_generation'],
+  'video.generate': ['video.generate', 'text_to_video'],
   'video.understand': ['video.understand'],
   'audio.generate': ['audio.generate', 'text_to_audio', 'audio'],
   'audio.tts': ['audio.tts', 'text_to_audio', 'audio'],

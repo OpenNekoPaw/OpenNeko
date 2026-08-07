@@ -41,7 +41,9 @@ export type {
 } from './creative-workbench';
 export type {
   ControlledWorkbenchDockPresentation,
+  ControlledWorkbenchInteractionPresentation,
   ControlledWorkbenchMainSplit,
+  ControlledWorkbenchMainComposition,
   ControlledWorkbenchResizeBinding,
   ControlledWorkbenchShellProps,
   EditorWorkbenchShellProps,

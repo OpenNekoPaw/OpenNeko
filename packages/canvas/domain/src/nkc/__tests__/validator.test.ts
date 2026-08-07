@@ -3,7 +3,6 @@ import { validateNkc } from '../index';
 
 function createValidCanvas(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    version: '3.0',
     name: 'Validator Fixture',
     nodes: [],
     connections: [],
@@ -22,33 +21,12 @@ function createCompleteNode(type: string): Record<string, unknown> {
   };
 }
 
-describe('NKC validator v3.0', () => {
+describe('NKC validator', () => {
   it('accepts the optional projected flag', () => {
     const result = validateNkc(createValidCanvas({ projected: true }));
 
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
-  });
-
-  it('rejects legacy root-level subsystem state in the canonical format', () => {
-    const result = validateNkc(
-      createValidCanvas({
-        narrative: { entryNodeId: 'choice-1', variables: [] },
-        behavior: { blackboard: [] },
-        entityGraph: { entityScope: ['character'], bindingSource: 'entities.json' },
-        memoryGraph: { queryContext: 'session' },
-      }),
-    );
-
-    expect(result.valid).toBe(false);
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'narrative' }),
-        expect.objectContaining({ field: 'behavior' }),
-        expect.objectContaining({ field: 'entityGraph' }),
-        expect.objectContaining({ field: 'memoryGraph' }),
-      ]),
-    );
   });
 
   it('rejects non-boolean projected flag', () => {
@@ -57,62 +35,6 @@ describe('NKC validator v3.0', () => {
     expect(result.valid).toBe(false);
     expect(result.errors).toContainEqual(
       expect.objectContaining({ field: 'projected', message: 'must be a boolean' }),
-    );
-  });
-
-  it('rejects runtime generated Group and candidate identities from durable NKC data', () => {
-    const result = validateNkc(
-      createValidCanvas({
-        nodes: [
-          {
-            ...createCompleteNode('group'),
-            id: 'runtime:canvas-generated-group:task-1',
-          },
-          {
-            ...createCompleteNode('media'),
-            id: 'runtime:canvas-generated-candidate:output-1',
-          },
-        ],
-      }),
-    );
-
-    expect(result.valid).toBe(false);
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field: 'nodes[0].id',
-          message: 'runtime generated Group identities cannot be persisted',
-        }),
-        expect.objectContaining({
-          field: 'nodes[1].id',
-          message: 'runtime generated Group identities cannot be persisted',
-        }),
-      ]),
-    );
-  });
-
-  it('rejects runtime projections and cache paths in node data', () => {
-    const result = validateNkc(
-      createValidCanvas({
-        nodes: [
-          {
-            ...createCompleteNode('media'),
-            data: {
-              projectionId: 'runtime:canvas-generated-group:task:1',
-              cachePath: '.neko/.cache/resources/generated-output.png',
-              resourceRef: { id: 'legacy-generated-output' },
-            },
-          },
-        ],
-      }),
-    );
-
-    expect(result.valid).toBe(false);
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ message: expect.stringContaining('runtime handles') }),
-        expect.objectContaining({ message: expect.stringContaining('runtime-only') }),
-      ]),
     );
   });
 
@@ -127,7 +49,6 @@ describe('NKC validator v3.0', () => {
               contentLocator: {
                 kind: 'generated-output',
                 outputId: 'generated-output:1',
-                revision: 'revision-1',
                 digest: 'sha256:generated',
                 path: 'neko/generated/image/concept.png',
               },
@@ -161,7 +82,6 @@ describe('NKC validator v3.0', () => {
             id: 'generation-job-node',
             data: {
               jobRef: { kind: 'generation', jobId: 'generation-job-1' },
-              revision: 3,
               title: 'Generate concept image',
               status: 'completed',
               inputRefs: [{ kind: 'canvas-node', nodeId: 'media-asset' }],
@@ -176,16 +96,14 @@ describe('NKC validator v3.0', () => {
     expect(result.errors).toEqual([]);
   });
 
-  it('rejects ResourceCacheSource/path heuristics without canonical locator and Job evidence', () => {
+  it('requires canonical locator and Job evidence for generated material nodes', () => {
     const result = validateNkc(
       createValidCanvas({
         nodes: [
           {
             ...createCompleteNode('media'),
             data: {
-              assetPath: 'neko/generated/image/legacy-concept.png',
-              resourceRef: { id: 'legacy-resource' },
-              generationContext: { prompt: 'Legacy prompt' },
+              assetPath: 'neko/generated/image/concept.png',
             },
           },
           {
@@ -197,7 +115,6 @@ describe('NKC validator v3.0', () => {
               contentLocator: {
                 kind: 'generated-output',
                 outputId: 'output-document-1',
-                revision: 'revision-1',
                 digest: 'sha256:document',
                 path: 'neko/generated/document/result.md',
               },
@@ -210,10 +127,6 @@ describe('NKC validator v3.0', () => {
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          field: 'nodes[0].data.generationContext',
-          message: expect.stringContaining('canvas-material-legacy-generation-evidence'),
-        }),
         expect.objectContaining({
           field: 'nodes[1].data.generation',
           message: expect.stringContaining('canvas-material-generation-evidence-required'),
@@ -282,7 +195,6 @@ describe('NKC validator v3.0', () => {
             ...createCompleteNode('job'),
             data: {
               jobRef: { kind: 'generation', jobId: 'generation-job-1' },
-              revision: 1,
               title: 'Generate concept image',
               status: 'running',
               inputRefs: [{ kind: 'file', path: '/Users/example/private.png' }],
@@ -306,7 +218,6 @@ describe('NKC validator v3.0', () => {
           message: expect.stringContaining('workspace-relative'),
         }),
         expect.objectContaining({ field: 'nodes[1].data.jobRef' }),
-        expect.objectContaining({ field: 'nodes[1].data.revision' }),
         expect.objectContaining({ field: 'nodes[1].data.inputRefs' }),
       ]),
     );

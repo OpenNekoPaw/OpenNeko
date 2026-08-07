@@ -1,5 +1,4 @@
 import {
-  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   validateCanvasWorkspaceProjectionRequest,
   type CanvasWorkspaceArtifactRole,
   type CanvasWorkspaceProjectionArtifact,
@@ -278,7 +277,7 @@ function createArtifactContentIdentity(artifact: CanvasWorkspaceProjectionArtifa
   return artifact.kind === 'markdown'
     ? createPortableArtifactContentIdentity(
         artifact.provenance.artifactId,
-        artifact.provenance.revision,
+        artifact.provenance.contentFingerprint,
       )
     : hashStableValue({
         kind: 'content-locator',
@@ -297,14 +296,17 @@ function readNodeContentIdentity(node: CanvasNode): string | undefined {
   const provenance = 'provenance' in node.data ? node.data.provenance : undefined;
   if (!isSerializableRecord(provenance)) return undefined;
   const artifactId = provenance['artifactId'];
-  const revision = provenance['revision'];
-  return typeof artifactId === 'string' && typeof revision === 'string'
-    ? createPortableArtifactContentIdentity(artifactId, revision)
+  const contentFingerprint = provenance['contentFingerprint'];
+  return typeof artifactId === 'string' && typeof contentFingerprint === 'string'
+    ? createPortableArtifactContentIdentity(artifactId, contentFingerprint)
     : undefined;
 }
 
-function createPortableArtifactContentIdentity(artifactId: string, revision: string): string {
-  return hashStableValue({ kind: 'artifact', artifactId, revision });
+function createPortableArtifactContentIdentity(
+  artifactId: string,
+  contentFingerprint: string,
+): string {
+  return hashStableValue({ kind: 'artifact', artifactId, contentFingerprint });
 }
 
 function createContentNodeId(contentIdentity: string): string {
@@ -345,7 +347,6 @@ function planGeneratedBatchGroup(
   const rowOffsets = cumulativeOffsets(rowHeights, GROUP_HEADER, GROUP_GAP);
   return {
     id: `workspace-batch-${hashStableValue({
-      version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
       kind: 'generated-batch',
       deliveryId,
     }).slice(0, 24)}`,
@@ -422,7 +423,6 @@ function createGeneratedBatchGroupNode(
     },
     data: {
       provenance: {
-        version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
         kind: 'generated-batch',
         deliveryId: request.process.deliveryId,
         sourceHost: request.process.sourceHost,
@@ -584,10 +584,9 @@ function createSerializableProvenance(
 ): CanvasSerializableRecord {
   const provenance = artifact.provenance;
   return {
-    version: provenance.version,
     deliveryId: provenance.deliveryId,
     artifactId: provenance.artifactId,
-    revision: provenance.revision,
+    contentFingerprint: provenance.contentFingerprint,
     kind: provenance.kind,
     role: provenance.role,
     sourceId: provenance.sourceId,
@@ -655,7 +654,6 @@ function planArtifactConnections(
 
 function createRelationId(sourceNodeId: string, targetNodeId: string): string {
   return `workspace-relation-${hashStableValue({
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     type: 'derived-from',
     sourceNodeId,
     targetNodeId,

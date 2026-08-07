@@ -11,7 +11,6 @@ function createAdapter(sourceUri: string): ProjectionAdapter {
     kind: 'entity',
     sourceUri,
     project: vi.fn(async () => ({
-      version: '2.1',
       name: 'Projected',
       projected: true as const,
       projectionSource: { kind: 'entity' as const, uri: sourceUri },
@@ -42,9 +41,7 @@ describe('canvas projection contracts', () => {
 
   it('validates projected canvas source DTOs without VSCode API types', () => {
     expect(isProjectedCanvasSource({ kind: 'entity', uri: 'file:///entity.json' })).toBe(true);
-    expect(isProjectedCanvasSource({ kind: 'memory', uri: 'memory://session', version: '1' })).toBe(
-      true,
-    );
+    expect(isProjectedCanvasSource({ kind: 'memory', uri: 'memory://session' })).toBe(true);
     expect(isProjectedCanvasSource({ kind: 'storyboard', uri: 'file:///story.json' })).toBe(false);
     expect(isProjectedCanvasSource({ kind: 'entity', uri: 3 })).toBe(false);
   });

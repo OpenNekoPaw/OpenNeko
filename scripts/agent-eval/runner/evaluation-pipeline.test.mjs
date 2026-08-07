@@ -41,7 +41,7 @@ describe('Desktop Agent Evaluation pipeline', () => {
       outcome: 'pass',
       reportId: 'run-1',
       result: {
-        schema: 'neko.agent-eval.result.v2',
+        schema: 'neko.agent-eval.result',
         outcome: 'pass',
         skippedStages: [],
       },
@@ -150,7 +150,7 @@ function pipelineInput(options = {}) {
           kind: 'file',
           path: 'output.json',
           digest: HASH,
-          validatorId: 'json-document-v1',
+          validatorId: 'json-document',
           evidenceRef: 'facts',
         },
       ]
@@ -175,7 +175,6 @@ function pipelineInput(options = {}) {
     suite: {
       id: 'suite-1',
       target: { kind: 'runtime', id: 'runtime-1', contractHash: HASH },
-      repositoryRevision: 'revision-1',
       judgeProfiles: options.withJudge ? [judgeProfile()] : [],
     },
     scenario,
@@ -186,7 +185,7 @@ function pipelineInput(options = {}) {
   return {
     selection,
     executionCase: {
-      schema: 'neko.agent-eval.execution-case.v1',
+      schema: 'neko.agent-eval.execution-case',
       suiteId: 'suite-1',
       caseId: 'ordinary-case',
       target: selection.suite.target,
@@ -228,12 +227,17 @@ function desktopEvidence(artifactChecks) {
         transcript: 'pi-session',
         metadata: 'sqlite',
         projection: 'conversation-projection-store',
-        forbiddenPathCount: 0,
       },
       configuration: {
         effective: {
           digest: HASH,
-          values: { modelBinding: { providerId: 'provider-1', modelId: 'model-1' } },
+          values: {
+            modelBinding: {
+              purpose: 'agent.main',
+              providerId: 'provider-1',
+              modelId: 'model-1',
+            },
+          },
         },
       },
       receipts: {
@@ -242,7 +246,7 @@ function desktopEvidence(artifactChecks) {
         tools: bounded(),
         permissions: bounded(),
       },
-      projection: { revision: 1, terminalState: 'completed' },
+      projection: { terminalState: 'completed' },
       resourceDisplayProjections: bounded(),
       persistence: { durability: 'durable', checkpoint: 'observed' },
       usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.01 },
@@ -271,7 +275,7 @@ function desktopEvidence(artifactChecks) {
 function judgeProfile() {
   return {
     id: 'quality-judge',
-    adapter: 'openai-chat-completions-v1',
+    adapter: 'openai-chat-completions',
     providerId: 'judge-provider',
     modelId: 'judge-model',
     endpointEnv: 'JUDGE_ENDPOINT',
@@ -286,7 +290,6 @@ function rubric() {
   return {
     id: 'quality-rubric',
     domain: 'test',
-    version: 'v1',
     minimumScore: 4,
     maximumUncertainty: 0.3,
     criteria: [
@@ -302,7 +305,7 @@ function rubric() {
 
 function judgeResult() {
   return {
-    schema: 'neko.agent-eval.judge.v2',
+    schema: 'neko.agent-eval.judge',
     reportId: 'run-1',
     suiteId: 'suite-1',
     caseId: 'ordinary-case',
@@ -311,7 +314,6 @@ function judgeResult() {
     modelId: 'judge-model',
     profileId: 'quality-judge',
     rubricId: 'quality-rubric',
-    rubricVersion: 'v1',
     promptHash: HASH,
     sampling: { temperature: 0, maxTokens: 1000 },
     criteria: [
@@ -333,7 +335,7 @@ function judgeResult() {
 
 function baselineDiff() {
   return {
-    schema: 'neko.agent-eval.comparison.v2',
+    schema: 'neko.agent-eval.comparison',
     id: 'comparison-run-1',
     baselineId: 'baseline-1',
     currentReportIds: ['run-1'],

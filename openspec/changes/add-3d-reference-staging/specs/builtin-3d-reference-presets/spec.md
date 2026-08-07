@@ -2,7 +2,7 @@
 
 ### Requirement: Built-in presets come from one code-owned catalog
 
-Preview SHALL expose built-in 3D reference assets through one immutable code-owned catalog. Every catalog entry MUST declare a stable preset ID, schema version, asset fingerprint, preset kind, supported reference purposes, default scale, capability descriptor, license/provenance, and packaged asset location; runtime registration and directory discovery are forbidden in the initial capability.
+Preview SHALL expose built-in 3D reference assets through one immutable code-owned catalog. Every catalog entry MUST declare a stable preset ID, asset fingerprint, preset kind, supported reference purposes, default scale, capability descriptor, license/provenance, and packaged asset location; runtime registration, schema dispatch and directory discovery are forbidden in the initial capability.
 
 #### Scenario: Enumerate bundled presets
 

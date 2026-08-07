@@ -95,7 +95,7 @@ export interface MediaGenerationRequestBase {
  * Image generation request
  */
 export interface ImageGenerationRequest extends MediaGenerationRequestBase {
-  /** Canonical image operation. Omit only for legacy request inference. */
+  /** Canonical image operation. When absent, semantic request inputs determine the operation. */
   operation?: ImageOperationId;
   /** Image width */
   width?: number;
@@ -139,7 +139,7 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
  * Video generation request
  */
 export interface VideoGenerationRequest extends MediaGenerationRequestBase {
-  /** Canonical single-clip video operation. Omit only for legacy request inference. */
+  /** Canonical single-clip video operation. When absent, semantic request inputs determine the operation. */
   operation?: VideoOperationId;
   /** Video duration in seconds */
   duration?: number;

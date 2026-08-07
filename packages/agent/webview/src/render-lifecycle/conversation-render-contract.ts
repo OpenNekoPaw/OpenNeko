@@ -12,36 +12,34 @@ export interface ConversationStreamingSnapshot {
   readonly isThinking: boolean;
   readonly queuedMessageCount: number;
   readonly queuedMessages: readonly AgentQueuedMessageItem[];
-  readonly messageQueueVersion?: number;
+  readonly messageQueueSequence?: number;
 }
 
 export interface ConversationRenderSnapshot {
   readonly conversationId: string;
-  readonly revision: number;
   readonly messages: readonly Message[];
   readonly streaming: ConversationStreamingSnapshot;
   readonly retention: ConversationRetention;
 }
 
-interface RevisionedConversationMutation {
+interface ConversationOwnedMutation {
   readonly conversationId: string;
-  readonly baseRevision: number;
 }
 
 export type ConversationRenderMutation =
-  | (RevisionedConversationMutation & {
+  | (ConversationOwnedMutation & {
       readonly kind: 'host-snapshot';
       readonly messages: readonly Message[];
       readonly streaming: ConversationStreamingSnapshot;
     })
-  | (RevisionedConversationMutation & {
+  | (ConversationOwnedMutation & {
       readonly kind: 'queue-status';
       readonly queuedMessageCount: number;
       readonly queuedMessages: readonly AgentQueuedMessageItem[];
-      readonly messageQueueVersion?: number;
+      readonly messageQueueSequence?: number;
       readonly isThinking?: boolean;
     })
-  | (RevisionedConversationMutation & {
+  | (ConversationOwnedMutation & {
       readonly kind: 'completion';
       readonly messages: readonly Message[];
     })
@@ -52,14 +50,12 @@ export type ConversationRenderMutation =
     };
 
 export type ConversationRenderDiagnosticCode =
-  'stale-revision' | 'conversation-snapshot-unavailable' | 'conversation-disposed';
+  'conversation-snapshot-unavailable' | 'conversation-disposed';
 
 export interface ConversationRenderDiagnostic {
   readonly code: ConversationRenderDiagnosticCode;
   readonly message: string;
   readonly conversationId: string;
-  readonly currentRevision?: number;
-  readonly targetRevision?: number;
   readonly messageId?: string;
   readonly turnId?: string;
 }

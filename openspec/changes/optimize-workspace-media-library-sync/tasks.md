@@ -1,14 +1,14 @@
 ## 1. Contracts And Storage Ownership
 
-- [x] 1.1 Define host-neutral requirement, owner-revision, link-state, recovery-plan, portability, and
+- [x] 1.1 Define host-neutral requirement, owner/source-fingerprint, link-state, recovery-plan, portability, and
       diagnostic contracts in `packages/shared` without Node paths, runtime URLs, global IDs, or
       target-bearing fields.
-- [x] 1.2 Add contract tests that reject unknown states, stale revisions, absolute paths, symlink
+- [x] 1.2 Add contract tests that reject unknown states, stale source/request identities, absolute paths, symlink
       targets, active-workspace fallback, `library.json`, and alternate resolver payloads.
-- [x] 1.3 Bind requirement freshness/diagnostics and referenced-media probe cache to the existing
-      `projection_versions` and `media_metadata` repositories under stable workspace partitions, with no
+- [x] 1.3 Bind requirement freshness/diagnostics and referenced-media probe cache to stable projection
+      and `media_metadata` repositories under stable workspace partitions, with no
       persisted link availability, new Media Library table, or workspace database.
-- [x] 1.4 Define versioned portable-snapshot task/checkpoint payloads on the existing `tasks` and
+- [x] 1.4 Define canonical portable-snapshot task/checkpoint payloads on the existing `tasks` and
       `task_checkpoints` repositories, excluding media bytes, full documents, credentials, absolute
       paths, and link targets.
 - [x] 1.5 Add local-metadata tests proving stale cache rebuild, state/cache transaction separation,
@@ -16,17 +16,17 @@
 
 ## 2. Authoritative Reference Projection
 
-- [x] 2.1 Implement minimal revisioned reference readers for Canvas, Cut, Entity representation
+- [x] 2.1 Implement minimal fingerprinted reference readers for Canvas, Cut, Entity representation
       bindings, and every project-document kind required for initial complete coverage.
 - [x] 2.2 Compose the fixed owner readers in Desktop Main and aggregate canonical
-      `neko/assets/<libraryName>/<descendant>` locators by library and owner revision.
+      `neko/assets/<libraryName>/<descendant>` locators by library and owner/source fingerprint.
 - [x] 2.3 Add aggregation tests for deduplication, unreferenced links, unsupported owner coverage,
       malformed locators, and deterministic rebuild after clone with no cached metadata.
 - [x] 2.4 Persist only freshness/diagnostic and referenced-media probe projections and prove every
       recovery plan re-reads current project facts and OS link state rather than trusting cached
       requirement membership or availability.
-- [x] 2.5 Migrate current-version NKC Media/File nodes with normalized legacy workspace paths to
-      canonical workspace-file locators, keep non-portable paths invalid, and prevent Canvas
+- [x] 2.5 Require canonical NKC Media/File nodes to use workspace-file locators, keep path-only and
+      non-portable records unchanged but invalid at their document boundary, and prevent Canvas
       authoring from persisting new path-only media nodes.
 
 ## 3. Link Inspection And Recovery
@@ -35,14 +35,14 @@
       global-connection-missing, target-unavailable, content-incomplete, entry-conflict, and
       unreferenced-linked states with target-free diagnostics.
 - [x] 3.2 Implement immutable exact-name recovery planning against project identity, owner revisions,
-      link revision, global alias identity, bounded descendant validation, and existing realpath
+      link/source fingerprint, global alias identity, bounded descendant validation, and existing realpath
       containment guards.
 - [x] 3.3 Implement explicit confirm/apply with stale-plan rejection, atomic workspace link mutation,
       cancellation semantics, and rollback limited to a newly created global connection.
 - [x] 3.4 Route new Desktop add/relink operations through the machine-global alias while keeping
       existing direct physical links readable until explicit normalization.
-- [x] 3.5 Add regression tests that poison fuzzy lookup, basename guessing, target history, unmanaged
-      entry replacement, direct legacy commands, JSON manifests, and target-record fallback.
+- [x] 3.5 Add regression tests proving fuzzy lookup, basename guessing, target history, unmanaged entry
+      replacement, direct retired commands, JSON manifests, and target-record fallback cannot return success.
 
 ## 4. Portability And Snapshot Execution
 
@@ -76,23 +76,22 @@
       projecting incomplete coverage with a bounded owner diagnostic, and align the global Library
       header/toolbars with the shared Home management composition.
 
-## 6. Migration And Legacy Removal
+## 6. Canonical And Retired Paths
 
-- [x] 6.1 Keep `.neko/workspace.json`, project JSON/NKC/OTIO facts, JSONL journals/logs, managed media
-      bytes, and SecretStorage/keychain data with their existing owners; document why they are not
-      migrated to SQLite.
+- [x] 6.1 Keep canonical workspace identity, project JSON/NKC/OTIO facts, JSONL journals/logs, managed
+      media bytes, and SecretStorage/keychain data with their existing owners; document why Media
+      Library does not read or rewrite those authorities.
 - [x] 6.2 Verify no project link, target content, or project fact is mutated during open or metadata
       rebuild and no whole-library copy occurs during add/relink.
 - [x] 6.3 Remove or fail-close temporary dual routes so new recovery succeeds only through
       plan/confirm/apply and package/export continues to dereference only authoritative references.
-- [x] 6.4 Record `desktop-shell-state.json` and `desktop-application-settings.v1.json` migration as a
-      separate Desktop persistence OpenSpec change with transactional migration/rollback ownership;
-      exclude secrets and workspace identity from that migration.
+- [x] 6.4 Record Desktop Shell and application settings as separate canonical authorities that Media
+      Library does not read, import, rewrite or repair; exclude secrets and workspace identity.
 
 ## 7. Verification And Documentation
 
 - [x] 7.1 Add producer/consumer, project codec, local-metadata, Desktop Main, preload, renderer, and
-      Assets package tests with canonical-path assertions and poisoned legacy paths.
+      Assets package tests with canonical-path and retired-path absence assertions.
 - [x] 7.2 Run affected package typechecks/builds and focused tests, then run `pnpm build`, `pnpm test`,
       `pnpm check`, `pnpm check:legacy-debt`, and `pnpm check:unused`.
 - [x] 7.3 Run isolated real Electron Desktop scenarios for clone-without-links, exact-name recovery,
@@ -109,3 +108,5 @@
       residual risks.
 - [x] 7.6 Add regression coverage for the reported legacy NKC search failure and run real Electron
       visual acceptance for the aligned global Media/Asset Library surface.
+- [x] 7.7 Reset stale retained Media facet containers against fresh root projections, add remount/facet-switch regression coverage, and prove an isolated Electron project still displays linked libraries.
+  - Assets Webview regression tests distinguish an explicit empty child container from a stale retained container. The packaged Electron report at `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-05T09-54-49.980Z-resource-browser-entity-management-packaged/report.json` proves a facet switch returns to the linked `Assets` library root instead of retaining the stale `portrait.png` child view.

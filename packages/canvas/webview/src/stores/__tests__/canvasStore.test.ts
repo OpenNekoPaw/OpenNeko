@@ -64,7 +64,6 @@ function group(
 
 function canvas(nodes: CanvasNode[], connections: CanvasConnection[] = []): CanvasData {
   return {
-    version: '3.0',
     name: 'Canonical Canvas Test',
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
     nodes,

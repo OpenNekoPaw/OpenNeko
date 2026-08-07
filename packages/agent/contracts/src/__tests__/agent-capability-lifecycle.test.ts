@@ -22,8 +22,8 @@ describe('agent capability lifecycle contracts', () => {
       displayName: 'Create storyboard review table',
       description: 'Create a review-first semantic storyboard table from Markdown.',
       phases: ['validate', 'review', 'apply'],
-      inputSchema: { id: 'canvas.markdown.input', version: 1 },
-      resultSchema: { id: 'agent.capability.lifecycle.result', version: 1 },
+      inputSchema: { id: 'canvas.markdown.input' },
+      resultSchema: { id: 'agent.capability.lifecycle.result' },
       accepts: ['markdown', 'gfm-table'],
       produces: ['canvas.table', 'canvas.storyboard'],
       risk: 'medium',
@@ -181,9 +181,7 @@ describe('agent capability lifecycle contracts', () => {
     expect(isRuntimeOnlyAgentCapabilityResourceValue('blob:neko-media/preview')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('/tmp/neko/page.png')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('/var/folders/neko/page.png')).toBe(true);
-    expect(isRuntimeOnlyAgentCapabilityResourceValue('/workspace/.neko/.cache/page.png')).toBe(
-      true,
-    );
+    expect(isRuntimeOnlyAgentCapabilityResourceValue('/workspace/.runtime/page.png')).toBe(true);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('assets/cover.png')).toBe(false);
     expect(isRuntimeOnlyAgentCapabilityResourceValue('${MEDIA}/cover.png')).toBe(false);
   });
@@ -193,6 +191,6 @@ function createTestContentLocator() {
   return {
     kind: 'workspace-file' as const,
     path: 'assets/cover.png',
-    fingerprint: { strategy: 'provider' as const, value: 'cover-v1' },
+    fingerprint: { strategy: 'provider' as const, value: 'cover-current' },
   };
 }

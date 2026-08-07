@@ -1,10 +1,8 @@
-import { resolveGlobalStorageLayout, resolveStorageLayout } from './storage';
+import { resolveGlobalStorageLayout } from './storage';
 import { createNodeSqliteLocalMetadataStore } from './node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from './node-workspace-identity';
-import { migrateLegacyResourceCacheManifest } from './node-resource-cache-manifest-migration';
 import { LocalMetadataResourceCacheManifestStore } from './resource-cache-manifest-store';
-import { M1_LOCAL_METADATA_MIGRATIONS, RESOURCE_CACHE_MIGRATIONS } from './sqlite';
-import type { ResourceCacheManifestMigrationReport } from './node-resource-cache-manifest-migration';
+import { initializeCoreLocalMetadataTables, initializeResourceCacheTables } from './sqlite';
 import type { ResourceCacheManifestStore } from '@neko/local-metadata/resource-cache';
 import type { LocalMetadataStore } from './contracts';
 
@@ -12,7 +10,6 @@ export interface NodeWorkspaceResourceCacheMetadataBinding {
   readonly workspaceId: string;
   readonly metadataStore: LocalMetadataStore;
   readonly manifestStore: ResourceCacheManifestStore;
-  readonly migrationReport: ResourceCacheManifestMigrationReport;
   dispose(): Promise<void>;
 }
 
@@ -31,13 +28,8 @@ export async function createNodeGlobalResourceCacheMetadataBinding(options: {
       databasePath,
       busyTimeoutMs: 2_000,
     });
-    await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
-      destructiveBackup: {
-        destinationPath: `${databasePath}.pre-resource-cache-v2.bak`,
-        reason: 'migration',
-      },
-    });
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeResourceCacheTables(metadataStore);
     return {
       manifestStore: new LocalMetadataResourceCacheManifestStore({
         metadataStore,
@@ -64,13 +56,8 @@ export async function createNodeWorkspaceResourceCacheMetadataBinding(options: {
       databasePath,
       busyTimeoutMs: 2_000,
     });
-    await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS, {
-      destructiveBackup: {
-        destinationPath: `${databasePath}.pre-resource-cache-v2.bak`,
-        reason: 'migration',
-      },
-    });
+    await initializeCoreLocalMetadataTables(metadataStore);
+    await initializeResourceCacheTables(metadataStore);
     const identityResolution = await resolveNodeWorkspaceIdentity({
       workspaceRoot: options.workDir,
       homedir: options.homedir,
@@ -86,19 +73,11 @@ export async function createNodeWorkspaceResourceCacheMetadataBinding(options: {
         workspaceId: identity.workspaceId,
         domain: 'resource-cache',
       },
-      projectRoot: options.workDir,
-    });
-    const layout = resolveStorageLayout(options.workDir, options.homedir);
-    const migrationReport = await migrateLegacyResourceCacheManifest({
-      manifestPath: layout.project.local.cache.resourceManifest,
-      cacheRoot: layout.project.local.cache.resources,
-      manifestStore,
     });
     return {
       workspaceId: identity.workspaceId,
       metadataStore,
       manifestStore,
-      migrationReport,
       dispose: () => metadataStore.dispose(),
     };
   } catch (error) {

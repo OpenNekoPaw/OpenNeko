@@ -50,14 +50,16 @@ describe('createWorkspaceFileAccessPolicy', () => {
   it('rejects managed workspace runtime directories by default', () => {
     const policy = createWorkspaceFileAccessPolicy({ workspaceRoot });
 
-    expect(policy.authorize('.neko/.cache/resources/page.png', 'read')).toMatchObject({
+    expect(policy.authorize('.runtime/cache/resources/page.png', 'read')).toMatchObject({
       allowed: false,
       reason: 'ignored-workspace-path',
     });
-    expect(policy.authorize('/workspace/project/.neko/logs/events.jsonl', 'read')).toMatchObject({
-      allowed: false,
-      reason: 'ignored-workspace-path',
-    });
+    expect(policy.authorize('/workspace/project/.runtime/logs/events.jsonl', 'read')).toMatchObject(
+      {
+        allowed: false,
+        reason: 'ignored-workspace-path',
+      },
+    );
   });
 
   it('rejects managed cache roots even when callers try to expose them as ordinary paths', () => {
@@ -65,11 +67,11 @@ describe('createWorkspaceFileAccessPolicy', () => {
       workspaceRoot,
     });
 
-    expect(policy.authorize('.neko/.cache/resources/documents/page.png', 'read')).toMatchObject({
+    expect(policy.authorize('.runtime/cache/resources/documents/page.png', 'read')).toMatchObject({
       allowed: false,
       reason: 'ignored-workspace-path',
     });
-    expect(policy.authorize('.neko/.cache/generated/shot.png', 'read')).toMatchObject({
+    expect(policy.authorize('.runtime/cache/generated/shot.png', 'read')).toMatchObject({
       allowed: false,
       reason: 'ignored-workspace-path',
     });

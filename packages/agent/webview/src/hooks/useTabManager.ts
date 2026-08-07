@@ -12,7 +12,7 @@ import type {
   ConversationSummary,
   TabType,
 } from '@neko/agent-contracts';
-import { AgentHostMessages } from '../messages';
+import { useAgentHostMessages } from '../host-runtime-context';
 import { isCharacterRoleTab } from '../presenters/character-role-session-presenter';
 
 export interface UseTabManagerProps {
@@ -31,8 +31,6 @@ export interface UseTabManagerProps {
   onActivateCharacterRoleTab?: (tab: OpenTab) => void;
   hasLocalConversationActivity?: (conversationId: string) => boolean;
   onConfigSnapshotRequested?: () => void;
-  tabStateRevision: number;
-  onTabStateRevisionAllocated: (revision: number) => void;
 }
 
 export interface UseTabManagerReturn {
@@ -55,29 +53,15 @@ export function useTabManager({
   onActivateCharacterRoleTab,
   hasLocalConversationActivity,
   onConfigSnapshotRequested,
-  tabStateRevision,
-  onTabStateRevisionAllocated,
 }: UseTabManagerProps): UseTabManagerReturn {
-  const optimisticTabStateRevisionRef = useRef(tabStateRevision);
+  const agentHostMessages = useAgentHostMessages();
   const activationIdRef = useRef(0);
-  optimisticTabStateRevisionRef.current = Math.max(
-    optimisticTabStateRevisionRef.current,
-    tabStateRevision,
-  );
-
-  const beginTabStateMutation = useCallback((): number => {
-    const expectedRevision = optimisticTabStateRevisionRef.current;
-    const nextRevision = expectedRevision + 1;
-    optimisticTabStateRevisionRef.current = nextRevision;
-    onTabStateRevisionAllocated(nextRevision);
-    return expectedRevision;
-  }, [onTabStateRevisionAllocated]);
 
   const persistTabState = useCallback(
     (nextOpenTabs: OpenTab[], nextActiveTabId: string | null): void => {
-      AgentHostMessages.updateTabState(nextOpenTabs, nextActiveTabId, beginTabStateMutation());
+      agentHostMessages.updateTabState(nextOpenTabs, nextActiveTabId);
     },
-    [beginTabStateMutation],
+    [agentHostMessages],
   );
 
   const activateOrdinaryConversation = useCallback(
@@ -87,16 +71,15 @@ export function useTabManager({
         activationId: activationIdRef.current,
         conversationId: tab.conversationId,
         tabId: tab.id,
-        expectedTabStateRevision: beginTabStateMutation(),
       };
       onBeforeConversationActivation?.(request);
-      AgentHostMessages.activateConversation({
+      agentHostMessages.activateConversation({
         ...request,
         tabState: { openTabs: nextOpenTabs, activeTabId: tab.id },
       });
       onConversationActivated?.(tab.conversationId);
     },
-    [beginTabStateMutation, onBeforeConversationActivation, onConversationActivated],
+    [agentHostMessages, onBeforeConversationActivation, onConversationActivated],
   );
 
   const handleOpenTab = useCallback(
@@ -156,11 +139,11 @@ export function useTabManager({
       const tabIndex = openTabs.findIndex((t) => t.id === tabId);
       const newTabs = openTabs.filter((t) => t.id !== tabId);
       if (tab.kind === 'character-dialogue') {
-        AgentHostMessages.exitCharacterDialogueSession(tab.conversationId);
+        agentHostMessages.exitCharacterDialogueSession(tab.conversationId);
       } else if (tab.kind === 'embody-character') {
-        AgentHostMessages.exitEmbodyCharacterSession(tab.conversationId);
+        agentHostMessages.exitEmbodyCharacterSession(tab.conversationId);
       } else if (shouldDeleteEmptyConversation) {
-        AgentHostMessages.deleteConversation(tab.conversationId, {
+        agentHostMessages.deleteConversation(tab.conversationId, {
           activateNext: false,
         });
       }

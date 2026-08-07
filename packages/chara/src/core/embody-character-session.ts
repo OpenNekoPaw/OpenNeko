@@ -11,7 +11,6 @@ import type {
   NpcTranscriptArtifact,
   NpcTranscriptMessage,
 } from '@neko/chara/contracts';
-import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/chara/contracts';
 import type { CharacterModelTier, CharacterToolPolicy } from './character-runtime-policy';
 import { renderCharacterEvidenceBundle, type CharacterEvidenceBundle } from './character-evidence';
 
@@ -275,7 +274,6 @@ export class EmbodyCharacterSession {
     input: { readonly createdAt?: string; readonly profileHash?: string } = {},
   ): NpcTranscriptArtifact {
     return {
-      version: NPC_TRANSCRIPT_ARTIFACT_VERSION,
       createdAt: input.createdAt ?? this.now(),
       entityRef: this.entityRef,
       mode: 'consult',

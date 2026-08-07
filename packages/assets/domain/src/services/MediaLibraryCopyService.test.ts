@@ -26,7 +26,6 @@ const sources: readonly ContentLocator[] = [
   {
     kind: 'generated-output',
     outputId: 'output-1',
-    revision: 'rev-1',
     digest: 'sha256:output',
     path: 'image.png',
   },
@@ -133,7 +132,6 @@ describe('MediaLibraryCopyService', () => {
     const generated: ContentLocator = {
       kind: 'generated-output',
       outputId: 'portrait-1',
-      revision: 'revision-1',
       digest: `sha256:${createHash('sha256').update(generatedBytes).digest('hex')}`,
       path: 'neko/generated/portrait.png',
     };

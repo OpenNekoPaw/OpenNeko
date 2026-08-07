@@ -1,112 +1,59 @@
 # OpenNeko
 
-> 本地优先、Agent 驱动的开源内容创作工作台。
+> Agent 驱动的内容创作平台
 
 [English](./README.md)
 
-[![Status](https://img.shields.io/badge/Status-Alpha-orange)]()
+![Status](https://img.shields.io/badge/Status-Alpha-orange)
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](./LICENSE)
 
-OpenNeko 面向希望自主掌控项目文件、模型接入和创作流程的创作者。它不是另一个在线模型聚合平台，而是让 Agent 在本地项目中理解上下文、调用创作能力，并把生成结果继续交给画布、媒体库、时间线和预览工具处理。
+OpenNeko 是一款桌面应用，用于管理内容，并在同一个工作区中连接 Agent、素材库与创作工具。
 
-## 核心特点
+![OpenNeko Desktop：Agent 与 Canvas 创作工作区](./docs/assets/openneko-desktop.png)
 
-- **本地项目优先**：素材、角色、项目上下文和创作结果围绕本地工作区组织。
-- **自主配置 AI 服务**：支持配置外部 API、兼容 API 和本地 API 服务，不绑定单一模型平台。
-- **Agent 驱动创作**：Agent 可以理解当前项目、规划任务、调用工具，并协助生成、分析和迭代内容。
-- **连续创作流程**：生成内容可以进入画布、媒体库和视频时间线继续编辑、预览与导出。
+使用 OpenNeko，你可以：
 
-## 当前 Desktop 能力
+- 让 Agent 理解当前项目并协助生成、分析和迭代内容；
+- 管理素材与生成结果，并在画布或视频时间线中继续处理；
+- 将项目文件保留在本地，预览、导出或交给专业工具继续创作。
 
-| 已接入表面 | 当前边界                                                 |
-| ---------- | -------------------------------------------------------- |
-| 创作 Agent | Desktop 项目对话、上下文、工具调用和受控内容生成         |
-| 画布       | 组织 Markdown、媒体、文件、分组、生成 Job 和 Canvas 引用 |
-| 视频时间线 | 轻量音视频编排、预览和 Node/FFmpeg 导出                  |
-| 媒体与实体 | 浏览工作区/全局媒体库，恢复项目连接并投影实体表现绑定    |
-| 只读预览   | 预览常用文档、图片、音视频和受支持的标准 3D 模型         |
+## 当前能力
+
+| 能力         | 你可以做什么                                           |
+| ------------ | ------------------------------------------------------ |
+| 创作 Agent   | 基于项目上下文对话、规划任务、调用工具和生成内容       |
+| 工具与 API   | 配置云端或本地 AI API，并让 Agent 使用已支持的本地工具 |
+| Skill 与扩展 | 管理个人 Skill 和 OpenNeko 扩展                        |
+| 素材库与画布 | 组织素材、文档、生成结果和创作结构                     |
+| 视频时间线   | 编排、预览并导出轻量音视频项目                         |
+| 内容预览     | 查看常用文档、图片、音视频和受支持的 3D 模型           |
 
 可用的生成与理解能力取决于你配置的 API、模型权限和本地服务。
 
-项目文件只保存可移植的媒体引用，不保存本机媒体库目标。同步或克隆到另一台机器后，Desktop
-会显示缺失的项目媒体库并要求显式恢复连接；普通同步不会复制外部媒体字节。需要完整移交时，可
-创建只收集项目实际引用媒体的独立便携快照。全局资源中心与项目资源管理器保持独立状态。
-
-仓库还保留 Chara、Search 和 Quality 等领域包，但它们尚未全部形成 Desktop 产品路径；原媒体比较
-Tools 子包已经退役。角色项目、Interactive World、专业工具接入和独立素材比较界面当前必须视为 unavailable
-或规划中能力，不能仅因子包存在而视为已经可用。
-
 ## 当前状态
 
-OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。Desktop 基础、Agent、媒体库、Canvas、Cut 和 Preview 已建立真实组合路径，但 Phase 1 完整创作闭环尚未完成，当前不是受支持的发布产品。安装、升级、兼容性、界面和项目格式仍可能变化。Electron Desktop 是唯一产品宿主；Agent、模型、Skill 和工作流验证也以 Desktop 组合边界为准。
+- **Alpha**：目前以源码体验和产品验证为主，界面与项目格式仍可能变化。
+- **平台**：当前只支持 Apple Silicon macOS；预览版尚未进行 Developer ID 签名和 Apple 公证。
+- **产品重点**：优先服务通用的 AI 辅助内容创作者；Character 与 Interactive World 仍是实验方向。
+- **开发中**：完整端到端创作闭环、稳定发布通道和专业工具集成尚未完成。
 
 ## 从源码开始
 
-要求 Node.js 24+ 和 pnpm 10；仓库开发工具链固定为 Node.js 24.18.0 LTS。
-
-Desktop 原生打包/发布目标仅限：
-
-| 系统  | 架构  | 当前 Desktop 资格                                      |
-| ----- | ----- | ------------------------------------------------------ |
-| macOS | ARM64 | Forge DMG 已验证；支持 ad-hoc GitHub 预发布             |
-
-Windows x64 与 Linux 只运行 typecheck、orchestration、SQLite 和 host-neutral CI，不调用
-Forge、不生成 Desktop artifact。Intel Mac 与其他架构不支持。
+需要 Apple Silicon macOS、Node.js 24.18.0 LTS 和 pnpm 10.29.2。
 
 ```bash
+corepack enable
 pnpm install
 pnpm build
 pnpm dev:desktop
 ```
 
-`pnpm build`、`pnpm dev:desktop`、`pnpm package:desktop` 和 `pnpm make:desktop` 只允许在
-Apple Silicon macOS 运行；Windows/Linux 使用 CI platform-test 或
-`pnpm check:static-build` 做确定性验证。
-
-常用验证命令：
-
-```bash
-pnpm test
-pnpm check
-pnpm gate:local
-```
-
-## 开发与发布
-
-除 `main` 外的非空分支名都属于开发分支，普通开发分支 push 不自动运行 GitHub Actions；提交前使用 `pnpm gate:local`，需要 GitHub runner 证据时从 Actions 手动运行 CI。`main` 是唯一发布分支，只接受开发分支到 `main` 的 Pull Request；`Merge Gate` 必须完成完整源码检查。
-
-macOS Preview Release workflow 只接受 `main` 历史上的稳定 `v<semver>` tag；tag 是公开版本的唯一
-权威，无需匹配本地 Desktop manifest 版本。Runner 仅在临时 checkout 中把 tag 版本投影给
-Forge；严格验证 ad-hoc 签名与 DMG 完整性后，只把一个 Apple Silicon DMG 和
-`SHASUMS256.txt` 发布为 GitHub prerelease。当前预览不需要 Apple 凭据，也没有 Developer ID
-签名或 Apple 公证；macOS 可能需要在“系统设置 → 隐私与安全性”中选择“仍要打开”。正常通过
-Gatekeeper 的稳定发布通道仍属于后续发布资格工作。
-
-## 项目入口
-
-- [OpenNeko Desktop](./apps/neko-desktop/)：图形化创作、编辑、预览与 Agent 协作的唯一应用组合根。
-
-## 仓库结构
-
-- `apps/neko-desktop`：唯一 Electron 应用组合根，只拥有宿主生命周期、typed IPC、安全边界和产品 shell。
-- `packages/<family>/<role>`：具有独立依赖闭包的领域家族，例如 `packages/agent/runtime`、`packages/assets/webview`。
-- `packages/<name>`：单一依赖闭包的 package，例如 `packages/media`、`packages/shared`、`packages/ui`。
-- `quality/`：package role、测试 ownership 和债务台账等机器可读治理输入，不是运行时 package。
-- `openspec/changes/`：仍在设计或实施中的变更。
-
-所有内部 package 统一使用 `@neko/*` scope。分组 package 使用
-`@neko/<family>-<role>`，单体 package 使用 `@neko/<name>`；不得通过旧 scope、目录 alias
-或直接导入 `packages/**/src` 绕过 public exports。完整规则见
-[Package 角色与命名](./docs/architecture/package-taxonomy.md)和
-[Package 边界](./docs/architecture/package-boundaries.md)。
-
-## 文档与参与
+## 了解更多
 
 - [文档导航](./docs/README.md)
 - [Desktop 开发路线图](./ROADMAP_CN.md)
 - [参与开发](./CONTRIBUTING_CN.md)
-- [进行中的产品与功能变更](./openspec/changes/)
-- [仓库开发规则](./AGENTS.md)
+- [系统架构](./docs/architecture/README.md)
 
 欢迎提交真实创作场景、可复现问题、Skill、模型接入、创作能力、测试和文档改进。
 

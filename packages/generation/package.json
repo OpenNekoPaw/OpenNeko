@@ -2,7 +2,6 @@
   "name": "@neko/generation",
   "description": "Host-neutral generation contracts and recoverable domain Job lifecycle for OpenNeko",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

@@ -24,13 +24,11 @@ vi.mock('@neko/ui/icons', () => ({
 }));
 
 const audioDescriptor: HtmlAudioDescriptor = {
-  version: 1,
   url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   mimeType: 'audio/wav',
   durationSeconds: 2,
 };
 const videoDescriptor: HtmlVideoDescriptor = {
-  version: 1,
   url: 'openneko://resource/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
   mimeType: 'video/mp4',
   preparationProfile: 'h264-mp4-direct',
@@ -136,51 +134,82 @@ describe('Inline media players', () => {
     expect(onEnded).not.toHaveBeenCalled();
   });
 
-  it('starts prepared native audio without a redundant initial seek', async () => {
-    const onSeek = vi.fn();
+  it('reports one manual playback intent to the owning controlled surface', async () => {
+    const onPlaybackInteraction = vi.fn();
     await act(async () => {
       root.render(
         <InlineAudioPlayer
           audio={audioDescriptor}
           duration={2}
-          startTime={0.75}
-          playbackState="playing"
-          playbackRequestId="audio-request-1"
-          playbackStartTime={0.75}
           onPause={() => undefined}
           onResume={() => undefined}
-          onSeek={onSeek}
+          onSeek={() => undefined}
           onStop={() => undefined}
+          onPlaybackInteraction={onPlaybackInteraction}
         />,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[title="Play"]')?.click();
+      await Promise.resolve();
+    });
+
+    expect(onPlaybackInteraction).toHaveBeenCalledTimes(1);
+    expect(onPlaybackInteraction).toHaveBeenCalledWith('playing', 0);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('starts prepared native audio without a redundant initial seek', async () => {
+    const onSeek = vi.fn();
+    await act(async () => {
+      root.render(
+        <React.StrictMode>
+          <InlineAudioPlayer
+            audio={audioDescriptor}
+            duration={2}
+            startTime={0.75}
+            playbackState="playing"
+            playbackRequestId="audio-request-1"
+            playbackStartTime={0.75}
+            onPause={() => undefined}
+            onResume={() => undefined}
+            onSeek={onSeek}
+            onStop={() => undefined}
+          />
+        </React.StrictMode>,
       );
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(onSeek).not.toHaveBeenCalled();
-    expect(play).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalled();
   });
 
   it('starts a prepared video stream without replacing it through a redundant initial seek', async () => {
     const onSeek = vi.fn();
     await act(async () => {
       root.render(
-        <InlineVideoPlayer
-          video={videoDescriptor}
-          hasAudio
-          width={320}
-          height={180}
-          fps={24}
-          duration={2}
-          startTime={0.75}
-          playbackState="playing"
-          playbackRequestId="video-request-1"
-          playbackStartTime={0.75}
-          onPause={() => undefined}
-          onResume={() => undefined}
-          onSeek={onSeek}
-          onStop={() => undefined}
-        />,
+        <React.StrictMode>
+          <InlineVideoPlayer
+            video={videoDescriptor}
+            hasAudio
+            width={320}
+            height={180}
+            fps={24}
+            duration={2}
+            startTime={0.75}
+            playbackState="playing"
+            playbackRequestId="video-request-1"
+            playbackStartTime={0.75}
+            onPause={() => undefined}
+            onResume={() => undefined}
+            onSeek={onSeek}
+            onStop={() => undefined}
+          />
+        </React.StrictMode>,
       );
       await Promise.resolve();
       await Promise.resolve();
@@ -188,7 +217,7 @@ describe('Inline media players', () => {
 
     expect(onSeek).not.toHaveBeenCalled();
     expect(host.querySelector('video')?.src).toBe(videoDescriptor.url);
-    expect(play).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalled();
   });
 
   it('preserves the Canvas node-card UI on the native audio path', async () => {

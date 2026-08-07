@@ -3,30 +3,15 @@ import type { AgentHostToWebviewMessage } from '@neko/agent-contracts';
 import { configHandlers } from '../config-handlers';
 import type { MessageHandlerContext } from '../types';
 import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
+import { createTestAgentHostMessageSender } from '../../test-utils/agent-host-messages';
 
 const messageMocks = vi.hoisted(() => ({
   updateSettingsMessage: vi.fn(),
 }));
 
-vi.mock('../../messages', () => ({
-  AgentHostMessages: {
-    updateSettings: messageMocks.updateSettingsMessage,
-  },
-}));
-
 describe('configHandlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('treats configChanged as a deprecated no-op', () => {
-    const context = createContext();
-
-    dispatch({ type: 'configChanged' }, context);
-
-    expect(context.requestConfigSnapshot).not.toHaveBeenCalled();
-    expect(context.setGlobalError).not.toHaveBeenCalled();
-    expect(context.setSettings).not.toHaveBeenCalled();
   });
 
   it('projects safe settings diagnostics into state and global error', () => {
@@ -113,13 +98,13 @@ describe('configHandlers', () => {
         conversationId: 'conversation-1',
         providers: [],
         selectedProviderId: 'deepseek-chat',
-        selectedModelId: 'deepseek-v4-pro',
+        selectedModelId: 'deepseek-pro',
         chatModelOptions: [
           {
-            id: 'deepseek-chat:deepseek-v4-pro',
+            id: 'deepseek-chat:deepseek-pro',
             label: 'DeepSeek V4 Pro',
             providerId: 'deepseek-chat',
-            modelId: 'deepseek-v4-pro',
+            modelId: 'deepseek-pro',
             category: 'llm',
           },
           {
@@ -137,13 +122,13 @@ describe('configHandlers', () => {
     expect(context.hydrateConversationSettings).toHaveBeenCalledWith(
       'conversation-1',
       expect.objectContaining({
-        selectedModel: 'deepseek-chat:deepseek-v4-pro',
-        availableModelIds: ['deepseek-chat:deepseek-v4-pro', 'configured-gateway:gpt-5.5'],
+        selectedModel: 'deepseek-chat:deepseek-pro',
+        availableModelIds: ['deepseek-chat:deepseek-pro', 'configured-gateway:gpt-5.5'],
         defaultMediaModels: {},
         executionMode: 'ask',
         settingsPatch: expect.objectContaining({
           selectedProviderId: 'deepseek-chat',
-          selectedModelId: 'deepseek-v4-pro',
+          selectedModelId: 'deepseek-pro',
         }),
       }),
     );
@@ -244,7 +229,7 @@ describe('configHandlers', () => {
             code: 'missingConfig',
             filePath: '/home/user/.neko/config.toml',
             message:
-              'Agent configuration file is missing: /home/user/.neko/config.toml. Create the config file with at least one enabled provider, chat model, and required provider credentials, then open a new Agent session or tab.',
+              'Agent configuration file is missing: /home/user/.neko/config.toml. Create the config file with at least one enabled provider and chat model, then open a new Agent session or tab.',
           },
         },
       },
@@ -265,6 +250,9 @@ function dispatch(message: AgentHostToWebviewMessage, context: MessageHandlerCon
 
 function createContext(): MessageHandlerContext {
   return {
+    agentHostMessages: createTestAgentHostMessageSender({
+      updateSettings: messageMocks.updateSettingsMessage,
+    }),
     messages: [],
     isThinking: false,
     streamingMessageId: null,

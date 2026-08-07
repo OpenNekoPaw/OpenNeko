@@ -32,7 +32,6 @@ export interface AgentCapabilityContributionSummary {
 
 export interface AgentCapabilityProviderAvailabilitySummary {
   readonly providerId: string;
-  readonly version?: string;
   readonly loaded: readonly AgentCapabilityContributionSummary[];
   readonly skipped: readonly AgentCapabilityAvailabilityDiagnostic[];
 }

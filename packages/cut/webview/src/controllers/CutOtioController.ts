@@ -36,7 +36,6 @@ export interface CutOtioControllerEvents {
 interface CutIdentity {
   readonly documentUri: string;
   readonly sessionId: string;
-  readonly expectedRevision: number;
 }
 
 interface CutMutationIdentity extends CutIdentity {
@@ -90,24 +89,25 @@ export type CutWebviewIntent =
   | ({
       readonly type: 'cut:preview-start';
       readonly timelineTimeSeconds: number;
-      readonly generation: number;
+      readonly previewRequestId: string;
       readonly retainedVideoClipId?: string;
       readonly playbackMode: 'playing' | 'paused';
     } & CutIdentity)
   | ({
       readonly type: 'cut:preview-prepare';
       readonly timelineTimeSeconds: number;
-      readonly generation: number;
+      readonly previewRequestId: string;
     } & CutIdentity)
-  | ({ readonly type: 'cut:preview-activate'; readonly generation: number } & CutIdentity)
+  | ({ readonly type: 'cut:preview-activate'; readonly previewRequestId: string } & CutIdentity)
   | ({
       readonly type: 'cut:preview-pause';
-      readonly generation: number;
-      readonly preparedGeneration?: number;
+      readonly previewRequestId: string;
+      readonly preparedRequestId?: string;
     } & CutIdentity)
-  | ({ readonly type: 'cut:preview-stop'; readonly generation: number } & CutIdentity)
+  | ({ readonly type: 'cut:preview-stop'; readonly previewRequestId: string } & CutIdentity)
   | ({
       readonly type: 'cut:request-representations';
+      readonly requestId: string;
       readonly requests: readonly CutClipRepresentationRequest[];
     } & CutIdentity)
   | ({ readonly type: 'cut:export-query' } & CutIdentity)
@@ -119,7 +119,7 @@ type CutMutationFactory = (identity: CutMutationIdentity) => CutMutationIntent;
 
 export interface CutPreviewReadyMessage extends Record<string, unknown> {
   readonly type: 'cut:preview-ready';
-  readonly generation: number;
+  readonly previewRequestId: string;
   readonly videoClipId?: string;
   readonly timelineTimeSeconds: number;
   readonly segmentEndSeconds: number;
@@ -154,11 +154,14 @@ export class CutOtioController {
   private sequenceTrimMutationId?: string;
   private deferredPreview?: {
     readonly timelineTimeSeconds: number;
-    readonly generation: number;
+    readonly previewRequestId: string;
     readonly retainedVideoClipId?: string;
     readonly playbackMode: 'playing' | 'paused';
   };
-  private previewGeneration = 0;
+  private previewRequestSequence = 0;
+  private currentPreviewRequestId: string | undefined;
+  private representationRequestSequence = 0;
+  private currentRepresentationRequestId: string | undefined;
   private acceptedPresentation?: CutHostPresentationState;
 
   constructor(
@@ -307,81 +310,83 @@ export class CutOtioController {
     timelineTimeSeconds: number,
     retainedVideoClipId?: string,
     playbackMode: 'playing' | 'paused' = 'playing',
-  ): number {
-    const generation = ++this.previewGeneration;
+  ): string {
+    const previewRequestId = this.createPreviewRequestId();
     if (this.inFlightMutationId || this.mutationQueue.length > 0) {
       this.deferredPreview = {
         timelineTimeSeconds,
-        generation,
+        previewRequestId,
         ...(retainedVideoClipId ? { retainedVideoClipId } : {}),
         playbackMode,
       };
       if (playbackMode === 'playing') this.store.setState({ isPlaying: true });
-      return generation;
+      return previewRequestId;
     }
     this.bridge.postMessage({
       type: 'cut:preview-start',
       ...this.identity(),
       timelineTimeSeconds,
-      generation,
+      previewRequestId,
       ...(retainedVideoClipId ? { retainedVideoClipId } : {}),
       playbackMode,
     });
-    return generation;
+    return previewRequestId;
   }
 
-  preparePreview(timelineTimeSeconds: number): number {
+  preparePreview(timelineTimeSeconds: number): string {
     if (this.inFlightMutationId || this.mutationQueue.length > 0) {
       throw new Error('Cannot prepare Cut preview while a document mutation is pending.');
     }
-    const generation = ++this.previewGeneration;
+    const previewRequestId = this.createPreviewRequestId();
     this.bridge.postMessage({
       type: 'cut:preview-prepare',
       ...this.identity(),
       timelineTimeSeconds,
-      generation,
+      previewRequestId,
     });
-    return generation;
+    return previewRequestId;
   }
 
-  activatePreview(generation: number): void {
-    if (generation !== this.previewGeneration) {
-      throw new Error(
-        `Cannot activate stale Cut preview generation ${generation}; current generation is ${this.previewGeneration}.`,
-      );
+  activatePreview(previewRequestId: string): void {
+    if (previewRequestId !== this.currentPreviewRequestId) {
+      throw new Error(`Cannot activate non-current Cut preview request ${previewRequestId}.`);
     }
     this.bridge.postMessage({
       type: 'cut:preview-activate',
       ...this.identity(),
-      generation,
+      previewRequestId,
     });
   }
 
-  pausePreview(preparedGeneration?: number): number {
-    const generation = ++this.previewGeneration;
+  pausePreview(preparedRequestId?: string): string {
+    const previewRequestId = this.createPreviewRequestId();
     this.deferredPreview = undefined;
-    if (this.inFlightMutationId || this.mutationQueue.length > 0) return generation;
+    if (this.inFlightMutationId || this.mutationQueue.length > 0) return previewRequestId;
     this.bridge.postMessage({
       type: 'cut:preview-pause',
       ...this.identity(),
-      generation,
-      ...(preparedGeneration !== undefined ? { preparedGeneration } : {}),
+      previewRequestId,
+      ...(preparedRequestId !== undefined ? { preparedRequestId } : {}),
     });
-    return generation;
+    return previewRequestId;
   }
 
-  stopPreview(): number {
-    const generation = ++this.previewGeneration;
+  stopPreview(): string {
+    const previewRequestId = this.createPreviewRequestId();
     this.deferredPreview = undefined;
-    if (this.inFlightMutationId || this.mutationQueue.length > 0) return generation;
-    this.bridge.postMessage({ type: 'cut:preview-stop', ...this.identity(), generation });
-    return generation;
+    if (this.inFlightMutationId || this.mutationQueue.length > 0) return previewRequestId;
+    this.bridge.postMessage({ type: 'cut:preview-stop', ...this.identity(), previewRequestId });
+    return previewRequestId;
   }
 
   requestRepresentations(requests: readonly CutClipRepresentationRequest[]): void {
+    const identity = this.identity();
+    const requestId = `${identity.sessionId}:representation:${++this.representationRequestSequence}`;
+    this.currentRepresentationRequestId = requestId;
     this.bridge.postMessage({
       type: 'cut:request-representations',
-      ...this.identity(),
+      ...identity,
+      requestId,
       requests,
     });
   }
@@ -410,6 +415,10 @@ export class CutOtioController {
       this.acceptView(value['view']);
       this.store.setState({
         dirty: value['dirty'],
+        playheadSeconds: Math.min(
+          presentation.playheadSeconds,
+          this.store.getState().view?.durationSeconds ?? 0,
+        ),
         previewVolume: presentation.previewVolume,
         previewMuted: presentation.previewMuted,
         pixelsPerSecond: presentation.pixelsPerSecond,
@@ -442,10 +451,9 @@ export class CutOtioController {
     if (
       value['type'] === 'cut:mutation-result' &&
       typeof value['clientMutationId'] === 'string' &&
-      typeof value['succeeded'] === 'boolean' &&
-      typeof value['revision'] === 'number'
+      typeof value['succeeded'] === 'boolean'
     ) {
-      this.acceptMutationResult(value['clientMutationId'], value['succeeded'], value['revision']);
+      this.acceptMutationResult(value['clientMutationId'], value['succeeded']);
       return true;
     }
     if (value['type'] === 'cut:export-tasks' && Array.isArray(value['tasks'])) {
@@ -510,6 +518,13 @@ export class CutOtioController {
     this.dispatchNextMutation();
   }
 
+  private createPreviewRequestId(): string {
+    const sessionId = this.identity().sessionId;
+    const requestId = `${sessionId}:preview:${++this.previewRequestSequence}`;
+    this.currentPreviewRequestId = requestId;
+    return requestId;
+  }
+
   private dispatchNextMutation(): void {
     if (this.inFlightMutationId) return;
     const factory = this.mutationQueue.shift();
@@ -523,20 +538,9 @@ export class CutOtioController {
     this.bridge.postMessage(factory({ ...current, clientMutationId }));
   }
 
-  private acceptMutationResult(
-    clientMutationId: string,
-    succeeded: boolean,
-    revision: number,
-  ): void {
+  private acceptMutationResult(clientMutationId: string, succeeded: boolean): void {
     if (clientMutationId !== this.inFlightMutationId) {
       throw new Error(`Unexpected Cut mutation result: ${clientMutationId}.`);
-    }
-    const current = this.store.getState().view;
-    if (!current) throw new Error('Cut TimelineView is unavailable.');
-    if (succeeded && current.revision !== revision) {
-      throw new Error(
-        `Cut mutation ${clientMutationId} completed at revision ${revision} before its projection was accepted.`,
-      );
     }
     this.inFlightMutationId = undefined;
     if (!succeeded) {
@@ -566,7 +570,7 @@ export class CutOtioController {
       type: 'cut:preview-start',
       ...this.identity(),
       timelineTimeSeconds: deferred.timelineTimeSeconds,
-      generation: deferred.generation,
+      previewRequestId: deferred.previewRequestId,
       ...(deferred.retainedVideoClipId
         ? { retainedVideoClipId: deferred.retainedVideoClipId }
         : {}),
@@ -580,7 +584,8 @@ export class CutOtioController {
       !currentView ||
       message['documentUri'] !== currentView.documentUri ||
       message['sessionId'] !== currentView.sessionId ||
-      message['revision'] !== currentView.revision
+      typeof message['requestId'] !== 'string' ||
+      message['requestId'] !== this.currentRepresentationRequestId
     ) {
       return true;
     }
@@ -591,7 +596,7 @@ export class CutOtioController {
     this.store.setState((state) => {
       const representations = new Map(state.representations);
       for (const result of results) {
-        representations.set(representationKey(currentView.revision, result), result);
+        representations.set(representationKey(result), result);
       }
       return { representations: pruneRepresentationCache(representations) };
     });
@@ -604,7 +609,6 @@ export class CutOtioController {
     return {
       documentUri: view.documentUri,
       sessionId: view.sessionId,
-      expectedRevision: view.revision,
     };
   }
 }
@@ -614,6 +618,7 @@ function sameCutHostPresentation(
   right: CutHostPresentationState,
 ): boolean {
   return (
+    left.playheadSeconds === right.playheadSeconds &&
     left.previewVolume === right.previewVolume &&
     left.previewMuted === right.previewMuted &&
     left.pixelsPerSecond === right.pixelsPerSecond &&
@@ -661,7 +666,7 @@ function retainRepresentations(
     const previousClip = findClipProjection(previous, result.clipId);
     const nextClip = findClipProjection(next, result.clipId);
     if (!previousClip || !nextClip || !sameRepresentationInput(previousClip, nextClip)) continue;
-    retained.set(representationKey(next.revision, result), result);
+    retained.set(representationKey(result), result);
   }
   return retained;
 }
@@ -778,7 +783,6 @@ function isTimelineView(value: unknown): value is TimelineView {
     isRecord(value) &&
     typeof value['documentUri'] === 'string' &&
     typeof value['sessionId'] === 'string' &&
-    typeof value['revision'] === 'number' &&
     typeof value['name'] === 'string' &&
     typeof value['durationSeconds'] === 'number' &&
     Array.isArray(value['tracks'])
@@ -788,7 +792,7 @@ function isTimelineView(value: unknown): value is TimelineView {
 function isPreviewReadyMessage(value: Record<string, unknown>): value is CutPreviewReadyMessage {
   return (
     value['type'] === 'cut:preview-ready' &&
-    typeof value['generation'] === 'number' &&
+    typeof value['previewRequestId'] === 'string' &&
     (value['videoClipId'] === undefined || typeof value['videoClipId'] === 'string') &&
     typeof value['timelineTimeSeconds'] === 'number' &&
     typeof value['segmentEndSeconds'] === 'number' &&
@@ -847,7 +851,6 @@ function isPositiveFinite(value: unknown): value is number {
 function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor {
   return (
     isRecord(value) &&
-    value['version'] === 1 &&
     isCutMediaUrl(value['url']) &&
     typeof value['mimeType'] === 'string' &&
     typeof value['preparationProfile'] === 'string' &&
@@ -859,9 +862,7 @@ function isHtmlVideoDescriptor(value: unknown): value is CutHtmlVideoDescriptor 
 function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
   return (
     isRecord(value) &&
-    value['version'] === 1 &&
     isCutMediaUrl(value['streamUrl']) &&
-    value['protocol'] === 'neko-pcm-f32le-v1' &&
     typeof value['sampleRate'] === 'number' &&
     typeof value['channels'] === 'number'
   );
@@ -891,7 +892,7 @@ function isExportTaskSnapshot(value: unknown): value is CutExportTaskSnapshot {
     typeof value['jobId'] === 'string' &&
     typeof value['documentUri'] === 'string' &&
     typeof value['sessionId'] === 'string' &&
-    typeof value['sourceRevision'] === 'number' &&
+    typeof value['sourceSnapshotId'] === 'string' &&
     isExportSettings(value['settings']) &&
     typeof value['outputWorkspaceRelativePath'] === 'string' &&
     (value['status'] === 'running' ||

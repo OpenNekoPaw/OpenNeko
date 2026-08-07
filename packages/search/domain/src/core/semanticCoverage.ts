@@ -13,7 +13,6 @@ import { type ContributionDiagnostic } from '../contracts';
 export interface ProjectSemanticCoverageAggregationInput {
   readonly query: ProjectSemanticCoverageQuery;
   readonly context: ProjectSearchQueryContext;
-  readonly generation: number;
   readonly providerResults: readonly PromiseSettledResult<ProjectSemanticCoverageResult>[];
   readonly providerIds: readonly string[];
 }
@@ -58,7 +57,6 @@ export function aggregateProjectSemanticCoverage(
               },
             ],
       ...(input.context.projectRoot ? { projectRoot: input.context.projectRoot } : {}),
-      generation: input.generation,
     };
   }
 
@@ -83,7 +81,6 @@ export function aggregateProjectSemanticCoverage(
     ...(mergedDiagnostics.length > 0 ? { diagnostics: mergedDiagnostics } : {}),
     ...(provider ? { provider } : {}),
     ...(input.context.projectRoot ? { projectRoot: input.context.projectRoot } : {}),
-    generation: input.generation,
   };
 }
 
@@ -124,18 +121,11 @@ function mergeProviderMetadata(
   if (present.length === 1) return present[0];
   return {
     providerId: uniqueStrings(present.map((provider) => provider.providerId)).join('+'),
-    modelVersion: uniqueStrings(compact(present.map((provider) => provider.modelVersion))).join(
+    model: uniqueStrings(compact(present.map((provider) => provider.model))).join('+'),
+    sourceIdentity: uniqueStrings(compact(present.map((provider) => provider.sourceIdentity))).join(
       '+',
     ),
-    chunkingVersion: uniqueStrings(
-      compact(present.map((provider) => provider.chunkingVersion)),
-    ).join('+'),
-    indexVersion: uniqueStrings(compact(present.map((provider) => provider.indexVersion))).join(
-      '+',
-    ),
-    schemaVersion: uniqueStrings(compact(present.map((provider) => provider.schemaVersion))).join(
-      '+',
-    ),
+    skillId: uniqueStrings(compact(present.map((provider) => provider.skillId))).join('+'),
   };
 }
 

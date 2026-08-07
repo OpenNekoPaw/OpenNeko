@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   collectSkillProfileReferences,
   toAgentProfileCatalogPackage,
-  toProviderExpressionProfile,
   validateAgentProfileDescriptorSet,
   validateArtifactProfileDescriptor,
   validateGenericTable,
@@ -14,11 +13,10 @@ import {
 } from '..';
 
 describe('Agent profile shared contracts', () => {
-  it('validates Agent profile identity, kind, source, version, and duplicates', () => {
-    const valid: AgentProfileIdentity<'artifact', string> = {
+  it('validates Agent profile identity, kind, source, and duplicates', () => {
+    const valid: AgentProfileIdentity<'artifact'> = {
       profileId: 'studio.artifact.review',
       kind: 'artifact',
-      version: '1.0.0',
       source: 'package',
     };
 
@@ -35,14 +33,12 @@ describe('Agent profile shared contracts', () => {
         {
           profileId: '',
           kind: 'workflow',
-          version: '',
           source: 'shared',
         } as unknown as AgentProfileIdentity,
       ]).diagnostics.map((diagnostic) => diagnostic.code),
     ).toEqual(
       expect.arrayContaining([
         'invalid-profile-id',
-        'unsupported-profile-version',
         'invalid-profile-kind',
         'invalid-profile-source',
       ]),
@@ -54,10 +50,9 @@ describe('Agent profile shared contracts', () => {
       profileId: 'studio.shot-review',
       kind: 'artifact',
       protocol: 'GenericTable',
-      version: 1,
       source: 'package',
       columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
-      schemaRefs: [{ schemaId: 'studio.shot-review.v1', required: true }],
+      schemaRefs: [{ schemaId: 'studio.shot-review', required: true }],
       resourceConstraints: [{ constraintId: 'source-image', mediaTypes: ['image'] }],
       operationRequirements: [{ operationId: 'review', validatorId: 'shot-review' }],
     };
@@ -78,16 +73,13 @@ describe('Agent profile shared contracts', () => {
       profileId: 'skill.temp-table',
       kind: 'artifact',
       protocol: 'GenericTable',
-      version: 1,
       source: 'skill-local',
       columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
     };
     const table: GenericTable = {
-      schemaVersion: 1,
       kind: 'generic-table',
       tableId: 'temp-table',
       profile: 'skill.temp-table',
-      profileVersion: 1,
       title: 'Temporary table',
       columns: [{ columnId: 'shotId', cellType: 'string', required: true }],
       rows: [{ rowId: 'row-1', cells: { shotId: { type: 'string', value: 'shot-1' } } }],
@@ -103,12 +95,14 @@ describe('Agent profile shared contracts', () => {
     );
   });
 
-  it('normalizes ProviderCard as a provider/model expression profile', () => {
+  it('validates the canonical ProviderCard profile without compatibility conversion', () => {
     const card: ProviderCard = {
+      profileId: 'provider-expression:flux:flux-pro',
+      kind: 'provider-expression',
+      source: 'builtin',
       providerId: 'flux',
       modelId: 'flux-pro',
       displayName: 'Flux Pro',
-      version: '1.0.0',
       capabilities: ['image.generate'],
       sourceLayer: 'builtin',
       syntaxProfile: { supportsNegativePrompt: false, notes: [] },
@@ -116,17 +110,21 @@ describe('Agent profile shared contracts', () => {
       trainingProfile: { styleAffinities: { photorealistic: 3 }, antiBiasStrategies: [] },
     };
 
-    const profile = toProviderExpressionProfile(card);
-
-    expect(profile).toMatchObject({
+    expect(card).toMatchObject({
       profileId: 'provider-expression:flux:flux-pro',
       kind: 'provider-expression',
       source: 'builtin',
     });
-    expect(validateProviderExpressionProfileDescriptor(profile).ok).toBe(true);
+    expect(validateProviderExpressionProfileDescriptor(card).ok).toBe(true);
     expect(
       validateProviderExpressionProfileDescriptor({
-        ...profile,
+        ...card,
+        profileId: undefined,
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateProviderExpressionProfileDescriptor({
+        ...card,
         apiKey: 'secret',
       }).diagnostics,
     ).toEqual(
@@ -144,7 +142,6 @@ describe('Agent profile shared contracts', () => {
             profileId: 'provider-expression:studio',
             kind: 'provider-expression',
             relationship: 'prefers',
-            versionRange: '^1.0.0',
           },
         ],
         mediaWorkflow: { artifactProfiles: ['studio.shot-review'] },
@@ -154,7 +151,6 @@ describe('Agent profile shared contracts', () => {
         profileId: 'provider-expression:studio',
         kind: 'provider-expression',
         relationship: 'prefers',
-        versionRange: '^1.0.0',
       },
       {
         profileId: 'studio.shot-review',
@@ -176,15 +172,13 @@ describe('Agent profile shared contracts', () => {
           profileKinds: ['artifact', 'provider-expression'],
           profiles: [
             {
-              profileId: 'studio.storyboard.v1',
+              profileId: 'studio.storyboard',
               kind: 'artifact',
-              version: 1,
               displayName: 'Studio Storyboard',
             },
             {
               profileId: 'provider-expression:studio',
               kind: 'provider-expression',
-              version: '1.0.0',
             },
           ],
         },
@@ -198,15 +192,13 @@ describe('Agent profile shared contracts', () => {
       profileKinds: ['artifact', 'provider-expression'],
       profiles: [
         {
-          profileId: 'studio.storyboard.v1',
+          profileId: 'studio.storyboard',
           kind: 'artifact',
-          version: 1,
           displayName: 'Studio Storyboard',
         },
         {
           profileId: 'provider-expression:studio',
           kind: 'provider-expression',
-          version: '1.0.0',
         },
       ],
       runnable: false,

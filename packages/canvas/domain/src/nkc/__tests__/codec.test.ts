@@ -11,7 +11,6 @@ import type { CanvasData } from '../../types/canvas';
 // =============================================================================
 
 const VALID_CANVAS: CanvasData = {
-  version: '3.0',
   name: 'Test Canvas',
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   nodes: [
@@ -56,7 +55,7 @@ describe('loadNkc', () => {
     expect(result.data.name).toBe('Test Canvas');
   });
 
-  it('loads current-version path-only material nodes as degraded content without inferring a locator', () => {
+  it('loads path-only material nodes as degraded content without inferring a locator', () => {
     const result = loadNkc(
       JSON.stringify({
         ...VALID_CANVAS,
@@ -64,7 +63,7 @@ describe('loadNkc', () => {
           {
             ...VALID_CANVAS.nodes[0],
             data: {
-              assetPath: 'media/legacy.mp4',
+              assetPath: 'media/path-only.mp4',
               mediaType: 'video',
             },
           },
@@ -73,11 +72,10 @@ describe('loadNkc', () => {
     );
 
     expect(result.validation.valid).toBe(true);
-    expect(result.migration).toBeUndefined();
     expect(result.data.nodes[0]).toMatchObject({
       type: 'media',
       data: {
-        assetPath: 'media/legacy.mp4',
+        assetPath: 'media/path-only.mp4',
         mediaType: 'video',
       },
     });
@@ -90,7 +88,7 @@ describe('loadNkc', () => {
     );
   });
 
-  it('preserves path-only File nodes and their connections without migration', () => {
+  it('preserves path-only File nodes and their connections', () => {
     const result = loadNkc(
       JSON.stringify({
         ...VALID_CANVAS,
@@ -102,8 +100,8 @@ describe('loadNkc', () => {
             size: { width: 260, height: 180 },
             zIndex: 2,
             data: {
-              path: 'documents/legacy.md',
-              title: 'Legacy notes',
+              path: 'documents/path-only.md',
+              title: 'Path-only notes',
               mediaKind: 'document',
               mediaType: 'text/markdown',
             },
@@ -112,7 +110,7 @@ describe('loadNkc', () => {
         ],
         connections: [
           {
-            id: 'legacy-connection',
+            id: 'path-only-connection',
             sourceId: 'file-1',
             targetId: 'node-1',
             sourceEndpoint: { nodeId: 'file-1', scope: 'node' },
@@ -124,16 +122,15 @@ describe('loadNkc', () => {
     );
 
     expect(result.validation.valid).toBe(true);
-    expect(result.migration).toBeUndefined();
     expect(result.data.nodes[0]).toMatchObject({
       id: 'file-1',
-      data: { path: 'documents/legacy.md' },
+      data: { path: 'documents/path-only.md' },
     });
     expect(result.data.nodes[0]?.data).not.toHaveProperty('contentLocator');
     expect(result.data.connections).toHaveLength(1);
   });
 
-  it('keeps non-portable current-version material paths invalid', () => {
+  it('keeps non-portable material paths invalid', () => {
     const result = loadNkc(
       JSON.stringify({
         ...VALID_CANVAS,
@@ -141,7 +138,7 @@ describe('loadNkc', () => {
           {
             ...VALID_CANVAS.nodes[0],
             data: {
-              assetPath: 'https://example.test/legacy.mp4',
+              assetPath: 'https://example.test/runtime-only.mp4',
               mediaType: 'video',
             },
           },
@@ -150,7 +147,6 @@ describe('loadNkc', () => {
     );
 
     expect(result.validation.valid).toBe(false);
-    expect(result.migration).toBeUndefined();
     expect(result.validation.errors).toContainEqual(
       expect.objectContaining({
         field: 'nodes[0].data.contentLocator',
@@ -167,7 +163,7 @@ describe('loadNkc', () => {
             ...VALID_CANVAS.nodes[0],
             data: {
               ...VALID_CANVAS.nodes[0]!.data,
-              assetPath: 'http://127.0.0.1:43125/v1/resources/runtime-token',
+              assetPath: 'http://127.0.0.1:43125/resources/runtime-token',
             },
           },
         ],
@@ -211,12 +207,16 @@ describe('loadNkc', () => {
     );
   });
 
-  it('should return validation errors for missing required fields', () => {
-    const result = loadNkc(JSON.stringify({ version: '2.1' }));
+  it('keeps an invalid document local while a valid sibling remains readable', () => {
+    const invalid = loadNkc(JSON.stringify({ name: 'Incomplete', nodes: [] }));
+    const sibling = loadNkc(JSON.stringify({ ...VALID_CANVAS, name: 'Sibling' }));
 
-    expect(result.validation.valid).toBe(false);
-    expect(result.validation.errors.some((e) => e.field === 'name')).toBe(true);
-    expect(result.validation.errors.some((e) => e.field === 'nodes')).toBe(true);
+    expect(invalid.validation.valid).toBe(false);
+    expect(invalid.validation.errors).toContainEqual(
+      expect.objectContaining({ field: 'connections' }),
+    );
+    expect(sibling.validation.valid).toBe(true);
+    expect(sibling.data.name).toBe('Sibling');
   });
 });
 
@@ -244,7 +244,7 @@ describe('saveNkc', () => {
 
   it('should skip validation when validate=false', () => {
     // Invalid canvas data (missing required fields)
-    const invalidCanvas = { version: '1.0' } as unknown as CanvasData;
+    const invalidCanvas = { name: 'Incomplete' } as unknown as CanvasData;
 
     // With validation enabled, should throw
     expect(() => saveNkc(invalidCanvas)).toThrow();
@@ -255,7 +255,7 @@ describe('saveNkc', () => {
   });
 
   it('should throw on validation failure with error details', () => {
-    const invalidCanvas = { version: '1.0' } as unknown as CanvasData;
+    const invalidCanvas = { name: 'Incomplete' } as unknown as CanvasData;
 
     expect(() => saveNkc(invalidCanvas)).toThrow('NKC validation failed');
   });

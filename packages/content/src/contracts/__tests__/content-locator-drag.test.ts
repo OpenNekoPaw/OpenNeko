@@ -14,7 +14,6 @@ describe('ContentLocator drag contract', () => {
         name: 'cat.png',
       }),
     ).toEqual({
-      schemaVersion: 1,
       type: 'content-locator',
       locator: { kind: 'workspace-file', path: 'media/cat.png' },
       name: 'cat.png',
@@ -24,7 +23,6 @@ describe('ContentLocator drag contract', () => {
   it('rejects absolute paths and unknown fields', () => {
     expect(() =>
       parseContentLocatorDragData({
-        schemaVersion: 1,
         type: 'content-locator',
         locator: { kind: 'workspace-file', path: '/private/cat.png' },
         name: 'cat.png',
@@ -32,7 +30,6 @@ describe('ContentLocator drag contract', () => {
     ).toThrow('workspace-relative');
     expect(() =>
       parseContentLocatorDragData({
-        schemaVersion: 1,
         type: 'content-locator',
         locator: {
           kind: 'workspace-file',
@@ -42,5 +39,13 @@ describe('ContentLocator drag contract', () => {
         name: 'cat.png',
       }),
     ).toThrow('unsupported fields');
+    expect(() =>
+      parseContentLocatorDragData({
+        unexpectedField: 1,
+        type: 'content-locator',
+        locator: { kind: 'workspace-file', path: 'media/cat.png' },
+        name: 'cat.png',
+      }),
+    ).toThrow('shape or type');
   });
 });

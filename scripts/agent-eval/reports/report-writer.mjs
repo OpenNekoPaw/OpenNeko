@@ -48,7 +48,6 @@ export function createM1ReportDocuments(input) {
     runId: input.runId,
     outcome: input.outcome,
     target: input.suite.target,
-    repositoryRevision: input.suite.repositoryRevision,
     modelIdentity: input.modelIdentity,
     effectiveConfiguration: input.effectiveConfiguration,
     fixtureDigest: input.fixtureDigest,
@@ -199,14 +198,13 @@ export async function writeAblationDeltaReport(document, options = {}) {
 function createSanitizedSummary(input) {
   const { result } = input;
   const summary = {
-    schema: 'neko.agent-eval.summary.v2',
+    schema: 'neko.agent-eval.summary',
     reportId: result.reportId,
     suiteId: result.suiteId,
     caseId: result.caseId,
     runId: result.runId,
     outcome: result.outcome,
     target: result.target,
-    repositoryRevision: result.repositoryRevision,
     modelIdentity: result.modelIdentity,
     effectiveConfiguration: result.effectiveConfiguration,
     fixtureDigest: result.fixtureDigest,
@@ -218,7 +216,6 @@ function createSanitizedSummary(input) {
       ? {
           judge: {
             rubricId: input.judge.rubricId,
-            rubricVersion: input.judge.rubricVersion,
             providerId: input.judge.providerId,
             modelId: input.judge.modelId,
             overallScore: input.judge.overallScore,
@@ -280,6 +277,17 @@ function projectHardGateResult(gate) {
 }
 
 function summarizeFacts(facts) {
+  if (facts?.schema === 'neko.agent-eval.desktop-session-facts') {
+    const messages = Array.isArray(facts.snapshot?.messages) ? facts.snapshot.messages : [];
+    const diagnostics = Array.isArray(facts.neutralFacts?.diagnostics?.items)
+      ? facts.neutralFacts.diagnostics.items
+      : [];
+    const terminalState = facts.neutralFacts?.projection?.terminalState;
+    const fullyIdle =
+      facts.workflow?.terminalIdle?.identity !== undefined &&
+      (terminalState === 'completed' || terminalState === 'cancelled');
+    return `Observed ${messages.filter((message) => message?.role === 'user').length} turn(s), ${diagnostics.filter((diagnostic) => diagnostic?.severity === 'error').length} runtime error(s), fullyIdle=${fullyIdle}.`;
+  }
   return `Observed ${Array.isArray(facts?.turns) ? facts.turns.length : 0} turn(s), ${Array.isArray(facts?.runtimeErrors) ? facts.runtimeErrors.length : 0} runtime error(s), fullyIdle=${facts?.idle?.fullyIdle === true}.`;
 }
 
@@ -354,7 +362,7 @@ function renderQualityReport(input) {
     '',
     ...(input.judge
       ? [
-          `- Rubric: \`${input.judge.rubricId}@${input.judge.rubricVersion}\``,
+          `- Rubric: \`${input.judge.rubricId}\``,
           `- Provider / model: \`${input.judge.providerId}/${input.judge.modelId}\``,
           `- Score: \`${input.judge.overallScore.toFixed(2)}\``,
           `- Uncertainty: \`${input.judge.uncertainty.toFixed(2)}\``,

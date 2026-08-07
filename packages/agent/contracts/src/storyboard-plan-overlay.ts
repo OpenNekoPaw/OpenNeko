@@ -9,7 +9,6 @@ import type {
 } from '@neko/canvas-domain';
 import { classifyStoryboardMediaIdentity } from '@neko/canvas-domain';
 
-export const STORYBOARD_PLAN_OVERLAY_SCHEMA_VERSION = 1 as const;
 export const STORYBOARD_PLAN_OVERLAY_KIND = 'storyboard-plan-overlay' as const;
 export const ANIMATION_PLAN_OVERLAY_KIND = 'animation-plan-overlay' as const;
 
@@ -34,7 +33,7 @@ export type StoryboardPlanDiagnosticSeverity =
 
 export type StoryboardPlanDiagnosticCode =
   | 'invalid-root'
-  | 'invalid-schema-version'
+  | 'unsupported-field'
   | 'invalid-kind'
   | 'invalid-overlay-type'
   | 'missing-source-storyboard-ref'
@@ -70,7 +69,6 @@ export interface StoryboardPlanSourceRef {
   readonly title?: string;
   readonly contentLocator?: ContentLocator;
   readonly path?: string;
-  readonly version?: string;
   readonly metadata?: StoryboardSerializableRecord;
 }
 
@@ -122,7 +120,6 @@ export interface StoryboardShotPlanOverlay {
 }
 
 export interface StoryboardPlanOverlay {
-  readonly schemaVersion: typeof STORYBOARD_PLAN_OVERLAY_SCHEMA_VERSION;
   readonly kind: typeof STORYBOARD_PLAN_OVERLAY_KIND | typeof ANIMATION_PLAN_OVERLAY_KIND;
   readonly overlayType: StoryboardPlanOverlayType;
   readonly planId?: string;
@@ -219,18 +216,37 @@ export function normalizeStoryboardPlanOverlay(
     );
   }
 
-  if (
-    payload['schemaVersion'] !== undefined &&
-    payload['schemaVersion'] !== STORYBOARD_PLAN_OVERLAY_SCHEMA_VERSION
-  ) {
-    diagnostics.push(
-      storyboardPlanDiagnostic(
-        'error',
-        'invalid-schema-version',
-        ['schemaVersion'],
-        'Storyboard plan overlay schemaVersion must be 1.',
-        { expected: '1', actual: serializableDiagnosticValue(payload['schemaVersion']) },
-      ),
+  rejectUnknownFields(
+    payload,
+    new Set([
+      'kind',
+      'domainKind',
+      'overlayType',
+      'planId',
+      'title',
+      'sourceStoryboardRef',
+      'shotOverlays',
+      'diagnostics',
+      'extensions',
+    ]),
+    [],
+    diagnostics,
+  );
+  const sourceStoryboardRefRecord = readRecord(payload['sourceStoryboardRef']);
+  if (sourceStoryboardRefRecord) {
+    rejectUnknownFields(
+      sourceStoryboardRefRecord,
+      new Set([
+        'kind',
+        'artifactId',
+        'storyboardId',
+        'title',
+        'contentLocator',
+        'path',
+        'metadata',
+      ]),
+      ['sourceStoryboardRef'],
+      diagnostics,
     );
   }
 
@@ -262,7 +278,6 @@ export function normalizeStoryboardPlanOverlay(
   const normalizedKind =
     overlayType === 'AnimationPlan' ? ANIMATION_PLAN_OVERLAY_KIND : STORYBOARD_PLAN_OVERLAY_KIND;
   const overlay: StoryboardPlanOverlay = {
-    schemaVersion: STORYBOARD_PLAN_OVERLAY_SCHEMA_VERSION,
     kind: normalizedKind,
     overlayType,
     ...(readString(payload['planId']) ? { planId: readString(payload['planId']) } : {}),
@@ -400,7 +415,6 @@ function normalizeSourceStoryboardRef(value: unknown): StoryboardPlanSourceRef |
       ? { contentLocator: record['contentLocator'] }
       : {}),
     ...(readString(record['path']) ? { path: readString(record['path']) } : {}),
-    ...(readString(record['version']) ? { version: readString(record['version']) } : {}),
     ...(isSerializableRecord(record['metadata']) ? { metadata: record['metadata'] } : {}),
   };
 }
@@ -635,7 +649,7 @@ function isUnsafePersistentString(value: string): boolean {
     /^file:\/\//i.test(trimmed) ||
     /^[A-Za-z]:[\\/]/.test(trimmed) ||
     trimmed.startsWith('/') ||
-    trimmed.includes('/.neko/.cache/')
+    trimmed.split('/').some((segment) => segment.startsWith('.'))
   );
 }
 
@@ -677,6 +691,26 @@ function isRecordLike(value: unknown): value is Record<string, unknown> {
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function rejectUnknownFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+  path: readonly StoryboardPlanDiagnosticPathSegment[],
+  diagnostics: StoryboardPlanDiagnostic[],
+): void {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
+    diagnostics.push(
+      storyboardPlanDiagnostic(
+        'error',
+        'unsupported-field',
+        [...path, field],
+        `Storyboard plan overlay contains unsupported field ${field}.`,
+        { actual: serializableDiagnosticValue(value[field]) },
+      ),
+    );
+  }
 }
 
 function storyboardPlanDiagnostic(

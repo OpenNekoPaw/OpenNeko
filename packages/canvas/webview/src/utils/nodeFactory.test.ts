@@ -13,7 +13,6 @@ describe('buildCanvasNode', () => {
     const group = createNode('group', { label: 'Chapter' });
     const job = createNode('job', {
       jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-      revision: 4,
       title: 'Generate key art',
       status: 'running',
     });
@@ -47,7 +46,6 @@ describe('buildCanvasNode', () => {
       type: 'job',
       data: {
         jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-        revision: 4,
         title: 'Generate key art',
         status: 'running',
         inputRefs: [],
@@ -70,15 +68,15 @@ describe('buildCanvasNode', () => {
       contentLocator: { kind: 'workspace-file', path: 'media/voice.wav' },
       mediaType: 'audio',
       duration: Number.POSITIVE_INFINITY,
-      legacyPrompt: 'must not survive',
+      unsupportedPrompt: 'must not survive',
     });
 
     expect(node.size.height).toBe(120);
-    expect(node.data).not.toHaveProperty('legacyPrompt');
+    expect(node.data).not.toHaveProperty('unsupportedPrompt');
     expect((node.data as Record<string, unknown>).duration).toBeUndefined();
   });
 
-  it('rejects legacy node types at the authoring boundary', () => {
+  it('rejects unsupported node types at the authoring boundary', () => {
     expect(() => createNode('shot' as CanonicalCanvasNodeType, {})).toThrow(
       'Unsupported Canvas node type "shot"',
     );
@@ -86,14 +84,6 @@ describe('buildCanvasNode', () => {
 
   it('rejects unowned Job projections and source-backed nodes without sources', () => {
     expect(() => createNode('job', {})).toThrow('Canvas jobRef must contain');
-    expect(() =>
-      createNode('job', {
-        jobRef: { kind: 'generation', jobId: 'job-owned-1' },
-        revision: -1,
-        title: 'Generate key art',
-        status: 'running',
-      }),
-    ).toThrow('Canvas Job revision must be a non-negative integer');
     expect(() =>
       createNode('media', { assetPath: 'media/path-only.png', mediaType: 'image' }),
     ).toThrow('Canvas Media creation requires a canonical ContentLocator');

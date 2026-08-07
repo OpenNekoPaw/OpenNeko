@@ -16,15 +16,12 @@ export interface DesktopResourceOwner {
   readonly windowId: string;
   readonly viewId: string;
   readonly sessionId: string;
-  readonly endpointEpoch: string;
-  readonly revision: string;
-  readonly generation: string;
+  readonly rendererSessionId: string;
 }
 
 export interface DesktopAuthorizedFileSource {
   readonly absolutePath: string;
   readonly mediaType: string;
-  readonly revision: string;
 }
 
 export interface DesktopResourceLease {
@@ -36,7 +33,6 @@ export interface DesktopResourceSetEntry {
   readonly virtualPath: string;
   readonly path: string;
   readonly contentType: string;
-  readonly revision?: string;
 }
 
 interface RegisteredFileSource {
@@ -144,7 +140,6 @@ export class DesktopResourceRegistry {
         await registerFileSource({
           absolutePath: entry.path,
           mediaType: entry.contentType,
-          revision: entry.revision ?? base.owner.revision,
         }),
       );
     }
@@ -165,28 +160,18 @@ export class DesktopResourceRegistry {
     );
   }
 
-  createMediaPublisher(owner: Omit<DesktopResourceOwner, 'generation'>): NodeMediaPublisher {
+  createMediaPublisher(owner: DesktopResourceOwner): NodeMediaPublisher {
     this.requireActive();
     assertPartialOwner(owner);
     const publisherId = this.nextPublisherId;
     this.nextPublisherId += 1;
-    let nextGeneration = 1;
-    const scopedOwner = (): DesktopResourceOwner => {
-      const result = {
-        ...owner,
-        generation: String(nextGeneration),
-      };
-      nextGeneration += 1;
-      return result;
-    };
     return {
-      registerFile: async (absolutePath, mediaType, revision) => {
+      registerFile: async (absolutePath, mediaType) => {
         const registration = await this.createFileRegistration(
-          scopedOwner(),
+          owner,
           {
             absolutePath,
             mediaType,
-            revision: revision ?? owner.revision,
           },
           publisherId,
         );
@@ -194,7 +179,7 @@ export class DesktopResourceRegistry {
         return this.createPublishedFile(registration);
       },
       registerPcm: async (createStream): Promise<RegisteredPcmStream> => {
-        const base = this.createBase(scopedOwner(), publisherId);
+        const base = this.createBase(owner, publisherId);
         const registration: PcmRegistration = {
           ...base,
           kind: 'pcm',
@@ -276,23 +261,6 @@ export class DesktopResourceRegistry {
 
   releaseSession(sessionId: string): void {
     this.releaseWhere((record) => record.owner.sessionId === sessionId);
-  }
-
-  releaseGeneration(
-    owner: Pick<
-      DesktopResourceOwner,
-      'windowId' | 'viewId' | 'sessionId' | 'endpointEpoch' | 'generation'
-    >,
-  ): void {
-    assertPartialOwner(owner);
-    this.releaseWhere(
-      (record) =>
-        record.owner.windowId === owner.windowId &&
-        record.owner.viewId === owner.viewId &&
-        record.owner.sessionId === owner.sessionId &&
-        record.owner.endpointEpoch === owner.endpointEpoch &&
-        record.owner.generation === owner.generation,
-    );
   }
 
   releaseView(windowId: string, viewId: string): void {
@@ -537,7 +505,6 @@ export function registerDesktopResourceRequestAuthorization(
 async function registerFileSource(
   source: DesktopAuthorizedFileSource,
 ): Promise<RegisteredFileSource> {
-  requireIdentity(source.revision, 'revision');
   if (!isAbsolute(source.absolutePath)) {
     throw new Error('Desktop resource registration requires an absolute file path.');
   }

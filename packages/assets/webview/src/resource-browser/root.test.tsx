@@ -5,23 +5,23 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CONTENT_LOCATOR_DRAG_MIME } from '@neko/content';
 import {
-  RESOURCE_BROWSER_CONTRACT_VERSION,
   type ResourceBrowserHostRuntime,
+  type ResourceBrowserProjectionEvent,
   type ResourceBrowserProjection,
 } from '@neko/assets-domain/resource-browser/contract';
 import { ResourceBrowserRoot } from './root';
+import { ResourceBrowserPresentationSnapshotProvider } from './presentation-snapshot-context';
+import { createResourceBrowserPresentationSnapshotStore } from './presentation-snapshot';
 
 const projection: ResourceBrowserProjection = {
-  schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
   identity: {
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     windowId: 'window-1',
     viewId: 'resource-view-1',
-    viewEpoch: 1,
-    endpointEpoch: 'endpoint-1',
+    viewInstanceId: 'view-instance-1',
+    rendererSessionId: 'endpoint-1',
   },
-  revision: 0,
   facet: 'media',
   query: '',
   items: [
@@ -35,7 +35,7 @@ const projection: ResourceBrowserProjection = {
       locator: { kind: 'workspace-file', path: 'assets/cat.png' },
       thumbnail: {
         descriptorId: 'thumbnail-cat',
-        revision: '1',
+        sourceFingerprint: '1',
         mediaType: 'image',
       },
       capabilities: ['preview', 'reveal', 'add-to-canvas'],
@@ -48,6 +48,224 @@ describe('ResourceBrowserRoot', () => {
     vi.unstubAllGlobals();
   });
 
+  it('defaults Workspace resources to list view', async () => {
+    render(<ResourceBrowserRoot runtime={createRuntime()} locale="en" />);
+
+    await screen.findByText('cat.png');
+    expect(screen.getByRole('button', { name: 'List view' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(
+      document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),
+    ).toBe('list');
+  }, 15_000);
+
+  it('does not create a presentation snapshot for the default reconstructable page', async () => {
+    const defaultProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'files',
+      items: [],
+    };
+    const store = createResourceBrowserPresentationSnapshotStore();
+    render(
+      <ResourceBrowserPresentationSnapshotProvider store={store}>
+        <ResourceBrowserRoot runtime={createRuntime(defaultProjection)} locale="en" />
+      </ResourceBrowserPresentationSnapshotProvider>,
+    );
+
+    await screen.findByText('No matching resources');
+    await waitFor(() => expect(store.read(defaultProjection.identity)).toBeUndefined());
+  });
+
+  it('contains invalid runtime data inside the Resource Browser surface', async () => {
+    const runtime: ResourceBrowserHostRuntime = {
+      ...createRuntime(),
+      getSnapshot: vi.fn(async () => {
+        throw new Error('Resource snapshot is invalid.');
+      }),
+    };
+
+    render(
+      <>
+        <div>Canvas remains available</div>
+        <ResourceBrowserRoot runtime={runtime} locale="en" />
+      </>,
+    );
+
+    expect(await screen.findByText('Resource Browser unavailable')).toBeTruthy();
+    expect(screen.getByText('Resource snapshot is invalid.')).toBeTruthy();
+    expect(screen.getByText('Canvas remains available')).toBeTruthy();
+  });
+
+  it('shows an Entity record diagnostic without hiding valid siblings', async () => {
+    const entityProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'entities',
+      diagnostics: [
+        {
+          code: 'invalid-project-entity-document',
+          message: "Project Entity 'character-invalid' is invalid.",
+          recordId: 'character-invalid',
+        },
+      ],
+      items: [
+        {
+          resourceId: 'entity:character-rin',
+          facet: 'entities',
+          role: 'entity',
+          depth: 0,
+          kind: 'character',
+          label: 'Rin',
+          entityRef: { entityId: 'character-rin', entityKind: 'character' },
+          entityStatus: 'confirmed',
+          sourceOwners: ['project-entity'],
+          attentionBindingIds: [],
+          representationAvailability: 'unbound',
+          inspector: {
+            status: 'confirmed',
+            kind: 'character',
+            names: { canonical: 'Rin', aliases: [] },
+            facts: {},
+            entityId: 'character-rin',
+            bindings: [],
+            operations: ['edit'],
+            blockers: [],
+          },
+          capabilities: [],
+        },
+      ],
+    };
+
+    render(<ResourceBrowserRoot runtime={createRuntime(entityProjection)} locale="en" />);
+
+    expect(await screen.findByText('Rin')).toBeTruthy();
+    expect(screen.getByText("Project Entity 'character-invalid' is invalid.")).toBeTruthy();
+    expect(screen.queryByText('Resource Browser unavailable')).toBeNull();
+  });
+
+  it('routes Files context actions and never offers generic deletion for Media content', async () => {
+    const filesProjection: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-file-context',
+        workspaceId: 'workspace-file-context',
+      },
+      facet: 'files',
+      items: [
+        {
+          resourceId: 'content:notes',
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'file',
+          label: 'notes.txt',
+          locator: { kind: 'workspace-file', path: 'notes.txt' },
+          capabilities: ['reveal'],
+        },
+      ],
+    };
+    const runtime = createRuntime(filesProjection);
+    const view = render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+    await screen.findByText('notes.txt');
+    const items = document.querySelector('.neko-resource-browser__items');
+    expect(items).toBeTruthy();
+
+    vi.stubGlobal('innerWidth', 120);
+    vi.stubGlobal('innerHeight', 120);
+    fireEvent.contextMenu(items!);
+    expect((await screen.findByRole('menu')).style).toMatchObject({ left: '4px', top: '4px' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New folder' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Folder name' }), {
+      target: { value: 'References' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'content.create-directory',
+          directoryName: 'References',
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
+    const fileButton = screen.getByText('notes.txt').closest('button');
+    expect(fileButton).toBeTruthy();
+    fireEvent.keyDown(fileButton!, { key: 'F10', shiftKey: true });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to Trash' }));
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'content.trash',
+          resourceId: 'content:notes',
+        }),
+      ),
+    );
+    view.unmount();
+
+    render(<ResourceBrowserRoot runtime={createRuntime()} locale="en" />);
+    const mediaButton = (await screen.findByText('cat.png')).closest('button');
+    expect(mediaButton).toBeTruthy();
+    fireEvent.contextMenu(mediaButton!);
+    expect(screen.queryByRole('menuitem', { name: 'Move to Trash' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Reveal' })).toBeTruthy();
+  }, 15_000);
+
+  it('resets local directory input after the current dialog closes', async () => {
+    const runtime = createRuntime({
+      ...projection,
+      facet: 'files',
+      items: [],
+    });
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    await screen.findByText('No matching resources');
+    const items = document.querySelector('.neko-resource-browser__items');
+    if (!items) throw new Error('Resource Browser item surface is required.');
+    fireEvent.contextMenu(items);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New folder' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Folder name' }), {
+      target: { value: 'Must not leak' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    fireEvent.contextMenu(items);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New folder' }));
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Folder name' }).value).toBe('');
+  });
+
+  it('omits duplicate package chrome when embedded while keeping toolbar actions', async () => {
+    const runtime = createRuntime();
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" chrome="embedded" />);
+
+    await screen.findByText('cat.png');
+    expect(screen.queryByText('Resource management')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
+    expect(document.querySelector('.neko-resource-browser__toolbar')).toBeTruthy();
+    expect(document.querySelector('.neko-resource-browser__header')).toBeNull();
+  });
+
+  it('hides only the global refresh control when composed by Workspace', async () => {
+    render(
+      <ResourceBrowserRoot
+        runtime={createRuntime()}
+        locale="en"
+        chrome="embedded"
+        refreshControl="hidden"
+      />,
+    );
+
+    await screen.findByText('cat.png');
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
+  });
+
   it('opens a previewable item on single click without a persistent action footer', async () => {
     const runtime = createRuntime();
     render(
@@ -57,7 +275,6 @@ describe('ResourceBrowserRoot', () => {
         previewTarget={{
           viewId: 'preview:project-view-1:temporary',
           presentation: 'temporary',
-          expectedWorkbenchRevision: 2,
         }}
       />,
     );
@@ -77,7 +294,6 @@ describe('ResourceBrowserRoot', () => {
         targetPreview: {
           viewId: 'preview:project-view-1:temporary',
           presentation: 'temporary',
-          expectedWorkbenchRevision: 2,
         },
       }),
     );
@@ -112,6 +328,41 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.queryByTestId('quick-preview')).toBeNull();
   });
 
+  it('releases the high-cost quick preview when its current Root is suspended', async () => {
+    const runtime = createRuntime();
+    const view = render(
+      <ResourceBrowserRoot
+        lifecyclePresentation="active"
+        runtime={runtime}
+        locale="en"
+        renderQuickPreview={(descriptor) => (
+          <div data-testid="quick-preview">{descriptor.displayName}</div>
+        )}
+      />,
+    );
+
+    const row = (await screen.findByText('cat.png')).closest('.neko-resource-browser__item-row');
+    expect(row).toBeTruthy();
+    fireEvent.pointerEnter(row!);
+    await screen.findByTestId('quick-preview');
+
+    view.rerender(
+      <ResourceBrowserRoot
+        lifecyclePresentation="suspended"
+        runtime={runtime}
+        locale="en"
+        renderQuickPreview={(descriptor) => (
+          <div data-testid="quick-preview">{descriptor.displayName}</div>
+        )}
+      />,
+    );
+
+    await waitFor(() => expect(screen.queryByTestId('quick-preview')).toBeNull());
+    expect(runtime.releaseQuickPreview).toHaveBeenCalledWith(
+      expect.objectContaining({ previewSessionId: 'hover:content:cat' }),
+    );
+  });
+
   it('releases a stale quick preview result that resolves after pointer leave', async () => {
     const runtime = createRuntime();
     let resolvePreview: (() => void) | undefined;
@@ -119,14 +370,13 @@ describe('ResourceBrowserRoot', () => {
       new Promise<void>((resolve) => {
         resolvePreview = resolve;
       }).then(() => ({
-        schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
         requestId: request.requestId,
         identity: request.identity,
         resourceId: request.resourceId,
         previewSessionId: `stale:${request.resourceId}`,
         descriptor: {
           descriptorId: `descriptor:${request.resourceId}`,
-          revision: 'revision-1',
+          sourceFingerprint: 'fingerprint-1',
           contentKind: 'image' as const,
           mediaType: 'image/png',
           displayName: 'stale.png',
@@ -182,7 +432,6 @@ describe('ResourceBrowserRoot', () => {
     expect(payload).toBeDefined();
     expect(transferred.get('application/json')).toBe(payload);
     expect(JSON.parse(payload!)).toEqual({
-      schemaVersion: 1,
       type: 'content-locator',
       locator: { kind: 'workspace-file', path: 'assets/cat.png' },
       name: 'cat.png',
@@ -245,7 +494,6 @@ describe('ResourceBrowserRoot', () => {
         previewTarget={{
           viewId: 'preview:project-view-1:temporary',
           presentation: 'temporary',
-          expectedWorkbenchRevision: 5,
         }}
       />,
     );
@@ -269,11 +517,20 @@ describe('ResourceBrowserRoot', () => {
 
     await screen.findByText('cat.png');
     expect(screen.queryByRole('tab', { name: '全部' })).toBeNull();
-    expect(screen.queryByRole('tab', { name: '实体' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: '素材' }));
+    expect(screen.getByRole('tab', { name: '目录' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '媒体库' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: '素材库' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: '实体' }));
     await waitFor(() =>
       expect(runtime.search).toHaveBeenCalledWith(
-        expect.objectContaining({ facet: 'materials', route: 'search' }),
+        expect.objectContaining({ facet: 'entities', route: 'search' }),
+      ),
+    );
+    expect(screen.queryByRole('button', { name: '配置媒体库' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '媒体库' }));
+    await waitFor(() =>
+      expect(runtime.search).toHaveBeenCalledWith(
+        expect.objectContaining({ facet: 'media', route: 'search' }),
       ),
     );
     fireEvent.click(screen.getByRole('button', { name: '配置媒体库' }));
@@ -289,6 +546,77 @@ describe('ResourceBrowserRoot', () => {
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({ route: 'source.add-directory-library' }),
       ),
+    );
+  });
+
+  it('preserves selection independently while switching owner facets', async () => {
+    const filesProjection: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-facet-selection',
+        workspaceId: 'workspace-facet-selection',
+      },
+      facet: 'files',
+      items: [
+        {
+          resourceId: 'content:brief',
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'file',
+          label: 'brief.md',
+          locator: { kind: 'workspace-file', path: 'brief.md' },
+          capabilities: ['reveal'],
+        },
+      ],
+    };
+    const assetsProjection: ResourceBrowserProjection = {
+      ...filesProjection,
+      facet: 'assets',
+      items: [
+        {
+          resourceId: 'asset:lighting',
+          facet: 'assets',
+          role: 'asset',
+          depth: 0,
+          kind: 'asset',
+          label: 'Lighting preset',
+          assetRef: { assetId: 'global-asset-library:lighting' },
+          availability: 'available',
+          capabilities: [],
+        },
+      ],
+    };
+    const runtime = createRuntime(filesProjection);
+    runtime.search.mockImplementation(async (request) =>
+      request.facet === 'assets' ? assetsProjection : filesProjection,
+    );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    const file = await screen.findByText('brief.md');
+    fireEvent.click(file);
+    fireEvent.click(screen.getByRole('tab', { name: 'Asset library' }));
+    const asset = await screen.findByText('Lighting preset');
+    expect(screen.queryByText('brief.md')).toBeNull();
+    fireEvent.click(asset);
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    await waitFor(() =>
+      expect(
+        screen
+          .getByText('brief.md')
+          .closest('.neko-resource-browser__item-row')
+          ?.getAttribute('data-selected'),
+      ).toBe('true'),
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Asset library' }));
+    await waitFor(() =>
+      expect(
+        screen
+          .getByText('Lighting preset')
+          .closest('.neko-resource-browser__item-row')
+          ?.getAttribute('data-selected'),
+      ).toBe('true'),
     );
   });
 
@@ -325,7 +653,7 @@ describe('ResourceBrowserRoot', () => {
     expect(runtime.search).not.toHaveBeenCalled();
   });
 
-  it('uses the Desktop default view only when no project-scoped view has been saved', async () => {
+  it('uses the Desktop default view only when the package owner has no Workspace snapshot', async () => {
     const defaultProjection: ResourceBrowserProjection = {
       ...projection,
       identity: {
@@ -335,8 +663,10 @@ describe('ResourceBrowserRoot', () => {
       },
     };
     const runtime = createRuntime(defaultProjection);
-    const first = render(
-      <ResourceBrowserRoot runtime={runtime} locale="en" defaultViewMode="grid" />,
+    const view = render(
+      <ResourceBrowserPresentationSnapshotProvider>
+        <ResourceBrowserRoot runtime={runtime} locale="en" defaultViewMode="grid" />
+      </ResourceBrowserPresentationSnapshotProvider>,
     );
     await screen.findByText('cat.png');
     expect(
@@ -347,13 +677,140 @@ describe('ResourceBrowserRoot', () => {
     expect(
       document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),
     ).toBe('list');
-    first.unmount();
-
-    render(<ResourceBrowserRoot runtime={runtime} locale="en" defaultViewMode="grid" />);
+    view.rerender(
+      <ResourceBrowserPresentationSnapshotProvider>
+        {null}
+      </ResourceBrowserPresentationSnapshotProvider>,
+    );
+    view.rerender(
+      <ResourceBrowserPresentationSnapshotProvider>
+        <ResourceBrowserRoot runtime={runtime} locale="en" defaultViewMode="grid" />
+      </ResourceBrowserPresentationSnapshotProvider>,
+    );
     await screen.findByText('cat.png');
     expect(
       document.querySelector('.neko-resource-browser__items')?.getAttribute('data-view-mode'),
     ).toBe('list');
+  });
+
+  it('returns a remounted Media facet to root when retained navigation has no loaded children', async () => {
+    const mediaRoot: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-media-remount-root',
+        workspaceId: 'workspace-media-remount-root',
+      },
+      items: [
+        {
+          resourceId: 'content:media-library-assets',
+          facet: 'media',
+          role: 'library-root',
+          depth: 0,
+          kind: 'directory',
+          label: 'Assets',
+          libraryName: 'Assets',
+          locator: { kind: 'workspace-file', path: 'neko/assets/Assets' },
+          capabilities: ['reveal'],
+        },
+      ],
+    };
+    const loaded = {
+      ...mediaRoot,
+      items: [
+        ...mediaRoot.items,
+        {
+          resourceId: 'content:media-library-assets:portrait',
+          parentResourceId: 'content:media-library-assets',
+          facet: 'media' as const,
+          role: 'content' as const,
+          depth: 1,
+          kind: 'image' as const,
+          label: 'portrait.png',
+          locator: { kind: 'workspace-file' as const, path: 'neko/assets/Assets/portrait.png' },
+          capabilities: ['preview' as const],
+        },
+      ],
+    };
+    const firstRuntime = createRuntime(mediaRoot);
+    firstRuntime.children.mockResolvedValueOnce(loaded);
+    const first = render(
+      <ResourceBrowserRoot runtime={firstRuntime} locale="en" defaultViewMode="grid" />,
+    );
+
+    fireEvent.doubleClick(await screen.findByText('Assets'));
+    expect(await screen.findByText('portrait.png')).toBeTruthy();
+    first.unmount();
+
+    render(
+      <ResourceBrowserRoot runtime={createRuntime(mediaRoot)} locale="en" defaultViewMode="grid" />,
+    );
+
+    await waitFor(() =>
+      expect(document.querySelector('.neko-resource-browser__item strong')?.textContent).toBe(
+        'Assets',
+      ),
+    );
+  });
+
+  it('returns to root and clears stale selection after a mutation refreshes a grid container', async () => {
+    const filesRoot: ResourceBrowserProjection = {
+      ...projection,
+      identity: {
+        ...projection.identity,
+        projectId: 'project-files-mutation-root',
+        workspaceId: 'workspace-files-mutation-root',
+      },
+      facet: 'files',
+      items: [
+        {
+          resourceId: 'content:references',
+          facet: 'files',
+          role: 'directory',
+          depth: 0,
+          kind: 'directory',
+          label: 'References',
+          locator: { kind: 'workspace-file', path: 'References' },
+          capabilities: ['reveal'],
+        },
+      ],
+    };
+    const loaded: ResourceBrowserProjection = {
+      ...filesRoot,
+      items: [
+        ...filesRoot.items,
+        {
+          resourceId: 'content:references:notes',
+          parentResourceId: 'content:references',
+          facet: 'files',
+          role: 'content',
+          depth: 1,
+          kind: 'file',
+          label: 'notes.txt',
+          locator: { kind: 'workspace-file', path: 'References/notes.txt' },
+          capabilities: ['reveal'],
+        },
+      ],
+    };
+    const runtime = createRuntime(filesRoot);
+    runtime.children.mockResolvedValueOnce(loaded);
+    runtime.execute.mockResolvedValueOnce(filesRoot);
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" defaultViewMode="grid" />);
+
+    fireEvent.doubleClick(await screen.findByText('References'));
+    const notes = await screen.findByText('notes.txt');
+    fireEvent.contextMenu(notes.closest('button')!);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to Trash' }));
+
+    await waitFor(() => expect(screen.queryByText('notes.txt')).toBeNull());
+    const references = await screen.findByText('References');
+    expect(
+      references.closest('.neko-resource-browser__item-row')?.getAttribute('data-selected'),
+    ).toBe('false');
   });
 
   it('restores the project-scoped query after the Resource Dock remounts', async () => {
@@ -366,20 +823,39 @@ describe('ResourceBrowserRoot', () => {
       },
     };
     const runtime = createRuntime(queryProjection);
-    const first = render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+    const view = render(
+      <ResourceBrowserPresentationSnapshotProvider>
+        <ResourceBrowserRoot runtime={runtime} locale="en" />
+      </ResourceBrowserPresentationSnapshotProvider>,
+    );
     const search = await screen.findByRole('textbox', { name: 'Search' });
     fireEvent.change(search, { target: { value: 'nested-image' } });
     fireEvent.submit(search.closest('form')!);
     await waitFor(() => expect(runtime.search).toHaveBeenCalledOnce());
-    first.unmount();
-
-    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+    view.rerender(
+      <ResourceBrowserPresentationSnapshotProvider>
+        {null}
+      </ResourceBrowserPresentationSnapshotProvider>,
+    );
+    view.rerender(
+      <ResourceBrowserPresentationSnapshotProvider>
+        <ResourceBrowserRoot runtime={runtime} locale="en" />
+      </ResourceBrowserPresentationSnapshotProvider>,
+    );
 
     expect(
       (await screen.findByRole('textbox', {
         name: 'Search',
       })) as HTMLInputElement,
     ).toHaveProperty('value', 'nested-image');
+    await waitFor(() => expect(runtime.search).toHaveBeenCalledTimes(2));
+    expect(runtime.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        facet: 'media',
+        query: 'nested-image',
+        identity: queryProjection.identity,
+      }),
+    );
   });
 
   it('expands Directory list branches in place and reserves container navigation for grid view', async () => {
@@ -587,7 +1063,6 @@ describe('ResourceBrowserRoot', () => {
         previewTarget={{
           viewId: 'preview:directory-tree',
           presentation: 'temporary',
-          expectedWorkbenchRevision: 4,
         }}
       />,
     );
@@ -645,7 +1120,6 @@ describe('ResourceBrowserRoot', () => {
         expect.objectContaining({
           route: 'source.relink',
           resourceId: 'content:library',
-          expectedRevision: 0,
         }),
       ),
     );
@@ -662,11 +1136,124 @@ describe('ResourceBrowserRoot', () => {
         expect.objectContaining({
           route: 'source.remove',
           resourceId: 'content:library',
-          expectedRevision: 0,
         }),
       ),
     );
     expect(document.querySelector('.neko-resource-browser__actions')).toBeNull();
+  });
+
+  it('submits Entity edits through the canonical Resource Browser runtime', async () => {
+    const entityProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'entities',
+      items: [
+        {
+          resourceId: 'entity:character-rin',
+          facet: 'entities',
+          role: 'entity',
+          depth: 0,
+          kind: 'character',
+          label: 'Rin',
+          entityRef: { entityId: 'character-rin', entityKind: 'character' },
+          entityStatus: 'confirmed',
+          sourceOwners: ['project-entity'],
+          attentionBindingIds: [],
+          representationAvailability: 'unbound',
+          inspector: {
+            status: 'confirmed',
+            kind: 'character',
+            names: { canonical: 'Rin', aliases: [] },
+            facts: {},
+            entityId: 'character-rin',
+            bindings: [],
+            operations: ['edit'],
+            blockers: [],
+          },
+          capabilities: [],
+        },
+      ],
+    };
+    const runtime = createRuntime(entityProjection);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    fireEvent.click(await screen.findByText('Rin'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Rin Aoki' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'entity.manage',
+          resourceId: 'entity:character-rin',
+          entityIntent: {
+            type: 'edit',
+            entityId: 'character-rin',
+            changes: { names: { canonical: 'Rin Aoki', aliases: [] } },
+          },
+        }),
+      ),
+    );
+  });
+
+  it('restores Entity drafts from presentation state without retaining hidden Inspector Roots', async () => {
+    const entity = (
+      resourceId: string,
+      entityId: string,
+      label: string,
+    ): ResourceBrowserProjection['items'][number] => ({
+      resourceId,
+      facet: 'entities',
+      role: 'entity',
+      depth: 0,
+      kind: 'character',
+      label,
+      entityRef: { entityId, entityKind: 'character' },
+      entityStatus: 'confirmed',
+      sourceOwners: ['project-entity'],
+      attentionBindingIds: [],
+      representationAvailability: 'unbound',
+      inspector: {
+        status: 'confirmed',
+        kind: 'character',
+        names: { canonical: label, aliases: [] },
+        facts: {},
+        entityId,
+        bindings: [],
+        operations: ['edit'],
+        blockers: [],
+      },
+      capabilities: [],
+    });
+    const first = entity('entity:rin', 'rin', 'Rin');
+    const second = entity('entity:mika', 'mika', 'Mika');
+    const entityProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'entities',
+      items: [first, second],
+    };
+    const runtime = createRuntime(entityProjection);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    fireEvent.click((await screen.findByText('Rin')).closest('button')!);
+    const firstDetail = document.querySelector<HTMLElement>('.neko-entity-inspector');
+    expect(firstDetail).not.toBeNull();
+    fireEvent.change(firstDetail!.querySelector<HTMLInputElement>('[aria-label="Name"]')!, {
+      target: { value: 'Uncommitted Rin' },
+    });
+
+    fireEvent.click(screen.getByText('Mika').closest('button')!);
+    const secondDetail = document.querySelector<HTMLElement>('.neko-entity-inspector');
+    expect(secondDetail).not.toBe(firstDetail);
+    expect(document.querySelectorAll('.neko-entity-inspector')).toHaveLength(1);
+    fireEvent.click(screen.getByText('Rin').closest('button')!);
+    expect(
+      document.querySelector<HTMLInputElement>('.neko-entity-inspector [aria-label="Name"]')?.value,
+    ).toBe('Uncommitted Rin');
+
+    act(() => runtime.emit({ sequence: 1, projection: { ...entityProjection, items: [second] } }));
+    await waitFor(() => expect(document.querySelector('.neko-entity-inspector')).toBeNull());
   });
 
   it('keeps missing library identity across list/grid and confirms revisioned recovery', async () => {
@@ -684,7 +1271,7 @@ describe('ResourceBrowserRoot', () => {
             state: 'required-unlinked',
             referenceCount: 2,
             missingCount: 2,
-            operationRevision: 'sha256:operation',
+            operationFingerprint: 'sha256:operation',
           },
           depth: 0,
           kind: 'directory',
@@ -696,18 +1283,16 @@ describe('ResourceBrowserRoot', () => {
     };
     const runtime = createRuntime(libraryProjection);
     runtime.planRecovery.mockResolvedValueOnce({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'resource-recovery-plan-1',
       identity: libraryProjection.identity,
       resourceId: 'content:missing-library',
       status: 'planned',
       plan: {
-        contractVersion: 1,
         planId: 'media-library-recovery:plan-1',
         workspaceId: libraryProjection.identity.workspaceId,
         libraryName: 'Footage',
-        requirementRevision: 'requirements-1',
-        operationRevision: 'sha256:operation',
+        requirementFingerprint: 'requirements-1',
+        operationFingerprint: 'sha256:operation',
         candidate: { kind: 'global-alias', name: 'Footage', locationKind: 'local' },
         referencedCount: 2,
         validatedCount: 2,
@@ -730,7 +1315,7 @@ describe('ResourceBrowserRoot', () => {
         expect.objectContaining({
           route: 'source.recovery.apply',
           planId: 'media-library-recovery:plan-1',
-          expectedOperationRevision: 'sha256:operation',
+          expectedOperationFingerprint: 'sha256:operation',
         }),
       ),
     );
@@ -764,7 +1349,7 @@ describe('ResourceBrowserRoot', () => {
     await waitFor(() => expect(runtime.resolveThumbnail).toHaveBeenCalledTimes(1));
   });
 
-  it('ignores a completed thumbnail when its descriptor revision was replaced', async () => {
+  it('ignores a completed thumbnail when its source fingerprint was replaced', async () => {
     let notify: ((entries: IntersectionObserverEntry[]) => void) | undefined;
     vi.stubGlobal(
       'IntersectionObserver',
@@ -801,20 +1386,18 @@ describe('ResourceBrowserRoot', () => {
 
     const nextProjection: ResourceBrowserProjection = {
       ...projection,
-      revision: 1,
       items: projection.items.map((item) => ({
         ...item,
-        thumbnail: item.thumbnail ? { ...item.thumbnail, revision: '2' } : undefined,
+        thumbnail: item.thumbnail ? { ...item.thumbnail, sourceFingerprint: '2' } : undefined,
       })),
     };
     const nextRuntime = createRuntime(nextProjection);
     nextRuntime.resolveThumbnail.mockResolvedValue({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'thumbnail-new',
       identity: nextProjection.identity,
       resourceId: 'content:cat',
       descriptorId: 'thumbnail-cat',
-      revision: '2',
+      sourceFingerprint: '2',
       dataUrl: 'data:image/png;base64,bmV3',
     });
     rerender(<ResourceBrowserRoot runtime={nextRuntime} locale="en" />);
@@ -827,12 +1410,11 @@ describe('ResourceBrowserRoot', () => {
     );
 
     resolveOld?.({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: 'thumbnail-old',
       identity: projection.identity,
       resourceId: 'content:cat',
       descriptorId: 'thumbnail-cat',
-      revision: '1',
+      sourceFingerprint: '1',
       dataUrl: 'data:image/png;base64,b2xk',
     });
     await Promise.resolve();
@@ -917,28 +1499,28 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
   readonly planRecovery: ReturnType<typeof vi.fn>;
   readonly applyRecovery: ReturnType<typeof vi.fn>;
   readonly cancelRecovery: ReturnType<typeof vi.fn>;
+  readonly emit: (event: ResourceBrowserProjectionEvent) => void;
 } {
+  let listener: ((event: ResourceBrowserProjectionEvent) => void) | undefined;
   return {
     identity: snapshot.identity,
     getSnapshot: vi.fn(async () => snapshot),
     resolveThumbnail: vi.fn(async (request) => ({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       resourceId: request.resourceId,
       descriptorId: request.descriptorId,
-      revision: request.revision,
+      sourceFingerprint: request.sourceFingerprint,
       dataUrl: 'data:image/png;base64,aW1hZ2U=',
     })),
     resolveQuickPreview: vi.fn(async (request) => ({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       resourceId: request.resourceId,
       previewSessionId: `hover:${request.resourceId}`,
       descriptor: {
         descriptorId: `descriptor:${request.resourceId}`,
-        revision: 'revision-1',
+        sourceFingerprint: 'fingerprint-1',
         contentLocator: { kind: 'workspace-file' as const, path: 'preview/preview.png' },
         url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
         contentKind: 'image' as const,
@@ -948,14 +1530,12 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
       },
     })),
     releaseQuickPreview: vi.fn(async (request) => ({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       previewSessionId: request.previewSessionId,
       status: 'released' as const,
     })),
     planRecovery: vi.fn(async (request) => ({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       resourceId: request.resourceId,
@@ -963,17 +1543,24 @@ function createRuntime(snapshot = projection): ResourceBrowserHostRuntime & {
     })),
     applyRecovery: vi.fn(async () => snapshot),
     cancelRecovery: vi.fn(async (request) => ({
-      schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       planId: request.planId,
       status: 'cancelled' as const,
     })),
-    subscribe: vi.fn(() => () => undefined),
+    subscribe: vi.fn((nextListener: (event: ResourceBrowserProjectionEvent) => void) => {
+      listener = nextListener;
+      return () => {
+        if (listener === nextListener) listener = undefined;
+      };
+    }),
+    emit(event) {
+      if (!listener) throw new Error('Resource Browser test listener is unavailable.');
+      listener(event);
+    },
     children: vi.fn(async () => snapshot),
     search: vi.fn(async (request) => ({
       ...snapshot,
-      revision: snapshot.revision + 1,
       facet: request.facet,
       query: request.query,
       items: [],

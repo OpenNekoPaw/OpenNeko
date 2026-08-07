@@ -34,7 +34,7 @@ change requires a new revision.
 
 ### Requirement: Manifests are closed portable package contracts
 
-An Asset manifest SHALL declare schema version, type, source/provenance, package-relative members,
+An Asset manifest SHALL use one canonical shape declaring type, source/provenance, package-relative members,
 dependencies, license policy, and type-specific metadata required by its Asset type. It MUST NOT persist
 absolute paths, physical Media Library targets, cache paths, provider credentials, or runtime URLs as
 durable package identity.
@@ -44,10 +44,10 @@ durable package identity.
 - **WHEN** an Asset publication selects content from a linked Media Library
 - **THEN** publication requires an owned package copy or an explicit installable Asset dependency and rejects the physical link target
 
-#### Scenario: Validate an unknown manifest version
+#### Scenario: Validate a non-canonical manifest
 
-- **WHEN** an installer receives a manifest schema version it does not support
-- **THEN** it rejects the package visibly before writing installed state
+- **WHEN** an installer receives a manifest with unknown fields or missing required semantic fields
+- **THEN** it rejects only that package visibly before writing installed state
 
 #### Scenario: Read remote provenance
 
@@ -56,7 +56,7 @@ durable package identity.
 
 #### Scenario: Encounter credential-bearing source URI
 
-- **WHEN** migration or installation finds a signed, credential-bearing, machine-private, or otherwise unsafe source URI
+- **WHEN** installation finds a signed, credential-bearing, machine-private, or otherwise unsafe source URI
 - **THEN** it rejects or archives the value without using or copying it into the installed manifest or synchronization state
 
 ### Requirement: Dependencies commit as a validated closure
@@ -90,6 +90,25 @@ those references through their owning workflows.
 
 - **WHEN** an installed dependency or project reference pins the revision
 - **THEN** uninstall fails with the exact blockers and preserves all package data
+
+### Requirement: Removing an Asset Library record preserves all bytes
+
+The ordinary Asset Library remove action SHALL remove only the mutable library membership record. It MUST NOT
+move a source file to the system trash, uninstall an immutable revision, delete a blob, or mutate a project
+reference. Uninstall and garbage collection SHALL remain separate explicit operations.
+
+#### Scenario: User removes a material from the Asset Library
+
+- **WHEN** the user confirms the remove-record action for an active Asset membership
+- **THEN** the record is absent from subsequent searches and after application restart
+- **AND** the source file and installed package bytes remain byte-for-byte unchanged
+- **AND** the Electron trash capability is not invoked
+
+#### Scenario: User imports the same preserved material again
+
+- **WHEN** the user explicitly imports content whose prior membership was removed
+- **THEN** the Asset owner creates or reactivates a validated membership through the canonical record path
+- **AND** filesystem discovery alone does not silently restore it
 
 ### Requirement: Entity Assets use the generic Asset lifecycle
 

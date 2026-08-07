@@ -10,7 +10,7 @@ export interface ConversationRenderStreamingState {
   readonly isThinking: boolean;
   readonly queuedMessageCount?: number;
   readonly queuedMessages?: readonly AgentQueuedMessageItem[];
-  readonly messageQueueVersion?: number;
+  readonly messageQueueSequence?: number;
 }
 
 export type ConversationRenderStateUpdater<
@@ -29,11 +29,9 @@ export function ingestConversationRenderSnapshot(input: {
     input.source === 'host'
       ? reconcilePendingUserMessages(current?.messages ?? [], input.messages)
       : input.messages;
-  const baseRevision = current?.revision ?? 0;
   return input.coordinator.ingest({
     kind: 'host-snapshot',
     conversationId: input.conversationId,
-    baseRevision,
     messages,
     streaming: toConversationStreamingSnapshot(input.streaming),
   });
@@ -64,7 +62,22 @@ function reconcilePendingUserMessages(
   });
   return retainedPendingMessages.length === 0
     ? hostMessages
-    : [...hostMessages, ...retainedPendingMessages];
+    : insertMessagesChronologically(hostMessages, retainedPendingMessages);
+}
+
+function insertMessagesChronologically(
+  messages: readonly Message[],
+  insertedMessages: readonly Message[],
+): readonly Message[] {
+  const merged = [...messages];
+  for (const message of insertedMessages) {
+    const insertionIndex = merged.findIndex(
+      (candidate) => candidate.timestamp >= message.timestamp,
+    );
+    if (insertionIndex === -1) merged.push(message);
+    else merged.splice(insertionIndex, 0, message);
+  }
+  return merged;
 }
 
 function isPendingUserMessage(message: Message): boolean {
@@ -88,8 +101,8 @@ function toConversationStreamingSnapshot(
     isThinking: streaming.isThinking,
     queuedMessageCount: streaming.queuedMessageCount ?? 0,
     queuedMessages: streaming.queuedMessages ?? [],
-    ...(streaming.messageQueueVersion !== undefined
-      ? { messageQueueVersion: streaming.messageQueueVersion }
+    ...(streaming.messageQueueSequence !== undefined
+      ? { messageQueueSequence: streaming.messageQueueSequence }
       : {}),
   };
 }

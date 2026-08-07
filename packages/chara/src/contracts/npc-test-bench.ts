@@ -12,8 +12,6 @@ export const NPC_TEST_BENCH_EXIT_AS_SLASH_COMMAND_NAME = 'exit-as';
 export const NPC_TEST_BENCH_EXIT_AS_SLASH_COMMAND = '/exit-as';
 export const NEKO_AGENT_CHARACTER_DIALOGUE_COMMAND = 'neko.agent.characterDialogue';
 export const NEKO_AGENT_EMBODY_CHARACTER_COMMAND = 'neko.agent.embodyCharacter';
-export const NPC_TRANSCRIPT_ARTIFACT_VERSION = 1;
-export const CHARACTER_ROLE_TEST_ARTIFACT_DIR = '.neko/character-tests';
 
 export type NpcTestMode = 'roleplay' | 'consult';
 export type NpcProfileSparsity = 'thin' | 'partial' | 'rich';
@@ -197,7 +195,6 @@ export interface NpcEvaluationSuggestion {
 }
 
 export interface NpcEvaluationReport {
-  readonly version: typeof NPC_TRANSCRIPT_ARTIFACT_VERSION;
   readonly createdAt: string;
   readonly entityRef: CreativeEntityRef;
   readonly summary: string;
@@ -208,7 +205,6 @@ export interface NpcEvaluationReport {
 }
 
 export interface NpcTranscriptArtifact {
-  readonly version: typeof NPC_TRANSCRIPT_ARTIFACT_VERSION;
   readonly createdAt: string;
   readonly entityRef: CreativeEntityRef;
   readonly mode: NpcTestMode;
@@ -539,7 +535,18 @@ export function isNpcEvaluationSuggestion(value: unknown): value is NpcEvaluatio
 export function isNpcEvaluationReport(value: unknown): value is NpcEvaluationReport {
   if (!isRecord(value)) return false;
   return (
-    value['version'] === NPC_TRANSCRIPT_ARTIFACT_VERSION &&
+    hasOnlyFields(
+      value,
+      new Set([
+        'createdAt',
+        'entityRef',
+        'summary',
+        'scores',
+        'findings',
+        'suggestions',
+        'evaluatorModelId',
+      ]),
+    ) &&
     isNonEmptyString(value['createdAt']) &&
     isCreativeEntityRef(value['entityRef']) &&
     isNonEmptyString(value['summary']) &&
@@ -556,7 +563,19 @@ export function isNpcEvaluationReport(value: unknown): value is NpcEvaluationRep
 export function isNpcTranscriptArtifact(value: unknown): value is NpcTranscriptArtifact {
   if (!isRecord(value)) return false;
   return (
-    value['version'] === NPC_TRANSCRIPT_ARTIFACT_VERSION &&
+    hasOnlyFields(
+      value,
+      new Set([
+        'createdAt',
+        'entityRef',
+        'mode',
+        'profileSnapshot',
+        'transcript',
+        'evaluation',
+        'profileHash',
+        'sessionId',
+      ]),
+    ) &&
     isNonEmptyString(value['createdAt']) &&
     isCreativeEntityRef(value['entityRef']) &&
     isNpcTestMode(value['mode']) &&
@@ -632,4 +651,11 @@ function includesString<T extends string>(values: readonly T[], value: unknown):
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyFields(
+  value: Record<string, unknown>,
+  allowedFields: ReadonlySet<string>,
+): boolean {
+  return Object.keys(value).every((field) => allowedFields.has(field));
 }

@@ -2,6 +2,9 @@
  * Session Module Tests
  */
 
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   SystemPromptBuilder,
@@ -14,6 +17,22 @@ import {
 } from '../../prompt';
 
 describe('SystemPromptBuilder', () => {
+  it('loads project instructions from the canonical project content directory', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'neko-system-prompt-'));
+    try {
+      await mkdir(join(projectRoot, 'neko'));
+      await writeFile(join(projectRoot, 'neko', 'AGENTS.md'), '# Canonical project rules\n');
+      const builder = new SystemPromptBuilder();
+
+      await expect(builder.loadAgentsFile(projectRoot)).resolves.toMatchObject({
+        source: 'project',
+        content: '# Canonical project rules\n',
+      });
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   describe('Locale Management', () => {
     it('should default to English locale', () => {
       const builder = new SystemPromptBuilder();

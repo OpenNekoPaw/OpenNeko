@@ -47,7 +47,6 @@ describe('Canvas material action catalog', () => {
         locator: {
           kind: 'generated-output',
           outputId: 'image-output',
-          revision: '1',
           digest: 'fixture-digest',
           path: 'generated/image.png',
         },
@@ -290,7 +289,7 @@ describe('Canvas material action catalog', () => {
       size: { width: 300, height: 180 },
       zIndex: 1,
       data: {
-        assetPath: 'media/legacy.mp4',
+        assetPath: 'media/path-only.mp4',
         mediaType: 'video',
       },
     };

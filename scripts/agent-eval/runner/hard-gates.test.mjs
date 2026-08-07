@@ -72,10 +72,7 @@ describe('M1 deterministic hard gates', () => {
       (facts) =>
         facts.turns.push({ id: 'a2', role: 'assistant', content: 'failed', isError: true }),
     ],
-    [
-      'non-idle state',
-      (facts) => (facts.idle = { fullyIdle: false, turnIdle: { idle: false } }),
-    ],
+    ['non-idle state', (facts) => (facts.idle = { fullyIdle: false, turnIdle: { idle: false } })],
     ['missing canonical user turn', (facts) => (facts.turns = facts.turns.slice(1))],
     ['empty final answer', (facts) => (facts.turns[1].content = '  ')],
   ])('fails on %s without allowing result-only success', (_label, mutate) => {
@@ -170,7 +167,6 @@ function m2Facts() {
       id: 'skill:storyboard',
       source: 'skill-lifecycle',
       order: 0,
-      version: HASH,
       hash: HASH_B,
     },
   ];
@@ -200,22 +196,12 @@ function m2Facts() {
     {
       status: 'projected',
       targetKind: 'workspace',
-      revision: HASH,
+      sourceFingerprint: HASH,
       nodeIds: ['workspace-content-source-1', 'workspace-content-generated-output-1'],
       connectionIds: ['workspace-relation-1'],
       diagnosticCodes: [],
     },
   ];
-  facts.workspaceBoardDelivery = {
-    canonicalSubmissionCount: 1,
-    resumeScanCount: 1,
-    legacyFallbackCounts: {
-      activeCanvas: 0,
-      recentCanvas: 0,
-      directWriter: 0,
-      genericSendToCanvas: 0,
-    },
-  };
   Object.assign(facts.evidenceCompleteness, {
     turnToolCalls: { limit: 256, droppedCount: 0 },
     skillReceipts: { limit: 128, droppedCount: 0 },
@@ -239,7 +225,6 @@ const M2_ASSERTIONS = [
     id: 'model',
     kind: 'model',
     profileId: 'explicit-profile',
-    noFallback: true,
     evidenceRef: 'model-facts',
   },
   {
@@ -256,12 +241,6 @@ const M2_ASSERTIONS = [
     artifactRef: 'asset:scene-1',
     validatorStatus: 'valid',
     evidenceRef: 'artifact-facts',
-  },
-  {
-    id: 'fallback',
-    kind: 'no-fallback',
-    forbiddenRefs: ['legacy-skill', 'legacy-tool'],
-    evidenceRef: 'path-facts',
   },
 ];
 
@@ -280,7 +259,7 @@ const M2_CONTEXT = {
 };
 
 describe('M2 typed path hard gates', () => {
-  it('passes Pi Skill receipt, actual model, Tool, artifact, and no-fallback facts', () => {
+  it('passes Pi Skill receipt, actual model, Tool, and artifact facts', () => {
     const results = evaluateHardGates(M2_ASSERTIONS, m2Facts(), M2_CONTEXT);
     expect(results.every((result) => result.status === 'pass')).toBe(true);
   });
@@ -311,7 +290,7 @@ describe('M2 typed path hard gates', () => {
     expect(result.status).toBe('pass');
   });
 
-  it('uses the same Pi receipt for the legacy assertion status vocabulary', () => {
+  it('uses the same Pi receipt for the triggered assertion status', () => {
     const [result] = evaluateHardGates(
       [{ ...M2_ASSERTIONS[0], status: 'triggered' }],
       m2Facts(),
@@ -472,9 +451,8 @@ describe('M2 typed path hard gates', () => {
           id: 'prompt',
           kind: 'prompt-composition',
           requiredFragments: [
-            { id: 'skill:storyboard', source: 'skill-lifecycle', version: HASH, hash: HASH_B },
+            { id: 'skill:storyboard', source: 'skill-lifecycle', hash: HASH_B },
           ],
-          forbiddenFragmentIds: ['legacy:storyboard'],
           evidenceRef: 'prompt-facts',
         },
       ],
@@ -491,19 +469,12 @@ describe('M2 typed path hard gates', () => {
       targetKind: 'workspace',
       minNodeIds: 2,
       minConnectionIds: 1,
-      revisionRequired: true,
+      sourceFingerprintRequired: true,
       diagnosticsEmpty: true,
       evidenceRef: 'workspace-board-facts',
     };
 
     expect(evaluateHardGates([assertion], m2Facts())[0]).toMatchObject({ status: 'pass' });
-
-    const legacyGroup = m2Facts();
-    legacyGroup.workspaceBoardProjections[0].nodeIds = ['workspace-inbox', 'generated-output-1'];
-    expect(evaluateHardGates([assertion], legacyGroup)[0]).toMatchObject({
-      status: 'fail',
-      message: expect.stringContaining('legacy visual Group'),
-    });
 
     const incomplete = m2Facts();
     incomplete.evidenceCompleteness.workspaceBoardProjections.droppedCount = 1;
@@ -512,22 +483,22 @@ describe('M2 typed path hard gates', () => {
       message: expect.stringContaining('evidence for workspaceBoardProjections is incomplete'),
     });
 
-    const missingRevision = m2Facts();
-    delete missingRevision.workspaceBoardProjections[0].revision;
-    expect(evaluateHardGates([assertion], missingRevision)[0]).toMatchObject({
+    const missingSourceFingerprint = m2Facts();
+    delete missingSourceFingerprint.workspaceBoardProjections[0].sourceFingerprint;
+    expect(evaluateHardGates([assertion], missingSourceFingerprint)[0]).toMatchObject({
       status: 'fail',
-      message: expect.stringContaining('no revision evidence'),
+      message: expect.stringContaining('no source fingerprint evidence'),
     });
   });
 
   it.each([
     ['Skill receipt mismatch', 0, (facts) => (facts.skillReceipts[0].fingerprint = HASH_B)],
     [
-      'model fallback',
+      'model identity mismatch',
       1,
       (facts) => {
-        facts.model.modelId = 'fallback-model';
-        facts.configuration.chat.modelId = 'fallback-model';
+        facts.model.modelId = 'unexpected-model';
+        facts.configuration.chat.modelId = 'unexpected-model';
       },
     ],
     [
@@ -536,11 +507,6 @@ describe('M2 typed path hard gates', () => {
       (facts) => (facts.turns[1].toolCalls[0].resultObservation = 'missing'),
     ],
     ['artifact not delivered', 3, (facts) => (facts.artifacts[0].deliveryStatus = 'failed')],
-    [
-      'forbidden fallback participated',
-      4,
-      (facts) => facts.turns[1].toolCalls.push({ id: 'legacy-call', name: 'legacy-tool' }),
-    ],
   ])('fails a correct-looking answer when %s', (_label, assertionIndex, mutate) => {
     const facts = m2Facts();
     mutate(facts);
@@ -548,18 +514,6 @@ describe('M2 typed path hard gates', () => {
     expect(result.status).toBe('fail');
     expect(classifyEvaluation({ hardGates: [result] }).outcome).toBe('case-fail');
     expect(facts.turns.at(-1).content).toBe('done');
-  });
-
-  it('fails absence assertions when any required no-fallback collection is incomplete', () => {
-    const facts = m2Facts();
-    facts.evidenceCompleteness.promptComposition.droppedCount = 1;
-    const assertion = M2_ASSERTIONS.find((candidate) => candidate.id === 'fallback');
-    expect(assertion).toBeDefined();
-    const [result] = evaluateHardGates([assertion], facts, M2_CONTEXT);
-    expect(result).toMatchObject({
-      status: 'fail',
-      message: expect.stringContaining('evidence for promptComposition is incomplete'),
-    });
   });
 
   it('fails Skill evidence when the read_skill receipt collection is truncated', () => {
@@ -572,34 +526,6 @@ describe('M2 typed path hard gates', () => {
     });
   });
 
-  it('uses explicit Workspace Board legacy fallback counters', () => {
-    const assertion = {
-      id: 'board-fallback',
-      kind: 'no-fallback',
-      forbiddenRefs: [
-        'active-canvas',
-        'recentCanvas',
-        'NodeWorkspaceBoardProjector',
-        'generic-send-to-canvas',
-      ],
-      evidenceRef: 'board-facts',
-    };
-    expect(evaluateHardGates([assertion], m2Facts())[0]).toMatchObject({ status: 'pass' });
-
-    const observed = m2Facts();
-    observed.workspaceBoardDelivery.legacyFallbackCounts.directWriter = 1;
-    expect(evaluateHardGates([assertion], observed)[0]).toMatchObject({
-      status: 'fail',
-      message: expect.stringContaining('NodeWorkspaceBoardProjector'),
-    });
-
-    const missing = m2Facts();
-    delete missing.workspaceBoardDelivery;
-    expect(evaluateHardGates([assertion], missing)[0]).toMatchObject({
-      status: 'fail',
-      message: expect.stringContaining('legacy fallback counters are unavailable'),
-    });
-  });
 });
 
 function m3Facts() {
@@ -612,7 +538,6 @@ function m3Facts() {
     conversationId: 'conversation-1',
     branchId: 'main',
     piSessionId: 'pi-session-1',
-    writerEpoch: 3,
     workspaceLocator: { kind: 'virtual', value: '/__neko_workspaces/workspace-1' },
     lastTurn: {
       turnId: 'turn-1',
@@ -642,13 +567,27 @@ function m3Facts() {
     turnId: 'turn-1',
     runId: 'run-1',
     messageId: 'assistant-turn-1',
-    projectionVersion: 3,
-    terminalProjectionVersion: 3,
     completionStatus: 'completed',
     patches: [
-      { baseProjectionVersion: 0, projectionVersion: 1 },
-      { baseProjectionVersion: 1, projectionVersion: 2 },
-      { baseProjectionVersion: 2, projectionVersion: 3 },
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'assistant-turn-1',
+      },
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'assistant-turn-1',
+      },
+      {
+        conversationId: 'conversation-1',
+        turnId: 'turn-1',
+        runId: 'run-1',
+        messageId: 'assistant-turn-1',
+        completionStatus: 'completed',
+      },
     ],
     droppedPatchCount: 0,
     acceptedPostTerminalPatchCount: 0,
@@ -656,11 +595,11 @@ function m3Facts() {
       {
         itemId: 'tool-call-1',
         kind: 'tool_call',
-        itemRevision: 2,
+        sequence: 0,
         toolCallId: 'call-1',
         toolName: 'GetContext',
       },
-      { itemId: 'text-1-0', kind: 'assistant_text', itemRevision: 3 },
+      { itemId: 'text-1-0', kind: 'assistant_text', sequence: 1 },
     ],
   };
   facts.resourceDisplayProjections = [
@@ -701,7 +640,7 @@ function m3Facts() {
     },
   ];
   facts.automation = {
-    schema: 'neko.agent-eval.workflow-trace.v1',
+    schema: 'neko.agent-eval.workflow-trace',
     sessions: [],
     steps: [
       {
@@ -771,7 +710,7 @@ function snapshot(options = {}) {
     conversationId: options.conversationId ?? 'conversation-1',
     idle: { fullyIdle: options.pendingCount !== 1 },
     messageQueue: {
-      version: 1,
+      sequence: 1,
       pendingCount: options.pendingCount ?? 0,
       pausedAfterCancel: options.pausedAfterCancel ?? false,
       items: [],
@@ -933,7 +872,7 @@ describe('M3 process hard gates', () => {
     });
 
     facts.resourceDisplayProjections[0].url =
-      'http://127.0.0.1:43125/v1/resources/must-not-enter-evidence';
+      'http://127.0.0.1:43125/resources/must-not-enter-evidence';
     expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
       status: 'fail',
       message: expect.stringContaining('non-redacted field'),
@@ -947,9 +886,9 @@ describe('M3 process hard gates', () => {
       (facts) => (facts.piRuntime.implementation = 'AgentSession'),
     ],
     [
-      'projection version gap',
+      'projection owner mismatch',
       1,
-      (facts) => (facts.timelineProjection.patches[1].baseProjectionVersion = 0),
+      (facts) => (facts.timelineProjection.patches[1].runId = 'run-other'),
     ],
     ['out-of-order event', 2, (facts) => facts.automation.steps.splice(1, 1)],
     ['queue not accepted', 3, (facts) => (facts.automation.steps[1].queued = false)],
@@ -987,16 +926,16 @@ describe('M3 process hard gates', () => {
     });
   });
 
-  it('validates bounded Markdown path events and viewport revision reuse', () => {
+  it('validates bounded Markdown path events across viewport widths', () => {
     const facts = m3Facts();
     facts.markdown = {
       pathEvents: [
         { type: 'session-created', key: 'assistant-1' },
         { type: 'source-updated', key: 'assistant-1', sourceLength: 10 },
-        { type: 'document-projected', key: 'assistant-1', revision: 2 },
-        { type: 'layout-created', key: 'assistant-1', revision: 2, viewportWidth: 96 },
-        { type: 'layout-created', key: 'assistant-1', revision: 2, viewportWidth: 48 },
-        { type: 'session-finalized', key: 'assistant-1', revision: 2 },
+        { type: 'document-projected', key: 'assistant-1' },
+        { type: 'layout-created', key: 'assistant-1', viewportWidth: 96 },
+        { type: 'layout-created', key: 'assistant-1', viewportWidth: 48 },
+        { type: 'session-finalized', key: 'assistant-1' },
       ],
       droppedPathEventCount: 0,
     };
@@ -1012,15 +951,9 @@ describe('M3 process hard gates', () => {
         'session-finalized',
       ],
       viewportWidths: [96, 48],
-      sameRevisionForViewportWidths: true,
       evidenceRef: 'markdown-facts',
     };
     expect(evaluateHardGates([assertion], facts)[0].status).toBe('pass');
-    facts.markdown.pathEvents[4].revision = 3;
-    expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
-      status: 'fail',
-      message: expect.stringContaining('did not reuse one Markdown revision'),
-    });
     facts.evidenceCompleteness.markdownPathEvents.droppedCount = 1;
     expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
       status: 'fail',

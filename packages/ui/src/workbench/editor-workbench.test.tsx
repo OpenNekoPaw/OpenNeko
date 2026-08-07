@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, StrictMode, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -116,6 +116,7 @@ describe('editor workbench shell primitives', () => {
           }}
           main={<div data-testid="main" />}
           secondaryMain={<div data-testid="secondary-main" />}
+          mainComposition="independent-shells"
           mainSplit="columns"
           mainSplitRatio={0.4}
           mainSplitResize={{
@@ -159,6 +160,7 @@ describe('editor workbench shell primitives', () => {
     expect(shell?.dataset['leftPresentation']).toBe('overlay');
     expect(shell?.dataset['rightPresentation']).toBe('docked');
     expect(shell?.dataset['mainSplit']).toBe('columns');
+    expect(shell?.dataset['mainComposition']).toBe('independent-shells');
     expect(shell?.dataset['timelineVisible']).toBe('true');
     expect(shell?.style.getPropertyValue('--neko-controlled-primary-width')).toBe('232px');
     expect(shell?.style.getPropertyValue('--neko-controlled-timeline-height')).toBe('220px');
@@ -171,6 +173,9 @@ describe('editor workbench shell primitives', () => {
         '.neko-controlled-workbench-main__secondary [data-testid="secondary-main"]',
       ),
     ).not.toBeNull();
+    expect(host.querySelector('[data-workbench-main-shell="primary"]')).not.toBeNull();
+    expect(host.querySelector('[data-workbench-main-shell="secondary"]')).not.toBeNull();
+    expect(host.querySelector('[data-workbench-main-gutter="true"]')).not.toBeNull();
     expect(
       host.querySelector('.neko-controlled-workbench-dock--left[data-presentation="overlay"]'),
     ).not.toBeNull();
@@ -183,22 +188,70 @@ describe('editor workbench shell primitives', () => {
     expect(host.querySelector('[aria-label="Resize timeline"]')).not.toBeNull();
   });
 
+  it('moves one retained Interaction between Main and a dock without remounting it', () => {
+    const mounted = vi.fn();
+    const disposed = vi.fn();
+    const interaction = <LifecycleProbe mounted={mounted} disposed={disposed} />;
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          interaction={interaction}
+          interactionPresentation="main"
+          leftDock={<div data-testid="retained-left-target" />}
+          leftDockPresentation="hidden"
+          main={<div data-testid="main" />}
+        />,
+      );
+    });
+
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(disposed).not.toHaveBeenCalled();
+    expect(
+      host.querySelector('.neko-controlled-workbench-interaction[data-presentation="main"]'),
+    ).not.toBeNull();
+
+    act(() => {
+      root.render(
+        <ControlledWorkbenchShell
+          interaction={interaction}
+          interactionPresentation="docked"
+          interactionPosition="left"
+          leftDock={<div data-testid="retained-left-target" />}
+          leftDockPresentation="hidden"
+          main={<div data-testid="main" />}
+        />,
+      );
+    });
+
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(disposed).not.toHaveBeenCalled();
+    expect(
+      host.querySelector('.neko-controlled-workbench-interaction[data-presentation="docked"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-controlled-workbench-dock--left[data-presentation="hidden"]'),
+    ).not.toBeNull();
+  });
+
   it('updates a panel live and emits one final resize size', () => {
     const onResizeEnd = vi.fn();
 
     act(() => {
       root.render(
-        <ControlledWorkbenchShell
-          primarySidebar={<div data-testid="primary" />}
-          primarySidebarWidth={232}
-          primarySidebarResize={{
-            label: 'Resize primary',
-            minSize: 208,
-            maxSize: 360,
-            onResizeEnd,
-          }}
-          main={<div data-testid="main" />}
-        />,
+        <StrictMode>
+          <ControlledWorkbenchShell
+            primarySidebar={<div data-testid="primary" />}
+            primarySidebarWidth={232}
+            primarySidebarResize={{
+              label: 'Resize primary',
+              minSize: 208,
+              maxSize: 360,
+              onResizeEnd,
+            }}
+            main={<div data-testid="main" />}
+          />
+        </StrictMode>,
       );
     });
 
@@ -225,10 +278,16 @@ describe('editor workbench shell primitives', () => {
 
     act(() => {
       dispatchPointer(handle, 'pointerdown', 1, 232, 0);
+    });
+
+    expect(panel.dataset['resizing']).toBe('true');
+
+    act(() => {
       dispatchPointer(handle, 'pointermove', 1, 300, 0);
       dispatchPointer(handle, 'pointerup', 1, 300, 0);
     });
 
+    expect(panel.dataset['resizing']).toBe('false');
     expect(onResizeEnd).toHaveBeenCalledOnce();
     expect(onResizeEnd).toHaveBeenCalledWith(300);
     expect(shell.style.getPropertyValue('--neko-controlled-primary-width')).toBe('300px');
@@ -401,6 +460,20 @@ describe('editor workbench shell primitives', () => {
     expect(onTabReorder).toHaveBeenCalledWith('a', 'b');
   });
 });
+
+function LifecycleProbe({
+  disposed,
+  mounted,
+}: {
+  readonly disposed: () => void;
+  readonly mounted: () => void;
+}): JSX.Element {
+  useEffect(() => {
+    mounted();
+    return disposed;
+  }, [disposed, mounted]);
+  return <div data-testid="interaction" />;
+}
 
 function dispatchPointer(
   target: HTMLElement,

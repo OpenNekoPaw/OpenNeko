@@ -2,7 +2,7 @@
  * Configuration Manager
  *
  * Providers/models: user config only (~/.neko/config.toml).
- * MCP servers: user + workspace merge (.neko/config.toml overrides by id).
+ * MCP servers: user configuration only.
  */
 
 import type { Provider, Model } from './types/provider';
@@ -14,15 +14,10 @@ import type {
   ModelRefConfig,
   ModelType,
 } from '@neko/ai-contracts';
-import type { UnifiedConfig } from './config-core/index';
+import type { ProviderDefinition, UnifiedConfig } from './config-core/index';
 import { DEFAULT_CONFIG, DEFAULT_EXTENSION_CONFIG } from './config-core/index';
-import {
-  readUserConfigResult,
-  readWorkspaceConfigResult,
-  type ConfigReadResult,
-} from './config-reader';
+import { type ConfigReadResult } from './config-reader';
 import { type UserConfig, type IUserConfigManager } from './user-config';
-import { loadWorkspaceConfigResult, type WorkspaceConfig } from './workspace-config';
 import { RETRY_TIMEOUT_PRESETS } from './retry-timeout-presets';
 import { ChatModelService } from './chat-model-service';
 import {
@@ -38,7 +33,7 @@ import {
   buildAssistantRuntimeSettingsSnapshot,
   buildAssistantSettingsSnapshot,
   buildDefaultMediaModelOptionIds,
-  mapWebviewSettingsToUnifiedScalars,
+  mapWebviewSettingsToAssistantSettings,
   selectAssistantDefaultProvider,
   selectAssistantProvider,
   type AssistantConfigState,
@@ -74,16 +69,12 @@ import {
   type EffectiveAgentRuntimeOverrides,
   type EffectiveAgentWorkspaceConfigSnapshot,
 } from './effective-agent-config';
-import {
-  buildProviderCredentialImports,
-  type ProviderCredentialImportApplyResult,
-  type ProviderCredentialImport,
-} from './config-file-import';
 import { isProviderConfigured } from './provider-configuration';
 import {
   resolveAiProviderSources,
   type AiProviderSourceProjection,
 } from './ai-provider-source-resolver';
+import type { AssistantRuntimeSettingsPort } from './assistant-runtime-settings-port';
 
 /**
  * Merged configuration
@@ -101,27 +92,23 @@ export interface MergedConfig {
 export interface ConfigManagerOptions {
   userConfigManager?: IUserConfigManager;
   workspacePath?: string;
+  assistantRuntimeSettings?: AssistantRuntimeSettingsPort;
 }
 
 /**
  * ConfigManager - Unified configuration management
  *
  * - Providers/Models: user config only (~/.neko/config.toml)
- * - MCP Servers: user + workspace merge (workspace overrides by id)
+ * - MCP Servers: user configuration only
  */
 export class ConfigManager {
   private userConfigManager: IUserConfigManager | null = null;
-  private workspaceConfig: WorkspaceConfig | null = null;
   private userConfigReadResult: ConfigReadResult | null = null;
-  private workspaceConfigReadResult: ConfigReadResult | null = null;
   private configDiagnostic: AssistantConfigDiagnostic | undefined;
   private workspacePath: string | null = null;
   private configMerged = false;
   private cachedConfig: MergedConfig | null = null;
-  /** Runtime-only media model overrides (not persisted to disk) */
-  private runtimeMediaDefaults: Partial<Record<MediaModelType, string>> = {};
-  /** Runtime-only assistant settings from Webview controls (not persisted to disk). */
-  private runtimeAssistantSettings: Partial<AssistantSettingsSnapshot> = {};
+  private readonly assistantRuntimeSettings: AssistantRuntimeSettingsPort | undefined;
 
   // Merged data
   private providers: Map<string, Provider> = new Map();
@@ -134,6 +121,7 @@ export class ConfigManager {
 
   constructor(options: ConfigManagerOptions = {}) {
     this.userConfigManager = options.userConfigManager ?? null;
+    this.assistantRuntimeSettings = options.assistantRuntimeSettings;
 
     if (options.workspacePath) {
       this.workspacePath = options.workspacePath;
@@ -168,9 +156,6 @@ export class ConfigManager {
         providers: [],
         models: [],
         mcpServers: [],
-        providerOverrides: {},
-        modelOverrides: {},
-        mcpServerOverrides: {},
       }
     );
   }
@@ -194,7 +179,7 @@ export class ConfigManager {
     return Array.from(this.providers.values()).filter((p) => p.enabled !== false);
   }
 
-  async setProvider(provider: Provider): Promise<void> {
+  async setProvider(provider: ProviderDefinition): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.addProvider(provider);
     this.reloadConfig();
@@ -203,42 +188,6 @@ export class ConfigManager {
   async removeProvider(providerId: string): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.removeProvider(providerId);
-    this.reloadConfig();
-  }
-
-  async setProviderApiKey(providerId: string, apiKey: string): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.updateProviderOverride(providerId, {
-      apiKey,
-    } as Partial<Provider>);
-    this.reloadConfig();
-  }
-
-  async updateProviderOverride(providerId: string, override: Partial<Provider>): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.updateProviderOverride(providerId, override);
-    this.reloadConfig();
-  }
-
-  /**
-   * Apply a runtime-only override to a provider (not persisted to disk).
-   * Useful for injecting env var API keys without modifying config files.
-   */
-  setRuntimeProviderOverride(providerId: string, override: Partial<Provider>): void {
-    this.ensureMerged();
-    const existing = this.providers.get(providerId);
-    if (existing) {
-      this.providers.set(providerId, { ...existing, ...override });
-      this.cachedConfig = null; // invalidate cached snapshot only
-      this.configDiagnostic = this.buildConfigDiagnostic();
-    }
-  }
-
-  async removeProviderOverride(providerId: string): Promise<void> {
-    this.ensureUserConfigManager();
-    const config = this.getUserConfig();
-    delete config.providerOverrides[providerId];
-    await this.userConfigManager!.save(config);
     this.reloadConfig();
   }
 
@@ -346,10 +295,11 @@ export class ConfigManager {
 
   getAssistantSettingsSnapshot(): AssistantSettingsSnapshot {
     const effective = this.getEffectiveAgentWorkspaceConfigSnapshot();
+    const runtimeSettings = this.getRuntimeAssistantSettings();
     return {
       ...buildAssistantSettingsSnapshot({
-        defaultProvider: this.getAssistantDefaultProviderScalarForSettings(),
-        defaultModel: this.getAssistantDefaultModelScalarForSettings(),
+        selectedProviderId: effective.providerId,
+        selectedModelId: effective.modelId,
         customSystemPrompt: this.getCustomSystemPrompt(),
         autoExecuteTools: this.getAutoExecuteTools(),
         streamResponses: this.getStreamResponses(),
@@ -358,7 +308,7 @@ export class ConfigManager {
         maxTokens: this.getMaxTokens(),
         executionMode: this.getExecutionMode(),
       }),
-      ...this.runtimeAssistantSettings,
+      ...runtimeSettings,
       selectedProviderId: effective.providerId,
       selectedModelId: effective.modelId,
       temperature: effective.temperature,
@@ -369,10 +319,11 @@ export class ConfigManager {
 
   getAssistantRuntimeSettingsSnapshot(): AssistantRuntimeSettingsSnapshot {
     const effective = this.getEffectiveAgentWorkspaceConfigSnapshot();
+    const runtimeSettings = this.getRuntimeAssistantSettings();
     return {
       ...buildAssistantRuntimeSettingsSnapshot({
-        defaultProvider: this.getAssistantDefaultProviderScalarForSettings(),
-        defaultModel: this.getAssistantDefaultModelScalarForSettings(),
+        selectedProviderId: effective.providerId,
+        selectedModelId: effective.modelId,
         customSystemPrompt: this.getCustomSystemPrompt(),
         autoExecuteTools: this.getAutoExecuteTools(),
         streamResponses: this.getStreamResponses(),
@@ -382,7 +333,7 @@ export class ConfigManager {
         executionMode: this.getExecutionMode(),
         thinkingBudget: this.getThinkingBudget(),
       }),
-      ...this.runtimeAssistantSettings,
+      ...runtimeSettings,
       selectedProviderId: effective.providerId,
       selectedModelId: effective.modelId,
       temperature: effective.temperature,
@@ -396,14 +347,14 @@ export class ConfigManager {
     runtimeOverrides: EffectiveAgentRuntimeOverrides = {},
   ): EffectiveAgentWorkspaceConfigSnapshot {
     const config = this.getConfig();
+    const runtimeSettings = this.getRuntimeAssistantSettings();
     return resolveEffectiveAgentWorkspaceConfigSnapshot({
       userConfigReadResult: this.userConfigReadResult,
-      workspaceConfigReadResult: this.workspaceConfigReadResult,
       providers: [...config.providers.values()],
       models: [...config.models.values()],
       mcpServers: [...config.mcpServers.values()],
       runtimeOverrides: {
-        ...projectRuntimeAssistantSettingsOverrides(this.runtimeAssistantSettings),
+        ...projectRuntimeAssistantSettingsOverrides(runtimeSettings),
         ...runtimeOverrides,
       },
     });
@@ -414,8 +365,12 @@ export class ConfigManager {
     const providerSourceProjection = this.resolveProviderSources();
     const chatModelOptions = [...providerSourceProjection.chatModelOptions];
     const explicitState = buildAssistantConfigState(config);
+    const localReadDiagnostic = this.userConfigReadResult
+      ? projectAssistantConfigReadResultDiagnostic(this.userConfigReadResult)
+      : undefined;
     const settingsDiagnostic =
       providerSourceProjection.explicitAiConfig.invalidDiagnostic ??
+      localReadDiagnostic ??
       (this.isBlockingConfigReadDiagnostic(this.configDiagnostic)
         ? this.configDiagnostic
         : undefined);
@@ -443,17 +398,6 @@ export class ConfigManager {
   async removeModel(modelId: string): Promise<void> {
     this.ensureUserConfigManager();
     await this.userConfigManager!.removeModel(modelId);
-    this.reloadConfig();
-  }
-
-  async updateModelOverride(modelId: string, override: Partial<Model>): Promise<void> {
-    this.ensureUserConfigManager();
-    const config = this.getUserConfig();
-    config.modelOverrides[modelId] = {
-      ...config.modelOverrides[modelId],
-      ...override,
-    };
-    await this.userConfigManager!.save(config);
     this.reloadConfig();
   }
 
@@ -488,15 +432,6 @@ export class ConfigManager {
     this.reloadConfig();
   }
 
-  async updateMCPServerOverride(
-    serverId: string,
-    override: Partial<MCPServerPreset>,
-  ): Promise<void> {
-    this.ensureUserConfigManager();
-    await this.userConfigManager!.updateMCPServerOverride(serverId, override);
-    this.reloadConfig();
-  }
-
   // ==========================================================================
   // Scalar Config Methods (read/write ~/.neko/config.toml scalars)
   // ==========================================================================
@@ -507,29 +442,12 @@ export class ConfigManager {
     return (raw?.[key] as NonNullable<UnifiedConfig[K]>) ?? undefined;
   }
 
-  getDefaultProviderScalar(): string {
-    return this.getScalar('defaultProvider') ?? DEFAULT_CONFIG.defaultProvider;
-  }
-
-  getDefaultModelScalar(): string {
-    return this.getScalar('defaultModel') ?? DEFAULT_CONFIG.defaultModel;
-  }
-
   getDefaultMediaModels(): Partial<Record<MediaModelType, string>> {
-    const fromConfig = this.getMediaDefaultModelOptionIdsFromConfig();
-    // Runtime overrides take priority over config-file defaults (not persisted)
-    return { ...fromConfig, ...this.runtimeMediaDefaults };
+    return this.getMediaDefaultModelOptionIdsFromConfig();
   }
 
   getDefaultModelRef(type: ModelType): ModelRefConfig | undefined {
     const defaults = this.getScalar('defaultModels') ?? {};
-    if (type === 'llm') {
-      const configured = defaults.llm;
-      if (configured) return configured;
-      const providerId = this.getExplicitDefaultProviderScalar();
-      const modelId = this.getExplicitDefaultModelScalar();
-      return providerId && modelId ? { providerId, modelId } : undefined;
-    }
     return defaults[type];
   }
 
@@ -587,15 +505,6 @@ export class ConfigManager {
     this.reloadConfig();
   }
 
-  /**
-   * Apply runtime-only media model defaults for the current session.
-   * These override config-file defaults but are never written to disk.
-   * Pass empty overrides to clear all per-category session overrides.
-   */
-  setRuntimeMediaDefaults(overrides: Partial<Record<MediaModelType, string>>): void {
-    this.runtimeMediaDefaults = { ...overrides };
-  }
-
   getTemperature(): number {
     return this.getScalar('temperature') ?? DEFAULT_CONFIG.temperature;
   }
@@ -643,26 +552,29 @@ export class ConfigManager {
   }
 
   async setAssistantSettings(updates: Partial<AssistantSettingsSnapshot>): Promise<void> {
-    this.setRuntimeAssistantSettings(updates);
+    const authority = this.requireAssistantRuntimeSettings();
+    await authority.commit({ ...authority.snapshot(), ...updates });
   }
 
   async applyRuntimeAssistantSettingsFromWebview(settings: Record<string, unknown>): Promise<void> {
-    const updates = this.mapUnifiedScalarsToAssistantSettings(
-      mapWebviewSettingsToUnifiedScalars(settings),
-    );
+    const updates = mapWebviewSettingsToAssistantSettings(settings);
+    const authority = this.requireAssistantRuntimeSettings();
+    const current = authority.snapshot();
     if (isClearingRuntimeModelSelection(settings)) {
-      const updatesWithoutModelSelection = { ...updates };
-      delete updatesWithoutModelSelection.selectedProviderId;
-      delete updatesWithoutModelSelection.selectedModelId;
-      this.clearRuntimeAssistantModelSelection();
-      this.setRuntimeAssistantSettings(updatesWithoutModelSelection);
+      const next = { ...current, ...updates };
+      delete next.selectedProviderId;
+      delete next.selectedModelId;
+      await authority.commit(next);
       return;
     }
-    this.setRuntimeAssistantSettings(updates);
+    await authority.commit({ ...current, ...updates });
   }
 
   async resetAssistantSettings(): Promise<void> {
-    this.runtimeAssistantSettings = {};
+    if (!this.assistantRuntimeSettings) {
+      throw new Error('Agent runtime settings authority is unavailable.');
+    }
+    await this.assistantRuntimeSettings.reset();
   }
 
   // ==========================================================================
@@ -677,58 +589,13 @@ export class ConfigManager {
   // Import/Export Methods
   // ==========================================================================
 
-  exportConfig(options: { includeSecrets?: boolean } = {}): ConfigExportData {
+  exportConfig(): ConfigExportData {
     const config = this.getConfig();
-    return this.configExportService.exportConfig(config.providers, config.models, options);
+    return this.configExportService.exportConfig(config.providers, config.models);
   }
 
-  async importConfig(
-    data: ConfigExportData,
-    options: { overwrite?: boolean; includeSecrets?: boolean } = {},
-  ): Promise<ConfigImportResult> {
-    return this.configExportService.importConfig(data, this, options);
-  }
-
-  async importProviderCredentialsFromUnifiedConfigs(
-    configs: readonly UnifiedConfig[],
-  ): Promise<ProviderCredentialImportApplyResult> {
-    const imports = buildProviderCredentialImports(configs);
-    const imported: ProviderCredentialImport[] = [];
-    const failed: ProviderCredentialImportApplyResult['failed'] = [];
-
-    for (const item of imports) {
-      try {
-        this.applyRuntimeProviderCredential(item);
-        imported.push(item);
-      } catch (error) {
-        failed.push({ id: item.id, error });
-      }
-    }
-
-    return { imported, failed };
-  }
-
-  async importProviderCredentialsFromConfigFiles(
-    options: {
-      readonly workspacePath?: string;
-    } = {},
-  ): Promise<ProviderCredentialImportApplyResult> {
-    const configs: UnifiedConfig[] = [];
-    const userConfig = this.userConfigReadResult ?? readUserConfigResult();
-    if (userConfig.status === 'ok') {
-      configs.push(userConfig.config);
-    }
-
-    const workspacePath = options.workspacePath ?? this.workspacePath ?? undefined;
-    if (workspacePath) {
-      const workspaceConfig =
-        this.workspaceConfigReadResult ?? readWorkspaceConfigResult(workspacePath);
-      if (workspaceConfig.status === 'ok') {
-        configs.push(workspaceConfig.config);
-      }
-    }
-
-    return this.importProviderCredentialsFromUnifiedConfigs(configs);
+  async importConfig(data: ConfigExportData): Promise<ConfigImportResult> {
+    return this.configExportService.importConfig(data, this);
   }
 
   async addCustomProvider(config: CustomProviderConfig): Promise<ConfigImportResult> {
@@ -742,12 +609,6 @@ export class ConfigManager {
   reloadConfig(): void {
     this.userConfigManager?.reload?.();
     this.userConfigReadResult = this.readUserConfigSnapshot();
-    const workspaceResult = this.workspacePath
-      ? loadWorkspaceConfigResult(this.workspacePath)
-      : undefined;
-    this.workspaceConfigReadResult = workspaceResult?.raw ?? null;
-    this.workspaceConfig = workspaceResult?.config ?? null;
-    this.clearRuntimeAssistantModelSelection();
     this.invalidateCache();
     this.configDiagnostic = this.buildConfigDiagnostic();
   }
@@ -762,8 +623,19 @@ export class ConfigManager {
   }
 
   assertConfigAvailable(): void {
-    if (this.configDiagnostic) {
-      throw new Error(buildConfigUnavailableMessage(this.configDiagnostic));
+    const readDiagnostic = this.userConfigReadResult
+      ? projectAssistantConfigReadResultDiagnostic(this.userConfigReadResult)
+      : undefined;
+    if (readDiagnostic && this.isBlockingConfigReadDiagnostic(readDiagnostic)) {
+      throw new Error(buildConfigUnavailableMessage(readDiagnostic));
+    }
+    const availabilityDiagnostic = this.buildAssistantAvailabilityDiagnostic();
+    if (availabilityDiagnostic) {
+      throw new Error(buildConfigUnavailableMessage(availabilityDiagnostic));
+    }
+    const effectiveDiagnostic = this.getEffectiveAgentWorkspaceConfigSnapshot().blockingDiagnostic;
+    if (effectiveDiagnostic) {
+      throw new Error(buildConfigUnavailableMessage(effectiveDiagnostic));
     }
   }
 
@@ -783,17 +655,8 @@ export class ConfigManager {
   }
 
   private readUserConfigSnapshot(): ConfigReadResult {
-    if (this.userConfigManager?.loadRawResult) {
-      return this.userConfigManager.loadRawResult();
-    }
-    if (this.userConfigManager) {
-      return {
-        status: 'ok',
-        filePath: '<in-memory-user-config>',
-        config: this.userConfigManager.loadRaw(),
-      };
-    }
-    throw new Error('User config storage not available');
+    if (!this.userConfigManager) throw new Error('User config storage not available');
+    return this.userConfigManager.loadRawResult();
   }
 
   private getRawUserConfigSnapshot(): UnifiedConfig | undefined {
@@ -883,37 +746,10 @@ export class ConfigManager {
     return (
       diagnostic?.code === 'empty' ||
       diagnostic?.code === 'invalidToml' ||
-      diagnostic?.code === 'unsupportedVersion' ||
-      diagnostic?.code === 'duplicateProviderId' ||
-      diagnostic?.code === 'duplicateModelId' ||
-      diagnostic?.code === 'invalidDefaultMaxTokens' ||
-      diagnostic?.code === 'invalidModelTokenMetadata' ||
-      diagnostic?.code === 'unsupportedModelType' ||
-      diagnostic?.code === 'unsupportedDefaultMediaModelType' ||
-      diagnostic?.code === 'unsupportedDefaultModelType' ||
-      diagnostic?.code === 'unsupportedDefaultModelPurpose' ||
       diagnostic?.code === 'invalidDefaultProvider' ||
       diagnostic?.code === 'invalidDefaultModel' ||
       diagnostic?.code === 'invalidDefaultModelBinding' ||
       diagnostic?.code === 'readError'
-    );
-  }
-
-  private getAssistantDefaultProviderScalarForSettings(): string | null {
-    if (this.userConfigReadResult?.status !== 'ok') return null;
-    return (
-      this.getExplicitDefaultModelRef('llm')?.providerId ??
-      this.getExplicitDefaultProviderScalar() ??
-      null
-    );
-  }
-
-  private getAssistantDefaultModelScalarForSettings(): string | null {
-    if (this.userConfigReadResult?.status !== 'ok') return null;
-    return (
-      this.getExplicitDefaultModelRef('llm')?.modelId ??
-      this.getExplicitDefaultModelScalar() ??
-      null
     );
   }
 
@@ -923,13 +759,11 @@ export class ConfigManager {
       : undefined;
     if (userDiagnostic) return userDiagnostic;
 
-    const workspaceDiagnostic = this.workspaceConfigReadResult
-      ? projectAssistantConfigReadResultDiagnostic(this.workspaceConfigReadResult)
-      : undefined;
-    if (workspaceDiagnostic) return workspaceDiagnostic;
-
     const availabilityDiagnostic = this.buildAssistantAvailabilityDiagnostic();
     if (availabilityDiagnostic) return availabilityDiagnostic;
+
+    const bindingDiagnostic = this.validateDefaultModelBindings();
+    if (bindingDiagnostic) return bindingDiagnostic;
 
     return this.getEffectiveAgentWorkspaceConfigSnapshot().blockingDiagnostic;
   }
@@ -957,29 +791,6 @@ export class ConfigManager {
       return buildAssistantConfigAvailabilityDiagnostic('missingModel', filePath);
     }
 
-    const explicitDefaultLlmModelRef = this.getExplicitDefaultModelRef('llm');
-    const explicitDefaultProvider =
-      explicitDefaultLlmModelRef?.providerId ?? this.getExplicitDefaultProviderScalar();
-    const explicitDefaultModel =
-      explicitDefaultLlmModelRef?.modelId ?? this.getExplicitDefaultModelScalar();
-    const defaultModelBindingDiagnostic = this.validateDefaultModelBindings(
-      filePath,
-      userConfigResult.config,
-    );
-    if (defaultModelBindingDiagnostic) {
-      return defaultModelBindingDiagnostic;
-    }
-
-    const defaultSelectionDiagnostic = this.validateExplicitChatDefaults({
-      filePath,
-      explicitDefaultProvider,
-      explicitDefaultModel,
-      enabledChatModels,
-    });
-    if (defaultSelectionDiagnostic) {
-      return defaultSelectionDiagnostic;
-    }
-
     const configuredProviders = new Set(
       enabledProviders
         .filter((provider) => isProviderConfigured(provider))
@@ -990,63 +801,16 @@ export class ConfigManager {
     );
     return hasConfiguredChatModel
       ? undefined
-      : buildAssistantConfigAvailabilityDiagnostic('missingApiKey', filePath);
+      : buildAssistantConfigAvailabilityDiagnostic('missingProviderEndpoint', filePath);
   }
 
-  private validateExplicitChatDefaults(input: {
-    filePath: string;
-    explicitDefaultProvider?: string;
-    explicitDefaultModel?: string;
-    enabledChatModels: readonly Model[];
-  }): AssistantConfigDiagnostic | undefined {
-    const provider = input.explicitDefaultProvider
-      ? this.providers.get(input.explicitDefaultProvider)
-      : undefined;
-    if (input.explicitDefaultProvider) {
-      if (!provider || provider.enabled === false || !isProviderConfigured(provider)) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultProvider', input.filePath);
-      }
-    }
+  private validateDefaultModelBindings(): AssistantConfigDiagnostic | undefined {
+    const result = this.userConfigReadResult ?? this.readUserConfigSnapshot();
+    if (result.status !== 'ok') return undefined;
 
-    if (!input.explicitDefaultModel) {
-      return undefined;
-    }
-
-    const model = this.models.get(input.explicitDefaultModel);
-    if (
-      !model ||
-      model.enabled === false ||
-      !modelSupportsPurpose(model, 'llm.chat') ||
-      (provider && model.providerId !== provider.id)
-    ) {
-      return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModel', input.filePath);
-    }
-
-    if (!provider) {
-      const modelProvider = this.providers.get(model.providerId);
-      if (
-        !modelProvider ||
-        modelProvider.enabled === false ||
-        !isProviderConfigured(modelProvider)
-      ) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultProvider', input.filePath);
-      }
-    }
-
-    const enabledModelIds = new Set(input.enabledChatModels.map((candidate) => candidate.id));
-    return enabledModelIds.has(model.id)
-      ? undefined
-      : buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModel', input.filePath);
-  }
-
-  private validateDefaultModelBindings(
-    filePath: string,
-    config: UnifiedConfig,
-  ): AssistantConfigDiagnostic | undefined {
-    const defaults = config.defaultModels ?? {};
+    const defaults = result.config.defaultModels ?? {};
     for (const [type, ref] of Object.entries(defaults)) {
       if (!ref) continue;
-      const modelType = type as ModelType;
       const provider = this.providers.get(ref.providerId);
       const model = this.models.get(ref.modelId);
       if (
@@ -1056,12 +820,17 @@ export class ConfigManager {
         !model ||
         model.enabled === false ||
         model.providerId !== provider.id ||
-        (model.type ?? 'llm') !== modelType
+        (model.type ?? 'llm') !== type
       ) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModelBinding', filePath);
+        return buildAssistantConfigAvailabilityDiagnostic(
+          'invalidDefaultModelBinding',
+          result.filePath,
+          `default_models.${type}`,
+        );
       }
     }
-    const purposeDefaults = config.defaultModelPurposes ?? {};
+
+    const purposeDefaults = result.config.defaultModelPurposes ?? {};
     for (const [purpose, ref] of Object.entries(purposeDefaults)) {
       if (!ref) continue;
       const provider = this.providers.get(ref.providerId);
@@ -1069,95 +838,40 @@ export class ConfigManager {
       if (
         !provider ||
         provider.enabled === false ||
+        !isProviderConfigured(provider) ||
         !model ||
         model.enabled === false ||
         model.providerId !== provider.id ||
         !modelSupportsPurpose(model, purpose)
       ) {
-        return buildAssistantConfigAvailabilityDiagnostic('invalidDefaultModelBinding', filePath);
+        return buildAssistantConfigAvailabilityDiagnostic(
+          'invalidDefaultModelBinding',
+          result.filePath,
+          `default_model_purposes.${purpose}`,
+        );
       }
     }
     return undefined;
   }
 
-  private getExplicitDefaultProviderScalar(): string | undefined {
-    const raw = this.getRawUserConfigSnapshot();
-    return typeof raw?.defaultProvider === 'string' && raw.defaultProvider.length > 0
-      ? raw.defaultProvider
-      : undefined;
+  private getRuntimeAssistantSettings(): Readonly<Partial<AssistantSettingsSnapshot>> {
+    return this.assistantRuntimeSettings?.snapshot() ?? {};
   }
 
-  private getExplicitDefaultModelScalar(): string | undefined {
-    const raw = this.getRawUserConfigSnapshot();
-    return typeof raw?.defaultModel === 'string' && raw.defaultModel.length > 0
-      ? raw.defaultModel
-      : undefined;
-  }
-
-  private getExplicitDefaultModelRef(type: ModelType): ModelRefConfig | undefined {
-    return this.getRawUserConfigSnapshot()?.defaultModels?.[type];
-  }
-
-  private setRuntimeAssistantSettings(updates: Partial<AssistantSettingsSnapshot>): void {
-    this.runtimeAssistantSettings = {
-      ...this.runtimeAssistantSettings,
-      ...updates,
-    };
-  }
-
-  private clearRuntimeAssistantModelSelection(): void {
-    if (
-      !('selectedProviderId' in this.runtimeAssistantSettings) &&
-      !('selectedModelId' in this.runtimeAssistantSettings)
-    ) {
-      return;
+  private requireAssistantRuntimeSettings(): AssistantRuntimeSettingsPort {
+    if (!this.assistantRuntimeSettings) {
+      throw new Error('Agent runtime settings authority is unavailable.');
     }
-
-    const nextSettings = { ...this.runtimeAssistantSettings };
-    delete nextSettings.selectedProviderId;
-    delete nextSettings.selectedModelId;
-    this.runtimeAssistantSettings = nextSettings;
-  }
-
-  private mapUnifiedScalarsToAssistantSettings(
-    updates: Partial<UnifiedConfig>,
-  ): Partial<AssistantSettingsSnapshot> {
-    const settings: Partial<AssistantSettingsSnapshot> = {};
-    if ('defaultProvider' in updates) {
-      settings.selectedProviderId = updates.defaultProvider ?? null;
-    }
-    if ('defaultModel' in updates) {
-      settings.selectedModelId = updates.defaultModel ?? null;
-    }
-    if (updates.customSystemPrompt !== undefined) {
-      settings.customSystemPrompt = updates.customSystemPrompt;
-    }
-    if (updates.autoExecuteTools !== undefined) {
-      settings.autoExecuteTools = updates.autoExecuteTools;
-    }
-    if (updates.streamResponses !== undefined) {
-      settings.streamResponses = updates.streamResponses;
-    }
-    if (updates.showToolCalls !== undefined) {
-      settings.showToolCalls = updates.showToolCalls;
-    }
-    if (updates.temperature !== undefined) {
-      settings.temperature = updates.temperature;
-    }
-    if (updates.maxTokens !== undefined) {
-      settings.maxTokens = updates.maxTokens;
-    }
-    if (updates.executionMode !== undefined) {
-      settings.executionMode = updates.executionMode;
-    }
-    return settings;
+    const diagnostic = this.assistantRuntimeSettings.diagnostic();
+    if (diagnostic) throw new Error(diagnostic.message);
+    return this.assistantRuntimeSettings;
   }
 
   /**
-   * Merge user config + workspace MCP config into flat Maps.
+   * Project user configuration into flat runtime maps.
    *
    * - Providers/Models: user config only (no workspace layer)
-   * - MCP Servers: user + workspace merge (workspace overrides by id)
+   * - MCP Servers: user configuration only
    */
   private ensureMerged(): void {
     if (this.configMerged) {
@@ -1166,69 +880,31 @@ export class ConfigManager {
 
     const userConfigResult = this.userConfigReadResult ?? this.readUserConfigSnapshot();
     const userConfig = userConfigResult.status === 'ok' ? userConfigResult.config : undefined;
-    const workspace = this.workspaceConfig;
 
     // --- Providers (user only) ---
     this.providers.clear();
     if (userConfigResult.status === 'ok') {
       this.mergeArrayToMap(this.providers, userConfig?.providers as Provider[] | undefined);
-      this.applyOverrides(
-        this.providers,
-        userConfig?.providerOverrides as Record<string, Partial<Provider>> | undefined,
-      );
-    }
-
-    // Apply credentials.apiKeys to providers missing an apiKey
-    const credentialKeys = userConfig?.credentials?.apiKeys;
-    if (credentialKeys) {
-      for (const [providerId, apiKey] of Object.entries(credentialKeys)) {
-        const provider = this.providers.get(providerId);
-        if (provider && !provider.apiKey) {
-          this.providers.set(providerId, { ...provider, apiKey });
-        }
-      }
     }
 
     // --- Models (user only) ---
     this.models.clear();
     if (userConfigResult.status === 'ok') {
       this.mergeArrayToMap(this.models, userConfig?.models as Model[] | undefined);
-      this.applyOverrides(
-        this.models,
-        userConfig?.modelOverrides as Record<string, Partial<Model>> | undefined,
-      );
     }
 
-    // --- MCP Servers (user + workspace) ---
+    // --- MCP Servers (user only) ---
     this.mcpServers.clear();
     if (userConfigResult.status === 'ok') {
       this.mergeArrayToMap(
         this.mcpServers,
         userConfig?.mcpServers as MCPServerPreset[] | undefined,
       );
-      this.applyOverrides(
-        this.mcpServers,
-        userConfig?.mcpServerOverrides as Record<string, Partial<MCPServerPreset>> | undefined,
-      );
     }
-    this.mergeArrayToMap(this.mcpServers, workspace?.mcpServers);
-    this.applyOverrides(this.mcpServers, workspace?.mcpServerOverrides);
-
     // Substitute workspace path in MCP server configurations
     this.substituteMCPWorkspacePath();
 
     this.configMerged = true;
-  }
-
-  private applyRuntimeProviderCredential(item: ProviderCredentialImport): void {
-    this.ensureMerged();
-    const existing = this.providers.get(item.id);
-    this.providers.set(item.id, {
-      ...(existing ?? item.provider),
-      apiKey: item.apiKey,
-    });
-    this.cachedConfig = null;
-    this.configDiagnostic = this.buildConfigDiagnostic();
   }
 
   /**
@@ -1239,23 +915,6 @@ export class ConfigManager {
     if (!items) return;
     for (const item of items) {
       target.set(item.id, { ...item });
-    }
-  }
-
-  /**
-   * Apply overrides to existing items in the Map.
-   * Only modifies items that already exist.
-   */
-  private applyOverrides<T extends { id: string }>(
-    target: Map<string, T>,
-    overrides?: Record<string, Partial<T>>,
-  ): void {
-    if (!overrides) return;
-    for (const [id, override] of Object.entries(overrides)) {
-      const existing = target.get(id);
-      if (existing) {
-        target.set(id, { ...existing, ...override });
-      }
     }
   }
 

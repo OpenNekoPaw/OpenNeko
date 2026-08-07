@@ -1,9 +1,5 @@
 import { isContentLocator, isHostProjectedRuntimeValue, type ContentLocator } from '@neko/content';
 
-export const CREATIVE_AI_INVOCATION_SCHEMA_VERSION = 1 as const;
-
-export type CreativeAiInvocationSchemaVersion = typeof CREATIVE_AI_INVOCATION_SCHEMA_VERSION;
-
 export const CREATIVE_AI_INVOCATION_DOMAINS = [
   'agent-internal',
   'external-creative-package',
@@ -156,8 +152,6 @@ export interface CreativeAiValidationResult<T> {
   readonly diagnostics: readonly CreativeAiDiagnostic[];
 }
 
-export type CreativeAiRevision = string | number;
-
 export interface CreativeAiDocumentRef {
   readonly kind: 'nk-document';
   readonly packageId: string;
@@ -177,7 +171,6 @@ export interface CreativeAiRefBase {
   readonly fieldPath?: string;
   readonly contentLocator?: ContentLocator;
   readonly label?: string;
-  readonly revision?: CreativeAiRevision;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
@@ -195,7 +188,6 @@ export interface CreativeAiTargetRef extends CreativeAiRefBase {
 export interface CreativeAiWritebackPolicy {
   readonly kind: CreativeAiWritebackKind;
   readonly atomicity?: CreativeAiBatchAtomicity;
-  readonly requiresRevisionMatch?: boolean;
 }
 
 export interface CreativeAiRoutingHint {
@@ -205,7 +197,6 @@ export interface CreativeAiRoutingHint {
 }
 
 export interface AgentInternalInvocation {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly domain: 'agent-internal';
   readonly invocationId: string;
   readonly conversationId: string;
@@ -222,7 +213,6 @@ export interface AgentInternalInvocation {
 }
 
 export interface ExternalCreativeAiInvocation {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly domain: 'external-creative-package';
   readonly invocationId: string;
   readonly sourcePackage: string;
@@ -233,8 +223,6 @@ export interface ExternalCreativeAiInvocation {
   readonly intent: string;
   readonly mode: CreativeAiInvocationMode;
   readonly writeback: CreativeAiWritebackPolicy;
-  readonly documentRevision?: CreativeAiRevision;
-  readonly targetRevision?: CreativeAiRevision;
   readonly routing?: CreativeAiRoutingHint;
   readonly idempotencyKey: string;
   readonly requestedAt?: string;
@@ -256,9 +244,7 @@ export interface CreativeAiRoutingDecision {
 export interface CreativeAiModelSnapshotRef {
   readonly providerId?: string;
   readonly modelId?: string;
-  readonly modelRevision?: string;
   readonly capabilityId?: string;
-  readonly capabilityRevision?: string;
 }
 
 export interface CreativeAiWorkItemSnapshot {
@@ -295,7 +281,6 @@ export interface CreativeAiRunAggregateSnapshot {
 }
 
 export interface CreativeAiRunSnapshot {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly runId: string;
   readonly conversationId: string;
   readonly invocationId: string;
@@ -310,8 +295,6 @@ export interface CreativeAiRunSnapshot {
   readonly intent: string;
   readonly mode: CreativeAiInvocationMode;
   readonly writeback: CreativeAiWritebackPolicy;
-  readonly documentRevision?: CreativeAiRevision;
-  readonly targetRevision?: CreativeAiRevision;
   readonly modelSnapshot?: CreativeAiModelSnapshotRef;
   readonly idempotencyKey: string;
   readonly status: CreativeAiRunStatus;
@@ -323,7 +306,6 @@ export interface CreativeAiRunSnapshot {
 }
 
 export interface ConversationLifecycleCommand {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly commandId: string;
   readonly conversationId: string;
   readonly action: ConversationLifecycleAction;
@@ -345,7 +327,6 @@ export interface CreativeAiOutputRef {
 }
 
 export interface CreativeAiApplyRequest {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly requestId: string;
   readonly conversationId: string;
   readonly runId: string;
@@ -355,7 +336,6 @@ export interface CreativeAiApplyRequest {
   readonly candidateTargetRef?: CreativeAiTargetRef;
   readonly outputRefs: readonly CreativeAiOutputRef[];
   readonly writeback: CreativeAiWritebackPolicy;
-  readonly targetRevision?: CreativeAiRevision;
   readonly idempotencyKey: string;
   readonly requestedAt?: string;
   readonly diagnostics?: readonly CreativeAiDiagnostic[];
@@ -367,13 +347,10 @@ export interface CreativeAiCandidateApplyRequest extends CreativeAiApplyRequest 
 }
 
 export interface CreativeAiCandidatePromotionRequest {
-  readonly schemaVersion: CreativeAiInvocationSchemaVersion;
   readonly requestId: string;
   readonly sourcePackage: string;
   readonly targetRef: CreativeAiTargetRef;
   readonly candidateTargetRef: CreativeAiTargetRef;
-  readonly targetRevision: CreativeAiRevision;
-  readonly candidateRevision?: CreativeAiRevision;
   readonly runId?: string;
   readonly workItemId?: string;
   readonly conversationId?: string;
@@ -406,13 +383,147 @@ const RUNTIME_ONLY_IDENTITY_PATTERNS: readonly RegExp[] = [
   /^engine-token:/i,
   /^https?:\/\/127\.0\.0\.1(?::|\/)/i,
   /^https?:\/\/localhost(?::|\/)/i,
-  /(?:^|\/)\.neko\/\.cache(?:\/|$)/i,
-  /(?:^|\\)\.neko\\\.cache(?:\\|$)/i,
   /^\/tmp(?:\/|$)/i,
   /^\/var\/folders(?:\/|$)/i,
   /^\/private\/var\/folders(?:\/|$)/i,
   /(?:^|\\)AppData\\Local\\Temp(?:\\|$)/i,
 ];
+
+const AGENT_INTERNAL_INVOCATION_FIELDS = new Set([
+  'domain',
+  'invocationId',
+  'conversationId',
+  'intent',
+  'mode',
+  'sourceRef',
+  'targetRef',
+  'candidateTargetRef',
+  'writeback',
+  'messageId',
+  'idempotencyKey',
+  'requestedAt',
+  'metadata',
+]);
+
+const EXTERNAL_INVOCATION_FIELDS = new Set([
+  'domain',
+  'invocationId',
+  'sourcePackage',
+  'documentRef',
+  'sourceRef',
+  'targetRef',
+  'candidateTargetRef',
+  'intent',
+  'mode',
+  'writeback',
+  'routing',
+  'idempotencyKey',
+  'requestedAt',
+  'metadata',
+]);
+
+const CREATIVE_AI_REF_BASE_FIELDS = [
+  'kind',
+  'packageId',
+  'id',
+  'documentRef',
+  'entityId',
+  'fieldPath',
+  'contentLocator',
+  'label',
+  'metadata',
+] as const;
+
+const CREATIVE_AI_SOURCE_REF_FIELDS = new Set([
+  ...CREATIVE_AI_REF_BASE_FIELDS,
+  'role',
+  'childRefs',
+]);
+
+const CREATIVE_AI_TARGET_REF_FIELDS = new Set([
+  ...CREATIVE_AI_REF_BASE_FIELDS,
+  'role',
+  'candidateOnly',
+  'childRefs',
+]);
+
+const CREATIVE_AI_RUN_SNAPSHOT_FIELDS = new Set([
+  'runId',
+  'conversationId',
+  'invocationId',
+  'invocationDomain',
+  'sourcePackage',
+  'associationKey',
+  'routingReason',
+  'sourceRef',
+  'documentRef',
+  'targetRef',
+  'candidateTargetRef',
+  'intent',
+  'mode',
+  'writeback',
+  'modelSnapshot',
+  'idempotencyKey',
+  'status',
+  'workItems',
+  'aggregate',
+  'createdAt',
+  'updatedAt',
+  'diagnostics',
+]);
+
+const CONVERSATION_LIFECYCLE_COMMAND_FIELDS = new Set([
+  'commandId',
+  'conversationId',
+  'action',
+  'expectedState',
+  'activeRunIds',
+  'reason',
+  'requestedAt',
+  'metadata',
+]);
+
+const CREATIVE_AI_APPLY_REQUEST_FIELDS = new Set([
+  'requestId',
+  'conversationId',
+  'runId',
+  'workItemId',
+  'sourcePackage',
+  'targetRef',
+  'candidateTargetRef',
+  'outputRefs',
+  'writeback',
+  'idempotencyKey',
+  'requestedAt',
+  'diagnostics',
+]);
+
+const CREATIVE_AI_PROMOTION_REQUEST_FIELDS = new Set([
+  'requestId',
+  'sourcePackage',
+  'targetRef',
+  'candidateTargetRef',
+  'runId',
+  'workItemId',
+  'conversationId',
+  'outputRefs',
+  'actor',
+  'judgeWorkItemId',
+  'judgeResultRef',
+  'idempotencyKey',
+  'requestedAt',
+  'metadata',
+]);
+
+const CREATIVE_AI_OUTPUT_REF_FIELDS = new Set([
+  'kind',
+  'id',
+  'contentLocator',
+  'generatedAssetId',
+  'mimeType',
+  'label',
+  'metadata',
+]);
 
 export function isCreativeAiInvocationMode(value: unknown): value is CreativeAiInvocationMode {
   return includesString(CREATIVE_AI_INVOCATION_MODES, value);
@@ -545,7 +656,7 @@ export function validateAgentInternalInvocation(
     return invalidRootResult('creative-ai-invalid-agent-internal-invocation');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectUnknownFields(value, AGENT_INTERNAL_INVOCATION_FIELDS, '', diagnostics);
   validateLiteral(
     value['domain'],
     'agent-internal',
@@ -583,7 +694,7 @@ export function validateExternalCreativeAiInvocation(
     return invalidRootResult('creative-ai-invalid-external-invocation');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectUnknownFields(value, EXTERNAL_INVOCATION_FIELDS, '', diagnostics);
   validateLiteral(
     value['domain'],
     'external-creative-package',
@@ -616,8 +727,6 @@ export function validateExternalCreativeAiInvocation(
   requireStableString(value['intent'], 'intent', diagnostics);
   validateMode(value['mode'], diagnostics);
   validateWriteback(value['writeback'], 'writeback', diagnostics);
-  validateOptionalRevision(value['documentRevision'], 'documentRevision', diagnostics);
-  validateOptionalRevision(value['targetRevision'], 'targetRevision', diagnostics);
   validateOptionalRoutingHint(value['routing'], 'routing', diagnostics);
   requireStableString(
     value['idempotencyKey'],
@@ -637,6 +746,9 @@ export function validateCreativeAiSourceRef(
   value: unknown,
 ): CreativeAiValidationResult<CreativeAiSourceRef> {
   const diagnostics: CreativeAiDiagnostic[] = [];
+  if (isRecord(value)) {
+    rejectUnknownFields(value, CREATIVE_AI_SOURCE_REF_FIELDS, 'sourceRef', diagnostics);
+  }
   validateCreativeAiRefBase(value, diagnostics, 'sourceRef');
   if (isRecord(value)) {
     validateOptionalChildSourceRefs(value['childRefs'], 'childRefs', diagnostics);
@@ -648,6 +760,9 @@ export function validateCreativeAiTargetRef(
   value: unknown,
 ): CreativeAiValidationResult<CreativeAiTargetRef> {
   const diagnostics: CreativeAiDiagnostic[] = [];
+  if (isRecord(value)) {
+    rejectUnknownFields(value, CREATIVE_AI_TARGET_REF_FIELDS, 'targetRef', diagnostics);
+  }
   validateCreativeAiRefBase(value, diagnostics, 'targetRef');
   if (isRecord(value)) {
     validateOptionalChildTargetRefs(value['childRefs'], 'childRefs', diagnostics);
@@ -727,7 +842,7 @@ export function validateCreativeAiRunSnapshot(
     return invalidRootResult('creative-ai-invalid-run-snapshot');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectUnknownFields(value, CREATIVE_AI_RUN_SNAPSHOT_FIELDS, '', diagnostics);
   requireStableString(value['runId'], 'runId', diagnostics);
   requireStableString(
     value['conversationId'],
@@ -781,8 +896,6 @@ export function validateCreativeAiRunSnapshot(
   requireStableString(value['intent'], 'intent', diagnostics);
   validateMode(value['mode'], diagnostics);
   validateWriteback(value['writeback'], 'writeback', diagnostics);
-  validateOptionalRevision(value['documentRevision'], 'documentRevision', diagnostics);
-  validateOptionalRevision(value['targetRevision'], 'targetRevision', diagnostics);
   validateOptionalModelSnapshot(value['modelSnapshot'], 'modelSnapshot', diagnostics);
   requireStableString(
     value['idempotencyKey'],
@@ -818,7 +931,7 @@ export function validateConversationLifecycleCommand(
     return invalidRootResult('creative-ai-invalid-lifecycle-command');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectUnknownFields(value, CONVERSATION_LIFECYCLE_COMMAND_FIELDS, '', diagnostics);
   requireStableString(value['commandId'], 'commandId', diagnostics);
   requireStableString(
     value['conversationId'],
@@ -865,7 +978,7 @@ export function validateCreativeAiApplyRequest(
     return invalidRootResult('creative-ai-invalid-apply-request');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectUnknownFields(value, CREATIVE_AI_APPLY_REQUEST_FIELDS, '', diagnostics);
   requireStableString(value['requestId'], 'requestId', diagnostics);
   requireStableString(
     value['conversationId'],
@@ -885,7 +998,6 @@ export function validateCreativeAiApplyRequest(
   validateOptionalTargetRef(value['candidateTargetRef'], 'candidateTargetRef', diagnostics);
   validateOutputRefs(value['outputRefs'], 'outputRefs', diagnostics);
   validateWriteback(value['writeback'], 'writeback', diagnostics);
-  validateOptionalRevision(value['targetRevision'], 'targetRevision', diagnostics);
   requireStableString(
     value['idempotencyKey'],
     'idempotencyKey',
@@ -942,7 +1054,7 @@ export function validateCreativeAiCandidatePromotionRequest(
     return invalidRootResult('creative-ai-invalid-candidate-promotion-request');
   }
 
-  validateSchemaVersion(value['schemaVersion'], diagnostics);
+  rejectUnknownFields(value, CREATIVE_AI_PROMOTION_REQUEST_FIELDS, '', diagnostics);
   requireStableString(value['requestId'], 'requestId', diagnostics);
   requireStableString(
     value['sourcePackage'],
@@ -974,8 +1086,6 @@ export function validateCreativeAiCandidatePromotionRequest(
   } else {
     validateOptionalTargetRef(value['candidateTargetRef'], 'candidateTargetRef', diagnostics);
   }
-  requireRevision(value['targetRevision'], 'targetRevision', diagnostics);
-  validateOptionalRevision(value['candidateRevision'], 'candidateRevision', diagnostics);
   validateOptionalStableString(value['runId'], 'runId', diagnostics);
   validateOptionalStableString(value['workItemId'], 'workItemId', diagnostics);
   validateOptionalStableString(value['conversationId'], 'conversationId', diagnostics);
@@ -1035,6 +1145,10 @@ export function isRuntimeOnlyCreativeAiIdentityValue(value: string): boolean {
   const normalized = value.trim();
   return (
     isHostProjectedRuntimeValue(normalized) ||
+    normalized
+      .replaceAll('\\', '/')
+      .split('/')
+      .some((segment) => segment.startsWith('.')) ||
     RUNTIME_ONLY_IDENTITY_PATTERNS.some((pattern) => pattern.test(normalized))
   );
 }
@@ -1069,7 +1183,6 @@ function validateCreativeAiRefBase(
   validateOptionalStableString(value['fieldPath'], `${targetLabel}.fieldPath`, diagnostics);
   validateCreativeAiRefLocator(value, targetLabel, diagnostics);
   validateOptionalStableString(value['label'], `${targetLabel}.label`, diagnostics);
-  validateOptionalRevision(value['revision'], `${targetLabel}.revision`, diagnostics);
   validateOptionalRecord(value['metadata'], `${targetLabel}.metadata`, diagnostics);
 }
 
@@ -1119,21 +1232,6 @@ function validateOptionalChildTargetRefs(
   }
 }
 
-function validateSchemaVersion(value: unknown, diagnostics: CreativeAiDiagnostic[]): void {
-  if (value !== CREATIVE_AI_INVOCATION_SCHEMA_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'creative-ai-unsupported-schema-version',
-        'Creative AI invocation schemaVersion is unsupported.',
-        'schemaVersion',
-        CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
-        value,
-      ),
-    );
-  }
-}
-
 function validateMode(value: unknown, diagnostics: CreativeAiDiagnostic[]): void {
   if (!isCreativeAiInvocationMode(value)) {
     diagnostics.push(
@@ -1142,6 +1240,26 @@ function validateMode(value: unknown, diagnostics: CreativeAiDiagnostic[]): void
         'creative-ai-invalid-mode',
         'Creative AI invocation mode is invalid.',
         'mode',
+      ),
+    );
+  }
+}
+
+function rejectUnknownFields(
+  value: Readonly<Record<string, unknown>>,
+  allowedFields: ReadonlySet<string>,
+  target: string,
+  diagnostics: CreativeAiDiagnostic[],
+): void {
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
+    const fieldTarget = target ? `${target}.${field}` : field;
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'creative-ai-unsupported-field',
+        `Creative AI field ${fieldTarget} is not supported.`,
+        fieldTarget,
       ),
     );
   }
@@ -1184,6 +1302,7 @@ function validateWriteback(
     );
     return;
   }
+  rejectUnknownFields(value, new Set(['kind', 'atomicity']), target, diagnostics);
   if (!isCreativeAiWritebackKind(value['kind'])) {
     diagnostics.push(
       diagnostic(
@@ -1201,19 +1320,6 @@ function validateWriteback(
         'creative-ai-invalid-batch-atomicity',
         'Creative AI writeback atomicity is invalid.',
         `${target}.atomicity`,
-      ),
-    );
-  }
-  if (
-    value['requiresRevisionMatch'] !== undefined &&
-    typeof value['requiresRevisionMatch'] !== 'boolean'
-  ) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'creative-ai-invalid-boolean',
-        'Creative AI writeback requiresRevisionMatch must be boolean.',
-        `${target}.requiresRevisionMatch`,
       ),
     );
   }
@@ -1408,15 +1514,15 @@ function validateOptionalModelSnapshot(
     );
     return;
   }
-  validateOptionalStableString(value['providerId'], `${target}.providerId`, diagnostics);
-  validateOptionalStableString(value['modelId'], `${target}.modelId`, diagnostics);
-  validateOptionalStableString(value['modelRevision'], `${target}.modelRevision`, diagnostics);
-  validateOptionalStableString(value['capabilityId'], `${target}.capabilityId`, diagnostics);
-  validateOptionalStableString(
-    value['capabilityRevision'],
-    `${target}.capabilityRevision`,
+  rejectUnknownFields(
+    value,
+    new Set(['providerId', 'modelId', 'capabilityId']),
+    target,
     diagnostics,
   );
+  validateOptionalStableString(value['providerId'], `${target}.providerId`, diagnostics);
+  validateOptionalStableString(value['modelId'], `${target}.modelId`, diagnostics);
+  validateOptionalStableString(value['capabilityId'], `${target}.capabilityId`, diagnostics);
 }
 
 function validateOptionalWorkItemSnapshots(
@@ -1637,6 +1743,7 @@ function validateOutputRef(
     );
     return;
   }
+  rejectUnknownFields(value, CREATIVE_AI_OUTPUT_REF_FIELDS, target, diagnostics);
   if (!isCreativeAiOutputRefKind(value['kind'])) {
     diagnostics.push(
       diagnostic(
@@ -1680,18 +1787,6 @@ function validateCreativeAiOutputLocator(
   target: string,
   diagnostics: CreativeAiDiagnostic[],
 ): void {
-  for (const field of ['resourceRef', 'resourceVariantRef', 'contentRef'] as const) {
-    if (value[field] === undefined) continue;
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'creative-ai-output-locator-migration-required',
-        `Creative AI output ${field} is no longer accepted; deliver contentLocator.`,
-        `${target}.${field}`,
-      ),
-    );
-  }
-
   const contentLocator = value['contentLocator'];
   if (contentLocator !== undefined && !isContentLocator(contentLocator)) {
     diagnostics.push(
@@ -1725,17 +1820,6 @@ function validateCreativeAiRefLocator(
   targetLabel: string,
   diagnostics: CreativeAiDiagnostic[],
 ): void {
-  for (const field of ['resourceRef', 'resourceVariantRef', 'contentRef'] as const) {
-    if (value[field] === undefined) continue;
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'creative-ai-ref-locator-migration-required',
-        `Creative AI ${targetLabel} ${field} is no longer accepted; deliver contentLocator.`,
-        `${targetLabel}.${field}`,
-      ),
-    );
-  }
   if (value['contentLocator'] !== undefined && !isContentLocator(value['contentLocator'])) {
     diagnostics.push(
       diagnostic(
@@ -1782,33 +1866,6 @@ function isCreativeAiDiagnostic(value: unknown): value is CreativeAiDiagnostic {
     isStableString(value['message']) &&
     optionalStableString(value['target']) &&
     (value['metadata'] === undefined || isRecord(value['metadata']))
-  );
-}
-
-function validateOptionalRevision(
-  value: unknown,
-  target: string,
-  diagnostics: CreativeAiDiagnostic[],
-): void {
-  if (value === undefined) return;
-  if (typeof value === 'number') return;
-  validateStableString(value, target, diagnostics);
-}
-
-function requireRevision(
-  value: unknown,
-  target: string,
-  diagnostics: CreativeAiDiagnostic[],
-): void {
-  if (typeof value === 'number') return;
-  if (isStableString(value)) return;
-  diagnostics.push(
-    diagnostic(
-      'error',
-      'creative-ai-missing-revision',
-      'Creative AI revision is required.',
-      target,
-    ),
   );
 }
 

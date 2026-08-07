@@ -74,9 +74,7 @@ describe('package product status reachability', () => {
   it('rejects generic, incomplete and expired dynamic-edge declarations', () => {
     const findings = validateProductStatusConfiguration(
       {
-        version: 1,
         applicationEntries: ['app.ts'],
-        migrationOnlyModules: [],
         dynamicEdges: [
           {
             kind: 'generic-allowlist',

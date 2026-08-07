@@ -2,8 +2,8 @@ import type { MarkdownDiagnostic } from './diagnostics';
 import type { NormalizedMarkdownDocument } from './document';
 import type {
   MarkdownAnnotationId,
+  MarkdownDocumentId,
   MarkdownNodeId,
-  MarkdownRevision,
   MarkdownSessionId,
 } from './identity';
 import { MarkdownContractError } from './source-range';
@@ -45,7 +45,7 @@ export interface MarkdownHandoffReference {
 
 export interface MarkdownResolutionSnapshot {
   readonly sessionId: MarkdownSessionId;
-  readonly revision: MarkdownRevision;
+  readonly documentId: MarkdownDocumentId;
   readonly resolutions: readonly MarkdownResolution[];
   readonly handoffRefs: readonly MarkdownHandoffReference[];
   readonly diagnostics: readonly MarkdownDiagnostic[];
@@ -54,12 +54,12 @@ export interface MarkdownResolutionSnapshot {
 export function assertMarkdownResolutionAssociation(
   snapshot: MarkdownResolutionSnapshot,
   sessionId: MarkdownSessionId,
-  revision: MarkdownRevision,
+  documentId: MarkdownDocumentId,
 ): void {
-  if (snapshot.sessionId !== sessionId || snapshot.revision !== revision) {
+  if (snapshot.sessionId !== sessionId || snapshot.documentId !== documentId) {
     throw new MarkdownContractError(
-      `Markdown resolution snapshot ${snapshot.sessionId}@${snapshot.revision} cannot be associated ` +
-        `with ${sessionId}@${revision}.`,
+      `Markdown resolution snapshot ${snapshot.sessionId}@${snapshot.documentId} cannot be associated ` +
+        `with ${sessionId}@${documentId}.`,
     );
   }
 }
@@ -68,7 +68,7 @@ export function validateMarkdownResolutionSnapshot(
   document: NormalizedMarkdownDocument,
   snapshot: MarkdownResolutionSnapshot,
 ): void {
-  assertMarkdownResolutionAssociation(snapshot, document.sessionId, document.revision);
+  assertMarkdownResolutionAssociation(snapshot, document.sessionId, document.documentId);
   const nodeIds = collectNodeIds(document.root);
   const annotationIds = new Set(document.annotations.map((annotation) => annotation.id));
   const resolvedTargets = new Set<string>();
@@ -150,7 +150,7 @@ export interface ResolveMarkdownSnapshotOptions<TContext> {
   readonly context: TContext;
   readonly resolver: MarkdownResolutionResolver<TContext>;
   readonly signal?: AbortSignal;
-  readonly isCurrent?: (sessionId: MarkdownSessionId, revision: MarkdownRevision) => boolean;
+  readonly isCurrent?: (sessionId: MarkdownSessionId, documentId: MarkdownDocumentId) => boolean;
 }
 
 export type MarkdownResolutionRunResult =
@@ -169,14 +169,14 @@ export async function resolveMarkdownSnapshot<TContext>(
   if (signal.aborted) return { status: 'discarded', reason: 'cancelled' };
   if (
     options.isCurrent &&
-    !options.isCurrent(options.document.sessionId, options.document.revision)
+    !options.isCurrent(options.document.sessionId, options.document.documentId)
   ) {
     return { status: 'discarded', reason: 'stale' };
   }
 
   const snapshot: MarkdownResolutionSnapshot = Object.freeze({
     sessionId: options.document.sessionId,
-    revision: options.document.revision,
+    documentId: options.document.documentId,
     resolutions: Object.freeze([...projection.resolutions]),
     handoffRefs: Object.freeze([...projection.handoffRefs]),
     diagnostics: Object.freeze([...projection.diagnostics]),

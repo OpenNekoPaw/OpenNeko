@@ -9,7 +9,6 @@ import { resolveCanvasMaterialPresentation } from './materialPresentation';
 const generatedLocator = {
   kind: 'generated-output',
   outputId: 'generated-image-1',
-  revision: 'revision-1',
   digest: 'sha256:generated-image-1',
   path: 'neko/generated/image/generated-image-1.png',
 } as const;
@@ -40,7 +39,7 @@ describe('resolveCanvasMaterialPresentation', () => {
       contentLocator: generatedLocator,
       generation: generationEvidence({
         prompt: 'Monolithic city at night',
-        model: 'image-model-v2',
+        model: 'image-model-current',
         sourceNodeId: 'prompt-1',
         aspectRatio: '16:9',
       }),
@@ -53,7 +52,7 @@ describe('resolveCanvasMaterialPresentation', () => {
       canCopyToMediaLibrary: true,
       generation: {
         prompt: 'Monolithic city at night',
-        model: 'image-model-v2',
+        model: 'image-model-current',
         sourceNodeId: 'prompt-1',
         aspectRatio: '16:9',
       },
@@ -107,7 +106,7 @@ describe('resolveCanvasMaterialPresentation', () => {
         },
         generation: generationEvidence({
           prompt: 'Create a six-shot storyboard',
-          model: 'document-model-v1',
+          model: 'document-model-current',
         }),
       },
     };
@@ -118,28 +117,18 @@ describe('resolveCanvasMaterialPresentation', () => {
       canCopyToMediaLibrary: true,
       generation: {
         prompt: 'Create a six-shot storyboard',
-        model: 'document-model-v1',
+        model: 'document-model-current',
       },
     });
   });
 
-  it('poisons path, ResourceCacheSource, provenance, and legacy summary classifiers in normal runtime', () => {
+  it('does not classify paths or generic provenance as generated material', () => {
     const data: MediaCanvasNode['data'] = {
       assetPath: 'neko/generated/image/task-1.png',
       mediaType: 'image',
-      provenance: { projectionId: 'generated-output:legacy' },
-      generationContext: { prompt: 'Legacy prompt' },
+      provenance: { projectionId: 'generated-output:unsupported' },
     };
-    Reflect.set(data, 'resourceRef', {
-      id: 'generated-image-legacy',
-      scope: 'project',
-      provider: 'generated-output',
-      kind: 'generated',
-      source: { kind: 'generated-asset', generatedAssetId: 'generated-image-legacy' },
-      locator: { kind: 'generated-asset', assetId: 'generated-image-legacy' },
-      fingerprint: { strategy: 'hash', value: 'sha256:legacy' },
-    });
-    const node = mediaNode('legacy-generated-path', data);
+    const node = mediaNode('unsupported-generated-path', data);
 
     expect(resolveCanvasMaterialPresentation(node)).toBeUndefined();
   });

@@ -19,11 +19,13 @@ export interface CutWebviewRootProps {
   readonly locale?: SupportedLocale;
   readonly bridge: CutWebviewHostBridge;
   readonly presentation?: 'editor' | 'timeline-only';
+  readonly lifecyclePresentation?: 'active' | 'suspended';
   readonly timelineTarget?: Element;
 }
 
 export function CutWebviewRoot({
   bridge,
+  lifecyclePresentation = 'active',
   locale,
   presentation,
   timelineTarget,
@@ -35,14 +37,18 @@ export function CutWebviewRoot({
   }, [locale]);
 
   return (
-    <div className="cut-webview-root">
+    <div className="cut-webview-root" data-lifecycle-presentation={lifecyclePresentation}>
       <I18nProvider service={i18nService}>
         <ErrorBoundary>
           <ToastProvider>
             <CutPresentationStoreProvider>
               <CutWebviewHostBridgeProvider bridge={bridge}>
                 <CutOtioControllerProvider>
-                  <App presentation={presentation} timelineTarget={timelineTarget} />
+                  {lifecyclePresentation === 'active' ? (
+                    <App presentation={presentation} timelineTarget={timelineTarget} />
+                  ) : (
+                    <div data-cut-suspended="true" hidden />
+                  )}
                 </CutOtioControllerProvider>
               </CutWebviewHostBridgeProvider>
             </CutPresentationStoreProvider>

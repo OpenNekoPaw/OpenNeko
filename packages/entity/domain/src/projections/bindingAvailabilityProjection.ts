@@ -1,53 +1,43 @@
 import type {
-  EntityRepresentationBindingAvailability,
-  EntityRepresentationTarget,
-  EntityRepresentationRole,
-  EntityRepresentationBindingStatus,
+  EntityBindingAvailabilityProjectionValue,
+  ProjectEntityBindingAttentionAction,
 } from '../contracts';
-
-export interface EntityBindingAvailabilityProjectionInput {
-  readonly role: EntityRepresentationRole;
-  readonly representation: EntityRepresentationTarget;
-  readonly status: EntityRepresentationBindingStatus;
-  readonly availability: EntityRepresentationBindingAvailability;
-  readonly orphanedAt?: string;
-  readonly isDefault?: boolean;
-}
 
 export interface EntityBindingAvailabilityProjection {
   readonly label: string;
   readonly description: string;
   readonly unavailable: boolean;
-  readonly statusLabel: string;
   readonly availabilityLabel: string;
+  readonly action?: ProjectEntityBindingAttentionAction;
 }
 
 export function projectEntityBindingAvailability(
-  binding: EntityBindingAvailabilityProjectionInput,
+  binding: EntityBindingAvailabilityProjectionValue,
 ): EntityBindingAvailabilityProjection {
-  const availabilityLabel = bindingAvailabilityLabel(binding.availability);
-  const statusLabel = bindingStatusLabel(binding.status);
-  const defaultLabel = binding.isDefault ? 'default' : undefined;
-  const orphanedAtLabel =
-    binding.availability === 'orphaned' && binding.orphanedAt
-      ? `orphaned at ${binding.orphanedAt}`
-      : undefined;
-  const description = compactStrings([
-    statusLabel,
-    availabilityLabel,
-    defaultLabel,
-    orphanedAtLabel,
-  ]).join(' · ');
+  const availabilityLabel = binding.availability === 'available' ? 'available' : 'needs attention';
+  const action = binding.attention?.action;
+  const description = [binding.owner, availabilityLabel, binding.isDefault ? 'default' : undefined]
+    .filter((value): value is string => value !== undefined)
+    .join(' · ');
   return {
     label: `${binding.role}: ${representationLabel(binding.representation)}`,
     description,
-    unavailable: binding.availability !== 'active',
-    statusLabel,
+    unavailable: binding.availability !== 'available',
     availabilityLabel,
+    ...(action ? { action } : {}),
   };
 }
 
-function representationLabel(representation: EntityRepresentationTarget): string {
+export function projectEntityBindingAvailabilityText(
+  binding: EntityBindingAvailabilityProjectionValue,
+): string {
+  const projection = projectEntityBindingAvailability(binding);
+  return `${projection.label} · ${projection.description}`;
+}
+
+function representationLabel(
+  representation: EntityBindingAvailabilityProjectionValue['representation'],
+): string {
   switch (representation.kind) {
     case 'workspace-file':
       return representation.path;
@@ -58,37 +48,4 @@ function representationLabel(representation: EntityRepresentationTarget): string
     case 'package-resource':
       return `${representation.packageId}/${representation.resourcePath}`;
   }
-}
-
-export function projectEntityBindingAvailabilityText(
-  binding: EntityBindingAvailabilityProjectionInput,
-): string {
-  const projection = projectEntityBindingAvailability(binding);
-  return `${projection.label} · ${projection.description}`;
-}
-
-function bindingStatusLabel(status: EntityRepresentationBindingStatus): string {
-  switch (status) {
-    case 'confirmed':
-      return 'confirmed';
-    case 'suggested':
-      return 'suggested';
-    case 'rejected':
-      return 'rejected';
-  }
-}
-
-function bindingAvailabilityLabel(availability: EntityRepresentationBindingAvailability): string {
-  switch (availability) {
-    case 'active':
-      return 'available';
-    case 'orphaned':
-      return 'unavailable';
-    case 'archived':
-      return 'archived';
-  }
-}
-
-function compactStrings(values: readonly (string | undefined)[]): string[] {
-  return values.filter((value): value is string => value !== undefined && value.length > 0);
 }

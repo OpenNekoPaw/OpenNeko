@@ -29,6 +29,35 @@ vi.mock('../../i18n/I18nContext', () => ({
 }));
 
 describe('Header', () => {
+  it('hides all package-owned conversation navigation in Desktop dock', () => {
+    render(
+      <Header
+        tabs={[]}
+        activeTabId={null}
+        activeView="chat"
+        historyConversations={[]}
+        activeConversationId={null}
+        roleplayItems={[]}
+        onSwitchTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onNewChat={vi.fn()}
+        onRequestRoleplayItems={vi.fn()}
+        onSelectRoleplayItem={vi.fn()}
+        onOpenConversation={vi.fn()}
+        onDeleteConversation={vi.fn()}
+        configuredProviders={[]}
+        onOpenOnboarding={vi.fn()}
+        showConversationNavigation={false}
+      />,
+    );
+
+    const header = screen.getByRole('banner');
+    expect(within(header).queryByRole('button', { name: 'New Chat' })).toBeNull();
+    expect(within(header).queryByRole('button', { name: 'History' })).toBeNull();
+    expect(within(header).queryByRole('button', { name: 'Role Session' })).toBeNull();
+    expect(within(header).getByRole('button', { name: 'Account' })).toBeTruthy();
+  });
+
   it('opens and dismisses the canonical role selector between new chat and history', () => {
     const onRequestRoleplayItems = vi.fn();
     const onSelectRoleplayItem = vi.fn();

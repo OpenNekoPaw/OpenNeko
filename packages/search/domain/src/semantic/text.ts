@@ -437,9 +437,7 @@ function requireCreativeSchemaAdapter(
   const schema = input.source.creativeSchema;
   const adapter = input.creativeSchemaAdapters?.find(
     (candidate) =>
-      candidate.schema.schemaId === schema?.schemaId &&
-      candidate.schema.schemaVersion === schema.schemaVersion &&
-      candidate.formats.includes(format),
+      candidate.schema.schemaId === schema?.schemaId && candidate.formats.includes(format),
   );
   if (!schema || !adapter) {
     throw new SemanticTextExtractionError(

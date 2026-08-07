@@ -44,8 +44,8 @@ import { t } from '../i18n';
 
 const AGENT_MEDIA_CATEGORIES: readonly AgentMediaModelCategory[] = ['image', 'video', 'audio'];
 const AGENT_GENERATION_PURPOSE_CAPABILITIES = {
-  'image.generate': ['image.generate', 'text_to_image', 'image_generation'],
-  'video.generate': ['video.generate', 'text_to_video', 'video_generation'],
+  'image.generate': ['image.generate', 'text_to_image'],
+  'video.generate': ['video.generate', 'text_to_video'],
   'audio.generate': ['audio.generate', 'text_to_audio', 'audio'],
   'audio.music.generate': ['audio.music.generate', 'text_to_music', 'music_generation'],
 } as const satisfies Readonly<
@@ -551,7 +551,7 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
   if (
     code !== 'empty' &&
     code !== 'invalidToml' &&
-    code !== 'unsupportedVersion' &&
+    code !== 'invalidConfigField' &&
     code !== 'unsupportedProviderType' &&
     code !== 'unsupportedProviderConnectionKind' &&
     code !== 'unsupportedProviderProtocolProfile' &&
@@ -559,32 +559,29 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
     code !== 'unsupportedProtocolAuthType' &&
     code !== 'unsupportedProtocolStreamFormat' &&
     code !== 'unsupportedModelProtocolProfile' &&
-    code !== 'unsupportedModelProtocol' &&
     code !== 'duplicateProviderId' &&
     code !== 'duplicateModelId' &&
     code !== 'invalidDefaultMaxTokens' &&
     code !== 'invalidModelTokenMetadata' &&
+    code !== 'invalidProviderApiKey' &&
     code !== 'unsupportedModelType' &&
-    code !== 'unsupportedDefaultMediaModelType' &&
     code !== 'unsupportedDefaultModelType' &&
     code !== 'invalidDefaultModelBinding' &&
-    code !== 'unsupportedWorkspaceProviderDefinition' &&
-    code !== 'unsupportedWorkspaceModelDefinition' &&
-    code !== 'unsupportedSkillSource' &&
     code !== 'readError' &&
     code !== 'missingConfig' &&
     code !== 'missingProvider' &&
     code !== 'missingModel' &&
-    code !== 'missingApiKey' &&
+    code !== 'missingProviderEndpoint' &&
     code !== 'invalidDefaultProvider' &&
     code !== 'invalidDefaultModel'
   ) {
     return undefined;
   }
   const filePath = readString(record, 'filePath');
+  const path = readString(record, 'path');
   const message = readString(record, 'message');
   if (!filePath || !message) return undefined;
-  return { code, filePath, message };
+  return { code, filePath, ...(path === undefined ? {} : { path }), message };
 }
 
 function projectSelectedChatModel(

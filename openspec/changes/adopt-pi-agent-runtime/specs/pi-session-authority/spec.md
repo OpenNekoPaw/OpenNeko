@@ -38,7 +38,7 @@ Pi `cwd` MUST be a Host-generated virtual workspace locator used only for Pi par
 
 ### Requirement: Portable conversation facts and operational product facts remain separate
 
-The versioned conversation manifest SHALL retain user-visible title, active/historical branch topology, export identity, stable workspace binding, and Pi Session references. OpenNeko SQLite SHALL retain execution leases, writer epochs, turn/run/task recovery identity, permission facts, provider task identity, bounded operational checkpoints, and replaceable listing/search projections. Neither authority SHALL copy transcript messages or rely on Pi custom entries as its sole product storage. Authorized attachments, Tool inputs, and ResourceRefs MAY add inputs without changing the default workspace binding.
+The stable conversation manifest SHALL retain user-visible title, active/historical branch topology, export identity, stable workspace binding, and Pi Session references. OpenNeko SQLite SHALL retain exact execution lease identities, turn/run/task recovery identity, permission facts, provider task identity, bounded operational checkpoints, and replaceable listing/search projections. Neither authority SHALL copy transcript messages or rely on Pi custom entries as its sole product storage. Authorized attachments, Tool inputs, and ResourceRefs MAY add inputs without changing the default workspace binding.
 
 #### Scenario: Store portable and operational conversation fields
 
@@ -62,7 +62,7 @@ The conversation runtime MUST create one idempotent checkpoint at each turn term
 
 ### Requirement: Desktop conversation execution has one fenced writer
 
-Multiple Desktop windows MAY observe the same conversation, but only the owner holding the current `ConversationExecutionLease` epoch MAY advance its Pi Agent or commit a turn checkpoint. Other owners MUST remain read-only unless an explicit takeover obtains a higher epoch. Expired or replaced holders MUST fail writes through fencing checks.
+Multiple Desktop windows MAY observe the same conversation, but only the owner holding the current exact `ConversationExecutionLease` identity MAY advance its Pi Agent or commit a turn checkpoint. Other owners MUST remain read-only unless an explicit takeover atomically replaces the expired lease with a new identity. Expired or replaced holders MUST fail writes through exact lease checks.
 
 #### Scenario: Open one conversation in two Desktop windows
 
@@ -71,8 +71,8 @@ Multiple Desktop windows MAY observe the same conversation, but only the owner h
 
 #### Scenario: Stale holder writes after takeover
 
-- **WHEN** another Desktop owner obtains a higher lease epoch and the former holder later submits a checkpoint
-- **THEN** SQLite rejects the stale epoch and no Pi Session or product metadata is advanced by that write
+- **WHEN** another Desktop owner atomically obtains a new lease identity and the former holder later submits a checkpoint
+- **THEN** SQLite rejects the stale lease identity and no Pi Session or product metadata is advanced by that write
 
 ### Requirement: Pi executes compaction under OpenNeko policy
 
@@ -85,9 +85,9 @@ Pi MUST remain the only summarization/context/compaction-entry implementation. O
 
 ### Requirement: Legacy transcript paths cannot provide fallback success
 
-Legacy ConversationManager, Journal reader/writer/projection, duplicate history hydration, custom compaction, and AgentSession persistence MUST be deleted, poisoned, or migration-only and MUST NOT serve a normal Pi conversation.
+Retired ConversationManager, Journal reader/writer/projection, duplicate history hydration, custom compaction, and AgentSession persistence MUST be deleted and MUST NOT serve a normal Pi conversation.
 
-#### Scenario: Poison legacy transcript hydration
+#### Scenario: Retired transcript hydration is absent
 
-- **WHEN** every legacy transcript reader is configured to throw
-- **THEN** create, append, close, reopen, and context build succeed exclusively through Pi Session primitives
+- **WHEN** create, append, close, reopen, and context build run after retired transcript readers are deleted
+- **THEN** they succeed exclusively through Pi Session primitives and import/registration assertions prove the retired readers did not participate

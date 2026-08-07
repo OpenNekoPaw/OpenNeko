@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { ConfiguredProvider } from '@neko/agent-contracts';
 import { useTranslation } from '../../i18n/I18nContext';
-import { AgentHostMessages } from '../../messages';
-import { EditIcon, FileIcon, SettingsIcon } from '@neko/ui/icons';
+import { useAgentHostMessages } from '../../host-runtime-context';
+import { FileIcon } from '@neko/ui/icons';
 
 interface AccountBarProps {
   configuredProviders: ConfiguredProvider[];
@@ -16,6 +16,7 @@ const ACCOUNT_MENU_STYLE: CSSProperties = {
 };
 
 export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBarProps) {
+  const agentHostMessages = useAgentHostMessages();
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -34,19 +35,13 @@ export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBar
   }, [open]);
 
   const activeProvider = configuredProviders.find(
-    (p) =>
-      p.enabled !== false &&
-      ((p.models?.length ?? 0) > 0 || !!p.apiKey || p.requiresApiKey === false),
+    (p) => p.enabled !== false && ((p.models?.length ?? 0) > 0 || p.requiresApiKey === false),
   );
   const isConfigured = !!activeProvider;
   const triggerLabel = activeProvider?.name ?? t('accountBar.connectTitle');
-  const closeAndOpenConfigFile = () => {
-    setOpen(false);
-    AgentHostMessages.openConfigFile();
-  };
   const closeAndOpenUserConfigFile = () => {
     setOpen(false);
-    AgentHostMessages.openUserConfigFile();
+    agentHostMessages.openUserConfigFile();
   };
 
   if (!isConfigured) {
@@ -83,37 +78,15 @@ export function AccountBar({ configuredProviders, onOpenOnboarding }: AccountBar
           style={ACCOUNT_MENU_STYLE}
           role="menu"
         >
-          <>
-            <button
-              type="button"
-              onClick={closeAndOpenConfigFile}
-              className="agent-header-menu-item"
-              role="menuitem"
-            >
-              <EditIcon className="h-3.5 w-3.5 flex-shrink-0 text-[var(--agent-fg-secondary)]" />
-              <span className="agent-header-menu-item-label">{t('accountBar.changeKey')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={closeAndOpenConfigFile}
-              className="agent-header-menu-item"
-              role="menuitem"
-            >
-              <SettingsIcon className="h-3.5 w-3.5 flex-shrink-0 text-[var(--agent-fg-secondary)]" />
-              <span className="agent-header-menu-item-label">
-                {t('accountBar.modelGenerationConfig')}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={closeAndOpenUserConfigFile}
-              className="agent-header-menu-item"
-              role="menuitem"
-            >
-              <FileIcon className="h-3.5 w-3.5 flex-shrink-0 text-[var(--agent-fg-secondary)]" />
-              <span className="agent-header-menu-item-label">{t('accountBar.openConfigFile')}</span>
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={closeAndOpenUserConfigFile}
+            className="agent-header-menu-item"
+            role="menuitem"
+          >
+            <FileIcon className="h-3.5 w-3.5 flex-shrink-0 text-[var(--agent-fg-secondary)]" />
+            <span className="agent-header-menu-item-label">{t('accountBar.openConfigFile')}</span>
+          </button>
         </div>
       )}
     </div>

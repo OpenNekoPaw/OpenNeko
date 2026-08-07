@@ -5,6 +5,7 @@ import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
 import { t } from '../../i18n';
 import { getLogger } from '../../utils/logger';
+import type { PreviewPlaybackInteractionHandler } from '../../preview/types';
 
 const logger = getLogger('InlineVideoPlayer');
 const DEFAULT_VOLUME = 0.8;
@@ -28,6 +29,7 @@ export interface InlineVideoPlayerProps {
   playbackRequestId?: string;
   playbackStartTime?: number;
   onEnded?: (currentTime: number) => void;
+  onPlaybackInteraction?: PreviewPlaybackInteractionHandler;
 }
 
 export function InlineVideoPlayer({
@@ -45,20 +47,21 @@ export function InlineVideoPlayer({
   playbackRequestId,
   playbackStartTime,
   onEnded,
+  onPlaybackInteraction,
 }: InlineVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const animationFrameRef = useRef(0);
   const currentTimeRef = useRef(startTime);
   const handledPlaybackRequestRef = useRef<string>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused'>();
-  const generationRef = useRef(0);
+  const playbackRequestRef = useRef<object>({});
   const startingRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
 
   const disposeStreams = useCallback(() => {
-    generationRef.current += 1;
+    playbackRequestRef.current = {};
     startingRef.current = false;
     const element = videoRef.current;
     if (element) {
@@ -69,7 +72,11 @@ export function InlineVideoPlayer({
   }, []);
 
   useEffect(() => {
-    return disposeStreams;
+    return () => {
+      handledPlaybackRequestRef.current = undefined;
+      handledPlaybackStateRef.current = undefined;
+      disposeStreams();
+    };
   }, [disposeStreams, playbackRate, video]);
 
   useEffect(() => {
@@ -111,10 +118,10 @@ export function InlineVideoPlayer({
     }
     if (startingRef.current) return;
     startingRef.current = true;
-    const generation = generationRef.current + 1;
-    generationRef.current = generation;
+    const request = {};
+    playbackRequestRef.current = request;
     const start = async (): Promise<void> => {
-      if (generation !== generationRef.current) return;
+      if (request !== playbackRequestRef.current) return;
       element.crossOrigin = 'anonymous';
       element.muted = isMuted;
       element.defaultMuted = false;
@@ -127,13 +134,13 @@ export function InlineVideoPlayer({
       element.currentTime = startTime;
       currentTimeRef.current = startTime;
       await element.play();
-      if (generation !== generationRef.current) return;
+      if (request !== playbackRequestRef.current) return;
       startingRef.current = false;
       setIsPlaying(true);
       onResume();
     };
     void start().catch((error: unknown) => {
-      if (generation !== generationRef.current) return;
+      if (request !== playbackRequestRef.current) return;
       disposeStreams();
       setIsPlaying(false);
       logger.error(`Inline video playback failed: ${error}`);
@@ -211,7 +218,17 @@ export function InlineVideoPlayer({
             type="button"
             data-testid="canvas-video-toggle-playback"
             className="flex h-6 w-6 items-center justify-center rounded text-white/85 hover:text-white"
-            onClick={isPlaying ? pause : resume}
+            onClick={() => {
+              if (onPlaybackInteraction) {
+                onPlaybackInteraction(isPlaying ? 'paused' : 'playing', currentTimeRef.current);
+                return;
+              }
+              if (isPlaying) {
+                pause();
+                return;
+              }
+              resume();
+            }}
             aria-label={playbackLabel}
             title={playbackLabel}
           >

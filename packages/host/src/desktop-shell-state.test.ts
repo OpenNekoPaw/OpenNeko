@@ -1,225 +1,262 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   createEmptyDesktopShellState,
   DesktopShellStateError,
   parseDesktopShellStoredState,
+  readDesktopShellStateDiagnostics,
+  serializeDesktopShellStoredState,
   type DesktopShellStoredState,
 } from './desktop-shell-state';
+import {
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+} from './desktop-scene-contract';
 import { createDefaultDesktopWorkbenchLayout } from './desktop-workbench-contract';
+import {
+  createDesktopWindowComposition,
+  parseDesktopWindowComposition,
+} from './desktop-window-composition-contract';
 import { createInMemoryDesktopShellStateRepository } from './testing/in-memory-desktop-shell-state-repository';
 
 describe('Desktop Shell state codec', () => {
-  it('validates state commits and rejects stale revisions through the repository contract', async () => {
-    const first = createInMemoryDesktopShellStateRepository();
-    const initial = await first.read();
-    const committed = await first.commit(0, withPrimaryWindow(initial, 'window-1'));
+  it('serializes state commits through the owning repository', async () => {
+    const repository = createInMemoryDesktopShellStateRepository();
+    const initial = await repository.read();
+    await repository.commit(withPrimaryWindow(initial, 'window:1'));
 
-    await expect(first.commit(0, withPrimaryWindow(initial, 'window-2'))).rejects.toMatchObject({
-      code: 'desktop-shell-stale-storage-revision',
-    });
-    expect((await first.read()).primaryWindowId).toBe('window-1');
-    expect(committed.storageRevision).toBe(1);
+    const committed = await repository.commit(withPrimaryWindow(initial, 'window:2'));
+
+    expect((await repository.read()).primaryWindowId).toBe('window:2');
+    expect(committed.primaryWindowId).toBe('window:2');
   });
 
-  it('fails visibly for a Project Tab whose Project is absent', () => {
-    const initial = createEmptyDesktopShellState();
-    const invalid: DesktopShellStoredState = {
+  it('isolates a Window whose current composition violates the canonical contract', () => {
+    const initial = withPrimaryWindow(createEmptyDesktopShellState(), 'window:1');
+    const state = {
       ...initial,
-      storageRevision: 1,
-      primaryWindowId: 'window-1',
-      windows: [
-        {
-          windowId: 'window-1',
-          revision: 1,
-          activeTarget: { kind: 'project', tabId: 'tab-1' },
-          tabs: [
-            {
-              tabId: 'tab-1',
-              projectId: 'missing-project',
-              viewId: 'view-1',
-              viewEpoch: 1,
-            },
-          ],
-          workbench: createDefaultDesktopWorkbenchLayout('window-1'),
-        },
-      ],
+      windows: initial.windows.map((window) => ({
+        ...window,
+        workbench: { ...window.workbench, scene: { invalid: true } },
+      })),
     };
 
-    expect(() => parseDesktopShellStoredState(invalid)).toThrow(DesktopShellStateError);
-  });
+    const parsed = parseDesktopShellStoredState(state);
 
-  it('migrates the version 1 Window state by adding a default Workbench layout', async () => {
-    const content = JSON.stringify({
-      schemaVersion: 1,
-      storageRevision: 0,
-      catalogRevision: 0,
-      primaryWindowId: 'window-1',
+    expect(parsed.windows).toEqual([]);
+    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([
+      expect.objectContaining({
+        code: 'desktop-stored-window-invalid',
+        windowId: 'window:1',
+        message: expect.stringContaining('Desktop stored Window composition is invalid'),
+      }),
+    ]);
+    expect(serializeDesktopShellStoredState(parsed)).toEqual({
+      primaryWindowId: null,
       projects: [],
-      windows: [
-        {
-          windowId: 'window-1',
-          revision: 0,
-          activeTarget: { kind: 'home' },
-          tabs: [],
-        },
-      ],
-    });
-    const migrated = parseDesktopShellStoredState(JSON.parse(content));
-
-    expect(migrated.schemaVersion).toBe(4);
-    expect(migrated.windows[0]?.workbench).toEqual(createDefaultDesktopWorkbenchLayout('window-1'));
-    expect({ ...migrated, storageRevision: 1 }).toMatchObject({
-      schemaVersion: 4,
-      windows: [{ workbench: { schemaVersion: 3, display: { mode: 'chat-only' } } }],
+      windows: [],
     });
   });
 
-  it('migrates the version 2 single-Main Workbench into explicit View Groups', async () => {
-    const content = JSON.stringify({
-      schemaVersion: 2,
-      storageRevision: 0,
-      catalogRevision: 0,
-      primaryWindowId: 'window-1',
+  it('restores valid root collections while retaining unknown metadata unchanged', () => {
+    const state = {
+      primaryWindowId: null,
       projects: [],
-      windows: [
-        {
-          windowId: 'window-1',
-          revision: 0,
-          activeTarget: { kind: 'home' },
-          tabs: [],
-          workbench: {
-            schemaVersion: 1,
-            windowId: 'window-1',
-            revision: 4,
-            preset: 'canvas-cut',
-            primarySidebar: { visible: true, width: 240 },
-            resourceDock: { presentation: 'hidden', position: 'right', width: 320 },
-            agent: {
-              presentation: 'dock',
-              dockPresentation: 'docked',
-              dockPosition: 'left',
-              width: 360,
-            },
-            main: {
-              views: [
-                {
-                  viewId: 'canvas-1',
-                  viewEpoch: 1,
-                  projectId: 'project-1',
-                  workspaceId: 'workspace-1',
-                  kind: 'canvas',
-                  ownerId: 'canvas-1',
-                  documentId: 'boards/main.nkc',
-                },
-                {
-                  viewId: 'cut-1',
-                  viewEpoch: 1,
-                  projectId: 'project-1',
-                  workspaceId: 'workspace-1',
-                  kind: 'cut',
-                  ownerId: 'cut-1',
-                  documentId: 'cuts/main.otio',
-                },
-              ],
-              activeViewId: 'canvas-1',
-              sideViewId: 'cut-1',
-              split: 'vertical',
-            },
-            timeline: { visible: true, height: 240 },
-          },
-        },
-      ],
-    });
-    const migrated = parseDesktopShellStoredState(JSON.parse(content));
+      windows: [],
+      opaqueSourceMarker: {
+        source: 'desktop-shell-fixture',
+        values: [1, null, false],
+      },
+    };
+    const before = JSON.stringify(state);
 
-    expect(migrated).toMatchObject({
-      schemaVersion: 4,
-      windows: [
-        {
-          workbench: {
-            schemaVersion: 3,
-            display: { mode: 'chat-main', chatPosition: 'left' },
-            main: {
-              groups: [
-                { viewIds: ['canvas-1'], activeViewId: 'canvas-1' },
-                { viewIds: ['cut-1'], activeViewId: 'cut-1' },
-              ],
-              split: { axis: 'rows', ratio: 0.5 },
-            },
-            timeline: { presentation: 'docked', ownerViewId: 'cut-1' },
+    const parsed = parseDesktopShellStoredState(state);
+
+    expect(parsed).toMatchObject({ primaryWindowId: null, projects: [], windows: [] });
+    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([
+      {
+        code: 'desktop-stored-state-metadata-retained',
+        severity: 'warning',
+        authorityKey: 'desktop.shell',
+        fieldNames: ['opaqueSourceMarker'],
+        message: expect.stringContaining('opaqueSourceMarker'),
+      },
+    ]);
+    expect(serializeDesktopShellStoredState(parsed)).toEqual(state);
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it('rejects a root whose required collections cannot identify smaller owners', () => {
+    expect(() => parseDesktopShellStoredState(null)).toThrow(DesktopShellStateError);
+    expect(() => parseDesktopShellStoredState({ primaryWindowId: null, windows: [] })).toThrow(
+      DesktopShellStateError,
+    );
+    expect(() =>
+      parseDesktopShellStoredState({ primaryWindowId: null, projects: {}, windows: [] }),
+    ).toThrow(DesktopShellStateError);
+  });
+
+  it('isolates a Window whose Project Tab references an absent Project', () => {
+    const initial = withPrimaryWindow(createEmptyDesktopShellState(), 'window:1');
+    const invalid: DesktopShellStoredState = {
+      ...initial,
+      windows: initial.windows.map((window) => ({
+        ...window,
+        activeTarget: { kind: 'project', tabId: 'tab:missing' },
+        tabs: [
+          {
+            tabId: 'tab:missing',
+            projectId: 'project:missing',
+            viewId: 'view:missing',
+            viewInstanceId: 'view-instance-1',
           },
-        },
-      ],
+        ],
+      })),
+    };
+
+    const parsed = parseDesktopShellStoredState(invalid);
+
+    expect(parsed.windows).toEqual([]);
+    expect(readDesktopShellStateDiagnostics(parsed)[0]).toMatchObject({
+      code: 'desktop-stored-window-invalid',
+      windowId: 'window:1',
+    });
+    expect(serializeDesktopShellStoredState(parsed)).toEqual({
+      primaryWindowId: null,
+      projects: [],
+      windows: [],
     });
   });
 
-  it('migrates version 3 Resource Browser Main Views into the right Dock', async () => {
-    const content = JSON.stringify({
-      schemaVersion: 3,
-      storageRevision: 0,
-      catalogRevision: 0,
-      primaryWindowId: 'window-1',
-      projects: [],
-      windows: [
-        {
-          windowId: 'window-1',
-          revision: 0,
-          activeTarget: { kind: 'home' },
-          tabs: [],
-          workbench: {
-            schemaVersion: 2,
-            windowId: 'window-1',
-            revision: 9,
-            primarySidebar: { visible: true, width: 240 },
-            resourceDock: { presentation: 'hidden', position: 'left', width: 416 },
-            display: { mode: 'main-only', chatPosition: 'right', chatWidth: 360 },
-            main: {
-              views: [
-                {
-                  viewId: 'resources-1',
-                  viewEpoch: 1,
-                  projectId: 'project-1',
-                  workspaceId: 'workspace-1',
-                  kind: 'resource-browser',
-                  ownerId: 'assets:project-1',
-                  displayLabel: 'Resources',
-                },
-              ],
-              groups: [
-                {
-                  groupId: 'main:primary',
-                  viewIds: ['resources-1'],
-                  activeViewId: 'resources-1',
-                },
-              ],
-              activeGroupId: 'main:primary',
-            },
-            timeline: { presentation: 'hidden', height: 240 },
-          },
-        },
-      ],
-    });
-    const migrated = parseDesktopShellStoredState(JSON.parse(content));
+  it('keeps a valid primary Window while dropping an invalid sibling payload', () => {
+    const validState = withPrimaryWindow(createEmptyDesktopShellState(), 'window:valid');
+    const invalidWindow = {
+      windowId: 'window:invalid',
+      activeTarget: { kind: 'home' },
+      tabs: [],
+      workbench: { invalid: true },
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window:invalid'),
+    };
 
-    expect(migrated).toMatchObject({
-      schemaVersion: 4,
-      windows: [
-        {
-          workbench: {
-            schemaVersion: 3,
-            revision: 9,
-            resourceDock: { presentation: 'docked', width: 416 },
-            display: { mode: 'chat-only', chatPosition: 'right' },
-            main: {
-              views: [],
-              groups: [{ groupId: 'main:primary', viewIds: [] }],
-              activeGroupId: 'main:primary',
-            },
-          },
-        },
-      ],
+    const parsed = parseDesktopShellStoredState({
+      ...validState,
+      windows: [...validState.windows, invalidWindow],
     });
-    expect(migrated.windows[0]?.workbench.resourceDock).not.toHaveProperty('position');
+
+    expect(parsed.windows.map((window) => window.windowId)).toEqual(['window:valid']);
+    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([
+      expect.objectContaining({
+        code: 'desktop-stored-window-invalid',
+        windowId: 'window:invalid',
+      }),
+    ]);
+    expect(serializeDesktopShellStoredState(parsed)).toEqual({
+      primaryWindowId: 'window:valid',
+      projects: [],
+      windows: [expect.objectContaining({ windowId: 'window:valid' })],
+    });
+  });
+
+  it('round-trips the current optional Project presentation snapshot', () => {
+    const windowId = 'window:1';
+    const initial = withPrimaryWindow(createEmptyDesktopShellState(), windowId);
+    const project = storedProject('project:1', 'workspace:1');
+    const presentation = projectPresentation(windowId, project.projectId, project.workspaceId);
+    const state: DesktopShellStoredState = {
+      ...initial,
+      projects: [project],
+      windows: initial.windows.map((window) => ({
+        ...window,
+        tabs: [
+          {
+            tabId: 'tab:1',
+            projectId: project.projectId,
+            viewId: 'view:1',
+            viewInstanceId: 'view-instance:1',
+            presentation,
+          },
+        ],
+      })),
+    };
+
+    const parsed = parseDesktopShellStoredState(serializeDesktopShellStoredState(state));
+
+    expect(parsed.windows[0]?.tabs[0]?.presentation).toEqual(presentation);
+  });
+
+  it.each([
+    {
+      label: 'another Window',
+      presentation: projectPresentation('window:other', 'project:1', 'workspace:1'),
+    },
+    {
+      label: 'another Project',
+      presentation: projectPresentation('window:1', 'project:other', 'workspace:1'),
+    },
+    {
+      label: 'another Workspace',
+      presentation: projectPresentation('window:1', 'project:1', 'workspace:other'),
+    },
+  ])(
+    'isolates a Window whose Project presentation contains $label identity',
+    ({ presentation }) => {
+      const initial = withPrimaryWindow(createEmptyDesktopShellState(), 'window:1');
+      const project = storedProject('project:1', 'workspace:1');
+      const state: DesktopShellStoredState = {
+        ...initial,
+        projects: [project],
+        windows: initial.windows.map((window) => ({
+          ...window,
+          tabs: [
+            {
+              tabId: 'tab:1',
+              projectId: project.projectId,
+              viewId: 'view:1',
+              viewInstanceId: 'view-instance:1',
+              presentation,
+            },
+          ],
+        })),
+      };
+
+      const parsed = parseDesktopShellStoredState(state);
+
+      expect(parsed.windows).toEqual([]);
+      expect(readDesktopShellStateDiagnostics(parsed)[0]).toMatchObject({
+        code: 'desktop-stored-window-invalid',
+        windowId: 'window:1',
+      });
+    },
+  );
+
+  it('commits a canonical Window without the isolated invalid payload', async () => {
+    const oldWindow = {
+      windowId: 'window:old',
+      activeTarget: { kind: 'home' },
+      tabs: [],
+      workbench: createDefaultDesktopWorkbenchLayout('window:old'),
+      scene: createDefaultDesktopAgentScene('window:old', 'draft:old'),
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window:old'),
+    };
+    const parsed = parseDesktopShellStoredState({
+      ...createEmptyDesktopShellState(),
+      primaryWindowId: oldWindow.windowId,
+      windows: [oldWindow],
+    });
+    const repository = createInMemoryDesktopShellStateRepository(parsed);
+    const committed = await repository.commit({
+      ...parsed,
+      primaryWindowId: 'window:new',
+      windows: [withPrimaryWindow(createEmptyDesktopShellState(), 'window:new').windows[0]!],
+    });
+
+    expect(committed.windows.map((window) => window.windowId)).toEqual(['window:new']);
+    expect(readDesktopShellStateDiagnostics(committed)).toEqual([]);
+    expect(serializeDesktopShellStoredState(committed)).toEqual({
+      primaryWindowId: 'window:new',
+      projects: [],
+      windows: [expect.objectContaining({ windowId: 'window:new' })],
+    });
   });
 });
 
@@ -227,18 +264,78 @@ function withPrimaryWindow(
   state: DesktopShellStoredState,
   windowId: string,
 ): DesktopShellStoredState {
+  const workbench = draftWorkbench(windowId, `workbench:${windowId}`, `draft:${windowId}`);
+  return withComposition(state, workbench);
+}
+
+function withComposition(
+  state: DesktopShellStoredState,
+  value: Parameters<typeof parseDesktopWindowComposition>[0],
+): DesktopShellStoredState {
+  const workbench = parseDesktopWindowComposition(value);
   return {
     ...state,
-    storageRevision: state.storageRevision + 1,
-    primaryWindowId: windowId,
+    primaryWindowId: workbench.windowId,
     windows: [
       {
-        windowId,
-        revision: 0,
+        windowId: workbench.windowId,
         activeTarget: { kind: 'home' },
         tabs: [],
-        workbench: createDefaultDesktopWorkbenchLayout(windowId),
+        workbench,
+        applicationSidebar: createDefaultDesktopApplicationSidebar(workbench.windowId),
       },
     ],
+  };
+}
+
+function draftWorkbench(windowId: string, workbenchInstanceId: string, draftId: string) {
+  const scene = createDefaultDesktopAgentScene(windowId, draftId);
+  return createDesktopWindowComposition({
+    workbenchInstanceId,
+    layout: createDefaultDesktopWorkbenchLayout(windowId),
+    scene,
+  });
+}
+
+function storedProject(projectId: string, workspaceId: string) {
+  return {
+    projectId,
+    workspaceId,
+    profile: 'content' as const,
+    displayName: projectId,
+    workspacePath: `/workspace/${workspaceId}`,
+    workspaceLocator: { kind: 'variable' as const, value: `\${HOME}/workspace/${workspaceId}` },
+    createdAt: '2026-08-07T00:00:00.000Z',
+    updatedAt: '2026-08-07T00:00:00.000Z',
+  };
+}
+
+function projectPresentation(windowId: string, projectId: string, workspaceId: string) {
+  const layout = createDefaultDesktopWorkbenchLayout(windowId);
+  return {
+    ...layout,
+    display: { ...layout.display, mode: 'chat-main' as const },
+    main: {
+      views: [
+        {
+          viewId: `canvas:${projectId}`,
+          viewInstanceId: `view-instance:${projectId}`,
+          projectId,
+          workspaceId,
+          kind: 'canvas' as const,
+          ownerId: `canvas:${projectId}`,
+          displayLabel: 'workspace.nkc',
+          documentId: 'neko/boards/workspace.nkc',
+        },
+      ],
+      groups: [
+        {
+          groupId: 'main:primary',
+          viewIds: [`canvas:${projectId}`],
+          activeViewId: `canvas:${projectId}`,
+        },
+      ],
+      activeGroupId: 'main:primary',
+    },
   };
 }

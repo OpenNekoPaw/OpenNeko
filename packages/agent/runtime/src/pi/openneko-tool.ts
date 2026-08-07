@@ -321,7 +321,7 @@ function assertNoTransientDisplayProjection(value: unknown, owner: string): void
 function isForbiddenDisplayTransport(value: string): boolean {
   return (
     /^(?:neko-media|media|video|audio|file):\/\//iu.test(value) ||
-    /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/v1\/(?:resources|streams|resource-sets)\//iu.test(
+    /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]):\d+\/(?:resources|streams|resource-sets)\//iu.test(
       value,
     )
   );

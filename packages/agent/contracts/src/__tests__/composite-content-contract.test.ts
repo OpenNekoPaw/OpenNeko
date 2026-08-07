@@ -31,11 +31,10 @@ describe('composite content contract', () => {
     ]);
   });
 
-  it('extracts semantic storyboard tables without requiring legacy sections', () => {
+  it('extracts canonical semantic storyboard tables', () => {
     const result = parseCompositeContentJson(
       JSON.stringify({
         template: 'storyboard-table',
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Opening',
         scenes: [
@@ -49,7 +48,7 @@ describe('composite content contract', () => {
                 visualDescription: 'A wide establishing frame.',
                 characterAction: 'Rin enters the cafe.',
                 imageStrategy: 'use-as-reference',
-                generationPrompt: 'wide anime cafe frame',
+                imagePrompt: 'wide anime cafe frame',
                 sourceMediaRefs: [
                   {
                     refId: 'source-page-1',
@@ -79,7 +78,6 @@ describe('composite content contract', () => {
       template: 'storyboard-table',
       title: 'Opening',
       storyboardTable: {
-        schemaVersion: 1,
         kind: 'storyboard-table',
         scenes: [
           {
@@ -117,97 +115,9 @@ describe('composite content contract', () => {
     });
   });
 
-  it('keeps flat Storyboard rows visible without promoting them to canonical Canvas input', () => {
-    const result = parseCompositeContentJson(
-      JSON.stringify({
-        template: 'storyboard-table',
-        schemaVersion: 1,
-        kind: 'storyboard-table',
-        title: 'Legacy flat rows',
-        scenes: [
-          {
-            sceneId: 'scene-1',
-            sceneTitle: 'Page 1',
-            shotNumber: 1,
-            duration: 3,
-            visualDescription: 'A flat row that must not become canonical input.',
-            characterAction: 'Rin enters.',
-            imageStrategy: 'use-as-reference',
-          },
-        ],
-      }),
-    );
-
-    expect(result).toHaveLength(1);
-    expect(result[0]?.storyboardTable).toBeUndefined();
-    expect(result[0]?.sections).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          heading: 'Page 1 / Shot 1',
-          content: 'A flat row that must not become canonical input.',
-        }),
-      ]),
-    );
-    expect(result[0]?.storyboardDiagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          severity: 'error',
-          code: 'canonical-scene-shot-hierarchy-required',
-          path: ['scenes', 0, 'shots'],
-        }),
-      ]),
-    );
-  });
-
-  it('does not promote flat Storyboard artifact payloads to canonical Canvas input', () => {
-    const result = parseCompositeContentJson(
-      JSON.stringify({
-        schemaVersion: 1,
-        kind: 'composite-artifact',
-        artifactId: 'artifact-flat-storyboard',
-        blocks: [
-          {
-            blockId: 'storyboard-domain',
-            kind: 'domain',
-            domainKind: 'StoryboardTable',
-            schemaVersion: 1,
-            payload: {
-              schemaVersion: 1,
-              kind: 'storyboard-table',
-              title: 'Legacy artifact rows',
-              scenes: [
-                {
-                  sceneId: 'scene-1',
-                  sceneTitle: 'Page 1',
-                  shotNumber: 1,
-                  duration: 3,
-                  visualDescription: 'Legacy artifact row.',
-                  characterAction: 'Rin enters.',
-                  imageStrategy: 'use-as-reference',
-                },
-              ],
-            },
-          },
-        ],
-      }),
-    );
-
-    expect(result[0]?.storyboardTable).toBeUndefined();
-    expect(result[0]?.sections[0]).toMatchObject({
-      heading: 'Page 1 / Shot 1',
-      content: 'Legacy artifact row.',
-    });
-    expect(result[0]?.storyboardDiagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'canonical-scene-shot-hierarchy-required' }),
-      ]),
-    );
-  });
-
   it('extracts storyboard domain blocks from composite artifacts', () => {
     const result = parseCompositeContentJson(
       JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'artifact-storyboard',
         title: 'Comic artifact',
@@ -242,9 +152,7 @@ describe('composite content contract', () => {
             kind: 'domain',
             title: 'Storyboard Payload',
             domainKind: 'StoryboardTable',
-            schemaVersion: 1,
             payload: {
-              schemaVersion: 1,
               kind: 'storyboard-table',
               title: 'Opening',
               scenes: [
@@ -316,7 +224,6 @@ describe('composite content contract', () => {
 
 \`\`\`json
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "artifact-storyboard",
   "title": "Comic artifact",
@@ -351,9 +258,7 @@ describe('composite content contract', () => {
       "kind": "domain",
       "title": "Storyboard Payload",
       "domainKind": "StoryboardTable",
-      "schemaVersion": 1,
       "payload": {
-        "schemaVersion": 1,
         "kind": "storyboard-table",
         "title": "Opening",
         "scenes": [
@@ -425,7 +330,6 @@ Done.`;
 
 \`\`\`NEKO
 {
-  "schemaVersion": 1,
   "kind": "composite-artifact",
   "artifactId": "artifact-storyboard",
   "title": "Comic artifact",
@@ -435,9 +339,7 @@ Done.`;
       "kind": "domain",
       "title": "Storyboard Payload",
       "domainKind": "StoryboardTable",
-      "schemaVersion": 1,
       "payload": {
-        "schemaVersion": 1,
         "kind": "storyboard-table",
         "title": "Opening",
         "scenes": [
@@ -493,7 +395,6 @@ Done.`;
   "kind": "neko-composite",
   "composites": [
     {
-      "schemaVersion": 1,
       "kind": "composite-artifact",
       "artifactId": "artifact-review",
       "title": "Review Artifact",
@@ -508,7 +409,6 @@ Done.`;
     expect(result).toHaveLength(1);
     expect(result[0]?.language).toBe('neko');
     expect(result[0]?.value).toMatchObject({
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'artifact-review',
       title: 'Review Artifact',
@@ -517,7 +417,7 @@ Done.`;
 
   it('accepts a CommonMark tilde fence for an explicit NEKO artifact', () => {
     const candidates = extractCompositeContentFenceCandidates(`~~~NEKO
-{"schemaVersion":1,"kind":"composite-artifact","artifactId":"analysis","title":"Analysis","blocks":[{"blockId":"summary","kind":"text","text":"Findings."}]}
+{"kind":"composite-artifact","artifactId":"analysis","title":"Analysis","blocks":[{"blockId":"summary","kind":"text","text":"Findings."}]}
 ~~~`);
 
     expect(candidates).toHaveLength(1);
@@ -531,7 +431,6 @@ Done.`;
     const result = parseCompositeContentJson(
       JSON.stringify({
         template: 'storyboard-table',
-        schemaVersion: 1,
         kind: 'storyboard-table',
         title: 'Broken',
         scenes: [

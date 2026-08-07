@@ -69,6 +69,13 @@ CharacterProject draft 更新不得静默改变已启动运行。
 每个 active CharacterRun 至多映射一个 primary AgentSession。Companion relationship 可以
 顺序创建多个 run/session，但不能通过共享 responder、active tab 或会话参数切换模拟并发实例。
 
+Desktop 会话导航中的 Character owner 必须同时携带 `characterId + characterRunId`，Room owner 必须
+携带 `roomId + roomRunId`。`conversationId` 仍只选择对应 AgentSession transcript；可选 Project
+grouping 只用于 PrimarySidebar 组织，不改变 CharacterRun/RoomRun、relationship/save、能力或记忆
+owner。角色或房间会话可以完全不绑定 Project；打开 Project header 也不得恢复任意旧角色/房间会话。
+当前 Chara/Room Desktop runtime 尚未组合，因此这些 navigation owner 只能返回带 exact owner kind 的
+unavailable，不能降级为 Assistant、Workspace 或占位会话。
+
 ## 产品设计：角色数量 × 互动类型
 
 用户可见体验只暴露角色数量和互动类型两个正交维度：

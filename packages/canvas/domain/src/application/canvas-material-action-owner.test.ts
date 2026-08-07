@@ -19,10 +19,10 @@ const identity: CanvasHostRuntimeIdentity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'canvas:view-1',
-  viewEpoch: 1,
+  viewInstanceId: 'view-instance-1',
   documentId: 'neko/boards/workspace.nkc',
-  sessionId: 'canvas-session:canvas:view-1:1',
-  endpointEpoch: 'app-1:window-1:1',
+  sessionId: 'canvas-session:canvas:view-1:view-instance-1',
+  rendererSessionId: 'app-1:window-1:1',
 };
 
 const target: CanvasMaterialActionTarget = {
@@ -39,7 +39,6 @@ const generatedTarget: CanvasMaterialActionTarget = {
   locator: {
     kind: 'generated-output',
     outputId: 'generated-output-1',
-    revision: 'revision-1',
     digest: 'sha256:generated-output-1',
     path: 'neko/generated/generation-job-1/result.png',
   },
@@ -47,7 +46,7 @@ const generatedTarget: CanvasMaterialActionTarget = {
     jobRef: { kind: 'generation', jobId: 'generation-job-1' },
     summary: {
       prompt: 'Cold industrial corridor',
-      model: 'image-model-v2',
+      model: 'image-model',
     },
   },
 };
@@ -76,7 +75,6 @@ describe('Desktop Canvas material action owner', () => {
           canvasSessionId: identity.sessionId,
         },
         actionId: descriptor.id,
-        expectedCanvasRevision: 0,
         selectedNodeIds: [target.nodeId],
         payload: {},
       },
@@ -106,7 +104,6 @@ describe('Desktop Canvas material action owner', () => {
             canvasSessionId: identity.sessionId,
           },
           actionId: 'cut:add',
-          expectedCanvasRevision: 0,
           selectedNodeIds: [target.nodeId],
           payload: {},
         },
@@ -161,7 +158,6 @@ describe('Desktop Canvas material action owner', () => {
             canvasSessionId: identity.sessionId,
           },
           actionId: descriptor.id,
-          expectedCanvasRevision: 0,
           selectedNodeIds: [generatedTarget.nodeId],
           payload: {},
         },
@@ -217,7 +213,6 @@ describe('Desktop Canvas material action owner', () => {
           canvasSessionId: identity.sessionId,
         },
         actionId: descriptor.id,
-        expectedCanvasRevision: 0,
         selectedNodeIds: [cutTarget.nodeId],
         payload: {},
       },
@@ -257,7 +252,6 @@ describe('Desktop Canvas material action owner', () => {
           canvasSessionId: identity.sessionId,
         },
         actionId: projectDescriptor.id,
-        expectedCanvasRevision: 0,
         selectedNodeIds: [target.nodeId],
         payload: {},
       },
@@ -274,13 +268,12 @@ function generationProjection(jobId: string): CanvasGenerationProjectionSnapshot
     ref: { kind: 'generation', jobId },
     regenerateOf: { kind: 'generation', jobId: 'generation-job-1' },
     phase: 'running',
-    revision: 0,
     title: 'Regenerate image',
     inputNodeIds: [generatedTarget.nodeId],
     mediaKind: 'image',
     summary: {
       prompt: 'Cold industrial corridor',
-      model: 'image-model-v2',
+      model: 'image-model',
     },
   };
 }

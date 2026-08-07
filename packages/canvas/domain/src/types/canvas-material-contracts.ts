@@ -176,7 +176,6 @@ export interface CanvasMaterialActionIntent<
 > {
   readonly identity: CanvasMaterialAuthoringIdentity;
   readonly actionId: string;
-  readonly expectedCanvasRevision: number;
   readonly selectedNodeIds: readonly string[];
   readonly payload: TPayload;
 }
@@ -187,7 +186,6 @@ export type CanvasMaterialPersistenceDiagnosticCode =
   | 'canvas-material-media-kind-invalid'
   | 'canvas-material-generation-evidence-required'
   | 'canvas-material-generation-evidence-forbidden'
-  | 'canvas-material-legacy-generation-evidence'
   | 'canvas-material-entity-evidence-invalid'
   | 'canvas-material-non-serializable-value'
   | 'canvas-material-sensitive-value-forbidden';
@@ -399,16 +397,9 @@ export function isCanvasMaterialActionDescriptor(
 export function isCanvasMaterialActionIntent(value: unknown): value is CanvasMaterialActionIntent {
   return (
     isRecord(value) &&
-    hasOnlyKeys(value, [
-      'identity',
-      'actionId',
-      'expectedCanvasRevision',
-      'selectedNodeIds',
-      'payload',
-    ]) &&
+    hasOnlyKeys(value, ['identity', 'actionId', 'selectedNodeIds', 'payload']) &&
     isCanvasMaterialAuthoringIdentity(value['identity']) &&
     isNonEmptyString(value['actionId']) &&
-    isNonNegativeInteger(value['expectedCanvasRevision']) &&
     isNonEmptyArray(value['selectedNodeIds'], isNonEmptyString) &&
     isRecord(value['payload'])
   );
@@ -512,15 +503,6 @@ export function validateCanvasMaterialNodePersistence(
       code: 'canvas-material-content-locator-invalid',
       target: `${target}.contentLocator`,
       message: 'Canvas material ContentLocator is invalid or non-portable.',
-    });
-  }
-
-  if (data['generationContext'] !== undefined) {
-    diagnostics.push({
-      code: 'canvas-material-legacy-generation-evidence',
-      target: `${target}.generationContext`,
-      message:
-        'Legacy generationContext cannot classify material; migrate to a generated-output locator with stable Generation Job evidence.',
     });
   }
 
@@ -758,10 +740,6 @@ function isNonEmptyArray<T>(
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {

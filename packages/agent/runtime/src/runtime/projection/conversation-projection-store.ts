@@ -14,7 +14,6 @@ export type ConversationProjectionListener = (patch: ConversationProjectionPatch
 
 export interface ConversationProjectionStore {
   readonly conversationId: string;
-  readonly projectionVersion: number;
   apply(update: ConversationProjectionUpdate): ConversationProjectionPatch;
   snapshot(): ConversationProjectionSnapshot;
   subscribe(listener: ConversationProjectionListener): () => void;
@@ -38,15 +37,10 @@ export function createConversationProjectionStore(
 class DefaultConversationProjectionStore implements ConversationProjectionStore {
   private readonly turns = new Map<string, MutableTurnProjection>();
   private readonly listeners = new Set<ConversationProjectionListener>();
-  private _projectionVersion = 0;
   private disposed = false;
 
   constructor(readonly conversationId: string) {
     assertRequiredIdentity('conversationId', conversationId);
-  }
-
-  get projectionVersion(): number {
-    return this._projectionVersion;
   }
 
   apply(update: ConversationProjectionUpdate): ConversationProjectionPatch {
@@ -70,13 +64,9 @@ class DefaultConversationProjectionStore implements ConversationProjectionStore 
     }
     this.turns.set(turn.turnId, turn);
 
-    const baseProjectionVersion = this._projectionVersion;
-    this._projectionVersion += 1;
     const patch = freezeClone<ConversationProjectionPatch>({
       type: 'conversationProjectionPatch',
       conversationId: this.conversationId,
-      baseProjectionVersion,
-      projectionVersion: this._projectionVersion,
       turnId: turn.turnId,
       runId: turn.runId,
       messageId: turn.messageId,
@@ -93,7 +83,6 @@ class DefaultConversationProjectionStore implements ConversationProjectionStore 
     this.assertActive();
     return freezeClone<ConversationProjectionSnapshot>({
       conversationId: this.conversationId,
-      projectionVersion: this._projectionVersion,
       turns: Array.from(this.turns.values(), (turn) => ({
         turnId: turn.turnId,
         runId: turn.runId,

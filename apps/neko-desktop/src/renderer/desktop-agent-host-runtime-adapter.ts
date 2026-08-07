@@ -9,36 +9,83 @@ export interface DesktopAgentPresentationStorage {
   setItem(key: string, value: string): void;
 }
 
+export interface ElectronAgentHostRuntimeAdapter extends AgentHostRuntimeAdapter {
+  dispose(): Promise<void>;
+}
+
+const INVALID_PRESENTATION_STATE = Object.freeze({ stateReadFailure: 'invalid-json' as const });
+
+export function createDesktopAgentPresentationStateKey(
+  ownerIdentity: string,
+  viewId: string,
+): string {
+  return `openneko:agent:presentation:${ownerIdentity}:${viewId}`;
+}
+
+export function readDesktopAgentPresentationState(
+  storage: DesktopAgentPresentationStorage,
+  stateKey: string,
+): unknown {
+  const serialized = storage.getItem(stateKey);
+  if (serialized === null) return undefined;
+  try {
+    const state: unknown = JSON.parse(serialized);
+    return state;
+  } catch {
+    return INVALID_PRESENTATION_STATE;
+  }
+}
+
 export function createElectronAgentHostRuntimeAdapter(input: {
   readonly bridge: OpenNekoDesktopAgentBridge;
   readonly bootstrap: DesktopAgentReadyBootstrapProjection;
   readonly storage?: DesktopAgentPresentationStorage;
-}): AgentHostRuntimeAdapter {
+}): ElectronAgentHostRuntimeAdapter {
   const { connection } = input.bootstrap;
   const storage = input.storage ?? window.sessionStorage;
-  const stateKey = `openneko:agent:presentation:${connection.viewId}:${connection.viewEpoch}`;
+  const subscriptions = new Set<() => void>();
+  let disposed = false;
+  let disposeOperation: Promise<void> | undefined;
+  const stateKey = createDesktopAgentPresentationStateKey(
+    `workspace:${connection.workspaceId}`,
+    connection.viewId,
+  );
   return {
     hostKind: 'electron',
     runtimeId: `neko.agent.webview.electron:${connection.connectionId}`,
     send(message): void {
-      input.bridge.agent.send(message);
+      if (disposed) throw new Error('Desktop Agent session adapter is disposed.');
+      input.bridge.agent.send(connection, message);
     },
     subscribe(listener) {
-      const unsubscribe = input.bridge.agent.subscribe(listener);
+      if (disposed) throw new Error('Desktop Agent session adapter is disposed.');
+      const unsubscribe = input.bridge.agent.subscribe(connection, listener);
+      let active = true;
+      const disposeSubscription = (): void => {
+        if (!active) return;
+        active = false;
+        subscriptions.delete(disposeSubscription);
+        unsubscribe();
+      };
+      subscriptions.add(disposeSubscription);
       return {
-        dispose(): void {
-          unsubscribe();
-        },
+        dispose: disposeSubscription,
       };
     },
     getState(): unknown {
-      const serialized = storage.getItem(stateKey);
-      if (serialized === null) return undefined;
-      const state: unknown = JSON.parse(serialized);
-      return state;
+      return readDesktopAgentPresentationState(storage, stateKey);
     },
     setState(state: unknown): void {
       storage.setItem(stateKey, JSON.stringify(state));
+    },
+    async dispose(): Promise<void> {
+      if (!disposeOperation) {
+        disposed = true;
+        for (const unsubscribe of subscriptions) unsubscribe();
+        subscriptions.clear();
+        disposeOperation = input.bridge.agent.detach(connection);
+      }
+      await disposeOperation;
     },
   };
 }

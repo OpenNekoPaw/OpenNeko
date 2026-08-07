@@ -37,6 +37,7 @@ import {
   useHistoryStoreApi,
 } from '../stores/canvasStoreScope';
 import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
+import type { CanvasWebviewStateDiagnostic } from '../utils/viewportWebviewState';
 
 // =============================================================================
 // Types
@@ -47,6 +48,7 @@ export interface CanvasHostMessagePort {
   postMessage: (message: unknown) => void;
   getState: () => unknown;
   setState: (state: unknown) => void;
+  reportStateDiagnostic?: (diagnostic: CanvasWebviewStateDiagnostic) => void;
   supportsMessage?: (messageType: string) => boolean;
   subscribe?: (listener: (message: unknown) => void) => () => void;
 }
@@ -696,7 +698,6 @@ export function useCanvasHostMessages(
 function isCanvasDocumentPayload(value: unknown): value is CanvasData {
   return (
     isRecord(value) &&
-    typeof value.version === 'string' &&
     typeof value.name === 'string' &&
     (value.viewport === undefined || isRecord(value.viewport)) &&
     Array.isArray(value.nodes) &&

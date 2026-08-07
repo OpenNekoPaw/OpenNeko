@@ -32,7 +32,7 @@ describe('Agent Evaluation aggregate report', () => {
     });
 
     expect(aggregate).toMatchObject({
-      schema: 'neko.agent-eval.aggregate.v2',
+      schema: 'neko.agent-eval.aggregate',
       outcome: 'non-comparable',
       repetitions: 2,
       statistics: {
@@ -61,7 +61,7 @@ describe('Agent Evaluation aggregate report', () => {
     const outputRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-eval-aggregate-'));
     temporaryDirectories.push(outputRoot);
     const file = await writeAggregateReport(aggregate, { outputRoot });
-    await expect(fs.readFile(file, 'utf8')).resolves.toContain('neko.agent-eval.aggregate.v2');
+    await expect(fs.readFile(file, 'utf8')).resolves.toContain('neko.agent-eval.aggregate');
   });
 
   it('fails visible when a planned repetition has no completed sample', () => {
@@ -86,14 +86,13 @@ function selection() {
 function sample(runId, outcome, options = {}) {
   const reportId = runId;
   const result = {
-    schema: 'neko.agent-eval.result.v2',
+    schema: 'neko.agent-eval.result',
     reportId,
     suiteId: 'suite-1',
     caseId: 'case-1',
     runId,
     outcome,
     target: { kind: 'runtime', id: 'runtime-1', contractHash: HASH },
-    repositoryRevision: 'revision-1',
     modelIdentity: { providerId: 'provider-1', modelId: 'model-1' },
     effectiveConfiguration: {
       runtimeProfileId: 'runtime-1',
@@ -137,7 +136,7 @@ function sample(runId, outcome, options = {}) {
           digest: HASH,
           provenance: 'fixture-workspace',
           deliveryStatus: 'delivered',
-          validatorId: 'json-document-v1',
+          validatorId: 'json-document',
           validatorStatus: 'valid',
         },
       },
@@ -150,7 +149,7 @@ function sample(runId, outcome, options = {}) {
         digest: HASH,
         provenance: 'fixture-workspace',
         deliveryStatus: 'delivered',
-        validatorId: 'json-document-v1',
+        validatorId: 'json-document',
         validatorStatus: 'valid',
       },
     ],
@@ -161,7 +160,7 @@ function sample(runId, outcome, options = {}) {
 
 function judge(reportId, score) {
   return {
-    schema: 'neko.agent-eval.judge.v2',
+    schema: 'neko.agent-eval.judge',
     reportId,
     suiteId: 'suite-1',
     caseId: 'case-1',
@@ -170,7 +169,6 @@ function judge(reportId, score) {
     modelId: 'judge-model',
     profileId: 'quality-judge',
     rubricId: 'quality-rubric',
-    rubricVersion: 'v1',
     promptHash: HASH,
     sampling: { temperature: 0, maxTokens: 1000 },
     criteria: [

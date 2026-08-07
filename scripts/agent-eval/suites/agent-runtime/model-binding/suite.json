@@ -1,9 +1,8 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.model-binding",
   "owner": { "kind": "agent-runtime", "id": "session-model-binding" },
   "target": { "kind": "model", "id": "chat-model-binding", "contractHash": "sha256:5e9c7a8e3d6ffaf067c21789a19103102548d17fe8fe6c1ddaf10d1c8601b70a" },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     { "id": "canonical-default", "settings": {}, "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" },
     { "id": "thinking-0", "settings": { "thinkingBudget": 0 }, "configurationHash": "sha256:82a878d0d08ec3a151819cb976bff055754df0ed72be501c66e6188669d98d2c" },

@@ -4,8 +4,6 @@ import { dirname } from 'node:path';
 
 import type { HostSecretPort } from '@neko/host/ports';
 
-const DESKTOP_SECRET_FILE_SCHEMA_VERSION = 1;
-
 export interface DesktopSecretEncryption {
   assertAvailable(): void;
   encrypt(value: string): Uint8Array;
@@ -18,7 +16,6 @@ export interface CreateEncryptedDesktopSecretPortOptions {
 }
 
 interface DesktopSecretFile {
-  readonly schemaVersion: typeof DESKTOP_SECRET_FILE_SCHEMA_VERSION;
   readonly entries: Readonly<Record<string, string>>;
 }
 
@@ -49,7 +46,6 @@ class EncryptedDesktopSecretPort implements HostSecretPort {
       const file = await this.readFile();
       const encrypted = Buffer.from(this.options.encryption.encrypt(value)).toString('base64');
       await this.writeFile({
-        schemaVersion: DESKTOP_SECRET_FILE_SCHEMA_VERSION,
         entries: { ...file.entries, [requireSecretKey(key)]: encrypted },
       });
     });
@@ -64,7 +60,6 @@ class EncryptedDesktopSecretPort implements HostSecretPort {
       const entries = { ...file.entries };
       delete entries[normalizedKey];
       await this.writeFile({
-        schemaVersion: DESKTOP_SECRET_FILE_SCHEMA_VERSION,
         entries,
       });
     });
@@ -77,16 +72,16 @@ class EncryptedDesktopSecretPort implements HostSecretPort {
     } catch (error) {
       if (hasErrorCode(error) && error.code === 'ENOENT') {
         return {
-          schemaVersion: DESKTOP_SECRET_FILE_SCHEMA_VERSION,
           entries: {},
         };
       }
       throw error;
     }
     const parsed: unknown = JSON.parse(source);
-    if (!isRecord(parsed) || parsed['schemaVersion'] !== DESKTOP_SECRET_FILE_SCHEMA_VERSION) {
-      throw new Error('Desktop secret file has an unknown schema version.');
+    if (!isRecord(parsed)) {
+      throw new TypeError('Desktop secret file must be an object.');
     }
+    requireExactKeys(parsed, ['entries']);
     const rawEntries = parsed['entries'];
     if (!isRecord(rawEntries)) {
       throw new TypeError('Desktop secret file entries must be a record.');
@@ -101,7 +96,6 @@ class EncryptedDesktopSecretPort implements HostSecretPort {
       entries[key] = value;
     }
     return {
-      schemaVersion: DESKTOP_SECRET_FILE_SCHEMA_VERSION,
       entries,
     };
   }
@@ -168,4 +162,16 @@ function hasErrorCode(error: unknown): error is Error & { readonly code: unknown
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requireExactKeys(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+): void {
+  const unexpected = Object.keys(record).filter((key) => !keys.includes(key));
+  if (unexpected.length > 0) {
+    throw new TypeError(
+      `Desktop secret file contains unsupported fields: ${unexpected.join(', ')}.`,
+    );
+  }
 }

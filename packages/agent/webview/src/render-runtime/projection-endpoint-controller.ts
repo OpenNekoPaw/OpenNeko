@@ -4,7 +4,7 @@ import type {
   AgentHostToWebviewMessage,
   ProjectionAttachmentKey,
 } from '@neko/agent-contracts';
-import { AGENT_WEBVIEW_PROTOCOL_VERSION, isSameProjectionAttachment } from '@neko/agent-contracts';
+import { isSameProjectionAttachment } from '@neko/agent-contracts';
 import type {
   TabProjectionAttachmentBinding,
   TabRenderBinding,
@@ -46,8 +46,9 @@ export function createProjectionAttachmentId(): string {
 
 class DefaultProjectionEndpointController implements ProjectionEndpointController {
   private readonly bindings = new Map<string, TabRenderBinding>();
+  private readonly ownedKeys = new Map<string, ProjectionAttachmentKey>();
   private readonly recoveryKeys = new Set<string>();
-  private endpointEpoch: string | null = null;
+  private endpointReady = false;
   private subscription: { dispose(): void } | null = null;
 
   constructor(private readonly options: ProjectionEndpointControllerOptions) {}
@@ -57,7 +58,6 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     this.subscription = this.options.host.subscribe((message) => this.acceptHostMessage(message));
     this.options.host.send({
       type: 'projectionEndpointDiscover',
-      protocolVersion: AGENT_WEBVIEW_PROTOCOL_VERSION,
       realmId: this.options.realmId,
     });
   }
@@ -82,27 +82,25 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
       }
       next.set(binding.tabId, binding);
     }
+    for (const tabId of this.bindings.keys()) {
+      if (!next.has(tabId)) this.releaseOwnedKey(tabId);
+    }
     this.bindings.clear();
     for (const [tabId, binding] of next) this.bindings.set(tabId, binding);
 
-    if (!this.endpointEpoch) return;
+    if (!this.endpointReady) return;
     for (const binding of this.bindings.values()) {
       const runtime = this.options.registry.require(binding.tabId);
       if (!runtime.projectionAttachment) {
-        this.attach(runtime, this.endpointEpoch);
+        this.attach(runtime);
       }
     }
   }
 
   private acceptHostMessage(message: AgentHostToWebviewMessage): void {
     if (message.type === 'projectionEndpointReady') {
-      if (message.protocolVersion !== AGENT_WEBVIEW_PROTOCOL_VERSION) {
-        throw new Error(
-          `Agent Webview protocol mismatch: expected ${AGENT_WEBVIEW_PROTOCOL_VERSION}, received ${message.protocolVersion}.`,
-        );
-      }
       if (message.realmId !== this.options.realmId) return;
-      this.acceptEndpoint(message.endpointEpoch);
+      this.acceptEndpointReady();
       return;
     }
     if (
@@ -115,24 +113,22 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     }
   }
 
-  private acceptEndpoint(endpointEpoch: string): void {
-    assertIdentity('endpointEpoch', endpointEpoch);
-    if (endpointEpoch === this.endpointEpoch) {
+  private acceptEndpointReady(): void {
+    if (this.endpointReady) {
       for (const binding of this.bindings.values()) {
         const runtime = this.options.registry.require(binding.tabId);
-        if (!runtime.projectionAttachment) this.attach(runtime, endpointEpoch);
+        if (!runtime.projectionAttachment) this.attach(runtime);
       }
       return;
     }
 
-    const replacesEndpoint = this.endpointEpoch !== null;
-    this.endpointEpoch = endpointEpoch;
+    this.endpointReady = true;
     for (const binding of this.bindings.values()) {
       const runtime = this.options.registry.require(binding.tabId);
-      if (replacesEndpoint && runtime.projectionAttachment) {
-        runtime.reattachProjection(this.createBinding(runtime, endpointEpoch), 'endpoint-replaced');
+      if (runtime.projectionAttachment) {
+        runtime.reattachProjection(this.createBinding(runtime), 'endpoint-replaced');
       } else {
-        this.attach(runtime, endpointEpoch);
+        this.attach(runtime);
       }
     }
   }
@@ -167,20 +163,27 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     }
   }
 
-  private attach(runtime: TabRenderRuntime, endpointEpoch: string): void {
-    runtime.attachProjection(this.createBinding(runtime, endpointEpoch));
+  private attach(runtime: TabRenderRuntime): void {
+    runtime.attachProjection(this.createBinding(runtime));
   }
 
-  private createBinding(
-    runtime: TabRenderRuntime,
-    endpointEpoch: string,
-  ): TabProjectionAttachmentBinding {
-    return {
-      endpointEpoch,
+  private createBinding(runtime: TabRenderRuntime): TabProjectionAttachmentBinding {
+    this.releaseOwnedKey(runtime.tabId);
+    const key = {
       attachmentId: this.options.createAttachmentId(runtime.tabId),
+      tabId: runtime.tabId,
+      conversationId: runtime.conversationId,
+    };
+    this.ownedKeys.set(runtime.tabId, key);
+    return {
+      attachmentId: key.attachmentId,
       send: (message) => this.options.host.send(message),
       reportError: (error, key) => this.handleAttachmentFatal(runtime.tabId, error, key),
     };
+  }
+
+  private releaseOwnedKey(tabId: string): void {
+    this.ownedKeys.delete(tabId);
   }
 
   private handleAttachmentFatal(tabId: string, error: Error, key: ProjectionAttachmentKey): void {
@@ -190,13 +193,13 @@ class DefaultProjectionEndpointController implements ProjectionEndpointControlle
     this.recoveryKeys.add(recoveryKey);
     queueMicrotask(() => {
       this.recoveryKeys.delete(recoveryKey);
-      if (!this.subscription || this.endpointEpoch !== key.endpointEpoch) return;
+      if (!this.subscription || !this.endpointReady) return;
       const runtime = this.options.registry.get(tabId);
       const binding = this.bindings.get(tabId);
       const activeKey = runtime?.projectionAttachment?.getSnapshot().key;
       if (!runtime || !binding || !activeKey || !isSameProjectionAttachment(activeKey, key)) return;
       if (runtime.projectionAttachment?.getSnapshot().phase !== 'fatal') return;
-      runtime.reattachProjection(this.createBinding(runtime, key.endpointEpoch), 'protocol-fatal');
+      runtime.reattachProjection(this.createBinding(runtime), 'protocol-fatal');
     });
   }
 }
@@ -211,7 +214,7 @@ function assertIdentity(name: string, value: string): void {
 }
 
 function formatKey(key: ProjectionAttachmentKey): string {
-  return `${key.endpointEpoch}:${key.attachmentId}:${key.tabId}:${key.conversationId}`;
+  return `${key.attachmentId}:${key.tabId}:${key.conversationId}`;
 }
 
 function toError(error: unknown): Error {

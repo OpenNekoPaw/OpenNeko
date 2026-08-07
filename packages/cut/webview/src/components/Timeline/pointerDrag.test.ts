@@ -85,7 +85,6 @@ describe('timeline pointer drag', () => {
     const view = {
       documentUri: 'file:///workspace/demo.otio',
       sessionId: 'session-1',
-      revision: 1,
       name: 'Demo',
       durationSeconds: 6,
       tracks: [videoTrack],

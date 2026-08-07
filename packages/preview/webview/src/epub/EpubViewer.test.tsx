@@ -6,11 +6,13 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
+import { PersistedStateProvider } from '../shared/usePersistedState';
 import {
   EPUB_PAGINATED_THEME,
   EpubViewer,
   applyEpubImageLayout,
   fetchForEpub,
+  getChapterNeighborhood,
   waitForEpubImage,
   waitForEpubResourceReadiness,
 } from './EpubViewer';
@@ -35,7 +37,7 @@ describe('fetchForEpub', () => {
       vi.fn(async () => new Response(archive, { status: 200 })),
     );
 
-    const result = await fetchForEpub('http://127.0.0.1:43125/v1/resources/book', 'binary');
+    const result = await fetchForEpub('http://127.0.0.1:43125/resources/book', 'binary');
 
     expect(result).toBeInstanceOf(ArrayBuffer);
     expect(Array.from(new Uint8Array(result as ArrayBuffer))).toEqual(Array.from(archive));
@@ -47,7 +49,7 @@ describe('fetchForEpub', () => {
       vi.fn(async () => new Response('chapter image', { status: 200 })),
     );
 
-    const result = await fetchForEpub('http://127.0.0.1:43125/v1/resources/image', 'blob');
+    const result = await fetchForEpub('http://127.0.0.1:43125/resources/image', 'blob');
 
     expect(result).toBeInstanceOf(Blob);
   });
@@ -83,7 +85,9 @@ describe('fetchForEpub', () => {
       await act(async () => {
         root.render(
           <I18nProvider service={i18nService}>
-            <EpubViewer sourceUrl="http://127.0.0.1:43125/v1/resources/book" />
+            <PersistedStateProvider>
+              <EpubViewer sourceUrl="http://127.0.0.1:43125/resources/book" />
+            </PersistedStateProvider>
           </I18nProvider>,
         );
       });
@@ -183,6 +187,27 @@ describe('EPUB waterfall image layout', () => {
       expect(page.style.margin).toBe('0px auto');
       expect(page.style.getPropertyPriority('margin')).toBe('important');
     }
+  });
+});
+
+describe('EPUB waterfall progressive rendering', () => {
+  it('selects only the target chapter and its bounded neighbors', () => {
+    const entries = Array.from({ length: 10 }, (_, index) => ({ index }));
+
+    expect(getChapterNeighborhood(entries, 5, 2).map((entry) => entry.index)).toEqual([
+      5, 4, 6, 3, 7,
+    ]);
+    expect(getChapterNeighborhood(entries, 0, 2).map((entry) => entry.index)).toEqual([0, 1, 2]);
+    expect(getChapterNeighborhood(entries, 20, 2)).toEqual([]);
+  });
+
+  it('keeps one waterfall chapter render path without hidden full-spine measurement', () => {
+    const source = readFileSync(resolve(import.meta.dirname, 'EpubViewer.tsx'), 'utf8');
+
+    expect(source.match(/await entry\.section\.render\(/g)).toHaveLength(1);
+    expect(source).not.toContain('measureContainerRef');
+    expect(source).not.toContain('measurementQueueRef');
+    expect(source).not.toContain('warmChapterHeights');
   });
 });
 

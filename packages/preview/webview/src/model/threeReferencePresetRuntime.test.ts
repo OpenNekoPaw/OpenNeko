@@ -115,7 +115,7 @@ describe('neutral 3D Reference mannequin runtime', () => {
     expect(disposals).toEqual({ geometry: geometries.size, material: materials.size });
   });
 
-  it.each(['blockout-cube-v1', 'blockout-sphere-v1', 'blockout-cylinder-v1'] as const)(
+  it.each(['blockout-cube', 'blockout-sphere', 'blockout-cylinder'] as const)(
     'creates exactly one declared blockout primitive for %s',
     (implementationId) => {
       const root = createBlockoutReferencePreset(implementationId);
@@ -124,15 +124,13 @@ describe('neutral 3D Reference mannequin runtime', () => {
         if (object instanceof THREE.Mesh) meshes.push(object);
       });
       expect(meshes).toHaveLength(1);
-      expect(meshes[0]?.name).toBe(
-        `guide-part:${implementationId.replace('blockout-', '').replace('-v1', '')}`,
-      );
+      expect(meshes[0]?.name).toBe(`guide-part:${implementationId.replace('blockout-', '')}`);
       expect(new THREE.Box3().setFromObject(root).isEmpty()).toBe(false);
       disposeObjectTree(root);
     },
   );
 
-  it.each(['studio-room-blockout-v1', 'neutral-panorama-grid-v1'] as const)(
+  it.each(['studio-room-blockout', 'neutral-panorama-grid'] as const)(
     'creates the declared guide-only blockout runtime %s',
     (implementationId) => {
       const root = createBlockoutReferencePreset(implementationId);

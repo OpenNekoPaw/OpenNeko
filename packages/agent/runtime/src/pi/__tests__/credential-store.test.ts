@@ -48,35 +48,9 @@ describe('OpenNekoCredentialStore', () => {
     }
   });
 
-  it('shares one program-level Host-secret view across Desktop runtime consumers', async () => {
-    const persistence = new InMemoryUserCredentialPersistence();
-    const programStore = new OpenNekoCredentialStore(persistence, () => 1_800_000_000_000);
-    const tuiConsumer = programStore;
-    const vscodeConsumer = programStore;
-
-    const status = await tuiConsumer.replace(
-      'newapi',
-      { type: 'api_key', key: 'secret-value' },
-      'user-config-import',
-    );
-
-    expect(await vscodeConsumer.read('newapi')).toEqual({
-      type: 'api_key',
-      key: 'secret-value',
-    });
-    expect(status).toEqual({
-      providerId: 'newapi',
-      type: 'api_key',
-      provenance: 'user-config-import',
-      fingerprint: expect.stringMatching(/^[0-9a-f]{16}$/),
-      updatedAt: '2027-01-15T08:00:00.000Z',
-    });
-    expect(JSON.stringify(status)).not.toContain('secret-value');
-  });
-
   it('serializes refresh writes per provider', async () => {
     const store = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-    await store.replace('oauth-provider', oauth('access-0', 'refresh-0'), 'interactive');
+    await store.replace('oauth-provider', oauth('access-0', 'refresh-0'));
     const observed: string[] = [];
 
     await Promise.all([
@@ -156,9 +130,9 @@ describe('OpenNekoCredentialStore', () => {
     };
     const store = new OpenNekoCredentialStore(failing);
 
-    await expect(
-      store.replace('openai', { type: 'api_key', key: 'secret' }, 'interactive'),
-    ).rejects.toMatchObject({ code: 'persistence' });
+    await expect(store.replace('openai', { type: 'api_key', key: 'secret' })).rejects.toMatchObject(
+      { code: 'persistence' },
+    );
     expect(await store.read('openai')).toBeUndefined();
   });
 

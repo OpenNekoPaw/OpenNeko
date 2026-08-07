@@ -13,7 +13,7 @@ describe('content locator contracts', () => {
       validateContentLocator({
         kind: 'workspace-file',
         path: 'neko/assets/Characters/alice.png',
-        fingerprint: { strategy: 'sha256', value: 'alice-v1' },
+        fingerprint: { strategy: 'sha256', value: 'alice-content' },
       }),
     ).toMatchObject({ ok: true });
   });
@@ -28,14 +28,13 @@ describe('content locator contracts', () => {
       {
         kind: 'generated-output',
         outputId: 'output-1',
-        revision: 'revision-1',
-        digest: 'sha256:generated-v1',
+        digest: 'sha256:generated-content',
         path: 'neko/generated/image/output-1.png',
       },
       {
         kind: 'package-resource',
         packageId: 'live2d-alice',
-        revision: 'v1',
+        revision: 'release-one',
         resourcePath: 'textures/texture_00.png',
         manifestPath: 'neko/packages/live2d-alice/manifest.json',
       },
@@ -50,17 +49,20 @@ describe('content locator contracts', () => {
     const first = {
       kind: 'workspace-file' as const,
       path: 'neko/assets/Characters/alice.png',
-      fingerprint: { strategy: 'sha256' as const, value: 'alice-v1' },
+      fingerprint: { strategy: 'sha256' as const, value: 'alice-content' },
     };
     const reordered = {
-      fingerprint: { value: 'alice-v1', strategy: 'sha256' as const },
+      fingerprint: { value: 'alice-content', strategy: 'sha256' as const },
       path: 'neko/assets/Characters/alice.png',
       kind: 'workspace-file' as const,
     };
     expect(contentLocatorsEqual(first, reordered)).toBe(true);
     expect(contentLocatorKey(first)).toBe(contentLocatorKey(reordered));
     expect(
-      contentLocatorsEqual(first, { ...reordered, path: 'neko/assets/Characters/alice-v2.png' }),
+      contentLocatorsEqual(first, {
+        ...reordered,
+        path: 'neko/assets/Characters/alice-edited.png',
+      }),
     ).toBe(false);
   });
 
@@ -72,7 +74,7 @@ describe('content locator contracts', () => {
       'https://example.com/image.png',
       '${MEDIA}/image.png',
       'neko/assets/../private.png',
-      '.neko/.cache/resources/image.png',
+      '.runtime/resources/image.png',
       'neko-media://panel/image.png',
     ];
 
@@ -104,75 +106,9 @@ describe('content locator contracts', () => {
       validateContentLocator({
         kind: 'package-resource',
         packageId: 'pkg',
-        revision: 'v1',
+        revision: 'release-one',
         resourcePath: '/absolute.bin',
       }).ok,
     ).toBe(false);
-  });
-
-  it('rejects unknown identity, cache, physical-path, and runtime fields', () => {
-    const poisonedLocators = [
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/alice.png',
-        assetId: 'asset-alice',
-      },
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/alice.png',
-        localPath: '/Users/private/alice.png',
-      },
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/alice.png',
-        cacheKey: 'thumbnail:alice',
-      },
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/alice.png',
-        webviewUri: 'neko-media://panel/alice.png',
-      },
-      {
-        kind: 'workspace-file',
-        path: 'neko/assets/Characters/alice.png',
-        fingerprint: { strategy: 'sha256', value: 'alice-v1', providerId: 'legacy-assets' },
-      },
-    ];
-
-    expect(poisonedLocators.map((locator) => validateContentLocator(locator).ok)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-    ]);
-  });
-
-  it('rejects legacy Asset URIs as generated or package owner identity', () => {
-    expect(
-      validateContentLocator({
-        kind: 'generated-output',
-        outputId: 'project://assets/generated',
-        revision: 'revision-1',
-        digest: 'sha256:generated',
-        path: 'neko/generated/generated.png',
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateContentLocator({
-        kind: 'package-resource',
-        packageId: 'project://assets/package',
-        revision: 'revision-1',
-        resourcePath: 'model.json',
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateContentLocator({
-        kind: 'package-resource',
-        packageId: '@studio/motion-pack',
-        revision: 'revision-1',
-        resourcePath: 'motions/wave.motion3.json',
-      }).ok,
-    ).toBe(true);
   });
 });

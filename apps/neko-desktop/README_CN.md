@@ -8,7 +8,7 @@ Agent + Home，以及 P1.4 Assets + Canvas 的确定性实现：
 - 安全的 main/preload/renderer 边界、Electron Host ports、应用身份和退出生命周期；
 - Home、Content Project Tab、Context Dock、Activity/Attention owner-derived 投影；
 - canonical Workspace/Project identity、Window/Tab/View state、CAS persistence；
-- sender-bound fixed IPC、renderer epoch/revision 检查和 restart recovery；
+- sender-bound fixed IPC、renderer session identity/revision 检查和 restart recovery；
 - 真实 Pi conversation authority、Session/checkpoint、lease、Tool/Skill snapshot 和 Timeline
   projection 的 AppHost composition；
 - 只通过 HostSecretPort 持久化的 credential runtime，以及 macOS 原生受保护认证输入；
@@ -61,15 +61,17 @@ workspace runtime、不打开 transcript 或获取 execution lease。Agent Root 
 菜单不得复制背景或依赖消费者 Tailwind 扫描共享包源码。Workbench 在没有 creative Main View
 时允许 `Chat + Main` 并展示明确空 Main surface；`Main only` 仍要求已有 Main View。
 
-完整 provider-backed 宿主验收仍未完成：Evaluation 只使用用户区 `~/.neko/config.toml`，不接受其他
+provider-backed 宿主与可见 UI 基础会话验收已接通：Evaluation 只使用用户区 `~/.neko/config.toml`，不接受其他
 用户配置、JSON/YAML 或 mock 降级。Desktop 边界验证原生 TOML 后将其原样复制到隔离 fixture，
 不执行格式编译、不合并默认值、不推断 provider，也不写回用户目录；凭据仍由产品配置 owner 解析。
-当前宿主尚未提供显式 provider/model 与成本授权，因此不会启动 Desktop 或真实 API。当前已实现通过公开 Agent bridge
+开发者通过显式 provider/model 与成本授权启动真实 API；`desktop-agent-provider-ui` 从可见 Entry composer
+提交并验证 Assistant 会话 materialization、真实回复、PrimarySidebar 激活和 terminal UI。另已实现通过公开 Agent bridge
 与 fixture-only automation contract 运行的 Desktop complete-session driver、通用多轮 workflow
 interpreter、Tool approval、cancel/recovery、renderer reload/reconnect、application restart/disposal、重复
 matrix、预算/分片和完整报告阶段，并增加受保护的可见 Tool/Timeline/reload/focus/close 场景。确定性测试、
 key-free Evaluation harness、production package 和无模型成本的 Electron Shell/Agent Root 路径仍不能
-替代真实模型、真实 UI 与消融验收。
+替代真实模型、真实 UI 与消融验收。完整基础矩阵还必须继续覆盖上下文压缩、完整应用重开、生成记录恢复、
+多会话切换和会话隔离。
 Canvas 工具栏按宿主 capability 显示。Desktop 当前已接通 source-add、selection/pan、
 undo/redo、资源放置、Preview、Cut、Media Library copy 和已提交 Generation result 的
 regenerate。Generation draft/edit-and-generate、playback、Canvas export/package 与
@@ -95,7 +97,6 @@ pnpm --filter @neko/app-desktop dev
 pnpm test:functional:headless
 pnpm test:local:ui
 pnpm test:local:ui --scenario=all-openneko-consumers
-pnpm test:local:ui --scenario=desktop-state-sqlite-migration
 pnpm test:local:ui --scenario=all-openneko-consumers --target=packaged
 pnpm test:local:media-openneko
 ```
@@ -121,10 +122,6 @@ Agent Evaluation 的 suite、Scenario、assertion、ablation、pass/fail 和报�
 `scripts/agent-eval`。Desktop 只提供固定 typed 产品操作与中立 facts，不解析测试计划，也不根据
 case、Skill 或 variant 选择成功路径。Agent Evaluation harness、真实 API、隐藏/可见 Desktop matrix
 和所有消融入口均为显式本地操作，不得加入 GitHub Actions 或通用 CI。
-
-`--scenario=desktop-state-sqlite-migration` 连续启动两个独立 Electron 进程：首次验证旧 Shell /
-应用设置 JSON 的事务导入、内容一致归档和 SQLite commit，第二次使用损坏的 legacy poison
-文件验证已提交 marker 后仅从 `~/.neko/neko.db` 恢复，且不会重新读取、归档或改写旧 authority。
 
 `pnpm test:local:media-openneko` 使用合成 H.264/WAV/Main10-PQ 和 32 MiB fixture 运行专用
 Electron OpenNeko resource qualification，验证 metadata、seek、Range、SHA-256、变化帧、

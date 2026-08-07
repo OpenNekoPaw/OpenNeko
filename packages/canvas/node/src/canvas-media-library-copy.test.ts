@@ -96,7 +96,7 @@ describe('CanvasMediaLibraryCopyService', () => {
     );
   });
 
-  it('poisons ambiguous legacy promotion requests with a migration-required diagnostic', async () => {
+  it('rejects malformed copy requests locally', async () => {
     const fixture = await createFixture();
 
     await expect(
@@ -104,14 +104,12 @@ describe('CanvasMediaLibraryCopyService', () => {
         runtimeIdentity: fixture.identity,
         workspace: fixture.workspace,
         request: {
-          kind: 'saveCanvasMaterialToAssetLibrary',
-          identity: materialIdentity(fixture.identity),
-          source: { kind: 'workspace-file', path: 'source/portrait.png' },
+          kind: 'unknown-copy-request',
         },
       }),
     ).rejects.toMatchObject({
       name: 'CanvasMediaLibraryCopyContractError',
-      code: 'migration-required',
+      code: 'invalid-request',
     });
   });
 
@@ -152,10 +150,10 @@ async function createFixture(): Promise<{
     workspaceId: 'workspace-1',
     windowId: 'window-1',
     viewId: 'canvas-1',
-    viewEpoch: 1,
+    viewInstanceId: 'view-instance-1',
     documentId: 'neko/boards/workspace.nkc',
     sessionId: 'session-1',
-    endpointEpoch: 'endpoint-1',
+    rendererSessionId: 'endpoint-1',
   };
   return {
     workspace: {

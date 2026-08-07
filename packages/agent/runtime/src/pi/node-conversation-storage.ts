@@ -1,14 +1,14 @@
-import { createHash } from 'node:crypto';
-import { mkdir, rename, stat } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
-const LEGACY_MIGRATION_ID = 'agent-pi-metadata-sqlite-v1';
-const PI_TABLES = [
-  'pi_conversations',
-  'pi_branches',
-  'pi_execution_leases',
-  'pi_turn_checkpoints',
+const REQUIRED_CONVERSATION_COLUMNS = [
+  'workspace_id',
+  'conversation_id',
+  'title',
+  'active_branch_id',
+  'created_at',
+  'updated_at',
 ] as const;
 
 export interface NodePiConversationStorage {
@@ -29,14 +29,14 @@ export async function openNodePiConversationStorage(
     timeout: 5_000,
   });
   try {
+    assertExistingConversationTableHasRequiredColumns(database);
     database.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
       PRAGMA synchronous = FULL;
       PRAGMA busy_timeout = 5000;
     `);
-    migratePiConversationSchema(database);
-    await migrateLegacyPiConversationStorage(database, userDataRoot);
+    initializePiConversationTables(database);
     return { database, databasePath, sessionsRoot };
   } catch (error) {
     database.close();
@@ -44,7 +44,8 @@ export async function openNodePiConversationStorage(
   }
 }
 
-export function migratePiConversationSchema(database: DatabaseSync): void {
+export function initializePiConversationTables(database: DatabaseSync): void {
+  assertExistingConversationTableHasRequiredColumns(database);
   database.exec(`
     CREATE TABLE IF NOT EXISTS pi_conversations (
       workspace_id TEXT NOT NULL,
@@ -95,131 +96,39 @@ export function migratePiConversationSchema(database: DatabaseSync): void {
       FOREIGN KEY(conversation_id, branch_id) REFERENCES pi_branches(conversation_id, branch_id)
         ON DELETE CASCADE
     );
-
-    CREATE TABLE IF NOT EXISTS pi_storage_authority_migrations (
-      migration_id TEXT PRIMARY KEY,
-      source_digest TEXT NOT NULL,
-      completed_at TEXT NOT NULL
-    ) STRICT;
   `);
+  assertConversationTableHasRequiredColumns(database);
 }
 
-async function migrateLegacyPiConversationStorage(
-  database: DatabaseSync,
-  userDataRoot: string,
-): Promise<void> {
-  const legacyPath = join(userDataRoot, 'agent', 'pi', 'metadata.sqlite');
-  if (!(await isFile(legacyPath))) return;
-
-  database.prepare('ATTACH DATABASE ? AS legacy_pi').run(legacyPath);
-  let digest: string;
-  try {
-    digest = digestPiTables(database, 'legacy_pi');
-    const marker = database
-      .prepare('SELECT source_digest FROM pi_storage_authority_migrations WHERE migration_id = ?')
-      .get(LEGACY_MIGRATION_ID);
-    if (marker !== undefined) {
-      const sourceDigest = readString(marker, 'source_digest');
-      if (sourceDigest !== digest) {
-        throw new Error('Legacy Pi metadata changed after canonical migration committed.');
-      }
-    } else {
-      assertCanonicalPiTablesEmpty(database);
-      database.exec('BEGIN IMMEDIATE');
-      try {
-        database.exec(`
-          INSERT INTO pi_conversations SELECT * FROM legacy_pi.pi_conversations;
-          INSERT INTO pi_branches SELECT * FROM legacy_pi.pi_branches;
-          INSERT INTO pi_execution_leases SELECT * FROM legacy_pi.pi_execution_leases;
-          INSERT INTO pi_turn_checkpoints SELECT * FROM legacy_pi.pi_turn_checkpoints;
-        `);
-        database
-          .prepare(
-            `INSERT INTO pi_storage_authority_migrations
-              (migration_id, source_digest, completed_at) VALUES (?, ?, ?)`,
-          )
-          .run(LEGACY_MIGRATION_ID, digest, new Date().toISOString());
-        database.exec('COMMIT');
-      } catch (error) {
-        database.exec('ROLLBACK');
-        throw error;
-      }
-      const canonicalDigest = digestPiTables(database, 'main');
-      if (canonicalDigest !== digest) {
-        throw new Error('Canonical Pi metadata verification failed after migration commit.');
-      }
-    }
-  } finally {
-    database.exec('DETACH DATABASE legacy_pi');
-  }
-
-  await archiveLegacyDatabase(legacyPath);
+function assertExistingConversationTableHasRequiredColumns(database: DatabaseSync): void {
+  const table = database
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
+    .get('pi_conversations');
+  if (table !== undefined) assertConversationTableHasRequiredColumns(database);
 }
 
-function digestPiTables(database: DatabaseSync, namespace: 'main' | 'legacy_pi'): string {
-  const hash = createHash('sha256');
-  for (const table of PI_TABLES) {
-    let rows: readonly unknown[];
-    try {
-      rows = database.prepare(`SELECT * FROM ${namespace}.${table} ORDER BY rowid`).all();
-    } catch (cause) {
-      throw new Error(`Legacy Pi metadata is missing or cannot read ${table}.`, { cause });
-    }
-    hash.update(table);
-    hash.update(
-      JSON.stringify(rows, (_key, value) => (typeof value === 'bigint' ? `${value}n` : value)),
-    );
-  }
-  return hash.digest('hex');
-}
-
-function assertCanonicalPiTablesEmpty(database: DatabaseSync): void {
-  for (const table of PI_TABLES) {
-    const row = database.prepare(`SELECT COUNT(*) AS count FROM main.${table}`).get();
-    const count = readInteger(row, 'count');
-    if (count !== 0) {
-      throw new Error(
-        `Canonical Pi metadata already contains ${table} rows without a migration marker.`,
-      );
-    }
+function assertConversationTableHasRequiredColumns(database: DatabaseSync): void {
+  const columns = new Set(
+    database
+      .prepare(`PRAGMA table_info(pi_conversations)`)
+      .all()
+      .map((row) => readColumnName(row)),
+  );
+  const missing = REQUIRED_CONVERSATION_COLUMNS.filter((column) => !columns.has(column));
+  if (missing.length > 0) {
+    throw new Error(`Pi conversation table is missing required columns: ${missing.join(', ')}.`);
   }
 }
 
-async function archiveLegacyDatabase(legacyPath: string): Promise<void> {
-  const archivePath = `${legacyPath}.migrated-v1`;
-  if (await isFile(archivePath)) {
-    throw new Error(`Legacy Pi metadata archive already exists: ${archivePath}`);
+function readColumnName(value: unknown): string {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    !('name' in value) ||
+    typeof value.name !== 'string'
+  ) {
+    throw new TypeError('Pi conversation table column name must be text.');
   }
-  await rename(legacyPath, archivePath);
-  for (const suffix of ['-wal', '-shm']) {
-    const sidecar = `${legacyPath}${suffix}`;
-    if (await isFile(sidecar)) await rename(sidecar, `${archivePath}${suffix}`);
-  }
-}
-
-function readString(value: unknown, key: string): string {
-  if (!isRecord(value) || typeof value[key] !== 'string') {
-    throw new TypeError(`SQLite row ${key} must be text.`);
-  }
-  return value[key];
-}
-
-function readInteger(value: unknown, key: string): number {
-  if (!isRecord(value)) throw new TypeError(`SQLite row ${key} must be an integer.`);
-  const field = value[key];
-  if (typeof field === 'bigint') return Number(field);
-  if (typeof field === 'number' && Number.isSafeInteger(field)) return field;
-  throw new TypeError(`SQLite row ${key} must be an integer.`);
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-async function isFile(target: string): Promise<boolean> {
-  try {
-    return (await stat(target)).isFile();
-  } catch {
-    return false;
-  }
+  return value.name;
 }

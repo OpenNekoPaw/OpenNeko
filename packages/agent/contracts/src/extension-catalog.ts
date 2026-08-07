@@ -46,7 +46,6 @@ export interface AgentExtensionRuntimeReadiness {
 }
 
 export interface AgentExtensionCatalogSnapshot {
-  readonly revision: string;
   readonly records: readonly AgentExtensionCatalogItem[];
   readonly runtimeDescriptors: readonly AgentExtensionRuntimeDescriptor[];
   readonly diagnostics: readonly {

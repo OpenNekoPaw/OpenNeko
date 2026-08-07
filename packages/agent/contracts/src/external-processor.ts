@@ -7,7 +7,6 @@ import type {
 import type { AgentCapabilitySource } from './capability';
 
 export const EXTERNAL_PROCESSOR_SCHEMA = 'neko.externalProcessor';
-export const EXTERNAL_PROCESSOR_SCHEMA_VERSION = 2;
 
 export const EXTERNAL_PROCESSOR_ROOT_ALIASES = [
   'workspace',
@@ -47,7 +46,6 @@ export type ExternalProcessorDiagnosticSeverity = 'error' | 'warning' | 'info';
 export type ExternalProcessorDiagnosticCode =
   | 'invalid-manifest'
   | 'unknown-schema'
-  | 'unknown-schema-version'
   | 'invalid-processor-kind'
   | 'missing-required-field'
   | 'invalid-field-type'
@@ -118,7 +116,6 @@ export interface ExternalProcessorEnvProfile {
 
 export interface ExternalProcessorManifest {
   readonly schema: typeof EXTERNAL_PROCESSOR_SCHEMA;
-  readonly schemaVersion: typeof EXTERNAL_PROCESSOR_SCHEMA_VERSION;
   readonly id: string;
   readonly kind: 'external-processor';
   readonly displayName: string;
@@ -149,14 +146,12 @@ export interface ExternalProcessorRegistration {
   readonly agentCapabilitySource: AgentCapabilitySource;
   readonly trustLevel: AgentCapabilityTrustLevel;
   readonly enabled: boolean;
-  readonly revision: number;
   readonly locationRef?: string;
   readonly packageId?: string;
   readonly diagnostics: readonly ExternalProcessorDiagnostic[];
 }
 
 export interface ExternalProcessorRegistryChange {
-  readonly revision: number;
   readonly kind: ExternalProcessorRegistryChangeKind;
   readonly registrationId: string;
   readonly reason?: string;
@@ -168,7 +163,6 @@ export interface ExternalProcessorSelector {
 }
 
 export interface ExternalProcessorCatalog {
-  readonly revision: number;
   readonly processors: readonly ExternalProcessorRegistration[];
   readonly diagnostics: readonly ExternalProcessorDiagnostic[];
 }
@@ -205,7 +199,6 @@ export interface ExternalProcessorRunIdentity {
 export interface ExternalProcessorInvocation {
   readonly processorId: string;
   readonly registrationId: string;
-  readonly registrationRevision: number;
   readonly run: ExternalProcessorRunIdentity;
   readonly inputs: readonly ExternalProcessorInvocationInputBinding[];
   readonly outputs: readonly ExternalProcessorInvocationOutputBinding[];
@@ -224,7 +217,6 @@ export interface ExternalProcessorResult {
   readonly status: 'succeeded' | 'failed' | 'cancelled';
   readonly processorId: string;
   readonly registrationId: string;
-  readonly registrationRevision: number;
   readonly run: ExternalProcessorRunIdentity;
   readonly outputs: readonly ExternalProcessorOutput[];
   readonly diagnostics: readonly ExternalProcessorDiagnostic[];
@@ -253,7 +245,6 @@ export interface ExternalProcessorPersonalRegistryEntry {
 }
 
 export interface ExternalProcessorPersonalRegistry {
-  readonly version: 1;
   readonly entries: readonly ExternalProcessorPersonalRegistryEntry[];
 }
 
@@ -337,25 +328,16 @@ export function validateExternalProcessorManifest(
   }
 
   const schema = readString(value, 'schema', diagnostics);
-  const schemaVersion = value['schemaVersion'];
   const kind = readString(value, 'kind', diagnostics);
   const id = readString(value, 'id', diagnostics);
   const displayName = readString(value, 'displayName', diagnostics);
   const version = readString(value, 'version', diagnostics);
 
+  rejectUnknownManifestFields(value, diagnostics);
+
   if (schema !== undefined && schema !== EXTERNAL_PROCESSOR_SCHEMA) {
     diagnostics.push(
       diagnostic('unknown-schema', 'error', `Unknown processor schema: ${schema}`, 'schema'),
-    );
-  }
-  if (schemaVersion !== EXTERNAL_PROCESSOR_SCHEMA_VERSION) {
-    diagnostics.push(
-      diagnostic(
-        'unknown-schema-version',
-        'error',
-        'External processor manifest schemaVersion must be 1.',
-        'schemaVersion',
-      ),
     );
   }
   if (kind !== undefined && kind !== 'external-processor') {
@@ -390,7 +372,6 @@ export function validateExternalProcessorManifest(
   return {
     manifest: {
       schema: EXTERNAL_PROCESSOR_SCHEMA,
-      schemaVersion: EXTERNAL_PROCESSOR_SCHEMA_VERSION,
       id: id!,
       kind: 'external-processor',
       displayName: displayName!,
@@ -592,7 +573,6 @@ function readEntry(
 class DefaultExternalProcessorRegistry implements ExternalProcessorRegistry {
   private readonly registrations = new Map<string, ExternalProcessorRegistration>();
   private readonly listeners = new Set<ExternalProcessorRegistryChangeListener>();
-  private revision = 0;
 
   upsert(
     source: ExternalProcessorSource,
@@ -601,7 +581,6 @@ class DefaultExternalProcessorRegistry implements ExternalProcessorRegistry {
   ): ExternalProcessorRegistration {
     const registrationId = createExternalProcessorRegistrationId(source, manifest);
     const existing = this.registrations.get(registrationId);
-    const nextRevision = this.nextRevision();
     const registration: ExternalProcessorRegistration = {
       id: manifest.id,
       registrationId,
@@ -611,14 +590,12 @@ class DefaultExternalProcessorRegistry implements ExternalProcessorRegistry {
       agentCapabilitySource: source.agentCapabilitySource,
       trustLevel: source.trustLevel ?? defaultExternalProcessorTrustLevel(source),
       enabled: options.enabled ?? existing?.enabled ?? true,
-      revision: nextRevision,
       ...(source.locationRef ? { locationRef: source.locationRef } : {}),
       ...(source.packageId ? { packageId: source.packageId } : {}),
       diagnostics: options.diagnostics ?? existing?.diagnostics ?? [],
     };
     this.registrations.set(registrationId, registration);
     this.emit({
-      revision: nextRevision,
       kind: existing ? 'updated' : 'registered',
       registrationId,
     });
@@ -635,7 +612,6 @@ class DefaultExternalProcessorRegistry implements ExternalProcessorRegistry {
       this.registrations.delete(registration.registrationId);
     }
     const change = {
-      revision: this.nextRevision(),
       kind: 'unregistered' as const,
       registrationId,
       reason,
@@ -653,18 +629,15 @@ class DefaultExternalProcessorRegistry implements ExternalProcessorRegistry {
     if (!registration) {
       throw new Error('ExternalProcessorRegistry.setEnabled could not resolve registration.');
     }
-    const nextRevision = this.nextRevision();
     const next: ExternalProcessorRegistration = {
       ...registration,
       enabled,
-      revision: nextRevision,
       diagnostics: enabled
         ? registration.diagnostics
         : [...registration.diagnostics, diagnostic('disabled-processor', 'warning', reason)],
     };
     this.registrations.set(registration.registrationId, next);
     const change = {
-      revision: nextRevision,
       kind: enabled ? ('enabled' as const) : ('disabled' as const),
       registrationId: registration.registrationId,
       reason,
@@ -681,7 +654,6 @@ class DefaultExternalProcessorRegistry implements ExternalProcessorRegistry {
       return true;
     });
     return {
-      revision: this.revision,
       processors,
       diagnostics: processors.flatMap((registration) => registration.diagnostics),
     };
@@ -759,11 +731,6 @@ class DefaultExternalProcessorRegistry implements ExternalProcessorRegistry {
     return Array.from(this.registrations.values()).find(
       (registration) => registration.id === selector.id,
     );
-  }
-
-  private nextRevision(): number {
-    this.revision += 1;
-    return this.revision;
   }
 
   private emit(change: ExternalProcessorRegistryChange): void {
@@ -1136,6 +1103,36 @@ function readString(
     return undefined;
   }
   return raw;
+}
+
+function rejectUnknownManifestFields(
+  value: Record<string, unknown>,
+  diagnostics: ExternalProcessorDiagnostic[],
+): void {
+  const allowedFields = new Set([
+    'schema',
+    'kind',
+    'id',
+    'displayName',
+    'version',
+    'entry',
+    'inputs',
+    'outputs',
+    'params',
+    'policy',
+    'envProfile',
+  ]);
+  for (const field of Object.keys(value)) {
+    if (allowedFields.has(field)) continue;
+    diagnostics.push(
+      diagnostic(
+        'invalid-manifest',
+        'error',
+        `External processor manifest contains unsupported field ${field}.`,
+        field,
+      ),
+    );
+  }
 }
 
 function readBoolean(

@@ -93,7 +93,6 @@ describe('ablation content-quality projection', () => {
         {
           result: {
             target: { kind: 'runtime', id: 'target' },
-            repositoryRevision: 'working-tree',
             fixtureDigest: 'fixture-digest',
             modelIdentity: { providerId: 'target-provider', modelId: 'target-model' },
             assertions: [{ id: 'path' }],
@@ -103,7 +102,6 @@ describe('ablation content-quality projection', () => {
             modelId,
             profileId: 'content-quality-judge',
             rubricId: 'content-quality',
-            rubricVersion: 'v1',
             promptHash,
             sampling: { temperature: 0, maxTokens: 1800 },
           },
@@ -123,7 +121,6 @@ describe('ablation content-quality projection', () => {
     const sample = (overrides = {}) => ({
       result: {
         target: { kind: 'runtime', id: 'target' },
-        repositoryRevision: 'revision',
         fixtureDigest: 'fixture',
         modelIdentity: { providerId: 'provider', modelId: 'model' },
         effectiveConfiguration: { runtimeProfileId: 'runtime', modelProfileId: 'model-profile' },
@@ -135,7 +132,7 @@ describe('ablation content-quality projection', () => {
         skills: [],
         tools: [{ name: 'Write', status: 'success' }],
         permissions: [{ toolName: 'Write', approved: true }],
-        validators: [{ id: 'artifact', validatorId: 'json-document-v1' }],
+        validators: [{ id: 'artifact', validatorId: 'json-document' }],
         budget: { timeoutMs: 1000, repetitions: 2 },
         ...overrides,
       },

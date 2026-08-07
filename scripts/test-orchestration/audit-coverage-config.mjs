@@ -10,6 +10,15 @@ export async function auditCoverageConfigs(options = {}) {
   const ownership = options.ownership ?? JSON.parse(
     await readFile(join(root, 'quality/test-ownership.json'), 'utf8'),
   );
+  if (
+    !ownership ||
+    typeof ownership !== 'object' ||
+    Array.isArray(ownership) ||
+    Object.keys(ownership).join('\0') !== 'workspaces' ||
+    !Array.isArray(ownership.workspaces)
+  ) {
+    throw new Error('quality/test-ownership.json must contain exactly the workspaces collection');
+  }
   const owners = [
     ...new Set(
       ownership.workspaces
@@ -38,7 +47,6 @@ export async function auditCoverageConfigs(options = {}) {
     }
   }
   const result = {
-    schemaVersion: 'neko.coverage-ownership-audit.v1',
     ok: errors.length === 0,
     owners: owners.length,
     errors,

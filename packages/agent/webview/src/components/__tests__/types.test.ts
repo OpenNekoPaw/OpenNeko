@@ -183,7 +183,6 @@ describe('types validation', () => {
         id: 'openai-1',
         type: 'openai',
         name: 'My OpenAI',
-        apiKey: 'sk-xxx',
         baseUrl: 'https://api.openai.com/v1',
         enabled: true,
       };
@@ -198,7 +197,6 @@ describe('types validation', () => {
         type: 'ollama',
         name: 'Local Ollama',
       };
-      expect(provider.apiKey).toBeUndefined();
       expect(provider.baseUrl).toBeUndefined();
       expect(provider.enabled).toBeUndefined();
     });

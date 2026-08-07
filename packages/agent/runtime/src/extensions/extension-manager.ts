@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { cp, lstat, mkdir, readdir, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 
@@ -10,6 +10,7 @@ import type {
   AgentExtensionRuntimeReadiness,
   AgentExtensionStatus,
 } from '@neko/agent-contracts';
+import { createPluginRuntimeSourceFingerprint } from './plugin-runtime-source-fingerprint';
 
 export type {
   AgentExtensionCatalogSnapshot,
@@ -19,7 +20,6 @@ export type {
 
 const OPENNEKO_MARKETPLACE_ID = 'openneko';
 const OPENNEKO_MARKETPLACE_PUBLISHER = 'OpenNeko';
-const OPENNEKO_MARKETPLACE_SCHEMA_VERSION = 1;
 const MAX_PLUGIN_DOCUMENT_BYTES = 1_000_000;
 const MAX_ICON_BYTES = 512_000;
 const MAX_PACKAGE_FILES = 2_048;
@@ -31,11 +31,11 @@ export interface AgentExtensionSupportPort {
 
 export interface AgentExtensionManager {
   readCatalog(): Promise<AgentExtensionCatalogSnapshot>;
-  installPlugin(pluginId: string, expectedRevision: string): Promise<AgentExtensionCatalogSnapshot>;
-  removePlugin(pluginId: string, expectedRevision: string): Promise<AgentExtensionCatalogSnapshot>;
-  refreshMarketplaces(expectedRevision: string): Promise<AgentExtensionCatalogSnapshot>;
+  installPlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot>;
+  removePlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot>;
+  refreshMarketplaces(): Promise<AgentExtensionCatalogSnapshot>;
   setRuntimeReadiness(
-    revision: string,
+    source: AgentExtensionCatalogSnapshot,
     readiness: ReadonlyMap<string, AgentExtensionRuntimeReadiness>,
   ): void;
 }
@@ -76,8 +76,9 @@ export function createAgentExtensionManager(options: {
 }
 
 class DefaultAgentExtensionManager implements AgentExtensionManager {
-  private runtimeRevision: string | undefined;
+  private runtimeSourceFingerprint: string | undefined;
   private runtimeReadiness = new Map<string, AgentExtensionRuntimeReadiness>();
+  private mutationTail = Promise.resolve();
 
   constructor(
     private readonly repository: AgentExtensionRepositoryPort,
@@ -92,7 +93,6 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
       return createSnapshot([], [], ['repository_failed']);
     }
 
-    const verifiedPlugins: VerifiedPlugin[] = [];
     const visiblePlugins: VerifiedPlugin[] = [];
     const runtimeDescriptors: AgentExtensionRuntimeDescriptor[] = [];
     const diagnosticCodes = [...repositorySnapshot.diagnostics];
@@ -102,83 +102,70 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
         diagnosticCodes.push(plugin.code);
         continue;
       }
-      verifiedPlugins.push(plugin.value);
       if (entry.installed || (await this.agentSupport.isSupported(plugin.value.runtime))) {
         visiblePlugins.push(plugin.value);
       }
       if (entry.installed && entry.enabled) runtimeDescriptors.push(plugin.value.runtime);
     }
-    const revision = computeRevision(repositorySnapshot.entries, verifiedPlugins);
-    const records = visiblePlugins.map((plugin) =>
-      projectExtension(
-        plugin,
-        this.runtimeRevision === revision
-          ? this.runtimeReadiness.get(plugin.entry.pluginId)
-          : undefined,
-      ),
-    );
+    let records = visiblePlugins.map((plugin) => projectExtension(plugin, undefined));
     records.sort(compareExtensionRecords);
     runtimeDescriptors.sort((left, right) => left.pluginId.localeCompare(right.pluginId));
-    return createSnapshot(records, runtimeDescriptors, diagnosticCodes, revision);
-  }
-
-  async installPlugin(
-    pluginId: string,
-    expectedRevision: string,
-  ): Promise<AgentExtensionCatalogSnapshot> {
-    const id = requireOpenNekoPluginId(pluginId);
-    return this.mutate(
-      id,
-      expectedRevision,
-      (record) => record.canInstall,
-      () => this.repository.install(id),
+    const sourceFingerprint = createPluginRuntimeSourceFingerprint(
+      createSnapshot(records, runtimeDescriptors, diagnosticCodes),
     );
-  }
-
-  async removePlugin(
-    pluginId: string,
-    expectedRevision: string,
-  ): Promise<AgentExtensionCatalogSnapshot> {
-    const id = requireOpenNekoPluginId(pluginId);
-    return this.mutate(
-      id,
-      expectedRevision,
-      (record) => record.canRemove,
-      () => this.repository.remove(id),
-    );
-  }
-
-  async refreshMarketplaces(expectedRevision: string): Promise<AgentExtensionCatalogSnapshot> {
-    requireRevision(expectedRevision);
-    const before = await this.readCatalog();
-    if (before.revision !== expectedRevision) {
-      throw new Error('Desktop extension catalog changed; refresh before retrying.');
+    if (this.runtimeSourceFingerprint === sourceFingerprint) {
+      records = visiblePlugins.map((plugin) =>
+        projectExtension(plugin, this.runtimeReadiness.get(plugin.entry.pluginId)),
+      );
+      records.sort(compareExtensionRecords);
     }
-    await this.repository.reload();
-    this.clearRuntimeReadiness();
-    return this.readCatalog();
+    return createSnapshot(records, runtimeDescriptors, diagnosticCodes);
+  }
+
+  async installPlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot> {
+    const id = requireOpenNekoPluginId(pluginId);
+    return this.serializeMutation(() =>
+      this.mutate(
+        id,
+        (record) => record.canInstall,
+        () => this.repository.install(id),
+      ),
+    );
+  }
+
+  async removePlugin(pluginId: string): Promise<AgentExtensionCatalogSnapshot> {
+    const id = requireOpenNekoPluginId(pluginId);
+    return this.serializeMutation(() =>
+      this.mutate(
+        id,
+        (record) => record.canRemove,
+        () => this.repository.remove(id),
+      ),
+    );
+  }
+
+  async refreshMarketplaces(): Promise<AgentExtensionCatalogSnapshot> {
+    return this.serializeMutation(async () => {
+      await this.repository.reload();
+      this.clearRuntimeReadiness();
+      return this.readCatalog();
+    });
   }
 
   setRuntimeReadiness(
-    revision: string,
+    source: AgentExtensionCatalogSnapshot,
     readiness: ReadonlyMap<string, AgentExtensionRuntimeReadiness>,
   ): void {
-    requireRevision(revision);
-    this.runtimeRevision = revision;
+    this.runtimeSourceFingerprint = createPluginRuntimeSourceFingerprint(source);
     this.runtimeReadiness = new Map(readiness);
   }
 
   private async mutate(
     pluginId: string,
-    expectedRevision: string,
     allowed: (record: AgentExtensionCatalogItem) => boolean,
     operation: () => Promise<void>,
   ): Promise<AgentExtensionCatalogSnapshot> {
-    requireRevision(expectedRevision);
     const before = await this.readCatalog();
-    if (before.revision !== expectedRevision) {
-      throw new Error('Desktop extension catalog changed; refresh before retrying.');
-    }
     const record = before.records.find((item) => item.id === pluginId);
     if (!record || !allowed(record)) {
       throw new Error(`OpenNeko extension '${pluginId}' does not allow this operation.`);
@@ -189,8 +176,22 @@ class DefaultAgentExtensionManager implements AgentExtensionManager {
   }
 
   private clearRuntimeReadiness(): void {
-    this.runtimeRevision = undefined;
+    this.runtimeSourceFingerprint = undefined;
     this.runtimeReadiness.clear();
+  }
+
+  private async serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.mutationTail;
+    let release!: () => void;
+    this.mutationTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
   }
 }
 
@@ -399,8 +400,7 @@ function parseMarketplaceIndex(
   | readonly { readonly name: string; readonly version: string; readonly path: string }[]
   | undefined {
   if (
-    !hasOnlyKeys(value, ['schemaVersion', 'publisher', 'plugins']) ||
-    value['schemaVersion'] !== OPENNEKO_MARKETPLACE_SCHEMA_VERSION ||
+    !hasOnlyKeys(value, ['publisher', 'plugins']) ||
     value['publisher'] !== OPENNEKO_MARKETPLACE_PUBLISHER ||
     !Array.isArray(value['plugins'])
   ) {
@@ -773,12 +773,10 @@ function createSnapshot(
   records: readonly AgentExtensionCatalogItem[],
   runtimeDescriptors: readonly AgentExtensionRuntimeDescriptor[],
   diagnosticCodes: readonly AgentExtensionDiagnosticCode[],
-  revision = computeRevision([], []),
 ): AgentExtensionCatalogSnapshot {
   const counts = new Map<AgentExtensionDiagnosticCode, number>();
   for (const code of diagnosticCodes) counts.set(code, (counts.get(code) ?? 0) + 1);
   return Object.freeze({
-    revision,
     records: Object.freeze([...records]),
     runtimeDescriptors: Object.freeze([...runtimeDescriptors]),
     diagnostics: Object.freeze(
@@ -787,32 +785,6 @@ function createSnapshot(
         .map(([code, count]) => Object.freeze({ code, count })),
     ),
   });
-}
-
-function computeRevision(
-  entries: readonly RepositoryPluginEntry[],
-  plugins: readonly VerifiedPlugin[],
-): string {
-  const stable = {
-    entries: entries.map(
-      ({ authorityRoot: _authorityRoot, sourcePath: _sourcePath, ...entry }) => entry,
-    ),
-    plugins: plugins.map((plugin) => ({
-      pluginId: plugin.entry.pluginId,
-      displayName: plugin.displayName,
-      description: plugin.description,
-      developer: plugin.developer,
-      category: plugin.category,
-      iconHash:
-        plugin.iconDataUrl === ''
-          ? ''
-          : createHash('sha256').update(plugin.iconDataUrl).digest('hex'),
-      mcpServerIds: plugin.runtime.mcpServerIds,
-      hasSkills: plugin.runtime.skillRoot !== undefined,
-      appIds: plugin.runtime.appIds,
-    })),
-  };
-  return `sha256:${createHash('sha256').update(JSON.stringify(stable)).digest('hex')}`;
 }
 
 function compareExtensionRecords(
@@ -849,12 +821,6 @@ function requireOpenNekoPluginId(value: string): string {
 
 function pluginNameFromId(pluginId: string): string {
   return requireOpenNekoPluginId(pluginId).slice(0, -`@${OPENNEKO_MARKETPLACE_ID}`.length);
-}
-
-function requireRevision(value: string): void {
-  if (!/^sha256:[0-9a-f]{64}$/u.test(value)) {
-    throw new Error('Desktop extension catalog revision is invalid.');
-  }
 }
 
 function requireAbsoluteRoot(value: string, name: string): string {

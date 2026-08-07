@@ -35,8 +35,8 @@ import { BUILTIN_PROMPTS } from './builtin-prompts';
 /** AGENTS.md filename */
 const AGENTS_FILENAME = 'AGENTS.md';
 
-/** Config directory name */
-const CONFIG_DIR = '.neko';
+const PERSONAL_CONTENT_DIR = '.neko';
+const PROJECT_CONTENT_DIR = 'neko';
 
 // =============================================================================
 // SystemPromptBuilder Implementation
@@ -90,7 +90,7 @@ export class SystemPromptBuilder {
   ): Promise<AgentsLoadResult | null> {
     // Try project AGENTS.md first (higher priority)
     if (projectPath) {
-      const projectAgentsPath = path.join(projectPath, CONFIG_DIR, AGENTS_FILENAME);
+      const projectAgentsPath = path.join(projectPath, PROJECT_CONTENT_DIR, AGENTS_FILENAME);
       const result = await this._tryLoadFile(projectAgentsPath, 'project');
       if (result) {
         this._agentsContent = result.content;
@@ -241,13 +241,13 @@ export function createSystemPromptBuilder(config?: SystemPromptBuilderConfig): S
  */
 export function getDefaultPersonalPath(): string {
   const home = process.env.HOME || process.env.USERPROFILE || '';
-  return path.join(home, CONFIG_DIR);
+  return path.join(home, PERSONAL_CONTENT_DIR);
 }
 
 /**
  * Check if AGENTS.md exists in a directory
  */
 export function hasAgentsFile(dirPath: string): boolean {
-  const agentsPath = path.join(dirPath, CONFIG_DIR, AGENTS_FILENAME);
+  const agentsPath = path.join(dirPath, PROJECT_CONTENT_DIR, AGENTS_FILENAME);
   return fs.existsSync(agentsPath);
 }

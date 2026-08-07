@@ -1,7 +1,6 @@
 import { type LocalMetadataRepositories } from '@neko/local-metadata';
 import { createWorkspaceMediaLibrarySyncMetadataBinding } from './workspace-media-library-sync-binding';
 import {
-  DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
   parseDesktopProjectPortabilityExecuteRequest,
   parseDesktopProjectPortabilityRequest,
   parseDesktopProjectPortabilityResumeRequest,
@@ -17,7 +16,7 @@ import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 
 export interface ProjectPortabilityShellPort {
-  getProjection(windowId: string): Promise<{ readonly endpointEpoch: string }>;
+  getProjection(windowId: string): Promise<{ readonly rendererSessionId: string }>;
   resolveProjectWorkspace(projectId: string): Promise<AssetWorkspaceResolution>;
 }
 
@@ -58,7 +57,6 @@ export class ProjectPortabilityRuntime {
       }).findResumableSnapshot(),
     ]);
     return {
-      version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       portability: projection.portability,
@@ -79,7 +77,6 @@ export class ProjectPortabilityRuntime {
       destinationPath,
     });
     return {
-      version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       status: 'planned',
@@ -101,7 +98,6 @@ export class ProjectPortabilityRuntime {
       destinationPath,
     });
     return {
-      version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       status: 'planned',
@@ -119,12 +115,11 @@ export class ProjectPortabilityRuntime {
     const result = await this.snapshotService.execute({
       workspace: context.workspace,
       snapshotId: request.snapshotId,
-      expectedOperationRevision: request.expectedOperationRevision,
+      expectedOperationFingerprint: request.expectedOperationFingerprint,
       onProgress: (progress) => {
         const sequence = (this.eventSequences.get(progress.snapshotId) ?? 0) + 1;
         this.eventSequences.set(progress.snapshotId, sequence);
         publish({
-          version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
           sequence,
           identity: request.identity,
           progress,
@@ -132,11 +127,10 @@ export class ProjectPortabilityRuntime {
       },
     });
     return {
-      version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       snapshotId: result.snapshotId,
-      requirementRevision: result.requirementRevision,
+      requirementFingerprint: result.requirementFingerprint,
       status: 'completed',
       ...(result.metadataDiagnostic ? { metadataDiagnostic: result.metadataDiagnostic } : {}),
     };
@@ -150,7 +144,6 @@ export class ProjectPortabilityRuntime {
       snapshotId: request.snapshotId,
     });
     return {
-      version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
       requestId: request.requestId,
       identity: request.identity,
       snapshotId: request.snapshotId,
@@ -175,7 +168,7 @@ export class ProjectPortabilityRuntime {
       this.options.shell.resolveProjectWorkspace(identity.projectId),
     ]);
     if (
-      projection.endpointEpoch !== identity.endpointEpoch ||
+      projection.rendererSessionId !== identity.rendererSessionId ||
       workspace.workspaceId !== identity.workspaceId
     ) {
       throw new Error('Project portability project identity is stale.');
@@ -189,7 +182,6 @@ function cancelledPlan(
   identity: DesktopProjectPortabilityIdentity,
 ): DesktopProjectPortabilityPlanResult {
   return {
-    version: DESKTOP_PROJECT_PORTABILITY_CONTRACT_VERSION,
     requestId,
     identity,
     status: 'cancelled',

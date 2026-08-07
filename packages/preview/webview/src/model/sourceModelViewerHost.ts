@@ -1,9 +1,12 @@
 import {
-  THREE_REFERENCE_PROTOCOL_VERSION,
+  isThreeReferenceStagingSnapshot,
   type ModelPreviewSourceDescriptor,
+  type ThreeReferenceDiagnostic,
   type ThreeReferenceHostMessage,
   type ThreeReferencePanelSubject,
+  type ThreeReferenceStagingSnapshot,
 } from '@neko/preview-domain';
+import { contentLocatorsEqual } from '@neko/content';
 import { createSourceModelStaging } from '@neko/preview-domain';
 import type { ModelViewerHostPort } from './modelViewerHost';
 
@@ -12,11 +15,10 @@ export function createSourceModelViewerHost(input: {
   readonly source: ModelPreviewSourceDescriptor;
 }): ModelViewerHostPort {
   const panelSubject = createSourceModelPanelSubject(input.source);
-  const staging = createSourceModelStaging(input.sessionId, panelSubject.subject);
+  const initialStaging = createSourceModelStaging(input.sessionId, panelSubject.subject);
   const listeners = new Set<(message: unknown) => void>();
-  let state: Record<string, unknown> | null = null;
+  let state: unknown = null;
   let initialized = false;
-  let subscriptionEpoch = 0;
   return {
     postMessage(message) {
       if (!isRecord(message) || typeof message['type'] !== 'string') {
@@ -27,30 +29,43 @@ export function createSourceModelViewerHost(input: {
           if (!isReadyMessage(message)) {
             throw new Error('Model Viewer emitted an invalid ready message.');
           }
-          if (message.sessionId !== input.sessionId) {
+          if (message.identity.sessionId !== input.sessionId) {
             throw new Error('Model Viewer ready identity does not match the source session.');
           }
           if (initialized) return;
           initialized = true;
-          const readyEpoch = subscriptionEpoch;
+          const restored = restoreStaging(state, initialStaging, panelSubject);
           const init: ThreeReferenceHostMessage = {
             type: '3d-reference/session-init',
-            protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+            identity: message.identity,
             panelSubject,
             availablePresets: [],
             eligiblePurposes: [],
-            staging,
+            staging: restored.staging,
           };
+          const subscribedListeners = [...listeners];
           queueMicrotask(() => {
-            if (!initialized || readyEpoch !== subscriptionEpoch) return;
-            for (const listener of listeners) listener(init);
+            if (!initialized) return;
+            for (const listener of subscribedListeners) {
+              if (!listeners.has(listener)) continue;
+              listener(init);
+              if (restored.diagnostic) {
+                listener({
+                  type: '3d-reference/diagnostic',
+                  identity: message.identity,
+                  diagnostic: restored.diagnostic,
+                } satisfies ThreeReferenceHostMessage);
+              }
+            }
           });
           return;
         }
         case '3d-reference/load-completed':
         case '3d-reference/staging-changed':
-        case '3d-reference/diagnostic':
+        case '3d-reference/diagnostic': {
+          requireRequestIdentity(message, input.sessionId);
           return;
+        }
         case '3d-reference/capture-requested':
         case '3d-reference/panorama-picker-requested':
         case '3d-reference/preset-subject-requested':
@@ -63,16 +78,14 @@ export function createSourceModelViewerHost(input: {
       return state;
     },
     setState(next) {
-      state = isRecord(next) ? next : null;
+      state = next;
     },
     subscribe(listener) {
-      subscriptionEpoch += 1;
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
         if (listeners.size === 0) {
           initialized = false;
-          subscriptionEpoch += 1;
         }
       };
     },
@@ -103,17 +116,69 @@ function createSourceModelPanelSubject(
 
 function isReadyMessage(value: unknown): value is {
   readonly type: '3d-reference/ready';
-  readonly protocolVersion: typeof THREE_REFERENCE_PROTOCOL_VERSION;
-  readonly sessionId: string;
+  readonly identity: { readonly sessionId: string; readonly requestId: string };
 } {
   return (
     isRecord(value) &&
+    hasOnlyKeys(value, ['type', 'identity']) &&
     value['type'] === '3d-reference/ready' &&
-    value['protocolVersion'] === THREE_REFERENCE_PROTOCOL_VERSION &&
-    typeof value['sessionId'] === 'string'
+    isRequestIdentity(value['identity'])
+  );
+}
+
+function restoreStaging(
+  state: unknown,
+  initial: ThreeReferenceStagingSnapshot,
+  panelSubject: Extract<ThreeReferencePanelSubject, { readonly kind: 'source-model' }>,
+): {
+  readonly staging: ThreeReferenceStagingSnapshot;
+  readonly diagnostic?: ThreeReferenceDiagnostic;
+} {
+  if (state === null || state === undefined) return { staging: initial };
+  const candidate = isRecord(state) ? state['threeReferenceStaging'] : undefined;
+  if (
+    isThreeReferenceStagingSnapshot(candidate) &&
+    candidate.sessionId === initial.sessionId &&
+    candidate.subject.kind === 'source-model' &&
+    candidate.subject.fingerprint === panelSubject.subject.fingerprint &&
+    contentLocatorsEqual(candidate.subject.source, panelSubject.subject.source)
+  ) {
+    return { staging: candidate };
+  }
+  return {
+    staging: initial,
+    diagnostic: {
+      code: 'staging-invalid',
+      message: 'Stored Model Preview staging does not belong to this panel and source.',
+      severity: 'warning',
+      identity: { sessionId: initial.sessionId },
+    },
+  };
+}
+
+function requireRequestIdentity(value: Record<string, unknown>, sessionId: string): void {
+  if (!isRequestIdentity(value['identity']) || value['identity'].sessionId !== sessionId) {
+    throw new Error('Model Viewer message does not belong to this source session request.');
+  }
+}
+
+function isRequestIdentity(
+  value: unknown,
+): value is { readonly sessionId: string; readonly requestId: string } {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, ['sessionId', 'requestId']) &&
+    typeof value['sessionId'] === 'string' &&
+    value['sessionId'].length > 0 &&
+    typeof value['requestId'] === 'string' &&
+    value['requestId'].length > 0
   );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(record).every((key) => keys.includes(key));
 }

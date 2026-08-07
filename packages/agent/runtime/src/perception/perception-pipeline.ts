@@ -44,7 +44,6 @@ export class PerceptionPipeline {
     const completedAt = this.now();
 
     const card: PerceptionCard = {
-      version: 1,
       assetId: asset.assetId,
       modality: asset.modality,
       ...(input.sourceToolCallId ? { sourceToolCallId: input.sourceToolCallId } : {}),

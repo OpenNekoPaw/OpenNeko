@@ -1,5 +1,4 @@
 import {
-  PREVIEW_HOST_RUNTIME_VERSION,
   PreviewContractError,
   parsePreviewProjection,
   parsePreviewRuntimeRequest,
@@ -13,14 +12,13 @@ export const DESKTOP_PREVIEW_CHANNELS = {
 } as const;
 
 export interface DesktopPreviewBootstrapRequest {
-  readonly schemaVersion: typeof PREVIEW_HOST_RUNTIME_VERSION;
   readonly requestId: string;
   readonly projectId: string;
   readonly workspaceId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
   readonly sessionId: string;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
 }
 
 export interface OpenNekoDesktopPreviewBridge {
@@ -35,35 +33,37 @@ export function createDesktopPreviewBootstrapRequest(input: {
   readonly projectId: string;
   readonly workspaceId: string;
   readonly viewId: string;
-  readonly viewEpoch: number;
+  readonly viewInstanceId: string;
   readonly sessionId: string;
-  readonly endpointEpoch: string;
+  readonly rendererSessionId: string;
 }): DesktopPreviewBootstrapRequest {
-  return parseDesktopPreviewBootstrapRequest({
-    schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
-    ...input,
-  });
+  return parseDesktopPreviewBootstrapRequest(input);
 }
 
 export function parseDesktopPreviewBootstrapRequest(
   value: unknown,
 ): DesktopPreviewBootstrapRequest {
   const record = requireRecord(value);
-  if (record['schemaVersion'] !== PREVIEW_HOST_RUNTIME_VERSION) {
-    throw new PreviewContractError(
-      'unsupported-preview-version',
-      `Unsupported Desktop Preview version '${String(record['schemaVersion'])}'.`,
-    );
-  }
+  requireExactKeys(record, [
+    'requestId',
+    'projectId',
+    'workspaceId',
+    'viewId',
+    'viewInstanceId',
+    'sessionId',
+    'rendererSessionId',
+  ]);
   return {
-    schemaVersion: PREVIEW_HOST_RUNTIME_VERSION,
     requestId: requireIdentity(record['requestId'], 'Desktop Preview request identity'),
     projectId: requireIdentity(record['projectId'], 'Desktop Preview Project identity'),
     workspaceId: requireIdentity(record['workspaceId'], 'Desktop Preview Workspace identity'),
     viewId: requireIdentity(record['viewId'], 'Desktop Preview View identity'),
-    viewEpoch: requireNonNegativeInteger(record['viewEpoch'], 'Desktop Preview View epoch'),
+    viewInstanceId: requireIdentity(
+      record['viewInstanceId'],
+      'Desktop Preview View instance identity',
+    ),
     sessionId: requireIdentity(record['sessionId'], 'Desktop Preview session identity'),
-    endpointEpoch: requireIdentity(record['endpointEpoch'], 'Desktop Preview endpoint epoch'),
+    rendererSessionId: requireIdentity(record['rendererSessionId'], 'Desktop Preview renderer session identity'),
   };
 }
 
@@ -82,6 +82,13 @@ function requireRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function requireExactKeys(record: Readonly<Record<string, unknown>>, keys: readonly string[]): void {
+  const actual = Object.keys(record);
+  if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) {
+    throw invalidPayload('Desktop Preview request contains unsupported fields.');
+  }
+}
+
 function requireIdentity(value: unknown, label: string): string {
   if (
     typeof value !== 'string' ||
@@ -93,13 +100,6 @@ function requireIdentity(value: unknown, label: string): string {
     throw invalidPayload(`${label} is invalid.`);
   }
   return value;
-}
-
-function requireNonNegativeInteger(value: unknown, label: string): number {
-  if (!Number.isInteger(value) || (value as number) < 0) {
-    throw invalidPayload(`${label} must be a non-negative integer.`);
-  }
-  return value as number;
 }
 
 function invalidPayload(message: string): PreviewContractError {

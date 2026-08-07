@@ -1,7 +1,11 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentContextPayload } from '@neko/agent-contracts';
+import {
+  createAgentDraftPresentation,
+  type AgentContextPayload,
+  type AgentHostToWebviewMessage,
+} from '@neko/agent-contracts';
 import type {
   AgentQueuedMessageItem,
   AgentState,
@@ -21,6 +25,7 @@ import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
 import { ConversationController } from './ConversationController';
 
 const hostMocks = vi.hoisted(() => ({
+  runtimeId: 'conversation-controller-test',
   getConversations: vi.fn(),
   getActiveConversation: vi.fn(),
   refreshConfigSnapshot: vi.fn(),
@@ -38,32 +43,37 @@ const hostMocks = vi.hoisted(() => ({
   getConversationSnapshot: vi.fn(),
   getContextTokenCount: vi.fn(),
   getMessageQueue: vi.fn(),
+  submitDraft: vi.fn(),
+  authorizeResource: vi.fn(),
 }));
-
-vi.mock('../messages', () => ({
-  AgentHostMessages: hostMocks,
-  getAgentHostRuntimeAdapter: () => ({
-    getState: () => undefined,
-    setState: vi.fn(),
-  }),
+const hostRuntimeMocks = vi.hoisted(() => ({
+  listener: undefined as ((message: AgentHostToWebviewMessage) => void) | undefined,
+  getState: vi.fn<() => unknown>(() => undefined),
+  setState: vi.fn(),
 }));
 
 vi.mock('../host-runtime-context', () => ({
+  useAgentHostMessages: () => hostMocks,
   useAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
-    runtimeId: 'conversation-controller-test',
+    runtimeId: hostMocks.runtimeId,
     send: vi.fn(),
-    subscribe: vi.fn(() => ({ dispose: vi.fn() })),
-    getState: () => undefined,
-    setState: vi.fn(),
+    subscribe: vi.fn((listener: (message: AgentHostToWebviewMessage) => void) => {
+      hostRuntimeMocks.listener = listener;
+      return { dispose: vi.fn() };
+    }),
+    getState: hostRuntimeMocks.getState,
+    setState: hostRuntimeMocks.setState,
+    submitDraft: hostMocks.submitDraft,
+    authorizeResource: hostMocks.authorizeResource,
   }),
   useOptionalAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
-    runtimeId: 'conversation-controller-test',
+    runtimeId: hostMocks.runtimeId,
     send: vi.fn(),
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
-    getState: () => undefined,
-    setState: vi.fn(),
+    getState: hostRuntimeMocks.getState,
+    setState: hostRuntimeMocks.setState,
   }),
 }));
 
@@ -84,6 +94,17 @@ vi.mock('../i18n/I18nContext', () => ({
         'chat.emptyState.desktopDockTitle': 'Hi, create with chat',
         'chat.emptyState.desktopDockDescription': 'Describe an idea or mention a resource.',
         'chat.emptyState.desktopDockSkills': 'Try a Skill',
+        'chat.emptyState.scope.title': 'Choose a creative space',
+        'chat.emptyState.scope.description': 'Choose an owner.',
+        'chat.emptyState.scope.assistant': 'Assistant',
+        'chat.emptyState.scope.assistantHelper': 'Assistant helper',
+        'chat.emptyState.scope.workspace': 'Workspace',
+        'chat.emptyState.scope.workspaceHelper': 'Workspace helper',
+        'chat.emptyState.scope.characterRoom': 'Character / Room',
+        'chat.emptyState.scope.characterRoomHelper': 'Character helper',
+        'chat.emptyState.scope.assistantActiveTitle': 'Assistant is ready',
+        'chat.emptyState.scope.workspaceActiveTitle': 'Workspace is ready',
+        'chat.emptyState.scope.activeDescription': 'Start a conversation.',
         'chat.input.placeholder': 'Type anything...',
         'chat.input.thinkingPlaceholder': 'Type next message...',
         'chat.input.queuePlaceholder': '{count} queued...',
@@ -162,10 +183,11 @@ vi.mock('./ChatWorkspace', () => ({
       mode: 'agent' | 'image' | 'video' | 'audio';
     } | null;
     isVisible?: boolean;
+    composerPresentation?: 'default' | 'compact';
   }) => {
     const tabRenderSnapshot = useTabRenderStore(props.tabRenderStore);
     const [instanceId] = useState(() => crypto.randomUUID());
-    const [localRevision, setLocalRevision] = useState(0);
+    const [localCounter, setLocalCounter] = useState(0);
     const isVisible = props.isVisible ?? true;
     const testId = (name: string) =>
       isVisible ? name : `${name}-${tabRenderSnapshot.snapshot.tabId}`;
@@ -183,13 +205,14 @@ vi.mock('./ChatWorkspace', () => ({
         data-testid={`workspace-runtime-${tabRenderSnapshot.snapshot.tabId}`}
         data-instance-id={instanceId}
         data-visible={String(isVisible)}
+        data-composer-presentation={props.composerPresentation ?? 'default'}
       >
         {isVisible ? <span data-testid="chat-workspace" /> : null}
-        <span data-testid={testId('workspace-local-state')}>{localRevision}</span>
+        <span data-testid={testId('workspace-local-state')}>{localCounter}</span>
         <button
           type="button"
           data-testid={testId('increment-workspace-local-state')}
-          onClick={() => setLocalRevision((current) => current + 1)}
+          onClick={() => setLocalCounter((current) => current + 1)}
         />
         <span data-testid={testId('workspace-conversation')}>
           {tabRenderSnapshot.snapshot.conversationId}
@@ -439,6 +462,360 @@ vi.mock('./ChatView/InputArea', async () => {
 });
 
 describe('ConversationController entry state', () => {
+  it('projects a global Host error through the renderer body portal', () => {
+    render(<ConversationController {...createProps()} />);
+
+    act(() => {
+      hostRuntimeMocks.listener?.({
+        type: 'globalError',
+        message: 'Desktop Agent failed globally.',
+      });
+    });
+
+    const alert = screen.getByRole('alert');
+    expect(alert.parentElement).toBe(document.body);
+    expect(alert.getAttribute('data-agent-diagnostic-toast')).toBe('true');
+    expect(alert.textContent).toContain('Desktop Agent failed globally.');
+  });
+
+  it('keeps the existing entry controller and controls available in draft presentation', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-1', {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant-1',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.queryByTestId('header')).toBeNull();
+    expect(screen.getByText('Workspace is ready')).toBeTruthy();
+    expect(screen.getByRole('textbox')).toBeTruthy();
+    expect(screen.getByTestId('entry-config-state').textContent).toBe('ready:false');
+    expect(hostMocks.getConversations).not.toHaveBeenCalled();
+    expect(hostMocks.getActiveConversation).not.toHaveBeenCalled();
+    expect(hostMocks.getTabState).not.toHaveBeenCalled();
+    expect(hostMocks.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getAgentStates).toHaveBeenCalledTimes(1);
+    expect(hostMocks.getSkills).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'skillsList',
+            skills: [
+              {
+                id: 'storyboard',
+                name: 'storyboard',
+                description: 'Build a storyboard.',
+                tags: [],
+                source: 'project',
+                enabled: true,
+              },
+            ],
+          },
+        }),
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
+    expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
+      purpose: 'entry',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
+    expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('projects the compact composer into Desktop dock conversation tabs', async () => {
+    render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Start Chat/ }));
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: { id: 'conversation-desktop', title: 'Desktop Chat', messages: [] },
+          },
+        }),
+      );
+    });
+
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-testid^="workspace-runtime-"]')
+          ?.getAttribute('data-composer-presentation'),
+      ).toBe('compact'),
+    );
+  });
+
+  it('restores and rewrites the exact Window entry draft snapshot', () => {
+    vi.clearAllMocks();
+    hostRuntimeMocks.getState.mockReturnValue({
+      drafts: [],
+      entryDraft: {
+        draftId: 'draft-restored',
+        inputValue: 'restored entry text',
+        contextReferences: [
+          {
+            type: 'file',
+            id: 'grant-restored',
+            label: 'brief.txt',
+            summary: 'Authorized file: brief.txt',
+            data: { resourceGrantId: 'grant-restored', resourceKind: 'file' },
+          },
+        ],
+        workspaceTarget: {
+          label: 'Restored Project',
+          context: {
+            kind: 'workspace',
+            workspaceId: 'workspace-restored',
+            workspaceGrantId: 'workspace-grant-restored',
+          },
+        },
+        selectedModel: 'test-model',
+        executionMode: 'auto',
+      },
+    });
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-restored', {
+          kind: 'unbound',
+          draftId: 'draft-restored',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'restored entry text');
+    expect(screen.getByTestId('entry-context-chips').textContent).toContain('brief.txt');
+    expect(screen.getByTestId('entry-selected-model').textContent).toBe('test-model');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited entry text' } });
+
+    expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({
+      drafts: [],
+      entryDraft: expect.objectContaining({
+        draftId: 'draft-restored',
+        inputValue: 'edited entry text',
+        selectedModel: 'test-model',
+        executionMode: 'auto',
+        workspaceTarget: expect.objectContaining({ label: 'Restored Project' }),
+      }),
+    });
+    hostRuntimeMocks.getState.mockReturnValue(undefined);
+  });
+
+  it('submits an unbound Entry Draft through deterministic Assistant targeting', async () => {
+    vi.clearAllMocks();
+    hostMocks.submitDraft.mockResolvedValue({
+      conversationId: 'conversation-entry-1',
+      turnId: 'turn-entry-1',
+      turnStatus: 'running',
+    });
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-1', {
+          kind: 'unbound',
+          draftId: 'draft-entry-1',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Help with this idea' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => undefined);
+    expect(hostMocks.submitDraft).toHaveBeenCalledWith({
+      target: { kind: 'automatic-assistant', draftId: 'draft-entry-1' },
+      messageText: 'Help with this idea',
+      resourceGrantIds: [],
+      configuration: { providerId: 'test', modelId: 'test-model', executionMode: 'ask' },
+    });
+    await waitFor(() => expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({ drafts: [] }));
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '');
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('preserves the complete Entry Draft when local submit fails', async () => {
+    vi.clearAllMocks();
+    hostMocks.submitDraft.mockRejectedValueOnce(new Error('Conversation persistence failed.'));
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-failed', {
+          kind: 'unbound',
+          draftId: 'draft-entry-failed',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep this request' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Conversation persistence failed.'),
+    );
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'Keep this request');
+    expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
+    expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({
+      drafts: [],
+      entryDraft: expect.objectContaining({
+        draftId: 'draft-entry-failed',
+        inputValue: 'Keep this request',
+        contextReferences: [expect.objectContaining({ id: 'entity:character:xiaoju' })],
+        selectedModel: 'test-model',
+        executionMode: 'ask',
+      }),
+    });
+  });
+
+  it('keeps draft mode selection scope-neutral until an owner is selected', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-mode', {
+          kind: 'unbound',
+          draftId: 'draft-entry-mode',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'keep this draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
+
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(hostMocks.submitDraft).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'keep this draft');
+  });
+
+  it('keeps unavailable Character and Room selection out of the Entry Draft', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-character', {
+          kind: 'unbound',
+          draftId: 'draft-entry-character',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Character / Room' })).toBeNull();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
+    expect(hostMocks.searchProjectFiles).not.toHaveBeenCalled();
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('removes Entry Draft owner choices after Workspace activation', () => {
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-workspace-1', {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant-1',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Workspace is ready' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Assistant' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Workspace' })).toBeNull();
+  });
+
+  it('resets prior presentation state when the same controller receives a fresh draft identity', () => {
+    vi.clearAllMocks();
+    const props = createProps();
+    const firstDraft = createAgentDraftPresentation('draft-old', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant:1',
+    });
+    const view = render(
+      <ConversationController
+        {...props}
+        agentPresentation={firstDraft}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'old draft input' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
+    const retainedModel = screen.getByTestId('entry-selected-model').textContent;
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'sessionDiagnostic',
+            code: 'conversation-durability-failed',
+            severity: 'error',
+            message: 'Old presentation error.',
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            tabState: {
+              openTabs: [{ id: 'tab-old', title: 'Old Chat', conversationId: 'conversation-old' }],
+              activeTabId: 'tab-old',
+            },
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: {
+              id: 'conversation-old',
+              title: 'Old Chat',
+              messages: [message('message-old', 'old transcript')],
+            },
+          },
+        }),
+      );
+    });
+    expect(document.querySelector('[data-testid^="workspace-runtime-"]')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Old presentation error.');
+
+    view.rerender(
+      <ConversationController
+        {...props}
+        agentPresentation={createAgentDraftPresentation('draft-new', {
+          kind: 'unbound',
+          draftId: 'draft-new',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(document.querySelector('[data-testid^="workspace-runtime-"]')).toBeNull();
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '');
+    expect(screen.getByTestId('entry-context-chips').textContent).toBe('');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('entry-selected-model').textContent).toBe(retainedModel);
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
   it('prefills an explicit Desktop Skill invocation without sending it', () => {
     render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
 
@@ -527,7 +904,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 0,
             tabState: { openTabs: [], activeTabId: null },
           },
         }),
@@ -538,9 +914,91 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.activateConversation).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conversation-1',
-        expectedTabStateRevision: 0,
       }),
     );
+  });
+
+  it('waits for the replacement runtime catalog before activating its session target', () => {
+    vi.clearAllMocks();
+    hostMocks.runtimeId = 'runtime-draft';
+    const view = render(
+      <ConversationController
+        {...createProps()}
+        initialConversation={{ id: 'conversation-draft', title: 'Draft runtime session' }}
+      />,
+    );
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'conversationList',
+            conversations: [
+              {
+                id: 'conversation-draft',
+                title: 'Draft runtime session',
+                createdAt: '2026-08-04T00:00:00.000Z',
+                updatedAt: '2026-08-04T00:01:00.000Z',
+                messageCount: 1,
+              },
+            ],
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            tabState: { openTabs: [], activeTabId: null },
+          },
+        }),
+      );
+    });
+    expect(hostMocks.activateConversation).toHaveBeenCalledTimes(1);
+
+    hostMocks.runtimeId = 'runtime-session';
+    view.rerender(
+      <ConversationController
+        {...createProps()}
+        initialConversation={{ id: 'conversation-session', title: 'Committed session' }}
+      />,
+    );
+    expect(hostMocks.activateConversation).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'conversationList',
+            conversations: [
+              {
+                id: 'conversation-session',
+                title: 'Committed session',
+                createdAt: '2026-08-04T00:02:00.000Z',
+                updatedAt: '2026-08-04T00:03:00.000Z',
+                messageCount: 2,
+              },
+            ],
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            tabState: { openTabs: [], activeTabId: null },
+          },
+        }),
+      );
+    });
+
+    expect(hostMocks.activateConversation).toHaveBeenCalledTimes(2);
+    expect(hostMocks.activateConversation).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        conversationId: 'conversation-session',
+      }),
+    );
+    hostMocks.runtimeId = 'conversation-controller-test';
   });
 
   it('fails visibly without activating another conversation when the navigation target is missing', () => {
@@ -565,7 +1023,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 0,
             tabState: { openTabs: [], activeTabId: null },
           },
         }),
@@ -854,7 +1311,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 1,
             tabState: {
               openTabs: [
                 {
@@ -1087,7 +1543,6 @@ describe('ConversationController entry state', () => {
               conversationId: 'conv-a',
               items: [queuedMessage('conv-a', 'queued for A')],
               pendingCount: 1,
-              version: 1,
             },
           },
         }),
@@ -1148,7 +1603,6 @@ describe('ConversationController entry state', () => {
               conversationId: 'conv-a',
               items: [queuedMessage('conv-a', 'late queued for A')],
               pendingCount: 1,
-              version: 2,
             },
           },
         }),
@@ -1705,6 +2159,47 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('workspace-streaming-flags').textContent).toBe('');
   });
 
+  it('keeps Character and Room new-conversation actions explicitly unavailable', () => {
+    vi.clearAllMocks();
+    render(<ConversationController {...createProps()} />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: { id: 'conv-role', title: 'Role B', messages: [] },
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            tabState: {
+              openTabs: [
+                {
+                  id: 'tab-role',
+                  title: 'Role B',
+                  conversationId: 'conv-role',
+                  kind: 'character-dialogue',
+                },
+              ],
+              activeTabId: 'tab-role',
+            },
+          },
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room new conversations are not available',
+    );
+  });
+
   it('hydrates model and execution settings only into Tabs for the owning conversation', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
@@ -1911,7 +2406,6 @@ describe('ConversationController entry state', () => {
             snapshot: {
               conversationId: 'conv-a',
               pendingCount: 0,
-              version: 2,
               items: [],
             },
           },
@@ -2001,7 +2495,6 @@ describe('ConversationController entry state', () => {
     );
     const activationA = hostMocks.activateConversation.mock.calls.at(-1)?.[0] as {
       activationId: number;
-      expectedTabStateRevision: number;
     };
     expect(screen.getByTestId('workspace-availability').textContent).toBe('loading');
 
@@ -2012,7 +2505,6 @@ describe('ConversationController entry state', () => {
             type: 'activeConversation',
             activation: {
               activationId: activationA.activationId,
-              tabStateRevision: activationA.expectedTabStateRevision + 1,
             },
             conversation: {
               id: 'conv-a',
@@ -2035,7 +2527,6 @@ describe('ConversationController entry state', () => {
     );
     const activationB = hostMocks.activateConversation.mock.calls.at(-1)?.[0] as {
       activationId: number;
-      expectedTabStateRevision: number;
     };
     expect(screen.getByTestId('workspace-tab-conversation').textContent).toBe('conv-b');
     expect(screen.getByTestId('workspace-switching').textContent).toBe('idle');
@@ -2048,7 +2539,6 @@ describe('ConversationController entry state', () => {
             type: 'activeConversation',
             activation: {
               activationId: activationB.activationId,
-              tabStateRevision: activationB.expectedTabStateRevision + 1,
             },
             conversation: {
               id: 'conv-b',
@@ -2074,7 +2564,6 @@ describe('ConversationController entry state', () => {
         new MessageEvent('message', {
           data: {
             type: 'tabState',
-            revision: 1,
             tabState: {
               openTabs: [
                 { id: 'tab-a', title: 'A', conversationId: 'conv-a' },
@@ -2216,7 +2705,6 @@ function message(id: string, content: string): Message {
 function projectionSnapshot(conversationId: string, messageId: string, content: string) {
   return {
     conversationId,
-    projectionVersion: 1,
     turns: [
       {
         turnId: `turn-${conversationId}`,
@@ -2232,10 +2720,9 @@ function projectionSnapshot(conversationId: string, messageId: string, content: 
             messageId,
             itemId: 'text-1',
             sequence: 1,
-            itemRevision: 1,
             kind: 'assistant_text' as const,
             status: 'streaming' as const,
-            payload: { content, format: 'markdown' as const, sourceGeneration: 1 },
+            payload: { content, format: 'markdown' as const },
             createdAt: 1,
             updatedAt: 1,
           },

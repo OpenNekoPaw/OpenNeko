@@ -2,78 +2,286 @@ import { describe, expect, it } from 'vitest';
 import {
   createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
+  createDesktopProjectSelectionRequest,
   createDesktopProjectOpenRequest,
-  createDesktopProjectRemoveRecentRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
+  parseDesktopConversationDeleteRequest,
+  parseDesktopProjectSelectionRequest,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
+  projectDesktopConversationNavigation,
 } from './desktop-shell-contract';
 import { createDefaultDesktopWorkbenchLayout } from './desktop-workbench-contract';
+import {
+  createDefaultDesktopAgentScene,
+  createDefaultDesktopApplicationSidebar,
+} from './desktop-scene-contract';
+import { createDesktopWindowComposition } from './desktop-window-composition-contract';
 
 describe('Desktop Shell contract', () => {
-  it('creates fixed profile and revision-bound Tab requests', () => {
+  it('groups Workspace conversations under exact Projects and Assistant conversations standalone', () => {
+    const catalog = validProjection().catalog;
+    const workspaceConversation = conversation('workspace-conversation', {
+      kind: 'workspace',
+      workspaceId: 'workspace-1',
+    });
+    const assistantConversation = conversation('assistant-conversation', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant-space:local-user',
+    });
+    const navigation = projectDesktopConversationNavigation(
+      catalog,
+      {
+        conversations: [assistantConversation, workspaceConversation],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      },
+      [],
+    );
+
+    expect(navigation.groups).toEqual([
+      expect.objectContaining({
+        kind: 'project',
+        projectId: 'content:workspace-1',
+        conversations: [workspaceConversation],
+      }),
+      expect.objectContaining({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        conversations: [assistantConversation],
+      }),
+    ]);
+  });
+
+  it('places an explicitly grouped Assistant conversation without changing its owner', () => {
+    const catalog = validProjection().catalog;
+    const assistantConversation = {
+      ...conversation('assistant-conversation', {
+        kind: 'assistant' as const,
+        assistantSpaceId: 'assistant-space:local-user',
+      }),
+      groupedProjectId: 'content:workspace-1',
+    };
+
+    const navigation = projectDesktopConversationNavigation(
+      catalog,
+      {
+        conversations: [assistantConversation],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      },
+      [],
+    );
+
+    expect(navigation.groups[0]).toMatchObject({
+      kind: 'project',
+      conversations: [
+        {
+          groupedProjectId: 'content:workspace-1',
+          navigation: {
+            owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+          },
+        },
+      ],
+    });
+  });
+
+  it('retains recent Projects without conversations but omits catalog-only Projects', () => {
+    const recentProjectId = 'content:workspace-1';
+    const catalogOnlyProject = {
+      ...validProjection().catalog.projects[0]!,
+      projectId: 'content:workspace-2',
+      workspaceId: 'workspace-2',
+      displayName: 'Catalog only',
+    };
+    expect(
+      projectDesktopConversationNavigation(
+        { projects: [...validProjection().catalog.projects, catalogOnlyProject] },
+        {
+          conversations: [],
+          attention: { needsInput: 0, needsReview: 0, running: 0 },
+        },
+        [recentProjectId],
+      ),
+    ).toEqual({
+      recentProjectIds: [recentProjectId],
+      groups: [
+        {
+          kind: 'project',
+          projectId: recentProjectId,
+          workspaceId: 'workspace-1',
+          displayName: 'Fixture',
+          conversations: [],
+        },
+      ],
+    });
+  });
+
+  it('rejects grouped navigation that does not match its exact recent Project identities', () => {
+    const projection = validProjection();
+    expect(() =>
+      parseDesktopShellProjection({
+        ...projection,
+        conversationNavigation: {
+          ...projection.conversationNavigation,
+          recentProjectIds: [],
+        },
+      }),
+    ).toThrowError(
+      'Desktop Conversation navigation projection does not match Project and Agent authorities.',
+    );
+  });
+
+  it('isolates unavailable Workspace and missing presentation associations by owner', () => {
+    const standaloneAssistant = conversation('standalone-assistant', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant-space:other',
+    });
+    expect(
+      projectDesktopConversationNavigation(
+        { projects: [] },
+        {
+          conversations: [
+            {
+              ...conversation('workspace-conversation', {
+                kind: 'workspace',
+                workspaceId: 'workspace-missing',
+              }),
+              groupedProjectId: 'project-removed',
+            },
+            {
+              ...conversation('assistant-conversation', {
+                kind: 'assistant',
+                assistantSpaceId: 'assistant-space:local-user',
+              }),
+              groupedProjectId: 'project-removed',
+            },
+            standaloneAssistant,
+          ],
+          attention: { needsInput: 0, needsReview: 0, running: 0 },
+        },
+        [],
+      ).groups,
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'workspace',
+        workspaceId: 'workspace-missing',
+        fieldNames: ['groupedProjectId'],
+        conversations: [expect.objectContaining({ title: 'workspace-conversation' })],
+      }),
+      expect.objectContaining({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        conversations: [expect.objectContaining({ title: 'assistant-conversation' })],
+      }),
+      expect.objectContaining({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:other',
+        conversations: [standaloneAssistant],
+      }),
+    ]);
+  });
+
+  it('creates fixed profile and sender-bound mutation requests', () => {
     expect(createDesktopProfileRequest('request-1', 'character')).toEqual({
-      schemaVersion: 1,
       requestId: 'request-1',
       profile: 'character',
     });
-    expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'app-1:window-1:1', 4)).toEqual({
-      schemaVersion: 1,
+    expect(createDesktopTabMutationRequest('request-2', 'tab-1', 'renderer-session-1')).toEqual({
       requestId: 'request-2',
-      expectedEndpointEpoch: 'app-1:window-1:1',
+      rendererSessionId: 'renderer-session-1',
       tabId: 'tab-1',
-      expectedWindowRevision: 4,
     });
     expect(
-      createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'app-1:window-1:1', 5),
+      createDesktopProjectOpenRequest('request-3', 'content:workspace-1', 'renderer-session-1'),
     ).toEqual({
-      schemaVersion: 1,
       requestId: 'request-3',
-      expectedEndpointEpoch: 'app-1:window-1:1',
-      expectedWindowRevision: 5,
+      rendererSessionId: 'renderer-session-1',
       projectId: 'content:workspace-1',
     });
     expect(
-      createDesktopProjectRemoveRecentRequest(
+      createDesktopProjectSelectionRequest(
         'request-4',
-        'content:workspace-1',
-        'app-1:window-1:1',
-        5,
-        3,
+        ['content:workspace-1', 'content:workspace-2'],
+        'renderer-session-1',
       ),
     ).toEqual({
-      schemaVersion: 1,
       requestId: 'request-4',
-      expectedEndpointEpoch: 'app-1:window-1:1',
-      expectedWindowRevision: 5,
-      expectedCatalogRevision: 3,
-      projectId: 'content:workspace-1',
+      rendererSessionId: 'renderer-session-1',
+      projectIds: ['content:workspace-1', 'content:workspace-2'],
     });
     expect(
       createDesktopConversationDeleteRequest(
         'request-5',
-        {
-          projectId: 'content:workspace-1',
-          workspaceId: 'workspace-1',
-          conversationId: 'conversation-1',
-        },
-        'app-1:window-1:1',
-        5,
-        7,
+        [
+          {
+            conversationId: 'conversation-1',
+            owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+          },
+        ],
+        'renderer-session-1',
       ),
     ).toEqual({
-      schemaVersion: 1,
       requestId: 'request-5',
-      expectedEndpointEpoch: 'app-1:window-1:1',
-      expectedWindowRevision: 5,
-      expectedAgentHomeRevision: 7,
-      navigation: {
-        projectId: 'content:workspace-1',
-        workspaceId: 'workspace-1',
-        conversationId: 'conversation-1',
-      },
+      rendererSessionId: 'renderer-session-1',
+      navigations: [
+        {
+          conversationId: 'conversation-1',
+          owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+        },
+      ],
     });
+  });
+
+  it('strictly requires a non-empty unique Conversation identity array', () => {
+    expect(() =>
+      parseDesktopConversationDeleteRequest({
+        requestId: 'request-1',
+        rendererSessionId: 'renderer-session-1',
+        navigation: {
+          conversationId: 'conversation-1',
+          owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+        },
+      }),
+    ).toThrowError(DesktopShellContractError);
+    expect(() =>
+      createDesktopConversationDeleteRequest('request-2', [], 'renderer-session-1'),
+    ).toThrowError('At least one Desktop Agent Home conversation identity is required.');
+    expect(() =>
+      createDesktopConversationDeleteRequest(
+        'request-3',
+        [
+          {
+            conversationId: 'conversation-1',
+            owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+          },
+          {
+            conversationId: 'conversation-1',
+            owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+          },
+        ],
+        'renderer-session-1',
+      ),
+    ).toThrowError('Desktop Agent Home conversation identities must be unique.');
+  });
+
+  it('strictly rejects invalid Project selection payloads', () => {
+    expect(() =>
+      parseDesktopProjectSelectionRequest({
+        requestId: 'request-1',
+        rendererSessionId: 'renderer-session-1',
+        projectId: 'content:workspace-1',
+      }),
+    ).toThrowError(DesktopShellContractError);
+    expect(() =>
+      createDesktopProjectSelectionRequest('request-2', [], 'renderer-session-1'),
+    ).toThrowError('At least one Desktop Project identity is required.');
+    expect(() =>
+      createDesktopProjectSelectionRequest(
+        'request-3',
+        ['content:workspace-1', 'content:workspace-1'],
+        'renderer-session-1',
+      ),
+    ).toThrowError('Desktop Project identities must be unique.');
   });
 
   it('rejects an active Tab that is not in the Window projection', () => {
@@ -88,11 +296,38 @@ describe('Desktop Shell contract', () => {
     ).toThrowError(DesktopShellContractError);
   });
 
+  it('isolates an invalid Project catalog while preserving sibling Shell components', () => {
+    const canonical = validProjection();
+    const parsedCanonical = parseDesktopShellProjection(canonical);
+    const parsed = parseDesktopShellProjection({
+      ...canonical,
+      catalog: {
+        ...canonical.catalog,
+        unexpectedField: 1,
+      },
+    });
+
+    expect(parsed.catalog.projects).toEqual([]);
+    expect(parsed.window).toEqual(parsedCanonical.window);
+    expect(parsed.agentHome).toEqual(parsedCanonical.agentHome);
+    expect(parsed.domains).toEqual(parsedCanonical.domains);
+    expect(parsed.stateDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'desktop-shell-component-invalid',
+        component: 'project-catalog',
+        severity: 'error',
+      }),
+    ]);
+    expect(parsed.stateDiagnostics?.[0]?.message).toContain(
+      "contains unknown field 'unexpectedField'",
+    );
+    expect(parsedCanonical.catalog.projects).toHaveLength(1);
+  });
+
   it('rejects absolute path leakage by projecting only known Project fields', () => {
     const projection = parseDesktopShellProjection({
       ...validProjection(),
       catalog: {
-        revision: 1,
         projects: [
           {
             ...validProjection().catalog.projects[0],
@@ -109,14 +344,115 @@ describe('Desktop Shell contract', () => {
   it('rejects projection events whose Window identity does not match', () => {
     expect(() =>
       parseDesktopShellProjectionEvent({
-        schemaVersion: 1,
         applicationInstanceId: 'app-1',
         windowId: 'window-2',
-        rendererEpoch: 1,
+        rendererSessionId: 'renderer-session-1',
         sequence: 1,
         projection: validProjection(),
       }),
     ).toThrowError(DesktopShellContractError);
+  });
+
+  it('rejects removed or unknown Shell projection fields', () => {
+    expect(() =>
+      parseDesktopShellProjection({
+        ...validProjection(),
+        removedTechnicalField: 1,
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<DesktopShellContractError>>({
+        code: 'invalid-desktop-shell-payload',
+      }),
+    );
+  });
+
+  it('parses an exact rejected Shell authority diagnostic', () => {
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-state-invalid',
+            severity: 'error',
+            authorityKey: 'desktop.shell',
+            rejectionId: 12,
+            message: 'Stored Shell authority was rejected.',
+          },
+        ],
+      }).stateDiagnostics,
+    ).toEqual([
+      {
+        code: 'desktop-stored-state-invalid',
+        severity: 'error',
+        authorityKey: 'desktop.shell',
+        rejectionId: 12,
+        message: 'Stored Shell authority was rejected.',
+      },
+    ]);
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-state-invalid',
+            severity: 'error',
+            authorityKey: 'desktop.application-settings',
+            rejectionId: 13,
+            message: 'Stored Application Settings authority was rejected.',
+          },
+        ],
+      }).stateDiagnostics,
+    ).toEqual([
+      {
+        code: 'desktop-stored-state-invalid',
+        severity: 'error',
+        authorityKey: 'desktop.application-settings',
+        rejectionId: 13,
+        message: 'Stored Application Settings authority was rejected.',
+      },
+    ]);
+    expect(() =>
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-state-invalid',
+            severity: 'error',
+            authorityKey: 'desktop.shell',
+            rejectionId: 0,
+            message: 'Invalid rejection identity.',
+          },
+        ],
+      }),
+    ).toThrowError(DesktopShellContractError);
+  });
+
+  it('parses exact retained Shell metadata without changing sibling projections', () => {
+    const canonical = validProjection();
+    const parsed = parseDesktopShellProjection({
+      ...canonical,
+      stateDiagnostics: [
+        {
+          code: 'desktop-stored-state-metadata-retained',
+          severity: 'warning',
+          authorityKey: 'desktop.shell',
+          fieldNames: ['opaqueSourceMarker'],
+          message: 'Desktop Shell root metadata was preserved without interpretation.',
+        },
+      ],
+    });
+
+    expect(parsed.catalog).toEqual(canonical.catalog);
+    expect(parsed.window).toEqual(canonical.window);
+    expect(parsed.stateDiagnostics).toEqual([
+      {
+        code: 'desktop-stored-state-metadata-retained',
+        severity: 'warning',
+        authorityKey: 'desktop.shell',
+        fieldNames: ['opaqueSourceMarker'],
+        message: 'Desktop Shell root metadata was preserved without interpretation.',
+      },
+    ]);
   });
 
   it('accepts ready domains only in their owning Phase 1 slices', () => {
@@ -180,13 +516,16 @@ describe('Desktop Shell contract', () => {
 });
 
 function validProjection() {
+  const scene = createDefaultDesktopAgentScene('window-1', 'draft:test');
+  const workbench = createDesktopWindowComposition({
+    workbenchInstanceId: 'workbench:window-1:entry',
+    layout: createDefaultDesktopWorkbenchLayout('window-1'),
+    scene,
+  });
   return {
-    schemaVersion: 1 as const,
     applicationInstanceId: 'app-1',
-    endpointEpoch: 'app-1:window-1:1',
-    projectionRevision: 2,
+    rendererSessionId: 'renderer-session-1',
     catalog: {
-      revision: 1,
       projects: [
         {
           projectId: 'content:workspace-1',
@@ -200,22 +539,33 @@ function validProjection() {
     },
     window: {
       windowId: 'window-1',
-      revision: 1,
       activeTarget: { kind: 'project' as const, tabId: 'tab-1' },
       tabs: [
         {
           tabId: 'tab-1',
           projectId: 'content:workspace-1',
           viewId: 'view-1',
-          viewEpoch: 1,
+          viewInstanceId: 'view-instance-1',
         },
       ],
-      workbench: createDefaultDesktopWorkbenchLayout('window-1'),
+      workbench,
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {
-      revision: 0,
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
+    },
+    conversationNavigation: {
+      recentProjectIds: ['content:workspace-1'],
+      groups: [
+        {
+          kind: 'project' as const,
+          projectId: 'content:workspace-1',
+          workspaceId: 'workspace-1',
+          displayName: 'Fixture',
+          conversations: [],
+        },
+      ],
     },
     domains: [
       {
@@ -225,5 +575,23 @@ function validProjection() {
         diagnosticCode: 'desktop-domain-surface-unavailable' as const,
       },
     ],
+  };
+}
+
+function conversation(
+  conversationId: string,
+  owner:
+    | { readonly kind: 'assistant'; readonly assistantSpaceId: string }
+    | { readonly kind: 'workspace'; readonly workspaceId: string },
+) {
+  return {
+    navigation: { conversationId, owner },
+    title: conversationId,
+    updatedAt: '2026-08-04T00:00:00.000Z',
+    attention: 'none' as const,
+    lastActivity: {
+      kind: 'conversation-updated' as const,
+      occurredAt: '2026-08-04T00:00:00.000Z',
+    },
   };
 }

@@ -120,7 +120,6 @@ describe('playbackStore storyline session state', () => {
 
 function canvasData(): CanvasData {
   return {
-    version: '2.1',
     name: 'Storyline Session State',
     nodes: [],
     connections: [],

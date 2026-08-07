@@ -4,7 +4,6 @@
  * Shared configuration format for agent-cli and platform.
  * File locations:
  * - User config: ~/.neko/config.toml
- * - Workspace config: .neko/config.toml
  */
 
 import { DEFAULT_EXTERNAL_RESEARCH_CONFIG } from '@neko/agent-contracts';
@@ -16,6 +15,8 @@ import type {
   PurposeDefaultModels,
   TypeDefaultModels,
 } from '@neko/ai-contracts';
+
+export type ProviderDefinition = Omit<ProviderConfig, 'apiKey'>;
 
 // =============================================================================
 // Unified Configuration Format
@@ -34,12 +35,6 @@ export interface UnifiedConfig {
   // ==========================================================================
   // Basic Configuration
   // ==========================================================================
-
-  /** Default provider ID */
-  defaultProvider?: string;
-
-  /** Default model ID */
-  defaultModel?: string;
 
   /** Default models by broad model type */
   defaultModels?: TypeDefaultModels;
@@ -89,7 +84,7 @@ export interface UnifiedConfig {
   // ==========================================================================
 
   /** Provider configurations */
-  providers?: ProviderConfig[];
+  providers?: ProviderDefinition[];
 
   /** Model configurations */
   models?: ModelConfig[];
@@ -99,45 +94,6 @@ export interface UnifiedConfig {
 
   /** Opt-in external research configuration. */
   externalResearch?: ExternalResearchConfigInput;
-
-  // ==========================================================================
-  // Override Configuration
-  // ==========================================================================
-
-  /** Provider overrides (keyed by provider ID) */
-  providerOverrides?: Record<string, Partial<ProviderConfig>>;
-
-  /** Model overrides (keyed by model ID) */
-  modelOverrides?: Record<string, Partial<ModelConfig>>;
-
-  /** MCP server overrides (keyed by server ID) */
-  mcpServerOverrides?: Record<string, Partial<MCPServerConfig>>;
-
-  // ==========================================================================
-  // Preserved removed-product settings & current credentials
-  // ==========================================================================
-
-  /**
-   * Preservation-only settings left by the removed Auth product.
-   * Current provider OAuth is owned by provider-specific credential services.
-   */
-  auth?: AuthConfigJson;
-
-  /**
-   * API key credentials.
-   *
-   * WARNING: Stored in PLAINTEXT in config.toml.
-   * Prefer environment variables for sensitive keys.
-   *
-   * Priority: env vars > credentials.apiKeys > providers[].apiKey
-   */
-  credentials?: CredentialsConfig;
-
-  /**
-   * Preservation-only settings left by the removed Market product.
-   * No retained runtime reads this section as an active registry.
-   */
-  market?: MarketConfig;
 }
 
 // =============================================================================
@@ -151,12 +107,6 @@ export interface UnifiedConfig {
  * user and workspace configurations.
  */
 export interface NormalizedConfig {
-  /** Default provider ID */
-  defaultProvider: string;
-
-  /** Default model ID */
-  defaultModel: string;
-
   /** Global default max output tokens */
   maxTokens: number;
 
@@ -173,7 +123,7 @@ export interface NormalizedConfig {
   outputFormat: 'text' | 'json' | 'markdown';
 
   /** Provider configurations (keyed by ID) */
-  providers: Map<string, ProviderConfig>;
+  providers: Map<string, ProviderDefinition>;
 
   /** Model configurations (keyed by ID) */
   models: Map<string, ModelConfig>;
@@ -193,8 +143,6 @@ export interface NormalizedConfig {
  * Default configuration values
  */
 export const DEFAULT_CONFIG: Omit<NormalizedConfig, 'providers' | 'models' | 'mcpServers'> = {
-  defaultProvider: 'ollama-local',
-  defaultModel: 'ollama-local-default-chat',
   maxTokens: 8192,
   temperature: 0.7,
   verbose: false,
@@ -224,41 +172,3 @@ export const CONFIG_DIR_NAME = '.neko';
 
 /** Config file name */
 export const CONFIG_FILE_NAME = 'config.toml';
-
-// =============================================================================
-// Auth & Credentials Types
-// =============================================================================
-
-/**
- * Preservation-only Auth product configuration stored in config.toml.
- * Fields remain round-trippable until an explicit user-data migration is defined.
- */
-export interface AuthConfigJson {
-  clientId?: string;
-  /** Authorization endpoint. Empty string = not configured. */
-  authUrl?: string;
-  /** Token endpoint. */
-  tokenUrl?: string;
-  /** Neko official account AI catalog endpoint. */
-  aiCatalogUrl?: string;
-  scopes?: string[];
-  /** Localhost redirect port for OAuth callback. Default: 6419 */
-  redirectPort?: number;
-}
-
-/**
- * API key credentials section.
- * Maps provider ID to API key string.
- */
-export interface CredentialsConfig {
-  /** Provider ID -> API key mapping (e.g. { "anthropic": "sk-ant-xxx" }) */
-  apiKeys?: Record<string, string>;
-}
-
-/**
- * Preservation-only Market product configuration.
- */
-export interface MarketConfig {
-  /** Former registry API base URL; not consumed by the retained runtime. */
-  registryUrl?: string;
-}

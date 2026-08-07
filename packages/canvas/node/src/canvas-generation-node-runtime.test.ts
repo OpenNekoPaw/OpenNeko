@@ -15,7 +15,6 @@ const workspace: CanvasGenerationWorkspace = {
 const resultLocator = {
   kind: 'generated-output' as const,
   outputId: 'generated-output-1',
-  revision: 'revision-1',
   digest: 'sha256:generated-output-1',
   path: 'neko/generated/image/generated-output-1.png',
 };
@@ -39,7 +38,6 @@ describe('CanvasGenerationNodeRuntime', () => {
     const { owner, describeGeneration } = createOwner({
       current: generationSnapshot({
         phase: 'succeeded',
-        revision: 4,
         resultLocators: [resultLocator],
       }),
     });
@@ -68,7 +66,6 @@ describe('CanvasGenerationNodeRuntime', () => {
     const mismatchedOwner = createOwner({
       current: generationSnapshot({
         phase: 'succeeded',
-        revision: 4,
         resultLocators: [{ ...resultLocator, outputId: 'another-output' }],
       }),
     });
@@ -94,36 +91,32 @@ describe('CanvasGenerationNodeRuntime', () => {
     await mismatchedRuntime.dispose();
   });
 
-  it('regenerates from the authoritative revision and projects new immutable Job lineage', async () => {
+  it('regenerates from the authoritative Job and projects new immutable Job lineage', async () => {
     const current = generationSnapshot({
       phase: 'succeeded',
-      revision: 4,
       resultLocators: [resultLocator],
     });
     const started = generationSnapshot({
       jobId: 'generation-job-2',
       phase: 'running',
-      revision: 1,
       regenerateOf: current.ref,
       prompt: 'Authoritative regenerated prompt',
-      modelId: 'image-model-v2',
+      modelId: 'image-model-regenerated',
       width: 1536,
       height: 1024,
     });
     const completed = generationSnapshot({
       jobId: 'generation-job-2',
       phase: 'succeeded',
-      revision: 2,
       regenerateOf: current.ref,
       prompt: 'Authoritative regenerated prompt',
-      modelId: 'image-model-v2',
+      modelId: 'image-model-regenerated',
       width: 1536,
       height: 1024,
       resultLocators: [
         {
           ...resultLocator,
           outputId: 'generated-output-2',
-          revision: 'revision-2',
           digest: 'sha256:generated-output-2',
           path: 'neko/generated/image/generated-output-2.png',
         },
@@ -140,23 +133,19 @@ describe('CanvasGenerationNodeRuntime', () => {
       ref: completed.ref,
       regenerateOf: current.ref,
       phase: 'succeeded',
-      revision: 2,
       title: 'Regenerate image',
       inputNodeIds: [],
       mediaKind: 'image',
       summary: {
         prompt: 'Authoritative regenerated prompt',
-        model: 'image-model-v2',
+        model: 'image-model-regenerated',
         width: 1536,
         height: 1024,
       },
       resultLocators: completed.resultLocators,
     });
-    expect(regenerateGeneration).toHaveBeenCalledWith({
-      ref: current.ref,
-      expectedRevision: 4,
-    });
-    expect(observeGeneration).toHaveBeenCalledWith(started.ref, started.revision);
+    expect(regenerateGeneration).toHaveBeenCalledWith({ ref: current.ref });
+    expect(observeGeneration).toHaveBeenCalledWith(started.ref);
 
     await runtime.dispose();
   });
@@ -165,7 +154,6 @@ describe('CanvasGenerationNodeRuntime', () => {
     const fixture = createOwner({
       current: generationSnapshot({
         phase: 'succeeded',
-        revision: 4,
         resultLocators: [resultLocator],
       }),
     });
@@ -218,9 +206,8 @@ function createOwner(options: {
     if (!options.regenerated) throw new Error('Fixture regenerated Job is missing.');
     return options.regenerated;
   });
-  const observeGeneration = vi.fn(
-    (_ref: GenerationJobRef, _afterRevision: number): AsyncIterable<GenerationJobSnapshot> =>
-      observe(options.observed ?? []),
+  const observeGeneration = vi.fn((_ref: GenerationJobRef): AsyncIterable<GenerationJobSnapshot> =>
+    observe(options.observed ?? []),
   );
   const jobs: Pick<
     GenerationJobPort,
@@ -249,7 +236,6 @@ async function* observe(
 function generationSnapshot(options: {
   readonly jobId?: string;
   readonly phase: GenerationJobSnapshot['phase'];
-  readonly revision: number;
   readonly regenerateOf?: GenerationJobRef;
   readonly prompt?: string;
   readonly modelId?: string;
@@ -266,17 +252,16 @@ function generationSnapshot(options: {
     ...(options.regenerateOf ? { regenerateOf: options.regenerateOf } : {}),
     lifecycleMode: 'linked',
     phase: options.phase,
-    revision: options.revision,
     createdAt: 100,
-    updatedAt: 100 + options.revision,
+    updatedAt: options.phase === 'succeeded' ? 102 : 101,
     request: {
       generationType: 'text-to-image',
       providerId: 'provider-1',
-      modelId: options.modelId ?? 'image-model-v1',
+      modelId: options.modelId ?? 'image-model-default',
       request: {
         prompt: options.prompt ?? 'Authoritative original prompt',
         providerId: 'provider-1',
-        modelId: options.modelId ?? 'image-model-v1',
+        modelId: options.modelId ?? 'image-model-default',
         ...(options.width !== undefined ? { width: options.width } : {}),
         ...(options.height !== undefined ? { height: options.height } : {}),
       },

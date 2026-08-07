@@ -8,7 +8,6 @@ export {
 export { resolveWorkspaceContentLocator } from './workspace-content-locator';
 export {
   WORKSPACE_MEDIA_LIBRARY_PROBE_METADATA_DOMAIN,
-  WORKSPACE_MEDIA_LIBRARY_SYNC_METADATA_DOMAIN,
   createWorkspaceMediaLibrarySyncMetadataBinding,
   type WorkspaceMediaLibrarySyncMetadataBinding,
 } from './workspace-media-library-sync-binding';
@@ -20,3 +19,4 @@ export * from './workspace-media-library-sync';
 export * from './resource-browser-node-source';
 export * from './global-asset-files';
 export * from './resource-browser-node-runtime';
+export * from './asset-center-node-runtime';

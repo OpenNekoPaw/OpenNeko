@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
-  CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
-  migrateLegacyCanvasStoryboardShot,
   projectCanvasStoryboardReviewRow,
   resolveCanvasStoryboardNextCreativeState,
   validateCanvasStoryboardActionIntent,
@@ -16,7 +13,6 @@ import type { StoryboardMediaRef } from '@neko/canvas-domain';
 describe('canvas semantic storyboard contracts', () => {
   it('validates semantic prompt documents as storyboard prompt authority', () => {
     const validation = validateCanvasStoryboardSemanticPromptDocument({
-      version: CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
       documentId: 'shot-1:video:prompt',
       blockKind: 'video',
       text: 'Aki turns back in a rainy hallway',
@@ -43,9 +39,8 @@ describe('canvas semantic storyboard contracts', () => {
     expect(validation.diagnostics).toEqual([]);
   });
 
-  it('fails visibly for unknown document versions and unresolved prompt refs', () => {
+  it('fails visibly for unresolved prompt refs', () => {
     const validation = validateCanvasStoryboardSemanticPromptDocument({
-      version: 999,
       documentId: 'shot-1:video:prompt',
       blockKind: 'video',
       text: 'Use @Aki',
@@ -62,10 +57,6 @@ describe('canvas semantic storyboard contracts', () => {
     expect(validation.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'unsupported-storyboard-prompt-document-version',
-          target: 'version',
-        }),
-        expect.objectContaining({
           code: 'unresolved-prompt-reference',
           target: 'spans[0]',
         }),
@@ -75,7 +66,6 @@ describe('canvas semantic storyboard contracts', () => {
 
   it('rejects malformed storyboard prompt documents', () => {
     const validation = validateCanvasStoryboardSemanticPromptDocument({
-      version: CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
       documentId: '',
       blockKind: 'audio',
     });
@@ -124,7 +114,6 @@ describe('canvas semantic storyboard contracts', () => {
   it('rejects unsupported action ids and unsupported model parameters', () => {
     const validation = validateCanvasStoryboardActionIntent(
       {
-        version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
         actionId: 'magic-render',
         target: { nodeId: 'shot-1' },
         generationParams: {
@@ -156,18 +145,16 @@ describe('canvas semantic storyboard contracts', () => {
     );
   });
 
-  it('rejects retired generic Task references instead of accepting a fallback path', () => {
+  it('rejects unsupported fields in current storyboard contracts', () => {
     const stateValidation = validateCanvasStoryboardPromptState({
-      version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
       executionRefs: {
-        taskRefs: [{ source: 'agent', sourceTaskId: 'task-1' }],
+        unexpectedField: 'unexpected',
       },
     });
     const intentValidation = validateCanvasStoryboardActionIntent({
-      version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
       actionId: 'generate-image',
       target: { nodeId: 'shot-1' },
-      taskRef: { source: 'agent', sourceTaskId: 'task-1' },
+      unexpectedField: 'unexpected',
     });
 
     expect(stateValidation.valid).toBe(false);
@@ -175,157 +162,43 @@ describe('canvas semantic storyboard contracts', () => {
     expect(stateValidation.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'retired-storyboard-task-contract',
-          target: 'executionRefs.taskRefs',
+          code: 'malformed-storyboard-execution-refs',
+          target: 'executionRefs.unexpectedField',
         }),
       ]),
     );
     expect(intentValidation.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'retired-storyboard-task-contract',
-          target: 'taskRef',
+          code: 'malformed-storyboard-action-intent',
+          target: 'actionIntent.unexpectedField',
         }),
       ]),
     );
   });
 
-  it('migrates safe legacy shot fields into prompt blocks with provenance', () => {
-    const sourceRef = stableMediaRef('source-panel');
-    const generatedRef = {
-      ...stableMediaRef('generated-video'),
-      role: 'generated' as const,
-      mimeType: 'video/mp4',
-      locator: {
-        type: 'asset' as const,
-        assetId: 'generated-video',
-        uri: 'assets/generated-video.mp4',
-      },
-    };
-    const migration = migrateLegacyCanvasStoryboardShot({
-      nodeId: 'shot-node-1',
-      shotData: {
-        shotNumber: 1,
-        duration: 4,
-        visualDescription: 'Rainy school hallway',
-        characters: [{ characterName: 'Aki', appearanceNotes: 'wet uniform' }],
-        characterAction: 'Aki turns back',
-        cameraMovement: 'dolly',
-        generationPrompt: 'anime keyframe, cold hallway light',
-        dialogue: 'Why are you here?',
-        sourceMediaRefs: [sourceRef],
-        generatedMediaRefs: [generatedRef],
-      },
-      migratedAt: 123,
-    });
-
-    expect(migration.migrated).toBe(true);
-    expect(migration.promptState?.promptBlocks?.imagePromptDocument?.text).toBe(
-      'anime keyframe, cold hallway light',
-    );
-    expect(migration.promptState?.promptBlocks?.videoPromptDocument?.text).toContain(
-      'Aki turns back',
-    );
-    expect(migration.promptState?.promptBlocks?.videoPromptDocument?.text).toContain(
-      'Characters: Aki',
-    );
-    expect(migration.promptState?.promptBlocks?.voicePromptDocument?.text).toBe(
-      'Why are you here?',
-    );
-    expect(migration.promptState?.referenceMedia?.imageRefs).toEqual([sourceRef]);
-    expect(migration.promptState?.executionRefs?.resultRefs).toEqual([{ mediaRef: generatedRef }]);
-    expect(migration.provenance).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ source: 'generationPrompt', targetBlockKind: 'image' }),
-        expect.objectContaining({ source: 'visualDescription', targetBlockKind: 'video' }),
-        expect.objectContaining({ source: 'dialogue', targetBlockKind: 'voice' }),
-      ]),
-    );
-    expect(migration.promptState?.nextCreativeState?.id).toBe('needs-result-review');
-    expect(validateCanvasStoryboardPromptState(migration.promptState).valid).toBe(true);
-  });
-
-  it('diagnoses ambiguous legacy prompt authority instead of guessing a canonical prompt', () => {
-    const migration = migrateLegacyCanvasStoryboardShot({
-      nodeId: 'shot-node-1',
-      shotData: {
-        shotNumber: 1,
-        duration: 4,
-        visualDescription: 'Rainy hallway',
-        characterAction: 'Aki turns',
-        generationPrompt: 'legacy generation prompt',
-        promptSlots: [
-          {
-            fieldId: 'imagePrompt',
-            scope: 'shot',
-            mediaType: 'image',
-            operation: 'generate',
-            prompt: 'slot image prompt',
-          },
-        ],
-      },
-    });
-
-    expect(migration.migrated).toBe(false);
-    expect(migration.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'ambiguous-legacy-prompt-authority' }),
-      ]),
-    );
-  });
-
-  it('keeps ambiguous/runtime-only legacy media from claiming semantic migration success', () => {
-    const migration = migrateLegacyCanvasStoryboardShot({
-      nodeId: 'shot-node-1',
-      shotData: {
-        shotNumber: 1,
-        duration: 4,
-        visualDescription: 'Rainy hallway',
-        characterAction: 'Aki turns',
-        generationPrompt: 'anime keyframe',
-        sourceMediaRefs: [
-          {
-            refId: 'runtime-preview',
-            role: 'reference',
-            locator: { type: 'asset', assetId: 'runtime-preview', uri: 'blob:neko-media/preview' },
-          },
-        ],
-      },
-    });
-
-    expect(migration.migrated).toBe(false);
-    expect(migration.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'runtime-only-storyboard-media-ref' }),
-      ]),
-    );
-    expect(migration.promptState?.nextCreativeState?.id).toBe('prompt-conflict');
-  });
-
-  it('projects storyboard review rows from semantic prompt documents, not legacy prompts', () => {
-    const legacyRow = projectCanvasStoryboardReviewRow({
-      nodeId: 'shot-legacy',
+  it('projects storyboard review rows from semantic prompt documents only', () => {
+    const unsupportedRow = projectCanvasStoryboardReviewRow({
+      nodeId: 'shot-unsupported',
       data: {
         shotNumber: 2,
         duration: 5,
-        generationPrompt: 'legacy plain prompt',
+        unexpectedField: 'unsupported plain prompt',
       },
     });
 
-    expect(legacyRow.source).toBe('migration-required');
-    expect(legacyRow.imagePrompt).toBe('');
-    expect(legacyRow.videoPrompt).toBe('');
-    expect(legacyRow.diagnostics).toEqual(
+    expect(unsupportedRow.source).toBe('empty');
+    expect(unsupportedRow.imagePrompt).toBe('');
+    expect(unsupportedRow.videoPrompt).toBe('');
+    expect(unsupportedRow.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'legacy-generation-prompt-requires-migration' }),
+        expect.objectContaining({ code: 'missing-semantic-storyboard-prompt' }),
       ]),
     );
 
     const promptState: CanvasStoryboardPromptState = {
-      version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
       promptBlocks: {
         videoPromptDocument: {
-          version: CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
           documentId: 'shot-2:video:prompt',
           blockKind: 'video',
           text: 'Aki turns back, slow dolly in',
@@ -339,7 +212,6 @@ describe('canvas semantic storyboard contracts', () => {
       data: {
         shotNumber: 2,
         storyboardPrompt: promptState,
-        generationPrompt: 'legacy prompt must not be read',
       },
     });
 
@@ -483,7 +355,6 @@ function stableMediaRef(refId: string): StoryboardMediaRef {
 
 function promptDocument(blockKind: 'image' | 'video' | 'voice', text: string) {
   return {
-    version: CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
     documentId: `shot-test:${blockKind}:prompt`,
     blockKind,
     text,

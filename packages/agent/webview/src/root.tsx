@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactElement, type ReactNode } from 'react';
 import { AppShell } from './components/AppShell';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider } from './i18n/I18nContext';
@@ -12,10 +12,13 @@ import {
   type WebviewFoundationContextValue,
   type WebviewFoundationThemeKind,
 } from '@neko/ui/foundation';
-import { NEKO_AGENT_HOST_MESSAGE_EVENT } from '@neko/agent-contracts/host-message-event';
 import { AgentHostRuntimeProvider } from './host-runtime-context';
 import type { AgentHostRuntimeAdapter } from './messages';
-import { setAgentHostRuntimeAdapter } from './messages';
+import type { AgentRootPresentation } from '@neko/agent-contracts';
+import {
+  ComposerWorkspaceProvider,
+  type AgentComposerWorkspacePresentation,
+} from './components/ComposerWorkspaceContext';
 import './index.css';
 
 registerDefaultRenderers();
@@ -27,32 +30,20 @@ export interface AgentWebviewRootProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
+  readonly agentPresentation?: AgentRootPresentation;
+  readonly composerWorkspace?: AgentComposerWorkspacePresentation;
 }
 
 export function AgentWebviewRoot({
   foundation,
   hostRuntimeAdapter,
+  agentPresentation,
+  composerWorkspace,
   initialConversation,
   initialInput,
   locale,
   presentation = 'default',
 }: AgentWebviewRootProps): ReactElement {
-  useLayoutEffect(() => {
-    const subscription = setAgentHostRuntimeAdapter(hostRuntimeAdapter);
-    return () => {
-      subscription.dispose();
-    };
-  }, [hostRuntimeAdapter]);
-
-  useLayoutEffect(() => {
-    const subscription = hostRuntimeAdapter.subscribe((message) => {
-      window.dispatchEvent(new CustomEvent(NEKO_AGENT_HOST_MESSAGE_EVENT, { detail: message }));
-    });
-    return () => {
-      subscription.dispose();
-    };
-  }, [hostRuntimeAdapter]);
-
   useEffect(() => {
     if (locale) {
       setLocale(locale);
@@ -68,17 +59,26 @@ export function AgentWebviewRoot({
       >
         <AgentHostRuntimeProvider adapter={hostRuntimeAdapter}>
           <I18nProvider service={i18nService}>
-            <AppShell
-              initialConversation={initialConversation}
-              initialInput={initialInput}
-              presentation={presentation}
-            />
+            <ComposerWorkspaceProvider value={composerWorkspace}>
+              <AppShell
+                agentPresentation={agentPresentation}
+                initialConversation={initialConversation}
+                initialInput={initialInput}
+                presentation={presentation}
+              />
+            </ComposerWorkspaceProvider>
           </I18nProvider>
         </AgentHostRuntimeProvider>
       </AgentWebviewFoundationBoundary>
     </ErrorBoundary>
   );
 }
+
+export type {
+  AgentComposerProjectOption,
+  AgentComposerWorkspacePresentation,
+  AgentComposerWorkspaceTarget,
+} from './components/ComposerWorkspaceContext';
 
 interface AgentWebviewFoundationBoundaryProps {
   readonly foundation?: WebviewFoundationContextValue;

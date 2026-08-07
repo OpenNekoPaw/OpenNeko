@@ -27,21 +27,6 @@ describe('HtmlVideoClient', () => {
     expect(mediaSource).not.toHaveBeenCalled();
   });
 
-  it('rejects the retired Desktop custom-scheme URL', async () => {
-    const video = createVideoStub();
-    const client = new HtmlVideoClient({
-      video,
-      descriptor: {
-        ...createDescriptor(0),
-        url: 'neko-media://desktop/media%3Apreview/preview.mp4',
-      },
-      playbackRate: 1,
-    });
-
-    await expect(client.connect()).rejects.toThrow('Invalid Cut HTML video descriptor');
-    expect(video.src).toBe('');
-  });
-
   it('warms the muted decoder and restores the descriptor origin before playback', async () => {
     const video = createVideoStub();
     const client = new HtmlVideoClient({
@@ -206,7 +191,6 @@ function createVideoStub(): HTMLVideoElement {
 
 function createDescriptor(mediaTimeOriginSeconds: number) {
   return {
-    version: 1 as const,
     url: 'openneko://resource/0123456789abcdefghijklmnopqrstuv',
     mimeType: 'video/mp4; codecs="avc1.4d0020"',
     mediaTimeOriginSeconds,

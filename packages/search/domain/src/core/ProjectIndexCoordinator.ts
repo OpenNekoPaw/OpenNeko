@@ -29,7 +29,6 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
   private readonly coverageProviders = new Map<string, ProjectSemanticCoverageProvider>();
   private readonly initializedProjects = new Set<string>();
   private readonly disposables: ProjectSearchDisposable[] = [];
-  private generation = 0;
 
   private readonly ports: ProjectSearchRuntimePorts;
   private readonly onDidChangeEmitter = new SimpleEventEmitter<ProjectIndexChangeEvent>();
@@ -91,7 +90,6 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
     readonly items: readonly ProjectSearchItem[];
     readonly partitions: readonly ProjectSearchPartitionStatusSnapshot[];
     readonly freshness: ProjectIndexFreshness;
-    readonly generation: number;
   }> {
     const context = await this.resolveContext(query);
     const projectRoot = context.projectRoot;
@@ -101,7 +99,6 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
         items: [],
         partitions: [],
         freshness: 'failed',
-        generation: this.generation,
       };
     }
 
@@ -137,7 +134,6 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
       items: ranked,
       partitions,
       freshness: aggregateFreshness(ranked, partitions),
-      generation: this.generation,
     };
   }
 
@@ -165,7 +161,6 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
             message: 'Semantic coverage requires a resolved project context.',
           },
         ],
-        generation: this.generation,
       };
     }
 
@@ -177,7 +172,6 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
     return aggregateProjectSemanticCoverage({
       query,
       context,
-      generation: this.generation,
       providerResults: settled,
       providerIds: providers.map((provider) => provider.providerId),
     });
@@ -253,13 +247,11 @@ export class ProjectIndexCoordinator implements ProjectSearchDisposable {
     freshness: ProjectIndexFreshness,
     changedRefs: readonly ProjectIndexChangedRef[] = [],
   ): void {
-    this.generation += 1;
     this.onDidChangeEmitter.fire({
       projectRoot,
       ...(partition ? { partition } : {}),
       reason,
       changedRefs,
-      generation: this.generation,
       freshness,
       updatedAt: (this.ports.now?.() ?? new Date()).toISOString(),
     });

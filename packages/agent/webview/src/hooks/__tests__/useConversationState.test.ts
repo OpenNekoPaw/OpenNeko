@@ -107,7 +107,6 @@ describe('useConversationState', () => {
     expect(result.current.conversationRenderCoordinator.read('conversation-a')?.messages).toEqual(
       [],
     );
-    expect(result.current.conversationRenderCoordinator.read('conversation-a')?.revision).toBe(2);
   });
 
   it('clears tabless visible state without deleting the detached conversation projection', () => {
@@ -135,6 +134,5 @@ describe('useConversationState', () => {
     expect(result.current.conversationRenderCoordinator.read('conversation-a')?.messages).toEqual([
       retained,
     ]);
-    expect(result.current.conversationRenderCoordinator.read('conversation-a')?.revision).toBe(1);
   });
 });

@@ -9,7 +9,6 @@ import type {
   NpcTranscriptArtifact,
   NpcTranscriptMessage,
 } from '@neko/chara/contracts';
-import { NPC_TRANSCRIPT_ARTIFACT_VERSION } from '@neko/chara/contracts';
 import {
   CharacterDialogueSession,
   type CharacterDialogueResponder,
@@ -373,7 +372,6 @@ export function createFallbackCharacterDialogueEvaluationReport(
   const hasNpcReply = artifact.transcript.some((message) => message.role === 'npc');
   const hasUserTurn = artifact.transcript.some((message) => message.role === 'user');
   return {
-    version: NPC_TRANSCRIPT_ARTIFACT_VERSION,
     createdAt,
     entityRef: artifact.entityRef,
     summary: hasNpcReply

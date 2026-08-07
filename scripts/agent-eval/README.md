@@ -27,6 +27,26 @@ Therefore:
 - The runner must not import `AgentSession` directly or substitute a mock provider, final-answer
   text or default success for missing runtime evidence.
 
+## Real-Provider Acceptance Lanes
+
+Agent development uses two complementary local lanes:
+
+- Feature acceptance drives a visible Electron window through actual user controls and a real
+  provider API. It must prove the submitted UI action, exact conversation/Scene identity, rendered
+  response, terminal controls, navigation state and visible diagnostics. Fixture automation may
+  observe or select controls, but it must not create the conversation through a bridge or seed the
+  success state.
+- Batch behavior evaluation runs without a visible UI while retaining the complete Desktop app and
+  session owner, public Agent input path, production provider/model resolution and real API. It is
+  not permission to call a turn runner directly, replace the Desktop assembly or use a mock.
+
+The foundational regression matrix covers basic and multi-turn conversation, context compaction
+with continuation, transcript restoration after a real owner/application reopen, generation
+Tool/Job/artifact record restoration, switching between multiple conversations, and isolation of
+transcripts, queues, configuration, context, artifacts and asynchronous state. A focused change may
+run only the affected cells, but its report must record the disposition of every cell. Session,
+persistence, projection and release acceptance require the full applicable matrix.
+
 ## Ownership Boundary
 
 - `apps/neko-desktop` owns application/session lifecycle, runtime configuration, input dispatch,
@@ -96,13 +116,12 @@ Every decision and scenario must define:
 
 1. user-visible behavior;
 2. canonical Desktop/runtime path;
-3. forbidden fallback;
-4. observable runtime or artifact evidence;
-5. expected result;
-6. expected fail-visible behavior.
+3. observable runtime or artifact evidence;
+4. expected result;
+5. expected fail-visible behavior.
 
 Use deterministic hard gates for configuration identity, Skill receipt, Tool/process state,
-structured output, artifacts, permissions and no-fallback. Use an external Judge only for
+structured output, artifacts and permissions. Use an external Judge only for
 subjective quality after hard gates pass.
 
 Skill-assisted authoring produces reviewable declarative drafts. The strict schema and runner are
@@ -135,15 +154,19 @@ node scripts/agent-eval/local-run.mjs --mode focused --suite skill.storyboard
 
 Real API entrypoints read their user-authorized source only from `~/.neko/config.toml`; CLI
 environment cannot redirect this path. Provider/model identity and cost authorization remain
-explicit; credentials are resolved by the product configuration owner from that TOML. The Desktop Evaluation boundary validates the native TOML and
-copies it unchanged into the isolated fixture home; it does not compile another format, merge
-defaults, infer providers or write back to the user directory. Missing authorization, an unavailable
+explicit. The Desktop Evaluation boundary validates the native non-secret TOML and copies it
+unchanged into the isolated fixture home; it does not compile another format, merge
+defaults, infer providers or write back to the user directory. Any readable source mode, including
+`0644`, is accepted; Evaluation neither requires an exact POSIX mode nor changes the source file's
+permissions. Missing authorization, an unavailable
 source/provider, or a case requiring an unsupported operation/evidence contract returns
 `infrastructure-blocked` with exit code 2 and never triggers JSON/YAML/mock fallback execution.
 
-At 2026-08-03 the requested `~/.neko/config.toml` is available on the qualification host, but the
-explicit provider/model and cost authorization variables are not set, so
-provider-backed runs remain intentionally blocked before Desktop launch or API use.
+Provider-backed runs require the developer to provide explicit provider/model identity and cost
+authorization for each invocation. The TOML contains only non-secret provider/model definitions;
+the product resolves credentials through its SecretStorage owner. Evaluation never reads or copies
+secret bytes. The runner reports the exact missing authorization before Desktop launch or API use;
+configuration availability alone does not imply cost authorization.
 
 Run a hidden packaged matrix with stable build identity and two Desktop workers:
 

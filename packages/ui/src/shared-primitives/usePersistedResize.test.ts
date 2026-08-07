@@ -85,6 +85,95 @@ describe('persisted resize state helpers', () => {
       collapsed: true,
     });
   });
+
+  it('defaults and reports only an invalid panel while restoring its valid sibling', () => {
+    const onDiagnostic = vi.fn();
+    const state = {
+      'neko.resizeState': {
+        'model.rightDock': { size: 'wide', collapsed: false },
+        'model.timeline': { size: 180, collapsed: true },
+      },
+    };
+
+    expect(readPersistedResizeState(state, 'model.rightDock', 280, {}, onDiagnostic)).toEqual({
+      size: 280,
+      collapsed: false,
+    });
+    expect(readPersistedResizeState(state, 'model.timeline', 140, {}, onDiagnostic)).toEqual({
+      size: 180,
+      collapsed: true,
+    });
+    expect(onDiagnostic).toHaveBeenCalledOnce();
+    expect(onDiagnostic).toHaveBeenCalledWith({
+      code: 'invalid-panel-state',
+      message: "Persisted resize state for panel 'model.rightDock' is invalid.",
+      panelId: 'model.rightDock',
+    });
+  });
+
+  it('rejects unsupported panel fields without changing stable optional-field semantics', () => {
+    const onDiagnostic = vi.fn();
+    const state = {
+      'neko.resizeState': {
+        invalid: { size: 320, unsupportedField: true },
+        defaults: {},
+      },
+    };
+
+    expect(readPersistedResizeState(state, 'invalid', 280, {}, onDiagnostic)).toEqual({
+      size: 280,
+      collapsed: false,
+    });
+    expect(readPersistedResizeState(state, 'defaults', 280, {}, onDiagnostic)).toEqual({
+      size: 280,
+      collapsed: false,
+    });
+    expect(onDiagnostic).toHaveBeenCalledOnce();
+  });
+
+  it('preserves malformed sibling panel bytes and emits only canonical panel fields', () => {
+    const malformedSibling = { size: 'wide', unsupportedField: { nested: true } };
+    const result = writePersistedResizeState(
+      {
+        'neko.resizeState': {
+          malformedSibling,
+        },
+      },
+      'model.rightDock',
+      { size: 320, collapsed: false },
+    );
+
+    expect(result).toEqual({
+      'neko.resizeState': {
+        malformedSibling,
+        'model.rightDock': { size: 320, collapsed: false },
+      },
+    });
+    expect(result?.['neko.resizeState']).toBeDefined();
+  });
+
+  it('reports an invalid resize map and leaves it unchanged', () => {
+    const onDiagnostic = vi.fn();
+    const rootState = { 'neko.resizeState': 'corrupt', unrelated: { visible: true } };
+
+    expect(
+      writePersistedResizeState(
+        rootState,
+        'model.rightDock',
+        { size: 320, collapsed: false },
+        onDiagnostic,
+      ),
+    ).toBeUndefined();
+    expect(rootState).toEqual({
+      'neko.resizeState': 'corrupt',
+      unrelated: { visible: true },
+    });
+    expect(onDiagnostic).toHaveBeenCalledWith({
+      code: 'invalid-resize-state-map',
+      message: 'Persisted resize state must be an object.',
+      panelId: 'model.rightDock',
+    });
+  });
 });
 
 describe('usePersistedResize hook persistence', () => {

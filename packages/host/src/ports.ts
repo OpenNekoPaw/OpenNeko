@@ -13,7 +13,6 @@ export interface NekoHostIdentity {
   readonly kind: NekoHostKind;
   readonly ui: NekoHostUiKind;
   readonly displayName?: string;
-  readonly version?: string;
 }
 
 export interface HostRuntimeInfo {

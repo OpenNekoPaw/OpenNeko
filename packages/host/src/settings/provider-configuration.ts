@@ -1,13 +1,7 @@
 import type { Provider } from './types/provider';
 
 export function isProviderConfigured(provider: Provider): boolean {
-  if (!hasProviderEndpoint(provider)) return false;
-  if (provider.requiresApiKey === false) return true;
-  return hasProviderApiKey(provider);
-}
-
-function hasProviderApiKey(provider: Provider): boolean {
-  return typeof provider.apiKey === 'string' && provider.apiKey.length > 0;
+  return hasProviderEndpoint(provider);
 }
 
 function hasProviderEndpoint(provider: Provider): boolean {

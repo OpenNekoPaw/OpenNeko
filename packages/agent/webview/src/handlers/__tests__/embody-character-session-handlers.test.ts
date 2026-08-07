@@ -11,6 +11,7 @@ import type { PluginsAvailable } from '../../components/ChatView/SendToMenu';
 import { ConversationRenderCoordinator } from '../../render-lifecycle/conversation-render-coordinator';
 import { embodyCharacterSessionHandlers } from '../embody-character-session-handlers';
 import type { HandlerRegistration, MessageHandlerContext, StreamingState } from '../types';
+import { createTestAgentHostMessageSender } from '../../test-utils/agent-host-messages';
 
 describe('Embody Character session handlers', () => {
   it('opens Embody Character tabs without rebinding the shared foreground projection', () => {
@@ -153,6 +154,7 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
   const reconciliations: TabRuntimeReconciliation[] = [];
 
   const context = {
+    agentHostMessages: createTestAgentHostMessageSender(),
     messages,
     isThinking: streaming.isThinking,
     queuedMessageCount: streaming.queuedMessageCount,

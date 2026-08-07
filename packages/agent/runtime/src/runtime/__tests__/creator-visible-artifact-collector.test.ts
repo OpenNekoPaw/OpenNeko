@@ -48,7 +48,6 @@ describe('collectCreatorVisibleArtifacts', () => {
             type: 'artifactSnapshot',
             complete: true,
             artifact: {
-              schemaVersion: 1,
               kind: 'composite-artifact',
               artifactId: 'analysis-1',
               title: 'Material Analysis',
@@ -96,7 +95,6 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('collects an accessed document only with an explicit fenced reviewable artifact', () => {
     const assistantMarkdown = `Review complete.\n\n~~~NEKO\n${JSON.stringify({
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'material-analysis',
       title: 'Material Analysis',
@@ -272,7 +270,6 @@ describe('collectCreatorVisibleArtifacts', () => {
 
   it('does not duplicate an explicit composite artifact after ReadImage analysis', () => {
     const assistantMarkdown = `~~~NEKO\n${JSON.stringify({
-      schemaVersion: 1,
       kind: 'composite-artifact',
       artifactId: 'declared-storyboard-analysis',
       title: 'Storyboard Analysis',
@@ -290,7 +287,6 @@ describe('collectCreatorVisibleArtifacts', () => {
               type: 'artifactSnapshot',
               complete: true,
               artifact: {
-                schemaVersion: 1,
                 kind: 'composite-artifact',
                 artifactId: 'declared-storyboard-analysis',
                 title: 'Storyboard Analysis',
@@ -307,7 +303,7 @@ describe('collectCreatorVisibleArtifacts', () => {
     expect(collected[0]).toMatchObject({ artifactId: 'declared-storyboard-analysis' });
   });
 
-  it('keeps unversioned and fingerprinted locators as explicit source revisions', () => {
+  it('uses locator content fingerprints for source candidates', () => {
     const portablePath = 'epub/animation/Blame/volume-01.epub';
     const unversionedLocator = {
       kind: 'workspace-file' as const,
@@ -332,7 +328,6 @@ describe('collectCreatorVisibleArtifacts', () => {
         },
       ],
       assistantMarkdown: `~~~NEKO\n${JSON.stringify({
-        schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'analysis-1',
         title: 'Material Analysis',
@@ -343,13 +338,13 @@ describe('collectCreatorVisibleArtifacts', () => {
     expect(collected.filter((candidate) => candidate.role === 'source')).toEqual([
       expect.objectContaining({ contentLocator: unversionedLocator }),
       expect.objectContaining({
-        revision: 'sha256:volume-01',
+        contentFingerprint: 'sha256:volume-01',
         contentLocator: fingerprintedLocator,
       }),
     ]);
   });
 
-  it('fails visibly when a creator-visible Tool result only exposes legacy references', () => {
+  it('fails visibly when a creator-visible Tool result omits required content locators', () => {
     expect(() =>
       collectCreatorVisibleArtifacts({
         toolResults: [
@@ -358,10 +353,10 @@ describe('collectCreatorVisibleArtifacts', () => {
             attachments: [
               {
                 type: 'image',
-                path: 'materials/legacy.png',
+                path: 'materials/missing-locator.png',
                 assetRef: {
-                  assetId: 'legacy-image',
-                  uri: 'materials/legacy.png',
+                  assetId: 'missing-locator-image',
+                  uri: 'materials/missing-locator.png',
                   mimeType: 'image/png',
                 },
               },
@@ -369,7 +364,7 @@ describe('collectCreatorVisibleArtifacts', () => {
           },
         ],
       }),
-    ).toThrowError(/creator-visible-artifact-migration-required/u);
+    ).toThrowError(/requires contentLocator/u);
 
     expect(() =>
       collectCreatorVisibleArtifacts({
@@ -377,11 +372,11 @@ describe('collectCreatorVisibleArtifacts', () => {
           {
             name: 'ReadDocument',
             success: true,
-            data: { resourceRef: { id: 'legacy-document' } },
+            data: { title: 'Missing locator document' },
           },
         ],
       }),
-    ).toThrowError(/creator-visible-artifact-migration-required/u);
+    ).toThrowError(/requires a valid contentLocator/u);
   });
 });
 

@@ -14,7 +14,7 @@ afterEach(async () => {
   );
 });
 
-describe('Agent Evaluation v2 suite discovery', () => {
+describe('Agent Evaluation suite discovery', () => {
   it('discovers an indexed Agent runtime suite by target and case id', async () => {
     const discovered = await discoverSuites();
     const selected = selectSuiteCases(discovered, {
@@ -28,7 +28,7 @@ describe('Agent Evaluation v2 suite discovery', () => {
         id: 'agent-runtime.model-binding',
         owner: { kind: 'agent-runtime', id: 'session-model-binding' },
       },
-      scenario: { id: 'explicit-chat-model', schema: 'neko.agent-eval.scenario.v2' },
+      scenario: { id: 'explicit-chat-model', schema: 'neko.agent-eval.scenario' },
     });
   });
 
@@ -39,7 +39,7 @@ describe('Agent Evaluation v2 suite discovery', () => {
     );
     expect(() =>
       selectSuiteCases(discovered, { target: { kind: 'runtime', id: 'unmapped' } }),
-    ).toThrow('no v2 Evaluation cases matched');
+    ).toThrow('no Evaluation cases matched');
   });
 
   it('requires full Host identity when selecting a Skill target', async () => {

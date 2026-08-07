@@ -362,8 +362,7 @@ function selectInferredStoryboardImageRefForShot(input: {
 }): InferredStoryboardImageRef | undefined {
   const explicit = selectExplicitStoryboardImageRef(input.shot, input.imageIndex);
   if (explicit) return explicit;
-  const hasExplicitRefs =
-    (input.shot.sourceMediaRefs ?? []).length > 0 || (input.shot.mediaRefs ?? []).length > 0;
+  const hasExplicitRefs = (input.shot.sourceMediaRefs ?? []).length > 0;
 
   const pageNumber = inferStoryboardShotPageNumber(input.scene, input.shot, input.section);
   if (pageNumber !== undefined) {
@@ -400,7 +399,7 @@ function selectExplicitStoryboardImageRef(
   shot: StoryboardTable['scenes'][number]['shots'][number],
   imageIndex: StoryboardImageAliasIndex,
 ): InferredStoryboardImageRef | undefined {
-  for (const mediaRef of [...(shot.sourceMediaRefs ?? []), ...(shot.mediaRefs ?? [])]) {
+  for (const mediaRef of shot.sourceMediaRefs ?? []) {
     const locator = mediaRef.locator;
     if (locator.type === 'tool-result') {
       const exact = imageIndex.refs.find(
@@ -558,7 +557,6 @@ function inferStoryboardShotPageNumber(
   const mediaRefTexts = [
     ...(shot.sourceMediaRefs ?? []),
     ...(shot.generatedMediaRefs ?? []),
-    ...(shot.mediaRefs ?? []),
   ].flatMap((mediaRef) => [mediaRef.label, mediaRef.refId]);
   const texts = [
     ...mediaRefTexts,
@@ -673,14 +671,9 @@ function collectExplicitStoryboardMediaRefsForSection(
   shot: StoryboardTable['scenes'][number]['shots'][number],
   toolCalls: ReadonlyMap<string, ToolCall>,
 ): readonly MediaRef[] {
-  const layeredRefs = [...(shot.sourceMediaRefs ?? []), ...(shot.generatedMediaRefs ?? [])].flatMap(
-    (mediaRef) => projectStoryboardMediaRefToCompositeMediaRefForSection(mediaRef, toolCalls),
+  return [...(shot.sourceMediaRefs ?? []), ...(shot.generatedMediaRefs ?? [])].flatMap((mediaRef) =>
+    projectStoryboardMediaRefToCompositeMediaRefForSection(mediaRef, toolCalls),
   );
-  return layeredRefs.length > 0
-    ? layeredRefs
-    : (shot.mediaRefs ?? []).flatMap((mediaRef) =>
-        projectStoryboardMediaRefToCompositeMediaRefForSection(mediaRef, toolCalls),
-      );
 }
 
 function projectStoryboardMediaRefToCompositeMediaRefForSection(
@@ -717,12 +710,9 @@ function hasResolvedCompositeMediaResource(
 function collectExplicitStoryboardMediaRefs(
   shot: StoryboardTable['scenes'][number]['shots'][number],
 ): readonly MediaRef[] {
-  const layeredRefs = [...(shot.sourceMediaRefs ?? []), ...(shot.generatedMediaRefs ?? [])].flatMap(
+  return [...(shot.sourceMediaRefs ?? []), ...(shot.generatedMediaRefs ?? [])].flatMap(
     projectStoryboardMediaRefToCompositeMediaRef,
   );
-  return layeredRefs.length > 0
-    ? layeredRefs
-    : (shot.mediaRefs ?? []).flatMap(projectStoryboardMediaRefToCompositeMediaRef);
 }
 
 function projectStoryboardMediaRefToCompositeMediaRef(
@@ -742,12 +732,9 @@ function projectStoryboardMediaRefToCompositeMediaRef(
 function collectExplicitStoryboardDocumentMediaRefs(
   shot: StoryboardTable['scenes'][number]['shots'][number],
 ): readonly StoryboardMediaRef[] {
-  const layeredRefs = [...(shot.sourceMediaRefs ?? []), ...(shot.generatedMediaRefs ?? [])].filter(
+  return [...(shot.sourceMediaRefs ?? []), ...(shot.generatedMediaRefs ?? [])].filter(
     hasStableDocumentContentLocator,
   );
-  return layeredRefs.length > 0
-    ? layeredRefs
-    : (shot.mediaRefs ?? []).filter(hasStableDocumentContentLocator);
 }
 
 function hasStableDocumentContentLocator(mediaRef: StoryboardMediaRef): boolean {
@@ -1415,7 +1402,7 @@ function readPortableSourcePath(value: string | undefined): string | undefined {
   if (!value) return undefined;
   if (value.startsWith('blob:') || value.startsWith('file:')) return undefined;
   const normalized = value.replace(/\\/g, '/').toLowerCase();
-  if (normalized.includes('/.neko/.cache/')) return undefined;
+  if (normalized.split('/').some((segment) => segment.startsWith('.'))) return undefined;
   if (isAbsolutePath(value)) return undefined;
   return value;
 }

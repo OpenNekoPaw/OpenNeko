@@ -1,10 +1,11 @@
 {
   "name": "@neko/agent-webview",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "exports": {
-    "./root": "./src/root.tsx"
+    "./root": "./src/root.tsx",
+    "./assistant-resources/root": "./src/assistant-resources/root.tsx",
+    "./extension-management/root": "./src/extension-management/root.tsx"
   },
   "scripts": {
     "build": "tsc --noEmit",

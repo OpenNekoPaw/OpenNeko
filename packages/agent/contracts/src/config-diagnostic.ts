@@ -4,9 +4,9 @@ export type AgentConfigDiagnosticCode =
   | 'missingConfig'
   | 'missingProvider'
   | 'missingModel'
-  | 'missingApiKey'
+  | 'missingProviderEndpoint'
   | 'invalidToml'
-  | 'unsupportedVersion'
+  | 'invalidConfigField'
   | 'unsupportedProviderType'
   | 'unsupportedProviderConnectionKind'
   | 'unsupportedProviderProtocolProfile'
@@ -14,25 +14,21 @@ export type AgentConfigDiagnosticCode =
   | 'unsupportedProtocolAuthType'
   | 'unsupportedProtocolStreamFormat'
   | 'unsupportedModelProtocolProfile'
-  | 'unsupportedModelProtocol'
   | 'duplicateProviderId'
   | 'duplicateModelId'
   | 'invalidDefaultMaxTokens'
   | 'invalidModelTokenMetadata'
-  | 'unsupportedProfileSchemaSection'
+  | 'invalidProviderApiKey'
   | 'unsupportedModelType'
-  | 'unsupportedDefaultMediaModelType'
   | 'unsupportedDefaultModelType'
   | 'unsupportedDefaultModelPurpose'
   | 'invalidDefaultModelBinding'
-  | 'unsupportedWorkspaceProviderDefinition'
-  | 'unsupportedWorkspaceModelDefinition'
-  | 'unsupportedSkillSource'
   | 'invalidDefaultProvider'
   | 'invalidDefaultModel';
 
 export interface AgentConfigDiagnostic {
   code: AgentConfigDiagnosticCode;
   filePath: string;
+  path?: string;
   message: string;
 }

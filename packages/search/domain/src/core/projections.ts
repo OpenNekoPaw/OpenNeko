@@ -30,7 +30,6 @@ export interface ProjectGlobalSearchResult {
   readonly query: ProjectGlobalSearchQuery;
   readonly items: readonly ProjectGlobalSearchItem[];
   readonly freshness: ProjectIndexFreshness;
-  readonly generation?: number;
 }
 
 export function toProjectGlobalSearchQuery(query: ProjectGlobalSearchQuery): ProjectSearchQuery {
@@ -51,7 +50,6 @@ export function projectSearchResultToGlobalSearchResult(
     query,
     items: result.items.map(projectSearchItemToGlobalSearchItem),
     freshness: result.freshness,
-    ...(result.generation !== undefined ? { generation: result.generation } : {}),
   };
 }
 

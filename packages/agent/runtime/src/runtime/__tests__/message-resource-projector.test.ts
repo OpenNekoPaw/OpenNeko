@@ -21,9 +21,7 @@ describe('message resource projector', () => {
   });
 
   it('preserves ContentLocator, removes absolute display paths and adds only renderUri', async () => {
-    const resolveContentLocator = vi.fn(
-      async () => 'http://127.0.0.1:43125/v1/resources/image-token',
-    );
+    const resolveContentLocator = vi.fn(async () => 'http://127.0.0.1:43125/resources/image-token');
 
     await expect(
       projectResourceValue(
@@ -40,7 +38,7 @@ describe('message resource projector', () => {
       path: 'images/page-1.jpg',
       mimeType: 'image/jpeg',
       contentLocator,
-      renderUri: 'http://127.0.0.1:43125/v1/resources/image-token',
+      renderUri: 'http://127.0.0.1:43125/resources/image-token',
     });
     expect(resolveContentLocator).toHaveBeenCalledWith(contentLocator, {
       mediaType: 'image/jpeg',
@@ -105,7 +103,7 @@ describe('message resource projector', () => {
     ];
 
     const [projected] = await projectMessagesForResourceDisplay(messages, {
-      resolveContentLocator: async () => 'http://127.0.0.1:43125/v1/resources/image-token',
+      resolveContentLocator: async () => 'http://127.0.0.1:43125/resources/image-token',
     });
     expect(messages[0]?.contentBlocks?.[0]).toEqual({
       id: 'block-1',
@@ -132,7 +130,7 @@ describe('message resource projector', () => {
       contentLocator,
       path: 'images/page-1.jpg',
       mimeType: 'image/jpeg',
-      renderUri: 'http://127.0.0.1:43125/v1/resources/image-token',
+      renderUri: 'http://127.0.0.1:43125/resources/image-token',
     });
     expect(JSON.stringify(projected)).not.toContain('/tmp/page-1.jpg');
   });

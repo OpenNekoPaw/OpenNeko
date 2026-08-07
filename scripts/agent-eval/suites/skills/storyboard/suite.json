@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.suite.v2",
+  "schema": "neko.agent-eval.suite",
   "id": "skill.storyboard",
   "owner": { "kind": "skill", "id": "storyboard" },
   "target": {
@@ -13,7 +13,6 @@
       "fingerprint": "sha256:d49b0a9d7f443b62c3145c7225f9d64db05b5039d3e309bd85154ee8c9be7f3f"
     }
   },
-  "repositoryRevision": "working-tree",
   "runtimeProfiles": [
     {
       "id": "markdown",

@@ -1,13 +1,17 @@
-import { AgentHostMessages } from '../../messages';
+import type { AgentHostMessageSender } from '../../messages';
 import type { MentionItem } from './InputArea/types';
 
-export function submitRoleplayEntrySelection(item: MentionItem, initialUserMessage?: string): void {
+export function submitRoleplayEntrySelection(
+  hostMessages: AgentHostMessageSender,
+  item: MentionItem,
+  initialUserMessage?: string,
+): void {
   const projectSearchItemId = item.navigationData?.projectSearchItemId;
   if (item.navigationData?.candidateId) {
     if (!projectSearchItemId) {
       throw new Error(`Roleplay Candidate "${item.id}" has no stable Project Search identity.`);
     }
-    AgentHostMessages.confirmRoleplayCandidate({
+    hostMessages.confirmRoleplayCandidate({
       projectSearchItemId,
       ...formatInitialUserMessageField(initialUserMessage),
     });
@@ -18,7 +22,7 @@ export function submitRoleplayEntrySelection(item: MentionItem, initialUserMessa
   if (!entityId) {
     throw new Error(`Roleplay Entity "${item.id}" has no stable Entity identity.`);
   }
-  AgentHostMessages.startCharacterDialogueFromSlash(
+  hostMessages.startCharacterDialogueFromSlash(
     `entity:${entityId} --roleplay --skip-enrich${formatInitialRoleplayMessage(initialUserMessage)}`,
   );
 }

@@ -1,14 +1,13 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node-sqlite-local-metadata-store';
-import { migrateLegacyAssetGraph } from './node-entity-asset-projection-migration';
 import {
-  ENTITY_ASSET_PROJECTION_MIGRATIONS,
-  M1_LOCAL_METADATA_MIGRATIONS,
+  initializeEntityAssetProjectionTables,
+  initializeCoreLocalMetadataTables,
 } from '@neko/local-metadata/sqlite';
 
 const temporaryDirectories: string[] = [];
@@ -27,8 +26,8 @@ describe('Entity/Asset projection repository', () => {
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const store = createNodeSqliteLocalMetadataStore({ homedir });
     await store.open({ databasePath, busyTimeoutMs: 1_000 });
-    await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await store.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(store);
+    await initializeEntityAssetProjectionTables(store);
     await store.dispose();
 
     const database = new DatabaseSync(databasePath, { readOnly: true });
@@ -46,16 +45,103 @@ describe('Entity/Asset projection repository', () => {
     expect(names).toEqual(['entity_asset_projections']);
   });
 
+  it('reinitializes stable tables and isolates an invalid projection row', async () => {
+    const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-stable-projections-'));
+    temporaryDirectories.push(homedir);
+    const databasePath = resolveGlobalStorageLayout(homedir).database;
+    const store = createNodeSqliteLocalMetadataStore({ homedir });
+    await store.open({ databasePath, busyTimeoutMs: 1_000 });
+    await initializeCoreLocalMetadataTables(store);
+    await initializeEntityAssetProjectionTables(store);
+    await store.repositories.workspaces.bind({
+      identity: { workspaceId: WORKSPACE_ID },
+      locator: { kind: 'variable', value: '${HOME}/workspace' },
+      seenAt: '2026-07-13T00:00:00.000Z',
+    });
+    const partition = {
+      scope: 'workspace' as const,
+      workspaceId: WORKSPACE_ID,
+      domain: 'entity-asset-projection',
+    };
+    const updatedAt = '2026-07-13T07:00:00.000Z';
+    await store.repositories.entityAssetProjections.replaceSource({
+      partition,
+      sourceId: 'asset-runtime',
+      records: [
+        {
+          projectionId: 'node:asset-rin',
+          kind: 'asset-graph-node',
+          sourceId: 'asset-runtime',
+          freshness: 'fresh',
+          value: { id: 'node:asset-rin', kind: 'asset', refId: 'asset-rin' },
+          updatedAt,
+        },
+      ],
+      updatedAt,
+    });
+    await store.transaction(
+      { mode: 'cache-write', ownership: 'cache', operation: 'seed-invalid-projection-row' },
+      async ({ sql }) => {
+        const rows = await sql.all(
+          `SELECT partition_key, partition_scope, workspace_id
+             FROM entity_asset_projections
+            WHERE projection_id = ?`,
+          ['node:asset-rin'],
+        );
+        const row = rows[0]!;
+        const invalidValue = {
+          projectionId: 'projection:invalid',
+          kind: 'asset-graph-node',
+          sourceId: 'invalid-source',
+          freshness: 'fresh',
+          value: { unexpectedField: true },
+          updatedAt,
+        };
+        await sql.run(
+          `INSERT INTO entity_asset_projections (
+             partition_key, partition_scope, workspace_id, projection_kind, projection_id,
+             source_id, entity_id, related_entity_id, candidate_id, asset_ref, freshness,
+             projection_json, updated_at
+           ) VALUES (?, ?, ?, 'asset-graph-node', ?, ?, NULL, NULL, NULL, NULL, 'fresh', ?, ?)`,
+          [
+            String(row['partition_key']),
+            String(row['partition_scope']),
+            String(row['workspace_id']),
+            invalidValue.projectionId,
+            invalidValue.sourceId,
+            JSON.stringify(invalidValue),
+            updatedAt,
+          ],
+        );
+      },
+    );
+
+    await initializeEntityAssetProjectionTables(store);
+
+    await expect(store.repositories.entityAssetProjections.list({ partition })).resolves.toEqual({
+      records: [
+        expect.objectContaining({ projectionId: 'node:asset-rin', kind: 'asset-graph-node' }),
+      ],
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'invalid-entity-asset-projection',
+          projectionId: 'projection:invalid',
+        }),
+      ]),
+    });
+    await store.dispose();
+  });
+
   it('round-trips typed projections and supports entity and asset reverse lookup', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-asset-projection-'));
     temporaryDirectories.push(homedir);
     const databasePath = resolveGlobalStorageLayout(homedir).database;
     const store = createNodeSqliteLocalMetadataStore({ homedir });
     await store.open({ databasePath, busyTimeoutMs: 1_000 });
-    await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await store.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
+    await initializeCoreLocalMetadataTables(store);
+    await initializeEntityAssetProjectionTables(store);
     await store.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      identity: { workspaceId: WORKSPACE_ID },
       locator: { kind: 'variable', value: '${HOME}/workspace' },
       seenAt: '2026-07-13T00:00:00.000Z',
     });
@@ -136,13 +222,17 @@ describe('Entity/Asset projection repository', () => {
           candidateId: 'candidate:rin-alt',
           freshness: 'fresh',
           value: {
-            id: 'candidate:rin-alt',
+            candidateId: 'candidate:rin-alt',
             kind: 'character',
-            name: 'Rin alt',
-            status: 'open',
-            identityBasis: 'user-named',
-            provenance: [{ providerId: 'story', sourceKind: 'story' }],
-            sourceRefs: [],
+            proposedNames: { canonical: 'Rin alt', aliases: [] },
+            freshness: 'fresh',
+            evidence: [
+              {
+                evidenceId: 'evidence:rin-alt',
+                owner: 'workspace',
+                sourceId: 'entity-runtime',
+              },
+            ],
           },
           updatedAt,
         },
@@ -158,9 +248,10 @@ describe('Entity/Asset projection repository', () => {
             entityKind: 'character',
             representation: { kind: 'workspace-file', path: 'neko/assets/rin.png' },
             role: 'portrait',
-            status: 'confirmed',
-            availability: 'active',
+            owner: 'workspace-file',
+            availability: 'available',
             isDefault: true,
+            checkedAt: updatedAt,
           },
           updatedAt,
         },
@@ -173,21 +264,26 @@ describe('Entity/Asset projection repository', () => {
         partition,
         assetRef: 'project://assets/rin.png',
       }),
-    ).resolves.toEqual([expect.objectContaining({ kind: 'asset-graph-edge' })]);
-    await expect(
-      store.repositories.entityAssetProjections.list({ partition, entityId: 'char_rin' }),
-    ).resolves.toHaveLength(5);
+    ).resolves.toEqual({
+      records: [expect.objectContaining({ kind: 'asset-graph-edge' })],
+      diagnostics: [],
+    });
+    const entityResult = await store.repositories.entityAssetProjections.list({
+      partition,
+      entityId: 'char_rin',
+    });
+    expect(entityResult.records).toHaveLength(5);
+    expect(entityResult.diagnostics).toEqual([]);
     await expect(
       store.repositories.entityAssetProjections.list({
         partition,
         kinds: ['entity-candidate'],
       }),
-    ).resolves.toEqual([
-      expect.objectContaining({ candidateId: 'candidate:rin-alt', kind: 'entity-candidate' }),
-    ]);
-    await expect(store.readPartitionRevision(partition)).resolves.toMatchObject({
-      revision: 1,
-      freshness: 'fresh',
+    ).resolves.toEqual({
+      records: [
+        expect.objectContaining({ candidateId: 'candidate:rin-alt', kind: 'entity-candidate' }),
+      ],
+      diagnostics: [],
     });
     await expect(
       store.repositories.entityAssetProjections.replaceSource({
@@ -213,9 +309,9 @@ describe('Entity/Asset projection repository', () => {
         updatedAt,
       }),
     ).rejects.toMatchObject({ code: 'metadata-transaction-failed' });
-    await expect(
-      store.repositories.entityAssetProjections.list({ partition }),
-    ).resolves.toHaveLength(6);
+    const all = await store.repositories.entityAssetProjections.list({ partition });
+    expect(all.records).toHaveLength(6);
+    expect(all.diagnostics).toEqual([]);
     await expect(
       store.repositories.cacheMaintenance.clearPartition({
         table: 'entity_asset_projections',
@@ -224,164 +320,10 @@ describe('Entity/Asset projection repository', () => {
         updatedAt: '2026-07-13T07:30:00.000Z',
       }),
     ).resolves.toEqual({ deletedRows: 6 });
-    await expect(store.repositories.entityAssetProjections.list({ partition })).resolves.toEqual(
-      [],
-    );
-    await expect(store.readPartitionRevision(partition)).resolves.toMatchObject({
-      freshness: 'stale',
-      diagnostic: 'cache-cleared:rebuild',
+    await expect(store.repositories.entityAssetProjections.list({ partition })).resolves.toEqual({
+      records: [],
+      diagnostics: [],
     });
-
-    await store.dispose();
-  });
-
-  it('backs up and archives a legacy asset graph without overwriting current projections', async () => {
-    const homedir = await mkdtemp(join(tmpdir(), 'neko-asset-graph-migration-'));
-    temporaryDirectories.push(homedir);
-    const assetGraphPath = join(homedir, 'workspace', '.neko', '.cache', 'asset-graph.json');
-    await mkdir(join(homedir, 'workspace', '.neko', '.cache'), { recursive: true });
-    await writeFile(
-      assetGraphPath,
-      JSON.stringify({
-        version: 1,
-        nodes: [
-          { id: 'node:char-rin', kind: 'entity', refId: 'char_rin', label: 'Legacy Rin' },
-          {
-            id: 'asset:rin-portrait',
-            kind: 'asset',
-            refId: 'project://assets/rin.png',
-            label: 'Rin portrait',
-          },
-        ],
-        edges: [
-          {
-            from: 'node:char-rin',
-            to: 'asset:rin-portrait',
-            type: 'bound-to-representation',
-            strength: 'confirmed',
-          },
-        ],
-      }),
-      'utf8',
-    );
-    const databasePath = resolveGlobalStorageLayout(homedir).database;
-    const store = createNodeSqliteLocalMetadataStore({ homedir });
-    await store.open({ databasePath, busyTimeoutMs: 1_000 });
-    await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await store.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
-    await store.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
-      locator: { kind: 'variable', value: '${HOME}/workspace' },
-      seenAt: '2026-07-13T00:00:00.000Z',
-    });
-    const partition = {
-      scope: 'workspace' as const,
-      workspaceId: WORKSPACE_ID,
-      domain: 'entity-asset-projection',
-    };
-    await store.repositories.entityAssetProjections.replaceSource({
-      partition,
-      sourceId: 'entity-runtime',
-      records: [
-        {
-          projectionId: 'node:char-rin',
-          kind: 'asset-graph-node',
-          sourceId: 'entity-runtime',
-          entityId: 'char_rin',
-          freshness: 'fresh',
-          value: {
-            id: 'node:char-rin',
-            kind: 'entity',
-            refId: 'char_rin',
-            label: 'Current Rin',
-          },
-          updatedAt: '2026-07-13T07:00:00.000Z',
-        },
-      ],
-      updatedAt: '2026-07-13T07:00:00.000Z',
-    });
-
-    const report = await migrateLegacyAssetGraph({
-      assetGraphPath,
-      partition,
-      repository: store.repositories.entityAssetProjections,
-      now: () => 1_752_364_800_000,
-    });
-
-    expect(report).toMatchObject({
-      sourceStatus: 'migrated',
-      discoveredCount: 3,
-      importedCount: 2,
-      preservedExistingCount: 1,
-      verifiedCount: 3,
-    });
-    await expect(access(report.backupPath ?? '')).resolves.toBeUndefined();
-    await expect(access(report.archivedPath ?? '')).resolves.toBeUndefined();
-    await expect(access(assetGraphPath)).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(
-      store.repositories.entityAssetProjections.list({
-        partition,
-        kinds: ['asset-graph-node'],
-      }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        projectionId: 'asset:rin-portrait',
-        assetRef: 'project://assets/rin.png',
-      }),
-      expect.objectContaining({
-        projectionId: 'node:char-rin',
-        sourceId: 'entity-runtime',
-        value: expect.objectContaining({ label: 'Current Rin' }),
-      }),
-    ]);
-
-    await store.dispose();
-  });
-
-  it('backs up and quarantines a malformed legacy asset graph without initializing empty success', async () => {
-    const homedir = await mkdtemp(join(tmpdir(), 'neko-asset-graph-quarantine-'));
-    temporaryDirectories.push(homedir);
-    const assetGraphPath = join(homedir, 'workspace', '.neko', '.cache', 'asset-graph.json');
-    await mkdir(join(homedir, 'workspace', '.neko', '.cache'), { recursive: true });
-    await writeFile(assetGraphPath, '', 'utf8');
-    const store = createNodeSqliteLocalMetadataStore({ homedir });
-    await store.open({
-      databasePath: resolveGlobalStorageLayout(homedir).database,
-      busyTimeoutMs: 1_000,
-    });
-    await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await store.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
-    await store.repositories.workspaces.bind({
-      identity: { version: 1, workspaceId: WORKSPACE_ID },
-      locator: { kind: 'variable', value: '${HOME}/workspace' },
-      seenAt: '2026-07-13T00:00:00.000Z',
-    });
-    const partition = {
-      scope: 'workspace' as const,
-      workspaceId: WORKSPACE_ID,
-      domain: 'entity-asset-projection',
-    };
-
-    const report = await migrateLegacyAssetGraph({
-      assetGraphPath,
-      partition,
-      repository: store.repositories.entityAssetProjections,
-      now: () => 1_752_364_800_000,
-    });
-
-    expect(report).toMatchObject({
-      sourceStatus: 'quarantined',
-      importedCount: 0,
-      verifiedCount: 0,
-      sourceDiagnostic: expect.stringContaining('Unexpected end of JSON input'),
-    });
-    await expect(access(report.backupPath ?? '')).resolves.toBeUndefined();
-    await expect(access(report.quarantinePath ?? '')).resolves.toBeUndefined();
-    await expect(access(assetGraphPath)).rejects.toMatchObject({ code: 'ENOENT' });
-    await expect(store.repositories.entityAssetProjections.list({ partition })).resolves.toEqual(
-      [],
-    );
-
     await store.dispose();
   });
 });

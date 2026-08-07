@@ -123,14 +123,11 @@ describe('media generated asset helpers', () => {
   });
 
   it('normalizes generated asset paths through one stable URI helper', () => {
-    expect(toStableGeneratedAssetUri('/repo/.neko/.cache/generated/image.png')).toBe(
+    expect(toStableGeneratedAssetUri('/repo/neko/generated/image/image.png')).toBe(
       'generated-assets/image.png',
     );
-    expect(toStableGeneratedAssetUri('/repo/.neko/.cache/generated/image.png', 'asset-1')).toBe(
+    expect(toStableGeneratedAssetUri('/repo/neko/generated/image/image.png', 'asset-1')).toBe(
       'generated-assets/asset-1.png',
-    );
-    expect(toStableGeneratedAssetUri('/repo/.neko/generated/image.png')).toBe(
-      'generated-assets/image.png',
     );
     expect(toStableGeneratedAssetUri('/tmp/image.png')).toBe('generated-assets/image.png');
   });

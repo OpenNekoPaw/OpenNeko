@@ -69,43 +69,43 @@ describe('Entity project search projections', () => {
     };
     const adapter = createEntitySearchAdapter({
       projectRoot: '/workspace',
-      service: {
-        list: async () => [],
-        listCandidates: async () => [],
-      },
-      automaticCandidateProjection: {
-        partition,
-        readRevision: async () => ({
-          partition,
-          revision: 1,
-          freshness: 'fresh',
-          diagnostic: null,
-          updatedAt: '2026-07-19T00:00:00.000Z',
+      entities: {
+        load: async () => ({
+          projectId: 'project-neko',
+          entities: [],
         }),
+      },
+      derivedProjection: {
+        partition,
         repository: {
-          list: async () => [
-            {
-              projectionId: 'workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
-              kind: 'entity-candidate' as const,
-              sourceId: 'workspace:cases/test.fountain',
-              candidateId: 'candidate:auto:character:小橘',
-              freshness: 'fresh' as const,
-              updatedAt: '2026-07-19T00:00:00.000Z',
-              value: {
-                id: 'candidate:auto:character:小橘',
-                kind: 'character' as const,
-                name: '小橘',
-                aliases: ['橘仔'],
-                status: 'open' as const,
-                identityBasis: 'user-named' as const,
-                provenance: [],
-                sourceRefs: ['${WORKSPACE}/cases/test.fountain'],
-                createdAt: '2026-07-19T00:00:00.000Z',
+          list: async () => ({
+            records: [
+              {
+                projectionId:
+                  'workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
+                kind: 'entity-candidate' as const,
+                sourceId: 'workspace:cases/test.fountain',
+                candidateId: 'candidate:auto:character:小橘',
+                freshness: 'fresh' as const,
                 updatedAt: '2026-07-19T00:00:00.000Z',
-                metadata: { projectionKind: 'automatic-entity-candidate' },
+                value: {
+                  candidateId: 'candidate:auto:character:小橘',
+                  kind: 'character' as const,
+                  proposedNames: { canonical: '小橘', aliases: ['橘仔'] },
+                  freshness: 'fresh' as const,
+                  evidence: [
+                    {
+                      evidenceId: 'evidence:小橘',
+                      owner: 'workspace' as const,
+                      sourceId: 'workspace:cases/test.fountain',
+                      locator: { kind: 'workspace-file' as const, path: 'cases/test.fountain' },
+                    },
+                  ],
+                },
               },
-            },
-          ],
+            ],
+            diagnostics: [],
+          }),
         },
       },
     });
@@ -121,14 +121,14 @@ describe('Entity project search projections', () => {
     );
     expect(projected).toEqual([
       expect.objectContaining({
-        id: 'entity-projection:workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
+        id: 'candidate:candidate:auto:character:小橘',
         kind: 'entity-candidate',
         label: '小橘',
         navigationData: expect.objectContaining({
           candidateId: 'candidate:auto:character:小橘',
-          sourceRef: '${WORKSPACE}/cases/test.fountain',
+          sourceRef: 'workspace:cases/test.fountain',
         }),
-        metadata: expect.objectContaining({ status: 'open' }),
+        metadata: expect.objectContaining({ freshness: 'fresh', evidenceCount: 1 }),
       }),
     ]);
 
@@ -145,4 +145,101 @@ describe('Entity project search projections', () => {
       ),
     ).resolves.toEqual(projected);
   });
+
+  it('projects canonical lifecycle and binding attention from the Entity repository', async () => {
+    const partition = {
+      scope: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      domain: 'entity-asset-projection',
+    };
+    const adapter = createEntitySearchAdapter({
+      projectRoot: '/workspace',
+      entities: {
+        load: async () => ({
+          projectId: 'project-neko',
+          entities: [
+            projectEntity('character-rin', 'Rin', { state: 'active' }, true),
+            projectEntity('location-school', 'School', {
+              state: 'deprecated',
+              deprecatedAt: '2026-07-19T00:00:00.000Z',
+            }),
+          ],
+        }),
+      },
+      derivedProjection: {
+        partition,
+        repository: {
+          list: async () => ({
+            records: [
+              {
+                projectionId: 'availability:rin',
+                kind: 'binding-availability' as const,
+                sourceId: 'binding-owner',
+                entityId: 'character-rin',
+                freshness: 'fresh' as const,
+                updatedAt: '2026-07-19T00:00:00.000Z',
+                value: {
+                  bindingId: 'binding-rin',
+                  entityId: 'character-rin',
+                  entityKind: 'character' as const,
+                  representation: { kind: 'workspace-file' as const, path: 'rin.png' },
+                  role: 'portrait' as const,
+                  owner: 'workspace-file' as const,
+                  availability: 'needs-attention' as const,
+                  attention: {
+                    diagnostic: { code: 'content-missing' as const },
+                    action: 'rebind' as const,
+                  },
+                  checkedAt: '2026-07-19T00:00:00.000Z',
+                },
+              },
+            ],
+            diagnostics: [],
+          }),
+        },
+      },
+    });
+
+    const items = await adapter.query(
+      { text: '', mode: 'entity-picker', partitions: ['creative-entities'] },
+      { projectRoot: '/workspace' },
+    );
+    expect(items.map((item) => [item.id, item.metadata?.['status']])).toEqual([
+      ['entity:character-rin', 'needs-attention'],
+      ['entity:location-school', 'deprecated'],
+    ]);
+    expect(items[0]?.source).toMatchObject({
+      sourceKind: 'project-entity',
+      metadata: { owners: ['project-entity'] },
+    });
+  });
 });
+
+function projectEntity(
+  entityId: string,
+  canonical: string,
+  lifecycle:
+    { readonly state: 'active' } | { readonly state: 'deprecated'; readonly deprecatedAt: string },
+  withBinding = false,
+) {
+  return {
+    entityId,
+    kind: entityId.startsWith('location') ? ('location' as const) : ('character' as const),
+    names: { canonical, aliases: [] },
+    facts: {},
+    representations: withBinding
+      ? [
+          {
+            bindingId: 'binding-rin',
+            role: 'portrait' as const,
+            target: { kind: 'workspace-file' as const, path: 'rin.png' },
+            source: 'user' as const,
+            acceptedAt: '2026-07-19T00:00:00.000Z',
+          },
+        ]
+      : [],
+    lifecycle,
+    createdAt: '2026-07-19T00:00:00.000Z',
+    updatedAt: '2026-07-19T00:00:00.000Z',
+  };
+}

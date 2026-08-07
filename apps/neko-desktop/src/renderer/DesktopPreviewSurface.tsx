@@ -1,6 +1,10 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
-import type { DesktopProjectCatalogItem, DesktopShellProjection } from '@neko/host/desktop-shell-contract';
+import { usePreviewViewerSnapshotStore } from '@neko/preview-webview/presentation-snapshot';
+import type {
+  DesktopProjectCatalogItem,
+  DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
 import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import { createElectronPreviewHostRuntime } from './desktop-preview-host-runtime';
 
@@ -19,6 +23,7 @@ export function DesktopPreviewSurface({
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const { locale, t } = useTranslation();
+  const snapshotStore = usePreviewViewerSnapshotStore();
   const runtime = useMemo(() => {
     if (!view.documentId) {
       throw new Error(`Desktop Preview View '${view.viewId}' has no document identity.`);
@@ -30,21 +35,20 @@ export function DesktopPreviewSurface({
         workspaceId: project.workspaceId,
         windowId: projection.window.windowId,
         viewId: view.viewId,
-        viewEpoch: view.viewEpoch,
+        viewInstanceId: view.viewInstanceId,
         documentId: view.documentId,
         sessionId: view.ownerId,
-        endpointEpoch: projection.endpointEpoch,
-        revision: 0,
+        rendererSessionId: projection.rendererSessionId,
       },
     });
   }, [
     project.projectId,
     project.workspaceId,
-    projection.endpointEpoch,
+    projection.rendererSessionId,
     projection.window.windowId,
     view.documentId,
     view.ownerId,
-    view.viewEpoch,
+    view.viewInstanceId,
     view.viewId,
   ]);
 
@@ -62,7 +66,13 @@ export function DesktopPreviewSurface({
           </div>
         }
       >
-        <PreviewRoot runtime={runtime} locale={locale} />
+        <PreviewRoot
+          chrome="content-only"
+          lifecyclePresentation="active"
+          runtime={runtime}
+          locale={locale}
+          snapshotStore={snapshotStore}
+        />
       </Suspense>
     </section>
   );

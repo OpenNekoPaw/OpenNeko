@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceMarkdownProjectionArtifact,
   type CanvasWorkspaceResourceProjectionArtifact,
@@ -161,7 +160,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
         jobRef: { kind: 'generation', jobId: 'job-1' },
         summary: {
           prompt: 'A silent megastructure under hard light',
-          model: 'image-model-v2',
+          model: 'image-model',
           aspectRatio: '2:3',
           width: 1024,
           height: 1536,
@@ -228,7 +227,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(replay.canvasData.nodes[0]).toMatchObject({ id: existing.id, size: creatorSize });
   });
 
-  it('deduplicates stable resource revisions across deliveries and preserves creator layout', () => {
+  it('deduplicates stable resource fingerprints across deliveries and preserves creator layout', () => {
     const first = planCanvasWorkspaceBoardProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [sourceArtifact('delivery:batch-1')] }),
@@ -278,19 +277,19 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     ]);
   });
 
-  it('treats locator fingerprints as explicit revision preconditions', () => {
+  it('uses locator fingerprints as exact content identities', () => {
     const portablePath = 'neko/assets/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,
       fingerprint: undefined,
-      revision: portablePath,
+      contentFingerprint: portablePath,
     });
     const hashedSource = sourceDocumentArtifact({
       artifactId: 'source-hashed',
       portablePath,
       fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
-      revision: 'sha256:volume-01',
+      contentFingerprint: 'sha256:volume-01',
     });
     const hashed = {
       ...hashedSource,
@@ -317,13 +316,13 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(new Set(plan.nodeIds).size).toBe(2);
   });
 
-  it('does not mutate an existing locator when a new fingerprint revision arrives', () => {
+  it('does not mutate an existing locator when a new content fingerprint arrives', () => {
     const portablePath = 'neko/assets/books/volume-01.epub';
     const weak = sourceDocumentArtifact({
       artifactId: 'source-weak',
       portablePath,
       fingerprint: undefined,
-      revision: portablePath,
+      contentFingerprint: portablePath,
     });
     const first = planCanvasWorkspaceBoardProjection(
       createEmptyCanvasData('Workspace'),
@@ -338,7 +337,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       artifactId: 'source-hashed',
       portablePath,
       fingerprint: { strategy: 'sha256', value: 'sha256:volume-01' },
-      revision: 'sha256:volume-01',
+      contentFingerprint: 'sha256:volume-01',
     });
     const hashed = {
       ...hashedSource,
@@ -358,22 +357,22 @@ describe('planCanvasWorkspaceBoardProjection', () => {
       data: { contentLocator: { kind: 'workspace-file', path: portablePath } },
     });
 
-    const secondRevisionSource = sourceDocumentArtifact({
-      artifactId: 'source-hashed-v2',
+    const changedSource = sourceDocumentArtifact({
+      artifactId: 'source-hashed-changed',
       portablePath,
-      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01-v2' },
-      revision: 'sha256:volume-01-v2',
+      fingerprint: { strategy: 'sha256', value: 'sha256:volume-01-changed' },
+      contentFingerprint: 'sha256:volume-01-changed',
     });
-    const secondRevision = {
-      ...secondRevisionSource,
+    const changed = {
+      ...changedSource,
       provenance: {
-        ...secondRevisionSource.provenance,
+        ...changedSource.provenance,
         deliveryId: 'delivery:batch-3',
       },
     } satisfies CanvasWorkspaceProjectionArtifact;
     const third = planCanvasWorkspaceBoardProjection(
       second.canvasData,
-      request({ deliveryId: 'delivery:batch-3', artifacts: [secondRevision] }),
+      request({ deliveryId: 'delivery:batch-3', artifacts: [changed] }),
     );
 
     expect(third.status).toBe('projected');
@@ -432,7 +431,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(second.canvasData.connections).toHaveLength(2);
   });
 
-  it('creates a distinct content node for a new durable locator revision', () => {
+  it('creates a distinct content node for a changed durable locator fingerprint', () => {
     const first = planCanvasWorkspaceBoardProjection(
       createEmptyCanvasData('Workspace'),
       request({ artifacts: [outputArtifact('delivery:batch-1')] }),
@@ -467,7 +466,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
     const occupied = expected.canvasData.nodes[0]!;
     if (occupied.type !== 'media') throw new Error('Expected a media projection fixture.');
-    const poisoned = {
+    const conflictingCanvas = {
       ...initial,
       nodes: [
         {
@@ -482,11 +481,11 @@ describe('planCanvasWorkspaceBoardProjection', () => {
 
     expect(() =>
       planCanvasWorkspaceBoardProjection(
-        poisoned,
+        conflictingCanvas,
         request({ artifacts: [outputArtifact('delivery:batch-1')] }),
       ),
     ).toThrow('projection-conflict');
-    expect(poisoned.nodes).toHaveLength(1);
+    expect(conflictingCanvas.nodes).toHaveLength(1);
   });
 });
 
@@ -510,7 +509,6 @@ function request(
 ): CanvasWorkspaceProjectionRequest {
   const deliveryId = input.deliveryId ?? 'delivery:batch-1';
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
     process: {
       deliveryId,
@@ -574,7 +572,7 @@ function outputArtifact(
       jobRef: { kind: 'generation', jobId: 'job-1' },
       summary: {
         prompt: 'A silent megastructure under hard light',
-        model: 'image-model-v2',
+        model: 'image-model',
         sourceNodeId: 'shot-node-1',
         aspectRatio: '16:9',
       },
@@ -608,7 +606,7 @@ function sourceDocumentArtifact(input: {
   readonly artifactId: string;
   readonly portablePath: string;
   readonly fingerprint: ContentFingerprint | undefined;
-  readonly revision: string;
+  readonly contentFingerprint: string;
 }): CanvasWorkspaceResourceProjectionArtifact {
   return {
     kind: 'file-reference',
@@ -621,7 +619,7 @@ function sourceDocumentArtifact(input: {
     provenance: provenance(
       'delivery:batch-1',
       input.artifactId,
-      input.revision,
+      input.contentFingerprint,
       'file-reference',
       'source',
     ),
@@ -631,16 +629,15 @@ function sourceDocumentArtifact(input: {
 function provenance(
   deliveryId: string,
   artifactId: string,
-  revision: string,
+  contentFingerprint: string,
   kind: CanvasWorkspaceProjectionArtifact['kind'],
   role: 'source' | 'analysis' | 'output',
   sourceArtifactIds: readonly string[] = [],
 ) {
   return {
-    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     deliveryId,
     artifactId,
-    revision,
+    contentFingerprint,
     kind,
     role,
     sourceId: `artifact:${artifactId}`,
@@ -655,7 +652,6 @@ function generatedOutputLocator(id: string, digest: string): ContentLocator {
   return {
     kind: 'generated-output',
     outputId: id,
-    revision: `rev:${digest}`,
     digest,
     path: `neko/generated/image/${id}.png`,
   };

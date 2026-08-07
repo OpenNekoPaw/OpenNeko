@@ -10,7 +10,13 @@ export * from './agent-capability-activation';
 export * from './agent-context';
 export * from './agent-home';
 export * from './agent-image-transport';
+export * from './agent-launch';
+export * from './agent-launch-host';
 export * from './agent-output-validation';
+export * from './agent-root-presentation';
+export * from './agent-conversation-context';
+export * from './assistant-resource-host';
+export * from './agent-draft-submit';
 export * from './agent-token-budget';
 export * from './creative-ai-invocation';
 export * from './config';
@@ -18,12 +24,12 @@ export * from './desktop-agent-connection';
 export * from './desktop-agent-facts';
 export * from './effective-agent-configuration';
 export * from './extension-catalog';
-export * from './hook';
+export * from './extension-management';
+export * from './extension-management-host';
 export * from './message-attachment';
 export * from './mcp';
 export * from './multimodal-context';
 export * from './perception-tool';
-export * from './project-memory';
 export * from './recovery-guidance';
 export * from './resource-display-projection';
 export * from './tool-group';
@@ -117,22 +123,33 @@ export type {
   AgentHostRouteCoverageAuditInput,
   AgentHostRouteCoverageDiagnostic,
   AgentHostRouteCoverageInput,
+  AgentHostRouteAuthority,
+  AgentHostRouteAuthorityRecord,
+  AgentHostRouteConnectionRequirement,
+  AgentHostRouteDiagnostic,
   AgentHostRouteFutureOwner,
+  AgentHostRouteScopeRequirement,
   AgentHostRouteSupport,
   AgentHostRouteSupportRecord,
   AgentHostRouteUnavailableDiagnostic,
   AgentHostRouteUnavailableSupport,
+  AgentHostWorkspaceScopeRequiredDiagnostic,
+  AgentDraftHostRuntimeAdapter,
   AgentHostRuntimeAdapter,
   AgentHostRuntimeSubscription,
   AgentWebviewToHostMessageType,
   AgentWebviewToHostMessageTypeCoverage,
 } from './agent-host-runtime-adapter';
 export {
+  AGENT_HOST_ROUTE_AUTHORITY,
   ELECTRON_AGENT_HOST_ROUTE_COVERAGE,
   ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS,
+  classifyAgentHostRoute,
   createAgentHostRouteCoverageDiagnostics,
   createAgentHostRouteUnavailableDiagnostic,
+  createAgentHostWorkspaceScopeRequiredDiagnostic,
   createElectronAgentHostRouteUnavailableDiagnostic,
+  requireAgentDraftHostRuntimeAdapter,
 } from './agent-host-runtime-adapter';
 export type { EnabledStateRecord } from './enabled-state';
 
@@ -296,7 +313,6 @@ export {
   EXTERNAL_PROCESSOR_REGISTRY_CHANGE_KINDS,
   EXTERNAL_PROCESSOR_ROOT_ALIASES,
   EXTERNAL_PROCESSOR_SCHEMA,
-  EXTERNAL_PROCESSOR_SCHEMA_VERSION,
   EXTERNAL_PROCESSOR_SOURCE_SCOPES,
   isExternalProcessorRootAlias,
   isExternalProcessorSourceScope,
@@ -422,7 +438,6 @@ export type {
   AgentCapabilityLifecycleResultMessage,
   CompressionErrorMessage,
   CompressionResultMessage,
-  ConfigChangedMessage,
   ConfigStateMessage,
   ConfirmToolWebviewMessage,
   ContextTokenCountMessage,
@@ -512,7 +527,6 @@ export {
   buildAgentCapabilityActivationProgressMessage,
   buildAgentCapabilityLifecycleResultMessage,
   buildAgentSessionDiagnosticMessage,
-  buildConfigChangedMessage,
   buildConfigStateMessage,
   buildErrorMessage,
   buildExternalInputMessage,
@@ -534,8 +548,6 @@ export {
   isSessionMode,
   parseSendMessageWebviewMessage,
   parseAgentWebviewToHostMessage,
-  AGENT_WEBVIEW_PROTOCOL_VERSION,
-  NEKO_AGENT_HOST_MESSAGE_EVENT,
 } from './webview-protocol';
 
 // Builtin slash command metadata shared across runtime + UI surfaces
@@ -560,14 +572,6 @@ export { DEFAULT_SETTINGS } from './settings';
 
 // Agent phase
 export type { AgentPhase, AgentState } from './phase';
-
-// UserPreferences — approval governance input (ADR §9.3)
-export type {
-  UserPreferences,
-  MergedPreferences,
-  PreferenceSubjectRule,
-  PreferenceCostThresholds,
-} from './preferences';
 
 // CapabilityKind — flat capability pool discriminant (ADR §5.1, §5.3)
 export type {
@@ -635,6 +639,7 @@ export * from './agent-capability';
 export * from './agent-observation';
 export * from './agent-profile';
 export * from './agent-runtime-scope';
+export * from './agent-root-presentation';
 export * from './agent-trace';
 export * from './decision-rationale';
 export * from './domain-routing';

@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import { type ContentReadService, type WorkspaceFileContentLocator } from '@neko/content';
 import {
-  PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
   parsePortableMediaLibrarySnapshotPlan,
   parsePortableMediaLibrarySnapshotProgress,
   type PortableMediaLibrarySnapshotPlan,
@@ -30,7 +29,6 @@ import {
 const COPY_CHUNK_BYTE_LENGTH = 8 * 1024 * 1024;
 const EXCLUDED_PROJECT_DIRECTORIES = new Set([
   '.git',
-  '.neko',
   '.turbo',
   '.vite',
   'build',
@@ -69,7 +67,7 @@ export interface PortableMediaLibrarySnapshotResult {
   readonly status: 'completed';
   readonly snapshotId: string;
   readonly workspaceId: string;
-  readonly requirementRevision: string;
+  readonly requirementFingerprint: string;
   readonly metadataDiagnostic?: 'snapshot-checkpoint-unavailable';
 }
 
@@ -149,14 +147,14 @@ export class PortableMediaLibrarySnapshotService {
   async execute(input: {
     readonly workspace: AssetWorkspaceResolution;
     readonly snapshotId: string;
-    readonly expectedOperationRevision: string;
+    readonly expectedOperationFingerprint: string;
     readonly onProgress?: (progress: PortableMediaLibrarySnapshotProgress) => void;
   }): Promise<PortableMediaLibrarySnapshotResult> {
     const plan = this.plans.get(input.snapshotId);
     if (
       !plan ||
       plan.publicPlan.workspaceId !== input.workspace.workspaceId ||
-      plan.publicPlan.operationRevision !== input.expectedOperationRevision
+      plan.publicPlan.operationFingerprint !== input.expectedOperationFingerprint
     ) {
       throw staleSnapshot();
     }
@@ -176,7 +174,7 @@ export class PortableMediaLibrarySnapshotService {
 
       const checkpoint = await binding.readSnapshotCheckpoint(input.snapshotId);
       const checkpointKeys =
-        checkpoint?.requirementRevision === plan.publicPlan.requirementRevision
+        checkpoint?.requirementFingerprint === plan.publicPlan.requirementFingerprint
           ? new Set(checkpoint.completedEntryKeys)
           : new Set<string>();
       const completedKeys: string[] = [];
@@ -200,10 +198,9 @@ export class PortableMediaLibrarySnapshotService {
         try {
           await binding.writeSnapshotCheckpoint(
             {
-              version: PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
               workspaceId: input.workspace.workspaceId,
               snapshotId: input.snapshotId,
-              requirementRevision: plan.publicPlan.requirementRevision,
+              requirementFingerprint: plan.publicPlan.requirementFingerprint,
               completedEntryKeys: completedKeys,
             },
             Date.now(),
@@ -225,6 +222,7 @@ export class PortableMediaLibrarySnapshotService {
       try {
         stagedReferences = await rewriteProjectContentReferences({
           stagedWorkspacePath: plan.stagingPath,
+          projectId: input.workspace.workspaceId,
           replacements: plan.replacements,
         });
       } catch (error: unknown) {
@@ -271,7 +269,7 @@ export class PortableMediaLibrarySnapshotService {
           status: 'completed',
           snapshotId: input.snapshotId,
           workspaceId: input.workspace.workspaceId,
-          requirementRevision: plan.publicPlan.requirementRevision,
+          requirementFingerprint: plan.publicPlan.requirementFingerprint,
           metadataDiagnostic: 'snapshot-checkpoint-unavailable',
         };
       }
@@ -279,7 +277,7 @@ export class PortableMediaLibrarySnapshotService {
         status: 'completed',
         snapshotId: input.snapshotId,
         workspaceId: input.workspace.workspaceId,
-        requirementRevision: plan.publicPlan.requirementRevision,
+        requirementFingerprint: plan.publicPlan.requirementFingerprint,
       };
     } catch (error: unknown) {
       const snapshotError = normalizeSnapshotError(error);
@@ -358,7 +356,10 @@ export class PortableMediaLibrarySnapshotService {
     });
     const [projection, references] = await Promise.all([
       this.options.syncService.inspect(input.workspace),
-      readProjectContentReferences(input.workspace.workspacePath),
+      readProjectContentReferences({
+        workspacePath: input.workspace.workspacePath,
+        projectId: input.workspace.workspaceId,
+      }),
     ]);
     requireSnapshotReady(projection, references);
     const reader = this.createReader(input.workspace.workspacePath);
@@ -382,11 +383,10 @@ export class PortableMediaLibrarySnapshotService {
         };
       });
     const publicPlan = parsePortableMediaLibrarySnapshotPlan({
-      version: PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
       snapshotId: input.snapshotId,
       workspaceId: input.workspace.workspaceId,
-      requirementRevision: references.requirements.revision,
-      operationRevision: projection.operationRevision,
+      requirementFingerprint: references.requirements.fingerprint,
+      operationFingerprint: projection.operationFingerprint,
       entryCount: entries.length,
       totalByteLength,
       libraries,
@@ -424,11 +424,14 @@ export class PortableMediaLibrarySnapshotService {
   ): Promise<void> {
     const [projection, references] = await Promise.all([
       this.options.syncService.inspect(workspace),
-      readProjectContentReferences(workspace.workspacePath),
+      readProjectContentReferences({
+        workspacePath: workspace.workspacePath,
+        projectId: workspace.workspaceId,
+      }),
     ]);
     if (
-      references.requirements.revision !== plan.publicPlan.requirementRevision ||
-      projection.operationRevision !== plan.publicPlan.operationRevision
+      references.requirements.fingerprint !== plan.publicPlan.requirementFingerprint ||
+      projection.operationFingerprint !== plan.publicPlan.operationFingerprint
     ) {
       throw staleSnapshot();
     }
@@ -763,7 +766,7 @@ function requireSnapshotReady(
     );
   }
   if (
-    projection.requirementRevision !== references.requirements.revision ||
+    projection.requirementFingerprint !== references.requirements.fingerprint ||
     projection.statuses.some((status) => status.referenceCount > 0 && status.state !== 'available')
   ) {
     throw new PortableMediaLibrarySnapshotError(
@@ -780,10 +783,9 @@ function taskPayload(
   diagnosticCode?: WorkspaceMediaLibrarySyncDiagnosticCode,
 ) {
   return {
-    version: PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
     workspaceId: plan.publicPlan.workspaceId,
     snapshotId: plan.publicPlan.snapshotId,
-    requirementRevision: plan.publicPlan.requirementRevision,
+    requirementFingerprint: plan.publicPlan.requirementFingerprint,
     status,
     completedEntryCount,
     totalEntryCount: plan.entries.length,
@@ -799,10 +801,9 @@ function progressFor(
   diagnosticCode?: WorkspaceMediaLibrarySyncDiagnosticCode,
 ): PortableMediaLibrarySnapshotProgress {
   return parsePortableMediaLibrarySnapshotProgress({
-    version: PORTABLE_MEDIA_LIBRARY_SNAPSHOT_TASK_VERSION,
     snapshotId: plan.publicPlan.snapshotId,
     workspaceId: plan.publicPlan.workspaceId,
-    requirementRevision: plan.publicPlan.requirementRevision,
+    requirementFingerprint: plan.publicPlan.requirementFingerprint,
     status,
     completedEntryCount,
     totalEntryCount: plan.entries.length,

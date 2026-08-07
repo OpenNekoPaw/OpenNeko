@@ -43,9 +43,9 @@ Desktop renderer
 身份，必须显式映射，不能互相推导。Transcript 只有 Pi Session 一个 authority；SQLite 只保存
 产品 catalog、binding 和恢复所需 metadata，不复制完整消息。
 
-同一 Conversation 同时只允许一个 writer epoch 推进 turn/checkpoint。跨窗口 view 订阅 Main 中
-同一 runtime owner；陈旧 writer、乱序 event 或 identity mismatch 必须失败，不使用全局 active
-conversation 协调。
+同一 Conversation 同时只允许一个 exact session/request owner 推进 turn/checkpoint。跨窗口 view
+订阅 Main 中同一 runtime owner；陈旧 owner、乱序 event 或 identity mismatch 必须失败，不使用全局
+active conversation 协调。
 
 ## Skill 与 Capability
 

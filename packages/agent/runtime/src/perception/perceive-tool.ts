@@ -4,7 +4,6 @@ import {
   TOOL_NAMES_PERCEPTION,
   type PerceiveToolInput,
   type ToolParameters,
-  type ToolExecuteOptions,
   type ToolResult,
 } from '@neko/agent-contracts';
 import type { IPerceptionPipeline } from './contracts';
@@ -52,6 +51,7 @@ export class PerceiveTool extends BuiltinTool {
           timestampMs: { type: 'number' },
         },
         required: ['assetId', 'uri', 'mimeType'],
+        additionalProperties: false,
       },
       options: {
         type: 'object',
@@ -74,7 +74,7 @@ export class PerceiveTool extends BuiltinTool {
     this.now = config.now ?? (() => Date.now());
   }
 
-  async execute(args: Record<string, unknown>, options?: ToolExecuteOptions): Promise<ToolResult> {
+  async execute(args: Record<string, unknown>): Promise<ToolResult> {
     const validation = this.validateArgs(args);
     if (!validation.valid) {
       return this.error(validation.error ?? 'Invalid arguments');
@@ -85,12 +85,9 @@ export class PerceiveTool extends BuiltinTool {
       return this.error('`assetId` must be a non-empty string and `depth` must be 1 or 2');
     }
 
-    if (
-      containsUnderstandingModelOverride(input.options) ||
-      options?.metadata?.understandingModels
-    ) {
+    if (containsUnderstandingModelOverride(input.options)) {
       throw new Error(
-        'legacy-perception-model-override-rejected: Perception model routing is owned by the immutable turn purpose policy.',
+        'perception-model-override-rejected: Perception model routing is owned by the immutable turn purpose policy.',
       );
     }
     const result = await this.pipeline.perceive({
@@ -153,13 +150,18 @@ function readNonEmptyString(value: unknown): string | undefined {
 
 function readPerceptualAssetRef(value: unknown): PerceiveToolInput['ref'] | undefined {
   if (!isRecord(value)) return undefined;
+  if (
+    Object.keys(value).some(
+      (key) =>
+        !['assetId', 'uri', 'mimeType', 'contentLocator', 'label', 'timestampMs'].includes(key),
+    )
+  ) {
+    return undefined;
+  }
   const assetId = readNonEmptyString(value['assetId']);
   const uri = readNonEmptyString(value['uri']);
   const mimeType = readNonEmptyString(value['mimeType']);
   if (!assetId || !uri || !mimeType) {
-    return undefined;
-  }
-  if (value['resourceRef'] !== undefined || value['documentResourceRef'] !== undefined) {
     return undefined;
   }
   const contentLocatorValue = value['contentLocator'];

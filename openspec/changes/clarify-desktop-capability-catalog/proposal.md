@@ -15,7 +15,7 @@ Computer Use 或 MCP 名称也会让用户误以为 Agent 已经可以调用，�
 - Extensions Surface 只投影 OpenNeko marketplace 或 OpenNeko 安装根中的插件；available
   目录还必须通过 Pi SkillHost 或 OpenNeko MCP runtime 支持判定。
 - 可安装插件默认按内容创作相关性、通用生产力和其他类别排序，提供安装、卸载和
-  marketplace 刷新，并通过 revision 防止陈旧操作。
+  marketplace 刷新，并通过 request identity 与 snapshot fingerprint 防止陈旧操作。
 - personal Skill 支持从本地目录安装和移除；plugin Skill 随插件生命周期管理；builtin
   Skill 继续服务 Pi Agent，但不进入扩展管理目录。
 - 已安装插件的 Skill contribution 进入 Pi SkillHost，并携带明确 `pluginId` provenance。

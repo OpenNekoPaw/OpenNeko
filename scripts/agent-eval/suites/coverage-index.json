@@ -1,5 +1,5 @@
 {
-  "schema": "neko.agent-eval.coverage-index.v2",
+  "schema": "neko.agent-eval.coverage-index",
   "targets": [
     { "kind": "builtin-skill", "id": "skill-creator", "disposition": "suite", "suiteIds": ["skill.skill-creator"] },
     { "kind": "builtin-skill", "id": "storyboard", "disposition": "suite", "suiteIds": ["skill.storyboard"] },
@@ -36,22 +36,5 @@
     { "kind": "agent-runtime-capability", "id": "tool-result-delivery", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
     { "kind": "agent-runtime-capability", "id": "desktop-event-projection", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
     { "kind": "agent-runtime-capability", "id": "resource-display-projection", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] }
-  ],
-  "legacyCases": [
-    { "id": "cat-play-image-analysis", "disposition": "migrated", "replacements": [{ "suiteId": "skill.image", "caseId": "generate-image" }, { "suiteId": "agent-runtime.perception-routing", "caseId": "external-perception-when-chat-differs" }, { "suiteId": "agent-runtime.creative-media-workflow", "caseId": "image-quality-feedback-iteration" }] },
-    { "id": "storyboard-distinct-image-video-prompts", "disposition": "migrated", "replacements": [{ "suiteId": "skill.storyboard", "caseId": "canonical-two-shot-storyboard" }] },
-    { "id": "comic-description-canonical-storyboard-skill", "disposition": "migrated", "replacements": [{ "suiteId": "skill.storyboard", "caseId": "comic-description-trigger" }] },
-    { "id": "blame-epub-storyboard-to-canvas", "disposition": "excluded", "reason": "The old case depends on an uncommitted private EPUB and an external workspace Canvas glob; it cannot provide isolated, stable artifact evidence." },
-    { "id": "blame-epub-canonical-storyboard-skill", "disposition": "excluded", "reason": "The private EPUB fixture is unavailable; canonical Storyboard and retired-Skill routing are covered by committed synthetic cases." },
-    { "id": "lamp-god-epub-animation-plan", "disposition": "excluded", "reason": "The private EPUB fixture is unavailable and the old case had no single target owner; generic production planning is covered separately without claiming source-specific acceptance." },
-    { "id": "image-analysis-uses-perception-tool-when-chat-differs", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.perception-routing", "caseId": "external-perception-when-chat-differs" }] },
-    { "id": "image-analysis-uses-native-chat-vision-when-chat-matches-perception", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.perception-routing", "caseId": "native-vision-without-perception-tool" }] },
-    { "id": "explicit-system-skill-creator", "disposition": "migrated", "replacements": [{ "suiteId": "skill.skill-creator", "caseId": "create-portable-skill" }] },
-    { "id": "native-create-project-skill", "disposition": "migrated", "replacements": [{ "suiteId": "skill.skill-creator", "caseId": "create-portable-skill" }] },
-    { "id": "native-create-rejects-invalid-skill", "disposition": "migrated", "replacements": [{ "suiteId": "skill.skill-creator", "caseId": "reject-invalid-skill" }] },
-    { "id": "native-create-rejects-resource-traversal", "disposition": "migrated", "replacements": [{ "suiteId": "skill.skill-creator", "caseId": "reject-resource-traversal" }] },
-    { "id": "native-create-rejects-existing-target", "disposition": "migrated", "replacements": [{ "suiteId": "skill.skill-creator", "caseId": "reject-existing-target" }] },
-    { "id": "stream-tool-text-order-and-final-answer", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.stream-delivery", "caseId": "tool-text-order-final-answer" }] },
-    { "id": "active-stream-cancellation", "disposition": "migrated", "replacements": [{ "suiteId": "agent-runtime.stream-delivery", "caseId": "active-stream-cancellation" }] }
   ]
 }

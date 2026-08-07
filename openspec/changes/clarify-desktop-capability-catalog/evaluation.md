@@ -29,13 +29,13 @@
 - MCP failure case: invalid/unsupported/unconnectable contribution produces a runtime diagnostic,
   registers no Tool and cannot return success.
 - Required evidence: Skill receipt, registered Tool identity, Tool call status, plugin/runtime
-  generation revision, MCP server/tool provenance and zero forbidden fallback counts.
+  runtime instance identity, MCP server/tool provenance and zero forbidden fallback counts.
 
 ## Verification
 
 - Key-free validation: `pnpm test:agent:eval` plus focused suite dry-runs.
 - Deterministic path validation: Pi SkillHost, MCP runtime, Desktop composition and IPC tests with
-  old paths poisoned.
+  old imports/registrations proven absent.
 - Available catalog support filtering is deterministic Main projection, covered by policy tests that
   reject App-only/no-contribution/invalid packages and accept Pi-valid Skill or supported MCP
   packages. It does not substitute for installed plugin Agent routing evidence.
@@ -44,7 +44,7 @@
   Contract, Main and Renderer tests reject builtin Home payloads and omit builtin records,
   diagnostics, duplicate counts, filters and cards, while Desktop Agent composition regressions
   continue to prove builtin discovery through the Agent-owned Pi SkillHost path.
-- Foreign marketplace exclusion is deterministic repository ownership, covered by a poisoned
+- Foreign marketplace exclusion is deterministic repository ownership, covered by path spies and a
   Codex/OpenAI local marketplace fixture that must remain unread and unprojected.
 - Real case: run through the Desktop-owned complete-session driver when available.
 - 2026-07-31 deterministic results:

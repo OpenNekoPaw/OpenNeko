@@ -133,7 +133,9 @@ describe('CharacterDialogueRuntimeService', () => {
       ports: {
         createResponder: asyncResponder('ok'),
         chooseSavePolicy: vi.fn(async () => 'always' as const),
-        saveTranscriptArtifact: vi.fn(async () => ({ path: '.neko/character-tests/lin.json' })),
+        saveTranscriptArtifact: vi.fn(async () => ({
+          path: 'neko/character-validation/lin.json',
+        })),
         confirmSuggestionApply: vi.fn(async () => true),
         applySuggestion: vi.fn(async () => ({ applied: true })),
       },
@@ -169,14 +171,13 @@ describe('CharacterDialogueRuntimeService', () => {
     expect(evaluated.evaluation).toEqual(
       createFallbackCharacterDialogueEvaluationReport(artifact, '2026-06-01T00:00:00.000Z'),
     );
-    expect(saved).toEqual({ path: '.neko/character-tests/lin.json' });
+    expect(saved).toEqual({ path: 'neko/character-validation/lin.json' });
     expect(applied).toEqual({ applied: true });
   });
 
   it('evaluates transcripts through the injected service in runtime', async () => {
     const artifact = makeArtifact();
     const report: NpcEvaluationReport = {
-      version: 1,
       createdAt: '2026-06-01T00:00:00.000Z',
       entityRef,
       summary: 'Lin stayed in character.',
@@ -222,7 +223,6 @@ function asyncResponder(content: string): () => CharacterDialogueResponder {
 
 function makeArtifact(): NpcTranscriptArtifact {
   return {
-    version: 1,
     createdAt: '2026-06-01T00:00:00.000Z',
     entityRef,
     mode: 'roleplay' as const,

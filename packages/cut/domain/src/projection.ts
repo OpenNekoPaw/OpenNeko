@@ -11,7 +11,6 @@ import type { OtioTimeline, OtioTrackKind } from './types';
 export interface TimelineView {
   readonly documentUri: string;
   readonly sessionId: string;
-  readonly revision: number;
   readonly name: string;
   readonly profile?: ReturnType<typeof readProjectProfile>;
   readonly tracks: readonly TimelineTrackView[];
@@ -81,7 +80,6 @@ export function projectTimelineView(input: {
   readonly document: OtioTimeline;
   readonly documentUri: string;
   readonly sessionId: string;
-  readonly revision: number;
 }): TimelineView {
   let maxDuration = 0;
   const tracks = input.document.tracks.children.map((track) => {
@@ -150,7 +148,6 @@ export function projectTimelineView(input: {
   return {
     documentUri: input.documentUri,
     sessionId: input.sessionId,
-    revision: input.revision,
     name: input.document.name,
     ...(profile ? { profile } : {}),
     tracks,

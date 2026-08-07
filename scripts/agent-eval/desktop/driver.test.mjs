@@ -5,7 +5,7 @@ describe('Desktop Agent external driver adapter', () => {
   it('uses only the renderer/preload public Agent bridge for every operation', async () => {
     const evaluate = vi.fn(async () => ({ accepted: true }));
     const driver = createDesktopAgentDriver({ evaluate });
-    await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+    await driver.connect(owner());
     await driver.createConversation();
     await driver.submit({
       conversationId: 'conversation-1',
@@ -31,6 +31,11 @@ describe('Desktop Agent external driver adapter', () => {
     });
     await driver.resume({ conversationId: 'conversation-1' });
     await driver.readProjection('conversation-1');
+    await driver.observeWorkflowStep({
+      conversationId: 'conversation-1',
+      afterEventOffset: 0,
+      timeoutMs: 30_000,
+    });
     await driver.waitForIdle('conversation-1', 30_000);
     await driver.readFacts({
       conversationId: 'conversation-1',
@@ -41,19 +46,23 @@ describe('Desktop Agent external driver adapter', () => {
     await driver.closeApplication();
     await driver.dispose();
 
-    expect(evaluate).toHaveBeenCalledTimes(13);
+    expect(evaluate).toHaveBeenCalledTimes(14);
     const expressions = evaluate.mock.calls.map(([expression]) => expression).join('\n');
     expect(expressions).toContain('window.openNekoDesktop?.agent');
     expect(expressions).toContain("type: 'sendMessage'");
     expect(expressions).toContain('contextPayloads');
     expect(expressions).toContain("type: 'newConversation'");
     expect(expressions).toContain("type: 'confirmTool'");
+    expect(expressions).toContain("type: 'getMessageQueue'");
     expect(expressions).toContain("kind: 'wait-for-idle'");
     expect(expressions).toContain("kind: 'read-facts'");
     expect(expressions).toContain("kind: 'reload-renderer'");
     expect(expressions).toContain("kind: 'close-application'");
+    expect(expressions).toContain('workbenchInstanceId');
+    expect(expressions).toContain('agentSurfaceId');
+    expect(expressions).toContain('execute(state.connection');
     expect(expressions).not.toMatch(
-      /ipcRenderer|DesktopAgentWorkspaceRuntime|PiConversationRuntime|AgentSession/iu,
+      /ipcRenderer|DesktopAgentWorkspaceRuntime|PiConversationRuntime|AgentSession|viewEpoch|rendererEpoch/iu,
     );
   });
 
@@ -70,6 +79,92 @@ describe('Desktop Agent external driver adapter', () => {
     expect(expression).toContain('operation identity was not observed');
   });
 
+  it('fails immediately when submit projects a conversation-scoped error before identity', async () => {
+    let publish;
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: connection('app-1', 'connection-1'),
+          })),
+          subscribe: vi.fn((_connection, listener) => {
+            publish = listener;
+            return () => {};
+          }),
+          send: vi.fn(),
+          automation: { execute: vi.fn() },
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect(owner());
+      await driver.submit({ conversationId: 'conversation-1', prompt: 'hello' });
+      const waiting = driver.waitForIdentity('conversation-1', 0, 1000);
+      await Promise.resolve();
+      publish({
+        type: 'error',
+        conversationId: 'conversation-1',
+        message: 'configured provider is unavailable',
+      });
+      await expect(waiting).rejects.toThrow(
+        'Desktop Agent public projection failed: configured provider is unavailable',
+      );
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
+  it('allows facts only for an identity returned by terminal idle observation', async () => {
+    const identity = {
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+    };
+    const automation = {
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({ status: 'idle', identity })
+        .mockResolvedValueOnce({ status: 'facts', facts: { identity } }),
+    };
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: connection('app-1', 'connection-1'),
+          })),
+          subscribe: vi.fn(() => () => {}),
+          send: vi.fn(),
+          automation,
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect(owner());
+      await expect(driver.readFacts(identity)).rejects.toThrow(
+        'facts identity was not observed at terminal idle',
+      );
+      await driver.waitForIdle(identity.conversationId, 1000);
+      await expect(driver.readFacts(identity)).resolves.toEqual({
+        status: 'facts',
+        facts: { identity },
+      });
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
   it('waits for exact identities and pending Tool confirmation from public projection events', async () => {
     let publish;
     const sent = [];
@@ -79,13 +174,13 @@ describe('Desktop Agent external driver adapter', () => {
         agent: {
           getBootstrap: vi.fn(async () => ({
             status: 'ready',
-            connection: { projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 },
+            connection: connection('app-1', 'connection-1'),
           })),
-          subscribe: vi.fn((listener) => {
+          subscribe: vi.fn((_connection, listener) => {
             publish = listener;
             return () => {};
           }),
-          send: vi.fn((message) => sent.push(message)),
+          send: vi.fn((connection, message) => sent.push({ connection, message })),
         },
       },
     };
@@ -93,7 +188,7 @@ describe('Desktop Agent external driver adapter', () => {
       evaluate: async (expression) => (0, eval)(expression),
     });
     try {
-      await driver.connect({ projectId: 'project-1', viewId: 'view-1', viewEpoch: 1 });
+      await driver.connect(owner());
       const submitted = await driver.submit({
         conversationId: 'conversation-1',
         prompt: 'hello',
@@ -149,7 +244,78 @@ describe('Desktop Agent external driver adapter', () => {
         events: [expect.objectContaining({ type: 'projectionPatch' })],
       });
       expect(sent).toEqual([
-        expect.objectContaining({ type: 'sendMessage', conversationId: 'conversation-1' }),
+        {
+          connection: connection('app-1', 'connection-1'),
+          message: expect.objectContaining({
+            type: 'sendMessage',
+            conversationId: 'conversation-1',
+          }),
+        },
+      ]);
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
+  });
+
+  it('captures queue and transcript snapshots through ordinary public Agent messages', async () => {
+    let publish;
+    const sent = [];
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: connection('app-1', 'connection-1'),
+          })),
+          subscribe: vi.fn((_connection, listener) => {
+            publish = listener;
+            return () => {};
+          }),
+          send: vi.fn((_connection, message) => sent.push(message)),
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect(owner());
+      const queued = await driver.queue({
+        conversationId: 'conversation-1',
+        prompt: 'follow up',
+      });
+      publish({
+        type: 'messageQueued',
+        conversationId: 'conversation-1',
+        snapshot: queueSnapshot(1, 3),
+      });
+      const observed = driver.observeWorkflowStep({
+        conversationId: 'conversation-1',
+        afterEventOffset: queued.eventOffset,
+        timeoutMs: 1000,
+      });
+      await Promise.resolve();
+      publish({
+        type: 'conversationSnapshot',
+        conversation: {
+          id: 'conversation-1',
+          messages: [{ id: 'user-1', role: 'user', content: 'follow up' }],
+        },
+      });
+      publish({ type: 'messageQueueSnapshot', snapshot: queueSnapshot(1, 3) });
+
+      await expect(observed).resolves.toMatchObject({
+        conversationId: 'conversation-1',
+        queued: true,
+        messageQueue: { pendingCount: 1, sequence: 3 },
+        messages: [{ id: 'user-1', role: 'user' }],
+      });
+      expect(sent).toEqual([
+        expect.objectContaining({ type: 'sendMessage' }),
+        { type: 'getConversationSnapshot', conversationId: 'conversation-1' },
+        { type: 'getMessageQueue', conversationId: 'conversation-1' },
       ]);
     } finally {
       await driver.dispose();
@@ -161,8 +327,8 @@ describe('Desktop Agent external driver adapter', () => {
     expect(() => createDesktopAgentDriver({})).toThrow('requires a CDP renderer evaluate function');
   });
 
-  it('reloads, reconnects and restores the exact conversation with an advanced renderer lease', async () => {
-    const next = connection('app-1', 2, 'connection-2');
+  it('reloads, reconnects and restores the exact conversation with a replacement connection', async () => {
+    const next = connection('app-1', 'connection-2');
     const evaluate = vi
       .fn()
       .mockResolvedValueOnce({ status: 'accepted' })
@@ -173,7 +339,7 @@ describe('Desktop Agent external driver adapter', () => {
       });
     const waitForRenderer = vi.fn(async () => undefined);
     const driver = createDesktopAgentDriver({ evaluate, waitForRenderer });
-    const prior = connection('app-1', 1, 'connection-1');
+    const prior = connection('app-1', 'connection-1');
 
     await expect(
       driver.reloadAndRestore({
@@ -182,15 +348,15 @@ describe('Desktop Agent external driver adapter', () => {
         timeoutMs: 1000,
       }),
     ).resolves.toMatchObject({
-      connection: { applicationInstanceId: 'app-1', rendererEpoch: 2 },
+      connection: { applicationInstanceId: 'app-1', connectionId: 'connection-2' },
       snapshot: { id: 'conversation-1' },
     });
     expect(waitForRenderer).toHaveBeenCalledOnce();
   });
 
   it('restarts the application, restores workspace/conversation identity and requires disposal facts', async () => {
-    const prior = connection('app-1', 1, 'connection-1');
-    const next = connection('app-2', 1, 'connection-2');
+    const prior = connection('app-1', 'connection-1');
+    const next = connection('app-2', 'connection-2');
     const evaluate = vi
       .fn()
       .mockResolvedValueOnce({ connection: next })
@@ -222,15 +388,34 @@ describe('Desktop Agent external driver adapter', () => {
   });
 });
 
-function connection(applicationInstanceId, rendererEpoch, connectionId) {
+function owner() {
+  return {
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
+    projectId: 'project-1',
+    viewId: 'view-1',
+  };
+}
+
+function connection(applicationInstanceId, connectionId) {
   return {
     applicationInstanceId,
     windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
     projectId: 'project-1',
     workspaceId: 'workspace-1',
     viewId: 'view-1',
-    viewEpoch: 1,
-    rendererEpoch,
     connectionId,
+  };
+}
+
+function queueSnapshot(pendingCount, sequence) {
+  return {
+    conversationId: 'conversation-1',
+    pendingCount,
+    sequence,
+    pausedAfterCancel: false,
+    items: [],
   };
 }

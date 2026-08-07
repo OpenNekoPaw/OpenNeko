@@ -23,11 +23,11 @@ import type { ForegroundConversationAvailability } from '../../render-lifecycle/
 import type { TabViewportSnapshot } from '../../render-runtime/tab-render-runtime';
 import { CharacterDialogueHeader } from './CharacterDialogueHeader';
 import { EmbodyCharacterHeader } from './EmbodyCharacterHeader';
-import { AgentRunStatus } from './AgentRunStatus';
 import { useTranslation } from '../../i18n/I18nContext';
 import { projectMessageIdentities } from './message-identity';
 import { SubAgentCard } from './SubAgentCard';
 interface ChatViewProps {
+  composerPresentation?: 'default' | 'compact';
   messages: Message[];
   inputValue: string;
   isThinking: boolean;
@@ -84,12 +84,13 @@ interface ChatViewProps {
   focusRequestOwner?: string;
   focusRequestEnabled?: boolean;
   focusRequestTarget?: 'none' | 'input';
-  focusRequestRevision?: number;
+  focusRequestId?: string;
   /** Current agent execution state (null when idle) */
   agentState?: AgentState | null;
 }
 
 export function ChatView({
+  composerPresentation = 'default',
   messages,
   inputValue,
   isThinking,
@@ -132,7 +133,7 @@ export function ChatView({
   focusRequestOwner,
   focusRequestEnabled,
   focusRequestTarget,
-  focusRequestRevision,
+  focusRequestId,
   agentState = null,
 }: ChatViewProps) {
   const { t } = useTranslation();
@@ -204,6 +205,7 @@ export function ChatView({
               <MessageList
                 messages={messages}
                 isThinking={isThinking}
+                agentState={agentState}
                 streamingMessageId={streamingMessageId}
                 activeConversationId={activeConversationId}
                 identities={messageIdentities}
@@ -215,10 +217,9 @@ export function ChatView({
           )}
         </MessageActionsProvider>
 
-        <AgentRunStatus agentState={agentState} />
-
         {/* Input Area */}
         <InputArea
+          composerPresentation={composerPresentation}
           inputValue={inputValue}
           isThinking={isThinking}
           isRunActive={isRunActive}
@@ -250,7 +251,7 @@ export function ChatView({
           focusRequestOwner={focusRequestOwner}
           focusRequestEnabled={focusRequestEnabled}
           focusRequestTarget={focusRequestTarget}
-          focusRequestRevision={focusRequestRevision}
+          focusRequestId={focusRequestId}
         />
       </div>
     </DropZone>

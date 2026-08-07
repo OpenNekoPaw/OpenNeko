@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  RESOURCE_BROWSER_CONTRACT_VERSION,
   createResourceBrowserRecoveryPlanRequest,
   createResourceBrowserSnapshotRequest,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -36,14 +35,14 @@ const identity = {
   workspaceId: 'workspace-1',
   windowId: 'window-1',
   viewId: 'resource-browser:project-view-1',
-  viewEpoch: 1,
-  endpointEpoch: 'application-1:window-1:1',
+  viewInstanceId: 'view-instance-1',
+  rendererSessionId: 'application-1:window-1:1',
 } as const;
 const portabilityIdentity = {
   projectId: identity.projectId,
   workspaceId: identity.workspaceId,
   windowId: identity.windowId,
-  endpointEpoch: identity.endpointEpoch,
+  rendererSessionId: identity.rendererSessionId,
 } as const;
 
 describe('Desktop Resource Browser recovery preload bridge', () => {
@@ -51,15 +50,12 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
     electron.invoke.mockReset();
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        schemaVersion: 1,
         requestId: request.requestId,
         application: {
-          schemaVersion: 1,
           applicationId: 'neko-desktop',
           instanceId: 'application-1',
-          version: '0.0.1',
         },
-        window: { windowId: 'window-1', rendererEpoch: 1 },
+        window: { windowId: 'window-1', rendererSessionId: 'renderer-session-1' },
         host: { id: 'electron', kind: 'electron', ui: 'graphical' },
         runtime: { platform: 'darwin' },
         status: 'foundation-ready',
@@ -79,18 +75,16 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
         }
         if (channel === DESKTOP_RESOURCE_BROWSER_CHANNELS.recoveryPlan) {
           return {
-            schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
             requestId: request.requestId,
             identity,
             resourceId: 'library-1',
             status: 'planned',
             plan: {
-              contractVersion: 1,
               planId: 'media-library-recovery:plan-1',
               workspaceId: identity.workspaceId,
               libraryName: 'Footage',
-              requirementRevision: 'requirements-1',
-              operationRevision: 'sha256:operation',
+              requirementFingerprint: 'requirements-1',
+              operationFingerprint: 'sha256:operation',
               candidate: {
                 kind: 'global-alias',
                 name: 'Footage',
@@ -115,8 +109,7 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
           requestId: 'recover-1',
           identity,
           resourceId: 'library-1',
-          expectedRevision: 0,
-          expectedOperationRevision: 'sha256:operation',
+          expectedOperationFingerprint: 'sha256:operation',
           candidate: 'existing-global',
         }),
       ),
@@ -141,18 +134,16 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
       async (channel: string, request: { readonly requestId: string }) => {
         if (channel === DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet) return projection();
         return {
-          schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
           requestId: request.requestId,
           identity,
           resourceId: 'library-1',
           status: 'planned',
           plan: {
-            contractVersion: 1,
             planId: 'media-library-recovery:plan-1',
             workspaceId: identity.workspaceId,
             libraryName: 'Footage',
-            requirementRevision: 'requirements-1',
-            operationRevision: 'sha256:operation',
+            requirementFingerprint: 'requirements-1',
+            operationFingerprint: 'sha256:operation',
             candidate: {
               kind: 'global-alias',
               name: 'Footage',
@@ -177,8 +168,7 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
           requestId: 'recover-2',
           identity,
           resourceId: 'library-1',
-          expectedRevision: 0,
-          expectedOperationRevision: 'sha256:operation',
+          expectedOperationFingerprint: 'sha256:operation',
           candidate: 'existing-global',
         }),
       ),
@@ -192,16 +182,14 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
           throw new Error(`Unexpected project portability channel '${channel}'.`);
         }
         return {
-          version: 1,
           requestId: request.requestId,
           identity: portabilityIdentity,
           status: 'planned',
           plan: {
-            version: 1,
             snapshotId: 'snapshot-a',
             workspaceId: portabilityIdentity.workspaceId,
-            requirementRevision: 'requirements:abc',
-            operationRevision: 'sha256:abc',
+            requirementFingerprint: 'requirements:abc',
+            operationFingerprint: 'sha256:abc',
             entryCount: 1,
             totalByteLength: 12,
             libraries: [{ libraryName: 'Footage', entryCount: 1, totalByteLength: 12 }],
@@ -230,16 +218,14 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
   it('rejects a target-bearing portable snapshot result from Main', async () => {
     electron.invoke.mockImplementation(
       async (_channel: string, request: { readonly requestId: string }) => ({
-        version: 1,
         requestId: request.requestId,
         identity: portabilityIdentity,
         status: 'planned',
         plan: {
-          version: 1,
           snapshotId: 'snapshot-a',
           workspaceId: portabilityIdentity.workspaceId,
-          requirementRevision: 'requirements:abc',
-          operationRevision: 'sha256:abc',
+          requirementFingerprint: 'requirements:abc',
+          operationFingerprint: 'sha256:abc',
           entryCount: 0,
           totalByteLength: 0,
           libraries: [],
@@ -263,9 +249,7 @@ describe('Desktop Resource Browser recovery preload bridge', () => {
 
 function projection() {
   return {
-    schemaVersion: RESOURCE_BROWSER_CONTRACT_VERSION,
     identity,
-    revision: 0,
     facet: 'media' as const,
     query: '',
     items: [
@@ -284,7 +268,7 @@ function projection() {
           state: 'required-unlinked' as const,
           referenceCount: 1,
           missingCount: 1,
-          operationRevision: 'sha256:operation',
+          operationFingerprint: 'sha256:operation',
         },
       },
     ],

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
-  type ModelPreviewStagingState,
-} from '@neko/preview-domain';
+import type { ModelPreviewStagingState } from '@neko/preview-domain';
 import {
   addModelCamera,
   addModelLight,
@@ -30,7 +27,6 @@ describe('model staging store', () => {
       scale: { x: 1, y: 1, z: 1 },
     });
 
-    expect(state.revision).toBe(5);
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
     expect(state.selectedNodePath).toBe('root/0:mesh');
     expect(state.activeCameraId).toBe('front');
@@ -69,7 +65,6 @@ describe('model staging store', () => {
       'Front',
       'Front copy 2',
     ]);
-    expect(state.revision).toBe(5);
   });
 
   it('adds fixed-position cameras with deterministic identities', () => {
@@ -119,10 +114,8 @@ describe('model staging store', () => {
 
 function initialState(): ModelPreviewStagingState {
   return {
-    schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
     sessionId: 'session-1',
     sourceFingerprint: 'fingerprint-1',
-    revision: 0,
     transformPatches: [],
     cameraPresets: [
       {
