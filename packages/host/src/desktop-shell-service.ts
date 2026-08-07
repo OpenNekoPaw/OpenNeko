@@ -62,7 +62,10 @@ import type { CutHostRuntimeIdentity } from '@neko/cut-domain';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createCutHostSessionId } from '@neko/cut-domain';
 import type { DesktopStartupTargetPreference } from './application-settings-contract';
-import type { DesktopWorkspaceGrantAuthorityPort } from './desktop-workspace-grant-authority';
+import type {
+  DesktopWorkspaceGrantAuthorityPort,
+  DesktopWorkspaceGrantResolution,
+} from './desktop-workspace-grant-authority';
 import type { AgentConversationContext } from '@neko/agent-contracts';
 
 const UNAVAILABLE_DOMAIN_CAPABILITIES: readonly DesktopDomainCapabilityProjection[] = [
@@ -466,48 +469,22 @@ export class DesktopShellService {
             targetProject.workspaceId,
           );
         }
-        const opened = openContentProject(
+        const composed = composeWorkspaceAgentDraft({
           state,
-          request.windowId,
-          resolution.workspace,
-          this.now(),
-          this.createIdentity,
-        );
-        const openedWindow = requireStoredWindow(opened, request.windowId);
-        const project = requireWorkspaceProject(opened, resolution.workspace.workspaceId);
-        const tab = requireProjectTab(openedWindow, project.projectId);
-        const workspaceWorkbench = attachProjectWorkbench(
-          openedWindow.workbench.layout,
-          project,
-          this.createIdentity,
-        );
-        const scene = createWorkspaceAgentScene({
+          windowId: request.windowId,
           current: activeScene,
           draftId:
             activeScene.context.kind === 'agent' && activeScene.context.scope.kind === 'unbound'
               ? activeScene.context.scope.draftId
               : `draft:${this.createIdentity()}`,
-          workspaceGrantId: resolution.workspaceGrantId,
-          workspaceId: resolution.workspace.workspaceId,
-          tab,
-          workbench: workspaceWorkbench,
+          resolution,
+          now: this.now(),
+          createIdentity: this.createIdentity,
         });
-        const next: DesktopShellStoredState = {
-          ...opened,
-          windows: opened.windows.map((candidate) =>
-            candidate.windowId === request.windowId
-              ? putSceneWorkbench({
-                  window: candidate,
-                  scene,
-                  layout: workspaceWorkbench,
-                })
-              : candidate,
-          ),
-        };
         this.assertMutationContext(request.windowId, request.rendererSessionId);
-        const committed = await this.options.stateRepository.commit(next);
+        const committed = await this.options.stateRepository.commit(composed.state);
         await this.emitAll(committed);
-        return { status: 'transitioned', requestId: request.requestId, scene };
+        return { status: 'transitioned', requestId: request.requestId, scene: composed.scene };
       }
       const unavailable = unavailableSceneTransition(request);
       if (unavailable) return unavailable;
@@ -564,6 +541,7 @@ export class DesktopShellService {
     readonly windowId: string;
     readonly rendererSessionId: string;
     readonly agentViewId: string;
+    readonly draftId: string;
     readonly context: AgentConversationContext;
     readonly conversationId: string;
   }): Promise<DesktopWorkbenchSceneProjection> {
@@ -577,12 +555,12 @@ export class DesktopShellService {
       if (
         current.context.kind === 'agent' &&
         current.context.scope.kind !== 'unbound' &&
-        current.context.agentViewId === input.agentViewId &&
+        current.context.scope.draftId === input.draftId &&
         current.context.scope.conversationId === input.conversationId &&
         conversationContextMatchesSceneScope(input.context, current.context.scope) &&
         interaction?.kind === 'agent' &&
         interaction.scope.kind !== 'unbound' &&
-        interaction.agentViewId === input.agentViewId &&
+        interaction.scope.draftId === input.draftId &&
         interaction.phase === 'session' &&
         interaction.scope.conversationId === input.conversationId
       ) {
@@ -591,41 +569,74 @@ export class DesktopShellService {
       if (
         current.context.kind !== 'agent' ||
         current.context.agentViewId !== input.agentViewId ||
+        current.context.scope.draftId !== input.draftId ||
         !interaction ||
         interaction.kind !== 'agent' ||
         interaction.agentViewId !== input.agentViewId ||
+        interaction.scope.draftId !== input.draftId ||
         interaction.phase !== 'draft' ||
         (current.context.scope.kind !== 'unbound' &&
           current.context.scope.conversationId !== undefined) ||
-        (current.context.scope.kind === 'unbound'
-          ? input.context.kind !== 'assistant'
-          : !conversationContextMatchesSceneScope(input.context, current.context.scope))
+        (current.context.scope.kind !== 'unbound' &&
+          !conversationContextMatchesSceneScope(input.context, current.context.scope))
       ) {
         throw new DesktopSceneContractError(
           'desktop-scene-scope-mismatch',
           'Committed Agent Conversation does not match the exact active draft Scene.',
         );
       }
-      const scope =
-        current.context.scope.kind === 'unbound'
-          ? createAssistantConversationScope(
-              current.context.scope.draftId,
-              input.context,
-              input.conversationId,
-            )
-          : { ...current.context.scope, conversationId: input.conversationId };
-      const scene = parseDesktopWorkbenchSceneProjection({
-        ...current,
-        context: { ...current.context, scope },
-        slots: {
-          ...current.slots,
-          interaction: { ...interaction, phase: 'session', scope },
-        },
-      });
+      let nextState = state;
+      let scene: DesktopWorkbenchSceneProjection;
+      if (current.context.scope.kind === 'unbound' && input.context.kind === 'workspace') {
+        const workspaceGrantAuthority = this.options.workspaceGrantAuthority;
+        if (!workspaceGrantAuthority) {
+          throw new DesktopSceneContractError(
+            'desktop-scene-scope-mismatch',
+            'Workspace authority is unavailable for the committed Entry Draft target.',
+          );
+        }
+        const resolution = await workspaceGrantAuthority.resolve(
+          input.windowId,
+          input.context.workspaceGrantId,
+        );
+        if (resolution.workspace.workspaceId !== input.context.workspaceId) {
+          throw new DesktopSceneContractError(
+            'desktop-scene-scope-mismatch',
+            'Committed Agent Workspace grant resolves to another Workspace.',
+          );
+        }
+        const composed = composeWorkspaceAgentDraft({
+          state,
+          windowId: input.windowId,
+          current,
+          draftId: input.draftId,
+          resolution,
+          now: this.now(),
+          createIdentity: this.createIdentity,
+        });
+        nextState = composed.state;
+        scene = attachConversationToDraftScene(composed.scene, input.context, input.conversationId);
+      } else if (current.context.scope.kind === 'unbound') {
+        const scope = createAssistantConversationScope(
+          input.draftId,
+          input.context,
+          input.conversationId,
+        );
+        scene = parseDesktopWorkbenchSceneProjection({
+          ...current,
+          context: { ...current.context, scope },
+          slots: {
+            ...current.slots,
+            interaction: { ...interaction, phase: 'session', scope },
+          },
+        });
+      } else {
+        scene = attachConversationToDraftScene(current, input.context, input.conversationId);
+      }
       this.assertMutationContext(input.windowId, input.rendererSessionId);
       const committed = await this.options.stateRepository.commit({
-        ...state,
-        windows: state.windows.map((candidate) =>
+        ...nextState,
+        windows: nextState.windows.map((candidate) =>
           candidate.windowId === input.windowId
             ? putSceneWorkbench({
                 window: candidate,
@@ -1854,6 +1865,58 @@ function openContentProject(
     windows: state.windows.map((candidate) =>
       candidate.windowId === windowId ? updatedWindow : candidate,
     ),
+  };
+}
+
+function composeWorkspaceAgentDraft(input: {
+  readonly state: DesktopShellStoredState;
+  readonly windowId: string;
+  readonly current: DesktopWorkbenchSceneProjection;
+  readonly draftId: string;
+  readonly resolution: DesktopWorkspaceGrantResolution;
+  readonly now: string;
+  readonly createIdentity: () => string;
+}): {
+  readonly state: DesktopShellStoredState;
+  readonly scene: DesktopWorkbenchSceneProjection;
+} {
+  const opened = openContentProject(
+    input.state,
+    input.windowId,
+    input.resolution.workspace,
+    input.now,
+    input.createIdentity,
+  );
+  const openedWindow = requireStoredWindow(opened, input.windowId);
+  const project = requireWorkspaceProject(opened, input.resolution.workspace.workspaceId);
+  const tab = requireProjectTab(openedWindow, project.projectId);
+  const workspaceWorkbench = attachProjectWorkbench(
+    openedWindow.workbench.layout,
+    project,
+    input.createIdentity,
+  );
+  const scene = createWorkspaceAgentScene({
+    current: input.current,
+    draftId: input.draftId,
+    workspaceGrantId: input.resolution.workspaceGrantId,
+    workspaceId: input.resolution.workspace.workspaceId,
+    tab,
+    workbench: workspaceWorkbench,
+  });
+  return {
+    state: {
+      ...opened,
+      windows: opened.windows.map((candidate) =>
+        candidate.windowId === input.windowId
+          ? putSceneWorkbench({
+              window: candidate,
+              scene,
+              layout: workspaceWorkbench,
+            })
+          : candidate,
+      ),
+    },
+    scene,
   };
 }
 

@@ -29,6 +29,16 @@ describe('DesktopWorkspaceGrantAuthority', () => {
     await expect(authority.resolve('window-2', grant.workspaceGrantId)).rejects.toMatchObject({
       code: 'desktop-workspace-grant-window-mismatch',
     });
+    await expect(
+      authority.resolveAuthorizedWorkspace(grant.workspaceGrantId, 'workspace-1'),
+    ).resolves.toMatchObject({
+      workspaceGrantId: 'workspace-grant:grant-1',
+      windowId: 'window-1',
+      workspace: { workspaceId: 'workspace-1' },
+    });
+    await expect(
+      authority.resolveAuthorizedWorkspace(grant.workspaceGrantId, 'workspace-other'),
+    ).rejects.toMatchObject({ code: 'desktop-workspace-grant-not-found' });
   });
 
   it('rejects revoked and released grants without resolving a fallback Workspace', async () => {
@@ -46,6 +56,9 @@ describe('DesktopWorkspaceGrantAuthority', () => {
     await expect(authority.resolve('window-1', revoked.workspaceGrantId)).rejects.toMatchObject({
       code: 'desktop-workspace-grant-revoked',
     });
+    await expect(
+      authority.resolveAuthorizedWorkspace(revoked.workspaceGrantId, 'workspace-1'),
+    ).rejects.toMatchObject({ code: 'desktop-workspace-grant-revoked' });
     authority.releaseWindow('window-1');
     await expect(authority.resolve('window-1', revoked.workspaceGrantId)).rejects.toMatchObject({
       code: 'desktop-workspace-grant-not-found',

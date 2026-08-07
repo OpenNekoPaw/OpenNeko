@@ -640,3 +640,41 @@ subsequent attempts exceeded the runner's 120-second scenario limit. These attem
 infrastructure failures, not passing evidence. The current process also has no explicit provider,
 model and cost authorization, so no real-provider run was started and no model-quality claim is made.
 Task 12.8 remains open for packaged and authorized real-provider closure.
+
+## Workspace Directory First-Submit Regression
+
+Date: 2026-08-07
+
+The visible Entry composer path initially reproduced the production failure after selecting a
+directory: lifecycle session materialization attempted to resolve the new Workspace through the
+Project catalog before the first-submit Shell commit had created that Project. The materializer now
+resolves the exact live `workspaceGrantId + workspaceId` through the Host grant authority; Project,
+Tab and Workspace Scene composition still occurs only after lifecycle commit and exact conversation
+materialization succeed.
+
+Focused deterministic verification passed:
+
+- Host grant and Shell coverage: `2 files / 52 tests`; full Host: `36 files / 287 tests`.
+- Desktop AppHost: `1 file / 37 tests`; full Desktop: `67 files / 421 tests`.
+- Headless Desktop functional coverage: `11 files / 129 tests`.
+- Agent Contracts `42 files / 263 tests`, Agent Runtime `109 / 984` and Agent Webview `89 / 698`.
+- Desktop and Host TypeScript checks, application boundaries (`1428 files / 0 findings`), legacy
+  debt (`0` blocking), `git diff --check`, strict OpenSpec validation and the Agent Evaluation
+  key-free harness (`44 files / 285 tests`, `22 suites / 52 cases`) passed. Key-free evidence does
+  not represent real-provider acceptance.
+
+The isolated visible development Electron scenario exercised the actual composer controls. Its first
+directory action cancelled without mutation; the second selected `workspace` while preserving the
+same unbound Scene and leaving Project, Tab and Conversation counts at zero. Sending from that exact
+draft created one Project, one Tab and one Conversation, retained the same `draftId`, activated the
+Workspace session with Main and Resources, and made exactly one functional-provider request. The run
+recorded no console errors, warnings, renderer exceptions or poisoned requests:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-07T15-56-00.925Z-workspace-directory-first-submit-regression-development/report.json`
+
+Both captured states were inspected directly. The selected-target Entry remained centered and
+Agent-only; the committed screenshot displayed the exact user message, provider response, Workspace
+Main and Resource Browser. The narrow Workspace Agent composer shows existing dense toolbar
+truncation in the committed screenshot; this fix changes submission ownership rather than layout, so
+that advisory visual issue remains outside this regression. Packaged and explicitly authorized real
+provider coverage remains part of open task 12.8.

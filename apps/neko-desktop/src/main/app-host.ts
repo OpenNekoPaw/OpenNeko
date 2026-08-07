@@ -578,43 +578,70 @@ export class DesktopAppHost {
         }
       } else {
         const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
-        if (
-          scene.context.kind !== 'agent' ||
-          scene.context.scope.draftId !== target.draftId ||
-          scene.context.agentViewId !== connection.viewId ||
-          scene.slots.interaction?.phase !== 'draft'
-        ) {
-          throw new Error('Agent draft submit is not the exact active Draft presentation.');
-        }
-        context = target.context;
-        if (connection.scope.kind === 'unbound') {
+        const isExactActiveDraft =
+          scene.context.kind === 'agent' &&
+          scene.context.scope.draftId === target.draftId &&
+          scene.context.agentViewId === connection.viewId &&
+          scene.slots.interaction?.phase === 'draft';
+        if (isExactActiveDraft) {
+          context = target.context;
+          if (connection.scope.kind === 'unbound') {
+            if (
+              scene.context.kind !== 'agent' ||
+              scene.context.scope.kind !== 'unbound' ||
+              connection.scope.draftId !== target.draftId
+            ) {
+              throw new Error('Agent draft submit is not the exact active Entry Draft.');
+            }
+            if (context.kind !== 'workspace') {
+              throw new Error(
+                'Unbound Entry target must use automatic Assistant or exact Workspace.',
+              );
+            }
+            const resolution = await this.workspaceGrants.resolve(
+              window.windowId,
+              context.workspaceGrantId,
+            );
+            if (resolution.workspace.workspaceId !== context.workspaceId) {
+              throw new Error('Agent Workspace target grant resolves to another Workspace.');
+            }
+            await this.agentLaunch.bindResourceGrants(
+              connection,
+              {
+                kind: 'workspace',
+                workspaceId: context.workspaceId,
+                workspaceGrantId: context.workspaceGrantId,
+              },
+              request.input.resourceGrantIds,
+            );
+          } else if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
+            throw new Error(
+              'Agent draft submit context does not match its launch connection scope.',
+            );
+          }
+        } else {
+          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
+            request.requestId,
+          );
+          const connectionMatchesCommittedDraft =
+            connection.scope.kind === 'unbound'
+              ? connection.scope.draftId === target.draftId
+              : existingRecord !== undefined &&
+                conversationContextMatchesLaunchScope(existingRecord.context, connection.scope);
           if (
-            scene.context.scope.kind !== 'unbound' ||
-            connection.scope.draftId !== target.draftId
+            !existingRecord ||
+            scene.context.kind !== 'agent' ||
+            scene.context.scope.kind === 'unbound' ||
+            scene.context.scope.draftId !== target.draftId ||
+            scene.context.scope.conversationId !== existingRecord.conversationId ||
+            scene.slots.interaction?.phase !== 'session' ||
+            !conversationContextMatchesLaunchScope(existingRecord.context, scene.context.scope) ||
+            !conversationContextMatchesLaunchScope(target.context, scene.context.scope) ||
+            !connectionMatchesCommittedDraft
           ) {
-            throw new Error('Agent draft submit is not the exact active Entry Draft.');
+            throw new Error('Agent draft submit is not the exact active Draft presentation.');
           }
-          if (context.kind !== 'workspace') {
-            throw new Error('Unbound Entry target must use automatic Assistant or exact Workspace.');
-          }
-          const resolution = await this.workspaceGrants.resolve(
-            window.windowId,
-            context.workspaceGrantId,
-          );
-          if (resolution.workspace.workspaceId !== context.workspaceId) {
-            throw new Error('Agent Workspace target grant resolves to another Workspace.');
-          }
-          await this.agentLaunch.bindResourceGrants(
-            connection,
-            {
-              kind: 'workspace',
-              workspaceId: context.workspaceId,
-              workspaceGrantId: context.workspaceGrantId,
-            },
-            request.input.resourceGrantIds,
-          );
-        } else if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
-          throw new Error('Agent draft submit context does not match its launch connection scope.');
+          context = existingRecord.context;
         }
       }
       const record =
@@ -635,6 +662,7 @@ export class DesktopAppHost {
         windowId: window.windowId,
         rendererSessionId: shellProjection.rendererSessionId,
         agentViewId: connection.viewId,
+        draftId: target.draftId,
         context: record.context,
         conversationId: record.conversationId,
       });

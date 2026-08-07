@@ -413,6 +413,7 @@ describe('DesktopShellService', () => {
       windowId,
       rendererSessionId: projection.rendererSessionId,
       agentViewId: bound.scene.context.agentViewId,
+      draftId: bound.scene.context.scope.draftId,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -457,6 +458,7 @@ describe('DesktopShellService', () => {
       windowId,
       rendererSessionId: projection.rendererSessionId,
       agentViewId: siblingBound.scene.context.agentViewId,
+      draftId: siblingBound.scene.context.scope.draftId,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -1267,6 +1269,7 @@ describe('DesktopShellService', () => {
       windowId,
       rendererSessionId: initial.rendererSessionId,
       agentViewId: bound.scene.context.agentViewId,
+      draftId: bound.scene.context.scope.draftId,
       context: {
         kind: 'assistant',
         assistantSpaceId: 'assistant-space:local-user',
@@ -1316,6 +1319,76 @@ describe('DesktopShellService', () => {
     expect(result.scene.context.scope).not.toHaveProperty('conversationId');
     expect(resolve).toHaveBeenCalledWith('/workspace/demo');
     expect(await fixture.service.getSceneProjection(windowId)).not.toEqual(scene);
+  });
+
+  it('commits an unbound Entry Draft directly into its exact Workspace session', async () => {
+    const workspace: AssetWorkspaceResolution = {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      workspacePath: '/workspace/demo',
+      displayName: 'Demo',
+      locator: { kind: 'variable', value: '${HOME}/workspace/demo' },
+    };
+    const resolve = vi.fn(async () => workspace);
+    const authority = new DesktopWorkspaceGrantAuthority({
+      resolver: { resolve },
+      createIdentity: () => 'entry-workspace-grant',
+    });
+    const fixture = createFixture(undefined, 'home', authority);
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await fixture.service.getProjection(windowId);
+    const entryScene = activeScene(initial.window);
+    if (entryScene.context.kind !== 'agent' || entryScene.context.scope.kind !== 'unbound') {
+      throw new Error('Workspace first-submit fixture requires an unbound Entry Draft.');
+    }
+    const grant = authority.authorize({
+      windowId,
+      label: workspace.displayName,
+      hostResource: workspace.workspacePath,
+    });
+    const input = {
+      windowId,
+      rendererSessionId: initial.rendererSessionId,
+      agentViewId: entryScene.context.agentViewId,
+      draftId: entryScene.context.scope.draftId,
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: grant.workspaceGrantId,
+      },
+      conversationId: 'conversation:entry-workspace',
+    };
+
+    const attached = await fixture.service.attachAgentConversation(input);
+    expect(attached).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'workspace',
+          draftId: entryScene.context.scope.draftId,
+          workspaceId: workspace.workspaceId,
+          workspaceGrantId: grant.workspaceGrantId,
+          conversationId: input.conversationId,
+        },
+      },
+      slots: {
+        interaction: { phase: 'session' },
+        main: { kind: 'workspace-main', workspaceId: workspace.workspaceId },
+        rightManager: { kind: 'workspace-resources', workspaceId: workspace.workspaceId },
+      },
+    });
+    const committed = await fixture.service.getProjection(windowId);
+    expect(committed.window.activeTarget).toMatchObject({ kind: 'project' });
+    expect(committed.catalog.projects).toHaveLength(1);
+    expect(committed.window.tabs).toHaveLength(1);
+    expect(resolve).toHaveBeenCalledOnce();
+
+    await expect(fixture.service.attachAgentConversation(input)).resolves.toEqual(attached);
+    expect(resolve).toHaveBeenCalledOnce();
+    await expect(
+      fixture.service.attachAgentConversation({ ...input, draftId: 'draft:stale' }),
+    ).rejects.toMatchObject({ code: 'desktop-scene-scope-mismatch' });
+    expect(await fixture.service.getSceneProjection(windowId)).toEqual(attached);
   });
 
   it('treats the active Workspace Project Draft as an idempotent Scene transition', async () => {
@@ -1509,6 +1582,7 @@ describe('DesktopShellService', () => {
       windowId,
       rendererSessionId: draftProjection.rendererSessionId,
       agentViewId: result.scene.context.agentViewId,
+      draftId: result.scene.context.scope.draftId,
       context: {
         kind: 'workspace',
         workspaceId: project.workspaceId,

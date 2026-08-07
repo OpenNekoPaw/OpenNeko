@@ -337,77 +337,56 @@ describe('DesktopAppHost', () => {
     const afterSelection = await fixture.appHost.shell.getProjection(fixture.windowId);
     expect(activeScene(afterSelection)).toEqual(initialScene);
     expect(afterSelection.agentHome.conversations).toHaveLength(initialConversationCount);
-    const transition = await fixture.appHost.transitionScene(
-      fixture.sender,
-      createDesktopSceneTransitionRequest({
-        requestId: 'workspace-transition-1',
-        rendererSessionId: fixture.projection.rendererSessionId,
-        windowId: fixture.windowId,
-        sceneId: initialScene.sceneId,
-        intent: { kind: 'open-workspace', workspaceGrantId: selected.grant.workspaceGrantId },
-      }),
-    );
-    expect(transition).toMatchObject({
-      status: 'transitioned',
-      scene: {
-        context: {
-          kind: 'agent',
-          scope: { kind: 'workspace', workspaceId: 'workspace-explicit' },
-        },
-        slots: { interaction: { phase: 'draft' } },
-      },
-    });
+    expect(afterSelection.catalog.projects).toHaveLength(0);
+    expect(afterSelection.window.tabs).toHaveLength(0);
     expect(fixture.registry.resolve).toHaveBeenCalledWith('/Users/fixture/demo');
-    expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
-
-    const workspaceProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
-    const workspaceWorkbench = activeWorkbench(workspaceProjection);
-    const workspaceScene = workspaceWorkbench.scene;
-    if (
-      workspaceScene.context.kind !== 'agent' ||
-      workspaceScene.context.scope.kind !== 'workspace'
-    ) {
-      throw new Error('Expected an exact Workspace-bound Agent draft.');
+    if (initialScene.context.kind !== 'agent' || initialScene.context.scope.kind !== 'unbound') {
+      throw new Error('Expected the exact unbound Entry Draft to remain active.');
     }
-    const workspaceConnection = createLaunchCatalog({
+    const entryConnection = createLaunchCatalog({
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
-      workbenchInstanceId: workspaceWorkbench.workbenchInstanceId,
-      agentSurfaceId: currentAgentSurfaceId(workspaceProjection),
-      viewId: workspaceScene.context.agentViewId,
-      connectionId: 'launch-workspace-1',
-      scope: {
-        kind: 'workspace',
-        workspaceId: workspaceScene.context.scope.workspaceId,
-        workspaceGrantId: workspaceScene.context.scope.workspaceGrantId,
-      },
+      workbenchInstanceId: activeWorkbench(afterSelection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(afterSelection),
+      viewId: initialScene.context.agentViewId,
+      connectionId: 'launch-entry-workspace-1',
+      scope: { kind: 'unbound', draftId: initialScene.context.scope.draftId },
     }).connection;
-    await expect(
-      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
-        requestId: 'workspace-first-submit-1',
-        operation: 'submit-draft',
-        connection: workspaceConnection,
-        input: {
-          target: {
-            kind: 'bound-context',
-            draftId: workspaceScene.context.scope.draftId,
-            context: {
-              kind: 'workspace',
-              workspaceId: workspaceScene.context.scope.workspaceId,
-              workspaceGrantId: workspaceScene.context.scope.workspaceGrantId,
-            },
+    const transitionScene = vi.spyOn(fixture.appHost.shell, 'transitionScene');
+    const submitRequest = {
+      requestId: 'workspace-first-submit-1',
+      operation: 'submit-draft' as const,
+      connection: entryConnection,
+      input: {
+        target: {
+          kind: 'bound-context' as const,
+          draftId: initialScene.context.scope.draftId,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: resolution.workspaceId,
+            workspaceGrantId: selected.grant.workspaceGrantId,
           },
-          messageText: 'Continue in the selected workspace',
-          resourceGrantIds: [],
-          configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
         },
-      }),
+        messageText: 'Continue in the selected workspace',
+        resourceGrantIds: [],
+        configuration: {
+          providerId: 'openai',
+          modelId: 'gpt-5',
+          executionMode: 'ask' as const,
+        },
+      },
+    };
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, submitRequest),
     ).resolves.toMatchObject({ status: 'committed' });
-    expect(await fixture.appHost.shell.getSceneProjection(fixture.windowId)).toMatchObject({
+    expect(transitionScene).not.toHaveBeenCalled();
+    const workspaceSessionProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    expect(activeScene(workspaceSessionProjection)).toMatchObject({
       context: {
         kind: 'agent',
         scope: {
           kind: 'workspace',
+          draftId: initialScene.context.scope.draftId,
           workspaceId: 'workspace-explicit',
           workspaceGrantId: selected.grant.workspaceGrantId,
           conversationId: expect.stringMatching(/^conversation:/),
@@ -415,7 +394,15 @@ describe('DesktopAppHost', () => {
       },
       slots: { interaction: { phase: 'session' } },
     });
-    const workspaceSessionProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    expect(workspaceSessionProjection.catalog.projects).toHaveLength(1);
+    expect(workspaceSessionProjection.window.tabs).toHaveLength(1);
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, submitRequest),
+    ).resolves.toMatchObject({ status: 'committed' });
+    const replayedProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    expect(replayedProjection.catalog.projects).toHaveLength(1);
+    expect(replayedProjection.window.tabs).toHaveLength(1);
+    expect(activeScene(replayedProjection)).toEqual(activeScene(workspaceSessionProjection));
     const workspaceConversationCount = workspaceSessionProjection.agentHome.conversations.length;
     const workspaceDraft = await fixture.appHost.transitionScene(
       fixture.sender,
@@ -737,17 +724,14 @@ describe('DesktopAppHost', () => {
     });
     expect(providerStart).toHaveBeenCalledOnce();
     const sendAgentMessage = vi.spyOn(fixture.appHost.agentBridge, 'send');
-    const assistantConversationCount = (
-      await fixture.appHost.shell.getProjection(fixture.windowId)
-    ).agentHome.conversations.length;
+    const assistantConversationCount = (await fixture.appHost.shell.getProjection(fixture.windowId))
+      .agentHome.conversations.length;
     await expect(
       fixture.appHost.sendAgentMessage(
         fixture.sender,
-        createDesktopAgentMessageRequest(
-          'assistant-new-conversation',
-          bootstrap.connection,
-          { type: 'newConversation' },
-        ),
+        createDesktopAgentMessageRequest('assistant-new-conversation', bootstrap.connection, {
+          type: 'newConversation',
+        }),
       ),
     ).resolves.toEqual({ requestId: 'assistant-new-conversation', status: 'accepted' });
     expect(sendAgentMessage).not.toHaveBeenCalled();

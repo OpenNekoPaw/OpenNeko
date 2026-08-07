@@ -1008,7 +1008,12 @@ async function startDesktop(): Promise<void> {
       ? agentComposition.attachWorkspace(assistantWorkspace)
       : (agentComposition.getWorkspace(context.workspaceId) ??
         (await agentComposition.attachWorkspace(
-          await shellService.resolveAgentWorkspace(context.workspaceId),
+          (
+            await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+              context.workspaceGrantId,
+              context.workspaceId,
+            )
+          ).workspace,
         )));
   const conversationLifecycle = createAgentConversationLifecycleService({
     repository: createPersistentAgentConversationLifecycleRepository({
