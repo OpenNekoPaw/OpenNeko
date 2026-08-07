@@ -12,6 +12,9 @@ const APPLICATION_NAVIGATION_BUTTON_SELECTOR =
 const VISUAL_SETTLE_MILLISECONDS = 1_000;
 const PROJECT_SIDEBAR_WORKSPACE_ID = '11111111-2222-4333-8444-555555555555';
 const PROJECT_SIDEBAR_CONVERSATION_ID = 'conversation:project-sidebar-history';
+const PROJECT_SIDEBAR_CLEANUP_WORKSPACE_ID = '66666666-7777-4888-8999-aaaaaaaaaaaa';
+const PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID =
+  'conversation:project-sidebar-cleanup-history';
 
 export const desktopWorkbenchScenesScenario = Object.freeze({
   id: 'desktop-workbench-scenes',
@@ -545,12 +548,22 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
   owner: '@neko/app-desktop',
   async prepare(context) {
     const prepared = await desktopWorkbenchScenesScenario.prepare(context);
-    await mkdir(join(prepared.workspacePath, 'neko'), { recursive: true });
-    await writeFile(
-      join(prepared.workspacePath, 'neko', 'project.json'),
-      `${JSON.stringify({ workspaceId: PROJECT_SIDEBAR_WORKSPACE_ID }, null, 2)}\n`,
-      'utf8',
-    );
+    await Promise.all([
+      mkdir(join(prepared.workspacePath, 'neko'), { recursive: true }),
+      mkdir(join(prepared.secondaryWorkspacePath, 'neko'), { recursive: true }),
+    ]);
+    await Promise.all([
+      writeFile(
+        join(prepared.workspacePath, 'neko', 'project.json'),
+        `${JSON.stringify({ workspaceId: PROJECT_SIDEBAR_WORKSPACE_ID }, null, 2)}\n`,
+        'utf8',
+      ),
+      writeFile(
+        join(prepared.secondaryWorkspacePath, 'neko', 'project.json'),
+        `${JSON.stringify({ workspaceId: PROJECT_SIDEBAR_CLEANUP_WORKSPACE_ID }, null, 2)}\n`,
+        'utf8',
+      ),
+    ]);
     const sqlite = await import('node:sqlite');
     const database = new sqlite.DatabaseSync(join(context.fixtureHome, '.neko', 'neko.db'));
     try {
@@ -564,19 +577,25 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
           updated_at TEXT NOT NULL
         );
       `);
-      database
-        .prepare(
-          `INSERT INTO pi_conversations (
-             workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
-           ) VALUES (?, ?, ?, 'branch-main', ?, ?)`,
-        )
-        .run(
-          PROJECT_SIDEBAR_WORKSPACE_ID,
-          PROJECT_SIDEBAR_CONVERSATION_ID,
-          'Project sidebar history',
-          '2026-08-07T00:00:00.000Z',
-          '2026-08-07T00:00:00.000Z',
-        );
+      const insertConversation = database.prepare(
+        `INSERT INTO pi_conversations (
+           workspace_id, conversation_id, title, active_branch_id, created_at, updated_at
+         ) VALUES (?, ?, ?, 'branch-main', ?, ?)`,
+      );
+      insertConversation.run(
+        PROJECT_SIDEBAR_WORKSPACE_ID,
+        PROJECT_SIDEBAR_CONVERSATION_ID,
+        'Project sidebar retained history',
+        '2026-08-07T00:00:00.000Z',
+        '2026-08-07T00:00:00.000Z',
+      );
+      insertConversation.run(
+        PROJECT_SIDEBAR_CLEANUP_WORKSPACE_ID,
+        PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID,
+        'Project sidebar cleanup history',
+        '2026-08-07T00:01:00.000Z',
+        '2026-08-07T00:01:00.000Z',
+      );
     } finally {
       database.close();
     }
@@ -586,19 +605,37 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
     await resizeWindow(evaluate, 1200, 800);
     await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
     const cancellation = await assertFixtureWorkspaceCancellation(evaluate);
-    const activation = await chooseFixtureWorkspaceWithHistory(evaluate);
+    const retentionActivation = await chooseFixtureWorkspaceWithHistory(
+      evaluate,
+      PROJECT_SIDEBAR_WORKSPACE_ID,
+      PROJECT_SIDEBAR_CONVERSATION_ID,
+    );
+    const cleanupActivation = await chooseFixtureWorkspaceWithHistory(
+      evaluate,
+      PROJECT_SIDEBAR_CLEANUP_WORKSPACE_ID,
+      PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID,
+    );
     await waitForSelector('.desktop-scene-workbench--workspace');
     await inspectActivatedWorkspaceAgent(evaluate);
-    const management = await exerciseProjectConversationGroup({
+    const management = await exerciseProjectConversationGroups({
       click,
+      cleanup: {
+        ...cleanupActivation,
+        conversationId: PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID,
+      },
       evaluate,
-      projectId: activation.projectId,
+      retention: {
+        ...retentionActivation,
+        conversationId: PROJECT_SIDEBAR_CONVERSATION_ID,
+      },
       screenshot,
-      workspaceId: activation.workspaceId,
     });
-    await access(join(prepared.workspacePath, 'preview.png'));
+    await Promise.all([
+      access(join(prepared.workspacePath, 'preview.png')),
+      access(join(prepared.secondaryWorkspacePath, 'secondary-preview.png')),
+    ]);
     const evidence = {
-      activation,
+      activations: { cleanup: cleanupActivation, retention: retentionActivation },
       cancellation,
       management,
       projectFilesRetained: true,
@@ -606,7 +643,7 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
     checkpoint('project-sidebar-management', evidence);
     return {
       ...evidence,
-      screenshots: [management.screenshot],
+      screenshots: management.screenshots,
     };
   },
 });
@@ -800,49 +837,64 @@ async function inspectRendererResidency(evaluate, measureRendererResources) {
   return { presentation, renderer };
 }
 
-async function exerciseProjectConversationGroup({
+async function exerciseProjectConversationGroups({
+  cleanup,
   click,
   evaluate,
-  projectId,
+  retention,
   screenshot,
-  workspaceId,
 }) {
-  const groupSelector = `.primary-conversation-group[data-group-id=${JSON.stringify(
-    `project:${projectId}`,
+  const retentionGroupSelector = `.primary-conversation-group[data-group-id=${JSON.stringify(
+    `project:${retention.projectId}`,
+  )}]`;
+  const cleanupGroupSelector = `.primary-conversation-group[data-group-id=${JSON.stringify(
+    `project:${cleanup.projectId}`,
   )}]`;
   await waitForCondition(
     evaluate,
     `(async () => {
       const projection = await window.openNekoDesktop.shell.getSnapshot();
-      const group = projection.conversationNavigation.groups.find(
+      const retentionGroup = projection.conversationNavigation.groups.find(
         (candidate) => candidate.kind === 'project' &&
-          candidate.projectId === ${JSON.stringify(projectId)},
+          candidate.projectId === ${JSON.stringify(retention.projectId)},
       );
-      const root = document.querySelector(${JSON.stringify(groupSelector)});
-      return group?.conversations.length === 1 &&
-        group.conversations[0]?.navigation.conversationId === ${JSON.stringify(PROJECT_SIDEBAR_CONVERSATION_ID)} &&
-        root?.querySelectorAll('.primary-recent-conversation-row').length === 1;
+      const cleanupGroup = projection.conversationNavigation.groups.find(
+        (candidate) => candidate.kind === 'project' &&
+          candidate.projectId === ${JSON.stringify(cleanup.projectId)},
+      );
+      const retentionRoot = document.querySelector(${JSON.stringify(retentionGroupSelector)});
+      const cleanupRoot = document.querySelector(${JSON.stringify(cleanupGroupSelector)});
+      return retentionGroup?.conversations.length === 1 &&
+        retentionGroup.conversations[0]?.navigation.conversationId === ${JSON.stringify(retention.conversationId)} &&
+        cleanupGroup?.conversations.length === 1 &&
+        cleanupGroup.conversations[0]?.navigation.conversationId === ${JSON.stringify(cleanup.conversationId)} &&
+        retentionRoot?.querySelectorAll('.primary-recent-conversation-row').length === 1 &&
+        cleanupRoot?.querySelectorAll('.primary-recent-conversation-row').length === 1;
     })()`,
-    'Persisted Project conversation did not render in its exact sidebar group.',
+    'Persisted Project conversations did not render in their exact sidebar groups.',
   );
   const initial = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     const groupProjection = projection.conversationNavigation.groups.find(
       (candidate) => candidate.kind === 'project' &&
-        candidate.projectId === ${JSON.stringify(projectId)},
+        candidate.projectId === ${JSON.stringify(retention.projectId)},
     );
-    const group = document.querySelector(${JSON.stringify(groupSelector)});
+    const group = document.querySelector(${JSON.stringify(retentionGroupSelector)});
     const header = group?.querySelector('.primary-conversation-group__header');
     const collapse = header?.querySelector('.primary-conversation-group__collapse');
     const open = header?.querySelector('.primary-conversation-group__project-link');
     const count = header?.querySelector('.primary-conversation-group__count');
     const create = header?.querySelector('.primary-navigation-state button');
-    const deletion = header?.querySelector(':scope > button:last-child');
+    const cleanupButton = header?.querySelector(':scope > button:nth-last-child(2)');
+    const removalButton = header?.querySelector(':scope > button:last-child');
     const conversationStatus = group?.querySelector(
       '.primary-recent-conversation-row > .primary-navigation-state .primary-navigation-unavailable',
     );
     const openRect = open?.getBoundingClientRect();
     const stateRect = create?.getBoundingClientRect();
+    const cleanupRect = cleanupButton?.getBoundingClientRect();
+    const removalRect = removalButton?.getBoundingClientRect();
+    const headerRect = header?.getBoundingClientRect();
     return {
       conversationId: groupProjection?.conversations[0]?.navigation.conversationId,
       conversationCount: groupProjection?.conversations.length ?? -1,
@@ -850,11 +902,20 @@ async function exerciseProjectConversationGroup({
       collapseEnabled: collapse instanceof HTMLButtonElement && !collapse.disabled,
       openEnabled: open instanceof HTMLButtonElement && !open.disabled,
       createEnabled: create instanceof HTMLButtonElement && !create.disabled,
-      deletionEnabled: deletion instanceof HTMLButtonElement && !deletion.disabled,
+      cleanupEnabled: cleanupButton instanceof HTMLButtonElement && !cleanupButton.disabled,
+      removalEnabled: removalButton instanceof HTMLButtonElement && !removalButton.disabled,
       conversationUnavailableTrailing: conversationStatus instanceof HTMLElement,
       countText: count?.textContent?.trim() ?? '',
       trailingTrackDoesNotOverlap:
-        openRect !== undefined && stateRect !== undefined && stateRect.left >= openRect.right,
+        openRect !== undefined &&
+        stateRect !== undefined &&
+        cleanupRect !== undefined &&
+        removalRect !== undefined &&
+        headerRect !== undefined &&
+        stateRect.left >= openRect.right &&
+        cleanupRect.left >= stateRect.right &&
+        removalRect.left >= cleanupRect.right &&
+        removalRect.right <= headerRect.right,
     };
   })()`);
   if (
@@ -864,7 +925,8 @@ async function exerciseProjectConversationGroup({
     !initial.collapseEnabled ||
     !initial.openEnabled ||
     !initial.createEnabled ||
-    !initial.deletionEnabled ||
+    !initial.cleanupEnabled ||
+    !initial.removalEnabled ||
     !initial.conversationUnavailableTrailing ||
     initial.countText !== '1' ||
     !initial.trailingTrackDoesNotOverlap
@@ -872,59 +934,126 @@ async function exerciseProjectConversationGroup({
     throw new Error(`Project sidebar controls are incorrect: ${JSON.stringify(initial)}`);
   }
 
-  await click(`${groupSelector} .primary-conversation-group__collapse`);
+  await click(`${retentionGroupSelector} .primary-conversation-group__collapse`);
   await waitForCondition(
     evaluate,
     `(() => {
-      const group = document.querySelector(${JSON.stringify(groupSelector)});
+      const group = document.querySelector(${JSON.stringify(retentionGroupSelector)});
       const toggle = group?.querySelector('.primary-conversation-group__collapse');
       return toggle?.getAttribute('aria-expanded') === 'false' &&
         group?.querySelectorAll('.primary-recent-conversation-row').length === 0;
     })()`,
     'Project conversation group did not collapse.',
   );
-  await click(`${groupSelector} .primary-conversation-group__collapse`);
+  await click(`${retentionGroupSelector} .primary-conversation-group__collapse`);
   await waitForCondition(
     evaluate,
     `(() => {
-      const group = document.querySelector(${JSON.stringify(groupSelector)});
+      const group = document.querySelector(${JSON.stringify(retentionGroupSelector)});
       const toggle = group?.querySelector('.primary-conversation-group__collapse');
       return toggle?.getAttribute('aria-expanded') === 'true' &&
         group?.querySelectorAll('.primary-recent-conversation-row').length === 1;
     })()`,
     'Project conversation group did not expand.',
   );
-  const groupScreenshot = await captureSettledScreenshot(
+  const desktopScreenshot = await captureSettledScreenshot(
     screenshot,
-    'project-sidebar-group-expanded',
+    'project-sidebar-groups-expanded-desktop',
   );
 
-  await click(`${groupSelector} .primary-conversation-group__project-link`);
-  await waitForProjectDraft(evaluate, projectId, workspaceId, 'Project open');
-  await click(`${groupSelector} .primary-navigation-state button`);
-  await waitForProjectDraft(evaluate, projectId, workspaceId, 'New conversation');
+  await resizeWindow(evaluate, 960, 640);
+  const compactLayout = await evaluate(`(() => {
+    const groups = [
+      document.querySelector(${JSON.stringify(retentionGroupSelector)}),
+      document.querySelector(${JSON.stringify(cleanupGroupSelector)}),
+    ];
+    return groups.map((group) => {
+      const header = group?.querySelector('.primary-conversation-group__header');
+      const buttons = [...(header?.querySelectorAll(':scope > button') ?? [])];
+      const headerRect = header?.getBoundingClientRect();
+      return {
+        buttonCount: buttons.length,
+        fits:
+          headerRect !== undefined &&
+          buttons.every((button) => {
+            const rectangle = button.getBoundingClientRect();
+            return rectangle.left >= headerRect.left && rectangle.right <= headerRect.right;
+          }),
+      };
+    });
+  })()`);
+  if (
+    compactLayout.length !== 2 ||
+    compactLayout.some((group) => group.buttonCount !== 4 || !group.fits)
+  ) {
+    throw new Error(`Compact Project sidebar controls overflow: ${JSON.stringify(compactLayout)}`);
+  }
+  const compactScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-groups-expanded-compact',
+  );
+  await resizeWindow(evaluate, 1200, 800);
+
+  await click(`${retentionGroupSelector} .primary-conversation-group__project-link`);
+  await waitForProjectDraft(
+    evaluate,
+    retention.projectId,
+    retention.workspaceId,
+    'Project open',
+  );
+  await click(`${retentionGroupSelector} .primary-navigation-state button`);
+  await waitForProjectDraft(
+    evaluate,
+    retention.projectId,
+    retention.workspaceId,
+    'New conversation',
+  );
   await waitForCondition(
     evaluate,
     `(() => {
-      const group = document.querySelector(${JSON.stringify(groupSelector)});
-      const deletion = group?.querySelector(
-        '.primary-conversation-group__header > button:last-child',
-      );
-      return deletion instanceof HTMLButtonElement && !deletion.disabled;
+      const removal = document.querySelector(${JSON.stringify(
+        `${retentionGroupSelector} .primary-conversation-group__header > button:last-child`,
+      )});
+      return removal instanceof HTMLButtonElement && !removal.disabled;
     })()`,
-    'Project sidebar deletion control did not become interactive after draft transition.',
+    'Project sidebar removal control did not become interactive after draft transition.',
   );
+
+  const removalCancellation = await evaluate(`(async () => {
+    globalThis.confirm = () => false;
+    const group = document.querySelector(${JSON.stringify(retentionGroupSelector)});
+    const removal = group?.querySelector(
+      '.primary-conversation-group__header > button:last-child',
+    );
+    if (!(removal instanceof HTMLButtonElement) || removal.disabled) {
+      throw new Error('Project sidebar removal control is unavailable.');
+    }
+    removal.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    return {
+      projectPresent: projection.catalog.projects.some(
+        (project) => project.projectId === ${JSON.stringify(retention.projectId)},
+      ),
+      conversationPresent: projection.agentHome.conversations.some(
+        (conversation) =>
+          conversation.navigation.conversationId === ${JSON.stringify(retention.conversationId)},
+      ),
+    };
+  })()`);
+  if (!removalCancellation.projectPresent || !removalCancellation.conversationPresent) {
+    throw new Error('Cancelled Project removal changed Project or conversation state.');
+  }
 
   await evaluate(`(() => {
     globalThis.confirm = () => true;
-    const group = document.querySelector(${JSON.stringify(groupSelector)});
-    const deletion = group?.querySelector(
-      '.primary-conversation-group__header > button:last-child',
-    );
-    if (!(deletion instanceof HTMLButtonElement) || deletion.disabled) {
-      throw new Error('Project sidebar deletion control is unavailable.');
+    const removal = document.querySelector(${JSON.stringify(
+      `${retentionGroupSelector} .primary-conversation-group__header > button:last-child`,
+    )});
+    if (!(removal instanceof HTMLButtonElement) || removal.disabled) {
+      throw new Error('Project sidebar removal control is unavailable.');
     }
-    deletion.click();
+    removal.click();
     return true;
   })()`);
   await waitForCondition(
@@ -932,30 +1061,152 @@ async function exerciseProjectConversationGroup({
     `(async () => {
       const projection = await window.openNekoDesktop.shell.getSnapshot();
       return !projection.catalog.projects.some(
-        (project) => project.projectId === ${JSON.stringify(projectId)},
-      ) && !projection.agentHome.conversations.some(
+        (project) => project.projectId === ${JSON.stringify(retention.projectId)},
+      ) && projection.agentHome.conversations.some(
         (conversation) =>
-          conversation.navigation.conversationId === ${JSON.stringify(initial.conversationId)},
+          conversation.navigation.conversationId === ${JSON.stringify(retention.conversationId)},
       ) && !projection.conversationNavigation.groups.some(
-        (group) => group.kind === 'project' && group.projectId === ${JSON.stringify(projectId)},
-      ) && document.querySelector(${JSON.stringify(groupSelector)}) === null;
+        (group) => group.kind === 'project' && group.projectId === ${JSON.stringify(retention.projectId)},
+      ) && projection.conversationNavigation.groups.some(
+        (group) => group.kind === 'workspace' &&
+          group.workspaceId === ${JSON.stringify(retention.workspaceId)} &&
+          group.conversations.some(
+            (conversation) =>
+              conversation.navigation.conversationId === ${JSON.stringify(retention.conversationId)},
+          ),
+      ) && document.querySelector(${JSON.stringify(retentionGroupSelector)}) === null;
     })()`,
-    'Project sidebar deletion did not remove the Project group and its conversations.',
+    'Project removal did not retain its conversation under an unavailable Workspace group.',
   );
-  const deleted = await evaluate(`(async () => {
+  const removed = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const unavailableGroup = projection.conversationNavigation.groups.find(
+      (group) => group.kind === 'workspace' &&
+        group.workspaceId === ${JSON.stringify(retention.workspaceId)},
+    );
     return {
       projectPresent: projection.catalog.projects.some(
-        (project) => project.projectId === ${JSON.stringify(projectId)},
+        (project) => project.projectId === ${JSON.stringify(retention.projectId)},
       ),
       conversationPresent: projection.agentHome.conversations.some(
         (conversation) =>
-          conversation.navigation.conversationId === ${JSON.stringify(initial.conversationId)},
+          conversation.navigation.conversationId === ${JSON.stringify(retention.conversationId)},
       ),
-      groupPresent: document.querySelector(${JSON.stringify(groupSelector)}) !== null,
+      projectGroupPresent:
+        document.querySelector(${JSON.stringify(retentionGroupSelector)}) !== null,
+      unavailableMessage: unavailableGroup?.message ?? '',
     };
   })()`);
-  return { initial, deleted, screenshot: groupScreenshot };
+  const unavailableScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-removed-workspace-unavailable',
+  );
+
+  const cleanupCancellation = await evaluate(`(async () => {
+    globalThis.confirm = () => false;
+    const cleanupButton = document.querySelector(${JSON.stringify(
+      `${cleanupGroupSelector} .primary-conversation-group__header > button:nth-last-child(2)`,
+    )});
+    if (!(cleanupButton instanceof HTMLButtonElement) || cleanupButton.disabled) {
+      throw new Error('Project conversation cleanup control is unavailable.');
+    }
+    cleanupButton.click();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    return {
+      projectPresent: projection.catalog.projects.some(
+        (project) => project.projectId === ${JSON.stringify(cleanup.projectId)},
+      ),
+      conversationPresent: projection.agentHome.conversations.some(
+        (conversation) =>
+          conversation.navigation.conversationId === ${JSON.stringify(cleanup.conversationId)},
+      ),
+    };
+  })()`);
+  if (!cleanupCancellation.projectPresent || !cleanupCancellation.conversationPresent) {
+    throw new Error('Cancelled Project conversation cleanup changed durable state.');
+  }
+
+  await evaluate(`(() => {
+    globalThis.confirm = () => true;
+    const cleanupButton = document.querySelector(${JSON.stringify(
+      `${cleanupGroupSelector} .primary-conversation-group__header > button:nth-last-child(2)`,
+    )});
+    if (!(cleanupButton instanceof HTMLButtonElement) || cleanupButton.disabled) {
+      throw new Error('Project conversation cleanup control is unavailable.');
+    }
+    cleanupButton.click();
+    return true;
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      return projection.catalog.projects.some(
+        (project) => project.projectId === ${JSON.stringify(cleanup.projectId)},
+      ) && !projection.agentHome.conversations.some(
+        (conversation) =>
+          conversation.navigation.conversationId === ${JSON.stringify(cleanup.conversationId)},
+      ) && !projection.conversationNavigation.groups.some(
+        (group) => group.kind === 'project' && group.projectId === ${JSON.stringify(cleanup.projectId)},
+      ) && document.querySelector(${JSON.stringify(cleanupGroupSelector)}) === null;
+    })()`,
+    'Project conversation cleanup did not preserve the Project while removing exact history.',
+  );
+  const cleaned = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    return {
+      projectPresent: projection.catalog.projects.some(
+        (project) => project.projectId === ${JSON.stringify(cleanup.projectId)},
+      ),
+      conversationPresent: projection.agentHome.conversations.some(
+        (conversation) =>
+          conversation.navigation.conversationId === ${JSON.stringify(cleanup.conversationId)},
+      ),
+      projectGroupPresent:
+        document.querySelector(${JSON.stringify(cleanupGroupSelector)}) !== null,
+    };
+  })()`);
+  await clickApplicationNavigation(evaluate, click, 3);
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const root = document.querySelector('.project-management-catalog');
+      const rows = [...(root?.querySelectorAll('.management-surface-row') ?? [])];
+      const retainedProject = rows.find((row) =>
+        row.querySelector('.management-surface-row__select')?.getAttribute('aria-label')?.includes(
+          ${JSON.stringify(cleanup.projectId)},
+        ),
+      ) ?? rows[0];
+      const actions = retainedProject?.querySelectorAll(
+        '.management-surface-row-actions button',
+      );
+      const cleanupButton = actions?.[1];
+      const removalButton = actions?.[2];
+      return rows.length === 1 &&
+        cleanupButton instanceof HTMLButtonElement && cleanupButton.disabled &&
+        removalButton instanceof HTMLButtonElement && !removalButton.disabled;
+    })()`,
+    'Project catalog did not retain the cleaned Project with cleanup disabled.',
+  );
+  const cleanedScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-catalog-conversations-cleaned-project-retained',
+  );
+  return {
+    cleaned,
+    cleanupCancellation,
+    compactLayout,
+    initial,
+    removalCancellation,
+    removed,
+    screenshots: [
+      desktopScreenshot,
+      compactScreenshot,
+      unavailableScreenshot,
+      cleanedScreenshot,
+    ],
+  };
 }
 
 async function waitForProjectDraft(evaluate, projectId, workspaceId, action) {
@@ -1089,7 +1340,7 @@ async function chooseFixtureWorkspace(evaluate) {
   })()`);
 }
 
-async function chooseFixtureWorkspaceWithHistory(evaluate) {
+async function chooseFixtureWorkspaceWithHistory(evaluate, expectedWorkspaceId, conversationId) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('projection')}
@@ -1119,9 +1370,9 @@ async function chooseFixtureWorkspaceWithHistory(evaluate) {
       (candidate) => candidate.kind === 'project' && candidate.projectId === project?.projectId,
     );
     if (
-      transition.scene.context.scope.workspaceId !== ${JSON.stringify(PROJECT_SIDEBAR_WORKSPACE_ID)} ||
+      transition.scene.context.scope.workspaceId !== ${JSON.stringify(expectedWorkspaceId)} ||
       !project ||
-      group?.conversations[0]?.navigation.conversationId !== ${JSON.stringify(PROJECT_SIDEBAR_CONVERSATION_ID)}
+      group?.conversations[0]?.navigation.conversationId !== ${JSON.stringify(conversationId)}
     ) {
       throw new Error('Workspace history did not attach to the exact Project group.');
     }

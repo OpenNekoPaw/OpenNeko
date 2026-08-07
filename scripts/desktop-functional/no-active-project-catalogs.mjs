@@ -270,40 +270,28 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     );
     checkpoint('unavailable-conversation-cleanup-complete', { removed: true });
 
-    const primaryProject = await evaluate(`(async () => {
-      const group = [...document.querySelectorAll('.primary-conversation-group[data-group-kind="project"]')]
-        .find((candidate) => candidate.querySelector('.primary-conversation-group__header')
-          ?.textContent?.includes('missing-project'));
-      const open = group?.querySelector('.primary-conversation-group__header .home-project-link');
-      const cleanup = group?.querySelector(
-        '.primary-conversation-group__header > button:last-child',
-      );
-      const before = await window.openNekoDesktop.shell.getSnapshot();
-      if (open instanceof HTMLButtonElement) open.click();
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      const after = await window.openNekoDesktop.shell.getSnapshot();
+    const primaryProjects = await evaluate(`(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
       return {
-        visible: group instanceof HTMLElement,
-        itemDiagnostic:
-          group?.querySelector(
-            '.primary-conversation-group__header > .primary-navigation-state .primary-navigation-unavailable',
-          )?.textContent?.trim() ?? '',
-        openDisabled: open instanceof HTMLButtonElement && open.disabled,
-        cleanupEnabled: cleanup instanceof HTMLButtonElement && !cleanup.disabled,
-        sceneUnchanged:
-          JSON.stringify(before.window.workbench) === JSON.stringify(after.window.workbench),
+        catalogProjectPresent: projection.catalog.projects.some(
+          (project) => project.displayName === 'missing-project',
+        ),
+        conversationGroupCount:
+          document.querySelectorAll('.primary-conversation-group').length,
+        projectGroupCount:
+          document.querySelectorAll(
+            '.primary-conversation-group[data-group-kind="project"]',
+          ).length,
       };
     })()`);
     if (
-      !primaryProject.visible ||
-      !primaryProject.openDisabled ||
-      !primaryProject.cleanupEnabled ||
-      !primaryProject.sceneUnchanged ||
-      !primaryProject.itemDiagnostic
+      !primaryProjects.catalogProjectPresent ||
+      primaryProjects.conversationGroupCount !== 0 ||
+      primaryProjects.projectGroupCount !== 0
     ) {
-      throw new Error('Unavailable Project primary navigation is not visible and inert.');
+      throw new Error('PrimarySidebar mirrored a Project without conversations.');
     }
-    checkpoint('unavailable-project-primary-navigation-visible', primaryProject);
+    checkpoint('empty-project-primary-navigation-absent', primaryProjects);
 
     await clickNavigation(evaluate, 3);
     await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
@@ -406,7 +394,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       const list = root?.querySelector('.management-surface-list');
       const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
       const open = finalRow?.querySelector('.management-surface-row-actions button:first-child');
-      const deletion = finalRow?.querySelector(
+      const removal = finalRow?.querySelector(
         '.management-surface-row-actions button:last-child',
       );
       return {
@@ -416,7 +404,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         toolbarTop: toolbar instanceof HTMLElement ? toolbar.getBoundingClientRect().top : -1,
         diagnostic: finalRow?.querySelector('.management-surface-row__diagnostic')?.textContent?.trim() ?? '',
         openDisabled: open instanceof HTMLButtonElement && open.disabled,
-        deletionEnabled: deletion instanceof HTMLButtonElement && !deletion.disabled,
+        removalEnabled: removal instanceof HTMLButtonElement && !removal.disabled,
       };
     })()`);
     if (
@@ -425,7 +413,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       Math.abs(scrollAfter.toolbarTop - scrollBefore.toolbarTop) > 1 ||
       !scrollAfter.diagnostic ||
       !scrollAfter.openDisabled ||
-      !scrollAfter.deletionEnabled
+      !scrollAfter.removalEnabled
     ) {
       throw new Error('Project catalog scrolling moved controls or hid unavailable-item actions.');
     }
@@ -570,8 +558,11 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       const toolbar = root.querySelector('.project-management-batch-toolbar');
       const toolbarRect = toolbar?.getBoundingClientRect();
       const rootRect = root.getBoundingClientRect();
-      const deletion = [...(toolbar?.querySelectorAll('button') ?? [])].find((button) =>
-        /^(Delete selected|删除所选项目)$/u.test(button.textContent?.trim() ?? ''),
+      const removal = [...(toolbar?.querySelectorAll('button') ?? [])].find((button) =>
+        /^(Remove selected|移除所选项目)$/u.test(button.textContent?.trim() ?? ''),
+      );
+      const cleanup = [...(toolbar?.querySelectorAll('button') ?? [])].find((button) =>
+        /^(Delete conversations|删除项目会话)$/u.test(button.textContent?.trim() ?? ''),
       );
       return {
         selectedCount: root.querySelectorAll('.management-surface-row[data-selected="true"]').length,
@@ -579,7 +570,8 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         toolbarText: toolbar?.textContent?.trim() ?? '',
         toolbarFits:
           toolbarRect !== undefined && toolbarRect.left >= rootRect.left && toolbarRect.right <= rootRect.right,
-        deletionEnabled: deletion instanceof HTMLButtonElement && !deletion.disabled,
+        cleanupDisabled: cleanup instanceof HTMLButtonElement && cleanup.disabled,
+        removalEnabled: removal instanceof HTMLButtonElement && !removal.disabled,
       };
     })()`);
     if (
@@ -587,7 +579,8 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       !batchSelection.toolbarVisible ||
       !batchSelection.toolbarText ||
       !batchSelection.toolbarFits ||
-      !batchSelection.deletionEnabled
+      !batchSelection.cleanupDisabled ||
+      !batchSelection.removalEnabled
     ) {
       throw new Error(
         `Unavailable Project batch selection is incorrect: ${JSON.stringify(batchSelection)}`,
@@ -598,17 +591,17 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
 
     const batchCancellation = await evaluate(`(async () => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const deletion = [
+      const removal = [
         ...(root?.querySelectorAll('.project-management-batch-toolbar button') ?? []),
       ].find((button) =>
-        /^(Delete selected|删除所选项目)$/u.test(button.textContent?.trim() ?? ''),
+        /^(Remove selected|移除所选项目)$/u.test(button.textContent?.trim() ?? ''),
       );
       const rowsBefore = root?.querySelectorAll('.management-surface-row').length ?? 0;
       globalThis.confirm = () => false;
-      if (!(deletion instanceof HTMLButtonElement)) {
-        throw new Error('Project batch deletion is unavailable.');
+      if (!(removal instanceof HTMLButtonElement)) {
+        throw new Error('Project batch removal is unavailable.');
       }
-      deletion.click();
+      removal.click();
       await new Promise((resolve) => setTimeout(resolve, 100));
       return {
         rowsBefore,
@@ -621,22 +614,22 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       batchCancellation.rowsBefore !== batchCancellation.rowsAfter ||
       batchCancellation.selectedAfter !== 2
     ) {
-      throw new Error('Cancelled unavailable Project batch deletion changed catalog state.');
+      throw new Error('Cancelled unavailable Project batch removal changed catalog state.');
     }
     checkpoint('project-catalog-batch-cancelled', batchCancellation);
 
     await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
-      const deletion = [
+      const removal = [
         ...(root?.querySelectorAll('.project-management-batch-toolbar button') ?? []),
       ].find((button) =>
-        /^(Delete selected|删除所选项目)$/u.test(button.textContent?.trim() ?? ''),
+        /^(Remove selected|移除所选项目)$/u.test(button.textContent?.trim() ?? ''),
       );
       globalThis.confirm = () => true;
-      if (!(deletion instanceof HTMLButtonElement)) {
-        throw new Error('Project batch deletion is unavailable.');
+      if (!(removal instanceof HTMLButtonElement)) {
+        throw new Error('Project batch removal is unavailable.');
       }
-      deletion.click();
+      removal.click();
       return true;
     })()`);
     await waitForCondition(
@@ -647,7 +640,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
           SCROLL_PROJECT_COUNT - 1,
         )} && root.querySelector('.project-management-batch-toolbar') === null;
       })()`,
-      'Confirmed Project batch deletion did not delete exactly two selected records.',
+      'Confirmed Project batch removal did not remove exactly two selected records.',
     );
     const batchRemoval = await evaluate(`(() => {
       const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
@@ -784,7 +777,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     checkpoint('retained-asset-membership-visible', asset);
     return {
       conversation,
-      primaryProject,
+      primaryProjects,
       project,
       asset,
       startupNotice,
