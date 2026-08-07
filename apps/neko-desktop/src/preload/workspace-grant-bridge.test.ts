@@ -5,10 +5,7 @@ import {
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
 } from '@neko/host/desktop-scene-contract';
-import {
-  createDesktopWorkbenchInstanceFromScene,
-  parseDesktopWindowWorkbenchCatalog,
-} from '@neko/host/desktop-workbench-instance-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -122,9 +119,8 @@ describe('Desktop Workspace grant preload bridge', () => {
 
 function shellProjection() {
   const scene = createDefaultDesktopAgentScene('window-1', 'assistant-space:default');
-  const workbench = createDesktopWorkbenchInstanceFromScene({
+  const workbench = createDesktopWindowComposition({
     workbenchInstanceId: 'workbench:window-1:entry',
-    agentSurfaceId: 'agent-surface:window-1:entry',
     layout: createDefaultDesktopWorkbenchLayout('window-1'),
     scene,
   });
@@ -136,11 +132,7 @@ function shellProjection() {
       windowId: 'window-1',
       activeTarget: { kind: 'home' as const },
       tabs: [],
-      workbenches: parseDesktopWindowWorkbenchCatalog({
-        windowId: 'window-1',
-        activeWorkbenchInstanceId: workbench.workbenchInstanceId,
-        instances: [workbench],
-      }),
+      workbench,
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome: {

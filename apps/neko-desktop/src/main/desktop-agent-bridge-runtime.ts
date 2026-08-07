@@ -21,7 +21,7 @@ import {
   DESKTOP_AGENT_RUNTIME_REQUIREMENTS,
   DesktopAgentContractError,
   type DesktopAgentBootstrapProjection,
-  type DesktopAgentMessageEvent,
+  type DesktopAgentEvent,
   type DesktopAgentMessageRequest,
   type DesktopAgentMessageResult,
   type DesktopAgentUnavailableDiagnostic,
@@ -69,7 +69,7 @@ export interface DesktopAgentBridgeRuntime {
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
-    readonly publish: (event: DesktopAgentMessageEvent) => void;
+    readonly publish: (event: DesktopAgentEvent) => void;
   }): DesktopAgentBootstrapProjection;
   send(
     request: DesktopAgentMessageRequest,
@@ -101,9 +101,10 @@ export interface DesktopAgentBridgeRuntime {
     connection: DesktopAgentConnectionIdentity,
     grant: DesktopAnyAgentConnectionGrant,
   ): Promise<DesktopAgentNeutralFacts>;
-  detachSurface(windowId: string, workbenchInstanceId: string, agentSurfaceId: string): void;
-  detachWorkbench(windowId: string, workbenchInstanceId: string): void;
-  detachConversation(windowId: string, conversationId: string): void;
+  detachConnection(
+    connection: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentProjectionSenderGrant,
+  ): void;
   detachWindow(windowId: string): void;
   dispose(): void;
 }
@@ -151,7 +152,7 @@ interface DesktopAgentConnection {
   readonly identity: DesktopAgentConnectionIdentity;
   readonly initialConversationId?: string;
   readonly controller: AgentHostMessageController;
-  publish: (event: DesktopAgentMessageEvent) => void;
+  publish: (event: DesktopAgentEvent) => void;
   readonly effects: AgentControllerEffects;
   readonly projectionAttachments: Map<string, ProjectionAttachmentKey>;
   lastFactsIdentity?: {
@@ -160,6 +161,8 @@ interface DesktopAgentConnection {
     readonly runId: string;
   };
   sequence: number;
+  attachmentCount: number;
+  acceptsEvents: boolean;
 }
 
 class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
@@ -182,7 +185,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
-    readonly publish: (event: DesktopAgentMessageEvent) => void;
+    readonly publish: (event: DesktopAgentEvent) => void;
   }): DesktopAgentBootstrapProjection {
     this.requireActive();
     if (!this.startup.ready) {
@@ -209,6 +212,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     for (const connection of this.connections.values()) {
       if (!isSameConnectionGrant(connection.identity, input.grant)) continue;
       if (connection.initialConversationId !== input.initialConversationId) continue;
+      connection.attachmentCount += 1;
       connection.publish = input.publish;
       return {
         requestId: input.requestId,
@@ -220,15 +224,6 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       ...input.grant,
       connectionId: this.input.createIdentity?.() ?? randomUUID(),
     });
-    for (const [connectionId, connection] of this.connections) {
-      if (
-        connection.identity.windowId === identity.windowId &&
-        connection.identity.workbenchInstanceId === identity.workbenchInstanceId &&
-        connection.identity.agentSurfaceId === identity.agentSurfaceId
-      ) {
-        this.disposeConnection(connectionId, connection);
-      }
-    }
     const effects = composition.createEffects({
       workspace: input.workspace,
       identity,
@@ -254,6 +249,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
           connectionId: identity.connectionId,
         },
         post: (message) => {
+          if (!connection.acceptsEvents) return;
           connection.sequence += 1;
           connection.publish({
             connection: connection.identity,
@@ -266,6 +262,8 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       effects,
       projectionAttachments: new Map(),
       sequence: 0,
+      attachmentCount: 1,
+      acceptsEvents: true,
     };
     this.connections.set(identity.connectionId, connection);
     return {
@@ -400,35 +398,36 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     return requireAutomationEffects(connection).disposeAndReadFacts(identity);
   }
 
-  detachSurface(windowId: string, workbenchInstanceId: string, agentSurfaceId: string): void {
+  detachConnection(
+    connectionIdentity: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentProjectionSenderGrant,
+  ): void {
     this.requireActive();
-    this.disposeMatchingConnections(
-      (connection) =>
-        connection.identity.windowId === windowId &&
-        connection.identity.workbenchInstanceId === workbenchInstanceId &&
-        connection.identity.agentSurfaceId === agentSurfaceId,
-      `Failed to detach Desktop Agent Surface '${agentSurfaceId}'.`,
-    );
-  }
-
-  detachWorkbench(windowId: string, workbenchInstanceId: string): void {
-    this.requireActive();
-    this.disposeMatchingConnections(
-      (connection) =>
-        connection.identity.windowId === windowId &&
-        connection.identity.workbenchInstanceId === workbenchInstanceId,
-      `Failed to detach Desktop Agent Workbench '${workbenchInstanceId}'.`,
-    );
-  }
-
-  detachConversation(windowId: string, conversationId: string): void {
-    this.requireActive();
-    this.disposeMatchingConnections(
-      (connection) =>
-        connection.identity.windowId === windowId &&
-        connection.initialConversationId === conversationId,
-      `Failed to detach Desktop Agent Conversation '${conversationId}'.`,
-    );
+    assertProjectionSender(connectionIdentity, grant);
+    const connection = this.connections.get(connectionIdentity.connectionId);
+    if (!connection) {
+      throw new DesktopAgentContractError(
+        'desktop-agent-identity-mismatch',
+        `Unknown Desktop Agent connection '${connectionIdentity.connectionId}'.`,
+      );
+    }
+    if (!isSameExactConnection(connectionIdentity, connection.identity)) {
+      throw new DesktopAgentContractError(
+        'desktop-agent-identity-mismatch',
+        `Desktop Agent connection '${connectionIdentity.connectionId}' does not match its exact owner.`,
+      );
+    }
+    if (connection.attachmentCount > 1) {
+      connection.attachmentCount -= 1;
+      return;
+    }
+    this.disposeConnection(connection.identity.connectionId, connection);
+    connection.sequence += 1;
+    connection.publish({
+      connection: connection.identity,
+      sequence: connection.sequence,
+      status: 'detached',
+    });
   }
 
   detachWindow(windowId: string): void {
@@ -442,10 +441,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.disposeMatchingConnections(
-      () => true,
-      'Failed to dispose Desktop Agent connections.',
-    );
+    this.disposeMatchingConnections(() => true, 'Failed to dispose Desktop Agent connections.');
   }
 
   private disposeMatchingConnections(
@@ -487,6 +483,7 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
 
   private disposeConnection(connectionId: string, connection: DesktopAgentConnection): void {
     if (this.connections.get(connectionId) !== connection) return;
+    connection.acceptsEvents = false;
     this.connections.delete(connectionId);
     connection.effects.dispose();
   }

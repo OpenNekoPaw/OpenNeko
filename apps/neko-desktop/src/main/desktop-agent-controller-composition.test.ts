@@ -463,6 +463,29 @@ describe('Agent controller composition', () => {
       throw new Error('Expected complete Agent tab state.');
     const activeTab = openTabs.find((tab) => tab.id === activeTabId);
     if (!activeTab) throw new Error('Expected an active Agent conversation Tab.');
+    await effects.conversation.readMessageQueue(activeTab.conversationId, context);
+    await effects.conversation.promoteQueuedMessage(
+      { conversationId: activeTab.conversationId, queueItemId: 'queued-turn-1' },
+      context,
+    );
+    await effects.conversation.cancelQueuedMessage(
+      { conversationId: activeTab.conversationId, queueItemId: 'queued-turn-1' },
+      context,
+    );
+    expect(workspace.readMessageQueue).toHaveBeenCalledWith(activeTab.conversationId);
+    expect(workspace.promoteQueuedMessage).toHaveBeenCalledWith(
+      activeTab.conversationId,
+      'queued-turn-1',
+    );
+    expect(workspace.cancelQueuedMessage).toHaveBeenCalledWith(
+      activeTab.conversationId,
+      'queued-turn-1',
+    );
+    expect(posted.slice(-3).map((message) => message.type)).toEqual([
+      'messageQueueSnapshot',
+      'messageQueueSnapshot',
+      'messageQueueSnapshot',
+    ]);
     const cutContext = {
       type: 'cut-clip' as const,
       id: 'cut:clip-1',
@@ -492,6 +515,8 @@ describe('Agent controller composition', () => {
 
     effects.dispose();
     await composition.dispose?.();
+    expect(workspace.cancelTurn).not.toHaveBeenCalled();
+    expect(workspace.dispose).not.toHaveBeenCalled();
   });
 
   it('removes credential material from renderer config projection', () => {
@@ -636,6 +661,27 @@ function createWorkspace(
       updatedAt: '2026-07-28T00:00:00.000Z',
     });
   });
+  const bindVisiblePresentation: AgentWorkspaceRuntime['bindVisiblePresentation'] = ({
+    bindingId,
+    conversationId: initialConversationId,
+  }) => {
+    let conversationId = initialConversationId;
+    let disposed = false;
+    return {
+      bindingId,
+      workspaceId: 'workspace-1',
+      get conversationId() {
+        return conversationId;
+      },
+      updateConversation: async (nextConversationId?: string) => {
+        if (disposed) throw new Error(`Agent visible binding '${bindingId}' is disposed.`);
+        conversationId = nextConversationId;
+      },
+      dispose: async () => {
+        disposed = true;
+      },
+    };
+  };
   return {
     workspaceId: 'workspace-1',
     workspace: {
@@ -662,6 +708,31 @@ function createWorkspace(
     openConversation: vi.fn(),
     startTurn: vi.fn(),
     executeTurn: vi.fn(),
+    readMessageQueue: vi.fn((conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
+    promoteQueuedMessage: vi.fn((conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
+    cancelQueuedMessage: vi.fn(async (conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
+    takeQueuedMessageForEdit: vi.fn(),
+    clearMessageQueue: vi.fn(async (conversationId: string) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    })),
     cancelTurn: vi.fn(),
     readActiveTurn: vi.fn(),
     readConversationEntries: vi.fn(async () => []),
@@ -677,6 +748,15 @@ function createWorkspace(
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(() => projection),
     subscribeConversationProjection: vi.fn(() => () => undefined),
+    bindVisiblePresentation,
+    protectConversationRuntime: vi.fn(),
+    readRuntimeResidency: vi.fn(() => ({
+      workspaceId: 'workspace-1',
+      visibleBindingCount: 1,
+      releaseRequested: false,
+      releasable: false,
+      conversations: [],
+    })),
     dispose: vi.fn(),
   };
 }

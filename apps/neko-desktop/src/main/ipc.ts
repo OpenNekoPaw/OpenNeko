@@ -49,6 +49,11 @@ export function registerDesktopIpc(
         }
       }),
   );
+  ipcMain.handle(
+    DESKTOP_AGENT_CHANNELS.connectionDetach,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.detachAgentConnection(requireSender(event), payload),
+  );
   ipcMain.handle(AGENT_LAUNCH_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeAgentLaunchRequest(requireSender(event), payload),
   );
@@ -223,10 +228,8 @@ export function registerDesktopIpc(
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.createShellSnapshot(requireSender(event), payload),
   );
-  ipcMain.handle(
-    ASSET_CENTER_HOST_CHANNEL,
-    (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.executeAssetCenter(requireSender(event), payload),
+  ipcMain.handle(ASSET_CENTER_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeAssetCenter(requireSender(event), payload),
   );
   ipcMain.handle(
     AGENT_EXTENSION_MANAGEMENT_HOST_CHANNEL,
@@ -291,6 +294,7 @@ export function registerDesktopIpc(
   return () => {
     for (const channel of [
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
+      DESKTOP_AGENT_CHANNELS.connectionDetach,
       AGENT_LAUNCH_HOST_CHANNEL,
       ASSISTANT_RESOURCE_HOST_CHANNEL,
       DESKTOP_WORKSPACE_GRANT_CHANNEL,

@@ -35,10 +35,7 @@ import {
   createDesktopSceneTransitionRequest,
   parseDesktopWorkbenchSceneProjection,
 } from '@neko/host/desktop-scene-contract';
-import {
-  createDesktopWorkbenchInstanceFromScene,
-  parseDesktopWindowWorkbenchCatalog,
-} from '@neko/host/desktop-workbench-instance-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import type { DesktopWorkspaceRegistry } from './desktop-workspace-registry';
@@ -436,7 +433,7 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           windowId,
           createResourceBrowserSnapshotRequest({ requestId: 'snapshot-assistant', identity }),
         ),
-      ).rejects.toThrow("Desktop Workspace 'workspace-1' has no open Workbench instance");
+      ).rejects.toThrow("Desktop Workspace 'workspace-1' is not the current composition");
     } finally {
       runtime.dispose();
       shell.releaseWindow(windowId);
@@ -673,7 +670,13 @@ function shellWithViews(views: readonly DesktopWorkbenchViewRef[]) {
     windowId: 'window-1',
     context: { kind: 'agent', agentViewId: 'agent-view-1', scope },
     slots: {
-      interaction: { kind: 'agent', agentViewId: 'agent-view-1', phase: 'draft', scope },
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface:window-1:workspace-1',
+        agentViewId: 'agent-view-1',
+        phase: 'draft',
+        scope,
+      },
       rightManager: { kind: 'workspace-resources', workspaceId: 'workspace-1' },
       status: { kind: 'scene-status', sceneId: 'scene:window-1:workspace-1' },
     },
@@ -693,9 +696,8 @@ function shellWithViews(views: readonly DesktopWorkbenchViewRef[]) {
       activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
     },
   };
-  const workbench = createDesktopWorkbenchInstanceFromScene({
+  const workbench = createDesktopWindowComposition({
     workbenchInstanceId: 'workbench:window-1:workspace-1',
-    agentSurfaceId: 'agent-surface:window-1:workspace-1',
     layout,
     scene,
   });
@@ -704,11 +706,7 @@ function shellWithViews(views: readonly DesktopWorkbenchViewRef[]) {
       windowId: 'window-1',
       activeTarget: { kind: 'home' },
       tabs: [],
-      workbenches: parseDesktopWindowWorkbenchCatalog({
-        windowId: 'window-1',
-        activeWorkbenchInstanceId: workbench.workbenchInstanceId,
-        instances: [workbench],
-      }),
+      workbench,
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
   };

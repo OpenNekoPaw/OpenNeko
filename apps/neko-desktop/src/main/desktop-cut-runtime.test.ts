@@ -30,10 +30,7 @@ import {
   createDefaultDesktopApplicationSidebar,
   parseDesktopWorkbenchSceneProjection,
 } from '@neko/host/desktop-scene-contract';
-import {
-  createDesktopWorkbenchInstanceFromScene,
-  parseDesktopWindowWorkbenchCatalog,
-} from '@neko/host/desktop-workbench-instance-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 const roots: string[] = [];
 
@@ -171,6 +168,7 @@ describe('DesktopCutRuntime', () => {
       slots: {
         interaction: {
           kind: 'agent',
+          agentSurfaceId: 'agent-surface:workspace-1',
           agentViewId: 'project-view-1',
           phase: 'draft',
           scope,
@@ -194,17 +192,11 @@ describe('DesktopCutRuntime', () => {
             viewInstanceId: 'view-instance-1',
           },
         ],
-        workbenches: (() => {
-          const instance = createDesktopWorkbenchInstanceFromScene({
+        workbench: (() => {
+          return createDesktopWindowComposition({
             workbenchInstanceId: 'workbench:workspace-1',
-            agentSurfaceId: 'agent-surface:workspace-1',
             layout: workbench,
             scene,
-          });
-          return parseDesktopWindowWorkbenchCatalog({
-            windowId: 'window-1',
-            activeWorkbenchInstanceId: instance.workbenchInstanceId,
-            instances: [instance],
           });
         })(),
         applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),

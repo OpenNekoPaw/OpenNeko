@@ -145,7 +145,7 @@ describe('DesktopCanvasRuntime', () => {
     await writeFixtureFile(workspacePath, 'media/cat.png', 'image');
     const identity = createIdentity();
     const runtime = createRuntime(workspacePath, identity);
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const projectionEvents: unknown[] = [];
     const unsubscribe = await runtime.subscribe('window-1', identity, (event) =>
       projectionEvents.push(event),
@@ -215,7 +215,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       previewResource,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
@@ -317,7 +317,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       requestProjectMediaLibraryCopy,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
@@ -423,7 +423,7 @@ describe('DesktopCanvasRuntime', () => {
       resolveCut,
       openInCut,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
     const authored = await runtime.executeIntent(
       'window-1',
       createCanvasHostIntentRequest({
@@ -532,7 +532,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       requestSource,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
@@ -605,7 +605,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       requestSource,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
@@ -683,7 +683,7 @@ describe('DesktopCanvasRuntime', () => {
       globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
       generation,
     });
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
@@ -768,7 +768,7 @@ describe('DesktopCanvasRuntime', () => {
     await symlink(outsidePath, path.join(workspacePath, 'escape'));
     const identity = createIdentity();
     const runtime = createRuntime(workspacePath, identity);
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const result = await runtime.executeIntent(
       'window-1',
@@ -1098,7 +1098,7 @@ describe('DesktopCanvasRuntime', () => {
       dispose: vi.fn(async () => undefined),
     };
     const runtime = createRuntimeWithGeneration(workspacePath, identity, generation);
-    const initial = await runtime.getSnapshot('window-1', identity);
+    await runtime.getSnapshot('window-1', identity);
 
     const projected = await runtime.executeIntent(
       'window-1',

@@ -75,6 +75,27 @@ describe('Desktop Agent preload event cursor', () => {
     });
   });
 
+  it('keeps a reused StrictMode connection registered until every bootstrap detaches', () => {
+    const registry = new DesktopAgentEventCursorRegistry();
+    const connection = createConnection('connection-strict');
+    registry.register(connection);
+    registry.register(connection);
+
+    registry.release(connection);
+    expect(registry.advance(connection, 1)).toEqual({
+      kind: 'accepted',
+      connection,
+    });
+
+    registry.release(connection);
+    expect(registry.advance(connection, 2)).toEqual({
+      kind: 'accepted',
+      connection,
+    });
+    registry.unregister(connection);
+    expect(registry.advance(connection, 3)).toEqual({ kind: 'foreign' });
+  });
+
   it('rejects events after the exact connection is unregistered', () => {
     const registry = new DesktopAgentEventCursorRegistry();
     const previous = createConnection('connection-1');
@@ -95,9 +116,7 @@ describe('Desktop Agent preload event cursor', () => {
     expect(registry.advance(createConnection('connection-foreign'), 1)).toEqual({
       kind: 'foreign',
     });
-    expect(
-      registry.advance({ ...current, workspaceId: 'workspace-forged' }, 1),
-    ).toEqual({
+    expect(registry.advance({ ...current, workspaceId: 'workspace-forged' }, 1)).toEqual({
       kind: 'foreign',
     });
     expect(registry.advance(current, 3)).toEqual({

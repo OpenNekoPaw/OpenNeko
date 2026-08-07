@@ -11,6 +11,7 @@ import {
 
 export const DESKTOP_AGENT_CHANNELS = {
   bootstrapGet: 'openneko:desktop:agent:bootstrap:get',
+  connectionDetach: 'openneko:desktop:agent:connection:detach',
   messageSend: 'openneko:desktop:agent:message:send',
   messageEvent: 'openneko:desktop:agent:message:event',
 } as const;
@@ -71,6 +72,16 @@ export interface DesktopAgentMessageRequest {
   readonly message: AgentWebviewToHostMessage;
 }
 
+export interface DesktopAgentDetachRequest {
+  readonly requestId: string;
+  readonly connection: DesktopAgentConnectionIdentity;
+}
+
+export interface DesktopAgentDetachResult {
+  readonly requestId: string;
+  readonly status: 'detached';
+}
+
 export interface DesktopAgentAcceptedMessageResult {
   readonly requestId: string;
   readonly status: 'accepted';
@@ -91,6 +102,14 @@ export interface DesktopAgentMessageEvent {
   readonly message: AgentHostToWebviewMessage;
 }
 
+export interface DesktopAgentConnectionDetachedEvent {
+  readonly connection: DesktopAgentConnectionIdentity;
+  readonly sequence: number;
+  readonly status: 'detached';
+}
+
+export type DesktopAgentEvent = DesktopAgentMessageEvent | DesktopAgentConnectionDetachedEvent;
+
 export interface OpenNekoDesktopAgentBridge {
   readonly agent: {
     getBootstrap(
@@ -107,6 +126,7 @@ export interface OpenNekoDesktopAgentBridge {
       conversationId: string,
       viewId: string,
     ): Promise<DesktopAgentBootstrapProjection>;
+    detach(connection: DesktopAgentConnectionIdentity): Promise<void>;
     send(connection: DesktopAgentConnectionIdentity, message: AgentWebviewToHostMessage): void;
     subscribe(
       connection: DesktopAgentConnectionIdentity,
@@ -274,6 +294,38 @@ export function createDesktopAgentMessageRequest(
   };
 }
 
+export function createDesktopAgentDetachRequest(
+  requestId: string,
+  connection: DesktopAgentConnectionIdentity,
+): DesktopAgentDetachRequest {
+  return {
+    requestId: requireNonEmptyString(requestId, 'Desktop Agent detach requestId is required.'),
+    connection: parseConnectionIdentity(connection),
+  };
+}
+
+export function parseDesktopAgentDetachRequest(value: unknown): DesktopAgentDetachRequest {
+  const record = requireRecord(value, 'Desktop Agent detach request must be an object.');
+  requireExactKeys(record, ['requestId', 'connection'], 'Desktop Agent detach request');
+  return createDesktopAgentDetachRequest(
+    requireNonEmptyString(record['requestId'], 'Desktop Agent detach requestId is required.'),
+    parseConnectionIdentity(record['connection']),
+  );
+}
+
+export function parseDesktopAgentDetachResult(
+  value: unknown,
+  expectedRequestId?: string,
+): DesktopAgentDetachResult {
+  const record = requireRecord(value, 'Desktop Agent detach result must be an object.');
+  const requestId = requireExpectedRequestId(record, expectedRequestId);
+  requireExactKeys(record, ['requestId', 'status'], 'Desktop Agent detach result');
+  if (record['status'] !== 'detached') {
+    throw invalidPayload('Desktop Agent detach result status must be detached.');
+  }
+  return { requestId, status: 'detached' };
+}
+
 export function parseDesktopAgentMessageRequest(value: unknown): DesktopAgentMessageRequest {
   const record = requireRecord(value, 'Desktop Agent message request must be an object.');
   requireExactKeys(record, ['requestId', 'connection', 'message'], 'Desktop Agent message request');
@@ -375,19 +427,29 @@ export function parseDesktopAgentMessageResult(
   throw invalidPayload('Desktop Agent message result status is invalid.');
 }
 
-export function parseDesktopAgentMessageEvent(value: unknown): DesktopAgentMessageEvent {
-  const record = requireRecord(value, 'Desktop Agent message event must be an object.');
+export function parseDesktopAgentEvent(value: unknown): DesktopAgentEvent {
+  const record = requireRecord(value, 'Desktop Agent event must be an object.');
+  const connection = parseConnectionIdentity(record['connection']);
+  const sequence = requirePositiveInteger(
+    record['sequence'],
+    'Desktop Agent event sequence must be a positive integer.',
+  );
+  if (record['status'] === 'detached') {
+    requireExactKeys(
+      record,
+      ['connection', 'sequence', 'status'],
+      'Desktop Agent connection detached event',
+    );
+    return { connection, sequence, status: 'detached' };
+  }
   requireExactKeys(record, ['connection', 'sequence', 'message'], 'Desktop Agent message event');
   const message = record['message'];
   if (!isAgentHostToWebviewMessage(message)) {
     throw invalidPayload('Desktop Agent event message type is invalid.');
   }
   return {
-    connection: parseConnectionIdentity(record['connection']),
-    sequence: requirePositiveInteger(
-      record['sequence'],
-      'Desktop Agent event sequence must be a positive integer.',
-    ),
+    connection,
+    sequence,
     message,
   };
 }

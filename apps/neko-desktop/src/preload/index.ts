@@ -6,11 +6,13 @@ import type {
 import {
   createDesktopAgentBootstrapRequest,
   createDesktopAssistantAgentBootstrapRequest,
+  createDesktopAgentDetachRequest,
   createDesktopAgentMessageRequest,
   DESKTOP_AGENT_CHANNELS,
   DesktopAgentContractError,
   parseDesktopAgentBootstrapProjection,
-  parseDesktopAgentMessageEvent,
+  parseDesktopAgentDetachResult,
+  parseDesktopAgentEvent,
   parseDesktopAgentMessageResult,
   type OpenNekoDesktopAgentBridge,
 } from '../shared/agent-contract';
@@ -191,7 +193,6 @@ const agentListeners = new Set<{
   readonly connection: DesktopAgentConnectionIdentity;
   readonly listener: (message: AgentHostToWebviewMessage) => void;
 }>();
-const pendingAgentRetirements = new Map<string, symbol>();
 let currentResourceIdentity: ResourceBrowserIdentity | undefined;
 let currentResourceEventSequence = 0;
 const resourceListeners = new Set<
@@ -354,6 +355,18 @@ const bridge: OpenNekoDesktopBridge &
       if (projection.status === 'ready') agentEventCursors.register(projection.connection);
       return projection;
     },
+    async detach(connection) {
+      const request = createDesktopAgentDetachRequest(
+        nextRequestId('desktop-agent-detach'),
+        connection,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_AGENT_CHANNELS.connectionDetach,
+        request,
+      );
+      parseDesktopAgentDetachResult(response, request.requestId);
+      agentEventCursors.release(connection);
+    },
     send(connection, message) {
       const request = createDesktopAgentMessageRequest(
         nextRequestId('desktop-agent-message'),
@@ -380,20 +393,9 @@ const bridge: OpenNekoDesktopBridge &
     },
     subscribe(connection, listener) {
       const subscription = { connection, listener };
-      pendingAgentRetirements.delete(connection.connectionId);
       agentListeners.add(subscription);
       return () => {
         agentListeners.delete(subscription);
-        const retirement = Symbol(connection.connectionId);
-        pendingAgentRetirements.set(connection.connectionId, retirement);
-        queueMicrotask(() => {
-          if (pendingAgentRetirements.get(connection.connectionId) !== retirement) return;
-          pendingAgentRetirements.delete(connection.connectionId);
-          const hasAnotherListener = [...agentListeners].some((entry) =>
-            isSameDesktopAgentEventConnection(entry.connection, connection),
-          );
-          if (!hasAnotherListener) agentEventCursors.unregister(connection);
-        });
       };
     },
     ...(process.argv.includes(DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT)
@@ -1151,12 +1153,13 @@ ipcRenderer.on(
 ipcRenderer.on(
   DESKTOP_AGENT_CHANNELS.messageEvent,
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
-    const event = parseDesktopAgentMessageEvent(value);
+    const event = parseDesktopAgentEvent(value);
     const result = agentEventCursors.advance(event.connection, event.sequence);
     if (result.kind === 'foreign') {
+      const eventKind = 'status' in event ? event.status : `message:${event.message.type}`;
       throw new DesktopAgentContractError(
         'desktop-agent-identity-mismatch',
-        `Desktop Agent rejected an event for foreign connection '${event.connection.connectionId}'.`,
+        `Desktop Agent rejected ${eventKind} event ${event.sequence} for foreign connection '${event.connection.connectionId}'.`,
       );
     }
     if (result.kind === 'sequence-mismatch') {
@@ -1164,6 +1167,10 @@ ipcRenderer.on(
         type: 'globalError',
         message: `Desktop Agent event sequence ${result.receivedSequence} does not follow ${result.expectedSequence - 1}.`,
       });
+      return;
+    }
+    if ('status' in event) {
+      agentEventCursors.unregister(result.connection);
       return;
     }
     emitAgentMessage(result.connection, event.message);

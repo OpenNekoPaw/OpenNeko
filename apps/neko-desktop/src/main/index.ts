@@ -396,12 +396,13 @@ async function startDesktop(): Promise<void> {
   });
   const assistantSpaceRoot = path.join(globalStorage.root, 'assistant-spaces', 'local-user');
   await mkdir(assistantSpaceRoot, { recursive: true });
-  const assistantAgentWorkspace = await agentComposition.attachWorkspace({
+  const assistantWorkspace = {
     workspaceId: assistantSpaceId,
     workspacePath: assistantSpaceRoot,
     displayName: 'Assistant',
-    locator: { kind: 'relative', value: 'assistant-spaces/local-user' },
-  });
+    locator: { kind: 'relative' as const, value: 'assistant-spaces/local-user' },
+  };
+  await agentComposition.attachWorkspace(assistantWorkspace);
   const extensionManager = createAgentExtensionManager({
     repository: createOpenNekoExtensionRepository({
       marketplaceRoot: path.join(
@@ -1004,7 +1005,7 @@ async function startDesktop(): Promise<void> {
     path.join(globalStorage.root, 'assistant-scratch', ref.conversationId, ref.scratchArtifactId);
   const resolveConversationWorkspace = async (context: AgentConversationContext) =>
     context.kind === 'assistant'
-      ? assistantAgentWorkspace
+      ? agentComposition.attachWorkspace(assistantWorkspace)
       : (agentComposition.getWorkspace(context.workspaceId) ??
         (await agentComposition.attachWorkspace(
           await shellService.resolveAgentWorkspace(context.workspaceId),
@@ -1096,6 +1097,7 @@ async function startDesktop(): Promise<void> {
     logger,
     shell: shellService,
     agent: agentComposition,
+    assistantWorkspace,
     agentControllerComposition,
     agentLaunch,
     workspaceGrants: workspaceGrantAuthority,

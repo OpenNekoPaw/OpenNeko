@@ -42,6 +42,7 @@ function fixtureResult(): CutHostRuntimeResult {
       playback: {},
       export: { tasks: [] },
       presentation: {
+        playheadSeconds: 0,
         previewVolume: 1,
         previewMuted: false,
         pixelsPerSecond: 80,

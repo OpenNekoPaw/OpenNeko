@@ -28,7 +28,7 @@ import {
   createDefaultDesktopApplicationSidebar,
 } from '@neko/host/desktop-scene-contract';
 import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
-import { createDesktopWorkbenchInstanceFromScene } from '@neko/host/desktop-workbench-instance-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 const roots: string[] = [];
 
@@ -81,6 +81,16 @@ describe('Desktop SQLite application state composition', () => {
     await repository.prepare();
     let identity = 0;
     const sceneId = 'scene:window-old:project-management';
+    const invalidScene = {
+      unexpectedField: 1,
+      sceneId,
+      windowId: 'window-old',
+      context: { kind: 'project-management' },
+      slots: {
+        main: { kind: 'project-management' },
+        status: { kind: 'scene-status', sceneId },
+      },
+    };
     const invalidState = {
       primaryWindowId: 'window-old',
       projects: [],
@@ -89,22 +99,11 @@ describe('Desktop SQLite application state composition', () => {
           windowId: 'window-old',
           activeTarget: { kind: 'home' },
           tabs: [],
-          workbench: createDefaultDesktopWorkbenchLayout('window-old'),
-          scene: {
-            unexpectedField: 1,
-            sceneId,
+          workbench: {
+            workbenchInstanceId: 'workbench:window-old:project-management',
             windowId: 'window-old',
-            context: {
-              kind: 'project-management',
-              projectManagementSessionId: 'project-management:1',
-            },
-            slots: {
-              leftManager: {
-                kind: 'project-catalog',
-                projectManagementSessionId: 'project-management:1',
-              },
-              status: { kind: 'scene-status', sceneId },
-            },
+            layout: createDefaultDesktopWorkbenchLayout('window-old'),
+            scene: invalidScene,
           },
           applicationSidebar: createDefaultDesktopApplicationSidebar('window-old'),
         },
@@ -145,12 +144,12 @@ describe('Desktop SQLite application state composition', () => {
       const projection = await service.getProjection(windowId);
 
       expect(windowId).not.toBe('window-old');
-      expect(projection.window.workbenches.instances).toHaveLength(1);
+      expect(projection.window.workbench.windowId).toBe(windowId);
       expect(projection.stateDiagnostics).toEqual([
         expect.objectContaining({
           code: 'desktop-stored-window-invalid',
           windowId: 'window-old',
-          message: expect.stringContaining('unexpected fields'),
+          message: expect.stringContaining("unknown field 'unexpectedField'"),
         }),
       ]);
       const rows = await store.transaction(
@@ -166,7 +165,7 @@ describe('Desktop SQLite application state composition', () => {
       }
       expect(document['windows']).toContainEqual(invalidState.windows[0]);
       expect(document['windows']).toContainEqual(
-        expect.objectContaining({ windowId, workbenches: expect.any(Object) }),
+        expect.objectContaining({ windowId, workbench: expect.any(Object) }),
       );
       await service.dispose();
     } finally {
@@ -192,9 +191,8 @@ describe('Desktop SQLite application state composition', () => {
     const projectId = 'project:existing';
     const workspaceId = 'workspace:existing';
     const scene = createDefaultDesktopAgentScene(windowId, 'draft:existing');
-    const workbench = createDesktopWorkbenchInstanceFromScene({
+    const workbench = createDesktopWindowComposition({
       workbenchInstanceId: 'workbench:existing',
-      agentSurfaceId: 'agent-surface:existing',
       layout: createDefaultDesktopWorkbenchLayout(windowId),
       scene,
     });
@@ -221,11 +219,7 @@ describe('Desktop SQLite application state composition', () => {
           windowId,
           activeTarget: { kind: 'home' },
           tabs: [],
-          workbenches: {
-            windowId,
-            activeWorkbenchInstanceId: workbench.workbenchInstanceId,
-            instances: [workbench],
-          },
+          workbench,
           applicationSidebar: createDefaultDesktopApplicationSidebar(windowId),
         },
       ],
@@ -296,7 +290,7 @@ describe('Desktop SQLite application state composition', () => {
       expect(projection.catalog.projects).toEqual([
         expect.objectContaining({ projectId, displayName: 'Existing Project Updated' }),
       ]);
-      expect(projection.window.workbenches.instances).toHaveLength(1);
+      expect(projection.window.workbench.workbenchInstanceId).toBe(workbench.workbenchInstanceId);
       expect(projection.stateDiagnostics).toEqual([
         expect.objectContaining({
           code: 'desktop-stored-state-metadata-retained',

@@ -26,7 +26,6 @@ vi.mock('electron', () => ({
 await import('./index');
 
 const identity = {
-  extensionManagementSessionId: 'extension-management:window-1:1',
   windowId: 'window-1',
 };
 

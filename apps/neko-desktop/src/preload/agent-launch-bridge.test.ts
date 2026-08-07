@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-host';
+import { DESKTOP_AGENT_CHANNELS } from '../shared/agent-contract';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -66,15 +67,10 @@ describe('Desktop Agent launch preload bridge', () => {
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
 
     await expect(
-      bridge.agentLaunch.attach(
-        'workbench-1',
-        'agent-surface-1',
-        'agent-view:window-1',
-        {
-          kind: 'assistant',
-          assistantSpaceId: 'assistant:1',
-        },
-      ),
+      bridge.agentLaunch.attach('workbench-1', 'agent-surface-1', 'agent-view:window-1', {
+        kind: 'assistant',
+        assistantSpaceId: 'assistant:1',
+      }),
     ).resolves.toEqual(createCatalog());
   });
 
@@ -101,6 +97,68 @@ describe('Desktop Agent launch preload bridge', () => {
       connection: catalog.connection,
     });
   });
+
+  it('keeps queued session events valid until exact Main detach completes', async () => {
+    const connection = createSessionConnection();
+    electron.invoke.mockImplementation(
+      async (channel: string, request: { readonly requestId: string }) => {
+        if (channel === DESKTOP_AGENT_CHANNELS.bootstrapGet) {
+          return { requestId: request.requestId, status: 'ready', connection };
+        }
+        expect(channel).toBe(DESKTOP_AGENT_CHANNELS.connectionDetach);
+        expect(request).toMatchObject({ connection });
+        return { requestId: request.requestId, status: 'detached' };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    const bootstrap = await bridge.agent.getBootstrap(
+      'workbench-1',
+      'agent-surface-1',
+      'project-1',
+      'view-1',
+      'conversation-1',
+    );
+    if (bootstrap.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+    const unsubscribe = bridge.agent.subscribe(connection, vi.fn());
+    unsubscribe();
+    const eventHandler = electron.on.mock.calls.find(
+      ([channel]) => channel === DESKTOP_AGENT_CHANNELS.messageEvent,
+    )?.[1] as ((event: unknown, value: unknown) => void) | undefined;
+    if (!eventHandler) throw new Error('Desktop Agent event handler was not registered.');
+
+    expect(() =>
+      eventHandler(undefined, {
+        connection,
+        sequence: 1,
+        message: { type: 'globalError', message: 'queued before detach' },
+      }),
+    ).not.toThrow();
+    await expect(bridge.agent.detach(connection)).resolves.toBeUndefined();
+    expect(() =>
+      eventHandler(undefined, {
+        connection,
+        sequence: 2,
+        message: { type: 'globalError', message: 'queued after detach response' },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      eventHandler(undefined, {
+        connection,
+        sequence: 3,
+        status: 'detached',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      eventHandler(undefined, {
+        connection,
+        sequence: 4,
+        message: { type: 'globalError', message: 'foreign after detach' },
+      }),
+    ).toThrow(
+      "Desktop Agent rejected message:globalError event 4 for foreign connection 'connection-1'.",
+    );
+  });
 });
 
 function createCatalog() {
@@ -118,5 +176,18 @@ function createCatalog() {
     commands: [],
     skills: [],
     resources: [],
+  };
+}
+
+function createSessionConnection() {
+  return {
+    applicationInstanceId: 'application-1',
+    windowId: 'window-1',
+    workbenchInstanceId: 'workbench-1',
+    agentSurfaceId: 'agent-surface-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    viewId: 'view-1',
+    connectionId: 'connection-1',
   };
 }

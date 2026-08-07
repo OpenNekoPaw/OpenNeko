@@ -23,29 +23,53 @@ export type DesktopAgentEventCursorAdvanceResult =
     };
 
 export class DesktopAgentEventCursorRegistry {
-  private readonly active = new Map<string, DesktopAgentEventCursor>();
+  private readonly active = new Map<
+    string,
+    { readonly cursor: DesktopAgentEventCursor; readonly attachmentCount: number }
+  >();
 
   register(connection: DesktopAgentConnectionIdentity): DesktopAgentEventCursor {
     const existing = this.active.get(connection.connectionId);
     if (existing) {
-      if (!isSameDesktopAgentEventConnection(existing.connection, connection)) {
+      if (!isSameDesktopAgentEventConnection(existing.cursor.connection, connection)) {
         throw new Error(
           `Desktop Agent connection '${connection.connectionId}' was registered with conflicting identity.`,
         );
       }
       this.active.delete(connection.connectionId);
-      this.active.set(connection.connectionId, existing);
-      return existing;
+      this.active.set(connection.connectionId, {
+        cursor: existing.cursor,
+        attachmentCount: existing.attachmentCount + 1,
+      });
+      return existing.cursor;
     }
     const cursor = { connection, sequence: 0 };
-    this.active.set(connection.connectionId, cursor);
+    this.active.set(connection.connectionId, { cursor, attachmentCount: 1 });
     return cursor;
   }
 
   unregister(connection: DesktopAgentConnectionIdentity): void {
     const current = this.active.get(connection.connectionId);
-    if (!current || !isSameDesktopAgentEventConnection(current.connection, connection)) return;
+    if (!current || !isSameDesktopAgentEventConnection(current.cursor.connection, connection)) {
+      return;
+    }
     this.active.delete(connection.connectionId);
+  }
+
+  release(connection: DesktopAgentConnectionIdentity): void {
+    const current = this.active.get(connection.connectionId);
+    if (!current || !isSameDesktopAgentEventConnection(current.cursor.connection, connection)) {
+      return;
+    }
+    if (current.attachmentCount === 0) {
+      throw new Error(
+        `Desktop Agent connection '${connection.connectionId}' has no attached bootstrap lease.`,
+      );
+    }
+    this.active.set(connection.connectionId, {
+      cursor: current.cursor,
+      attachmentCount: current.attachmentCount - 1,
+    });
   }
 
   advance(
@@ -54,23 +78,26 @@ export class DesktopAgentEventCursorRegistry {
   ): DesktopAgentEventCursorAdvanceResult {
     const current = this.active.get(connection.connectionId);
     if (current) {
-      if (!isSameDesktopAgentEventConnection(current.connection, connection)) {
+      if (!isSameDesktopAgentEventConnection(current.cursor.connection, connection)) {
         return { kind: 'foreign' };
       }
-      const expectedSequence = current.sequence + 1;
+      const expectedSequence = current.cursor.sequence + 1;
       if (sequence !== expectedSequence) {
         return {
           kind: 'sequence-mismatch',
-          connection: current.connection,
+          connection: current.cursor.connection,
           expectedSequence,
           receivedSequence: sequence,
         };
       }
       this.active.set(connection.connectionId, {
-        connection: current.connection,
-        sequence,
+        cursor: {
+          connection: current.cursor.connection,
+          sequence,
+        },
+        attachmentCount: current.attachmentCount,
       });
-      return { kind: 'accepted', connection: current.connection };
+      return { kind: 'accepted', connection: current.cursor.connection };
     }
     return { kind: 'foreign' };
   }

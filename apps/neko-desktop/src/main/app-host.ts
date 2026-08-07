@@ -4,9 +4,11 @@ import type { NekoHostPorts } from '@neko/host/ports';
 import type { ILogger } from '@neko/shared/logger';
 import {
   parseDesktopAgentBootstrapRequest,
+  parseDesktopAgentDetachRequest,
   parseDesktopAgentMessageRequest,
   type DesktopAgentBootstrapProjection,
-  type DesktopAgentMessageEvent,
+  type DesktopAgentDetachResult,
+  type DesktopAgentEvent,
   type DesktopAgentMessageResult,
 } from '../shared/agent-contract';
 import {
@@ -75,6 +77,7 @@ import {
   type AssetCenterHostResult,
 } from '@neko/assets-domain/asset-center/host-contract';
 import type { AssetCenterSessionProjection } from '@neko/assets-domain/asset-center/contract';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { DesktopPreviewRuntime } from './desktop-preview-runtime';
 import type { PreviewProjection, PreviewRuntimeRequest } from '@neko/preview-domain';
 import type {
@@ -157,6 +160,7 @@ export interface DesktopAppHostOptions {
   readonly logger: ILogger;
   readonly shell: DesktopShellService;
   readonly agent: AgentAppHost;
+  readonly assistantWorkspace: AssetWorkspaceResolution;
   readonly agentControllerComposition?: AgentControllerComposition;
   readonly agentLaunch: DesktopAgentLaunchRuntime;
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
@@ -337,20 +341,18 @@ export class DesktopAppHost {
   async createAgentBootstrap(
     sender: DesktopSenderIdentity,
     payload: unknown,
-    publish: (event: DesktopAgentMessageEvent) => void,
+    publish: (event: DesktopAgentEvent) => void,
   ): Promise<DesktopAgentBootstrapProjection> {
     this.requireActive();
     const request = parseDesktopAgentBootstrapRequest(payload);
     const window = this.windows.resolveSender(sender);
     const surfaceGrant = await this.shell.resolveAgentSurfaceGrant(window.windowId, request);
-    const surfaceInteraction = surfaceGrant.surface.interaction;
+    const surfaceInteraction = surfaceGrant.interaction;
     if (surfaceInteraction.agentViewId !== request.viewId) {
       throw new Error('Desktop Agent bootstrap does not match its exact Agent Surface View.');
     }
     if ('assistantSpaceId' in request) {
       if (
-        surfaceGrant.workbench.owner.kind !== 'assistant-space' ||
-        surfaceGrant.workbench.owner.assistantSpaceId !== request.assistantSpaceId ||
         surfaceInteraction.phase !== 'session' ||
         surfaceInteraction.scope.kind !== 'assistant' ||
         surfaceInteraction.scope.assistantSpaceId !== request.assistantSpaceId ||
@@ -369,10 +371,17 @@ export class DesktopAppHost {
           'Desktop Assistant Agent bootstrap does not match its persisted Conversation context.',
         );
       }
-      const workspace = this.agent.getWorkspace(request.assistantSpaceId);
-      if (!workspace || workspace.workspaceId !== request.assistantSpaceId) {
+      if (this.options.assistantWorkspace.workspaceId !== request.assistantSpaceId) {
         throw new Error(
-          `Desktop Assistant Space '${request.assistantSpaceId}' has no attached Agent runtime.`,
+          `Desktop Assistant Space '${request.assistantSpaceId}' does not match its configured Workspace authority.`,
+        );
+      }
+      const workspace =
+        this.agent.getWorkspace(request.assistantSpaceId) ??
+        (await this.agent.attachWorkspace(this.options.assistantWorkspace));
+      if (workspace.workspaceId !== request.assistantSpaceId) {
+        throw new Error(
+          `Desktop Assistant Space '${request.assistantSpaceId}' resolved to another Agent runtime.`,
         );
       }
       return this.agentBridge.createBootstrap({
@@ -398,8 +407,6 @@ export class DesktopAppHost {
     }
     const view = await this.shell.resolveAgentViewGrant(window.windowId, request);
     if (
-      surfaceGrant.workbench.owner.kind !== 'workspace' ||
-      surfaceGrant.workbench.owner.workspaceId !== view.workspaceId ||
       surfaceInteraction.scope.kind !== 'workspace' ||
       surfaceInteraction.scope.workspaceId !== view.workspaceId
     ) {
@@ -467,7 +474,7 @@ export class DesktopAppHost {
     const window = this.windows.resolveSender(sender);
     if (request.operation === 'attach') {
       const surfaceGrant = await this.shell.resolveAgentSurfaceGrant(window.windowId, request);
-      const interaction = surfaceGrant.surface.interaction;
+      const interaction = surfaceGrant.interaction;
       if (
         interaction.agentViewId !== request.viewId ||
         interaction.phase !== 'draft' ||
@@ -750,6 +757,23 @@ export class DesktopAppHost {
     return this.agentBridge.send(request, grant);
   }
 
+  async detachAgentConnection(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopAgentDetachResult> {
+    this.requireActive();
+    const request = parseDesktopAgentDetachRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    this.agentBridge.detachConnection(request.connection, {
+      applicationInstanceId: this.applicationIdentity.instanceId,
+      windowId: window.windowId,
+    });
+    return {
+      requestId: request.requestId,
+      status: 'detached',
+    };
+  }
+
   async executeAgentAutomation(
     sender: DesktopSenderIdentity,
     payload: unknown,
@@ -917,7 +941,6 @@ export class DesktopAppHost {
       request.navigation,
     );
     await this.agent.deleteConversation(request.navigation.conversationId);
-    this.agentBridge.detachConversation(window.windowId, request.navigation.conversationId);
     return {
       requestId: request.requestId,
       projection: await this.shell.getProjection(window.windowId),
@@ -970,8 +993,8 @@ export class DesktopAppHost {
       case 'selection.select':
         projection = await runtime.select(request);
         break;
-      case 'preview.detach':
-        projection = await runtime.detachView(request.identity);
+      case 'session.detach':
+        projection = await runtime.detachSession(request.identity);
         break;
       case 'asset.import':
         projection = await runtime.importAssets(request);
@@ -999,7 +1022,7 @@ export class DesktopAppHost {
       request.route === 'selection.select' ||
       request.route === 'assets.remove' ||
       request.route === 'items.move' ||
-      request.route === 'preview.detach'
+      request.route === 'session.detach'
     ) {
       const currentScene = await this.shell.getSceneProjection(window.windowId);
       if (
@@ -1035,11 +1058,7 @@ export class DesktopAppHost {
     }
     const shell = await this.shell.getProjection(window.windowId);
     const activeScene = resolveActiveDesktopWindowWorkbench(shell.window).scene;
-    if (
-      activeScene.context.kind !== 'extensions' ||
-      activeScene.context.extensionManagementSessionId !==
-        request.identity.extensionManagementSessionId
-    ) {
+    if (activeScene.context.kind !== 'extensions') {
       throw new Error('Agent Extension Management request does not match the active Scene.');
     }
     switch (request.route) {
@@ -1711,15 +1730,13 @@ export class DesktopAppHost {
     connection: import('@neko/agent-contracts').DesktopAgentConnectionIdentity,
   ): Promise<DesktopAnyAgentConnectionGrant> {
     const surfaceGrant = await this.shell.resolveAgentSurfaceGrant(windowId, connection);
-    const interaction = surfaceGrant.surface.interaction;
+    const interaction = surfaceGrant.interaction;
     if (interaction.agentViewId !== connection.viewId) {
       throw new Error('Desktop Agent connection does not match its exact Agent Surface View.');
     }
     if ('assistantSpaceId' in connection) {
       if (
         connection.windowId !== windowId ||
-        surfaceGrant.workbench.owner.kind !== 'assistant-space' ||
-        surfaceGrant.workbench.owner.assistantSpaceId !== connection.assistantSpaceId ||
         interaction.phase !== 'session' ||
         interaction.scope.kind !== 'assistant' ||
         interaction.scope.assistantSpaceId !== connection.assistantSpaceId ||
@@ -1753,8 +1770,6 @@ export class DesktopAppHost {
     }
     const view = await this.shell.resolveAgentViewGrant(windowId, connection);
     if (
-      surfaceGrant.workbench.owner.kind !== 'workspace' ||
-      surfaceGrant.workbench.owner.workspaceId !== view.workspaceId ||
       interaction.scope.kind !== 'workspace' ||
       interaction.scope.workspaceId !== view.workspaceId
     ) {
@@ -1872,17 +1887,8 @@ export class DesktopAppHost {
     const targetProject = current.catalog.projects.find(
       (project) => project.projectId === targetTab.projectId,
     );
-    const targetWorkbench = targetProject
-      ? current.window.workbenches.instances.find(
-          (instance) =>
-            instance.owner.kind === 'workspace' &&
-            instance.owner.workspaceId === targetProject.workspaceId,
-        )
-      : undefined;
-    if (!targetProject || !targetWorkbench) {
-      throw new Error(
-        `Desktop Project Tab '${request.tabId}' has no exact retained Workbench owner.`,
-      );
+    if (!targetProject) {
+      throw new Error(`Desktop Project Tab '${request.tabId}' has no Project catalog owner.`);
     }
     let projection: DesktopShellProjection;
     if (operation === 'activate') {
@@ -1907,9 +1913,6 @@ export class DesktopAppHost {
         request.rendererSessionId,
       );
     }
-    if (operation === 'close') {
-      this.agentBridge.detachWorkbench(window.windowId, targetWorkbench.workbenchInstanceId);
-    }
     this.reconcileWindowWorkbenchResources(window.windowId, projection);
     return {
       requestId: request.requestId,
@@ -1921,7 +1924,7 @@ export class DesktopAppHost {
     windowId: string,
     projection: DesktopShellProjection,
   ): void {
-    const workbenches = projection.window.workbenches.instances.map((instance) => instance.layout);
+    const workbenches = [projection.window.workbench.layout];
     this.preview?.reconcileWindow(windowId, workbenches);
     this.canvas?.reconcileWindow(windowId, workbenches);
     this.cut?.reconcileWindow(windowId, workbenches);

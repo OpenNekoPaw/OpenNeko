@@ -5,6 +5,7 @@ import type { ILogger } from '@neko/shared/logger';
 import {
   createDesktopAgentBootstrapRequest,
   createDesktopAssistantAgentBootstrapRequest,
+  createDesktopAgentDetachRequest,
   createDesktopAgentMessageRequest,
 } from '../shared/agent-contract';
 import { createDesktopBootstrapRequest } from '../shared/bridge-contract';
@@ -19,6 +20,7 @@ import {
   createDesktopConversationDeleteRequest,
   createDesktopProjectOpenRequest,
   createDesktopWindowMutationRequest,
+  resolveActiveDesktopWindowWorkbench,
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import { DesktopAppHost } from './app-host';
@@ -53,7 +55,6 @@ import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { AssetCenterNodeRuntime, type AssetCenterNodeRuntimeOptions } from '@neko/assets-node';
-import { resolveActiveDesktopWorkbenchInstance } from '@neko/host/desktop-workbench-instance-contract';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
@@ -71,6 +72,7 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent: createAgentComposition(),
+      assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       workspaceGrants: createWorkspaceGrantAuthority(),
       conversationLifecycle: createConversationLifecycle(),
@@ -145,6 +147,7 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent: createAgentComposition(),
+      assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       workspaceGrants: createWorkspaceGrantAuthority(),
       conversationLifecycle: createConversationLifecycle(),
@@ -203,6 +206,7 @@ describe('DesktopAppHost', () => {
       logger,
       shell: createShellService('app-1'),
       agent,
+      assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
       workspaceGrants: createWorkspaceGrantAuthority(),
       conversationLifecycle: createConversationLifecycle(),
@@ -355,7 +359,7 @@ describe('DesktopAppHost', () => {
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
       workbenchInstanceId: workspaceWorkbench.workbenchInstanceId,
-      agentSurfaceId: activeAgentSurfaceId(workspaceProjection),
+      agentSurfaceId: currentAgentSurfaceId(workspaceProjection),
       viewId: workspaceScene.context.agentViewId,
       connectionId: 'launch-workspace-1',
       scope: {
@@ -411,7 +415,7 @@ describe('DesktopAppHost', () => {
       assistantSpaceId: scene.context.scope.assistantSpaceId,
     };
     const launchWorkbench = activeWorkbench(projection);
-    const launchAgentSurfaceId = activeAgentSurfaceId(projection);
+    const launchAgentSurfaceId = currentAgentSurfaceId(projection);
     const catalog = createLaunchCatalog({
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
@@ -444,19 +448,8 @@ describe('DesktopAppHost', () => {
         viewId: scene.context.agentViewId,
         scope: launchScope,
       }),
-    ).resolves.toEqual({
-      requestId: 'launch-attach-1',
-      status: 'ready',
-      catalog,
-    });
-    expect(agentLaunch.attach).toHaveBeenCalledWith({
-      applicationInstanceId: 'app-1',
-      windowId: fixture.windowId,
-      workbenchInstanceId: launchWorkbench.workbenchInstanceId,
-      agentSurfaceId: launchAgentSurfaceId,
-      viewId: scene.context.agentViewId,
-      scope: launchScope,
-    });
+    ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
+    expect(agentLaunch.attach).not.toHaveBeenCalled();
 
     await expect(
       fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
@@ -490,7 +483,7 @@ describe('DesktopAppHost', () => {
     }
     const scope = { kind: 'unbound' as const, draftId: scene.context.scope.draftId };
     const workbench = activeWorkbench(fixture.projection);
-    const agentSurfaceId = activeAgentSurfaceId(fixture.projection);
+    const agentSurfaceId = currentAgentSurfaceId(fixture.projection);
     const catalog = createLaunchCatalog({
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
@@ -562,7 +555,7 @@ describe('DesktopAppHost', () => {
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
       workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
-      agentSurfaceId: activeAgentSurfaceId(fixture.projection),
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
       viewId: scene.context.agentViewId,
       connectionId: 'launch-first-submit',
       scope: { kind: 'unbound', draftId: scene.context.scope.draftId },
@@ -618,7 +611,7 @@ describe('DesktopAppHost', () => {
     );
     const committedProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
     const workbenchInstanceId = activeWorkbench(committedProjection).workbenchInstanceId;
-    const agentSurfaceId = activeAgentSurfaceId(committedProjection);
+    const agentSurfaceId = currentAgentSurfaceId(committedProjection);
     const sessionConnection = {
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
@@ -791,12 +784,9 @@ describe('DesktopAppHost', () => {
     if (!restoredScene || restoredScene.context.kind !== 'agent') {
       throw new Error('Expected an exact restored Assistant Scene.');
     }
-    vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
-      createAgentWorkspaceRuntime('assistant-space:local-user'),
-    );
     const assistantProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
     const assistantWorkbench = activeWorkbench(assistantProjection);
-    const assistantSurfaceId = activeAgentSurfaceId(assistantProjection);
+    const assistantSurfaceId = currentAgentSurfaceId(assistantProjection);
     const createBootstrap = vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap');
     await fixture.appHost.createAgentBootstrap(
       fixture.sender,
@@ -809,6 +799,9 @@ describe('DesktopAppHost', () => {
         restoredScene.context.agentViewId,
       ),
       vi.fn(),
+    );
+    expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(
+      createAssistantWorkspaceResolution(),
     );
     expect(createBootstrap).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1150,7 +1143,7 @@ describe('DesktopAppHost', () => {
     expect(fixture.registry.resolve).toHaveBeenCalledWith(workspace.workspacePath);
     if (!activeTab) throw new Error('Expected the restored Workspace Project Tab.');
     const workspaceWorkbench = activeWorkbench(committed);
-    const workspaceSurfaceId = activeAgentSurfaceId(committed);
+    const workspaceSurfaceId = currentAgentSurfaceId(committed);
     vi.mocked(fixture.agent.getWorkspace).mockReturnValue(
       createAgentWorkspaceRuntime(workspace.workspaceId),
     );
@@ -1343,7 +1336,7 @@ describe('DesktopAppHost', () => {
     );
     const assistantProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
     const assistantWorkbench = activeWorkbench(assistantProjection);
-    const assistantSurfaceId = activeAgentSurfaceId(assistantProjection);
+    const assistantSurfaceId = currentAgentSurfaceId(assistantProjection);
     const createBootstrap = vi.spyOn(fixture.appHost.agentBridge, 'createBootstrap');
     await fixture.appHost.createAgentBootstrap(
       fixture.sender,
@@ -1925,17 +1918,17 @@ describe('DesktopAppHost', () => {
       fixture.appHost.executeAssetCenter(
         fixture.sender,
         createAssetCenterHostRequest({
-          route: 'preview.detach',
+          route: 'session.detach',
           requestId: 'asset-center-detach-after-leave-1',
           identity,
         }),
       ),
     ).resolves.toMatchObject({
-      route: 'preview.detach',
+      route: 'session.detach',
       projection: { identity, preview: { status: 'empty' } },
     });
     expect(projectPreview).not.toHaveBeenCalled();
-    expect(assetCenter.getSnapshot(identity).preview).toEqual({ status: 'empty' });
+    expect(() => assetCenter.getSnapshot(identity)).toThrow('unavailable');
   });
 
   it('delegates canonical Asset Center batch routes only for the bound sender and session', async () => {
@@ -2026,7 +2019,7 @@ describe('DesktopAppHost', () => {
     const tab = opened.projection.window.tabs[0];
     if (!tab) throw new Error('Expected an opened Project Tab.');
     const workbench = activeWorkbench(opened.projection);
-    const agentSurfaceId = activeAgentSurfaceId(opened.projection);
+    const agentSurfaceId = currentAgentSurfaceId(opened.projection);
 
     await expect(
       fixture.appHost.createAgentBootstrap(
@@ -2061,7 +2054,7 @@ describe('DesktopAppHost', () => {
     const tab = opened.projection.window.tabs[0];
     if (!tab) throw new Error('Expected an opened Project Tab.');
     const workbench = activeWorkbench(opened.projection);
-    const agentSurfaceId = activeAgentSurfaceId(opened.projection);
+    const agentSurfaceId = currentAgentSurfaceId(opened.projection);
     const publish = vi.fn();
 
     await expect(
@@ -2082,20 +2075,20 @@ describe('DesktopAppHost', () => {
 
   it('routes exact projection cleanup by sender connection while business messages stay active-Scene fenced', async () => {
     const fixture = await createShellAppHost();
-    const retainedWorkbench = activeWorkbench(fixture.projection);
-    const retainedScene = retainedWorkbench.scene;
-    if (retainedScene.context.kind !== 'agent') {
+    const currentWorkbench = activeWorkbench(fixture.projection);
+    const currentScene = currentWorkbench.scene;
+    if (currentScene.context.kind !== 'agent') {
       throw new Error('Expected the fixture Entry Agent Scene.');
     }
     const connection = {
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
-      workbenchInstanceId: retainedWorkbench.workbenchInstanceId,
-      agentSurfaceId: activeAgentSurfaceId(fixture.projection),
+      workbenchInstanceId: currentWorkbench.workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
       assistantSpaceId: 'assistant-space:local-user',
       workspaceId: 'assistant-space:local-user',
-      viewId: retainedScene.context.agentViewId,
-      connectionId: 'connection-retained-1',
+      viewId: currentScene.context.agentViewId,
+      connectionId: 'connection-current-1',
     };
     const cleanup = vi
       .spyOn(fixture.appHost.agentBridge, 'sendProjectionControl')
@@ -2126,11 +2119,45 @@ describe('DesktopAppHost', () => {
     await expect(
       fixture.appHost.sendAgentMessage(
         fixture.sender,
-        createDesktopAgentMessageRequest('business-retained-1', connection, {
+        createDesktopAgentMessageRequest('business-current-1', connection, {
           type: 'getConversations',
         }),
       ),
     ).rejects.toThrow('exact Agent Surface');
+  });
+
+  it('detaches an exact Agent connection through its sender-bound Window', async () => {
+    const fixture = await createShellAppHost();
+    const current = activeWorkbench(fixture.projection);
+    if (current.scene.context.kind !== 'agent') {
+      throw new Error('Expected the fixture Entry Agent Scene.');
+    }
+    const connection = {
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: current.workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      assistantSpaceId: 'assistant-space:local-user',
+      workspaceId: 'assistant-space:local-user',
+      viewId: current.scene.context.agentViewId,
+      connectionId: 'connection-detach-1',
+    };
+    const detachConnection = vi
+      .spyOn(fixture.appHost.agentBridge, 'detachConnection')
+      .mockImplementation(() => undefined);
+
+    await expect(
+      fixture.appHost.detachAgentConnection(
+        fixture.sender,
+        createDesktopAgentDetachRequest('detach-connection-1', connection),
+      ),
+    ).resolves.toEqual({ requestId: 'detach-connection-1', status: 'detached' });
+
+    expect(detachConnection).toHaveBeenCalledWith(connection, {
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+    });
+    await fixture.appHost.dispose();
   });
 
   it('recursively detaches Agent connections with the exact Window resource owner', async () => {
@@ -2266,6 +2293,7 @@ async function createShellAppHost(options?: {
     logger,
     shell: fixture.service,
     agent,
+    assistantWorkspace: createAssistantWorkspaceResolution(),
     agentLaunch: options?.agentLaunch ?? createAgentLaunchRuntime(),
     workspaceGrants: fixture.workspaceGrants,
     conversationLifecycle: options?.conversationLifecycle ?? createConversationLifecycle(),
@@ -2375,7 +2403,6 @@ async function openExtensionsScene(fixture: Awaited<ReturnType<typeof createShel
     projection,
     identity: {
       windowId: fixture.windowId,
-      extensionManagementSessionId: scene.context.extensionManagementSessionId,
     },
   };
 }
@@ -2458,6 +2485,7 @@ function createAgentComposition(): AgentAppHost & {
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     })),
+    readRuntimeResidency: vi.fn(() => []),
     subscribeHomeProjection: vi.fn(() => () => undefined),
     dispose: vi.fn(async () => undefined),
   };
@@ -2533,6 +2561,18 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
       throw new Error('Agent turn start is not expected by this AppHost test.');
     },
     executeTurn: unavailable,
+    readMessageQueue: (conversationId) => ({
+      conversationId,
+      items: [],
+      pendingCount: 0,
+      sequence: 0,
+    }),
+    promoteQueuedMessage: () => {
+      throw new Error('Agent queue promotion is not expected by this AppHost test.');
+    },
+    cancelQueuedMessage: unavailable,
+    takeQueuedMessageForEdit: unavailable,
+    clearMessageQueue: unavailable,
     cancelTurn: () => {
       throw new Error('Agent cancellation is not expected by this AppHost test.');
     },
@@ -2554,6 +2594,19 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
     subscribeConversationProjection: () => {
       throw new Error('Agent projection subscription is not expected by this AppHost test.');
     },
+    bindVisiblePresentation: () => {
+      throw new Error('Agent visible binding is not expected by this AppHost test.');
+    },
+    protectConversationRuntime: () => {
+      throw new Error('Agent runtime protection is not expected by this AppHost test.');
+    },
+    readRuntimeResidency: () => ({
+      workspaceId,
+      visibleBindingCount: 0,
+      releaseRequested: false,
+      releasable: false,
+      conversations: [],
+    }),
     dispose: async () => undefined,
   };
 }
@@ -2575,16 +2628,25 @@ function createWorkspaceResolution(): AssetWorkspaceResolution {
   };
 }
 
+function createAssistantWorkspaceResolution(): AssetWorkspaceResolution {
+  return {
+    workspaceId: 'assistant-space:local-user',
+    workspacePath: '/Users/fixture/.openneko/assistant-spaces/local-user',
+    displayName: 'Assistant',
+    locator: { kind: 'relative', value: 'assistant-spaces/local-user' },
+  };
+}
+
 function activeWorkbench(projection: DesktopShellProjection) {
-  return resolveActiveDesktopWorkbenchInstance(projection.window.workbenches);
+  return resolveActiveDesktopWindowWorkbench(projection.window);
 }
 
 function activeScene(projection: DesktopShellProjection) {
   return activeWorkbench(projection).scene;
 }
 
-function activeAgentSurfaceId(projection: DesktopShellProjection): string {
-  const agentSurfaceId = activeWorkbench(projection).activeAgentSurfaceId;
+function currentAgentSurfaceId(projection: DesktopShellProjection): string {
+  const agentSurfaceId = activeWorkbench(projection).scene.slots.interaction?.agentSurfaceId;
   if (!agentSurfaceId) throw new Error('Expected an exact active Agent Surface.');
   return agentSurfaceId;
 }

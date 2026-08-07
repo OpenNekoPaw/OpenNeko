@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDesktopAgentBootstrapRequest,
+  createDesktopAgentDetachRequest,
   createDesktopAgentMessageRequest,
   DesktopAgentContractError,
   parseDesktopAgentBootstrapProjection,
-  parseDesktopAgentMessageEvent,
+  parseDesktopAgentDetachRequest,
+  parseDesktopAgentDetachResult,
+  parseDesktopAgentEvent,
   parseDesktopAgentMessageResult,
 } from './agent-contract';
 
@@ -27,7 +30,7 @@ describe('Desktop Agent contract', () => {
     });
   });
 
-  it('binds a retained Workspace Surface bootstrap to its exact conversation', () => {
+  it('binds a Workspace session bootstrap to its exact conversation', () => {
     expect(
       createDesktopAgentBootstrapRequest(
         'request-1',
@@ -45,6 +48,18 @@ describe('Desktop Agent contract', () => {
       viewId: 'view-1',
       conversationId: 'conversation-1',
     });
+  });
+
+  it('round-trips an exact connection detach request and result', () => {
+    const request = createDesktopAgentDetachRequest('detach-1', connection());
+
+    expect(parseDesktopAgentDetachRequest(request)).toEqual(request);
+    expect(
+      parseDesktopAgentDetachResult({ requestId: 'detach-1', status: 'detached' }, 'detach-1'),
+    ).toEqual({ requestId: 'detach-1', status: 'detached' });
+    expect(() =>
+      parseDesktopAgentDetachResult({ requestId: 'detach-1', status: 'accepted' }, 'detach-1'),
+    ).toThrowError(DesktopAgentContractError);
   });
 
   it('rejects invalid Agent messages before they reach Main routing', () => {
@@ -98,12 +113,22 @@ describe('Desktop Agent contract', () => {
 
   it('rejects an event with an unknown Host message type', () => {
     expect(() =>
-      parseDesktopAgentMessageEvent({
+      parseDesktopAgentEvent({
         connection: connection(),
         sequence: 1,
         message: { type: 'forgedHostMessage' },
       }),
     ).toThrowError(DesktopAgentContractError);
+  });
+
+  it('parses the connection terminal marker on the ordered Agent event stream', () => {
+    expect(
+      parseDesktopAgentEvent({
+        connection: connection(),
+        sequence: 3,
+        status: 'detached',
+      }),
+    ).toEqual({ connection: connection(), sequence: 3, status: 'detached' });
   });
 });
 
