@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Neko UI Validation'
+  short_description: 'Review UI behavior as advisory visual evidence'
+  default_prompt: 'Use $neko-ui-validation to produce advisory UI evidence and directly review every required visual artifact.'

@@ -58,9 +58,24 @@ pnpm gate:local
 pnpm package:desktop
 ```
 
-Documentation-only changes require formatting, local-link checks, and `git diff --check`. Desktop
-visual, interaction, CSP, IPC, focus, or media changes also require focused acceptance in the real
-Electron application.
+Documentation-only changes require formatting, local-link checks, and `git diff --check`. For
+Desktop visual, interaction, CSP, IPC, focus, or media changes, focused checks in the real Electron
+application are recommended as advisory evidence.
+
+Development work that adds or materially changes user-visible UI behavior should use
+[`.codex/skills/neko-ui-validation/SKILL.md`](.codex/skills/neko-ui-validation/SKILL.md) to build the
+affected-function inventory and perform separate functional, visual, and adjacent-regression
+checks. Evidence should use the authoritative runtime for every affected boundary. Desktop trust,
+preload, IPC, window or focus state, native resources, persistence, and lifecycle should use the real
+Electron product path; browser or component previews are supplemental only. UI acceptance must not
+pass while any required item is failed, blocked, missing, or unexecuted. Every required visual state
+must have its current image evidence directly inspected by an image-capable Agent with the state,
+observable findings, and uncertainty recorded. Screenshot existence, filenames, and scenario success
+do not replace visual review. Record changes with no user-visible impact as `not-applicable` and state
+the reason. UI validation is advisory and must not affect code-quality gates, task completion,
+commits, merges, or releases. Graphical execution, visual judgment, and their contract tests must not
+be added to `check:ci`, `gate:local`, `gate:remote`, `ci:*`, or GitHub Actions. Generic gates may keep
+only a negative orchestration check proving that these local entrypoints remain unreachable.
 
 Agent Evaluation harnesses, including `pnpm test:agent:eval`, real API runs, hidden or visible
 Desktop sessions, repeated matrices, ablations, and graphical Electron acceptance are explicit

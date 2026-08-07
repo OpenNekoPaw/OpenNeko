@@ -18,6 +18,8 @@
 !.codex/skills/neko-agent-evaluation/**
 !.codex/skills/neko-quality-review/
 !.codex/skills/neko-quality-review/**
+!.codex/skills/neko-ui-validation/
+!.codex/skills/neko-ui-validation/**
 
 # 依赖库与非 pnpm 锁文件
 node_modules/

@@ -30,6 +30,7 @@
     "test:local:agent:ablation:media-production": "node scripts/agent-eval/ablation/run.mjs --plan media-production-guidance",
     "test:local:agent:ablation:dry-run": "node scripts/agent-eval/ablation/run.mjs --plan thinking-budget --dry-run && node scripts/agent-eval/ablation/run.mjs --plan media-production-guidance --dry-run",
     "test:local:ui": "node scripts/run-desktop-ui-functional.mjs",
+    "test:local:ui:contract": "node --test scripts/local-ui-validation/ui-validation-skill.test.mjs",
     "test:local:media-openneko": "node scripts/run-desktop-openneko-qualification.mjs",
     "clean": "rm -rf node_modules/.cache",
     "generate:agent-eval:document-image-fixture": "node scripts/agent-eval/fixtures/generate-synthetic-document-image-epub.mjs",

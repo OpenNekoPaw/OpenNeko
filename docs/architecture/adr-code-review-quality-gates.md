@@ -214,6 +214,17 @@ loopback file-access 测试和真实 Electron 场景。UI 运行态测试不得�
 辅助；它们不经过 preload、sender-bound IPC、Electron CSP、窗口/焦点和应用资源生命周期，
 不能替代 Desktop 验收。
 
+任何已实现的新增或实质变更用户可见 UI 行为，推荐使用
+`.codex/skills/neko-ui-validation/SKILL.md` 作为唯一 UI 参考验证流程 owner。检查受影响功能清单时，分别记录
+功能、视觉和适用的相邻回归证据；涉及 Desktop 边界时，真实 Electron 产品路径是权威运行时，
+较窄的浏览器或组件运行时不得替代。任何必需项失败、阻塞、缺失或未执行时，该 UI 报告不得标记为通过；
+无用户可见影响时必须记录 `not-applicable` 及原因。详细清单构建、执行和报告方法由该 Skill 单一维护，
+本文不建立第二套流程。每个必需视觉状态必须由具备图像理解能力的 Agent 实际读取当前图像证据，并记录
+对应状态、可观察结论与不确定性；截图存在、文件名、场景成功、DOM 数据或历史证据均不能替代视觉审阅。
+UI 结果仅作非阻塞参考，不得影响代码质量门禁、任务完成、提交、合并或发布，也不得成为 required check。
+图形化执行、视觉判断及其契约测试不得进入 `check:ci`、`gate:local`、`gate:remote`、`ci:*` 或 GitHub
+Actions；通用门禁只可保留验证这些本地入口不可达的反向编排约束。
+
 场景必须使用隔离合成 fixture，并通过可见 UI、public Desktop port 和 owning project/media
 service 完成；不得读取真实用户工作区、配置、凭据或增加 test-only 成功入口。OpenSpec/PR
 只提交脱敏摘要，包含 scenario id、命令、Desktop 版本、fixture identity、结果、失败分类、
@@ -292,5 +303,9 @@ proposal / spec scenario
 ## 自动化与人工边界
 
 机器检查负责格式、类型、依赖、台账、契约和可重复测试。人工 review 负责架构取舍、功能偏离、UX、专业创作工作流、性能解释和残余风险判断。
+
+UI 参考验证可以组合自动化功能证据和人工视觉判断，并遵守 `neko-ui-validation` 的同一受影响功能清单、
+权威运行时和 fail-visible 报告语义。其结果不参与代码完成判定；图形化 Electron 执行、视觉判断及相关
+契约测试不纳入 CI 或通用 gate。
 
 新增质量工具时，应优先接入现有脚本或 OpenSpec validation tasks，避免形成只靠口头约定的并行流程。

@@ -289,6 +289,7 @@
 ## 测试与质量门禁
 
 - 单元测试只是实现级反馈，不代表功能验收完成。新增功能、bug 修复和非平凡重构必须按影响范围完成从局部到系统的验证；若同时命中多种变更类型，验证要求取并集。
+- 新增或实质修改用户可见 UI 后，推荐使用 `.codex/skills/neko-ui-validation/SKILL.md` 建立受影响功能清单，在权威运行边界内执行功能、视觉和相邻回归检查，并按 `passed`、`failed`、`blocked` 或 `not-applicable` 如实记录参考结论与证据。每个已执行的视觉状态应由具备图像理解能力的 Agent 实际读取当前图像证据并记录可观察结论；不得根据截图文件存在、文件名、场景成功、DOM 数据或历史证据推断视觉通过。UI 报告自身存在失败、阻塞、缺失或未执行项时不得声明该报告通过，但这些结果仅作非阻塞参考，不得影响代码质量门禁、任务完成、提交、合并或发布。图形化执行、视觉判断及其契约测试不得加入 `check:ci`、`gate:local`、`gate:remote`、`ci:*` 或 GitHub Actions；通用门禁可以保留仅验证这些本地入口不可达的反向编排约束。没有用户可见影响时可记录 `not-applicable` 及理由，不得虚构图形化验证。
 
 | 变更类型                                                                                                                    | 最低必要验证                                                                                                                                                                                                   |
 | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -300,7 +301,7 @@
 | Node/FFmpeg 媒体 runtime                                                                                                    | 聚焦 Node/FFmpeg、Range/PCM、取消与资源释放测试；涉及 Renderer 时增加真实 Electron 媒体路径验收                                                                                                                |
 | Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                                 | 显式本地运行 `pnpm test:agent:eval`；该命令不得进入 CI，且仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                                                            |
 | prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 Desktop Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 运行真实 API：功能路径用可见 Electron UI，批量回归用隐藏完整 Desktop session；覆盖适用的对话/压缩/重开/生成记录/切换/隔离矩阵，无法运行时记录 blocker 与风险 |
-| Renderer/Webview 视觉、交互、CSP、消息、焦点或媒体                                                                          | 受影响构建/测试，加真实 Electron Desktop 聚焦场景；普通浏览器/Vite/Chrome 不能替代 preload/IPC/窗口生命周期验收；UI 运行态测试不得进入 CI                                                                      |
+| Renderer/Webview 用户可见 UI                                                                                                | 推荐按 `.codex/skills/neko-ui-validation/SKILL.md` 生成非阻塞参考证据；Desktop 边界使用真实 Electron；UI 运行态、视觉判断及其契约测试不得进入 CI 或通用 gate                                                   |
 | 发布链路或影响面不易限定的高风险改动                                                                                        | `pnpm ci:local`，并按领域分别显式本地运行适用的 evaluation、Electron Desktop UI 或 Node/FFmpeg 运行态验证；不得把本地专用入口并入 CI 命令                                                                      |
 
 - 新路径、独立离线数据处理脚本和 bug 修复必须同时验证结果与执行路径：长期生产测试正向断言唯一 canonical contract、handler、renderer、adapter 或 Node/FFmpeg path 被命中；替换期间对旧路径的反向验证属于交付前必须删除的一次性证据。离线脚本必须额外证明不会被产品代码、构建、启动、通用测试或 CI 调用。
@@ -318,7 +319,7 @@
 2. canonical path 已实现并接入；本次边界内被替代的旧实现、入口、导出、注册、fixture、专用 diagnostic 和临时验证测试均已删除，不存在被禁用、poison、fail-closed 隔离或仍可触发的旧路径。
 3. 抽象保持精简，未引入无真实变化点的接口层，也未保留平行接口、多实现或多种事实来源绕开设计问题。
 4. 回归测试能够证明目标行为或 bug 根因，并覆盖关键中间状态和执行路径。
-5. 已完成“测试与质量门禁”中所有适用验证，不能只依据单元测试或局部构建判断通过。
+5. 已完成“测试与质量门禁”中所有适用的阻塞验证，不能只依据单元测试或局部构建判断通过；非阻塞 UI 参考验证不属于该完成条件。
 6. 影响使用方式、架构、契约或模块入口时，相关 README、架构文档、OpenSpec 或包级文档已同步。
 7. 未执行验证、外部阻塞和残余风险已在交付说明中明确记录。
 
