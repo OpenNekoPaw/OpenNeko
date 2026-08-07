@@ -117,7 +117,6 @@ export interface DesktopShellOpenContentResult {
 }
 
 export interface DesktopProjectCatalogRemovalResult {
-  readonly conversations: readonly DesktopAgentHomeNavigationIdentity[];
   readonly projection: DesktopShellProjection;
 }
 
@@ -1124,41 +1123,12 @@ export class DesktopShellService {
       const state = await this.options.stateRepository.read();
       requireStoredWindow(state, windowId);
       const requestedProjectIds = new Set(projectIds);
+      const projects = resolveRequestedProjects(state, this.retainedProjects, projectIds);
       const storedProjectIds = new Set(
         state.projects
           .filter((project) => requestedProjectIds.has(project.projectId))
           .map((project) => project.projectId),
       );
-      if (projectIds.length === 0 || requestedProjectIds.size !== projectIds.length) {
-        throw new DesktopShellContractError(
-          'invalid-desktop-shell-payload',
-          'Desktop Project removal identities must be non-empty and unique.',
-        );
-      }
-      const projects = projectIds.map((projectId) => {
-        const storedProject = state.projects.find((project) => project.projectId === projectId);
-        const project = storedProject ?? this.retainedProjects.get(projectId);
-        if (!project) {
-          throw new DesktopShellContractError(
-            'desktop-shell-project-not-found',
-            `Desktop Project '${projectId}' is not present in the stable catalog.`,
-          );
-        }
-        return project;
-      });
-      const currentProjection = this.projectWindow(state, windowId);
-      const conversations = projectIds.flatMap((projectId) => {
-        const group = currentProjection.conversationNavigation.groups.find(
-          (candidate) => candidate.kind === 'project' && candidate.projectId === projectId,
-        );
-        if (!group || group.kind !== 'project') {
-          throw new DesktopShellContractError(
-            'desktop-shell-project-identity-mismatch',
-            `Desktop Project '${projectId}' has no authoritative conversation group.`,
-          );
-        }
-        return group.conversations.map((conversation) => conversation.navigation);
-      });
       if (
         this.options.workspaceRegistry.removeProjects &&
         !(await this.options.workspaceRegistry.removeProjects(
@@ -1186,9 +1156,31 @@ export class DesktopShellService {
       projectIds.forEach((projectId) => this.retainedProjects.delete(projectId));
       await this.emitAll(committed);
       return {
-        conversations,
         projection: this.projectWindow(committed, windowId),
       };
+    });
+  }
+
+  async resolveProjectWorkspaceConversations(
+    windowId: string,
+    projectIds: readonly string[],
+    rendererSessionId: string,
+  ): Promise<readonly DesktopAgentHomeNavigationIdentity[]> {
+    return this.enqueue(async () => {
+      this.requireActive();
+      this.assertMutationContext(windowId, rendererSessionId);
+      const state = await this.options.stateRepository.read();
+      requireStoredWindow(state, windowId);
+      const projects = resolveRequestedProjects(state, this.retainedProjects, projectIds);
+      const workspaceIds = new Set(projects.map((project) => project.workspaceId));
+      const conversations = this.readAgentHomeProjection().conversations.flatMap((conversation) =>
+        conversation.navigation.owner.kind === 'workspace' &&
+        workspaceIds.has(conversation.navigation.owner.workspaceId)
+          ? [conversation.navigation]
+          : [],
+      );
+      this.assertMutationContext(windowId, rendererSessionId);
+      return Object.freeze(conversations);
     });
   }
 
@@ -1916,6 +1908,32 @@ function restoreWindowWorkbench(
   return {
     ...createDefaultDesktopWorkbenchLayout(window.windowId),
   };
+}
+
+function resolveRequestedProjects(
+  state: DesktopShellStoredState,
+  retainedProjects: ReadonlyMap<string, DesktopProjectCatalogItem>,
+  projectIds: readonly string[],
+): readonly DesktopProjectCatalogItem[] {
+  const requestedProjectIds = new Set(projectIds);
+  if (projectIds.length === 0 || requestedProjectIds.size !== projectIds.length) {
+    throw new DesktopShellContractError(
+      'invalid-desktop-shell-payload',
+      'Desktop Project identities must be non-empty and unique.',
+    );
+  }
+  return projectIds.map((projectId) => {
+    const project =
+      state.projects.find((candidate) => candidate.projectId === projectId) ??
+      retainedProjects.get(projectId);
+    if (!project) {
+      throw new DesktopShellContractError(
+        'desktop-shell-project-not-found',
+        `Desktop Project '${projectId}' is not present in the stable catalog.`,
+      );
+    }
+    return project;
+  });
 }
 
 function requireStoredProject(

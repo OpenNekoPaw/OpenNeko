@@ -31,7 +31,8 @@ export const DESKTOP_SHELL_CHANNELS = {
   projectionEvent: 'openneko:desktop:shell:projection:event',
   projectOpenContent: 'openneko:desktop:project:content:open',
   projectOpenCatalog: 'openneko:desktop:project:catalog:open',
-  projectDelete: 'openneko:desktop:project:delete',
+  projectRemove: 'openneko:desktop:project:remove',
+  projectConversationDelete: 'openneko:desktop:project:conversation:delete',
   projectRequestProfile: 'openneko:desktop:project:profile:request',
   conversationDelete: 'openneko:desktop:home:conversation:delete',
   homeActivate: 'openneko:desktop:home:activate',
@@ -71,7 +72,7 @@ export interface DesktopProjectOpenRequest extends DesktopWindowMutationRequest 
   readonly projectId: string;
 }
 
-export interface DesktopProjectDeleteRequest extends DesktopWindowMutationRequest {
+export interface DesktopProjectSelectionRequest extends DesktopWindowMutationRequest {
   readonly projectIds: readonly string[];
 }
 
@@ -327,7 +328,8 @@ export interface OpenNekoDesktopShellBridge {
   readonly projects: {
     openContent(): Promise<DesktopOpenContentResult>;
     open(projectId: string): Promise<DesktopOpenContentResult>;
-    delete(projectIds: readonly string[]): Promise<DesktopShellProjection>;
+    remove(projectIds: readonly string[]): Promise<DesktopShellProjection>;
+    deleteConversations(projectIds: readonly string[]): Promise<DesktopShellProjection>;
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly conversations: {
@@ -407,10 +409,23 @@ export function projectDesktopConversationNavigation(
     if (explicitProjectId !== undefined) {
       const projectGroup = projectGroups.get(explicitProjectId);
       if (!projectGroup) {
-        throw new DesktopShellContractError(
-          'desktop-shell-project-identity-mismatch',
-          `Agent Conversation '${conversation.navigation.conversationId}' references unknown Project '${explicitProjectId}'.`,
-        );
+        if (conversation.navigation.owner.kind === 'workspace') {
+          const workspaceId = conversation.navigation.owner.workspaceId;
+          const current = unavailableWorkspaceGroups.get(workspaceId) ?? {
+            kind: 'workspace' as const,
+            workspaceId,
+            fieldNames: ['groupedProjectId'],
+            message: `Project '${explicitProjectId}' is not present in the Project catalog.`,
+            conversations: [],
+          };
+          unavailableWorkspaceGroups.set(workspaceId, appendConversation(current, conversation));
+        } else {
+          const key = standaloneGroupKey(conversation.navigation.owner);
+          const current =
+            standaloneGroups.get(key) ?? createStandaloneGroup(conversation.navigation.owner);
+          standaloneGroups.set(key, appendConversation(current, conversation));
+        }
+        continue;
       }
       if (
         conversation.navigation.owner.kind === 'workspace' &&
@@ -456,7 +471,7 @@ export function projectDesktopConversationNavigation(
   return Object.freeze({
     groups: Object.freeze(
       [
-        ...projectGroups.values(),
+        ...[...projectGroups.values()].filter((group) => group.conversations.length > 0),
         ...unavailableWorkspaceGroups.values(),
         ...standaloneGroups.values(),
       ].map((group) =>
@@ -579,11 +594,11 @@ export function createDesktopProjectOpenRequest(
   };
 }
 
-export function createDesktopProjectDeleteRequest(
+export function createDesktopProjectSelectionRequest(
   requestId: string,
   projectIds: readonly string[],
   rendererSessionId: string,
-): DesktopProjectDeleteRequest {
+): DesktopProjectSelectionRequest {
   return {
     ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
     projectIds: requireUniqueProjectIds(projectIds),
@@ -662,14 +677,16 @@ export function parseDesktopProjectOpenRequest(value: unknown): DesktopProjectOp
   );
 }
 
-export function parseDesktopProjectDeleteRequest(value: unknown): DesktopProjectDeleteRequest {
-  const record = requireRecord(value, 'Desktop Project delete request must be an object.');
+export function parseDesktopProjectSelectionRequest(
+  value: unknown,
+): DesktopProjectSelectionRequest {
+  const record = requireRecord(value, 'Desktop Project selection request must be an object.');
   requireExactKeys(
     record,
     ['requestId', 'projectIds', 'rendererSessionId'],
-    'Desktop Project delete request',
+    'Desktop Project selection request',
   );
-  return createDesktopProjectDeleteRequest(
+  return createDesktopProjectSelectionRequest(
     parseDesktopShellRequestId(record),
     requireUniqueProjectIds(
       requireArray(record['projectIds'], 'Desktop Project identities must be an array.'),

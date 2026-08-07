@@ -159,7 +159,7 @@ describe('DesktopShellService', () => {
     expect(removed.projection.catalog.projects).toEqual([]);
   });
 
-  it('captures only conversations from the exact authoritative Project groups', async () => {
+  it('selects only exact Workspace-owned conversations without coupling them to Project removal', async () => {
     const projects: readonly DesktopProjectCatalogItem[] = [
       {
         projectId: 'content:workspace-1',
@@ -186,6 +186,7 @@ describe('DesktopShellService', () => {
           workspaceHomeConversation('conversation:second', 'workspace-2'),
           {
             ...workspaceHomeConversation('conversation:assistant', 'workspace-1'),
+            groupedProjectId: 'content:workspace-1',
             navigation: {
               conversationId: 'conversation:assistant',
               owner: {
@@ -203,19 +204,81 @@ describe('DesktopShellService', () => {
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
     const projection = await fixture.service.getProjection(windowId);
 
-    const removed = await fixture.service.removeProjectsFromCatalog(
+    const conversations = await fixture.service.resolveProjectWorkspaceConversations(
       windowId,
       ['content:workspace-1'],
       projection.rendererSessionId,
     );
 
-    expect(removed.conversations).toEqual([
+    expect(conversations).toEqual([
       {
         conversationId: 'conversation:first',
         owner: { kind: 'workspace', workspaceId: 'workspace-1' },
       },
     ]);
+    const removed = await fixture.service.removeProjectsFromCatalog(
+      windowId,
+      ['content:workspace-1'],
+      projection.rendererSessionId,
+    );
     expect(removed.projection.catalog.projects).toEqual([projects[1]]);
+    expect(removed.projection.agentHome.conversations).toHaveLength(3);
+    expect(removed.projection.conversationNavigation.groups).toEqual([
+      expect.objectContaining({
+        kind: 'project',
+        projectId: 'content:workspace-2',
+        conversations: [expect.objectContaining({ title: 'conversation:second' })],
+      }),
+      expect.objectContaining({
+        kind: 'workspace',
+        workspaceId: 'workspace-1',
+        conversations: [expect.objectContaining({ title: 'conversation:first' })],
+      }),
+      expect.objectContaining({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        conversations: [expect.objectContaining({ title: 'conversation:assistant' })],
+      }),
+    ]);
+  });
+
+  it('validates the complete Project conversation cleanup identity set before selecting targets', async () => {
+    const project: DesktopProjectCatalogItem = {
+      projectId: 'content:workspace-1',
+      workspaceId: 'workspace-1',
+      profile: 'content',
+      displayName: 'First',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-06T00:00:00.000Z',
+    };
+    const fixture = createFixture(undefined, 'home', undefined, true, [], [project]);
+    fixture.service.setAgentHomeProjectionSource({
+      readHomeProjection: () => ({
+        conversations: [workspaceHomeConversation('conversation:first', 'workspace-1')],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }),
+      subscribeHomeProjection: () => () => undefined,
+    });
+    const windowId = await fixture.service.claimWindowId();
+    fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const projection = await fixture.service.getProjection(windowId);
+
+    await expect(
+      fixture.service.resolveProjectWorkspaceConversations(
+        windowId,
+        [project.projectId, project.projectId],
+        projection.rendererSessionId,
+      ),
+    ).rejects.toMatchObject({ code: 'invalid-desktop-shell-payload' });
+    await expect(
+      fixture.service.resolveProjectWorkspaceConversations(
+        windowId,
+        [project.projectId, 'content:missing'],
+        projection.rendererSessionId,
+      ),
+    ).rejects.toMatchObject({ code: 'desktop-shell-project-not-found' });
+    expect(fixture.registry.removeProjects).not.toHaveBeenCalled();
+    expect((await fixture.service.getProjection(windowId)).agentHome.conversations).toHaveLength(1);
   });
 
   it('retains Workspace conversations when no Project is open', async () => {

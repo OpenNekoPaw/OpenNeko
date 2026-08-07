@@ -10,7 +10,7 @@
     "./application-settings-service": "./src/application-settings-service.ts",
     "./application-settings-state": "./src/application-settings-state.ts",
     "./desktop-shell-contract": "./src/desktop-shell-contract.ts",
-    "./desktop-project-conversation-management-service": "./src/desktop-project-conversation-management-service.ts",
+    "./desktop-project-management-service": "./src/desktop-project-management-service.ts",
     "./desktop-shell-service": "./src/desktop-shell-service.ts",
     "./desktop-shell-state": "./src/desktop-shell-state.ts",
     "./desktop-scene-contract": "./src/desktop-scene-contract.ts",

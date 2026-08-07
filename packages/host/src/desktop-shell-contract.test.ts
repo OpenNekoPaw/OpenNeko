@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   createDesktopConversationDeleteRequest,
   createDesktopProfileRequest,
-  createDesktopProjectDeleteRequest,
+  createDesktopProjectSelectionRequest,
   createDesktopProjectOpenRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
-  parseDesktopProjectDeleteRequest,
+  parseDesktopProjectSelectionRequest,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
   projectDesktopConversationNavigation,
@@ -76,16 +76,40 @@ describe('Desktop Shell contract', () => {
     });
   });
 
-  it('retains unavailable Workspace conversations and rejects unknown explicit associations', () => {
+  it('omits Projects without conversations from grouped navigation', () => {
+    expect(
+      projectDesktopConversationNavigation(validProjection().catalog, {
+        conversations: [],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      }).groups,
+    ).toEqual([]);
+  });
+
+  it('isolates unavailable Workspace and missing presentation associations by owner', () => {
+    const standaloneAssistant = conversation('standalone-assistant', {
+      kind: 'assistant',
+      assistantSpaceId: 'assistant-space:other',
+    });
     expect(
       projectDesktopConversationNavigation(
         { projects: [] },
         {
           conversations: [
-            conversation('workspace-conversation', {
-              kind: 'workspace',
-              workspaceId: 'workspace-missing',
-            }),
+            {
+              ...conversation('workspace-conversation', {
+                kind: 'workspace',
+                workspaceId: 'workspace-missing',
+              }),
+              groupedProjectId: 'project-removed',
+            },
+            {
+              ...conversation('assistant-conversation', {
+                kind: 'assistant',
+                assistantSpaceId: 'assistant-space:local-user',
+              }),
+              groupedProjectId: 'project-removed',
+            },
+            standaloneAssistant,
           ],
           attention: { needsInput: 0, needsReview: 0, running: 0 },
         },
@@ -94,28 +118,20 @@ describe('Desktop Shell contract', () => {
       expect.objectContaining({
         kind: 'workspace',
         workspaceId: 'workspace-missing',
-        fieldNames: ['workspaceId'],
+        fieldNames: ['groupedProjectId'],
         conversations: [expect.objectContaining({ title: 'workspace-conversation' })],
       }),
+      expect.objectContaining({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        conversations: [expect.objectContaining({ title: 'assistant-conversation' })],
+      }),
+      expect.objectContaining({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:other',
+        conversations: [standaloneAssistant],
+      }),
     ]);
-    expect(() =>
-      projectDesktopConversationNavigation(validProjection().catalog, {
-        conversations: [
-          {
-            ...conversation('assistant-conversation', {
-              kind: 'assistant',
-              assistantSpaceId: 'assistant-space:local-user',
-            }),
-            groupedProjectId: 'project-missing',
-          },
-        ],
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-      }),
-    ).toThrowError(
-      expect.objectContaining<Partial<DesktopShellContractError>>({
-        code: 'desktop-shell-project-identity-mismatch',
-      }),
-    );
   });
 
   it('creates fixed profile and sender-bound mutation requests', () => {
@@ -136,7 +152,7 @@ describe('Desktop Shell contract', () => {
       projectId: 'content:workspace-1',
     });
     expect(
-      createDesktopProjectDeleteRequest(
+      createDesktopProjectSelectionRequest(
         'request-4',
         ['content:workspace-1', 'content:workspace-2'],
         'renderer-session-1',
@@ -165,19 +181,19 @@ describe('Desktop Shell contract', () => {
     });
   });
 
-  it('strictly rejects invalid Project delete payloads', () => {
+  it('strictly rejects invalid Project selection payloads', () => {
     expect(() =>
-      parseDesktopProjectDeleteRequest({
+      parseDesktopProjectSelectionRequest({
         requestId: 'request-1',
         rendererSessionId: 'renderer-session-1',
         projectId: 'content:workspace-1',
       }),
     ).toThrowError(DesktopShellContractError);
     expect(() =>
-      createDesktopProjectDeleteRequest('request-2', [], 'renderer-session-1'),
+      createDesktopProjectSelectionRequest('request-2', [], 'renderer-session-1'),
     ).toThrowError('At least one Desktop Project identity is required.');
     expect(() =>
-      createDesktopProjectDeleteRequest(
+      createDesktopProjectSelectionRequest(
         'request-3',
         ['content:workspace-1', 'content:workspace-1'],
         'renderer-session-1',
@@ -456,17 +472,7 @@ function validProjection() {
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
-    conversationNavigation: {
-      groups: [
-        {
-          kind: 'project' as const,
-          projectId: 'content:workspace-1',
-          workspaceId: 'workspace-1',
-          displayName: 'Fixture',
-          conversations: [],
-        },
-      ],
-    },
+    conversationNavigation: { groups: [] },
     domains: [
       {
         surface: 'agent' as const,
