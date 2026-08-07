@@ -1,4 +1,5 @@
 import {
+  BotIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CloseIcon,
@@ -6,15 +7,17 @@ import {
   FolderIcon,
   GridIcon,
   IconButton,
+  MessageIcon,
   PackageIcon,
   PlusIcon,
   RemoveIcon,
   SearchIcon,
   SettingsIcon,
-  StorylineIcon,
   Tooltip,
   TooltipProvider,
   TrashIcon,
+  UserIcon,
+  UsersIcon,
   WarningIcon,
   WorkbenchEditorTabs,
   toCodiconClassName,
@@ -2271,7 +2274,7 @@ function PrimaryRecentNavigation({
                   title={projectUnavailable?.message}
                   onClick={() => onOpenRecent(project.projectId)}
                 >
-                  <FolderIcon size={15} />
+                  {conversationGroupIcon(group)}
                   <span>{project.displayName}</span>
                 </button>
                 <span className="primary-conversation-group__count">
@@ -2327,7 +2330,7 @@ function PrimaryRecentNavigation({
                   icon={collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
                   onClick={() => toggleCollapsed(group)}
                 />
-                <StorylineIcon size={14} />
+                {conversationGroupIcon(group)}
                 <span className="primary-conversation-group__label">
                   {formatStandaloneConversationGroup(group, t)}
                 </span>
@@ -2405,7 +2408,10 @@ function ConversationNavigationRow({
         title={conversation.unavailable?.message}
         onClick={() => onOpen(conversation)}
       >
-        <StorylineIcon size={13} />
+        <MessageIcon
+          className="primary-conversation-group__identity-icon is-conversation"
+          size={13}
+        />
         <span>{conversation.title}</span>
       </button>
       <span className="primary-navigation-state">
@@ -2458,6 +2464,29 @@ function conversationGroupKey(group: DesktopConversationNavigationGroup): string
       return `character:${group.characterId}`;
     case 'room':
       return `room:${group.roomId}`;
+  }
+}
+
+function conversationGroupIcon(group: DesktopConversationNavigationGroup): JSX.Element {
+  switch (group.kind) {
+    case 'project':
+      return (
+        <FolderIcon className="primary-conversation-group__identity-icon is-project" size={15} />
+      );
+    case 'workspace':
+      return (
+        <FolderIcon className="primary-conversation-group__identity-icon is-workspace" size={15} />
+      );
+    case 'assistant':
+      return (
+        <BotIcon className="primary-conversation-group__identity-icon is-assistant" size={14} />
+      );
+    case 'character':
+      return (
+        <UserIcon className="primary-conversation-group__identity-icon is-character" size={14} />
+      );
+    case 'room':
+      return <UsersIcon className="primary-conversation-group__identity-icon is-room" size={14} />;
   }
 }
 

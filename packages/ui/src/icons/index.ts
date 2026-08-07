@@ -41,6 +41,7 @@ export {
   ClockIcon,
 } from './action';
 export { ErrorIcon, WarningIcon, SuccessIcon, LoadingIcon, InfoIcon } from './status';
+export { BotIcon, MessageIcon, UserIcon, UsersIcon } from './identity';
 export {
   CodeIcon,
   FileIcon,

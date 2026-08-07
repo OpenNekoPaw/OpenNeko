@@ -884,6 +884,14 @@ describe('DesktopApplication scene lifecycle', () => {
     if (!projectButton || !conversationButton || !newConversationButton) {
       throw new Error('Desktop fixture requires recent Project and conversation actions.');
     }
+    expect(
+      projectButton.querySelector('.primary-conversation-group__identity-icon.is-project'),
+    ).not.toBeNull();
+    expect(
+      conversationButton.querySelector(
+        '.primary-conversation-group__identity-icon.is-conversation',
+      ),
+    ).not.toBeNull();
     await act(async () => projectButton.click());
     await waitFor(() => transition.mock.calls.length === 1);
     await act(async () => newConversationButton.click());
@@ -1139,6 +1147,9 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(heading?.textContent).toContain('Unavailable workspace');
     expect(heading?.textContent).not.toContain('workspaceId');
     expect(
+      heading?.querySelector('.primary-conversation-group__identity-icon.is-workspace'),
+    ).not.toBeNull();
+    expect(
       heading?.querySelector(':scope > .primary-navigation-state .primary-navigation-unavailable'),
     ).not.toBeNull();
     expect(group.querySelector('.primary-conversation-group__diagnostic')).toBeNull();
@@ -1266,7 +1277,17 @@ describe('DesktopApplication scene lifecycle', () => {
     );
     if (!group) throw new Error('Desktop fixture requires a standalone Assistant group.');
     expect(group.textContent).toContain('Personal assistant');
+    expect(
+      group.querySelector(
+        '.primary-conversation-group__standalone-heading .primary-conversation-group__identity-icon.is-assistant',
+      ),
+    ).not.toBeNull();
     expect(group.querySelectorAll('.primary-recent-conversation-row')).toHaveLength(5);
+    expect(
+      group.querySelectorAll(
+        '.primary-recent-conversation-row .primary-conversation-group__identity-icon.is-conversation',
+      ),
+    ).toHaveLength(5);
     expect(group.textContent).not.toContain('Assistant conversation 1');
     expect(group.textContent).toContain('Assistant conversation 6');
 
@@ -1288,6 +1309,89 @@ describe('DesktopApplication scene lifecycle', () => {
       { kind: 'restore-conversation', navigation: conversations[0]?.navigation },
       activeScene(projection).sceneId,
     );
+    await act(async () => root.unmount());
+  });
+
+  it('renders distinct Character and Room owner icons above shared Conversation icons', async () => {
+    const base = createProjection();
+    const conversations = [
+      {
+        navigation: {
+          conversationId: 'character-conversation-1',
+          owner: {
+            kind: 'character' as const,
+            characterId: 'character-1',
+            characterRunId: 'character-run-1',
+          },
+        },
+        title: 'Character conversation',
+        updatedAt: '2026-08-07T01:00:00.000Z',
+        attention: 'none' as const,
+        lastActivity: {
+          kind: 'conversation-updated' as const,
+          occurredAt: '2026-08-07T01:00:00.000Z',
+        },
+      },
+      {
+        navigation: {
+          conversationId: 'room-conversation-1',
+          owner: {
+            kind: 'room' as const,
+            roomId: 'room-1',
+            roomRunId: 'room-run-1',
+          },
+        },
+        title: 'Room conversation',
+        updatedAt: '2026-08-07T02:00:00.000Z',
+        attention: 'none' as const,
+        lastActivity: {
+          kind: 'conversation-updated' as const,
+          occurredAt: '2026-08-07T02:00:00.000Z',
+        },
+      },
+    ];
+    const catalog = { projects: [] };
+    const agentHome = {
+      conversations,
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    };
+    installBridge({ projection });
+    const { container, root } = await renderApplication();
+
+    const characterGroup = container.querySelector<HTMLElement>(
+      '.primary-conversation-group[data-group-kind="character"]',
+    );
+    const roomGroup = container.querySelector<HTMLElement>(
+      '.primary-conversation-group[data-group-kind="room"]',
+    );
+    if (!characterGroup || !roomGroup) {
+      throw new Error('Desktop fixture requires Character and Room groups.');
+    }
+    expect(
+      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-character'),
+    ).not.toBeNull();
+    expect(
+      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-room'),
+    ).not.toBeNull();
+    expect(
+      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-conversation'),
+    ).not.toBeNull();
+    expect(
+      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-conversation'),
+    ).not.toBeNull();
+    expect(
+      characterGroup.querySelector('.primary-conversation-group__identity-icon.is-room'),
+    ).toBeNull();
+    expect(
+      roomGroup.querySelector('.primary-conversation-group__identity-icon.is-character'),
+    ).toBeNull();
+
     await act(async () => root.unmount());
   });
 
