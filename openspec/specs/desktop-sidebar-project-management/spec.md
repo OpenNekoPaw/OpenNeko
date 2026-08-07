@@ -5,7 +5,7 @@ TBD - created by archiving change manage-sidebar-project-conversations. Update P
 ## Requirements
 ### Requirement: Sidebar groups conversations by owning context
 
-The Desktop primary sidebar SHALL render each Project, unavailable Workspace, personal Assistant, Character, and Room context as one explicit group whose conversation children can be collapsed and expanded independently from the active Scene.
+The Desktop primary sidebar SHALL render each Project, unavailable Workspace, personal Assistant, Character and Room context that contains at least one conversation as one explicit group whose conversation children can be collapsed and expanded independently from the active Scene. It SHALL NOT mirror Project catalog records that have no conversations.
 
 #### Scenario: User collapses a Project group
 
@@ -19,9 +19,15 @@ The Desktop primary sidebar SHALL render each Project, unavailable Workspace, pe
 - **THEN** the sidebar initially renders only the most recently updated bounded subset
 - **AND** the user can explicitly show all conversations without changing another group's state
 
+#### Scenario: Project has no conversations
+
+- **WHEN** a Project catalog record has no grouped conversation
+- **THEN** PrimarySidebar does not render that Project group
+- **AND** the Project remains available in the complete Project catalog
+
 ### Requirement: Project group exposes project-scoped actions
 
-Each available Project group SHALL expose distinct controls to open the Project, create or focus its new-conversation draft, and delete the Project registration together with its authoritative conversation group.
+Each available Project group SHALL expose distinct controls to open the Project, create or focus its new-conversation draft, remove the Project registration while preserving conversations, and explicitly delete exact Workspace-owned Project conversations while preserving the Project.
 
 #### Scenario: User opens a Project
 
@@ -35,12 +41,18 @@ Each available Project group SHALL expose distinct controls to open the Project,
 - **THEN** Desktop opens that exact Project's canonical Workspace draft
 - **AND** a persisted conversation identity is created only by the existing first-submit lifecycle
 
-#### Scenario: User deletes a Project group
+#### Scenario: User removes a Project group
 
-- **WHEN** the user confirms deletion from the Project group
-- **THEN** Desktop invokes the same package-owned batch Project deletion contract used by the Project catalog
-- **AND** the group and its deleted conversations disappear from the next authoritative sidebar projection
+- **WHEN** the user confirms Project removal from the group
+- **THEN** Desktop invokes the same package-owned batch Project removal contract used by the Project catalog
+- **AND** the Project registration disappears while its conversations remain under an unavailable Workspace group
 - **AND** Project files are not deleted
+
+#### Scenario: User deletes Project conversations
+
+- **WHEN** the user confirms Project conversation cleanup from the group
+- **THEN** Desktop invokes the package-owned Project conversation cleanup contract
+- **AND** only exact Workspace-owned conversations disappear while the Project remains registered
 
 ### Requirement: Unavailable diagnostics use the item trailing edge
 

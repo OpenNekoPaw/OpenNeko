@@ -50,7 +50,7 @@ A conversation MAY carry an explicit Project grouping association. Grouping SHAL
 
 ### Requirement: Host produces one authoritative grouped navigation projection
 
-The Host Shell service SHALL combine the Project catalog and owner-qualified Agent conversation catalog into one versioned grouped navigation projection. Renderer MUST consume that projection and MUST NOT independently infer grouping from current, first or recent Project state.
+The Host Shell service SHALL combine the Project catalog and owner-qualified Agent conversation catalog into one grouped navigation projection. Renderer MUST consume that projection and MUST NOT independently infer grouping from current, first or recent Project state. The projection SHALL contain only groups with conversation children.
 
 #### Scenario: Project has multiple Workspace conversations
 
@@ -61,14 +61,14 @@ The Host Shell service SHALL combine the Project catalog and owner-qualified Age
 #### Scenario: Project has no conversations
 
 - **WHEN** a stored Project has no matching conversation
-- **THEN** the Project remains visible as an activatable container
+- **THEN** it remains in the Project catalog but is absent from PrimarySidebar conversation navigation
 - **AND** no empty conversation is created
 
 #### Scenario: Workspace owner has no exact Project
 
 - **WHEN** a Workspace conversation resolves to zero or multiple Project catalog entries
-- **THEN** Host returns a visible identity diagnostic
-- **AND** it does not attach the conversation to another Project
+- **THEN** Host projects an unavailable Workspace group with a visible identity diagnostic
+- **AND** it does not attach the conversation to another Project or fail unrelated navigation groups
 
 #### Scenario: Group contains many conversations
 
@@ -106,7 +106,7 @@ Project/Character/Room container activation SHALL create or expose an owner-boun
 
 ### Requirement: Lifecycle operations validate exact conversation and owner identity
 
-Delete, restore and future association operations SHALL carry exact conversation identity, owner identity and applicable revision fences. Host SHALL compare them with the authoritative projection before delegating and MUST NOT require a Project identity for standalone owners.
+Delete, restore and future association operations SHALL carry exact conversation identity, owner identity and applicable revision fences. Host SHALL compare them with the authoritative projection before delegating and MUST NOT require a Project identity for standalone owners. Project removal SHALL NOT act as a conversation lifecycle operation.
 
 #### Scenario: Assistant conversation is deleted
 
@@ -120,11 +120,12 @@ Delete, restore and future association operations SHALL carry exact conversation
 - **THEN** Host rejects the operation visibly
 - **AND** neither transcript nor grouping metadata is modified
 
-#### Scenario: Project is removed from recent navigation
+#### Scenario: Project is removed while conversations remain
 
-- **WHEN** a Project is removed while associated Assistant/Character/Room conversations remain
+- **WHEN** a Project is removed while Workspace, Assistant, Character or Room conversations remain
 - **THEN** the Project catalog operation does not delete those conversations
-- **AND** they remain accessible under standalone owner grouping or a visible broken-association diagnostic
+- **AND** Workspace conversations remain under an unavailable Workspace group
+- **AND** standalone-owner conversations remain accessible under their exact owner grouping
 
 ### Requirement: Existing valuable conversations migrate without synthetic fallback
 
