@@ -18,7 +18,7 @@ import {
 } from '@neko/host/desktop-shell-contract';
 import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 import { DEFAULT_DESKTOP_APPLICATION_PREFERENCES } from '@neko/host/application-settings';
-import { DesktopApplication } from './DesktopShell';
+import { createDesktopAgentSurfaceProps, DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import { createDesktopI18n } from './i18n';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
@@ -73,6 +73,68 @@ describe('DesktopApplication scene lifecycle', () => {
     document.body.replaceChildren();
     rendererInstrumentation.extensionRootRender.mockClear();
     vi.restoreAllMocks();
+  });
+
+  it('projects registered Projects and the canonical directory chooser into the Agent entry', () => {
+    const base = createProjection();
+    const projects = [
+      {
+        projectId: 'content:project-ready',
+        workspaceId: 'workspace-ready',
+        profile: 'content' as const,
+        displayName: 'Ready Project',
+        createdAt: '2026-08-07T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+      },
+      {
+        projectId: 'content:project-unavailable',
+        workspaceId: 'workspace-unavailable',
+        profile: 'content' as const,
+        displayName: 'Unavailable Project',
+        createdAt: '2026-08-07T00:00:00.000Z',
+        updatedAt: '2026-08-07T00:00:00.000Z',
+        unavailable: {
+          fieldNames: ['workspacePath'],
+          message: 'The Project workspace is missing.',
+        },
+      },
+    ];
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog: { projects },
+    };
+    const scene = activeScene(projection);
+    const interaction = scene.slots.interaction;
+    if (!interaction) throw new Error('Desktop Agent entry fixture requires an interaction slot.');
+    const onSelectProject = vi.fn();
+    const onChooseWorkspace = vi.fn();
+
+    const surface = createDesktopAgentSurfaceProps({
+      projection,
+      workbenchInstanceId: projection.window.workbench.workbenchInstanceId,
+      interaction,
+      onSelectProject,
+      onChooseWorkspace,
+    });
+
+    expect(surface?.binding).toBe('launch');
+    if (surface?.composerWorkspace?.kind !== 'assistant') {
+      throw new Error('Desktop Agent entry fixture requires an Assistant Project selector.');
+    }
+    expect(surface.composerWorkspace.projects).toEqual([
+      { projectId: 'content:project-ready', label: 'Ready Project' },
+      {
+        projectId: 'content:project-unavailable',
+        label: 'Unavailable Project',
+        disabled: true,
+        diagnostic: 'The Project workspace is missing.',
+      },
+    ]);
+
+    surface.composerWorkspace.onSelectProject('content:project-ready');
+    surface.composerWorkspace.onChooseDirectory();
+    expect(onSelectProject).toHaveBeenCalledWith('content:project-ready');
+    expect(onChooseWorkspace).toHaveBeenCalledOnce();
   });
 
   it('owns one Shell subscription and commits Sidebar state through its sender-bound owner', async () => {

@@ -2552,12 +2552,15 @@ async function inspectAgentDraftControls(evaluate) {
     composerCount: document.querySelectorAll('.agent-composer-shell').length,
     textareaCount: document.querySelectorAll('.agent-composer-textarea').length,
     toolButtonCount: document.querySelectorAll('.agent-composer-tool-button').length,
-    hasWorkspaceChoice: Boolean(document.querySelector('.agent-composer-workspace-button')),
+    hasProjectChoice: Boolean(document.querySelector('.agent-composer-project-trigger')),
     hasLegacyWorkspaceToolbar: Boolean(document.querySelector('.desktop-assistant-agent__toolbar')),
     hasMode: Boolean(document.querySelector('.agent-control-chip-mode')),
     hasModel: Boolean(document.querySelector('.agent-model-config-trigger')),
     modelLabel: document.querySelector('.agent-model-config-trigger')?.textContent?.trim() ?? '',
     hasApproval: Boolean(document.querySelector('.agent-execution-mode-trigger')),
+    hasShortcutButtons: [...document.querySelectorAll('.agent-composer-tool-button')]
+      .some((button) => ['/', '$'].includes(button.textContent?.trim() ?? '')),
+    entryPlaceholder: document.querySelector('.agent-composer-textarea')?.getAttribute('placeholder') ?? '',
     sessionTabsVisible: Boolean(document.querySelector('[data-testid="conversation-tabs"]')),
   }))()`);
   return { ...controls, composer: await inspectComposerPresentation(evaluate) };
@@ -2571,14 +2574,14 @@ async function inspectComposerPresentation(evaluate) {
     const activeSurface = activeSurfaces[0];
     const shell = activeSurface?.querySelector('.agent-composer-shell');
     const toolbar = activeSurface?.querySelector('.agent-composer-toolbar');
-    const workspace = activeSurface?.querySelector('.agent-composer-workspace');
+    const project = activeSurface?.querySelector('.agent-composer-project');
     const emptyPanel = activeSurface?.querySelector(
       '.agent-empty-state--desktop-dock .agent-empty-panel',
     );
     const owner = shell?.closest('[data-dock-owner="agent"], [data-primary-surface="agent"]');
     if (activeSurfaces.length !== 1 || !(shell instanceof HTMLElement) ||
         !(toolbar instanceof HTMLElement) ||
-        !(workspace instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
+        !(project instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
       throw new Error('Agent composer presentation is incomplete.');
     }
     const shellRect = shell.getBoundingClientRect();
@@ -2587,7 +2590,8 @@ async function inspectComposerPresentation(evaluate) {
     const emptyPanelRect = emptyPanel instanceof HTMLElement ? emptyPanel.getBoundingClientRect() : undefined;
     const style = getComputedStyle(shell);
     return {
-      workspaceLabel: workspace.textContent?.trim() ?? '',
+      projectLabel: project.textContent?.trim() ?? '',
+      projectInToolbar: toolbar.contains(project),
       hasShadow: style.boxShadow !== 'none',
       shellWidth: shellRect.width,
       ownerWidth: ownerRect.width,
@@ -2946,12 +2950,15 @@ function assertAgentDraftControls(detail) {
     detail.composerCount !== 1 ||
     detail.textareaCount !== 1 ||
     detail.toolButtonCount < 1 ||
-    !detail.hasWorkspaceChoice ||
+    !detail.hasProjectChoice ||
     detail.hasLegacyWorkspaceToolbar ||
-    !detail.hasMode ||
+    detail.hasMode ||
     !detail.hasModel ||
     !detail.modelLabel.includes('Functional Chat') ||
-    !detail.hasApproval ||
+    detail.hasApproval ||
+    detail.hasShortcutButtons ||
+    detail.entryPlaceholder.includes('/') ||
+    detail.entryPlaceholder.includes('$') ||
     detail.sessionTabsVisible
   ) {
     throw new Error(
@@ -2969,8 +2976,10 @@ function assertWorkspaceComposer(detail, scope) {
     !detail.emptyPanelAligned ||
     detail.emptyPanelWidth > 820 ||
     detail.branchMetadataCount !== 0 ||
-    (scope === 'assistant' && !detail.workspaceLabel.includes('选择工作目录')) ||
-    (scope === 'workspace' && detail.workspaceLabel !== 'workspace')
+    !detail.projectInToolbar ||
+    (scope === 'assistant' &&
+      !['Open Project', '打开项目'].some((label) => detail.projectLabel.includes(label))) ||
+    (scope === 'workspace' && detail.projectLabel !== 'workspace')
   ) {
     throw new Error(
       `Agent ${scope} composer did not preserve its compact Workspace presentation: ${JSON.stringify(detail)}`,

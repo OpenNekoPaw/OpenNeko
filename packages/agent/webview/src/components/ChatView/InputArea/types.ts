@@ -87,7 +87,12 @@ export type ComposerConfigCategory = 'llm' | GenCategory;
 export type ComposerConfigSection = 'model' | 'params';
 
 export type ComposerControlMenuId =
-  'session-mode' | 'composer-config' | 'agent-model' | 'understanding-model' | 'execution-mode';
+  | 'session-mode'
+  | 'composer-config'
+  | 'agent-model'
+  | 'understanding-model'
+  | 'execution-mode'
+  | 'project';
 
 export interface ComposerControlMenuState {
   readonly openMenu: ComposerControlMenuId | null;

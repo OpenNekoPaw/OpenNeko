@@ -100,52 +100,18 @@ describe('EmptyState', () => {
     );
   });
 
-  it('renders at most four enabled catalog Skills in the Desktop dock', () => {
-    const onSkillSelect = vi.fn();
-    render(
-      <EmptyState
-        presentation="desktop-dock"
-        skills={[
-          skill('disabled', false),
-          skill('a'),
-          skill('b'),
-          skill('c'),
-          skill('d'),
-          skill('e'),
-        ]}
-        onSkillSelect={onSkillSelect}
-      />,
-    );
+  it('renders the centered Desktop entry without actions or Skill shortcuts', () => {
+    render(<EmptyState presentation="desktop-dock" />);
 
     expect(screen.getByRole('heading', { name: 'Hi, create with chat' })).toBeTruthy();
     expect(screen.getByText('Describe an idea or mention a resource.')).toBeTruthy();
-    expect(screen.getByText('Try a Skill')).toBeTruthy();
-    expect(document.querySelectorAll('.agent-empty-skill-button')).toHaveLength(4);
     expect(document.querySelector('.agent-empty-state--desktop-dock')).toBeTruthy();
     expect(document.querySelector('.agent-empty-state--desktop-dock')?.className).toContain('px-3');
-    expect(screen.queryByRole('button', { name: 'disabled' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'e' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'b' }));
-    expect(onSkillSelect).toHaveBeenCalledWith(expect.objectContaining({ name: 'b' }));
+    expect(document.querySelector('.agent-empty-state--desktop-dock')?.className).toContain(
+      'justify-center',
+    );
+    expect(document.querySelector('.agent-empty-actions')).toBeNull();
+    expect(document.querySelector('.agent-empty-skill-button')).toBeNull();
     expect(screen.queryByText('AI responses may be inaccurate.')).toBeNull();
   });
-
-  it('does not fabricate Desktop Skill suggestions when none are enabled', () => {
-    render(<EmptyState presentation="desktop-dock" skills={[skill('disabled', false)]} />);
-
-    expect(screen.queryByText('Try a Skill')).toBeNull();
-    expect(document.querySelector('.agent-empty-skill-button')).toBeNull();
-  });
 });
-
-function skill(name: string, enabled = true) {
-  return {
-    id: name,
-    name,
-    description: `${name} description`,
-    tags: [],
-    source: 'project' as const,
-    enabled,
-  };
-}

@@ -49,6 +49,7 @@ interface ComposerConfigMenuProps {
   readonly genParams: GenerationParams;
   readonly onGenParamsChange: (params: Partial<GenerationParams>) => void;
   readonly disabled?: boolean;
+  readonly presentation?: 'default' | 'agent-model-only';
 }
 
 interface ParamOption<Value extends string = string> {
@@ -118,11 +119,14 @@ export function ComposerConfigMenu({
   genParams,
   onGenParamsChange,
   disabled = false,
+  presentation = 'default',
 }: ComposerConfigMenuProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useComposerControlMenu('composer-config');
-  const defaultCategory = configCategoryForMode(activeMode);
+  const agentModelOnly = presentation === 'agent-model-only';
+  const defaultCategory = agentModelOnly ? 'llm' : configCategoryForMode(activeMode);
   const [category, setCategory] = useComposerConfigCategory(defaultCategory);
+  const activeCategory = agentModelOnly ? 'llm' : category;
   const [section, setSection] = useComposerConfigSection('model');
   const [placement, setPlacement] = useState<DropdownPlacement>({
     direction: 'up',
@@ -158,7 +162,7 @@ export function ComposerConfigMenu({
 
   const openConfig = (nextSection: ComposerConfigSection) => {
     if (!canOpen) return;
-    const shouldClose = isOpen && section === nextSection && category === defaultCategory;
+    const shouldClose = isOpen && section === nextSection && activeCategory === defaultCategory;
     if (shouldClose) {
       setIsOpen(false);
       return;
@@ -222,58 +226,62 @@ export function ComposerConfigMenu({
           aria-label={t('chat.configMenu.title')}
         >
           <div className="agent-model-config-header">{t('chat.configMenu.title')}</div>
-          <div
-            className="agent-model-config-tabs"
-            role="tablist"
-            aria-label={t('chat.configMenu.category')}
-          >
-            {CATEGORIES.map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="tab"
-                aria-selected={category === option}
-                className={`agent-model-config-tab ${
-                  category === option ? 'agent-model-config-tab-selected' : ''
-                }`}
-                onClick={() => {
-                  setCategory(option);
-                  if (option === 'llm') setSection('model');
-                }}
-              >
-                {option === 'llm' ? (
-                  <SessionModeIcon mode="agent" size={13} />
-                ) : (
-                  <MediaCategoryIcon category={option} size={13} />
-                )}
-                <span>{getCategoryLabel(t, option)}</span>
-              </button>
-            ))}
-          </div>
+          {agentModelOnly ? null : (
+            <div
+              className="agent-model-config-tabs"
+              role="tablist"
+              aria-label={t('chat.configMenu.category')}
+            >
+              {CATEGORIES.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeCategory === option}
+                  className={`agent-model-config-tab ${
+                    activeCategory === option ? 'agent-model-config-tab-selected' : ''
+                  }`}
+                  onClick={() => {
+                    setCategory(option);
+                    if (option === 'llm') setSection('model');
+                  }}
+                >
+                  {option === 'llm' ? (
+                    <SessionModeIcon mode="agent" size={13} />
+                  ) : (
+                    <MediaCategoryIcon category={option} size={13} />
+                  )}
+                  <span>{getCategoryLabel(t, option)}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
-          <div
-            className="agent-model-config-secondary-tabs"
-            role="tablist"
-            aria-label={t('chat.configMenu.section')}
-          >
-            {(category === 'llm' ? SECTIONS.slice(0, 1) : SECTIONS).map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="tab"
-                aria-selected={section === option}
-                className={`agent-model-config-secondary-tab ${
-                  section === option ? 'agent-model-config-secondary-tab-selected' : ''
-                }`}
-                onClick={() => setSection(option)}
-              >
-                {t(`chat.configMenu.section.${option}`)}
-              </button>
-            ))}
-          </div>
+          {agentModelOnly ? null : (
+            <div
+              className="agent-model-config-secondary-tabs"
+              role="tablist"
+              aria-label={t('chat.configMenu.section')}
+            >
+              {(activeCategory === 'llm' ? SECTIONS.slice(0, 1) : SECTIONS).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="tab"
+                  aria-selected={section === option}
+                  className={`agent-model-config-secondary-tab ${
+                    section === option ? 'agent-model-config-secondary-tab-selected' : ''
+                  }`}
+                  onClick={() => setSection(option)}
+                >
+                  {t(`chat.configMenu.section.${option}`)}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="agent-model-config-content">
-            {category === 'llm' ? (
+            {activeCategory === 'llm' ? (
               <ChatModelPanel
                 models={primaryModels}
                 selectedModel={selectedModel}
@@ -281,24 +289,24 @@ export function ComposerConfigMenu({
               />
             ) : section === 'model' ? (
               <MediaModelPanel
-                category={category}
+                category={activeCategory}
                 understandingModels={availableModels.filter((model) =>
-                  supportsUnderstanding(model, category),
+                  supportsUnderstanding(model, activeCategory),
                 )}
-                understandingStatus={mediaUnderstandingModels?.[category]}
-                understandingSelection={mediaUnderstandingSelection[category]}
+                understandingStatus={mediaUnderstandingModels?.[activeCategory]}
+                understandingSelection={mediaUnderstandingSelection[activeCategory]}
                 onUnderstandingSelect={(modelId) =>
-                  onMediaUnderstandingModelSelect(category, modelId)
+                  onMediaUnderstandingModelSelect(activeCategory, modelId)
                 }
                 generationModels={availableMediaModels.filter(
-                  (model) => model.category === category && isSelectable(model),
+                  (model) => model.category === activeCategory && isSelectable(model),
                 )}
-                generationSelection={mediaModelSelection[category]}
-                onGenerationSelect={(modelId) => onMediaModelSelect(category, modelId)}
+                generationSelection={mediaModelSelection[activeCategory]}
+                onGenerationSelect={(modelId) => onMediaModelSelect(activeCategory, modelId)}
               />
             ) : (
               <MediaParameterPanel
-                category={category}
+                category={activeCategory}
                 params={genParams}
                 onChange={onGenParamsChange}
               />

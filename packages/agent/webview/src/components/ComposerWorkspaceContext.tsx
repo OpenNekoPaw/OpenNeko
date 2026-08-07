@@ -1,9 +1,18 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
+export interface AgentComposerProjectOption {
+  readonly projectId: string;
+  readonly label: string;
+  readonly disabled?: boolean;
+  readonly diagnostic?: string;
+}
+
 export type AgentComposerWorkspacePresentation =
   | {
       readonly kind: 'assistant';
-      readonly onChoose: () => void;
+      readonly projects: readonly AgentComposerProjectOption[];
+      readonly onSelectProject: (projectId: string) => void;
+      readonly onChooseDirectory: () => void;
       readonly disabled?: boolean;
     }
   | {

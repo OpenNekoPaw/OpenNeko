@@ -1,6 +1,4 @@
 import { useTranslation } from '../../i18n/I18nContext';
-import type { SkillSummary } from './InputArea/types';
-
 export type EmptyStateEntryAction = 'start-chat' | 'generate-assets' | 'roleplay';
 
 interface EmptyStateProps {
@@ -9,8 +7,6 @@ interface EmptyStateProps {
   onEntryAction?: (action: EmptyStateEntryAction) => void;
   presentation?: 'default' | 'desktop-dock';
   draftScope?: 'unbound' | 'assistant' | 'workspace';
-  skills?: readonly SkillSummary[];
-  onSkillSelect?: (skill: SkillSummary) => void;
 }
 
 const EMPTY_STATE_ENTRIES: readonly {
@@ -41,18 +37,15 @@ export function EmptyState({
   onEntryAction,
   presentation = 'default',
   draftScope,
-  skills = [],
-  onSkillSelect,
 }: EmptyStateProps) {
   const { t } = useTranslation();
   const entries = EMPTY_STATE_ENTRIES;
   const selectedEntry = entries.find((entry) => entry.action === selectedAction);
-  const suggestedSkills = skills.filter((skill) => skill.enabled).slice(0, 4);
   const draftPresentation = draftScope !== undefined;
 
   if (presentation === 'desktop-dock') {
     return (
-      <div className="agent-empty-state agent-empty-state--desktop-dock flex min-h-0 flex-1 select-none items-end overflow-y-auto px-3 pb-4">
+      <div className="agent-empty-state agent-empty-state--desktop-dock flex min-h-0 flex-none select-none items-center justify-center px-3 pb-4 text-center">
         <section
           className="agent-empty-panel w-full min-w-0"
           aria-labelledby="neko-agent-empty-title"
@@ -76,45 +69,6 @@ export function EmptyState({
                 : 'chat.emptyState.desktopDockDescription',
             )}
           </p>
-          {draftPresentation ? null : (
-            <div className="agent-empty-actions mt-4 grid grid-cols-1 gap-1.5">
-              {entries.map((entry) => (
-                <button
-                  key={entry.action}
-                  type="button"
-                  onClick={() => onEntryAction?.(entry.action)}
-                  disabled={disabled}
-                  className={`agent-empty-action flex min-h-9 w-full min-w-0 items-center rounded-md border px-3 py-2 text-left text-[12px] leading-5 transition-colors disabled:cursor-default disabled:opacity-60 ${
-                    selectedAction === entry.action
-                      ? 'agent-empty-action-selected border-[var(--agent-empty-action-hover-border)]'
-                      : 'border-[var(--agent-empty-action-border)] bg-[var(--agent-empty-action-bg)]'
-                  }`}
-                  aria-pressed={selectedAction === entry.action}
-                >
-                  <span className="min-w-0 flex-1 break-words">{t(entry.labelKey)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {suggestedSkills.length > 0 ? (
-            <div className="agent-empty-skill-suggestions mt-4">
-              <p className="agent-empty-skill-label">{t('chat.emptyState.desktopDockSkills')}</p>
-              <div className="agent-empty-skill-list">
-                {suggestedSkills.map((skill) => (
-                  <button
-                    key={skill.id}
-                    type="button"
-                    disabled={disabled}
-                    className="agent-empty-skill-button"
-                    title={skill.description}
-                    onClick={() => onSkillSelect?.(skill)}
-                  >
-                    {skill.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </section>
       </div>
     );

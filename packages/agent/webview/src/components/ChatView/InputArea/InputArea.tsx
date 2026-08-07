@@ -12,7 +12,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon, FolderIcon } from '@neko/ui/icons';
+import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon } from '@neko/ui/icons';
 import { ModeSelector } from './ModeSelector';
 import { SessionModeSelector } from './SessionModeSelector';
 import { ComposerConfigMenu } from './ComposerConfigMenu';
@@ -69,6 +69,7 @@ import type {
 import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
 import { useAgentHostMessages } from '../../../host-runtime-context';
 import { useComposerWorkspacePresentation } from '../../ComposerWorkspaceContext';
+import { ComposerProjectSelector } from './ComposerProjectSelector';
 
 interface InputAreaProps {
   inputValue: string;
@@ -113,6 +114,7 @@ interface InputAreaProps {
   focusRequestEnabled?: boolean;
   focusRequestTarget?: 'none' | 'input';
   focusRequestId?: string;
+  presentation?: 'default' | 'desktop-entry';
 }
 
 type InputAreaTranslator = (key: string, params?: Record<string, string | number>) => string;
@@ -216,6 +218,7 @@ export function InputArea({
   focusRequestEnabled = true,
   focusRequestTarget = 'none',
   focusRequestId,
+  presentation = 'default',
 }: InputAreaProps) {
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
@@ -256,6 +259,8 @@ export function InputArea({
     isBusy = false,
   } = useInputAreaContext();
   const { t } = useTranslation();
+  const isDesktopEntry = presentation === 'desktop-entry';
+  const effectiveSessionMode: SessionMode = isDesktopEntry ? 'agent' : sessionMode;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useLayoutEffect(() => {
@@ -415,9 +420,12 @@ export function InputArea({
   const filteredMentionItems = getFilteredMentionItems(mentionItems, atFilter);
   const mediaModelCounts = countMediaModelsByCategory(availableMediaModels);
   const availableSessionModes = getAvailableSessionModes(mediaModelCounts);
-  const currentSessionMediaModelCount = getSessionMediaModelCount(sessionMode, mediaModelCounts);
+  const currentSessionMediaModelCount = getSessionMediaModelCount(
+    effectiveSessionMode,
+    mediaModelCounts,
+  );
   const showEntryPromptMenu = Boolean(entryPromptMenu);
-  const isMediaGenerationSession = isMediaGenerationMode(sessionMode);
+  const isMediaGenerationSession = isMediaGenerationMode(effectiveSessionMode);
   const isRoleplayConversation = isRoleplayConversationKind(conversationKind);
   const allowCommandMenus = !isMediaGenerationSession && !isRoleplayConversation;
   const slashMenuOpen = allowCommandMenus && showSlashMenu;
@@ -758,11 +766,13 @@ export function InputArea({
     onSend({
       messageText: outboundMessageText,
       displayMessageText: inputValue,
-      sessionMode,
+      sessionMode: effectiveSessionMode,
       attachments: files,
       contextPayloads,
       fileReferences: hasSelectedFileReferences ? selectedFileReferences : undefined,
-      ...(sessionMode === 'agent' ? buildAgentModelSendConfig(selectedModel, availableModels) : {}),
+      ...(effectiveSessionMode === 'agent'
+        ? buildAgentModelSendConfig(selectedModel, availableModels)
+        : {}),
     });
     contextChips.forEach((c) => onRemoveContextChip(c.id));
     onInputChange('');
@@ -920,7 +930,7 @@ export function InputArea({
     isThinking: isRunActive,
     queuedMessageCount: projectedQueuedMessageCount,
     disabled,
-    sessionMode,
+    sessionMode: effectiveSessionMode,
     conversationKind,
     currentSessionMediaModelCount,
   });
@@ -934,7 +944,7 @@ export function InputArea({
         </div>
       )}
 
-      <div className="agent-composer-rail">
+      <div className="agent-composer-rail" data-composer-presentation={presentation}>
         {inputAreaProjection.showQueuedMessages && (
           <MessageQueueControls
             items={queuedMessages}
@@ -955,25 +965,6 @@ export function InputArea({
 
         {/* ── Input container ── */}
         <div className="agent-composer-shell relative">
-          {composerWorkspace ? (
-            <div className="agent-composer-workspace" aria-label={t('chat.input.workspace.label')}>
-              <FolderIcon size={14} />
-              {composerWorkspace.kind === 'assistant' ? (
-                <button
-                  type="button"
-                  className="agent-composer-workspace-button"
-                  disabled={composerWorkspace.disabled}
-                  onClick={composerWorkspace.onChoose}
-                >
-                  {t('chat.input.workspace.choose')}
-                </button>
-              ) : (
-                <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
-                  {composerWorkspace.label}
-                </span>
-              )}
-            </div>
-          ) : null}
           {/* Slash command menu */}
           <SlashCommandMenu
             isOpen={slashMenuOpen}
@@ -1048,9 +1039,13 @@ export function InputArea({
               onCompositionEnd={() => onCompositionChange?.(false)}
               onPaste={handlePaste}
               disabled={disabled}
-              placeholder={t(inputAreaProjection.inputPlaceholderKey, {
-                count: inputAreaProjection.queuedMessageCount,
-              })}
+              placeholder={
+                isDesktopEntry
+                  ? t('chat.input.entryPlaceholder')
+                  : t(inputAreaProjection.inputPlaceholderKey, {
+                      count: inputAreaProjection.queuedMessageCount,
+                    })
+              }
               className="agent-composer-textarea"
               rows={1}
             />
@@ -1085,7 +1080,7 @@ export function InputArea({
               disabled={onAuthorizeResource !== undefined}
             />
 
-            {(inputAreaProjection.showSessionModeSelector ||
+            {((inputAreaProjection.showSessionModeSelector && !isDesktopEntry) ||
               inputAreaProjection.showModelConfig) && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
                 <div
@@ -1093,9 +1088,9 @@ export function InputArea({
                   role="group"
                   aria-label={t('chat.input.control.mode')}
                 >
-                  {inputAreaProjection.showSessionModeSelector ? (
+                  {inputAreaProjection.showSessionModeSelector && !isDesktopEntry ? (
                     <SessionModeSelector
-                      mode={sessionMode}
+                      mode={effectiveSessionMode}
                       onChange={onSessionModeChange}
                       availableModes={availableSessionModes}
                       disabled={isBusy}
@@ -1103,7 +1098,7 @@ export function InputArea({
                   ) : null}
                   {inputAreaProjection.showModelConfig ? (
                     <ComposerConfigMenu
-                      activeMode={sessionMode}
+                      activeMode={effectiveSessionMode}
                       availableModels={availableModels}
                       selectedModel={selectedModel}
                       onModelSelect={onModelSelect}
@@ -1116,13 +1111,23 @@ export function InputArea({
                       genParams={genParams}
                       onGenParamsChange={onGenParamsChange}
                       disabled={isBusy}
+                      presentation={isDesktopEntry ? 'agent-model-only' : 'default'}
                     />
                   ) : null}
                 </div>
               </ComposerMenuRuntimeProvider>
             )}
 
-            {allowCommandMenus && (
+            {composerWorkspace ? (
+              <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
+                <ComposerProjectSelector
+                  presentation={composerWorkspace}
+                  disabled={disabled || isBusy}
+                />
+              </ComposerMenuRuntimeProvider>
+            ) : null}
+
+            {allowCommandMenus && !isDesktopEntry && (
               <>
                 {/* Slash command button */}
                 <button
@@ -1146,17 +1151,19 @@ export function InputArea({
             )}
 
             {/* Token usage pie */}
-            <UsageIndicator
-              tokenCount={contextTokenCount}
-              maxTokens={maxContextTokens}
-              maxOutputTokens={outputTokenCap}
-              modelMaxOutputTokens={modelMaxOutputTokens}
-              isCompressing={isCompressing}
-              onCompress={onCompressContext}
-            />
+            {isDesktopEntry ? null : (
+              <UsageIndicator
+                tokenCount={contextTokenCount}
+                maxTokens={maxContextTokens}
+                maxOutputTokens={outputTokenCap}
+                modelMaxOutputTokens={modelMaxOutputTokens}
+                isCompressing={isCompressing}
+                onCompress={onCompressContext}
+              />
+            )}
 
             {/* Media call count */}
-            {inputAreaProjection.showMediaCallCount && (
+            {inputAreaProjection.showMediaCallCount && !isDesktopEntry && (
               <div
                 className="agent-composer-media-count"
                 title={t('chat.input.mediaModelCalls', { count: mediaModelCallCount })}
@@ -1169,7 +1176,7 @@ export function InputArea({
             <div className="flex-1" />
 
             {/* Execution mode — runtime control belongs with send/tools, not model config. */}
-            {inputAreaProjection.showExecutionModeSelector && (
+            {inputAreaProjection.showExecutionModeSelector && !isDesktopEntry && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
                 <ModeSelector mode={executionMode} onChange={onExecutionModeChange} />
               </ComposerMenuRuntimeProvider>
