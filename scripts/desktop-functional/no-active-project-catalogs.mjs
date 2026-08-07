@@ -4,6 +4,7 @@ import { join } from 'node:path';
 const CONVERSATION_TITLE = 'Retained historical conversation';
 const ASSET_LABEL = 'missing-retained-asset.png';
 const ACTIVE_WORKBENCH = '.desktop-scene-workbench';
+const SCROLL_PROJECT_COUNT = 28;
 
 export const noActiveProjectCatalogsScenario = Object.freeze({
   id: 'no-active-project-catalogs',
@@ -69,6 +70,23 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
           timestamp,
           timestamp,
         );
+      const insertWorkspace = database.prepare(
+        `INSERT INTO workspaces (
+           workspace_id, current_locator_kind, current_locator_value,
+           locator_history_json, last_seen_at, orphaned_at
+         ) VALUES (?, 'relative', ?, ?, ?, ?)`,
+      );
+      for (let index = 1; index <= SCROLL_PROJECT_COUNT; index += 1) {
+        const suffix = String(index).padStart(2, '0');
+        const locator = `missing-scroll-project-${suffix}`;
+        insertWorkspace.run(
+          `workspace-scroll-${suffix}`,
+          locator,
+          JSON.stringify([{ kind: 'relative', value: locator }]),
+          timestamp,
+          timestamp,
+        );
+      }
       database
         .prepare(
           `INSERT INTO pi_conversations (
@@ -113,7 +131,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     }
     return { workspacePath };
   },
-  async run({ checkpoint, evaluate, screenshot, waitForSelector }) {
+  async run({ checkpoint, click, evaluate, pressKey, screenshot, waitForSelector }) {
     await waitForSelector('.shell-diagnostic');
     const startupNotice = await evaluate(`(() => {
       const notice = document.querySelector('.shell-diagnostic');
@@ -270,6 +288,132 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       throw new Error('Startup notice reappeared after Project navigation.');
     }
     checkpoint('retained-workspace-visible', project);
+    const scrollSelector = `${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-list`;
+    const scrollBefore = await evaluate(`(() => {
+      const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
+      const header = root?.querySelector('.management-surface-header');
+      const toolbar = root?.querySelector('.management-surface-toolbar');
+      const list = root?.querySelector('.management-surface-list');
+      const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
+      if (!(root instanceof HTMLElement) || !(header instanceof HTMLElement) ||
+          !(toolbar instanceof HTMLElement) || !(list instanceof HTMLElement) ||
+          !(finalRow instanceof HTMLElement)) return null;
+      const rootStyle = getComputedStyle(root);
+      const listStyle = getComputedStyle(list);
+      return {
+        rootOverflow: rootStyle.overflow,
+        rootClientHeight: root.clientHeight,
+        rootScrollHeight: root.scrollHeight,
+        listOverflowY: listStyle.overflowY,
+        headerTop: header.getBoundingClientRect().top,
+        toolbarTop: toolbar.getBoundingClientRect().top,
+        listClientHeight: list.clientHeight,
+        listScrollHeight: list.scrollHeight,
+        finalRowTop: finalRow.getBoundingClientRect().top,
+        listBottom: list.getBoundingClientRect().bottom,
+      };
+    })()`);
+    if (
+      !scrollBefore ||
+      scrollBefore.rootOverflow !== 'hidden' ||
+      scrollBefore.listOverflowY !== 'auto' ||
+      scrollBefore.listScrollHeight <= scrollBefore.listClientHeight ||
+      scrollBefore.finalRowTop <= scrollBefore.listBottom
+    ) {
+      throw new Error(
+        `Project catalog did not establish a bounded collection scroll owner: ${JSON.stringify(scrollBefore)}`,
+      );
+    }
+    checkpoint('project-catalog-scroll-owner-ready', scrollBefore);
+    const projectScrollStartScreenshot = await screenshot('project-catalog-scroll-start');
+    checkpoint('project-catalog-scroll-start-captured', projectScrollStartScreenshot);
+    await click(scrollSelector);
+    await pressKey('End');
+    const scrollProgress = await evaluate(`(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const list = document.querySelector(${JSON.stringify(scrollSelector)});
+      return list instanceof HTMLElement
+        ? { scrollTop: list.scrollTop, maxScrollTop: list.scrollHeight - list.clientHeight }
+        : null;
+    })()`);
+    if (!scrollProgress || scrollProgress.scrollTop < scrollProgress.maxScrollTop - 1) {
+      throw new Error(
+        `Project catalog keyboard input did not reach the final row: ${JSON.stringify(scrollProgress)}`,
+      );
+    }
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const list = document.querySelector(${JSON.stringify(scrollSelector)});
+        const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
+        if (!(list instanceof HTMLElement) || !(finalRow instanceof HTMLElement)) return false;
+        const listRect = list.getBoundingClientRect();
+        const rowRect = finalRow.getBoundingClientRect();
+        return list.scrollTop > 0 && rowRect.top >= listRect.top && rowRect.bottom <= listRect.bottom;
+      })()`,
+      'Project catalog scroll did not reveal the final retained Workspace.',
+      5_000,
+    );
+    const scrollAfter = await evaluate(`(() => {
+      const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
+      const header = root?.querySelector('.management-surface-header');
+      const toolbar = root?.querySelector('.management-surface-toolbar');
+      const list = root?.querySelector('.management-surface-list');
+      const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
+      const open = finalRow?.querySelector('.management-surface-row-actions button:first-child');
+      const remove = finalRow?.querySelector('.management-surface-row-actions button:last-child');
+      return {
+        scrollTop: list instanceof HTMLElement ? list.scrollTop : 0,
+        finalProject: finalRow?.querySelector('strong')?.textContent?.trim() ?? '',
+        headerTop: header instanceof HTMLElement ? header.getBoundingClientRect().top : -1,
+        toolbarTop: toolbar instanceof HTMLElement ? toolbar.getBoundingClientRect().top : -1,
+        diagnostic: finalRow?.querySelector('.management-surface-row__diagnostic')?.textContent?.trim() ?? '',
+        openDisabled: open instanceof HTMLButtonElement && open.disabled,
+        removeEnabled: remove instanceof HTMLButtonElement && !remove.disabled,
+      };
+    })()`);
+    if (
+      scrollAfter.scrollTop <= 0 ||
+      Math.abs(scrollAfter.headerTop - scrollBefore.headerTop) > 1 ||
+      Math.abs(scrollAfter.toolbarTop - scrollBefore.toolbarTop) > 1 ||
+      !scrollAfter.diagnostic ||
+      !scrollAfter.openDisabled ||
+      !scrollAfter.removeEnabled
+    ) {
+      throw new Error('Project catalog scrolling moved controls or hid unavailable-item actions.');
+    }
+    checkpoint('project-catalog-final-row-reachable', { scrollBefore, scrollAfter });
+    const projectScrollEndScreenshot = await screenshot('project-catalog-scroll-end');
+
+    await evaluate(`(() => {
+      window.resizeTo(960, 640);
+      return { width: window.innerWidth, height: window.innerHeight };
+    })()`);
+    await waitForCondition(
+      evaluate,
+      `(() => window.innerWidth <= 960 && window.innerHeight <= 640)()`,
+      'Desktop window did not reach the minimum supported validation size.',
+    );
+    const compactProject = await evaluate(`(() => {
+      const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
+      const list = root?.querySelector('.management-surface-list');
+      if (!(root instanceof HTMLElement) || !(list instanceof HTMLElement)) return null;
+      return {
+        rootHeight: root.clientHeight,
+        listClientHeight: list.clientHeight,
+        listScrollHeight: list.scrollHeight,
+        viewportHeight: window.innerHeight,
+      };
+    })()`);
+    if (
+      !compactProject ||
+      compactProject.rootHeight > compactProject.viewportHeight ||
+      compactProject.listScrollHeight <= compactProject.listClientHeight
+    ) {
+      throw new Error('Project catalog is not bounded at the minimum supported window size.');
+    }
+    checkpoint('project-catalog-minimum-window-bounded', compactProject);
+    const compactProjectScreenshot = await screenshot('project-catalog-minimum-window');
 
     await clickNavigation(evaluate, 1);
     await waitForSelector(`${ACTIVE_WORKBENCH} [data-owner-root="asset-management"]`);
@@ -311,7 +455,17 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       project,
       asset,
       startupNotice,
-      screenshots: [startupNoticeScreenshot, unavailableNavigationScreenshot, catalogScreenshot],
+      scrollBefore,
+      scrollAfter,
+      compactProject,
+      screenshots: [
+        startupNoticeScreenshot,
+        unavailableNavigationScreenshot,
+        projectScrollStartScreenshot,
+        projectScrollEndScreenshot,
+        compactProjectScreenshot,
+        catalogScreenshot,
+      ],
     };
   },
 });

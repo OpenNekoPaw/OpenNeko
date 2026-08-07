@@ -72,7 +72,19 @@ export function DesktopProjectCatalogSurface({
           <LayersIcon size={15} />
         </button>
       </div>
-      <div className={`management-surface-list is-${view}`} data-empty={visible.length === 0}>
+      <div
+        aria-label={t('home.allProjects')}
+        className={`management-surface-list is-${view}`}
+        data-empty={visible.length === 0}
+        onKeyDown={(event) => {
+          if (event.key !== 'Home' && event.key !== 'End') return;
+          event.preventDefault();
+          event.currentTarget.scrollTop =
+            event.key === 'Home' ? 0 : event.currentTarget.scrollHeight;
+        }}
+        role="region"
+        tabIndex={0}
+      >
         {visible.length === 0 ? (
           <EmptyState fill icon={<FolderIcon size={24} />} title={t('home.projects.noResults')} />
         ) : null}

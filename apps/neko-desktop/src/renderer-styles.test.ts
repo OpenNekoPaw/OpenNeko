@@ -176,12 +176,31 @@ describe('Desktop renderer styles', () => {
       /\.agent-extension-management-root,[\s\S]*?\.project-management-catalog\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
     const managementListRule = styles.match(/\.management-surface-list\s*\{(?<body>[\s\S]*?)\n\}/u);
+    const projectRootRule = styles.match(
+      /\.project-management-catalog\s*\{\n(?<body>\s+height\s*:\s*100%;[\s\S]*?)\n\}/u,
+    );
+    const projectListRule = styles.match(
+      /\.project-management-catalog\s*>\s*\.management-surface-list\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
     expect(rootRule?.groups?.body).toMatch(/width\s*:\s*min\(1020px, calc\(100% - 64px\)\)/u);
     expect(rootRule?.groups?.body).toMatch(/margin\s*:\s*0 auto/u);
     expect(rootRule?.groups?.body).toMatch(/padding\s*:\s*clamp\(66px, 10vh, 104px\) 0 52px/u);
     expect(styles).toMatch(/\.management-surface-list\s*\{[\s\S]*?display\s*:\s*grid/u);
     expect(managementListRule?.groups?.body).toMatch(/padding\s*:\s*0/u);
     expect(managementListRule?.groups?.body).not.toMatch(/border|background|border-radius/u);
+    expect(projectRootRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
+    expect(projectRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+    expect(projectRootRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
+    expect(projectListRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
+    expect(projectListRule?.groups?.body).toMatch(/flex\s*:\s*1 1 auto/u);
+    expect(projectListRule?.groups?.body).toMatch(/align-content\s*:\s*start/u);
+    expect(projectListRule?.groups?.body).toMatch(/overflow-y\s*:\s*auto/u);
+    expect(styles).toMatch(
+      /\.project-management-catalog\s*>\s*\.management-surface-header,[\s\S]*?\.project-management-catalog\s*>\s*\.management-surface-toolbar\s*\{[\s\S]*?flex\s*:\s*0 0 auto/u,
+    );
+    expect(styles).toMatch(
+      /\.desktop-workbench-main-panel\[data-panel-role='management'\]\s*>\s*\.project-main-group__content\s*\{[\s\S]*?height\s*:\s*100%/u,
+    );
     expect(styles).toMatch(
       /\.management-surface-list\[data-empty='true'\]\s*\{[\s\S]*?display\s*:\s*grid[\s\S]*?grid-template-columns\s*:\s*minmax\(0, 1fr\)[\s\S]*?flex\s*:\s*1/u,
     );

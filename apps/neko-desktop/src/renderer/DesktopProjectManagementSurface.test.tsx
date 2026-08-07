@@ -91,6 +91,23 @@ describe('Desktop Project Management surfaces', () => {
     expect(markup.container.querySelector('.management-surface-list')?.className).toContain(
       'is-list',
     );
+    expect(markup.container.querySelector('.management-surface-list')).toHaveProperty(
+      'tabIndex',
+      0,
+    );
+    expect(markup.container.querySelector('.management-surface-list')?.getAttribute('role')).toBe(
+      'region',
+    );
+    const list = markup.container.querySelector<HTMLElement>('.management-surface-list');
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 640 });
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'End' }));
+    });
+    expect(list?.scrollTop).toBe(640);
+    await act(async () => {
+      list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Home' }));
+    });
+    expect(list?.scrollTop).toBe(0);
     expect(markup.container.textContent).toContain(
       'currentLocator: Workspace directory is unavailable.',
     );

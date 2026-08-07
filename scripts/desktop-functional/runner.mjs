@@ -709,6 +709,7 @@ function describeKey(input) {
     ArrowUp: ['ArrowUp', 'ArrowUp', 38],
     Backspace: ['Backspace', 'Backspace', 8],
     Enter: ['Enter', 'Enter', 13],
+    End: ['End', 'End', 35],
     Escape: ['Escape', 'Escape', 27],
     Space: [' ', 'Space', 32],
     Tab: ['Tab', 'Tab', 9],

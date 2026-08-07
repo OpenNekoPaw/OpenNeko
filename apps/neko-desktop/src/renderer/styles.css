@@ -1244,6 +1244,17 @@ code {
   overflow: auto;
 }
 
+.project-management-catalog {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.project-management-catalog > .management-surface-header,
+.project-management-catalog > .management-surface-toolbar {
+  flex: 0 0 auto;
+}
+
 .management-surface-header {
   display: flex;
   align-items: flex-end;
@@ -1383,6 +1394,18 @@ code {
   display: grid;
   gap: 8px;
   padding: 0;
+}
+
+.project-management-catalog > .management-surface-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  align-content: start;
+  overflow-y: auto;
+}
+
+.project-management-catalog > .management-surface-list:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--neko-accent) 72%, transparent);
+  outline-offset: 2px;
 }
 
 .management-surface-list.is-grid {
@@ -1728,6 +1751,10 @@ code {
 
 .desktop-workbench-main-panel {
   container-type: inline-size;
+}
+
+.desktop-workbench-main-panel[data-panel-role='management'] > .project-main-group__content {
+  height: 100%;
 }
 
 .desktop-workbench-main-panel[data-panel-size='compact'] .global-library-browser,

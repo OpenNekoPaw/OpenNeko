@@ -271,6 +271,7 @@ describe('Desktop automated functional runner contract', () => {
       platform: 'darwin',
     });
     await pressDesktopKey(cdp, 'Enter', ['Shift']);
+    await pressDesktopKey(cdp, 'End');
     await scrollDesktopElement(cdp, '[data-testid="timeline"]', 0, { deltaY: 240 });
     await dragDesktopElement(cdp, '[data-testid="clip"]', '[data-testid="track"]');
     const screenshot = await captureDesktopScreenshot(cdp);
@@ -291,6 +292,8 @@ describe('Desktop automated functional runner contract', () => {
         ['keyUp', 'Backspace', 0],
         ['keyDown', 'Enter', 8],
         ['keyUp', 'Enter', 8],
+        ['keyDown', 'End', 0],
+        ['keyUp', 'End', 0],
       ],
     );
     assert.deepEqual(
