@@ -18,7 +18,7 @@ import { createAgentExtensionManagementHostRequest } from '@neko/agent-contracts
 import { type AgentHomeNavigationIdentity } from '@neko/agent-contracts';
 import {
   createDesktopConversationDeleteRequest,
-  createDesktopProjectDeleteRequest,
+  createDesktopProjectSelectionRequest,
   createDesktopProjectOpenRequest,
   createDesktopWindowMutationRequest,
   resolveActiveDesktopWindowWorkbench,
@@ -42,7 +42,7 @@ import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DESKTOP_APP_ORIGIN } from './security';
 import { DesktopShellService } from '@neko/host/desktop-shell-service';
-import { DesktopProjectConversationManagementService } from '@neko/host/desktop-project-conversation-management-service';
+import { DesktopProjectManagementService } from '@neko/host/desktop-project-management-service';
 import { createInMemoryDesktopShellStateRepository } from '@neko/host/testing/desktop-shell-state';
 import {
   DesktopApplicationSettingsService,
@@ -75,7 +75,7 @@ describe('DesktopAppHost', () => {
       instanceId: 'app-1',
       logger,
       shell,
-      projectConversations: createProjectConversationManagementService(shell, agent),
+      projectManagement: createProjectManagementService(shell, agent),
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
@@ -153,7 +153,7 @@ describe('DesktopAppHost', () => {
       instanceId: 'app-1',
       logger,
       shell,
-      projectConversations: createProjectConversationManagementService(shell, agent),
+      projectManagement: createProjectManagementService(shell, agent),
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
@@ -214,7 +214,7 @@ describe('DesktopAppHost', () => {
       instanceId: 'app-1',
       logger,
       shell,
-      projectConversations: createProjectConversationManagementService(shell, agent),
+      projectManagement: createProjectManagementService(shell, agent),
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
@@ -1527,11 +1527,65 @@ describe('DesktopAppHost', () => {
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledTimes(2);
   });
 
-  it('strictly delegates Project deletion through the package-owned batch contract', async () => {
+  it('strictly removes a Project without deleting its Workspace conversations', async () => {
     const fixture = await createShellAppHost();
     const resolution = createWorkspaceResolution();
     fixture.registry.resolve.mockResolvedValue(resolution);
     fixture.registry.removeProjects.mockResolvedValue(true);
+    const opened = await fixture.appHost.openContentProject(
+      fixture.sender,
+      createDesktopWindowMutationRequest('open-1', fixture.projection.rendererSessionId),
+      async () => resolution.workspacePath,
+    );
+    const project = opened.projection.catalog.projects[0]!;
+    const projectConversation = {
+      conversationId: 'conversation:project-1',
+      owner: { kind: 'workspace' as const, workspaceId: project.workspaceId },
+    };
+    setAgentHomeConversation(fixture.agent, projectConversation);
+    await expect(
+      fixture.appHost.removeProjects(fixture.sender, {
+        requestId: 'remove-invalid-payload',
+        rendererSessionId: opened.projection.rendererSessionId,
+        projectId: project.projectId,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-desktop-shell-payload' });
+    expect(fixture.registry.removeProjects).not.toHaveBeenCalled();
+    expect(fixture.agent.deleteConversation).not.toHaveBeenCalled();
+
+    const removed = await fixture.appHost.removeProjects(
+      fixture.sender,
+      createDesktopProjectSelectionRequest(
+        'remove-batch',
+        [project.projectId],
+        opened.projection.rendererSessionId,
+      ),
+    );
+
+    expect(fixture.registry.removeProjects).toHaveBeenCalledWith([project.workspaceId]);
+    expect(fixture.agent.deleteConversation).not.toHaveBeenCalled();
+    expect(removed).toMatchObject({
+      requestId: 'remove-batch',
+      projection: {
+        catalog: { projects: [] },
+        window: { tabs: [] },
+        conversationNavigation: {
+          groups: [
+            {
+              kind: 'workspace',
+              workspaceId: project.workspaceId,
+              conversations: [expect.objectContaining({ navigation: projectConversation })],
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it('deletes exact Project Workspace conversations while retaining the Project', async () => {
+    const fixture = await createShellAppHost();
+    const resolution = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(resolution);
     const opened = await fixture.appHost.openContentProject(
       fixture.sender,
       createDesktopWindowMutationRequest('open-1', fixture.projection.rendererSessionId),
@@ -1550,34 +1604,24 @@ describe('DesktopAppHost', () => {
       });
     });
 
-    await expect(
-      fixture.appHost.deleteProjects(fixture.sender, {
-        requestId: 'delete-invalid-payload',
-        rendererSessionId: opened.projection.rendererSessionId,
-        projectId: project.projectId,
-      }),
-    ).rejects.toMatchObject({ code: 'invalid-desktop-shell-payload' });
-    expect(fixture.registry.removeProjects).not.toHaveBeenCalled();
-    expect(fixture.agent.deleteConversation).not.toHaveBeenCalled();
-
-    const removed = await fixture.appHost.deleteProjects(
+    const cleaned = await fixture.appHost.deleteProjectConversations(
       fixture.sender,
-      createDesktopProjectDeleteRequest(
-        'delete-batch',
+      createDesktopProjectSelectionRequest(
+        'cleanup-project-conversations',
         [project.projectId],
         opened.projection.rendererSessionId,
       ),
     );
 
-    expect(fixture.registry.removeProjects).toHaveBeenCalledWith([project.workspaceId]);
     expect(fixture.agent.deleteConversation).toHaveBeenCalledWith(
       projectConversation.conversationId,
     );
-    expect(removed).toMatchObject({
-      requestId: 'delete-batch',
+    expect(fixture.registry.removeProjects).not.toHaveBeenCalled();
+    expect(cleaned).toMatchObject({
+      requestId: 'cleanup-project-conversations',
       projection: {
-        catalog: { projects: [] },
-        window: { tabs: [] },
+        catalog: { projects: [expect.objectContaining({ projectId: project.projectId })] },
+        window: { tabs: [expect.objectContaining({ projectId: project.projectId })] },
         conversationNavigation: { groups: [] },
       },
     });
@@ -2360,7 +2404,7 @@ async function createShellAppHost(options?: {
     instanceId: 'app-1',
     logger,
     shell: fixture.service,
-    projectConversations: createProjectConversationManagementService(fixture.service, agent),
+    projectManagement: createProjectManagementService(fixture.service, agent),
     agent,
     assistantWorkspace: createAssistantWorkspaceResolution(),
     agentLaunch: options?.agentLaunch ?? createAgentLaunchRuntime(),
@@ -2608,11 +2652,11 @@ function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {
   };
 }
 
-function createProjectConversationManagementService(
+function createProjectManagementService(
   shell: DesktopShellService,
   agent: AgentAppHost,
-): DesktopProjectConversationManagementService {
-  return new DesktopProjectConversationManagementService({
+): DesktopProjectManagementService {
+  return new DesktopProjectManagementService({
     shell,
     conversations: {
       deleteConversations: async (conversations) => {

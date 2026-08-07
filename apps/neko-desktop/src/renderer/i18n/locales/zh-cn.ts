@@ -11,9 +11,15 @@ export const zhCN = {
   'shell.retrySurface': '重试',
   'shell.openProjects': '已打开的项目',
   'shell.closeProjectTab': '关闭项目标签',
-  'shell.deleteProject': '删除 {project} 及关联会话',
-  'shell.deleteProjectConfirm': '要删除“{project}”及其关联会话吗？项目文件不会被删除。',
-  'shell.deleteProjectsConfirm': '要删除选中的 {count} 个项目及其关联会话吗？项目文件不会被删除。',
+  'shell.removeProject': '移除项目 {project}',
+  'shell.removeProjectConfirm': '要从 OpenNeko 移除“{project}”吗？会话和项目文件都会保留。',
+  'shell.removeProjectsConfirm':
+    '要从 OpenNeko 移除选中的 {count} 个项目吗？会话和项目文件都会保留。',
+  'shell.deleteProjectConversations': '删除 {project} 的工作区会话',
+  'shell.deleteProjectConversationsConfirm':
+    '要永久删除“{project}”的 {count} 个工作区会话吗？项目及其文件都会保留。',
+  'shell.deleteProjectsConversationsConfirm':
+    '要永久删除所选 {projectCount} 个项目中的 {conversationCount} 个工作区会话吗？项目及其文件都会保留。',
   'shell.deleteConversation': '删除会话 {conversation}',
   'shell.deleteConversationConfirm': '要永久删除会话“{conversation}”吗？此操作无法撤销。',
   'shell.openProject': '打开内容项目',
@@ -185,7 +191,8 @@ export const zhCN = {
   'home.projects.view': '项目视图',
   'home.projects.noResults': '没有匹配的项目',
   'home.projects.selectedCount': '已选择 {count} 个项目',
-  'home.projects.deleteSelected': '删除所选项目',
+  'home.projects.removeSelected': '移除所选项目',
+  'home.projects.deleteConversationsSelected': '删除项目会话',
   'home.projects.clearSelection': '清除选择',
   'home.projects.select': '选择项目以查看详情',
   'home.projects.updated': '更新时间',

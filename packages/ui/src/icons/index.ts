@@ -31,6 +31,7 @@ export {
   EditIcon,
   SendIcon,
   PlusIcon,
+  RemoveIcon,
   UploadIcon,
   PackageIcon,
   TrashIcon,

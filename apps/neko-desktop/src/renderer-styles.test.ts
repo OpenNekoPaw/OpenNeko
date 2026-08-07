@@ -30,6 +30,16 @@ describe('Desktop renderer styles', () => {
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
   });
 
+  it('reserves stable Project-group columns for navigation and independent cleanup actions', () => {
+    const projectGroupRule = styles.match(
+      /\.primary-conversation-group__header\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(projectGroupRule?.groups?.body).toMatch(
+      /grid-template-columns\s*:\s*24px minmax\(0, 1fr\) auto minmax\(24px, auto\) 24px 24px/u,
+    );
+  });
+
   it('centers a bounded Settings control column without centering its text', () => {
     const settingsControlColumnRule = styles.match(
       /\.desktop-settings__navigation-control\s*\{(?<body>[\s\S]*?)\n\}/u,

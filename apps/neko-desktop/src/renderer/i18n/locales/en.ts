@@ -11,11 +11,16 @@ export const en = {
   'shell.retrySurface': 'Retry',
   'shell.openProjects': 'Open projects',
   'shell.closeProjectTab': 'Close project tab',
-  'shell.deleteProject': 'Delete {project} and its conversations',
-  'shell.deleteProjectConfirm':
-    'Delete “{project}” and its conversations? Project files will not be deleted.',
-  'shell.deleteProjectsConfirm':
-    'Delete {count} selected projects and their conversations? Project files will not be deleted.',
+  'shell.removeProject': 'Remove {project}',
+  'shell.removeProjectConfirm':
+    'Remove “{project}” from OpenNeko? Its conversations and files will be retained.',
+  'shell.removeProjectsConfirm':
+    'Remove {count} selected projects from OpenNeko? Their conversations and files will be retained.',
+  'shell.deleteProjectConversations': 'Delete Workspace conversations for {project}',
+  'shell.deleteProjectConversationsConfirm':
+    'Permanently delete {count} Workspace conversations for “{project}”? The project and its files will be retained.',
+  'shell.deleteProjectsConversationsConfirm':
+    'Permanently delete {conversationCount} Workspace conversations from {projectCount} selected projects? The projects and their files will be retained.',
   'shell.deleteConversation': 'Delete conversation {conversation}',
   'shell.deleteConversationConfirm':
     'Permanently delete the conversation “{conversation}”? This cannot be undone.',
@@ -204,7 +209,8 @@ export const en = {
   'home.projects.view': 'Project view',
   'home.projects.noResults': 'No matching projects',
   'home.projects.selectedCount': '{count} selected',
-  'home.projects.deleteSelected': 'Delete selected',
+  'home.projects.removeSelected': 'Remove selected',
+  'home.projects.deleteConversationsSelected': 'Delete conversations',
   'home.projects.clearSelection': 'Clear selection',
   'home.projects.select': 'Select a project to inspect it',
   'home.projects.updated': 'Updated',

@@ -8,6 +8,7 @@ import {
   IconButton,
   PackageIcon,
   PlusIcon,
+  RemoveIcon,
   SearchIcon,
   SettingsIcon,
   StorylineIcon,
@@ -106,7 +107,8 @@ interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onDeleteProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onRemoveProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onDeleteProjectConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onUpdateWorkbench: (
     workbenchInstanceId: string,
     workbench: DesktopWorkbenchLayoutProjection,
@@ -302,19 +304,53 @@ export function DesktopApplication(): JSX.Element {
       }
       void runMutation(() => window.openNekoDesktop.conversations.delete(conversation.navigation));
     },
-    onDeleteProjects: (projects) => {
+    onRemoveProjects: (projects) => {
       if (projects.length === 0) {
-        throw new Error('At least one Project is required for deletion.');
+        throw new Error('At least one Project is required for removal.');
       }
       const confirmation =
         projects.length === 1 && projects[0]
-          ? t('shell.deleteProjectConfirm', { project: projects[0].displayName })
-          : t('shell.deleteProjectsConfirm', { count: projects.length });
+          ? t('shell.removeProjectConfirm', { project: projects[0].displayName })
+          : t('shell.removeProjectsConfirm', { count: projects.length });
       if (!globalThis.confirm(confirmation)) {
         return;
       }
       void runMutation(() =>
-        window.openNekoDesktop.projects.delete(projects.map((project) => project.projectId)),
+        window.openNekoDesktop.projects.remove(projects.map((project) => project.projectId)),
+      );
+    },
+    onDeleteProjectConversations: (projects) => {
+      if (projects.length === 0) {
+        throw new Error('At least one Project is required for conversation cleanup.');
+      }
+      const conversationCount = projects.reduce(
+        (count, project) =>
+          count +
+          projection.agentHome.conversations.filter(
+            (conversation) =>
+              conversation.navigation.owner.kind === 'workspace' &&
+              conversation.navigation.owner.workspaceId === project.workspaceId,
+          ).length,
+        0,
+      );
+      if (conversationCount === 0) {
+        throw new Error('Selected Projects have no Workspace conversations to delete.');
+      }
+      const confirmation =
+        projects.length === 1 && projects[0]
+          ? t('shell.deleteProjectConversationsConfirm', {
+              project: projects[0].displayName,
+              count: conversationCount,
+            })
+          : t('shell.deleteProjectsConversationsConfirm', {
+              projectCount: projects.length,
+              conversationCount,
+            });
+      if (!globalThis.confirm(confirmation)) return;
+      void runMutation(() =>
+        window.openNekoDesktop.projects.deleteConversations(
+          projects.map((project) => project.projectId),
+        ),
       );
     },
     onUpdateWorkbench: (workbenchInstanceId, workbench) => {
@@ -411,7 +447,8 @@ export function DesktopShellView({
     onSelectProject: () => undefined,
     onOpenConversation: () => undefined,
     onDeleteConversation: () => undefined,
-    onDeleteProjects: () => undefined,
+    onRemoveProjects: () => undefined,
+    onDeleteProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
     onUpdateApplicationSidebar: () => undefined,
     onTransitionScene: () => undefined,
@@ -636,10 +673,13 @@ function DesktopSceneWorkbench({
             disabled={pending}
             activeProjectId={workspaceProject?.projectId}
             onDeleteConversation={actions.onDeleteConversation}
+            onDeleteProjectConversations={(project) =>
+              actions.onDeleteProjectConversations([project])
+            }
             onNavigate={(section) => actions.onTransitionScene(sceneIntentForSection(section))}
             onOpenConversation={actions.onOpenConversation}
             onOpenRecent={actions.onSelectProject}
-            onDeleteProject={(project) => actions.onDeleteProjects([project])}
+            onRemoveProject={(project) => actions.onRemoveProjects([project])}
             onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
             onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
             projection={projection}
@@ -845,9 +885,11 @@ function DesktopWorkbenchRuntimePortals({
       ) : null
     ) : scene.context.kind === 'project-management' ? (
       <DesktopProjectCatalogSurface
+        conversations={projection.agentHome.conversations}
         interactive={interactive}
         onOpen={actions.onSelectProject}
-        onDelete={actions.onDeleteProjects}
+        onDeleteConversations={actions.onDeleteProjectConversations}
+        onRemove={actions.onRemoveProjects}
         projects={projection.catalog.projects}
       />
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
@@ -2029,10 +2071,11 @@ function ApplicationPrimarySidebar({
   compact,
   disabled = false,
   onDeleteConversation,
+  onDeleteProjectConversations,
   onNavigate,
   onOpenConversation,
   onOpenRecent,
-  onDeleteProject,
+  onRemoveProject,
   onOpenSettings,
   onToggle,
   projection,
@@ -2044,10 +2087,11 @@ function ApplicationPrimarySidebar({
   readonly compact: boolean;
   readonly disabled?: boolean;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
   readonly onNavigate: (section: HomeSection) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
-  readonly onDeleteProject: (project: DesktopProjectCatalogItem) => void;
+  readonly onRemoveProject: (project: DesktopProjectCatalogItem) => void;
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
@@ -2102,9 +2146,10 @@ function ApplicationPrimarySidebar({
         activeProjectId={activeProjectId}
         disabled={disabled}
         onDeleteConversation={onDeleteConversation}
-        onDeleteProject={onDeleteProject}
+        onDeleteProjectConversations={onDeleteProjectConversations}
         onOpenConversation={onOpenConversation}
         onOpenRecent={onOpenRecent}
+        onRemoveProject={onRemoveProject}
         projection={projection}
       />
       <PrimarySidebarFooter
@@ -2120,17 +2165,19 @@ function PrimaryRecentNavigation({
   activeProjectId,
   disabled = false,
   onDeleteConversation,
-  onDeleteProject,
+  onDeleteProjectConversations,
   onOpenConversation,
   onOpenRecent,
+  onRemoveProject,
   projection,
 }: {
   readonly activeProjectId?: string;
   readonly disabled?: boolean;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onDeleteProject: (project: DesktopProjectCatalogItem) => void;
+  readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
+  readonly onRemoveProject: (project: DesktopProjectCatalogItem) => void;
   readonly projection: DesktopShellProjection;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -2179,6 +2226,14 @@ function PrimaryRecentNavigation({
               )
             : undefined;
         const projectUnavailable = project?.unavailable;
+        const workspaceConversationCount =
+          group.kind === 'project'
+            ? group.conversations.filter(
+                (conversation) =>
+                  conversation.navigation.owner.kind === 'workspace' &&
+                  conversation.navigation.owner.workspaceId === group.workspaceId,
+              ).length
+            : 0;
         if (group.kind === 'project' && !project) {
           throw new Error(
             `Conversation navigation references missing Project '${group.projectId}'.`,
@@ -2237,12 +2292,20 @@ function PrimaryRecentNavigation({
                   )}
                 </span>
                 <IconButton
+                  disabled={disabled || workspaceConversationCount === 0}
+                  size="xs"
+                  label={t('shell.deleteProjectConversations', { project: project.displayName })}
+                  title={t('shell.deleteProjectConversations', { project: project.displayName })}
+                  icon={<TrashIcon size={13} />}
+                  onClick={() => onDeleteProjectConversations(project)}
+                />
+                <IconButton
                   disabled={disabled}
                   size="xs"
-                  label={t('shell.deleteProject', { project: project.displayName })}
-                  title={t('shell.deleteProject', { project: project.displayName })}
-                  icon={<TrashIcon size={13} />}
-                  onClick={() => onDeleteProject(project)}
+                  label={t('shell.removeProject', { project: project.displayName })}
+                  title={t('shell.removeProject', { project: project.displayName })}
+                  icon={<RemoveIcon size={13} />}
+                  onClick={() => onRemoveProject(project)}
                 />
               </div>
             ) : (

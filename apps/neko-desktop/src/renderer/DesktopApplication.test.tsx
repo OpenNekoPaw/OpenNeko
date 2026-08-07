@@ -855,23 +855,21 @@ describe('DesktopApplication scene lifecycle', () => {
       scene: activeScene(projection),
     }));
     const deleteConversation = vi.fn(async () => projection);
-    const deletedProjection: DesktopShellProjection = {
+    const removedProjection: DesktopShellProjection = {
       ...projection,
       catalog: { projects: [] },
-      agentHome: {
-        conversations: [],
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-      },
-      conversationNavigation: { groups: [] },
+      conversationNavigation: projectDesktopConversationNavigation({ projects: [] }, agentHome),
     };
-    const deleteProjects = vi.fn(async () => deletedProjection);
+    const removeProjects = vi.fn(async () => removedProjection);
+    const deleteProjectConversations = vi.fn(async () => projection);
     installBridge({
       projection,
       transition,
       deleteConversation,
-      deleteProjects,
+      deleteProjectConversations,
+      removeProjects,
     });
-    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const confirm = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
     const projectButton = [
@@ -925,21 +923,36 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => collapseButton.click());
     expect(collapseButton.getAttribute('aria-expanded')).toBe('true');
 
-    const deleteProjectButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete Project one and its conversations"]',
+    const cleanupProjectButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete Workspace conversations for Project one"]',
+    );
+    const removeProjectButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove Project one"]',
     );
     const deleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete conversation Conversation one"]',
     );
-    if (!deleteProjectButton || !deleteButton) {
-      throw new Error('Desktop fixture requires Project and conversation deletion actions.');
+    if (!cleanupProjectButton || !removeProjectButton || !deleteButton) {
+      throw new Error('Desktop fixture requires Project removal and conversation cleanup actions.');
     }
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
     expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
-    await act(async () => deleteProjectButton.click());
-    await waitFor(() => deleteProjects.mock.calls.length === 1);
-    expect(deleteProjects).toHaveBeenCalledWith([project.projectId]);
+    confirm.mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await act(async () => cleanupProjectButton.click());
+    expect(deleteProjectConversations).not.toHaveBeenCalled();
+    await act(async () => cleanupProjectButton.click());
+    await waitFor(() => deleteProjectConversations.mock.calls.length === 1);
+    expect(deleteProjectConversations).toHaveBeenCalledWith([project.projectId]);
+    expect(confirm).toHaveBeenCalledWith(
+      'Permanently delete 1 Workspace conversations for “Project one”? The project and its files will be retained.',
+    );
+    await act(async () => removeProjectButton.click());
+    await waitFor(() => removeProjects.mock.calls.length === 1);
+    expect(removeProjects).toHaveBeenCalledWith([project.projectId]);
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove “Project one” from OpenNeko? Its conversations and files will be retained.',
+    );
     await waitFor(
       () =>
         container.querySelector('.primary-conversation-group[data-group-kind="project"]') === null,
@@ -1011,8 +1024,8 @@ describe('DesktopApplication scene lifecycle', () => {
       scene: activeScene(projection),
     }));
     const deleteConversation = vi.fn(async () => projection);
-    const deleteProjects = vi.fn(async () => projection);
-    installBridge({ projection, transition, deleteConversation, deleteProjects });
+    const removeProjects = vi.fn(async () => projection);
+    installBridge({ projection, transition, deleteConversation, removeProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
 
@@ -1061,7 +1074,7 @@ describe('DesktopApplication scene lifecycle', () => {
     );
 
     const removeButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete Unavailable Project and its conversations"]',
+      'button[aria-label="Remove Unavailable Project"]',
     );
     const deleteButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Delete conversation Unavailable conversation"]',
@@ -1072,10 +1085,10 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(removeButton.disabled).toBe(false);
     expect(deleteButton.disabled).toBe(false);
     await act(async () => removeButton.click());
-    await waitFor(() => deleteProjects.mock.calls.length === 1);
+    await waitFor(() => removeProjects.mock.calls.length === 1);
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteProjects).toHaveBeenCalledWith([project.projectId]);
+    expect(removeProjects).toHaveBeenCalledWith([project.projectId]);
     expect(deleteConversation).toHaveBeenCalledWith(unavailableConversation.navigation);
     await act(async () => root.unmount());
   });
@@ -1183,8 +1196,8 @@ describe('DesktopApplication scene lifecycle', () => {
       },
       projectManagementScene(),
     );
-    const deleteProjects = vi.fn(async () => projection);
-    installBridge({ projection, deleteProjects });
+    const removeProjects = vi.fn(async () => projection);
+    installBridge({ projection, removeProjects });
     vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { container, root } = await renderApplication();
     await waitFor(() => container.querySelector('.management-surface-row__select') !== null);
@@ -1198,16 +1211,16 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () =>
       second.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })),
     );
-    const deleteSelected = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Delete selected',
+    const removeSelected = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Remove selected',
     );
-    if (!deleteSelected) throw new Error('Project Management batch action is unavailable.');
+    if (!removeSelected) throw new Error('Project Management batch action is unavailable.');
 
-    await act(async () => deleteSelected.click());
-    expect(deleteProjects).not.toHaveBeenCalled();
-    await act(async () => deleteSelected.click());
-    await waitFor(() => deleteProjects.mock.calls.length === 1);
-    expect(deleteProjects).toHaveBeenCalledWith(['content:workspace-1', 'content:workspace-2']);
+    await act(async () => removeSelected.click());
+    expect(removeProjects).not.toHaveBeenCalled();
+    await act(async () => removeSelected.click());
+    await waitFor(() => removeProjects.mock.calls.length === 1);
+    expect(removeProjects).toHaveBeenCalledWith(['content:workspace-1', 'content:workspace-2']);
     await act(async () => root.unmount());
   });
 
@@ -1391,7 +1404,8 @@ function installBridge({
   subscribe = vi.fn(() => () => undefined),
   transition = vi.fn(),
   deleteConversation = vi.fn(),
-  deleteProjects = vi.fn(),
+  deleteProjectConversations = vi.fn(),
+  removeProjects = vi.fn(),
   updateApplicationSidebar = vi.fn(),
   updateWorkbench = vi.fn(),
   assetCenterExecute = vi.fn(),
@@ -1401,7 +1415,8 @@ function installBridge({
   readonly subscribe?: (listener: (event: DesktopShellProjectionEvent) => void) => () => void;
   readonly transition?: ReturnType<typeof vi.fn>;
   readonly deleteConversation?: ReturnType<typeof vi.fn>;
-  readonly deleteProjects?: ReturnType<typeof vi.fn>;
+  readonly deleteProjectConversations?: ReturnType<typeof vi.fn>;
+  readonly removeProjects?: ReturnType<typeof vi.fn>;
   readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
   readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
@@ -1412,7 +1427,7 @@ function installBridge({
       shell: { getSnapshot, subscribe },
       scenes: { transition },
       conversations: { delete: deleteConversation },
-      projects: { delete: deleteProjects },
+      projects: { remove: removeProjects, deleteConversations: deleteProjectConversations },
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },

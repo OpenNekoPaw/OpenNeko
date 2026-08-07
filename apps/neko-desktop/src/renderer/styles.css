@@ -712,7 +712,7 @@ code {
 }
 
 .primary-conversation-group__header {
-  grid-template-columns: 24px minmax(0, 1fr) auto minmax(24px, auto) 24px;
+  grid-template-columns: 24px minmax(0, 1fr) auto minmax(24px, auto) 24px 24px;
   margin-bottom: 1px;
 }
 

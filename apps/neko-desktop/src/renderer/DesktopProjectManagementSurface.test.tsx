@@ -24,9 +24,11 @@ describe('Desktop Project Management surfaces', () => {
     const onOpen = vi.fn();
     const { container, root } = await renderWithI18n(
       <DesktopProjectCatalogSurface
+        conversations={[]}
         interactive
         onOpen={onOpen}
-        onDelete={vi.fn()}
+        onDeleteConversations={vi.fn()}
+        onRemove={vi.fn()}
         projects={[project()]}
       />,
     );
@@ -39,7 +41,7 @@ describe('Desktop Project Management surfaces', () => {
   });
 
   it('supports range, modifier, filtered select-all, escape, and keyboard batch removal', async () => {
-    const onDelete = vi.fn();
+    const onRemove = vi.fn();
     const projects = [
       project('Alpha', 'project-alpha'),
       project('Beta', 'project-beta'),
@@ -47,9 +49,11 @@ describe('Desktop Project Management surfaces', () => {
     ];
     const markup = await renderWithI18n(
       <DesktopProjectCatalogSurface
+        conversations={[]}
         interactive
         onOpen={vi.fn()}
-        onDelete={onDelete}
+        onDeleteConversations={vi.fn()}
+        onRemove={onRemove}
         projects={projects}
       />,
     );
@@ -80,7 +84,7 @@ describe('Desktop Project Management surfaces', () => {
     await act(async () => {
       list?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' }));
     });
-    expect(onDelete).toHaveBeenCalledWith([projects[1]]);
+    expect(onRemove).toHaveBeenCalledWith([projects[1]]);
     await act(async () => markup.root.unmount());
   });
 
@@ -117,9 +121,11 @@ describe('Desktop Project Management surfaces', () => {
   it('renders an explicit empty catalog state', async () => {
     const markup = await renderWithI18n(
       <DesktopProjectCatalogSurface
+        conversations={[]}
         interactive
         onOpen={vi.fn()}
-        onDelete={vi.fn()}
+        onDeleteConversations={vi.fn()}
+        onRemove={vi.fn()}
         projects={[]}
       />,
     );
@@ -138,7 +144,7 @@ describe('Desktop Project Management surfaces', () => {
 
   it('defaults to list mode and keeps unavailable Workspace fields visible and removable', async () => {
     const onOpen = vi.fn();
-    const onDelete = vi.fn();
+    const onRemove = vi.fn();
     const unavailable = {
       ...project(),
       unavailable: {
@@ -148,9 +154,11 @@ describe('Desktop Project Management surfaces', () => {
     };
     const markup = await renderWithI18n(
       <DesktopProjectCatalogSurface
+        conversations={[]}
         interactive
         onOpen={onOpen}
-        onDelete={onDelete}
+        onDeleteConversations={vi.fn()}
+        onRemove={onRemove}
         projects={[unavailable]}
       />,
     );
@@ -179,20 +187,44 @@ describe('Desktop Project Management surfaces', () => {
       'currentLocator: Workspace directory is unavailable.',
     );
     expect(findButton(markup.container, 'Open project: Demo').disabled).toBe(true);
-    await act(async () =>
-      findButton(markup.container, 'Delete Demo and its conversations').click(),
+    expect(findButton(markup.container, 'Delete Workspace conversations for Demo').disabled).toBe(
+      true,
     );
-    expect(onDelete).toHaveBeenCalledWith([unavailable]);
+    await act(async () => findButton(markup.container, 'Remove Demo').click());
+    expect(onRemove).toHaveBeenCalledWith([unavailable]);
     expect(onOpen).not.toHaveBeenCalled();
+    await act(async () => markup.root.unmount());
+  });
+
+  it('exposes Project conversation cleanup only for exact Workspace conversations', async () => {
+    const onDeleteConversations = vi.fn();
+    const demo = project();
+    const markup = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        conversations={[workspaceConversation('conversation-1', demo.workspaceId)]}
+        interactive
+        onDeleteConversations={onDeleteConversations}
+        onOpen={vi.fn()}
+        onRemove={vi.fn()}
+        projects={[demo]}
+      />,
+    );
+
+    const cleanup = findButton(markup.container, 'Delete Workspace conversations for Demo');
+    expect(cleanup.disabled).toBe(false);
+    await act(async () => cleanup.click());
+    expect(onDeleteConversations).toHaveBeenCalledWith([demo]);
     await act(async () => markup.root.unmount());
   });
 
   it('reconstructs query, sort and view from defaults after the singleton scene unmounts', async () => {
     const first = await renderWithI18n(
       <DesktopProjectCatalogSurface
+        conversations={[]}
         interactive
         onOpen={vi.fn()}
-        onDelete={vi.fn()}
+        onDeleteConversations={vi.fn()}
+        onRemove={vi.fn()}
         projects={[project()]}
       />,
     );
@@ -219,9 +251,11 @@ describe('Desktop Project Management surfaces', () => {
 
     const restored = await renderWithI18n(
       <DesktopProjectCatalogSurface
+        conversations={[]}
         interactive
         onOpen={vi.fn()}
-        onDelete={vi.fn()}
+        onDeleteConversations={vi.fn()}
+        onRemove={vi.fn()}
         projects={[project()]}
       />,
     );
@@ -272,5 +306,21 @@ function project(name = 'Demo', projectId = 'project-1') {
     displayName: name,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-02-01T00:00:00.000Z',
+  };
+}
+
+function workspaceConversation(conversationId: string, workspaceId: string) {
+  return {
+    navigation: {
+      conversationId,
+      owner: { kind: 'workspace' as const, workspaceId },
+    },
+    title: conversationId,
+    updatedAt: '2026-02-01T00:00:00.000Z',
+    attention: 'none' as const,
+    lastActivity: {
+      kind: 'conversation-updated' as const,
+      occurredAt: '2026-02-01T00:00:00.000Z',
+    },
   };
 }

@@ -4,6 +4,7 @@ import {
   GridIcon,
   LayersIcon,
   OpenIcon,
+  RemoveIcon,
   SearchIcon,
   TrashIcon,
   WarningIcon,
@@ -11,20 +12,27 @@ import {
 import { useTranslation } from '@neko/ui/i18n/react';
 import { EmptyState } from '@neko/ui/primitives';
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
-import type { DesktopProjectCatalogItem } from '@neko/host/desktop-shell-contract';
+import type {
+  DesktopAgentHomeConversationSummary,
+  DesktopProjectCatalogItem,
+} from '@neko/host/desktop-shell-contract';
 
 export type DesktopProjectManagementSort =
   'updated-descending' | 'updated-ascending' | 'name-ascending' | 'name-descending';
 
 export function DesktopProjectCatalogSurface({
+  conversations,
   interactive,
-  onDelete,
+  onDeleteConversations,
   onOpen,
+  onRemove,
   projects,
 }: {
+  readonly conversations: readonly DesktopAgentHomeConversationSummary[];
   readonly interactive: boolean;
-  readonly onDelete: (projects: readonly DesktopProjectCatalogItem[]) => void;
+  readonly onDeleteConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onOpen: (projectId: string) => void;
+  readonly onRemove: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly projects: readonly DesktopProjectCatalogItem[];
 }): JSX.Element {
   const { locale, t } = useTranslation();
@@ -40,6 +48,14 @@ export function DesktopProjectCatalogSurface({
   const selectedProjects = useMemo(
     () => projects.filter((project) => selectedProjectIds.has(project.projectId)),
     [projects, selectedProjectIds],
+  );
+  const conversationCounts = useMemo(
+    () => countProjectWorkspaceConversations(projects, conversations),
+    [conversations, projects],
+  );
+  const selectedConversationCount = selectedProjects.reduce(
+    (count, project) => count + (conversationCounts.get(project.projectId) ?? 0),
+    0,
   );
   useEffect(() => {
     setSelectedProjectIds((current) => {
@@ -111,9 +127,17 @@ export function DesktopProjectCatalogSurface({
         >
           <strong>{t('home.projects.selectedCount', { count: selectedProjects.length })}</strong>
           <span className="project-management-batch-toolbar__spacer" />
-          <button type="button" disabled={!interactive} onClick={() => onDelete(selectedProjects)}>
+          <button type="button" disabled={!interactive} onClick={() => onRemove(selectedProjects)}>
+            <RemoveIcon size={14} />
+            <span>{t('home.projects.removeSelected')}</span>
+          </button>
+          <button
+            type="button"
+            disabled={!interactive || selectedConversationCount === 0}
+            onClick={() => onDeleteConversations(selectedProjects)}
+          >
             <TrashIcon size={14} />
-            <span>{t('home.projects.deleteSelected')}</span>
+            <span>{t('home.projects.deleteConversationsSelected')}</span>
           </button>
           <button
             type="button"
@@ -149,7 +173,7 @@ export function DesktopProjectCatalogSurface({
             (event.key === 'Delete' || event.key === 'Backspace')
           ) {
             event.preventDefault();
-            onDelete(selectedProjects);
+            onRemove(selectedProjects);
             return;
           }
           if (event.key === 'Home' || event.key === 'End') {
@@ -207,12 +231,23 @@ export function DesktopProjectCatalogSurface({
               </button>
               <button
                 type="button"
-                aria-label={t('shell.deleteProject', { project: project.displayName })}
-                disabled={!interactive}
-                title={t('shell.deleteProject', { project: project.displayName })}
-                onClick={() => onDelete([project])}
+                aria-label={t('shell.deleteProjectConversations', {
+                  project: project.displayName,
+                })}
+                disabled={!interactive || (conversationCounts.get(project.projectId) ?? 0) === 0}
+                title={t('shell.deleteProjectConversations', { project: project.displayName })}
+                onClick={() => onDeleteConversations([project])}
               >
                 <TrashIcon size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label={t('shell.removeProject', { project: project.displayName })}
+                disabled={!interactive}
+                title={t('shell.removeProject', { project: project.displayName })}
+                onClick={() => onRemove([project])}
+              >
+                <RemoveIcon size={15} />
               </button>
             </span>
           </div>
@@ -220,6 +255,23 @@ export function DesktopProjectCatalogSurface({
       </div>
     </section>
   );
+}
+
+function countProjectWorkspaceConversations(
+  projects: readonly DesktopProjectCatalogItem[],
+  conversations: readonly DesktopAgentHomeConversationSummary[],
+): ReadonlyMap<string, number> {
+  const projectIdsByWorkspace = new Map(
+    projects.map((project) => [project.workspaceId, project.projectId] as const),
+  );
+  const counts = new Map<string, number>();
+  for (const conversation of conversations) {
+    if (conversation.navigation.owner.kind !== 'workspace') continue;
+    const projectId = projectIdsByWorkspace.get(conversation.navigation.owner.workspaceId);
+    if (!projectId) continue;
+    counts.set(projectId, (counts.get(projectId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 export interface ProjectSelectionUpdate {
