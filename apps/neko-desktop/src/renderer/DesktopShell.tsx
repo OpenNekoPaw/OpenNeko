@@ -3,11 +3,13 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CloseIcon,
+  ContextMenu,
   ControlledWorkbenchShell,
   FolderIcon,
   GridIcon,
   IconButton,
   MessageIcon,
+  OpenIcon,
   PackageIcon,
   PlusIcon,
   RemoveIcon,
@@ -23,6 +25,7 @@ import {
   toCodiconClassName,
   type ControlledWorkbenchResizeBinding,
   type ControlledWorkbenchShellProps,
+  type ContextMenuItem,
 } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -679,6 +682,7 @@ function DesktopSceneWorkbench({
             onDeleteProjectConversations={(project) =>
               actions.onDeleteProjectConversations([project])
             }
+            onManageProjects={() => actions.onTransitionScene({ kind: 'open-project-management' })}
             onNavigate={(section) => actions.onTransitionScene(sceneIntentForSection(section))}
             onOpenConversation={actions.onOpenConversation}
             onOpenRecent={actions.onSelectProject}
@@ -2075,6 +2079,7 @@ function ApplicationPrimarySidebar({
   disabled = false,
   onDeleteConversation,
   onDeleteProjectConversations,
+  onManageProjects,
   onNavigate,
   onOpenConversation,
   onOpenRecent,
@@ -2091,6 +2096,7 @@ function ApplicationPrimarySidebar({
   readonly disabled?: boolean;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onManageProjects: () => void;
   readonly onNavigate: (section: HomeSection) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
@@ -2150,6 +2156,7 @@ function ApplicationPrimarySidebar({
         disabled={disabled}
         onDeleteConversation={onDeleteConversation}
         onDeleteProjectConversations={onDeleteProjectConversations}
+        onManageProjects={onManageProjects}
         onOpenConversation={onOpenConversation}
         onOpenRecent={onOpenRecent}
         onRemoveProject={onRemoveProject}
@@ -2169,6 +2176,7 @@ function PrimaryRecentNavigation({
   disabled = false,
   onDeleteConversation,
   onDeleteProjectConversations,
+  onManageProjects,
   onOpenConversation,
   onOpenRecent,
   onRemoveProject,
@@ -2178,6 +2186,7 @@ function PrimaryRecentNavigation({
   readonly disabled?: boolean;
   readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
+  readonly onManageProjects: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
   readonly onOpenRecent: (projectId: string) => void;
   readonly onRemoveProject: (project: DesktopProjectCatalogItem) => void;
@@ -2250,67 +2259,87 @@ function PrimaryRecentNavigation({
             key={key}
           >
             {group.kind === 'project' && project ? (
-              <div
-                className="primary-recent-project-row primary-conversation-group__header"
-                data-active={project.projectId === activeProjectId ? 'true' : 'false'}
-              >
-                <IconButton
-                  className="primary-conversation-group__collapse"
-                  disabled={disabled}
-                  size="xs"
-                  label={
-                    collapsed
-                      ? t('home.expandConversationGroup', { group: project.displayName })
-                      : t('home.collapseConversationGroup', { group: project.displayName })
-                  }
-                  aria-expanded={!collapsed}
-                  icon={collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
-                  onClick={() => toggleCollapsed(group)}
-                />
-                <button
-                  type="button"
-                  className="home-project-link primary-conversation-group__project-link"
-                  disabled={disabled || projectUnavailable !== undefined}
-                  title={projectUnavailable?.message}
-                  onClick={() => onOpenRecent(project.projectId)}
-                >
-                  {conversationGroupIcon(group)}
-                  <span>{project.displayName}</span>
-                </button>
-                <span className="primary-conversation-group__count">
-                  {group.conversations.length}
-                </span>
-                <span className="primary-navigation-state">
-                  {projectUnavailable ? (
-                    <NavigationUnavailableStatus message={projectUnavailable.message} />
-                  ) : (
+              <ContextMenu
+                items={createProjectNavigationMenuItems({
+                  disabled,
+                  onDeleteConversations: () => onDeleteProjectConversations(project),
+                  onManageProjects,
+                  onOpen: () => onOpenRecent(project.projectId),
+                  onRemove: () => onRemoveProject(project),
+                  project,
+                  t,
+                  workspaceConversationCount,
+                })}
+                trigger={
+                  <div
+                    className="primary-recent-project-row primary-conversation-group__header"
+                    data-active={project.projectId === activeProjectId ? 'true' : 'false'}
+                  >
+                    <IconButton
+                      className="primary-conversation-group__collapse"
+                      disabled={disabled}
+                      size="xs"
+                      label={
+                        collapsed
+                          ? t('home.expandConversationGroup', { group: project.displayName })
+                          : t('home.collapseConversationGroup', { group: project.displayName })
+                      }
+                      aria-expanded={!collapsed}
+                      icon={
+                        collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />
+                      }
+                      onClick={() => toggleCollapsed(group)}
+                    />
+                    <button
+                      type="button"
+                      className="home-project-link primary-conversation-group__project-link"
+                      disabled={disabled || projectUnavailable !== undefined}
+                      title={projectUnavailable?.message}
+                      onClick={() => onOpenRecent(project.projectId)}
+                    >
+                      {conversationGroupIcon(group)}
+                      <span>{project.displayName}</span>
+                    </button>
+                    <span className="primary-conversation-group__count">
+                      {group.conversations.length}
+                    </span>
+                    <span className="primary-navigation-state">
+                      {projectUnavailable ? (
+                        <NavigationUnavailableStatus message={projectUnavailable.message} />
+                      ) : (
+                        <IconButton
+                          disabled={disabled}
+                          size="xs"
+                          label={t('home.newProjectConversation', { project: project.displayName })}
+                          title={t('home.newProjectConversation', { project: project.displayName })}
+                          icon={<PlusIcon size={13} />}
+                          onClick={() => onOpenRecent(project.projectId)}
+                        />
+                      )}
+                    </span>
+                    <IconButton
+                      disabled={disabled || workspaceConversationCount === 0}
+                      size="xs"
+                      label={t('shell.deleteProjectConversations', {
+                        project: project.displayName,
+                      })}
+                      title={t('shell.deleteProjectConversations', {
+                        project: project.displayName,
+                      })}
+                      icon={<TrashIcon size={13} />}
+                      onClick={() => onDeleteProjectConversations(project)}
+                    />
                     <IconButton
                       disabled={disabled}
                       size="xs"
-                      label={t('home.newProjectConversation', { project: project.displayName })}
-                      title={t('home.newProjectConversation', { project: project.displayName })}
-                      icon={<PlusIcon size={13} />}
-                      onClick={() => onOpenRecent(project.projectId)}
+                      label={t('shell.removeProject', { project: project.displayName })}
+                      title={t('shell.removeProject', { project: project.displayName })}
+                      icon={<RemoveIcon size={13} />}
+                      onClick={() => onRemoveProject(project)}
                     />
-                  )}
-                </span>
-                <IconButton
-                  disabled={disabled || workspaceConversationCount === 0}
-                  size="xs"
-                  label={t('shell.deleteProjectConversations', { project: project.displayName })}
-                  title={t('shell.deleteProjectConversations', { project: project.displayName })}
-                  icon={<TrashIcon size={13} />}
-                  onClick={() => onDeleteProjectConversations(project)}
-                />
-                <IconButton
-                  disabled={disabled}
-                  size="xs"
-                  label={t('shell.removeProject', { project: project.displayName })}
-                  title={t('shell.removeProject', { project: project.displayName })}
-                  icon={<RemoveIcon size={13} />}
-                  onClick={() => onRemoveProject(project)}
-                />
-              </div>
+                  </div>
+                }
+              />
             ) : (
               <div className="primary-conversation-group__standalone-heading">
                 <IconButton
@@ -2397,41 +2426,191 @@ function ConversationNavigationRow({
 }): JSX.Element {
   const { t } = useTranslation();
   return (
-    <div
-      className="primary-recent-project-row primary-recent-conversation-row"
-      data-active={active ? 'true' : 'false'}
-    >
-      <button
-        type="button"
-        className="home-project-link home-conversation-link"
-        disabled={navigationDisabled || conversation.unavailable !== undefined}
-        title={conversation.unavailable?.message}
-        onClick={() => onOpen(conversation)}
-      >
-        <MessageIcon
-          className="primary-conversation-group__identity-icon is-conversation"
-          size={13}
-        />
-        <span>{conversation.title}</span>
-      </button>
-      <span className="primary-navigation-state">
-        {conversation.unavailable ? (
-          <NavigationUnavailableStatus message={conversation.unavailable.message} />
-        ) : conversation.attention !== 'none' ? (
-          <span
-            className={`home-conversation-attention is-${conversation.attention}`}
-            aria-label={formatAttention(conversation.attention, t)}
+    <ContextMenu
+      items={createConversationNavigationMenuItems({
+        conversation,
+        disabled,
+        navigationDisabled,
+        onDelete: () => onDelete(conversation),
+        onOpen: () => onOpen(conversation),
+        t,
+      })}
+      trigger={
+        <div
+          className="primary-recent-project-row primary-recent-conversation-row"
+          data-active={active ? 'true' : 'false'}
+        >
+          <button
+            type="button"
+            className="home-project-link home-conversation-link"
+            disabled={navigationDisabled || conversation.unavailable !== undefined}
+            title={conversation.unavailable?.message}
+            onClick={() => onOpen(conversation)}
+          >
+            <MessageIcon
+              className="primary-conversation-group__identity-icon is-conversation"
+              size={13}
+            />
+            <span>{conversation.title}</span>
+          </button>
+          <span className="primary-navigation-state">
+            {conversation.unavailable ? (
+              <NavigationUnavailableStatus message={conversation.unavailable.message} />
+            ) : conversation.attention !== 'none' ? (
+              <ConversationAttentionStatus attention={conversation.attention} />
+            ) : null}
+          </span>
+          <IconButton
+            disabled={disabled}
+            size="xs"
+            label={t('shell.deleteConversation', { conversation: conversation.title })}
+            icon={<TrashIcon size={13} />}
+            onClick={() => onDelete(conversation)}
           />
-        ) : null}
+        </div>
+      }
+    />
+  );
+}
+
+function ConversationAttentionStatus({
+  attention,
+}: {
+  readonly attention: Exclude<DesktopAgentHomeConversationSummary['attention'], 'none'>;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const label = formatAttention(attention, t);
+  return (
+    <Tooltip content={label} side="right">
+      <span className={`home-conversation-status is-${attention}`} role="status" title={label}>
+        <span className={`home-conversation-attention is-${attention}`} />
+        <span className="home-conversation-status__label">{label}</span>
       </span>
-      <IconButton
-        disabled={disabled}
-        size="xs"
-        label={t('shell.deleteConversation', { conversation: conversation.title })}
-        icon={<TrashIcon size={13} />}
-        onClick={() => onDelete(conversation)}
-      />
-    </div>
+    </Tooltip>
+  );
+}
+
+function createProjectNavigationMenuItems(input: {
+  readonly disabled: boolean;
+  readonly onDeleteConversations: () => void;
+  readonly onManageProjects: () => void;
+  readonly onOpen: () => void;
+  readonly onRemove: () => void;
+  readonly project: DesktopProjectCatalogItem;
+  readonly t: TranslationFunction;
+  readonly workspaceConversationCount: number;
+}): readonly ContextMenuItem[] {
+  const unavailable = input.project.unavailable !== undefined;
+  return [
+    {
+      id: 'open-project',
+      label: (
+        <NavigationMenuLabel icon={<OpenIcon size={14} />} text={input.t('home.openProject')} />
+      ),
+      disabled: input.disabled || unavailable,
+      onSelect: input.onOpen,
+    },
+    {
+      id: 'new-project-conversation',
+      label: (
+        <NavigationMenuLabel
+          icon={<PlusIcon size={14} />}
+          text={input.t('home.newProjectConversation', { project: input.project.displayName })}
+        />
+      ),
+      disabled: input.disabled || unavailable,
+      onSelect: input.onOpen,
+    },
+    {
+      id: 'manage-projects',
+      label: (
+        <NavigationMenuLabel
+          icon={<FolderIcon size={14} />}
+          text={input.t('home.projectManagement')}
+        />
+      ),
+      disabled: input.disabled,
+      onSelect: input.onManageProjects,
+    },
+    { id: 'project-destructive-separator', type: 'separator' },
+    {
+      id: 'delete-project-conversations',
+      label: (
+        <NavigationMenuLabel
+          icon={<TrashIcon size={14} />}
+          text={input.t('shell.deleteProjectConversations', {
+            project: input.project.displayName,
+          })}
+        />
+      ),
+      disabled: input.disabled || input.workspaceConversationCount === 0,
+      danger: true,
+      onSelect: input.onDeleteConversations,
+    },
+    {
+      id: 'remove-project',
+      label: (
+        <NavigationMenuLabel
+          icon={<RemoveIcon size={14} />}
+          text={input.t('shell.removeProject', { project: input.project.displayName })}
+        />
+      ),
+      disabled: input.disabled,
+      danger: true,
+      onSelect: input.onRemove,
+    },
+  ];
+}
+
+function createConversationNavigationMenuItems(input: {
+  readonly conversation: DesktopAgentHomeConversationSummary;
+  readonly disabled: boolean;
+  readonly navigationDisabled: boolean;
+  readonly onDelete: () => void;
+  readonly onOpen: () => void;
+  readonly t: TranslationFunction;
+}): readonly ContextMenuItem[] {
+  return [
+    {
+      id: 'open-conversation',
+      label: (
+        <NavigationMenuLabel
+          icon={<OpenIcon size={14} />}
+          text={input.t('home.openConversation')}
+        />
+      ),
+      disabled:
+        input.navigationDisabled || input.conversation.unavailable !== undefined || input.disabled,
+      onSelect: input.onOpen,
+    },
+    { id: 'conversation-destructive-separator', type: 'separator' },
+    {
+      id: 'delete-conversation',
+      label: (
+        <NavigationMenuLabel
+          icon={<TrashIcon size={14} />}
+          text={input.t('home.deleteConversation')}
+        />
+      ),
+      disabled: input.disabled,
+      danger: true,
+      onSelect: input.onDelete,
+    },
+  ];
+}
+
+function NavigationMenuLabel({
+  icon,
+  text,
+}: {
+  readonly icon: JSX.Element;
+  readonly text: string;
+}): JSX.Element {
+  return (
+    <span className="desktop-navigation-menu-label">
+      {icon}
+      <span>{text}</span>
+    </span>
   );
 }
 

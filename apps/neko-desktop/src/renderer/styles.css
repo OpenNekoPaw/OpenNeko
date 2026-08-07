@@ -808,6 +808,7 @@ code {
 }
 
 .home-conversation-attention {
+  flex: 0 0 auto;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -822,6 +823,48 @@ code {
 .home-conversation-attention.is-running {
   background: var(--neko-desktop-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--neko-desktop-accent) 16%, transparent);
+}
+
+.home-conversation-status {
+  display: inline-flex;
+  max-width: 76px;
+  align-items: center;
+  gap: 5px;
+  color: var(--neko-desktop-text-subtle);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.home-conversation-status.is-needs-input,
+.home-conversation-status.is-needs-review {
+  color: var(--neko-desktop-warning);
+}
+
+.home-conversation-status.is-running {
+  color: var(--neko-desktop-accent);
+}
+
+.home-conversation-status__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desktop-navigation-menu-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-navigation-menu-label > svg {
+  flex: 0 0 auto;
+}
+
+.desktop-navigation-menu-label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .home-navigation-footer {

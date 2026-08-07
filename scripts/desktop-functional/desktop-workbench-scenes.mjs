@@ -600,7 +600,7 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
     }
     return prepared;
   },
-  async run({ checkpoint, click, evaluate, prepared, screenshot, waitForSelector }) {
+  async run({ cdp, checkpoint, click, evaluate, prepared, pressKey, screenshot, waitForSelector }) {
     await resizeWindow(evaluate, 1200, 800);
     await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
     const cancellation = await assertFixtureWorkspaceCancellation(evaluate);
@@ -617,12 +617,14 @@ export const desktopProjectSidebarManagementScenario = Object.freeze({
     await waitForSelector('.desktop-scene-workbench--workspace');
     await inspectActivatedWorkspaceAgent(evaluate);
     const management = await exerciseProjectConversationGroups({
+      cdp,
       click,
       cleanup: {
         ...cleanupActivation,
         conversationId: PROJECT_SIDEBAR_CLEANUP_CONVERSATION_ID,
       },
       evaluate,
+      pressKey,
       retention: {
         ...retentionActivation,
         conversationId: PROJECT_SIDEBAR_CONVERSATION_ID,
@@ -652,7 +654,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
   owner: '@neko/app-desktop',
   prepare: desktopWorkbenchScenesScenario.prepare,
   async run({ checkpoint, click, evaluate, prepared, screenshot, type, waitForSelector }) {
-    const providerServer = await startFunctionalProviderServer(prepared.providerPort, 25);
+    const providerServer = await startFunctionalProviderServer(prepared.providerPort, 750);
     try {
       await resizeWindow(evaluate, 1440, 960);
       await waitForSelector(
@@ -669,6 +671,30 @@ export const desktopConversationNavigationScenario = Object.freeze({
         'Conversation navigation fixture did not enable its initial send control.',
       );
       await click(ACTIVE_AGENT_SEND_SELECTOR);
+      await waitForSelector('.home-conversation-status.is-running');
+      const runningStatus = await evaluate(`(() => {
+        const status = document.querySelector('.home-conversation-status.is-running');
+        const row = status?.closest('.primary-recent-conversation-row');
+        const rectangle = status?.getBoundingClientRect();
+        return {
+          visible: status instanceof HTMLElement && rectangle !== undefined &&
+            rectangle.width > 0 && rectangle.height > 0,
+          label: status?.textContent?.trim() ?? '',
+          conversationTitle: row?.querySelector('.home-conversation-link')?.textContent?.trim() ?? '',
+          active: row?.getAttribute('data-active'),
+        };
+      })()`);
+      if (
+        !runningStatus.visible ||
+        !['Running', '运行中'].includes(runningStatus.label) ||
+        runningStatus.conversationTitle.length === 0
+      ) {
+        throw new Error(
+          `Conversation running status was not visible in PrimarySidebar: ${JSON.stringify(runningStatus)}`,
+        );
+      }
+      const runningStatusScreenshot = await screenshot('assistant-conversation-running-status');
+      checkpoint('assistant-conversation-running-status', runningStatus);
       const initialSession = await waitForAssistantSession(evaluate);
       assertAssistantConversationNavigation(initialSession);
       if (initialSession.conversationCount !== initialDraft.conversationCount + 1) {
@@ -701,7 +727,8 @@ export const desktopConversationNavigationScenario = Object.freeze({
         groupLifecycle,
         restoredSession,
         provider: providerServer.snapshot(),
-        screenshots: [restoredScreenshot],
+        runningStatus,
+        screenshots: [runningStatusScreenshot, restoredScreenshot],
       };
     } finally {
       await providerServer.close();
@@ -837,9 +864,11 @@ async function inspectRendererResidency(evaluate, measureRendererResources) {
 }
 
 async function exerciseProjectConversationGroups({
+  cdp,
   cleanup,
   click,
   evaluate,
+  pressKey,
   retention,
   screenshot,
 }) {
@@ -948,6 +977,40 @@ async function exerciseProjectConversationGroups({
   ) {
     throw new Error(`Project sidebar controls are incorrect: ${JSON.stringify(initial)}`);
   }
+
+  const projectContextMenu = await openSidebarContextMenu({
+    cdp,
+    evaluate,
+    selector: `${retentionGroupSelector} .primary-conversation-group__header`,
+  });
+  assertProjectContextMenu(projectContextMenu);
+  const projectContextMenuScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-project-context-menu',
+  );
+  await pressKey('Escape');
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[role="menu"]') === null`,
+    'Project context menu did not close with Escape.',
+  );
+
+  const conversationContextMenu = await openSidebarContextMenu({
+    cdp,
+    evaluate,
+    selector: `${retentionGroupSelector} .primary-recent-conversation-row`,
+  });
+  assertConversationContextMenu(conversationContextMenu);
+  const conversationContextMenuScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-conversation-context-menu',
+  );
+  await pressKey('Escape');
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[role="menu"]') === null`,
+    'Conversation context menu did not close with Escape.',
+  );
 
   await click(`${retentionGroupSelector} .primary-conversation-group__collapse`);
   await waitForCondition(
@@ -1264,16 +1327,105 @@ async function exerciseProjectConversationGroups({
     compactLayout,
     darkTheme,
     initial,
+    projectContextMenu,
+    conversationContextMenu,
     removalCancellation,
     removed,
     screenshots: [
       desktopScreenshot,
+      projectContextMenuScreenshot,
+      conversationContextMenuScreenshot,
       compactScreenshot,
       darkCompactScreenshot,
       unavailableScreenshot,
       cleanedScreenshot,
     ],
   };
+}
+
+async function openSidebarContextMenu({ cdp, evaluate, selector }) {
+  const point = await evaluate(`(() => {
+    const trigger = document.querySelector(${JSON.stringify(selector)});
+    if (!(trigger instanceof HTMLElement)) {
+      throw new Error('Desktop sidebar context-menu trigger is unavailable.');
+    }
+    const rectangle = trigger.getBoundingClientRect();
+    return { x: rectangle.left + rectangle.width / 2, y: rectangle.top + rectangle.height / 2 };
+  })()`);
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: point.x,
+    y: point.y,
+    button: 'right',
+    buttons: 2,
+    clickCount: 1,
+  });
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: point.x,
+    y: point.y,
+    button: 'right',
+    buttons: 0,
+    clickCount: 1,
+  });
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[role="menu"]') instanceof HTMLElement`,
+    'Desktop sidebar context menu did not open from a right click.',
+  );
+  return evaluate(`(() => {
+    const menu = document.querySelector('[role="menu"]');
+    if (!(menu instanceof HTMLElement)) return null;
+    const rectangle = menu.getBoundingClientRect();
+    const items = [...menu.querySelectorAll('[role="menuitem"]')].map((item) => ({
+      text: item.textContent?.trim() ?? '',
+      disabled: item.hasAttribute('data-disabled'),
+      danger: item.classList.contains('danger'),
+    }));
+    return {
+      items,
+      separatorCount: menu.querySelectorAll('.neko-menu-sep').length,
+      background: getComputedStyle(menu).backgroundColor,
+      withinViewport:
+        rectangle.left >= 0 && rectangle.top >= 0 &&
+        rectangle.right <= window.innerWidth && rectangle.bottom <= window.innerHeight,
+    };
+  })()`);
+}
+
+function assertProjectContextMenu(menu) {
+  const texts = menu?.items.map((item) => item.text) ?? [];
+  const has = (...labels) => labels.some((label) => texts.some((text) => text.includes(label)));
+  if (
+    menu?.items.length !== 5 ||
+    menu.separatorCount !== 1 ||
+    !menu.withinViewport ||
+    menu.background === 'rgba(0, 0, 0, 0)' ||
+    !has('Open project', '打开项目') ||
+    !has('New conversation', '新建会话') ||
+    !has('Project management', '项目管理') ||
+    !has('Delete Workspace conversations', '删除') ||
+    !has('Remove', '移除') ||
+    menu.items.filter((item) => item.danger).length !== 2
+  ) {
+    throw new Error(`Project context menu is incomplete: ${JSON.stringify(menu)}`);
+  }
+}
+
+function assertConversationContextMenu(menu) {
+  const texts = menu?.items.map((item) => item.text) ?? [];
+  const has = (...labels) => labels.some((label) => texts.some((text) => text.includes(label)));
+  if (
+    menu?.items.length !== 2 ||
+    menu.separatorCount !== 1 ||
+    !menu.withinViewport ||
+    menu.background === 'rgba(0, 0, 0, 0)' ||
+    !has('Open conversation', '打开会话') ||
+    !has('Delete conversation', '删除会话') ||
+    menu.items.filter((item) => item.danger).length !== 1
+  ) {
+    throw new Error(`Conversation context menu is incomplete: ${JSON.stringify(menu)}`);
+  }
 }
 
 async function selectDesktopTheme(evaluate, theme) {

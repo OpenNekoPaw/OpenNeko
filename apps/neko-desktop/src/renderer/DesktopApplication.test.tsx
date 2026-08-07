@@ -968,6 +968,184 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('routes Project and Conversation context-menu actions through their exact existing commands', async () => {
+    const base = createProjection();
+    const project = {
+      projectId: 'content:context-menu-project',
+      workspaceId: 'workspace-context-menu-project',
+      profile: 'content' as const,
+      displayName: 'Context menu project',
+      createdAt: '2026-08-07T00:00:00.000Z',
+      updatedAt: '2026-08-07T00:00:00.000Z',
+    };
+    const conversation = createSidebarConversation(
+      project.workspaceId,
+      'context-menu',
+      'Context menu conversation',
+      'none',
+    );
+    const catalog = { projects: [project] };
+    const agentHome = {
+      conversations: [conversation],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    };
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'context-menu-transition',
+      scene: activeScene(projection),
+    }));
+    const deleteConversation = vi.fn(async () => projection);
+    const removeProjects = vi.fn(async () => projection);
+    const deleteProjectConversations = vi.fn(async () => projection);
+    installBridge({
+      projection,
+      transition,
+      deleteConversation,
+      removeProjects,
+      deleteProjectConversations,
+    });
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const { container, root } = await renderApplication();
+
+    const projectRow = container.querySelector<HTMLElement>(
+      '.primary-conversation-group[data-group-kind="project"] .primary-conversation-group__header',
+    );
+    const conversationRow = container.querySelector<HTMLElement>(
+      '.primary-conversation-group[data-group-kind="project"] .primary-recent-conversation-row',
+    );
+    if (!projectRow || !conversationRow) {
+      throw new Error('Desktop fixture requires Project and Conversation context-menu rows.');
+    }
+
+    await openContextMenu(projectRow);
+    await selectContextMenuItem('Open project');
+    await waitFor(() => transition.mock.calls.length === 1);
+    expect(transition).toHaveBeenLastCalledWith(
+      projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      activeScene(projection).sceneId,
+    );
+
+    await openContextMenu(projectRow);
+    await selectContextMenuItem('New conversation in Context menu project');
+    await waitFor(() => transition.mock.calls.length === 2);
+    expect(transition).toHaveBeenLastCalledWith(
+      projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      activeScene(projection).sceneId,
+    );
+
+    await openContextMenu(projectRow);
+    await selectContextMenuItem('Project management');
+    await waitFor(() => transition.mock.calls.length === 3);
+    expect(transition).toHaveBeenLastCalledWith(
+      projection.window.windowId,
+      { kind: 'open-project-management' },
+      activeScene(projection).sceneId,
+    );
+
+    await openContextMenu(projectRow);
+    await selectContextMenuItem('Delete Workspace conversations for Context menu project');
+    await waitFor(() => deleteProjectConversations.mock.calls.length === 1);
+    expect(deleteProjectConversations).toHaveBeenCalledWith([project.projectId]);
+
+    await openContextMenu(projectRow);
+    await selectContextMenuItem('Remove Context menu project');
+    await waitFor(() => removeProjects.mock.calls.length === 1);
+    expect(removeProjects).toHaveBeenCalledWith([project.projectId]);
+
+    await openContextMenu(conversationRow);
+    await selectContextMenuItem('Open conversation');
+    await waitFor(() => transition.mock.calls.length === 4);
+    expect(transition).toHaveBeenLastCalledWith(
+      projection.window.windowId,
+      { kind: 'restore-conversation', navigation: conversation.navigation },
+      activeScene(projection).sceneId,
+    );
+
+    await openContextMenu(conversationRow);
+    await selectContextMenuItem('Delete conversation');
+    await waitFor(() => deleteConversation.mock.calls.length === 1);
+    expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
+
+    await act(async () => root.unmount());
+  });
+
+  it('disables unavailable context navigation and shows exact Conversation execution attention', async () => {
+    const base = createProjection();
+    const project = {
+      projectId: 'content:execution-state-project',
+      workspaceId: 'workspace-execution-state-project',
+      profile: 'content' as const,
+      displayName: 'Execution state project',
+      createdAt: '2026-08-07T00:00:00.000Z',
+      updatedAt: '2026-08-07T00:00:00.000Z',
+    };
+    const conversations = [
+      createSidebarConversation(project.workspaceId, 'running', 'Running task', 'running'),
+      createSidebarConversation(project.workspaceId, 'input', 'Input task', 'needs-input'),
+      createSidebarConversation(project.workspaceId, 'review', 'Review task', 'needs-review'),
+      createSidebarConversation(project.workspaceId, 'idle', 'Idle task', 'none'),
+      {
+        ...createSidebarConversation(
+          project.workspaceId,
+          'unavailable-running',
+          'Unavailable running task',
+          'running',
+        ),
+        unavailable: {
+          fieldNames: ['context'],
+          message: 'Conversation context is unavailable.',
+        },
+      },
+    ] as const;
+    const catalog = { projects: [project] };
+    const agentHome = {
+      conversations,
+      attention: { needsInput: 1, needsReview: 1, running: 2 },
+    } as const;
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    };
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'execution-status-transition',
+      scene: activeScene(projection),
+    }));
+    const deleteConversation = vi.fn(async () => projection);
+    installBridge({ projection, transition, deleteConversation });
+    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const { container, root } = await renderApplication();
+
+    expect(readConversationStatus(container, 'Running task')).toBe('Running');
+    expect(readConversationStatus(container, 'Input task')).toBe('Needs input');
+    expect(readConversationStatus(container, 'Review task')).toBe('Needs review');
+    expect(readConversationStatus(container, 'Idle task')).toBeUndefined();
+    expect(readConversationStatus(container, 'Unavailable running task')).toBeUndefined();
+
+    const unavailableRow = findConversationRow(container, 'Unavailable running task');
+    await openContextMenu(unavailableRow);
+    const openItem = findContextMenuItem('Open conversation');
+    const deleteItem = findContextMenuItem('Delete conversation');
+    expect(openItem.hasAttribute('data-disabled')).toBe(true);
+    expect(deleteItem.hasAttribute('data-disabled')).toBe(false);
+    await act(async () => deleteItem.click());
+    await waitFor(() => deleteConversation.mock.calls.length === 1);
+    expect(deleteConversation).toHaveBeenCalledWith(conversations[4].navigation);
+    expect(transition).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
   it('keeps unavailable items visible and cleanup-capable without opening them', async () => {
     const base = createProjection();
     const project = {
@@ -1066,6 +1244,14 @@ describe('DesktopApplication scene lifecycle', () => {
       ),
     ).not.toBeNull();
     expect(projectGroup?.querySelector('.primary-conversation-group__diagnostic')).toBeNull();
+
+    const projectHeader = projectButton.closest<HTMLElement>('.primary-conversation-group__header');
+    if (!projectHeader) throw new Error('Desktop fixture requires unavailable Project header.');
+    await openContextMenu(projectHeader);
+    expect(findContextMenuItem('Open project').hasAttribute('data-disabled')).toBe(true);
+    expect(findContextMenuItem('Remove Unavailable Project').hasAttribute('data-disabled')).toBe(
+      false,
+    );
 
     await act(async () => {
       projectButton.click();
@@ -1702,6 +1888,64 @@ function expectManagementSplit(
   expect(container.querySelector('[data-workbench-main-shell="secondary"]')).not.toBeNull();
   expect(container.querySelector('[data-workbench-main-gutter="true"]')).not.toBeNull();
   expect(container.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
+}
+
+async function openContextMenu(target: HTMLElement): Promise<void> {
+  await act(async () => {
+    target.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 24, clientY: 24 }),
+    );
+  });
+  await waitFor(() => document.body.querySelector('[role="menu"]') !== null);
+}
+
+async function selectContextMenuItem(label: string): Promise<void> {
+  const item = findContextMenuItem(label);
+  await act(async () => item.click());
+}
+
+function findContextMenuItem(label: string): HTMLElement {
+  const item = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent?.trim() === label,
+  );
+  if (!item) throw new Error(`Desktop fixture requires context-menu item '${label}'.`);
+  return item;
+}
+
+function findConversationRow(container: HTMLElement, title: string): HTMLElement {
+  const link = [...container.querySelectorAll<HTMLElement>('.home-conversation-link')].find(
+    (candidate) => candidate.textContent?.includes(title),
+  );
+  const row = link?.closest<HTMLElement>('.primary-recent-conversation-row');
+  if (!row) throw new Error(`Desktop fixture requires Conversation row '${title}'.`);
+  return row;
+}
+
+function readConversationStatus(container: HTMLElement, title: string): string | undefined {
+  return findConversationRow(container, title)
+    .querySelector<HTMLElement>('.home-conversation-status__label')
+    ?.textContent?.trim();
+}
+
+function createSidebarConversation(
+  workspaceId: string,
+  suffix: string,
+  title: string,
+  attention: 'none' | 'needs-input' | 'needs-review' | 'running',
+) {
+  return {
+    navigation: {
+      conversationId: `conversation-${suffix}`,
+      owner: { kind: 'workspace' as const, workspaceId },
+    },
+    title,
+    updatedAt: '2026-08-07T00:00:00.000Z',
+    attention,
+    lastActivity: {
+      kind: attention === 'running' ? ('turn-running' as const) : ('conversation-updated' as const),
+      occurredAt: '2026-08-07T00:00:00.000Z',
+    },
+  };
 }
 
 async function waitFor(assertion: () => boolean | undefined): Promise<void> {

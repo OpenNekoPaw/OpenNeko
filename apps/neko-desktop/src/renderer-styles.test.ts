@@ -40,6 +40,17 @@ describe('Desktop renderer styles', () => {
     );
   });
 
+  it('bounds readable Conversation execution status in the trailing row track', () => {
+    const statusRule = styles.match(/\.home-conversation-status\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(statusRule?.groups?.body).toMatch(/display\s*:\s*inline-flex/u);
+    expect(statusRule?.groups?.body).toMatch(/max-width\s*:\s*76px/u);
+    expect(statusRule?.groups?.body).toMatch(/white-space\s*:\s*nowrap/u);
+    expect(styles).toMatch(
+      /\.home-conversation-status__label\s*\{[\s\S]*?text-overflow\s*:\s*ellipsis/u,
+    );
+  });
+
   it('centers a bounded Settings control column without centering its text', () => {
     const settingsControlColumnRule = styles.match(
       /\.desktop-settings__navigation-control\s*\{(?<body>[\s\S]*?)\n\}/u,
