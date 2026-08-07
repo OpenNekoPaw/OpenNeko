@@ -6,7 +6,6 @@ import {
 } from '../extension-management-host';
 
 const identity = {
-  extensionManagementSessionId: 'extension-management:window-1:1',
   windowId: 'window-1',
 };
 

@@ -56,6 +56,14 @@ export interface AssetCenterSelectionProjection {
   readonly contentLocator: ContentLocator;
 }
 
+export interface AssetCenterPresentationSnapshot {
+  readonly filter: AssetCenterFilterProjection;
+  readonly selection?: {
+    readonly owner: GlobalLibraryOwner;
+    readonly itemId: string;
+  };
+}
+
 export interface AssetCenterDiagnostic {
   readonly code: 'asset-center-catalog-unavailable';
   readonly message: string;
@@ -137,6 +145,42 @@ export function parseAssetCenterFilterProjection(value: unknown): AssetCenterFil
     ),
     viewMode: requireOneOf(record['viewMode'], ['list', 'grid'] as const, 'view mode'),
     ...(directory ? { directory } : {}),
+  };
+}
+
+export function parseAssetCenterPresentationSnapshot(
+  value: unknown,
+): AssetCenterPresentationSnapshot {
+  const record = requireExactRecord(
+    value,
+    ['filter', 'selection'],
+    'Asset Center presentation snapshot is invalid.',
+  );
+  const selectionRecord =
+    record['selection'] === undefined
+      ? undefined
+      : requireExactRecord(
+          record['selection'],
+          ['owner', 'itemId'],
+          'Asset Center presentation selection is invalid.',
+        );
+  return {
+    filter: parseAssetCenterFilterProjection(record['filter']),
+    ...(selectionRecord
+      ? {
+          selection: {
+            owner: requireOneOf(
+              selectionRecord['owner'],
+              GLOBAL_LIBRARY_OWNERS,
+              'presentation selection owner',
+            ),
+            itemId: requireIdentity(
+              selectionRecord['itemId'],
+              'Asset Center presentation selected item',
+            ),
+          },
+        }
+      : {}),
   };
 }
 

@@ -5,7 +5,6 @@ import type {
 } from './extension-catalog';
 
 export interface AgentExtensionManagementSessionIdentity {
-  readonly extensionManagementSessionId: string;
   readonly windowId: string;
 }
 
@@ -76,14 +75,10 @@ export function parseAgentExtensionManagementSessionIdentity(
 ): AgentExtensionManagementSessionIdentity {
   const record = requireExactRecord(
     value,
-    ['extensionManagementSessionId', 'windowId'],
+    ['windowId'],
     'Agent Extension Management identity is invalid.',
   );
   return {
-    extensionManagementSessionId: requireNonEmptyString(
-      record['extensionManagementSessionId'],
-      'Agent Extension Management session identity is required.',
-    ),
     windowId: requireNonEmptyString(
       record['windowId'],
       'Agent Extension Management Window identity is required.',

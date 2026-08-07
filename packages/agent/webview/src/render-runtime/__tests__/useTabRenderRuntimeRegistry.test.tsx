@@ -63,20 +63,7 @@ describe('useTabRenderRuntimeRegistry', () => {
           tabId: 'tab-a',
           conversationId: 'conv-a',
           inputValue: 'restored draft',
-          selectedModel: 'provider:model',
-          mediaModelSelection: { image: 'image:model', video: 'none', audio: 'none' },
-          mediaUnderstandingSelection: { image: 'auto', video: 'auto', audio: 'auto' },
-          sessionMode: 'agent',
-          executionMode: 'ask',
-          generationCategory: 'image',
-          generationParams: {
-            ratio: '16:9',
-            resolution: '1080p',
-            videoDuration: 'auto',
-            videoFps: 24,
-            audioDuration: 'auto',
-            audioType: 'sfx',
-          },
+          viewport: { followMode: 'detached', anchorMessageId: 'message-1', anchorOffset: 24 },
         },
       ],
     }));
@@ -91,9 +78,14 @@ describe('useTabRenderRuntimeRegistry', () => {
 
     const state = result.current.require('tab-a').store.getSnapshot().state;
     expect(state.inputValue).toBe('restored draft');
-    expect(state.selectedModel).toBe('provider:model');
-    expect(state.mediaModelSelection.image).toBe('image:model');
+    expect(state.selectedModel).toBe('');
+    expect(state.mediaModelSelection.image).toBe('none');
     expect(state.executionMode).toBe('ask');
+    expect(state.viewport).toEqual({
+      followMode: 'detached',
+      anchorMessageId: 'message-1',
+      anchorOffset: 24,
+    });
     act(() => window.dispatchEvent(new Event('pagehide')));
     expect(host.setState).toHaveBeenCalledWith({
       drafts: [expect.objectContaining({ tabId: 'tab-a', inputValue: 'restored draft' })],

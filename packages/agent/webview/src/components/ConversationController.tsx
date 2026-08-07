@@ -96,6 +96,10 @@ import {
 } from '../presenters/conversation-session-state-presenter';
 import { DEFAULT_GENERATION_PARAMS } from './ChatView/InputArea/types';
 import { useTabRenderRuntimeRegistry } from '../render-runtime/useTabRenderRuntimeRegistry';
+import {
+  readAgentEntryDraftSnapshot,
+  writeAgentEntryDraftSnapshot,
+} from '../render-runtime/tab-render-realm-state';
 import { useProjectionEndpoint } from '../render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/agent-contracts';
 import type { ConversationRenderCoordinator } from '../render-lifecycle/conversation-render-coordinator';
@@ -265,6 +269,7 @@ export function ConversationController({
   const [entryGenCategory, setEntryGenCategory] = useState<GenCategory>('image');
   const [entryGenParams, setEntryGenParams] = useState<GenerationParams>(DEFAULT_GENERATION_PARAMS);
   const activeDraftIdRef = useRef<string>();
+  const skipEntryDraftWriteRef = useRef<string>();
 
   // ---- Per-conversation ref Maps ----
   const conversationTokenCountRef = useRef<Map<string, number>>(new Map());
@@ -386,6 +391,9 @@ export function ConversationController({
     if (agentPresentation?.kind !== 'draft') return;
     if (activeDraftIdRef.current === agentPresentation.draftId) return;
     activeDraftIdRef.current = agentPresentation.draftId;
+    skipEntryDraftWriteRef.current = agentPresentation.draftId;
+    const restored = readAgentEntryDraftSnapshot(hostRuntimeAdapter, agentPresentation.draftId);
+    const entryDraft = restored.snapshot;
 
     setOpenTabs([]);
     setActiveTabId(null);
@@ -393,9 +401,9 @@ export function ConversationController({
     clearVisibleState();
     setActiveTab('chat');
     setEntryAction('start-chat');
-    updateEntryInputValue('');
+    updateEntryInputValue(entryDraft?.inputValue ?? '');
     setEntryContextReferences([]);
-    setGlobalError(null);
+    setGlobalError(restored.diagnostics[0]?.message ?? null);
     setPendingSendRequest(null);
     setInitialInputRequest(null);
     setInitialSessionModeRequest(null);
@@ -411,7 +419,26 @@ export function ConversationController({
     setActiveTabId,
     setOpenTabs,
     updateEntryInputValue,
+    hostRuntimeAdapter,
   ]);
+
+  useEffect(() => {
+    if (agentPresentation?.kind !== 'draft') return;
+    if (activeDraftIdRef.current !== agentPresentation.draftId) return;
+    if (skipEntryDraftWriteRef.current === agentPresentation.draftId) {
+      skipEntryDraftWriteRef.current = undefined;
+      return;
+    }
+    writeAgentEntryDraftSnapshot(
+      hostRuntimeAdapter,
+      entryInputValue.length === 0
+        ? undefined
+        : {
+            draftId: agentPresentation.draftId,
+            inputValue: entryInputValue,
+          },
+    );
+  }, [agentPresentation, entryInputValue, hostRuntimeAdapter]);
 
   // ---- Context chips & ambient nodes ----
   const [ambientNodesByConversation, setAmbientNodesByConversation] = useState<

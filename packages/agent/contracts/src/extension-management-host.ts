@@ -98,10 +98,7 @@ export function parseAgentExtensionManagementHostResult(
   }
   const projection = parseAgentExtensionManagementProjection(record['projection']);
   const identity = projection.identity;
-  if (
-    identity.windowId !== request.identity.windowId ||
-    identity.extensionManagementSessionId !== request.identity.extensionManagementSessionId
-  ) {
+  if (identity.windowId !== request.identity.windowId) {
     throw new Error('Agent Extension Management projection owner identity is stale.');
   }
   return {

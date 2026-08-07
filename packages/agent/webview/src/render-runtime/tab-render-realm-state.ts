@@ -1,8 +1,3 @@
-import type { GenCategory, GenerationParams } from '../components/ChatView/InputArea/types';
-import type {
-  MediaModelSelection,
-  MediaUnderstandingSelection,
-} from '../components/ChatView/InputAreaContext';
 import type {
   TabRenderBinding,
   TabRenderRuntimeRegistry,
@@ -12,22 +7,27 @@ import type {
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly inputValue: string;
-  readonly selectedModel: string;
-  readonly mediaModelSelection: Readonly<MediaModelSelection>;
-  readonly mediaUnderstandingSelection: Readonly<MediaUnderstandingSelection>;
-  readonly sessionMode: TabRenderState['sessionMode'];
-  readonly executionMode: TabRenderState['executionMode'];
-  readonly generationCategory: GenCategory;
-  readonly generationParams: Readonly<GenerationParams>;
+  readonly viewport: TabRenderState['viewport'];
+}
+
+export interface AgentEntryDraftSnapshot {
+  readonly draftId: string;
+  readonly inputValue: string;
 }
 
 export interface TabRenderRealmState {
   readonly drafts: readonly TabRenderDraftSnapshot[];
+  readonly entryDraft?: AgentEntryDraftSnapshot;
 }
 
 export interface TabRenderRealmStateDiagnostic {
   readonly code:
-    'invalid-realm-state' | 'invalid-draft' | 'duplicate-draft' | 'draft-owner-mismatch';
+    | 'invalid-realm-state'
+    | 'invalid-draft'
+    | 'invalid-entry-draft'
+    | 'duplicate-draft'
+    | 'draft-owner-mismatch'
+    | 'entry-draft-owner-mismatch';
   readonly message: string;
   readonly draftIndex?: number;
   readonly tabId?: string;
@@ -49,6 +49,11 @@ export interface TabRenderRealmStateHost {
   getState(): unknown;
   setState(state: TabRenderRealmState): void;
   reportStateDiagnostic?(diagnostic: TabRenderRealmStateDiagnostic): void;
+}
+
+export interface AgentEntryDraftSnapshotReadResult {
+  readonly snapshot?: AgentEntryDraftSnapshot;
+  readonly diagnostics: readonly TabRenderRealmStateDiagnostic[];
 }
 
 export function createTabRenderRealmStateCoordinator(
@@ -94,7 +99,57 @@ export function parseTabRenderRealmState(value: unknown): ParsedTabRenderRealmSt
     tabIds.add(draft.tabId);
     drafts.push(draft);
   }
-  return { state: { drafts }, diagnostics };
+  let entryDraft: AgentEntryDraftSnapshot | undefined;
+  if (value.entryDraft !== undefined) {
+    try {
+      entryDraft = parseEntryDraft(value.entryDraft);
+    } catch (error) {
+      diagnostics.push({
+        code: 'invalid-entry-draft',
+        message: error instanceof Error ? error.message : 'Agent entry draft snapshot is invalid.',
+      });
+    }
+  }
+  return {
+    state: { drafts, ...(entryDraft === undefined ? {} : { entryDraft }) },
+    diagnostics,
+  };
+}
+
+export function readAgentEntryDraftSnapshot(
+  host: Pick<TabRenderRealmStateHost, 'getState'>,
+  draftId: string,
+): AgentEntryDraftSnapshotReadResult {
+  const exactDraftId = nonEmptyString(draftId, 'Agent entry draft identity');
+  const parsed = parseTabRenderRealmState(host.getState());
+  const snapshot = parsed.state.entryDraft;
+  if (snapshot === undefined || snapshot.draftId === exactDraftId) {
+    return {
+      ...(snapshot === undefined ? {} : { snapshot }),
+      diagnostics: parsed.diagnostics,
+    };
+  }
+  return {
+    diagnostics: [
+      ...parsed.diagnostics,
+      {
+        code: 'entry-draft-owner-mismatch',
+        message: `Persisted Agent entry draft belongs to ${snapshot.draftId}, not ${exactDraftId}.`,
+      },
+    ],
+  };
+}
+
+export function writeAgentEntryDraftSnapshot(
+  host: Pick<TabRenderRealmStateHost, 'getState' | 'setState'>,
+  snapshot: AgentEntryDraftSnapshot | undefined,
+): void {
+  const current = parseTabRenderRealmState(host.getState()).state;
+  const entryDraft = snapshot === undefined ? undefined : parseEntryDraft(snapshot);
+  host.setState({
+    drafts: current.drafts,
+    ...(entryDraft === undefined ? {} : { entryDraft }),
+  });
 }
 
 class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordinator {
@@ -185,8 +240,10 @@ class DefaultTabRenderRealmStateCoordinator implements TabRenderRealmStateCoordi
       clearTimeout(this.flushTimer);
       this.flushTimer = undefined;
     }
+    const entryDraft = parseTabRenderRealmState(this.host.getState()).state.entryDraft;
     this.host.setState({
       drafts: [...this.drafts.values()],
+      ...(entryDraft === undefined ? {} : { entryDraft }),
     });
   }
 
@@ -217,26 +274,14 @@ function projectDraft(state: TabRenderState, binding: TabRenderBinding): TabRend
   return {
     ...binding,
     inputValue: state.inputValue,
-    selectedModel: state.selectedModel,
-    mediaModelSelection: { ...state.mediaModelSelection },
-    mediaUnderstandingSelection: { ...state.mediaUnderstandingSelection },
-    sessionMode: state.sessionMode,
-    executionMode: state.executionMode,
-    generationCategory: state.generationCategory,
-    generationParams: { ...state.generationParams },
+    viewport: { ...state.viewport },
   };
 }
 
 function toStateUpdate(draft: TabRenderDraftSnapshot): TabRenderStateUpdate {
   return {
     inputValue: draft.inputValue,
-    selectedModel: draft.selectedModel,
-    mediaModelSelection: draft.mediaModelSelection,
-    mediaUnderstandingSelection: draft.mediaUnderstandingSelection,
-    sessionMode: draft.sessionMode,
-    executionMode: draft.executionMode,
-    generationCategory: draft.generationCategory,
-    generationParams: draft.generationParams,
+    viewport: draft.viewport,
   };
 }
 
@@ -245,22 +290,9 @@ function hasSameDraft(left: TabRenderDraftSnapshot, right: TabRenderDraftSnapsho
     left.tabId === right.tabId &&
     left.conversationId === right.conversationId &&
     left.inputValue === right.inputValue &&
-    left.selectedModel === right.selectedModel &&
-    left.mediaModelSelection.image === right.mediaModelSelection.image &&
-    left.mediaModelSelection.video === right.mediaModelSelection.video &&
-    left.mediaModelSelection.audio === right.mediaModelSelection.audio &&
-    left.mediaUnderstandingSelection.image === right.mediaUnderstandingSelection.image &&
-    left.mediaUnderstandingSelection.video === right.mediaUnderstandingSelection.video &&
-    left.mediaUnderstandingSelection.audio === right.mediaUnderstandingSelection.audio &&
-    left.sessionMode === right.sessionMode &&
-    left.executionMode === right.executionMode &&
-    left.generationCategory === right.generationCategory &&
-    left.generationParams.ratio === right.generationParams.ratio &&
-    left.generationParams.resolution === right.generationParams.resolution &&
-    left.generationParams.videoDuration === right.generationParams.videoDuration &&
-    left.generationParams.videoFps === right.generationParams.videoFps &&
-    left.generationParams.audioDuration === right.generationParams.audioDuration &&
-    left.generationParams.audioType === right.generationParams.audioType
+    left.viewport.followMode === right.viewport.followMode &&
+    left.viewport.anchorMessageId === right.viewport.anchorMessageId &&
+    left.viewport.anchorOffset === right.viewport.anchorOffset
   );
 }
 
@@ -270,70 +302,33 @@ function parseDraft(value: unknown, index: number): TabRenderDraftSnapshot {
   const tabId = nonEmptyString(value.tabId, `${path}.tabId`);
   const conversationId = nonEmptyString(value.conversationId, `${path}.conversationId`);
   const inputValue = stringValue(value.inputValue, `${path}.inputValue`);
-  const selectedModel = stringValue(value.selectedModel, `${path}.selectedModel`);
   return {
     tabId,
     conversationId,
     inputValue,
-    selectedModel,
-    mediaModelSelection: parseMediaSelection(
-      value.mediaModelSelection,
-      `${path}.mediaModelSelection`,
-    ),
-    mediaUnderstandingSelection: parseMediaSelection(
-      value.mediaUnderstandingSelection,
-      `${path}.mediaUnderstandingSelection`,
-    ),
-    sessionMode: enumValue(
-      value.sessionMode,
-      ['agent', 'image', 'video', 'audio'],
-      `${path}.sessionMode`,
-    ),
-    executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
-    generationCategory: enumValue(
-      value.generationCategory,
-      ['image', 'video', 'audio'],
-      `${path}.generationCategory`,
-    ),
-    generationParams: parseGenerationParams(value.generationParams, `${path}.generationParams`),
+    viewport: parseViewport(value.viewport, `${path}.viewport`),
   };
 }
 
-function parseMediaSelection(value: unknown, path: string): MediaModelSelection {
+function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
+  const path = 'Agent entry draft snapshot';
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
   return {
-    image: stringValue(value.image, `${path}.image`),
-    video: stringValue(value.video, `${path}.video`),
-    audio: stringValue(value.audio, `${path}.audio`),
+    draftId: nonEmptyString(value.draftId, `${path}.draftId`),
+    inputValue: stringValue(value.inputValue, `${path}.inputValue`),
   };
 }
 
-function parseGenerationParams(value: unknown, path: string): GenerationParams {
+function parseViewport(value: unknown, path: string): TabRenderState['viewport'] {
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  const followMode = enumValue(value.followMode, ['follow-tail', 'detached'], `${path}.followMode`);
+  const anchorMessageId = optionalNonEmptyString(value.anchorMessageId, `${path}.anchorMessageId`);
+  const anchorOffset = optionalFiniteNumber(value.anchorOffset, `${path}.anchorOffset`);
   return {
-    ratio: enumValue(
-      value.ratio,
-      ['16:9', '9:16', '1:1', '4:3', '3:2', '21:9', '2.39:1'],
-      `${path}.ratio`,
-    ),
-    resolution: enumValue(
-      value.resolution,
-      ['512', '720p', '1080p', '2K', '4K'],
-      `${path}.resolution`,
-    ),
-    videoDuration: durationValue(value.videoDuration, `${path}.videoDuration`),
-    videoFps: enumValue(value.videoFps, [24, 30], `${path}.videoFps`),
-    audioDuration: durationValue(value.audioDuration, `${path}.audioDuration`),
-    audioType: enumValue(value.audioType, ['sfx', 'ambient', 'voice'], `${path}.audioType`),
+    followMode,
+    ...(anchorMessageId === undefined ? {} : { anchorMessageId }),
+    ...(anchorOffset === undefined ? {} : { anchorOffset }),
   };
-}
-
-function durationValue(value: unknown, path: string): 'auto' | number {
-  if (value === 'auto') return value;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    throw new Error(`${path} must be 'auto' or a positive number.`);
-  }
-  return value;
 }
 
 function enumValue<const T extends string | number>(
@@ -355,6 +350,19 @@ function nonEmptyString(value: unknown, path: string): string {
 
 function stringValue(value: unknown, path: string): string {
   if (typeof value !== 'string') throw new Error(`${path} must be a string.`);
+  return value;
+}
+
+function optionalNonEmptyString(value: unknown, path: string): string | undefined {
+  if (value === undefined) return undefined;
+  return nonEmptyString(value, path);
+}
+
+function optionalFiniteNumber(value: unknown, path: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${path} must be a finite number.`);
+  }
   return value;
 }
 

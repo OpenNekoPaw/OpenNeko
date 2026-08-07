@@ -26,6 +26,7 @@ import {
   projectGenerationSnapshotToCanvas,
   type CanvasGenerationProjectionSnapshot,
 } from './canvas-generation-projection';
+import type { CanvasHostPresentationSnapshotStore } from './canvas-host-presentation-snapshot';
 
 export interface CanvasHostRuntimeSessionEffects {
   readonly resolveMaterialActions?: (input: {
@@ -74,7 +75,7 @@ export interface CanvasHostRuntimeSessionOptions {
   readonly identity: CanvasHostRuntimeIdentity;
   readonly initialCanvas: CanvasData;
   readonly initialDirty?: boolean;
-  readonly initialPresentation?: CanvasHostPresentationState;
+  readonly presentationSnapshots?: CanvasHostPresentationSnapshotStore;
   readonly effects: CanvasHostRuntimeSessionEffects;
   readonly commandHistoryLimit?: number;
   readonly documentHistoryLimit?: number;
@@ -117,7 +118,9 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     this.identity = { ...options.identity };
     this.canvas = cloneCanvas(options.initialCanvas);
     this.dirty = options.initialDirty ?? false;
-    this.presentation = clonePresentation(options.initialPresentation ?? DEFAULT_PRESENTATION);
+    this.presentation = clonePresentation(
+      options.presentationSnapshots?.read(options.identity) ?? DEFAULT_PRESENTATION,
+    );
     this.commandHistoryLimit = options.commandHistoryLimit ?? 200;
     this.documentHistoryLimit = options.documentHistoryLimit ?? 50;
     if (!Number.isSafeInteger(this.commandHistoryLimit) || this.commandHistoryLimit < 1) {
@@ -355,6 +358,7 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     }
     if (intent.type === 'update-presentation') {
       this.presentation = clonePresentation(intent.presentation);
+      this.options.presentationSnapshots?.write(this.identity, this.presentation);
       this.commitStateChange(this.dirty, request.commandId);
       return this.accepted(request);
     }

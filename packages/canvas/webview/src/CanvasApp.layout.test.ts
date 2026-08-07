@@ -350,13 +350,13 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(playbackWorkspaceSource).not.toMatch(/selectNode\(unit\.sourceNodeId\)/);
   });
 
-  it('replaces the persistent node library with an exact retained node inspector Dock', () => {
+  it('renders only the current selected node inspector Dock', () => {
     expect(appSource).not.toMatch(/isRightNodeTreeVisible|canvas-right-node-tree/);
     expect(appSource).not.toMatch(/NodeLibraryPanel|canvas\.nodeLibraryDock/);
     expect(cssSource).not.toMatch(/canvas-right-node-tree|canvas-node-library/);
     expect(appSource).toMatch(/rightDock=\{/);
-    expect(appSource).toMatch(/nodeChildCatalog\.activeInspectorId/);
-    expect(appSource).toMatch(/<CanvasNodeInspectorDeck/);
+    expect(appSource).toMatch(/selectedInspectorNode/);
+    expect(appSource).toMatch(/<PropertyPanel/);
   });
 
   it('projects the shared add catalog from the left toolbar popover', () => {

@@ -36,11 +36,16 @@ export {
   createCanvasMaterialActionResolutionRequest,
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
+  parseCanvasHostPresentationState,
   parseCanvasMaterialActionResolution,
   parseCanvasMaterialActionResolutionRequest,
   parseCanvasHostProjectionEvent,
   parseCanvasHostSnapshot,
 } from './canvas-host-runtime-contract';
+export {
+  createCanvasHostPresentationSnapshotStore,
+  type CanvasHostPresentationSnapshotStore,
+} from './canvas-host-presentation-snapshot';
 export type {
   CanvasHostAuthoringCapabilities,
   CanvasHostIntent,

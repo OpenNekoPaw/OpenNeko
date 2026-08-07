@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentExtensionManagementRuntime } from '@neko/agent-contracts/extension-management';
 import {
@@ -32,7 +32,7 @@ describe('AgentExtensionManagementRoot', () => {
   });
 
   it('renders an explicit empty state for the active catalog', async () => {
-    const identity = { extensionManagementSessionId: 'extension-session-1', windowId: 'window-1' };
+    const identity = { windowId: 'window-1' };
     const runtime: AgentExtensionManagementRuntime = {
       identity,
       getSnapshot: async () => ({
@@ -62,6 +62,51 @@ describe('AgentExtensionManagementRoot', () => {
       'true',
     );
     expect(document.querySelector('.management-surface-empty')).toBeNull();
+  });
+
+  it('reconstructs with default tab and query instead of retaining a management page', async () => {
+    const identity = { windowId: 'window-1' };
+    const runtime: AgentExtensionManagementRuntime = {
+      identity,
+      getSnapshot: async () => ({
+        identity,
+        skills: [skill('Audio', 'personal')],
+        skillDiscovery: { diagnostics: [], duplicateCount: 0 },
+        extensions: [extension('github@openneko', 'GitHub', false)],
+        extensionDiscovery: { diagnostics: [] },
+      }),
+      installPlugin: vi.fn(),
+      removePlugin: vi.fn(),
+      refreshMarketplaces: vi.fn(),
+      installPersonalSkill: vi.fn(),
+      removePersonalSkill: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const first = render(
+      <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
+    );
+    await screen.findAllByText('Audio');
+    fireEvent.change(screen.getByRole('textbox', { name: 'home.capabilities.search' }), {
+      target: { value: 'github' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'home.capabilities.extensions' }));
+    expect(
+      screen
+        .getByRole('button', { name: 'home.capabilities.extensions' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    first.unmount();
+
+    render(
+      <AgentExtensionManagementRoot confirmAction={() => true} interactive runtime={runtime} />,
+    );
+    await screen.findAllByText('Audio');
+    expect(
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'home.capabilities.search' }).value,
+    ).toBe('');
+    expect(
+      screen.getByRole('button', { name: 'home.capabilities.skills' }).getAttribute('aria-pressed'),
+    ).toBe('true');
   });
 });
 

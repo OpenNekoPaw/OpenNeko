@@ -55,6 +55,7 @@ export function createCutHostSessionId(viewId: string, viewInstanceId: string): 
 }
 
 export interface CutHostPresentationState {
+  readonly playheadSeconds: number;
   readonly previewVolume: number;
   readonly previewMuted: boolean;
   readonly pixelsPerSecond: number;
@@ -63,6 +64,7 @@ export interface CutHostPresentationState {
 }
 
 export const DEFAULT_CUT_HOST_PRESENTATION: CutHostPresentationState = Object.freeze({
+  playheadSeconds: 0,
   previewVolume: 1,
   previewMuted: false,
   pixelsPerSecond: 80,
@@ -226,6 +228,21 @@ export function parseCutHostExportState(value: unknown): CutHostExportState {
 
 export function parseCutHostPresentationState(value: unknown): CutHostPresentationState {
   const record = requireRecord(value, 'Cut Host presentation state must be an object.');
+  requireExactKeys(record, [
+    'playheadSeconds',
+    'previewVolume',
+    'previewMuted',
+    'pixelsPerSecond',
+    'snappingEnabled',
+    'overviewVisible',
+  ]);
+  const playheadSeconds = requireFinite(
+    record['playheadSeconds'],
+    'Cut playhead position must be finite.',
+  );
+  if (playheadSeconds < 0) {
+    throw invalidPayload('Cut playhead position must not be negative.');
+  }
   const previewVolume = requireFinite(
     record['previewVolume'],
     'Cut preview volume must be finite.',
@@ -241,6 +258,7 @@ export function parseCutHostPresentationState(value: unknown): CutHostPresentati
     throw invalidPayload('Cut Timeline scale must be between 8 and 480 pixels per second.');
   }
   return {
+    playheadSeconds,
     previewVolume,
     previewMuted: requireBoolean(record['previewMuted'], 'Cut preview mute state is required.'),
     pixelsPerSecond,

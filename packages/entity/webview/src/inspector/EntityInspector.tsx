@@ -11,19 +11,39 @@ export interface EntityInspectorProps {
   readonly projection: ProjectEntityInspectorProjection;
   readonly locale: 'en' | 'zh-cn';
   readonly disabled?: boolean;
+  readonly initialDraft?: EntityInspectorDraft;
+  readonly onDraftChange?: (draft: EntityInspectorDraft) => void;
   readonly onIntent: (intent: ProjectEntityInspectorIntent) => void | Promise<void>;
+}
+
+export interface EntityInspectorDraft {
+  readonly canonicalName: string;
+  readonly mergeTargetId: string;
+  readonly bindingPath: string;
 }
 
 export function EntityInspector({
   disabled = false,
+  initialDraft,
   locale,
+  onDraftChange,
   onIntent,
   projection,
 }: EntityInspectorProps): ReactElement {
   const labels = locale === 'zh-cn' ? ZH_LABELS : EN_LABELS;
-  const [canonicalName, setCanonicalName] = useState(projection.names.canonical);
-  const [mergeTargetId, setMergeTargetId] = useState('');
-  const [bindingPath, setBindingPath] = useState('');
+  const [draft, setDraft] = useState<EntityInspectorDraft>(
+    () =>
+      initialDraft ?? {
+        canonicalName: projection.names.canonical,
+        mergeTargetId: '',
+        bindingPath: '',
+      },
+  );
+  const updateDraft = (next: EntityInspectorDraft): void => {
+    setDraft(next);
+    onDraftChange?.(next);
+  };
+  const { canonicalName, mergeTargetId, bindingPath } = draft;
   const can = (operation: ProjectEntityInspectorOperation): boolean =>
     projection.operations.includes(operation);
   const entityId = projection.entityId;
@@ -185,7 +205,9 @@ export function EntityInspector({
             <input
               aria-label={labels.name}
               value={canonicalName}
-              onChange={(event) => setCanonicalName(event.currentTarget.value)}
+              onChange={(event) =>
+                updateDraft({ ...draft, canonicalName: event.currentTarget.value })
+              }
             />
             <button type="button" disabled={disabled || !canonicalName.trim()} onClick={submitEdit}>
               <EditIcon size={13} /> {labels.save}
@@ -198,7 +220,9 @@ export function EntityInspector({
               aria-label={labels.workspacePath}
               placeholder="characters/neko.png"
               value={bindingPath}
-              onChange={(event) => setBindingPath(event.currentTarget.value)}
+              onChange={(event) =>
+                updateDraft({ ...draft, bindingPath: event.currentTarget.value })
+              }
             />
             <button
               type="button"
@@ -214,7 +238,9 @@ export function EntityInspector({
             <input
               aria-label={labels.mergeTarget}
               value={mergeTargetId}
-              onChange={(event) => setMergeTargetId(event.currentTarget.value)}
+              onChange={(event) =>
+                updateDraft({ ...draft, mergeTargetId: event.currentTarget.value })
+              }
             />
             <button
               type="button"

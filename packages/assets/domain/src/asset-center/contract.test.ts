@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createAssetCenterSessionId,
   createDefaultAssetCenterFilter,
+  parseAssetCenterPresentationSnapshot,
   parseAssetCenterSessionProjection,
 } from './contract';
 
@@ -53,6 +54,24 @@ describe('Asset Center session contract', () => {
         },
       }),
     ).toThrow('invalid');
+  });
+
+  it('limits presentation snapshots to filter and selection identity', () => {
+    const snapshot = parseAssetCenterPresentationSnapshot({
+      filter: { ...createDefaultAssetCenterFilter(), query: 'shot' },
+      selection: { owner: 'global-asset-library', itemId: 'asset:shot' },
+    });
+    expect(snapshot).toEqual({
+      filter: { ...createDefaultAssetCenterFilter(), query: 'shot' },
+      selection: { owner: 'global-asset-library', itemId: 'asset:shot' },
+    });
+    expect(JSON.stringify(snapshot)).not.toMatch(/absolutePath|contentLocator|previewSessionId/u);
+    expect(() =>
+      parseAssetCenterPresentationSnapshot({
+        ...snapshot,
+        previewSessionId: 'preview:stale',
+      }),
+    ).toThrow('unsupported fields');
   });
 });
 

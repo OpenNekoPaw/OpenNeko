@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -16,6 +16,8 @@ import {
   QuickPreviewSurface,
   getPreviewViewerRegistry,
 } from './index';
+import { PreviewViewerSnapshotProvider } from './viewer-snapshot-context';
+import { createPreviewViewerSnapshotStore } from './viewer-snapshot';
 const playerStyles = readFileSync(resolve(__dirname, '../styles/player.css'), 'utf8');
 const modelStyles = readFileSync(resolve(__dirname, '../model/model.css'), 'utf8');
 const rootStyles = readFileSync(resolve(__dirname, './style.css'), 'utf8');
@@ -100,19 +102,26 @@ describe('PreviewRoot', () => {
 
     await act(async () => {
       workspaceRoot.render(
-        <PreviewRoot
-          chrome="content-only"
-          locale="en"
-          runtime={createRuntime({
-            identity,
-            presentation: 'side',
-            status: 'ready',
-            descriptor,
-          })}
-        />,
+        withPreviewSnapshots(
+          <PreviewRoot
+            chrome="content-only"
+            locale="en"
+            runtime={createRuntime({
+              identity,
+              presentation: 'side',
+              status: 'ready',
+              descriptor,
+            })}
+          />,
+        ),
       );
       authorizedRoot.render(
-        <AuthorizedPreviewRoot chrome="content-only" locale="en" runtime={authorizedRuntime} />,
+        <AuthorizedPreviewRoot
+          chrome="content-only"
+          locale="en"
+          runtime={authorizedRuntime}
+          snapshotStore={createPreviewViewerSnapshotStore()}
+        />,
       );
     });
     await act(async () => Promise.resolve());
@@ -153,24 +162,26 @@ describe('PreviewRoot', () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <PreviewRoot
-          locale="zh-cn"
-          runtime={createRuntime({
-            identity,
-            presentation: 'temporary',
-            status: 'ready',
-            descriptor: {
-              descriptorId: 'descriptor-1',
-              sourceFingerprint: 'fingerprint-1',
-              contentLocator: previewContentLocator,
-              url: 'http://127.0.0.1:43125/resources/text-token',
-              contentKind: 'text',
-              mediaType: 'application/json',
-              displayName: 'candidates.json',
-              byteLength: 12,
-            },
-          })}
-        />,
+        withPreviewSnapshots(
+          <PreviewRoot
+            locale="zh-cn"
+            runtime={createRuntime({
+              identity,
+              presentation: 'temporary',
+              status: 'ready',
+              descriptor: {
+                descriptorId: 'descriptor-1',
+                sourceFingerprint: 'fingerprint-1',
+                contentLocator: previewContentLocator,
+                url: 'http://127.0.0.1:43125/resources/text-token',
+                contentKind: 'text',
+                mediaType: 'application/json',
+                displayName: 'candidates.json',
+                byteLength: 12,
+              },
+            })}
+          />,
+        ),
       );
     });
     await act(async () => Promise.resolve());
@@ -202,7 +213,7 @@ describe('PreviewRoot', () => {
     document.body.append(container);
     const root = createRoot(container);
     await act(async () => {
-      root.render(<PreviewRoot locale="en" runtime={runtime} />);
+      root.render(withPreviewSnapshots(<PreviewRoot locale="en" runtime={runtime} />));
     });
     const pin = container.querySelector<HTMLButtonElement>('[aria-label="Pin preview"]');
     expect(pin).toBeTruthy();
@@ -233,24 +244,26 @@ describe('PreviewRoot', () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <PreviewRoot
-          locale="en"
-          runtime={createRuntime({
-            identity,
-            presentation: 'temporary',
-            status: 'ready',
-            descriptor: {
-              descriptorId: 'descriptor-video',
-              sourceFingerprint: 'fingerprint-1',
-              contentLocator: previewContentLocator,
-              url: 'http://127.0.0.1:43125/resources/video-token',
-              contentKind: 'video',
-              mediaType: 'video/mp4',
-              displayName: 'clip.mp4',
-              byteLength: 42,
-            },
-          })}
-        />,
+        withPreviewSnapshots(
+          <PreviewRoot
+            locale="en"
+            runtime={createRuntime({
+              identity,
+              presentation: 'temporary',
+              status: 'ready',
+              descriptor: {
+                descriptorId: 'descriptor-video',
+                sourceFingerprint: 'fingerprint-1',
+                contentLocator: previewContentLocator,
+                url: 'http://127.0.0.1:43125/resources/video-token',
+                contentKind: 'video',
+                mediaType: 'video/mp4',
+                displayName: 'clip.mp4',
+                byteLength: 42,
+              },
+            })}
+          />,
+        ),
       );
     });
 
@@ -261,7 +274,7 @@ describe('PreviewRoot', () => {
     expect(container.querySelector('[aria-label="Play (Space)"]')).toBeTruthy();
   });
 
-  it('releases the media viewer while suspended and restores it from the retained projection', async () => {
+  it('releases an unmounted media Root and restores it from the package snapshot owner', async () => {
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -290,9 +303,13 @@ describe('PreviewRoot', () => {
       },
     });
 
-    await act(async () => {
-      root.render(<PreviewRoot lifecyclePresentation="active" locale="en" runtime={runtime} />);
-    });
+    const renderPreview = (visible: boolean): ReactElement => (
+      <PreviewViewerSnapshotProvider>
+        {visible ? <PreviewRoot locale="en" runtime={runtime} /> : null}
+      </PreviewViewerSnapshotProvider>
+    );
+
+    await act(async () => root.render(renderPreview(true)));
     const presentationRoot = container.querySelector('.neko-preview-root');
     const initialVideo = container.querySelector('video');
     expect(initialVideo).not.toBeNull();
@@ -301,18 +318,13 @@ describe('PreviewRoot', () => {
     initialVideo.playbackRate = 1.5;
     initialVideo.volume = 0.4;
 
-    await act(async () => {
-      root.render(<PreviewRoot lifecyclePresentation="suspended" locale="en" runtime={runtime} />);
-    });
-    expect(container.querySelector('.neko-preview-root')).toBe(presentationRoot);
+    await act(async () => root.render(renderPreview(false)));
+    expect(container.querySelector('.neko-preview-root')).toBeNull();
     expect(container.querySelector('video')).toBeNull();
-    expect(container.querySelector('[data-preview-suspended="true"]')).not.toBeNull();
     expect(pause).toHaveBeenCalled();
 
-    await act(async () => {
-      root.render(<PreviewRoot lifecyclePresentation="active" locale="en" runtime={runtime} />);
-    });
-    expect(container.querySelector('.neko-preview-root')).toBe(presentationRoot);
+    await act(async () => root.render(renderPreview(true)));
+    expect(container.querySelector('.neko-preview-root')).not.toBe(presentationRoot);
     const restoredVideo = container.querySelector('video');
     expect(restoredVideo).not.toBeNull();
     if (!restoredVideo) throw new Error('Restored video viewer is required.');
@@ -328,19 +340,21 @@ describe('PreviewRoot', () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <QuickPreviewSurface
-          locale="en"
-          descriptor={{
-            descriptorId: 'descriptor-image-hover',
-            sourceFingerprint: 'fingerprint-1',
-            contentLocator: previewContentLocator,
-            url: 'http://127.0.0.1:43125/resources/image-hover-token',
-            contentKind: 'image',
-            mediaType: 'image/png',
-            displayName: 'hover.png',
-            byteLength: 42,
-          }}
-        />,
+        withPreviewSnapshots(
+          <QuickPreviewSurface
+            locale="en"
+            descriptor={{
+              descriptorId: 'descriptor-image-hover',
+              sourceFingerprint: 'fingerprint-1',
+              contentLocator: previewContentLocator,
+              url: 'http://127.0.0.1:43125/resources/image-hover-token',
+              contentKind: 'image',
+              mediaType: 'image/png',
+              displayName: 'hover.png',
+              byteLength: 42,
+            }}
+          />,
+        ),
       );
     });
 
@@ -360,19 +374,21 @@ describe('PreviewRoot', () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <QuickPreviewSurface
-          locale="en"
-          descriptor={{
-            descriptorId: 'descriptor-video-hover',
-            sourceFingerprint: 'fingerprint-1',
-            contentLocator: previewContentLocator,
-            url: 'http://127.0.0.1:43125/resources/video-hover-token',
-            contentKind: 'video',
-            mediaType: 'video/mp4',
-            displayName: 'hover.mp4',
-            byteLength: 42,
-          }}
-        />,
+        withPreviewSnapshots(
+          <QuickPreviewSurface
+            locale="en"
+            descriptor={{
+              descriptorId: 'descriptor-video-hover',
+              sourceFingerprint: 'fingerprint-1',
+              contentLocator: previewContentLocator,
+              url: 'http://127.0.0.1:43125/resources/video-hover-token',
+              contentKind: 'video',
+              mediaType: 'video/mp4',
+              displayName: 'hover.mp4',
+              byteLength: 42,
+            }}
+          />,
+        ),
       );
     });
     const video = container.querySelector('video');
@@ -381,19 +397,21 @@ describe('PreviewRoot', () => {
 
     await act(async () => {
       root.render(
-        <QuickPreviewSurface
-          locale="en"
-          descriptor={{
-            descriptorId: 'descriptor-audio-hover',
-            sourceFingerprint: 'fingerprint-1',
-            contentLocator: previewContentLocator,
-            url: 'http://127.0.0.1:43125/resources/audio-hover-token',
-            contentKind: 'audio',
-            mediaType: 'audio/aac',
-            displayName: 'hover.aac',
-            byteLength: 42,
-          }}
-        />,
+        withPreviewSnapshots(
+          <QuickPreviewSurface
+            locale="en"
+            descriptor={{
+              descriptorId: 'descriptor-audio-hover',
+              sourceFingerprint: 'fingerprint-1',
+              contentLocator: previewContentLocator,
+              url: 'http://127.0.0.1:43125/resources/audio-hover-token',
+              contentKind: 'audio',
+              mediaType: 'audio/aac',
+              displayName: 'hover.aac',
+              byteLength: 42,
+            }}
+          />,
+        ),
       );
     });
     expect(container.querySelector('audio')).toBeTruthy();
@@ -411,4 +429,8 @@ function createRuntime(projection: PreviewProjection): PreviewHostRuntime {
     execute: async () => projection,
     subscribe: () => () => undefined,
   };
+}
+
+function withPreviewSnapshots(element: ReactElement): ReactElement {
+  return <PreviewViewerSnapshotProvider>{element}</PreviewViewerSnapshotProvider>;
 }

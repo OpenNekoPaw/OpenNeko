@@ -450,7 +450,7 @@ function readOptionalPosition(value: unknown): {
   };
 }
 
-function parseCanvasHostPresentationState(value: unknown): CanvasHostPresentationState {
+export function parseCanvasHostPresentationState(value: unknown): CanvasHostPresentationState {
   const record = requireRecord(value, 'Canvas Host presentation state is required.');
   const viewport = requireRecord(
     record['viewport'],

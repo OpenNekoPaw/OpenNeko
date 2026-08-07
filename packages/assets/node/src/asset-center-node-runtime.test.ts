@@ -72,7 +72,7 @@ describe('AssetCenterNodeRuntime', () => {
       descriptor: { contentLocator: { kind: 'workspace-file', path: 'shots/shot.png' } },
     });
 
-    const detached = await runtime.detachView(identity);
+    const detached = await runtime.detachSession(identity);
     expect(detached.selection?.itemId).toBe(item.id);
     expect(detached.preview).toEqual({ status: 'empty' });
     expect(releaseSession).toHaveBeenCalledWith('preview:asset-center:preview-1');
@@ -95,6 +95,94 @@ describe('AssetCenterNodeRuntime', () => {
         identity: { ...identity, windowId: 'window-2' },
       }),
     ).toThrow('owning Window');
+  });
+
+  it('reconstructs filter and selection through current authority after Session detach', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'openneko-asset-center-restore-'));
+    const absolutePath = join(directory, 'restored.png');
+    await writeFile(absolutePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const item = mediaItem('restored.png');
+    const resourceBrowser = resourceBrowserWithItem(item, absolutePath);
+    const registerFile = vi.fn(async () => ({
+      url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    }));
+    const releaseSession = vi.fn();
+    const createIdentity = vi
+      .fn<() => string>()
+      .mockReturnValueOnce('first-preview')
+      .mockReturnValueOnce('restored-preview');
+    const runtime = new AssetCenterNodeRuntime({
+      resourceBrowser,
+      createIdentity,
+      resources: { registerFile, releaseSession },
+    });
+    const identity = sessionIdentity();
+    runtime.attach({ identity });
+    await runtime.updateFilter({
+      identity,
+      filter: {
+        ...runtime.getSnapshot(identity).filter,
+        catalog: 'media-library',
+        query: 'restored',
+        viewMode: 'grid',
+      },
+    });
+    await runtime.refresh({ identity });
+    await runtime.select({ identity, owner: 'media-library', itemId: item.id });
+
+    await runtime.detachSession(identity);
+    expect(() => runtime.getSnapshot(identity)).toThrow('unavailable');
+    expect(releaseSession).toHaveBeenCalledWith('preview:asset-center:first-preview');
+
+    const attached = runtime.attach({ identity, initialViewMode: 'list' });
+    expect(attached).toMatchObject({
+      filter: { catalog: 'media-library', query: 'restored', viewMode: 'grid' },
+      catalog: { status: 'loading' },
+      preview: { status: 'empty' },
+    });
+    expect(attached).not.toHaveProperty('selection');
+
+    const restored = await runtime.refresh({ identity });
+    expect(restored).toMatchObject({
+      selection: { owner: 'media-library', itemId: item.id },
+      preview: {
+        status: 'ready',
+        previewSessionId: 'preview:asset-center:restored-preview',
+      },
+    });
+    expect(resourceBrowser.resolveAssetCenterSelection).toHaveBeenCalledTimes(2);
+    expect(registerFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retain an empty default presentation after Session detach', async () => {
+    const runtime = new AssetCenterNodeRuntime({
+      resourceBrowser: emptyResourceBrowser(),
+      resources: { registerFile: vi.fn(), releaseSession: vi.fn() },
+    });
+    const identity = sessionIdentity();
+    runtime.attach({ identity });
+    await runtime.detachSession(identity);
+
+    expect(runtime.attach({ identity, initialViewMode: 'grid' }).filter.viewMode).toBe('grid');
+    await runtime.detachSession(identity);
+    expect(runtime.attach({ identity, initialViewMode: 'list' }).filter.viewMode).toBe('list');
+  });
+
+  it('clears detached presentation snapshots with their owning Window', async () => {
+    const runtime = new AssetCenterNodeRuntime({
+      resourceBrowser: emptyResourceBrowser(),
+      resources: { registerFile: vi.fn(), releaseSession: vi.fn() },
+    });
+    const identity = sessionIdentity();
+    runtime.attach({ identity });
+    await runtime.updateFilter({
+      identity,
+      filter: { ...runtime.getSnapshot(identity).filter, query: 'window-owned' },
+    });
+    await runtime.detachSession(identity);
+    runtime.detachWindow(identity.windowId);
+
+    expect(runtime.attach({ identity }).filter.query).toBe('');
   });
 
   it('continues the session queue after one operation fails locally', async () => {

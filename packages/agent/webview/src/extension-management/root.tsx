@@ -74,10 +74,7 @@ export function AgentExtensionManagementRoot({
       0);
 
   return (
-    <section
-      className="agent-extension-management-root"
-      data-agent-extension-management-session={runtime.identity.extensionManagementSessionId}
-    >
+    <section className="agent-extension-management-root">
       <header className="management-surface-header">
         <div>
           <p className="section-label">{t('home.capabilities.eyebrow')}</p>

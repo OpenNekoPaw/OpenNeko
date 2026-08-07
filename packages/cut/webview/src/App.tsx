@@ -174,6 +174,7 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
   useEffect(() => {
     if (!view) return;
     controller.updatePresentation({
+      playheadSeconds,
       previewVolume,
       previewMuted,
       pixelsPerSecond,
@@ -189,6 +190,22 @@ function App({ presentation = 'editor', timelineTarget }: CutAppProps) {
     snappingEnabled,
     view,
   ]);
+
+  useEffect(
+    () => () => {
+      const presentation = store.getState();
+      if (!presentation.view) return;
+      controller.updatePresentation({
+        playheadSeconds: presentation.playheadSeconds,
+        previewVolume: presentation.previewVolume,
+        previewMuted: presentation.previewMuted,
+        pixelsPerSecond: presentation.pixelsPerSecond,
+        snappingEnabled: presentation.snappingEnabled,
+        overviewVisible: presentation.overviewVisible,
+      });
+    },
+    [controller, store],
+  );
 
   const reportPreviewFailure = useCallback(
     (attempt: number, stage: PreviewFailureStage): void => {

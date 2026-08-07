@@ -47,6 +47,8 @@ const hostMocks = vi.hoisted(() => ({
 }));
 const hostRuntimeMocks = vi.hoisted(() => ({
   listener: undefined as ((message: AgentHostToWebviewMessage) => void) | undefined,
+  getState: vi.fn<() => unknown>(() => undefined),
+  setState: vi.fn(),
 }));
 
 vi.mock('../host-runtime-context', () => ({
@@ -59,8 +61,8 @@ vi.mock('../host-runtime-context', () => ({
       hostRuntimeMocks.listener = listener;
       return { dispose: vi.fn() };
     }),
-    getState: () => undefined,
-    setState: vi.fn(),
+    getState: hostRuntimeMocks.getState,
+    setState: hostRuntimeMocks.setState,
     submitDraft: hostMocks.submitDraft,
   }),
   useOptionalAgentHostRuntimeAdapter: () => ({
@@ -68,8 +70,8 @@ vi.mock('../host-runtime-context', () => ({
     runtimeId: hostMocks.runtimeId,
     send: vi.fn(),
     subscribe: vi.fn(() => ({ dispose: vi.fn() })),
-    getState: () => undefined,
-    setState: vi.fn(),
+    getState: hostRuntimeMocks.getState,
+    setState: hostRuntimeMocks.setState,
   }),
 }));
 
@@ -526,6 +528,39 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('restores and rewrites the exact Window entry draft snapshot', () => {
+    vi.clearAllMocks();
+    hostRuntimeMocks.getState.mockReturnValue({
+      drafts: [],
+      entryDraft: {
+        draftId: 'draft-restored',
+        inputValue: 'restored entry text',
+      },
+    });
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-restored', {
+          kind: 'unbound',
+          draftId: 'draft-restored',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'restored entry text');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited entry text' } });
+
+    expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({
+      drafts: [],
+      entryDraft: expect.objectContaining({
+        draftId: 'draft-restored',
+        inputValue: 'edited entry text',
+      }),
+    });
+    hostRuntimeMocks.getState.mockReturnValue(undefined);
   });
 
   it('submits an unbound Entry Draft through deterministic Assistant targeting', async () => {

@@ -51,6 +51,11 @@ interface CutApplicationRuntimeEntry {
   sequence: number;
 }
 
+interface CutPresentationSnapshotEntry {
+  readonly windowId: string;
+  readonly presentation: CutHostPresentationState;
+}
+
 type CutAgentContextOutput = Extract<
   NonNullable<CutHostRuntimeResult['output']>,
   { readonly type: 'agent-context' }
@@ -116,6 +121,7 @@ export class CutApplicationRuntime {
   private readonly sessionOpenings = new Map<string, Promise<CutApplicationRuntimeEntry>>();
   private readonly operationTails = new Map<string, Promise<void>>();
   private readonly pendingDisposals = new Set<Promise<void>>();
+  private readonly presentationSnapshots = new Map<string, CutPresentationSnapshotEntry>();
   private readonly exportTasks: CutExportTaskRegistry;
   private disposed = false;
 
@@ -308,6 +314,10 @@ export class CutApplicationRuntime {
         break;
       case CUT_HOST_RUNTIME_ROUTES.presentationUpdate:
         entry.presentation = parseCutHostPresentationState(request.payload);
+        this.presentationSnapshots.set(cutPresentationSnapshotKey(entry.identity), {
+          windowId: entry.identity.windowId,
+          presentation: { ...entry.presentation },
+        });
         break;
       case CUT_HOST_RUNTIME_ROUTES.mediaSelect: {
         const payload = requireMediaSelectPayload(request.payload);
@@ -563,6 +573,9 @@ export class CutApplicationRuntime {
       this.sessions.delete(key);
       this.scheduleDisposal(entry);
     }
+    for (const [key, snapshot] of this.presentationSnapshots) {
+      if (snapshot.windowId === windowId) this.presentationSnapshots.delete(key);
+    }
   }
 
   reconcileSessions(windowId: string, attachedSessionIds: readonly string[]): void {
@@ -583,6 +596,7 @@ export class CutApplicationRuntime {
       this.scheduleDisposal(entry);
     }
     this.sessions.clear();
+    this.presentationSnapshots.clear();
     const results = await Promise.allSettled(this.pendingDisposals);
     await this.exportTasks.dispose();
     const failures = results.flatMap((result) =>
@@ -667,7 +681,10 @@ export class CutApplicationRuntime {
         identity,
         `open:${identity.sessionId}`,
       ),
-      presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
+      presentation: {
+        ...(this.presentationSnapshots.get(cutPresentationSnapshotKey(identity))?.presentation ??
+          DEFAULT_CUT_HOST_PRESENTATION),
+      },
       sequence: 0,
     };
     this.sessions.set(key, entry);
@@ -1355,4 +1372,16 @@ function cutSessionKey(identity: CutHostRuntimeIdentity): string {
     identity.sessionId,
     identity.rendererSessionId,
   ].join(':');
+}
+
+function cutPresentationSnapshotKey(identity: CutHostRuntimeIdentity): string {
+  return JSON.stringify([
+    identity.projectId,
+    identity.workspaceId,
+    identity.windowId,
+    identity.viewId,
+    identity.viewInstanceId,
+    identity.documentId,
+    identity.sessionId,
+  ]);
 }

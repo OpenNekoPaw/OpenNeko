@@ -32,7 +32,7 @@ export type AssetCenterHostRequest =
       readonly route: 'attach';
       readonly initialViewMode: AssetCenterFilterProjection['viewMode'];
     })
-  | (AssetCenterHostRequestBase & { readonly route: 'snapshot.get' | 'preview.detach' })
+  | (AssetCenterHostRequestBase & { readonly route: 'snapshot.get' | 'session.detach' })
   | (AssetCenterHostRequestBase & {
       readonly route: 'filter.update';
       readonly filter: AssetCenterFilterProjection;
@@ -116,7 +116,7 @@ export function parseAssetCenterHostRequest(value: unknown): AssetCenterHostRequ
         initialViewMode: requireViewMode(record['initialViewMode']),
       };
     case 'snapshot.get':
-    case 'preview.detach':
+    case 'session.detach':
       requireExactKeys(record, BASE_KEYS, 'Asset Center snapshot request');
       return { ...base, route: record['route'] };
     case 'catalog.refresh':

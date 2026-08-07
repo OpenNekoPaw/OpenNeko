@@ -6,6 +6,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import {
   CanvasHostRuntimeSession,
+  createCanvasHostPresentationSnapshotStore,
   createCanvasHostIntentRequest,
   type CanvasHostRuntimeIdentity,
 } from '../index';
@@ -493,6 +494,42 @@ describe('CanvasHostRuntimeSession', () => {
     runtime.dispose();
     expect(() => runtime.subscribe(listener)).toThrow('disposed');
     await expect(runtime.getSnapshot()).rejects.toThrow('disposed');
+  });
+
+  it('reconstructs presentation from the package snapshot after runtime release', async () => {
+    const presentationSnapshots = createCanvasHostPresentationSnapshotStore();
+    const first = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: createEmptyCanvasData('Initial'),
+      presentationSnapshots,
+      effects: {},
+    });
+    await first.executeIntent(
+      request('presentation-reconstruct', {
+        type: 'update-presentation',
+        presentation: {
+          viewport: { pan: { x: 24, y: -10 }, zoom: 1.5 },
+          selectedNodeIds: ['node-1'],
+        },
+      }),
+    );
+    first.dispose();
+
+    const reconstructed = new CanvasHostRuntimeSession({
+      identity: { ...identity, rendererSessionId: 'endpoint-2' },
+      initialCanvas: createEmptyCanvasData('Initial'),
+      presentationSnapshots,
+      effects: {},
+    });
+
+    await expect(reconstructed.getSnapshot()).resolves.toMatchObject({
+      presentation: {
+        viewport: { pan: { x: 24, y: -10 }, zoom: 1.5 },
+        selectedNodeIds: ['node-1'],
+      },
+    });
+    expect(JSON.stringify(await reconstructed.getSnapshot())).not.toContain('/Users/');
+    reconstructed.dispose();
   });
 });
 

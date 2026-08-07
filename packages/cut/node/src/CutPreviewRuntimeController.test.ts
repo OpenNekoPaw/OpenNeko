@@ -41,6 +41,11 @@ describe('CutPreviewRuntimeController', () => {
       timelineTimeSeconds: 0,
       previewRequestId: 'preview-request-1',
     });
+    const lateOutcome = late.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(startPreview).toHaveBeenCalledTimes(1));
     const current = controller.start(timelineView(), {
       timelineTimeSeconds: 0,
       previewRequestId: 'preview-request-2',
@@ -52,7 +57,11 @@ describe('CutPreviewRuntimeController', () => {
       video: { url: 'openneko://resource/video-session-2' },
     });
     resolveFirst?.(previewSession('video-session-1'));
-    await expect(late).rejects.toThrow('preview-request-1 was superseded');
+    await expect(lateOutcome).resolves.toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('preview-request-1 was superseded'),
+      }),
+    );
     expect(stopPreview).toHaveBeenCalledWith('video-session-1');
     expect(stopPreview).not.toHaveBeenCalledWith('video-session-2');
 

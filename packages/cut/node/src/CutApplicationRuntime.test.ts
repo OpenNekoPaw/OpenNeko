@@ -123,6 +123,57 @@ describe('CutApplicationRuntime', () => {
     await runtime.dispose();
   });
 
+  it('reconstructs presentation after an inactive Cut runtime is released', async () => {
+    const identity = fixtureIdentity();
+    const storage = inMemoryStorage();
+    const runtime = new CutApplicationRuntime({
+      authorizeSession: async () => ({
+        documentPath: '/fixture/cuts/story.otio',
+        workspacePath: '/fixture',
+        storage,
+      }),
+      authorizeNewSession: async () => ({
+        documentPath: '/fixture/cuts/story.otio',
+        workspacePath: '/fixture',
+        storage,
+      }),
+      resolveResourcePath: async () => {
+        throw new Error('Resource resolution is not part of this scenario.');
+      },
+      readText: async () => {
+        throw new Error('Text reading is not part of this scenario.');
+      },
+      createPreviewMediaAdapter: () => mediaAdapter(),
+    });
+    const presentation = {
+      ...DEFAULT_CUT_HOST_PRESENTATION,
+      playheadSeconds: 18.25,
+      previewVolume: 0.35,
+      pixelsPerSecond: 140,
+      overviewVisible: false,
+    };
+    await runtime.execute(identity.windowId, {
+      requestId: 'presentation-release-request',
+      commandId: 'presentation-release-command',
+      route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
+      identity,
+      payload: presentation,
+    });
+
+    runtime.reconcileSessions(identity.windowId, []);
+    const reconstructedIdentity = { ...identity, rendererSessionId: 'renderer-session-2' };
+
+    await expect(
+      runtime.getSnapshot(reconstructedIdentity.windowId, reconstructedIdentity),
+    ).resolves.toMatchObject({ presentation });
+    expect(
+      JSON.stringify(
+        await runtime.getSnapshot(reconstructedIdentity.windowId, reconstructedIdentity),
+      ),
+    ).not.toContain('/fixture/');
+    await runtime.dispose();
+  });
+
   it('projects exact Clip context and rejects unknown selections', async () => {
     const identity = fixtureIdentity();
     const runtime = new CutApplicationRuntime({

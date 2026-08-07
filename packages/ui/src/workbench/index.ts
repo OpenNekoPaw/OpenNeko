@@ -15,7 +15,6 @@ export {
   WorkbenchWebviewRuntimeFrame,
 } from './editor-workbench';
 export { CreativeHostAdapterFrame } from './host-adapter-frame';
-export { RetainedSurfaceDeck } from './retained-surface-deck';
 export type {
   CreativeHostAdapterFrameProps,
   CreativeHostAdapterInspectorLabels,
@@ -69,8 +68,3 @@ export type {
   CreativeHostIntentHandler,
   CreativeHostRuntimeProjection,
 } from './host-adapter';
-export type {
-  RetainedSurfaceDeckProps,
-  RetainedSurfaceLifecyclePolicy,
-  RetainedSurfacePresentation,
-} from './retained-surface-deck';

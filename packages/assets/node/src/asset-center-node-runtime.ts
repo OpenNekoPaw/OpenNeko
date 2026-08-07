@@ -5,7 +5,9 @@ import {
   AssetCenterController,
   AssetCenterSession,
   createDefaultAssetCenterFilter,
+  parseAssetCenterPresentationSnapshot,
   type AssetCenterFilterProjection,
+  type AssetCenterPresentationSnapshot,
   type AssetCenterSessionIdentity,
   type AssetCenterSessionProjection,
 } from '@neko/assets-domain/asset-center';
@@ -66,7 +68,13 @@ export interface AssetCenterNodeRuntimeOptions {
 
 interface SessionEntry {
   controller: AssetCenterController;
+  initialViewMode: AssetCenterFilterProjection['viewMode'];
   operationTail: Promise<void>;
+}
+
+interface PresentationEntry {
+  readonly windowId: string;
+  readonly snapshot: AssetCenterPresentationSnapshot;
 }
 
 interface ResolvedSelection {
@@ -84,6 +92,11 @@ interface PendingPreview {
 
 export class AssetCenterNodeRuntime {
   private readonly sessions = new Map<string, SessionEntry>();
+  private readonly presentations = new Map<string, PresentationEntry>();
+  private readonly pendingSelectionRestores = new Map<
+    string,
+    NonNullable<AssetCenterPresentationSnapshot['selection']>
+  >();
   private readonly resolvedSelections = new Map<string, ResolvedSelection>();
   private readonly pendingPreviews = new Map<string, PendingPreview>();
   private readonly previews = new Map<string, AuthorizedPreviewSessionProjection>();
@@ -104,12 +117,18 @@ export class AssetCenterNodeRuntime {
       assertIdentity(existing.controller.identity, input.identity);
       return existing.controller.getSnapshot();
     }
-    const entry = {} as SessionEntry;
+    const presentation = this.presentations.get(input.identity.assetCenterSessionId);
+    if (presentation && presentation.windowId !== input.identity.windowId) {
+      throw new Error('Asset Center presentation identity does not match its owning Window.');
+    }
     const browser = this.createBrowserRuntime(input.identity);
-    const session = new AssetCenterSession(input.identity, {
-      ...createDefaultAssetCenterFilter(),
-      ...(input.initialViewMode ? { viewMode: input.initialViewMode } : {}),
-    });
+    const session = new AssetCenterSession(
+      input.identity,
+      presentation?.snapshot.filter ?? {
+        ...createDefaultAssetCenterFilter(),
+        ...(input.initialViewMode ? { viewMode: input.initialViewMode } : {}),
+      },
+    );
     const controller = new AssetCenterController(
       session,
       browser,
@@ -244,9 +263,18 @@ export class AssetCenterNodeRuntime {
         },
       },
     );
-    entry.controller = controller;
-    entry.operationTail = Promise.resolve();
+    const entry: SessionEntry = {
+      controller,
+      initialViewMode: input.initialViewMode ?? 'list',
+      operationTail: Promise.resolve(),
+    };
     this.sessions.set(input.identity.assetCenterSessionId, entry);
+    if (presentation?.snapshot.selection) {
+      this.pendingSelectionRestores.set(
+        input.identity.assetCenterSessionId,
+        presentation.snapshot.selection,
+      );
+    }
     return controller.getSnapshot();
   }
 
@@ -259,14 +287,29 @@ export class AssetCenterNodeRuntime {
     readonly filter: AssetCenterFilterProjection;
   }): Promise<AssetCenterSessionProjection> {
     const entry = this.requireSession(input.identity);
-    return this.enqueue(entry, () => entry.controller.updateFilter(input.filter));
+    return this.enqueue(entry, () => {
+      const projection = entry.controller.updateFilter(input.filter);
+      this.capturePresentation(entry, projection);
+      return projection;
+    });
   }
 
   refresh(input: {
     readonly identity: AssetCenterSessionIdentity;
   }): Promise<AssetCenterSessionProjection> {
     const entry = this.requireSession(input.identity);
-    return this.enqueue(entry, () => entry.controller.refresh());
+    return this.enqueue(entry, async () => {
+      const projection = await entry.controller.refresh();
+      const selection = this.pendingSelectionRestores.get(input.identity.assetCenterSessionId);
+      this.pendingSelectionRestores.delete(input.identity.assetCenterSessionId);
+      if (!selection || !isSelectionAvailable(projection, selection)) {
+        this.capturePresentation(entry, projection);
+        return projection;
+      }
+      const restored = await entry.controller.select(selection);
+      this.capturePresentation(entry, restored);
+      return restored;
+    });
   }
 
   select(input: {
@@ -275,7 +318,11 @@ export class AssetCenterNodeRuntime {
     readonly itemId: string;
   }): Promise<AssetCenterSessionProjection> {
     const entry = this.requireSession(input.identity);
-    return this.enqueue(entry, () => entry.controller.select(input));
+    return this.enqueue(entry, async () => {
+      const projection = await entry.controller.select(input);
+      this.capturePresentation(entry, projection);
+      return projection;
+    });
   }
 
   resolveThumbnail(input: {
@@ -386,9 +433,17 @@ export class AssetCenterNodeRuntime {
     return preview;
   }
 
-  async detachView(identity: AssetCenterSessionIdentity): Promise<AssetCenterSessionProjection> {
-    const controller = this.requireSession(identity).controller;
-    return controller.detachPreview();
+  async detachSession(identity: AssetCenterSessionIdentity): Promise<AssetCenterSessionProjection> {
+    const entry = this.requireSession(identity);
+    return this.enqueue(entry, async () => {
+      const projection = await entry.controller.detachPreview();
+      this.capturePresentation(entry, projection);
+      entry.controller.dispose();
+      this.sessions.delete(identity.assetCenterSessionId);
+      this.pendingSelectionRestores.delete(identity.assetCenterSessionId);
+      this.clearResolvedSelections(identity.assetCenterSessionId);
+      return projection;
+    });
   }
 
   detachWindow(windowId: string): void {
@@ -401,6 +456,12 @@ export class AssetCenterNodeRuntime {
       }
       entry.controller.dispose();
       this.sessions.delete(sessionId);
+      this.presentations.delete(sessionId);
+      this.pendingSelectionRestores.delete(sessionId);
+      this.clearResolvedSelections(sessionId);
+    }
+    for (const [sessionId, presentation] of this.presentations) {
+      if (presentation.windowId === windowId) this.presentations.delete(sessionId);
     }
   }
 
@@ -413,6 +474,8 @@ export class AssetCenterNodeRuntime {
     this.previews.clear();
     for (const entry of this.sessions.values()) entry.controller.dispose();
     this.sessions.clear();
+    this.presentations.clear();
+    this.pendingSelectionRestores.clear();
     this.pendingPreviews.clear();
     this.resolvedSelections.clear();
   }
@@ -486,6 +549,34 @@ export class AssetCenterNodeRuntime {
     };
   }
 
+  private capturePresentation(entry: SessionEntry, projection: AssetCenterSessionProjection): void {
+    const selection =
+      projection.selection?.owner === projection.filter.catalog
+        ? {
+            owner: projection.selection.owner,
+            itemId: projection.selection.itemId,
+          }
+        : undefined;
+    if (isDefaultFilter(projection.filter, entry.initialViewMode) && !selection) {
+      this.presentations.delete(projection.identity.assetCenterSessionId);
+      return;
+    }
+    this.presentations.set(projection.identity.assetCenterSessionId, {
+      windowId: projection.identity.windowId,
+      snapshot: parseAssetCenterPresentationSnapshot({
+        filter: projection.filter,
+        selection,
+      }),
+    });
+  }
+
+  private clearResolvedSelections(assetCenterSessionId: string): void {
+    const prefix = `${assetCenterSessionId}\u0000`;
+    for (const key of this.resolvedSelections.keys()) {
+      if (key.startsWith(prefix)) this.resolvedSelections.delete(key);
+    }
+  }
+
   private requireSession(identity: AssetCenterSessionIdentity): SessionEntry {
     this.requireActive();
     const entry = this.sessions.get(identity.assetCenterSessionId);
@@ -546,4 +637,35 @@ function assertIdentity(
 
 function selectionKey(assetCenterSessionId: string, itemId: string): string {
   return `${assetCenterSessionId}\u0000${itemId}`;
+}
+
+function isSelectionAvailable(
+  projection: AssetCenterSessionProjection,
+  selection: NonNullable<AssetCenterPresentationSnapshot['selection']>,
+): boolean {
+  return (
+    projection.catalog.status === 'ready' &&
+    projection.catalog.owner === selection.owner &&
+    projection.catalog.entries.some(
+      (entry) =>
+        entry.item.owner === selection.owner &&
+        entry.item.id === selection.itemId &&
+        entry.item.availability === 'available',
+    )
+  );
+}
+
+function isDefaultFilter(
+  filter: AssetCenterFilterProjection,
+  initialViewMode: AssetCenterFilterProjection['viewMode'],
+): boolean {
+  const defaults = createDefaultAssetCenterFilter();
+  return (
+    filter.catalog === defaults.catalog &&
+    filter.query === defaults.query &&
+    filter.sortBy === defaults.sortBy &&
+    filter.sortDirection === defaults.sortDirection &&
+    filter.viewMode === initialViewMode &&
+    filter.directory === undefined
+  );
 }

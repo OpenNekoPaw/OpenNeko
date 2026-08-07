@@ -1,5 +1,6 @@
 import {
   CanvasHostRuntimeSession,
+  createCanvasHostPresentationSnapshotStore,
   createCanvasHostIntentRequest,
   type CanvasHostRuntime,
 } from '@neko/canvas-domain';
@@ -401,13 +402,15 @@ describe('createCanvasWebviewHost', () => {
           mediaType: 'image',
         },
       };
+      const presentationSnapshots = createCanvasHostPresentationSnapshotStore();
+      presentationSnapshots.write(identity, {
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        selectedNodeIds: [node.id],
+      });
       const session = new CanvasHostRuntimeSession({
         identity,
         initialCanvas: { ...DEFAULT_CANVAS_DATA, nodes: [node] },
-        initialPresentation: {
-          viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
-          selectedNodeIds: [node.id],
-        },
+        presentationSnapshots,
         effects: {},
       });
       let releaseFirstResolution = (): void => {};
@@ -621,22 +624,25 @@ describe('createCanvasWebviewHost', () => {
       ...DEFAULT_CANVAS_DATA,
       viewport: { pan: { x: 3, y: 4 }, zoom: 0.8 },
     };
+    const runtimeIdentity = {
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'view-1',
+      viewInstanceId: 'view-instance-1',
+      documentId: 'neko/boards/workspace.nkc',
+      sessionId: 'session-1',
+      rendererSessionId: 'endpoint-1',
+    };
+    const presentationSnapshots = createCanvasHostPresentationSnapshotStore();
+    presentationSnapshots.write(runtimeIdentity, {
+      viewport: { pan: { x: 20, y: 30 }, zoom: 1.2 },
+      selectedNodeIds: ['node-a'],
+    });
     const runtime = new CanvasHostRuntimeSession({
-      identity: {
-        projectId: 'project-1',
-        workspaceId: 'workspace-1',
-        windowId: 'window-1',
-        viewId: 'view-1',
-        viewInstanceId: 'view-instance-1',
-        documentId: 'neko/boards/workspace.nkc',
-        sessionId: 'session-1',
-        rendererSessionId: 'endpoint-1',
-      },
+      identity: runtimeIdentity,
       initialCanvas,
-      initialPresentation: {
-        viewport: { pan: { x: 20, y: 30 }, zoom: 1.2 },
-        selectedNodeIds: ['node-a'],
-      },
+      presentationSnapshots,
       effects: {},
     });
     const host = createCanvasWebviewHost(runtime);

@@ -187,14 +187,22 @@ describe('Cut Host runtime contract', () => {
     expect(
       parseCutHostPresentationState({
         ...DEFAULT_CUT_HOST_PRESENTATION,
+        playheadSeconds: 14.5,
         previewVolume: 0.4,
         pixelsPerSecond: 160,
       }),
     ).toEqual({
       ...DEFAULT_CUT_HOST_PRESENTATION,
+      playheadSeconds: 14.5,
       previewVolume: 0.4,
       pixelsPerSecond: 160,
     });
+    expect(() =>
+      parseCutHostPresentationState({
+        ...DEFAULT_CUT_HOST_PRESENTATION,
+        playheadSeconds: -1,
+      }),
+    ).toThrow('must not be negative');
     expect(() =>
       parseCutHostPresentationState({
         ...DEFAULT_CUT_HOST_PRESENTATION,

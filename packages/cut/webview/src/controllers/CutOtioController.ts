@@ -415,6 +415,10 @@ export class CutOtioController {
       this.acceptView(value['view']);
       this.store.setState({
         dirty: value['dirty'],
+        playheadSeconds: Math.min(
+          presentation.playheadSeconds,
+          this.store.getState().view?.durationSeconds ?? 0,
+        ),
         previewVolume: presentation.previewVolume,
         previewMuted: presentation.previewMuted,
         pixelsPerSecond: presentation.pixelsPerSecond,
@@ -614,6 +618,7 @@ function sameCutHostPresentation(
   right: CutHostPresentationState,
 ): boolean {
   return (
+    left.playheadSeconds === right.playheadSeconds &&
     left.previewVolume === right.previewVolume &&
     left.previewMuted === right.previewMuted &&
     left.pixelsPerSecond === right.pixelsPerSecond &&

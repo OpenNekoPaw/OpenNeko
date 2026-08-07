@@ -20,7 +20,6 @@ import {
   WarningIcon,
   InfoIcon,
 } from '@neko/ui/icons';
-import { RetainedSurfaceDeck } from '@neko/ui/workbench';
 import React, {
   useCallback,
   useEffect,
@@ -52,16 +51,17 @@ import {
   type ResourceBrowserRecoveryPlanResult,
 } from '@neko/assets-domain/resource-browser/contract';
 import { getResourceBrowserLabels } from './labels';
-import { EntityInspector, type EntityInspectorProps } from '@neko/entity-webview/inspector';
 import {
-  activateResourceBrowserFacet,
-  closeResourceBrowserPage,
-  createResourceBrowserPageCatalog,
-  openResourceBrowserDetail,
-  openResourceBrowserDialog,
-  openResourceBrowserPreview,
-  reconcileResourceBrowserDetails,
-} from './page-lifecycle';
+  EntityInspector,
+  type EntityInspectorDraft,
+  type EntityInspectorProps,
+} from '@neko/entity-webview/inspector';
+import { useResourceBrowserPresentationSnapshotStore } from './presentation-snapshot-context';
+import type {
+  ResourceBrowserPresentationIdentity,
+  ResourceBrowserPresentationSnapshot,
+  ResourceBrowserPresentationSnapshotStore,
+} from './presentation-snapshot';
 import './style.css';
 
 export interface ResourceBrowserRootProps {
@@ -86,16 +86,6 @@ type ResourceBrowserRootState =
   | { readonly kind: 'ready'; readonly projection: ResourceBrowserProjection }
   | { readonly kind: 'error'; readonly message: string };
 
-interface ResourceBrowserDisplayState {
-  readonly query: string;
-  readonly viewMode: 'list' | 'grid';
-  readonly expandedIds: ReadonlySet<string>;
-  readonly selectedIdByFacet: Readonly<Partial<Record<ResourceBrowserFacet, string>>>;
-  readonly activeContainerByFacet: Readonly<Partial<Record<'files' | 'media', string>>>;
-}
-
-const displayStateByProject = new Map<string, ResourceBrowserDisplayState>();
-
 export function ResourceBrowserRoot({
   chrome = 'standalone',
   defaultViewMode = 'list',
@@ -108,13 +98,15 @@ export function ResourceBrowserRoot({
   runtime,
 }: ResourceBrowserRootProps): ReactElement {
   const labels = getResourceBrowserLabels(locale);
+  const presentationSnapshots = useResourceBrowserPresentationSnapshotStore();
+  const presentationIdentity = resourceBrowserPresentationIdentity(runtime.identity);
   const displayStateKey = `${runtime.identity.projectId}:${runtime.identity.workspaceId}`;
-  const initialDisplayState = displayStateByProject.get(displayStateKey);
+  const initialDisplayState = useRef(presentationSnapshots?.read(presentationIdentity)).current;
   const [state, setState] = useState<ResourceBrowserRootState>({ kind: 'loading' });
   const [query, setQuery] = useState(initialDisplayState?.query ?? '');
   const [selectedIdByFacet, setSelectedIdByFacet] = useState<
     Readonly<Partial<Record<ResourceBrowserFacet, string>>>
-  >(() => initialDisplayState?.selectedIdByFacet ?? {});
+  >(() => initialDisplayState?.selectedResourceIds ?? {});
   const [pending, setPending] = useState(false);
   const [libraryMenuOpen, setLibraryMenuOpen] = useState(false);
   const [recovery, setRecovery] = useState<
@@ -124,15 +116,19 @@ export function ResourceBrowserRoot({
     initialDisplayState?.viewMode ?? defaultViewMode,
   );
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
-    () => initialDisplayState?.expandedIds ?? new Set(),
+    () => new Set(initialDisplayState?.expandedResourceIds ?? []),
   );
   const [activeContainerByFacet, setActiveContainerByFacet] = useState<
     Readonly<Partial<Record<'files' | 'media', string>>>
-  >(() => initialDisplayState?.activeContainerByFacet ?? {});
+  >(() => initialDisplayState?.activeContainerResourceIds ?? {});
+  const [entityDrafts, setEntityDrafts] = useState<Readonly<Record<string, EntityInspectorDraft>>>(
+    () => initialDisplayState?.entityDrafts ?? {},
+  );
   const requestSequence = useRef(0);
   const eventSequence = useRef(0);
   const pendingChildrenFacet = useRef<'files' | 'media'>();
   const activeDisplayStateKey = useRef(displayStateKey);
+  const activePresentationIdentity = useRef(presentationIdentity);
   const restoringDisplayState = useRef(false);
   const quickPreviewRequestId = useRef<string>();
   const quickPreviewTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -153,58 +149,6 @@ export function ResourceBrowserRoot({
     readonly resourceId: string;
     readonly result: ResourceBrowserQuickPreviewResult;
   }>();
-  const [pageCatalog, setPageCatalog] = useState(() =>
-    createResourceBrowserPageCatalog(displayStateKey),
-  );
-  const [retainedDetailItems, setRetainedDetailItems] = useState<
-    ReadonlyMap<string, ResourceBrowserItem>
-  >(() => new Map());
-
-  useEffect(() => {
-    setPageCatalog(createResourceBrowserPageCatalog(displayStateKey));
-  }, [displayStateKey]);
-
-  useEffect(() => {
-    if (state.kind !== 'ready') return;
-    const projection = state.projection;
-    setRetainedDetailItems((current) => {
-      const next = new Map(current);
-      for (const item of projection.items) next.set(item.resourceId, item);
-      for (const item of current.values()) {
-        if (
-          item.facet === projection.facet &&
-          !projection.items.some((candidate) => candidate.resourceId === item.resourceId)
-        ) {
-          next.delete(item.resourceId);
-        }
-      }
-      return next;
-    });
-    const selectedId = selectedIdByFacet[projection.facet];
-    setPageCatalog((current) => {
-      let next = activateResourceBrowserFacet(current, projection.facet);
-      next = reconcileResourceBrowserDetails(
-        next,
-        projection.facet,
-        new Set(projection.items.map((item) => item.resourceId)),
-      );
-      if (selectedId && projection.items.some((item) => item.resourceId === selectedId)) {
-        next = openResourceBrowserDetail(next, projection.facet, selectedId);
-      }
-      if (quickPreview) {
-        next = openResourceBrowserPreview(next, quickPreview.result.previewSessionId);
-      } else if (next.activePreviewPageId) {
-        next = closeResourceBrowserPage(next, next.activePreviewPageId);
-      }
-      if (createDirectoryParent) {
-        next = openResourceBrowserDialog(next, createDirectoryParent.invocationId);
-      } else if (next.activeDialogPageId) {
-        next = closeResourceBrowserPage(next, next.activeDialogPageId);
-      }
-      return next;
-    });
-  }, [createDirectoryParent, quickPreview, selectedIdByFacet, state]);
-
   useEffect(() => {
     if (!libraryMenuOpen) return undefined;
     const closeOnOutsidePointer = (event: PointerEvent): void => {
@@ -336,9 +280,29 @@ export function ResourceBrowserRoot({
     });
     void runtime
       .getSnapshot()
+      .then(async (projection) => {
+        const saved = presentationSnapshots?.read(
+          resourceBrowserPresentationIdentity(runtime.identity),
+        );
+        if (
+          !saved ||
+          (saved.activeFacet === projection.facet && saved.query === projection.query)
+        ) {
+          return projection;
+        }
+        return runtime.search(
+          createResourceBrowserSearchRequest({
+            requestId: `resource-presentation-restore-${globalThis.crypto.randomUUID()}`,
+            identity: runtime.identity,
+            facet: saved.activeFacet,
+            query: saved.query,
+          }),
+        );
+      })
       .then((projection) => {
         if (active) {
           reconcileRetainedContainer(projection, setActiveContainerByFacet);
+          reconcilePresentationState(projection, setSelectedIdByFacet, setActiveContainerByFacet);
           setState({ kind: 'ready', projection });
         }
       })
@@ -349,32 +313,43 @@ export function ResourceBrowserRoot({
       active = false;
       unsubscribe();
     };
-  }, [runtime]);
+  }, [presentationSnapshots, runtime]);
 
   useEffect(() => {
     if (activeDisplayStateKey.current === displayStateKey) return;
-    displayStateByProject.set(activeDisplayStateKey.current, {
+    writePresentationSnapshot(
+      presentationSnapshots,
+      activePresentationIdentity.current,
+      defaultViewMode,
+      state,
       query,
       viewMode,
-      expandedIds: new Set(expandedIds),
+      expandedIds,
       selectedIdByFacet,
       activeContainerByFacet,
-    });
+      entityDrafts,
+    );
     activeDisplayStateKey.current = displayStateKey;
+    activePresentationIdentity.current = presentationIdentity;
     restoringDisplayState.current = true;
-    const saved = displayStateByProject.get(displayStateKey);
+    const saved = presentationSnapshots?.read(presentationIdentity);
     setQuery(saved?.query ?? '');
     setViewMode(saved?.viewMode ?? defaultViewMode);
-    setExpandedIds(saved?.expandedIds ?? new Set());
-    setSelectedIdByFacet(saved?.selectedIdByFacet ?? {});
-    setActiveContainerByFacet(saved?.activeContainerByFacet ?? {});
+    setExpandedIds(new Set(saved?.expandedResourceIds ?? []));
+    setSelectedIdByFacet(saved?.selectedResourceIds ?? {});
+    setActiveContainerByFacet(saved?.activeContainerResourceIds ?? {});
+    setEntityDrafts(saved?.entityDrafts ?? {});
   }, [
     activeContainerByFacet,
     defaultViewMode,
     expandedIds,
+    entityDrafts,
     displayStateKey,
+    presentationIdentity,
+    presentationSnapshots,
     selectedIdByFacet,
     query,
+    state,
     viewMode,
   ]);
 
@@ -383,14 +358,29 @@ export function ResourceBrowserRoot({
       restoringDisplayState.current = false;
       return;
     }
-    displayStateByProject.set(activeDisplayStateKey.current, {
+    writePresentationSnapshot(
+      presentationSnapshots,
+      activePresentationIdentity.current,
+      defaultViewMode,
+      state,
       query,
       viewMode,
-      expandedIds: new Set(expandedIds),
+      expandedIds,
       selectedIdByFacet,
       activeContainerByFacet,
-    });
-  }, [activeContainerByFacet, expandedIds, query, selectedIdByFacet, viewMode]);
+      entityDrafts,
+    );
+  }, [
+    activeContainerByFacet,
+    defaultViewMode,
+    expandedIds,
+    entityDrafts,
+    presentationSnapshots,
+    query,
+    selectedIdByFacet,
+    state,
+    viewMode,
+  ]);
 
   const runSearch = async (facet: ResourceBrowserFacet, nextQuery: string): Promise<void> => {
     requestSequence.current += 1;
@@ -477,14 +467,18 @@ export function ResourceBrowserRoot({
   }
 
   const projection = state.projection;
-  const activeFacetPageId = `facet:${projection.facet}`;
   const selectedId = selectedIdByFacet[projection.facet];
+  const selectedEntity = selectedId
+    ? projection.items.find((item) => item.resourceId === selectedId && item.facet === 'entities')
+    : undefined;
   const executeEntityIntent = async (
     resourceId: string,
     intent: Parameters<EntityInspectorProps['onIntent']>[0],
   ): Promise<void> => {
-    const selectedEntity = retainedDetailItems.get(resourceId);
-    if (selectedEntity?.facet !== 'entities') {
+    const entity = projection.items.find(
+      (item) => item.resourceId === resourceId && item.facet === 'entities',
+    );
+    if (!entity) {
       throw new Error('Resource Browser Entity selection is stale.');
     }
     requestSequence.current += 1;
@@ -494,7 +488,7 @@ export function ResourceBrowserRoot({
         createResourceBrowserEntityIntentRequest({
           requestId: `resource-entity-${requestSequence.current}`,
           identity: runtime.identity,
-          resourceId: selectedEntity.resourceId,
+          resourceId: entity.resourceId,
           intent,
         }),
       );
@@ -664,12 +658,7 @@ export function ResourceBrowserRoot({
     <section
       className="neko-resource-browser"
       aria-label={labels.title}
-      data-resource-page-owner={pageCatalog.ownerId}
       data-lifecycle-presentation={lifecyclePresentation}
-      data-active-resource-facet-page={activeFacetPageId}
-      data-active-resource-detail-page={pageCatalog.activeDetailPageId}
-      data-active-resource-preview-page={pageCatalog.activePreviewPageId}
-      data-active-resource-dialog-page={pageCatalog.activeDialogPageId}
     >
       {chrome === 'standalone' ? (
         <header className="neko-resource-browser__header">
@@ -783,323 +772,273 @@ export function ResourceBrowserRoot({
           </button>
         ))}
       </div>
-      <RetainedSurfaceDeck
-        items={pageCatalog.pages.filter((page) => page.kind === 'facet')}
-        activeId={activeFacetPageId}
-        getId={(page) => page.pageId}
-        getLifecycle={(page) => page.lifecycle}
-        itemIdentityAttribute="data-resource-facet-instance"
-        renderItem={(page, presentation) => {
-          if (page.kind !== 'facet') {
-            throw new Error(`Resource Browser page '${page.pageId}' is not a Facet page.`);
-          }
-          return (
-            <RetainedResourceBrowserFacetPage active={presentation.active}>
-              {presentation.active ? (
-                <>
-                  {navigableFacet && projection.query.length === 0 && viewMode === 'grid' ? (
-                    <nav
-                      className="neko-resource-browser__breadcrumbs"
-                      aria-label={labels.breadcrumbs}
-                    >
-                      <button
-                        type="button"
-                        aria-current={!activeContainerId ? 'page' : undefined}
-                        onClick={() =>
-                          setActiveContainerByFacet((current) => ({
-                            ...current,
-                            [navigableFacet]: undefined,
-                          }))
+      <>
+        {navigableFacet && projection.query.length === 0 && viewMode === 'grid' ? (
+          <nav className="neko-resource-browser__breadcrumbs" aria-label={labels.breadcrumbs}>
+            <button
+              type="button"
+              aria-current={!activeContainerId ? 'page' : undefined}
+              onClick={() =>
+                setActiveContainerByFacet((current) => ({
+                  ...current,
+                  [navigableFacet]: undefined,
+                }))
+              }
+            >
+              {projection.facet === 'files' ? labels.workspaceRoot : labels.mediaLibraries}
+            </button>
+            {breadcrumbs.map((item) => (
+              <React.Fragment key={item.resourceId}>
+                <ChevronRightIcon size={11} aria-hidden="true" />
+                <button
+                  type="button"
+                  aria-current={item.resourceId === activeContainerId ? 'page' : undefined}
+                  onClick={() =>
+                    setActiveContainerByFacet((current) => ({
+                      ...current,
+                      [navigableFacet]: item.resourceId,
+                    }))
+                  }
+                >
+                  {item.label}
+                </button>
+              </React.Fragment>
+            ))}
+          </nav>
+        ) : null}
+        {projection.diagnostics?.length ? (
+          <div className="neko-resource-browser__diagnostics" role="status">
+            {projection.diagnostics.map((diagnostic, index) => (
+              <span
+                key={`${diagnostic.code}:${diagnostic.recordId ?? diagnostic.message}:${String(index)}`}
+              >
+                {diagnostic.message}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        <div
+          className="neko-resource-browser__items"
+          data-view-mode={viewMode}
+          role={treePresentation ? 'tree' : 'list'}
+          onContextMenu={(event) => {
+            if (
+              event.target instanceof Element &&
+              event.target.closest('.neko-resource-browser__item-row')
+            ) {
+              return;
+            }
+            openContextMenu(event);
+          }}
+        >
+          {projection.items.length === 0 ? (
+            <div className="neko-resource-browser__empty">{labels.empty}</div>
+          ) : (
+            visibleItems.map((item) => (
+              <React.Fragment key={item.resourceId}>
+                <div
+                  className="neko-resource-browser__item-row"
+                  data-selected={item.resourceId === selectedId ? 'true' : 'false'}
+                  onPointerEnter={() => beginQuickPreview(item)}
+                  onPointerLeave={() => releaseQuickPreview()}
+                  onContextMenu={(event) => openContextMenu(event, item)}
+                >
+                  <button
+                    type="button"
+                    className="neko-resource-browser__item"
+                    data-role={item.role}
+                    data-tree-item={treePresentation ? 'true' : 'false'}
+                    draggable={canDragResourceToCanvas(item)}
+                    {...(treePresentation
+                      ? {
+                          role: 'treeitem',
+                          'aria-level': item.depth + 1,
+                          'aria-selected': item.resourceId === selectedId,
+                          ...(item.role === 'directory' || item.role === 'library-root'
+                            ? {
+                                'aria-expanded': expandedIds.has(item.resourceId),
+                              }
+                            : {}),
                         }
-                      >
-                        {projection.facet === 'files'
-                          ? labels.workspaceRoot
-                          : labels.mediaLibraries}
-                      </button>
-                      {breadcrumbs.map((item) => (
-                        <React.Fragment key={item.resourceId}>
-                          <ChevronRightIcon size={11} aria-hidden="true" />
-                          <button
-                            type="button"
-                            aria-current={
-                              item.resourceId === activeContainerId ? 'page' : undefined
-                            }
-                            onClick={() =>
-                              setActiveContainerByFacet((current) => ({
-                                ...current,
-                                [navigableFacet]: item.resourceId,
-                              }))
-                            }
-                          >
-                            {item.label}
-                          </button>
-                        </React.Fragment>
-                      ))}
-                    </nav>
-                  ) : null}
-                  {projection.diagnostics?.length ? (
-                    <div className="neko-resource-browser__diagnostics" role="status">
-                      {projection.diagnostics.map((diagnostic, index) => (
-                        <span
-                          key={`${diagnostic.code}:${diagnostic.recordId ?? diagnostic.message}:${String(index)}`}
-                        >
-                          {diagnostic.message}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div
-                    className="neko-resource-browser__items"
-                    data-view-mode={viewMode}
-                    role={treePresentation ? 'tree' : 'list'}
-                    onContextMenu={(event) => {
+                      : {})}
+                    style={viewMode === 'list' ? { paddingLeft: 7 + item.depth * 14 } : undefined}
+                    onClick={(event) => {
+                      setSelectedIdByFacet((current) => ({
+                        ...current,
+                        [projection.facet]: item.resourceId,
+                      }));
+                      if (event.detail > 1) return;
+                      if (item.role === 'directory' || item.role === 'library-root') {
+                        return;
+                      }
                       if (
-                        event.target instanceof Element &&
-                        event.target.closest('.neko-resource-browser__item-row')
+                        isWorkspaceDocument(item, '.otio') &&
+                        item.capabilities.includes('open-cut') &&
+                        !pending
+                      ) {
+                        void execute(RESOURCE_BROWSER_ROUTES.openCut, item);
+                        return;
+                      }
+                      if (isWorkspaceDocument(item, '.nkc') && onOpenCanvas && !pending) {
+                        onOpenCanvas(item, 'main');
+                        return;
+                      }
+                      if (previewTarget && item.capabilities.includes('preview') && !pending) {
+                        void execute(RESOURCE_BROWSER_ROUTES.preview, item);
+                      }
+                    }}
+                    onDoubleClick={() => {
+                      if (
+                        !navigableFacet ||
+                        projection.query.length > 0 ||
+                        (item.role !== 'directory' && item.role !== 'library-root') ||
+                        !canBrowseResourceContainer(item)
                       ) {
                         return;
                       }
-                      openContextMenu(event);
+                      if (viewMode === 'list') {
+                        void toggleTreeContainer(navigableFacet, item);
+                      } else {
+                        void openGridContainer(navigableFacet, item);
+                      }
                     }}
+                    onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
+                      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+                        event.preventDefault();
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        setContextMenu({
+                          x: bounds.left + 12,
+                          y: bounds.top + 12,
+                          facet: projection.facet,
+                          item,
+                        });
+                        return;
+                      }
+                      if (
+                        !treePresentation ||
+                        !navigableFacet ||
+                        (item.role !== 'directory' && item.role !== 'library-root')
+                      ) {
+                        return;
+                      }
+                      if (event.key === 'ArrowRight' && !expandedIds.has(item.resourceId)) {
+                        event.preventDefault();
+                        setSelectedIdByFacet((current) => ({
+                          ...current,
+                          [projection.facet]: item.resourceId,
+                        }));
+                        void toggleTreeContainer(navigableFacet, item);
+                        return;
+                      }
+                      if (event.key === 'ArrowLeft' && expandedIds.has(item.resourceId)) {
+                        event.preventDefault();
+                        setSelectedIdByFacet((current) => ({
+                          ...current,
+                          [projection.facet]: item.resourceId,
+                        }));
+                        void toggleTreeContainer(navigableFacet, item);
+                      }
+                    }}
+                    onDragStart={(event) => startResourceCanvasDrag(event, item)}
                   >
-                    {projection.items.length === 0 ? (
-                      <div className="neko-resource-browser__empty">{labels.empty}</div>
-                    ) : (
-                      visibleItems.map((item) => (
-                        <React.Fragment key={item.resourceId}>
-                          <div
-                            className="neko-resource-browser__item-row"
-                            data-selected={item.resourceId === selectedId ? 'true' : 'false'}
-                            onPointerEnter={() => beginQuickPreview(item)}
-                            onPointerLeave={() => releaseQuickPreview()}
-                            onContextMenu={(event) => openContextMenu(event, item)}
+                    {treePresentation ? (
+                      <span
+                        className={`neko-resource-browser__disclosure${
+                          item.role === 'directory' || item.role === 'library-root'
+                            ? ''
+                            : ' is-placeholder'
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {item.role === 'directory' || item.role === 'library-root' ? (
+                          expandedIds.has(item.resourceId) ? (
+                            <ChevronDownIcon size={12} />
+                          ) : (
+                            <ChevronRightIcon size={12} />
+                          )
+                        ) : null}
+                      </span>
+                    ) : null}
+                    <ResourceBrowserThumbnail
+                      item={item}
+                      runtime={runtime}
+                      unavailableLabel={labels.thumbnailUnavailable}
+                      libraryStatusLabel={presentLibraryStatus(item, labels)}
+                    />
+                    <ResourceBrowserItemCopy
+                      item={item}
+                      showDescription={!treePresentation}
+                      libraryStatusLabel={presentLibraryStatus(item, labels)}
+                    />
+                  </button>
+                  {item.role === 'library-root' ? (
+                    <span className="neko-resource-browser__inline-actions">
+                      {canRecoverLibrary(item) ? (
+                        <button
+                          type="button"
+                          disabled={pending}
+                          aria-label={labels.recoverSource}
+                          title={labels.recoverSource}
+                          onClick={() => void requestRecovery(item, 'existing-global')}
+                        >
+                          <RefreshIcon size={13} />
+                        </button>
+                      ) : null}
+                      {hasManagedLibraryLink(item) ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            aria-label={labels.relinkSource}
+                            title={labels.relinkSource}
+                            onClick={() => void execute(RESOURCE_BROWSER_ROUTES.relinkSource, item)}
                           >
-                            <button
-                              type="button"
-                              className="neko-resource-browser__item"
-                              data-role={item.role}
-                              data-tree-item={treePresentation ? 'true' : 'false'}
-                              draggable={canDragResourceToCanvas(item)}
-                              {...(treePresentation
-                                ? {
-                                    role: 'treeitem',
-                                    'aria-level': item.depth + 1,
-                                    'aria-selected': item.resourceId === selectedId,
-                                    ...(item.role === 'directory' || item.role === 'library-root'
-                                      ? {
-                                          'aria-expanded': expandedIds.has(item.resourceId),
-                                        }
-                                      : {}),
-                                  }
-                                : {})}
-                              style={
-                                viewMode === 'list'
-                                  ? { paddingLeft: 7 + item.depth * 14 }
-                                  : undefined
+                            <EditIcon size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            aria-label={labels.removeSource}
+                            title={labels.removeSource}
+                            onClick={() => {
+                              if (globalThis.confirm(labels.removeSourceConfirm)) {
+                                void execute(RESOURCE_BROWSER_ROUTES.removeSource, item);
                               }
-                              onClick={(event) => {
-                                setSelectedIdByFacet((current) => ({
-                                  ...current,
-                                  [projection.facet]: item.resourceId,
-                                }));
-                                if (event.detail > 1) return;
-                                if (item.role === 'directory' || item.role === 'library-root') {
-                                  return;
-                                }
-                                if (
-                                  isWorkspaceDocument(item, '.otio') &&
-                                  item.capabilities.includes('open-cut') &&
-                                  !pending
-                                ) {
-                                  void execute(RESOURCE_BROWSER_ROUTES.openCut, item);
-                                  return;
-                                }
-                                if (isWorkspaceDocument(item, '.nkc') && onOpenCanvas && !pending) {
-                                  onOpenCanvas(item, 'main');
-                                  return;
-                                }
-                                if (
-                                  previewTarget &&
-                                  item.capabilities.includes('preview') &&
-                                  !pending
-                                ) {
-                                  void execute(RESOURCE_BROWSER_ROUTES.preview, item);
-                                }
-                              }}
-                              onDoubleClick={() => {
-                                if (
-                                  !navigableFacet ||
-                                  projection.query.length > 0 ||
-                                  (item.role !== 'directory' && item.role !== 'library-root') ||
-                                  !canBrowseResourceContainer(item)
-                                ) {
-                                  return;
-                                }
-                                if (viewMode === 'list') {
-                                  void toggleTreeContainer(navigableFacet, item);
-                                } else {
-                                  void openGridContainer(navigableFacet, item);
-                                }
-                              }}
-                              onKeyDown={(event: KeyboardEvent<HTMLButtonElement>) => {
-                                if (
-                                  event.key === 'ContextMenu' ||
-                                  (event.shiftKey && event.key === 'F10')
-                                ) {
-                                  event.preventDefault();
-                                  const bounds = event.currentTarget.getBoundingClientRect();
-                                  setContextMenu({
-                                    x: bounds.left + 12,
-                                    y: bounds.top + 12,
-                                    facet: projection.facet,
-                                    item,
-                                  });
-                                  return;
-                                }
-                                if (
-                                  !treePresentation ||
-                                  !navigableFacet ||
-                                  (item.role !== 'directory' && item.role !== 'library-root')
-                                ) {
-                                  return;
-                                }
-                                if (
-                                  event.key === 'ArrowRight' &&
-                                  !expandedIds.has(item.resourceId)
-                                ) {
-                                  event.preventDefault();
-                                  setSelectedIdByFacet((current) => ({
-                                    ...current,
-                                    [projection.facet]: item.resourceId,
-                                  }));
-                                  void toggleTreeContainer(navigableFacet, item);
-                                  return;
-                                }
-                                if (event.key === 'ArrowLeft' && expandedIds.has(item.resourceId)) {
-                                  event.preventDefault();
-                                  setSelectedIdByFacet((current) => ({
-                                    ...current,
-                                    [projection.facet]: item.resourceId,
-                                  }));
-                                  void toggleTreeContainer(navigableFacet, item);
-                                }
-                              }}
-                              onDragStart={(event) => startResourceCanvasDrag(event, item)}
-                            >
-                              {treePresentation ? (
-                                <span
-                                  className={`neko-resource-browser__disclosure${
-                                    item.role === 'directory' || item.role === 'library-root'
-                                      ? ''
-                                      : ' is-placeholder'
-                                  }`}
-                                  aria-hidden="true"
-                                >
-                                  {item.role === 'directory' || item.role === 'library-root' ? (
-                                    expandedIds.has(item.resourceId) ? (
-                                      <ChevronDownIcon size={12} />
-                                    ) : (
-                                      <ChevronRightIcon size={12} />
-                                    )
-                                  ) : null}
-                                </span>
-                              ) : null}
-                              <ResourceBrowserThumbnail
-                                item={item}
-                                runtime={runtime}
-                                unavailableLabel={labels.thumbnailUnavailable}
-                                libraryStatusLabel={presentLibraryStatus(item, labels)}
-                              />
-                              <ResourceBrowserItemCopy
-                                item={item}
-                                showDescription={!treePresentation}
-                                libraryStatusLabel={presentLibraryStatus(item, labels)}
-                              />
-                            </button>
-                            {item.role === 'library-root' ? (
-                              <span className="neko-resource-browser__inline-actions">
-                                {canRecoverLibrary(item) ? (
-                                  <button
-                                    type="button"
-                                    disabled={pending}
-                                    aria-label={labels.recoverSource}
-                                    title={labels.recoverSource}
-                                    onClick={() => void requestRecovery(item, 'existing-global')}
-                                  >
-                                    <RefreshIcon size={13} />
-                                  </button>
-                                ) : null}
-                                {hasManagedLibraryLink(item) ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      disabled={pending}
-                                      aria-label={labels.relinkSource}
-                                      title={labels.relinkSource}
-                                      onClick={() =>
-                                        void execute(RESOURCE_BROWSER_ROUTES.relinkSource, item)
-                                      }
-                                    >
-                                      <EditIcon size={13} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={pending}
-                                      aria-label={labels.removeSource}
-                                      title={labels.removeSource}
-                                      onClick={() => {
-                                        if (globalThis.confirm(labels.removeSourceConfirm)) {
-                                          void execute(RESOURCE_BROWSER_ROUTES.removeSource, item);
-                                        }
-                                      }}
-                                    >
-                                      <TrashIcon size={13} />
-                                    </button>
-                                  </>
-                                ) : null}
-                              </span>
-                            ) : null}
-                            {quickPreview?.resourceId === item.resourceId && renderQuickPreview ? (
-                              <div
-                                className="neko-resource-browser__quick-preview"
-                                data-preview-kind={quickPreview.result.descriptor.contentKind}
-                              >
-                                {renderQuickPreview(quickPreview.result.descriptor)}
-                              </div>
-                            ) : null}
-                          </div>
-                        </React.Fragment>
-                      ))
-                    )}
-                  </div>
-                </>
-              ) : undefined}
-            </RetainedResourceBrowserFacetPage>
-          );
-        }}
-      />
-      <RetainedSurfaceDeck
-        items={pageCatalog.pages.filter((page) => page.kind === 'detail')}
-        activeId={pageCatalog.activeDetailPageId}
-        getId={(page) => page.pageId}
-        getLifecycle={(page) => page.lifecycle}
-        itemIdentityAttribute="data-resource-detail-instance"
-        renderItem={(page) => {
-          if (page.kind !== 'detail') {
-            throw new Error(`Resource Browser page '${page.pageId}' is not a detail page.`);
+                            }}
+                          >
+                            <TrashIcon size={13} />
+                          </button>
+                        </>
+                      ) : null}
+                    </span>
+                  ) : null}
+                  {quickPreview?.resourceId === item.resourceId && renderQuickPreview ? (
+                    <div
+                      className="neko-resource-browser__quick-preview"
+                      data-preview-kind={quickPreview.result.descriptor.contentKind}
+                    >
+                      {renderQuickPreview(quickPreview.result.descriptor)}
+                    </div>
+                  ) : null}
+                </div>
+              </React.Fragment>
+            ))
+          )}
+        </div>
+      </>
+      {selectedEntity?.facet === 'entities' ? (
+        <EntityInspector
+          key={selectedEntity.resourceId}
+          disabled={pending}
+          initialDraft={entityDrafts[selectedEntity.resourceId]}
+          locale={locale}
+          onDraftChange={(draft) =>
+            setEntityDrafts((current) => ({ ...current, [selectedEntity.resourceId]: draft }))
           }
-          const item = retainedDetailItems.get(page.resourceId);
-          if (!item || item.facet !== 'entities') return null;
-          return (
-            <EntityInspector
-              disabled={pending}
-              locale={locale}
-              projection={item.inspector}
-              onIntent={(intent) => executeEntityIntent(page.resourceId, intent)}
-            />
-          );
-        }}
-      />
+          projection={selectedEntity.inspector}
+          onIntent={(intent) => executeEntityIntent(selectedEntity.resourceId, intent)}
+        />
+      ) : null}
       {contextMenu ? (
         <ResourceBrowserContextMenu
           menu={contextMenu}
@@ -1232,18 +1171,6 @@ export function ResourceBrowserRoot({
       ) : null}
     </section>
   );
-}
-
-function RetainedResourceBrowserFacetPage({
-  active,
-  children,
-}: {
-  readonly active: boolean;
-  readonly children?: ReactNode;
-}): ReactElement {
-  const retainedChildren = useRef<ReactNode>();
-  if (active && children !== undefined) retainedChildren.current = children;
-  return <>{retainedChildren.current}</>;
 }
 
 type ResourceBrowserContextAction =
@@ -1461,6 +1388,67 @@ function presentResourceBrowserDescription(item: ResourceBrowserItem): string | 
   const description = item.description?.trim();
   if (!description || description === '.' || description === item.kind) return undefined;
   return description;
+}
+
+function resourceBrowserPresentationIdentity(
+  identity: ResourceBrowserProjection['identity'],
+): ResourceBrowserPresentationIdentity {
+  return {
+    projectId: identity.projectId,
+    workspaceId: identity.workspaceId,
+  };
+}
+
+function writePresentationSnapshot(
+  store: ResourceBrowserPresentationSnapshotStore | undefined,
+  identity: ResourceBrowserPresentationIdentity,
+  defaultViewMode: 'list' | 'grid',
+  state: ResourceBrowserRootState,
+  query: string,
+  viewMode: 'list' | 'grid',
+  expandedIds: ReadonlySet<string>,
+  selectedResourceIds: Readonly<Partial<Record<ResourceBrowserFacet, string>>>,
+  activeContainerResourceIds: Readonly<Partial<Record<'files' | 'media', string>>>,
+  entityDrafts: Readonly<Record<string, EntityInspectorDraft>>,
+): void {
+  if (!store || state.kind !== 'ready') return;
+  if (
+    state.projection.identity.projectId !== identity.projectId ||
+    state.projection.identity.workspaceId !== identity.workspaceId
+  ) {
+    return;
+  }
+  const snapshot: ResourceBrowserPresentationSnapshot = {
+    query,
+    activeFacet: state.projection.facet,
+    viewMode,
+    expandedResourceIds: [...expandedIds].sort(),
+    selectedResourceIds,
+    activeContainerResourceIds,
+    entityDrafts,
+  };
+  const isDefault =
+    snapshot.query.length === 0 &&
+    snapshot.activeFacet === 'files' &&
+    snapshot.viewMode === defaultViewMode &&
+    snapshot.expandedResourceIds.length === 0 &&
+    !Object.values(snapshot.selectedResourceIds).some(Boolean) &&
+    !Object.values(snapshot.activeContainerResourceIds).some(Boolean) &&
+    Object.keys(snapshot.entityDrafts).length === 0;
+  store.write(identity, isDefault ? undefined : snapshot);
+}
+
+function reconcilePresentationState(
+  projection: ResourceBrowserProjection,
+  setSelectedIdByFacet: React.Dispatch<
+    React.SetStateAction<Readonly<Partial<Record<ResourceBrowserFacet, string>>>>
+  >,
+  setActiveContainerByFacet: React.Dispatch<
+    React.SetStateAction<Readonly<Partial<Record<'files' | 'media', string>>>>
+  >,
+): void {
+  reconcileRetainedSelection(projection, setSelectedIdByFacet);
+  reconcileRetainedContainer(projection, setActiveContainerByFacet);
 }
 
 function addSetMember(current: ReadonlySet<string>, resourceId: string): ReadonlySet<string> {

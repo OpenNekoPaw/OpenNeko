@@ -28,7 +28,7 @@ import { InfiniteCanvas, ZoomControls, MiniMap } from './components';
 import { ContextMenu } from './components/common/ContextMenu';
 import { CanvasToolbar } from './components/toolbar/CanvasToolbar';
 import { PlaybackWorkspace } from './components/playback/PlaybackWorkspace';
-import { CanvasNodeInspectorDeck } from './components/panels/CanvasNodeInspectorDeck';
+import { PropertyPanel } from './components/panels/PropertyPanel';
 import { MIN_ZOOM, MAX_ZOOM } from './hooks';
 import { useCanvasHostMessages } from './hooks/useCanvasHostMessages';
 import { useNodeHelpers } from './hooks/useNodeHelpers';
@@ -71,12 +71,6 @@ import { resolveCanvasRenderRefreshDecision } from './utils/renderRefreshTiering
 import { t } from './i18n';
 import { getLogger } from './utils/logger';
 import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
-import {
-  createCanvasNodeChildCatalog,
-  deactivateCanvasNodeInspector,
-  openCanvasNodeInspector,
-  reconcileCanvasNodeChildren,
-} from './node-lifecycle';
 
 // =============================================================================
 // Constants & Host API
@@ -172,21 +166,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
   const connections = canvasData?.connections ?? [];
   const selectedNodeIds = selection.nodeIds;
   const selectedConnectionIds = selection.connectionIds;
-  const [nodeChildCatalog, setNodeChildCatalog] = useState(() =>
-    createCanvasNodeChildCatalog(`canvas:${hostPort.documentId}`),
-  );
-  useEffect(() => {
-    setNodeChildCatalog(createCanvasNodeChildCatalog(`canvas:${hostPort.documentId}`));
-  }, [hostPort.documentId]);
-  useEffect(() => {
-    setNodeChildCatalog((current) => {
-      const next = reconcileCanvasNodeChildren(current, new Set(nodes.map((node) => node.id)));
-      const selectedNodeId = selectedNodeIds[0];
-      return selectedNodeId
-        ? openCanvasNodeInspector(next, selectedNodeId)
-        : deactivateCanvasNodeInspector(next);
-    });
-  }, [nodes, selectedNodeIds]);
+  const selectedInspectorNode = nodes.find((node) => node.id === selectedNodeIds[0]);
   const isPanMode = interactionTool === 'pan';
   const setCanvasContainerRef = useCallback((element: HTMLDivElement | null) => {
     canvasContainerRef.current = element;
@@ -1021,8 +1001,6 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
       ref={rootRef}
       className="canvas-workbench-root"
       data-neko-keyboard-focused={isKeyboardFocused ? 'true' : 'false'}
-      data-canvas-child-owner={nodeChildCatalog.canvasOwnerId}
-      data-active-node-inspector={nodeChildCatalog.activeInspectorId}
     >
       <CreativeWorkbenchShell
         className="canvas-workbench-shell"
@@ -1218,7 +1196,7 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
           />
         }
         rightDock={
-          nodeChildCatalog.activeInspectorId
+          selectedInspectorNode
             ? {
                 id: 'canvas-node-inspector-dock',
                 panelId: `canvas-node-inspector:${hostPort.documentId}`,
@@ -1227,9 +1205,8 @@ export function CanvasApp({ host: hostPort }: CanvasAppProps) {
                 maxSize: 440,
                 label: t('panel.properties'),
                 children: (
-                  <CanvasNodeInspectorDeck
-                    catalog={nodeChildCatalog}
-                    nodes={nodes}
+                  <PropertyPanel
+                    selectedNodes={[selectedInspectorNode]}
                     onUpdateNode={updateNode}
                     onUpdateNodeData={updateNodeData}
                     onUpdatePorts={updateNodePorts}

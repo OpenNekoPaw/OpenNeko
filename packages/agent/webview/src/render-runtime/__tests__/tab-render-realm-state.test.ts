@@ -3,6 +3,9 @@ import { createTabRenderRuntimeRegistry } from '../tab-render-runtime';
 import {
   createTabRenderRealmStateCoordinator,
   parseTabRenderRealmState,
+  readAgentEntryDraftSnapshot,
+  writeAgentEntryDraftSnapshot,
+  type AgentEntryDraftSnapshot,
   type TabRenderDraftSnapshot,
   type TabRenderRealmStateHost,
 } from '../tab-render-realm-state';
@@ -134,7 +137,7 @@ describe('Tab render realm state', () => {
   it('rejects one malformed draft while restoring valid siblings', () => {
     const parsed = parseTabRenderRealmState({
       drafts: [
-        { ...draft('tab-a', 'conv-a', 'draft'), generationCategory: 'document' },
+        { ...draft('tab-a', 'conv-a', 'draft'), viewport: { followMode: 'sideways' } },
         draft('tab-b', 'conv-b', 'valid'),
       ],
     });
@@ -145,7 +148,7 @@ describe('Tab render realm state', () => {
         code: 'invalid-draft',
         draftIndex: 0,
         tabId: 'tab-a',
-        message: expect.stringContaining('generationCategory has an unsupported value'),
+        message: expect.stringContaining('viewport.followMode has an unsupported value'),
       }),
     ]);
   });
@@ -177,6 +180,48 @@ describe('Tab render realm state', () => {
       ],
     });
   });
+
+  it('restores one exact entry draft and isolates an owner mismatch', () => {
+    const stored = entryDraft('draft-a', 'continue the scene');
+    const host = createMutableHost({ drafts: [], entryDraft: stored });
+
+    expect(readAgentEntryDraftSnapshot(host.adapter, 'draft-a')).toEqual({
+      snapshot: stored,
+      diagnostics: [],
+    });
+    expect(readAgentEntryDraftSnapshot(host.adapter, 'draft-b')).toEqual({
+      diagnostics: [
+        expect.objectContaining({
+          code: 'entry-draft-owner-mismatch',
+          message: expect.stringContaining('draft-a'),
+        }),
+      ],
+    });
+    expect(host.state).toEqual({ drafts: [], entryDraft: stored });
+  });
+
+  it('writes and clears only the entry draft while preserving Tab drafts', () => {
+    const tabDraft = draft('tab-a', 'conv-a', 'tab text');
+    const host = createMutableHost({ drafts: [tabDraft] });
+    const stored = entryDraft('draft-a', 'entry text');
+
+    writeAgentEntryDraftSnapshot(host.adapter, stored);
+    expect(host.state).toEqual({ drafts: [tabDraft], entryDraft: stored });
+
+    writeAgentEntryDraftSnapshot(host.adapter, undefined);
+    expect(host.state).toEqual({ drafts: [tabDraft] });
+  });
+
+  it('isolates an invalid entry draft without dropping valid Tab drafts', () => {
+    const tabDraft = draft('tab-a', 'conv-a', 'tab text');
+    const parsed = parseTabRenderRealmState({
+      drafts: [tabDraft],
+      entryDraft: { draftId: '', inputValue: 'entry text' },
+    });
+
+    expect(parsed.state).toEqual({ drafts: [tabDraft] });
+    expect(parsed.diagnostics).toEqual([expect.objectContaining({ code: 'invalid-entry-draft' })]);
+  });
 });
 
 function createHost(state: unknown): {
@@ -202,19 +247,31 @@ function draft(tabId: string, conversationId: string, inputValue: string): TabRe
     tabId,
     conversationId,
     inputValue,
-    selectedModel: 'provider:model',
-    mediaModelSelection: { image: 'none', video: 'none', audio: 'none' },
-    mediaUnderstandingSelection: { image: 'auto', video: 'auto', audio: 'auto' },
-    sessionMode: 'agent',
-    executionMode: 'ask',
-    generationCategory: 'image',
-    generationParams: {
-      ratio: '16:9',
-      resolution: '1080p',
-      videoDuration: 'auto',
-      videoFps: 24,
-      audioDuration: 'auto',
-      audioType: 'sfx',
+    viewport: { followMode: 'follow-tail' },
+  };
+}
+
+function entryDraft(draftId: string, inputValue: string): AgentEntryDraftSnapshot {
+  return {
+    draftId,
+    inputValue,
+  };
+}
+
+function createMutableHost(initialState: unknown): {
+  readonly adapter: TabRenderRealmStateHost;
+  readonly state: unknown;
+} {
+  let state = initialState;
+  return {
+    get state() {
+      return state;
+    },
+    adapter: {
+      getState: () => state,
+      setState: (next) => {
+        state = next;
+      },
     },
   };
 }

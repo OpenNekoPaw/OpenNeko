@@ -33,7 +33,8 @@ import { PdfViewer } from '../pdf/PdfViewer';
 import { AudioPlayer } from '../audio/AudioPlayer';
 import { VideoPlayer } from '../video/VideoPlayer';
 import { PersistedStateProvider } from '../shared/usePersistedState';
-import { createPreviewViewerSnapshotStore, type PreviewViewerSnapshot } from './viewer-snapshot';
+import type { PreviewViewerSnapshot, PreviewViewerSnapshotStore } from './viewer-snapshot';
+import { useOptionalPreviewViewerSnapshotStore } from './viewer-snapshot-context';
 import '../model/model.css';
 import '../styles/player.css';
 import './style.css';
@@ -43,6 +44,7 @@ export interface PreviewRootProps {
   readonly locale: SupportedLocale;
   readonly chrome?: PreviewChrome;
   readonly lifecyclePresentation?: 'active' | 'suspended';
+  readonly snapshotStore?: PreviewViewerSnapshotStore;
 }
 
 export type PreviewChrome = 'default' | 'content-only';
@@ -52,6 +54,7 @@ export interface AuthorizedPreviewRootProps {
   readonly locale: SupportedLocale;
   readonly chrome?: PreviewChrome;
   readonly lifecyclePresentation?: 'active' | 'suspended';
+  readonly snapshotStore?: PreviewViewerSnapshotStore;
 }
 
 export interface QuickPreviewSurfaceProps {
@@ -149,6 +152,7 @@ export function PreviewPresentation({
   descriptor,
   locale,
   lifecyclePresentation = 'active',
+  snapshotStore: explicitSnapshotStore,
 }: {
   readonly actions?: ReactNode;
   readonly authorizedPreviewSessionId?: string;
@@ -156,14 +160,18 @@ export function PreviewPresentation({
   readonly descriptor: PreviewMediaDescriptor;
   readonly locale: SupportedLocale;
   readonly lifecyclePresentation?: 'active' | 'suspended';
+  readonly snapshotStore?: PreviewViewerSnapshotStore;
 }): ReactElement {
-  const snapshotStore = useMemo(() => createPreviewViewerSnapshotStore(), []);
+  const contextSnapshotStore = useOptionalPreviewViewerSnapshotStore();
+  const snapshotStore = explicitSnapshotStore ?? contextSnapshotStore;
+  if (!snapshotStore) {
+    throw new Error('Preview Viewer snapshot owner is missing.');
+  }
   const updateSnapshot = useCallback(
     (update: Partial<PreviewViewerSnapshot>) =>
       snapshotStore.update(descriptor.descriptorId, update),
     [descriptor.descriptorId, snapshotStore],
   );
-  useEffect(() => () => snapshotStore.clear(), [snapshotStore]);
   const viewer = VIEWERS.find((candidate) => candidate.kind === descriptor.contentKind);
   if (!viewer) {
     return (
@@ -215,6 +223,7 @@ export function PreviewRoot({
   lifecyclePresentation = 'active',
   locale,
   runtime,
+  snapshotStore,
 }: PreviewRootProps): ReactElement {
   const [state, setState] = useState<PreviewRootState>({ kind: 'loading' });
   const [pendingRoute, setPendingRoute] = useState<PreviewHostRuntimeRoute>();
@@ -305,6 +314,7 @@ export function PreviewRoot({
       lifecyclePresentation={lifecyclePresentation}
       descriptor={projection.descriptor}
       locale={locale}
+      snapshotStore={snapshotStore}
       actions={
         <div
           className="neko-preview-root__actions"
@@ -343,6 +353,7 @@ export function AuthorizedPreviewRoot({
   lifecyclePresentation = 'active',
   locale,
   runtime,
+  snapshotStore,
 }: AuthorizedPreviewRootProps): ReactElement {
   const [projection, setProjection] = useState<AuthorizedPreviewSessionProjection>();
   const [error, setError] = useState<string>();
@@ -385,6 +396,7 @@ export function AuthorizedPreviewRoot({
       descriptor={projection.descriptor}
       locale={locale}
       lifecyclePresentation={lifecyclePresentation}
+      snapshotStore={snapshotStore}
     />
   );
 }

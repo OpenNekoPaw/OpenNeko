@@ -7,6 +7,7 @@
     "./asset-management/root": "./src/global-library/root.tsx",
     "./asset-management/main-root": "./src/global-library/main-root.tsx",
     "./project-portability/control": "./src/project-portability/ProjectPortabilityControl.tsx",
+    "./resource-browser/presentation-snapshot": "./src/resource-browser/presentation-snapshot-context.tsx",
     "./resource-browser/root": "./src/resource-browser/root.tsx"
   },
   "scripts": {
