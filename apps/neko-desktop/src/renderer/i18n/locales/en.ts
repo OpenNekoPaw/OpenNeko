@@ -78,7 +78,7 @@ export const en = {
     'Unrecognized workspace metadata was preserved ({fields}). Projects and windows remain available.',
   'shell.settingsMetadataRetained':
     'Unrecognized application settings metadata was preserved ({fields}). Your settings remain available.',
-  'shell.dismissStartupNotification': 'Dismiss startup notification',
+  'shell.dismissNotification': 'Dismiss notification',
   'shell.conversationRecordInvalid':
     "Saved conversation '{conversationId}' is no longer compatible and was isolated. A new draft is open; other conversations, projects, and files were not changed.",
   'shell.conversationRecordInvalidUnknown':

@@ -272,30 +272,39 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('recovers from a failed scene mutation without accepting a stale result', async () => {
-    const initial = createProjection();
-    const recovered = withActiveScene(initial, settingsScene());
-    const getSnapshot = vi
-      .fn<() => Promise<DesktopShellProjection>>()
-      .mockResolvedValueOnce(initial)
-      .mockResolvedValueOnce(recovered);
-    const transition = vi.fn(async () => {
-      throw new Error('Scene transition failed before commit.');
-    });
-    installBridge({ projection: initial, getSnapshot, transition });
-    const { container, root } = await renderApplication();
-    const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent?.trim() === 'Asset Center',
-    );
-    if (!assetCenter) throw new Error('Desktop fixture requires Asset Center navigation.');
+  it('recovers from a failed scene mutation and dismisses its transient error', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = createProjection();
+      const recovered = withActiveScene(initial, settingsScene());
+      const getSnapshot = vi
+        .fn<() => Promise<DesktopShellProjection>>()
+        .mockResolvedValueOnce(initial)
+        .mockResolvedValueOnce(recovered);
+      const transition = vi.fn(async () => {
+        throw new Error('Scene transition failed before commit.');
+      });
+      installBridge({ projection: initial, getSnapshot, transition });
+      const { container, root } = await renderApplication();
+      const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+        (button) => button.textContent?.trim() === 'Asset Center',
+      );
+      if (!assetCenter) throw new Error('Desktop fixture requires Asset Center navigation.');
 
-    await act(async () => assetCenter.click());
-    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+      await act(async () => assetCenter.click());
+      await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
 
-    expect(getSnapshot).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain('Scene transition failed before commit.');
-    expect(container.querySelector('[data-asset-management-root="assets"]')).toBeNull();
-    await act(async () => root.unmount());
+      expect(getSnapshot).toHaveBeenCalledTimes(2);
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+        'Scene transition failed before commit.',
+      );
+      expect(container.querySelector('[data-asset-management-root="assets"]')).toBeNull();
+      await act(async () => vi.advanceTimersByTime(6_000));
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      await act(async () => root.unmount());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('routes every Start Creating action to a fresh Host-owned Entry Draft transition', async () => {
@@ -358,32 +367,57 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
-  it('shows a rejected stored Window diagnostic while keeping the new Workbench usable', async () => {
-    const projection: DesktopShellProjection = {
-      ...createProjection(),
-      stateDiagnostics: [
-        {
-          code: 'desktop-stored-window-invalid',
-          severity: 'error',
-          windowId: 'window:old',
-          message: "Stored Window 'window:old' is unavailable and was not opened.",
-        },
-      ],
-    };
-    installBridge({ projection });
+  it('shows a rejected stored Window briefly while keeping the new Workbench usable', async () => {
+    vi.useFakeTimers();
+    try {
+      const projection: DesktopShellProjection = {
+        ...createProjection(),
+        stateDiagnostics: [
+          {
+            code: 'desktop-stored-window-invalid',
+            severity: 'error',
+            windowId: 'window:old',
+            message: "Stored Window 'window:old' is unavailable and was not opened.",
+          },
+        ],
+      };
+      let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+      installBridge({
+        projection,
+        subscribe: vi.fn((next) => {
+          listener = next;
+          return () => undefined;
+        }),
+      });
 
-    const { container, root } = await renderApplication();
+      const { container, root } = await renderApplication();
 
-    const alert = container.querySelector('[role="alert"]');
-    expect(alert?.textContent).toContain(
-      'Saved workspace window window:old is no longer compatible and was not opened.',
-    );
-    expect(alert?.getAttribute('title')).toBe(
-      "Stored Window 'window:old' is unavailable and was not opened.",
-    );
-    expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
-    expect(container.querySelector('.agent-workspace')).not.toBeNull();
-    await act(async () => root.unmount());
+      const alert = container.querySelector('[role="alert"]');
+      expect(alert?.textContent).toContain(
+        'Saved workspace window window:old is no longer compatible and was not opened.',
+      );
+      expect(alert?.getAttribute('title')).toBe(
+        "Stored Window 'window:old' is unavailable and was not opened.",
+      );
+      expect(container.querySelector('[data-neko-controlled-workbench="true"]')).not.toBeNull();
+      expect(container.querySelector('.agent-workspace')).not.toBeNull();
+      await act(async () => vi.advanceTimersByTime(6_000));
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      await act(async () => {
+        listener?.({
+          applicationInstanceId: projection.applicationInstanceId,
+          windowId: projection.window.windowId,
+          rendererSessionId: projection.rendererSessionId,
+          sequence: 1,
+          projection: withActiveScene(projection, settingsScene()),
+        });
+      });
+      expect(container.querySelector('[role="alert"]')).toBeNull();
+      expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+      await act(async () => root.unmount());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows a rejected Shell authority diagnostic while keeping the new Workbench usable', async () => {
@@ -501,7 +535,7 @@ describe('DesktopApplication scene lifecycle', () => {
         'unrecognizedSettingForNotice',
       );
       await act(async () => {
-        vi.advanceTimersByTime(8_000);
+        vi.advanceTimersByTime(6_000);
       });
       expect(container.querySelector('[role="alert"]')).toBeNull();
 
@@ -539,9 +573,9 @@ describe('DesktopApplication scene lifecycle', () => {
     const { container, root } = await renderApplication();
 
     const dismiss = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Dismiss startup notification"]',
+      'button[aria-label="Dismiss notification"]',
     );
-    if (!dismiss) throw new Error('Desktop startup notice requires a dismiss action.');
+    if (!dismiss) throw new Error('Desktop notice requires a dismiss action.');
     await act(async () => dismiss.click());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     await act(async () => root.unmount());
@@ -641,10 +675,7 @@ describe('DesktopApplication scene lifecycle', () => {
 
   it('disposes the exact Extensions runtime when Settings replaces its Scene slots', async () => {
     const assistant = createProjection();
-    const projection = withActiveScene(
-      assistant,
-      extensionsScene(),
-    );
+    const projection = withActiveScene(assistant, extensionsScene());
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     const dispose = vi.spyOn(DesktopExtensionManagementRuntime.prototype, 'dispose');
     installBridge({
@@ -655,11 +686,7 @@ describe('DesktopApplication scene lifecycle', () => {
       }),
     });
     const { container, root } = await renderApplication();
-    expect(
-      container.querySelector(
-        '[data-extension-management-window="window-1"]',
-      ),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-extension-management-window="window-1"]')).not.toBeNull();
 
     const settings = withActiveScene(
       {
