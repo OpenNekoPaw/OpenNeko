@@ -1,10 +1,11 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const CONVERSATION_TITLE = 'Retained historical conversation';
 const ASSET_LABEL = 'missing-retained-asset.png';
 const ACTIVE_WORKBENCH = '.desktop-scene-workbench';
 const SCROLL_PROJECT_COUNT = 28;
+const EMPTY_WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
 
 export const noActiveProjectCatalogsScenario = Object.freeze({
   id: 'no-active-project-catalogs',
@@ -18,6 +19,12 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       mkdir(missingProjectPath, { recursive: true }),
       mkdir(join(nekoRoot, 'assets'), { recursive: true }),
     ]);
+    await mkdir(join(workspacePath, 'neko'), { recursive: true });
+    await writeFile(
+      join(workspacePath, 'neko', 'project.json'),
+      `${JSON.stringify({ workspaceId: EMPTY_WORKSPACE_ID })}\n`,
+      'utf8',
+    );
     const sqlite = await import('node:sqlite');
     const database = new sqlite.DatabaseSync(join(nekoRoot, 'neko.db'));
     try {
@@ -76,6 +83,13 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
            locator_history_json, last_seen_at, orphaned_at
          ) VALUES (?, 'relative', ?, ?, ?, ?)`,
       );
+      insertWorkspace.run(
+        EMPTY_WORKSPACE_ID,
+        'workspace',
+        JSON.stringify([{ kind: 'relative', value: 'workspace' }]),
+        '2026-08-07T00:00:00.000Z',
+        null,
+      );
       for (let index = 1; index <= SCROLL_PROJECT_COUNT; index += 1) {
         const suffix = String(index).padStart(2, '0');
         const locator = `missing-scroll-project-${suffix}`;
@@ -131,7 +145,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     }
     return { workspacePath };
   },
-  async run({ checkpoint, click, evaluate, hover, pressKey, screenshot, waitForSelector }) {
+  async run({ checkpoint, click, evaluate, hover, pressKey, screenshot, scroll, waitForSelector }) {
     await waitForSelector('.shell-diagnostic');
     const startupNotice = await evaluate(`(() => {
       const notice = document.querySelector('.shell-diagnostic');
@@ -322,29 +336,160 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       'Unavailable Conversation cleanup did not remove the persisted entry.',
     );
     checkpoint('unavailable-conversation-cleanup-complete', { removed: true });
+    await scroll('.home-recent-navigation', 0, { deltaY: -2_000 });
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('.home-recent-navigation')?.scrollTop === 0`,
+      'PrimarySidebar did not return to the first empty Project.',
+    );
 
     const primaryProjects = await evaluate(`(async () => {
       const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const groups = [...document.querySelectorAll(
+        '.primary-conversation-group[data-group-kind="project"]',
+      )];
+      const findProjectGroup = (displayName) => groups.find(
+        (group) => group.querySelector('.primary-conversation-group__project-link span')
+          ?.textContent?.trim() === displayName,
+      );
+      const inspectProjectGroup = (displayName) => {
+        const group = findProjectGroup(displayName);
+        const header = group?.querySelector('.primary-conversation-group__header');
+        const projectLink = header?.querySelector('.primary-conversation-group__project-link');
+        const actions = [...(header?.querySelectorAll(
+          ':scope > .primary-navigation-row-actions button',
+        ) ?? [])];
+        return {
+          present: group instanceof HTMLElement,
+          count: group?.querySelector('.primary-conversation-group__count')?.textContent?.trim() ?? '',
+          conversationRows: group?.querySelectorAll('.primary-recent-conversation-row').length ?? -1,
+          projectOpenDisabled: projectLink instanceof HTMLButtonElement && projectLink.disabled,
+          actionDisabled: actions.map((action) => action.disabled),
+          hasDisclosure: group?.querySelector('.primary-conversation-group__collapse') !== null,
+          hasDisclosureSpacer:
+            group?.querySelector('.primary-conversation-group__collapse-spacer') !== null,
+          unavailable:
+            group?.querySelector('.primary-navigation-state .primary-navigation-unavailable') !== null,
+        };
+      };
+      const navigation = document.querySelector('.home-recent-navigation');
+      const navigationStyle = navigation instanceof HTMLElement ? getComputedStyle(navigation) : null;
       return {
         catalogProjectPresent: projection.catalog.projects.some(
           (project) => project.displayName === 'missing-project',
         ),
-        conversationGroupCount:
-          document.querySelectorAll('.primary-conversation-group').length,
-        projectGroupCount:
-          document.querySelectorAll(
-            '.primary-conversation-group[data-group-kind="project"]',
-          ).length,
+        catalogProjectCount: projection.catalog.projects.length,
+        conversationGroupCount: document.querySelectorAll('.primary-conversation-group').length,
+        projectGroupCount: groups.length,
+        everyProjectEmpty: groups.every(
+          (group) => group.querySelectorAll('.primary-recent-conversation-row').length === 0,
+        ),
+        availableProject: inspectProjectGroup('workspace'),
+        unavailableProject: inspectProjectGroup('missing-project'),
+        boundedNavigation:
+          navigation instanceof HTMLElement &&
+          navigationStyle?.overflowY === 'auto' &&
+          navigation.scrollHeight > navigation.clientHeight,
+      };
+    })()`);
+    const expectedProjectCount = SCROLL_PROJECT_COUNT + 2;
+    if (
+      !primaryProjects.catalogProjectPresent ||
+      primaryProjects.catalogProjectCount !== expectedProjectCount ||
+      primaryProjects.conversationGroupCount !== expectedProjectCount ||
+      primaryProjects.projectGroupCount !== expectedProjectCount ||
+      !primaryProjects.everyProjectEmpty ||
+      !primaryProjects.boundedNavigation ||
+      !primaryProjects.availableProject.present ||
+      primaryProjects.availableProject.count !== '0' ||
+      primaryProjects.availableProject.projectOpenDisabled ||
+      JSON.stringify(primaryProjects.availableProject.actionDisabled) !==
+        JSON.stringify([false, true, false]) ||
+      primaryProjects.availableProject.hasDisclosure ||
+      !primaryProjects.availableProject.hasDisclosureSpacer ||
+      primaryProjects.availableProject.unavailable ||
+      !primaryProjects.unavailableProject.present ||
+      primaryProjects.unavailableProject.count !== '0' ||
+      !primaryProjects.unavailableProject.projectOpenDisabled ||
+      JSON.stringify(primaryProjects.unavailableProject.actionDisabled) !==
+        JSON.stringify([true, false]) ||
+      primaryProjects.unavailableProject.hasDisclosure ||
+      !primaryProjects.unavailableProject.hasDisclosureSpacer ||
+      !primaryProjects.unavailableProject.unavailable
+    ) {
+      throw new Error(
+        `PrimarySidebar empty Project navigation is incorrect: ${JSON.stringify(primaryProjects)}`,
+      );
+    }
+    checkpoint('empty-project-primary-navigation-visible', primaryProjects);
+    const emptyProjectNavigationScreenshot = await screenshot(
+      'empty-project-primary-navigation-visible',
+    );
+
+    const emptyProjectHeader =
+      '.primary-conversation-group[data-group-id="project:content:' +
+      `${EMPTY_WORKSPACE_ID}"] .primary-conversation-group__header`;
+    await hover(`${emptyProjectHeader} .primary-conversation-group__project-link`);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const actions = document.querySelector(${JSON.stringify(
+          `${emptyProjectHeader} > .primary-navigation-row-actions`,
+        )});
+        return actions instanceof HTMLElement && getComputedStyle(actions).opacity === '1';
+      })()`,
+      'Empty Project actions did not appear on hover.',
+    );
+    const emptyProjectHover = await evaluate(`(() => {
+      const header = document.querySelector(${JSON.stringify(emptyProjectHeader)});
+      const actions = header?.querySelector(':scope > .primary-navigation-row-actions');
+      const count = header?.querySelector(':scope > .primary-conversation-group__count');
+      return {
+        actionCount: actions?.querySelectorAll('button').length ?? 0,
+        actionOpacity: actions instanceof HTMLElement ? getComputedStyle(actions).opacity : '',
+        countOpacity: count instanceof HTMLElement ? getComputedStyle(count).opacity : '',
       };
     })()`);
     if (
-      !primaryProjects.catalogProjectPresent ||
-      primaryProjects.conversationGroupCount !== 0 ||
-      primaryProjects.projectGroupCount !== 0
+      emptyProjectHover.actionCount !== 3 ||
+      emptyProjectHover.actionOpacity !== '1' ||
+      emptyProjectHover.countOpacity !== '0'
     ) {
-      throw new Error('PrimarySidebar mirrored a Project without conversations.');
+      throw new Error(
+        `Empty Project hover actions are incorrect: ${JSON.stringify(emptyProjectHover)}`,
+      );
     }
-    checkpoint('empty-project-primary-navigation-absent', primaryProjects);
+    checkpoint('empty-project-hover-actions-visible', emptyProjectHover);
+    const emptyProjectHoverScreenshot = await screenshot('empty-project-hover-actions-visible');
+
+    await evaluate(`(() => {
+      const link = document.querySelector(${JSON.stringify(
+        `${emptyProjectHeader} .primary-conversation-group__project-link`,
+      )});
+      if (!(link instanceof HTMLButtonElement)) {
+        throw new Error('Empty Project link is unavailable for keyboard validation.');
+      }
+      link.focus();
+    })()`);
+    await pressKey('Tab');
+    const emptyProjectKeyboard = await evaluate(`(() => {
+      const header = document.querySelector(${JSON.stringify(emptyProjectHeader)});
+      const actions = header?.querySelector(':scope > .primary-navigation-row-actions');
+      return {
+        actionOpacity: actions instanceof HTMLElement ? getComputedStyle(actions).opacity : '',
+        focusedAction:
+          document.activeElement instanceof HTMLButtonElement && actions?.contains(document.activeElement),
+      };
+    })()`);
+    if (emptyProjectKeyboard.actionOpacity !== '1' || !emptyProjectKeyboard.focusedAction) {
+      throw new Error(
+        `Empty Project keyboard actions are incorrect: ${JSON.stringify(emptyProjectKeyboard)}`,
+      );
+    }
+    checkpoint('empty-project-keyboard-actions-visible', emptyProjectKeyboard);
+    const emptyProjectKeyboardScreenshot = await screenshot(
+      'empty-project-keyboard-actions-visible',
+    );
 
     await clickNavigation(evaluate, 3);
     await waitForSelector(`${ACTIVE_WORKBENCH} .project-management-catalog`);
@@ -690,7 +835,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       `(() => {
         const root = document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog`)});
         return root?.querySelectorAll('.management-surface-row').length === ${String(
-          SCROLL_PROJECT_COUNT - 1,
+          SCROLL_PROJECT_COUNT,
         )} && root.querySelector('.project-management-batch-toolbar') === null;
       })()`,
       'Confirmed Project batch removal did not remove exactly two selected records.',
@@ -707,6 +852,44 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     })()`);
     checkpoint('project-catalog-batch-removed', batchRemoval);
     const batchRemovalScreenshot = await screenshot('project-catalog-batch-removed-minimum');
+
+    await clickNavigation(evaluate, 0);
+    await waitForSelector('.desktop-scene-workbench--agent-only');
+    await scroll('.home-recent-navigation', 0, { deltaY: -2_000 });
+    const lightNarrowEmptyProject = await evaluate(`(() => {
+      const header = document.querySelector(${JSON.stringify(emptyProjectHeader)});
+      const navigation = document.querySelector('.home-recent-navigation');
+      const projectLink = header?.querySelector('.primary-conversation-group__project-link');
+      const count = header?.querySelector('.primary-conversation-group__count');
+      if (!(header instanceof HTMLElement) || !(navigation instanceof HTMLElement) ||
+          !(projectLink instanceof HTMLElement) || !(count instanceof HTMLElement)) return null;
+      const headerRect = header.getBoundingClientRect();
+      const navigationRect = navigation.getBoundingClientRect();
+      const projectLinkRect = projectLink.getBoundingClientRect();
+      const countRect = count.getBoundingClientRect();
+      return {
+        theme: document.documentElement.dataset.nekoTheme,
+        viewportWidth: window.innerWidth,
+        headerWithinNavigation:
+          headerRect.left >= navigationRect.left && headerRect.right <= navigationRect.right,
+        projectClearOfCount: projectLinkRect.right <= countRect.left,
+        count: count.textContent?.trim() ?? '',
+      };
+    })()`);
+    if (
+      !lightNarrowEmptyProject ||
+      lightNarrowEmptyProject.theme !== 'light' ||
+      lightNarrowEmptyProject.viewportWidth > 960 ||
+      !lightNarrowEmptyProject.headerWithinNavigation ||
+      !lightNarrowEmptyProject.projectClearOfCount ||
+      lightNarrowEmptyProject.count !== '0'
+    ) {
+      throw new Error(
+        `Light narrow empty Project is incorrect: ${JSON.stringify(lightNarrowEmptyProject)}`,
+      );
+    }
+    checkpoint('empty-project-light-narrow', lightNarrowEmptyProject);
+    const lightNarrowEmptyProjectScreenshot = await screenshot('empty-project-light-narrow');
 
     await evaluate(`(() => {
       const settings = document.querySelector('.home-navigation-footer__actions button:last-child');
@@ -794,6 +977,50 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       return true;
     })()`);
 
+    await clickNavigation(evaluate, 0);
+    await waitForSelector('.desktop-scene-workbench--agent-only');
+    await scroll('.home-recent-navigation', 0, { deltaY: -2_000 });
+    await hover(`${emptyProjectHeader} .primary-conversation-group__project-link`);
+    await waitForCondition(
+      evaluate,
+      `getComputedStyle(document.querySelector(${JSON.stringify(
+        `${emptyProjectHeader} > .primary-navigation-row-actions`,
+      )})).opacity === '1'`,
+      'Dark narrow empty Project actions did not appear on hover.',
+    );
+    const darkNarrowEmptyProject = await evaluate(`(() => {
+      const header = document.querySelector(${JSON.stringify(emptyProjectHeader)});
+      const actions = header?.querySelector(':scope > .primary-navigation-row-actions');
+      const projectLink = header?.querySelector('.primary-conversation-group__project-link');
+      if (!(header instanceof HTMLElement) || !(actions instanceof HTMLElement) ||
+          !(projectLink instanceof HTMLElement)) return null;
+      const headerRect = header.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      const projectLinkRect = projectLink.getBoundingClientRect();
+      return {
+        theme: document.documentElement.dataset.nekoTheme,
+        viewportWidth: window.innerWidth,
+        actionOpacity: getComputedStyle(actions).opacity,
+        actionsWithinHeader:
+          actionsRect.left >= headerRect.left && actionsRect.right <= headerRect.right,
+        projectClearOfActions: projectLinkRect.right <= actionsRect.left,
+      };
+    })()`);
+    if (
+      !darkNarrowEmptyProject ||
+      darkNarrowEmptyProject.theme !== 'dark' ||
+      darkNarrowEmptyProject.viewportWidth > 960 ||
+      darkNarrowEmptyProject.actionOpacity !== '1' ||
+      !darkNarrowEmptyProject.actionsWithinHeader ||
+      !darkNarrowEmptyProject.projectClearOfActions
+    ) {
+      throw new Error(
+        `Dark narrow empty Project is incorrect: ${JSON.stringify(darkNarrowEmptyProject)}`,
+      );
+    }
+    checkpoint('empty-project-dark-narrow-hover', darkNarrowEmptyProject);
+    const darkNarrowEmptyProjectScreenshot = await screenshot('empty-project-dark-narrow-hover');
+
     await clickNavigation(evaluate, 1);
     await waitForSelector(`${ACTIVE_WORKBENCH} [data-owner-root="asset-management"]`);
     await evaluate(`(() => {
@@ -843,10 +1070,15 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       batchCancellation,
       batchRemoval,
       darkBatchSelection,
+      lightNarrowEmptyProject,
+      darkNarrowEmptyProject,
       screenshots: [
         startupNoticeScreenshot,
         unavailableNavigationScreenshot,
         unavailableGroupActionScreenshot,
+        emptyProjectNavigationScreenshot,
+        emptyProjectHoverScreenshot,
+        emptyProjectKeyboardScreenshot,
         projectScrollStartScreenshot,
         projectScrollEndScreenshot,
         wideBatchSelectionScreenshot,
@@ -854,7 +1086,9 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         compactProjectScreenshot,
         batchSelectionScreenshot,
         batchRemovalScreenshot,
+        lightNarrowEmptyProjectScreenshot,
         darkBatchSelectionScreenshot,
+        darkNarrowEmptyProjectScreenshot,
         catalogScreenshot,
       ],
     };

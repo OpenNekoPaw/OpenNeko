@@ -1470,6 +1470,13 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(activeScene(result.projection).context).not.toHaveProperty('scope.conversationId');
+    expect(result.projection.conversationNavigation.groups).toEqual([
+      expect.objectContaining({
+        kind: 'project',
+        workspaceId: resolution.workspaceId,
+        conversations: [],
+      }),
+    ]);
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
   });
 
@@ -1622,7 +1629,15 @@ describe('DesktopAppHost', () => {
       projection: {
         catalog: { projects: [expect.objectContaining({ projectId: project.projectId })] },
         window: { tabs: [expect.objectContaining({ projectId: project.projectId })] },
-        conversationNavigation: { groups: [] },
+        conversationNavigation: {
+          groups: [
+            expect.objectContaining({
+              kind: 'project',
+              projectId: project.projectId,
+              conversations: [],
+            }),
+          ],
+        },
       },
     });
   });

@@ -721,6 +721,11 @@ code {
   color: var(--neko-desktop-text-subtle);
 }
 
+.primary-conversation-group__collapse-spacer {
+  width: 24px;
+  height: 24px;
+}
+
 .primary-conversation-group__project-link {
   min-height: 30px;
   padding: 0 4px;

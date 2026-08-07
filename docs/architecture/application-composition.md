@@ -141,17 +141,20 @@ Desktop 不得伪造占位业务 UI。
 Host 把项目 catalog 与 owner-qualified Agent conversation catalog 组合成一个 canonical grouped
 navigation projection，PrimarySidebar 只消费该投影，不在 React 中重新 join 或推断。Project header
 是容器入口，conversation child 携带 exact `conversationId + owner`；无 Project 的 Assistant、Character
-和 Room conversation 位于独立 owner group。可选 Project grouping 只改变导航位置，不改变 capability、
-memory、resource grant 或 Scene owner。场景切换、renderer reload 和应用重启不得丢失这些 identity；
-每组默认展示有界 child 并显式展开/收起。sidebar 展开、折叠和宽度修改只更新 Window-owned sidebar aggregate，
-不修改任何 Workspace instance。Workspace 只能由显式 Project identity 或 sender/Window-bound opaque
-directory grant 打开；取消授权保持原 scene，且不得创建 Workspace 或 conversation。
+和 Room conversation 位于独立 owner group。每个 canonical Project catalog 记录都保留一个 Project group；
+零 Conversation 只表示 child 为空，不得让 Project 从侧栏消失、伪造默认 Conversation，或在 Renderer
+从 active/recent identity 临时补组。可选 Project grouping 只改变导航位置，不改变 capability、memory、
+resource grant 或 Scene owner。场景切换、renderer reload 和应用重启不得丢失这些 identity；有 child 的
+组默认展示有界 child 并显式展开/收起。sidebar 展开、折叠和宽度修改只更新 Window-owned sidebar
+aggregate，不修改任何 Workspace instance。Workspace 只能由显式 Project identity 或 sender/Window-bound
+opaque directory grant 打开；取消授权保持原 scene，且不得创建 Workspace 或 conversation。
 
-PrimarySidebar 是 Desktop 唯一用户级 conversation switcher。Agent Webview 在 Desktop dock 中保留
-完整 controller/composer/runtime 能力，但隐藏 package 内部 Tab、新建和 History 导航，防止只切换
-transcript 而不切换完整 owner-qualified Scene。Project header 不恢复 first/active/recent conversation；
-conversation restore 与 delete 都验证完整 owner identity，Character/Room runtime 未组合时返回带
-exact owner kind 的 unavailable。
+PrimarySidebar 是 Desktop 唯一用户级 Project context 与 conversation switcher。Project group 可见性是
+轻量导航 projection，不表示对应 Workspace Root、媒体资源或 Agent runtime 驻留。Agent Webview 在 Desktop
+dock 中保留完整 controller/composer/runtime 能力，但隐藏 package 内部 Tab、新建和 History 导航，防止只
+切换 transcript 而不切换完整 owner-qualified Scene。Project header 不恢复 first/active/recent conversation；
+conversation restore 与 delete 都验证完整 owner identity，Character/Room runtime 未组合时返回带 exact
+owner kind 的 unavailable。
 
 Entry Draft 的 `unbound` scope 不显示强制 owner 卡片。用户未选择 owner 而直接发送时，Host 以 exact
 draft identity 确定性绑定 Assistant 用户区，并在同一事务中创建首次 conversation/session；选择显式

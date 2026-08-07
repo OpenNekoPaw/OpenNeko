@@ -2290,21 +2290,28 @@ function PrimaryRecentNavigation({
                     className="primary-recent-project-row primary-conversation-group__header"
                     data-active={project.projectId === activeProjectId ? 'true' : 'false'}
                   >
-                    <IconButton
-                      className="primary-conversation-group__collapse"
-                      disabled={disabled}
-                      size="xs"
-                      label={
-                        collapsed
-                          ? t('home.expandConversationGroup', { group: project.displayName })
-                          : t('home.collapseConversationGroup', { group: project.displayName })
-                      }
-                      aria-expanded={!collapsed}
-                      icon={
-                        collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />
-                      }
-                      onClick={() => toggleCollapsed(group)}
-                    />
+                    {group.conversations.length > 0 ? (
+                      <IconButton
+                        className="primary-conversation-group__collapse"
+                        disabled={disabled}
+                        size="xs"
+                        label={
+                          collapsed
+                            ? t('home.expandConversationGroup', { group: project.displayName })
+                            : t('home.collapseConversationGroup', { group: project.displayName })
+                        }
+                        aria-expanded={!collapsed}
+                        icon={
+                          collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />
+                        }
+                        onClick={() => toggleCollapsed(group)}
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="primary-conversation-group__collapse-spacer"
+                      />
+                    )}
                     <button
                       type="button"
                       className="home-project-link primary-conversation-group__project-link"

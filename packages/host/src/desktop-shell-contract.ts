@@ -473,7 +473,7 @@ export function projectDesktopConversationNavigation(
   return Object.freeze({
     groups: Object.freeze(
       [
-        ...[...projectGroups.values()].filter((group) => group.conversations.length > 0),
+        ...projectGroups.values(),
         ...unavailableWorkspaceGroups.values(),
         ...standaloneGroups.values(),
       ].map((group) =>

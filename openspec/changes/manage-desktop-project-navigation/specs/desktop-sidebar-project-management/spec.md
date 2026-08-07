@@ -105,3 +105,32 @@ An unavailable Workspace conversation group SHALL expose an icon-only group clea
 - **WHEN** a caller submits the former single `navigation` object instead of the required non-empty `navigations` array
 - **THEN** strict contract decoding rejects the request
 - **AND** no compatibility parser, fallback or deletion runs
+
+### Requirement: Sidebar retains Project navigation without Conversations
+
+The Desktop PrimarySidebar SHALL retain one Project group for every Project in the canonical Project catalog, including Projects with no grouped Conversations. An empty Project group SHALL preserve exact Project navigation and creation actions without fabricating a Conversation, retaining a Workspace runtime, or deriving visibility from an active or recent identity in Renderer.
+
+#### Scenario: Project has no Conversations
+
+- **WHEN** the canonical Project catalog contains a Project and Agent Home contains no Conversation grouped under it
+- **THEN** grouped navigation includes that exact Project with `conversations: []`
+- **AND** the sidebar shows its Project entry and zero Conversation count without an expand or collapse control
+- **AND** opening the Project and creating its first Conversation remain available while Conversation cleanup is disabled
+
+#### Scenario: User deletes every Project Conversation
+
+- **WHEN** the canonical Project conversation cleanup completes and the Project remains registered
+- **THEN** the refreshed sidebar retains the Project group with no Conversation rows
+- **AND** neither Project registration nor the current Project Scene is removed as a side effect
+
+#### Scenario: Empty Project is unavailable
+
+- **WHEN** a Project catalog record is unavailable and has no Conversations
+- **THEN** the sidebar retains its Project group with the exact diagnostic
+- **AND** opening remains disabled while explicit Project management and removal remain available
+
+#### Scenario: Project is explicitly removed
+
+- **WHEN** the user removes a Project from the canonical Project catalog
+- **THEN** its Project group is absent from the next grouped navigation projection
+- **AND** any retained Workspace Conversations remain isolated in the existing unavailable Workspace group rather than being deleted or projected as that Project

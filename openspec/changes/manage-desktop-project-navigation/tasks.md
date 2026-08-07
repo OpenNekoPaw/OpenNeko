@@ -26,3 +26,15 @@
 - [x] 5.1 Change the canonical Conversation delete payload to a strict non-empty identity array, update all producer/consumer tests, and prove the former singular payload is rejected without fallback.
 - [x] 5.2 Add unavailable Workspace group hover/focus and context-menu cleanup using the exact projected identities, and hide trailing status markers while row actions are visible.
 - [x] 5.3 Run focused contracts, Renderer, Main, typecheck, lint, strict OpenSpec and isolated Electron checks for dense unavailable groups and non-overlapping icons.
+
+## 6. Empty Project Navigation
+
+- [x] 6.1 Update Host, Main integration and Renderer regression tests to require catalog Projects with zero Conversations to remain visible after initial projection and Project conversation cleanup.
+- [x] 6.2 Retain empty Project groups in the canonical Host projection and render them without a meaningless disclosure control, while preserving exact open, new Conversation, management and removal actions.
+- [x] 6.3 Update the isolated Desktop catalog scenario to verify empty available and unavailable Project presentation, zero-count actions, bounded dense navigation and post-cleanup retention.
+
+## 7. Empty Project Validation And Delivery
+
+- [x] 7.1 Update stable architecture documentation and run focused Host, Main and Renderer tests, affected typechecks, lint/format, strict OpenSpec validation and debt checks.
+- [x] 7.2 Validate empty Project default, hover, keyboard-focus, unavailable, dense, narrow and dark/light states in the real Electron Desktop and directly inspect every required screenshot.
+- [x] 7.3 Complete the Neko quality review and confirm Project visibility remains a lightweight projection rather than a retained Root, runtime or cross-domain open-instance catalog.

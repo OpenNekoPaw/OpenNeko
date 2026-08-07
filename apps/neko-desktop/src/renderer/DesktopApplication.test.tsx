@@ -815,6 +815,76 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => root.unmount());
   });
 
+  it('retains empty Projects as exact Workspace navigation without a disclosure control', async () => {
+    const base = createProjection();
+    const project = {
+      projectId: 'content:empty-workspace',
+      workspaceId: 'empty-workspace',
+      profile: 'content' as const,
+      displayName: 'Empty project',
+      createdAt: '2026-08-07T00:00:00.000Z',
+      updatedAt: '2026-08-07T00:00:00.000Z',
+    };
+    const catalog = { projects: [project] };
+    const agentHome = {
+      conversations: [],
+      attention: { needsInput: 0, needsReview: 0, running: 0 },
+    } as const;
+    const projection: DesktopShellProjection = {
+      ...base,
+      catalog,
+      agentHome,
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    };
+    const transition = vi.fn(async () => ({
+      status: 'transitioned' as const,
+      requestId: 'empty-project-transition',
+      scene: activeScene(projection),
+    }));
+    installBridge({ projection, transition });
+
+    const { container, root } = await renderApplication();
+    const group = container.querySelector<HTMLElement>(
+      '.primary-conversation-group[data-group-kind="project"]',
+    );
+    const projectButton = group?.querySelector<HTMLButtonElement>('.home-project-link');
+    const newConversationButton = group?.querySelector<HTMLButtonElement>(
+      'button[aria-label="New conversation in Empty project"]',
+    );
+    const cleanupButton = group?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete Workspace conversations for Empty project"]',
+    );
+    if (!group || !projectButton || !newConversationButton || !cleanupButton) {
+      throw new Error('Desktop fixture requires empty Project navigation actions.');
+    }
+
+    expect(projectButton.textContent).toContain(project.displayName);
+    expect(group.querySelector('.primary-conversation-group__count')?.textContent).toBe('0');
+    expect(group.querySelector('.primary-recent-conversation-row')).toBeNull();
+    expect(group.querySelector('.primary-conversation-group__collapse')).toBeNull();
+    expect(group.querySelector('.primary-conversation-group__collapse-spacer')).not.toBeNull();
+    expect(cleanupButton.disabled).toBe(true);
+
+    await act(async () => projectButton.click());
+    await waitFor(() => transition.mock.calls.length === 1);
+    await act(async () => newConversationButton.click());
+    await waitFor(() => transition.mock.calls.length === 2);
+    expect(transition).toHaveBeenNthCalledWith(
+      1,
+      projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      activeScene(projection).sceneId,
+    );
+    expect(transition).toHaveBeenNthCalledWith(
+      2,
+      projection.window.windowId,
+      { kind: 'open-project-workspace', projectId: project.projectId },
+      activeScene(projection).sceneId,
+    );
+
+    await act(async () => root.unmount());
+  });
+
   it('routes recent Project and conversation actions with their exact projection identities', async () => {
     const base = createProjection();
     const project = {

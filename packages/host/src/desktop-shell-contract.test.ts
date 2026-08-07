@@ -77,13 +77,21 @@ describe('Desktop Shell contract', () => {
     });
   });
 
-  it('omits Projects without conversations from grouped navigation', () => {
+  it('retains Projects without conversations in grouped navigation', () => {
     expect(
       projectDesktopConversationNavigation(validProjection().catalog, {
         conversations: [],
         attention: { needsInput: 0, needsReview: 0, running: 0 },
       }).groups,
-    ).toEqual([]);
+    ).toEqual([
+      {
+        kind: 'project',
+        projectId: 'content:workspace-1',
+        workspaceId: 'workspace-1',
+        displayName: 'Fixture',
+        conversations: [],
+      },
+    ]);
   });
 
   it('isolates unavailable Workspace and missing presentation associations by owner', () => {
@@ -509,7 +517,17 @@ function validProjection() {
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
-    conversationNavigation: { groups: [] },
+    conversationNavigation: {
+      groups: [
+        {
+          kind: 'project' as const,
+          projectId: 'content:workspace-1',
+          workspaceId: 'workspace-1',
+          displayName: 'Fixture',
+          conversations: [],
+        },
+      ],
+    },
     domains: [
       {
         surface: 'agent' as const,

@@ -14,6 +14,7 @@ PrimarySidebar 已消费 `@neko/host/desktop-shell-contract` 生成的 owner-qua
 - 把实时 `running`、`needs-input`、`needs-review` 显示为条目右侧紧凑、可访问的状态图标。
 - 不可用状态只保留警告图标；行内项目与会话操作仅在 hover/focus 时显示，降低常驻视觉噪音。
 - 保持项目、会话、后台 Agent runtime 与当前 React Root 的所有权隔离。
+- Project 可见性由 canonical Project catalog 决定，不再依赖是否已经创建 Agent Conversation。
 
 **Non-Goals:**
 
@@ -21,6 +22,7 @@ PrimarySidebar 已消费 `@neko/host/desktop-shell-contract` 生成的 owner-qua
 - 不在 Renderer 推断 provider、turn、tool 或后台任务状态，也不显示历史完成状态。
 - 不新增 Project detail Scene、第二套命令 router 或新的 Desktop IPC。
 - 不改变项目移除、会话删除、不可用数据隔离和首次提交创建会话的既有业务语义。
+- 不新增跨领域“已打开项目”总表、最近项目 authority、隐藏 React Root 或 Project/Conversation 联合生命周期。
 
 ## Decisions
 
@@ -58,6 +60,14 @@ Renderer 对 `attention !== none` 显示带语义颜色的 trailing icon。`runn
 
 状态和操作共享 trailing 位置时，row hover/focus 先隐藏 `.primary-navigation-state`，再显示 action layer；退出交互后状态恢复。这样保持行宽稳定，同时避免删除图标与告警/执行图标视觉重叠。
 
+### 6. Project group 可见性独立于 Conversation 数量
+
+`projectDesktopConversationNavigation()` 继续以 Project catalog 和 Agent Home projection 为唯一输入，并为 catalog 中每个 Project 生成一个 group。零会话 Project 保留 `conversations: []`，Renderer 直接消费该 canonical group；不得在 Renderer 从 active tab、recent identity 或 mounted Workspace Root 临时补组。
+
+空 Project group 仍提供打开项目、新建会话、项目管理和移除项目操作；Workspace 会话清理保持 disabled，因为没有可提交的 Conversation identity。空组不渲染无意义的展开/折叠按钮，也不伪造“默认会话”或 empty Conversation record。Project group 出现在侧栏只表示轻量导航投影，不代表 Workspace Root、媒体 runtime 或 Agent runtime 驻留。
+
+Project 从 catalog 显式移除后，其 Project group 才消失。若对应 Workspace Conversation 仍存在，则继续由既有 unavailable Workspace group fail-visible 投影，不能回退为 Project group或自动删除。
+
 ## Risks / Trade-offs
 
 - [图标语义可能不够清晰] → 每个状态图标保留本地化 Tooltip、title 和可访问名称；在小窗口和暗色主题做真实 Electron 检查。
@@ -66,6 +76,7 @@ Renderer 对 `attention !== none` 显示带语义颜色的 trailing icon。`runn
 - [“项目管理”不能自动聚焦某一行] → 当前 Project Management Scene 是完整 catalog，菜单明确命名为通用项目管理入口；不为单一入口扩大 Scene contract。
 - [运行完成后状态标签消失可能被误解] → 本变更只声明当前执行/attention 状态；完整历史终态继续由 conversation transcript 拥有。
 - [批量清理中途发生存储错误] → Main 先验证全部 identity，删除阶段错误保持 fail-visible 并刷新 authoritative projection；不把部分完成伪装成整体成功。
+- [Project catalog 较大时侧栏项目增多] → 继续使用既有有界侧栏滚动和项目组折叠；本次不建立 recent/open registry。未来若需要最近或固定项目，必须由明确的轻量 presentation owner 投影，不能再次用 Conversation 数量推断可见性。
 
 ## Migration Plan
 
