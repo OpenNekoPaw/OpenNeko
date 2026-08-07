@@ -559,7 +559,6 @@ function DesktopSceneWorkbench({
         projection,
         workbenchInstanceId: activeWorkbench.workbenchInstanceId,
         interaction: scene.slots.interaction,
-        onSelectProject: actions.onSelectProject,
         onChooseWorkspace: actions.onChooseWorkspace,
         workspaceSelectionDisabled: pending || !interactive,
       })
@@ -1072,12 +1071,11 @@ function createLaunchAgentPresentation(
     : createAgentDraftPresentation(scope.draftId, authorityScope);
 }
 
-export function createDesktopAgentSurfaceProps(input: {
+function createDesktopAgentSurfaceProps(input: {
   readonly projection: DesktopShellProjection;
   readonly workbenchInstanceId: string;
   readonly project?: DesktopProjectCatalogItem;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
-  readonly onSelectProject?: (projectId: string) => void;
   readonly onChooseWorkspace?: () => void;
   readonly workspaceSelectionDisabled?: boolean;
 }): DesktopAgentSurfaceProps | undefined {
@@ -1116,8 +1114,8 @@ export function createDesktopAgentSurfaceProps(input: {
       composerWorkspace: { kind: 'workspace', label: project.displayName },
     };
   }
-  if (!input.onSelectProject || !input.onChooseWorkspace) {
-    throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Project opener.`);
+  if (!input.onChooseWorkspace) {
+    throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace chooser.`);
   }
   return {
     binding: 'launch',
@@ -1127,13 +1125,7 @@ export function createDesktopAgentSurfaceProps(input: {
     agentPresentation: createLaunchAgentPresentation(scope),
     composerWorkspace: {
       kind: 'assistant',
-      projects: input.projection.catalog.projects.map((project) => ({
-        projectId: project.projectId,
-        label: project.displayName,
-        ...(project.unavailable ? { disabled: true, diagnostic: project.unavailable.message } : {}),
-      })),
-      onSelectProject: input.onSelectProject,
-      onChooseDirectory: input.onChooseWorkspace,
+      onChoose: input.onChooseWorkspace,
       ...(input.workspaceSelectionDisabled === undefined
         ? {}
         : { disabled: input.workspaceSelectionDisabled }),

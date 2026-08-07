@@ -212,29 +212,10 @@ async function inspectEntryDraft(evaluate) {
     if (projection.agentHome.conversations.length !== 0) {
       throw new Error('Isolated visible provider fixture unexpectedly restored an existing conversation.');
     }
-    const toolbar = document.querySelector('.agent-composer-toolbar');
-    const shortcutVisible = [...(toolbar?.querySelectorAll('.agent-composer-tool-button') ?? [])]
-      .some((button) => ['/', '$'].includes(button.textContent?.trim() ?? ''));
-    const presentation = document.querySelector('.agent-composer-rail')
-      ?.getAttribute('data-composer-presentation');
-    if (
-      presentation !== 'desktop-entry' ||
-      !document.querySelector('.agent-model-config-trigger') ||
-      !document.querySelector('.agent-composer-project-trigger') ||
-      document.querySelector('.agent-control-chip-mode') ||
-      document.querySelector('.agent-execution-mode-trigger') ||
-      shortcutVisible ||
-      textarea.placeholder.includes('/') ||
-      textarea.placeholder.includes('$')
-    ) {
-      throw new Error('Visible provider scenario Entry Draft is not Agent-only.');
-    }
     return {
       draftId: context.scope.draftId,
       conversationCount: projection.agentHome.conversations.length,
       composerFocused: document.activeElement === textarea,
-      presentation,
-      agentOnly: true,
     };
   })()`);
 }

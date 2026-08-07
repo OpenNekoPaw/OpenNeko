@@ -541,10 +541,6 @@ export function ConversationController({
     [sessionStateByConversation, visibleConversationId],
   );
   const activeSettings = settings;
-  const isDesktopEntryPresentation = emptyStatePresentation === 'desktop-dock';
-  const effectiveEntrySessionMode: SessionMode = isDesktopEntryPresentation
-    ? 'agent'
-    : entrySessionMode;
 
   useEffect(() => {
     for (const tab of openTabs) {
@@ -560,13 +556,13 @@ export function ConversationController({
         chatModelOptions: activeSettings.chatModelOptions,
         selectedModel: entrySelectedModel,
         defaultMaxOutputTokens: activeSettings.maxTokens,
-        sessionMode: effectiveEntrySessionMode,
+        sessionMode: entrySessionMode,
         mediaModelSelection: entryMediaModelSelection,
       }),
     [
       activeSettings.chatModelOptions,
       activeSettings.maxTokens,
-      effectiveEntrySessionMode,
+      entrySessionMode,
       entryMediaModelSelection,
       entrySelectedModel,
     ],
@@ -1136,7 +1132,7 @@ export function ConversationController({
             ...input,
             messageText,
             displayMessageText: input?.displayMessageText ?? messageText,
-            sessionMode: input?.sessionMode ?? effectiveEntrySessionMode,
+            sessionMode: input?.sessionMode ?? entrySessionMode,
             ...(contextPayloads.length > 0 ? { contextPayloads: [...contextPayloads] } : {}),
           });
           updateEntryInputValue('');
@@ -1165,7 +1161,7 @@ export function ConversationController({
       agentPresentation,
       entryContextReferences,
       entryInputValue,
-      effectiveEntrySessionMode,
+      entrySessionMode,
       entrySelectedModel,
       handleSendWithoutConversation,
       handleRequestRoleplayItems,
@@ -1516,11 +1512,7 @@ export function ConversationController({
 
       {activeTab === 'chat' ? (
         openTabs.length === 0 ? (
-          <div
-            className={`flex min-h-0 flex-1 flex-col ${
-              isDesktopEntryPresentation ? 'agent-entry-surface' : ''
-            }`}
-          >
+          <div className="flex min-h-0 flex-1 flex-col">
             <EmptyState
               presentation={emptyStatePresentation}
               draftScope={
@@ -1529,11 +1521,13 @@ export function ConversationController({
               selectedAction={entryAction}
               disabled={isForegroundConversationActivationPending}
               onEntryAction={handleEntryAction}
+              skills={skills}
+              onSkillSelect={(skill) => updateEntryInputValue(`$${skill.name} `)}
             />
             <InputAreaProvider
               isBusy={!hasConfigSnapshot}
               modelCatalogStatus={hasConfigSnapshot ? 'ready' : 'loading'}
-              sessionMode={effectiveEntrySessionMode}
+              sessionMode={entrySessionMode}
               onSessionModeChange={handleEntrySessionModeChange}
               selectedModel={entrySelectedModel}
               availableModels={entryModelState.availableModels}
@@ -1595,7 +1589,6 @@ export function ConversationController({
                 entryPromptMenu={entryPromptMenu}
                 onEntryPromptMenuChange={setEntryPromptMenu}
                 onEntryGenerationModeSelect={handleEntryGenerationModeSelect}
-                presentation={isDesktopEntryPresentation ? 'desktop-entry' : 'default'}
               />
             </InputAreaProvider>
           </div>

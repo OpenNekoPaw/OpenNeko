@@ -39,12 +39,8 @@ const translations: Record<string, string> = {
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
   'chat.input.attach': '添加附件',
   'chat.input.attachFile': '添加附件',
-  'chat.input.entryPlaceholder': '描述你想创作或探索的内容...',
-  'chat.input.project.open': '打开项目',
-  'chat.input.project.current': '当前项目：{project}',
-  'chat.input.project.added': '已添加项目',
-  'chat.input.project.empty': '暂无已添加项目',
-  'chat.input.project.systemDirectory': '从系统目录打开...',
+  'chat.input.workspace.label': '工作目录',
+  'chat.input.workspace.choose': '选择工作目录',
   'chat.input.send': '发送',
   'chat.input.queue': '加入队列',
   'chat.input.skills': '技能',
@@ -649,109 +645,24 @@ describe('InputArea composer controls', () => {
       </Harness>,
     );
 
-    const context = screen.getByLabelText('当前项目：OpenNeko');
-    expect(context.className).toContain('agent-composer-project-current');
+    const context = screen.getByLabelText('工作目录');
+    expect(context.className).toContain('agent-composer-workspace');
     expect(context.textContent).toContain('OpenNeko');
     expect(document.querySelector('.agent-composer-shell')?.contains(context)).toBe(true);
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
   });
 
-  it('opens one registered Project or the existing system directory from the composer', () => {
-    const onSelectProject = vi.fn();
-    const onChooseDirectory = vi.fn();
+  it('keeps Assistant Workspace authorization in the package-owned composer', () => {
+    const onChoose = vi.fn();
     render(
-      <Harness
-        composerWorkspace={{
-          kind: 'assistant',
-          projects: [
-            { projectId: 'project-ready', label: 'Ready Project' },
-            {
-              projectId: 'project-unavailable',
-              label: 'Unavailable Project',
-              disabled: true,
-              diagnostic: 'Project metadata is invalid.',
-            },
-          ],
-          onSelectProject,
-          onChooseDirectory,
-        }}
-      >
+      <Harness composerWorkspace={{ kind: 'assistant', onChoose }}>
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
-    expect(screen.getByText('已添加项目')).toBeTruthy();
-    expect(screen.getByText('Unavailable Project').closest('button')?.disabled).toBe(true);
-    expect(screen.getByText('Project metadata is invalid.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '选择工作目录' }));
 
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Ready Project' }));
-    expect(onSelectProject).toHaveBeenCalledWith('project-ready');
-    expect(screen.queryByRole('menu')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '从系统目录打开...' }));
-
-    expect(onChooseDirectory).toHaveBeenCalledOnce();
-    expect(onSelectProject).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('menu')).toBeNull();
-  });
-
-  it('uses the Agent-only Desktop entry presentation', () => {
-    const onSend = vi.fn();
-    render(
-      <Harness
-        sessionMode="image"
-        availableMediaModels={allMediaModels}
-        composerWorkspace={{
-          kind: 'assistant',
-          projects: [],
-          onSelectProject: vi.fn(),
-          onChooseDirectory: vi.fn(),
-        }}
-      >
-        <InputArea
-          presentation="desktop-entry"
-          inputValue="Create a character arc"
-          isThinking={false}
-          onInputChange={vi.fn()}
-          onSend={onSend}
-        />
-      </Harness>,
-    );
-
-    expect(screen.getByPlaceholderText('描述你想创作或探索的内容...')).toBeTruthy();
-    expect(screen.getByTitle('添加附件')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '配置模型' }).textContent).toContain('gpt-5.5');
-    expect(screen.getByRole('button', { name: '打开项目' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '图片' })).toBeNull();
-    expect(screen.queryByTitle('命令')).toBeNull();
-    expect(screen.queryByTitle('技能')).toBeNull();
-    expect(screen.queryByRole('button', { name: '审批' })).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
-    const dialog = screen.getByRole('dialog', { name: '创作配置' });
-    expect(within(dialog).queryByRole('tablist')).toBeNull();
-    expect(within(dialog).getByText('gpt-5.5')).toBeTruthy();
-    expect(within(dialog).queryByText('图片')).toBeNull();
-    expect(within(dialog).queryByText('视频')).toBeNull();
-    expect(within(dialog).queryByText('音频')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '配置模型' }));
-
-    fireEvent.click(screen.getByTitle('发送'));
-    expect(onSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        messageText: 'Create a character arc',
-        sessionMode: 'agent',
-        agentModels: {
-          primary: {
-            providerId: 'openai',
-            modelId: 'gpt-5.5',
-            category: 'llm',
-          },
-        },
-      }),
-    );
+    expect(onChoose).toHaveBeenCalledOnce();
   });
 
   it('sends the primary Agent model without composer LLM parameters', () => {

@@ -391,7 +391,6 @@ vi.mock('./ChatView/InputArea', async () => {
       entryPromptMenu?: 'generate-assets' | 'roleplay' | null;
       onEntryPromptMenuChange?: (menu: 'generate-assets' | 'roleplay' | null) => void;
       onEntryGenerationModeSelect?: (mode: 'image' | 'video' | 'audio') => void;
-      presentation?: 'default' | 'desktop-entry';
     }) => {
       const {
         isBusy,
@@ -402,14 +401,9 @@ vi.mock('./ChatView/InputArea', async () => {
         contextChips,
         onAddContextChip,
         onRemoveContextChip,
-        sessionMode,
       } = useInputAreaContext();
       return (
-        <div
-          data-testid="entry-composer"
-          data-composer-presentation={props.presentation}
-          data-session-mode={sessionMode}
-        >
+        <div>
           <span data-testid="entry-selected-model">{selectedModel}</span>
           <span data-testid="entry-config-state">{`${modelCatalogStatus}:${String(isBusy)}`}</span>
           <span data-testid="entry-media-models">
@@ -497,11 +491,6 @@ describe('ConversationController entry state', () => {
     expect(screen.queryByTestId('header')).toBeNull();
     expect(screen.getByText('Workspace is ready')).toBeTruthy();
     expect(screen.getByRole('textbox')).toBeTruthy();
-    expect(document.querySelector('.agent-entry-surface')).toBeTruthy();
-    expect(screen.getByTestId('entry-composer').getAttribute('data-composer-presentation')).toBe(
-      'desktop-entry',
-    );
-    expect(screen.getByTestId('entry-composer').getAttribute('data-session-mode')).toBe('agent');
     expect(screen.getByTestId('entry-config-state').textContent).toBe('ready:false');
     expect(hostMocks.getConversations).not.toHaveBeenCalled();
     expect(hostMocks.getActiveConversation).not.toHaveBeenCalled();
@@ -529,7 +518,8 @@ describe('ConversationController entry state', () => {
         }),
       );
     });
-    expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '@hero' } });
     expect(hostMocks.searchProjectFiles).toHaveBeenCalledWith('hero', undefined, {
@@ -737,7 +727,7 @@ describe('ConversationController entry state', () => {
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
-  it('does not expose Desktop Skill shortcuts in the entry presentation', () => {
+  it('prefills an explicit Desktop Skill invocation without sending it', () => {
     render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
 
     act(() => {
@@ -760,8 +750,9 @@ describe('ConversationController entry state', () => {
       );
     });
 
-    expect(screen.queryByRole('button', { name: 'storyboard' })).toBeNull();
-    expect(screen.getByRole('textbox')).toHaveProperty('value', '');
+    fireEvent.click(screen.getByRole('button', { name: 'storyboard' }));
+
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '$storyboard ');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
   });
 
