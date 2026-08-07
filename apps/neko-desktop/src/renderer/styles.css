@@ -1688,7 +1688,7 @@ code {
   border: 1px solid var(--neko-desktop-border);
   border-radius: var(--neko-desktop-radius-frame);
   background: var(--neko-desktop-main);
-  box-shadow: var(--neko-desktop-shadow-surface);
+  box-shadow: none;
   isolation: isolate;
 }
 
@@ -1725,7 +1725,7 @@ code {
   border: 1px solid var(--neko-desktop-border);
   border-radius: var(--neko-desktop-radius-frame);
   background: var(--neko-desktop-main);
-  box-shadow: var(--neko-desktop-shadow-surface);
+  box-shadow: none;
 }
 
 .project-workspace
@@ -1763,6 +1763,10 @@ code {
     0;
 }
 
+.desktop-scene-workbench--agent-only > .neko-controlled-workbench-interaction {
+  margin: 8px 8px 8px 0;
+}
+
 .desktop-workbench-slot-target {
   width: 100%;
   height: 100%;
@@ -1798,7 +1802,7 @@ code {
   border: 1px solid var(--neko-desktop-border);
   border-radius: var(--neko-desktop-radius-panel);
   background: var(--neko-desktop-surface);
-  box-shadow: var(--neko-desktop-shadow-surface);
+  box-shadow: none;
 }
 
 .project-workspace[data-left-presentation='docked'] .neko-controlled-workbench-timeline {
@@ -2059,7 +2063,7 @@ code {
   border: 1px solid var(--neko-desktop-border);
   border-radius: var(--neko-desktop-radius-frame);
   background: var(--neko-desktop-surface);
-  box-shadow: var(--neko-desktop-shadow-surface);
+  box-shadow: none;
 }
 
 .project-resource-dock {
@@ -2546,6 +2550,10 @@ code {
   .project-workspace .neko-controlled-workbench-main {
     margin: 4px;
     border-radius: var(--neko-desktop-radius-panel);
+  }
+
+  .desktop-scene-workbench--agent-only > .neko-controlled-workbench-interaction {
+    margin: 4px;
   }
 
   .project-workspace .neko-controlled-workbench-timeline {

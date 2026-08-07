@@ -153,13 +153,38 @@ describe('Desktop renderer styles', () => {
     expect(globalLibraryRootRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
   });
 
+  it('keeps structural Workbench frames neutral at their top and bottom edges', () => {
+    const mainRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-main\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const independentMainRule = styles.match(
+      /> \.neko-controlled-workbench-main__secondary\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const timelineRule = styles.match(
+      /\.project-workspace \.neko-controlled-workbench-timeline\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const dockPanelRule = styles.match(/\.project-dock-panel\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    for (const rule of [mainRule, independentMainRule, timelineRule, dockPanelRule]) {
+      expect(rule?.groups?.body).toMatch(/box-shadow\s*:\s*none/u);
+      expect(rule?.groups?.body).not.toMatch(/--neko-desktop-shadow-surface/u);
+    }
+  });
+
   it('expands Agent-only interaction into the business area and collapses both docks', () => {
     const shellRule = styles.match(
       /\.desktop-scene-workbench--agent-only\.neko-controlled-workbench-shell\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
+    const interactionRule = styles.match(
+      /\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
 
     expect(shellRule?.groups?.body).toMatch(
       /grid-template-columns\s*:[\s\S]*?var\(--neko-controlled-primary-width\)[\s\S]*?0[\s\S]*?minmax\(420px, 1fr\)[\s\S]*?0/u,
+    );
+    expect(interactionRule?.groups?.body).toMatch(/margin\s*:\s*8px 8px 8px 0/u);
+    expect(styles).toMatch(
+      /@media \(max-width: 720px\)[\s\S]*?\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{[\s\S]*?margin\s*:\s*4px/u,
     );
   });
 
