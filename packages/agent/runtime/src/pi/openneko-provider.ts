@@ -6,6 +6,8 @@ import {
   type Model,
   type MutableModels,
   type Provider,
+  type ProviderStreams,
+  type StreamOptions,
 } from '@earendil-works/pi-ai';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
 import { googleGenerativeAIApi } from '@earendil-works/pi-ai/api/google-generative-ai.lazy';
@@ -71,6 +73,7 @@ export function projectOpenNekoPiProvider(
   config: OpenNekoPiProviderConfig,
 ): OpenNekoPiProviderProjection {
   validateConfig(config);
+  const openAICompletions = openAICompletionsApi();
   const models = Object.freeze(
     config.models.map((model) =>
       Object.freeze({
@@ -123,13 +126,53 @@ export function projectOpenNekoPiProvider(
       },
     },
     api: {
-      'openai-completions': openAICompletionsApi(),
+      'openai-completions': config.requiresApiKey
+        ? openAICompletions
+        : keylessOpenAICompletionsApi(openAICompletions),
       'openai-responses': openAIResponsesApi(),
       'anthropic-messages': anthropicMessagesApi(),
       'google-generative-ai': googleGenerativeAIApi(),
     },
   });
   return Object.freeze({ provider, models });
+}
+
+function keylessOpenAICompletionsApi(api: ProviderStreams): ProviderStreams {
+  return {
+    stream: (model, context, options) =>
+      api.stream(model, context, keylessOpenAITransportOptions(options)),
+    streamSimple: (model, context, options) =>
+      api.streamSimple(model, context, keylessOpenAITransportOptions(options)),
+  };
+}
+
+function keylessOpenAITransportOptions<T extends StreamOptions>(options: T | undefined) {
+  if (
+    options?.apiKey ||
+    hasNonEmptyHeader(options?.headers, 'authorization') ||
+    hasNonEmptyHeader(options?.headers, 'cf-aig-authorization')
+  ) {
+    return options;
+  }
+
+  // pi-ai's OpenAI transport requires a constructor key. The null header keeps
+  // this transport-only sentinel out of the actual keyless local request.
+  return {
+    ...options,
+    apiKey: 'openneko-keyless-transport',
+    headers: {
+      ...options?.headers,
+      authorization: null,
+    },
+  };
+}
+
+function hasNonEmptyHeader(headers: StreamOptions['headers'], expectedName: string): boolean {
+  if (!headers) return false;
+  return Object.entries(headers).some(
+    ([name, value]) =>
+      name.toLowerCase() === expectedName && value !== null && value.trim().length > 0,
+  );
 }
 
 function projectModelAuth(
