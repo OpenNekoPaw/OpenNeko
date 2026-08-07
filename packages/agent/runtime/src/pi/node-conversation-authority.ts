@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
 import {
@@ -141,6 +142,7 @@ export interface AppendPiCompactionInput {
 }
 
 const DEFAULT_LEASE_TTL_MS = 30_000;
+const MAX_LEASE_TOKEN_EXCLUSIVE = 2 ** 48;
 
 export class NodePiConversationAuthority {
   private readonly durability = new Map<string, PiTurnDurabilityState>();
@@ -201,24 +203,24 @@ export class NodePiConversationAuthority {
       );
       let leaseId: string;
       if (current === undefined) {
-        leaseId = uuidv7();
+        leaseId = createLeaseId();
         this.database
           .prepare(
-            'INSERT INTO pi_execution_leases (conversation_id, holder_id, lease_id, expires_at) VALUES (?, ?, ?, ?)',
+            'INSERT INTO pi_execution_leases (conversation_id, holder_id, epoch, expires_at) VALUES (?, ?, ?, ?)',
           )
-          .run(conversationId, this.hostId, leaseId, expiresAt);
+          .run(conversationId, this.hostId, requireLeaseToken(leaseId), expiresAt);
       } else if (current.holderId === this.hostId && current.expiresAt > now) {
         leaseId = current.leaseId;
         this.database
           .prepare('UPDATE pi_execution_leases SET expires_at = ? WHERE conversation_id = ?')
           .run(expiresAt, conversationId);
       } else if (current.expiresAt <= now || options?.takeover === true) {
-        leaseId = uuidv7();
+        leaseId = createLeaseId(current.leaseId);
         this.database
           .prepare(
-            'UPDATE pi_execution_leases SET holder_id = ?, lease_id = ?, expires_at = ? WHERE conversation_id = ?',
+            'UPDATE pi_execution_leases SET holder_id = ?, epoch = ?, expires_at = ? WHERE conversation_id = ?',
           )
-          .run(this.hostId, leaseId, expiresAt, conversationId);
+          .run(this.hostId, requireLeaseToken(leaseId), expiresAt, conversationId);
       } else {
         throw new PiConversationAuthorityError(
           'lease-held',
@@ -267,9 +269,9 @@ export class NodePiConversationAuthority {
       this.assertLease(lease, this.now(), false);
       this.database
         .prepare(
-          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND lease_id = ?',
+          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
         )
-        .run(lease.conversationId, lease.holderId, lease.leaseId);
+        .run(lease.conversationId, lease.holderId, requireLeaseToken(lease.leaseId));
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -475,9 +477,9 @@ export class NodePiConversationAuthority {
         .run(conversationId);
       this.database
         .prepare(
-          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND lease_id = ?',
+          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
         )
-        .run(conversationId, lease.holderId, lease.leaseId);
+        .run(conversationId, lease.holderId, requireLeaseToken(lease.leaseId));
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.exec('ROLLBACK');
@@ -618,7 +620,7 @@ export class NodePiConversationAuthority {
           this.database
             .prepare(
               `INSERT INTO pi_turn_checkpoints
-                (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_lease_id, terminal_state, committed_at)
+                (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_epoch, terminal_state, committed_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             )
             .run(
@@ -627,7 +629,7 @@ export class NodePiConversationAuthority {
               record.branchId,
               record.piSessionId,
               record.leafId,
-              record.writerLeaseId,
+              requireLeaseToken(record.writerLeaseId),
               record.terminalState,
               record.committedAt,
             );
@@ -1103,7 +1105,7 @@ function readLeaseRow(value: unknown): ConversationExecutionLease | undefined {
   return Object.freeze({
     conversationId: requireString(row, 'conversation_id'),
     holderId: requireString(row, 'holder_id'),
-    leaseId: requireString(row, 'lease_id'),
+    leaseId: String(requireInteger(row, 'epoch')),
     expiresAt: requireInteger(row, 'expires_at'),
   });
 }
@@ -1125,10 +1127,29 @@ function readCheckpointRow(value: unknown): PiTurnCheckpointRecord | undefined {
     branchId: requireString(row, 'branch_id'),
     piSessionId: requireString(row, 'pi_session_id'),
     leafId: optionalString(row, 'leaf_id') ?? null,
-    writerLeaseId: requireString(row, 'writer_lease_id'),
+    writerLeaseId: String(requireInteger(row, 'writer_epoch')),
     terminalState,
     committedAt: requireString(row, 'committed_at'),
   });
+}
+
+function createLeaseId(replacedLeaseId?: string): string {
+  let leaseId: string;
+  do {
+    leaseId = String(randomInt(1, MAX_LEASE_TOKEN_EXCLUSIVE));
+  } while (leaseId === replacedLeaseId);
+  return leaseId;
+}
+
+function requireLeaseToken(leaseId: string): number {
+  const token = Number(leaseId);
+  if (!Number.isSafeInteger(token) || token <= 0 || String(token) !== leaseId) {
+    throw new PiConversationAuthorityError(
+      'invalid-identity',
+      `Conversation writer lease '${leaseId}' is not a canonical identity.`,
+    );
+  }
+  return token;
 }
 
 function requireRow(value: unknown): Readonly<Record<string, unknown>> {

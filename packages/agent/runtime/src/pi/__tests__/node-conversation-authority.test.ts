@@ -321,6 +321,135 @@ describe('NodePiConversationAuthority', () => {
     }
   });
 
+  it('uses the stable lease fields without rewriting sibling conversation records', async () => {
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
+    database.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE pi_conversations (
+        workspace_id TEXT NOT NULL,
+        conversation_id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        active_branch_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE pi_branches (
+        conversation_id TEXT NOT NULL,
+        branch_id TEXT NOT NULL,
+        parent_branch_id TEXT,
+        state TEXT NOT NULL CHECK(state IN ('active', 'historical')),
+        pi_session_id TEXT NOT NULL UNIQUE,
+        pi_session_created_at TEXT NOT NULL,
+        pi_session_cwd TEXT NOT NULL,
+        pi_session_path TEXT NOT NULL,
+        pi_parent_session_path TEXT,
+        pi_metadata_json TEXT,
+        leaf_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(conversation_id, branch_id),
+        FOREIGN KEY(conversation_id) REFERENCES pi_conversations(conversation_id) ON DELETE CASCADE
+      );
+      CREATE TABLE pi_execution_leases (
+        conversation_id TEXT PRIMARY KEY,
+        holder_id TEXT NOT NULL,
+        epoch INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE TABLE pi_turn_checkpoints (
+        conversation_id TEXT NOT NULL,
+        turn_id TEXT NOT NULL,
+        branch_id TEXT NOT NULL,
+        pi_session_id TEXT NOT NULL,
+        leaf_id TEXT,
+        writer_epoch INTEGER NOT NULL,
+        terminal_state TEXT NOT NULL CHECK(terminal_state IN ('completed', 'cancelled', 'failed')),
+        committed_at TEXT NOT NULL,
+        PRIMARY KEY(conversation_id, turn_id),
+        FOREIGN KEY(conversation_id, branch_id) REFERENCES pi_branches(conversation_id, branch_id)
+          ON DELETE CASCADE
+      );
+      INSERT INTO pi_conversations VALUES (
+        'workspace-sibling', 'conversation-sibling', 'Sibling', 'main',
+        '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'
+      );
+      INSERT INTO pi_branches VALUES (
+        'conversation-sibling', 'main', NULL, 'active', 'session-sibling',
+        '2026-08-01T00:00:00.000Z', '/__neko_workspaces/workspace-sibling',
+        '/tmp/sibling.jsonl', NULL, NULL, 'leaf-sibling',
+        '2026-08-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'
+      );
+      INSERT INTO pi_execution_leases VALUES (
+        'conversation-sibling', 'desktop-sibling', 41, 1700000000000
+      );
+      INSERT INTO pi_turn_checkpoints VALUES (
+        'conversation-sibling', 'turn-sibling', 'main', 'session-sibling',
+        'leaf-sibling', 41, 'completed', '2026-08-01T00:00:00.000Z'
+      );
+    `);
+    const siblingBefore = database
+      .prepare(
+        `SELECT c.*, l.holder_id, l.epoch, l.expires_at,
+                t.turn_id, t.writer_epoch, t.terminal_state, t.committed_at
+           FROM pi_conversations c
+           JOIN pi_execution_leases l USING (conversation_id)
+           JOIN pi_turn_checkpoints t USING (conversation_id)
+          WHERE c.conversation_id = ?`,
+      )
+      .get('conversation-sibling');
+    database.close();
+
+    const authority = await createAuthority('desktop-current');
+    const lease = authority.acquireLease('conversation-current');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-current',
+      branchId: 'main',
+    });
+    const checkpoint = await authority.checkpointTurn({
+      lease,
+      conversationId: 'conversation-current',
+      branchId: 'main',
+      turnId: 'turn-current',
+      terminalState: 'completed',
+    });
+
+    expect(checkpoint.writerLeaseId).toBe(lease.leaseId);
+    const unchanged = new sqlite.DatabaseSync(join(root, 'neko.db'), { readOnly: true });
+    try {
+      expect(
+        unchanged
+          .prepare(
+            `SELECT c.*, l.holder_id, l.epoch, l.expires_at,
+                    t.turn_id, t.writer_epoch, t.terminal_state, t.committed_at
+               FROM pi_conversations c
+               JOIN pi_execution_leases l USING (conversation_id)
+               JOIN pi_turn_checkpoints t USING (conversation_id)
+              WHERE c.conversation_id = ?`,
+          )
+          .get('conversation-sibling'),
+      ).toEqual(siblingBefore);
+      expect(
+        unchanged.prepare('PRAGMA table_info(pi_execution_leases)').all().map(readColumnName),
+      ).toEqual(['conversation_id', 'holder_id', 'epoch', 'expires_at']);
+      expect(
+        unchanged.prepare('PRAGMA table_info(pi_turn_checkpoints)').all().map(readColumnName),
+      ).toEqual([
+        'conversation_id',
+        'turn_id',
+        'branch_id',
+        'pi_session_id',
+        'leaf_id',
+        'writer_epoch',
+        'terminal_state',
+        'committed_at',
+      ]);
+    } finally {
+      unchanged.close();
+    }
+  });
+
   it('rejects a Pi conversation table missing a required column', async () => {
     const sqlite = await import('node:sqlite');
     const database = new sqlite.DatabaseSync(join(root, 'neko.db'));
@@ -495,5 +624,18 @@ describe('NodePiConversationAuthority', () => {
     });
     authorities.push(authority);
     return authority;
+  }
+
+  function readColumnName(value: unknown): string {
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      Array.isArray(value) ||
+      !('name' in value) ||
+      typeof value.name !== 'string'
+    ) {
+      throw new TypeError('Expected SQLite column name.');
+    }
+    return value.name;
   }
 });

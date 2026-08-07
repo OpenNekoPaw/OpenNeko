@@ -79,7 +79,7 @@ export function initializePiConversationTables(database: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS pi_execution_leases (
       conversation_id TEXT PRIMARY KEY,
       holder_id TEXT NOT NULL,
-      lease_id TEXT NOT NULL,
+      epoch INTEGER NOT NULL,
       expires_at INTEGER NOT NULL
     );
 
@@ -89,7 +89,7 @@ export function initializePiConversationTables(database: DatabaseSync): void {
       branch_id TEXT NOT NULL,
       pi_session_id TEXT NOT NULL,
       leaf_id TEXT,
-      writer_lease_id TEXT NOT NULL,
+      writer_epoch INTEGER NOT NULL,
       terminal_state TEXT NOT NULL CHECK(terminal_state IN ('completed', 'cancelled', 'failed')),
       committed_at TEXT NOT NULL,
       PRIMARY KEY(conversation_id, turn_id),
