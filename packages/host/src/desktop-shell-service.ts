@@ -1717,7 +1717,11 @@ function projectShellState(
       applicationSidebar: window.applicationSidebar,
     },
     agentHome,
-    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    conversationNavigation: projectDesktopConversationNavigation(
+      catalog,
+      agentHome,
+      state.projects.map((project) => project.projectId),
+    ),
     domains: domainCapabilities,
     stateDiagnostics: [...startupStateDiagnostics, ...readDesktopShellStateDiagnostics(state)],
   };

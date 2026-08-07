@@ -825,7 +825,13 @@ describe('DesktopApplication scene lifecycle', () => {
       createdAt: '2026-08-07T00:00:00.000Z',
       updatedAt: '2026-08-07T00:00:00.000Z',
     };
-    const catalog = { projects: [project] };
+    const catalogOnlyProject = {
+      ...project,
+      projectId: 'content:catalog-only-workspace',
+      workspaceId: 'catalog-only-workspace',
+      displayName: 'Catalog only project',
+    };
+    const catalog = { projects: [project, catalogOnlyProject] };
     const agentHome = {
       conversations: [],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
@@ -834,7 +840,9 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, [
+        project.projectId,
+      ]),
     };
     const transition = vi.fn(async () => ({
       status: 'transitioned' as const,
@@ -859,6 +867,7 @@ describe('DesktopApplication scene lifecycle', () => {
     }
 
     expect(projectButton.textContent).toContain(project.displayName);
+    expect(container.textContent).not.toContain(catalogOnlyProject.displayName);
     expect(group.querySelector('.primary-conversation-group__count')?.textContent).toBe('0');
     expect(group.querySelector('.primary-recent-conversation-row')).toBeNull();
     expect(group.querySelector('.primary-conversation-group__collapse')).toBeNull();
@@ -917,7 +926,7 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     };
     const transition = vi.fn(async (_windowId: string, _intent: unknown, _sceneId: string) => ({
       status: 'transitioned' as const,
@@ -928,7 +937,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const removedProjection: DesktopShellProjection = {
       ...projection,
       catalog: { projects: [] },
-      conversationNavigation: projectDesktopConversationNavigation({ projects: [] }, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation({ projects: [] }, agentHome, []),
     };
     const removeProjects = vi.fn(async () => removedProjection);
     const deleteProjectConversations = vi.fn(async () => projection);
@@ -1063,7 +1072,7 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     };
     const transition = vi.fn(async () => ({
       status: 'transitioned' as const,
@@ -1190,7 +1199,11 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(
+        catalog,
+        agentHome,
+        catalog.projects.map((project) => project.projectId),
+      ),
     };
     const transition = vi.fn(async () => ({
       status: 'transitioned' as const,
@@ -1290,7 +1303,11 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(
+        catalog,
+        agentHome,
+        catalog.projects.map((project) => project.projectId),
+      ),
     };
     const transition = vi.fn(async () => ({
       status: 'transitioned' as const,
@@ -1427,7 +1444,7 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     };
     const transition = vi.fn();
     const deleteConversation = vi.fn(async () => projection);
@@ -1517,7 +1534,7 @@ describe('DesktopApplication scene lifecycle', () => {
       {
         ...base,
         catalog,
-        conversationNavigation: projectDesktopConversationNavigation(catalog, base.agentHome),
+        conversationNavigation: projectDesktopConversationNavigation(catalog, base.agentHome, []),
       },
       projectManagementScene(),
     );
@@ -1576,7 +1593,7 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     };
     const transition = vi.fn(async () => ({
       status: 'transitioned' as const,
@@ -1673,7 +1690,7 @@ describe('DesktopApplication scene lifecycle', () => {
       ...base,
       catalog,
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     };
     installBridge({ projection });
     const { container, root } = await renderApplication();
@@ -1909,7 +1926,7 @@ function createProjection(): DesktopShellProjection {
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome,
-    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     domains: [],
   };
 }

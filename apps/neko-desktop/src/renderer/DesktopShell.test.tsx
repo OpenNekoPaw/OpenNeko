@@ -553,7 +553,11 @@ function baseProjection(): DesktopShellProjection {
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome,
-    conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+    conversationNavigation: projectDesktopConversationNavigation(
+      catalog,
+      agentHome,
+      catalog.projects.map((project) => project.projectId),
+    ),
     domains: [],
   };
 }

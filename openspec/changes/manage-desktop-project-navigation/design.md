@@ -14,7 +14,7 @@ PrimarySidebar 已消费 `@neko/host/desktop-shell-contract` 生成的 owner-qua
 - 把实时 `running`、`needs-input`、`needs-review` 显示为条目右侧紧凑、可访问的状态图标。
 - 不可用状态只保留警告图标；行内项目与会话操作仅在 hover/focus 时显示，降低常驻视觉噪音。
 - 保持项目、会话、后台 Agent runtime 与当前 React Root 的所有权隔离。
-- Project 可见性由 canonical Project catalog 决定，不再依赖是否已经创建 Agent Conversation。
+- Project 可见性由当前 Conversation owner 与既有 Desktop stored Project context 共同投影，不再随最后一条 Conversation 清理而丢失，也不镜像完整 Project catalog。
 
 **Non-Goals:**
 
@@ -22,7 +22,7 @@ PrimarySidebar 已消费 `@neko/host/desktop-shell-contract` 生成的 owner-qua
 - 不在 Renderer 推断 provider、turn、tool 或后台任务状态，也不显示历史完成状态。
 - 不新增 Project detail Scene、第二套命令 router 或新的 Desktop IPC。
 - 不改变项目移除、会话删除、不可用数据隔离和首次提交创建会话的既有业务语义。
-- 不新增跨领域“已打开项目”总表、最近项目 authority、隐藏 React Root 或 Project/Conversation 联合生命周期。
+- 不新增跨领域“已打开项目”总表、第二份最近项目 authority、隐藏 React Root 或 Project/Conversation 联合生命周期。
 
 ## Decisions
 
@@ -60,13 +60,15 @@ Renderer 对 `attention !== none` 显示带语义颜色的 trailing icon。`runn
 
 状态和操作共享 trailing 位置时，row hover/focus 先隐藏 `.primary-navigation-state`，再显示 action layer；退出交互后状态恢复。这样保持行宽稳定，同时避免删除图标与告警/执行图标视觉重叠。
 
-### 6. Project group 可见性独立于 Conversation 数量
+### 6. Recent Project context 独立于 Conversation 清理
 
-`projectDesktopConversationNavigation()` 继续以 Project catalog 和 Agent Home projection 为唯一输入，并为 catalog 中每个 Project 生成一个 group。零会话 Project 保留 `conversations: []`，Renderer 直接消费该 canonical group；不得在 Renderer 从 active tab、recent identity 或 mounted Workspace Root 临时补组。
+完整 Project catalog 与侧栏 recent Project presentation 保持不同职责。`retainedProjects` 继续提供项目管理页的完整注册表；既有 `DesktopShellStoredState.projects` 是已经进入 Desktop Project context 的持久 owner，不新增表、字段或迁移。Host 从该状态投影 exact `recentProjectIds`，`projectDesktopConversationNavigation()` 只为以下 Project 生成 group：当前拥有 Conversation，或存在于 `recentProjectIds`。
 
-空 Project group 仍提供打开项目、新建会话、项目管理和移除项目操作；Workspace 会话清理保持 disabled，因为没有可提交的 Conversation identity。空组不渲染无意义的展开/折叠按钮，也不伪造“默认会话”或 empty Conversation record。Project group 出现在侧栏只表示轻量导航投影，不代表 Workspace Root、媒体 runtime 或 Agent runtime 驻留。
+`recentProjectIds` 属于 grouped navigation 的 canonical presentation contract，仅用于 producer/consumer 精确复算和校验。Renderer 不从 active tab、mounted Workspace Root、Conversation 数量或 catalog 顺序推断 recent Project，也不自行补组。完整 catalog 中从未进入 recent context 且没有 Conversation 的 Project 继续只出现在 Project Management Scene。
 
-Project 从 catalog 显式移除后，其 Project group 才消失。若对应 Workspace Conversation 仍存在，则继续由既有 unavailable Workspace group fail-visible 投影，不能回退为 Project group或自动删除。
+空 recent Project group 仍提供打开项目、新建会话、项目管理和移除项目操作；Workspace 会话清理保持 disabled，因为没有可提交的 Conversation identity。空组不渲染无意义的展开/折叠按钮，也不伪造“默认会话”或 empty Conversation record。Project group 出现在侧栏只表示轻量导航投影，不代表 Workspace Root、媒体 runtime 或 Agent runtime 驻留。
+
+Project 从 catalog 显式移除后，其 recent identity 与 Project group 一并消失。若对应 Workspace Conversation 仍存在，则继续由既有 unavailable Workspace group fail-visible 投影，不能回退为 Project group或自动删除。
 
 ## Risks / Trade-offs
 
@@ -76,7 +78,8 @@ Project 从 catalog 显式移除后，其 Project group 才消失。若对应 Wo
 - [“项目管理”不能自动聚焦某一行] → 当前 Project Management Scene 是完整 catalog，菜单明确命名为通用项目管理入口；不为单一入口扩大 Scene contract。
 - [运行完成后状态标签消失可能被误解] → 本变更只声明当前执行/attention 状态；完整历史终态继续由 conversation transcript 拥有。
 - [批量清理中途发生存储错误] → Main 先验证全部 identity，删除阶段错误保持 fail-visible 并刷新 authoritative projection；不把部分完成伪装成整体成功。
-- [Project catalog 较大时侧栏项目增多] → 继续使用既有有界侧栏滚动和项目组折叠；本次不建立 recent/open registry。未来若需要最近或固定项目，必须由明确的轻量 presentation owner 投影，不能再次用 Conversation 数量推断可见性。
+- [既有 stored Project context 包含打开后尚未提交会话的 Project] → 这是当前“最近打开 Project”产品语义；它与有过 Conversation 的 Project 使用同一 exact context owner，允许创建第一条会话，但不会把完整 catalog 镜像进侧栏。
+- [Project catalog 较大时管理记录增多] → Project Management Scene 继续使用完整 catalog 和既有滚动/批量管理；侧栏只消费 recent context 与 Conversation groups，不建立通用 LRU 或 runtime residency policy。
 
 ## Migration Plan
 

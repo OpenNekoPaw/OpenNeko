@@ -134,7 +134,9 @@ describe('Desktop Workspace grant preload bridge', () => {
     );
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
-    await expect(bridge.workspaceGrants.selectProject('window-1', 'project-1')).resolves.toMatchObject({
+    await expect(
+      bridge.workspaceGrants.selectProject('window-1', 'project-1'),
+    ).resolves.toMatchObject({
       status: 'authorized',
       workspaceId: 'workspace-1',
     });
@@ -168,6 +170,7 @@ function shellProjection() {
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
     conversationNavigation: {
+      recentProjectIds: [],
       groups: [],
     },
     domains: [],

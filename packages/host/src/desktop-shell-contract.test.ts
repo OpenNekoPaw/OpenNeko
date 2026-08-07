@@ -30,10 +30,14 @@ describe('Desktop Shell contract', () => {
       kind: 'assistant',
       assistantSpaceId: 'assistant-space:local-user',
     });
-    const navigation = projectDesktopConversationNavigation(catalog, {
-      conversations: [assistantConversation, workspaceConversation],
-      attention: { needsInput: 0, needsReview: 0, running: 0 },
-    });
+    const navigation = projectDesktopConversationNavigation(
+      catalog,
+      {
+        conversations: [assistantConversation, workspaceConversation],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      },
+      [],
+    );
 
     expect(navigation.groups).toEqual([
       expect.objectContaining({
@@ -59,10 +63,14 @@ describe('Desktop Shell contract', () => {
       groupedProjectId: 'content:workspace-1',
     };
 
-    const navigation = projectDesktopConversationNavigation(catalog, {
-      conversations: [assistantConversation],
-      attention: { needsInput: 0, needsReview: 0, running: 0 },
-    });
+    const navigation = projectDesktopConversationNavigation(
+      catalog,
+      {
+        conversations: [assistantConversation],
+        attention: { needsInput: 0, needsReview: 0, running: 0 },
+      },
+      [],
+    );
 
     expect(navigation.groups[0]).toMatchObject({
       kind: 'project',
@@ -77,21 +85,50 @@ describe('Desktop Shell contract', () => {
     });
   });
 
-  it('retains Projects without conversations in grouped navigation', () => {
+  it('retains recent Projects without conversations but omits catalog-only Projects', () => {
+    const recentProjectId = 'content:workspace-1';
+    const catalogOnlyProject = {
+      ...validProjection().catalog.projects[0]!,
+      projectId: 'content:workspace-2',
+      workspaceId: 'workspace-2',
+      displayName: 'Catalog only',
+    };
     expect(
-      projectDesktopConversationNavigation(validProjection().catalog, {
-        conversations: [],
-        attention: { needsInput: 0, needsReview: 0, running: 0 },
-      }).groups,
-    ).toEqual([
-      {
-        kind: 'project',
-        projectId: 'content:workspace-1',
-        workspaceId: 'workspace-1',
-        displayName: 'Fixture',
-        conversations: [],
-      },
-    ]);
+      projectDesktopConversationNavigation(
+        { projects: [...validProjection().catalog.projects, catalogOnlyProject] },
+        {
+          conversations: [],
+          attention: { needsInput: 0, needsReview: 0, running: 0 },
+        },
+        [recentProjectId],
+      ),
+    ).toEqual({
+      recentProjectIds: [recentProjectId],
+      groups: [
+        {
+          kind: 'project',
+          projectId: recentProjectId,
+          workspaceId: 'workspace-1',
+          displayName: 'Fixture',
+          conversations: [],
+        },
+      ],
+    });
+  });
+
+  it('rejects grouped navigation that does not match its exact recent Project identities', () => {
+    const projection = validProjection();
+    expect(() =>
+      parseDesktopShellProjection({
+        ...projection,
+        conversationNavigation: {
+          ...projection.conversationNavigation,
+          recentProjectIds: [],
+        },
+      }),
+    ).toThrowError(
+      'Desktop Conversation navigation projection does not match Project and Agent authorities.',
+    );
   });
 
   it('isolates unavailable Workspace and missing presentation associations by owner', () => {
@@ -122,6 +159,7 @@ describe('Desktop Shell contract', () => {
           ],
           attention: { needsInput: 0, needsReview: 0, running: 0 },
         },
+        [],
       ).groups,
     ).toEqual([
       expect.objectContaining({
@@ -518,6 +556,7 @@ function validProjection() {
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
     conversationNavigation: {
+      recentProjectIds: ['content:workspace-1'],
       groups: [
         {
           kind: 'project' as const,

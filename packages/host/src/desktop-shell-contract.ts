@@ -193,6 +193,7 @@ export type DesktopConversationNavigationGroup =
     };
 
 export interface DesktopConversationNavigationProjection {
+  readonly recentProjectIds: readonly string[];
   readonly groups: readonly DesktopConversationNavigationGroup[];
 }
 
@@ -378,7 +379,12 @@ export class DesktopShellContractError extends Error {
 export function projectDesktopConversationNavigation(
   catalog: DesktopProjectCatalogProjection,
   agentHome: DesktopAgentHomeProjection,
+  recentProjectIds: readonly string[],
 ): DesktopConversationNavigationProjection {
+  const recentProjectIdSet = new Set(recentProjectIds);
+  if (recentProjectIds.length !== recentProjectIdSet.size) {
+    throw invalidPayload('Desktop recent Project identities must be unique.');
+  }
   const projectGroups = new Map<
     string,
     Extract<DesktopConversationNavigationGroup, { readonly kind: 'project' }>
@@ -394,6 +400,13 @@ export function projectDesktopConversationNavigation(
       },
     ]),
   );
+  for (const projectId of recentProjectIds) {
+    if (!projectGroups.has(projectId)) {
+      throw invalidPayload(
+        `Desktop recent Project '${projectId}' is not present in the Project catalog.`,
+      );
+    }
+  }
   const projectsByWorkspace = new Map<string, DesktopProjectCatalogItem[]>();
   for (const project of catalog.projects) {
     projectsByWorkspace.set(project.workspaceId, [
@@ -471,9 +484,12 @@ export function projectDesktopConversationNavigation(
     standaloneGroups.set(key, appendConversation(current, conversation));
   }
   return Object.freeze({
+    recentProjectIds: Object.freeze([...recentProjectIds]),
     groups: Object.freeze(
       [
-        ...projectGroups.values(),
+        ...[...projectGroups.values()].filter(
+          (group) => group.conversations.length > 0 || recentProjectIdSet.has(group.projectId),
+        ),
         ...unavailableWorkspaceGroups.values(),
         ...standaloneGroups.values(),
       ].map((group) =>
@@ -1086,7 +1102,20 @@ export function parseDesktopConversationNavigationProjection(
     value,
     'Desktop Conversation navigation projection must be an object.',
   );
-  requireExactKeys(record, ['groups'], 'Desktop Conversation navigation projection');
+  requireExactKeys(
+    record,
+    ['recentProjectIds', 'groups'],
+    'Desktop Conversation navigation projection',
+  );
+  const recentProjectIds = requireArray(
+    record['recentProjectIds'],
+    'Desktop recent Project identities must be an array.',
+  ).map((projectId) =>
+    requireNonEmptyString(projectId, 'Desktop recent Project identity is required.'),
+  );
+  if (new Set(recentProjectIds).size !== recentProjectIds.length) {
+    throw invalidPayload('Desktop recent Project identities must be unique.');
+  }
   const groups = requireArray(
     record['groups'],
     'Desktop Conversation navigation groups must be an array.',
@@ -1098,6 +1127,7 @@ export function parseDesktopConversationNavigationProjection(
     throw invalidPayload('Desktop Conversation navigation places a Conversation more than once.');
   }
   return Object.freeze({
+    recentProjectIds: Object.freeze(recentProjectIds),
     groups: Object.freeze(groups),
   });
 }
@@ -1213,7 +1243,11 @@ function assertConversationNavigationProjection(
   catalog: DesktopProjectCatalogProjection,
   agentHome: DesktopAgentHomeProjection,
 ): DesktopConversationNavigationProjection {
-  const expected = projectDesktopConversationNavigation(catalog, agentHome);
+  const expected = projectDesktopConversationNavigation(
+    catalog,
+    agentHome,
+    actual.recentProjectIds,
+  );
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw invalidPayload(
       'Desktop Conversation navigation projection does not match Project and Agent authorities.',

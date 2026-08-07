@@ -202,7 +202,11 @@ describe('DesktopCutRuntime', () => {
         applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
       },
       agentHome,
-      conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome),
+      conversationNavigation: projectDesktopConversationNavigation(
+        catalog,
+        agentHome,
+        catalog.projects.map((project) => project.projectId),
+      ),
       domains: [],
     });
     const updateWorkbench = vi.fn(
@@ -415,9 +419,7 @@ describe('DesktopCutRuntime', () => {
     });
 
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
-    expect((await runtime.getSnapshot('window-1', identity)).presentation.previewVolume).toBe(
-      0.25,
-    );
+    expect((await runtime.getSnapshot('window-1', identity)).presentation.previewVolume).toBe(0.25);
   });
 
   it('owns command idempotency, history, dirty, save and presentation in one session', async () => {

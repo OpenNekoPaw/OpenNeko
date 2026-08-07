@@ -106,31 +106,61 @@ An unavailable Workspace conversation group SHALL expose an icon-only group clea
 - **THEN** strict contract decoding rejects the request
 - **AND** no compatibility parser, fallback or deletion runs
 
-### Requirement: Sidebar retains Project navigation without Conversations
+### Requirement: Sidebar retains recent Project context without Conversations
 
-The Desktop PrimarySidebar SHALL retain one Project group for every Project in the canonical Project catalog, including Projects with no grouped Conversations. An empty Project group SHALL preserve exact Project navigation and creation actions without fabricating a Conversation, retaining a Workspace runtime, or deriving visibility from an active or recent identity in Renderer.
+The Desktop PrimarySidebar SHALL retain a Project group when that exact Project owns a current Conversation or belongs to the Host-projected recent Project context. Clearing the final Conversation SHALL NOT remove a recent Project group. A Project that exists only in the complete Project catalog and has neither a current Conversation nor a recent context identity MUST remain absent from the sidebar. Renderer MUST consume the exact grouped navigation projection without inferring recent identity from active tabs, catalog order or mounted Roots.
 
-#### Scenario: Project has no Conversations
+#### Scenario: Recent Project has no Conversations
 
-- **WHEN** the canonical Project catalog contains a Project and Agent Home contains no Conversation grouped under it
+- **WHEN** a Project belongs to the Host-projected recent Project context and Agent Home contains no Conversation grouped under it
 - **THEN** grouped navigation includes that exact Project with `conversations: []`
 - **AND** the sidebar shows its Project entry and zero Conversation count without an expand or collapse control
 - **AND** opening the Project and creating its first Conversation remain available while Conversation cleanup is disabled
 
+#### Scenario: Catalog-only Project has no Conversations
+
+- **WHEN** the complete Project catalog contains a Project that has no Conversation and is absent from the recent Project context
+- **THEN** Project Management continues to show that Project
+- **AND** grouped sidebar navigation does not mirror it
+
 #### Scenario: User deletes every Project Conversation
 
-- **WHEN** the canonical Project conversation cleanup completes and the Project remains registered
+- **WHEN** the canonical Project conversation cleanup completes and the Project remains in the recent Project context
 - **THEN** the refreshed sidebar retains the Project group with no Conversation rows
 - **AND** neither Project registration nor the current Project Scene is removed as a side effect
 
-#### Scenario: Empty Project is unavailable
+#### Scenario: Empty recent Project is unavailable
 
-- **WHEN** a Project catalog record is unavailable and has no Conversations
+- **WHEN** a recent Project catalog record is unavailable and has no Conversations
 - **THEN** the sidebar retains its Project group with the exact diagnostic
 - **AND** opening remains disabled while explicit Project management and removal remain available
 
 #### Scenario: Project is explicitly removed
 
-- **WHEN** the user removes a Project from the canonical Project catalog
+- **WHEN** the user removes a recent Project from the canonical Project catalog
 - **THEN** its Project group is absent from the next grouped navigation projection
 - **AND** any retained Workspace Conversations remain isolated in the existing unavailable Workspace group rather than being deleted or projected as that Project
+
+## MODIFIED Requirements
+
+### Requirement: Sidebar groups conversations by owning context
+
+The Desktop primary sidebar SHALL render each Project that owns a current Conversation or belongs to the Host-projected recent Project context, plus each unavailable Workspace, personal Assistant, Character and Room context that contains at least one Conversation, as one explicit group. Groups with Conversation children can be collapsed and expanded independently from the active Scene. The sidebar MUST NOT mirror catalog-only Projects that have neither a Conversation nor a recent context identity.
+
+#### Scenario: User collapses a Project group
+
+- **WHEN** the user activates the collapse control for an expanded Project group
+- **THEN** that group's conversation rows are not rendered while its Project header and conversation count remain visible
+- **AND** other groups and background Agent runtimes remain unchanged
+
+#### Scenario: Expanded group exceeds the initial budget
+
+- **WHEN** an expanded group contains more than the bounded initial conversation count
+- **THEN** the sidebar initially renders only the most recently updated bounded subset
+- **AND** the user can explicitly show all conversations without changing another group's state
+
+#### Scenario: Recent Project has no conversations
+
+- **WHEN** a recent Project context has no grouped Conversation
+- **THEN** PrimarySidebar renders that exact Project group with zero children
+- **AND** a catalog-only Project with no Conversation remains absent from the sidebar and available in Project Management

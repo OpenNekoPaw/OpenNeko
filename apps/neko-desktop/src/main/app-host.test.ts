@@ -1542,6 +1542,9 @@ describe('DesktopAppHost', () => {
         conversations: [],
       }),
     ]);
+    expect(result.projection.conversationNavigation.recentProjectIds).toEqual([
+      `content:${resolution.workspaceId}`,
+    ]);
     expect(fixture.agent.attachWorkspace).toHaveBeenCalledWith(resolution);
   });
 
@@ -1642,6 +1645,7 @@ describe('DesktopAppHost', () => {
         catalog: { projects: [] },
         window: { tabs: [] },
         conversationNavigation: {
+          recentProjectIds: [],
           groups: [
             {
               kind: 'workspace',
@@ -1695,6 +1699,7 @@ describe('DesktopAppHost', () => {
         catalog: { projects: [expect.objectContaining({ projectId: project.projectId })] },
         window: { tabs: [expect.objectContaining({ projectId: project.projectId })] },
         conversationNavigation: {
+          recentProjectIds: [project.projectId],
           groups: [
             expect.objectContaining({
               kind: 'project',

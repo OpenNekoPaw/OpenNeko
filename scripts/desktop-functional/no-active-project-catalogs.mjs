@@ -140,6 +140,30 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
           }),
           timestamp,
         );
+      database
+        .prepare(
+          `INSERT INTO desktop_application_state(authority_key, document_json, updated_at)
+           VALUES ('desktop.shell', ?, ?)`,
+        )
+        .run(
+          JSON.stringify({
+            primaryWindowId: null,
+            projects: [
+              {
+                projectId: `content:${EMPTY_WORKSPACE_ID}`,
+                workspaceId: EMPTY_WORKSPACE_ID,
+                profile: 'content',
+                displayName: 'workspace',
+                workspacePath,
+                workspaceLocator: { kind: 'relative', value: 'workspace' },
+                createdAt: timestamp,
+                updatedAt: '2026-08-07T00:00:00.000Z',
+              },
+            ],
+            windows: [],
+          }),
+          timestamp,
+        );
     } finally {
       database.close();
     }
@@ -340,7 +364,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     await waitForCondition(
       evaluate,
       `document.querySelector('.home-recent-navigation')?.scrollTop === 0`,
-      'PrimarySidebar did not return to the first empty Project.',
+      'PrimarySidebar did not return to the recent empty Project.',
     );
 
     const primaryProjects = await evaluate(`(async () => {
@@ -386,20 +410,18 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         ),
         availableProject: inspectProjectGroup('workspace'),
         unavailableProject: inspectProjectGroup('missing-project'),
-        boundedNavigation:
-          navigation instanceof HTMLElement &&
-          navigationStyle?.overflowY === 'auto' &&
-          navigation.scrollHeight > navigation.clientHeight,
+        navigationScrollable:
+          navigation instanceof HTMLElement && navigationStyle?.overflowY === 'auto',
       };
     })()`);
     const expectedProjectCount = SCROLL_PROJECT_COUNT + 2;
     if (
       !primaryProjects.catalogProjectPresent ||
       primaryProjects.catalogProjectCount !== expectedProjectCount ||
-      primaryProjects.conversationGroupCount !== expectedProjectCount ||
-      primaryProjects.projectGroupCount !== expectedProjectCount ||
+      primaryProjects.conversationGroupCount !== 1 ||
+      primaryProjects.projectGroupCount !== 1 ||
       !primaryProjects.everyProjectEmpty ||
-      !primaryProjects.boundedNavigation ||
+      !primaryProjects.navigationScrollable ||
       !primaryProjects.availableProject.present ||
       primaryProjects.availableProject.count !== '0' ||
       primaryProjects.availableProject.projectOpenDisabled ||
@@ -408,22 +430,15 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       primaryProjects.availableProject.hasDisclosure ||
       !primaryProjects.availableProject.hasDisclosureSpacer ||
       primaryProjects.availableProject.unavailable ||
-      !primaryProjects.unavailableProject.present ||
-      primaryProjects.unavailableProject.count !== '0' ||
-      !primaryProjects.unavailableProject.projectOpenDisabled ||
-      JSON.stringify(primaryProjects.unavailableProject.actionDisabled) !==
-        JSON.stringify([true, false]) ||
-      primaryProjects.unavailableProject.hasDisclosure ||
-      !primaryProjects.unavailableProject.hasDisclosureSpacer ||
-      !primaryProjects.unavailableProject.unavailable
+      primaryProjects.unavailableProject.present
     ) {
       throw new Error(
         `PrimarySidebar empty Project navigation is incorrect: ${JSON.stringify(primaryProjects)}`,
       );
     }
-    checkpoint('empty-project-primary-navigation-visible', primaryProjects);
+    checkpoint('recent-empty-project-primary-navigation-visible', primaryProjects);
     const emptyProjectNavigationScreenshot = await screenshot(
-      'empty-project-primary-navigation-visible',
+      'recent-empty-project-primary-navigation-visible',
     );
 
     const emptyProjectHeader =

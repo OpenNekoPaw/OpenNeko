@@ -29,12 +29,12 @@
 
 ## 6. Empty Project Navigation
 
-- [x] 6.1 Update Host, Main integration and Renderer regression tests to require catalog Projects with zero Conversations to remain visible after initial projection and Project conversation cleanup.
-- [x] 6.2 Retain empty Project groups in the canonical Host projection and render them without a meaningless disclosure control, while preserving exact open, new Conversation, management and removal actions.
-- [x] 6.3 Update the isolated Desktop catalog scenario to verify empty available and unavailable Project presentation, zero-count actions, bounded dense navigation and post-cleanup retention.
+- [x] 6.1 Update Host, Main integration and Renderer regression tests to require recent Project contexts with zero Conversations to remain visible after cleanup while catalog-only Projects stay out of the sidebar.
+- [x] 6.2 Project exact recent Project identities from the existing Desktop stored Project owner, retain only those empty Project groups in canonical grouped navigation, and preserve exact open, new Conversation, management and removal actions.
+- [x] 6.3 Update the isolated Desktop catalog scenario to verify recent empty Project retention, catalog-only Project exclusion, complete Project Management visibility, bounded navigation and post-cleanup behavior.
 
 ## 7. Empty Project Validation And Delivery
 
 - [x] 7.1 Update stable architecture documentation and run focused Host, Main and Renderer tests, affected typechecks, lint/format, strict OpenSpec validation and debt checks.
-- [x] 7.2 Validate empty Project default, hover, keyboard-focus, unavailable, dense, narrow and dark/light states in the real Electron Desktop and directly inspect every required screenshot.
-- [x] 7.3 Complete the Neko quality review and confirm Project visibility remains a lightweight projection rather than a retained Root, runtime or cross-domain open-instance catalog.
+- [x] 7.2 Validate recent empty Project default, hover, keyboard-focus, unavailable, dense, narrow and dark/light states in the real Electron Desktop and directly inspect every required screenshot.
+- [x] 7.3 Complete the Neko quality review and confirm recent Project visibility remains a lightweight presentation projection rather than a retained Root, runtime or cross-domain open-instance catalog.

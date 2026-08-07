@@ -158,7 +158,7 @@ function projection(
       conversations: summaries,
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     },
-    conversationNavigation: { groups: [] },
+    conversationNavigation: { recentProjectIds: [], groups: [] },
     domains: [],
   };
 }

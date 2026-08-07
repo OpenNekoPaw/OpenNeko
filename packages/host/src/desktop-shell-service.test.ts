@@ -98,6 +98,7 @@ describe('DesktopShellService', () => {
     let projection = await fixture.service.getProjection(windowId);
 
     expect(projection.catalog.projects).toEqual([retainedProject]);
+    expect(projection.conversationNavigation).toEqual({ recentProjectIds: [], groups: [] });
     const opened = await fixture.service.transitionScene(
       createDesktopSceneTransitionRequest({
         requestId: 'open-retained-project',
@@ -111,6 +112,16 @@ describe('DesktopShellService', () => {
     expect(fixture.registry.restore).toHaveBeenCalledWith(retainedProject.workspaceId);
 
     projection = await fixture.service.getProjection(windowId);
+    expect(projection.conversationNavigation).toMatchObject({
+      recentProjectIds: [retainedProject.projectId],
+      groups: [
+        {
+          kind: 'project',
+          projectId: retainedProject.projectId,
+          conversations: [],
+        },
+      ],
+    });
     const removed = await fixture.service.removeProjectsFromCatalog(
       windowId,
       [retainedProject.projectId],

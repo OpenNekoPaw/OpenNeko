@@ -138,16 +138,18 @@ Project selection 保留在 catalog，并以独立行操作显式打开 Workspac
 未具备真实 owner/runtime/public Root 的 Character/Chatroom scene 必须返回 owner-qualified unavailable，
 Desktop 不得伪造占位业务 UI。
 
-Host 把项目 catalog 与 owner-qualified Agent conversation catalog 组合成一个 canonical grouped
-navigation projection，PrimarySidebar 只消费该投影，不在 React 中重新 join 或推断。Project header
-是容器入口，conversation child 携带 exact `conversationId + owner`；无 Project 的 Assistant、Character
-和 Room conversation 位于独立 owner group。每个 canonical Project catalog 记录都保留一个 Project group；
-零 Conversation 只表示 child 为空，不得让 Project 从侧栏消失、伪造默认 Conversation，或在 Renderer
-从 active/recent identity 临时补组。可选 Project grouping 只改变导航位置，不改变 capability、memory、
-resource grant 或 Scene owner。场景切换、renderer reload 和应用重启不得丢失这些 identity；有 child 的
-组默认展示有界 child 并显式展开/收起。sidebar 展开、折叠和宽度修改只更新 Window-owned sidebar
-aggregate，不修改任何 Workspace instance。Workspace 只能由显式 Project identity 或 sender/Window-bound
-opaque directory grant 打开；取消授权保持原 scene，且不得创建 Workspace 或 conversation。
+Host 把完整 Project catalog、Desktop stored recent Project context 与 owner-qualified Agent conversation
+catalog 组合成一个 canonical grouped navigation projection，PrimarySidebar 只消费该投影，不在 React 中
+重新 join 或推断。Project header 是容器入口，conversation child 携带 exact `conversationId + owner`；无
+Project 的 Assistant、Character 和 Room conversation 位于独立 owner group。当前拥有 Conversation 或属于
+recent Project context 的 Project 保留一个 group；清理最后一条 Conversation 只让 child 变为空，不得让
+recent Project 从侧栏消失或伪造默认 Conversation。完整 catalog 中从未进入 recent context 且没有
+Conversation 的 Project 只出现在 Project Management，不得由 Renderer 从 active tab、catalog 顺序或
+mounted Root 临时补组。该轻量 presentation 不改变 capability、memory、resource grant 或 Scene owner。
+场景切换、renderer reload 和应用重启不得丢失这些 identity；有 child 的组默认展示有界 child 并显式
+展开/收起。sidebar 展开、折叠和宽度修改只更新 Window-owned sidebar aggregate，不修改任何 Workspace
+instance。Workspace 只能由显式 Project identity 或 sender/Window-bound opaque directory grant 打开；
+取消授权保持原 scene，且不得创建 Workspace 或 conversation。
 
 PrimarySidebar 是 Desktop 唯一用户级 Project context 与 conversation switcher。Project group 可见性是
 轻量导航 projection，不表示对应 Workspace Root、媒体资源或 Agent runtime 驻留。Agent Webview 在 Desktop
