@@ -131,7 +131,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     }
     return { workspacePath };
   },
-  async run({ checkpoint, click, evaluate, pressKey, screenshot, waitForSelector }) {
+  async run({ checkpoint, click, evaluate, hover, pressKey, screenshot, waitForSelector }) {
     await waitForSelector('.shell-diagnostic');
     const startupNotice = await evaluate(`(() => {
       const notice = document.querySelector('.shell-diagnostic');
@@ -184,6 +184,9 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       await new Promise((resolve) => setTimeout(resolve, 50));
       const after = await window.openNekoDesktop.shell.getSnapshot();
       const heading = group?.querySelector('.primary-conversation-group__standalone-heading');
+      const groupCleanup = heading?.querySelector(
+        ':scope > .primary-navigation-row-actions button',
+      );
       return {
         noActiveProject: document.querySelector('.desktop-scene-workbench--workspace') === null,
         titleVisible: [...(group?.querySelectorAll('.home-conversation-link span') ?? [])]
@@ -199,6 +202,8 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
           group?.querySelector('.primary-conversation-group__diagnostic') !== null,
         openDisabled: open instanceof HTMLButtonElement && open.disabled,
         cleanupEnabled: cleanup instanceof HTMLButtonElement && !cleanup.disabled,
+        groupCleanupEnabled:
+          groupCleanup instanceof HTMLButtonElement && !groupCleanup.disabled,
         sceneUnchanged:
           JSON.stringify(before.window.workbench) === JSON.stringify(after.window.workbench),
       };
@@ -208,6 +213,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       !conversation.titleVisible ||
       !conversation.openDisabled ||
       !conversation.cleanupEnabled ||
+      !conversation.groupCleanupEnabled ||
       !conversation.sceneUnchanged ||
       !conversation.groupDiagnostic ||
       conversation.rawWorkspaceFieldVisible ||
@@ -218,6 +224,52 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     }
     checkpoint('historical-conversation-visible', conversation);
     const unavailableNavigationScreenshot = await screenshot('unavailable-navigation-visible');
+
+    const unavailableGroupHeading =
+      '.primary-conversation-group[data-group-kind="workspace"] ' +
+      '.primary-conversation-group__standalone-heading';
+    await hover(`${unavailableGroupHeading} .primary-conversation-group__label`);
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const heading = document.querySelector(${JSON.stringify(unavailableGroupHeading)});
+        const actions = heading?.querySelector(':scope > .primary-navigation-row-actions');
+        return actions instanceof HTMLElement && getComputedStyle(actions).opacity === '1';
+      })()`,
+      'Unavailable Workspace group cleanup did not appear on hover.',
+    );
+    const unavailableGroupAction = await evaluate(`(() => {
+      const heading = document.querySelector(${JSON.stringify(unavailableGroupHeading)});
+      const actions = heading?.querySelector(':scope > .primary-navigation-row-actions');
+      const status = heading?.querySelector(':scope > .primary-navigation-state');
+      const button = actions?.querySelector('button');
+      const headingRect = heading?.getBoundingClientRect();
+      const actionsRect = actions?.getBoundingClientRect();
+      return {
+        actionCount: actions?.querySelectorAll('button').length ?? 0,
+        actionLabel: button?.getAttribute('aria-label') ?? '',
+        statusOpacity: status instanceof HTMLElement ? getComputedStyle(status).opacity : '',
+        withinRow:
+          headingRect !== undefined && actionsRect !== undefined &&
+          actionsRect.left >= headingRect.left && actionsRect.right <= headingRect.right,
+      };
+    })()`);
+    if (
+      unavailableGroupAction.actionCount !== 1 ||
+      !/Delete unavailable Workspace conversations|删除不可用工作区的会话/u.test(
+        unavailableGroupAction.actionLabel,
+      ) ||
+      unavailableGroupAction.statusOpacity !== '0' ||
+      !unavailableGroupAction.withinRow
+    ) {
+      throw new Error(
+        `Unavailable Workspace group action is incorrect: ${JSON.stringify(unavailableGroupAction)}`,
+      );
+    }
+    checkpoint('unavailable-workspace-group-action-visible', unavailableGroupAction);
+    const unavailableGroupActionScreenshot = await screenshot(
+      'unavailable-workspace-group-action-visible',
+    );
 
     const workspaceGroupCollapse = await evaluate(`(async () => {
       const group = document.querySelector('.primary-conversation-group[data-group-kind="workspace"]');
@@ -254,10 +306,11 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
     await evaluate(`(() => {
       window.confirm = () => true;
       const group = document.querySelector('.primary-conversation-group[data-group-kind="workspace"]');
-      const row = group?.querySelector('.primary-recent-conversation-row');
-      const cleanup = row?.querySelector('button[aria-label*="${CONVERSATION_TITLE}"]');
+      const cleanup = group?.querySelector(
+        '.primary-conversation-group__standalone-heading > .primary-navigation-row-actions button',
+      );
       if (!(cleanup instanceof HTMLButtonElement) || cleanup.disabled) {
-        throw new Error('Unavailable Conversation cleanup is unavailable.');
+        throw new Error('Unavailable Workspace group cleanup is unavailable.');
       }
       cleanup.click();
       return true;
@@ -793,6 +846,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       screenshots: [
         startupNoticeScreenshot,
         unavailableNavigationScreenshot,
+        unavailableGroupActionScreenshot,
         projectScrollStartScreenshot,
         projectScrollEndScreenshot,
         wideBatchSelectionScreenshot,

@@ -6,6 +6,7 @@ import {
   createDesktopProjectOpenRequest,
   createDesktopTabMutationRequest,
   DesktopShellContractError,
+  parseDesktopConversationDeleteRequest,
   parseDesktopProjectSelectionRequest,
   parseDesktopShellProjection,
   parseDesktopShellProjectionEvent,
@@ -165,20 +166,56 @@ describe('Desktop Shell contract', () => {
     expect(
       createDesktopConversationDeleteRequest(
         'request-5',
-        {
-          conversationId: 'conversation-1',
-          owner: { kind: 'workspace', workspaceId: 'workspace-1' },
-        },
+        [
+          {
+            conversationId: 'conversation-1',
+            owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+          },
+        ],
         'renderer-session-1',
       ),
     ).toEqual({
       requestId: 'request-5',
       rendererSessionId: 'renderer-session-1',
-      navigation: {
-        conversationId: 'conversation-1',
-        owner: { kind: 'workspace', workspaceId: 'workspace-1' },
-      },
+      navigations: [
+        {
+          conversationId: 'conversation-1',
+          owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+        },
+      ],
     });
+  });
+
+  it('strictly requires a non-empty unique Conversation identity array', () => {
+    expect(() =>
+      parseDesktopConversationDeleteRequest({
+        requestId: 'request-1',
+        rendererSessionId: 'renderer-session-1',
+        navigation: {
+          conversationId: 'conversation-1',
+          owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+        },
+      }),
+    ).toThrowError(DesktopShellContractError);
+    expect(() =>
+      createDesktopConversationDeleteRequest('request-2', [], 'renderer-session-1'),
+    ).toThrowError('At least one Desktop Agent Home conversation identity is required.');
+    expect(() =>
+      createDesktopConversationDeleteRequest(
+        'request-3',
+        [
+          {
+            conversationId: 'conversation-1',
+            owner: { kind: 'workspace', workspaceId: 'workspace-1' },
+          },
+          {
+            conversationId: 'conversation-1',
+            owner: { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
+          },
+        ],
+        'renderer-session-1',
+      ),
+    ).toThrowError('Desktop Agent Home conversation identities must be unique.');
   });
 
   it('strictly rejects invalid Project selection payloads', () => {

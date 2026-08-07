@@ -945,7 +945,7 @@ describe('DesktopApplication scene lifecycle', () => {
     }
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
+    expect(deleteConversation).toHaveBeenCalledWith([conversation.navigation]);
     confirm.mockReturnValueOnce(false).mockReturnValueOnce(true);
     await act(async () => cleanupProjectButton.click());
     expect(deleteProjectConversations).not.toHaveBeenCalled();
@@ -1078,7 +1078,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await openContextMenu(conversationRow);
     await selectContextMenuItem('Delete conversation');
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
+    expect(deleteConversation).toHaveBeenCalledWith([conversation.navigation]);
 
     await act(async () => root.unmount());
   });
@@ -1158,7 +1158,7 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(deleteItem.hasAttribute('data-disabled')).toBe(false);
     await act(async () => deleteItem.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith(conversations[4].navigation);
+    expect(deleteConversation).toHaveBeenCalledWith([conversations[4].navigation]);
     expect(transition).not.toHaveBeenCalled();
 
     await act(async () => root.unmount());
@@ -1317,11 +1317,11 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
     expect(removeProjects).toHaveBeenCalledWith([project.projectId]);
-    expect(deleteConversation).toHaveBeenCalledWith(unavailableConversation.navigation);
+    expect(deleteConversation).toHaveBeenCalledWith([unavailableConversation.navigation]);
     await act(async () => root.unmount());
   });
 
-  it('keeps unavailable Workspace groups collapsible and places diagnostics in the trailing track', async () => {
+  it('keeps unavailable Workspace groups collapsible and deletes their exact conversations as one batch', async () => {
     const base = createProjection();
     const conversation = {
       navigation: {
@@ -1340,9 +1340,17 @@ describe('DesktopApplication scene lifecycle', () => {
         message: 'Conversation context is missing.',
       },
     };
+    const secondConversation = {
+      ...conversation,
+      navigation: {
+        ...conversation.navigation,
+        conversationId: 'conversation:missing-workspace-2',
+      },
+      title: 'Second missing Workspace conversation',
+    };
     const catalog = { projects: [] };
     const agentHome = {
-      conversations: [conversation],
+      conversations: [conversation, secondConversation],
       attention: { needsInput: 0, needsReview: 0, running: 0 },
     } as const;
     const projection: DesktopShellProjection = {
@@ -1372,6 +1380,9 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(
       heading?.querySelector(':scope > .primary-navigation-state .primary-navigation-unavailable'),
     ).not.toBeNull();
+    expect(
+      heading?.querySelectorAll(':scope > .primary-navigation-row-actions button'),
+    ).toHaveLength(1);
     expect(group.querySelector('.primary-conversation-group__diagnostic')).toBeNull();
 
     const conversationButton = group.querySelector<HTMLButtonElement>('.home-conversation-link');
@@ -1388,13 +1399,26 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(group.querySelector('.primary-recent-conversation-row')).not.toBeNull();
     expect(transition).not.toHaveBeenCalled();
 
-    const deleteButton = group.querySelector<HTMLButtonElement>(
-      'button[aria-label="Delete conversation Missing Workspace conversation"]',
+    const deleteButton = heading?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete unavailable Workspace conversations"]',
     );
     if (!deleteButton) throw new Error('Unavailable Workspace cleanup action is missing.');
     await act(async () => deleteButton.click());
     await waitFor(() => deleteConversation.mock.calls.length === 1);
-    expect(deleteConversation).toHaveBeenCalledWith(conversation.navigation);
+    expect(deleteConversation).toHaveBeenCalledWith([
+      conversation.navigation,
+      secondConversation.navigation,
+    ]);
+    deleteConversation.mockClear();
+
+    if (!heading) throw new Error('Unavailable Workspace heading is missing.');
+    await openContextMenu(heading);
+    await selectContextMenuItem('Delete unavailable Workspace conversations');
+    await waitFor(() => deleteConversation.mock.calls.length === 1);
+    expect(deleteConversation).toHaveBeenCalledWith([
+      conversation.navigation,
+      secondConversation.navigation,
+    ]);
     await act(async () => root.unmount());
   });
 

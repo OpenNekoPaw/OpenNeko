@@ -999,7 +999,7 @@ async function exerciseProjectConversationGroups({
     throw new Error(`Project sidebar controls are incorrect: ${JSON.stringify(initial)}`);
   }
 
-  await hover(`${retentionGroupSelector} .primary-conversation-group__header`);
+  await hover(`${retentionGroupSelector} .primary-conversation-group__project-link`);
   await waitForCondition(
     evaluate,
     `getComputedStyle(document.querySelector(${JSON.stringify(
@@ -1020,7 +1020,7 @@ async function exerciseProjectConversationGroups({
   );
 
   const retentionConversationSelector = `${retentionGroupSelector} .primary-recent-conversation-row`;
-  await hover(retentionConversationSelector);
+  await hover(`${retentionConversationSelector} .home-conversation-link`);
   await waitForCondition(
     evaluate,
     `getComputedStyle(document.querySelector(${JSON.stringify(
@@ -1032,7 +1032,11 @@ async function exerciseProjectConversationGroups({
     evaluate,
     retentionConversationSelector,
   );
-  if (conversationHoverActions.visibleActionCount !== 1 || !conversationHoverActions.withinRow) {
+  if (
+    conversationHoverActions.visibleActionCount !== 1 ||
+    conversationHoverActions.statusOpacity !== '0' ||
+    !conversationHoverActions.withinRow
+  ) {
     throw new Error(
       `Conversation hover actions are incorrect: ${JSON.stringify(conversationHoverActions)}`,
     );
@@ -1318,6 +1322,74 @@ async function exerciseProjectConversationGroups({
       unavailableMessage: unavailableGroup?.message ?? '',
     };
   })()`);
+  const unavailableWorkspaceGroupSelector = `.primary-conversation-group[data-group-id=${JSON.stringify(
+    `workspace:${retention.workspaceId}`,
+  )}]`;
+  const unavailableWorkspaceHeaderSelector = `${unavailableWorkspaceGroupSelector} .primary-conversation-group__standalone-heading`;
+  await hover(`${unavailableWorkspaceHeaderSelector} .primary-conversation-group__label`);
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const header = document.querySelector(${JSON.stringify(unavailableWorkspaceHeaderSelector)});
+      const actions = header?.querySelector(':scope > .primary-navigation-row-actions');
+      return actions instanceof HTMLElement && getComputedStyle(actions).opacity === '1';
+    })()`,
+    'Unavailable Workspace group cleanup did not appear on hover.',
+  );
+  const unavailableWorkspaceAction = await evaluate(`(() => {
+    const header = document.querySelector(${JSON.stringify(unavailableWorkspaceHeaderSelector)});
+    const actions = header?.querySelector(':scope > .primary-navigation-row-actions');
+    const status = header?.querySelector(':scope > .primary-navigation-state');
+    const button = actions?.querySelector('button');
+    const headerRect = header?.getBoundingClientRect();
+    const actionsRect = actions?.getBoundingClientRect();
+    return {
+      actionCount: actions?.querySelectorAll('button').length ?? 0,
+      actionLabel: button?.getAttribute('aria-label') ?? '',
+      statusOpacity: status instanceof HTMLElement ? getComputedStyle(status).opacity : '',
+      withinRow:
+        headerRect !== undefined && actionsRect !== undefined &&
+        actionsRect.left >= headerRect.left && actionsRect.right <= headerRect.right,
+    };
+  })()`);
+  if (
+    unavailableWorkspaceAction.actionCount !== 1 ||
+    !/Delete unavailable Workspace conversations|删除不可用工作区的会话/u.test(
+      unavailableWorkspaceAction.actionLabel,
+    ) ||
+    unavailableWorkspaceAction.statusOpacity !== '0' ||
+    !unavailableWorkspaceAction.withinRow
+  ) {
+    throw new Error(
+      `Unavailable Workspace group action is incorrect: ${JSON.stringify(unavailableWorkspaceAction)}`,
+    );
+  }
+  const unavailableWorkspaceActionScreenshot = await screenshot(
+    'project-sidebar-unavailable-workspace-action-hover',
+  );
+  const unavailableWorkspaceContextMenu = await openSidebarContextMenu({
+    cdp,
+    evaluate,
+    selector: unavailableWorkspaceHeaderSelector,
+  });
+  assertWorkspaceContextMenu(unavailableWorkspaceContextMenu);
+  const unavailableWorkspaceContextMenuScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-sidebar-unavailable-workspace-context-menu',
+  );
+  await pressKey('Escape');
+  await hover('.home-sidebar-heading');
+  await waitForCondition(
+    evaluate,
+    `(() => {
+      const header = document.querySelector(${JSON.stringify(unavailableWorkspaceHeaderSelector)});
+      const actions = header?.querySelector(':scope > .primary-navigation-row-actions');
+      const status = header?.querySelector(':scope > .primary-navigation-state');
+      return actions instanceof HTMLElement && status instanceof HTMLElement &&
+        getComputedStyle(actions).opacity === '0' && getComputedStyle(status).opacity === '1';
+    })()`,
+    'Unavailable Workspace status did not return after its action closed.',
+  );
   const unavailableScreenshot = await captureSettledScreenshot(
     screenshot,
     'project-sidebar-removed-workspace-unavailable',
@@ -1425,6 +1497,8 @@ async function exerciseProjectConversationGroups({
     projectHoverActions,
     projectContextMenu,
     conversationContextMenu,
+    unavailableWorkspaceAction,
+    unavailableWorkspaceContextMenu,
     removalCancellation,
     removed,
     screenshots: [
@@ -1435,6 +1509,8 @@ async function exerciseProjectConversationGroups({
       conversationContextMenuScreenshot,
       compactScreenshot,
       darkCompactScreenshot,
+      unavailableWorkspaceActionScreenshot,
+      unavailableWorkspaceContextMenuScreenshot,
       unavailableScreenshot,
       cleanedScreenshot,
     ],
@@ -1445,6 +1521,7 @@ async function inspectSidebarRowActions(evaluate, rowSelector) {
   return evaluate(`(() => {
     const row = document.querySelector(${JSON.stringify(rowSelector)});
     const actions = row?.querySelector(':scope > .primary-navigation-row-actions');
+    const status = row?.querySelector(':scope > .primary-navigation-state');
     const rowRect = row?.getBoundingClientRect();
     const actionsRect = actions?.getBoundingClientRect();
     return {
@@ -1455,6 +1532,7 @@ async function inspectSidebarRowActions(evaluate, rowSelector) {
         document.activeElement instanceof HTMLButtonElement && actions?.contains(document.activeElement)
           ? document.activeElement.getAttribute('aria-label') ?? ''
           : '',
+      statusOpacity: status instanceof HTMLElement ? getComputedStyle(status).opacity : '',
       withinRow:
         rowRect !== undefined && actionsRect !== undefined &&
         actionsRect.left >= rowRect.left && actionsRect.right <= rowRect.right,
@@ -1544,6 +1622,21 @@ function assertConversationContextMenu(menu) {
     menu.items.filter((item) => item.danger).length !== 1
   ) {
     throw new Error(`Conversation context menu is incomplete: ${JSON.stringify(menu)}`);
+  }
+}
+
+function assertWorkspaceContextMenu(menu) {
+  const item = menu?.items[0];
+  if (
+    menu?.items.length !== 1 ||
+    menu.separatorCount !== 0 ||
+    !menu.withinViewport ||
+    menu.background === 'rgba(0, 0, 0, 0)' ||
+    item?.disabled ||
+    !item?.danger ||
+    !/Delete unavailable Workspace conversations|删除不可用工作区的会话/u.test(item?.text ?? '')
+  ) {
+    throw new Error(`Unavailable Workspace context menu is incomplete: ${JSON.stringify(menu)}`);
   }
 }
 

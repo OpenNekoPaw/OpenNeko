@@ -261,7 +261,7 @@ export function registerDesktopIpc(
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.conversationDelete,
     (event: IpcMainInvokeEvent, payload: unknown) =>
-      appHost.deleteHomeConversation(requireSender(event), payload),
+      appHost.deleteHomeConversations(requireSender(event), payload),
   );
   ipcMain.handle(
     DESKTOP_SHELL_CHANNELS.projectRequestProfile,

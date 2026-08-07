@@ -790,6 +790,7 @@ code {
   min-height: 24px;
   align-items: center;
   justify-content: flex-end;
+  transition: opacity 120ms ease;
 }
 
 .primary-navigation-unavailable {
@@ -844,6 +845,10 @@ code {
 .primary-recent-project-row:is(:hover, :focus-within) > .primary-navigation-row-actions {
   opacity: 1;
   pointer-events: auto;
+}
+
+.primary-recent-project-row:is(:hover, :focus-within) > .primary-navigation-state {
+  opacity: 0;
 }
 
 .desktop-navigation-menu-label {

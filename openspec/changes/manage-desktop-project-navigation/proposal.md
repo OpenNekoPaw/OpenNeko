@@ -9,6 +9,8 @@ Desktop PrimarySidebar 已能按项目展示会话，但项目与会话操作依
 - 会话菜单提供打开和删除；不可用会话继续禁止打开，但允许显式删除。
 - 将 Agent Home 已投影的 `running`、`needs-input`、`needs-review` 状态显示为条目右侧的紧凑图标，并通过 Tooltip 与可访问名称保留完整语义。
 - 不可用状态仅显示警告图标；项目与会话的行内操作默认收起，在条目悬停或键盘聚焦时显示，右键菜单保持完整操作入口。
+- 失去 Project catalog 身份的 Workspace 会话组提供组级会话清理操作，但继续禁止打开或伪装成可用项目。
+- 行内操作显示时隐藏同一 trailing 位置的状态图标，操作退出后恢复，禁止删除图标与告警/执行图标叠加。
 - 保持 Project、Conversation、Scene 和 Agent runtime 的现有 owner 与 typed port，不新增 IPC 成功路径、兼容分支或 fallback。
 
 ## Capabilities

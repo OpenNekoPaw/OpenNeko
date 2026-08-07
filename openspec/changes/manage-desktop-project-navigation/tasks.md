@@ -20,3 +20,9 @@
 - [x] 4.1 Update Renderer and CSS regression tests to require icon-only unavailable/execution states and hover/focus-revealed Project and Conversation actions.
 - [x] 4.2 Replace inline marker labels with accessible icons and compose the existing Project and Conversation buttons into a stable trailing hover/focus action layer.
 - [x] 4.3 Re-run focused quality gates and validate default, hover, keyboard-focus, unavailable, running, narrow and dark/light states in isolated Electron Desktop evidence.
+
+## 5. Unavailable Workspace Management
+
+- [x] 5.1 Change the canonical Conversation delete payload to a strict non-empty identity array, update all producer/consumer tests, and prove the former singular payload is rejected without fallback.
+- [x] 5.2 Add unavailable Workspace group hover/focus and context-menu cleanup using the exact projected identities, and hide trailing status markers while row actions are visible.
+- [x] 5.3 Run focused contracts, Renderer, Main, typecheck, lint, strict OpenSpec and isolated Electron checks for dense unavailable groups and non-overlapping icons.

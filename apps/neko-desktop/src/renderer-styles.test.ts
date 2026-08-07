@@ -58,6 +58,9 @@ describe('Desktop renderer styles', () => {
     expect(styles).toMatch(
       /\.primary-recent-project-row:is\(\s*:hover,\s*:focus-within\s*\)\s*>\s*\.primary-navigation-row-actions\s*\{[\s\S]*?opacity\s*:\s*1/u,
     );
+    expect(styles).toMatch(
+      /\.primary-recent-project-row:is\(\s*:hover,\s*:focus-within\s*\)\s*>\s*\.primary-navigation-state\s*\{[\s\S]*?opacity\s*:\s*0/u,
+    );
     expect(styles).not.toContain('.home-conversation-status__label');
     expect(styles).not.toContain('.primary-navigation-unavailable > span');
   });

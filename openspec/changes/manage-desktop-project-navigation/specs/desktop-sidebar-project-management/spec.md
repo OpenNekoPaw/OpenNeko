@@ -77,3 +77,31 @@ Project group headers SHALL expose their existing new-Conversation, Conversation
 - **WHEN** a Project or Conversation row is neither hovered nor focus-within
 - **THEN** destructive row buttons are not visually displayed
 - **AND** unavailable and execution markers use icon-only presentation with diagnostic details available on hover or assistive technology
+
+#### Scenario: Row action replaces its trailing status marker
+
+- **WHEN** a Project, unavailable Workspace or Conversation row reveals its hover/focus action layer
+- **THEN** the row's unavailable or execution status icon is visually hidden while the action is visible
+- **AND** leaving the row restores the status icon without changing row width or identity
+
+### Requirement: Unavailable Workspace groups remain explicitly manageable
+
+An unavailable Workspace conversation group SHALL expose an icon-only group cleanup action and a shared context-menu cleanup action. Cleanup SHALL submit the exact non-empty set of owner-qualified Conversation identities through the canonical Conversation deletion command. The group MUST NOT expose Project open, Project creation or Project removal actions because it has no Project catalog identity.
+
+#### Scenario: User manages an unavailable Workspace group
+
+- **WHEN** the user hovers, keyboard-focuses or opens the context menu for an unavailable Workspace group
+- **THEN** the group exposes deletion of all conversations currently projected in that exact Workspace group
+- **AND** the unavailable diagnostic remains available through Tooltip and assistive technology
+
+#### Scenario: User confirms unavailable Workspace cleanup
+
+- **WHEN** the user confirms deletion for an unavailable Workspace group containing multiple conversations
+- **THEN** Desktop validates every submitted Conversation identity before deleting any of them
+- **AND** all identities are sent through one sender-bound typed command and the Shell is projected once after deletion
+
+#### Scenario: Old singular deletion payload is received
+
+- **WHEN** a caller submits the former single `navigation` object instead of the required non-empty `navigations` array
+- **THEN** strict contract decoding rejects the request
+- **AND** no compatibility parser, fallback or deletion runs

@@ -50,6 +50,14 @@ Renderer 对 `attention !== none` 显示带语义颜色的 trailing icon。`runn
 
 菜单和既有可见按钮调用同一 `ShellActions`，确认、错误展示与 authoritative projection 更新保持唯一。Unavailable Project/Conversation 的 open item disabled；删除或移除仍显式可用。Context menu 关闭不修改 Project selection、group collapse 或 Agent runtime。
 
+### 5. Unavailable Workspace 使用 canonical Conversation 删除
+
+失去 Project catalog 身份的 `workspace` group 不是 Project，不提供打开、新建会话、项目移除等虚假操作。组 header 只提供“删除该工作区会话”，并提交该组当前 projection 中全部 owner-qualified Conversation identity。
+
+现有 `conversations.delete` typed port 从单个 identity 收敛为非空 identity 数组；单条删除也提交单元素数组。Main 在执行任何删除前验证全部 identity 都属于当前 sender-bound Agent Home projection，再由现有 Agent lifecycle 顺序删除并只重新投影一次。旧单对象 payload 直接拒绝，不保留兼容解析、第二个 IPC channel 或 fallback。
+
+状态和操作共享 trailing 位置时，row hover/focus 先隐藏 `.primary-navigation-state`，再显示 action layer；退出交互后状态恢复。这样保持行宽稳定，同时避免删除图标与告警/执行图标视觉重叠。
+
 ## Risks / Trade-offs
 
 - [图标语义可能不够清晰] → 每个状态图标保留本地化 Tooltip、title 和可访问名称；在小窗口和暗色主题做真实 Electron 检查。
@@ -57,10 +65,11 @@ Renderer 对 `attention !== none` 显示带语义颜色的 trailing icon。`runn
 - [右键菜单可能与嵌套 button 事件冲突] → 使用 Radix `asChild` 的现有共享 primitive，并测试普通点击、右键选择和 disabled primary action互不影响。
 - [“项目管理”不能自动聚焦某一行] → 当前 Project Management Scene 是完整 catalog，菜单明确命名为通用项目管理入口；不为单一入口扩大 Scene contract。
 - [运行完成后状态标签消失可能被误解] → 本变更只声明当前执行/attention 状态；完整历史终态继续由 conversation transcript 拥有。
+- [批量清理中途发生存储错误] → Main 先验证全部 identity，删除阶段错误保持 fail-visible 并刷新 authoritative projection；不把部分完成伪装成整体成功。
 
 ## Migration Plan
 
-无需用户数据迁移。部署只替换 Renderer presentation；回滚可恢复旧 Renderer，同时 Host、IPC、SQLite、项目和会话数据保持不变。
+无需用户数据迁移。`conversations.delete` 是未发布的内部 typed payload，本次直接切换全部 producer/consumer 到 identity 数组并删除旧单对象解析；SQLite、项目和会话数据格式保持不变。
 
 ## Open Questions
 

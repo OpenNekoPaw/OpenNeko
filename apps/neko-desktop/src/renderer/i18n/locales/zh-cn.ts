@@ -22,6 +22,8 @@ export const zhCN = {
     '要永久删除所选 {projectCount} 个项目中的 {conversationCount} 个工作区会话吗？项目及其文件都会保留。',
   'shell.deleteConversation': '删除会话 {conversation}',
   'shell.deleteConversationConfirm': '要永久删除会话“{conversation}”吗？此操作无法撤销。',
+  'shell.deleteWorkspaceConversations': '删除不可用工作区的会话',
+  'shell.deleteConversationsConfirm': '要永久删除这 {count} 个会话吗？此操作无法撤销。',
   'shell.openProject': '打开内容项目',
   'shell.settingsUnavailable': '当前版本尚未接入设置',
   'shell.settingsLabel': 'Desktop 设置',

@@ -1665,11 +1665,11 @@ describe('DesktopAppHost', () => {
     fixture.agent.deleteConversation.mockImplementation(deleteConversation);
     const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
 
-    const result = await fixture.appHost.deleteHomeConversation(
+    const result = await fixture.appHost.deleteHomeConversations(
       fixture.sender,
       createDesktopConversationDeleteRequest(
         'conversation-delete-1',
-        navigation,
+        [navigation],
         projection.rendererSessionId,
       ),
     );
@@ -1713,11 +1713,11 @@ describe('DesktopAppHost', () => {
     fixture.agent.deleteConversation.mockImplementation(deleteConversation);
     const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
 
-    const result = await fixture.appHost.deleteHomeConversation(
+    const result = await fixture.appHost.deleteHomeConversations(
       fixture.sender,
       createDesktopConversationDeleteRequest(
         'assistant-conversation-delete',
-        navigation,
+        [navigation],
         projection.rendererSessionId,
       ),
     );
@@ -1747,11 +1747,11 @@ describe('DesktopAppHost', () => {
     });
     const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
 
-    const result = await fixture.appHost.deleteHomeConversation(
+    const result = await fixture.appHost.deleteHomeConversations(
       fixture.sender,
       createDesktopConversationDeleteRequest(
         'delete-unavailable-conversation',
-        navigation,
+        [navigation],
         projection.rendererSessionId,
       ),
     );
@@ -1761,6 +1761,41 @@ describe('DesktopAppHost', () => {
     expect(fixture.agent.attachWorkspace).not.toHaveBeenCalled();
     expect(fixture.registry.resolve).not.toHaveBeenCalled();
     expect(result.projection.agentHome.conversations).toEqual([]);
+  });
+
+  it('validates every Conversation identity before a batch deletion starts', async () => {
+    const fixture = await createShellAppHost();
+    const availableNavigation = {
+      conversationId: 'conversation:available-for-batch',
+      owner: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace:unavailable-batch',
+      },
+    };
+    const missingNavigation = {
+      conversationId: 'conversation:missing-from-batch',
+      owner: availableNavigation.owner,
+    };
+    setAgentHomeConversation(fixture.agent, availableNavigation, {
+      fieldNames: ['context'],
+      message: 'Conversation context is unavailable.',
+    });
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+
+    await expect(
+      fixture.appHost.deleteHomeConversations(
+        fixture.sender,
+        createDesktopConversationDeleteRequest(
+          'delete-conversation-batch',
+          [availableNavigation, missingNavigation],
+          projection.rendererSessionId,
+        ),
+      ),
+    ).rejects.toThrow(
+      "Desktop Agent Home conversation 'conversation:missing-from-batch' is not present",
+    );
+
+    expect(fixture.agent.deleteConversation).not.toHaveBeenCalled();
   });
 
   it('projects sanitized global Skills and verified extensions without a Project', async () => {

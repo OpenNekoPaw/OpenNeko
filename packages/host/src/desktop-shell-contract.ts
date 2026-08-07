@@ -152,7 +152,7 @@ export type DesktopAgentHomeActivityKind = AgentHomeActivityKind;
 export type DesktopAgentHomeNavigationIdentity = AgentHomeNavigationIdentity;
 
 export interface DesktopConversationDeleteRequest extends DesktopWindowMutationRequest {
-  readonly navigation: DesktopAgentHomeNavigationIdentity;
+  readonly navigations: readonly DesktopAgentHomeNavigationIdentity[];
 }
 
 export type DesktopAgentHomeActivitySummary = AgentHomeActivitySummary;
@@ -333,7 +333,9 @@ export interface OpenNekoDesktopShellBridge {
     requestProfile(profile: DesktopUnavailableProjectProfile): Promise<DesktopProfileRequestResult>;
   };
   readonly conversations: {
-    delete(navigation: DesktopAgentHomeNavigationIdentity): Promise<DesktopShellProjection>;
+    delete(
+      navigations: readonly DesktopAgentHomeNavigationIdentity[],
+    ): Promise<DesktopShellProjection>;
   };
   readonly tabs: {
     activateHome(): Promise<DesktopShellProjection>;
@@ -607,12 +609,12 @@ export function createDesktopProjectSelectionRequest(
 
 export function createDesktopConversationDeleteRequest(
   requestId: string,
-  navigation: DesktopAgentHomeNavigationIdentity,
+  navigations: readonly DesktopAgentHomeNavigationIdentity[],
   rendererSessionId: string,
 ): DesktopConversationDeleteRequest {
   return {
     ...createDesktopWindowMutationRequest(requestId, rendererSessionId),
-    navigation: parseDesktopAgentHomeNavigationIdentity(navigation),
+    navigations: requireUniqueConversationNavigations(navigations),
   };
 }
 
@@ -707,17 +709,22 @@ export function parseDesktopConversationDeleteRequest(
   );
   requireExactKeys(
     record,
-    ['requestId', 'navigation', 'rendererSessionId'],
+    ['requestId', 'navigations', 'rendererSessionId'],
     'Desktop Agent Home conversation delete request',
   );
-  return createDesktopConversationDeleteRequest(
-    parseDesktopShellRequestId(record),
-    parseDesktopAgentHomeNavigationIdentity(record['navigation']),
-    requireNonEmptyString(
+  return {
+    requestId: parseDesktopShellRequestId(record),
+    navigations: requireUniqueConversationNavigations(
+      requireArray(
+        record['navigations'],
+        'Desktop Agent Home conversation identities must be an array.',
+      ),
+    ),
+    rendererSessionId: requireNonEmptyString(
       record['rendererSessionId'],
       'Desktop renderer session identity is required.',
     ),
-  );
+  };
 }
 
 export function parseDesktopWorkbenchMutationRequest(
@@ -1440,6 +1447,20 @@ function requireUniqueProjectIds(value: readonly unknown[]): readonly string[] {
     throw invalidPayload('Desktop Project identities must be unique.');
   }
   return projectIds;
+}
+
+function requireUniqueConversationNavigations(
+  value: readonly unknown[],
+): readonly DesktopAgentHomeNavigationIdentity[] {
+  if (value.length === 0) {
+    throw invalidPayload('At least one Desktop Agent Home conversation identity is required.');
+  }
+  const navigations = value.map(parseDesktopAgentHomeNavigationIdentity);
+  const conversationIds = navigations.map((navigation) => navigation.conversationId);
+  if (new Set(conversationIds).size !== conversationIds.length) {
+    throw invalidPayload('Desktop Agent Home conversation identities must be unique.');
+  }
+  return navigations;
 }
 
 function requireRecord(value: unknown, message: string): Readonly<Record<string, unknown>> {

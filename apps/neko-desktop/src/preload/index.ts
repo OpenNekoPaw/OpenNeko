@@ -1029,11 +1029,11 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   conversations: {
-    async delete(navigation) {
+    async delete(navigations) {
       const context = requireShellMutationContext();
       const request = createDesktopConversationDeleteRequest(
         nextRequestId('desktop-conversation-delete'),
-        navigation,
+        navigations,
         context.rendererSessionId,
       );
       const response: unknown = await ipcRenderer.invoke(

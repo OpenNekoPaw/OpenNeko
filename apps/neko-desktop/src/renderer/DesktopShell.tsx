@@ -114,7 +114,9 @@ const SHELL_DIAGNOSTIC_DURATION_MS = 6_000;
 interface ShellActions {
   readonly onSelectProject: (projectId: string) => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
-  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onDeleteConversations: (
+    conversations: readonly DesktopAgentHomeConversationSummary[],
+  ) => void;
   readonly onRemoveProjects: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onDeleteProjectConversations: (projects: readonly DesktopProjectCatalogItem[]) => void;
   readonly onUpdateWorkbench: (
@@ -302,15 +304,22 @@ export function DesktopApplication(): JSX.Element {
         kind: 'restore-conversation',
         navigation: conversation.navigation,
       }),
-    onDeleteConversation: (conversation) => {
-      if (
-        !globalThis.confirm(
-          t('shell.deleteConversationConfirm', { conversation: conversation.title }),
-        )
-      ) {
+    onDeleteConversations: (conversations) => {
+      if (conversations.length === 0) {
+        throw new Error('At least one Conversation is required for deletion.');
+      }
+      const confirmation =
+        conversations.length === 1 && conversations[0]
+          ? t('shell.deleteConversationConfirm', { conversation: conversations[0].title })
+          : t('shell.deleteConversationsConfirm', { count: conversations.length });
+      if (!globalThis.confirm(confirmation)) {
         return;
       }
-      void runMutation(() => window.openNekoDesktop.conversations.delete(conversation.navigation));
+      void runMutation(() =>
+        window.openNekoDesktop.conversations.delete(
+          conversations.map((conversation) => conversation.navigation),
+        ),
+      );
     },
     onRemoveProjects: (projects) => {
       if (projects.length === 0) {
@@ -454,7 +463,7 @@ export function DesktopShellView({
   const actions: ShellActions = {
     onSelectProject: () => undefined,
     onOpenConversation: () => undefined,
-    onDeleteConversation: () => undefined,
+    onDeleteConversations: () => undefined,
     onRemoveProjects: () => undefined,
     onDeleteProjectConversations: () => undefined,
     onUpdateWorkbench: () => undefined,
@@ -680,7 +689,7 @@ function DesktopSceneWorkbench({
             compact={compact}
             disabled={pending}
             activeProjectId={workspaceProject?.projectId}
-            onDeleteConversation={actions.onDeleteConversation}
+            onDeleteConversations={actions.onDeleteConversations}
             onDeleteProjectConversations={(project) =>
               actions.onDeleteProjectConversations([project])
             }
@@ -2079,7 +2088,7 @@ function ApplicationPrimarySidebar({
   activeSection,
   compact,
   disabled = false,
-  onDeleteConversation,
+  onDeleteConversations,
   onDeleteProjectConversations,
   onManageProjects,
   onNavigate,
@@ -2096,7 +2105,9 @@ function ApplicationPrimarySidebar({
   readonly activeSection?: HomeSection;
   readonly compact: boolean;
   readonly disabled?: boolean;
-  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onDeleteConversations: (
+    conversations: readonly DesktopAgentHomeConversationSummary[],
+  ) => void;
   readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
   readonly onManageProjects: () => void;
   readonly onNavigate: (section: HomeSection) => void;
@@ -2156,7 +2167,7 @@ function ApplicationPrimarySidebar({
       <PrimaryRecentNavigation
         activeProjectId={activeProjectId}
         disabled={disabled}
-        onDeleteConversation={onDeleteConversation}
+        onDeleteConversations={onDeleteConversations}
         onDeleteProjectConversations={onDeleteProjectConversations}
         onManageProjects={onManageProjects}
         onOpenConversation={onOpenConversation}
@@ -2176,7 +2187,7 @@ function ApplicationPrimarySidebar({
 function PrimaryRecentNavigation({
   activeProjectId,
   disabled = false,
-  onDeleteConversation,
+  onDeleteConversations,
   onDeleteProjectConversations,
   onManageProjects,
   onOpenConversation,
@@ -2186,7 +2197,9 @@ function PrimaryRecentNavigation({
 }: {
   readonly activeProjectId?: string;
   readonly disabled?: boolean;
-  readonly onDeleteConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
+  readonly onDeleteConversations: (
+    conversations: readonly DesktopAgentHomeConversationSummary[],
+  ) => void;
   readonly onDeleteProjectConversations: (project: DesktopProjectCatalogItem) => void;
   readonly onManageProjects: () => void;
   readonly onOpenConversation: (conversation: DesktopAgentHomeConversationSummary) => void;
@@ -2346,37 +2359,13 @@ function PrimaryRecentNavigation({
                 }
               />
             ) : (
-              <div className="primary-conversation-group__standalone-heading">
-                <IconButton
-                  className="primary-conversation-group__collapse"
-                  disabled={disabled}
-                  size="xs"
-                  label={
-                    collapsed
-                      ? t('home.expandConversationGroup', {
-                          group: formatStandaloneConversationGroup(group, t),
-                        })
-                      : t('home.collapseConversationGroup', {
-                          group: formatStandaloneConversationGroup(group, t),
-                        })
-                  }
-                  aria-expanded={!collapsed}
-                  icon={collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
-                  onClick={() => toggleCollapsed(group)}
-                />
-                {conversationGroupIcon(group)}
-                <span className="primary-conversation-group__label">
-                  {formatStandaloneConversationGroup(group, t)}
-                </span>
-                <span className="primary-conversation-group__count">
-                  {group.conversations.length}
-                </span>
-                <span className="primary-navigation-state">
-                  {group.kind === 'workspace' ? (
-                    <NavigationUnavailableStatus message={group.message} />
-                  ) : null}
-                </span>
-              </div>
+              <StandaloneConversationGroupHeader
+                collapsed={collapsed}
+                disabled={disabled}
+                group={group}
+                onDeleteConversations={() => onDeleteConversations(group.conversations)}
+                onToggle={() => toggleCollapsed(group)}
+              />
             )}
             {!collapsed ? (
               <div className="primary-conversation-group__children">
@@ -2389,7 +2378,7 @@ function PrimaryRecentNavigation({
                     navigationDisabled={
                       disabled || group.kind === 'workspace' || projectUnavailable !== undefined
                     }
-                    onDelete={onDeleteConversation}
+                    onDelete={(conversation) => onDeleteConversations([conversation])}
                     onOpen={onOpenConversation}
                   />
                 ))}
@@ -2409,6 +2398,79 @@ function PrimaryRecentNavigation({
         );
       })}
     </div>
+  );
+}
+
+function StandaloneConversationGroupHeader({
+  collapsed,
+  disabled,
+  group,
+  onDeleteConversations,
+  onToggle,
+}: {
+  readonly collapsed: boolean;
+  readonly disabled: boolean;
+  readonly group: DesktopConversationNavigationGroup;
+  readonly onDeleteConversations: () => void;
+  readonly onToggle: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  if (group.kind === 'project') {
+    throw new Error(`Project group '${group.projectId}' requires a Project navigation header.`);
+  }
+  const label = formatStandaloneConversationGroup(group, t);
+  const header = (
+    <div
+      className={`primary-conversation-group__standalone-heading ${
+        group.kind === 'workspace' ? 'primary-recent-project-row' : ''
+      }`}
+    >
+      <IconButton
+        className="primary-conversation-group__collapse"
+        disabled={disabled}
+        size="xs"
+        label={
+          collapsed
+            ? t('home.expandConversationGroup', { group: label })
+            : t('home.collapseConversationGroup', { group: label })
+        }
+        aria-expanded={!collapsed}
+        icon={collapsed ? <ChevronRightIcon size={13} /> : <ChevronDownIcon size={13} />}
+        onClick={onToggle}
+      />
+      {conversationGroupIcon(group)}
+      <span className="primary-conversation-group__label">{label}</span>
+      <span className="primary-conversation-group__count">{group.conversations.length}</span>
+      <span className="primary-navigation-state">
+        {group.kind === 'workspace' ? (
+          <NavigationUnavailableStatus message={group.message} />
+        ) : null}
+      </span>
+      {group.kind === 'workspace' ? (
+        <span className="primary-navigation-row-actions">
+          <IconButton
+            disabled={disabled}
+            size="xs"
+            label={t('shell.deleteWorkspaceConversations')}
+            title={t('shell.deleteWorkspaceConversations')}
+            icon={<TrashIcon size={13} />}
+            onClick={onDeleteConversations}
+          />
+        </span>
+      ) : null}
+    </div>
+  );
+  return group.kind === 'workspace' ? (
+    <ContextMenu
+      items={createWorkspaceNavigationMenuItems({
+        disabled,
+        onDeleteConversations,
+        t,
+      })}
+      trigger={header}
+    />
+  ) : (
+    header
   );
 }
 
@@ -2619,6 +2681,27 @@ function createConversationNavigationMenuItems(input: {
       disabled: input.disabled,
       danger: true,
       onSelect: input.onDelete,
+    },
+  ];
+}
+
+function createWorkspaceNavigationMenuItems(input: {
+  readonly disabled: boolean;
+  readonly onDeleteConversations: () => void;
+  readonly t: TranslationFunction;
+}): readonly ContextMenuItem[] {
+  return [
+    {
+      id: 'delete-workspace-conversations',
+      label: (
+        <NavigationMenuLabel
+          icon={<TrashIcon size={14} />}
+          text={input.t('shell.deleteWorkspaceConversations')}
+        />
+      ),
+      disabled: input.disabled,
+      danger: true,
+      onSelect: input.onDeleteConversations,
     },
   ];
 }

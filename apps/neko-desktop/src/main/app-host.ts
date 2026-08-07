@@ -949,19 +949,23 @@ export class DesktopAppHost {
     };
   }
 
-  async deleteHomeConversation(
+  async deleteHomeConversations(
     sender: DesktopSenderIdentity,
     payload: unknown,
   ): Promise<DesktopShellResponse> {
     this.requireActive();
     const request = parseDesktopConversationDeleteRequest(payload);
     const window = this.windows.resolveSender(sender);
-    await this.shell.assertAgentHomeConversation(
-      window.windowId,
-      request.rendererSessionId,
-      request.navigation,
-    );
-    await this.agent.deleteConversation(request.navigation.conversationId);
+    for (const navigation of request.navigations) {
+      await this.shell.assertAgentHomeConversation(
+        window.windowId,
+        request.rendererSessionId,
+        navigation,
+      );
+    }
+    for (const navigation of request.navigations) {
+      await this.agent.deleteConversation(navigation.conversationId);
+    }
     return {
       requestId: request.requestId,
       projection: await this.shell.getProjection(window.windowId),
