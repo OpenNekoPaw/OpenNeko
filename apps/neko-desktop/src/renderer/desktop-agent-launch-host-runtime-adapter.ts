@@ -2,7 +2,7 @@ import {
   classifyAgentHostRoute,
   createAgentHostWorkspaceScopeRequiredDiagnostic,
   isAgentLaunchEntryAvailable,
-  type AgentHostRuntimeAdapter,
+  type AgentDraftHostRuntimeAdapter,
   type AgentHostToWebviewMessage,
   type AgentLaunchCatalogProjection,
 } from '@neko/agent-contracts';
@@ -13,16 +13,15 @@ import {
   type DesktopAgentPresentationStorage,
 } from './desktop-agent-host-runtime-adapter';
 
-export interface ElectronAgentLaunchHostRuntimeAdapter extends AgentHostRuntimeAdapter {
+export interface ElectronAgentLaunchHostRuntimeAdapter extends AgentDraftHostRuntimeAdapter {
   readonly catalog: AgentLaunchCatalogProjection;
-  readonly authorizeResource: NonNullable<AgentHostRuntimeAdapter['authorizeResource']>;
-  readonly submitDraft: NonNullable<AgentHostRuntimeAdapter['submitDraft']>;
   dispose(): Promise<void>;
 }
 
 export function createElectronAgentLaunchHostRuntimeAdapter(input: {
   readonly bridge: OpenNekoAgentLaunchBridge;
   readonly catalog: AgentLaunchCatalogProjection;
+  readonly draftId: string;
   readonly storage?: DesktopAgentPresentationStorage;
 }): ElectronAgentLaunchHostRuntimeAdapter {
   const { connection } = input.catalog;
@@ -30,7 +29,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
   const storage = input.storage ?? window.sessionStorage;
   const listeners = new Set<(message: AgentHostToWebviewMessage) => void>();
   const stateKey = createDesktopAgentPresentationStateKey(
-    `window:${connection.windowId}:entry`,
+    `window:${connection.windowId}:draft:${input.draftId}`,
     connection.viewId,
   );
   let disposed = false;
@@ -137,19 +136,21 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
     async submitDraft(draftInput) {
       if (disposed) throw new Error('Agent launch adapter is disposed.');
       const contextMatches =
-        draftInput.target.kind === 'automatic-assistant'
-          ? connection.scope.kind === 'unbound' &&
-            connection.scope.draftId === draftInput.target.draftId
-          : draftInput.target.context.kind === 'assistant'
-            ? connection.scope.kind === 'assistant' &&
-              draftInput.target.context.assistantSpaceId === connection.scope.assistantSpaceId &&
-              sameIdentities(
-                draftInput.target.context.baseGrantIds,
-                draftInput.resourceGrantIds,
-              )
-            : connection.scope.kind === 'workspace' &&
-              draftInput.target.context.workspaceId === connection.scope.workspaceId &&
-              draftInput.target.context.workspaceGrantId === connection.scope.workspaceGrantId;
+        connection.scope.kind === 'unbound'
+          ? connection.scope.draftId === draftInput.target.draftId &&
+            input.draftId === draftInput.target.draftId
+          : draftInput.target.kind === 'bound-context' &&
+            draftInput.target.draftId === input.draftId &&
+            (draftInput.target.context.kind === 'assistant'
+              ? connection.scope.kind === 'assistant' &&
+                draftInput.target.context.assistantSpaceId === connection.scope.assistantSpaceId &&
+                sameIdentities(
+                  draftInput.target.context.baseGrantIds,
+                  draftInput.resourceGrantIds,
+                )
+              : connection.scope.kind === 'workspace' &&
+                draftInput.target.context.workspaceId === connection.scope.workspaceId &&
+                draftInput.target.context.workspaceGrantId === connection.scope.workspaceGrantId);
       if (!contextMatches) {
         throw new Error('Agent draft submit context does not match its launch connection scope.');
       }

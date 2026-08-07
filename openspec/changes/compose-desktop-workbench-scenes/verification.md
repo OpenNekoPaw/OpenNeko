@@ -597,3 +597,46 @@ The overall scenario later failed because its isolated Agent configuration proje
 model and an Extension Management request no longer matched the active Agent Scene; that later failure
 does not invalidate the already committed large/compact management-layout checkpoints and is not
 counted as Agent acceptance.
+
+## Entry Target Commit-On-Submit Verification
+
+Date: 2026-08-07
+
+The final deterministic implementation and quality gates passed:
+
+- Agent Draft contract `1 file / 5 tests`; Agent Runtime controller `3 files / 10 tests`.
+- Agent Webview composer/controller/presenter `3 files / 121 tests` and package type build.
+- Desktop typecheck plus AppHost, launch/bridge/controller, preload and renderer coverage `7 files /
+  78 tests`.
+- Headless Desktop functional coverage `11 files / 128 tests`.
+- Agent Evaluation key-free harness `44 files / 285 tests`; all-suite dry-run `22 suites / 52 cases`.
+  These are harness and deterministic workflow evidence, not real-provider behavior acceptance.
+- `pnpm check:unused` completed with configuration hints only; `pnpm check:legacy-debt` passed with
+  zero blocking production occurrences; full `pnpm check:quality` passed, including internal
+  versioning, canonical-path, package/application/Agent/Webview boundaries, strict TypeScript,
+  storage authorities, test orchestration and all strict OpenSpec validation.
+- `git diff --check` and the Desktop functional scenario syntax check passed.
+
+Visible development Electron evidence:
+
+- `desktop-conversation-navigation` passed through the actual Entry composer, created exactly one
+  Assistant Conversation only after send, projected the running state, retained the unified composer
+  shell, restored conversation-only mode/approval/command/usage controls, and reopened the exact
+  Conversation after visiting management navigation. Report:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-07T14-08-19.545Z-desktop-conversation-navigation-development/report.json`.
+- `desktop-workbench-scenes` rendered and asserted both `1440x960` and `1040x700` Entry layouts before
+  its adjacent management stage. Both layouts show one centered empty state and composer, the
+  bottom-toolbar `打开项目` selector and model configuration, with no Session mode, execution mode,
+  command/Skill shortcuts, usage indicator or top Workspace divider. Screenshots:
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-07T14-04-37.001Z-desktop-workbench-scenes-development/screenshots/03-agent-only-large.png`
+  and `04-agent-only-small.png` in the same directory. The overall scenario remains failed because
+  the pre-existing Assets management + Preview assertion requires non-`none` shadows while both
+  independent shells currently render `none`; that unrelated assertion was not weakened.
+
+The current darwin-arm64 production package built and its canonical executable was verified. Packaged
+`desktop-conversation-navigation` did not produce complete acceptance: one attempt materialized the
+Assistant session and submitted transcript but missed the short-lived running selector, and two
+subsequent attempts exceeded the runner's 120-second scenario limit. These attempts remain
+infrastructure failures, not passing evidence. The current process also has no explicit provider,
+model and cost authorization, so no real-provider run was started and no model-quality claim is made.
+Task 12.8 remains open for packaged and authorized real-provider closure.

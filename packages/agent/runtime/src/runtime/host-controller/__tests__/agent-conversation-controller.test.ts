@@ -25,7 +25,6 @@ function createEffects(): AgentConversationControllerEffectPort {
     submitTurn: vi.fn(),
     confirmTool: vi.fn(),
     cancelTurn: vi.fn(),
-    createConversation: vi.fn(),
     activateConversation: vi.fn(),
     deleteConversation: vi.fn(),
     listConversations: vi.fn(),
@@ -147,7 +146,6 @@ describe('Agent conversation controller', () => {
       context,
     );
     await dispatch({ type: 'cancelMessage', conversationId: 'conversation-1' }, effects, context);
-    await dispatch({ type: 'newConversation' }, effects, context);
     await dispatch(activation, effects, context);
     await dispatch(
       { type: 'deleteConversation', conversationId: 'conversation-1', activateNext: false },
@@ -199,7 +197,6 @@ describe('Agent conversation controller', () => {
       context,
     );
     expect(effects.cancelTurn).toHaveBeenCalledWith('conversation-1', context);
-    expect(effects.createConversation).toHaveBeenCalledWith(context);
     expect(effects.activateConversation).toHaveBeenCalledWith(activation, context);
     expect(effects.deleteConversation).toHaveBeenCalledWith(
       { conversationId: 'conversation-1', activateNext: false },

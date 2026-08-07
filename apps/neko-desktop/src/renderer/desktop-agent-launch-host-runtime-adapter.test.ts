@@ -10,6 +10,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
     const adapter = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
       catalog: createCatalog(),
+      draftId: 'draft:entry',
     });
     const messages: AgentHostToWebviewMessage[] = [];
     adapter.subscribe((message) => messages.push(message));
@@ -39,7 +40,11 @@ describe('Electron Agent launch Host runtime adapter', () => {
 
   it('fails visibly for session-only routes and detaches once', async () => {
     const bridge = createBridge();
-    const adapter = createElectronAgentLaunchHostRuntimeAdapter({ bridge, catalog: createCatalog() });
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
     const messages: AgentHostToWebviewMessage[] = [];
     adapter.subscribe((message) => messages.push(message));
 
@@ -60,6 +65,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
     const first = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
       catalog: createCatalog(),
+      draftId: 'draft:entry',
       storage,
     });
     const replacement = createElectronAgentLaunchHostRuntimeAdapter({
@@ -71,6 +77,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
           connectionId: 'launch-replacement',
         },
       },
+      draftId: 'draft:entry',
       storage,
     });
     const workspaceReplacement = createElectronAgentLaunchHostRuntimeAdapter({
@@ -87,6 +94,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
           },
         },
       },
+      draftId: 'draft:entry',
       storage,
     });
 
@@ -95,7 +103,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(replacement.getState()).toEqual({ drafts: [{ tabId: 'tab-1' }] });
     expect(workspaceReplacement.getState()).toEqual({ drafts: [{ tabId: 'tab-1' }] });
     expect([...storage.values.keys()]).toEqual([
-      'openneko:agent:presentation:window:window-1:entry:agent-view:window-1',
+      'openneko:agent:presentation:window:window-1:draft:draft:entry:agent-view:window-1',
     ]);
   });
 
@@ -114,7 +122,11 @@ describe('Electron Agent launch Host runtime adapter', () => {
         },
       ],
     });
-    const adapter = createElectronAgentLaunchHostRuntimeAdapter({ bridge, catalog: createCatalog() });
+    const adapter = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge,
+      catalog: createCatalog(),
+      draftId: 'draft:entry',
+    });
 
     const payload = await adapter.authorizeResource('file');
 

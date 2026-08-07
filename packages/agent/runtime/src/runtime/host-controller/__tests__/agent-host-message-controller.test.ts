@@ -12,7 +12,6 @@ function createEffects(): AgentHostControllerEffectPorts {
       submitTurn: vi.fn(),
       confirmTool: vi.fn(),
       cancelTurn: vi.fn(),
-      createConversation: vi.fn(),
       activateConversation: vi.fn(),
       deleteConversation: vi.fn(),
       listConversations: vi.fn(),
@@ -81,7 +80,7 @@ describe('Agent Host message controller', () => {
     const controller = createAgentHostMessageController(effects, context);
 
     expect(controller.identity).toBe(context.identity);
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(40);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(39);
 
     await controller.tryHandle({ type: 'getConversations' });
     await controller.tryHandle({ type: 'getConfig' });

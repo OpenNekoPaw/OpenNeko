@@ -1,4 +1,4 @@
-export const DESKTOP_WORKSPACE_GRANT_CHANNEL = 'openneko:desktop:workspace-grant:choose' as const;
+export const DESKTOP_WORKSPACE_GRANT_CHANNEL = 'openneko:desktop:workspace-grant:target' as const;
 
 export interface DesktopWorkspaceGrantProjection {
   readonly workspaceGrantId: string;
@@ -6,16 +6,26 @@ export interface DesktopWorkspaceGrantProjection {
   readonly label: string;
 }
 
-export interface DesktopWorkspaceGrantChooseRequest {
+interface DesktopWorkspaceGrantTargetRequestBase {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
 }
 
-export type DesktopWorkspaceGrantChooseResult =
+export type DesktopWorkspaceGrantTargetRequest =
+  | (DesktopWorkspaceGrantTargetRequestBase & {
+      readonly operation: 'choose-directory';
+    })
+  | (DesktopWorkspaceGrantTargetRequestBase & {
+      readonly operation: 'select-project';
+      readonly projectId: string;
+    });
+
+export type DesktopWorkspaceGrantTargetResult =
   | {
       readonly requestId: string;
       readonly status: 'authorized';
+      readonly workspaceId: string;
       readonly grant: DesktopWorkspaceGrantProjection;
     }
   | {
@@ -25,7 +35,8 @@ export type DesktopWorkspaceGrantChooseResult =
 
 export interface OpenNekoDesktopWorkspaceGrantBridge {
   readonly workspaceGrants: {
-    choose(windowId: string): Promise<DesktopWorkspaceGrantChooseResult>;
+    chooseDirectory(windowId: string): Promise<DesktopWorkspaceGrantTargetResult>;
+    selectProject(windowId: string, projectId: string): Promise<DesktopWorkspaceGrantTargetResult>;
   };
 }
 
@@ -39,57 +50,85 @@ export class DesktopWorkspaceGrantContractError extends Error {
   }
 }
 
-export function createDesktopWorkspaceGrantChooseRequest(input: {
+export function createDesktopWorkspaceDirectoryTargetRequest(input: {
   readonly requestId: string;
   readonly rendererSessionId: string;
   readonly windowId: string;
-}): DesktopWorkspaceGrantChooseRequest {
-  return parseDesktopWorkspaceGrantChooseRequest(input);
+}): DesktopWorkspaceGrantTargetRequest {
+  return parseDesktopWorkspaceGrantTargetRequest({ ...input, operation: 'choose-directory' });
 }
 
-export function parseDesktopWorkspaceGrantChooseRequest(
+export function createDesktopWorkspaceProjectTargetRequest(input: {
+  readonly requestId: string;
+  readonly rendererSessionId: string;
+  readonly windowId: string;
+  readonly projectId: string;
+}): DesktopWorkspaceGrantTargetRequest {
+  return parseDesktopWorkspaceGrantTargetRequest({ ...input, operation: 'select-project' });
+}
+
+export function parseDesktopWorkspaceGrantTargetRequest(
   value: unknown,
-): DesktopWorkspaceGrantChooseRequest {
-  const record = requireRecord(value, 'Desktop Workspace grant request must be an object.');
-  requireExactKeys(
-    record,
-    ['requestId', 'rendererSessionId', 'windowId'],
-    'Desktop Workspace grant request',
-  );
-  return {
-    requestId: requireIdentity(record['requestId'], 'Desktop Workspace grant request'),
+): DesktopWorkspaceGrantTargetRequest {
+  const record = requireRecord(value, 'Desktop Workspace target request must be an object.');
+  const operation = record['operation'];
+  const base = {
+    requestId: requireIdentity(record['requestId'], 'Desktop Workspace target request'),
     rendererSessionId: requireIdentity(
       record['rendererSessionId'],
-      'Desktop Workspace grant renderer session identity',
+      'Desktop Workspace target renderer session identity',
     ),
-    windowId: requireIdentity(record['windowId'], 'Desktop Workspace grant Window'),
+    windowId: requireIdentity(record['windowId'], 'Desktop Workspace target Window'),
   };
-}
-
-export function parseDesktopWorkspaceGrantChooseResult(
-  value: unknown,
-  expectedRequestId?: string,
-): DesktopWorkspaceGrantChooseResult {
-  const record = requireRecord(value, 'Desktop Workspace grant result must be an object.');
-  const status = record['status'];
-  const requestId = requireIdentity(record['requestId'], 'Desktop Workspace grant request');
-  if (expectedRequestId !== undefined && requestId !== expectedRequestId) {
-    throw invalid('Desktop Workspace grant result request identity does not match.');
+  if (operation === 'choose-directory') {
+    requireExactKeys(
+      record,
+      ['requestId', 'rendererSessionId', 'windowId', 'operation'],
+      'Desktop Workspace directory target request',
+    );
+    return { ...base, operation };
   }
-  if (status === 'cancelled') {
-    requireExactKeys(record, ['requestId', 'status'], 'Desktop Workspace grant result');
+  if (operation === 'select-project') {
+    requireExactKeys(
+      record,
+      ['requestId', 'rendererSessionId', 'windowId', 'operation', 'projectId'],
+      'Desktop Workspace Project target request',
+    );
     return {
-      requestId,
-      status,
+      ...base,
+      operation,
+      projectId: requireIdentity(record['projectId'], 'Desktop Workspace target Project'),
     };
   }
-  if (status !== 'authorized') {
-    throw invalid(`Unknown Desktop Workspace grant result status '${String(status)}'.`);
+  throw invalid(`Unknown Desktop Workspace target operation '${String(operation)}'.`);
+}
+
+export function parseDesktopWorkspaceGrantTargetResult(
+  value: unknown,
+  expectedRequestId?: string,
+): DesktopWorkspaceGrantTargetResult {
+  const record = requireRecord(value, 'Desktop Workspace target result must be an object.');
+  const status = record['status'];
+  const requestId = requireIdentity(record['requestId'], 'Desktop Workspace target request');
+  if (expectedRequestId !== undefined && requestId !== expectedRequestId) {
+    throw invalid('Desktop Workspace target result request identity does not match.');
   }
-  requireExactKeys(record, ['requestId', 'status', 'grant'], 'Desktop Workspace grant result');
+  if (status === 'cancelled') {
+    requireExactKeys(record, ['requestId', 'status'], 'Desktop Workspace target result');
+    return { requestId, status };
+  }
+  if (status !== 'authorized') {
+    throw invalid(`Unknown Desktop Workspace target result status '${String(status)}'.`);
+  }
+  requireExactKeys(
+    record,
+    ['requestId', 'status', 'workspaceId', 'grant'],
+    'Desktop Workspace target result',
+  );
   return {
     requestId,
     status,
+    workspaceId: requireIdentity(record['workspaceId'], 'Desktop Workspace target Workspace'),
     grant: parseDesktopWorkspaceGrantProjection(record['grant']),
   };
 }

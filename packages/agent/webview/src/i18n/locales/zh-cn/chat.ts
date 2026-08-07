@@ -211,6 +211,7 @@ export const chat = {
     '不支持的画布 Markdown 表格配置。',
 
   'chat.input.placeholder': '输入任何问题... (/ 命令, @ 文件, Shift+Enter 换行)',
+  'chat.input.entryPlaceholder': '描述你想要完成的内容...',
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
   'chat.input.queuePlaceholder': '正在回答... {count} 条排队消息待处理',
   'chat.input.queuedMessages': '消息队列（{count} 条待处理）',
@@ -234,7 +235,9 @@ export const chat = {
   'chat.input.attach': '添加附件',
   'chat.input.attachFile': '添加附件',
   'chat.input.workspace.label': '工作目录',
-  'chat.input.workspace.choose': '选择工作目录',
+  'chat.input.workspace.openProject': '打开项目',
+  'chat.input.workspace.chooseDirectory': '从系统目录选择',
+  'chat.input.workspace.clear': '清除项目选择',
   'chat.input.commands': '命令',
   'chat.input.skills': '技能',
   'chat.input.mediaModelCalls': '媒体模型调用：{count}',

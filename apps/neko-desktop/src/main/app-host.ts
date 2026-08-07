@@ -137,8 +137,8 @@ import {
 } from '../shared/agent-automation-contract';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import {
-  parseDesktopWorkspaceGrantChooseRequest,
-  type DesktopWorkspaceGrantChooseResult,
+  parseDesktopWorkspaceGrantTargetRequest,
+  type DesktopWorkspaceGrantTargetResult,
 } from '@neko/host/desktop-workspace-grant-contract';
 import type { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import {
@@ -554,9 +554,9 @@ export class DesktopAppHost {
           assistantSpaceId,
           baseGrantIds: request.input.resourceGrantIds,
         };
-        await this.agentLaunch.bindAssistantResourceGrants(
+        await this.agentLaunch.bindResourceGrants(
           connection,
-          assistantSpaceId,
+          { kind: 'assistant', assistantSpaceId },
           request.input.resourceGrantIds,
         );
         if (scene.context.scope.kind === 'assistant' && scene.context.scope.conversationId) {
@@ -577,8 +577,43 @@ export class DesktopAppHost {
           }
         }
       } else {
+        const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
+        if (
+          scene.context.kind !== 'agent' ||
+          scene.context.scope.draftId !== target.draftId ||
+          scene.context.agentViewId !== connection.viewId ||
+          scene.slots.interaction?.phase !== 'draft'
+        ) {
+          throw new Error('Agent draft submit is not the exact active Draft presentation.');
+        }
         context = target.context;
-        if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
+        if (connection.scope.kind === 'unbound') {
+          if (
+            scene.context.scope.kind !== 'unbound' ||
+            connection.scope.draftId !== target.draftId
+          ) {
+            throw new Error('Agent draft submit is not the exact active Entry Draft.');
+          }
+          if (context.kind !== 'workspace') {
+            throw new Error('Unbound Entry target must use automatic Assistant or exact Workspace.');
+          }
+          const resolution = await this.workspaceGrants.resolve(
+            window.windowId,
+            context.workspaceGrantId,
+          );
+          if (resolution.workspace.workspaceId !== context.workspaceId) {
+            throw new Error('Agent Workspace target grant resolves to another Workspace.');
+          }
+          await this.agentLaunch.bindResourceGrants(
+            connection,
+            {
+              kind: 'workspace',
+              workspaceId: context.workspaceId,
+              workspaceGrantId: context.workspaceGrantId,
+            },
+            request.input.resourceGrantIds,
+          );
+        } else if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
           throw new Error('Agent draft submit context does not match its launch connection scope.');
         }
       }
@@ -703,7 +738,7 @@ export class DesktopAppHost {
     };
   }
 
-  async chooseWorkspaceGrant(
+  async resolveWorkspaceTarget(
     sender: DesktopSenderIdentity,
     payload: unknown,
     selectWorkspace: () => Promise<
@@ -713,30 +748,51 @@ export class DesktopAppHost {
         }
       | undefined
     >,
-  ): Promise<DesktopWorkspaceGrantChooseResult> {
+  ): Promise<DesktopWorkspaceGrantTargetResult> {
     this.requireActive();
-    const request = parseDesktopWorkspaceGrantChooseRequest(payload);
+    const request = parseDesktopWorkspaceGrantTargetRequest(payload);
     const window = this.windows.resolveSender(sender);
     if (request.windowId !== window.windowId) {
       throw new Error('Desktop Workspace grant request belongs to another Window.');
     }
     await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
-    const selection = await selectWorkspace();
-    if (!selection) {
+    if (request.operation === 'choose-directory') {
+      const selection = await selectWorkspace();
+      if (!selection) return { requestId: request.requestId, status: 'cancelled' };
+      await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
+      const grant = this.workspaceGrants.authorize({
+        windowId: window.windowId,
+        label: selection.label,
+        hostResource: selection.hostResource,
+      });
+      const resolution = await this.workspaceGrants.resolve(
+        window.windowId,
+        grant.workspaceGrantId,
+      );
       return {
         requestId: request.requestId,
-        status: 'cancelled',
+        status: 'authorized',
+        workspaceId: resolution.workspace.workspaceId,
+        grant,
       };
     }
+    const projection = await this.shell.getProjection(window.windowId);
+    const project = projection.catalog.projects.find(
+      (candidate) => candidate.projectId === request.projectId,
+    );
+    if (!project || project.unavailable) {
+      throw new Error(`Desktop Project '${request.projectId}' is unavailable as a Draft target.`);
+    }
+    const target = await this.workspaceGrants.authorizeWorkspace({
+      windowId: window.windowId,
+      workspaceId: project.workspaceId,
+    });
     await this.shell.assertWindowMutationContext(window.windowId, request.rendererSessionId);
     return {
       requestId: request.requestId,
       status: 'authorized',
-      grant: this.workspaceGrants.authorize({
-        windowId: window.windowId,
-        label: selection.label,
-        hostResource: selection.hostResource,
-      }),
+      workspaceId: target.workspace.workspaceId,
+      grant: target.grant,
     };
   }
 
@@ -758,6 +814,20 @@ export class DesktopAppHost {
       return result;
     }
     const grant = await this.resolveAgentConnectionGrant(window.windowId, request.connection);
+    if (request.message.type === 'newConversation') {
+      const projection = await this.shell.getProjection(window.windowId);
+      const scene = resolveActiveDesktopWindowWorkbench(projection.window).scene;
+      await this.shell.transitionScene(
+        createDesktopSceneTransitionRequest({
+          requestId: request.requestId,
+          rendererSessionId: projection.rendererSessionId,
+          windowId: window.windowId,
+          sceneId: scene.sceneId,
+          intent: { kind: 'new-agent-conversation' },
+        }),
+      );
+      return { requestId: request.requestId, status: 'accepted' };
+    }
     return this.agentBridge.send(request, grant);
   }
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -36,11 +36,14 @@ const translations: Record<string, string> = {
   'chat.input.control.mode': '模式、模型与参数',
   'chat.input.control.params': '工具参数',
   'chat.input.placeholder': '输入任何问题...',
+  'chat.input.entryPlaceholder': '描述你想要完成的内容...',
   'chat.input.thinkingPlaceholder': '正在回答... 请等待或取消后再发送',
   'chat.input.attach': '添加附件',
   'chat.input.attachFile': '添加附件',
   'chat.input.workspace.label': '工作目录',
-  'chat.input.workspace.choose': '选择工作目录',
+  'chat.input.workspace.openProject': '打开项目',
+  'chat.input.workspace.chooseDirectory': '从系统目录选择',
+  'chat.input.workspace.clear': '清除项目选择',
   'chat.input.send': '发送',
   'chat.input.queue': '加入队列',
   'chat.input.skills': '技能',
@@ -649,20 +652,70 @@ describe('InputArea composer controls', () => {
     expect(context.className).toContain('agent-composer-workspace');
     expect(context.textContent).toContain('OpenNeko');
     expect(document.querySelector('.agent-composer-shell')?.contains(context)).toBe(true);
+    expect(document.querySelector('.agent-composer-toolbar')?.contains(context)).toBe(true);
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
   });
 
-  it('keeps Assistant Workspace authorization in the package-owned composer', () => {
-    const onChoose = vi.fn();
+  it('keeps the Entry composer model-only while reusing the conversation composer shell', () => {
     render(
-      <Harness composerWorkspace={{ kind: 'assistant', onChoose }}>
-        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+      <Harness>
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
       </Harness>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '选择工作目录' }));
+    const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
+    expect(within(modeGroup).getByRole('button', { name: '配置模型' })).toBeTruthy();
+    expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '审批' })).toBeNull();
+    expect(screen.queryByTitle('命令')).toBeNull();
+    expect(screen.queryByTitle('技能')).toBeNull();
+    expect(screen.queryByTitle('chat.usage.clickToCompress')).toBeNull();
+    expect(document.querySelector('.agent-composer-shell')).toBeTruthy();
+    expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('描述你想要完成的内容...');
+  });
 
-    expect(onChoose).toHaveBeenCalledOnce();
+  it('keeps Entry Workspace target selection in the package-owned composer', async () => {
+    const target = {
+      label: 'OpenNeko',
+      context: {
+        kind: 'workspace' as const,
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    };
+    const onSelectProject = vi.fn().mockResolvedValue(target);
+    const onTargetChange = vi.fn();
+    render(
+      <Harness
+        composerWorkspace={{
+          kind: 'entry',
+          projects: [{ projectId: 'project-1', label: 'OpenNeko' }],
+          onChooseDirectory: vi.fn().mockResolvedValue(undefined),
+          onSelectProject,
+        }}
+      >
+        <InputArea
+          presentation="entry"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+          onDraftWorkspaceTargetChange={onTargetChange}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '打开项目' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'OpenNeko' }));
+
+    await waitFor(() => expect(onTargetChange).toHaveBeenCalledWith(target));
+    expect(onSelectProject).toHaveBeenCalledWith('project-1');
   });
 
   it('sends the primary Agent model without composer LLM parameters', () => {

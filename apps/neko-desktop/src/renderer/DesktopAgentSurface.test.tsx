@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
+import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
 import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
 
@@ -22,9 +23,7 @@ vi.mock('@neko/agent-webview/root', async () => {
       readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
       readonly agentPresentation?: AgentRootPresentation;
       readonly initialConversation?: { readonly id: string; readonly title: string };
-      readonly composerWorkspace?:
-        | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
-        | { readonly kind: 'workspace'; readonly label: string };
+      readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly locale: string;
       readonly presentation: string;
     }) => {
@@ -372,9 +371,7 @@ function TestAgentSurface({
   initialConversation,
 }: {
   readonly agentPresentation?: AgentRootPresentation;
-  readonly composerWorkspace?:
-    | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
-    | { readonly kind: 'workspace'; readonly label: string };
+  readonly composerWorkspace?: AgentComposerWorkspacePresentation;
   readonly initialConversation?: { readonly id: string; readonly title: string };
 }): JSX.Element {
   const i18n = createDesktopI18n('en');
@@ -445,7 +442,7 @@ function installBridge(
         submitDraft: vi.fn(),
         detach: launch?.detach ?? vi.fn(),
       },
-      workspaceGrants: { choose: vi.fn() },
+      workspaceGrants: { chooseDirectory: vi.fn(), selectProject: vi.fn() },
       agent: {
         getBootstrap,
         getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),

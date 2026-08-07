@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createDesktopWorkspaceGrantChooseRequest,
-  parseDesktopWorkspaceGrantChooseResult,
+  createDesktopWorkspaceDirectoryTargetRequest,
+  createDesktopWorkspaceProjectTargetRequest,
+  parseDesktopWorkspaceGrantTargetResult,
 } from './desktop-workspace-grant-contract';
 
 describe('Desktop Workspace grant contract', () => {
   it('round-trips an opaque grant without exposing a host path', () => {
-    const result = parseDesktopWorkspaceGrantChooseResult({
+    const result = parseDesktopWorkspaceGrantTargetResult({
       requestId: 'request-1',
       status: 'authorized',
+      workspaceId: 'workspace-1',
       grant: {
         workspaceGrantId: 'workspace-grant:1',
         windowId: 'window-1',
@@ -24,10 +26,11 @@ describe('Desktop Workspace grant contract', () => {
 
   it('rejects raw paths, unknown fields and mismatched request identities', () => {
     expect(() =>
-      parseDesktopWorkspaceGrantChooseResult(
+      parseDesktopWorkspaceGrantTargetResult(
         {
           requestId: 'request-1',
           status: 'authorized',
+          workspaceId: 'workspace-1',
           grant: {
             workspaceGrantId: 'workspace-grant:1',
             windowId: 'window-1',
@@ -39,7 +42,7 @@ describe('Desktop Workspace grant contract', () => {
       ),
     ).toThrow(/unknown field 'path'/);
     expect(() =>
-      parseDesktopWorkspaceGrantChooseResult(
+      parseDesktopWorkspaceGrantTargetResult(
         {
           requestId: 'request-other',
           status: 'cancelled',
@@ -48,11 +51,19 @@ describe('Desktop Workspace grant contract', () => {
       ),
     ).toThrow(/request identity does not match/);
     expect(() =>
-      createDesktopWorkspaceGrantChooseRequest({
+      createDesktopWorkspaceDirectoryTargetRequest({
         requestId: 'request-1',
         rendererSessionId: 'epoch-1',
         windowId: '',
       }),
     ).toThrow(/Window identity is required/);
+    expect(
+      createDesktopWorkspaceProjectTargetRequest({
+        requestId: 'request-2',
+        rendererSessionId: 'epoch-1',
+        windowId: 'window-1',
+        projectId: 'project-1',
+      }),
+    ).toMatchObject({ operation: 'select-project', projectId: 'project-1' });
   });
 });

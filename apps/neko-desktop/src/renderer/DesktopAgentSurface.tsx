@@ -66,7 +66,17 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
   useEffect(() => {
     let active = true;
     let bootstrapOperation: Promise<DesktopAgentBootstrapProjection | AgentLaunchCatalogProjection>;
-    if (binding === 'workspace') {
+    if (agentPresentation?.kind === 'draft') {
+      bootstrapOperation = Promise.all([
+        loadDesktopAgentWebviewRootModule(),
+        window.openNekoDesktop.agentLaunch.attach(
+          props.workbenchInstanceId,
+          props.agentSurfaceId,
+          viewId,
+          agentPresentation.scope,
+        ),
+      ]).then(([, catalog]) => catalog);
+    } else if (binding === 'workspace') {
       if (projectId === undefined) {
         throw new Error('Workspace-bound Agent requires a Project identity.');
       }
@@ -106,15 +116,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
         });
       }
     } else {
-      bootstrapOperation = Promise.all([
-        loadDesktopAgentWebviewRootModule(),
-        window.openNekoDesktop.agentLaunch.attach(
-          props.workbenchInstanceId,
-          props.agentSurfaceId,
-          viewId,
-          agentPresentation.scope,
-        ),
-      ]).then(([, catalog]) => catalog);
+      throw new Error('Launch-bound Agent requires a Draft or Assistant session presentation.');
     }
     void bootstrapOperation
       .then((bootstrap) => {
@@ -135,9 +137,13 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           return;
         }
         if (!('status' in bootstrap)) {
+          if (agentPresentation?.kind !== 'draft') {
+            throw new Error('Agent launch adapter requires a Draft presentation.');
+          }
           const launchAdapter = createElectronAgentLaunchHostRuntimeAdapter({
             bridge: window.openNekoDesktop,
             catalog: bootstrap,
+            draftId: agentPresentation.draftId,
           });
           setState({
             kind: 'ready',

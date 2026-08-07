@@ -28,7 +28,7 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 - 每次“开始创作”创建新的未绑定 Entry Draft identity，旧 session UI 状态不能泄漏到新 draft。
 - 未绑定 Entry Draft 直接提交时自动使用 Assistant 用户区；选择目录/Project 时使用 Workspace；选择角色/Room 时使用对应 owner，不要求发送前先点 owner 卡片。
 - Assistant 使用 OpenNeko 用户资源、显式文件 grant 和可恢复 conversation scratch。
-- 用户显式选择目录后获得 Workspace scope 和现有 creative Workbench composition，不自动创建 conversation。
+- 用户显式选择已添加 Project 或系统目录后只获得当前 Entry Draft 的单选 Workspace target receipt；发送前不切换 Scene、不激活 creative Workbench、不创建 conversation。
 - 资源中心以 Assets management 为 Main，authorized Preview 只作为可选 Secondary Main。
 - 保持现有 workspace Agent、Canvas、Preview、Cut、Resource Browser 的行为和身份。
 
@@ -232,7 +232,7 @@ Request 携带 requestId、Window identity、目标 Workbench/Scene identity 和
 
 Renderer reload 从 Host projection 恢复精确 scene。关闭最后一个 conversation 只回到同 scope 的 Agent draft，不默认切换目录或 Project。跨 scope/目录的 active conversation 不可原地 rebind。
 
-`open-agent-entry` 每次必须分配新的 `draftId`，即使当前已经位于 Agent scene。它原子创建一个没有 conversation/scope binding 的独立 Surface，但不删除任何持久 conversation。`bind-agent-assistant` 与显式 directory/Project action 只能绑定请求携带的 exact open draft；未知、已关闭或不匹配的 draft intent 必须失败。未来 Character/Room owner 提供 contract 前，相关绑定返回 owner-qualified unavailable。
+`open-agent-entry` 每次必须分配新的 `draftId`，即使当前已经位于 Agent scene。它原子创建一个没有 conversation/scope binding 的独立 Surface，但不删除任何持久 conversation。Project/directory/Character/Room 选择不是 Scene transition；它只产生 exact Entry `draftId` 的 target receipt 并更新 package-owned Draft snapshot。Canonical first-submit application operation 只能在 local transaction 与 target runtime materialization 成功后激活同一 `draftId` 提交出的 exact conversation。`bind-agent-assistant` 只服务已在 Assistant owner 内发起的新会话 Draft，不用于 Entry target selection。未知、已关闭或不匹配的 draft/target intent 必须失败。未来 Character/Room owner 提供 contract 前，相关选择返回 owner-qualified unavailable。
 
 ### 4. Sidebar is a separate window presentation aggregate
 
@@ -258,11 +258,11 @@ type AgentRootPresentation =
   | { kind: 'session'; scope: AgentScopeProjection; conversationId: ConversationId };
 ```
 
-Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。`unbound` Entry Draft 与 owner-bound draft 使用同一个简洁入口 EmptyState；入口不显示强制 owner 选择卡。Assistant/Workspace 绑定成功后立即显示对应已激活空会话状态。
+Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。`unbound` Entry Draft 和从 Assistant/Workspace/Character/Room owner 内发起的 bound Draft 复用同一简洁 EmptyState；Entry 不显示强制 owner 选择卡，bound Draft 的 target 由其发起 owner 固定。任何 Draft 都不是空 Conversation，只在 first submit 成功后进入 session presentation。
 
-`draftId` 是 presentation identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、旧 transcript/render subscription、entry input/reference 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。Desktop 只挂载当前 package Root，不发送伪造 close-tab 消息，也不保留旧 Root 作为 draft 状态 owner。
+`draftId` 是 presentation identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、旧 transcript/render subscription、entry input/reference/target/configuration 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。当前 Draft snapshot 可以保存未发送 input、resource refs、单选 target receipt 和 model/configuration selection，但不得把它们提前写成 conversation effective configuration 或共享用户设置。Desktop 只挂载当前 package Root，不发送伪造 close-tab 消息，也不保留旧 Root 作为 draft 状态 owner。
 
-Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog，以及目录/Project、未来 Character/Room 等会扩大或改变 owner 的显式选择。普通直接提交由 package-owned Agent 入口确定性绑定 Assistant 用户区并沿既有 local transaction 创建 exact session；它不依赖关键词、模型推断或 active Project。选择目录/Project 绑定 Workspace draft并激活 creative slots；选择未来 Character/Room 绑定对应 owner。入口不得用 owner 选择卡阻塞普通输入。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
+Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog，以及目录/Project、未来 Character/Room 等 target 显式选择。普通直接提交由 package-owned Agent 入口确定性选择 Assistant 用户区并沿既有 local transaction 创建 exact session；它不依赖关键词、模型推断或 active Project。选择目录/Project 只替换当前 Draft 的单一 target receipt，Agent-only Entry Scene 与 launch connection 保持不变；首次提交才把 target 转为 stable conversation context 并激活对应 owner Scene。入口不得用 owner 选择卡阻塞普通输入。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
 
 Entry Draft 中显式授权的文件仍归 exact launch connection 与 `draftId` 所有。确定性 Assistant 首次提交在 conversation validation 前先校验请求中的全部 grant，再将匹配的 `unbound` grants 原子绑定到 exact AssistantSpace；缺失、跨 connection、跨 draft、已绑定其他 scope 或 conversation 的 grant 必须 fail-visible，且验证失败不能造成部分 scope 修改。相同 AssistantSpace 的幂等重试保持成功，但不得扩大授权集合或接受其他 draft 的 grant。
 
@@ -276,8 +276,8 @@ Composer 视觉继续由 `@neko/agent-webview` 拥有并增强现有 `InputArea`
 
 1. Desktop Main 通过 native picker 授权目录并创建 sender/window-bound opaque `WorkspaceGrantId`；路径不进入 renderer、Agent message、project fact 或日志。
 2. Host workspace authority 验证 grant，建立或恢复精确 Workspace identity，并返回 Workspace scope projection。
-3. Scene 切换为同一 Agent Root + Workspace Main + Workspace Resources +适用 Timeline/Status；此时尚不创建 conversation。
-4. 用户提交第一条消息时，Agent authority 把 conversation context 冻结为该 Workspace identity，并创建 initial message/pending turn。
+3. Agent Webview 把 exact Workspace identity/grant/label 作为当前 Draft 的单选 target receipt；Agent-only Entry Scene、Root 和 launch connection 均不变。
+4. 用户提交第一条消息时，Agent authority 验证 receipt 并把 conversation context 冻结为该 Workspace identity，创建 initial message/pending turn；物化 exact runtime 成功后 Host 才切换到 Workspace Scene。
 
 Project catalog entry 可以解析为同一 Workspace identity，但不能用 first/recent/active Project 作为隐式选择。切换到另一目录时，draft 可以替换 scope；active conversation 必须新建 conversation，原会话保持不变。
 

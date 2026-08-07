@@ -4,6 +4,11 @@ import type {
   TabRenderState,
   TabRenderStateUpdate,
 } from './tab-render-runtime';
+import {
+  parseAgentConversationContext,
+  type AgentContextPayload,
+  type AgentConversationContext,
+} from '@neko/agent-contracts';
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
   readonly inputValue: string;
@@ -13,6 +18,13 @@ export interface TabRenderDraftSnapshot extends TabRenderBinding {
 export interface AgentEntryDraftSnapshot {
   readonly draftId: string;
   readonly inputValue: string;
+  readonly contextReferences: readonly AgentContextPayload[];
+  readonly workspaceTarget?: {
+    readonly label: string;
+    readonly context: Extract<AgentConversationContext, { readonly kind: 'workspace' }>;
+  };
+  readonly selectedModel: string;
+  readonly executionMode: 'plan' | 'ask' | 'auto';
 }
 
 export interface TabRenderRealmState {
@@ -313,9 +325,71 @@ function parseDraft(value: unknown, index: number): TabRenderDraftSnapshot {
 function parseEntryDraft(value: unknown): AgentEntryDraftSnapshot {
   const path = 'Agent entry draft snapshot';
   if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  const contextReferences = value.contextReferences;
+  if (!Array.isArray(contextReferences)) {
+    throw new Error(`${path}.contextReferences must be an array.`);
+  }
+  const workspaceTarget = parseEntryWorkspaceTarget(value.workspaceTarget, path);
   return {
     draftId: nonEmptyString(value.draftId, `${path}.draftId`),
     inputValue: stringValue(value.inputValue, `${path}.inputValue`),
+    contextReferences: contextReferences.map((reference, index) =>
+      parseEntryContextReference(reference, `${path}.contextReferences[${index}]`),
+    ),
+    ...(workspaceTarget === undefined ? {} : { workspaceTarget }),
+    selectedModel: stringValue(value.selectedModel, `${path}.selectedModel`),
+    executionMode: enumValue(value.executionMode, ['plan', 'ask', 'auto'], `${path}.executionMode`),
+  };
+}
+
+function parseEntryWorkspaceTarget(
+  value: unknown,
+  path: string,
+): AgentEntryDraftSnapshot['workspaceTarget'] {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`${path}.workspaceTarget must be an object.`);
+  const context = parseAgentConversationContext(value.context);
+  if (context.kind !== 'workspace') {
+    throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
+  }
+  return {
+    label: nonEmptyString(value.label, `${path}.workspaceTarget.label`),
+    context,
+  };
+}
+
+function parseEntryContextReference(value: unknown, path: string): AgentContextPayload {
+  if (!isRecord(value)) throw new Error(`${path} must be an object.`);
+  const type = enumValue(
+    value.type,
+    [
+      'canvas-node',
+      'cut-clip',
+      'story-selection',
+      'character',
+      'scene',
+      'asset',
+      'media',
+      'entity',
+      'sketch-layer',
+      '3d-reference',
+      'audio-clip',
+      'file',
+      'image',
+      'document-selection',
+      'canvas-storyboard-action-intent',
+    ] as const,
+    `${path}.type`,
+  );
+  if (!('data' in value)) throw new Error(`${path}.data is required.`);
+  const intent = optionalString(value.intent, `${path}.intent`);
+  return {
+    type,
+    id: nonEmptyString(value.id, `${path}.id`),
+    label: nonEmptyString(value.label, `${path}.label`),
+    summary: stringValue(value.summary, `${path}.summary`),
+    data: value.data,
+    ...(intent === undefined ? {} : { intent }),
   };
 }
 
@@ -356,6 +430,11 @@ function stringValue(value: unknown, path: string): string {
 function optionalNonEmptyString(value: unknown, path: string): string | undefined {
   if (value === undefined) return undefined;
   return nonEmptyString(value, path);
+}
+
+function optionalString(value: unknown, path: string): string | undefined {
+  if (value === undefined) return undefined;
+  return stringValue(value, path);
 }
 
 function optionalFiniteNumber(value: unknown, path: string): number | undefined {

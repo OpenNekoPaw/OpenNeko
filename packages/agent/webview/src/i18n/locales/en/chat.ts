@@ -230,6 +230,7 @@ export const chat = {
 
   'chat.input.placeholder':
     'Ask anything... (/ for commands, @ for files, Shift+Enter for new line)',
+  'chat.input.entryPlaceholder': 'Describe what you want to create...',
   'chat.input.thinkingPlaceholder': 'Responding... wait or cancel before sending again',
   'chat.input.queuePlaceholder': 'Responding... {count} queued message(s)',
   'chat.input.queuedMessages': 'Message queue ({count} pending)',
@@ -254,7 +255,9 @@ export const chat = {
   'chat.input.attach': 'Attach file',
   'chat.input.attachFile': 'Attach file',
   'chat.input.workspace.label': 'Working directory',
-  'chat.input.workspace.choose': 'Choose working directory',
+  'chat.input.workspace.openProject': 'Open project',
+  'chat.input.workspace.chooseDirectory': 'Choose from system directories',
+  'chat.input.workspace.clear': 'Clear project selection',
   'chat.input.commands': 'Commands',
   'chat.input.skills': 'Skills',
   'chat.input.mediaModelCalls': 'Media model calls: {count}',

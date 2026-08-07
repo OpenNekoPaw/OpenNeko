@@ -123,3 +123,14 @@ preserve or a legacy path to keep after the replacement is complete.
 - [ ] 11.10 Complete `bound-desktop-ui-residency`, then run focused Host/Desktop/Agent/Assets/Canvas tests, strict OpenSpec/quality gates and visible real-provider Electron acceptance proving two Workspace/conversation histories remain recoverable while only current/explicit-split Roots mount and background execution remains independent.
 - [x] 11.11 Reconcile persisted session Agent Surfaces against the canonical owner-qualified Conversation catalog before renderer bootstrap; locally reject an invalid exact Surface, preserve Conversation authority bytes and valid siblings, activate a same-owner draft, project the diagnostic, and add Host/Desktop regressions plus deterministic Evaluation disposition.
 - [x] 11.12 Make Assets, Extensions and Projects management/detail compositions default to an equal split and constrain the management Main to at least 50%; add renderer resize-boundary tests and visible large/compact Electron evidence.
+
+## 12. Commit Entry Target Only On First Submit
+
+- [x] 12.1 Update proposal/design/spec and Evaluation disposition so Project/directory/Assistant/Character/Room are Entry Draft targets, not pre-submit Scene scopes; keep unqualified Character/Room fail-visible.
+- [x] 12.2 Keep Entry Draft unbound while retaining exact owner-bound Drafts for Assistant/Workspace/Character/Room invocation; replace optional submit authority with an exact `draftId + target` submit contract and update every producer, consumer, codec, fixture and test in one pass.
+- [x] 12.3 Add a sender-bound Workspace target receipt path for one selected catalog Project or native directory without Scene mutation, active-Project inference or raw-path projection.
+- [x] 12.4 Persist package-owned Entry input, references, target and model/configuration selection; stop writing Entry model/mode changes to shared settings and clear Draft state only after local submit succeeds.
+- [x] 12.5 Activate Assistant/Workspace session Scene only after local transaction and exact runtime materialization; prove validation/persistence failure preserves the Entry Draft and provider failure remains in the committed session.
+- [x] 12.6 Route Assistant/Workspace new-conversation actions to fresh owner-qualified Entry Drafts and retain explicit unavailable behavior for Character/Room until their owners are composed.
+- [x] 12.7 Unify the Entry composer presentation with the session composer while hiding Entry-only unsupported mode and shortcut controls; add narrow/large UI regressions.
+- [ ] 12.8 Run focused contracts/runtime/Webview/Host/Desktop tests, strict OpenSpec and quality gates, focused Agent Evaluation, and visible development/packaged Electron UI validation; record evidence and residual risk.

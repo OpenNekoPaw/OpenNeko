@@ -192,3 +192,44 @@ Date: 2026-08-06
 - Real provider execution is not required for this disposition because no Agent turn or behavior can
   change. The existing key-free Evaluation harness remains infrastructure evidence only and is not
   described as provider behavior acceptance.
+
+## Entry Target Commit-On-Submit Decision
+
+Date: 2026-08-07
+
+- Disposition remains `update` for
+  `session-workflows -> agent-runtime.workflow-controller`. Entry, Assistant-owner and
+  Workspace-owner drafts converge on the existing first-submit lifecycle; no second controller,
+  direct runtime runner or target-specific success path is introduced.
+- User-visible behavior: selecting one catalog Project or native directory in the unbound Entry
+  composer changes only the package-owned Draft target. The Agent-only Scene, launch connection and
+  Conversation catalog remain unchanged until the user sends the first message. Assistant and
+  Workspace owner-local “new conversation” actions create a fresh owner-qualified Draft without an
+  empty Conversation. Character/Room remain owner-qualified unavailable until their composition is
+  implemented.
+- Canonical path: exact Entry `draftId` -> sender-bound target receipt -> package-owned input,
+  reference, target and configuration snapshot -> first-submit local transaction -> exact target
+  runtime materialization -> owner-qualified session Scene -> provider claim. A target receipt is
+  single-select and is frozen into the committed conversation context only at first submit.
+- Required evidence: no Scene or Conversation mutation after Project/directory selection; requested
+  and effective target/model/configuration identity at submit; one committed Conversation, initial
+  message and pending turn; exact session attachment; terminal provider state. A pre-commit target,
+  grant, configuration or persistence failure must retain the Entry Draft. A post-commit provider
+  failure must remain attached to the committed session with its diagnostic.
+- Forbidden paths: pre-submit `open-workspace`/`open-project-workspace`, active/first/recent Project
+  inference, a Workspace Draft rendered through a session adapter without submit authority, clearing
+  Draft state before local commit, writing Entry model selection into shared settings, Character/Room
+  fallback to Assistant and any mock or direct-turn acceptance substitute.
+- Focused provider-backed coverage continues to reuse
+  `assistant-first-submit-exactly-once` and update
+  `workspace-directory-grant-first-submit`. Deterministic contract/Webview/Host tests own target
+  single-selection, no-navigation, pre-commit retention and unavailable-owner assertions. Visible
+  Desktop validation must additionally exercise the real composer and inspect both the unchanged
+  Entry Scene before send and the exact target Scene after send.
+
+Current execution evidence on 2026-08-07 is deterministic only: the key-free harness passed `44 files
+/ 285 tests` and the all-suite dry-run passed `22 suites / 52 cases`; visible development Electron
+proved the composer-driven Entry-to-Assistant transaction and exact session restore with the isolated
+functional provider. The process did not provide explicit provider/model/cost authorization, so the
+provider-backed cases were not run. Packaged UI attempts did not reach a complete runner terminal and
+remain infrastructure failures. Neither result is promoted to real-provider Agent behavior evidence.

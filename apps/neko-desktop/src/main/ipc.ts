@@ -61,7 +61,7 @@ export function registerDesktopIpc(
     appHost.executeAssistantResourceRequest(requireSender(event), payload),
   );
   ipcMain.handle(DESKTOP_WORKSPACE_GRANT_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
-    appHost.chooseWorkspaceGrant(requireSender(event), payload, () =>
+    appHost.resolveWorkspaceTarget(requireSender(event), payload, () =>
       options.selectWorkspaceGrant(event),
     ),
   );

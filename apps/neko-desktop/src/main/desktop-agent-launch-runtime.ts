@@ -42,9 +42,9 @@ export interface DesktopAgentLaunchRuntime {
     connection: AgentLaunchConnectionIdentity,
     resourceKind: AgentLaunchResourceKind,
   ): Promise<AgentLaunchCatalogProjection | undefined>;
-  bindAssistantResourceGrants(
+  bindResourceGrants(
     connection: AgentLaunchConnectionIdentity,
-    assistantSpaceId: string,
+    targetScope: Exclude<AgentAuthorityScopeProjection, { readonly kind: 'unbound' }>,
     resourceGrantIds: readonly string[],
   ): Promise<void>;
   detach(connection: AgentLaunchConnectionIdentity): Promise<void>;
@@ -132,11 +132,10 @@ export function createDesktopAgentLaunchRuntime(input: {
     readCatalog: (connection) => service.readCatalog(connection),
     authorizeResource: (connection, resourceKind) =>
       service.authorizeResource(connection, resourceKind),
-    async bindAssistantResourceGrants(connection, assistantSpaceId, resourceGrantIds) {
+    async bindResourceGrants(connection, targetScope, resourceGrantIds) {
       if (connection.scope.kind !== 'unbound') {
-        throw new Error('Assistant Resource grant binding requires an unbound launch connection.');
+        throw new Error('Agent Resource grant binding requires an unbound launch connection.');
       }
-      const targetScope = { kind: 'assistant' as const, assistantSpaceId };
       const pending: DesktopAgentResourceGrant[] = [];
       for (const resourceGrantId of resourceGrantIds) {
         const grant = grants.get(resourceGrantId);
@@ -145,10 +144,7 @@ export function createDesktopAgentLaunchRuntime(input: {
             `Agent Resource grant '${resourceGrantId}' does not belong to its launch connection.`,
           );
         }
-        if (
-          grant.scope.kind === 'assistant' &&
-          grant.scope.assistantSpaceId === assistantSpaceId
-        ) {
+        if (sameScope(grant.scope, targetScope)) {
           continue;
         }
         if (
@@ -240,3 +236,20 @@ export function createDesktopAgentLaunchRuntime(input: {
 }
 
 const MAX_AGENT_AUTHORIZED_TEXT_CHARS = 256 * 1024;
+
+function sameScope(
+  left: AgentAuthorityScopeProjection,
+  right: Exclude<AgentAuthorityScopeProjection, { readonly kind: 'unbound' }>,
+): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === 'assistant' && right.kind === 'assistant') {
+    return left.assistantSpaceId === right.assistantSpaceId;
+  }
+  if (left.kind === 'workspace' && right.kind === 'workspace') {
+    return (
+      left.workspaceId === right.workspaceId &&
+      left.workspaceGrantId === right.workspaceGrantId
+    );
+  }
+  return false;
+}

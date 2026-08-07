@@ -61,7 +61,6 @@ export interface AgentConversationControllerEffectPort {
     context: AgentHostRouteEffectContext,
   ): void | Promise<void>;
   cancelTurn(conversationId: string, context: AgentHostRouteEffectContext): void | Promise<void>;
-  createConversation(context: AgentHostRouteEffectContext): void | Promise<void>;
   activateConversation(
     message: ActivateConversationWebviewMessage,
     context: AgentHostRouteEffectContext,
@@ -223,7 +222,6 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'mermaidError',
   'confirmTool',
   'cancelMessage',
-  'newConversation',
   'activateConversation',
   'deleteConversation',
   'getConversations',
@@ -236,6 +234,10 @@ export const AGENT_CONVERSATION_CONTROLLER_ROUTE_TYPES = [
   'editQueuedMessage',
   'clearHistory',
   'clearAllConversations',
+] as const satisfies readonly AgentWebviewToHostMessage['type'][];
+
+export const AGENT_WINDOW_NAVIGATION_ROUTE_TYPES = [
+  'newConversation',
 ] as const satisfies readonly AgentWebviewToHostMessage['type'][];
 
 export const AGENT_CONFIG_CONTROLLER_ROUTE_TYPES = [
@@ -322,7 +324,10 @@ type ElectronImplementedRouteType = {
 }[keyof typeof ELECTRON_AGENT_HOST_ROUTE_COVERAGE];
 type AssertNever<Value extends never> = Value;
 export type AgentSharedControllerMissingRouteCoverage = AssertNever<
-  Exclude<ElectronImplementedRouteType, SharedControllerRouteType>
+  Exclude<
+    ElectronImplementedRouteType,
+    SharedControllerRouteType | (typeof AGENT_WINDOW_NAVIGATION_ROUTE_TYPES)[number]
+  >
 >;
 export type AgentSharedControllerUnexpectedRouteCoverage = AssertNever<
   Exclude<SharedControllerRouteType, ElectronImplementedRouteType>

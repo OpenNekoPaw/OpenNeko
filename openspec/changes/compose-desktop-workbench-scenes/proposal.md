@@ -17,7 +17,8 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Agent Webview 以 `draftId` 作为 presentation instance identity；进入新 draft 时必须清除旧 conversation Tabs、active conversation、transcript、输入引用和瞬态错误，同时保留全局模型目录与用户设置。
 - 将 Agent 的 presentation phase 与 authority scope 分离：draft/session 决定会话 chrome，`assistant | workspace` 决定可用目录、资源、Tool、Skill 和 scene composition。
 - Assistant scope 使用 OpenNeko 管理的用户资源投影、用户显式授权文件和 conversation-scoped scratch；它不得获得整个用户 Home、配置、凭据、插件安装根或任意本地路径。
-- 用户显式选择目录时由 Desktop Main 授权并返回 opaque directory grant；Host/Agent authority 建立精确 Workspace identity并激活原有 Agent + Canvas/Preview/Cut + Workspace Resources composition。选择目录不自动创建 conversation。
+- 用户显式选择已添加 Project 或系统目录时由 Desktop Main 授权并返回只属于当前 `draftId` 的 opaque Workspace target receipt；选择只更新 package-owned Entry Draft snapshot，不绑定 Scene、不激活 Workspace composition、不创建 conversation。
+- 只有用户发送首条消息时，Agent authority 才冻结 exact target、model/configuration、resource grants 与 message，原子提交 conversation/initial message/pending turn，物化目标 runtime 后再激活 Assistant/Workspace/Character/Room Scene。提交前不得因 target 选择跳转。
 - Scene 或权限 scope 只由入口动作、已持久化 conversation context 和 owner capability facts 决定：未选择 owner 的普通直接提交确定性使用 Assistant，目录/Project 选择使用 Workspace，角色选择使用对应角色 owner。模型文本不得发明目录/Project identity 或扩大权限；需要 workspace 能力但尚未选择目录时返回明确的选择要求。
 - 资源中心建立 Assets-owned `AssetCenterSession`，由同一 session 的 Management Root 在 Main 管理 catalog/filter/selection，并把选中资源通过授权 descriptor 投影给可选 Secondary Preview Root；Desktop 不拥有 Asset selection、资源事实或 preview 类型判断。
 - 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个视觉、DOM 与 overflow 边界独立的共享 panel shell；两个 shell 各自拥有边框、圆角、背景并由带间距的 resize composition 连接，不能只在同一连续 Main 底板上画分隔线。
@@ -66,7 +67,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - `@neko/canvas-*`、`@neko/cut-*`、`@neko/preview-*` 继续拥有 workspace creative Roots；scene composition 不复制其状态、业务逻辑或媒体 runtime。
 - Agent extension management UI 必须通过 Agent package public Root/port 暴露；项目目录与 Settings 只保留 app-level placement，领域状态与操作继续委托 owning Host/package contract。
 - `apps/neko-desktop` 只保留 Electron Window/View 生命周期、typed IPC/preload、目录/文件/麦克风授权 adapter 和将公开 Roots 放入已验证 slots 的 presentation composition。
-- `@neko/host` 同时拥有 Entry Draft identity 与 `unbound -> owner-bound draft -> session` Scene transition fencing；`@neko/agent-webview` 拥有同一 Root 内 presentation reset，Desktop renderer 不推断或缓存 scope。
+- `@neko/host` 同时拥有 Entry Draft identity 与 `unbound entry -> committed owner-qualified session` Scene transition fencing；`@neko/agent-webview` 拥有同一 Root 内 presentation reset 和未发送 target/configuration snapshot，Desktop renderer 不推断 scope 或以 Scene 表示 Draft target。
 - `@neko/host` 拥有 Window 当前 Scene/Workspace/View identity 与布局，不拥有 Renderer residency policy；
   package runtime 继续拥有业务状态与后台任务，Desktop renderer 只挂载当前和显式分屏 Roots。
 - 用户数据不删除、不复制，产品运行时不迁移、不兼容读取也不自动修复。持久记录必须长期保持单一稳定 shape；无法满足 canonical shape 的记录在其最小实例边界返回明确 diagnostic，其他 Window、Workbench、conversation 和 Project 继续可用。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。

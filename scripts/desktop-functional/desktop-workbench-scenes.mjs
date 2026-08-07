@@ -140,6 +140,22 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         rendererResources: initialRendererResources,
       });
 
+      await resizeWindow(evaluate, 1040, 700);
+      const smallAgent = await inspectWorkbench(evaluate, 'agent-only');
+      assertSingleWorkbench(smallAgent);
+      assertAgentOnly(smallAgent);
+      const smallDraftControls = await inspectAgentDraftControls(evaluate);
+      assertAgentDraftControls(smallDraftControls);
+      if (!smallDraftControls.composer.toolbarFitsSurface) {
+        throw new Error('Small-window Entry composer toolbar overflowed its Agent surface.');
+      }
+      const smallAgentScreenshot = await screenshot('agent-only-small');
+      checkpoint('agent-only-small', {
+        ...smallAgent,
+        draftControls: smallDraftControls,
+      });
+      await resizeWindow(evaluate, 1440, 960);
+
       const assetsProjectionStart = await readShellProjectionProbe(evaluate);
       await clickApplicationNavigation(evaluate, click, 1);
       await waitForSelector('[data-owner-root="asset-management"]');
@@ -507,6 +523,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       return {
         scenes: {
           agent,
+          smallAgent,
           assets,
           extensions,
           projects,
@@ -522,6 +539,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         screenshots: [
           ...sidebarScreenshots,
           agentScreenshot,
+          smallAgentScreenshot,
           assetsScreenshot,
           assetPreviewScreenshot,
           extensionsScreenshot,
@@ -715,6 +733,9 @@ export const desktopConversationNavigationScenario = Object.freeze({
       if (initialSession.conversationCount !== initialDraft.conversationCount + 1) {
         throw new Error('Conversation navigation fixture did not create one initial session.');
       }
+      const sessionComposer = await inspectAgentSessionControls(evaluate);
+      assertAgentSessionControls(sessionComposer);
+      checkpoint('assistant-session-composer-controls', sessionComposer);
 
       const groupLifecycle = await exerciseAssistantConversationGroup(
         evaluate,
@@ -2651,9 +2672,44 @@ async function inspectAgentDraftControls(evaluate) {
     hasModel: Boolean(document.querySelector('.agent-model-config-trigger')),
     modelLabel: document.querySelector('.agent-model-config-trigger')?.textContent?.trim() ?? '',
     hasApproval: Boolean(document.querySelector('.agent-execution-mode-trigger')),
+    hasCommandShortcut: Boolean(document.querySelector('.agent-composer-tool-button-text')),
     sessionTabsVisible: Boolean(document.querySelector('[data-testid="conversation-tabs"]')),
   }))()`);
   return { ...controls, composer: await inspectComposerPresentation(evaluate) };
+}
+
+async function inspectAgentSessionControls(evaluate) {
+  return evaluate(`(() => {
+    const activeSurface = document.querySelector('[data-primary-surface="agent"]');
+    const shell = activeSurface?.querySelector('.agent-composer-shell');
+    const toolbar = activeSurface?.querySelector('.agent-composer-toolbar');
+    const owner = shell?.closest('[data-dock-owner="agent"], [data-primary-surface="agent"]');
+    if (!(activeSurface instanceof HTMLElement) || !(shell instanceof HTMLElement) ||
+        !(toolbar instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
+      throw new Error('Assistant session composer presentation is incomplete.');
+    }
+    const shellRect = shell.getBoundingClientRect();
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const ownerRect = owner.getBoundingClientRect();
+    return {
+      composerCount: activeSurface.querySelectorAll('.agent-composer-shell').length,
+      textareaCount: activeSurface.querySelectorAll('.agent-composer-textarea').length,
+      hasMode: Boolean(activeSurface.querySelector('.agent-control-chip-mode')),
+      hasModel: Boolean(activeSurface.querySelector('.agent-model-config-trigger')),
+      hasApproval: Boolean(activeSurface.querySelector('.agent-execution-mode-trigger')),
+      commandShortcutCount:
+        activeSurface.querySelectorAll('.agent-composer-tool-button-text').length,
+      hasUsageIndicator: [...activeSurface.querySelectorAll('.agent-composer-tool-button')].some(
+        (button) => /compress|\u538b\u7f29/iu.test(button.getAttribute('title') ?? ''),
+      ),
+      workspaceControlCount: activeSurface.querySelectorAll('.agent-composer-workspace').length,
+      hasShadow: getComputedStyle(shell).boxShadow !== 'none',
+      shellWidth: shellRect.width,
+      fitsSurface: shellRect.left >= ownerRect.left && shellRect.right <= ownerRect.right,
+      toolbarFitsSurface:
+        toolbar.scrollWidth <= toolbar.clientWidth && toolbarRect.right <= shellRect.right,
+    };
+  })()`);
 }
 
 async function inspectComposerPresentation(evaluate) {
@@ -2681,6 +2737,8 @@ async function inspectComposerPresentation(evaluate) {
     const style = getComputedStyle(shell);
     return {
       workspaceLabel: workspace.textContent?.trim() ?? '',
+      workspaceInToolbar: toolbar.contains(workspace),
+      workspaceBorderBottomWidth: getComputedStyle(workspace).borderBottomWidth,
       hasShadow: style.boxShadow !== 'none',
       shellWidth: shellRect.width,
       ownerWidth: ownerRect.width,
@@ -3041,10 +3099,11 @@ function assertAgentDraftControls(detail) {
     detail.toolButtonCount < 1 ||
     !detail.hasWorkspaceChoice ||
     detail.hasLegacyWorkspaceToolbar ||
-    !detail.hasMode ||
+    detail.hasMode ||
     !detail.hasModel ||
     !detail.modelLabel.includes('Functional Chat') ||
-    !detail.hasApproval ||
+    detail.hasApproval ||
+    detail.hasCommandShortcut ||
     detail.sessionTabsVisible
   ) {
     throw new Error(
@@ -3052,6 +3111,27 @@ function assertAgentDraftControls(detail) {
     );
   }
   assertWorkspaceComposer(detail.composer, 'assistant');
+}
+
+function assertAgentSessionControls(detail) {
+  if (
+    detail.composerCount !== 1 ||
+    detail.textareaCount !== 1 ||
+    !detail.hasMode ||
+    !detail.hasModel ||
+    !detail.hasApproval ||
+    detail.commandShortcutCount !== 2 ||
+    !detail.hasUsageIndicator ||
+    detail.workspaceControlCount !== 0 ||
+    !detail.hasShadow ||
+    detail.shellWidth > 820 ||
+    !detail.fitsSurface ||
+    !detail.toolbarFitsSurface
+  ) {
+    throw new Error(
+      `Assistant session did not restore its conversation-only controls: ${JSON.stringify(detail)}`,
+    );
+  }
 }
 
 function assertWorkspaceComposer(detail, scope) {
@@ -3062,7 +3142,9 @@ function assertWorkspaceComposer(detail, scope) {
     !detail.emptyPanelAligned ||
     detail.emptyPanelWidth > 820 ||
     detail.branchMetadataCount !== 0 ||
-    (scope === 'assistant' && !detail.workspaceLabel.includes('选择工作目录')) ||
+    !detail.workspaceInToolbar ||
+    detail.workspaceBorderBottomWidth !== '0px' ||
+    (scope === 'assistant' && !detail.workspaceLabel.includes('打开项目')) ||
     (scope === 'workspace' && detail.workspaceLabel !== 'workspace')
   ) {
     throw new Error(

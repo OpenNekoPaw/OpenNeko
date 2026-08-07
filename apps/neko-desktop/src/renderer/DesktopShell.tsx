@@ -125,7 +125,12 @@ interface ShellActions {
   ) => void;
   readonly onUpdateApplicationSidebar: (sidebar: DesktopApplicationSidebarProjection) => void;
   readonly onTransitionScene: (intent: DesktopSceneTransitionIntent) => void;
-  readonly onChooseWorkspace: () => void;
+  readonly onChooseWorkspaceTarget: () => Promise<
+    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
+  >;
+  readonly onSelectWorkspaceProjectTarget: (
+    projectId: string,
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
 }
 
 export function DesktopApplication(): JSX.Element {
@@ -387,28 +392,54 @@ export function DesktopApplication(): JSX.Element {
         ),
       ),
     onTransitionScene: transitionScene,
-    onChooseWorkspace: () => {
+    onChooseWorkspaceTarget: async () => {
       setPending(true);
       setDiagnostic(undefined);
-      void window.openNekoDesktop.workspaceGrants
-        .choose(projection.window.windowId)
-        .then(async (result) => {
-          if (result.status === 'cancelled') return;
-          const transition = await window.openNekoDesktop.scenes.transition(
-            projection.window.windowId,
-            { kind: 'open-workspace', workspaceGrantId: result.grant.workspaceGrantId },
-            activeWorkbench.scene.sceneId,
-          );
-          if (transition.status !== 'transitioned') {
-            setDiagnostic(transition.diagnostic.message);
-            return;
-          }
-        })
-        .catch(async (error: unknown) => {
-          setDiagnostic(describeError(error));
-          await refresh();
-        })
-        .finally(() => setPending(false));
+      try {
+        const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
+          projection.window.windowId,
+        );
+        if (result.status === 'cancelled') return undefined;
+        return {
+          label: result.grant.label,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: result.workspaceId,
+            workspaceGrantId: result.grant.workspaceGrantId,
+          },
+        };
+      } catch (error: unknown) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        return undefined;
+      } finally {
+        setPending(false);
+      }
+    },
+    onSelectWorkspaceProjectTarget: async (projectId) => {
+      setPending(true);
+      setDiagnostic(undefined);
+      try {
+        const result = await window.openNekoDesktop.workspaceGrants.selectProject(
+          projection.window.windowId,
+          projectId,
+        );
+        if (result.status === 'cancelled') return undefined;
+        return {
+          label: result.grant.label,
+          context: {
+            kind: 'workspace' as const,
+            workspaceId: result.workspaceId,
+            workspaceGrantId: result.grant.workspaceGrantId,
+          },
+        };
+      } catch (error: unknown) {
+        setDiagnostic(describeError(error));
+        await refresh();
+        return undefined;
+      } finally {
+        setPending(false);
+      }
     },
   };
 
@@ -469,7 +500,8 @@ export function DesktopShellView({
     onUpdateWorkbench: () => undefined,
     onUpdateApplicationSidebar: () => undefined,
     onTransitionScene: () => undefined,
-    onChooseWorkspace: () => undefined,
+    onChooseWorkspaceTarget: async () => undefined,
+    onSelectWorkspaceProjectTarget: async () => undefined,
   };
   return (
     <DesktopSceneWorkbench
@@ -568,7 +600,8 @@ function DesktopSceneWorkbench({
         projection,
         workbenchInstanceId: activeWorkbench.workbenchInstanceId,
         interaction: scene.slots.interaction,
-        onChooseWorkspace: actions.onChooseWorkspace,
+        onChooseWorkspaceTarget: actions.onChooseWorkspaceTarget,
+        onSelectWorkspaceProjectTarget: actions.onSelectWorkspaceProjectTarget,
         workspaceSelectionDisabled: pending || !interactive,
       })
     : undefined;
@@ -1085,7 +1118,12 @@ function createDesktopAgentSurfaceProps(input: {
   readonly workbenchInstanceId: string;
   readonly project?: DesktopProjectCatalogItem;
   readonly interaction: DesktopAgentInteractionSurfaceRef;
-  readonly onChooseWorkspace?: () => void;
+  readonly onChooseWorkspaceTarget?: () => Promise<
+    import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined
+  >;
+  readonly onSelectWorkspaceProjectTarget?: (
+    projectId: string,
+  ) => Promise<import('@neko/agent-webview/root').AgentComposerWorkspaceTarget | undefined>;
   readonly workspaceSelectionDisabled?: boolean;
 }): DesktopAgentSurfaceProps | undefined {
   const { interaction } = input;
@@ -1123,22 +1161,33 @@ function createDesktopAgentSurfaceProps(input: {
       composerWorkspace: { kind: 'workspace', label: project.displayName },
     };
   }
-  if (!input.onChooseWorkspace) {
+  if (!input.onChooseWorkspaceTarget || !input.onSelectWorkspaceProjectTarget) {
     throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace chooser.`);
   }
+  const agentPresentation = createLaunchAgentPresentation(scope);
   return {
     binding: 'launch',
     workbenchInstanceId: input.workbenchInstanceId,
     agentSurfaceId: interaction.agentSurfaceId,
     viewId: interaction.agentViewId,
-    agentPresentation: createLaunchAgentPresentation(scope),
-    composerWorkspace: {
-      kind: 'assistant',
-      onChoose: input.onChooseWorkspace,
-      ...(input.workspaceSelectionDisabled === undefined
-        ? {}
-        : { disabled: input.workspaceSelectionDisabled }),
-    },
+    agentPresentation,
+    ...(agentPresentation.kind === 'draft' && agentPresentation.scope.kind === 'unbound'
+      ? {
+          composerWorkspace: {
+            kind: 'entry' as const,
+            projects: input.projection.catalog.projects.map((project) => ({
+              projectId: project.projectId,
+              label: project.displayName,
+              ...(project.unavailable ? { disabled: true } : {}),
+            })),
+            onChooseDirectory: input.onChooseWorkspaceTarget,
+            onSelectProject: input.onSelectWorkspaceProjectTarget,
+            ...(input.workspaceSelectionDisabled === undefined
+              ? {}
+              : { disabled: input.workspaceSelectionDisabled }),
+          },
+        }
+      : {}),
   };
 }
 

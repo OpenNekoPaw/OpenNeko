@@ -216,7 +216,10 @@ describe('Tab render realm state', () => {
     const tabDraft = draft('tab-a', 'conv-a', 'tab text');
     const parsed = parseTabRenderRealmState({
       drafts: [tabDraft],
-      entryDraft: { draftId: '', inputValue: 'entry text' },
+      entryDraft: {
+        ...entryDraft('draft-a', 'entry text'),
+        draftId: '',
+      },
     });
 
     expect(parsed.state).toEqual({ drafts: [tabDraft] });
@@ -255,6 +258,9 @@ function entryDraft(draftId: string, inputValue: string): AgentEntryDraftSnapsho
   return {
     draftId,
     inputValue,
+    contextReferences: [],
+    selectedModel: 'test:test-model',
+    executionMode: 'ask',
   };
 }
 

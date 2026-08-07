@@ -80,6 +80,35 @@ export class DesktopWorkspaceGrantAuthority implements DesktopWorkspaceGrantAuth
     return projection;
   }
 
+  async authorizeWorkspace(input: {
+    readonly windowId: string;
+    readonly workspaceId: string;
+  }): Promise<{
+    readonly grant: DesktopWorkspaceGrantProjection;
+    readonly workspace: AssetWorkspaceResolution;
+  }> {
+    this.requireActive();
+    if (!this.options.resolver.restore) {
+      throw new DesktopWorkspaceGrantAuthorityError(
+        'desktop-workspace-grant-not-found',
+        `Workspace '${input.workspaceId}' cannot be restored by this Host.`,
+      );
+    }
+    const workspace = await this.options.resolver.restore(input.workspaceId);
+    if (workspace.workspaceId !== input.workspaceId) {
+      throw new DesktopWorkspaceGrantAuthorityError(
+        'desktop-workspace-grant-not-found',
+        `Workspace '${input.workspaceId}' resolved to another Workspace.`,
+      );
+    }
+    const grant = this.authorize({
+      windowId: input.windowId,
+      label: workspace.displayName,
+      hostResource: workspace.workspacePath,
+    });
+    return { grant, workspace };
+  }
+
   async resolve(
     windowId: string,
     workspaceGrantId: string,

@@ -1574,7 +1574,7 @@ function reconcilePersistedAgentSurface(
   const interaction = window.workbench.scene.slots.interaction;
   if (!interaction || isPersistedAgentSurfaceQualified(interaction, agentHome)) return window;
   return replaceActiveDesktopWorkbench(window, {
-    scene: createReplacementAgentDraftScene(window.workbench, `draft:${createIdentity()}`),
+    scene: createReplacementAgentDraftScene(window.workbench.scene, `draft:${createIdentity()}`),
   });
 }
 
@@ -1597,38 +1597,35 @@ function isPersistedAgentSurfaceQualified(
 }
 
 function createReplacementAgentDraftScene(
-  instance: DesktopWindowCompositionProjection,
+  current: DesktopWorkbenchSceneProjection,
   draftId: string,
 ): DesktopWorkbenchSceneProjection {
-  if (
-    instance.scene.context.kind === 'agent' &&
-    instance.scene.context.scope.kind === 'assistant'
-  ) {
+  if (current.context.kind === 'agent' && current.context.scope.kind === 'assistant') {
     return createAssistantAgentScene({
-      current: instance.scene,
-      assistantSpaceId: instance.scene.context.scope.assistantSpaceId,
+      current,
+      assistantSpaceId: current.context.scope.assistantSpaceId,
       draftId,
     });
   }
   if (
-    instance.scene.context.kind !== 'agent' ||
-    instance.scene.context.scope.kind !== 'workspace' ||
-    instance.scene.slots.interaction?.kind !== 'agent'
+    current.context.kind !== 'agent' ||
+    current.context.scope.kind !== 'workspace' ||
+    current.slots.interaction?.kind !== 'agent'
   ) {
     throw new DesktopSceneContractError(
       'desktop-scene-scope-mismatch',
-      `Desktop Workbench '${instance.workbenchInstanceId}' cannot replace an invalid session with a same-owner draft.`,
+      `Desktop Scene '${current.sceneId}' cannot replace an invalid session with a same-owner draft.`,
     );
   }
-  const { conversationId: _conversationId, ...persistedScope } = instance.scene.context.scope;
+  const { conversationId: _conversationId, ...persistedScope } = current.context.scope;
   const scope = { ...persistedScope, draftId };
   return parseDesktopWorkbenchSceneProjection({
-    ...instance.scene,
-    context: { ...instance.scene.context, scope },
+    ...current,
+    context: { ...current.context, scope },
     slots: {
-      ...instance.scene.slots,
+      ...current.slots,
       interaction: {
-        ...instance.scene.slots.interaction,
+        ...current.slots.interaction,
         phase: 'draft',
         scope,
       },
@@ -2424,6 +2421,20 @@ function createTransitionedScene(
   const windowId = current.windowId;
   if (intent.kind === 'open-agent-entry') {
     return createDefaultDesktopAgentScene(windowId, `draft:${createIdentity()}`);
+  }
+  if (intent.kind === 'new-agent-conversation') {
+    if (
+      current.context.kind !== 'agent' ||
+      current.context.scope.kind === 'unbound' ||
+      current.context.scope.conversationId === undefined ||
+      current.slots.interaction?.phase !== 'session'
+    ) {
+      throw new DesktopSceneContractError(
+        'desktop-scene-scope-mismatch',
+        'A new owner-bound Agent Draft requires the exact active Conversation Scene.',
+      );
+    }
+    return createReplacementAgentDraftScene(current, `draft:${createIdentity()}`);
   }
   if (intent.kind === 'bind-agent-assistant') {
     if (

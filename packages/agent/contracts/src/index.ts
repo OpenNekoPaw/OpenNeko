@@ -134,6 +134,7 @@ export type {
   AgentHostRouteUnavailableDiagnostic,
   AgentHostRouteUnavailableSupport,
   AgentHostWorkspaceScopeRequiredDiagnostic,
+  AgentDraftHostRuntimeAdapter,
   AgentHostRuntimeAdapter,
   AgentHostRuntimeSubscription,
   AgentWebviewToHostMessageType,
@@ -148,6 +149,7 @@ export {
   createAgentHostRouteUnavailableDiagnostic,
   createAgentHostWorkspaceScopeRequiredDiagnostic,
   createElectronAgentHostRouteUnavailableDiagnostic,
+  requireAgentDraftHostRuntimeAdapter,
 } from './agent-host-runtime-adapter';
 export type { EnabledStateRecord } from './enabled-state';
 

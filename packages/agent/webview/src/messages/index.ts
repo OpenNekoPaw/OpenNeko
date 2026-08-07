@@ -1,5 +1,6 @@
 /** Type-safe messages from the Agent surface to its injected Desktop host runtime. */
 import type {
+  AgentDraftHostRuntimeAdapter,
   AgentHostRuntimeAdapter,
   InvokeAgentCapabilityLifecycleWebviewMessage,
   RequestCanvasAuthoringHandoffWebviewMessage,
@@ -10,7 +11,7 @@ import type {
 import type { ContentLocator, DocumentLocator } from '@neko/content';
 import type { AgentContextType } from '@neko/agent-contracts';
 
-export type { AgentHostRuntimeAdapter };
+export type { AgentDraftHostRuntimeAdapter, AgentHostRuntimeAdapter };
 
 function requireConversationId(messageType: string, conversationId: string): string {
   if (conversationId.trim().length === 0) {

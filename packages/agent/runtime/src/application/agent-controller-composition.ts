@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 
 import { createSystemPromptBuilder } from '@neko/agent-runtime/prompt/system-prompt-builder';
-import { createConversationId } from '@neko/agent-runtime/session/conversation-id';
 import {
   PiToolConfirmationRegistry,
   registerOpenNekoPiProvider,
@@ -556,27 +555,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         if (!active)
           throw new Error(`Desktop Agent conversation '${conversationId}' is not running.`);
         workspace.cancelTurn(conversationId, active);
-      },
-      createConversation: (context) => {
-        bind(context);
-        return enqueueTabOperation(state, async () => {
-          const conversationId = createConversationId(workspace.workspace.workspacePath);
-          await workspace.createConversation(conversationId);
-          state.activeConversationId = conversationId;
-          await visiblePresentation.updateConversation(conversationId);
-          const tab: OpenTab = {
-            id: `tab-${conversationId}`,
-            title: 'New conversation',
-            conversationId,
-          };
-          state.tabState = {
-            openTabs: [...state.tabState.openTabs, tab],
-            activeTabId: tab.id,
-          };
-          await postConversationList(context);
-          await context.post(buildTabStateMessage(state.tabState));
-          await postConversation(conversationId, context);
-        });
       },
       activateConversation: (message, context) => {
         bind(context);

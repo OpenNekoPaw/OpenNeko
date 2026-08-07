@@ -447,22 +447,29 @@ describe('Agent controller composition', () => {
     });
     expect(auditDesktopAgentStartup(composition)).toEqual({ ready: true });
 
-    await effects.conversation.createConversation(context);
+    await workspace.createConversation('conversation-owner-1');
+    const activeTab = {
+      id: 'tab-conversation-owner-1',
+      title: 'Owner conversation',
+      conversationId: 'conversation-owner-1',
+    };
+    await effects.conversation.listConversations(context);
+    await effects.conversation.activateConversation(
+      {
+        type: 'activateConversation',
+        activationId: 1,
+        conversationId: activeTab.conversationId,
+        tabId: activeTab.id,
+        tabState: { openTabs: [activeTab], activeTabId: activeTab.id },
+      },
+      context,
+    );
     expect(workspace.createConversation).toHaveBeenCalledOnce();
     expect(posted.map((message) => message.type)).toEqual([
       'conversationList',
       'tabState',
       'activeConversation',
     ]);
-    const tabState = posted.find((message) => message.type === 'tabState');
-    if (!tabState || tabState.type !== 'tabState' || !tabState.tabState) {
-      throw new Error('Expected Agent tab state.');
-    }
-    const { activeTabId, openTabs } = tabState.tabState;
-    if (!openTabs || activeTabId === undefined)
-      throw new Error('Expected complete Agent tab state.');
-    const activeTab = openTabs.find((tab) => tab.id === activeTabId);
-    if (!activeTab) throw new Error('Expected an active Agent conversation Tab.');
     await effects.conversation.readMessageQueue(activeTab.conversationId, context);
     await effects.conversation.promoteQueuedMessage(
       { conversationId: activeTab.conversationId, queueItemId: 'queued-turn-1' },

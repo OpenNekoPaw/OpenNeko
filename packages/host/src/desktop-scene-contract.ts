@@ -108,6 +108,7 @@ export interface DesktopApplicationSidebarProjection {
 
 export type DesktopSceneTransitionIntent =
   | { readonly kind: 'open-agent-entry' }
+  | { readonly kind: 'new-agent-conversation' }
   | { readonly kind: 'bind-agent-assistant'; readonly draftId: string }
   | { readonly kind: 'open-workspace'; readonly workspaceGrantId: string }
   | { readonly kind: 'open-project-workspace'; readonly projectId: string }
@@ -726,6 +727,7 @@ function parseSceneTransitionIntent(value: unknown): DesktopSceneTransitionInten
   const kind = record['kind'];
   if (
     kind === 'open-agent-entry' ||
+    kind === 'new-agent-conversation' ||
     kind === 'open-asset-center' ||
     kind === 'open-extensions' ||
     kind === 'open-project-management'

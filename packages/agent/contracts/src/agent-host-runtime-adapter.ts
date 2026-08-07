@@ -17,12 +17,28 @@ export interface AgentHostRuntimeAdapter {
   subscribe(listener: (message: AgentHostToWebviewMessage) => void): AgentHostRuntimeSubscription;
   getState(): unknown;
   setState(state: unknown): void;
-  submitDraft?(
+}
+
+export interface AgentDraftHostRuntimeAdapter extends AgentHostRuntimeAdapter {
+  submitDraft(
     input: import('./agent-draft-submit').AgentDraftSubmitInput,
   ): Promise<import('./agent-draft-submit').AgentDraftSubmitProjection>;
-  authorizeResource?(
+  authorizeResource(
     resourceKind: import('./agent-launch').AgentLaunchResourceKind,
   ): Promise<import('./agent-context').AgentContextPayload | undefined>;
+}
+
+export function requireAgentDraftHostRuntimeAdapter(
+  adapter: AgentHostRuntimeAdapter,
+): AgentDraftHostRuntimeAdapter {
+  const candidate = adapter as Partial<AgentDraftHostRuntimeAdapter>;
+  if (
+    typeof candidate.submitDraft !== 'function' ||
+    typeof candidate.authorizeResource !== 'function'
+  ) {
+    throw new Error('Agent Draft presentation requires an exact Draft Host runtime adapter.');
+  }
+  return candidate as AgentDraftHostRuntimeAdapter;
 }
 
 export type AgentHostRouteSupport = 'implemented' | 'unsupported' | 'host-inapplicable';

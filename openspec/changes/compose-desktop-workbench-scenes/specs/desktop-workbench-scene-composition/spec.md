@@ -135,8 +135,9 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 #### Scenario: User selects an explicit owner from Entry Draft
 
 - **WHEN** the user explicitly chooses a Workspace directory/Project or a future Character/Room for the current exact draft
-- **THEN** Host binds that draft to the matching owner-qualified scope and activates its Workbench shape without creating a conversation
-- **AND** the first submit creates one exact conversation/session and atomically activates its Agent phase and layout
+- **THEN** the owning adapter returns one exact target receipt for that draft and the package-owned Draft snapshot replaces its previous target selection
+- **AND** the Entry Draft remains in the same unbound Agent-only Scene without creating a conversation, Workspace composition or provider turn
+- **AND** the first submit freezes the target and configuration, creates one exact conversation/session and atomically activates its Agent phase and owner-qualified layout
 - **AND** a stale draft identity or unavailable Character/Room owner fails visibly
 
 #### Scenario: Direct Entry Draft submit uses Assistant
@@ -154,10 +155,11 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 - **AND** missing, cross-connection, cross-draft or previously bound grants fail visibly without partially rebinding the remaining grants
 - **AND** an idempotent retry for the same AssistantSpace does not duplicate or expand authorization
 
-#### Scenario: Workspace owner binding activates the Agent presentation
+#### Scenario: Workspace target selection keeps the Entry presentation
 
 - **WHEN** an exact Entry Draft is bound to a Workspace through a directory or Project selection
-- **THEN** the same Agent Root switches immediately to the Workspace-bound draft presentation and the creative Workbench slots
+- **THEN** the same Agent Root remains in the unbound Entry Draft presentation and records one Workspace target receipt
+- **AND** the Scene does not expose Workspace Main, Workspace Resources, Timeline or a Workspace session before submit
 - **AND** ordinary message text cannot fabricate the directory grant or Workspace identity
 
 #### Scenario: Workspace conversation renders normally
@@ -214,16 +216,16 @@ Workspace capability SHALL be activated only from an explicit user directory/Pro
 #### Scenario: User selects a directory from Agent draft
 
 - **WHEN** the user authorizes a directory
-- **THEN** Host validates the grant, establishes an exact Workspace identity and activates Agent + Workspace Main + Workspace Resources composition
+- **THEN** Host validates the grant, establishes an exact Workspace identity and returns a target receipt bound to the current draft
 - **AND** the same Agent Root remains mounted
-- **AND** no conversation is created until the user submits a message or explicitly creates one
+- **AND** the active Scene and composition remain Agent-only and no conversation is created until the user submits a message
 
-#### Scenario: User opens an existing Project Workspace
+#### Scenario: User selects an existing Project from Agent draft
 
-- **WHEN** the user activates an exact Project from PrimarySidebar or project management
-- **THEN** Host commits its active Project target, attached Workbench and Workspace Agent draft Scene together
-- **AND** the returned projection immediately contains Agent + Workspace Main + Workspace Resources with matching identities
-- **AND** no old Assistant launch scope or unrelated Project can bootstrap during the transition
+- **WHEN** the user selects an exact available Project from the Entry composer
+- **THEN** Host returns one Workspace target receipt without changing active Project, Workbench or Scene
+- **AND** the receipt replaces any prior Entry target because only one target can be submitted
+- **AND** an unavailable Project fails locally while preserving the prior Draft input, target and configuration
 
 #### Scenario: User cancels directory selection
 
@@ -281,7 +283,14 @@ Submitting an Agent draft SHALL validate the explicit scope and grants, atomical
 
 - **WHEN** the user submits a draft under an exact Workspace grant
 - **THEN** Agent authority freezes that Workspace identity in the conversation context
+- **AND** Host activates Agent + Workspace Main + Workspace Resources only after the exact conversation is materialized
 - **AND** the initial provider turn starts exactly once after the local commit
+
+#### Scenario: Draft submit fails before local commit
+
+- **WHEN** target, grant, model configuration or local persistence validation rejects the first submit
+- **THEN** the Entry Scene remains active and its input, references, target and configuration selections remain unchanged
+- **AND** no conversation, pending turn, provider execution or target Scene is created
 
 #### Scenario: Renderer reloads during the first turn
 

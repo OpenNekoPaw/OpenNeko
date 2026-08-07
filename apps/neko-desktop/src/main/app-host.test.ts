@@ -26,7 +26,7 @@ import {
 } from '@neko/host/desktop-shell-contract';
 import { DesktopAppHost } from './app-host';
 import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
-import { createDesktopWorkspaceGrantChooseRequest } from '@neko/host/desktop-workspace-grant-contract';
+import { createDesktopWorkspaceDirectoryTargetRequest } from '@neko/host/desktop-workspace-grant-contract';
 import { createAssetCenterHostRequest } from '@neko/assets-domain/asset-center';
 import {
   createAgentConversationLifecycleService,
@@ -287,20 +287,21 @@ describe('DesktopAppHost', () => {
     ).rejects.toThrow('belongs to another Window');
   });
 
-  it('keeps directory picker cancellation inert and activates only the explicitly authorized Workspace', async () => {
+  it('keeps directory target selection inert until the Draft is submitted', async () => {
     const fixture = await createShellAppHost();
-    const chooseRequest = createDesktopWorkspaceGrantChooseRequest({
+    const chooseRequest = createDesktopWorkspaceDirectoryTargetRequest({
       requestId: 'workspace-choose-1',
       rendererSessionId: fixture.projection.rendererSessionId,
       windowId: fixture.windowId,
     });
     const initialScene = activeScene(fixture.projection);
+    const initialConversationCount = fixture.projection.agentHome.conversations.length;
     const foreignPicker = vi.fn(async () => ({
       label: 'foreign',
       hostResource: '/Users/fixture/foreign',
     }));
     await expect(
-      fixture.appHost.chooseWorkspaceGrant(
+      fixture.appHost.resolveWorkspaceTarget(
         { webContentsId: 11, frameUrl: `${DESKTOP_APP_ORIGIN}/index.html` },
         chooseRequest,
         foreignPicker,
@@ -309,7 +310,7 @@ describe('DesktopAppHost', () => {
     expect(foreignPicker).not.toHaveBeenCalled();
 
     await expect(
-      fixture.appHost.chooseWorkspaceGrant(fixture.sender, chooseRequest, async () => undefined),
+      fixture.appHost.resolveWorkspaceTarget(fixture.sender, chooseRequest, async () => undefined),
     ).resolves.toEqual({
       requestId: 'workspace-choose-1',
       status: 'cancelled',
@@ -324,7 +325,7 @@ describe('DesktopAppHost', () => {
       locator: { kind: 'variable', value: '${HOME}/demo' },
     };
     fixture.registry.resolve.mockResolvedValue(resolution);
-    const selected = await fixture.appHost.chooseWorkspaceGrant(
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
       fixture.sender,
       { ...chooseRequest, requestId: 'workspace-choose-2' },
       async () => ({ label: 'demo', hostResource: '/Users/fixture/demo' }),
@@ -333,6 +334,9 @@ describe('DesktopAppHost', () => {
     expect(JSON.stringify(selected)).not.toContain('/Users/fixture');
     if (selected.status !== 'authorized')
       throw new Error('Expected an authorized Workspace grant.');
+    const afterSelection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    expect(activeScene(afterSelection)).toEqual(initialScene);
+    expect(afterSelection.agentHome.conversations).toHaveLength(initialConversationCount);
     const transition = await fixture.appHost.transitionScene(
       fixture.sender,
       createDesktopSceneTransitionRequest({
@@ -386,6 +390,7 @@ describe('DesktopAppHost', () => {
         input: {
           target: {
             kind: 'bound-context',
+            draftId: workspaceScene.context.scope.draftId,
             context: {
               kind: 'workspace',
               workspaceId: workspaceScene.context.scope.workspaceId,
@@ -410,6 +415,36 @@ describe('DesktopAppHost', () => {
       },
       slots: { interaction: { phase: 'session' } },
     });
+    const workspaceSessionProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const workspaceConversationCount = workspaceSessionProjection.agentHome.conversations.length;
+    const workspaceDraft = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'workspace-new-conversation',
+        rendererSessionId: workspaceSessionProjection.rendererSessionId,
+        windowId: fixture.windowId,
+        sceneId: activeScene(workspaceSessionProjection).sceneId,
+        intent: { kind: 'new-agent-conversation' },
+      }),
+    );
+    expect(workspaceDraft).toMatchObject({
+      status: 'transitioned',
+      scene: {
+        context: {
+          kind: 'agent',
+          scope: {
+            kind: 'workspace',
+            workspaceId: 'workspace-explicit',
+            workspaceGrantId: selected.grant.workspaceGrantId,
+            draftId: expect.stringMatching(/^draft:/u),
+          },
+        },
+        slots: { interaction: { phase: 'draft' } },
+      },
+    });
+    expect(
+      (await fixture.appHost.shell.getProjection(fixture.windowId)).agentHome.conversations,
+    ).toHaveLength(workspaceConversationCount);
   });
 
   it('binds Agent launch operations to the exact Assistant Scene and connection identity', async () => {
@@ -597,9 +632,9 @@ describe('DesktopAppHost', () => {
         }),
       }),
     );
-    expect(agentLaunch.bindAssistantResourceGrants).toHaveBeenCalledWith(
+    expect(agentLaunch.bindResourceGrants).toHaveBeenCalledWith(
       connection,
-      'assistant-space:local-user',
+      { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
       ['grant:entry-1'],
     );
     expect(first).toMatchObject({ status: 'committed' });
@@ -701,6 +736,36 @@ describe('DesktopAppHost', () => {
       },
     });
     expect(providerStart).toHaveBeenCalledOnce();
+    const sendAgentMessage = vi.spyOn(fixture.appHost.agentBridge, 'send');
+    const assistantConversationCount = (
+      await fixture.appHost.shell.getProjection(fixture.windowId)
+    ).agentHome.conversations.length;
+    await expect(
+      fixture.appHost.sendAgentMessage(
+        fixture.sender,
+        createDesktopAgentMessageRequest(
+          'assistant-new-conversation',
+          bootstrap.connection,
+          { type: 'newConversation' },
+        ),
+      ),
+    ).resolves.toEqual({ requestId: 'assistant-new-conversation', status: 'accepted' });
+    expect(sendAgentMessage).not.toHaveBeenCalled();
+    const assistantDraftProjection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    expect(activeScene(assistantDraftProjection)).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant-space:local-user',
+          draftId: expect.stringMatching(/^draft:/u),
+        },
+      },
+      slots: { interaction: { phase: 'draft' } },
+    });
+    expect(assistantDraftProjection.agentHome.conversations).toHaveLength(
+      assistantConversationCount,
+    );
     await fixture.appHost.dispose();
   });
 
@@ -1044,9 +1109,9 @@ describe('DesktopAppHost', () => {
     const fixture = await createShellAppHost({ conversationLifecycle });
     const workspace = createWorkspaceResolution();
     fixture.registry.resolve.mockResolvedValue(workspace);
-    const selected = await fixture.appHost.chooseWorkspaceGrant(
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
       fixture.sender,
-      createDesktopWorkspaceGrantChooseRequest({
+      createDesktopWorkspaceDirectoryTargetRequest({
         requestId: 'restore-workspace-grant',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
@@ -1211,9 +1276,9 @@ describe('DesktopAppHost', () => {
     const fixture = await createShellAppHost({ conversationLifecycle });
     const readConversationContext = vi.spyOn(conversationLifecycle, 'readConversationContext');
     fixture.registry.resolve.mockResolvedValue(workspace);
-    const selected = await fixture.appHost.chooseWorkspaceGrant(
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
       fixture.sender,
-      createDesktopWorkspaceGrantChooseRequest({
+      createDesktopWorkspaceDirectoryTargetRequest({
         requestId: 'pi-only-workspace-grant',
         rendererSessionId: fixture.projection.rendererSessionId,
         windowId: fixture.windowId,
@@ -2692,7 +2757,7 @@ function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {
       throw new Error('Agent launch catalog read is not expected by this AppHost test.');
     }),
     validateResourceGrants: vi.fn(async () => undefined),
-    bindAssistantResourceGrants: vi.fn(async () => undefined),
+    bindResourceGrants: vi.fn(async () => undefined),
     resolveResourceContexts: vi.fn(async () => []),
     commitResourceGrants: vi.fn(),
     readConversationResourceGrants: vi.fn(() => []),

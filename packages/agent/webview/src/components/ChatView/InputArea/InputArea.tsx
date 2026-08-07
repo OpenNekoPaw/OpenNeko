@@ -68,9 +68,13 @@ import type {
 } from '@neko/agent-contracts';
 import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
 import { useAgentHostMessages } from '../../../host-runtime-context';
-import { useComposerWorkspacePresentation } from '../../ComposerWorkspaceContext';
+import {
+  useComposerWorkspacePresentation,
+  type AgentComposerWorkspaceTarget,
+} from '../../ComposerWorkspaceContext';
 
 interface InputAreaProps {
+  presentation?: 'entry' | 'conversation';
   inputValue: string;
   isThinking: boolean;
   /** Conversation-owned run state for queue/send/stop behavior. */
@@ -104,6 +108,8 @@ interface InputAreaProps {
   /** Callback to update attached files (when managed externally) */
   onAttachedFilesChange?: (files: MessageAttachment[]) => void;
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
+  draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
+  onDraftWorkspaceTargetChange?: (target: AgentComposerWorkspaceTarget | undefined) => void;
   /** Session-bound @file references selected from the mention menu. */
   selectedFileReferences?: SelectedFileReference[];
   onSelectedFileReferencesChange?: (references: SelectedFileReference[]) => void;
@@ -186,6 +192,7 @@ function resolveStateAction<T>(action: StateAction<T>, previous: T): T {
 }
 
 export function InputArea({
+  presentation = 'conversation',
   inputValue,
   isThinking,
   isRunActive = isThinking,
@@ -208,6 +215,8 @@ export function InputArea({
   attachedFiles: externalAttachedFiles,
   onAttachedFilesChange,
   onAuthorizeResource,
+  draftWorkspaceTarget,
+  onDraftWorkspaceTargetChange,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
   isComposing = false,
@@ -219,6 +228,7 @@ export function InputArea({
 }: InputAreaProps) {
   const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   // Global configuration from context (model, modes, compression, skills)
   const {
     sessionMode,
@@ -419,7 +429,8 @@ export function InputArea({
   const showEntryPromptMenu = Boolean(entryPromptMenu);
   const isMediaGenerationSession = isMediaGenerationMode(sessionMode);
   const isRoleplayConversation = isRoleplayConversationKind(conversationKind);
-  const allowCommandMenus = !isMediaGenerationSession && !isRoleplayConversation;
+  const allowCommandMenus =
+    presentation !== 'entry' && !isMediaGenerationSession && !isRoleplayConversation;
   const slashMenuOpen = allowCommandMenus && showSlashMenu;
   const skillMenuOpen = allowCommandMenus && showSkillMenu;
 
@@ -912,6 +923,7 @@ export function InputArea({
 
   const projectedQueuedMessageCount = Math.max(queuedMessageCount, queuedMessages.length);
   const inputAreaProjection = projectInputAreaUi({
+    presentation,
     inputValue,
     attachedFileCount: attachedFiles.length + selectedFileReferences.length,
     contextChipCount: contextChips.length,
@@ -955,25 +967,6 @@ export function InputArea({
 
         {/* ── Input container ── */}
         <div className="agent-composer-shell relative">
-          {composerWorkspace ? (
-            <div className="agent-composer-workspace" aria-label={t('chat.input.workspace.label')}>
-              <FolderIcon size={14} />
-              {composerWorkspace.kind === 'assistant' ? (
-                <button
-                  type="button"
-                  className="agent-composer-workspace-button"
-                  disabled={composerWorkspace.disabled}
-                  onClick={composerWorkspace.onChoose}
-                >
-                  {t('chat.input.workspace.choose')}
-                </button>
-              ) : (
-                <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
-                  {composerWorkspace.label}
-                </span>
-              )}
-            </div>
-          ) : null}
           {/* Slash command menu */}
           <SlashCommandMenu
             isOpen={slashMenuOpen}
@@ -1085,6 +1078,76 @@ export function InputArea({
               disabled={onAuthorizeResource !== undefined}
             />
 
+            {composerWorkspace ? (
+              <div
+                className="agent-composer-workspace"
+                aria-label={t('chat.input.workspace.label')}
+              >
+                <FolderIcon size={14} />
+                {composerWorkspace.kind === 'workspace' ? (
+                  <span className="agent-composer-workspace-label" title={composerWorkspace.label}>
+                    {composerWorkspace.label}
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="agent-composer-workspace-button"
+                      disabled={composerWorkspace.disabled}
+                      onClick={() => setWorkspaceMenuOpen((open) => !open)}
+                      aria-expanded={workspaceMenuOpen}
+                    >
+                      {draftWorkspaceTarget?.label ?? t('chat.input.workspace.openProject')}
+                    </button>
+                    {draftWorkspaceTarget ? (
+                      <button
+                        type="button"
+                        className="agent-composer-workspace-clear"
+                        title={t('chat.input.workspace.clear')}
+                        onClick={() => onDraftWorkspaceTargetChange?.(undefined)}
+                      >
+                        <CloseIcon size={12} />
+                      </button>
+                    ) : null}
+                    {workspaceMenuOpen ? (
+                      <div className="agent-composer-workspace-menu" role="menu">
+                        {composerWorkspace.projects.map((project) => (
+                          <button
+                            key={project.projectId}
+                            type="button"
+                            role="menuitem"
+                            disabled={project.disabled}
+                            onClick={() => {
+                              void composerWorkspace
+                                .onSelectProject(project.projectId)
+                                .then((target) => {
+                                  if (target) onDraftWorkspaceTargetChange?.(target);
+                                  setWorkspaceMenuOpen(false);
+                                });
+                            }}
+                          >
+                            {project.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            void composerWorkspace.onChooseDirectory().then((target) => {
+                              if (target) onDraftWorkspaceTargetChange?.(target);
+                              setWorkspaceMenuOpen(false);
+                            });
+                          }}
+                        >
+                          {t('chat.input.workspace.chooseDirectory')}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : null}
+
             {(inputAreaProjection.showSessionModeSelector ||
               inputAreaProjection.showModelConfig) && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
@@ -1146,14 +1209,16 @@ export function InputArea({
             )}
 
             {/* Token usage pie */}
-            <UsageIndicator
-              tokenCount={contextTokenCount}
-              maxTokens={maxContextTokens}
-              maxOutputTokens={outputTokenCap}
-              modelMaxOutputTokens={modelMaxOutputTokens}
-              isCompressing={isCompressing}
-              onCompress={onCompressContext}
-            />
+            {presentation !== 'entry' ? (
+              <UsageIndicator
+                tokenCount={contextTokenCount}
+                maxTokens={maxContextTokens}
+                maxOutputTokens={outputTokenCap}
+                modelMaxOutputTokens={modelMaxOutputTokens}
+                isCompressing={isCompressing}
+                onCompress={onCompressContext}
+              />
+            ) : null}
 
             {/* Media call count */}
             {inputAreaProjection.showMediaCallCount && (

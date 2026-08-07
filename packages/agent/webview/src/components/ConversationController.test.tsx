@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useEffect, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -44,6 +44,7 @@ const hostMocks = vi.hoisted(() => ({
   getContextTokenCount: vi.fn(),
   getMessageQueue: vi.fn(),
   submitDraft: vi.fn(),
+  authorizeResource: vi.fn(),
 }));
 const hostRuntimeMocks = vi.hoisted(() => ({
   listener: undefined as ((message: AgentHostToWebviewMessage) => void) | undefined,
@@ -64,6 +65,7 @@ vi.mock('../host-runtime-context', () => ({
     getState: hostRuntimeMocks.getState,
     setState: hostRuntimeMocks.setState,
     submitDraft: hostMocks.submitDraft,
+    authorizeResource: hostMocks.authorizeResource,
   }),
   useOptionalAgentHostRuntimeAdapter: () => ({
     hostKind: 'electron',
@@ -537,6 +539,25 @@ describe('ConversationController entry state', () => {
       entryDraft: {
         draftId: 'draft-restored',
         inputValue: 'restored entry text',
+        contextReferences: [
+          {
+            type: 'file',
+            id: 'grant-restored',
+            label: 'brief.txt',
+            summary: 'Authorized file: brief.txt',
+            data: { resourceGrantId: 'grant-restored', resourceKind: 'file' },
+          },
+        ],
+        workspaceTarget: {
+          label: 'Restored Project',
+          context: {
+            kind: 'workspace',
+            workspaceId: 'workspace-restored',
+            workspaceGrantId: 'workspace-grant-restored',
+          },
+        },
+        selectedModel: 'test-model',
+        executionMode: 'auto',
       },
     });
     render(
@@ -551,6 +572,8 @@ describe('ConversationController entry state', () => {
     );
 
     expect(screen.getByRole('textbox')).toHaveProperty('value', 'restored entry text');
+    expect(screen.getByTestId('entry-context-chips').textContent).toContain('brief.txt');
+    expect(screen.getByTestId('entry-selected-model').textContent).toBe('test-model');
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited entry text' } });
 
     expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({
@@ -558,6 +581,9 @@ describe('ConversationController entry state', () => {
       entryDraft: expect.objectContaining({
         draftId: 'draft-restored',
         inputValue: 'edited entry text',
+        selectedModel: 'test-model',
+        executionMode: 'auto',
+        workspaceTarget: expect.objectContaining({ label: 'Restored Project' }),
       }),
     });
     hostRuntimeMocks.getState.mockReturnValue(undefined);
@@ -591,7 +617,44 @@ describe('ConversationController entry state', () => {
       resourceGrantIds: [],
       configuration: { providerId: 'test', modelId: 'test-model', executionMode: 'ask' },
     });
+    await waitFor(() => expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({ drafts: [] }));
+    expect(screen.getByRole('textbox')).toHaveProperty('value', '');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('preserves the complete Entry Draft when local submit fails', async () => {
+    vi.clearAllMocks();
+    hostMocks.submitDraft.mockRejectedValueOnce(new Error('Conversation persistence failed.'));
+    render(
+      <ConversationController
+        {...createProps()}
+        agentPresentation={createAgentDraftPresentation('draft-entry-failed', {
+          kind: 'unbound',
+          draftId: 'draft-entry-failed',
+        })}
+        emptyStatePresentation="desktop-dock"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Keep this request' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Conversation persistence failed.'),
+    );
+    expect(screen.getByRole('textbox')).toHaveProperty('value', 'Keep this request');
+    expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
+    expect(hostRuntimeMocks.setState).toHaveBeenLastCalledWith({
+      drafts: [],
+      entryDraft: expect.objectContaining({
+        draftId: 'draft-entry-failed',
+        inputValue: 'Keep this request',
+        contextReferences: [expect.objectContaining({ id: 'entity:character:xiaoju' })],
+        selectedModel: 'test-model',
+        executionMode: 'ask',
+      }),
+    });
   });
 
   it('keeps draft mode selection scope-neutral until an owner is selected', () => {
@@ -2068,6 +2131,47 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByTestId('workspace-messages').textContent).toBe('');
     expect(screen.getByTestId('workspace-streaming-flags').textContent).toBe('');
+  });
+
+  it('keeps Character and Room new-conversation actions explicitly unavailable', () => {
+    vi.clearAllMocks();
+    render(<ConversationController {...createProps()} />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: { id: 'conv-role', title: 'Role B', messages: [] },
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            tabState: {
+              openTabs: [
+                {
+                  id: 'tab-role',
+                  title: 'Role B',
+                  conversationId: 'conv-role',
+                  kind: 'character-dialogue',
+                },
+              ],
+              activeTabId: 'tab-role',
+            },
+          },
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+
+    expect(hostMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Character and Room new conversations are not available',
+    );
   });
 
   it('hydrates model and execution settings only into Tabs for the owning conversation', () => {

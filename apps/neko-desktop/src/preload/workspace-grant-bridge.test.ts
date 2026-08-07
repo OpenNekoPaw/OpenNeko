@@ -63,6 +63,7 @@ describe('Desktop Workspace grant preload bridge', () => {
       async (channel: string, request: Record<string, unknown>) => {
         expect(channel).toBe(DESKTOP_WORKSPACE_GRANT_CHANNEL);
         expect(request).toMatchObject({
+          operation: 'choose-directory',
           windowId: 'window-1',
           rendererSessionId: 'application-1:window-1:1',
         });
@@ -71,6 +72,7 @@ describe('Desktop Workspace grant preload bridge', () => {
         return {
           requestId: request['requestId'],
           status: 'authorized',
+          workspaceId: 'workspace-1',
           grant: {
             workspaceGrantId: 'workspace-grant:1',
             windowId: 'window-1',
@@ -81,7 +83,7 @@ describe('Desktop Workspace grant preload bridge', () => {
     );
     const bridge = electron.bridge;
     if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
-    await expect(bridge.workspaceGrants.choose('window-1')).resolves.toMatchObject({
+    await expect(bridge.workspaceGrants.chooseDirectory('window-1')).resolves.toMatchObject({
       status: 'authorized',
       grant: { workspaceGrantId: 'workspace-grant:1', label: 'demo' },
     });
@@ -96,13 +98,14 @@ describe('Desktop Workspace grant preload bridge', () => {
         status: 'cancelled',
       }),
     );
-    await expect(bridge.workspaceGrants.choose('window-1')).resolves.toMatchObject({
+    await expect(bridge.workspaceGrants.chooseDirectory('window-1')).resolves.toMatchObject({
       status: 'cancelled',
     });
     electron.invoke.mockImplementationOnce(
       async (_channel: string, request: { readonly requestId: string }) => ({
         requestId: request.requestId,
         status: 'authorized',
+        workspaceId: 'workspace-1',
         grant: {
           workspaceGrantId: 'workspace-grant:1',
           windowId: 'window-1',
@@ -111,9 +114,34 @@ describe('Desktop Workspace grant preload bridge', () => {
         },
       }),
     );
-    await expect(bridge.workspaceGrants.choose('window-1')).rejects.toThrow(
+    await expect(bridge.workspaceGrants.chooseDirectory('window-1')).rejects.toThrow(
       /unknown field 'path'/,
     );
+  });
+
+  it('selects an existing Project without exposing a host path', async () => {
+    electron.invoke.mockImplementation(
+      async (_channel: string, request: Record<string, unknown>) => ({
+        requestId: request['requestId'],
+        status: 'authorized',
+        workspaceId: 'workspace-1',
+        grant: {
+          workspaceGrantId: 'workspace-grant:project-1',
+          windowId: 'window-1',
+          label: 'OpenNeko',
+        },
+      }),
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+    await expect(bridge.workspaceGrants.selectProject('window-1', 'project-1')).resolves.toMatchObject({
+      status: 'authorized',
+      workspaceId: 'workspace-1',
+    });
+    expect(electron.invoke.mock.calls[0]?.[1]).toMatchObject({
+      operation: 'select-project',
+      projectId: 'project-1',
+    });
   });
 });
 

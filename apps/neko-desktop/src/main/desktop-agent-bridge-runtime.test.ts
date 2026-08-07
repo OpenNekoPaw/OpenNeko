@@ -80,7 +80,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-1', projection.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         grant(),
       ),
@@ -88,7 +88,7 @@ describe('Desktop Agent bridge runtime', () => {
       requestId: 'message-1',
       status: 'accepted',
     });
-    expect(effects.conversation.createConversation).toHaveBeenCalledOnce();
+    expect(effects.conversation.listConversations).toHaveBeenCalledOnce();
   });
 
   it('routes an Assistant session through the same controller without a synthetic Project grant', async () => {
@@ -273,13 +273,13 @@ describe('Desktop Agent bridge runtime', () => {
       await expect(
         runtime.send(
           createDesktopAgentMessageRequest('message-1', fixture.connection, {
-            type: 'newConversation',
+            type: 'getConversations',
           }),
           grant(),
         ),
       ).rejects.toMatchObject({ code: fixture.expectedCode });
     }
-    expect(effects.conversation.createConversation).not.toHaveBeenCalled();
+    expect(effects.conversation.listConversations).not.toHaveBeenCalled();
   });
 
   it('reuses and reference-counts the exact connection when StrictMode repeats bootstrap', async () => {
@@ -326,7 +326,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-current', first.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         grant(),
       ),
@@ -340,7 +340,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-detached', second.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         grant(),
       ),
@@ -422,7 +422,7 @@ describe('Desktop Agent bridge runtime', () => {
   it('stops connection event publication before background effects finish', async () => {
     const effects = createEffects();
     let latePost: ((message: AgentHostToWebviewMessage) => void | Promise<void>) | undefined;
-    vi.mocked(effects.conversation.createConversation).mockImplementation((context) => {
+    vi.mocked(effects.conversation.listConversations).mockImplementation((context) => {
       latePost = context.post;
     });
     const publish = vi.fn();
@@ -439,7 +439,7 @@ describe('Desktop Agent bridge runtime', () => {
     if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
     await runtime.send(
       createDesktopAgentMessageRequest('message-background', projection.connection, {
-        type: 'newConversation',
+        type: 'getConversations',
       }),
       grant(),
     );
@@ -507,7 +507,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-stale', first.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         firstGrant,
       ),
@@ -515,7 +515,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-current', next.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         nextGrant,
       ),
@@ -556,7 +556,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-stale', first.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         firstGrant,
       ),
@@ -564,7 +564,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-current', next.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         firstGrant,
       ),
@@ -615,7 +615,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-old', first.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         firstGrant,
       ),
@@ -623,7 +623,7 @@ describe('Desktop Agent bridge runtime', () => {
     await expect(
       runtime.send(
         createDesktopAgentMessageRequest('message-current', second.connection, {
-          type: 'newConversation',
+          type: 'getConversations',
         }),
         secondGrant,
       ),
@@ -709,7 +709,6 @@ function createEffects(
       submitTurn: vi.fn(),
       confirmTool: vi.fn(),
       cancelTurn: vi.fn(),
-      createConversation: vi.fn(),
       activateConversation: vi.fn(),
       deleteConversation: vi.fn(),
       listConversations: vi.fn(),

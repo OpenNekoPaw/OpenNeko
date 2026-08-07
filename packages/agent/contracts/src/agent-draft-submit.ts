@@ -21,6 +21,7 @@ export type AgentDraftSubmitTarget =
     }
   | {
       readonly kind: 'bound-context';
+      readonly draftId: string;
       readonly context: AgentConversationContext;
     };
 
@@ -73,8 +74,12 @@ function parseTarget(value: unknown): AgentDraftSubmitTarget {
     };
   }
   if (record['kind'] === 'bound-context') {
-    requireExactKeys(record, ['kind', 'context'], 'Bound Agent draft target');
-    return { kind: 'bound-context', context: parseAgentConversationContext(record['context']) };
+    requireExactKeys(record, ['kind', 'draftId', 'context'], 'Bound Agent draft target');
+    return {
+      kind: 'bound-context',
+      draftId: requireIdentity(record['draftId'], 'Draft'),
+      context: parseAgentConversationContext(record['context']),
+    };
   }
   throw new Error(`Unknown Agent draft submit target '${String(record['kind'])}'.`);
 }

@@ -175,8 +175,9 @@ import {
 } from '@neko/agent-contracts/assistant-resource-host';
 import {
   DESKTOP_WORKSPACE_GRANT_CHANNEL,
-  createDesktopWorkspaceGrantChooseRequest,
-  parseDesktopWorkspaceGrantChooseResult,
+  createDesktopWorkspaceDirectoryTargetRequest,
+  createDesktopWorkspaceProjectTargetRequest,
+  parseDesktopWorkspaceGrantTargetResult,
   type OpenNekoDesktopWorkspaceGrantBridge,
 } from '@neko/host/desktop-workspace-grant-contract';
 import {
@@ -303,15 +304,26 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   workspaceGrants: {
-    async choose(windowId) {
+    async chooseDirectory(windowId) {
       const context = requireShellMutationContext();
-      const request = createDesktopWorkspaceGrantChooseRequest({
+      const request = createDesktopWorkspaceDirectoryTargetRequest({
         requestId: nextRequestId('desktop-workspace-grant-choose'),
         rendererSessionId: context.rendererSessionId,
         windowId,
       });
       const response: unknown = await ipcRenderer.invoke(DESKTOP_WORKSPACE_GRANT_CHANNEL, request);
-      return parseDesktopWorkspaceGrantChooseResult(response, request.requestId);
+      return parseDesktopWorkspaceGrantTargetResult(response, request.requestId);
+    },
+    async selectProject(windowId, projectId) {
+      const context = requireShellMutationContext();
+      const request = createDesktopWorkspaceProjectTargetRequest({
+        requestId: nextRequestId('desktop-workspace-grant-select-project'),
+        rendererSessionId: context.rendererSessionId,
+        windowId,
+        projectId,
+      });
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_WORKSPACE_GRANT_CHANNEL, request);
+      return parseDesktopWorkspaceGrantTargetResult(response, request.requestId);
     },
   },
   agent: {

@@ -18,6 +18,7 @@ describe('Agent draft submit contract', () => {
       parseAgentDraftSubmitInput({
         target: {
           kind: 'bound-context',
+          draftId: 'draft-workspace-1',
           context: {
             kind: 'workspace',
             workspaceId: 'workspace-1',
@@ -29,8 +30,30 @@ describe('Agent draft submit contract', () => {
         configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
       }),
     ).toMatchObject({
-      target: { kind: 'bound-context', context: { kind: 'workspace', workspaceId: 'workspace-1' } },
+      target: {
+        kind: 'bound-context',
+        draftId: 'draft-workspace-1',
+        context: { kind: 'workspace', workspaceId: 'workspace-1' },
+      },
     });
+  });
+
+  it('rejects a bound target without the exact draft identity', () => {
+    expect(() =>
+      parseAgentDraftSubmitInput({
+        target: {
+          kind: 'bound-context',
+          context: {
+            kind: 'workspace',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'workspace-grant-1',
+          },
+        },
+        messageText: 'Edit this project',
+        resourceGrantIds: [],
+        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      }),
+    ).toThrow('unsupported fields');
   });
 
   it('rejects the superseded caller-supplied context field', () => {

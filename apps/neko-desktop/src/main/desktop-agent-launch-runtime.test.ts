@@ -92,10 +92,11 @@ describe('Desktop Agent launch native adapter', () => {
       "Agent Resource grant 'identity-2' belongs to another scope.",
     );
     await expect(
-      runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', [
-        'identity-2',
-        'missing-grant',
-      ]),
+      runtime.bindResourceGrants(
+        catalog.connection,
+        { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+        ['identity-2', 'missing-grant'],
+      ),
     ).rejects.toThrow(
       "Agent Resource grant 'missing-grant' does not belong to its launch connection.",
     );
@@ -113,13 +114,25 @@ describe('Desktop Agent launch native adapter', () => {
     });
     await runtime.authorizeResource(otherCatalog.connection, 'file');
     await expect(
-      runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-4']),
+      runtime.bindResourceGrants(
+        catalog.connection,
+        { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+        ['identity-4'],
+      ),
     ).rejects.toThrow(
       "Agent Resource grant 'identity-4' does not belong to its launch connection.",
     );
 
-    await runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-2']);
-    await runtime.bindAssistantResourceGrants(catalog.connection, 'assistant:1', ['identity-2']);
+    await runtime.bindResourceGrants(
+      catalog.connection,
+      { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+      ['identity-2'],
+    );
+    await runtime.bindResourceGrants(
+      catalog.connection,
+      { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+      ['identity-2'],
+    );
     await expect(
       runtime.resolveResourceContexts(assistantContext, ['identity-2']),
     ).resolves.toEqual([
