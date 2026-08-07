@@ -165,7 +165,10 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 #### Scenario: Workspace conversation renders normally
 
 - **WHEN** AgentWebviewRoot mounts an active Workspace conversation
-- **THEN** its existing Header, Tabs, history, composer, model, commands, Skills, execution/approval, voice and Host-message behavior remain unchanged
+- **THEN** its transcript, model, typed commands/Skills, execution/approval, voice and Host-message behavior remain attached to the exact Workspace runtime
+- **AND** Desktop dock does not render an empty package Header or its divider after the conversation starts
+- **AND** removing that inner divider does not remove, flatten or recolor the owning Workbench panel's outer border or rounded shell chrome
+- **AND** the shared conversation composer omits the locked Workspace label, Agent mode selector and `/` or `$` shortcut buttons while typed command and Skill discovery remains available
 - **AND** draft-only branches do not affect its scope or route classification
 
 #### Scenario: Workspace scene restores an active conversation
@@ -197,11 +200,18 @@ The existing package-owned `AgentWebviewRoot`, controller, composer and Host pro
 #### Scenario: Agent composer uses the shared compact Workbench presentation
 
 - **WHEN** the package-owned Agent Root renders in Assistant or Workspace scope
-- **THEN** the existing composer is presented as one centered, elevated input surface with an integrated Workspace context strip and compact control toolbar
-- **AND** add/resource authorization, creative mode, model configuration, commands, Skills, execution/approval, usage and send/stop behavior remain available according to their existing capability projection
-- **AND** Assistant scope offers explicit Workspace directory selection while Workspace scope shows only the authorized user-visible Workspace label, never an absolute path
+- **THEN** the existing composer is presented as one centered, elevated input surface with a compact control toolbar
+- **AND** Entry offers explicit single-target Workspace selection while conversation scope does not repeat its locked Workspace identity inside the composer
+- **AND** add/resource authorization, model configuration, typed commands/Skills, execution/approval, usage and send/stop behavior remain available according to their existing capability projection
 - **AND** branch and local-runtime metadata are not added to the composer
 - **AND** narrow Workbench docks keep the input, controls and upward-opening menus within the visible surface without overlap
+
+#### Scenario: Window owner commits resize independently from legacy navigation target
+
+- **WHEN** the user resizes the current Agent, Main or management composition
+- **THEN** Host validates the mutation against the exact current Workbench Scene owner and its Workspace identity when present
+- **AND** a stale or non-Project legacy navigation target does not reject the current Scene's valid layout mutation
+- **AND** a Workspace layout containing a View from another Project or Workspace remains rejected at that Workbench boundary
 
 #### Scenario: A capability requires Workspace scope
 

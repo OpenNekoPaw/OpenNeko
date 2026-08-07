@@ -27,6 +27,7 @@ import { useTranslation } from '../../i18n/I18nContext';
 import { projectMessageIdentities } from './message-identity';
 import { SubAgentCard } from './SubAgentCard';
 interface ChatViewProps {
+  composerPresentation?: 'default' | 'compact';
   messages: Message[];
   inputValue: string;
   isThinking: boolean;
@@ -89,6 +90,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({
+  composerPresentation = 'default',
   messages,
   inputValue,
   isThinking,
@@ -217,6 +219,7 @@ export function ChatView({
 
         {/* Input Area */}
         <InputArea
+          composerPresentation={composerPresentation}
           inputValue={inputValue}
           isThinking={isThinking}
           isRunActive={isRunActive}

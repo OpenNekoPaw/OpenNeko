@@ -83,6 +83,7 @@ import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
 export interface ChatWorkspaceProps {
   tabRenderStore: TabRenderStore;
   isVisible?: boolean;
+  composerPresentation?: 'default' | 'compact';
   // Conversation state
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -144,6 +145,7 @@ export interface ChatWorkspaceProps {
 export function ChatWorkspace({
   tabRenderStore,
   isVisible = true,
+  composerPresentation = 'default',
   messages,
   setMessages,
   isThinking,
@@ -815,6 +817,7 @@ export function ChatWorkspace({
         </AgentDiagnosticToast>
       ) : null}
       <ChatView
+        composerPresentation={composerPresentation}
         composerDisabled={!isModelConfigurationReady}
         messages={visibleMessages}
         inputValue={inputValue}

@@ -103,15 +103,17 @@ export function AppShell({
         pluginsAvailable={pluginsAvailable}
         setPluginsAvailable={setPluginsAvailable}
         setShowOnboarding={setShowOnboarding}
-        renderHeader={(headerProps) => (
-          <Header
-            {...headerProps}
-            configuredProviders={settings.configuredProviders}
-            onOpenOnboarding={() => setShowOnboarding(true)}
-            showAccountBar={presentation === 'default'}
-            showConversationNavigation={presentation === 'default'}
-          />
-        )}
+        renderHeader={(headerProps) =>
+          presentation === 'default' ? (
+            <Header
+              {...headerProps}
+              configuredProviders={settings.configuredProviders}
+              onOpenOnboarding={() => setShowOnboarding(true)}
+              showAccountBar
+              showConversationNavigation
+            />
+          ) : null
+        }
       />
       {presentation === 'default' && showOnboarding ? (
         <OnboardingFlow onComplete={() => setShowOnboarding(false)} />

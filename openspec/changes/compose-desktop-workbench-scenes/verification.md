@@ -678,3 +678,43 @@ Main and Resource Browser. The narrow Workspace Agent composer shows existing de
 truncation in the committed screenshot; this fix changes submission ownership rather than layout, so
 that advisory visual issue remains outside this regression. Packaged and explicitly authorized real
 provider coverage remains part of open task 12.8.
+
+## Workspace Resize And Compact Conversation Composer
+
+Date: 2026-08-08
+
+Host Workbench mutation now derives its optional Project attachment from the exact current Workspace
+Scene rather than the legacy navigation target. Non-Workspace Scene layout commits remain Window
+owned; Workspace Views are still rejected when their Project or Workspace identity differs from the
+active Scene. The package-owned Desktop dock presentation omits its empty session Header and uses a
+compact conversation composer without the locked Workspace label, Agent mode selector or `/` and
+`$` shortcut buttons. Typed command and Skill discovery remains enabled. No Desktop Shell CSS or
+`.project-dock-panel` chrome was changed.
+
+Deterministic verification passed:
+
+- Host: `36 files / 287 tests`; Agent Webview: `89 files / 700 tests`; Desktop: `67 files / 421 tests`.
+- Headless Desktop functional coverage: `11 files / 129 tests`.
+- Host TypeScript, Agent Webview build, Desktop typecheck, application boundaries, legacy debt,
+  `check:quality`, `git diff --check` and strict OpenSpec validation.
+- Agent Evaluation was excluded because provider selection, prompts, capabilities, session/turn
+  behavior and Desktop Agent event projection were unchanged.
+
+Visible development Electron evidence passed through the native directory picker, exact Workspace
+Scene activation and both user-operable dock resize handles. Agent width changed from `360` to `494`
+and Resources width from `320` to `520`; the Workbench and Workspace identities remained exact, with
+no alerts, console errors, warnings or Renderer exceptions. Direct screenshot inspection confirmed
+the Agent and Resources Shells retained four `1px` borders, `18px` radius and hidden overflow without
+clipping or overlap. Report:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-07T16-46-41.879Z-desktop-workspace-resize-development/report.json`
+
+The focused Assistant conversation scenario also passed with no inner Header divider and a compact
+session composer while preserving the Shell's four borders and radius:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-07T16-39-00.768Z-desktop-conversation-navigation-development/report.json`
+
+The broader `desktop-workbench-scenes` run remains failed before reaching Workspace because its
+existing management + Preview assertion requires a non-`none` shadow while both independent shells
+currently render without shadows. That unrelated assertion was not weakened. Packaged and explicitly
+authorized real-provider coverage remains part of open task 12.8.

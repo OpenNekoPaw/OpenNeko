@@ -281,12 +281,18 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       if (workspaceComposer.ownerWidth >= 400 || !workspaceComposer.toolbarFitsSurface) {
         throw new Error('Agent composer did not qualify the narrow Workspace dock presentation.');
       }
+      const workspaceDockResize = await exerciseWorkspaceDockResize(
+        evaluate,
+        drag,
+        workspaceActivation.workspaceId,
+      );
       checkpoint('workspace-large', {
         ...workspace,
         workspaceActivation,
         workspaceAgentActivation,
         workspaceResourceChrome,
         workspaceComposer,
+        workspaceDockResize,
       });
 
       const workspacePreview = await openWorkspacePreview(evaluate);
@@ -560,6 +566,33 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
   },
 });
 
+export const desktopWorkspaceResizeScenario = Object.freeze({
+  id: 'desktop-workspace-resize',
+  owner: '@neko/app-desktop',
+  prepare: desktopWorkbenchScenesScenario.prepare,
+  async run({ checkpoint, drag, evaluate, screenshot, waitForSelector }) {
+    await resizeWindow(evaluate, 1440, 960);
+    await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
+    await assertFixtureWorkspaceCancellation(evaluate);
+    const workspaceActivation = await chooseFixtureWorkspace(evaluate);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector('[data-dock-owner="resources"]');
+    const workspace = await inspectWorkbench(evaluate, 'workspace', 'workspace');
+    assertSingleWorkbench(workspace);
+    const workspaceDockResize = await exerciseWorkspaceDockResize(
+      evaluate,
+      drag,
+      workspaceActivation.workspaceId,
+    );
+    const shellChrome = await inspectWorkspaceShellChrome(evaluate);
+    assertWorkspaceShellChrome(shellChrome);
+    const workspaceScreenshot = await screenshot('workspace-resized-shell-chrome');
+    const evidence = { workspaceActivation, workspaceDockResize, shellChrome };
+    checkpoint('workspace-resized-shell-chrome', evidence);
+    return { ...evidence, screenshots: [workspaceScreenshot] };
+  },
+});
+
 export const desktopProjectSidebarManagementScenario = Object.freeze({
   id: 'desktop-project-sidebar-management',
   owner: '@neko/app-desktop',
@@ -735,6 +768,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
       }
       const sessionComposer = await inspectAgentSessionControls(evaluate);
       assertAgentSessionControls(sessionComposer);
+      const sessionComposerScreenshot = await screenshot('assistant-session-composer-compact');
       checkpoint('assistant-session-composer-controls', sessionComposer);
 
       const groupLifecycle = await exerciseAssistantConversationGroup(
@@ -764,7 +798,7 @@ export const desktopConversationNavigationScenario = Object.freeze({
         restoredSession,
         provider: providerServer.snapshot(),
         runningStatus,
-        screenshots: [runningStatusScreenshot, restoredScreenshot],
+        screenshots: [runningStatusScreenshot, sessionComposerScreenshot, restoredScreenshot],
       };
     } finally {
       await providerServer.close();
@@ -1773,7 +1807,7 @@ async function chooseFixtureWorkspace(evaluate) {
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('projection')}
-    const result = await window.openNekoDesktop.workspaceGrants.choose(
+    const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
       projection.window.windowId,
     );
     if (result.status !== 'authorized') {
@@ -1815,7 +1849,7 @@ async function chooseFixtureWorkspaceWithHistory(evaluate, expectedWorkspaceId, 
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('projection')}
-    const result = await window.openNekoDesktop.workspaceGrants.choose(
+    const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
       projection.window.windowId,
     );
     if (result.status !== 'authorized') {
@@ -2094,7 +2128,7 @@ async function assertFixtureWorkspaceCancellation(evaluate) {
   return evaluate(`(async () => {
     const before = await window.openNekoDesktop.shell.getSnapshot();
     ${requireActiveWorkbenchProjection('before', 'beforeWorkbench')}
-    const result = await window.openNekoDesktop.workspaceGrants.choose(
+    const result = await window.openNekoDesktop.workspaceGrants.chooseDirectory(
       before.window.windowId,
     );
     if (result.status !== 'cancelled') {
@@ -2579,6 +2613,112 @@ async function exerciseManagementMainSplit(evaluate, drag) {
   return { initial, resized, restored };
 }
 
+async function exerciseWorkspaceDockResize(evaluate, drag, expectedWorkspaceId) {
+  const inspect = () =>
+    evaluate(`(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const activeWorkbench = projection.window.workbench;
+      const context = activeWorkbench.scene.context;
+      return {
+        workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+        workspaceId:
+          context.kind === 'agent' && context.scope.kind === 'workspace'
+            ? context.scope.workspaceId
+            : null,
+        chatWidth: activeWorkbench.layout.display.chatWidth,
+        resourceWidth: activeWorkbench.layout.resourceDock.width,
+        alerts: [...document.querySelectorAll('[role="alert"]')]
+          .map((element) => element.textContent?.trim() ?? '')
+          .filter(Boolean),
+      };
+    })()`);
+  const initial = await inspect();
+  await drag(
+    '.neko-controlled-workbench-interaction[data-presentation="docked"] > ' +
+      '.neko-controlled-workbench-resize-handle',
+    '.neko-controlled-workbench-main',
+    { targetPosition: { xRatio: 0.25, yRatio: 0.5 } },
+  );
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      return projection.window.workbench.layout.display.chatWidth !== ${String(initial.chatWidth)};
+    })()`,
+    'Workspace Agent/Main resize did not commit a new width.',
+  );
+  const afterAgentResize = await inspect();
+  await drag(
+    '.neko-controlled-workbench-dock--right[data-presentation="docked"] > ' +
+      '.neko-controlled-workbench-resize-handle',
+    '.neko-controlled-workbench-main',
+    { targetPosition: { xRatio: 0.75, yRatio: 0.5 } },
+  );
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      return projection.window.workbench.layout.resourceDock.width !== ${String(initial.resourceWidth)};
+    })()`,
+    'Workspace Main/Resources resize did not commit a new width.',
+  );
+  const afterResourceResize = await inspect();
+  for (const [phase, detail] of [
+    ['initial', initial],
+    ['agent', afterAgentResize],
+    ['resources', afterResourceResize],
+  ]) {
+    if (
+      detail.workbenchInstanceId !== initial.workbenchInstanceId ||
+      detail.workspaceId !== expectedWorkspaceId ||
+      detail.alerts.length > 0
+    ) {
+      throw new Error(
+        `Workspace resize changed identity or emitted an error during ${phase}: ${JSON.stringify(detail)}`,
+      );
+    }
+  }
+  return { initial, afterAgentResize, afterResourceResize };
+}
+
+async function inspectWorkspaceShellChrome(evaluate) {
+  return evaluate(`(() => {
+    const agentPanel = document.querySelector('[data-dock-owner="agent"]');
+    const resourcePanel = document.querySelector('[data-dock-owner="resources"]');
+    if (!(agentPanel instanceof HTMLElement) || !(resourcePanel instanceof HTMLElement)) {
+      throw new Error('Workspace Shell chrome inspection requires Agent and Resources panels.');
+    }
+    return [agentPanel, resourcePanel].map((panel) => {
+      const style = getComputedStyle(panel);
+      return {
+        owner: panel.getAttribute('data-dock-owner'),
+        borderWidths: [
+          style.borderTopWidth,
+          style.borderRightWidth,
+          style.borderBottomWidth,
+          style.borderLeftWidth,
+        ],
+        borderRadius: style.borderRadius,
+        overflow: style.overflow,
+      };
+    });
+  })()`);
+}
+
+function assertWorkspaceShellChrome(detail) {
+  if (
+    detail.length !== 2 ||
+    detail.some(
+      (panel) =>
+        panel.borderWidths.some((width) => width !== '1px') ||
+        panel.borderRadius === '0px' ||
+        panel.overflow !== 'hidden',
+    )
+  ) {
+    throw new Error(`Workspace resize changed Shell chrome: ${JSON.stringify(detail)}`);
+  }
+}
+
 function assertManagementMainNotNarrower(detail, phase) {
   if (
     (Math.abs(detail.ratio - 50) > 0.5 && phase !== 'resized') ||
@@ -2684,13 +2824,16 @@ async function inspectAgentSessionControls(evaluate) {
     const shell = activeSurface?.querySelector('.agent-composer-shell');
     const toolbar = activeSurface?.querySelector('.agent-composer-toolbar');
     const owner = shell?.closest('[data-dock-owner="agent"], [data-primary-surface="agent"]');
+    const dockPanel = activeSurface.closest('[data-dock-owner="agent"]');
     if (!(activeSurface instanceof HTMLElement) || !(shell instanceof HTMLElement) ||
-        !(toolbar instanceof HTMLElement) || !(owner instanceof HTMLElement)) {
+        !(toolbar instanceof HTMLElement) || !(owner instanceof HTMLElement) ||
+        !(dockPanel instanceof HTMLElement)) {
       throw new Error('Assistant session composer presentation is incomplete.');
     }
     const shellRect = shell.getBoundingClientRect();
     const toolbarRect = toolbar.getBoundingClientRect();
     const ownerRect = owner.getBoundingClientRect();
+    const dockPanelStyle = getComputedStyle(dockPanel);
     return {
       composerCount: activeSurface.querySelectorAll('.agent-composer-shell').length,
       textareaCount: activeSurface.querySelectorAll('.agent-composer-textarea').length,
@@ -2703,6 +2846,15 @@ async function inspectAgentSessionControls(evaluate) {
         (button) => /compress|\u538b\u7f29/iu.test(button.getAttribute('title') ?? ''),
       ),
       workspaceControlCount: activeSurface.querySelectorAll('.agent-composer-workspace').length,
+      hasInnerHeader: Boolean(activeSurface.querySelector('.agent-header')),
+      shellBorderWidths: [
+        dockPanelStyle.borderTopWidth,
+        dockPanelStyle.borderRightWidth,
+        dockPanelStyle.borderBottomWidth,
+        dockPanelStyle.borderLeftWidth,
+      ],
+      shellBorderRadius: dockPanelStyle.borderRadius,
+      shellOverflow: dockPanelStyle.overflow,
       hasShadow: getComputedStyle(shell).boxShadow !== 'none',
       shellWidth: shellRect.width,
       fitsSurface: shellRect.left >= ownerRect.left && shellRect.right <= ownerRect.right,
@@ -3117,12 +3269,16 @@ function assertAgentSessionControls(detail) {
   if (
     detail.composerCount !== 1 ||
     detail.textareaCount !== 1 ||
-    !detail.hasMode ||
+    detail.hasMode ||
     !detail.hasModel ||
     !detail.hasApproval ||
-    detail.commandShortcutCount !== 2 ||
+    detail.commandShortcutCount !== 0 ||
     !detail.hasUsageIndicator ||
     detail.workspaceControlCount !== 0 ||
+    detail.hasInnerHeader ||
+    detail.shellBorderWidths.some((width) => width !== '1px') ||
+    detail.shellBorderRadius === '0px' ||
+    detail.shellOverflow !== 'hidden' ||
     !detail.hasShadow ||
     detail.shellWidth > 820 ||
     !detail.fitsSurface ||

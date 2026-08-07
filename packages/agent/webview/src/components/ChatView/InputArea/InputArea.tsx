@@ -75,6 +75,7 @@ import {
 
 interface InputAreaProps {
   presentation?: 'entry' | 'conversation';
+  composerPresentation?: 'default' | 'compact';
   inputValue: string;
   isThinking: boolean;
   /** Conversation-owned run state for queue/send/stop behavior. */
@@ -193,6 +194,7 @@ function resolveStateAction<T>(action: StateAction<T>, previous: T): T {
 
 export function InputArea({
   presentation = 'conversation',
+  composerPresentation = 'default',
   inputValue,
   isThinking,
   isRunActive = isThinking,
@@ -935,6 +937,7 @@ export function InputArea({
     sessionMode,
     conversationKind,
     currentSessionMediaModelCount,
+    compactControls: composerPresentation === 'compact',
   });
   const queuePanelCount = inputAreaProjection.queuedMessageCount;
   return (
@@ -1078,7 +1081,8 @@ export function InputArea({
               disabled={onAuthorizeResource !== undefined}
             />
 
-            {composerWorkspace ? (
+            {composerWorkspace &&
+            (presentation === 'entry' || composerPresentation === 'default') ? (
               <div
                 className="agent-composer-workspace"
                 aria-label={t('chat.input.workspace.label')}
@@ -1185,9 +1189,8 @@ export function InputArea({
               </ComposerMenuRuntimeProvider>
             )}
 
-            {allowCommandMenus && (
+            {composerPresentation === 'default' && allowCommandMenus ? (
               <>
-                {/* Slash command button */}
                 <button
                   type="button"
                   onClick={handleSlashClick}
@@ -1196,7 +1199,6 @@ export function InputArea({
                 >
                   /
                 </button>
-
                 <button
                   type="button"
                   onClick={handleSkillClick}
@@ -1206,7 +1208,7 @@ export function InputArea({
                   $
                 </button>
               </>
-            )}
+            ) : null}
 
             {/* Token usage pie */}
             {presentation !== 'entry' ? (

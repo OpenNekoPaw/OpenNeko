@@ -1646,6 +1646,7 @@ export function ConversationController({
             tab={tab}
             runtime={runtime}
             visible={visible}
+            composerPresentation={emptyStatePresentation === 'desktop-dock' ? 'compact' : 'default'}
             messages={[...sessionState.messages]}
             setMessages={(value) =>
               updateConversationRenderState(tab.conversationId, (currentMessages, streaming) => ({

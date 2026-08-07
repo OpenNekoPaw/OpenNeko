@@ -102,6 +102,30 @@ describe('input area presenter', () => {
     );
   });
 
+  it('hides the locked Agent mode in the compact Desktop composer', () => {
+    expect(
+      projectInputAreaUi({
+        inputValue: '',
+        attachedFileCount: 0,
+        contextChipCount: 0,
+        ambientNodeCount: 0,
+        mediaModelCallCount: 0,
+        isThinking: false,
+        disabled: false,
+        sessionMode: 'agent',
+        conversationKind: 'chat',
+        currentSessionMediaModelCount: 0,
+        compactControls: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        showSessionModeSelector: false,
+        showModelConfig: true,
+        showExecutionModeSelector: true,
+      }),
+    );
+  });
+
   it('does not expose queue for rich context while a response is running', () => {
     expect(
       projectInputAreaUi({

@@ -592,26 +592,26 @@ describe('InputArea composer controls', () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it('keeps unconfigured conversations on Agent with an empty LLM selector only', () => {
+  it('keeps unconfigured conversations on the locked Agent mode with an empty LLM selector only', () => {
     render(
       <Harness selectedModel="" availableModels={[]} availableMediaModels={[]}>
-        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+        <InputArea
+          composerPresentation="compact"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
       </Harness>,
     );
 
     const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
-    expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
+    expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
     const modelTrigger = within(modeGroup).getByRole('button', {
       name: '配置模型',
     });
     expect(modelTrigger.textContent).toContain('无可用模型');
     expect(within(modeGroup).queryByRole('button', { name: '配置参数' })).toBeNull();
-
-    fireEvent.click(within(modeGroup).getByRole('button', { name: 'Agent' }));
-    expect(screen.queryByRole('menuitem', { name: /图片生成/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /视频生成/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /声音生成/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: '生音乐' })).toBeNull();
 
     fireEvent.click(modelTrigger);
     const dialog = screen.getByRole('dialog', { name: '创作配置' });
@@ -623,36 +623,45 @@ describe('InputArea composer controls', () => {
   it('renders the current Agent composer controls', () => {
     render(
       <Harness>
-        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+        <InputArea
+          composerPresentation="compact"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
       </Harness>,
     );
 
     const modeGroup = screen.getByRole('group', { name: '模式、模型与参数' });
     expect(modeGroup.className).toContain('agent-composer-mode-controls');
-    expect(within(modeGroup).getByRole('button', { name: 'Agent' })).toBeTruthy();
+    expect(within(modeGroup).queryByRole('button', { name: 'Agent' })).toBeNull();
     const modelTrigger = within(modeGroup).getByRole('button', { name: '配置模型' });
     expect(modelTrigger).toBeTruthy();
     expect(modelTrigger.textContent).toBe('gpt-5.5');
     expect(screen.getByRole('button', { name: '审批' })).toBeTruthy();
     expect(within(modeGroup).getByTitle(/gpt-5.5/)).toBeTruthy();
     expect(screen.getByTitle('添加附件').className).toContain('agent-composer-tool-button');
-    expect(screen.getByTitle('命令').className).toContain('agent-composer-tool-button');
+    expect(screen.queryByTitle('命令')).toBeNull();
+    expect(screen.queryByTitle('技能')).toBeNull();
     expect(document.querySelector('.agent-composer-toolbar')).toBeTruthy();
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
   });
 
-  it('integrates the authorized Workspace label without branch or local runtime metadata', () => {
+  it('omits the locked Workspace label from the conversation composer', () => {
     render(
       <Harness composerWorkspace={{ kind: 'workspace', label: 'OpenNeko' }}>
-        <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
+        <InputArea
+          composerPresentation="compact"
+          inputValue=""
+          isThinking={false}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
       </Harness>,
     );
 
-    const context = screen.getByLabelText('工作目录');
-    expect(context.className).toContain('agent-composer-workspace');
-    expect(context.textContent).toContain('OpenNeko');
-    expect(document.querySelector('.agent-composer-shell')?.contains(context)).toBe(true);
-    expect(document.querySelector('.agent-composer-toolbar')?.contains(context)).toBe(true);
+    expect(screen.queryByLabelText('工作目录')).toBeNull();
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
   });
 

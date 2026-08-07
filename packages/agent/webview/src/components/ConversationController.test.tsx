@@ -183,6 +183,7 @@ vi.mock('./ChatWorkspace', () => ({
       mode: 'agent' | 'image' | 'video' | 'audio';
     } | null;
     isVisible?: boolean;
+    composerPresentation?: 'default' | 'compact';
   }) => {
     const tabRenderSnapshot = useTabRenderStore(props.tabRenderStore);
     const [instanceId] = useState(() => crypto.randomUUID());
@@ -204,6 +205,7 @@ vi.mock('./ChatWorkspace', () => ({
         data-testid={`workspace-runtime-${tabRenderSnapshot.snapshot.tabId}`}
         data-instance-id={instanceId}
         data-visible={String(isVisible)}
+        data-composer-presentation={props.composerPresentation ?? 'default'}
       >
         {isVisible ? <span data-testid="chat-workspace" /> : null}
         <span data-testid={testId('workspace-local-state')}>{localCounter}</span>
@@ -530,6 +532,30 @@ describe('ConversationController entry state', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
     expect(screen.getByTestId('entry-context-chips').textContent).toContain('小橘');
     expect(hostMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('projects the compact composer into Desktop dock conversation tabs', async () => {
+    render(<ConversationController {...createProps()} emptyStatePresentation="desktop-dock" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Start Chat/ }));
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: { id: 'conversation-desktop', title: 'Desktop Chat', messages: [] },
+          },
+        }),
+      );
+    });
+
+    await waitFor(() =>
+      expect(
+        document
+          .querySelector('[data-testid^="workspace-runtime-"]')
+          ?.getAttribute('data-composer-presentation'),
+      ).toBe('compact'),
+    );
   });
 
   it('restores and rewrites the exact Window entry draft snapshot', () => {

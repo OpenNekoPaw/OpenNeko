@@ -1346,34 +1346,37 @@ export class DesktopShellService {
           'Desktop Workbench mutation has invalid Window identity.',
         );
       }
-      if (window.activeTarget.kind !== 'project') {
-        throw new DesktopShellContractError(
-          'desktop-shell-project-identity-mismatch',
-          'Desktop Workbench mutation requires an active Project attachment.',
-        );
-      }
-      const activeTabId = window.activeTarget.tabId;
-      const tab = window.tabs.find((candidate) => candidate.tabId === activeTabId);
-      if (!tab) {
-        throw new DesktopShellContractError(
-          'desktop-shell-project-identity-mismatch',
-          'Desktop Workbench active Project attachment is missing.',
-        );
-      }
-      const project = requireStoredProject(state, tab.projectId);
-      for (const view of parsed.main.views) {
-        if (view.projectId !== project.projectId || view.workspaceId !== project.workspaceId) {
-          throw new DesktopShellContractError(
-            'desktop-shell-project-identity-mismatch',
-            `Desktop Workbench View '${view.viewId}' belongs to another Project.`,
-          );
+      const sceneScope =
+        instance.scene.context.kind === 'agent' ? instance.scene.context.scope : null;
+      const workspaceProject =
+        sceneScope?.kind === 'workspace'
+          ? requireWorkspaceProject(state, sceneScope.workspaceId)
+          : undefined;
+      const workspaceTab = workspaceProject
+        ? requireProjectTab(window, workspaceProject.projectId)
+        : undefined;
+      if (workspaceProject) {
+        for (const view of parsed.main.views) {
+          if (
+            view.projectId !== workspaceProject.projectId ||
+            view.workspaceId !== workspaceProject.workspaceId
+          ) {
+            throw new DesktopShellContractError(
+              'desktop-shell-project-identity-mismatch',
+              `Desktop Workbench View '${view.viewId}' belongs to another Project.`,
+            );
+          }
         }
       }
       return {
         ...window,
-        tabs: window.tabs.map((candidate) =>
-          candidate.tabId === tab.tabId ? { ...candidate, presentation: parsed } : candidate,
-        ),
+        tabs: workspaceTab
+          ? window.tabs.map((candidate) =>
+              candidate.tabId === workspaceTab.tabId
+                ? { ...candidate, presentation: parsed }
+                : candidate,
+            )
+          : window.tabs,
         workbench: createDesktopWindowComposition({
           workbenchInstanceId: instance.workbenchInstanceId,
           layout: parsed,

@@ -173,17 +173,8 @@ describe('AppShell onboarding lifecycle', () => {
     });
 
     expect(screen.queryByTestId('onboarding')).toBeNull();
-    expect(screen.getByTestId('header').getAttribute('data-show-account-bar')).toBe('false');
-    expect(screen.getByTestId('header').getAttribute('data-show-conversation-navigation')).toBe(
-      'false',
-    );
+    expect(screen.queryByTestId('header')).toBeNull();
     expect(screen.getByTestId('empty-state-presentation').textContent).toBe('desktop-dock');
-    expect(
-      screen
-        .getByTestId('header')
-        .closest('[data-presentation]')
-        ?.getAttribute('data-presentation'),
-    ).toBe('desktop-dock');
   });
 
   it('keeps package-owned conversation navigation in standalone presentation', () => {
@@ -203,7 +194,7 @@ describe('AppShell onboarding lifecycle', () => {
       />,
     );
 
-    expect(screen.getByTestId('header')).toBeTruthy();
+    expect(screen.queryByTestId('header')).toBeNull();
     expect(screen.getByTestId('initial-conversation').textContent).toBe(
       'conversation-1:Workspace session',
     );

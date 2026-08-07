@@ -14,6 +14,7 @@ export interface InputAreaUiProjectionInput {
   sessionMode: SessionMode;
   conversationKind?: ConversationKind;
   currentSessionMediaModelCount: number;
+  compactControls?: boolean;
 }
 
 export interface InputAreaUiProjection {
@@ -106,7 +107,7 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
     showMediaCallCount: !isCharacterRoleSession && input.mediaModelCallCount > 0,
     showExecutionModeSelector: !isEntry && !isCharacterRoleSession && isAgentMode,
     showModelConfig: !isCharacterRoleSession && (isAgentMode || hasCurrentSessionMediaModels),
-    showSessionModeSelector: !isEntry && !isCharacterRoleSession,
+    showSessionModeSelector: !isEntry && !isCharacterRoleSession && !input.compactControls,
     inputPlaceholderKey: isEntry
       ? 'chat.input.entryPlaceholder'
       : queuedMessageCount > 0

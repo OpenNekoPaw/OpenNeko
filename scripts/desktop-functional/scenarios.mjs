@@ -12,6 +12,7 @@ import {
   desktopConversationNavigationScenario,
   desktopProjectSidebarManagementScenario,
   desktopWorkbenchScenesScenario,
+  desktopWorkspaceResizeScenario,
 } from './desktop-workbench-scenes.mjs';
 
 const scenarios = new Map(
@@ -25,6 +26,7 @@ const scenarios = new Map(
     desktopConversationNavigationScenario,
     desktopProjectSidebarManagementScenario,
     desktopWorkbenchScenesScenario,
+    desktopWorkspaceResizeScenario,
     resourceBrowserEntityManagementScenario,
     resourceBrowserInvalidEntityDocumentScenario,
     assetLibraryRecordRemovalScenario,

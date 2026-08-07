@@ -2350,7 +2350,7 @@ describe('DesktopShellService', () => {
     }
   });
 
-  it('rejects Workbench updates while no Project is active', async () => {
+  it('commits a Workspace Scene resize when the legacy navigation target is Home', async () => {
     const fixture = createFixture();
     const windowId = await fixture.service.claimWindowId();
     fixture.service.setRendererSessionId(windowId, 'renderer-session-1');
@@ -2365,23 +2365,47 @@ describe('DesktopShellService', () => {
     fixture.service.setRendererSessionId(windowId, 'renderer-session-2');
     const reattachedHome = await fixture.service.getProjection(windowId);
     const current = activeWorkbench(reattachedHome.window);
+    expect(activeScene(reattachedHome.window).context).toMatchObject({
+      kind: 'agent',
+      scope: { kind: 'workspace', workspaceId: opened.workspace.workspaceId },
+    });
+    const updated = {
+      ...current,
+      resourceDock: {
+        ...current.resourceDock,
+        presentation: 'overlay' as const,
+      },
+    };
+    const committed = await fixture.service.updateWorkbench(
+      windowId,
+      reattachedHome.rendererSessionId,
+      activeInstance(reattachedHome.window).workbenchInstanceId,
+      updated,
+    );
+    expect(activeWorkbench(committed.window)).toEqual(updated);
+    expect(committed.window.activeTarget).toEqual({ kind: 'home' });
+    const workspaceView = activeWorkbench(committed.window).main.views[0];
+    if (!workspaceView) throw new Error('Expected the active Workspace View.');
     await expect(
       fixture.service.updateWorkbench(
         windowId,
-        reattachedHome.rendererSessionId,
-        activeInstance(reattachedHome.window).workbenchInstanceId,
+        committed.rendererSessionId,
+        activeInstance(committed.window).workbenchInstanceId,
         {
-          ...current,
-          resourceDock: {
-            ...current.resourceDock,
-            presentation: 'overlay',
+          ...activeWorkbench(committed.window),
+          main: {
+            ...activeWorkbench(committed.window).main,
+            views: [{ ...workspaceView, workspaceId: 'workspace:other' }],
           },
         },
       ),
     ).rejects.toMatchObject({
       code: 'desktop-shell-project-identity-mismatch',
-      message: 'Desktop Workbench mutation requires an active Project attachment.',
+      message: expect.stringContaining('belongs to another Project'),
     });
+    expect(activeWorkbench((await fixture.service.getProjection(windowId)).window)).toEqual(
+      updated,
+    );
     expect(await fixture.service.getApplicationSidebarProjection(windowId)).toEqual(
       reattachedHome.window.applicationSidebar,
     );

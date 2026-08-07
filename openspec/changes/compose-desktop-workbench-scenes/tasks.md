@@ -134,3 +134,4 @@ preserve or a legacy path to keep after the replacement is complete.
 - [x] 12.6 Route Assistant/Workspace new-conversation actions to fresh owner-qualified Entry Drafts and retain explicit unavailable behavior for Character/Room until their owners are composed.
 - [x] 12.7 Unify the Entry composer presentation with the session composer while hiding Entry-only unsupported mode and shortcut controls; add narrow/large UI regressions.
 - [ ] 12.8 Run focused contracts/runtime/Webview/Host/Desktop tests, strict OpenSpec and quality gates, focused Agent Evaluation, and visible development/packaged Electron UI validation; record evidence and residual risk.
+- [x] 12.9 Validate Workbench resize against the exact current Scene owner, remove the empty Desktop dock session Header divider, and simplify the shared conversation composer without disabling typed command/Skill discovery; add focused Host/Webview/Desktop and visible Electron regressions.
