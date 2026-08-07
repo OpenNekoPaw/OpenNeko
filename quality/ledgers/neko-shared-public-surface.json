@@ -1,4 +1,12 @@
 {
   "package": "@neko/shared",
-  "entries": [".", "./core", "./errors", "./job-lifecycle", "./logger", "./path"]
+  "entries": [
+    ".",
+    "./core",
+    "./errors",
+    "./job-lifecycle",
+    "./logger",
+    "./logger/node",
+    "./path"
+  ]
 }
