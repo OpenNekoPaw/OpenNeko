@@ -194,6 +194,9 @@ describe('Desktop renderer styles', () => {
       expect(rule?.groups?.body).toMatch(/box-shadow\s*:\s*none/u);
       expect(rule?.groups?.body).not.toMatch(/--neko-desktop-shadow-surface/u);
     }
+    expect(dockPanelRule?.groups?.body).toMatch(
+      /border\s*:\s*1px solid var\(--neko-desktop-border-strong\)/u,
+    );
   });
 
   it('expands Agent-only interaction into the business area and collapses both docks', () => {
