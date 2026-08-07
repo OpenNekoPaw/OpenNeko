@@ -121,6 +121,25 @@
   - L2：DOM / React 能力
   - 不要破坏依赖方向
 
+## UI、业务实例与运行时生命周期
+
+- Desktop 必须分别建模四类状态 owner：本地 durable 业务记录、当前可见 presentation、可脱离 UI 的后台 task/runtime、可丢弃并可重建的 package-owned presentation snapshot。禁止用统一 `Session`、`OpenInstance`、Workbench catalog、全局 store 或 active identity 同时承载这些生命周期；名称相似、需要恢复或曾被打开不构成共享 owner 的依据。
+- 新增入口、页面、标签页、聊天室、助手或编辑器前，必须先归类为 Window 导航、领域 durable 记录、后台 task/runtime 或 package-owned presentation snapshot，并明确 owner、identity、创建条件、释放条件和恢复来源。仅需要切换展示的能力必须保持为当前 scene；无法证明独立业务生命周期时，不得新增 Session/OpenInstance、跨领域 registry、常驻 Root 或“已打开”数量模型。
+- 不得把 Agent Conversation/Task 或 Workspace Canvas/Editor 规定为整个产品的统一核心实例。入口与管理场景是 Window 导航，Workspace/Project 是本地创作上下文，Conversation/Task 是可后台运行的业务实例，Canvas/Cut/Preview 是文档或 View 的领域实例；它们只能通过明确、最小、可校验的 identity 引用协作，各自 ownership 和生命周期不得被提升为万能 Session、Workbench 或页面模型。
+- Project、Workspace、Conversation、Room、Asset、文档等本地用户记录与其 UI/runtime 驻留必须解耦；不得通过限制、删除、隐藏或自动归档历史记录来控制内存、React Root、subscription、provider 或进程资源。大量记录应使用轻量 metadata、分页、搜索、最近项和用户显式归档/删除管理。
+- Desktop Window 只保留稳定的窗口级 Shell，并只挂载当前 scene composition 在各可见 slot 明确引用的业务 Root；同一 slot 不得同时保留多个历史 Root，只有产品明确提供且用户当前可见的分屏操作才可增加 `Secondary Main`。离开场景后，隐藏的 Workbench、Agent、管理页、资源页、编辑器和 inspector Root 必须卸载，不得把访问历史实现成永久 mounted tree、portal deck 或隐藏 DOM。当前 Workspace 同时需要的 Agent Interaction、Main editor、Resources 或 Timeline 属于同一可见 composition，不得为了追求“全窗口单 Root”把不同领域职责压入一个组件或 store。
+- 入口页、Assets、Extensions、Projects、Settings 等导航目的默认是当前单例场景；“打开”只表示当前 Window 的展示选择，不得仅为导航、返回或保存组件状态创建 durable open-instance、management session 或 retained Workbench catalog。确有独立业务生命周期的 session 必须由对应 owning package 定义，并与窗口导航实例分离。
+- Window 导航、入口、创作、资产、扩展和项目列表之间的切换只更新当前 scene 与可见 identity；不得因此重新解析未变化的 Workspace authority、重新绑定仍有效的 Agent/task runtime、重新创建 Window 级 provider、刷新完整 Shell snapshot 或启动与目标场景无关的订阅和 IO。需要恢复的目标 Root 从 owning authority、轻量 metadata 和最小 presentation snapshot 按需重建；不得用预挂载所有场景或保留隐藏业务 Root 换取切换速度。
+- 产品不得提供或维护跨领域的“已打开实例”总表。单例导航场景没有打开数量；Workspace/Project、Conversation、Asset 和文档的历史数量不受 UI 驻留预算限制；只有当前可见 slot、显式分屏 slot、正在执行的 task 以及实际持有昂贵资源的 runtime 可以有容量或并发上限。包内 tab、recent 或 history 只是轻量 presentation/catalog projection，不得因此保留对应 React Root 或 runtime。
+- Agent 的 Conversation、turn、queue、approval、后台任务、取消和 transcript projection 属于 Agent application/session/task runtime，不属于 React Root、页面 store 或 active Workspace。Renderer 只选择和渲染投影；卸载 Agent UI、切换 Workspace 或进入管理场景不得取消、重定向或转移精确 identity 下仍在运行、排队或等待用户处理的任务。
+- Workspace、Canvas、Cut、Preview 和其他编辑器的 durable facts 由领域 owner 保存；仅布局、viewport、selection、scroll、playhead、未发送 draft 等用户有价值的展示状态可以进入最小 package-owned snapshot。切换 Workspace 或场景后应从同一 authority 与 snapshot 重建，禁止用隐藏 Root、跨领域可变 store、进程/媒体句柄、raw path 或重复领域数据保存展示状态。
+- 切换 Workspace 的语义是提交当前可恢复 presentation snapshot、卸载当前业务 Root、选择目标精确 identity 并重建目标 presentation；不得删除或重置源 Workspace 的 durable facts，不得停止其受保护后台 task，也不得让目标 Workspace 继承源 Workspace 的 transient state。未声明为可恢复 snapshot 的临时查询、hover、打开菜单和未提交手势可以按 owning package 的显式策略重置，这不构成工作区状态丢失。
+- 资源限制必须作用于真实消耗：可见 Root、昂贵 runtime、provider turn、媒体/GPU 资源、subscription 和后台 Job 并发；不得把“打开过多少记录”或 durable catalog 总数当作资源预算。具体并发数和保留条件必须由 owning application service 明确定义，并通过测量、取消、排队、公平性、释放和重开测试验证，active/current identity 不得参与任务所有权或调度优先级。
+- 不可见且无运行、排队、审批或未完成外部操作等真实执行保护条件的 runtime 应显式释放；受保护后台 runtime 可以在无 UI 时继续，但不得因此保留 React tree。未发送 draft、选择、滚动和编辑器展示状态必须在卸载前进入最小 snapshot，不得作为保留 React Root 或无执行任务 runtime 的理由。释放不得修改 durable catalog、transcript、项目事实或产物；重开必须绑定原精确 identity，禁止回退到 active/recent Workspace 或 Conversation。
+- durable 记录失效时必须由 owning catalog 保持可见并携带明确 diagnostic，打开、执行和其他依赖有效 authority 的操作必须禁用；用户显式删除、移除或重新关联以外，不得因 UI 卸载、runtime 释放、数量预算或 presentation snapshot 失效而自动隐藏、转换、修复或清理记录。单条记录或单个 Surface 重建失败必须局部隔离，不得卸载窗口 Shell、清空 sibling catalog 或停止无关后台任务。
+- 未经真实内存、切换延迟和重开成本证据，不得引入通用 LRU、跨领域 cache manager、页面 registry 或多层 residency policy。确需缓存时，必须先通过 OpenSpec 定义单一 owner、容量、pin/protect/evict 条件、可丢弃语义和验证预算；cache 不得成为记录可见性、业务事实或后台任务生命周期的 owner。
+- 本地 UI/runtime 生命周期和资源预算不得以云同步、远程 session server、多租户或跨设备一致性为前提；此类能力只有在出现真实产品需求并通过独立 OpenSpec 定义 authority、冲突和用户数据保护后才能引入。
+
 ## Agent Prompt / Capability / Skill 注入边界
 
 - 系统提示词负责默认 Agent 人设、通用行为准则、通用工具协议、Markdown/引用/视觉证据/安全边界、工具发现与失败处理规则。

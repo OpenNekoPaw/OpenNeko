@@ -44,84 +44,46 @@ Desktop 目前由 `DesktopShell` 在 Home、Project workspace 和 Settings 三�
 
 ## Decisions
 
-### 1. One window shell hosts multiple retained Workbench instances
+### 1. One window shell composes one current scene
 
-`DesktopShell` 始终渲染一个 `ControlledWorkbenchShell` 结构；Settings 也只是 Workbench scene。
-该 React shell 是窗口级 chrome，不等同于唯一业务状态实例。Host 在 Window 下维护多个逻辑
-`WorkbenchInstance`，renderer 在同一 shell 的 slot stacks 中常驻挂载全部 open instance，只让
-`activeWorkbenchInstanceId` 对应的节点可见。Workbench 的 slot 数量按场景变化，不能把
-management Root 压入固定窄栏或用 Preview 替代 management Main：
+`DesktopShell` 始终渲染一个 `ControlledWorkbenchShell` 结构；Settings 也只是 Workbench scene。该 React
+shell 是窗口级 chrome，不是所有历史业务实例的容器。Host 只投影当前 Scene/Workspace/View identity、
+布局和 slot refs，renderer 只挂载当前业务 Root；用户显式打开支持的 split 时可额外挂载一个 Secondary
+Root。Workbench 的 slot 数量按场景变化，不能把 management Root 压入固定窄栏或用 Preview 替代
+management Main：
 
 ```text
 DesktopApplication
 └─ ControlledWorkbenchShell
    ├─ primarySidebar: ApplicationPrimarySidebar
-   ├─ interactionStack: open Agent Surface Roots
-   ├─ mainStack: open Workbench Main View Roots
-   ├─ managerStack: open Manager Roots
-   ├─ timelineStack: open Timeline Roots
+   ├─ currentInteractionOrMain
+   ├─ optionalExplicitSecondary
+   ├─ currentManagerOrTimeline
    └─ status
 ```
 
-实例层级固定为：
+Workspace、Conversation、Room、Project、Asset 和文档 identity 继续由各自 durable catalog 保存，不因
+Root 卸载而关闭、删除或归档。Create 与 Assets/Extensions/Projects/Settings 是当前导航 Scene，不进入
+Window 级 open Workbench catalog。每个 Window 至多保留一个未发送 Entry Draft snapshot；Conversation
+历史不设总量上限，但只有当前/显式分屏 Agent Root 挂载。
 
-```text
-Window
-├─ activeWorkbenchInstanceId
-└─ WorkbenchInstance[]
-   ├─ owner: assistant-space | workspace | management | entry-draft
-   ├─ layout + slot shell instance identities
-   ├─ active Surface identity per slot/group
-   ├─ SurfaceInstance[]
-   │  └─ package-owned page/tab/node child instance catalog
-   ├─ activeAgentSurfaceId
-   └─ AgentSurface[]
-      └─ draft/session connection + Webview UI state
-```
+切换前，owning package 保存恢复所需的最小 layout、viewport、selection、scroll、playhead 或 draft
+snapshot；切回时从 durable facts 与 snapshot 重建。GPU、decoder、playback、frame-loop、subscription
+和 React state 不作为持久状态，也不通过隐藏 DOM 保留。没有用户价值的瞬态页面不创建 snapshot。
 
-同一 `workspaceId` 在一个 Window 内最多一个 open Workbench instance。恢复或新建属于该 Workspace
-的 conversation 时，Host 复用该 instance、增加或聚焦 Agent Surface 并保持 layout/Main/Manager/
-Timeline runtime；不得再创建另一个 Workspace instance。不同 Workspace 的 instance 完全隔离，
-切换只改变 active identity。Assistant conversations 同样在 AssistantSpace instance 内保留各自
-Agent Surface。Entry Draft 首次提交后原 Surface 原地从 draft 交接到 session，不复制 Root。
+Agent turn、queue、approval、transcript 和 lease 属于 `@neko/agent-runtime`。运行中、排队中或等待用户
+处理的 Conversation 在其 Root 卸载后继续运行；不可见且空闲的 Conversation/Workspace runtime 释放后
+从本地 authority 恢复。具体 UI/runtime bounds、应用级 provider 并发和释放条件由
+`bound-desktop-ui-residency` 定义，本变更不再声明 Host-owned Renderer lifecycle policy。
 
-关闭 Workspace instance 才释放其所有 View/Agent runtime；关闭、删除或归档 conversation 只释放
-对应 Agent Surface。Window/renderer 结束释放全部短生命周期资源。隐藏、PrimarySidebar 导航和
-普通 scene 切换都不构成 disposal。持久布局用于应用重开恢复；scroll、输入 selection 等 renderer
-可恢复 UI state 在进程存续期由常驻 Root 保留，必要的 draft/input state 继续经现有 presentation
-storage 恢复，但不能伪造正在运行的资源句柄。
+实例与状态遵循以下不变量：
 
-Retained ownership 逐层组合而不是由一个全局 registry 接管。Host 只拥有 Window 下 Workbench 与
-Agent Surface 的 open/active/close 生命周期；Workbench Main View catalog 继续拥有 document tabs；
-Assets session 拥有资源 facet/page/selection，Canvas Root 拥有已打开 node inspector/editor identity。
-共享 UI 只提供按稳定 key 常驻挂载并以 `hidden` 切换的无业务 `RetainedSurfaceDeck` primitive，以及
-不拥有领域资源的 active/suspended presentation signal。每层必须从 owning facts 精确清理已关闭
-identity，禁止以 active identity、React `key` 或 scene 条件分支触发兄弟实例释放。
-
-实例树遵循以下不变量：
-
-1. parent hidden 不等于 child close，整棵未关闭子树继续挂载；
-2. sibling selection 只更新该层 `activeInstanceId`，不会更新兄弟实例状态；
-3. close/delete/archive 从精确 owner 向下释放，不影响父级和兄弟级；
-4. durable facts 由 owning package 保存，Renderer Root 只保留 scroll、selection、展开、草稿输入、
-   viewport 和未提交控件状态；
-5. 应用重启重建不能持久化的资源句柄，但必须从 Host/package catalog 恢复 open identity、布局、文档、
-   会话 transcript 和可恢复 presentation state。
-
-#### Retention policies
-
-| policy         | owner examples                                                                   | inactive behavior                                                                                                                       | close behavior                 |
-| -------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `hot-retained` | Primary navigation、Agent Surface、向导/表单、轻量管理 page                      | Root 常驻，`hidden` 切换；subscription 继续按精确 identity 投影                                                                         | dispose exact Root/model       |
-| `suspendable`  | Canvas GPU surface、video/audio player、large-image/3D preview、重型 Cut runtime | 保留 owner model、open identity、viewport/scroll/selection/playhead snapshot；暂停 task presentation 并释放 GPU/decoder/playback handle | dispose snapshot、model 与资源 |
-| `ephemeral`    | Modal、Dialog、context editor/menu                                               | invocation 结束即销毁；下一次以新 invocation identity 初始化                                                                            | dispose immediately            |
-
-Retention policy 由 Surface owning contract 声明，Desktop 不按 DOM 大小或文件扩展名猜测。可挂起 Root
-必须提供 package-owned `suspend/resume` 边界或可恢复 ViewModel snapshot；不能把普通 React unmount
-冒充 suspend。恢复时先用内存/本地 shadow state 画出稳定 shell，再异步恢复高成本资源，不能重新请求
-已经存在的业务列表或显示无内容白屏。未提交修改按领域 durability 规则写入内存 model，重度办公流程
-需要跨 View disposal 或离线恢复时使用 owning package 的 SQLite/项目 draft shadow，不写 Desktop-local
-临时副本。
+1. durable record 存在不代表 Root 或 runtime 常驻；
+2. 当前 selection 只选择展示投影，不成为 Conversation、Workspace、Asset 或文档事实 owner；
+3. 后台执行是否继续由 exact task/queue/approval identity 决定，不由 active Scene 决定；
+4. package snapshot 只保存恢复所需展示状态，不复制领域事实、路径、handle 或 provider stream；
+5. Root 重建失败只影响该 Surface，并显示 owner-qualified diagnostic；
+6. 不引入通用 LRU、跨领域 cache manager、旧 lifecycle reader 或双路径。
 
 #### Invalid persisted Window isolation
 
@@ -298,7 +260,7 @@ type AgentRootPresentation =
 
 Draft 隐藏 conversation Tabs/history 等 session-only chrome，但继续复用当前 `ConversationController`、`EmptyState`、`InputAreaProvider` 和 `InputArea`。模型配置、launch-safe commands/Skills、授权文件/引用、语音入口以及创建 turn 后的执行/审批均走相同 Webview contract。普通 workspace session 未传入 draft presentation 时，现有 DOM、Host messages 和行为保持不变。`unbound` Entry Draft 与 owner-bound draft 使用同一个简洁入口 EmptyState；入口不显示强制 owner 选择卡。Assistant/Workspace 绑定成功后立即显示对应已激活空会话状态。
 
-`draftId` 是 presentation instance identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、retained transcript/render subscription、entry input/reference 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。Desktop 不通过 React `key` 重建第二个 Root，也不发送伪造 close-tab 消息来达到清理效果。
+`draftId` 是 presentation identity，不是 conversation identity。Controller 观察到新的 `draftId` 时，必须在 package 内完成一次显式 draft transition：清空 `openTabs`、`activeConversationId`、旧 transcript/render subscription、entry input/reference 和 transient error；全局模型 catalog、用户 settings 与静态 capability catalog 不重建。Desktop 只挂载当前 package Root，不发送伪造 close-tab 消息，也不保留旧 Root 作为 draft 状态 owner。
 
 Entry Draft 的 `unbound` scope 只允许 scope-neutral catalog，以及目录/Project、未来 Character/Room 等会扩大或改变 owner 的显式选择。普通直接提交由 package-owned Agent 入口确定性绑定 Assistant 用户区并沿既有 local transaction 创建 exact session；它不依赖关键词、模型推断或 active Project。选择目录/Project 绑定 Workspace draft并激活 creative slots；选择未来 Character/Room 绑定对应 owner。入口不得用 owner 选择卡阻塞普通输入。每次再次点击“开始创作”都回到新的 `unbound` draft，而不是恢复任何已有 conversation。
 
@@ -373,23 +335,20 @@ main:          AssetManagementRoot(assetCenterSessionId)
 secondaryMain: PreviewRoot(previewSessionId) // only when selected and authorized
 ```
 
-没有 selection 时 Secondary Main 不显示；不支持的内容保留 Main selection 并在 Secondary Main 显示 typed unavailable diagnostic。Desktop 不持有 filter、selection、Asset facts、ContentLocator interpretation 或 preview-kind switch。切换到其他 Workbench/scene 只隐藏 Asset Center instance；其 management Root、已打开 page/detail/preview Root 与可继续使用的授权 session 保持。显式关闭 preview/page/Asset Center instance 或 Window teardown 才释放对应 handle/subscription。
+没有 selection 时 Secondary Main 不显示；不支持的内容保留 Main selection 并在 Secondary Main 显示 typed unavailable diagnostic。Desktop 不持有 filter、selection、Asset facts、ContentLocator interpretation 或 preview-kind switch。切换到其他 Workbench/scene 时卸载 Asset Center management 与 Preview Roots，Assets owner 保留必要的 filter/selection snapshot；授权 Preview handle、subscription 和空闲 runtime 随精确 Surface cleanup 释放，Asset catalog facts 不受影响。
 
 ### 10. Other management and Settings scenes use the same shell
 
 Extensions 使用 Agent extension application contract 与 package public management Root，并将该 Root 放入 Main；现有 Desktop `HomeExtensions` presentation 迁移后删除。Project management 的 catalog/management Root 同样占据 Main，selection 与 explicit open-workspace action分离。Settings 将当前 configuration Surface 放入 settings navigation/main slots；设置事实继续由 `@neko/host` settings owner管理。
 
-Assets、Extensions、Projects 与 Settings 各自拥有独立 management Workbench instance。Settings section、
-资源 facet/page、detail/preview 与其他可返回页面在首次打开后进入 owning instance 的 child catalog；
-后续导航只切换 active identity。关闭整个 management instance 才释放其子树，切换 PrimarySidebar 项
-不得通过 scene 条件渲染卸载它们。
+Assets、Extensions、Projects 与 Settings 是单例当前管理 Scene，不拥有 Window 级 durable management
+Workbench instance。Settings section、资源 filter/selection 和其他有用户价值的展示状态由 owning
+package 保存最小 snapshot；离开 Scene 时 Root 卸载，返回时从领域事实与 snapshot 重建。
 
-Canvas Root 本身继续拥有完整 canvas store/runtime；选择 Canvas node 不创建新的领域 node。对需要
-独立 UI 生命周期的 node inspector/editor，Canvas Webview 以 node identity 保留已访问 Root，并仅切换
-可见性。节点数据变化通过 Canvas store 投影到所有对应 Root；删除 node 才清理该 node UI instance。
-Canvas 的 GPU/媒体 node viewer 属于 `suspendable` child；切换节点时保留 node editor ViewModel 与
-viewport/control snapshot，但 inactive viewer 必须停止 frame loop、playback 和 decoder 并释放高成本
-handle。普通属性 inspector 仍可 hot-retain，Modal/context menu 始终 ephemeral。
+Canvas Root 本身继续拥有完整 canvas store/runtime；选择 Canvas node 不创建新的领域 node。Canvas
+owner 保存 node-qualified editor/inspector snapshot，只挂载当前 node 的 UI。切换节点时提交必要的
+viewport/control snapshot，停止 inactive viewer 的 frame loop、playback 和 decoder 并释放高成本 handle；
+返回节点时从 Canvas facts 与 snapshot 重建。Modal/context menu invocation 结束后直接释放。
 
 若当前没有真实 detail Root，scene 只挂载 owner-qualified catalog/empty/unavailable Surface，不在 Desktop 创建临时 domain implementation。所有 scene 都保留同一 PrimarySidebar、Workbench、主题和 resize lifecycle。
 

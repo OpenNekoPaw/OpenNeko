@@ -107,6 +107,10 @@
 
 ## 11. Multi-Workbench And Agent Surface Instances
 
+Tasks 11.1-11.9 record the implemented retained baseline that exposed the residency problem. Their
+target constraints are superseded by `bound-desktop-ui-residency`; they are not production behavior to
+preserve or a legacy path to keep after the replacement is complete.
+
 - [x] 11.1 Reconcile this change with `remove-internal-versioning-and-product-migrations` tasks 3.1, 3.2, 5.3, 7.2 and 7.3; add red Host contract/state tests for a Window open Workbench instance catalog, one instance per AssistantSpace/Workspace owner, independent layouts and active-instance visibility selection without internal version/generation fields.
 - [x] 11.2 Add red Desktop lifecycle tests proving two Workspace panel trees and multiple same-Workspace Agent Roots stay mounted across switching, while close/delete/archive releases only the exact owner; cover shell/panel and Main tab visibility without remount.
 - [x] 11.3 Replace Window-global Workbench mutable state with instance-owned layouts and active identity; use one stable persisted shape, delete superseded product readers/writers, and reject only the exact invalid Window/Workbench record without modifying its bytes or disabling valid siblings.
@@ -116,6 +120,6 @@
 - [x] 11.7 Add package-owned retained page/node lifecycle for resource directory/media/material/entity/detail/preview navigation and Canvas node inspector/editor switching; deletion closes only the exact child instance.
 - [x] 11.8 Prove parent hide preserves the complete descendant tree and explicit close/delete/archive performs exact recursive disposal without cross-instance mutation.
 - [x] 11.9 Add explicit `hot-retained | suspendable | ephemeral` lifecycle contracts and tests: retain core navigation/forms, suspend high-memory Canvas/media/3D resources with recoverable UI snapshots, reset Modal/Dialog invocations, recursively clear Window/user context, and reject one invalid child snapshot without dropping valid siblings.
-- [ ] 11.10 Run focused Host/Desktop/Agent/Assets/Canvas tests and typechecks, strict OpenSpec/quality gates, then visible real-provider Electron acceptance across two Workspaces, two conversations, management/resource pages and Canvas nodes with background execution, switching, suspend/resume, offline restore and restart restoration.
+- [ ] 11.10 Complete `bound-desktop-ui-residency`, then run focused Host/Desktop/Agent/Assets/Canvas tests, strict OpenSpec/quality gates and visible real-provider Electron acceptance proving two Workspace/conversation histories remain recoverable while only current/explicit-split Roots mount and background execution remains independent.
 - [x] 11.11 Reconcile persisted session Agent Surfaces against the canonical owner-qualified Conversation catalog before renderer bootstrap; locally reject an invalid exact Surface, preserve Conversation authority bytes and valid siblings, activate a same-owner draft, project the diagnostic, and add Host/Desktop regressions plus deterministic Evaluation disposition.
 - [x] 11.12 Make Assets, Extensions and Projects management/detail compositions default to an equal split and constrain the management Main to at least 50%; add renderer resize-boundary tests and visible large/compact Electron evidence.

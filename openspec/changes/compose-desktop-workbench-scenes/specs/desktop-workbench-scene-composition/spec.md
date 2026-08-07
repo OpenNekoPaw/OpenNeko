@@ -351,9 +351,9 @@ The resource center SHALL use one Assets-owned `AssetCenterSession` for catalog,
 #### Scenario: Resource center scene is left
 
 - **WHEN** another scene replaces the resource center slots
-- **THEN** the open Asset Center Workbench, management Root and opened Preview/page Roots remain mounted but hidden
-- **AND** their exact selection, scroll, filter, page and authorized session state remain isolated
-- **AND** handles and subscriptions are released only when their exact Preview/page or Asset Center instance is explicitly closed, or when the owning Window terminates
+- **THEN** the Asset Center management and Preview/page Roots are unmounted
+- **AND** Assets owner preserves only the exact selection, filter and other required presentation snapshot
+- **AND** authorized Preview handles, subscriptions and idle runtime resources are released without changing Asset catalog facts
 
 ### Requirement: Management and Settings surfaces use the same scene model
 
@@ -403,8 +403,8 @@ Extensions and project management SHALL place their package-owned management Roo
 #### Scenario: User opens Settings
 
 - **WHEN** Settings is selected from any scene
-- **THEN** the window activates the retained Settings management Workbench inside the existing shell chrome
-- **AND** Settings navigation and configuration Main slots keep previously opened section Roots mounted while only the active section is visible
+- **THEN** the window composes the current Settings navigation and configuration Main inside the existing shell chrome
+- **AND** Settings facts and the current section projection reconstruct the visible Roots without retaining hidden section Roots
 - **AND** no separate application sidebar or top-level page shell is mounted
 
 ### Requirement: Scene and Surface lifecycle remains instance-scoped
@@ -503,19 +503,20 @@ PrimarySidebar SHALL keep owner-qualified recent session and recent container pr
 - **THEN** sender-bound grants, adapters, listeners, handles and subscriptions are explicitly released
 - **AND** durable conversations, published Assets, Workspace facts and application settings remain intact
 
-### Requirement: Window retains multiple independent Workbench instances
+### Requirement: Window restores independent Workspace presentation without retained Roots
 
-The Window-owned shell SHALL maintain an explicit catalog of open Workbench instances and one active instance
-identity. Each AssistantSpace or Workspace owner SHALL have at most one open Workbench instance in a Window.
-Switching the active instance SHALL change visibility only and SHALL NOT replace, dispose or reconstruct another
-open instance's layout, Views, subscriptions, running tasks or renderer UI state.
+The Window-owned shell SHALL keep one current Scene/Workspace composition and SHALL NOT use an open Workbench
+catalog to retain every visited Root. Each Workspace owner SHALL persist its own durable facts and minimal layout/View
+snapshot. Switching Workspace SHALL unmount inactive UI after snapshot cleanup while exact background tasks continue
+under package runtime ownership.
 
 #### Scenario: User switches between two open Workspaces
 
 - **WHEN** Workspace A and Workspace B are both open and the user activates B after editing A
-- **THEN** A retains its exact layout, Main Views, manager selection, Timeline ownership and running resources
+- **THEN** A commits its exact layout, Main View, manager selection and Timeline snapshot before its Roots unmount
 - **AND** B displays its own independent state
-- **AND** switching back to A reuses the same mounted package Roots and runtime identities
+- **AND** switching back to A reconstructs package Roots from A's durable facts and snapshot
+- **AND** A's running tasks continue under their exact task/runtime identities without requiring hidden Roots
 
 #### Scenario: User changes one Workspace layout
 
@@ -523,107 +524,107 @@ open instance's layout, Views, subscriptions, running tasks or renderer UI state
 - **THEN** only A's Workbench owner commits the layout mutation
 - **AND** Workspace B and the Assistant Workbench retain their layouts and mutable state
 
-#### Scenario: Workspace instance closes
+#### Scenario: Inactive Workspace runtime becomes idle
 
-- **WHEN** the user explicitly closes Workspace A or its Project container is removed from the Window
-- **THEN** Host removes A's open instance and releases its Agent/View/resource runtimes exactly once
-- **AND** other Workbench instances remain mounted and unaffected
+- **WHEN** Workspace A is not visible and owns no running, queued or approval-waiting task
+- **THEN** its package runtimes, subscriptions and resource handles are released exactly once
+- **AND** A's Project, documents, conversations and recoverable View snapshots remain available
+- **AND** the active Workspace remains mounted and unaffected
 
-### Requirement: Open Agent Surfaces retain independent Webview state
+### Requirement: Agent conversations retain independent task state without retained Webviews
 
-Every open Agent draft or conversation SHALL own an independent Agent Webview Root, connection, transcript,
-composer and execution projection. A Workbench instance SHALL select one `activeAgentSurfaceId` for display;
-selection SHALL NOT be used as the state owner.
+Every Agent Conversation SHALL own an independent transcript, queue, turn, approval and recoverable presentation
+state in Agent-owned authority. Desktop SHALL mount only the current or explicitly split Agent Root. Renderer selection
+MUST NOT own or redirect Conversation task state, and an inactive running Conversation MUST NOT require a hidden
+Webview Root or connection to continue.
 
 #### Scenario: User switches conversations inside one Workspace
 
 - **WHEN** two Agent conversations are open in the same Workspace Workbench
-- **THEN** switching changes only the active Agent Surface
-- **AND** both Webview Roots remain mounted with isolated transcript, input, scroll, configuration and run state
-- **AND** no adapter, projection endpoint or controller is recreated merely because visibility changed
+- **THEN** the outgoing Root commits its required input/scroll snapshot and unmounts
+- **AND** the incoming Root reconstructs from its exact transcript, configuration, run state and presentation snapshot
+- **AND** the two Conversations remain isolated without two mounted Webview Roots
 
 #### Scenario: New conversation targets an already open Workspace
 
-- **WHEN** the user creates or restores another Agent conversation whose exact `workspaceId` already has an open Workbench instance
-- **THEN** Host adds or focuses an Agent Surface within that instance
-- **AND** it does not open a second Workspace Workbench or reset the existing layout and Views
+- **WHEN** the user creates or restores another Agent conversation whose exact `workspaceId` is the current Workspace
+- **THEN** Host activates that exact Conversation in the current Workspace composition
+- **AND** it does not open a second Workspace Workbench or reset the Workspace layout and Views
 
-#### Scenario: Agent Surface reaches terminal lifecycle
+#### Scenario: Inactive Agent runtime reaches releasable lifecycle
 
-- **WHEN** its draft/conversation is explicitly closed, deleted or archived
-- **THEN** only that Surface's subscription, projection attachment, connection and renderer state are released
-- **AND** sibling conversations and the owning Workbench remain active
+- **WHEN** its Conversation is inactive with no running turn, queued input, approval or question
+- **THEN** only that Conversation runtime's lease, subscription, projection attachment and in-memory Agent state are released
+- **AND** its durable transcript and sibling Conversations remain available
 
-#### Scenario: Hidden Agent connection receives projection progress
+#### Scenario: Hidden Agent task produces progress
 
-- **WHEN** a running hidden conversation receives events or acknowledges its connection-owned projection frames
-- **THEN** exact connection-scoped delivery continues without routing through the visible conversation
-- **AND** stale, unknown or forged connections remain fail-visible
+- **WHEN** a running inactive Conversation produces progress while no Agent Root is mounted for it
+- **THEN** Agent runtime commits progress to that exact Conversation projection and durable authority
+- **AND** reopening the Conversation projects the accumulated progress without routing through the visible Conversation
+- **AND** stale, unknown or forged runtime identities remain fail-visible
 
-### Requirement: Navigation at every surface layer retains independent open instances
+### Requirement: Navigation reconstructs Surfaces from owner facts and minimal snapshots
 
-Every navigation layer that opens stateful product UI SHALL model an owner-qualified open instance catalog and an
-active identity. This includes Workbench instances, slot shell/panel instances, Main tabs, resource management
-facets/pages/details/previews and Canvas node inspectors/editors. Activating a sibling SHALL only change visibility
-and MUST NOT dispose, reconstruct, rebind or overwrite another open instance. A generic active selection MUST NOT
-own the mutable state of multiple instances. Each owning Surface contract SHALL classify its instances as
-`hot-retained`, `suspendable` or `ephemeral`; Desktop MUST NOT infer that policy from file extension, current route
-or component availability.
+Each stateful product Surface SHALL keep durable business facts and required recoverable presentation snapshots with
+its owning package. Workbench, Main tab, resource page and Canvas node navigation SHALL mount only current or
+explicitly split Roots and MUST NOT retain hidden component trees as mutable state owners. Host durable contracts
+MUST NOT classify Renderer instances as `hot-retained`, `suspendable` or `ephemeral`.
 
 #### Scenario: User switches Workbench shell or panel
 
-- **WHEN** the user moves between Agent, Main, Manager, Preview/Detail or Timeline shells that remain open
-- **THEN** each shell keeps its exact Root, layout, subscription, scroll and pending UI state
-- **AND** visibility changes do not recreate its package runtime or reuse another shell's mutable state
+- **WHEN** the user moves between Agent, Main, Manager, Preview/Detail or Timeline compositions
+- **THEN** the outgoing owner commits required layout, scroll and pending UI snapshot before unmount
+- **AND** the incoming Root uses only its own owner facts and snapshot
+- **AND** background package runtime lifetime remains independent from Root visibility
 
 #### Scenario: User switches Main tabs
 
 - **WHEN** the user activates another Canvas, Cut, Model or Preview tab in a Workbench group
-- **THEN** every lightweight open tab Root remains mounted under its stable View identity
-- **AND** a high-memory tab keeps its owner model and UI snapshot while its package runtime suspends GPU, decoder, playback and frame-loop resources
+- **THEN** the outgoing tab Root unmounts after its owner saves the required View snapshot
+- **AND** GPU, decoder, playback and frame-loop resources are released for the inactive tab
 - **AND** switching back restores the same viewport, selection, playhead/editor and transient UI state without reloading existing business data or showing an empty shell
 - **AND** closing a tab releases only that View and its owned resources
 
 #### Scenario: User switches resource management pages
 
 - **WHEN** the user changes directory, media library, material library, entity, detail or preview pages within an open resource manager
-- **THEN** each opened page keeps an independent Root and page-scoped state while hidden
-- **AND** package-owned resource facts continue to update without being routed through the currently visible page
-- **AND** removing a resource fact does not implicitly close unrelated page instances
+- **THEN** only the current page and explicit Preview/Detail split Roots remain mounted
+- **AND** package-owned resource facts and required filter/selection snapshots remain independent from page mounting
+- **AND** removing a resource fact does not discard unrelated page snapshots or durable records
 
 #### Scenario: User switches Canvas nodes
 
 - **WHEN** the user selects node B after editing node A in the same Canvas
-- **THEN** the Canvas owner model and A's opened inspector/editor UI instance remain isolated
-- **AND** B uses its own node-qualified UI instance while both consume current Canvas-owned node facts
+- **THEN** the Canvas owner commits A's required editor/inspector snapshot and unmounts A's UI
+- **AND** B uses its own node-qualified UI while consuming current Canvas-owned node facts
 - **AND** selecting A again restores its uncommitted control, expansion and scroll state
-- **AND** an inactive media/GPU node viewer is suspended and releases playback, decoder, frame-loop and GPU handles without discarding its recoverable snapshot
-- **AND** deleting A releases only A's node UI instance after the Canvas owner commits deletion
+- **AND** the inactive media/GPU viewer releases playback, decoder, frame-loop and GPU handles without discarding its recoverable snapshot
+- **AND** deleting A releases only A's facts and snapshot after the Canvas owner commits deletion
 
 #### Scenario: Parent instance becomes hidden
 
-- **WHEN** a parent Workbench or shell becomes inactive while descendants remain open
-- **THEN** its complete descendant instance catalog and owner models remain alive
-- **AND** hot-retained descendants remain mounted and hidden while suspendable descendants enter their package-owned suspended lifecycle
-- **AND** hidden Agent events, media tasks and package projections continue through their exact instance identities
-- **AND** no descendant is released until an explicit lifecycle action reaches its owner
+- **WHEN** a Workbench or shell becomes inactive while one of its descendants owns a background task
+- **THEN** its Renderer descendants unmount after snapshot cleanup
+- **AND** the exact task runtime continues under its package application owner
+- **AND** idle subscriptions, media handles and UI runtimes are released without waiting for an explicit delete/archive action
 
 #### Scenario: Modal or context dialog closes
 
 - **WHEN** a Modal, Dialog, context menu or context editor invocation ends
-- **THEN** its ephemeral instance and uncommitted invocation-local state are disposed
+- **THEN** its invocation instance and uncommitted invocation-local state are disposed
 - **AND** reopening for another target creates a new invocation identity initialized from that target's current owning facts
 - **AND** no prior target's draft, validation error or selection leaks into the new invocation
 
-#### Scenario: Suspendable view resumes offline
+#### Scenario: An unmounted view resumes offline
 
-- **WHEN** a suspended editor resumes while an API or network provider is unavailable
+- **WHEN** an editor is reconstructed while an API or network provider is unavailable
 - **THEN** it restores its owner model, last durable or shadow draft and UI snapshot without refetching already available business data
 - **AND** unavailable external refresh or execution is reported separately without clearing the restored view
 
 #### Scenario: Window or user context terminates
 
 - **WHEN** the owning Window closes or a future user/account context is replaced
-- **THEN** every hot-retained, suspended and ephemeral descendant is recursively disposed exactly once
-- **AND** user-scoped in-memory caches, handles, subscriptions and pending UI drafts do not leak into the next context
+- **THEN** every mounted Root, protected runtime, handle and subscription is disposed exactly once
+- **AND** user-scoped in-memory snapshots and pending UI drafts do not leak into the next context
 - **AND** durable project, conversation and explicitly persisted shadow data follow their owning retention policy

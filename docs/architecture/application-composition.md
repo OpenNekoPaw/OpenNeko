@@ -2,9 +2,10 @@
 
 状态：Accepted
 
-更新日期：2026-08-05
+更新日期：2026-08-07
 对应变更：`replace-desktop-media-scheme-with-http-resource-gateway`、
-`enforce-thin-desktop-application-root`、`compose-desktop-workbench-scenes`
+`enforce-thin-desktop-application-root`、`compose-desktop-workbench-scenes`、
+`bound-desktop-ui-residency`
 
 OpenNeko 只有一个可执行产品组合根：`apps/neko-desktop`。`packages/*` 与 `packages/*/*` canonical workspace
 提供 host-neutral contract、领域 runtime、Node adapter 和 browser-safe UI；应用根负责把它们
@@ -101,10 +102,33 @@ workspace package 的角色、拆分条件、领域家族命名和 inactive capa
 ## Desktop Workbench 组合
 
 每个 Desktop Window 只组合一个 `ControlledWorkbenchShell` 和一个持续存在的
-PrimarySidebar。Host 以 closed canonical scene projection 拥有 open Workbench instance catalog、
-active identity、slot refs 与独立 sidebar presentation；renderer 只能把已验证的 package public Root 映射到
-Interaction、Main、Secondary Main、Manager、Timeline 和 Status slot，不得根据 route、当前组件、
-active/first/recent Project 或模型文本推断场景和权限。
+PrimarySidebar。Host 以 closed canonical scene projection 拥有一个当前 Window composition、当前
+Workspace/Workbench identity、slot refs 与独立 sidebar presentation；renderer 只能把已验证的 package
+public Root 映射到 Interaction、Main、Secondary Main、Manager、Timeline 和 Status slot，不得根据 route、
+当前组件、active/first/recent Project 或模型文本推断场景和权限。一个 Window 只挂载当前 scene composition
+在各可见 slot 明确引用的业务 Root；同一 slot 不保留历史 Root，只有产品明确提供且用户当前可见的分屏
+composition 才能增加 `Secondary Main`。当前 Workspace 可同时组合 Agent Interaction、Main editor、Resources
+和 Timeline，但它们仍只服务当前可见 composition，不构成跨场景 retained tree。离开场景后，先由 owning
+package 保存必要的最小 presentation snapshot，再卸载隐藏的 Workbench、Agent、管理页、资源页、编辑器和
+inspector Root；Host 不保存 open Workbench catalog、Renderer lifecycle policy 或访问历史对应的隐藏 Root。
+
+Desktop 分别建模本地 durable 业务记录、当前可见 presentation、可脱离 UI 的后台 task/runtime，以及
+可丢弃并可重建的 package-owned presentation snapshot。入口与管理场景是 Window 导航，Workspace/Project
+是本地创作上下文，Conversation/Task 是可后台运行的 Agent 业务实例，Canvas/Cut/Preview 是文档或 View
+领域实例；不得用统一 Session、Workbench、全局 active identity 或跨领域 open-instance catalog 同时承担
+这些 lifecycle。Project、Workspace、Conversation、Asset 和文档历史不受 UI 驻留预算限制，应通过轻量
+metadata、分页、搜索、最近项和用户显式归档/删除管理。
+
+新增入口、标签页、聊天室、助手或编辑器必须先归类到上述生命周期，并明确 owning package、精确 identity、
+创建与释放条件以及恢复来源。只改变当前展示选择的能力保持为 Window scene；没有独立业务生命周期的页面不得
+创建 Session/OpenInstance、跨领域 registry、常驻 Root 或“已打开”数量。数量预算只约束实际驻留和执行资源，
+不约束 durable 历史记录。
+
+导航只提交当前 scene、精确 identity 和必要布局。成功的 Host mutation 以 canonical projection event 更新
+Renderer，不再无条件刷新完整 Shell snapshot，也不得重新解析未变化的 Workspace authority、重新绑定仍有效的
+后台 Agent/task runtime 或启动与目标场景无关的订阅和 IO。资源上限只作用于当前可见 slot、显式分屏 slot、
+provider turn、媒体/GPU、subscription、后台 Job 和其他真实昂贵 runtime；不可见且无运行、排队、审批或
+未完成外部操作保护条件的 runtime 应释放，受保护后台 runtime 可在无 React Root 时继续。
 
 Workbench 是可变形态，不是固定的 Workspace 页面：默认 Agent draft 只有 Interaction；Assistant
 激活后是 Agent + Preview Main；Workspace 是 Agent + creative Main + 右侧 Workspace Resources；

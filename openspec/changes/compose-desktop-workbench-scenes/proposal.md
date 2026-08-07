@@ -27,27 +27,24 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - **BREAKING**：删除 `HomeStartCreating`、Home 独立 Agent composer、`agentInitialInput` handoff、Home/Project/Settings 顶层分支、场景级 sidebar frame，以及通过首个/最近/active Project 或模型意图决定可执行场景的路径；只保留单一 canonical owner-qualified path。
 - PrimarySidebar 将“最近会话”定义为恢复精确 interactive session，将“最近打开”定义为打开 Project/Character/Room 容器并进入新的 owner-bound draft；不得把容器选择当作旧会话恢复，也不得把内部角色 AgentSession 作为 Room 最近项暴露。
 - Workspace 顶部布局 chrome 使用 VS Code 风格的紧凑独立图标控件，分别管理一级侧栏、Agent、Main 与管理面板显隐；Main tab header 和领域 Surface 不再重复渲染布局按钮。
-- Renderer view-scoped runtime 的 effect 只拥有 subscription；runtime instance 只在 identity 被替换或组件真正卸载时 dispose。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实 Electron exception/DOM 证据验收。
-- Window Shell 在唯一 `ControlledWorkbenchShell` 内管理多个逻辑 Workbench instance。每个已打开
-  Workspace 只有一个 instance 并独立保留布局、Main/Manager/Timeline Views 与运行资源；Assistant
-  用户区拥有自己的 instance。关联到已打开 Workspace 的新 Agent 会话只向该 instance 增加独立
-  Agent Surface，不重复打开 Workspace。
-- 每个未关闭、未删除或未归档的 Agent draft/session 都是独立常驻的 Webview Root/connection/UI
-  state owner；每个 Workbench instance 只切换 `activeAgentSurfaceId`，Workspace 切换只切换
-  `activeWorkbenchInstanceId`。选择状态不得模拟实例所有权或触发隐藏实例释放/重建。
-- 将 retained instance 规则贯穿所有真实导航层级：Workbench、slot shell/panel、Main tab、资源管理
-  facet/page/detail/preview 与 Canvas node inspector/editor 分别维护 owner-qualified open catalog 和 active
-  identity。父层或同层切换只改变可见性；只有显式关闭、删除、归档或 owning Window teardown 才精确
-  释放对应 Root、subscription、handle 和 runtime。
-- Renderer 只保留浏览器 UI 状态与 package public Root；Workspace 文档、Canvas node、Asset selection、
-  Agent transcript 和运行任务等事实仍由 owning package/runtime 管理。不得用 retained DOM 代替领域持久化，
-  也不得用全局 active selection 模拟多个实例。
-- Surface 生命周期按真实成本分为三类：主导航、Agent、工作流表单和轻量页面为 `hot-retained`；
-  Canvas、视频、大图、3D 等高内存 Surface 为 `suspendable`，隐藏时保留 ViewModel/UI snapshot 并释放
-  GPU/decoder/playback 资源；Dialog/Modal/context editor 为 `ephemeral`，每次按新 invocation identity
-  初始化。Window teardown 与未来账号 context 更换递归清理所有类型。
-- 核心编辑草稿和未提交修改由 owning package 的内存 model 与适用的本地 shadow persistence 保持，
-  断网和 View suspend 不得触发业务数据重新拉取、静默丢失或空白重建。
+- Renderer effect 只拥有自身 subscription；后台 task/runtime 由 package application owner 管理，不依赖
+  React Root 是否挂载。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实
+  Electron exception/DOM 证据验收。
+- Window 只保留唯一 `ControlledWorkbenchShell`、当前 Scene/Workspace identity 和必要布局；Create 与
+  Assets/Extensions/Projects/Settings 是当前导航场景，不创建长期 open Workbench instance。只有用户显式
+  分屏时才允许第二个同时可见的业务 Surface。
+- Workspace、Conversation、Room、Project、Asset 和文档是可持久、可恢复且不设总量硬上限的业务记录，
+  但 inactive UI 不常驻。Renderer 只挂载当前和显式分屏 package Root；切换前由 owning package 保存最小
+  View snapshot，切回时从 durable facts 与 snapshot 重建。
+- Agent transcript、turn、queue 和 approval 由 Agent runtime 独立持有。运行中、排队中或等待用户处理的
+  Conversation 在隐藏后继续运行，但不要求隐藏 Agent Root/connection；不可见且空闲的 Conversation 与
+  Workspace runtime 可释放并从本地 authority 恢复。
+- Entry Draft 每个 Window 至多保存一个轻量未发送 snapshot，不为每个 draft 保留 Webview Root。管理页、
+  资源 facet/page/detail/preview 和 Canvas inspector/editor 也不得用隐藏 DOM 作为状态 owner。
+- Host durable contract 不保存 `hot-retained`、`suspendable`、`ephemeral` 或其他 Renderer lifecycle policy；
+  生命周期和并发预算由 `bound-desktop-ui-residency` 的 package-owned runtime/UI 约束负责。
+- 核心编辑草稿和未提交修改由 owning package 的内存 model 与适用的本地 shadow persistence 保持；UI
+  卸载和离线不得触发业务数据重新拉取、静默丢失或空白重建。
 - 本变更定义 Character/Chatroom 的 Workbench 形态，但不实现尚不存在的 Character Manager、Interactive Main、World authoring/experience owner；未具备 owner/runtime/Surface 的显式导航请求返回 unavailable，active conversation 不允许原地 rebind。
 
 ## Capabilities
@@ -70,8 +67,8 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Agent extension management UI 必须通过 Agent package public Root/port 暴露；项目目录与 Settings 只保留 app-level placement，领域状态与操作继续委托 owning Host/package contract。
 - `apps/neko-desktop` 只保留 Electron Window/View 生命周期、typed IPC/preload、目录/文件/麦克风授权 adapter 和将公开 Roots 放入已验证 slots 的 presentation composition。
 - `@neko/host` 同时拥有 Entry Draft identity 与 `unbound -> owner-bound draft -> session` Scene transition fencing；`@neko/agent-webview` 拥有同一 Root 内 presentation reset，Desktop renderer 不推断或缓存 scope。
-- `@neko/host` 拥有 Window 内 open Workbench/Agent Surface 目录、active identity 和关闭生命周期；
-  package runtime 继续拥有各实例业务状态，Desktop renderer 只把全部 open Roots 常驻挂载并切换可见性。
+- `@neko/host` 拥有 Window 当前 Scene/Workspace/View identity 与布局，不拥有 Renderer residency policy；
+  package runtime 继续拥有业务状态与后台任务，Desktop renderer 只挂载当前和显式分屏 Roots。
 - 用户数据不删除、不复制，产品运行时不迁移、不兼容读取也不自动修复。持久记录必须长期保持单一稳定 shape；无法满足 canonical shape 的记录在其最小实例边界返回明确 diagnostic，其他 Window、Workbench、conversation 和 Project 继续可用。Assistant scratch 在 conversation 存续期间可恢复，只有删除 conversation 或显式清理时回收；接受的产物必须先发布到资源中心或 workspace。
 
 本变更依赖 `remove-internal-versioning-and-product-migrations` 的 Host/Desktop contract、Agent connection 与 runtime ordering 切片。两项变更必须一次性更新本次边界内全部 producer、consumer、fixture 和测试，不建立版本判别、产品迁移、兼容 reader、双路径或内部代际别名。
