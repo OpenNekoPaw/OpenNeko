@@ -27,7 +27,6 @@ describe('Desktop Project Management surfaces', () => {
         onRemove={vi.fn()}
         onSelect={onSelect}
         projects={[project()]}
-        sessionId="project-management:1"
       />,
     );
     await act(async () => findButton(container, 'Demo').click());
@@ -54,7 +53,6 @@ describe('Desktop Project Management surfaces', () => {
         onRemove={vi.fn()}
         onSelect={vi.fn()}
         projects={[]}
-        sessionId="project-management:empty-catalog"
       />,
     );
 
@@ -87,7 +85,6 @@ describe('Desktop Project Management surfaces', () => {
         onRemove={onRemove}
         onSelect={vi.fn()}
         projects={[unavailable]}
-        sessionId="project-management:unavailable"
       />,
     );
 
@@ -102,6 +99,56 @@ describe('Desktop Project Management surfaces', () => {
     expect(onRemove).toHaveBeenCalledWith(unavailable);
     expect(onOpen).not.toHaveBeenCalled();
     await act(async () => markup.root.unmount());
+  });
+
+  it('reconstructs query, sort and view from defaults after the singleton scene unmounts', async () => {
+    const first = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        interactive
+        onOpen={vi.fn()}
+        onRemove={vi.fn()}
+        onSelect={vi.fn()}
+        projects={[project()]}
+      />,
+    );
+    const search = first.container.querySelector<HTMLInputElement>('input');
+    const sort = first.container.querySelector<HTMLSelectElement>('select');
+    const viewButtons = first.container.querySelectorAll<HTMLButtonElement>(
+      '.management-surface-toolbar button',
+    );
+    if (!search || !sort || !viewButtons[0]) {
+      throw new Error('Project Management controls are unavailable.');
+    }
+    const gridButton = viewButtons[0];
+    await act(async () => {
+      search.value = 'missing';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      sort.value = 'name-ascending';
+      sort.dispatchEvent(new Event('change', { bubbles: true }));
+      gridButton.click();
+    });
+    expect(first.container.querySelector('.management-surface-list')?.className).toContain(
+      'is-grid',
+    );
+    await act(async () => first.root.unmount());
+
+    const restored = await renderWithI18n(
+      <DesktopProjectCatalogSurface
+        interactive
+        onOpen={vi.fn()}
+        onRemove={vi.fn()}
+        onSelect={vi.fn()}
+        projects={[project()]}
+      />,
+    );
+    expect(restored.container.querySelector<HTMLInputElement>('input')?.value).toBe('');
+    expect(restored.container.querySelector<HTMLSelectElement>('select')?.value).toBe(
+      'updated-descending',
+    );
+    expect(restored.container.querySelector('.management-surface-list')?.className).toContain(
+      'is-list',
+    );
+    await act(async () => restored.root.unmount());
   });
 });
 

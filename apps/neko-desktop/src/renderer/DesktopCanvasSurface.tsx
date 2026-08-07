@@ -1,6 +1,9 @@
 import { CanvasWebviewRoot } from '@neko/canvas-webview/root';
 import { useMemo } from 'react';
-import type { DesktopProjectCatalogItem, DesktopShellProjection } from '@neko/host/desktop-shell-contract';
+import type {
+  DesktopProjectCatalogItem,
+  DesktopShellProjection,
+} from '@neko/host/desktop-shell-contract';
 import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contract';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createElectronCanvasHostRuntime } from './desktop-canvas-host-runtime';
@@ -9,12 +12,10 @@ import { createDesktopCanvasWebviewDelegate } from './desktop-canvas-webview-del
 export function DesktopCanvasSurface({
   project,
   projection,
-  lifecyclePresentation,
   view,
 }: {
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
-  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const documentId = requireCanvasDocumentId(view);
@@ -50,7 +51,7 @@ export function DesktopCanvasSurface({
     >
       <CanvasWebviewRoot
         delegate={delegate}
-        lifecyclePresentation={lifecyclePresentation}
+        lifecyclePresentation="active"
         locale="zh-cn"
         runtime={runtime}
       />

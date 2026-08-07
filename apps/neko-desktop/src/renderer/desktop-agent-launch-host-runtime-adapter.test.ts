@@ -55,7 +55,7 @@ describe('Electron Agent launch Host runtime adapter', () => {
     expect(bridge.agentLaunch.detach).toHaveBeenCalledOnce();
   });
 
-  it('restores Assistant draft state across connection replacement with a stable owner key', () => {
+  it('restores the one Window entry draft across scope and connection replacement', () => {
     const storage = createStorage();
     const first = createElectronAgentLaunchHostRuntimeAdapter({
       bridge: createBridge(),
@@ -73,12 +73,29 @@ describe('Electron Agent launch Host runtime adapter', () => {
       },
       storage,
     });
+    const workspaceReplacement = createElectronAgentLaunchHostRuntimeAdapter({
+      bridge: createBridge(),
+      catalog: {
+        ...createCatalog(),
+        connection: {
+          ...createCatalog().connection,
+          connectionId: 'launch-workspace-replacement',
+          scope: {
+            kind: 'workspace' as const,
+            workspaceId: 'workspace:1',
+            workspaceGrantId: 'workspace-grant:1',
+          },
+        },
+      },
+      storage,
+    });
 
     first.setState({ drafts: [{ tabId: 'tab-1' }] });
 
     expect(replacement.getState()).toEqual({ drafts: [{ tabId: 'tab-1' }] });
+    expect(workspaceReplacement.getState()).toEqual({ drafts: [{ tabId: 'tab-1' }] });
     expect([...storage.values.keys()]).toEqual([
-      'openneko:agent:presentation:assistant:assistant:1:agent-view:window-1',
+      'openneko:agent:presentation:window:window-1:entry:agent-view:window-1',
     ]);
   });
 

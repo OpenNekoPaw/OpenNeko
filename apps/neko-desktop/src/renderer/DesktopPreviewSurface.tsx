@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { usePreviewViewerSnapshotStore } from '@neko/preview-webview/presentation-snapshot';
 import type {
   DesktopProjectCatalogItem,
   DesktopShellProjection,
@@ -15,15 +16,14 @@ const PreviewRoot = lazy(async () => {
 export function DesktopPreviewSurface({
   project,
   projection,
-  lifecyclePresentation,
   view,
 }: {
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
-  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const { locale, t } = useTranslation();
+  const snapshotStore = usePreviewViewerSnapshotStore();
   const runtime = useMemo(() => {
     if (!view.documentId) {
       throw new Error(`Desktop Preview View '${view.viewId}' has no document identity.`);
@@ -68,9 +68,10 @@ export function DesktopPreviewSurface({
       >
         <PreviewRoot
           chrome="content-only"
-          lifecyclePresentation={lifecyclePresentation}
+          lifecyclePresentation="active"
           runtime={runtime}
           locale={locale}
+          snapshotStore={snapshotStore}
         />
       </Suspense>
     </section>

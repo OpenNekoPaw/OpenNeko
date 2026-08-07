@@ -15,6 +15,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
         agent: {
           getBootstrap: vi.fn(),
           getAssistantBootstrap: vi.fn(),
+          detach: vi.fn(),
           send,
           subscribe,
         },
@@ -31,12 +32,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
     });
     expect(adapter.getState()).toEqual({ draft: 'hello' });
     expect(storage.values).toEqual(
-      new Map([
-        [
-          'openneko:agent:presentation:workspace:workspace-1:view-1',
-          '{"draft":"hello"}',
-        ],
-      ]),
+      new Map([['openneko:agent:presentation:workspace:workspace-1:view-1', '{"draft":"hello"}']]),
     );
   });
 
@@ -85,10 +81,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
 
   it('returns a local invalid-state marker without rewriting malformed JSON', () => {
     const storage = createStorage();
-    storage.values.set(
-      'openneko:agent:presentation:workspace:workspace-1:view-1',
-      '{invalid',
-    );
+    storage.values.set('openneko:agent:presentation:workspace:workspace-1:view-1', '{invalid');
     const adapter = createElectronAgentHostRuntimeAdapter({
       bridge: bridge(),
       bootstrap: bootstrap('view-1'),
@@ -101,8 +94,9 @@ describe('Electron AgentHostRuntimeAdapter', () => {
     );
   });
 
-  it('disposes the preload subscription without owning Host lifecycle', () => {
+  it('disposes local subscriptions before detaching its exact Host connection', async () => {
     const unsubscribe = vi.fn();
+    const detach = vi.fn(async () => undefined);
     const subscribe = vi.fn(
       (
         _connection: ReturnType<typeof bootstrap>['connection'],
@@ -114,6 +108,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
         agent: {
           getBootstrap: vi.fn(),
           getAssistantBootstrap: vi.fn(),
+          detach,
           send: vi.fn(),
           subscribe,
         },
@@ -123,10 +118,14 @@ describe('Electron AgentHostRuntimeAdapter', () => {
     });
 
     const subscription = adapter.subscribe(vi.fn());
+    await adapter.dispose();
     subscription.dispose();
 
     expect(subscribe).toHaveBeenCalledWith(bootstrap('view-1').connection, expect.any(Function));
     expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(detach).toHaveBeenCalledWith(bootstrap('view-1').connection);
+    await adapter.dispose();
+    expect(detach).toHaveBeenCalledOnce();
   });
 
   it('keeps replacement adapter sends bound to the connection that created them', () => {
@@ -136,6 +135,7 @@ describe('Electron AgentHostRuntimeAdapter', () => {
       agent: {
         getBootstrap: vi.fn(),
         getAssistantBootstrap: vi.fn(),
+        detach: vi.fn(),
         send,
         subscribe,
       },
@@ -186,6 +186,7 @@ function bridge() {
     agent: {
       getBootstrap: vi.fn(),
       getAssistantBootstrap: vi.fn(),
+      detach: vi.fn(),
       send: vi.fn(),
       subscribe: vi.fn(() => vi.fn()),
     },

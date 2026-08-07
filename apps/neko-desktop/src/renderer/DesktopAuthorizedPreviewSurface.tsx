@@ -10,6 +10,7 @@ import type {
 } from '@neko/preview-domain/authorized-session';
 import { lazy, Suspense, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { usePreviewViewerSnapshotStore } from '@neko/preview-webview/presentation-snapshot';
 
 const AuthorizedPreviewRoot = lazy(async () => {
   const module = await import('@neko/preview-webview/root');
@@ -18,16 +19,15 @@ const AuthorizedPreviewRoot = lazy(async () => {
 
 export function DesktopAuthorizedPreviewSurface({
   bridge,
-  lifecyclePresentation,
   previewSessionId,
   projection,
 }: {
   readonly bridge: OpenNekoAssetCenterBridge;
-  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly previewSessionId: string;
   readonly projection: AssetCenterSessionProjection;
 }): JSX.Element {
   const { locale } = useTranslation();
+  const snapshotStore = usePreviewViewerSnapshotStore();
   const selection = projection.selection;
   if (!selection || projection.preview.status !== 'ready') {
     throw new Error('Authorized Preview requires an exact Asset Center selection.');
@@ -60,9 +60,10 @@ export function DesktopAuthorizedPreviewSurface({
     <Suspense fallback={null}>
       <AuthorizedPreviewRoot
         chrome="content-only"
-        lifecyclePresentation={lifecyclePresentation}
+        lifecyclePresentation="active"
         locale={locale}
         runtime={runtime}
+        snapshotStore={snapshotStore}
       />
     </Suspense>
   );

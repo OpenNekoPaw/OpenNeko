@@ -8,6 +8,7 @@ import type {
   AuthorizedPreviewSessionRuntime,
 } from '@neko/preview-domain/authorized-session';
 import { useTranslation } from '@neko/ui/i18n/react';
+import { usePreviewViewerSnapshotStore } from '@neko/preview-webview/presentation-snapshot';
 import { lazy, Suspense, useMemo } from 'react';
 
 const AuthorizedPreviewRoot = lazy(async () => {
@@ -18,19 +19,18 @@ const AuthorizedPreviewRoot = lazy(async () => {
 export function DesktopAssistantPreviewSurface({
   assistantSpaceId,
   conversationId,
-  lifecyclePresentation,
   previewSessionId,
   scratchArtifactId,
   windowId,
 }: {
   readonly assistantSpaceId: string;
   readonly conversationId: string;
-  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly previewSessionId: string;
   readonly scratchArtifactId: string;
   readonly windowId: string;
 }): JSX.Element {
   const { locale } = useTranslation();
+  const snapshotStore = usePreviewViewerSnapshotStore();
   const resourceIdentity = useMemo(
     () => ({ assistantSpaceId, conversationId, windowId }),
     [assistantSpaceId, conversationId, windowId],
@@ -49,9 +49,10 @@ export function DesktopAssistantPreviewSurface({
     <Suspense fallback={null}>
       <AuthorizedPreviewRoot
         chrome="content-only"
-        lifecyclePresentation={lifecyclePresentation}
+        lifecyclePresentation="active"
         locale={locale}
         runtime={runtime}
+        snapshotStore={snapshotStore}
       />
     </Suspense>
   );

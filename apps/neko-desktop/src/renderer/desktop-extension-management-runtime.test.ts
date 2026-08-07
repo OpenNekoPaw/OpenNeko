@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
 
 describe('DesktopExtensionManagementRuntime', () => {
-  it('projects the exact owner session and fails visibly after disposal', async () => {
+  it('projects the exact owner Window and fails visibly after disposal', async () => {
     const execute = vi.fn(async (request) => ({
       requestId: request.requestId,
       route: request.route,
@@ -15,13 +15,13 @@ describe('DesktopExtensionManagementRuntime', () => {
       },
     }));
     const runtime = new DesktopExtensionManagementRuntime(
-      { extensionManagementSessionId: 'extension-management:1', windowId: 'window-1' },
+      { windowId: 'window-1' },
       {
         extensionManagement: { execute },
       },
     );
     await expect(runtime.getSnapshot()).resolves.toMatchObject({
-      identity: { extensionManagementSessionId: 'extension-management:1', windowId: 'window-1' },
+      identity: { windowId: 'window-1' },
     });
     runtime.dispose();
     await expect(runtime.getSnapshot()).rejects.toThrow('disposed');

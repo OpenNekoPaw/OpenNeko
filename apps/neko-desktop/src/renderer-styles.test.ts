@@ -162,17 +162,6 @@ describe('Desktop renderer styles', () => {
     expect(previewSurfaceRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
   });
 
-  it('gives retained Main View decks a stable full-height viewport', () => {
-    const retainedDeckRule = styles.match(
-      /\.project-main-group__content\s*>\s*\[data-neko-retained-surface-deck='true'\]\s*\{(?<body>[\s\S]*?)\n\}/u,
-    );
-
-    expect(retainedDeckRule?.groups?.body).toMatch(/width\s*:\s*100%/u);
-    expect(retainedDeckRule?.groups?.body).toMatch(/height\s*:\s*100%/u);
-    expect(retainedDeckRule?.groups?.body).toMatch(/min-height\s*:\s*0/u);
-    expect(retainedDeckRule?.groups?.body).toMatch(/overflow\s*:\s*hidden/u);
-  });
-
   it('keeps Asset names visible in a compact management panel', () => {
     expect(styles).toMatch(
       /\.desktop-workbench-main-panel\[data-panel-size='compact'\][\s\S]*?\.global-library-browser__collection\[data-view-mode='list'\][\s\S]*?\.global-library-browser__entry\s*\{[\s\S]*?grid-template-columns\s*:\s*40px minmax\(0, 1fr\) 28px/u,

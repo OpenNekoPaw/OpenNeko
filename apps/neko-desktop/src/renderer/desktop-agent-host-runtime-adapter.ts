@@ -9,6 +9,10 @@ export interface DesktopAgentPresentationStorage {
   setItem(key: string, value: string): void;
 }
 
+export interface ElectronAgentHostRuntimeAdapter extends AgentHostRuntimeAdapter {
+  dispose(): Promise<void>;
+}
+
 const INVALID_PRESENTATION_STATE = Object.freeze({ stateReadFailure: 'invalid-json' as const });
 
 export function createDesktopAgentPresentationStateKey(
@@ -36,9 +40,12 @@ export function createElectronAgentHostRuntimeAdapter(input: {
   readonly bridge: OpenNekoDesktopAgentBridge;
   readonly bootstrap: DesktopAgentReadyBootstrapProjection;
   readonly storage?: DesktopAgentPresentationStorage;
-}): AgentHostRuntimeAdapter {
+}): ElectronAgentHostRuntimeAdapter {
   const { connection } = input.bootstrap;
   const storage = input.storage ?? window.sessionStorage;
+  const subscriptions = new Set<() => void>();
+  let disposed = false;
+  let disposeOperation: Promise<void> | undefined;
   const stateKey = createDesktopAgentPresentationStateKey(
     `workspace:${connection.workspaceId}`,
     connection.viewId,
@@ -47,14 +54,22 @@ export function createElectronAgentHostRuntimeAdapter(input: {
     hostKind: 'electron',
     runtimeId: `neko.agent.webview.electron:${connection.connectionId}`,
     send(message): void {
+      if (disposed) throw new Error('Desktop Agent session adapter is disposed.');
       input.bridge.agent.send(connection, message);
     },
     subscribe(listener) {
+      if (disposed) throw new Error('Desktop Agent session adapter is disposed.');
       const unsubscribe = input.bridge.agent.subscribe(connection, listener);
+      let active = true;
+      const disposeSubscription = (): void => {
+        if (!active) return;
+        active = false;
+        subscriptions.delete(disposeSubscription);
+        unsubscribe();
+      };
+      subscriptions.add(disposeSubscription);
       return {
-        dispose(): void {
-          unsubscribe();
-        },
+        dispose: disposeSubscription,
       };
     },
     getState(): unknown {
@@ -62,6 +77,15 @@ export function createElectronAgentHostRuntimeAdapter(input: {
     },
     setState(state: unknown): void {
       storage.setItem(stateKey, JSON.stringify(state));
+    },
+    async dispose(): Promise<void> {
+      if (!disposeOperation) {
+        disposed = true;
+        for (const unsubscribe of subscriptions) unsubscribe();
+        subscriptions.clear();
+        disposeOperation = input.bridge.agent.detach(connection);
+      }
+      await disposeOperation;
     },
   };
 }

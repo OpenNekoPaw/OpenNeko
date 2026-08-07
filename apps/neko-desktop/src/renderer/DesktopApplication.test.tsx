@@ -12,14 +12,11 @@ import {
 } from '@neko/host/desktop-scene-contract';
 import {
   projectDesktopConversationNavigation,
+  resolveActiveDesktopWindowWorkbench,
   type DesktopShellProjection,
   type DesktopShellProjectionEvent,
 } from '@neko/host/desktop-shell-contract';
-import {
-  createDesktopWorkbenchInstanceFromScene,
-  parseDesktopWindowWorkbenchCatalog,
-  resolveActiveDesktopWorkbenchInstance,
-} from '@neko/host/desktop-workbench-instance-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 import { DEFAULT_DESKTOP_APPLICATION_PREFERENCES } from '@neko/host/application-settings';
 import { DesktopApplication } from './DesktopShell';
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
@@ -32,17 +29,24 @@ import {
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+const rendererInstrumentation = vi.hoisted(() => ({
+  extensionRootRender: vi.fn(),
+}));
+
 vi.mock('./DesktopExtensionManagementSurface', () => ({
   DesktopExtensionManagementSurface: ({
     runtime,
   }: {
     readonly runtime: DesktopExtensionManagementRuntime;
-  }) => (
-    <div
-      data-extension-management-root="agent"
-      data-extension-management-session={runtime.identity.extensionManagementSessionId}
-    />
-  ),
+  }) => {
+    rendererInstrumentation.extensionRootRender(runtime.identity.windowId);
+    return (
+      <div
+        data-extension-management-root="agent"
+        data-extension-management-window={runtime.identity.windowId}
+      />
+    );
+  },
 }));
 
 vi.mock('./DesktopAssetManagementSurface', () => ({
@@ -67,6 +71,7 @@ vi.mock('./DesktopAssetCenterMainSurface', () => ({
 describe('DesktopApplication scene lifecycle', () => {
   afterEach(() => {
     document.body.replaceChildren();
+    rendererInstrumentation.extensionRootRender.mockClear();
     vi.restoreAllMocks();
   });
 
@@ -116,7 +121,7 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(activeSubscriptions).toBe(0);
   });
 
-  it('keeps the Workbench and PrimarySidebar mounted while Host switches to Settings', async () => {
+  it('uses one committed projection event to switch Settings without a success refresh', async () => {
     const assistant = createProjection();
     const settings = withActiveScene(
       {
@@ -127,9 +132,18 @@ describe('DesktopApplication scene lifecycle', () => {
       },
       settingsScene(),
     );
-    let snapshot = assistant;
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    const getSnapshot = vi.fn(async () => assistant);
     const transition = vi.fn(async () => {
-      snapshot = settings;
+      queueMicrotask(() =>
+        listener?.({
+          applicationInstanceId: settings.applicationInstanceId,
+          windowId: settings.window.windowId,
+          rendererSessionId: settings.rendererSessionId,
+          sequence: 1,
+          projection: settings,
+        }),
+      );
       return {
         status: 'transitioned' as const,
         requestId: 'transition-1',
@@ -138,7 +152,11 @@ describe('DesktopApplication scene lifecycle', () => {
     });
     installBridge({
       projection: assistant,
-      getSnapshot: vi.fn(async () => snapshot),
+      getSnapshot,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
       transition,
     });
     const { container, root } = await renderApplication();
@@ -162,6 +180,121 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(container.querySelector('[data-primary-sidebar="application"]')).toBe(sidebar);
     expect(container.querySelector('[data-settings-surface="navigation"]')).not.toBeNull();
     expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+    expect(getSnapshot).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+  });
+
+  it('recovers from a renderer-session replacement through one authoritative snapshot', async () => {
+    const initial = createProjection();
+    const replacement: DesktopShellProjection = {
+      ...withActiveScene(initial, settingsScene()),
+      rendererSessionId: 'app-1:window-1:2',
+    };
+    const replacementEvent: DesktopShellProjection = {
+      ...withActiveScene(initial, extensionsScene()),
+      rendererSessionId: replacement.rendererSessionId,
+    };
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    const getSnapshot = vi
+      .fn<() => Promise<DesktopShellProjection>>()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(replacement);
+    installBridge({
+      projection: initial,
+      getSnapshot,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: replacement.applicationInstanceId,
+        windowId: replacement.window.windowId,
+        rendererSessionId: replacement.rendererSessionId,
+        sequence: 1,
+        projection: replacementEvent,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-extension-management-root="agent"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('rejects an event sequence gap and restores from the authoritative snapshot', async () => {
+    const initial = createProjection();
+    const extensions = withActiveScene(initial, extensionsScene());
+    const skipped = withActiveScene(initial, projectManagementScene());
+    const recovered = withActiveScene(initial, settingsScene());
+    let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
+    const getSnapshot = vi
+      .fn<() => Promise<DesktopShellProjection>>()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(recovered);
+    installBridge({
+      projection: initial,
+      getSnapshot,
+      subscribe: vi.fn((next) => {
+        listener = next;
+        return () => undefined;
+      }),
+    });
+    const { container, root } = await renderApplication();
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: initial.applicationInstanceId,
+        windowId: initial.window.windowId,
+        rendererSessionId: initial.rendererSessionId,
+        sequence: 1,
+        projection: extensions,
+      });
+    });
+    expect(container.querySelector('[data-extension-management-root="agent"]')).not.toBeNull();
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: initial.applicationInstanceId,
+        windowId: initial.window.windowId,
+        rendererSessionId: initial.rendererSessionId,
+        sequence: 3,
+        projection: skipped,
+      });
+    });
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-project-management-surface="main"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('recovers from a failed scene mutation without accepting a stale result', async () => {
+    const initial = createProjection();
+    const recovered = withActiveScene(initial, settingsScene());
+    const getSnapshot = vi
+      .fn<() => Promise<DesktopShellProjection>>()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(recovered);
+    const transition = vi.fn(async () => {
+      throw new Error('Scene transition failed before commit.');
+    });
+    installBridge({ projection: initial, getSnapshot, transition });
+    const { container, root } = await renderApplication();
+    const assetCenter = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === 'Asset Center',
+    );
+    if (!assetCenter) throw new Error('Desktop fixture requires Asset Center navigation.');
+
+    await act(async () => assetCenter.click());
+    await waitFor(() => container.querySelector('[data-settings-surface="main"]') !== null);
+
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('Scene transition failed before commit.');
+    expect(container.querySelector('[data-asset-management-root="assets"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -510,7 +643,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const assistant = createProjection();
     const projection = withActiveScene(
       assistant,
-      extensionsScene('extension-management:window-1:1'),
+      extensionsScene(),
     );
     let listener: ((event: DesktopShellProjectionEvent) => void) | undefined;
     const dispose = vi.spyOn(DesktopExtensionManagementRuntime.prototype, 'dispose');
@@ -524,7 +657,7 @@ describe('DesktopApplication scene lifecycle', () => {
     const { container, root } = await renderApplication();
     expect(
       container.querySelector(
-        '[data-extension-management-session="extension-management:window-1:1"]',
+        '[data-extension-management-window="window-1"]',
       ),
     ).not.toBeNull();
 
@@ -549,6 +682,19 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(container.querySelector('[data-extension-management-root="agent"]')).toBeNull();
     expect(container.querySelector('[data-settings-surface="main"]')).not.toBeNull();
+    const extensionRenderCount = rendererInstrumentation.extensionRootRender.mock.calls.length;
+
+    await act(async () => {
+      listener?.({
+        applicationInstanceId: projection.applicationInstanceId,
+        windowId: projection.window.windowId,
+        rendererSessionId: projection.rendererSessionId,
+        sequence: 2,
+        projection: withActiveScene(settings, settingsScene()),
+      });
+    });
+    expect(rendererInstrumentation.extensionRootRender).toHaveBeenCalledTimes(extensionRenderCount);
+    expect(dispose).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
 
@@ -598,7 +744,7 @@ describe('DesktopApplication scene lifecycle', () => {
     await act(async () => Promise.resolve());
     expect(assetCenterExecute.mock.calls.map(([request]) => request.route)).toEqual([
       'attach',
-      'preview.detach',
+      'session.detach',
     ]);
   });
 
@@ -963,6 +1109,7 @@ describe('DesktopApplication scene lifecycle', () => {
       slots: {
         interaction: {
           kind: 'agent',
+          agentSurfaceId: 'agent-surface:workspace-empty',
           agentViewId: tab.viewId,
           phase: 'draft',
           scope: {
@@ -1103,9 +1250,8 @@ function createProjection(): DesktopShellProjection {
     attention: { needsInput: 0, needsReview: 0, running: 0 },
   } as const;
   const scene = createDefaultDesktopAgentScene('window-1', 'draft:test');
-  const instance = createDesktopWorkbenchInstanceFromScene({
+  const instance = createDesktopWindowComposition({
     workbenchInstanceId: 'workbench:window-1:entry',
-    agentSurfaceId: 'agent-surface:window-1:entry',
     layout: createDefaultDesktopWorkbenchLayout('window-1'),
     scene,
   });
@@ -1117,11 +1263,7 @@ function createProjection(): DesktopShellProjection {
       windowId: 'window-1',
       activeTarget: { kind: 'home' },
       tabs: [],
-      workbenches: parseDesktopWindowWorkbenchCatalog({
-        windowId: 'window-1',
-        activeWorkbenchInstanceId: instance.workbenchInstanceId,
-        instances: [instance],
-      }),
+      workbench: instance,
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome,
@@ -1131,20 +1273,17 @@ function createProjection(): DesktopShellProjection {
 }
 
 function activeScene(projection: DesktopShellProjection) {
-  return resolveActiveDesktopWorkbenchInstance(projection.window.workbenches).scene;
+  return resolveActiveDesktopWindowWorkbench(projection.window).scene;
 }
 
 function withActiveScene(
   projection: DesktopShellProjection,
   scene: ReturnType<typeof parseDesktopWorkbenchSceneProjection>,
-  layout = resolveActiveDesktopWorkbenchInstance(projection.window.workbenches).layout,
+  layout = resolveActiveDesktopWindowWorkbench(projection.window).layout,
 ): DesktopShellProjection {
-  const current = resolveActiveDesktopWorkbenchInstance(projection.window.workbenches);
-  const instance = createDesktopWorkbenchInstanceFromScene({
+  const current = resolveActiveDesktopWindowWorkbench(projection.window);
+  const instance = createDesktopWindowComposition({
     workbenchInstanceId: current.workbenchInstanceId,
-    ...(scene.slots.interaction === undefined
-      ? {}
-      : { agentSurfaceId: current.activeAgentSurfaceId ?? 'agent-surface:test' }),
     layout,
     scene,
   });
@@ -1152,11 +1291,7 @@ function withActiveScene(
     ...projection,
     window: {
       ...projection.window,
-      workbenches: parseDesktopWindowWorkbenchCatalog({
-        windowId: projection.window.windowId,
-        activeWorkbenchInstanceId: instance.workbenchInstanceId,
-        instances: [instance],
-      }),
+      workbench: instance,
     },
   };
 }
@@ -1175,14 +1310,14 @@ function settingsScene() {
   });
 }
 
-function extensionsScene(extensionManagementSessionId: string) {
+function extensionsScene() {
   const sceneId = 'scene:window-1:extensions';
   return parseDesktopWorkbenchSceneProjection({
     sceneId,
     windowId: 'window-1',
-    context: { kind: 'extensions', extensionManagementSessionId },
+    context: { kind: 'extensions' },
     slots: {
-      main: { kind: 'extension-management', extensionManagementSessionId },
+      main: { kind: 'extension-management' },
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -1209,13 +1344,12 @@ function assetCenterPreviewScene() {
 
 function projectManagementScene() {
   const sceneId = 'scene:window-1:project-management';
-  const projectManagementSessionId = 'project-management:window-1:1';
   return parseDesktopWorkbenchSceneProjection({
     sceneId,
     windowId: 'window-1',
-    context: { kind: 'project-management', projectManagementSessionId },
+    context: { kind: 'project-management' },
     slots: {
-      main: { kind: 'project-management', projectManagementSessionId },
+      main: { kind: 'project-management' },
       status: { kind: 'scene-status', sceneId },
     },
   });

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import {
   projectDesktopConversationNavigation,
+  resolveActiveDesktopWindowWorkbench,
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
@@ -40,11 +41,7 @@ import { DEFAULT_DESKTOP_APPLICATION_PREFERENCES } from '@neko/host/application-
 import { DesktopApplicationSettingsProvider } from './application-settings-context';
 import desktopShellSource from './DesktopShell.tsx?raw';
 import assetManagementSurfaceSource from './DesktopAssetManagementSurface.tsx?raw';
-import {
-  createDesktopWorkbenchInstanceFromScene,
-  parseDesktopWindowWorkbenchCatalog,
-  resolveActiveDesktopWorkbenchInstance,
-} from '@neko/host/desktop-workbench-instance-contract';
+import { createDesktopWindowComposition } from '@neko/host/desktop-window-composition-contract';
 
 describe('Desktop scene Workbench', () => {
   it('keeps catalog parsing and deterministic ordering fail-visible', () => {
@@ -202,13 +199,12 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('data-workbench-region-control="primary-sidebar"');
   });
 
-  it('activates retained management IPC only for the active Workbench', () => {
-    expect(desktopShellSource.match(/interactive=\{interactive && active\}/gu) ?? []).toHaveLength(
-      2,
-    );
+  it('creates management runtimes only for the current Scene', () => {
+    expect(desktopShellSource).not.toContain('interactive={interactive && active}');
     expect(desktopShellSource).toContain(
       "if (!input.active || !assetCenterSessionId || typeof window === 'undefined')",
     );
+    expect(desktopShellSource).toContain("const active = scene.context.kind === 'extensions'");
   });
 
   it('reserves Settings navigation and Main portal targets in the same Workbench', () => {
@@ -217,7 +213,7 @@ describe('Desktop scene Workbench', () => {
     );
     expect(markup).toContain('data-workbench-slot="leftDock"');
     expect(markup).toContain('data-workbench-slot="main"');
-    expect(markup).toContain('data-lifecycle="hot-retained"');
+    expect(markup).not.toContain('data-lifecycle=');
     expect(markup).not.toContain('data-primary-sidebar-frame="application"');
   });
 
@@ -225,11 +221,11 @@ describe('Desktop scene Workbench', () => {
     ['asset-management', projectionWithScene(assetCenterScene())],
     ['extension-management', projectionWithScene(extensionsScene())],
     ['project-management', projectionWithScene(projectManagementScene())],
-  ])('uses a tabless retained Main target for %s', (_panelId, projection) => {
+  ])('uses one tabless current Main target for %s', (_panelId, projection) => {
     const markup = renderShell(<DesktopShellView projection={projection} />);
 
     expect(markup).toContain('data-workbench-slot="main"');
-    expect(markup).toContain('data-active="true"');
+    expect(markup.match(/data-workbench-slot="main"/gu) ?? []).toHaveLength(1);
     expect(markup).toContain('data-main-split="none"');
     expect(markup).not.toContain('project-main-group__tabs');
   });
@@ -325,10 +321,10 @@ describe('Desktop scene Workbench', () => {
     expect(assetMarkup).toContain('desktop-scene-workbench--management');
     expect(assetMarkup).toContain('data-left-presentation="hidden"');
     expect(assetMarkup).toContain('neko-controlled-workbench-dock--left');
-    expect(assetMarkup).toContain('data-workbench-slot="leftDock"');
+    expect(assetMarkup).not.toContain('data-workbench-slot="leftDock"');
   });
 
-  it('preserves Workspace Agent and retained slot identities without a nested Shell', () => {
+  it('mounts one current Workspace Agent and only its visible slots without a nested Shell', () => {
     vi.stubGlobal('window', {
       openNekoDesktop: {
         resources: {
@@ -351,7 +347,6 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('data-workbench-slot="main"');
     expect(markup).toContain('data-workbench-slot="rightDock"');
     expect(markup).toContain('data-workbench-slot="timeline"');
-    expect(markup).toContain('data-workbench-instance-id="workbench:window-1:entry"');
     expect(markup).toContain('data-timeline-visible="true"');
     vi.unstubAllGlobals();
   });
@@ -541,9 +536,8 @@ function baseProjection(): DesktopShellProjection {
     attention: { needsInput: 0, needsReview: 0, running: 0 },
   };
   const scene = createDefaultDesktopAgentScene('window-1', 'draft:test');
-  const instance = createDesktopWorkbenchInstanceFromScene({
+  const instance = createDesktopWindowComposition({
     workbenchInstanceId: 'workbench:window-1:entry',
-    agentSurfaceId: 'agent-surface:window-1:entry',
     layout: createDefaultDesktopWorkbenchLayout('window-1'),
     scene,
   });
@@ -555,11 +549,7 @@ function baseProjection(): DesktopShellProjection {
       windowId: 'window-1',
       activeTarget: { kind: 'home' },
       tabs: [],
-      workbenches: parseDesktopWindowWorkbenchCatalog({
-        windowId: 'window-1',
-        activeWorkbenchInstanceId: instance.workbenchInstanceId,
-        instances: [instance],
-      }),
+      workbench: instance,
       applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
     },
     agentHome,
@@ -569,7 +559,7 @@ function baseProjection(): DesktopShellProjection {
 }
 
 function activeWorkbenchLayout(projection: DesktopShellProjection) {
-  return resolveActiveDesktopWorkbenchInstance(projection.window.workbenches).layout;
+  return resolveActiveDesktopWindowWorkbench(projection.window).layout;
 }
 
 function withWorkbench(
@@ -577,12 +567,9 @@ function withWorkbench(
   scene: DesktopWorkbenchSceneProjection,
   layout: ReturnType<typeof createDefaultDesktopWorkbenchLayout>,
 ): DesktopShellProjection {
-  const current = resolveActiveDesktopWorkbenchInstance(projection.window.workbenches);
-  const instance = createDesktopWorkbenchInstanceFromScene({
+  const current = resolveActiveDesktopWindowWorkbench(projection.window);
+  const instance = createDesktopWindowComposition({
     workbenchInstanceId: current.workbenchInstanceId,
-    ...(scene.slots.interaction === undefined
-      ? {}
-      : { agentSurfaceId: current.activeAgentSurfaceId ?? 'agent-surface:test' }),
     layout,
     scene,
   });
@@ -590,11 +577,7 @@ function withWorkbench(
     ...projection,
     window: {
       ...projection.window,
-      workbenches: parseDesktopWindowWorkbenchCatalog({
-        windowId: projection.window.windowId,
-        activeWorkbenchInstanceId: instance.workbenchInstanceId,
-        instances: [instance],
-      }),
+      workbench: instance,
     },
   };
 }
@@ -611,7 +594,13 @@ function workspaceScene(): DesktopWorkbenchSceneProjection {
     windowId: 'window-1',
     context: { kind: 'agent', agentViewId: 'view-1', scope },
     slots: {
-      interaction: { kind: 'agent', agentViewId: 'view-1', phase: 'draft', scope },
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface:workspace-1',
+        agentViewId: 'view-1',
+        phase: 'draft',
+        scope,
+      },
       main: {
         kind: 'workspace-main',
         workspaceId: 'workspace-1',
@@ -692,12 +681,9 @@ function managementScene(
     return parseDesktopWorkbenchSceneProjection({
       sceneId,
       windowId: 'window-1',
-      context: { kind, extensionManagementSessionId: 'extension-management-1' },
+      context: { kind },
       slots: {
-        main: {
-          kind: 'extension-management',
-          extensionManagementSessionId: 'extension-management-1',
-        },
+        main: { kind: 'extension-management' },
         status: { kind: 'scene-status', sceneId },
       },
     });
@@ -706,12 +692,9 @@ function managementScene(
     return parseDesktopWorkbenchSceneProjection({
       sceneId,
       windowId: 'window-1',
-      context: { kind, projectManagementSessionId: 'project-management-1' },
+      context: { kind },
       slots: {
-        main: {
-          kind: 'project-management',
-          projectManagementSessionId: 'project-management-1',
-        },
+        main: { kind: 'project-management' },
         status: { kind: 'scene-status', sceneId },
       },
     });

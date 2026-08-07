@@ -22,7 +22,6 @@ export function DesktopProjectCatalogSurface({
   onSelect,
   projects,
   selectedProjectId,
-  sessionId,
 }: {
   readonly interactive: boolean;
   readonly onOpen: (projectId: string) => void;
@@ -30,7 +29,6 @@ export function DesktopProjectCatalogSurface({
   readonly onSelect: (projectId: string) => void;
   readonly projects: readonly DesktopProjectCatalogItem[];
   readonly selectedProjectId?: string;
-  readonly sessionId: string;
 }): JSX.Element {
   const { locale, t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -41,7 +39,7 @@ export function DesktopProjectCatalogSurface({
     [projects, query, sort],
   );
   return (
-    <section className="project-management-catalog" data-project-management-session={sessionId}>
+    <section className="project-management-catalog">
       <header className="management-surface-header">
         <div>
           <p className="section-label">{t('home.projects.eyebrow')}</p>

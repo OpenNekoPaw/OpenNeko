@@ -1,56 +1,69 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
 import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
-import {
-  DesktopAgentSurface,
-  RetainedDesktopAgentSurfaceDeck,
-  prepareDesktopAgentSurfaceResources,
-} from './DesktopAgentSurface';
+import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
 
-vi.mock('@neko/agent-webview/root', () => ({
-  AgentWebviewRoot: ({
-    hostRuntimeAdapter,
-    agentPresentation,
-    initialConversation,
-    composerWorkspace,
-    locale,
-    presentation,
-  }: {
-    readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
-    readonly agentPresentation?: AgentRootPresentation;
-    readonly initialConversation?: { readonly id: string; readonly title: string };
-    readonly composerWorkspace?:
-      | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
-      | { readonly kind: 'workspace'; readonly label: string };
-    readonly locale: string;
-    readonly presentation: string;
-  }) => {
-    if (hostRuntimeAdapter.runtimeId.includes('connection-failing')) {
-      throw new Error('agent surface failed');
-    }
-    return (
-      <div
-        data-testid="agent-root"
-        data-initial-conversation-id={initialConversation?.id}
-        data-initial-conversation-title={initialConversation?.title}
-        data-presentation={presentation}
-        data-agent-presentation={agentPresentation?.kind}
-        data-composer-workspace={
-          composerWorkspace?.kind === 'workspace'
-            ? composerWorkspace.label
-            : (composerWorkspace?.kind ?? 'none')
-        }
-      >
-        {hostRuntimeAdapter.runtimeId}:{locale}
-      </div>
-    );
-  },
-}));
+vi.mock('@neko/agent-webview/root', async () => {
+  const { useEffect } = await import('react');
+  return {
+    AgentWebviewRoot: ({
+      hostRuntimeAdapter,
+      agentPresentation,
+      initialConversation,
+      composerWorkspace,
+      locale,
+      presentation,
+    }: {
+      readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
+      readonly agentPresentation?: AgentRootPresentation;
+      readonly initialConversation?: { readonly id: string; readonly title: string };
+      readonly composerWorkspace?:
+        | { readonly kind: 'assistant'; readonly onChoose: () => void; readonly disabled?: boolean }
+        | { readonly kind: 'workspace'; readonly label: string };
+      readonly locale: string;
+      readonly presentation: string;
+    }) => {
+      useEffect(
+        () => () => {
+          hostRuntimeAdapter.send({
+            type: 'projectionDetach',
+            key: {
+              attachmentId: 'attachment-test',
+              tabId: 'tab-test',
+              conversationId: 'conversation-test',
+            },
+            reason: 'endpoint-replaced',
+          });
+        },
+        [hostRuntimeAdapter],
+      );
+      if (hostRuntimeAdapter.runtimeId.includes('connection-failing')) {
+        throw new Error('agent surface failed');
+      }
+      return (
+        <div
+          data-testid="agent-root"
+          data-initial-conversation-id={initialConversation?.id}
+          data-initial-conversation-title={initialConversation?.title}
+          data-presentation={presentation}
+          data-agent-presentation={agentPresentation?.kind}
+          data-composer-workspace={
+            composerWorkspace?.kind === 'workspace'
+              ? composerWorkspace.label
+              : (composerWorkspace?.kind ?? 'none')
+          }
+        >
+          {hostRuntimeAdapter.runtimeId}:{locale}
+        </div>
+      );
+    },
+  };
+});
 
 describe('DesktopAgentSurface', () => {
   afterEach(() => {
@@ -61,7 +74,8 @@ describe('DesktopAgentSurface', () => {
 
   it('bootstraps the exact Project View and mounts the package-owned Root', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
-    installBridge(getBootstrap);
+    const detachSession = vi.fn(async () => undefined);
+    installBridge(getBootstrap, undefined, detachSession);
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -106,6 +120,7 @@ describe('DesktopAgentSurface', () => {
         ?.getAttribute('data-composer-workspace'),
     ).toBe('OpenNeko');
     await act(async () => root.unmount());
+    expect(detachSession).toHaveBeenCalledWith(readyBootstrap().connection);
   });
 
   it('restores the exact Workspace conversation projected by the active Scene', async () => {
@@ -138,6 +153,31 @@ describe('DesktopAgentSurface', () => {
       'workspace-conversation-1',
     );
     await act(async () => root.unmount());
+  });
+
+  it('balances StrictMode bootstrap leases without detaching the active session early', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const detachSession = vi.fn(async () => undefined);
+    installBridge(getBootstrap, undefined, detachSession);
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <StrictMode>
+          <TestAgentSurface />
+        </StrictMode>,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(getBootstrap).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('neko.agent.webview.electron:connection-1:en');
+    expect(detachSession).toHaveBeenCalledTimes(1);
+
+    await act(async () => root.unmount());
+    expect(detachSession).toHaveBeenCalledTimes(2);
   });
 
   it('starts the Agent module and owner bootstrap concurrently', async () => {
@@ -324,220 +364,7 @@ describe('DesktopAgentSurface', () => {
     expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(false);
     await act(async () => root.unmount());
   });
-
-  it('retains same-Workspace conversation Roots and only changes active visibility', async () => {
-    let connection = 0;
-    const getBootstrap = vi.fn(async () => ({
-      ...readyBootstrap(),
-      connection: {
-        ...readyBootstrap().connection,
-        connectionId: `connection-${++connection}`,
-      },
-    }));
-    installBridge(getBootstrap);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestRetainedWorkspaceAgentSurface conversationId="conversation-1" />);
-    });
-    await act(async () => undefined);
-    const firstRoot = container.querySelector('[data-testid="agent-root"]');
-
-    await act(async () => {
-      root.render(
-        <TestRetainedWorkspaceAgentSurface
-          conversationId="conversation-2"
-          retainedConversationIds={new Set(['conversation-1', 'conversation-2'])}
-        />,
-      );
-    });
-    await act(async () => undefined);
-
-    const roots = container.querySelectorAll('[data-testid="agent-root"]');
-    expect(roots).toHaveLength(2);
-    expect(roots[0]).toBe(firstRoot);
-    expect(roots[0]?.closest('.desktop-agent-surface-deck__item')?.hasAttribute('hidden')).toBe(
-      true,
-    );
-    expect(roots[1]?.closest('.desktop-agent-surface-deck__item')?.hasAttribute('hidden')).toBe(
-      false,
-    );
-    expect(getBootstrap).toHaveBeenNthCalledWith(
-      1,
-      'workbench-1',
-      'agent-surface:conversation-1',
-      'project-1',
-      'view-1',
-      'conversation-1',
-    );
-    expect(getBootstrap).toHaveBeenNthCalledWith(
-      2,
-      'workbench-1',
-      'agent-surface:conversation-2',
-      'project-1',
-      'view-1',
-      'conversation-2',
-    );
-    await act(async () => root.unmount());
-  });
-
-  it('contains a render failure to the exact retained Agent Surface', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const getBootstrap = vi.fn(async (_workbenchId: string, agentSurfaceId: string) => ({
-      ...readyBootstrap(),
-      connection: {
-        ...readyBootstrap().connection,
-        agentSurfaceId,
-        connectionId: agentSurfaceId.endsWith('conversation-1')
-          ? 'connection-failing'
-          : 'connection-healthy',
-      },
-    }));
-    installBridge(getBootstrap);
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <TestRetainedWorkspaceAgentSurface
-          conversationId="conversation-2"
-          retainedConversationIds={new Set(['conversation-1', 'conversation-2'])}
-        />,
-      );
-    });
-    await act(async () => undefined);
-
-    const failedSurface = container.querySelector(
-      '[data-agent-surface-id="agent-surface:conversation-1"]',
-    );
-    const healthySurface = container.querySelector(
-      '[data-agent-surface-id="agent-surface:conversation-2"]',
-    );
-    expect(failedSurface?.querySelector('[role="alert"]')?.textContent).toContain(
-      'agent surface failed',
-    );
-    expect(healthySurface?.querySelector('[data-testid="agent-root"]')?.textContent).toContain(
-      'connection-healthy',
-    );
-    expect(container.querySelectorAll('[data-agent-surface-id]')).toHaveLength(2);
-
-    await act(async () => root.unmount());
-    consoleError.mockRestore();
-  });
-
-  it('keeps the conversation Root across an equivalent owner projection refresh', async () => {
-    installBridge(async () => readyBootstrap());
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(
-        <TestRetainedWorkspaceAgentSurface
-          conversationId="conversation-1"
-          viewInstanceId="view-instance-2"
-        />,
-      );
-    });
-    await act(async () => undefined);
-    const firstRoot = container.querySelector('[data-testid="agent-root"]');
-
-    await act(async () => {
-      root.render(
-        <TestRetainedWorkspaceAgentSurface
-          conversationId="conversation-1"
-          viewInstanceId="view-instance-3"
-        />,
-      );
-    });
-    await act(async () => undefined);
-
-    expect(container.querySelectorAll('[data-testid="agent-root"]')).toHaveLength(1);
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(firstRoot);
-    await act(async () => root.unmount());
-  });
-
-  it('releases only the explicitly closed conversation Root', async () => {
-    installBridge(async () => readyBootstrap());
-    const container = document.createElement('div');
-    document.body.append(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(<TestRetainedWorkspaceAgentSurface conversationId="conversation-1" />);
-    });
-    await act(async () => undefined);
-    await act(async () => {
-      root.render(
-        <TestRetainedWorkspaceAgentSurface
-          conversationId="conversation-2"
-          retainedConversationIds={new Set(['conversation-1', 'conversation-2'])}
-        />,
-      );
-    });
-    await act(async () => undefined);
-    const secondRoot = container.querySelectorAll('[data-testid="agent-root"]')[1];
-
-    await act(async () => {
-      root.render(
-        <TestRetainedWorkspaceAgentSurface
-          conversationId="conversation-2"
-          retainedConversationIds={new Set(['conversation-2'])}
-        />,
-      );
-    });
-
-    expect(container.querySelectorAll('[data-testid="agent-root"]')).toHaveLength(1);
-    expect(container.querySelector('[data-testid="agent-root"]')).toBe(secondRoot);
-    await act(async () => root.unmount());
-  });
 });
-
-function TestRetainedWorkspaceAgentSurface({
-  conversationId,
-  retainedConversationIds = new Set([conversationId]),
-  viewInstanceId = 'view-instance-2',
-}: {
-  readonly conversationId: string;
-  readonly retainedConversationIds?: ReadonlySet<string>;
-  readonly viewInstanceId?: string;
-}): JSX.Element {
-  const i18n = createDesktopI18n('en');
-  return (
-    <I18nProvider service={i18n.i18nService}>
-      <RetainedDesktopAgentSurfaceDeck
-        activeAgentSurfaceId={`agent-surface:${conversationId}`}
-        surfaces={[...retainedConversationIds].map((retainedConversationId) => ({
-          agentSurfaceId: `agent-surface:${retainedConversationId}`,
-          lifecycle: 'hot-retained',
-          surface: {
-            binding: 'workspace',
-            workbenchInstanceId: 'workbench-1',
-            agentSurfaceId: `agent-surface:${retainedConversationId}`,
-            agentPresentation: {
-              kind: 'session',
-              conversationId: retainedConversationId,
-              scope: {
-                kind: 'workspace',
-                workspaceId: 'workspace-1',
-                workspaceGrantId: 'workspace-grant-1',
-              },
-            },
-            tab: {
-              tabId: 'tab-1',
-              projectId: 'project-1',
-              viewId: 'view-1',
-              viewInstanceId,
-            },
-          },
-        }))}
-      />
-    </I18nProvider>
-  );
-}
 
 function TestAgentSurface({
   agentPresentation,
@@ -604,6 +431,7 @@ function installBridge(
     readonly detach: typeof window.openNekoDesktop.agentLaunch.detach;
     readonly getAssistantBootstrap?: typeof window.openNekoDesktop.agent.getAssistantBootstrap;
   },
+  detachSession: typeof window.openNekoDesktop.agent.detach = vi.fn(async () => undefined),
 ): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -621,6 +449,7 @@ function installBridge(
       agent: {
         getBootstrap,
         getAssistantBootstrap: launch?.getAssistantBootstrap ?? vi.fn(),
+        detach: detachSession,
         send: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },

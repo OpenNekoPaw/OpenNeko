@@ -12,6 +12,8 @@ import type {
 import type { WebviewI18nAdapter } from '@neko/ui/i18n/webview';
 import { initializeDesktopRendererBridge } from './desktop-renderer-startup';
 import { DesktopRootErrorBoundary } from './DesktopSurfaceErrorBoundary';
+import { PreviewViewerSnapshotProvider } from '@neko/preview-webview/presentation-snapshot';
+import { ResourceBrowserPresentationSnapshotProvider } from '@neko/assets-webview/resource-browser/presentation-snapshot';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -91,7 +93,11 @@ function DesktopRendererRoot({
   return (
     <I18nProvider service={i18n.i18nService}>
       <DesktopApplicationSettingsProvider value={runtime}>
-        <DesktopApplication />
+        <ResourceBrowserPresentationSnapshotProvider>
+          <PreviewViewerSnapshotProvider>
+            <DesktopApplication />
+          </PreviewViewerSnapshotProvider>
+        </ResourceBrowserPresentationSnapshotProvider>
       </DesktopApplicationSettingsProvider>
     </I18nProvider>
   );

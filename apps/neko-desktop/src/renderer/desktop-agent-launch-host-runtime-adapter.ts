@@ -30,7 +30,7 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
   const storage = input.storage ?? window.sessionStorage;
   const listeners = new Set<(message: AgentHostToWebviewMessage) => void>();
   const stateKey = createDesktopAgentPresentationStateKey(
-    launchStateOwnerIdentity(connection.scope),
+    `window:${connection.windowId}:entry`,
     connection.viewId,
   );
   let disposed = false;
@@ -190,17 +190,4 @@ export function createElectronAgentLaunchHostRuntimeAdapter(input: {
 
 function sameIdentities(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((identity, index) => identity === right[index]);
-}
-
-function launchStateOwnerIdentity(
-  scope: AgentLaunchCatalogProjection['connection']['scope'],
-): string {
-  switch (scope.kind) {
-    case 'assistant':
-      return `assistant:${scope.assistantSpaceId}`;
-    case 'workspace':
-      return `workspace:${scope.workspaceId}`;
-    case 'unbound':
-      return `draft:${scope.draftId}`;
-  }
 }

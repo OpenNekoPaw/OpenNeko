@@ -20,13 +20,11 @@ const QuickPreviewSurface = lazy(async () => {
 });
 
 export function DesktopResourceBrowserSurface({
-  lifecyclePresentation,
   onOpenCanvasDocument,
   project,
   projection,
   tab,
 }: {
-  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly onOpenCanvasDocument: (documentId: string, presentation: 'main' | 'side') => void;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
@@ -69,7 +67,7 @@ export function DesktopResourceBrowserSurface({
           chrome="embedded"
           runtime={runtime}
           locale={locale}
-          lifecyclePresentation={lifecyclePresentation}
+          lifecyclePresentation="active"
           refreshControl="hidden"
           defaultViewMode={applicationSettings.projection.preferences.resourceBrowserView}
           previewTarget={{

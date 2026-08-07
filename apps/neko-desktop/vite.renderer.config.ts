@@ -62,6 +62,8 @@ export default defineConfig({
     exclude: [
       '@neko/agent-contracts',
       '@neko/agent-webview/root',
+      '@neko/assets-webview/resource-browser/presentation-snapshot',
+      '@neko/assets-webview/resource-browser/root',
       '@neko/assets-domain/asset-center/contract',
       '@neko/assets-domain/asset-center/host-contract',
       '@neko/assets-domain/contracts',
@@ -75,7 +77,8 @@ export default defineConfig({
       '@neko/host/desktop-scene-contract',
       '@neko/host/desktop-shell-contract',
       '@neko/host/desktop-workbench-contract',
-      '@neko/host/desktop-workbench-instance-contract',
+      '@neko/host/desktop-window-composition-contract',
+      '@neko/preview-webview/presentation-snapshot',
       '@neko/preview-webview/root',
       '@neko/media',
       '@neko/media/browser',

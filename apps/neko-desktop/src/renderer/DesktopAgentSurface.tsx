@@ -1,21 +1,18 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
-import { RetainedSurfaceDeck } from '@neko/ui/workbench';
-import type {
-  AgentHostRuntimeAdapter,
-  AgentLaunchCatalogProjection,
-  AgentRootPresentation,
-} from '@neko/agent-contracts';
+import type { AgentLaunchCatalogProjection, AgentRootPresentation } from '@neko/agent-contracts';
 import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
 import type { DesktopProjectTabProjection } from '@neko/host/desktop-shell-contract';
-import { createElectronAgentHostRuntimeAdapter } from './desktop-agent-host-runtime-adapter';
+import {
+  createElectronAgentHostRuntimeAdapter,
+  type ElectronAgentHostRuntimeAdapter,
+} from './desktop-agent-host-runtime-adapter';
 import {
   createElectronAgentLaunchHostRuntimeAdapter,
   type ElectronAgentLaunchHostRuntimeAdapter,
 } from './desktop-agent-launch-host-runtime-adapter';
 import { loadDesktopAgentWebviewRootModule } from './desktop-agent-module';
 import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
-import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
 
 const AgentWebviewRoot = lazy(() =>
   loadDesktopAgentWebviewRootModule().then((module) => ({ default: module.AgentWebviewRoot })),
@@ -26,13 +23,16 @@ type DesktopAgentSurfaceState =
   | {
       readonly kind: 'ready';
       readonly connectionKey: string;
-      readonly adapter: AgentHostRuntimeAdapter;
+      readonly adapter: DesktopAgentSurfaceRuntimeAdapter;
       readonly agentPresentation?: AgentRootPresentation;
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly initialInput?: { readonly id: string; readonly value: string };
     }
   | { readonly kind: 'unavailable'; readonly connectionKey: string; readonly message: string }
   | { readonly kind: 'error'; readonly connectionKey: string; readonly message: string };
+
+type DesktopAgentSurfaceRuntimeAdapter =
+  ElectronAgentHostRuntimeAdapter | ElectronAgentLaunchHostRuntimeAdapter;
 
 export type DesktopAgentSurfaceProps =
   | {
@@ -56,7 +56,6 @@ export type DesktopAgentSurfaceProps =
 
 export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Element {
   const [state, setState] = useState<DesktopAgentSurfaceState>({ kind: 'loading' });
-  const launchAdapterRef = useRef<ElectronAgentLaunchHostRuntimeAdapter>();
   const { locale, t } = useTranslation();
   const viewId = props.binding === 'workspace' ? props.tab.viewId : props.viewId;
   const projectId = props.binding === 'workspace' ? props.tab.projectId : undefined;
@@ -122,6 +121,8 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
         if (!active) {
           if (!('status' in bootstrap)) {
             reportCleanupFailure(window.openNekoDesktop.agentLaunch.detach(bootstrap.connection));
+          } else if (bootstrap.status === 'ready') {
+            reportCleanupFailure(window.openNekoDesktop.agent.detach(bootstrap.connection));
           }
           return;
         }
@@ -138,8 +139,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             bridge: window.openNekoDesktop,
             catalog: bootstrap,
           });
-          const previous = launchAdapterRef.current;
-          launchAdapterRef.current = launchAdapter;
           setState({
             kind: 'ready',
             connectionKey,
@@ -152,11 +151,8 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
               ? { initialInput: props.initialInput }
               : {}),
           });
-          if (previous) reportCleanupFailure(previous.dispose());
           return;
         }
-        const previous = launchAdapterRef.current;
-        launchAdapterRef.current = undefined;
         setState({
           kind: 'ready',
           connectionKey,
@@ -172,7 +168,6 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             ? { initialInput: props.initialInput }
             : {}),
         });
-        if (previous) reportCleanupFailure(previous.dispose());
       })
       .catch((error: unknown) => {
         if (active) {
@@ -184,87 +179,80 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     };
   }, [binding, connectionKey, projectId, viewId]);
 
-  useEffect(
-    () => () => {
-      const adapter = launchAdapterRef.current;
-      launchAdapterRef.current = undefined;
-      if (adapter) reportCleanupFailure(adapter.dispose());
-    },
-    [],
-  );
-
+  const activeAdapter = state.kind === 'ready' ? state.adapter : undefined;
+  let content: JSX.Element;
   if (state.kind === 'loading') {
-    return <AgentSurfaceStatus message={t('agent.connecting')} />;
-  }
-  if (
+    content = <AgentSurfaceStatus message={t('agent.connecting')} />;
+  } else if (
     state.connectionKey === connectionKey &&
     (state.kind === 'unavailable' || state.kind === 'error')
   ) {
-    return <AgentSurfaceStatus message={state.message} error />;
+    content = <AgentSurfaceStatus message={state.message} error />;
+  } else if (state.kind !== 'ready') {
+    content = <AgentSurfaceStatus message={t('agent.connecting')} />;
+  } else {
+    const connectionReady = state.connectionKey === connectionKey;
+    content = (
+      <>
+        <div
+          className="desktop-agent-root"
+          data-owner-root="agent"
+          data-view-id={viewId}
+          hidden={!connectionReady}
+        >
+          <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
+            <AgentWebviewRoot
+              hostRuntimeAdapter={state.adapter}
+              agentPresentation={state.agentPresentation}
+              composerWorkspace={props.composerWorkspace}
+              initialConversation={
+                state.agentPresentation?.kind === 'session'
+                  ? { id: state.agentPresentation.conversationId, title: '' }
+                  : state.initialConversation
+              }
+              initialInput={state.initialInput}
+              locale={locale}
+              presentation="desktop-dock"
+            />
+          </Suspense>
+        </div>
+        {connectionReady ? null : <AgentSurfaceStatus message={t('agent.connecting')} />}
+      </>
+    );
   }
-  if (state.kind !== 'ready') {
-    return <AgentSurfaceStatus message={t('agent.connecting')} />;
-  }
-  const connectionReady = state.connectionKey === connectionKey;
   return (
     <>
-      <div
-        className="desktop-agent-root"
-        data-owner-root="agent"
-        data-view-id={viewId}
-        hidden={!connectionReady}
-      >
-        <Suspense fallback={<AgentSurfaceStatus message={t('agent.loading')} />}>
-          <AgentWebviewRoot
-            hostRuntimeAdapter={state.adapter}
-            agentPresentation={state.agentPresentation}
-            composerWorkspace={props.composerWorkspace}
-            initialConversation={
-              state.agentPresentation?.kind === 'session'
-                ? { id: state.agentPresentation.conversationId, title: '' }
-                : state.initialConversation
-            }
-            initialInput={state.initialInput}
-            locale={locale}
-            presentation="desktop-dock"
-          />
-        </Suspense>
-      </div>
-      {connectionReady ? null : <AgentSurfaceStatus message={t('agent.connecting')} />}
+      {content}
+      <DesktopAgentAdapterDisposer adapter={activeAdapter} />
     </>
   );
 }
 
-export function RetainedDesktopAgentSurfaceDeck({
-  activeAgentSurfaceId,
-  surfaces,
-  visible = true,
+function DesktopAgentAdapterDisposer({
+  adapter,
 }: {
-  readonly activeAgentSurfaceId?: string;
-  readonly surfaces: readonly {
-    readonly agentSurfaceId: string;
-    readonly lifecycle: 'hot-retained';
-    readonly surface: DesktopAgentSurfaceProps;
-  }[];
-  readonly visible?: boolean;
-}): JSX.Element {
-  return (
-    <RetainedSurfaceDeck
-      className="desktop-agent-surface-deck"
-      itemClassName="desktop-agent-surface-deck__item"
-      itemIdentityAttribute="data-agent-surface-id"
-      items={surfaces}
-      activeId={activeAgentSurfaceId}
-      visible={visible}
-      getId={(item) => item.agentSurfaceId}
-      getLifecycle={(item) => item.lifecycle}
-      renderItem={(item) => (
-        <DesktopSurfaceErrorBoundary surfaceIdentity={`agent:${item.agentSurfaceId}`}>
-          <DesktopAgentSurface {...item.surface} />
-        </DesktopSurfaceErrorBoundary>
-      )}
-    />
-  );
+  readonly adapter: DesktopAgentSurfaceRuntimeAdapter | undefined;
+}): null {
+  const disposals = useRef(new Map<DesktopAgentSurfaceRuntimeAdapter, { cancelled: boolean }>());
+  useEffect(() => {
+    if (!adapter) return;
+    const scheduled = disposals.current.get(adapter);
+    if (scheduled) {
+      scheduled.cancelled = true;
+      disposals.current.delete(adapter);
+    }
+    return () => {
+      const disposal = { cancelled: false };
+      disposals.current.set(adapter, disposal);
+      // StrictMode replays setup after cleanup in the same turn; child cleanup also finishes first.
+      queueMicrotask(() => {
+        if (disposal.cancelled || disposals.current.get(adapter) !== disposal) return;
+        disposals.current.delete(adapter);
+        reportCleanupFailure(adapter.dispose());
+      });
+    };
+  }, [adapter]);
+  return null;
 }
 
 function createDesktopAgentSurfaceKey(props: DesktopAgentSurfaceProps): string {

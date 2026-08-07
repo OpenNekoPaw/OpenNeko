@@ -77,7 +77,7 @@ describe('Desktop architecture boundaries', () => {
     expect(composition).toContain('createConversationProjectionStore');
     expect(composition).toContain('createPiTimelineProjector');
     expect(composition).not.toContain('AgentSession');
-    expect(composition).not.toContain('activeConversation');
+    expect(composition).not.toMatch(/\bactiveConversation(?:Id)?\b/u);
   });
 
   it('keeps provider credentials in Host secret and protected native UI boundaries', () => {
@@ -303,6 +303,15 @@ describe('Desktop architecture boundaries', () => {
     expect(optimizeDepsExclude).toContain("'@neko/agent-contracts'");
     expect(optimizeDepsExclude).not.toContain("'@neko/agent-contracts/host-message-event'");
     expect(optimizeDepsInclude).not.toContain("'@neko/agent-contracts'");
+    for (const sharedReactModule of [
+      '@neko/assets-webview/resource-browser/presentation-snapshot',
+      '@neko/assets-webview/resource-browser/root',
+      '@neko/preview-webview/presentation-snapshot',
+      '@neko/preview-webview/root',
+    ]) {
+      expect(optimizeDepsExclude).toContain(`'${sharedReactModule}'`);
+      expect(optimizeDepsInclude).not.toContain(`'${sharedReactModule}'`);
+    }
     for (const assetsWireContract of [
       '@neko/assets-domain/asset-center/contract',
       '@neko/assets-domain/asset-center/host-contract',
@@ -318,7 +327,7 @@ describe('Desktop architecture boundaries', () => {
       '@neko/host/desktop-scene-contract',
       '@neko/host/desktop-shell-contract',
       '@neko/host/desktop-workbench-contract',
-      '@neko/host/desktop-workbench-instance-contract',
+      '@neko/host/desktop-window-composition-contract',
     ]) {
       expect(optimizeDepsExclude).toContain(`'${hostWireContract}'`);
       expect(optimizeDepsInclude).not.toContain(`'${hostWireContract}'`);

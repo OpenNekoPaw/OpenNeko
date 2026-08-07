@@ -6,7 +6,6 @@ import {
   IconButton,
   PackageIcon,
   PlusIcon,
-  RetainedSurfaceDeck,
   SearchIcon,
   SettingsIcon,
   StorylineIcon,
@@ -34,7 +33,6 @@ import {
   closeMainView,
   openOrFocusMainView,
   reorderMainView,
-  resolveDesktopWorkbenchViewLifecycle,
   resizeMainSplit,
   setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
@@ -42,14 +40,12 @@ import {
 } from '@neko/host/desktop-workbench-contract';
 import {
   DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS,
+  type DesktopAgentInteractionSurfaceRef,
   type DesktopApplicationSidebarProjection,
   type DesktopSceneTransitionIntent,
   type DesktopWorkbenchSceneProjection,
 } from '@neko/host/desktop-scene-contract';
-import {
-  RetainedDesktopAgentSurfaceDeck,
-  type DesktopAgentSurfaceProps,
-} from './DesktopAgentSurface';
+import { DesktopAgentSurface, type DesktopAgentSurfaceProps } from './DesktopAgentSurface';
 import { DesktopResourceBrowserSurface } from './DesktopResourceBrowserSurface';
 import { DesktopPreviewSurface } from './DesktopPreviewSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
@@ -79,10 +75,7 @@ import {
   createAgentSessionPresentation,
   type AgentRootPresentation,
 } from '@neko/agent-contracts';
-import type {
-  DesktopAgentSurfaceProjection,
-  DesktopWorkbenchInstanceProjection,
-} from '@neko/host/desktop-workbench-instance-contract';
+import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
 import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
 
 type ShellState =
@@ -270,12 +263,10 @@ export function DesktopApplication(): JSX.Element {
     setDiagnostic(undefined);
     void window.openNekoDesktop.scenes
       .transition(projection.window.windowId, intent, activeWorkbench.scene.sceneId)
-      .then(async (result) => {
+      .then((result) => {
         if (result.status !== 'transitioned') {
           setDiagnostic(result.diagnostic.message);
-          return;
         }
-        await refresh();
       })
       .catch(async (error: unknown) => {
         setDiagnostic(describeError(error));
@@ -309,10 +300,7 @@ export function DesktopApplication(): JSX.Element {
       void runMutation(() => window.openNekoDesktop.projects.removeRecent(project.projectId));
     },
     onUpdateWorkbench: (workbenchInstanceId, workbench) => {
-      const instance = projection.window.workbenches.instances.find(
-        (candidate) => candidate.workbenchInstanceId === workbenchInstanceId,
-      );
-      if (!instance) {
+      if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
         throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
       }
       void runMutation(() =>
@@ -344,7 +332,6 @@ export function DesktopApplication(): JSX.Element {
             setDiagnostic(transition.diagnostic.message);
             return;
           }
-          await refresh();
         })
         .catch(async (error: unknown) => {
           setDiagnostic(describeError(error));
@@ -500,32 +487,14 @@ function DesktopSceneWorkbench({
     activeWorkbench.layout.display.chatPosition === 'right'
       ? ('left' as const)
       : activeWorkbench.layout.display.chatPosition;
-  const requestedActiveAgentSurfaceId =
-    scene.context.kind === 'agent' ? requireActiveAgentSurfaceId(activeWorkbench) : undefined;
-  const allAgentSurfaces = projection.window.workbenches.instances.flatMap((instance) =>
-    instance.agentSurfaces.flatMap((surface) => {
-      const surfaceProps = createDesktopAgentSurfaceProps({
+  const agentSurfaceProps = scene.slots.interaction
+    ? createDesktopAgentSurfaceProps({
         projection,
-        workbenchInstanceId: instance.workbenchInstanceId,
-        surface,
+        workbenchInstanceId: activeWorkbench.workbenchInstanceId,
+        interaction: scene.slots.interaction,
         onChooseWorkspace: actions.onChooseWorkspace,
         workspaceSelectionDisabled: pending || !interactive,
-      });
-      return surfaceProps
-        ? [
-            {
-              agentSurfaceId: surface.agentSurfaceId,
-              lifecycle: surface.lifecycle,
-              surface: surfaceProps,
-            },
-          ]
-        : [];
-    }),
-  );
-  const activeAgentSurfaceId = allAgentSurfaces.some(
-    (surface) => surface.agentSurfaceId === requestedActiveAgentSurfaceId,
-  )
-    ? requestedActiveAgentSurfaceId
+      })
     : undefined;
   const projectCatalogUnavailable = hasProjectCatalogDiagnostic(projection);
   const interaction = (
@@ -536,15 +505,15 @@ function DesktopSceneWorkbench({
           data-agent-scope={scene.context.kind === 'agent' ? scene.context.scope.kind : undefined}
           data-primary-surface="agent"
         >
-          {projectCatalogUnavailable && allAgentSurfaces.length === 0 ? (
+          {projectCatalogUnavailable && !agentSurfaceProps ? (
             <SceneSurfaceUnavailable owner="workspace-authority" />
-          ) : (
-            <RetainedDesktopAgentSurfaceDeck
-              activeAgentSurfaceId={activeAgentSurfaceId}
-              surfaces={allAgentSurfaces}
-              visible={interactionVisible}
-            />
-          )}
+          ) : agentSurfaceProps && interactionVisible ? (
+            <DesktopSurfaceErrorBoundary
+              surfaceIdentity={`agent:${agentSurfaceProps.agentSurfaceId}`}
+            >
+              <DesktopAgentSurface key={agentSurfaceProps.agentSurfaceId} {...agentSurfaceProps} />
+            </DesktopSurfaceErrorBoundary>
+          ) : null}
         </section>
       </div>
     </DesktopSurfaceErrorBoundary>
@@ -623,13 +592,15 @@ function DesktopSceneWorkbench({
         })
       : undefined;
   const portalDeck = (slot: DesktopWorkbenchPortalSlot, visible = true): JSX.Element => (
-    <DesktopWorkbenchPortalTargetDeck
-      activeWorkbenchInstanceId={activeWorkbench.workbenchInstanceId}
-      instances={projection.window.workbenches.instances}
-      onTarget={registerPortalTarget}
-      slot={slot}
-      visible={visible}
-    />
+    <>
+      {visible ? (
+        <DesktopWorkbenchPortalTarget
+          instanceId={activeWorkbench.workbenchInstanceId}
+          onTarget={registerPortalTarget}
+          slot={slot}
+        />
+      ) : null}
+    </>
   );
 
   return (
@@ -726,23 +697,20 @@ function DesktopSceneWorkbench({
             : undefined
         }
       />
-      {projection.window.workbenches.instances.map((instance) => (
-        <DesktopSurfaceErrorBoundary
-          key={instance.workbenchInstanceId}
-          surfaceIdentity={`workbench:${instance.workbenchInstanceId}`}
-        >
-          <DesktopWorkbenchRuntimePortals
-            active={instance.workbenchInstanceId === activeWorkbench.workbenchInstanceId}
-            actions={actions}
-            instance={instance}
-            interactive={interactive}
-            pending={pending}
-            portalTargets={portalTargets}
-            projection={projection}
-            resourceBrowserView={settings.projection.preferences.resourceBrowserView}
-          />
-        </DesktopSurfaceErrorBoundary>
-      ))}
+      <DesktopSurfaceErrorBoundary
+        key={activeWorkbench.workbenchInstanceId}
+        surfaceIdentity={`workbench:${activeWorkbench.workbenchInstanceId}`}
+      >
+        <DesktopWorkbenchRuntimePortals
+          actions={actions}
+          composition={activeWorkbench}
+          interactive={interactive}
+          pending={pending}
+          portalTargets={portalTargets}
+          projection={projection}
+          resourceBrowserView={settings.projection.preferences.resourceBrowserView}
+        />
+      </DesktopSurfaceErrorBoundary>
     </>
   );
 }
@@ -754,44 +722,6 @@ function createDesktopWorkbenchPortalTargetKey(
   slot: DesktopWorkbenchPortalSlot,
 ): string {
   return `${workbenchInstanceId}:${slot}`;
-}
-
-function DesktopWorkbenchPortalTargetDeck({
-  activeWorkbenchInstanceId,
-  instances,
-  onTarget,
-  slot,
-  visible,
-}: {
-  readonly activeWorkbenchInstanceId: string;
-  readonly instances: readonly DesktopWorkbenchInstanceProjection[];
-  readonly onTarget: (
-    workbenchInstanceId: string,
-    slot: DesktopWorkbenchPortalSlot,
-    target: HTMLDivElement | null,
-  ) => void;
-  readonly slot: DesktopWorkbenchPortalSlot;
-  readonly visible: boolean;
-}): JSX.Element {
-  return (
-    <RetainedSurfaceDeck
-      activeId={activeWorkbenchInstanceId}
-      className="desktop-workbench-slot-deck"
-      getId={(instance) => instance.workbenchInstanceId}
-      getLifecycle={() => 'hot-retained'}
-      items={instances}
-      itemClassName="desktop-workbench-slot-deck__item"
-      itemIdentityAttribute="data-workbench-instance-id"
-      renderItem={(instance) => (
-        <DesktopWorkbenchPortalTarget
-          instanceId={instance.workbenchInstanceId}
-          onTarget={onTarget}
-          slot={slot}
-        />
-      )}
-      visible={visible}
-    />
-  );
 }
 
 function DesktopWorkbenchPortalTarget({
@@ -817,18 +747,16 @@ function DesktopWorkbenchPortalTarget({
 }
 
 function DesktopWorkbenchRuntimePortals({
-  active,
   actions,
-  instance,
+  composition,
   interactive,
   pending,
   portalTargets,
   projection,
   resourceBrowserView,
 }: {
-  readonly active: boolean;
   readonly actions: ShellActions;
-  readonly instance: DesktopWorkbenchInstanceProjection;
+  readonly composition: DesktopWindowCompositionProjection;
   readonly interactive: boolean;
   readonly pending: boolean;
   readonly portalTargets: ReadonlyMap<string, HTMLDivElement>;
@@ -836,19 +764,18 @@ function DesktopWorkbenchRuntimePortals({
   readonly resourceBrowserView: 'list' | 'grid';
 }): JSX.Element {
   const { t } = useTranslation();
-  const scene = instance.scene;
+  const scene = composition.scene;
   const assetCenter = useDesktopAssetCenterScene({
-    active,
+    active: true,
     scene,
     viewMode: resourceBrowserView,
   });
   const extensionManagement = useDesktopExtensionManagementScene(scene);
   const projectManagement = useDesktopProjectManagementScene(scene, projection.catalog.projects);
-  const workspaceProject = resolveWorkspaceSceneProject(projection, instance);
+  const workspaceProject = resolveWorkspaceSceneProject(projection, composition);
   const workspaceSlots = useContentProjectWorkbenchSlots({
-    active,
     actions,
-    instance,
+    instance: composition,
     pending,
     projection,
     project: workspaceProject,
@@ -868,7 +795,6 @@ function DesktopWorkbenchRuntimePortals({
       <DesktopAssistantPreviewSurface
         assistantSpaceId={assistantScope.assistantSpaceId}
         conversationId={assistantScope.conversationId}
-        lifecyclePresentation={active ? 'active' : 'suspended'}
         previewSessionId={assistantPreviewRef.previewSessionId}
         scratchArtifactId={assistantPreviewRef.scratchArtifactId}
         windowId={scene.windowId}
@@ -880,25 +806,19 @@ function DesktopWorkbenchRuntimePortals({
       : undefined;
   const assetPreview =
     typeof assetPreviewSession === 'string' && assetCenter.projection ? (
-      <DesktopAssetCenterMainSurface
-        lifecyclePresentation={active ? 'active' : 'suspended'}
-        projection={assetCenter.projection}
-      />
+      <DesktopAssetCenterMainSurface projection={assetCenter.projection} />
     ) : undefined;
   const mainContent =
     settingsSection !== undefined ? (
       <DesktopSettingsMainSurface section={settingsSection} />
     ) : scene.context.kind === 'asset-center' ? (
       assetCenter.runtime ? (
-        <DesktopAssetManagementSurface
-          interactive={interactive && active}
-          runtime={assetCenter.runtime}
-        />
+        <DesktopAssetManagementSurface interactive={interactive} runtime={assetCenter.runtime} />
       ) : null
     ) : scene.context.kind === 'extensions' ? (
       extensionManagement ? (
         <DesktopExtensionManagementSurface
-          interactive={interactive && active}
+          interactive={interactive}
           runtime={extensionManagement}
         />
       ) : null
@@ -910,7 +830,6 @@ function DesktopWorkbenchRuntimePortals({
         onSelect={projectManagement.select}
         projects={projection.catalog.projects}
         selectedProjectId={projectManagement.project?.projectId}
-        sessionId={scene.context.projectManagementSessionId}
       />
     ) : scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace' ? (
       workspaceSlots.main
@@ -989,13 +908,13 @@ function DesktopWorkbenchRuntimePortals({
       {(Object.entries(contentBySlot) as readonly [DesktopWorkbenchPortalSlot, ReactNode][]).map(
         ([slot, content]) => {
           const target = portalTargets.get(
-            createDesktopWorkbenchPortalTargetKey(instance.workbenchInstanceId, slot),
+            createDesktopWorkbenchPortalTargetKey(composition.workbenchInstanceId, slot),
           );
           return target
             ? createPortal(
                 <DesktopSurfaceErrorBoundary
                   key={`${scene.sceneId}:${slot}`}
-                  surfaceIdentity={`${instance.workbenchInstanceId}:${slot}`}
+                  surfaceIdentity={`${composition.workbenchInstanceId}:${slot}`}
                 >
                   {content}
                 </DesktopSurfaceErrorBoundary>,
@@ -1082,24 +1001,15 @@ function createLaunchAgentPresentation(
     : createAgentDraftPresentation(scope.draftId, authorityScope);
 }
 
-function requireActiveAgentSurfaceId(instance: DesktopWorkbenchInstanceProjection): string {
-  if (!instance.activeAgentSurfaceId) {
-    throw new Error(
-      `Desktop Workbench '${instance.workbenchInstanceId}' has no active Agent Surface.`,
-    );
-  }
-  return instance.activeAgentSurfaceId;
-}
-
 function createDesktopAgentSurfaceProps(input: {
   readonly projection: DesktopShellProjection;
   readonly workbenchInstanceId: string;
   readonly project?: DesktopProjectCatalogItem;
-  readonly surface: DesktopAgentSurfaceProjection;
+  readonly interaction: DesktopAgentInteractionSurfaceRef;
   readonly onChooseWorkspace?: () => void;
   readonly workspaceSelectionDisabled?: boolean;
 }): DesktopAgentSurfaceProps | undefined {
-  const { interaction } = input.surface;
+  const { interaction } = input;
   const scope = interaction.scope;
   if (scope.kind === 'workspace') {
     const project =
@@ -1109,15 +1019,13 @@ function createDesktopAgentSurfaceProps(input: {
       );
     if (!project) {
       if (hasProjectCatalogDiagnostic(input.projection)) return undefined;
-      throw new Error(`Agent Surface '${input.surface.agentSurfaceId}' has no Workspace Project.`);
+      throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace Project.`);
     }
     const tab = input.projection.window.tabs.find(
       (candidate) => candidate.projectId === project.projectId,
     );
     if (!tab || tab.viewId !== interaction.agentViewId) {
-      throw new Error(
-        `Agent Surface '${input.surface.agentSurfaceId}' has no exact Workspace View.`,
-      );
+      throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no exact Workspace View.`);
     }
     const authorityScope = {
       kind: 'workspace' as const,
@@ -1130,19 +1038,19 @@ function createDesktopAgentSurfaceProps(input: {
     return {
       binding: 'workspace',
       workbenchInstanceId: input.workbenchInstanceId,
-      agentSurfaceId: input.surface.agentSurfaceId,
+      agentSurfaceId: interaction.agentSurfaceId,
       tab,
       agentPresentation,
       composerWorkspace: { kind: 'workspace', label: project.displayName },
     };
   }
   if (!input.onChooseWorkspace) {
-    throw new Error(`Agent Surface '${input.surface.agentSurfaceId}' has no Workspace chooser.`);
+    throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no Workspace chooser.`);
   }
   return {
     binding: 'launch',
     workbenchInstanceId: input.workbenchInstanceId,
-    agentSurfaceId: input.surface.agentSurfaceId,
+    agentSurfaceId: interaction.agentSurfaceId,
     viewId: interaction.agentViewId,
     agentPresentation: createLaunchAgentPresentation(scope),
     composerWorkspace: {
@@ -1189,7 +1097,7 @@ export function resolveAssetCenterPreviewSession(
 
 function resolveWorkspaceSceneProject(
   projection: DesktopShellProjection,
-  instance: DesktopWorkbenchInstanceProjection,
+  instance: DesktopWindowCompositionProjection,
 ): DesktopProjectCatalogItem | undefined {
   const { context, slots } = instance.scene;
   if (context.kind !== 'agent' || context.scope.kind !== 'workspace') return undefined;
@@ -1304,15 +1212,14 @@ function useDesktopAssetCenterScene(input: {
 function useDesktopExtensionManagementScene(
   scene: DesktopWorkbenchSceneProjection,
 ): DesktopExtensionManagementRuntime | undefined {
-  const sessionId =
-    scene.context.kind === 'extensions' ? scene.context.extensionManagementSessionId : undefined;
+  const active = scene.context.kind === 'extensions';
   const runtime = useMemo(() => {
-    if (!sessionId || typeof window === 'undefined') return undefined;
+    if (!active || typeof window === 'undefined') return undefined;
     return new DesktopExtensionManagementRuntime(
-      { extensionManagementSessionId: sessionId, windowId: scene.windowId },
+      { windowId: scene.windowId },
       window.openNekoDesktop,
     );
-  }, [scene.windowId, sessionId]);
+  }, [active, scene.windowId]);
   useDisposeRuntime(runtime);
   return runtime;
 }
@@ -1342,26 +1249,21 @@ function useDesktopProjectManagementScene(
   readonly project?: DesktopProjectCatalogItem;
   readonly select: (projectId: string) => void;
 } {
-  const [selection, setSelection] = useState<{
-    readonly projectManagementSessionId: string;
-    readonly projectId: string;
-  }>();
-  const sessionId =
-    scene.context.kind === 'project-management'
-      ? scene.context.projectManagementSessionId
-      : undefined;
+  const [selectedProjectId, setSelectedProjectId] = useState<string>();
   const project =
-    sessionId && selection?.projectManagementSessionId === sessionId
-      ? projects.find((candidate) => candidate.projectId === selection.projectId)
+    scene.context.kind === 'project-management'
+      ? projects.find((candidate) => candidate.projectId === selectedProjectId)
       : undefined;
   return {
     ...(project ? { project } : {}),
     select: (projectId) => {
-      if (!sessionId) throw new Error('Project Management Scene is unavailable.');
+      if (scene.context.kind !== 'project-management') {
+        throw new Error('Project Management Scene is unavailable.');
+      }
       if (!projects.some((candidate) => candidate.projectId === projectId)) {
         throw new Error(`Project Management item '${projectId}' is unavailable.`);
       }
-      setSelection({ projectManagementSessionId: sessionId, projectId });
+      setSelectedProjectId(projectId);
     },
   };
 }
@@ -1372,16 +1274,14 @@ type ContentProjectWorkbenchSlots = Pick<
 >;
 
 function useContentProjectWorkbenchSlots({
-  active,
   actions,
   instance,
   pending,
   projection,
   project,
 }: {
-  readonly active: boolean;
   readonly actions: ShellActions;
-  readonly instance: DesktopWorkbenchInstanceProjection;
+  readonly instance: DesktopWindowCompositionProjection;
   readonly pending: boolean;
   readonly projection: DesktopShellProjection;
   readonly project?: DesktopProjectCatalogItem;
@@ -1447,7 +1347,6 @@ function useContentProjectWorkbenchSlots({
             <div className="project-resource-dock__content">
               {assetsCapability?.status === 'ready' ? (
                 <DesktopResourceBrowserSurface
-                  lifecyclePresentation={active ? 'active' : 'suspended'}
                   onOpenCanvasDocument={(documentId, presentation) =>
                     actions.onUpdateWorkbench(
                       instance.workbenchInstanceId,
@@ -1478,7 +1377,7 @@ function useContentProjectWorkbenchSlots({
         );
   const mainSurface = (
     <MainViewGroupSurface
-      visible={active && workbench.display.mode !== 'chat-only'}
+      visible={workbench.display.mode !== 'chat-only'}
       actions={actions}
       canvasCapability={canvasCapability}
       cutCapability={cutCapability}
@@ -1505,7 +1404,7 @@ function useContentProjectWorkbenchSlots({
     ),
     secondaryMain: secondaryGroup ? (
       <MainViewGroupSurface
-        visible={active && workbench.display.mode !== 'chat-only'}
+        visible={workbench.display.mode !== 'chat-only'}
         actions={actions}
         canvasCapability={canvasCapability}
         cutCapability={cutCapability}
@@ -1616,29 +1515,19 @@ function MainViewGroupSurface({
     >
       {views.length === 0 ? (
         <EmptyMainSurface />
-      ) : (
-        <RetainedSurfaceDeck
-          visible={visible}
-          items={views}
-          activeId={activeView?.viewId}
-          getId={(view) => view.viewId}
-          getLifecycle={resolveDesktopWorkbenchViewLifecycle}
-          itemClassName="project-main-view-stack__item"
-          itemIdentityAttribute="data-main-view-id"
-          renderItem={(view, presentation) =>
-            renderWorkbenchMainView({
-              canvasCapability,
-              previewCapability,
-              cutCapability,
-              project,
-              projection,
-              timelineTarget: view.viewId === timelineOwnerViewId ? timelineTarget : undefined,
-              view,
-              lifecyclePresentation: presentation.suspended ? 'suspended' : 'active',
-            })
-          }
-        />
-      )}
+      ) : activeView && visible ? (
+        <div className="project-main-view-stack__item" data-main-view-id={activeView.viewId}>
+          {renderWorkbenchMainView({
+            canvasCapability,
+            previewCapability,
+            cutCapability,
+            project,
+            projection,
+            timelineTarget: activeView.viewId === timelineOwnerViewId ? timelineTarget : undefined,
+            view: activeView,
+          })}
+        </div>
+      ) : null}
     </WorkbenchMainPanelSurface>
   );
 }
@@ -1651,7 +1540,6 @@ function renderWorkbenchMainView({
   projection,
   timelineTarget,
   view,
-  lifecyclePresentation,
 }: {
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
@@ -1660,32 +1548,16 @@ function renderWorkbenchMainView({
   readonly projection: DesktopShellProjection;
   readonly timelineTarget?: Element;
   readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number];
-  readonly lifecyclePresentation: 'active' | 'suspended';
 }): JSX.Element {
   if (view.kind === 'preview' && previewCapability?.status === 'ready') {
-    return (
-      <DesktopPreviewSurface
-        lifecyclePresentation={lifecyclePresentation}
-        project={project}
-        projection={projection}
-        view={view}
-      />
-    );
+    return <DesktopPreviewSurface project={project} projection={projection} view={view} />;
   }
   if (view.kind === 'canvas' && canvasCapability?.status === 'ready') {
-    return (
-      <DesktopCanvasSurface
-        lifecyclePresentation={lifecyclePresentation}
-        project={project}
-        projection={projection}
-        view={view}
-      />
-    );
+    return <DesktopCanvasSurface project={project} projection={projection} view={view} />;
   }
   if (view.kind === 'cut' && cutCapability?.status === 'ready') {
     return (
       <DesktopCutSurface
-        lifecyclePresentation={lifecyclePresentation}
         project={project}
         projection={projection}
         timelineTarget={timelineTarget}

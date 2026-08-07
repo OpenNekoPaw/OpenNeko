@@ -9,10 +9,8 @@ const AssetCenterMainRoot = lazy(async () => {
 });
 
 export function DesktopAssetCenterMainSurface({
-  lifecyclePresentation,
   projection,
 }: {
-  readonly lifecyclePresentation: 'active' | 'suspended';
   readonly projection: AssetCenterSessionProjection;
 }): JSX.Element {
   const { locale } = useTranslation();
@@ -24,7 +22,6 @@ export function DesktopAssetCenterMainSurface({
         renderPreview={(previewSessionId) => (
           <DesktopAuthorizedPreviewSurface
             bridge={window.openNekoDesktop}
-            lifecyclePresentation={lifecyclePresentation}
             previewSessionId={previewSessionId}
             projection={projection}
           />

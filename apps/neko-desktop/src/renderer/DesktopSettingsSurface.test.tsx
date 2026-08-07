@@ -4,9 +4,7 @@ import { I18nProvider } from '@neko/ui/i18n/react';
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  type DesktopApplicationSettingsProjection,
-} from '@neko/host/application-settings';
+import { type DesktopApplicationSettingsProjection } from '@neko/host/application-settings';
 import {
   DesktopSettingsMainSurface,
   DesktopSettingsNavigationSurface,
@@ -75,13 +73,35 @@ describe('Desktop Settings scene surfaces', () => {
     );
     await act(async () => root.unmount());
   });
+
+  it('restores only the Host-owned section and resets transient search on remount', async () => {
+    const first = await renderSettings();
+    const search = first.container.querySelector<HTMLInputElement>('input[type="search"]');
+    if (!search) throw new Error('Settings fixture requires a search field.');
+    await act(async () => {
+      search.value = 'theme';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => first.root.unmount());
+
+    const restored = await renderSettings({ initialSection: 'appearance' });
+    expect(restored.container.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe(
+      '',
+    );
+    expect(
+      restored.container.querySelector('[data-settings-surface="main"]')?.textContent,
+    ).toContain('Theme');
+    await act(async () => restored.root.unmount());
+  });
 });
 
 async function renderSettings({
   openAgentAdvanced = vi.fn(async () => undefined),
+  initialSection = 'general',
   update = vi.fn(async () => undefined),
 }: {
   readonly openAgentAdvanced?: () => Promise<void>;
+  readonly initialSection?: DesktopSettingsSection;
   readonly update?: (
     preferences: DesktopApplicationSettingsProjection['preferences'],
   ) => Promise<void>;
@@ -91,7 +111,7 @@ async function renderSettings({
   document.body.append(container);
   const root = createRoot(container);
   function Fixture(): JSX.Element {
-    const [section, setSection] = useState<DesktopSettingsSection>('general');
+    const [section, setSection] = useState<DesktopSettingsSection>(initialSection);
     return (
       <>
         <DesktopSettingsNavigationSurface activeSection={section} onSectionChange={setSection} />

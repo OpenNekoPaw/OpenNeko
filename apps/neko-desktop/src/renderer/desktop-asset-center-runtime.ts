@@ -110,16 +110,18 @@ export class DesktopAssetCenterRuntime implements AssetCenterManagementRuntime {
 
   dispose(): void {
     if (this.disposed) return;
-    const projection = this.projection;
+    const attachment = this.attachPromise;
     this.disposed = true;
     this.listeners.clear();
-    if (projection?.preview.status === 'ready') {
-      void this.bridge.assetCenter.execute(
-        createAssetCenterHostRequest({
-          requestId: crypto.randomUUID(),
-          identity: this.identity,
-          route: 'preview.detach',
-        }),
+    if (attachment) {
+      void attachment.then(() =>
+        this.bridge.assetCenter.execute(
+          createAssetCenterHostRequest({
+            requestId: crypto.randomUUID(),
+            identity: this.identity,
+            route: 'session.detach',
+          }),
+        ),
       );
     }
   }
