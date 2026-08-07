@@ -654,29 +654,30 @@
 .neko-workbench-editor-tabs {
   display: flex;
   min-width: 0;
-  min-height: 38px;
-  align-items: stretch;
+  min-height: 44px;
+  align-items: center;
+  gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
+  padding: 7px 10px;
   scrollbar-width: thin;
   overscroll-behavior-x: contain;
-  border-bottom: 1px solid var(--neko-border, #d8dde4);
   background: var(--neko-workbench-tabs-background, var(--neko-workbench-chrome, #f1f3f6));
 }
 
 .neko-workbench-editor-tab {
   position: relative;
   display: inline-flex;
-  min-width: 112px;
-  max-width: 220px;
-  height: 38px;
-  flex: 0 1 180px;
+  min-width: 96px;
+  max-width: 200px;
+  height: 30px;
+  flex: 0 1 156px;
   align-items: center;
   gap: 6px;
   overflow: hidden;
   border: 0;
-  border-right: 1px solid var(--neko-border, #d8dde4);
-  padding: 0 9px 0 12px;
+  border-radius: 10px;
+  padding: 0 8px 0 10px;
   color: var(--neko-descriptionForeground, #627080);
   background: transparent;
   cursor: pointer;
@@ -688,30 +689,19 @@
 
 .neko-workbench-editor-tab:not([data-active='true']):hover {
   color: var(--neko-foreground, #1d2b38);
-  background: var(--neko-list-hoverBackground, rgba(90, 93, 94, 0.08));
+  background: color-mix(in srgb, var(--neko-foreground, #1d2b38) 4%, transparent);
 }
 
 .neko-workbench-editor-tab:focus-visible {
   z-index: 1;
   outline: 1px solid var(--neko-focusBorder, var(--neko-accent, #1687d9));
-  outline-offset: -2px;
+  outline-offset: 1px;
 }
 
 .neko-workbench-editor-tab[data-active='true'] {
   color: var(--neko-foreground, #1d2b38);
-  background: var(--neko-editor-background, #ffffff);
-  font-weight: 650;
-}
-
-.neko-workbench-editor-tab[data-active='true']::after {
-  position: absolute;
-  right: 10px;
-  bottom: 0;
-  left: 10px;
-  height: 2px;
-  border-radius: 999px 999px 0 0;
-  background: var(--neko-focusBorder, var(--neko-accent, #1687d9));
-  content: '';
+  background: color-mix(in srgb, var(--neko-foreground, #1d2b38) 7%, transparent);
+  font-weight: 600;
 }
 
 .neko-workbench-editor-tab__icon {
@@ -730,11 +720,11 @@
 .neko-workbench-editor-tab__close {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
   border: 0;
-  border-radius: 3px;
+  border-radius: 5px;
   color: inherit;
   background: transparent;
   cursor: pointer;
