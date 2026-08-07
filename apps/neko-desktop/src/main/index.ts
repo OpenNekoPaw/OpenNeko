@@ -152,8 +152,10 @@ async function bootstrapDesktop(): Promise<void> {
 async function startDesktop(): Promise<void> {
   await app.whenReady();
 
+  const userData = app.getPath('userData');
   const homedir = resolveDesktopRuntimeHome({
     systemHome: app.getPath('home'),
+    userDataRoot: userData,
     argv: process.argv,
     environment: process.env,
   });
@@ -195,11 +197,8 @@ async function startDesktop(): Promise<void> {
     environment: process.env,
     workspace: functionalWorkspace,
   });
-  const userData = app.getPath('userData');
   const agentAutomationLaunch = resolveDesktopAgentAutomationLaunch({
     argv: process.argv,
-    fixtureHome: homedir,
-    userDataRoot: userData,
     workspace: functionalWorkspace,
   });
   const globalStorage = resolveGlobalStorageLayout(homedir);

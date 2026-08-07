@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { resolveGlobalStorageLayout } from '@neko/local-metadata';
 import {
   consumeDesktopFunctionalWorkspaceSelection,
   resolveDesktopAgentAutomationLaunch,
@@ -24,6 +25,7 @@ describe('Desktop functional fixture home', () => {
     expect(
       resolveDesktopRuntimeHome({
         systemHome: '/Users/example',
+        userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
         argv: [],
         environment: {},
       }),
@@ -48,6 +50,7 @@ describe('Desktop functional fixture home', () => {
     expect(
       resolveDesktopRuntimeHome({
         systemHome: '/Users/example',
+        userDataRoot: '/private/tmp/openneko-desktop-functional-library-browser/electron-user-data',
         argv: ['--openneko-functional-fixture'],
         environment: {
           OPENNEKO_DESKTOP_FUNCTIONAL_HOME:
@@ -63,6 +66,8 @@ describe('Desktop functional fixture home', () => {
       expect(() =>
         resolveDesktopRuntimeHome({
           systemHome: '/Users/example',
+          userDataRoot:
+            '/private/tmp/openneko-desktop-functional-library-browser/electron-user-data',
           argv: ['--openneko-functional-fixture'],
           environment,
         }),
@@ -74,6 +79,7 @@ describe('Desktop functional fixture home', () => {
     expect(() =>
       resolveDesktopRuntimeHome({
         systemHome: '/Users/example',
+        userDataRoot: '/private/tmp/openneko-desktop-functional-missing/electron-user-data',
         argv: ['--openneko-functional-fixture'],
         environment: {},
       }),
@@ -84,6 +90,7 @@ describe('Desktop functional fixture home', () => {
     expect(() =>
       resolveDesktopRuntimeHome({
         systemHome: '/Users/example',
+        userDataRoot: '/private/tmp/openneko-desktop-functional-library-browser/electron-user-data',
         argv: [],
         environment: {
           OPENNEKO_DESKTOP_FUNCTIONAL_HOME:
@@ -91,6 +98,41 @@ describe('Desktop functional fixture home', () => {
         },
       }),
     ).toThrow('explicit fixture argument');
+  });
+
+  it('selects separate user and functional databases before storage opens', () => {
+    const userHome = resolveDesktopRuntimeHome({
+      systemHome: '/Users/example',
+      userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
+      argv: [],
+      environment: {},
+    });
+    const fixtureHome = resolveDesktopRuntimeHome({
+      systemHome: '/Users/example',
+      userDataRoot: '/private/tmp/openneko-desktop-functional-storage/electron-user-data',
+      argv: ['--openneko-functional-fixture'],
+      environment: {
+        OPENNEKO_DESKTOP_FUNCTIONAL_HOME: '/private/tmp/openneko-desktop-functional-storage',
+      },
+    });
+
+    expect(resolveGlobalStorageLayout(userHome).database).toBe('/Users/example/.neko/neko.db');
+    expect(resolveGlobalStorageLayout(fixtureHome).database).toBe(
+      '/private/tmp/openneko-desktop-functional-storage/.neko/neko.db',
+    );
+  });
+
+  it('rejects functional Electron userData outside the fixture before storage selection', () => {
+    expect(() =>
+      resolveDesktopRuntimeHome({
+        systemHome: '/Users/example',
+        userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
+        argv: ['--openneko-functional-fixture'],
+        environment: {
+          OPENNEKO_DESKTOP_FUNCTIONAL_HOME: '/private/tmp/openneko-desktop-functional-storage',
+        },
+      }),
+    ).toThrow('Electron userData must be contained by the fixture home');
   });
 
   it('accepts a functional workspace only inside the isolated fixture home', () => {
@@ -182,31 +224,25 @@ describe('Desktop functional fixture home', () => {
     }
   });
 
-  it('enables Agent automation only for a fixture Workspace and contained userData', () => {
+  it('enables Agent automation only for an explicit fixture Workspace', () => {
     const fixtureHome = '/private/tmp/openneko-desktop-functional-agent';
     expect(
       resolveDesktopAgentAutomationLaunch({
         argv: [],
-        fixtureHome,
-        userDataRoot: `${fixtureHome}/electron-user-data`,
         workspace: `${fixtureHome}/workspace`,
       }),
     ).toBe(false);
     expect(
       resolveDesktopAgentAutomationLaunch({
         argv: ['--openneko-functional-fixture'],
-        fixtureHome,
-        userDataRoot: `${fixtureHome}/electron-user-data`,
         workspace: `${fixtureHome}/workspace`,
       }),
     ).toBe(true);
     expect(() =>
       resolveDesktopAgentAutomationLaunch({
         argv: ['--openneko-functional-fixture'],
-        fixtureHome,
-        userDataRoot: '/private/tmp/shared-user-data',
-        workspace: `${fixtureHome}/workspace`,
+        workspace: undefined,
       }),
-    ).toThrow('isolated Electron userData');
+    ).toThrow('isolated fixture Workspace');
   });
 });

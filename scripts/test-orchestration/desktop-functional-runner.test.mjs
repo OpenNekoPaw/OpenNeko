@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -22,7 +22,24 @@ import {
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
 } from '../desktop-functional/scenario-contract.mjs';
+import { createDesktopUiFunctionalLaunch } from '../run-desktop-ui-functional.mjs';
 describe('Desktop automated functional runner contract', () => {
+  it('keeps Agent Evaluation on the shared isolated Desktop runner', async () => {
+    const source = await readFile(
+      new URL('../agent-eval/runner/run-case.mjs', import.meta.url),
+      'utf8',
+    );
+
+    assert.match(
+      source,
+      /import \{ runAutomatedDesktopFunctional \} from '\.\.\/\.\.\/desktop-functional\/runner\.mjs';/u,
+    );
+    assert.match(
+      source,
+      /const runDesktop = options\.runDesktop \?\? runAutomatedDesktopFunctional;/u,
+    );
+  });
+
   it('requires explicit provider, model, and cost authorization for visible Agent UI', () => {
     assert.deepEqual(
       resolveVisibleAgentProviderAuthorization(
@@ -113,6 +130,47 @@ describe('Desktop automated functional runner contract', () => {
       OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT:
         '/tmp/openneko-desktop-functional-cut/workspace/exports/functional-cut-export.mp4',
     });
+  });
+
+  it('rejects functional launch paths that can reach user storage', () => {
+    const base = {
+      platform: 'darwin',
+      target: 'development',
+      fixtureHome: '/tmp/openneko-desktop-functional-storage',
+      userDataRoot: '/tmp/openneko-desktop-functional-storage/electron-user-data',
+      workspacePath: '/tmp/openneko-desktop-functional-storage/workspace',
+      debugPort: 43128,
+    };
+
+    assert.throws(
+      () => createAutomatedDesktopLaunch({ ...base, fixtureHome: '/Users/example' }),
+      /unsafe directory name/u,
+    );
+    assert.throws(
+      () =>
+        createAutomatedDesktopLaunch({
+          ...base,
+          userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
+        }),
+      /Electron userData must remain inside its fixture home/u,
+    );
+    assert.throws(
+      () =>
+        createAutomatedDesktopLaunch({
+          ...base,
+          workspacePath: '/Users/example/OpenNekoProjects/user-project',
+        }),
+      /Workspace must remain inside its fixture home/u,
+    );
+    assert.throws(
+      () =>
+        createDesktopUiFunctionalLaunch({
+          platform: 'darwin',
+          fixtureHome: base.fixtureHome,
+          userDataRoot: '/Users/example/Library/Application Support/OpenNeko',
+        }),
+      /Electron userData must remain inside its fixture home/u,
+    );
   });
 
   it('launches the current native packaged application directly', () => {

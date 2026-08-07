@@ -12,6 +12,7 @@ const FUNCTIONAL_WORKSPACE_QUEUE = '.openneko-functional-workspace-queue.json';
 
 export function resolveDesktopRuntimeHome(input: {
   readonly systemHome: string;
+  readonly userDataRoot: string;
   readonly argv: readonly string[];
   readonly environment: Readonly<Record<string, string | undefined>>;
 }): string {
@@ -33,6 +34,9 @@ export function resolveDesktopRuntimeHome(input: {
   if (!path.basename(resolved).startsWith(FUNCTIONAL_FIXTURE_PREFIX)) {
     throw new Error('Desktop functional fixture home has an unsafe directory name.');
   }
+  if (!isStrictDescendant(resolved, input.userDataRoot)) {
+    throw new Error('Desktop functional Electron userData must be contained by the fixture home.');
+  }
   return resolved;
 }
 
@@ -51,8 +55,7 @@ export function resolveDesktopFunctionalWorkspace(input: {
   }
   const fixtureHome = path.resolve(input.fixtureHome);
   const resolved = path.resolve(workspace);
-  const relative = path.relative(fixtureHome, resolved);
-  if (relative.length === 0 || relative.startsWith('..') || path.isAbsolute(relative)) {
+  if (!isStrictDescendant(fixtureHome, resolved)) {
     throw new Error('Desktop functional workspace must be contained by the fixture home.');
   }
   return resolved;
@@ -138,27 +141,19 @@ export function resolveDesktopFunctionalCutExport(input: {
 
 export function resolveDesktopAgentAutomationLaunch(input: {
   readonly argv: readonly string[];
-  readonly fixtureHome: string;
-  readonly userDataRoot: string;
   readonly workspace: string | undefined;
 }): boolean {
   if (!input.argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT)) return false;
   if (!input.workspace) {
     throw new Error('Desktop Agent automation requires an isolated fixture Workspace.');
   }
-  const fixtureHome = path.resolve(input.fixtureHome);
-  const userDataRoot = path.resolve(input.userDataRoot);
-  const relativeUserData = path.relative(fixtureHome, userDataRoot);
-  const isolatedUserData = !(
-    relativeUserData.length === 0 ||
-    relativeUserData.startsWith('..') ||
-    path.isAbsolute(relativeUserData)
-  );
-  if (!isolatedUserData) {
-    throw new Error('Desktop Agent automation requires isolated Electron userData.');
-  }
-  assertDesktopAgentAutomationLaunch({ fixtureLaunch: true, isolatedUserData });
+  assertDesktopAgentAutomationLaunch({ fixtureLaunch: true, isolatedUserData: true });
   return true;
+}
+
+function isStrictDescendant(parent: string, target: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(target));
+  return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 function hasNodeErrorCode(error: unknown, code: string): boolean {

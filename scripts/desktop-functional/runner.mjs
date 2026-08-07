@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectDesktopCdp } from './cdp-client.mjs';
 import {
+  validateDesktopFunctionalStoragePaths,
   validateDesktopFunctionalScenario,
   validatePreparedDesktopFixture,
 } from './scenario-contract.mjs';
@@ -259,6 +260,7 @@ function mergeDesktopObservations(items) {
 }
 
 export function createAutomatedDesktopLaunch(input) {
+  validateDesktopFunctionalStoragePaths(input);
   const commonArgs = [
     '--openneko-functional-fixture',
     ...(input.windowMode === 'hidden' ? ['--openneko-functional-hidden'] : []),

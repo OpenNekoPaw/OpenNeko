@@ -6,12 +6,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runAutomatedDesktopFunctional } from './desktop-functional/runner.mjs';
+import { validateDesktopFunctionalStoragePaths } from './desktop-functional/scenario-contract.mjs';
 import { resolveDesktopFunctionalScenarios } from './desktop-functional/scenarios.mjs';
 
 const repositoryRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const fixturePrefix = 'openneko-desktop-functional-';
 
 export function createDesktopUiFunctionalLaunch(input) {
+  validateDesktopFunctionalStoragePaths(input);
   const command = input.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
   return Object.freeze({
     command,
