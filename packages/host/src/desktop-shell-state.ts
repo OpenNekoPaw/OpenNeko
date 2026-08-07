@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import type {
   DesktopProjectTabProjection,
   DesktopShellStateDiagnosticProjection,
+  DesktopStoredWindowInvalidDiagnosticProjection,
   DesktopWindowActiveTarget,
 } from './desktop-shell-contract';
 import {
@@ -55,20 +56,17 @@ export interface DesktopShellStoredState {
 
 export type DesktopShellStateDiagnostic = DesktopShellStateDiagnosticProjection;
 
-interface DesktopRetainedInvalidWindow {
-  readonly record: unknown;
-  readonly diagnostic: DesktopShellStateDiagnostic;
-}
-
 type DesktopRetainedRootMetadataEntry = readonly [fieldName: string, value: unknown];
 
-const RETAINED_INVALID_WINDOWS: unique symbol = Symbol('desktop-retained-invalid-windows');
+const ISOLATED_INVALID_WINDOW_DIAGNOSTICS: unique symbol = Symbol(
+  'desktop-isolated-invalid-window-diagnostics',
+);
 const RETAINED_ROOT_METADATA: unique symbol = Symbol('desktop-retained-root-metadata');
 const DESKTOP_SHELL_ROOT_FIELDS = ['primaryWindowId', 'projects', 'windows'] as const;
 const DESKTOP_SHELL_ROOT_FIELD_SET = new Set<string>(DESKTOP_SHELL_ROOT_FIELDS);
 
-type DesktopShellStateWithRetainedInvalidWindows = DesktopShellStoredState & {
-  readonly [RETAINED_INVALID_WINDOWS]: readonly DesktopRetainedInvalidWindow[];
+type DesktopShellStateWithDiagnostics = DesktopShellStoredState & {
+  readonly [ISOLATED_INVALID_WINDOW_DIAGNOSTICS]: readonly DesktopStoredWindowInvalidDiagnosticProjection[];
   readonly [RETAINED_ROOT_METADATA]: readonly DesktopRetainedRootMetadataEntry[];
 };
 
@@ -110,13 +108,12 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
     projectsById.set(project.projectId, project);
     workspaceIds.add(project.workspaceId);
   }
-  const retainedInvalidWindows = readRetainedInvalidWindows(value);
-  const windowCandidates = [
-    ...requireArray(record['windows'], 'Desktop Shell windows must be an array.'),
-    ...retainedInvalidWindows.map((invalid) => invalid.record),
-  ];
+  const windowCandidates = requireArray(
+    record['windows'],
+    'Desktop Shell windows must be an array.',
+  );
   const windows: DesktopStoredWindow[] = [];
-  const invalidWindows: DesktopRetainedInvalidWindow[] = [];
+  const invalidWindowDiagnostics = [...readIsolatedInvalidWindowDiagnostics(value)];
   const windowIds = new Set<string>();
   const candidateWindowIds = new Set<string>();
   for (const [index, candidate] of windowCandidates.entries()) {
@@ -126,28 +123,22 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
     try {
       window = parseStoredWindow(candidate, projectsById);
     } catch (error) {
-      invalidWindows.push({
-        record: candidate,
-        diagnostic: {
-          code: 'desktop-stored-window-invalid',
-          severity: 'error',
-          windowId: candidateWindowId,
-          message: `Stored Window '${candidateWindowId}' is unavailable and was not opened: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        },
+      invalidWindowDiagnostics.push({
+        code: 'desktop-stored-window-invalid',
+        severity: 'error',
+        windowId: candidateWindowId,
+        message: `Stored Window '${candidateWindowId}' is unavailable and was not opened: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       });
       continue;
     }
     if (windowIds.has(window.windowId)) {
-      invalidWindows.push({
-        record: candidate,
-        diagnostic: {
-          code: 'desktop-stored-window-invalid',
-          severity: 'error',
-          windowId: window.windowId,
-          message: `Duplicate Desktop Window identity '${window.windowId}'.`,
-        },
+      invalidWindowDiagnostics.push({
+        code: 'desktop-stored-window-invalid',
+        severity: 'error',
+        windowId: window.windowId,
+        message: `Duplicate Desktop Window identity '${window.windowId}'.`,
       });
       continue;
     }
@@ -166,11 +157,11 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
     storedPrimaryWindowId !== null && windowIds.has(storedPrimaryWindowId)
       ? storedPrimaryWindowId
       : null;
-  const parsed: DesktopShellStateWithRetainedInvalidWindows = {
+  const parsed: DesktopShellStateWithDiagnostics = {
     primaryWindowId,
     projects,
     windows,
-    [RETAINED_INVALID_WINDOWS]: invalidWindows,
+    [ISOLATED_INVALID_WINDOW_DIAGNOSTICS]: invalidWindowDiagnostics,
     [RETAINED_ROOT_METADATA]: retainedRootMetadata,
   };
   return parsed;
@@ -179,9 +170,7 @@ export function parseDesktopShellStoredState(value: unknown): DesktopShellStored
 export function readDesktopShellStateDiagnostics(
   state: DesktopShellStoredState,
 ): readonly DesktopShellStateDiagnostic[] {
-  const invalidWindowDiagnostics = readRetainedInvalidWindows(state).map(
-    (invalid) => invalid.diagnostic,
-  );
+  const invalidWindowDiagnostics = readIsolatedInvalidWindowDiagnostics(state);
   const retainedRootMetadata = readRetainedRootMetadata(state);
   if (retainedRootMetadata.length === 0) return invalidWindowDiagnostics;
   const fieldNames = retainedRootMetadata.map(([fieldName]) => fieldName);
@@ -205,10 +194,7 @@ export function serializeDesktopShellStoredState(state: DesktopShellStoredState)
     ...Object.fromEntries(readRetainedRootMetadata(parsed)),
     primaryWindowId: parsed.primaryWindowId,
     projects: parsed.projects,
-    windows: [
-      ...parsed.windows.map(serializeStoredWindow),
-      ...readRetainedInvalidWindows(parsed).map((invalid) => invalid.record),
-    ],
+    windows: parsed.windows.map(serializeStoredWindow),
   };
 }
 
@@ -342,15 +328,17 @@ function readCandidateWindowId(value: unknown, index: number): string {
   return `invalid-window-record:${index + 1}`;
 }
 
-function readRetainedInvalidWindows(value: unknown): readonly DesktopRetainedInvalidWindow[] {
-  if (!isUnknownRecord(value) || !(RETAINED_INVALID_WINDOWS in value)) return [];
-  const retained = value[RETAINED_INVALID_WINDOWS];
-  if (!Array.isArray(retained)) {
-    throw invalidState('Desktop retained invalid Window records must be an array.');
+function readIsolatedInvalidWindowDiagnostics(
+  value: unknown,
+): readonly DesktopStoredWindowInvalidDiagnosticProjection[] {
+  if (!isUnknownRecord(value) || !(ISOLATED_INVALID_WINDOW_DIAGNOSTICS in value)) return [];
+  const diagnostics = value[ISOLATED_INVALID_WINDOW_DIAGNOSTICS];
+  if (!Array.isArray(diagnostics)) {
+    throw invalidState('Desktop isolated invalid Window diagnostics must be an array.');
   }
-  return retained.map((candidate) => {
-    if (!isRetainedInvalidWindow(candidate)) {
-      throw invalidState('Desktop retained invalid Window record is invalid.');
+  return diagnostics.map((candidate) => {
+    if (!isStoredWindowInvalidDiagnostic(candidate)) {
+      throw invalidState('Desktop isolated invalid Window diagnostic is invalid.');
     }
     return candidate;
   });
@@ -394,18 +382,17 @@ function validateRetainedRootMetadata(
   return retained;
 }
 
-function isRetainedInvalidWindow(value: unknown): value is DesktopRetainedInvalidWindow {
+function isStoredWindowInvalidDiagnostic(
+  value: unknown,
+): value is DesktopStoredWindowInvalidDiagnosticProjection {
   if (!isUnknownRecord(value)) return false;
-  const diagnostic = value['diagnostic'];
   return (
-    'record' in value &&
-    isUnknownRecord(diagnostic) &&
-    diagnostic['code'] === 'desktop-stored-window-invalid' &&
-    diagnostic['severity'] === 'error' &&
-    typeof diagnostic['windowId'] === 'string' &&
-    diagnostic['windowId'].trim().length > 0 &&
-    typeof diagnostic['message'] === 'string' &&
-    diagnostic['message'].trim().length > 0
+    value['code'] === 'desktop-stored-window-invalid' &&
+    value['severity'] === 'error' &&
+    typeof value['windowId'] === 'string' &&
+    value['windowId'].trim().length > 0 &&
+    typeof value['message'] === 'string' &&
+    value['message'].trim().length > 0
   );
 }
 

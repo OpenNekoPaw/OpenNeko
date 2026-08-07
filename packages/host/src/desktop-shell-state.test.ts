@@ -51,7 +51,11 @@ describe('Desktop Shell state codec', () => {
         message: expect.stringContaining('Desktop stored Window composition is invalid'),
       }),
     ]);
-    expect(serializeDesktopShellStoredState(parsed)).toMatchObject({ windows: state.windows });
+    expect(serializeDesktopShellStoredState(parsed)).toEqual({
+      primaryWindowId: null,
+      projects: [],
+      windows: [],
+    });
   });
 
   it('restores valid root collections while retaining unknown metadata unchanged', () => {
@@ -117,7 +121,40 @@ describe('Desktop Shell state codec', () => {
       code: 'desktop-stored-window-invalid',
       windowId: 'window:1',
     });
-    expect(serializeDesktopShellStoredState(parsed)).toMatchObject({ windows: invalid.windows });
+    expect(serializeDesktopShellStoredState(parsed)).toEqual({
+      primaryWindowId: null,
+      projects: [],
+      windows: [],
+    });
+  });
+
+  it('keeps a valid primary Window while dropping an invalid sibling payload', () => {
+    const validState = withPrimaryWindow(createEmptyDesktopShellState(), 'window:valid');
+    const invalidWindow = {
+      windowId: 'window:invalid',
+      activeTarget: { kind: 'home' },
+      tabs: [],
+      workbench: { invalid: true },
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window:invalid'),
+    };
+
+    const parsed = parseDesktopShellStoredState({
+      ...validState,
+      windows: [...validState.windows, invalidWindow],
+    });
+
+    expect(parsed.windows.map((window) => window.windowId)).toEqual(['window:valid']);
+    expect(readDesktopShellStateDiagnostics(parsed)).toEqual([
+      expect.objectContaining({
+        code: 'desktop-stored-window-invalid',
+        windowId: 'window:invalid',
+      }),
+    ]);
+    expect(serializeDesktopShellStoredState(parsed)).toEqual({
+      primaryWindowId: 'window:valid',
+      projects: [],
+      windows: [expect.objectContaining({ windowId: 'window:valid' })],
+    });
   });
 
   it('round-trips the current optional Project presentation snapshot', () => {
@@ -192,7 +229,7 @@ describe('Desktop Shell state codec', () => {
     },
   );
 
-  it('keeps a superseded Window record unchanged while allowing a new canonical Window', async () => {
+  it('commits a canonical Window without the isolated invalid payload', async () => {
     const oldWindow = {
       windowId: 'window:old',
       activeTarget: { kind: 'home' },
@@ -214,12 +251,11 @@ describe('Desktop Shell state codec', () => {
     });
 
     expect(committed.windows.map((window) => window.windowId)).toEqual(['window:new']);
-    expect(readDesktopShellStateDiagnostics(committed)).toEqual([
-      expect.objectContaining({ windowId: 'window:old' }),
-    ]);
-    expect(serializeDesktopShellStoredState(committed)).toMatchObject({
+    expect(readDesktopShellStateDiagnostics(committed)).toEqual([]);
+    expect(serializeDesktopShellStoredState(committed)).toEqual({
       primaryWindowId: 'window:new',
-      windows: [expect.objectContaining({ windowId: 'window:new' }), oldWindow],
+      projects: [],
+      windows: [expect.objectContaining({ windowId: 'window:new' })],
     });
   });
 });

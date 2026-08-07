@@ -5,6 +5,7 @@ import { resourceBrowserEntityManagementScenario } from '../../packages/assets/w
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
 import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic-portal.mjs';
+import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import {
   desktopConversationNavigationScenario,
@@ -19,6 +20,7 @@ const scenarios = new Map(
     previewOpenNekoConsumerScenario,
     desktopAgentProviderUiScenario,
     desktopAgentDiagnosticPortalScenario,
+    desktopInvalidWindowConvergenceScenario,
     desktopConversationNavigationScenario,
     desktopProjectSidebarManagementScenario,
     desktopWorkbenchScenesScenario,

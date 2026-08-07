@@ -68,7 +68,7 @@ describe('Desktop SQLite application state composition', () => {
     }
   });
 
-  it('isolates an invalid Window, opens a new Workbench, and preserves the rejected record', async () => {
+  it('isolates an invalid Window once and reopens only canonical Shell state', async () => {
     const root = await mkdtemp(join(tmpdir(), 'openneko-desktop-state-invalid-window-'));
     roots.push(root);
     const store = createNodeSqliteLocalMetadataStore({ homedir: root });
@@ -153,7 +153,7 @@ describe('Desktop SQLite application state composition', () => {
         }),
       ]);
       const rows = await store.transaction(
-        { mode: 'read', ownership: 'state', operation: 'verify-rejected-window-retained' },
+        { mode: 'read', ownership: 'state', operation: 'verify-invalid-window-removed' },
         ({ sql }) =>
           sql.all('SELECT document_json FROM desktop_application_state WHERE authority_key = ?', [
             DESKTOP_STATE_AUTHORITY_KEYS.shell,
@@ -163,11 +163,36 @@ describe('Desktop SQLite application state composition', () => {
       if (!isRecord(document) || !Array.isArray(document['windows'])) {
         throw new Error('Desktop Shell authority did not persist a Window collection.');
       }
-      expect(document['windows']).toContainEqual(invalidState.windows[0]);
-      expect(document['windows']).toContainEqual(
+      expect(document['windows']).toEqual([
         expect.objectContaining({ windowId, workbench: expect.any(Object) }),
-      );
+      ]);
       await service.dispose();
+
+      const reopenedRepository = new SqliteJsonStateRepository({
+        store,
+        authorityKey: DESKTOP_STATE_AUTHORITY_KEYS.shell,
+        codec: shellCodec,
+      });
+      await reopenedRepository.prepare();
+      const reopenedService = new DesktopShellService({
+        applicationInstanceId: 'application:reopened',
+        stateRepository: reopenedRepository,
+        workspaceRegistry: {
+          resolve: async () => {
+            throw new Error('Workspace resolution is not expected during Shell reopen.');
+          },
+          dispose: async () => undefined,
+        },
+        startupTarget: 'home',
+        createIdentity: () => `reopened-${(identity += 1)}`,
+      });
+      const reopenedWindowId = await reopenedService.claimWindowId();
+      reopenedService.setRendererSessionId(reopenedWindowId, 'renderer-session:reopened');
+      const reopenedProjection = await reopenedService.getProjection(reopenedWindowId);
+
+      expect(reopenedWindowId).toBe(windowId);
+      expect(reopenedProjection.stateDiagnostics).toEqual([]);
+      await reopenedService.dispose();
     } finally {
       await store.dispose();
     }
@@ -468,7 +493,6 @@ describe('Desktop SQLite application state composition', () => {
       await store.dispose();
     }
   });
-
 });
 
 const shellCodec = {

@@ -259,3 +259,20 @@ application host 的全局删除入口。该入口从 Pi catalog 解析 conversa
 对应 Workspace runtime 已存在则复用它完成精确停止和删除；否则只创建短生命周期 Pi conversation
 authority 执行删除并立即释放，不解析 Project path、不 attach Workspace、不加载 tools/provider。
 未知 conversation 继续 fail-visible，且不以 active/recent owner 替代。
+
+## Follow-up decisions: invalid Window presentation convergence
+
+Window、Workbench、Tab 和 application-sidebar state 是可重建 presentation，不是 Project、Conversation
+或文件事实。Shell codec 逐项解析 `windows[]`；单条 Window 无法满足当前 canonical contract 时，只保留
+owner-qualified diagnostic，不保留该记录的原始 payload，也不识别旧字段或旧 shape。合法 Window、Project
+和其他 authority 继续解析并可用。
+
+`DesktopShellService` 在首次 claim 前读取这些局部 diagnostics，通过现有 Shell diagnostic projection
+向当前应用实例展示，并立即以同一个 state repository canonical commit 持久化仅包含合法 Window 的状态。
+若没有合法 primary Window，正常 claim 流程创建 fresh Home Window；若存在合法 primary Window，则原样
+恢复该 Window。两种情况都不得把失效 payload 写回，下一次应用启动不再产生同一 diagnostic。
+
+这不是内部数据迁移或旧 shape fallback：没有版本判断、字段映射、旧 contract reader、双读双写或第二条
+handler。解析失败的非 authoritative presentation 被局部丢弃并进入当前 canonical fresh state；用户项目、
+会话、素材、设置和文件不修改。SQLite 集成测试必须关闭并重新打开 store，证明旧 Window 不再存在、合法
+sibling 仍可恢复且提示不会在第二次启动重复出现。

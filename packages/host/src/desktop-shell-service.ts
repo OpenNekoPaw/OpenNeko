@@ -152,6 +152,7 @@ interface DesktopWindowRuntime {
 export class DesktopShellService {
   private readonly activeWindows = new Map<string, DesktopWindowRuntime>();
   private readonly retainedProjects = new Map<string, DesktopProjectCatalogItem>();
+  private isolatedWindowDiagnostics: readonly DesktopShellStateDiagnosticProjection[] = [];
   private operationTail: Promise<void> = Promise.resolve();
   private agentCapabilityReady = false;
   private resourceBrowserCapabilityReady = false;
@@ -240,7 +241,15 @@ export class DesktopShellService {
   async claimWindowId(): Promise<string> {
     return this.enqueue(async () => {
       this.requireActive();
-      const state = await this.options.stateRepository.read();
+      let state = await this.options.stateRepository.read();
+      const isolatedWindowDiagnostics = readDesktopShellStateDiagnostics(state).filter(
+        (diagnostic) => diagnostic.code === 'desktop-stored-window-invalid',
+      );
+      if (isolatedWindowDiagnostics.length > 0) {
+        this.isolatedWindowDiagnostics = isolatedWindowDiagnostics;
+        await this.options.stateRepository.commit(state);
+        state = await this.options.stateRepository.read();
+      }
       const reusablePrimary =
         state.primaryWindowId !== null && !this.activeWindows.has(state.primaryWindowId)
           ? state.primaryWindowId
@@ -350,7 +359,7 @@ export class DesktopShellService {
       this.rendererSessionId(windowId),
       this.readAgentHomeProjection(),
       this.domainCapabilities(),
-      this.options.startupStateDiagnostics ?? [],
+      this.startupStateDiagnostics(),
       [...this.retainedProjects.values()],
     );
   }
@@ -1409,7 +1418,7 @@ export class DesktopShellService {
         rendererSessionId,
         this.readAgentHomeProjection(),
         this.domainCapabilities(),
-        this.options.startupStateDiagnostics ?? [],
+        this.startupStateDiagnostics(),
         [...this.retainedProjects.values()],
       );
       runtime.sequence += 1;
@@ -1432,7 +1441,7 @@ export class DesktopShellService {
       this.rendererSessionId(windowId),
       this.readAgentHomeProjection(),
       this.domainCapabilities(),
-      this.options.startupStateDiagnostics ?? [],
+      this.startupStateDiagnostics(),
       [...this.retainedProjects.values()],
     );
   }
@@ -1476,6 +1485,10 @@ export class DesktopShellService {
       }
       return capability;
     });
+  }
+
+  private startupStateDiagnostics(): readonly DesktopShellStateDiagnosticProjection[] {
+    return [...(this.options.startupStateDiagnostics ?? []), ...this.isolatedWindowDiagnostics];
   }
 
   private installWindowRuntime(windowId: string): void {

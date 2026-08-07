@@ -459,6 +459,33 @@ retain their existing fail-visible lifecycle.
 - **THEN** the error remains fail-visible according to its owning lifecycle
 - **AND** the startup notice timeout does not hide it
 
+### Requirement: Invalid Window presentation converges to canonical state
+
+Desktop SHALL isolate each Window record that cannot satisfy the current Window presentation contract while
+keeping valid sibling Windows and unrelated user data available. The invalid raw record SHALL NOT be serialized
+back into canonical Shell state. Its diagnostic SHALL be observable in the application instance that performed
+the isolation and SHALL NOT recur after the canonical state is reopened.
+
+#### Scenario: One stored Window is invalid
+
+- **WHEN** Shell state contains an invalid Window record beside a valid Window
+- **THEN** Desktop opens the valid Window and reports the invalid Window identity for the current startup
+- **AND** Project, Conversation, file and valid sibling state remain unchanged
+- **AND** no old field, alternate shape or active Window fallback is used to interpret the invalid record
+
+#### Scenario: Invalid Window is the stored primary Window
+
+- **WHEN** the stored primary Window is invalid and no valid primary Window remains
+- **THEN** Desktop creates a fresh canonical Home Window through the normal claim path
+- **AND** the invalid presentation does not prevent the Shell or unrelated capabilities from starting
+
+#### Scenario: Canonical Shell state is reopened
+
+- **WHEN** Desktop has committed Shell state after isolating an invalid Window and the application starts again
+- **THEN** only canonical valid Windows are read from storage
+- **AND** the isolated Window diagnostic is not projected again
+- **AND** no migration marker, internal version, compatibility reader or retained raw payload exists
+
 ### Requirement: Unavailable Project identity is rejected before restore
 
 Desktop SHALL inspect the canonical Project identity while building the Project catalog. A registered Workspace

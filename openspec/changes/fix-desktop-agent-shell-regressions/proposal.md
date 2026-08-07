@@ -39,6 +39,9 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
 - Project catalog 在开放导航前读取并校验 canonical `neko/project.json` identity；缺失、损坏或与
   registry identity 冲突时保留 Project 并投影为不可用。失效会话的显式删除通过 Agent 全局
   conversation authority 完成，不得为清理操作解析或 attach 已失效的 Workspace。
+- 将无法按当前 contract 解析的单条 Window presentation 局部隔离为本次启动 diagnostic，并在
+  canonical Shell commit 中只保存有效 Window；不得把失效 Window 原始记录重新写回，导致每次启动
+  重复提示。Project、Conversation、文件和合法 sibling Window 保持不变。
 
 ## Capabilities
 
@@ -65,3 +68,4 @@ Electron Desktop 的 Agent 入口在冷启动、首次挂载和项目主面板�
   功能验收数据库隔离门禁。
 - Desktop 启动通知生命周期、Workspace identity catalog inspection，以及不依赖 Workspace runtime
   的 Agent conversation 清理入口。
+- Desktop Shell Window presentation 的逐项隔离、canonical 持久化和应用重启验收。

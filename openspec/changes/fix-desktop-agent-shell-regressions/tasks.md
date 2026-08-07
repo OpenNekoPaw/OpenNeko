@@ -17,6 +17,7 @@
 - [x] 1.15 Add red Agent Webview tests proving global/session diagnostics portal to the renderer body, remain viewport-bounded, and retained hidden Tabs do not project alerts.
 - [x] 1.16 Add contract, renderer and Host red tests proving unavailable Conversations/Projects remain visible, their primary actions are disabled, forged requests execute no domain call, and valid siblings remain operable.
 - [x] 1.17 Add red Renderer, Workspace registry, Host and Agent/AppHost tests for one-time retained-metadata startup notice, missing Project identity projection, stored/unavailable Project convergence and unavailable conversation deletion without Workspace attach.
+- [x] 1.18 Add Host codec, service and SQLite reopen regression tests proving invalid Window presentation is diagnosed once, never serialized back, and valid sibling/user data remains unchanged.
 
 ## 2. Persistent Agent Home catalog
 
@@ -36,6 +37,7 @@
 - [x] 3.8 Split active-Scene Agent routing from sender-bound connection cleanup, retain bounded retired identity tombstones, and replace the preload global cursor with exact connection-scoped lifecycle tracking.
 - [x] 3.9 Remove missing-context owner inference, project item-local unavailable diagnostics, and reject unavailable Conversation/Project transitions before context, Workspace or Scene effects.
 - [x] 3.10 Capture retained-metadata warnings only from the first Renderer projection with bounded dismissal; inspect Project identity during catalog listing, preserve unavailable state over stored Project display facts, and route exact conversation cleanup through Agent authority without Workspace resolution.
+- [x] 3.11 Remove retained invalid Window payloads from Shell state, canonicalize through the existing state repository before first Window claim, and project the isolated diagnostic only for the current application instance.
 
 ## 4. Desktop portal and Workbench layout
 
@@ -69,3 +71,5 @@
       Evidence: the `no-active-project-catalogs` development Electron scenario passed at `1200x800` with an isolated fixture HOME, `${FIXTURE_HOME}/.neko/neko.db`, contained Electron userData and Workspace; unavailable Conversation/Project open controls were disabled, forced DOM clicks left the Scene unchanged, cleanup controls remained enabled, and runtime observation recorded no console errors, warnings or exceptions.
 - [x] 5.13 Run focused Renderer/Desktop/Host/Agent tests and typechecks, strict OpenSpec validation, visible Electron notice/navigation acceptance, and the affected quality gates.
       Evidence: the isolated `no-active-project-catalogs` development Electron scenario passed with a one-time non-blocking retained-metadata notice, unavailable Conversation cleanup without Workspace attach, missing-identity Project open disabled, list-mode Asset display, and no console errors, warnings or exceptions. Report: `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-06T19-30-13.100Z-no-active-project-catalogs-development/report.json`.
+- [x] 5.14 Run focused Host/Desktop/SQLite tests, typechecks, strict OpenSpec and quality gates; restart an isolated Electron fixture to prove the invalid Window notice does not recur, then verify the normal Desktop startup removes only the user's invalid Shell Window records.
+      Evidence: Host Shell tests passed `58/58`, Desktop SQLite integration passed `5/5`, Host typecheck, strict OpenSpec and affected lint/format/internal-versioning/legacy/unused/dependency gates passed. The isolated `desktop-invalid-window-convergence` Electron scenario displayed the item-local diagnostic with a usable Workbench on first launch and reopened the same canonical Window without the diagnostic. Normal Desktop startup removed only the two invalid user Shell Window records while preserving the valid primary Window and Project count; a second normal restart restored that valid Window without startup errors. Desktop typecheck remains blocked by unrelated concurrent Agent draft API edits outside this task.
