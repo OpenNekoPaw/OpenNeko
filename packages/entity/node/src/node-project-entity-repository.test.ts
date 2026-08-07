@@ -89,6 +89,15 @@ describe('NodeProjectEntityRepository', () => {
     });
     await writeFile(entityPath, invalidBytes, 'utf8');
 
+    await expect(createRepository(workspacePath).readAvailable()).resolves.toEqual({
+      document: createDocument('Rin'),
+      diagnostics: [
+        {
+          code: 'invalid-project-entity-document',
+          message: 'Project Entity document contains unsupported fields: unexpectedField.',
+        },
+      ],
+    });
     await expect(createRepository(workspacePath).load()).rejects.toBeInstanceOf(
       ProjectEntityContractError,
     );
@@ -97,6 +106,29 @@ describe('NodeProjectEntityRepository', () => {
       projectId: 'project-neko',
       entities: [],
     });
+  });
+
+  it('reports a foreign document identity without adopting or rewriting its records', async () => {
+    const workspacePath = await createWorkspace();
+    const entityPath = resolveProjectEntityDocumentPath(workspacePath);
+    await mkdir(path.dirname(entityPath), { recursive: true });
+    const foreignDocument = { ...createDocument('Rin'), projectId: 'project-other' };
+    const source = `${JSON.stringify(foreignDocument)}\n`;
+    await writeFile(entityPath, source, 'utf8');
+    const repository = createRepository(workspacePath);
+
+    await expect(repository.readAvailable()).resolves.toEqual({
+      document: { projectId: 'project-neko', entities: [] },
+      diagnostics: [
+        {
+          code: 'project-entity-owner-mismatch',
+          message:
+            "Project Entity document belongs to Project 'project-other', not current Project 'project-neko'.",
+        },
+      ],
+    });
+    await expect(repository.load()).rejects.toBeInstanceOf(ProjectEntityContractError);
+    await expect(readFile(entityPath, 'utf8')).resolves.toBe(source);
   });
 
   it('reads valid sibling Entities but blocks mutation while preserving an invalid record', async () => {

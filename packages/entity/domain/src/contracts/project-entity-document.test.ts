@@ -121,15 +121,17 @@ describe('Project Entity document contract', () => {
     });
   });
 
-  it('rejects unknown fields and projection or workflow authority fields', () => {
+  it('diagnoses unsupported document fields and rejects projection authority from facts', () => {
     expect(
       decodeProjectEntityDocument({ ...createDocument([]), unexpectedField: 1 }),
     ).toMatchObject({
-      ok: false,
+      ok: true,
+      document: createDocument([]),
       diagnostics: [{ code: 'invalid-project-entity-document' }],
     });
     expect(decodeProjectEntityDocument({ ...createDocument([]), candidates: [] })).toMatchObject({
-      ok: false,
+      ok: true,
+      document: createDocument([]),
       diagnostics: [{ code: 'invalid-project-entity-document' }],
     });
     expect(
@@ -277,6 +279,35 @@ describe('Project Entity document contract', () => {
           valid,
           { ...valid, entityId: 'character-invalid', names: { canonical: '', aliases: [] } },
         ],
+      }),
+    ).toThrow(ProjectEntityContractError);
+  });
+
+  it('reports unsupported document fields without hiding independently valid records', () => {
+    const entity = createEntity({
+      entityId: 'character-rin',
+      kind: 'character',
+      canonical: 'Rin',
+    });
+    const decoded = decodeProjectEntityDocument({
+      ...createDocument([entity]),
+      unsupportedField: 'preserved',
+    });
+
+    expect(decoded).toEqual({
+      ok: true,
+      document: createDocument([entity]),
+      diagnostics: [
+        {
+          code: 'invalid-project-entity-document',
+          message: 'Project Entity document contains unsupported fields: unsupportedField.',
+        },
+      ],
+    });
+    expect(() =>
+      assertProjectEntityDocument({
+        ...createDocument([entity]),
+        unsupportedField: 'preserved',
       }),
     ).toThrow(ProjectEntityContractError);
   });

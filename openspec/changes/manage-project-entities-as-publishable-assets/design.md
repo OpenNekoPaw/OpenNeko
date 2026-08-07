@@ -119,14 +119,14 @@ decisions and cannot distinguish local customization from upstream correction.
 
 ### 7. Package ownership and runtime boundaries
 
-| Owner                     | Package role and canonical public entry                                         | Producer                                                    | Consumer                                             | Runtime boundary                     | Replaced path                                     | User-data impact                                      |
-| ------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------ | ------------------------------------------------- | ----------------------------------------------------- |
-| Entity semantics          | `packages/entity/domain` via `@neko/entity-domain`                              | Entity codec, lifecycle, diff/apply, publication conversion | Node, Search, Webview, Agent effects, Assets adapter | Host-neutral TypeScript              | Fragmented character/per-kind/binding authority   | Defines the only canonical semantic model             |
-| Workspace persistence     | `packages/entity/node` via `@neko/entity-node`                                  | Atomic `neko/entities.json` repository and migration        | Desktop composition                                  | Node filesystem                      | Multiple normal readers/writers                   | Archives, migrates, and atomically commits user facts |
-| Entity search projections | `packages/search/domain` and `packages/search/local-metadata` public entries    | Candidate/occurrence/index projections                      | Entity Webview and Agent query                       | Host-neutral + Node/SQLite adapter   | Ad hoc candidate files and mixed `materials` rows | Rebuildable; never semantic authority                 |
-| Entity presentation       | Entity-owned Webview surface consumed through Resource Browser public contracts | Entity facet and Inspector intents                          | Desktop renderer                                     | Renderer sandbox                     | `materials` facet                                 | No durable facts; projects status and operations      |
-| Asset distribution        | `@neko/assets-domain` public lifecycle ports                                    | Installed/published Entity Asset revisions                  | Entity adapter                                       | Host-neutral contract + Node adapter | Separate Entity catalog/sync idea                 | Does not read mutable project facts                   |
-| Application composition   | `apps/neko-desktop` typed preload/IPC and composition root                      | Sender-bound ports and window lifecycle                     | Renderer/package services                            | Electron                             | App-owned Entity business logic                   | No Entity authority; only Desktop-specific wiring     |
+| Owner                     | Package role and canonical public entry                                         | Producer                                                    | Consumer                                             | Runtime boundary                     | Replaced path                                     | User-data impact                                                |
+| ------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------- |
+| Entity semantics          | `packages/entity/domain` via `@neko/entity-domain`                              | Entity codec, lifecycle, diff/apply, publication conversion | Node, Search, Webview, Agent effects, Assets adapter | Host-neutral TypeScript              | Fragmented character/per-kind/binding authority   | Defines the only canonical semantic model                       |
+| Workspace persistence     | `packages/entity/node` via `@neko/entity-node`                                  | Atomic `neko/entities.json` repository                      | Desktop composition                                  | Node filesystem                      | Multiple normal readers/writers                   | Preserves invalid bytes and atomically commits valid user facts |
+| Entity search projections | `packages/search/domain` and `packages/search/local-metadata` public entries    | Candidate/occurrence/index projections                      | Entity Webview and Agent query                       | Host-neutral + Node/SQLite adapter   | Ad hoc candidate files and mixed `materials` rows | Rebuildable; never semantic authority                           |
+| Entity presentation       | Entity-owned Webview surface consumed through Resource Browser public contracts | Entity facet and Inspector intents                          | Desktop renderer                                     | Renderer sandbox                     | `materials` facet                                 | No durable facts; projects status and operations                |
+| Asset distribution        | `@neko/assets-domain` public lifecycle ports                                    | Installed/published Entity Asset revisions                  | Entity adapter                                       | Host-neutral contract + Node adapter | Separate Entity catalog/sync idea                 | Does not read mutable project facts                             |
+| Application composition   | `apps/neko-desktop` typed preload/IPC and composition root                      | Sender-bound ports and window lifecycle                     | Renderer/package services                            | Electron                             | App-owned Entity business logic                   | No Entity authority; only Desktop-specific wiring               |
 
 Production logic remains in `apps/neko-desktop` only for Electron sender authorization, preload
 projection, window/workspace lifecycle, and composition. Entity semantics, persistence, search projection,
@@ -249,14 +249,14 @@ migration coverage, not an unclassified deletion path. Complete reference-owner 
 manifest-backed publication/provider/tombstone runtime remain capability blockers, so tasks 5.3, 5.4,
 and 6.3 stay open.
 
-## Project-open migration composition
+## Project-open invalid-data containment
 
-`@neko/entity-node` owns one `restoreProjectEntities` application path: inspect canonical document and legacy
-inventory, archive and migrate only an unambiguous inventory, then refresh canonical Entity/candidate/occurrence
-projection. Desktop Main only injects authorized workspace and local-metadata ports and calls this path before the
-Assets Resource Browser snapshot is described as ready. Renderer must not read `characters.json`, candidate
-registries, or semantic occurrence tables directly. Ambiguity, stale revision, archive failure, or invalid source
-returns a typed diagnostic rather than a successful empty Entity facet.
+`@neko/entity-node` reads only the canonical document and refreshes Entity/candidate/occurrence projections from
+independently valid current facts. Unsupported document metadata remains an exact diagnostic and blocks mutation
+without hiding valid records or rewriting bytes. A document owned by another Project identity is not adopted as
+current authority; the Entity facet reports the mismatch while other resource facets, Workspaces and Desktop Shell
+remain usable. Desktop Main only injects authorized workspace and local-metadata ports. No migration, compatibility
+reader, retired-source inspection or fallback participates in project open.
 
 ## Resource context-menu ownership
 

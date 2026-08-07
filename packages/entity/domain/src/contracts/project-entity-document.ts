@@ -132,6 +132,7 @@ export interface ProjectEntityCandidateProjection {
 
 export type ProjectEntityDiagnosticCode =
   | 'invalid-project-entity-document'
+  | 'project-entity-owner-mismatch'
   | 'duplicate-project-entity-id'
   | 'duplicate-project-entity-binding-id'
   | 'project-entity-not-found'
@@ -177,7 +178,6 @@ export class ProjectEntityContractError extends Error {
 export function decodeProjectEntityDocument(value: unknown): ProjectEntityDocumentDecodeResult {
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, DOCUMENT_KEYS) ||
     !isStableIdentity(value['projectId']) ||
     !Array.isArray(value['entities'])
   ) {
@@ -187,6 +187,15 @@ export function decodeProjectEntityDocument(value: unknown): ProjectEntityDocume
     );
   }
   const diagnostics: ProjectEntityDiagnostic[] = [];
+  const unsupportedKeys = Object.keys(value).filter(
+    (key) => !DOCUMENT_KEYS.some((candidate) => candidate === key),
+  );
+  if (unsupportedKeys.length > 0) {
+    diagnostics.push({
+      code: 'invalid-project-entity-document',
+      message: `Project Entity document contains unsupported fields: ${unsupportedKeys.sort().join(', ')}.`,
+    });
+  }
   const entities: ProjectEntityRecord[] = [];
   const entityIds = new Set<string>();
   const bindingIds = new Set<string>();

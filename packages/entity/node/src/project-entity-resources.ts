@@ -1,4 +1,5 @@
 import {
+  ProjectEntityContractError,
   projectEntityManagement,
   type EntityAssetProjectionPartition,
   type EntityAssetProjectionRepository,
@@ -28,6 +29,10 @@ export async function readProjectEntityResources(input: {
     workspacePath: input.workspace.workspacePath,
     projectId: input.workspace.workspaceId,
   }).readAvailable(input.signal);
+  const ownerMismatch = result.diagnostics.find(
+    (diagnostic) => diagnostic.code === 'project-entity-owner-mismatch',
+  );
+  if (ownerMismatch) throw new ProjectEntityContractError([ownerMismatch]);
   return {
     entities: result.document.entities.filter((entity) => entity.lifecycle.state === 'active'),
     diagnostics: result.diagnostics,

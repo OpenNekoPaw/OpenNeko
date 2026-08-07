@@ -90,10 +90,16 @@ export class NodeProjectEntityRepository implements ProjectEntityDocumentReposit
     const decoded = decodeProjectEntityDocument(parsed);
     if (!decoded.ok) throw new ProjectEntityContractError(decoded.diagnostics);
     if (decoded.document.projectId !== this.options.projectId) {
-      throw repositoryError(
-        'project-entity-path-unauthorized',
-        'Project Entity document belongs to another Project identity.',
-      );
+      return {
+        document: createEmptyProjectEntityDocument(this.options.projectId),
+        diagnostics: [
+          ...decoded.diagnostics,
+          {
+            code: 'project-entity-owner-mismatch',
+            message: `Project Entity document belongs to Project '${decoded.document.projectId}', not current Project '${this.options.projectId}'.`,
+          },
+        ],
+      };
     }
     return { document: decoded.document, diagnostics: decoded.diagnostics };
   }

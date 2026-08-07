@@ -66,18 +66,34 @@ describe('readProjectEntityResources', () => {
     });
   });
 
-  it('fails visibly when canonical data belongs to another Project identity', async () => {
+  it('keeps a foreign document identity local to the Entity projection', async () => {
     const workspacePath = await createWorkspace();
     await writeJson(workspacePath, 'neko/entities.json', {
       projectId: 'project-other',
-      entities: [],
+      entities: [entity('foreign-character', 'Foreign', { state: 'active' })],
     });
 
+    await expect(
+      readProjectEntityManagementResources({
+        workspace: { workspaceId: 'project-neko', workspacePath },
+      }),
+    ).resolves.toEqual({
+      projections: [],
+      diagnostics: [
+        {
+          code: 'project-entity-owner-mismatch',
+          message:
+            "Project Entity document belongs to Project 'project-other', not current Project 'project-neko'.",
+        },
+      ],
+    });
     await expect(
       readProjectEntityResources({
         workspace: { workspaceId: 'project-neko', workspacePath },
       }),
-    ).rejects.toMatchObject({ diagnostic: { code: 'project-entity-path-unauthorized' } });
+    ).rejects.toMatchObject({
+      diagnostics: [{ code: 'project-entity-owner-mismatch' }],
+    });
   });
 
   it('projects deprecated records and rebuildable candidate state for management consumers', async () => {

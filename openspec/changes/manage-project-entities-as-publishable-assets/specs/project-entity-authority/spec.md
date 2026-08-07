@@ -108,3 +108,17 @@ renderer, migration reader or app-local fallback.
 - **WHEN** one record reports an identity, binding or unknown-field blocker
 - **THEN** project Entity projection exposes an exact record diagnostic
 - **AND** valid sibling Entities remain available without reading retired files
+
+#### Scenario: Canonical document metadata is unsupported
+
+- **WHEN** the canonical document has valid structural fields plus unsupported document metadata
+- **THEN** the Entity owner projects independently valid records with an exact document diagnostic
+- **AND** strict mutation remains blocked while the original bytes remain untouched
+- **AND** no version dispatch, compatibility reader or migration runs
+
+#### Scenario: Canonical document belongs to another Project identity
+
+- **WHEN** the canonical document declares a Project identity different from the active Workspace
+- **THEN** the Entity facet exposes an exact owner-local diagnostic without adopting its records as current Project facts
+- **AND** Files, Media, Assets, sibling Workspaces and the Desktop Shell remain usable
+- **AND** only explicit user repair may change the original document

@@ -656,6 +656,52 @@ describe('Desktop Resource Browser source', () => {
     ]);
   });
 
+  it('returns Entity-local diagnostics for unsupported metadata and a foreign Project identity', async () => {
+    const fixture = await createFixture();
+    await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
+    const entityPath = path.join(fixture.workspace, 'neko', 'entities.json');
+    const source = JSON.stringify({
+      projectId: 'workspace-other',
+      unsupportedField: 'preserved',
+      entities: [
+        {
+          entityId: 'foreign-character',
+          kind: 'character',
+          names: { canonical: 'Foreign', aliases: [] },
+          facts: {},
+          representations: [],
+          lifecycle: { state: 'active' },
+          createdAt: '2026-08-07T00:00:00.000Z',
+          updatedAt: '2026-08-07T00:00:00.000Z',
+        },
+      ],
+    });
+    await writeFile(entityPath, source);
+
+    await expect(
+      createComposition(fixture.workspace).source.entities.list({
+        identity,
+        query: '',
+        limit: 20,
+      }),
+    ).resolves.toEqual({
+      projections: [],
+      diagnostics: [
+        {
+          code: 'invalid-project-entity-document',
+          message: 'Project Entity document contains unsupported fields: unsupportedField.',
+        },
+        {
+          code: 'project-entity-owner-mismatch',
+          message:
+            "Project Entity document belongs to Project 'workspace-other', not current Project 'workspace-1'.",
+        },
+      ],
+      inspectorCapabilities: [],
+    });
+    await expect(readFile(entityPath, 'utf8')).resolves.toBe(source);
+  });
+
   it('combines canonical Entities with candidate and binding-attention local metadata', async () => {
     const fixture = await createFixture();
     await mkdir(path.join(fixture.workspace, 'neko'), { recursive: true });
