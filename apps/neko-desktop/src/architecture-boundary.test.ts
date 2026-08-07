@@ -332,6 +332,20 @@ describe('Desktop architecture boundaries', () => {
       expect(optimizeDepsExclude).toContain(`'${hostWireContract}'`);
       expect(optimizeDepsInclude).not.toContain(`'${hostWireContract}'`);
     }
+    for (const liveWorkspaceUiEntry of [
+      '@neko/ui',
+      '@neko/ui/creative',
+      '@neko/ui/hooks',
+      '@neko/ui/icons',
+      '@neko/ui/keyboard',
+      '@neko/ui/markdown',
+      '@neko/ui/primitives',
+      '@neko/ui/utils',
+      '@neko/ui/workbench',
+    ]) {
+      expect(optimizeDepsExclude).toContain(`'${liveWorkspaceUiEntry}'`);
+      expect(optimizeDepsInclude).not.toContain(`'${liveWorkspaceUiEntry}'`);
+    }
   });
 
   it('releases window resources through the registered sender identity after Electron closes', () => {
