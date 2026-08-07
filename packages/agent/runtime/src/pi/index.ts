@@ -109,6 +109,8 @@ export {
   type ExecutePiConversationSkillInput,
   type ExecutePiConversationTurnInput,
   type OpenPiConversationRuntimeOptions,
+  type PiProviderTurnAdmission,
+  type PiProviderTurnAdmissionInput,
   type PiCompactionPolicy,
   type PiConversationCompactionResult,
 } from './conversation-runtime';

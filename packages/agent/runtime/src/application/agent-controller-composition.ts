@@ -22,10 +22,6 @@ import {
   type AgentContentInteractionPort,
 } from '@neko/agent-runtime/runtime/host-controller';
 import {
-  createAgentConversationMessageQueue,
-  type AgentConversationMessageQueue,
-} from '@neko/agent-runtime/runtime/session/agent-message-queue';
-import {
   createConversationProjectionAttachmentServer,
   type ConversationProjectionAttachmentServer,
 } from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
@@ -41,6 +37,7 @@ import {
   buildTabStateMessage,
   type DesktopAgentNeutralFacts,
   type AgentContextPayload,
+  type AgentMessageQueueSnapshot,
   type OpenTab,
   type Message,
   type ProjectionAttachmentKey,
@@ -63,10 +60,12 @@ import {
 } from '@neko/host/settings';
 import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/ai-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
-import type {
-  AgentTurnConfigurationSnapshot,
-  AgentTurnInput,
-  AgentWorkspaceRuntime,
+import {
+  AgentQueuedTurnCancellationError,
+  type AgentTurnConfigurationSnapshot,
+  type AgentTurnInput,
+  type AgentVisiblePresentationBinding,
+  type AgentWorkspaceRuntime,
 } from './agent-app-host';
 import type { AgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { DesktopAgentConnectionIdentity } from '@neko/agent-contracts';
@@ -180,7 +179,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   } as const);
 
   private readonly configs = new Map<string, ConfigManager>();
-  private readonly queues = new Map<string, AgentConversationMessageQueue>();
   private readonly confirmations = new Map<string, PiToolConfirmationRegistry>();
   private readonly agentStates = new Map<string, AgentStateRuntime>();
   private readonly pendingDisposals = new Set<Promise<void>>();
@@ -228,6 +226,12 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         : { openTabs: [], activeTabId: null },
       tabOperationTail: Promise.resolve(),
     };
+    const visiblePresentation = input.workspace.bindVisiblePresentation({
+      bindingId: input.identity.connectionId,
+      ...(input.initialConversationId === undefined
+        ? {}
+        : { conversationId: input.initialConversationId }),
+    });
     let post: AgentHostRouteEffectContext['post'] | undefined;
     const agentStates = this.getAgentStates(input.workspace.workspaceId);
     const unsubscribeAgentStates = agentStates.subscribe((snapshot) => {
@@ -298,6 +302,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           unsubscribeAgentStates();
           resourceDisplay.dispose();
           await projection.abandon();
+          await visiblePresentation.dispose();
           facts.dispose();
         } catch (error) {
           facts.failDisposal();
@@ -313,6 +318,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         state,
         bind,
         facts,
+        visiblePresentation,
         input.initialConversationId === undefined
           ? undefined
           : {
@@ -439,7 +445,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   async dispose(): Promise<void> {
     for (const confirmation of this.confirmations.values()) confirmation.cancelAll();
     this.confirmations.clear();
-    this.queues.clear();
     this.configs.clear();
     const results = await Promise.allSettled(this.pendingDisposals);
     this.pendingDisposals.clear();
@@ -458,6 +463,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     state: ConnectionState,
     bind: (context: AgentHostRouteEffectContext) => void,
     facts: DesktopAgentFactsProjector,
+    visiblePresentation: AgentVisiblePresentationBinding,
     initialConversation?: {
       readonly conversationId: string;
       readonly message?: Message;
@@ -557,6 +563,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           const conversationId = createConversationId(workspace.workspace.workspacePath);
           await workspace.createConversation(conversationId);
           state.activeConversationId = conversationId;
+          await visiblePresentation.updateConversation(conversationId);
           const tab: OpenTab = {
             id: `tab-${conversationId}`,
             title: 'New conversation',
@@ -591,6 +598,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           }
           state.activeConversationId = message.conversationId;
           state.tabState = cloneTabState(message.tabState);
+          await visiblePresentation.updateConversation(message.conversationId);
           await context.post(buildTabStateMessage(state.tabState));
           await postConversation(message.conversationId, context, {
             activationId: message.activationId,
@@ -602,7 +610,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         return enqueueTabOperation(state, async () => {
           await workspace.deleteConversation(conversationId);
           this.getAgentStates(workspace.workspaceId).clear(conversationId);
-          this.queues.delete(ownerKey(workspace.workspaceId, conversationId));
           this.confirmations.get(ownerKey(workspace.workspaceId, conversationId))?.cancelAll();
           this.confirmations.delete(ownerKey(workspace.workspaceId, conversationId));
           state.tabState = {
@@ -625,6 +632,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
                   (tab) => tab.conversationId === state.activeConversationId,
                 )?.id ?? null,
             };
+            await visiblePresentation.updateConversation(state.activeConversationId ?? undefined);
           }
           await postConversationList(context);
           await context.post(buildTabStateMessage(state.tabState));
@@ -666,34 +674,37 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       readMessageQueue: async (conversationId, context) => {
         bind(context);
         await context.post(
-          buildMessageQueueSnapshotMessage(
-            this.getQueue(workspace.workspaceId, conversationId).snapshot(),
-          ),
+          buildMessageQueueSnapshotMessage(workspace.readMessageQueue(conversationId)),
         );
       },
       promoteQueuedMessage: async ({ conversationId, queueItemId }, context) => {
         bind(context);
-        const queue = this.getQueue(workspace.workspaceId, conversationId);
-        queue.promote(queueItemId);
-        await context.post(buildMessageQueueSnapshotMessage(queue.snapshot()));
+        await context.post(
+          buildMessageQueueSnapshotMessage(
+            workspace.promoteQueuedMessage(conversationId, queueItemId),
+          ),
+        );
       },
       cancelQueuedMessage: async ({ conversationId, queueItemId }, context) => {
         bind(context);
-        const queue = this.getQueue(workspace.workspaceId, conversationId);
-        queue.remove(queueItemId);
-        await context.post(buildMessageQueueSnapshotMessage(queue.snapshot()));
+        await context.post(
+          buildMessageQueueSnapshotMessage(
+            await workspace.cancelQueuedMessage(conversationId, queueItemId),
+          ),
+        );
       },
       editQueuedMessage: async ({ tabId, conversationId, queueItemId }, context) => {
         bind(context);
-        const queue = this.getQueue(workspace.workspaceId, conversationId);
-        const item = queue.snapshot().items.find((candidate) => candidate.id === queueItemId);
-        if (!item) throw new Error(`Queued message '${queueItemId}' does not exist.`);
+        const { item, snapshot } = await workspace.takeQueuedMessageForEdit(
+          conversationId,
+          queueItemId,
+        );
         await context.post(
           buildQueuedMessageEditRequestedMessage({
             tabId,
             conversationId,
             item,
-            snapshot: queue.snapshot(),
+            snapshot,
           }),
         );
       },
@@ -706,7 +717,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           );
         }
         await workspace.clearContext(conversationId);
-        this.getQueue(workspace.workspaceId, conversationId).clear();
+        await workspace.clearMessageQueue(conversationId);
         await context.post(buildHistoryClearedMessage(conversationId));
       },
       clearAllConversations: (context) => {
@@ -715,6 +726,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           await workspace.clearAllConversations();
           state.activeConversationId = null;
           state.tabState = { openTabs: [], activeTabId: null };
+          await visiblePresentation.updateConversation();
           await postConversationList(context);
           await context.post(buildTabStateMessage(state.tabState));
           await postConversation(null, context);
@@ -1013,6 +1025,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     };
     const operation = input.workspace.startTurn(observedTurnInput);
     factsEvents.bind(input.facts.beginTurn({ identity: operation.identity, systemPrompt }));
+    this.postMessageQueueSnapshot(
+      input.context,
+      input.workspace.readMessageQueue(input.request.conversationId),
+    );
     this.getAgentStates(input.workspace.workspaceId).update({
       conversationId: input.request.conversationId,
       phase: 'thinking',
@@ -1024,10 +1040,21 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         conversation: input.workspace.readConversationEvidence(input.request.conversationId),
         turn,
       });
+    } catch (error) {
+      if (!(error instanceof AgentQueuedTurnCancellationError)) throw error;
     } finally {
+      this.postMessageQueueSnapshot(
+        input.context,
+        input.workspace.readMessageQueue(input.request.conversationId),
+      );
+      const residency = input.workspace
+        .readRuntimeResidency()
+        .conversations.find(
+          (conversation) => conversation.conversationId === input.request.conversationId,
+        );
       this.getAgentStates(input.workspace.workspaceId).update({
         conversationId: input.request.conversationId,
-        phase: 'idle',
+        phase: residency?.running === true || residency?.queued === true ? 'thinking' : 'idle',
         startedAt: Date.now(),
       });
     }
@@ -1243,13 +1270,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return config;
   }
 
-  private getQueue(workspaceId: string, conversationId: string): AgentConversationMessageQueue {
-    const key = ownerKey(workspaceId, conversationId);
-    const existing = this.queues.get(key);
-    if (existing) return existing;
-    const queue = createAgentConversationMessageQueue({ conversationId });
-    this.queues.set(key, queue);
-    return queue;
+  private postMessageQueueSnapshot(
+    context: AgentHostRouteEffectContext,
+    snapshot: AgentMessageQueueSnapshot,
+  ): void {
+    this.track(
+      Promise.resolve(context.post(buildMessageQueueSnapshotMessage(snapshot))).then(
+        () => undefined,
+      ),
+    );
   }
 
   private getConfirmation(workspaceId: string, conversationId: string): PiToolConfirmationRegistry {

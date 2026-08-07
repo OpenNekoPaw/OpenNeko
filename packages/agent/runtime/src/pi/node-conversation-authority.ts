@@ -531,7 +531,6 @@ export class NodePiConversationAuthority {
     const branch = this.requireBranch(input.conversationId, input.branchId);
     const session = await this.sessions.open(branch.session);
     const previousLeafId = await session.getLeafId();
-    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(input.lease, this.now());
       await session.appendCompaction(
@@ -540,18 +539,25 @@ export class NodePiConversationAuthority {
         input.tokensBefore,
         input.details,
       );
+      const leafId = await session.getLeafId();
       const updatedAt = new Date(this.now()).toISOString();
-      this.database
-        .prepare(
-          'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
-        )
-        .run(await session.getLeafId(), updatedAt, input.conversationId, input.branchId);
-      this.database
-        .prepare('UPDATE pi_conversations SET updated_at = ? WHERE conversation_id = ?')
-        .run(updatedAt, input.conversationId);
-      this.database.exec('COMMIT');
+      this.database.exec('BEGIN IMMEDIATE');
+      try {
+        this.assertLease(input.lease, this.now());
+        this.database
+          .prepare(
+            'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
+          )
+          .run(leafId, updatedAt, input.conversationId, input.branchId);
+        this.database
+          .prepare('UPDATE pi_conversations SET updated_at = ? WHERE conversation_id = ?')
+          .run(updatedAt, input.conversationId);
+        this.database.exec('COMMIT');
+      } catch (error) {
+        this.database.exec('ROLLBACK');
+        throw error;
+      }
     } catch (error) {
-      this.database.exec('ROLLBACK');
       try {
         if ((await session.getLeafId()) !== previousLeafId) {
           await session.moveTo(previousLeafId);
@@ -575,21 +581,14 @@ export class NodePiConversationAuthority {
       const branch = this.requireBranch(input.conversationId, input.branchId);
       const session = await this.sessions.open(branch.session);
       const previousLeafId = await session.getLeafId();
-      this.database.exec('BEGIN IMMEDIATE');
+      const existing = this.readCheckpoint(input.conversationId, input.turnId);
+      if (existing !== undefined) {
+        assertCheckpointIdentity(existing, input, branch.session.id);
+        this.durability.set(key, 'durable');
+        return existing;
+      }
       try {
         this.assertLease(input.lease, this.now());
-        const existing = this.readCheckpoint(input.conversationId, input.turnId);
-        if (existing !== undefined) {
-          if (existing.branchId !== input.branchId || existing.piSessionId !== branch.session.id) {
-            throw new PiConversationAuthorityError(
-              'invalid-identity',
-              `Turn checkpoint ${input.conversationId}/${input.turnId} targets a different branch or Pi Session.`,
-            );
-          }
-          this.database.exec('COMMIT');
-          this.durability.set(key, 'durable');
-          return existing;
-        }
         for (const message of input.messages ?? []) {
           await session.appendMessage(message);
         }
@@ -605,32 +604,46 @@ export class NodePiConversationAuthority {
           terminalState: input.terminalState,
           committedAt,
         };
-        this.database
-          .prepare(
-            `INSERT INTO pi_turn_checkpoints
-              (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_lease_id, terminal_state, committed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(
-            record.conversationId,
-            record.turnId,
-            record.branchId,
-            record.piSessionId,
-            record.leafId,
-            record.writerLeaseId,
-            record.terminalState,
-            record.committedAt,
-          );
-        this.database
-          .prepare(
-            'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
-          )
-          .run(leafId, committedAt, input.conversationId, input.branchId);
-        this.database.exec('COMMIT');
+        this.database.exec('BEGIN IMMEDIATE');
+        try {
+          this.assertLease(input.lease, this.now());
+          const concurrent = this.readCheckpoint(input.conversationId, input.turnId);
+          if (concurrent !== undefined) {
+            assertCheckpointIdentity(concurrent, input, branch.session.id);
+            throw new PiConversationAuthorityError(
+              'invalid-identity',
+              `Turn checkpoint ${input.conversationId}/${input.turnId} was committed concurrently by the same writer lease.`,
+            );
+          }
+          this.database
+            .prepare(
+              `INSERT INTO pi_turn_checkpoints
+                (conversation_id, turn_id, branch_id, pi_session_id, leaf_id, writer_lease_id, terminal_state, committed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .run(
+              record.conversationId,
+              record.turnId,
+              record.branchId,
+              record.piSessionId,
+              record.leafId,
+              record.writerLeaseId,
+              record.terminalState,
+              record.committedAt,
+            );
+          this.database
+            .prepare(
+              'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
+            )
+            .run(leafId, committedAt, input.conversationId, input.branchId);
+          this.database.exec('COMMIT');
+        } catch (error) {
+          this.database.exec('ROLLBACK');
+          throw error;
+        }
         this.durability.set(key, 'durable');
         return Object.freeze(record);
       } catch (error) {
-        this.database.exec('ROLLBACK');
         try {
           if ((await session.getLeafId()) !== previousLeafId) {
             await session.moveTo(previousLeafId);
@@ -1173,4 +1186,17 @@ function validateIdentity(field: string, value: string): void {
 
 function checkpointKey(conversationId: string, turnId: string): string {
   return `${conversationId}\u0000${turnId}`;
+}
+
+function assertCheckpointIdentity(
+  checkpoint: PiTurnCheckpointRecord,
+  input: CheckpointPiTurnInput,
+  piSessionId: string,
+): void {
+  if (checkpoint.branchId !== input.branchId || checkpoint.piSessionId !== piSessionId) {
+    throw new PiConversationAuthorityError(
+      'invalid-identity',
+      `Turn checkpoint ${input.conversationId}/${input.turnId} targets a different branch or Pi Session.`,
+    );
+  }
 }

@@ -1,4 +1,5 @@
 export * from './agent-app-host';
+export * from './agent-provider-turn-scheduler';
 export * from './agent-controller-composition';
 export * from './agent-launch-service';
 export * from './agent-conversation-lifecycle-service';

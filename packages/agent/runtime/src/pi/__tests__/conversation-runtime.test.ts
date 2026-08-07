@@ -723,6 +723,78 @@ describe('PiConversationRuntime', () => {
     }
   });
 
+  it('preserves the original checkpoint error after terminal projection without a second failure turn', async () => {
+    const lease = authority.acquireLease('conversation-terminal-checkpoint-failure');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-terminal-checkpoint-failure',
+      branchId: 'branch-main',
+    });
+    let finishProvider: (() => void) | undefined;
+    const models = createFixtureModels(() => {
+      const stream = createAssistantMessageEventStream();
+      const message = assistant('stop', 'completed before checkpoint');
+      stream.push({ type: 'start', partial: message });
+      finishProvider = () => {
+        stream.push({ type: 'done', reason: 'stop', message });
+        stream.end();
+      };
+      return stream;
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-terminal-checkpoint-failure',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'base',
+    });
+    const events: PiProductAgentEvent[] = [];
+    const execution = runtime.execute({
+      turnId: 'turn-terminal-checkpoint-failure',
+      runId: 'run-terminal-checkpoint-failure',
+      prompt: 'complete then lose the lease',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: collect(events),
+    });
+    await vi.waitFor(() => expect(finishProvider).toBeTypeOf('function'));
+    const otherHost = await NodePiConversationAuthority.create({
+      userDataRoot: root,
+      workspaceId: 'workspace-1',
+      hostId: 'desktop-checkpoint-takeover',
+    });
+    const takeover = otherHost.acquireLease('conversation-terminal-checkpoint-failure', {
+      takeover: true,
+    });
+
+    try {
+      finishProvider?.();
+      await expect(execution).rejects.toMatchObject({ code: 'lease-stale' });
+      expect(events.filter((event) => event.type === 'turn.completed')).toHaveLength(1);
+      expect(events.filter((event) => event.type === 'turn.failed')).toHaveLength(0);
+      expect(events.at(-1)).toMatchObject({
+        type: 'turn.persistence',
+        state: 'persistence-delayed',
+      });
+      expect(
+        authority.readCheckpoint(
+          'conversation-terminal-checkpoint-failure',
+          'turn-terminal-checkpoint-failure',
+        ),
+      ).toBeUndefined();
+      expect(() => runtime.dispose()).not.toThrow();
+      otherHost.releaseLease(takeover);
+    } finally {
+      await otherHost.dispose();
+    }
+  });
+
   it('persists explicit Skill invocation as real Pi transcript input without physical paths', async () => {
     const lease = authority.acquireLease('conversation-1');
     await authority.createConversation({
