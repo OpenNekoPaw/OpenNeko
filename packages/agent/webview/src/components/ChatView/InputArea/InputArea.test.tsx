@@ -616,6 +616,8 @@ describe('InputArea composer controls', () => {
     fireEvent.click(modelTrigger);
     const dialog = screen.getByRole('dialog', { name: '创作配置' });
     expect(dialog).toBeTruthy();
+    expect(within(dialog).queryByRole('tablist', { name: '配置类型' })).toBeNull();
+    expect(within(dialog).getByRole('heading', { name: '主模型' })).toBeTruthy();
     expect(within(dialog).getByText('无可用模型')).toBeTruthy();
     expect(screen.queryByText('全选')).toBeNull();
   });
@@ -953,12 +955,8 @@ describe('InputArea composer controls', () => {
     expect(
       within(screen.getByRole('tablist', { name: '内容类型' })).getAllByRole('tab'),
     ).toHaveLength(4);
-    expect(
-      within(screen.getByRole('tablist', { name: '配置类型' })).getAllByRole('tab'),
-    ).toHaveLength(1);
-    expect(
-      within(configDialog).getByRole('tab', { name: '模型' }).getAttribute('aria-selected'),
-    ).toBe('true');
+    expect(within(configDialog).queryByRole('tablist', { name: '配置类型' })).toBeNull();
+    expect(within(configDialog).getByRole('heading', { name: '主模型' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('radio', { name: /Gemini Flash/ }));
     expect(onModelSelect).toHaveBeenCalledWith('google:gemini-flash');

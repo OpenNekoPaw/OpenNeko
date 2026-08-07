@@ -3,7 +3,7 @@
  * whether a dropdown should open upward or downward.
  */
 
-import { useCallback, type RefObject } from 'react';
+import { useCallback, useLayoutEffect, useState, type RefObject } from 'react';
 
 export type DropdownDirection = 'up' | 'down';
 export type DropdownAlignment = 'start' | 'end';
@@ -16,6 +16,19 @@ export interface DropdownPlacement {
 export interface DropdownPlacementOptions {
   readonly preferredDirection?: DropdownDirection;
   readonly estimatedWidth?: number;
+  readonly boundarySelector?: string;
+}
+
+export interface BoundedDropdownLayout {
+  readonly direction: DropdownDirection;
+  readonly inlineSize: number;
+  readonly horizontalOffset: number;
+}
+
+export interface BoundedDropdownLayoutOptions {
+  readonly enabled: boolean;
+  readonly preferredDirection?: DropdownDirection;
+  readonly preferredInlineSize: number;
   readonly boundarySelector?: string;
 }
 
@@ -64,6 +77,60 @@ export function useDropdownPlacement(
   }, [boundarySelector, estimatedWidth, preferredDirection, triggerRef]);
 }
 
+export function useBoundedDropdownLayout(
+  triggerRef: RefObject<HTMLElement | null>,
+  options: BoundedDropdownLayoutOptions,
+): BoundedDropdownLayout {
+  const {
+    enabled,
+    preferredDirection = 'down',
+    preferredInlineSize,
+    boundarySelector = DEFAULT_BOUNDARY_SELECTOR,
+  } = options;
+  const [layout, setLayout] = useState<BoundedDropdownLayout>({
+    direction: preferredDirection,
+    inlineSize: preferredInlineSize,
+    horizontalOffset: 0,
+  });
+
+  const updateLayout = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    setLayout(
+      resolveBoundedDropdownLayout({
+        triggerRect: trigger.getBoundingClientRect(),
+        boundaryRect: resolveBoundaryRect(trigger, boundarySelector),
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        preferredDirection,
+        preferredInlineSize,
+      }),
+    );
+  }, [boundarySelector, preferredDirection, preferredInlineSize, triggerRef]);
+
+  useLayoutEffect(() => {
+    if (!enabled) return undefined;
+
+    updateLayout();
+    const trigger = triggerRef.current;
+    const boundary = trigger?.closest(boundarySelector);
+    const resizeObserver =
+      boundary instanceof HTMLElement && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(updateLayout)
+        : undefined;
+    if (boundary instanceof HTMLElement) resizeObserver?.observe(boundary);
+    window.addEventListener('resize', updateLayout);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateLayout);
+    };
+  }, [boundarySelector, enabled, triggerRef, updateLayout]);
+
+  return layout;
+}
+
 /** CSS class helpers for dropdown positioning */
 export function dropdownPositionClass(placement: DropdownDirection | DropdownPlacement): string {
   const direction = typeof placement === 'string' ? placement : placement.direction;
@@ -99,6 +166,36 @@ export function resolveDropdownPlacement(input: {
   const alignment = startOverflowsRight && !endOverflowsLeft ? 'end' : 'start';
 
   return { direction, alignment };
+}
+
+export function resolveBoundedDropdownLayout(input: {
+  readonly triggerRect: DropdownPlacementRect;
+  readonly boundaryRect: DropdownPlacementRect;
+  readonly viewportWidth: number;
+  readonly viewportHeight: number;
+  readonly preferredDirection: DropdownDirection;
+  readonly preferredInlineSize: number;
+}): BoundedDropdownLayout {
+  const boundaryLeft = Math.max(input.boundaryRect.left, 0) + DEFAULT_EDGE_GAP;
+  const boundaryRight = Math.min(input.boundaryRect.right, input.viewportWidth) - DEFAULT_EDGE_GAP;
+  const availableInlineSize = Math.max(1, boundaryRight - boundaryLeft);
+  const inlineSize = Math.min(input.preferredInlineSize, availableInlineSize);
+  const placement = resolveDropdownPlacement({
+    triggerRect: input.triggerRect,
+    boundaryRect: input.boundaryRect,
+    viewportHeight: input.viewportHeight,
+    preferredDirection: input.preferredDirection,
+    estimatedWidth: inlineSize,
+  });
+  const preferredLeft =
+    placement.alignment === 'end' ? input.triggerRect.right - inlineSize : input.triggerRect.left;
+  const left = Math.min(Math.max(preferredLeft, boundaryLeft), boundaryRight - inlineSize);
+
+  return {
+    direction: placement.direction,
+    inlineSize,
+    horizontalOffset: left - input.triggerRect.left,
+  };
 }
 
 function resolveBoundaryRect(el: HTMLElement, boundarySelector: string): DOMRect {
