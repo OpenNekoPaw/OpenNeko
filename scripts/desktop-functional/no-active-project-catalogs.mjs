@@ -665,6 +665,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         toolbarVisible: toolbar instanceof HTMLElement,
         selectedBackground: selectedStyle?.backgroundColor ?? '',
         selectedBorder: selectedStyle?.borderColor ?? '',
+        selectedShadow: selectedStyle?.boxShadow ?? '',
       };
     })()`);
     if (
@@ -672,7 +673,8 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       darkBatchSelection.selectedCount !== 2 ||
       !darkBatchSelection.toolbarVisible ||
       !darkBatchSelection.selectedBackground ||
-      !darkBatchSelection.selectedBorder
+      !darkBatchSelection.selectedBorder ||
+      darkBatchSelection.selectedShadow !== 'none'
     ) {
       throw new Error(
         `Dark Project batch selection is incorrect: ${JSON.stringify(darkBatchSelection)}`,

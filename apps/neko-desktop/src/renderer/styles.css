@@ -1499,14 +1499,8 @@ code {
 
 .management-surface-row:hover,
 .management-surface-row[data-selected='true'] {
-  border-color: color-mix(in srgb, var(--neko-accent) 30%, var(--neko-desktop-border));
-  background: var(--neko-list-hoverBackground, var(--neko-desktop-control-hover));
-}
-
-.management-surface-row[data-selected='true'] {
-  border-color: color-mix(in srgb, var(--neko-accent) 55%, var(--neko-desktop-border));
-  background: color-mix(in srgb, var(--neko-accent) 9%, var(--neko-desktop-control));
-  box-shadow: inset 3px 0 0 var(--neko-accent);
+  border-color: color-mix(in srgb, var(--neko-accent) 30%, var(--neko-border));
+  background: var(--neko-hover, #f4f6f7);
 }
 
 .management-surface-row__select:disabled {
