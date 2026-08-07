@@ -6,13 +6,18 @@ import path from 'node:path';
 import { DESKTOP_VITE_CSP_NONCE } from './src/shared/vite-development-security';
 
 const functionalFixtureHome = process.env['OPENNEKO_DESKTOP_FUNCTIONAL_HOME'];
-const canonicalWorkspacePublicEntries = new Set([
+export const DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES = Object.freeze([
+  '@neko/agent-contracts',
   '@neko/agent-webview/root',
   '@neko/canvas-webview/root',
   '@neko/cut-webview/root',
   '@neko/cut-webview/runtime-bridge',
   '@neko/preview-webview/root',
-]);
+] as const);
+
+const canonicalWorkspacePublicEntries = new Set<string>(
+  DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES,
+);
 
 function createWorkspacePublicEntryCanonicalizationPlugin(): Plugin {
   return {
@@ -46,6 +51,7 @@ export default defineConfig({
   },
   resolve: {
     dedupe: [
+      '@neko/agent-contracts',
       '@neko/agent-webview',
       '@neko/assets-webview',
       '@neko/canvas-webview',
