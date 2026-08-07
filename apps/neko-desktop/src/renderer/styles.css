@@ -1803,6 +1803,10 @@ code {
   padding: 8px 0;
 }
 
+.project-workspace > .neko-controlled-workbench-interaction[data-presentation='docked'] {
+  margin-block: 8px;
+}
+
 .desktop-scene-workbench--agent-only.neko-controlled-workbench-shell {
   grid-template-columns:
     var(--neko-controlled-primary-width)
@@ -2108,7 +2112,7 @@ code {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--neko-desktop-border-strong);
+  border: 1px solid var(--neko-desktop-border);
   border-radius: var(--neko-desktop-radius-frame);
   background: var(--neko-desktop-surface);
   box-shadow: none;

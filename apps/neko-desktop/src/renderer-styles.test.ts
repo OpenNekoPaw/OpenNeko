@@ -195,13 +195,16 @@ describe('Desktop renderer styles', () => {
       expect(rule?.groups?.body).not.toMatch(/--neko-desktop-shadow-surface/u);
     }
     expect(dockPanelRule?.groups?.body).toMatch(
-      /border\s*:\s*1px solid var\(--neko-desktop-border-strong\)/u,
+      /border\s*:\s*1px solid var\(--neko-desktop-border\)/u,
     );
   });
 
   it('expands Agent-only interaction into the business area and collapses both docks', () => {
     const shellRule = styles.match(
       /\.desktop-scene-workbench--agent-only\.neko-controlled-workbench-shell\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const dockedInteractionRule = styles.match(
+      /\.project-workspace > \.neko-controlled-workbench-interaction\[data-presentation='docked'\]\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
     const interactionRule = styles.match(
       /\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{(?<body>[\s\S]*?)\n\}/u,
@@ -210,6 +213,7 @@ describe('Desktop renderer styles', () => {
     expect(shellRule?.groups?.body).toMatch(
       /grid-template-columns\s*:[\s\S]*?var\(--neko-controlled-primary-width\)[\s\S]*?0[\s\S]*?minmax\(420px, 1fr\)[\s\S]*?0/u,
     );
+    expect(dockedInteractionRule?.groups?.body).toMatch(/margin-block\s*:\s*8px/u);
     expect(interactionRule?.groups?.body).toMatch(/margin\s*:\s*8px 8px 8px 0/u);
     expect(styles).toMatch(
       /@media \(max-width: 720px\)[\s\S]*?\.desktop-scene-workbench--agent-only > \.neko-controlled-workbench-interaction\s*\{[\s\S]*?margin\s*:\s*4px/u,
