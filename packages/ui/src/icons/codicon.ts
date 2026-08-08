@@ -34,6 +34,7 @@ export type CodiconName =
   | 'search'
   | 'settings'
   | 'screen-normal'
+  | 'save'
   | 'symbol-misc'
   | 'symbol-ruler'
   | 'symbol-namespace'

@@ -108,6 +108,7 @@ export const timeline = {
   'timeline.controls.pause': '暂停',
   'timeline.controls.forward5s': '前进 5 秒',
   'timeline.controls.goToEnd': '跳转到结尾',
+  'timeline.controls.save': '保存 (Cmd/Ctrl+S)',
   'timeline.controls.undo': '撤销 (Cmd+Z)',
   'timeline.controls.redo': '重做 (Cmd+Shift+Z)',
   'timeline.controls.split': '分割片段 (S)',

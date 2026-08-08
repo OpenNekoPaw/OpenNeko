@@ -1035,6 +1035,9 @@ function App() {
   };
   const undo = () => view && controller.undo();
   const redo = () => view && controller.redo();
+  const save = useCallback(() => {
+    if (view) controller.save();
+  }, [controller, view]);
 
   const shortcutActions = useMemo(
     () => ({
@@ -1044,6 +1047,7 @@ function App() {
       seekEnd: () => seek(view?.durationSeconds ?? 0),
       undo,
       redo,
+      save,
       split: splitSelected,
       duplicateSelection: () => {
         if (selectedClips.length > 0) {
@@ -1068,6 +1072,7 @@ function App() {
       playheadSeconds,
       playing,
       presentationActions,
+      save,
       selected?.clipId,
       selectedClips,
       selection,
@@ -1162,7 +1167,7 @@ function App() {
               className="cut-basic-preview-resize-handle"
             />
             <section className="cut-basic-timeline-region" style={{ flex: 1 - previewSplit.size }}>
-              <Timeline onOpenPackage={linkMediaToSelectedTrack} onSeek={seek} />
+              <Timeline onOpenPackage={linkMediaToSelectedTrack} onSave={save} onSeek={seek} />
             </section>
           </div>
         }

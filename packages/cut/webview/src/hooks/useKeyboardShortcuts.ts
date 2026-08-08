@@ -15,6 +15,7 @@ export interface CutKeyboardShortcutActions {
   readonly seekEnd: () => void;
   readonly undo: () => void;
   readonly redo: () => void;
+  readonly save: () => void;
   readonly split: () => void;
   readonly duplicateSelection: () => void;
   readonly cutSelection: () => void;
@@ -61,6 +62,10 @@ export function createCutShortcutBindings(
     binding('go-end', 'End', actions.seekEnd, hasView),
     binding('undo', { key: 'KeyZ', primary: true }, actions.undo, hasView),
     binding('redo', { key: 'KeyZ', primary: true, shift: true }, actions.redo, hasView),
+    {
+      ...binding('save', { key: 'KeyS', primary: true }, actions.save, hasView),
+      allowEditableTarget: true,
+    },
     binding('split-at-playhead', 'KeyS', actions.split, (state) => state.canSplit),
     binding(
       'duplicate-selected',

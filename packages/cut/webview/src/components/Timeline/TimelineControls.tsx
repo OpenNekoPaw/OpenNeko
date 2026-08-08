@@ -9,6 +9,7 @@ import {
   PlusIcon,
   RedoIcon,
   ScissorsIcon,
+  toCodiconClassName,
   TrashIcon,
   UndoIcon,
   VolumeLowIcon,
@@ -29,6 +30,7 @@ export interface TimelineControlsProps {
   readonly canSplit: boolean;
   readonly canAddAudioTrack: boolean;
   readonly canAddSubtitleTrack: boolean;
+  readonly canSave: boolean;
   readonly onPixelsPerSecond: (value: number) => void;
   readonly onPlacementMode: (mode: CutPlacementMode) => void;
   readonly onToggleSnapping: () => void;
@@ -40,6 +42,7 @@ export interface TimelineControlsProps {
   readonly onDelete: () => void;
   readonly onUndo: () => void;
   readonly onRedo: () => void;
+  readonly onSave: () => void;
   readonly onFitAll: () => void;
   readonly onExport: () => void;
 }
@@ -75,6 +78,14 @@ export const TimelineControls = memo(function TimelineControls(props: TimelineCo
           </ToolbarButton>
         </div>
         <div className="cut-basic-timeline-actions">
+          <ToolbarButton
+            disabled={!props.canSave}
+            label={t('timeline.controls.save')}
+            onClick={props.onSave}
+          >
+            <span aria-hidden="true" className={toCodiconClassName('save')} />
+          </ToolbarButton>
+          <span className="cut-basic-toolbar-separator" />
           <ToolbarButton
             disabled={!props.canSplit}
             label={t('timeline.controls.split')}

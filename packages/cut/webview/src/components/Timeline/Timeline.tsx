@@ -57,6 +57,7 @@ import {
 
 export interface TimelineProps {
   readonly onOpenPackage: () => void;
+  readonly onSave: () => void;
   readonly onSeek: (seconds: number) => void;
 }
 
@@ -711,6 +712,7 @@ export function Timeline(props: TimelineProps) {
       <TimelineControls
         canAddAudioTrack={audioTrackCount < 3}
         canAddSubtitleTrack={subtitleTrackCount < 1}
+        canSave={Boolean(view)}
         canSplit={canSplit}
         hasSelection={selectedClips.length > 0}
         onAddAudioTrack={() => controller.addTrack('Audio')}
@@ -725,6 +727,7 @@ export function Timeline(props: TimelineProps) {
         onPixelsPerSecond={actions.setPixelsPerSecond}
         onPlacementMode={(mode) => controller.setPlacementMode(mode)}
         onRedo={() => controller.redo()}
+        onSave={props.onSave}
         onSplit={() => selectedClip && splitClip(selectedClip)}
         onToggleOverview={() => actions.setOverviewVisible(!overviewVisible)}
         onToggleSnapping={actions.toggleSnapping}

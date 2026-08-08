@@ -31,11 +31,14 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/<PreviewControls/);
     expect(app).toMatch(/<PropertyPanelInline/);
     expect(app).toMatch(/<Timeline/);
-    expect(app).toMatch(/<Timeline onOpenPackage=\{linkMediaToSelectedTrack\} onSeek=\{seek\} \/>/);
+    expect(app).toMatch(
+      /<Timeline[\s\S]*onOpenPackage=\{linkMediaToSelectedTrack\}[\s\S]*onSave=\{save\}[\s\S]*onSeek=\{seek\}/,
+    );
     expect(app).not.toMatch(/timelineVisible|data-cut-timeline-visible/);
     expect(app).not.toMatch(/createPortal\(/);
     expect(app).not.toMatch(/timelineTarget|timeline-only/);
     expect(timeline).toMatch(/<TimelineControls/);
+    expect(timeline).toMatch(/onSave=\{props\.onSave\}/);
     expect(timeline).toMatch(/<TimelineMinimap/);
     expect(timeline).toMatch(/<TimelineRuler/);
     expect(timeline).toMatch(/<TimelineTrack/);
@@ -106,6 +109,9 @@ describe('Cut OTIO Webview boundary', () => {
     expect(timeline).toMatch(/timeline\.clip\.lock/);
     expect(timeline).toMatch(/timeline\.contextMenu\.addMedia/);
     expect(app).toMatch(/useKeyboardShortcuts/);
+    expect(app).toMatch(/if \(view\) controller\.save\(\)/);
+    expect(app).toMatch(/onSave=\{save\}/);
+    expect(timeline).toMatch(/onSave=\{props\.onSave\}/);
   });
 
   it('uses Host-derived thumbnail and waveform representations', () => {
@@ -176,7 +182,9 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app.match(/controller\.startPreview\(/g)).toHaveLength(2);
     expect(app).toMatch(/previewVideoClientRef\.current\?\.pause\(\)/);
     expect(app).toMatch(/activeVideoClient\.seek\(/);
-    expect(app).toMatch(/<Timeline onOpenPackage=\{linkMediaToSelectedTrack\} onSeek=\{seek\} \/>/);
+    expect(app).toMatch(/onOpenPackage=\{linkMediaToSelectedTrack\}/);
+    expect(app).toMatch(/onSave=\{save\}/);
+    expect(app).toMatch(/onSeek=\{seek\}/);
     expect(timeline).toMatch(/onSeek: \(seconds: number\) => void/);
     expect(timeline).toMatch(/props\.onSeek\(/);
     expect(timeline).toMatch(/onSeek=\{props\.onSeek\}/);

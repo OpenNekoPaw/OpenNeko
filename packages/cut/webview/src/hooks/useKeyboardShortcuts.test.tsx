@@ -69,12 +69,27 @@ describe('useKeyboardShortcuts', () => {
     expect(actions.duplicateSelection).toHaveBeenCalledOnce();
   });
 
-  it('leaves primary+S to the VS Code workbench save keybinding', () => {
+  it('handles primary+S through the active Cut save command', () => {
     act(() => root.render(<KeyboardHarness actions={actions} />));
-    const event = createKeyEvent('s', 'KeyS', { metaKey: true });
+    const event = createKeyEvent('s', 'KeyS', { ctrlKey: true });
     act(() => window.dispatchEvent(event));
-    expect(event.defaultPrevented).toBe(false);
+    expect(event.defaultPrevented).toBe(true);
+    expect(actions.save).toHaveBeenCalledOnce();
     expect(actions.split).not.toHaveBeenCalled();
+  });
+
+  it('keeps primary+S available while a text input owns focus', () => {
+    act(() => root.render(<KeyboardHarness actions={actions} />));
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = createKeyEvent('s', 'KeyS', { ctrlKey: true });
+    act(() => input.dispatchEvent(event));
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(actions.save).toHaveBeenCalledOnce();
+    input.remove();
   });
 });
 
@@ -95,6 +110,7 @@ function createActions(): CutKeyboardShortcutActions {
     seekEnd: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
+    save: vi.fn(),
     split: vi.fn(),
     duplicateSelection: vi.fn(),
     cutSelection: vi.fn(),

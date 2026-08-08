@@ -109,6 +109,7 @@ export const timeline = {
   'timeline.controls.pause': 'Pause',
   'timeline.controls.forward5s': 'Forward 5s',
   'timeline.controls.goToEnd': 'Go to end',
+  'timeline.controls.save': 'Save (Cmd/Ctrl+S)',
   'timeline.controls.undo': 'Undo (Cmd+Z)',
   'timeline.controls.redo': 'Redo (Cmd+Shift+Z)',
   'timeline.controls.split': 'Split clip (S)',

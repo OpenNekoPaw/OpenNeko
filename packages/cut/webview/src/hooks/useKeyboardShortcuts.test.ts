@@ -20,6 +20,7 @@ describe('Cut keyboard shortcuts', () => {
 
     expect(dispatch(bindings, keyboard('Space'))).toBe('handled');
     expect(dispatch(bindings, keyboard('KeyS'))).toBe('handled');
+    expect(dispatch(bindings, keyboard('KeyS', { metaKey: true }))).toBe('handled');
     expect(dispatch(bindings, keyboard('Delete'))).toBe('handled');
     expect(dispatch(bindings, keyboard('KeyZ', { metaKey: true }))).toBe('handled');
     expect(dispatch(bindings, keyboard('KeyD', { metaKey: true }))).toBe('handled');
@@ -30,6 +31,7 @@ describe('Cut keyboard shortcuts', () => {
 
     expect(actions.togglePlayback).toHaveBeenCalledOnce();
     expect(actions.split).toHaveBeenCalledOnce();
+    expect(actions.save).toHaveBeenCalledOnce();
     expect(actions.deleteSelection).toHaveBeenCalledOnce();
     expect(actions.undo).toHaveBeenCalledOnce();
     expect(actions.duplicateSelection).toHaveBeenCalledOnce();
@@ -39,13 +41,24 @@ describe('Cut keyboard shortcuts', () => {
     expect(actions.selectAll).toHaveBeenCalledOnce();
   });
 
-  it('leaves primary+S to VS Code and ignores editing shortcuts in inputs', () => {
+  it('routes primary+S on macOS and Windows without invoking plain-S split', () => {
+    const actions = createActions();
+    const bindings = createCutShortcutBindings(actions);
+
+    expect(dispatch(bindings, keyboard('KeyS', { metaKey: true }))).toBe('handled');
+    expect(dispatch(bindings, keyboard('KeyS', { ctrlKey: true }), false)).toBe('handled');
+    expect(actions.save).toHaveBeenCalledTimes(2);
+    expect(actions.split).not.toHaveBeenCalled();
+  });
+
+  it('allows save but ignores editing shortcuts in inputs', () => {
     const actions = createActions();
     const bindings = createCutShortcutBindings(actions);
     const input = document.createElement('input');
 
-    expect(dispatch(bindings, keyboard('KeyS', { metaKey: true }))).toBe('ignored');
+    expect(dispatch(bindings, keyboard('KeyS', { metaKey: true, target: input }))).toBe('handled');
     expect(dispatch(bindings, keyboard('Delete', { target: input }))).toBe('stopped-editable');
+    expect(actions.save).toHaveBeenCalledOnce();
     expect(actions.split).not.toHaveBeenCalled();
     expect(actions.deleteSelection).not.toHaveBeenCalled();
   });
@@ -59,6 +72,7 @@ function createActions(): CutKeyboardShortcutActions {
     seekEnd: vi.fn(),
     undo: vi.fn(),
     redo: vi.fn(),
+    save: vi.fn(),
     split: vi.fn(),
     duplicateSelection: vi.fn(),
     cutSelection: vi.fn(),
@@ -70,8 +84,12 @@ function createActions(): CutKeyboardShortcutActions {
   };
 }
 
-function dispatch(bindings: ReturnType<typeof createCutShortcutBindings>, event: KeyboardEvent) {
-  return dispatchKeyboardShortcut(event, bindings, activeState, { isMac: true }).outcome;
+function dispatch(
+  bindings: ReturnType<typeof createCutShortcutBindings>,
+  event: KeyboardEvent,
+  isMac = true,
+) {
+  return dispatchKeyboardShortcut(event, bindings, activeState, { isMac }).outcome;
 }
 
 function keyboard(
