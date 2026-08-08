@@ -26,7 +26,11 @@ import {
   registerDesktopOpenNekoProtocol,
   registerDesktopOpenNekoScheme,
 } from './desktop-openneko-protocol';
-import { createDesktopWorkspaceRegistry } from './desktop-workspace-registry';
+import {
+  createDesktopWorkspaceRegistry,
+  type DesktopWorkspaceRegistry,
+} from './desktop-workspace-registry';
+import { DesktopWorkspaceBoardDelivery } from './desktop-workspace-board-delivery';
 import { createElectronNekoHostPorts } from './electron-host-ports';
 import { registerDesktopIpc } from './ipc';
 import { DesktopRendererRecovery } from './renderer-recovery';
@@ -369,10 +373,35 @@ async function startDesktop(): Promise<void> {
     }),
   });
   const retainedProjects = await workspaceRegistry.listProjects([assistantSpaceId]);
+  const workspaceBoardDelivery = new DesktopWorkspaceBoardDelivery({
+    applicationInstanceId,
+    metadataStore: localMetadataStore,
+    workspaceRegistry,
+    host,
+    createIdentity: randomUUID,
+  });
+  const boardRestoringWorkspaceRegistry: DesktopWorkspaceRegistry = {
+    metadataRepositories: workspaceRegistry.metadataRepositories,
+    listProjects: (excludedWorkspaceIds) => workspaceRegistry.listProjects(excludedWorkspaceIds),
+    removeProjects: (workspaceIds) => workspaceRegistry.removeProjects(workspaceIds),
+    resolve: async (workspacePath) => {
+      const workspace = await workspaceRegistry.resolve(workspacePath);
+      await workspaceBoardDelivery.flushWorkspace(workspace);
+      return workspace;
+    },
+    restore: workspaceRegistry.restore
+      ? async (workspaceId) => {
+          const workspace = await workspaceRegistry.restore!(workspaceId);
+          await workspaceBoardDelivery.flushWorkspace(workspace);
+          return workspace;
+        }
+      : undefined,
+    dispose: () => workspaceRegistry.dispose(),
+  };
   const shellService = new DesktopShellService({
     applicationInstanceId,
     stateRepository: shellStateRepository,
-    workspaceRegistry,
+    workspaceRegistry: boardRestoringWorkspaceRegistry,
     workspaceGrantAuthority,
     startupTarget: initialApplicationSettings.preferences.startupTarget,
     retainedProjects,
@@ -433,6 +462,7 @@ async function startDesktop(): Promise<void> {
         workspaceRoot: workspace.workspacePath,
       }),
     assistantSpaceIds: [assistantSpaceId],
+    creatorVisibleArtifactDelivery: workspaceBoardDelivery,
     createWorkspaceLogger: (workspace) => {
       if (workspace.workspaceId === assistantSpaceId) return agentLogger;
       const existing = workspaceLoggers.get(workspace.workspaceId);

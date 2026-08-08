@@ -101,7 +101,9 @@ export class WriteTool extends BuiltinTool {
 
       const stat = await fs.stat(resolved);
       return this.success({
-        path: resolved,
+        ...(authorization?.allowed && authorization.contentLocator
+          ? { contentLocator: authorization.contentLocator }
+          : {}),
         mode: append ? 'append' : 'write',
         bytesWritten: Buffer.byteLength(content, 'utf-8'),
         totalSize: stat.size,

@@ -83,6 +83,11 @@ export {
 
 export {
   collectCreatorVisibleArtifacts,
+  collectCreatorVisibleArtifactsFromTurnProjection,
+  deliverCreatorVisibleArtifactsFromTurnProjection,
+  type AgentCreatorVisibleArtifactDeliveryInput,
+  type AgentCreatorVisibleArtifactDeliveryOutcome,
+  type AgentCreatorVisibleArtifactDeliveryPort,
   type CreatorVisibleArtifactCandidate,
   type CreatorVisibleArtifactCollectionInput,
   type CreatorVisibleToolResult,

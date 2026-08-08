@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import {
   shouldIgnoreWorkspaceFile,
   type WorkspaceFileIgnoreRules,
@@ -19,6 +20,7 @@ export type CoreFileAccessDecision =
   | {
       readonly allowed: true;
       readonly path: string;
+      readonly contentLocator?: WorkspaceFileContentLocator;
     }
   | {
       readonly allowed: false;
@@ -109,6 +111,14 @@ class WorkspaceFileAccessPolicy implements CoreFileAccessPolicy {
     return {
       allowed: true,
       path: resolved,
+      ...(relativePath
+        ? {
+            contentLocator: {
+              kind: 'workspace-file' as const,
+              path: relativePath.split(path.sep).join('/'),
+            },
+          }
+        : {}),
     };
   }
 }

@@ -87,9 +87,24 @@ describe('createCoreTools', () => {
     await expect(read.execute({ file_path: 'src/story.txt' })).resolves.toMatchObject({
       success: true,
       data: expect.objectContaining({
+        contentLocator: { kind: 'workspace-file', path: 'src/story.txt' },
         content: expect.stringContaining('hello neko'),
       }),
     });
+  });
+
+  it('returns portable locators for Workspace writes without exposing the absolute root', async () => {
+    const write = getTool(createCoreTools({ defaultCwd: workspaceRoot }), 'Write');
+
+    const result = await write.execute({ file_path: 'docs/output.md', content: '# Output\n' });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: expect.objectContaining({
+        contentLocator: { kind: 'workspace-file', path: 'docs/output.md' },
+      }),
+    });
+    expect(JSON.stringify(result)).not.toContain(workspaceRoot);
   });
 
   it('keeps creator-review and plan documents as ordinary authorized Markdown', async () => {

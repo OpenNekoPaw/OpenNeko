@@ -14,7 +14,7 @@ authoritative save 与后续 delivery 的竞态。
   source content fingerprint, request and artifact identity. Missing or stale identity fails visibly.
 - **Extension:** explicit Canvas authoring and default Workspace Board delivery share the coordinator
   but never mirror. New artifact kinds require a stable creator-visible representation and provenance.
-- **Testing:** coordinator tests prove claim fencing, idempotence and revision conflicts; Electron
+- **Testing:** coordinator tests prove claim fencing, idempotence and authoritative document conflicts; Electron
   scenarios prove actual Main writer, package-owned Canvas root and renderer diagnostics.
 
 ## Decisions
@@ -31,7 +31,7 @@ The delivery ledger records pending/claimed/projected/blocked state, not Canvas 
 Every write reloads the current document, verifies the source content fingerprint, applies a deterministic mutation and
 commits atomically. Completed receipts never reconstruct nodes that the user later deletes.
 
-Desktop Main validates renderer save snapshots against the last authoritative document, exact writer
+Desktop Main validates renderer save snapshots against the current authoritative document, exact writer
 claim and source content fingerprint. Missing explicit removal evidence cannot erase Host-authored nodes.
 A stale writer claim, source fingerprint or sender identity fails without modifying `.nkc`.
 
@@ -46,6 +46,15 @@ block reuses the same identity and produces one Canvas effect or one current dia
 Stable source and artifact identities deduplicate across deliveries. Proven dependencies produce
 deterministic connections. Multi-item generated batches may create one editable display Group; user
 movement and existing layout remain authoritative. Delivery/Job state never becomes a visual Group.
+
+### Production composition and terminal ownership
+
+Agent terminal finalization collects typed artifacts and calls one narrow Host delivery port. Agent does
+not import Canvas and an ordinary file-write callback does not write the Board. Desktop Main composes a
+Canvas-owned `WorkspaceBoardDeliveryCoordinator` per exact Workspace from the user-level
+`LocalMetadataStore`, an exact Workspace Board mutation port, and one process holder identity. Both the
+bound Draft/session controller and background Generation terminal owner submit through this composition;
+missing Workspace authority blocks only that delivery and never selects an active or recent Workspace.
 
 ## Acceptance
 

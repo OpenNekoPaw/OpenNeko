@@ -39,7 +39,10 @@ import { registerMediaAgentTools } from '@neko/agent-runtime/tools';
 import type { GenerationJobPort } from '@neko/generation';
 import {
   buildEnhancedAgentMessage,
+  deliverCreatorVisibleArtifactsFromTurnProjection,
   createHostAgentContentAccessRuntime,
+  type AgentCreatorVisibleArtifactDeliveryOutcome,
+  type AgentCreatorVisibleArtifactDeliveryPort,
   type AgentContentAccessRuntime,
 } from '@neko/agent-runtime/runtime';
 import { createContentReadCapabilityProvider } from '@neko/agent-runtime';
@@ -121,6 +124,7 @@ export interface AgentTurnResult {
   readonly durability: NonNullable<ReturnType<NodePiConversationAuthority['getTurnDurability']>>;
   readonly projection: ReturnType<ConversationProjectionStore['snapshot']>;
   readonly configuration: AgentTurnConfigurationSnapshot;
+  readonly artifactDelivery?: AgentCreatorVisibleArtifactDeliveryOutcome;
   readonly path: {
     readonly runtime: 'pi-conversation-runtime';
     readonly transcript: 'pi-session';
@@ -308,6 +312,7 @@ export interface CreateAgentAppHostOptions {
   readonly resolveWorkspaceGenerationJobs: (
     workspace: AssetWorkspaceResolution,
   ) => Promise<GenerationJobPort>;
+  readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
 }
 
 export function createAgentAppHost(options: CreateAgentAppHostOptions): AgentAppHost {
@@ -628,6 +633,9 @@ class DefaultAgentAppHost implements AgentAppHost {
       canStartTurn: () => !this.pluginRuntimeChanging,
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
       providerTurnAdmission: this.providerTurns,
+      ...(this.options.creatorVisibleArtifactDelivery
+        ? { creatorVisibleArtifactDelivery: this.options.creatorVisibleArtifactDelivery }
+        : {}),
     });
     if (this.pluginRuntime) runtime.applyPluginRuntime(this.pluginRuntime);
     this.workspaces.set(workspace.workspaceId, runtime);
@@ -702,6 +710,7 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly canStartTurn: () => boolean;
   readonly onReleaseEligible: (workspace: DefaultAgentWorkspaceRuntime) => Promise<void>;
   readonly providerTurnAdmission: AgentProviderTurnScheduler;
+  readonly creatorVisibleArtifactDelivery?: AgentCreatorVisibleArtifactDeliveryPort;
 }
 
 interface PendingAgentTurnOperation {
@@ -1210,11 +1219,31 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         `Agent turn ${input.conversationId}/${identity.turnId} completed without durability state.`,
       );
     }
+    const projection = owner.projection.snapshot();
+    const turn = projection.turns.find(
+      (candidate) => candidate.turnId === identity.turnId && candidate.runId === identity.runId,
+    );
+    if (!turn) {
+      throw new Error(
+        `Agent turn ${identity.conversationId}/${identity.turnId} has no terminal projection.`,
+      );
+    }
+    const artifactDelivery = await deliverCreatorVisibleArtifactsFromTurnProjection({
+      turn,
+      workspaceId: identity.workspaceId,
+      conversationId: identity.conversationId,
+      turnId: identity.turnId,
+      runId: identity.runId,
+      ...(this.options.creatorVisibleArtifactDelivery
+        ? { delivery: this.options.creatorVisibleArtifactDelivery }
+        : {}),
+    });
     return Object.freeze({
       identity,
       durability,
-      projection: owner.projection.snapshot(),
+      projection,
       configuration: input.configuration,
+      ...(artifactDelivery ? { artifactDelivery } : {}),
       path: Object.freeze({
         runtime: 'pi-conversation-runtime',
         transcript: 'pi-session',

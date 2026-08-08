@@ -27,6 +27,7 @@ import {
 import { projectPiConversationEntries } from '@neko/agent-runtime/runtime/projection/pi-conversation-history-projector';
 import {
   buildAgentInputCatalogMessage,
+  buildAgentSessionDiagnosticMessage,
   buildAgentStateSnapshotMessage,
   buildConfigStateMessage,
   buildGlobalErrorMessage,
@@ -1252,6 +1253,16 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         conversation: input.workspace.readConversationEvidence(input.request.conversationId),
         turn,
       });
+      if (turn.artifactDelivery?.status === 'blocked') {
+        await input.context.post(
+          buildAgentSessionDiagnosticMessage({
+            code: 'canvas-board-delivery-failed',
+            message: `Workspace Board delivery was blocked (${turn.artifactDelivery.diagnostic.code}). The artifact remains available.`,
+            action: 'workspace-board-delivery',
+            conversationId: input.request.conversationId,
+          }),
+        );
+      }
     } catch (error) {
       if (!(error instanceof AgentQueuedTurnCancellationError)) throw error;
     } finally {

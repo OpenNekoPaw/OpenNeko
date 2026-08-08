@@ -12,6 +12,7 @@ import {
   type EffectiveAgentConfigurationProjection,
 } from '@neko/agent-contracts';
 import type { PiToolRunIdentity } from '../../pi';
+import type { AgentCreatorVisibleArtifactDeliveryOutcome } from '../turn/creator-visible-artifact-collector';
 
 const DEFAULT_FACT_LIMIT = 100;
 
@@ -39,6 +40,7 @@ export interface DesktopAgentFactsTurnResult {
     readonly effective: EffectiveAgentConfigurationProjection;
     readonly diagnostics: readonly { readonly code: string; readonly message: string }[];
   };
+  readonly artifactDelivery?: AgentCreatorVisibleArtifactDeliveryOutcome;
   readonly path: {
     readonly runtime: 'pi-conversation-runtime';
     readonly transcript: 'pi-session';

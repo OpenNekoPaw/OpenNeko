@@ -7,11 +7,13 @@ import {
   type ToolResultAttachment,
 } from '@neko/agent-contracts';
 import {
+  type CanvasGenerationEvidence,
   type CanvasWorkspaceArtifactDimensions,
   type CanvasWorkspaceProjectionKind,
 } from '@neko/canvas-domain';
 import { validateCompositeArtifact } from '@neko/agent-contracts';
 import { extractCompositeContentFenceCandidates } from '@neko/agent-contracts';
+import type { ConversationTurnProjection } from '@neko/agent-contracts';
 
 export interface CreatorVisibleArtifactCandidate {
   readonly artifactId: string;
@@ -23,6 +25,8 @@ export interface CreatorVisibleArtifactCandidate {
   readonly sourceArtifactIds?: readonly string[];
   readonly markdown?: string;
   readonly contentLocator?: ContentLocator;
+  readonly mimeType?: string;
+  readonly generation?: CanvasGenerationEvidence;
   readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
   readonly provenanceSource?: 'tool-result' | 'assistant-declared' | 'native-image-analysis';
 }
@@ -42,6 +46,70 @@ export interface CreatorVisibleToolResult {
   readonly artifacts?: readonly ToolResultArtifactTransfer[];
 }
 
+export interface AgentCreatorVisibleArtifactDeliveryInput {
+  readonly workspaceId: string;
+  readonly conversationId: string;
+  readonly turnId: string;
+  readonly runId: string;
+  readonly completedAt: number;
+  readonly artifacts: readonly CreatorVisibleArtifactCandidate[];
+}
+
+export type AgentCreatorVisibleArtifactDeliveryOutcome =
+  | { readonly status: 'accepted' }
+  | {
+      readonly status: 'blocked';
+      readonly diagnostic: {
+        readonly code: string;
+        readonly message: string;
+      };
+    };
+
+export interface AgentCreatorVisibleArtifactDeliveryPort {
+  deliver(
+    input: AgentCreatorVisibleArtifactDeliveryInput,
+  ): Promise<AgentCreatorVisibleArtifactDeliveryOutcome>;
+}
+
+export async function deliverCreatorVisibleArtifactsFromTurnProjection(input: {
+  readonly turn: ConversationTurnProjection;
+  readonly workspaceId: string;
+  readonly conversationId: string;
+  readonly turnId: string;
+  readonly runId: string;
+  readonly delivery?: AgentCreatorVisibleArtifactDeliveryPort;
+}): Promise<AgentCreatorVisibleArtifactDeliveryOutcome | undefined> {
+  try {
+    const artifacts = collectCreatorVisibleArtifactsFromTurnProjection(input.turn);
+    if (artifacts.length === 0) return undefined;
+    if (!input.delivery) {
+      return {
+        status: 'blocked',
+        diagnostic: {
+          code: 'agent-artifact-delivery-unavailable',
+          message: 'Creator-visible artifacts are durable but no Host delivery port is composed.',
+        },
+      };
+    }
+    return await input.delivery.deliver({
+      workspaceId: input.workspaceId,
+      conversationId: input.conversationId,
+      turnId: input.turnId,
+      runId: input.runId,
+      completedAt: input.turn.completion?.completedAt ?? Date.now(),
+      artifacts,
+    });
+  } catch (error) {
+    return {
+      status: 'blocked',
+      diagnostic: {
+        code: 'agent-artifact-delivery-failed',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
 export function collectCreatorVisibleArtifacts(
   input: CreatorVisibleArtifactCollectionInput,
 ): readonly CreatorVisibleArtifactCandidate[] {
@@ -53,6 +121,14 @@ export function collectCreatorVisibleArtifacts(
     if (result.name === 'ReadDocument') {
       const source = collectReadDocumentSource(result.data);
       if (source) candidates.push(source);
+    }
+    if (result.name === 'Read') {
+      const source = collectWorkspaceFileArtifact(result.data, 'source');
+      if (source) candidates.push(source);
+    }
+    if (result.name === 'Write') {
+      const output = collectWorkspaceFileArtifact(result.data, 'output');
+      if (output) candidates.push(output);
     }
     const isReadImage = result.name === TOOL_NAMES_SYSTEM.READ_IMAGE;
     const imageDimensions = isReadImage
@@ -75,6 +151,7 @@ export function collectCreatorVisibleArtifacts(
         continue;
       }
       const intrinsicDimensions = imageDimensions.get(contentLocatorKey(contentLocator));
+      const generation = collectGenerationEvidence(result.data, contentLocator);
       const candidate: CreatorVisibleArtifactCandidate = {
         artifactId: attachment.assetRef?.assetId ?? sourceId,
         contentFingerprint: createContentFingerprint(contentLocator),
@@ -83,6 +160,10 @@ export function collectCreatorVisibleArtifacts(
         title: attachment.assetRef?.label ?? `${attachment.type} result`,
         sourceId,
         contentLocator,
+        ...((attachment.mimeType ?? attachment.assetRef?.mimeType)
+          ? { mimeType: attachment.mimeType ?? attachment.assetRef?.mimeType }
+          : {}),
+        ...(generation ? { generation } : {}),
         ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
       };
       candidates.push(candidate);
@@ -94,6 +175,7 @@ export function collectCreatorVisibleArtifacts(
     }
   }
   for (const lifecycle of input.generatedLifecycles ?? []) {
+    const generation = collectLifecycleGenerationEvidence(lifecycle);
     candidates.push({
       artifactId: lifecycle.assetId,
       contentFingerprint: lifecycle.revision,
@@ -102,6 +184,8 @@ export function collectCreatorVisibleArtifacts(
       title: `Generated ${lifecycle.mediaKind}`,
       sourceId: createContentSourceId(lifecycle.contentLocator),
       contentLocator: lifecycle.contentLocator,
+      mimeType: lifecycle.mimeType,
+      ...(generation ? { generation } : {}),
     });
   }
   const fencedCandidates = extractCompositeContentFenceCandidates(input.assistantMarkdown ?? '');
@@ -125,6 +209,66 @@ export function collectCreatorVisibleArtifacts(
   return deduplicateCandidates(
     reviewable ? candidates : candidates.filter((candidate) => candidate.role !== 'source'),
   );
+}
+
+function collectGenerationEvidence(
+  data: unknown,
+  contentLocator: ContentLocator,
+): CanvasGenerationEvidence | undefined {
+  if (contentLocator.kind !== 'generated-output' || !isRecord(data)) return undefined;
+  const jobKind = data['jobKind'];
+  const jobId = readNonEmptyString(data['jobId']);
+  const prompt = readNonEmptyString(data['message']);
+  const routedTo = data['routedTo'];
+  const model = isRecord(routedTo) ? readNonEmptyString(routedTo['model']) : undefined;
+  if (jobKind !== 'generation' || !jobId || (!prompt && !model)) return undefined;
+  return {
+    jobRef: { kind: 'generation', jobId },
+    summary: {
+      ...(prompt ? { prompt } : {}),
+      ...(model ? { model } : {}),
+    },
+  };
+}
+
+function collectLifecycleGenerationEvidence(
+  lifecycle: GeneratedAssetRevisionRef,
+): CanvasGenerationEvidence | undefined {
+  const model = readNonEmptyString(lifecycle.generation.modelId);
+  if (!model) return undefined;
+  return {
+    jobRef: { kind: 'generation', jobId: lifecycle.generation.operationId },
+    summary: { model },
+  };
+}
+
+export function collectCreatorVisibleArtifactsFromTurnProjection(
+  turn: ConversationTurnProjection,
+): readonly CreatorVisibleArtifactCandidate[] {
+  if (turn.completion?.status !== 'completed') return [];
+  const toolResults: CreatorVisibleToolResult[] = [];
+  const assistantMarkdown: string[] = [];
+  for (const item of turn.items) {
+    if (item.kind === 'assistant_text' && item.status === 'complete') {
+      const content = item.payload.content.trim();
+      if (content) assistantMarkdown.push(content);
+      continue;
+    }
+    if (item.kind !== 'tool_call') continue;
+    const result = item.payload.toolCall.result;
+    if (!result) continue;
+    toolResults.push({
+      name: item.payload.toolCall.name,
+      success: result.success,
+      data: result.data,
+      ...(result.attachments ? { attachments: result.attachments } : {}),
+      ...(result.artifacts ? { artifacts: result.artifacts } : {}),
+    });
+  }
+  return collectCreatorVisibleArtifacts({
+    toolResults,
+    ...(assistantMarkdown.length > 0 ? { assistantMarkdown: assistantMarkdown.join('\n\n') } : {}),
+  });
 }
 
 type ReadImageAnalysisKind = 'describe' | 'ocr' | 'panels' | 'storyboard' | 'custom';
@@ -313,6 +457,28 @@ function collectReadDocumentSource(data: unknown): CreatorVisibleArtifactCandida
     artifactId: id,
     contentFingerprint: createContentFingerprint(contentLocator),
     role: 'source',
+    kind: 'file-reference',
+    title: createContentTitle(contentLocator),
+    sourceId: id,
+    contentLocator,
+  };
+}
+
+function collectWorkspaceFileArtifact(
+  data: unknown,
+  role: 'source' | 'output',
+): CreatorVisibleArtifactCandidate | undefined {
+  if (!isRecord(data)) return undefined;
+  const contentLocator = data['contentLocator'];
+  if (contentLocator === undefined) return undefined;
+  if (!isContentLocator(contentLocator) || contentLocator.kind !== 'workspace-file') {
+    throw new Error(`Creator-visible ${role} file requires a Workspace ContentLocator.`);
+  }
+  const id = createContentSourceId(contentLocator);
+  return {
+    artifactId: role === 'output' ? `output:${id}` : id,
+    contentFingerprint: createContentFingerprint(contentLocator),
+    role,
     kind: 'file-reference',
     title: createContentTitle(contentLocator),
     sourceId: id,

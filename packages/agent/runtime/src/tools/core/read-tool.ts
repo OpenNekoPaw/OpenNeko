@@ -99,6 +99,9 @@ export class ReadTool extends BuiltinTool {
       });
 
       return this.success({
+        ...(authorization?.allowed && authorization.contentLocator
+          ? { contentLocator: authorization.contentLocator }
+          : {}),
         content: formatted.join('\n'),
         totalLines: allLines.length,
         linesShown: lines.length,

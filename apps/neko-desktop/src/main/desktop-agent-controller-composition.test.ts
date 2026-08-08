@@ -14,6 +14,7 @@ import { auditDesktopAgentStartup } from './desktop-agent-bridge-runtime';
 import {
   createAgentControllerComposition,
   projectAgentConfigurationPolicy,
+  projectAgentModelCatalog,
   projectAgentSecretSafeConfig,
   resolveAgentConversationTurnContext,
 } from '@neko/agent-runtime/application';
@@ -274,6 +275,204 @@ describe('Agent controller composition', () => {
         },
       },
     ]);
+
+    effects.dispose();
+    await composition.dispose?.();
+  });
+
+  it('projects blocked Workspace Board delivery to the owning Conversation and neutral facts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'desktop-agent-board-diagnostic-'));
+    temporaryRoots.push(root);
+    const configPath = join(root, 'config.toml');
+    await writeFile(
+      configPath,
+      [
+        '[[providers]]',
+        'id = "provider-1"',
+        'name = "Provider"',
+        'type = "openai"',
+        'api_url = "https://example.test/v1"',
+        'protocol_profile = "openai-chat"',
+        'enabled = true',
+        'requires_api_key = false',
+        '',
+        '[[models]]',
+        'id = "model-1"',
+        'name = "model-1"',
+        'provider_id = "provider-1"',
+        'type = "llm"',
+        'capabilities = ["chat", "tools"]',
+        'context_window = 8192',
+        'max_output_tokens = 4096',
+        'enabled = true',
+      ].join('\n'),
+      'utf8',
+    );
+    const config = new ConfigManager({
+      userConfigManager: new FileUserConfigManager({ filePath: configPath }),
+      assistantRuntimeSettings: createRuntimeSettings({
+        selectedProviderId: 'provider-1',
+        selectedModelId: 'model-1',
+      }),
+    });
+    const workspace = createWorkspace(root);
+    await workspace.createConversation('conversation-board-blocked');
+    const turnIdentity = {
+      workspaceId: workspace.workspaceId,
+      conversationId: 'conversation-board-blocked',
+      branchId: 'main',
+      turnId: 'turn-board-blocked',
+      runId: 'run-board-blocked',
+    };
+    workspace.readConversationEvidence.mockReturnValue({
+      workspaceId: workspace.workspaceId,
+      conversationId: turnIdentity.conversationId,
+      branchId: turnIdentity.branchId,
+      piSessionId: 'pi-session-board-blocked',
+      writerLeaseId: 'writer-lease-board-blocked',
+    });
+    workspace.startTurn.mockImplementation(
+      (input: Parameters<AgentWorkspaceRuntime['startTurn']>[0]) => ({
+        identity: turnIdentity,
+        completion: Promise.resolve({
+          identity: turnIdentity,
+          durability: 'durable',
+          projection: {
+            conversationId: turnIdentity.conversationId,
+            turns: [
+              {
+                turnId: turnIdentity.turnId,
+                runId: turnIdentity.runId,
+                messageId: 'message-board-blocked',
+                items: [],
+                completion: { status: 'completed', completedAt: 1 },
+              },
+            ],
+          },
+          configuration: input.configuration,
+          artifactDelivery: {
+            status: 'blocked',
+            diagnostic: {
+              code: 'workspace-board-read-only',
+              message: 'Host-only detail.',
+            },
+          },
+          path: {
+            runtime: 'pi-conversation-runtime',
+            transcript: 'pi-session',
+            metadata: 'sqlite',
+            projection: 'conversation-projection-store',
+          },
+        }),
+      }),
+    );
+    const request = {
+      modelCatalogEntryId: 'provider-1:model-1',
+      providerId: 'provider-1',
+      modelId: 'model-1',
+      executionMode: 'ask' as const,
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    };
+    const configuration = {
+      conversationId: turnIdentity.conversationId,
+      request,
+      projection: projectAgentConfigurationPolicy({
+        models: projectAgentModelCatalog(config.getAssistantConfigState()),
+        request,
+        source: 'conversation',
+        defaults: {
+          executionMode: 'ask',
+          temperature: 0.7,
+          maximumOutputTokens: 4096,
+          thinkingBudget: 0,
+        },
+      }),
+    };
+    const composition = createAgentControllerComposition({
+      host: createHost(),
+      userHome: root,
+      credentialRuntime: createCredentialRuntime(),
+      resolveWorkspaceConfig: () => config,
+      resources: {
+        registerFile: vi.fn(async () => ({
+          url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          release: vi.fn(),
+        })),
+      },
+      contentInteraction: {
+        openContent: vi.fn(),
+        revealDocument: vi.fn(),
+        selectWorkspaceWriteTarget: vi.fn(),
+      },
+      configInteraction: { openUserConfig: vi.fn() },
+      reportError: vi.fn(),
+    });
+    const effects = composition.createEffects({
+      workspace,
+      identity: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'agent-surface-1',
+        projectId: 'project-1',
+        workspaceId: workspace.workspaceId,
+        viewId: 'view-1',
+        connectionId: 'connection-1',
+      },
+      readConversationConfiguration: async () => configuration,
+      readConversationContext: async () => ({
+        kind: 'workspace',
+        workspaceId: workspace.workspaceId,
+        workspaceGrantId: 'workspace-grant-1',
+      }),
+    });
+    const posted: AgentHostToWebviewMessage[] = [];
+    effects.conversation.submitTurn(
+      {
+        source: 'user-message',
+        conversationId: turnIdentity.conversationId,
+        messageText: 'Create a durable artifact.',
+        sessionMode: 'agent',
+        locale: 'en',
+      },
+      {
+        identity: {
+          hostKind: 'electron',
+          applicationId: 'neko-desktop',
+          windowId: 'window-1',
+          viewId: 'view-1',
+          workspaceId: workspace.workspaceId,
+          connectionId: 'connection-1',
+        },
+        post: (message) => {
+          posted.push(message);
+        },
+      },
+    );
+
+    await vi.waitFor(() =>
+      expect(posted).toContainEqual({
+        type: 'sessionDiagnostic',
+        code: 'canvas-board-delivery-failed',
+        severity: 'error',
+        message:
+          'Workspace Board delivery was blocked (workspace-board-read-only). The artifact remains available.',
+        action: 'workspace-board-delivery',
+        conversationId: turnIdentity.conversationId,
+      }),
+    );
+    const facts = effects.automation?.readFacts(turnIdentity);
+    expect(facts).toMatchObject({
+      projection: { terminalState: 'completed' },
+    });
+    expect(facts?.diagnostics.items).toContainEqual(
+      expect.objectContaining({
+        code: 'workspace-board-read-only',
+        severity: 'error',
+      }),
+    );
 
     effects.dispose();
     await composition.dispose?.();
@@ -714,6 +913,10 @@ function createWorkspace(
   readonly createConversation: ReturnType<typeof vi.fn>;
   readonly ensureConversation: ReturnType<typeof vi.fn>;
   readonly checkpointFailedInitialTurn: ReturnType<typeof vi.fn>;
+  readonly startTurn: ReturnType<typeof vi.fn<AgentWorkspaceRuntime['startTurn']>>;
+  readonly readConversationEvidence: ReturnType<
+    typeof vi.fn<AgentWorkspaceRuntime['readConversationEvidence']>
+  >;
 } {
   const records: Array<{
     workspaceId: string;
@@ -754,6 +957,8 @@ function createWorkspace(
       },
     };
   };
+  const startTurn = vi.fn<AgentWorkspaceRuntime['startTurn']>();
+  const readConversationEvidence = vi.fn<AgentWorkspaceRuntime['readConversationEvidence']>();
   return {
     workspaceId: 'workspace-1',
     workspace: {
@@ -778,7 +983,7 @@ function createWorkspace(
     deleteConversation: vi.fn(),
     clearAllConversations: vi.fn(),
     openConversation: vi.fn(),
-    startTurn: vi.fn(),
+    startTurn,
     executeTurn: vi.fn(),
     readMessageQueue: vi.fn((conversationId: string) => ({
       conversationId,
@@ -817,7 +1022,7 @@ function createWorkspace(
       warnings: [],
     })),
     listConversations: () => records,
-    readConversationEvidence: vi.fn(),
+    readConversationEvidence,
     readConversationProjection: vi.fn(() => projection),
     subscribeConversationProjection: vi.fn(() => () => undefined),
     bindVisiblePresentation,
@@ -925,8 +1130,10 @@ function createCredentialRuntime() {
   });
 }
 
-function createRuntimeSettings(): AssistantRuntimeSettingsPort {
-  let settings: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = {};
+function createRuntimeSettings(
+  initial: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = {},
+): AssistantRuntimeSettingsPort {
+  let settings: ReturnType<AssistantRuntimeSettingsPort['snapshot']> = { ...initial };
   return {
     snapshot: () => settings,
     commit: async (next) => {
