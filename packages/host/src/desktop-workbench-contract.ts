@@ -16,7 +16,7 @@ export type DesktopWorkbenchDockPresentation = 'hidden' | 'docked' | 'overlay';
 export type DesktopWorkbenchDisplayMode = 'chat-main' | 'chat-only' | 'main-only';
 export type DesktopWorkbenchMainSplitAxis = 'columns' | 'rows';
 export type DesktopPreviewViewPresentation = 'temporary' | 'pinned' | 'side';
-export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut';
+export type DesktopWorkbenchViewKind = 'canvas' | 'preview' | 'cut' | 'text-editor';
 
 export interface DesktopWorkbenchViewRef {
   readonly viewId: string;
@@ -27,6 +27,7 @@ export interface DesktopWorkbenchViewRef {
   readonly ownerId: string;
   readonly displayLabel: string;
   readonly documentId?: string;
+  readonly editorSessionId?: string;
   readonly previewPresentation?: DesktopPreviewViewPresentation;
   readonly previewContentKind?: PreviewContentKind;
 }
@@ -241,6 +242,36 @@ export function openOrFocusMainView(
   const parsedView = parseDesktopWorkbenchViewRef(view);
   if (parsedView.kind === 'cut') {
     throw invalidPayload('Desktop Cut Views belong to the Cut Panel, not Main.');
+  }
+  const existingTextEditor =
+    parsedView.kind === 'text-editor'
+      ? workbench.main.views.find(
+          (candidate) =>
+            candidate.kind === 'text-editor' &&
+            candidate.projectId === parsedView.projectId &&
+            candidate.workspaceId === parsedView.workspaceId &&
+            candidate.documentId === parsedView.documentId,
+        )
+      : undefined;
+  if (existingTextEditor && existingTextEditor.viewId !== parsedView.viewId) {
+    const group = findMainGroupForView(workbench, existingTextEditor.viewId);
+    if (!group) {
+      throw staleIdentity(
+        `Desktop Text Editor View '${existingTextEditor.viewId}' has no Group membership.`,
+      );
+    }
+    return parseDesktopWorkbenchLayout({
+      ...workbench,
+      main: {
+        ...workbench.main,
+        groups: workbench.main.groups.map((candidate) =>
+          candidate.groupId === group.groupId
+            ? { ...candidate, activeViewId: existingTextEditor.viewId }
+            : candidate,
+        ),
+        activeGroupId: group.groupId,
+      },
+    });
   }
   const existing = workbench.main.views.find((candidate) => candidate.viewId === parsedView.viewId);
   const existingGroup = findMainGroupForView(workbench, parsedView.viewId);
@@ -592,6 +623,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
       'ownerId',
       'displayLabel',
       ...(record['documentId'] === undefined ? [] : ['documentId']),
+      ...(record['editorSessionId'] === undefined ? [] : ['editorSessionId']),
       ...(record['previewPresentation'] === undefined ? [] : ['previewPresentation']),
       ...(record['previewContentKind'] === undefined ? [] : ['previewContentKind']),
     ],
@@ -599,12 +631,16 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   );
   const kind = requireOneOf(
     record['kind'],
-    ['canvas', 'preview', 'cut'] as const,
+    ['canvas', 'preview', 'cut', 'text-editor'] as const,
     'Desktop Workbench Main View kind is invalid.',
   );
   const documentId = readOptionalNonEmptyString(
     record['documentId'],
     'Desktop Workbench document identity is invalid.',
+  );
+  const editorSessionId = readOptionalNonEmptyString(
+    record['editorSessionId'],
+    'Desktop Text Editor session identity is invalid.',
   );
   const previewPresentation =
     record['previewPresentation'] === undefined
@@ -629,6 +665,14 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
     throw invalidPayload(
       'Desktop Workbench Preview presentation metadata belongs only to Preview Views.',
     );
+  }
+  if (kind === 'text-editor' && (!documentId || !editorSessionId)) {
+    throw invalidPayload(
+      'Desktop Text Editor View requires exact document and editor session identities.',
+    );
+  }
+  if (kind !== 'text-editor' && editorSessionId !== undefined) {
+    throw invalidPayload('Desktop Text Editor session identity belongs only to Text Editor Views.');
   }
   return {
     viewId: requireNonEmptyString(
@@ -657,6 +701,7 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
       'Desktop Workbench Main View display label is required.',
     ),
     ...(documentId ? { documentId } : {}),
+    ...(editorSessionId ? { editorSessionId } : {}),
     ...(previewPresentation ? { previewPresentation } : {}),
     ...(previewContentKind ? { previewContentKind } : {}),
   };

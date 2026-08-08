@@ -562,6 +562,55 @@ describe('Resource Browser controller', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it('routes admitted text only to the editor and never falls back to Preview on admission failure', async () => {
+    const source = createSource();
+    const textEntry: ResourceBrowserContentEntry = {
+      locator: { kind: 'workspace-file', path: 'notes/story.fountain' },
+      label: 'story.fountain',
+      availability: 'available',
+      capabilities: ['read', 'preview'],
+      metadata: { mediaType: 'text', byteLength: 128 },
+      role: 'content',
+      depth: 0,
+    };
+    source.files.list = vi.fn(async () => [textEntry]);
+    const interactions = createInteractions();
+    interactions.editText.mockRejectedValueOnce(new Error('text-document-invalid-utf8'));
+    const controller = new ResourceBrowserController({
+      identity,
+      source,
+      interactions,
+      initialFacet: 'files',
+    });
+    const snapshot = await controller.getSnapshot();
+    const item = snapshot.items[0];
+    if (!item) throw new Error('Missing editable text fixture.');
+
+    await expect(
+      controller.execute({
+        requestId: 'edit-invalid-text',
+        identity,
+        route: RESOURCE_BROWSER_ROUTES.editText,
+        resourceId: item.resourceId,
+      }),
+    ).rejects.toThrow('text-document-invalid-utf8');
+    expect(interactions.editText).toHaveBeenCalledWith({ identity, item });
+    expect(interactions.preview).not.toHaveBeenCalled();
+
+    await controller.execute({
+      requestId: 'explicit-preview',
+      identity,
+      route: RESOURCE_BROWSER_ROUTES.preview,
+      resourceId: item.resourceId,
+      targetPreview: { viewId: 'preview-1', presentation: 'temporary' },
+    });
+    expect(interactions.preview).toHaveBeenCalledWith({
+      identity,
+      item,
+      target: { viewId: 'preview-1', presentation: 'temporary' },
+    });
+  });
+
   it('does not publish a stale search that resolves after a newer request', async () => {
     let resolveOlder: ((entries: readonly ResourceBrowserContentEntry[]) => void) | undefined;
     const baseSource = createSource();
@@ -785,6 +834,7 @@ function createInteractions(): ResourceBrowserInteractionPort & {
   readonly addDirectoryLibrary: ReturnType<typeof vi.fn>;
   readonly preview: ReturnType<typeof vi.fn>;
   readonly openCreativeDocument: ReturnType<typeof vi.fn>;
+  readonly editText: ReturnType<typeof vi.fn>;
   readonly reveal: ReturnType<typeof vi.fn>;
   readonly resolveThumbnail: ReturnType<typeof vi.fn>;
   readonly addToCanvas: ReturnType<typeof vi.fn>;
@@ -802,6 +852,7 @@ function createInteractions(): ResourceBrowserInteractionPort & {
     removeSource: vi.fn(async () => undefined),
     preview: vi.fn(async () => undefined),
     openCreativeDocument: vi.fn(async () => undefined),
+    editText: vi.fn(async () => undefined),
     reveal: vi.fn(async () => undefined),
     resolveThumbnail: vi.fn(async () => 'data:image/png;base64,aW1hZ2U='),
     addToCanvas: vi.fn(async () => undefined),

@@ -77,9 +77,11 @@ describe('AgentAppHost', () => {
     await fixture.composition.dispose();
 
     expect(transport.list().map((entry) => entry.message)).toEqual([
+      'Provider "neko-content-read" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
       'Workspace runtime attached.',
       'Conversation created.',
       'Conversation deleted.',
+      'Provider "neko-content-read" unregistered',
       'Workspace runtime disposed.',
     ]);
     expect(transport.list().every((entry) => entry.source === 'Workspace')).toBe(true);
@@ -302,8 +304,7 @@ describe('AgentAppHost', () => {
     await writeFile(join(fixture.workspace.workspacePath, 'notes.py'), 'print("locator text")\n');
     const prompts: string[] = [];
     const models = createFixtureModels((_model, context) => {
-      const content = context.messages.at(-1)?.content;
-      prompts.push(typeof content === 'string' ? content : JSON.stringify(content));
+      prompts.push(lastUserPrompt(context));
       return completedStream(assistant('text observed'));
     });
     const policy = fixturePolicy();
@@ -338,7 +339,7 @@ describe('AgentAppHost', () => {
       locale: 'en',
     });
 
-    expect(prompts[0]).toContain('print(\\"locator text\\")');
+    expect(prompts[0]).toContain('print("locator text")');
     expect(prompts[0]).not.toContain(fixture.workspace.workspacePath);
     const persisted = JSON.stringify(
       await workspace.readConversationEntries('conversation-text-reference'),
@@ -354,8 +355,7 @@ describe('AgentAppHost', () => {
       const fixture = await createFixture();
       const prompts: string[] = [];
       const models = createFixtureModels((_model, context) => {
-        const content = context.messages.at(-1)?.content;
-        prompts.push(typeof content === 'string' ? content : JSON.stringify(content));
+        prompts.push(lastUserPrompt(context));
         return completedStream(assistant('document locator observed'));
       });
       const policy = fixturePolicy();

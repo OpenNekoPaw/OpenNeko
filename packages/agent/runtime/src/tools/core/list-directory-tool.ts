@@ -71,7 +71,7 @@ export class ListDirectoryTool extends BuiltinTool {
     const recursive = (args.recursive as boolean | undefined) ?? false;
 
     try {
-      const authorization = this.fileAccessPolicy?.authorize(dirPath, 'read');
+      const authorization = this.fileAccessPolicy?.authorize(dirPath, 'list');
       if (authorization && !authorization.allowed) {
         return this.error(
           presentCoreFileAccessDenial(
@@ -130,7 +130,7 @@ export class ListDirectoryTool extends BuiltinTool {
 
       const fullPath = path.join(dirPath, dirent.name);
       const displayName = prefix ? `${prefix}/${dirent.name}` : dirent.name;
-      const authorization = this.fileAccessPolicy?.authorize(fullPath, 'read');
+      const authorization = this.fileAccessPolicy?.authorize(fullPath, 'list');
       if (authorization && !authorization.allowed) {
         continue;
       }

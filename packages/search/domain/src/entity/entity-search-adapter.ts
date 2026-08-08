@@ -15,12 +15,10 @@ import type {
 import { projectEntityManagement } from '@neko/entity-domain';
 
 export {
-  extractLineBasedScriptCharacters,
   extractScriptCharacterCandidates,
   scriptCharacterCandidateToProjectSearchItem,
   type ContextScriptEntitySearchItemOptions,
   type ScriptEntityCandidate,
-  type StoryScriptParser,
 } from './project-search-projection';
 
 export interface EntitySearchAdapterOptions {

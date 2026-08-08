@@ -38,6 +38,8 @@
     "@neko/preview-domain": "workspace:*",
     "@neko/preview-webview": "workspace:*",
     "@neko/shared": "workspace:*",
+    "@neko/text-editor-domain": "workspace:*",
+    "@neko/text-editor-webview": "workspace:*",
     "@neko/ui": "workspace:*",
     "react": "18.3.1",
     "react-dom": "18.3.1"

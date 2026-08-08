@@ -84,7 +84,7 @@ not create a second parser or mutate source outside the revisioned text command 
 
 - **WHEN** the cursor is in a character-cue position outside IME composition
 - **THEN** completion offers characters from the current normalized screenplay and inserts standard Fountain syntax through one edit command
-- **AND** accepting completion preserves exact session revision semantics
+- **AND** accepting completion preserves exact session edit sequence semantics
 
 #### Scenario: User navigates from the scene outline
 
@@ -119,7 +119,7 @@ Content-owned simplified Fountain DTO SHALL be removed in the same change.
 #### Scenario: Retired parser path is poisoned
 
 - **WHEN** production Editor, Preview projection or Search parses Fountain after migration
-- **THEN** tests prove the canonical screenplay parser is invoked exactly once for the source revision
+- **THEN** tests prove the canonical screenplay parser is invoked exactly once for the source edit sequence
 - **AND** the removed Search classifier and Content Fountain DTO cannot produce a successful path
 
 ### Requirement: Fountain diagnostics are visible but do not invent success
@@ -140,21 +140,21 @@ diagnostics and SHALL preserve the source even when the screenplay remains edita
 - **THEN** the editor preserves raw source editing and disables only derived screenplay Preview, outline and Search projection
 - **AND** it does not display stale projections, empty successful screenplay output or a Markdown interpretation
 
-### Requirement: Fountain remains the future AI screenplay authority
+### Requirement: Fountain remains the canonical screenplay source
 
-Future AI screenplay generation and editing SHALL target Fountain source or bounded edits applied by
-the canonical Text Document authoring port. Markdown MAY provide outline and character context but
-MUST NOT become a parallel authoritative screenplay or be synchronized bidirectionally with
-Fountain.
+Fountain screenplay semantics SHALL be derived from the authoritative Workspace file. Markdown MAY
+provide outline and character context but MUST NOT become a parallel authoritative screenplay or be
+synchronized bidirectionally with Fountain. Agent mutation is outside the Text Document authoring port
+and SHALL be observed by the editor as an external file change.
 
-#### Scenario: Future AI generates a new draft
+#### Scenario: Agent writes Fountain while the editor is clean
 
-- **WHEN** a separately approved Agent capability later generates Fountain source
-- **THEN** the source is parsed by the canonical screenplay parser before an authorized save is offered
-- **AND** parse diagnostics remain visible rather than triggering a hidden Markdown or parser fallback
+- **WHEN** an Agent changes the authoritative Fountain file through the canonical Workspace-native file path
+- **THEN** the clean editor session reloads the changed source and derives a new screenplay projection
+- **AND** the Agent does not open or mutate a `TextDocumentSession`
 
-#### Scenario: Future AI changes an existing screenplay
+#### Scenario: Agent writes Fountain while the editor is dirty
 
-- **WHEN** a separately approved Agent capability later proposes changes to an existing screenplay
-- **THEN** it uses exact scene/source context and revisioned bounded edits against the Fountain session
-- **AND** it does not replace the workspace file through an Agent-owned writer or maintain a second screenplay AST authority
+- **WHEN** an Agent changes the authoritative Fountain file while the editor has an unsaved buffer
+- **THEN** the editor preserves that buffer and reports an external-change conflict
+- **AND** it does not automatically merge, overwrite or redirect the Agent write through the editor port

@@ -218,8 +218,29 @@
       "testScope": "src/**/*.test.ts"
     },
     {
+      "path": "packages/screenplay/domain",
+      "owner": "packages/screenplay/domain",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
       "path": "packages/shared",
       "owner": "packages/shared",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/text-editor/domain",
+      "owner": "packages/text-editor/domain",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
+      "path": "packages/text-editor/webview",
+      "owner": "packages/text-editor/webview",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"

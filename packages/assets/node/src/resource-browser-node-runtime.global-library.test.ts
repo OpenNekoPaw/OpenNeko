@@ -230,6 +230,7 @@ async function createFixture(): Promise<{
     },
     openPreview: async () => undefined,
     openCreativeDocument: async () => undefined,
+    openTextEditor: async () => undefined,
     selectSource: async () => undefined,
     trashWorkspaceItem: async () => undefined,
     selectConfiguredGlobalMediaLibrary: async () => undefined,

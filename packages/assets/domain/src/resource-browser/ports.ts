@@ -141,6 +141,10 @@ export interface ResourceBrowserInteractionPort {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserContentItem;
   }): Promise<void>;
+  editText(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: ResourceBrowserContentItem;
+  }): Promise<void>;
   reveal(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserItem;

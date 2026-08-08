@@ -137,6 +137,11 @@ export async function runAutomatedDesktopFunctional(options) {
             }),
             scenarioAbort.signal,
           ),
+        composeText: (selector, text, index, inputOptions) =>
+          abortable(
+            composeDesktopText(cdp, selector, text, index, inputOptions),
+            scenarioAbort.signal,
+          ),
         pressKey: (key, modifiers) =>
           abortable(pressDesktopKey(cdp, key, modifiers), scenarioAbort.signal),
         scroll: (selector, index, scrollOptions) =>
@@ -545,6 +550,19 @@ export async function typeDesktopText(cdp, selector, text, index = 0, options = 
   if (text.length > 0) {
     await cdp.send('Input.insertText', { text });
   }
+}
+
+export async function composeDesktopText(cdp, selector, text, index = 0, options = {}) {
+  if (typeof text !== 'string' || text.length === 0) {
+    throw new Error('Desktop composition input requires a non-empty string value.');
+  }
+  await clickElement(cdp, selector, index, options.position);
+  await cdp.send('Input.imeSetComposition', {
+    text,
+    selectionStart: text.length,
+    selectionEnd: text.length,
+  });
+  await cdp.send('Input.insertText', { text });
 }
 
 export async function pressDesktopKey(cdp, key, modifiers = []) {

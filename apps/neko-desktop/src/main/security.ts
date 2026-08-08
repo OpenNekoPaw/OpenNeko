@@ -1,4 +1,5 @@
 import type { Session, WebContents, WebPreferences } from 'electron';
+import { DESKTOP_RENDERER_CSP_NONCE } from '../shared/vite-development-security';
 
 type DesktopWillNavigateListener = (event: Electron.Event, url: string) => void;
 
@@ -19,6 +20,7 @@ export interface DesktopWindowSecurityTarget {
 
 export interface DesktopContentSecurityPolicyOptions {
   readonly viteDevelopmentNonce?: string;
+  readonly styleNonce?: string;
 }
 
 export const OPENNEKO_SCHEME = 'openneko';
@@ -26,6 +28,15 @@ export const DESKTOP_APP_HOST = 'desktop';
 export const DESKTOP_APP_ORIGIN = `${OPENNEKO_SCHEME}://${DESKTOP_APP_HOST}`;
 export const DESKTOP_RESOURCE_HOST = 'resource';
 export const DESKTOP_RESOURCE_ORIGIN = `${OPENNEKO_SCHEME}://${DESKTOP_RESOURCE_HOST}`;
+
+export function desktopRendererContentSecurityPolicyOptions(
+  development: boolean,
+): DesktopContentSecurityPolicyOptions {
+  return {
+    styleNonce: DESKTOP_RENDERER_CSP_NONCE,
+    ...(development ? { viteDevelopmentNonce: DESKTOP_RENDERER_CSP_NONCE } : {}),
+  };
+}
 
 export function createDesktopWebPreferences(preloadPath: string): WebPreferences {
   if (preloadPath.trim().length === 0) {
@@ -73,7 +84,10 @@ export function createDesktopContentSecurityPolicy(
     ? `'nonce-${validateContentSecurityPolicyNonce(options.viteDevelopmentNonce)}'`
     : undefined;
   const scriptSources = nonceSource ? `'self' ${nonceSource}` : "'self'";
-  const styleSources = nonceSource ? `'self' ${nonceSource}` : "'self'";
+  const styleNonceSource = options.styleNonce
+    ? `'nonce-${validateContentSecurityPolicyNonce(options.styleNonce)}'`
+    : nonceSource;
+  const styleSources = styleNonceSource ? `'self' ${styleNonceSource}` : "'self'";
   return [
     "default-src 'none'",
     "base-uri 'none'",

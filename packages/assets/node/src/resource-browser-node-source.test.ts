@@ -229,6 +229,7 @@ function createComposition(
     },
     openPreview: async () => undefined,
     openCreativeDocument: overrides.openCreativeDocument ?? (async () => undefined),
+    openTextEditor: async () => undefined,
     selectSource: async () => undefined,
     trashWorkspaceItem: overrides.trashWorkspaceItem ?? (async () => undefined),
     selectGlobalLibrary: async () => undefined,

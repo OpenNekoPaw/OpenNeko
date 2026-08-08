@@ -121,6 +121,7 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly host: Pick<NekoHostPorts, 'files' | 'external' | 'diagnostics'>;
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
   readonly openCreativeDocument: ResourceBrowserNodeSourceOptions['openCreativeDocument'];
+  readonly openTextEditor: ResourceBrowserNodeSourceOptions['openTextEditor'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
   readonly trashWorkspaceItem: ResourceBrowserNodeSourceOptions['trashWorkspaceItem'];
   readonly selectConfiguredGlobalMediaLibrary: ResourceBrowserNodeSourceOptions['selectGlobalLibrary'];
@@ -1058,6 +1059,7 @@ export class ResourceBrowserNodeRuntime {
       host: this.options.host,
       openPreview: this.options.openPreview,
       openCreativeDocument: this.options.openCreativeDocument,
+      openTextEditor: this.options.openTextEditor,
       selectSource: this.options.selectSource,
       trashWorkspaceItem: this.options.trashWorkspaceItem,
       selectGlobalLibrary: this.options.selectConfiguredGlobalMediaLibrary,

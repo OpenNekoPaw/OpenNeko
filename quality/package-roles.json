@@ -271,6 +271,15 @@
       "architectureState": "converged"
     },
     {
+      "path": "packages/screenplay/domain",
+      "name": "@neko/screenplay-domain",
+      "family": "screenplay",
+      "roles": ["contracts", "domain"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
       "path": "packages/skills",
       "name": "@neko/skills",
       "family": "skills",
@@ -285,6 +294,24 @@
       "family": "shared",
       "roles": ["infrastructure", "contracts", "node"],
       "runtimes": ["host-neutral", "node", "browser"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/text-editor/domain",
+      "name": "@neko/text-editor-domain",
+      "family": "text-editor",
+      "roles": ["contracts", "domain", "application"],
+      "runtimes": ["host-neutral"],
+      "productStatus": "active-product",
+      "architectureState": "converged"
+    },
+    {
+      "path": "packages/text-editor/webview",
+      "name": "@neko/text-editor-webview",
+      "family": "text-editor",
+      "roles": ["webview"],
+      "runtimes": ["browser"],
       "productStatus": "active-product",
       "architectureState": "converged"
     },

@@ -29,6 +29,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@neko/text-editor-domain": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
     "@neko/preview-domain": "workspace:*",

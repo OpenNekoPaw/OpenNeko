@@ -29,11 +29,13 @@ describe('Desktop OpenNeko protocol handler', () => {
     expect(appResponse.headers.get('Content-Security-Policy')).toContain(
       'media-src openneko://resource',
     );
+    expect(appResponse.headers.get('Content-Security-Policy')).toContain(
+      "style-src 'self' 'nonce-openneko-renderer-style'",
+    );
+    expect(appResponse.headers.get('Content-Security-Policy')).toContain("script-src 'self'");
     const workerResponse = await handle(new Request('openneko://desktop/pdf.worker.mjs'));
     expect(workerResponse.headers.get('Content-Type')).toBe('text/javascript; charset=utf-8');
-    const fontResponse = await handle(
-      new Request('openneko://desktop/assets/codicon.ttf'),
-    );
+    const fontResponse = await handle(new Request('openneko://desktop/assets/codicon.ttf'));
     expect(fontResponse.status).toBe(200);
     expect(fontResponse.headers.get('Content-Type')).toBe('font/ttf');
 

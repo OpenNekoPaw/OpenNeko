@@ -4,6 +4,7 @@ import type { OpenNekoDesktopAgentAutomationBridge } from './agent-automation-co
 import type { OpenNekoDesktopShellBridge } from '@neko/host/desktop-shell-contract';
 import type { OpenNekoDesktopResourceBrowserBridge } from './resource-browser-bridge-contract';
 import type { OpenNekoDesktopPreviewBridge } from './preview-bridge-contract';
+import type { OpenNekoDesktopTextEditorBridge } from '@neko/text-editor-domain';
 import type { OpenNekoDesktopCanvasBridge } from './canvas-bridge-contract';
 import type { OpenNekoDesktopCutBridge } from './cut-bridge-contract';
 import type { OpenNekoDesktopApplicationSettingsBridge } from '@neko/host/application-settings';
@@ -23,6 +24,7 @@ declare global {
       OpenNekoDesktopAgentAutomationBridge &
       OpenNekoDesktopResourceBrowserBridge &
       OpenNekoDesktopPreviewBridge &
+      OpenNekoDesktopTextEditorBridge &
       OpenNekoDesktopCanvasBridge &
       OpenNekoDesktopCutBridge &
       OpenNekoAssetCenterBridge &

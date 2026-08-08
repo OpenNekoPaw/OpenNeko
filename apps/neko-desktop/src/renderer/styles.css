@@ -2613,6 +2613,15 @@ code {
   background: var(--neko-desktop-main);
 }
 
+.desktop-text-editor-surface {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--neko-desktop-main);
+}
+
 .desktop-canvas-surface {
   width: 100%;
   height: 100%;
@@ -2685,6 +2694,10 @@ code {
 }
 
 @media (max-width: 1120px) {
+  .project-main-group__tabs {
+    padding-right: 132px;
+  }
+
   .project-workspace.neko-controlled-workbench-shell {
     grid-template-columns:
       var(--neko-controlled-primary-width)

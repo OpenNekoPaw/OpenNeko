@@ -103,6 +103,16 @@ import {
 } from '../shared/preview-bridge-contract';
 import type { PreviewRuntimeIdentity } from '@neko/preview-domain';
 import {
+  TEXT_EDITOR_HOST_CHANNELS,
+  parseTextEditorHostRequest,
+  parseTextEditorHostResult,
+  parseTextEditorProjectionEvent,
+  parseTextEditorRuntimeIdentity,
+  sameTextEditorRuntimeIdentity,
+  type OpenNekoDesktopTextEditorBridge,
+  type TextEditorRuntimeIdentity,
+} from '@neko/text-editor-domain';
+import {
   parseCanvasHostIntentRequest,
   parseCanvasHostIntentResult,
   parseCanvasMaterialActionResolution,
@@ -217,6 +227,12 @@ const projectPortabilityListeners = new Set<
   Parameters<OpenNekoDesktopProjectPortabilityBridge['projectPortability']['subscribe']>[0]
 >();
 const currentPreviewIdentities = new Map<string, PreviewRuntimeIdentity>();
+const currentTextEditorIdentities = new Map<string, TextEditorRuntimeIdentity>();
+const currentTextEditorEventSequences = new Map<string, number>();
+const textEditorListeners = new Set<{
+  readonly identity: TextEditorRuntimeIdentity;
+  readonly listener: Parameters<OpenNekoDesktopTextEditorBridge['textEditor']['subscribe']>[1];
+}>();
 const currentCanvasIdentities = new Map<string, CanvasHostRuntimeIdentity>();
 const currentCanvasEventSequences = new Map<string, number>();
 const canvasListeners = new Set<{
@@ -241,6 +257,7 @@ const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopAgentAutomationBridge &
   OpenNekoDesktopResourceBrowserBridge &
   OpenNekoDesktopPreviewBridge &
+  OpenNekoDesktopTextEditorBridge &
   OpenNekoDesktopCanvasBridge &
   OpenNekoDesktopCutBridge &
   OpenNekoAssetCenterBridge &
@@ -897,6 +914,32 @@ const bridge: OpenNekoDesktopBridge &
       return projection;
     },
   },
+  textEditor: {
+    async execute(value) {
+      const request = parseTextEditorHostRequest(value);
+      const response: unknown = await ipcRenderer.invoke(TEXT_EDITOR_HOST_CHANNELS.execute, request);
+      const result = parseTextEditorHostResult(response);
+      if (
+        result.requestId !== request.requestId ||
+        !sameTextEditorRuntimeIdentity(result.identity, request.identity)
+      ) {
+        throw new Error('Desktop Text Editor result identity does not match.');
+      }
+      const key = textEditorIdentityKey(result.identity);
+      if (result.status === 'ready') {
+        currentTextEditorIdentities.set(key, result.identity);
+      } else if (result.status === 'closed') {
+        currentTextEditorIdentities.delete(key);
+        currentTextEditorEventSequences.delete(key);
+      }
+      return result;
+    },
+    subscribe(identity, listener) {
+      const entry = { identity: parseTextEditorRuntimeIdentity(identity), listener };
+      textEditorListeners.add(entry);
+      return () => textEditorListeners.delete(entry);
+    },
+  },
   canvas: {
     async getSnapshot(value) {
       const identity = parseDesktopCanvasHostIdentity(value);
@@ -1376,6 +1419,22 @@ ipcRenderer.on(
 );
 
 ipcRenderer.on(
+  TEXT_EDITOR_HOST_CHANNELS.projectionEvent,
+  (_event: Electron.IpcRendererEvent, value: unknown): void => {
+    const event = parseTextEditorProjectionEvent(value);
+    const key = textEditorIdentityKey(event.identity);
+    const identity = currentTextEditorIdentities.get(key);
+    if (!identity || !sameTextEditorRuntimeIdentity(event.identity, identity)) return;
+    const currentSequence = currentTextEditorEventSequences.get(key);
+    if (currentSequence !== undefined && event.sequence <= currentSequence) return;
+    currentTextEditorEventSequences.set(key, event.sequence);
+    for (const entry of textEditorListeners) {
+      if (sameTextEditorRuntimeIdentity(entry.identity, identity)) entry.listener(event);
+    }
+  },
+);
+
+ipcRenderer.on(
   DESKTOP_CANVAS_CHANNELS.projectionEvent,
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
     const event: CanvasHostProjectionEvent = parseCanvasHostProjectionEvent(value);
@@ -1396,6 +1455,16 @@ ipcRenderer.on(
 );
 
 contextBridge.exposeInMainWorld('openNekoDesktop', bridge);
+
+function textEditorIdentityKey(identity: TextEditorRuntimeIdentity): string {
+  return [
+    identity.windowId,
+    identity.viewId,
+    identity.viewInstanceId,
+    identity.documentId,
+    identity.sessionId,
+  ].join(':');
+}
 
 function nextRequestId(prefix: string): string {
   requestSequence += 1;

@@ -334,6 +334,7 @@ describe('Resource Browser contract', () => {
         'source.recovery.plan',
         'source.relink',
         'source.remove',
+        'text.edit',
         'thumbnail.resolve',
         'workspace-entry.create-directory',
         'workspace-entry.create-file',

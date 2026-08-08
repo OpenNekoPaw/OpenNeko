@@ -53,6 +53,7 @@ import {
   type DesktopWorkbenchViewRef,
 } from '@neko/host/desktop-workbench-contract';
 import { createCutHostSessionId } from '@neko/cut-domain';
+import { TEXT_EDITOR_HOST_ROUTES } from '@neko/text-editor-domain';
 import {
   DESKTOP_APPLICATION_SIDEBAR_WIDTH_LIMITS,
   type DesktopAgentInteractionSurfaceRef,
@@ -63,6 +64,7 @@ import {
 import { DesktopAgentSurface, type DesktopAgentSurfaceProps } from './DesktopAgentSurface';
 import { DesktopResourceBrowserSurface } from './DesktopResourceBrowserSurface';
 import { DesktopPreviewSurface } from './DesktopPreviewSurface';
+import { DesktopTextEditorSurface } from './DesktopTextEditorSurface';
 import { DesktopCanvasSurface } from './DesktopCanvasSurface';
 import { DesktopCutSurface } from './DesktopCutSurface';
 import {
@@ -132,6 +134,11 @@ interface ShellActions {
     workbenchInstanceId: string,
     view: DesktopWorkbenchViewRef,
   ) => void;
+  readonly onCloseWorkbenchView: (
+    workbenchInstanceId: string,
+    workbench: DesktopWorkbenchLayoutProjection,
+    view: DesktopWorkbenchViewRef,
+  ) => void;
   readonly onUpdateApplicationSidebar: (sidebar: DesktopApplicationSidebarProjection) => void;
   readonly onTransitionScene: (intent: DesktopSceneTransitionIntent) => void;
   readonly onChooseWorkspaceTarget: () => Promise<
@@ -151,6 +158,7 @@ export function DesktopApplication(): JSX.Element {
     useState<RetainedMetadataDiagnostic>();
   const [dismissedPersistedDiagnosticKey, setDismissedPersistedDiagnosticKey] = useState<string>();
   const lastSequence = useRef<number | null>(null);
+  const textEditorCloseRequestOrdinal = useRef(0);
   const rendererSessionId = useRef<string>();
   const pendingProjectionRequest = useRef<object>();
   const startupProjectionCaptured = useRef(false);
@@ -426,6 +434,78 @@ export function DesktopApplication(): JSX.Element {
         return result.projection;
       });
     },
+    onCloseWorkbenchView: (workbenchInstanceId, workbench, view) => {
+      if (view.kind !== 'text-editor') {
+        if (projection.window.workbench.workbenchInstanceId !== workbenchInstanceId) {
+          throw new Error(`Desktop Workbench '${workbenchInstanceId}' is unavailable.`);
+        }
+        void runMutation(() =>
+          window.openNekoDesktop.workbench.update(
+            workbenchInstanceId,
+            closeMainView(workbench, view.viewId),
+          ),
+        );
+        return;
+      }
+      const project = projection.catalog.projects.find(
+        (candidate) =>
+          candidate.projectId === view.projectId && candidate.workspaceId === view.workspaceId,
+      );
+      if (!project || !view.documentId || !view.editorSessionId) {
+        throw new Error(`Desktop Text Editor View '${view.viewId}' has incomplete identity.`);
+      }
+      textEditorCloseRequestOrdinal.current += 1;
+      const identity = {
+        projectId: project.projectId,
+        workspaceId: project.workspaceId,
+        windowId: projection.window.windowId,
+        viewId: view.viewId,
+        viewInstanceId: view.viewInstanceId,
+        documentId: view.documentId,
+        sessionId: view.editorSessionId,
+        rendererSessionId: projection.rendererSessionId,
+      };
+      const requestPrefix = `desktop-text-editor:close:${textEditorCloseRequestOrdinal.current}`;
+      setPending(true);
+      setDiagnostic(undefined);
+      void window.openNekoDesktop.textEditor
+        .execute({
+          route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
+          requestId: `${requestPrefix}:projection`,
+          identity,
+        })
+        .then(async (result) => {
+          if (result.status === 'rejected') throw new Error(result.diagnostic.code);
+          if (result.status !== 'ready') {
+            throw new Error('Desktop Text Editor close requires a ready projection.');
+          }
+          let decision: 'save' | 'discard' | 'cancel' = 'discard';
+          if (result.projection.dirty) {
+            if (globalThis.confirm(t('workspace.textEditorCloseSave'))) {
+              decision = 'save';
+            } else if (globalThis.confirm(t('workspace.textEditorCloseDiscard'))) {
+              decision = 'discard';
+            } else {
+              decision = 'cancel';
+            }
+          }
+          if (decision === 'cancel') return;
+          const closed = await window.openNekoDesktop.textEditor.execute({
+            route: TEXT_EDITOR_HOST_ROUTES.close,
+            requestId: `${requestPrefix}:decision`,
+            identity,
+            decision,
+          });
+          if (closed.status === 'rejected') throw new Error(closed.diagnostic.code);
+          if (closed.status === 'cancelled') return;
+          await refresh();
+        })
+        .catch(async (error: unknown) => {
+          setDiagnostic(describeError(error));
+          await refresh();
+        })
+        .finally(() => setPending(false));
+    },
     onUpdateApplicationSidebar: (sidebar) =>
       void runMutation(() =>
         window.openNekoDesktop.applicationSidebar.update(
@@ -543,6 +623,7 @@ export function DesktopShellView({
     onUpdateWorkbench: () => undefined,
     onCreateCutDraft: () => undefined,
     onCloseCutView: () => undefined,
+    onCloseWorkbenchView: () => undefined,
     onUpdateApplicationSidebar: () => undefined,
     onTransitionScene: () => undefined,
     onChooseWorkspaceTarget: async () => undefined,
@@ -1672,7 +1753,9 @@ function MainViewGroupSurface({
             closeLabel: t('workspace.mainTabs.close', { name: view.displayLabel }),
           }))}
           onClose={(viewId) => {
-            actions.onUpdateWorkbench(workbenchInstanceId, closeMainView(workbench, viewId));
+            const view = views.find((candidate) => candidate.viewId === viewId);
+            if (!view) throw new Error(`Desktop Main Tab '${viewId}' is unavailable.`);
+            actions.onCloseWorkbenchView(workbenchInstanceId, workbench, view);
           }}
           onReorder={(sourceViewId, targetViewId) => {
             actions.onUpdateWorkbench(
@@ -1718,6 +1801,9 @@ function renderWorkbenchMainView({
   readonly projection: DesktopShellProjection;
   readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number];
 }): JSX.Element {
+  if (view.kind === 'text-editor') {
+    return <DesktopTextEditorSurface project={project} projection={projection} view={view} />;
+  }
   if (view.kind === 'preview' && previewCapability?.status === 'ready') {
     return <DesktopPreviewSurface project={project} projection={projection} view={view} />;
   }

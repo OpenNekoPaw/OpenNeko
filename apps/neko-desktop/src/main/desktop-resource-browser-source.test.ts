@@ -1089,6 +1089,7 @@ function createComposition(
     host,
     openPreview: effects.openPreview ?? (async () => undefined),
     openCreativeDocument: effects.openCreativeDocument ?? (async () => undefined),
+    openTextEditor: async () => undefined,
     selectSource: effects.selectSource ?? (async () => undefined),
     trashWorkspaceItem: async () => undefined,
     selectGlobalLibrary: effects.selectGlobalLibrary ?? (async () => undefined),

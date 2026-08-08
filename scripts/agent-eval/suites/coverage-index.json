@@ -187,6 +187,12 @@
     },
     {
       "kind": "agent-runtime-capability",
+      "id": "native-content-file-authoring",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.screenplay-authoring"]
+    },
+    {
+      "kind": "agent-runtime-capability",
       "id": "workspace-board-delivery",
       "disposition": "suite",
       "suiteIds": ["agent-runtime.creative-media-workflow", "agent-runtime.workflow-controller"]

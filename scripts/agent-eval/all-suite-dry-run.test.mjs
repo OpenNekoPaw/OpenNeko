@@ -6,8 +6,8 @@ describe('all-suite key-free dry-run', () => {
     await expect(runAllSuiteDryRun()).resolves.toMatchObject({
       schema: 'neko.agent-eval.all-suite-dry-run',
       ok: true,
-      suiteCount: 23,
-      caseCount: 60,
+      suiteCount: 24,
+      caseCount: 62,
     });
   });
 

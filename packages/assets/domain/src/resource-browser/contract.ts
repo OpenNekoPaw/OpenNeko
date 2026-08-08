@@ -41,6 +41,7 @@ export const RESOURCE_BROWSER_ROUTES = {
   openCreativeDocument: 'creative-document.open',
   trashContent: 'content.trash',
   preview: 'preview',
+  editText: 'text.edit',
   addToCut: 'cut.add',
   reveal: 'reveal',
   addToCanvas: 'canvas.add',
@@ -64,7 +65,7 @@ export type ResourceBrowserItemKind =
   | 'location'
   | 'style';
 export type ResourceBrowserCapability =
-  'preview' | 'open-creative-document' | 'add-to-cut' | 'reveal' | 'add-to-canvas';
+  'preview' | 'edit-text' | 'open-creative-document' | 'add-to-cut' | 'reveal' | 'add-to-canvas';
 
 export interface ResourceBrowserDiagnostic {
   readonly code: string;
@@ -290,6 +291,7 @@ export interface ResourceBrowserIntentRequest extends ResourceBrowserRequest {
     | typeof RESOURCE_BROWSER_ROUTES.openCreativeDocument
     | typeof RESOURCE_BROWSER_ROUTES.trashContent
     | typeof RESOURCE_BROWSER_ROUTES.preview
+    | typeof RESOURCE_BROWSER_ROUTES.editText
     | typeof RESOURCE_BROWSER_ROUTES.addToCut
     | typeof RESOURCE_BROWSER_ROUTES.reveal
     | typeof RESOURCE_BROWSER_ROUTES.addToCanvas
@@ -961,6 +963,7 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
     route !== RESOURCE_BROWSER_ROUTES.trashContent &&
     route !== RESOURCE_BROWSER_ROUTES.preview &&
     route !== RESOURCE_BROWSER_ROUTES.openCreativeDocument &&
+    route !== RESOURCE_BROWSER_ROUTES.editText &&
     route !== RESOURCE_BROWSER_ROUTES.addToCut &&
     route !== RESOURCE_BROWSER_ROUTES.reveal &&
     route !== RESOURCE_BROWSER_ROUTES.addToCanvas &&
@@ -1044,6 +1047,9 @@ export function parseResourceBrowserIntentRequest(value: unknown): ResourceBrows
         presentation,
       },
     };
+  }
+  if (route === RESOURCE_BROWSER_ROUTES.editText) {
+    return { ...request, resourceId };
   }
   if (route === RESOURCE_BROWSER_ROUTES.addToCut) {
     const target = requireRecord(
@@ -1768,6 +1774,7 @@ function requireLibraryName(value: unknown, message: string): string {
 function requireCapability(value: unknown): ResourceBrowserCapability {
   const allowed: readonly ResourceBrowserCapability[] = [
     'preview',
+    'edit-text',
     'open-creative-document',
     'add-to-cut',
     'reveal',

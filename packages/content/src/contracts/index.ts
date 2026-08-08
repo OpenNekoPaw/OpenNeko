@@ -5,4 +5,3 @@ export * from './content-locator';
 export * from './content-locator-drag';
 export * from './content-representation';
 export * from './document-reading';
-export * from './fountain-script';

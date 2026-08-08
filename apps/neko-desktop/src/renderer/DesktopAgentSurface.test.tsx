@@ -599,6 +599,7 @@ function installBridge(
         subscribe: vi.fn(() => () => undefined),
       },
       preview: { getSnapshot: vi.fn(), execute: vi.fn() },
+      textEditor: { execute: vi.fn(), subscribe: vi.fn(() => () => undefined) },
       canvas: {
         getSnapshot: vi.fn(),
         resolveMaterialActions: vi.fn(),

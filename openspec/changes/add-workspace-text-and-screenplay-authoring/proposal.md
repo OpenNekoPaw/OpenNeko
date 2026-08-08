@@ -8,7 +8,7 @@ authoring boundary.
 ## What Changes
 
 - Add a package-owned Workspace Text Editor Main View for authorized UTF-8 workspace files, using
-  CodeMirror 6 for browser-side editing while a host-neutral document session owns revision, dirty
+  CodeMirror 6 for browser-side editing while a host-neutral document session owns edit sequence, dirty
   state, save conflict handling and diagnostics.
 - Make Resource Browser open supported text files through the Text Editor by default; keep Preview
   read-only and preserve it as the canonical viewer for non-editable content.
@@ -21,8 +21,8 @@ authoring boundary.
 - Provide Chinese-friendly Fountain authoring through UTF-8, IME-safe editing, CJK typography,
   standard forced syntax support and localized UI/diagnostics without creating a localized private
   screenplay format.
-- Expose one revisioned text-authoring application port that future Agent capabilities can call with
-  exact document identity and deterministic edits. Actual Agent prompts, tools, autonomous write-back,
+- Keep the revisioned text-authoring application port Window-editor scoped. Agent content authoring
+  uses the separate Workspace-native file path; Agent prompts, protected structured-project access,
   FDX interchange and PDF export remain separate changes.
 - Extend the canonical Workbench View union with `text-editor`, with exact document/session identity,
   bounded split behavior and package-owned presentation snapshots; no universal Editor/Preview/Canvas
@@ -47,13 +47,14 @@ None.
 
 ## Impact
 
-- New `@neko/text-editor-domain` package owns host-neutral text document sessions, admission policy,
-  generic format diagnostics, revisioned edit commands and the public authoring port. New
+- New `@neko/text-editor-domain` package owns host-neutral Window text document sessions, admission
+  policy, generic format diagnostics, revisioned edit commands and the public editor port. New
   `@neko/text-editor-webview` owns the CodeMirror Root, browser interaction and recoverable editor
   presentation snapshots.
 - New `@neko/screenplay-domain` owns the canonical Fountain parser, source-positioned normalized
-  document, diagnostics and scene/character projections. Text Editor, Search and future Agent
-  authoring consume this public contract instead of depending on one another.
+  document, diagnostics and scene/character projections. Text Editor and Search consume this public
+  contract; native Agent authoring reads and writes the Fountain file rather than calling the parser
+  as a mutation interface.
 - `@neko/content` remains the authority for `ContentLocator`, authorized workspace reads/writes and
   fingerprint CAS. Its Fountain DTO is replaced inside this change by the canonical parser contract
   owned by `@neko/screenplay-domain`; it does not gain a second file writer.

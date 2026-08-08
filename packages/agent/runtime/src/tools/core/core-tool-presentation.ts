@@ -34,6 +34,50 @@ export function presentCoreFileAccessDenial(
       return zh
         ? `路径位于受管理的工作区运行时或缓存目录中，已被忽略：${decision.path}`
         : `Path is ignored because it is in a managed workspace runtime or cache directory: ${decision.path}`;
+    case 'protected-project-document': {
+      const owner = decision.protectedProjectOwner;
+      if (!owner) throw new Error('Protected project denial requires an owning domain.');
+      return zh
+        ? `受保护的项目文档只能通过 ${owner} 领域能力访问，不能读取或写入原始文件：${decision.path}`
+        : `Protected project document must use the ${owner} domain capability and cannot be read or written as a raw file: ${decision.path}`;
+    }
+  }
+}
+
+export function presentContentWriteDiagnostic(
+  code: import('@neko/content').ContentIoDiagnosticCode,
+  workspacePath: string,
+  locale: unknown,
+): string {
+  const zh = isChinesePromptLocale(locale);
+  switch (code) {
+    case 'content-changed':
+    case 'content-conflict':
+      return zh
+        ? `${code}：文件“${workspacePath}”已变化或已存在；请重新读取并使用返回的 freshness。`
+        : `${code}: File "${workspacePath}" changed or already exists; read it again and use the returned freshness.`;
+    case 'content-cancelled':
+      return zh ? `${code}：文件写入已取消。` : `${code}: File write was cancelled.`;
+    case 'content-too-large':
+      return zh ? `${code}：写入内容超过允许大小。` : `${code}: Content exceeds the write limit.`;
+    case 'content-missing':
+      return zh
+        ? `${code}：文件或授权目录不存在：${workspacePath}`
+        : `${code}: File or authorized directory is missing: ${workspacePath}`;
+    case 'content-unauthorized':
+      return zh
+        ? `${code}：文件写入未获授权：${workspacePath}`
+        : `${code}: File write is not authorized: ${workspacePath}`;
+    case 'content-write-failed':
+      return zh
+        ? `${code}：文件写入失败：${workspacePath}`
+        : `${code}: File write failed: ${workspacePath}`;
+    case 'content-allocation-failed':
+    case 'content-projection-failed':
+    case 'content-range-invalid':
+    case 'content-read-failed':
+    case 'content-unsupported':
+      throw new Error(`Unexpected Workspace write diagnostic: ${code}`);
   }
 }
 

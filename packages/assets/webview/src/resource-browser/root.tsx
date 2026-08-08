@@ -425,6 +425,7 @@ export function ResourceBrowserRoot({
       | 'creative-document.open'
       | 'content.trash'
       | 'preview'
+      | 'text.edit'
       | 'reveal',
     item?: ResourceBrowserItem,
     entryNameInput?: string,
@@ -1041,6 +1042,10 @@ export function ResourceBrowserRoot({
                         void execute(RESOURCE_BROWSER_ROUTES.openCreativeDocument, item);
                         return;
                       }
+                      if (item.capabilities.includes('edit-text') && !pending) {
+                        void execute(RESOURCE_BROWSER_ROUTES.editText, item);
+                        return;
+                      }
                       if (previewTarget && item.capabilities.includes('preview') && !pending) {
                         void execute(RESOURCE_BROWSER_ROUTES.preview, item);
                       }
@@ -1250,6 +1255,7 @@ export function ResourceBrowserRoot({
               return;
             }
             if (!item) return;
+            if (action === 'edit-text') void execute(RESOURCE_BROWSER_ROUTES.editText, item);
             if (action === 'preview') void execute(RESOURCE_BROWSER_ROUTES.preview, item);
             if (action === 'open-cut') {
               void execute(RESOURCE_BROWSER_ROUTES.openCreativeDocument, item);
@@ -1322,6 +1328,7 @@ type ResourceBrowserContextAction =
   | 'link-library'
   | 'add-library'
   | 'preview'
+  | 'edit-text'
   | 'open-cut'
   | 'reveal'
   | 'recover'
@@ -1378,6 +1385,9 @@ function ResourceBrowserContextMenu({
   } else {
     if (item.facet === 'files' && item.kind === 'directory') {
       actions.push(...createContextActions(creationKinds, labels));
+    }
+    if (item.capabilities.includes('edit-text')) {
+      actions.push({ action: 'edit-text', label: labels.editText, icon: <EditIcon size={14} /> });
     }
     if (previewAvailable && item.capabilities.includes('preview')) {
       actions.push({ action: 'preview', label: labels.preview, icon: <PlayIcon size={14} /> });

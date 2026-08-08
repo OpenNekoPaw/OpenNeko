@@ -39,6 +39,12 @@
       "targetKind": "prompt"
     },
     {
+      "suiteId": "agent-runtime.screenplay-authoring",
+      "path": "screenplay-authoring/suite.json",
+      "ownerId": "screenplay-authoring",
+      "targetKind": "capability"
+    },
+    {
       "suiteId": "agent-runtime.skill-runtime",
       "path": "skill-runtime/suite.json",
       "ownerId": "skill-runtime",

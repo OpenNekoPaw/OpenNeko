@@ -5,6 +5,7 @@ import { DESKTOP_BRIDGE_CHANNELS } from '../shared/bridge-contract';
 import { DESKTOP_SHELL_CHANNELS } from '@neko/host/desktop-shell-contract';
 import { DESKTOP_RESOURCE_BROWSER_CHANNELS } from '../shared/resource-browser-bridge-contract';
 import { DESKTOP_PREVIEW_CHANNELS } from '../shared/preview-bridge-contract';
+import { TEXT_EDITOR_HOST_CHANNELS } from '@neko/text-editor-domain';
 import { DESKTOP_CANVAS_CHANNELS } from '../shared/canvas-bridge-contract';
 import { DESKTOP_CUT_CHANNELS } from '../shared/cut-bridge-contract';
 import { DESKTOP_APPLICATION_SETTINGS_CHANNELS } from '@neko/host/application-settings';
@@ -182,6 +183,13 @@ export function registerDesktopIpc(
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executePreviewRequest(requireSender(event), payload),
   );
+  ipcMain.handle(TEXT_EDITOR_HOST_CHANNELS.execute, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.executeTextEditorRequest(requireSender(event), payload, (textEditorEvent) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send(TEXT_EDITOR_HOST_CHANNELS.projectionEvent, textEditorEvent);
+      }
+    }),
+  );
   ipcMain.handle(
     DESKTOP_CANVAS_CHANNELS.snapshotGet,
     (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -338,6 +346,7 @@ export function registerDesktopIpc(
       DESKTOP_PROJECT_PORTABILITY_CHANNELS.cancel,
       DESKTOP_PREVIEW_CHANNELS.snapshotGet,
       DESKTOP_PREVIEW_CHANNELS.requestExecute,
+      TEXT_EDITOR_HOST_CHANNELS.execute,
       DESKTOP_CANVAS_CHANNELS.snapshotGet,
       DESKTOP_CANVAS_CHANNELS.materialActionsResolve,
       DESKTOP_CANVAS_CHANNELS.intentExecute,

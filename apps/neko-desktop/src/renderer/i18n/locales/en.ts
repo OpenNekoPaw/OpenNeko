@@ -295,6 +295,8 @@ export const en = {
   'workspace.mainTabs.emptyDetail':
     'Open a Canvas, Preview, Cut, or Resource management view to continue.',
   'workspace.mainTabs.close': 'Close {name}',
+  'workspace.textEditorCloseSave': 'Save changes before closing?',
+  'workspace.textEditorCloseDiscard': 'Discard changes and close?',
   'workspace.mainTabs.splitRight': 'Move active tab to a right split',
   'workspace.mainTabs.splitDown': 'Move active tab to a lower split',
   'workspace.primaryNavigation': 'Project navigation',

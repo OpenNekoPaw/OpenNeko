@@ -1,6 +1,13 @@
 # @neko/markdown
 
-`@neko/markdown` owns Neko's host-neutral Markdown semantic contract. It parses authoritative CommonMark/GFM source into exhaustive Neko-owned nodes, annotations, diagnostics and revision-associated resolution contracts without importing Agent, Canvas, Electron, React, DOM or content services.
+`@neko/markdown` owns Neko's host-neutral Markdown semantic contract. It parses authoritative CommonMark/GFM source into exhaustive Neko-owned nodes, annotations, diagnostics and revision-associated resolution contracts without importing Agent, Canvas, Electron, React, DOM, Milkdown, CodeMirror, Streamdown or content services. The package is not a user-visible Neko Markdown dialect or a React renderer.
+
+The package exports `OpenNekoGfmProfile` and a shared conformance corpus while parsing through
+`remark-gfm`. The profile follows CommonMark plus GFM 0.29-gfm autolink literals, one- or two-tilde
+strikethrough, tables, task-list items and tagfilter behavior. Mermaid, Math, footnotes, mentions and
+Workspace resource references are separately declared extensions. Raw HTML remains source evidence
+and is inert by default in browser presentations. Cross-surface consumer adoption is tracked by
+`openspec/changes/adopt-gfm-authoring-and-agent-rendering-surfaces/`.
 
 ## Canonical entry points
 
@@ -56,21 +63,25 @@ Parsing is pure and does not perform workspace, entity, resource, authorization 
 
 ## Host adapter boundary
 
-Desktop Agent renderer consumes normalized snapshots through a package-local chain:
+Semantic consumers use normalized snapshots through package-local adapters:
 
 ```text
-MarkdownStreamingSession
-  -> renderer projector
-  -> package-owned Markdown presentation
-  -> React surface
+authoritative source/revision
+  -> @neko/markdown normalized semantic projection
+  -> outline/reference/diagnostic/resource extension consumer
 ```
 
 Resize reprojects/reflows the unchanged normalized revision; it does not reparse source. Layout,
 table presentation, code wrapping and theme behavior remain renderer-owned presentation policy.
 
-The Agent renderer uses `MarkdownStreamingSession` and the normalized package contract. Renderer
-components still own layout and React projection, but they do not maintain a second Markdown parser
-or cross-package semantic model.
+Text Editor Rich, Text Editor Source and Agent message content have separate presentation engines,
+but all must pass the package-owned GFM/extension conformance corpus. A surface engine's third-party
+AST remains private to that surface. It cannot become a cross-package semantic model, file authority
+or fallback renderer. Milkdown Rich and CodeMirror Source consume this contract through the Text
+Editor. Streamdown 2.5.0 was evaluated and rejected for the current Agent surface because incomplete
+emphasis and Neko resource/semantic/creative presentation parity did not pass. Production Agent
+messages continue to use `MarkdownStreamingSession` and the package-local renderer as the one
+canonical path.
 
 ## Diagnostics, resources and security
 

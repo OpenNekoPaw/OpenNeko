@@ -3562,6 +3562,7 @@ function createAgentWorkspaceRuntime(workspaceId: string): AgentWorkspaceRuntime
     clearContext: unavailable,
     compactContext: unavailable,
     readSkillCatalog: unavailable,
+    readCapabilityPromptFragments: () => [],
     listConversations: () => [],
     readConversationEvidence: () => {
       throw new Error('Agent evidence is not expected by this AppHost test.');

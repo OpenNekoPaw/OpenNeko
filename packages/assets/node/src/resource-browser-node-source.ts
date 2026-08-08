@@ -85,6 +85,7 @@ export interface ResourceBrowserNodeSourceOptions {
     readonly absolutePath: string;
     readonly kind: 'canvas' | 'cut';
   }) => Promise<void>;
+  readonly openTextEditor: ResourceBrowserInteractionPort['editText'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
   readonly trashWorkspaceItem: (absolutePath: string) => Promise<void>;
   readonly selectGlobalLibrary: (input: {
@@ -530,6 +531,7 @@ export function createResourceBrowserNodeProjectionSource(
       });
       await options.openPreview({ identity, item, absolutePath, target });
     },
+    editText: options.openTextEditor,
     async openCreativeDocument({ identity, item }): Promise<void> {
       if (item.locator.kind !== 'workspace-file') {
         throw new Error('Resource Browser creative-document open requires a Workspace file.');

@@ -70,7 +70,32 @@ describe('Desktop Workbench contract', () => {
     expect(focused.main.views).toHaveLength(2);
   });
 
-  it('rejects duplicate membership and a missing active Group', () => {
+  it('focuses one exact Text Editor View per Workspace document', () => {
+    const initial = createDefaultDesktopWorkbenchLayout('window-1');
+    const first = openOrFocusMainView(initial, textEditorViewRef('editor-1', 'session-1'));
+    const focused = openOrFocusMainView(first, textEditorViewRef('editor-2', 'session-2'));
+
+    expect(focused.main.views).toEqual(first.main.views);
+    expect(focused.main.groups[0]?.activeViewId).toBe('editor-1');
+  });
+
+  it('requires Text Editor session identity only on exact Text Editor Views', () => {
+    expect(() =>
+      openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), {
+        ...viewRef('preview-1', 'preview'),
+        editorSessionId: 'session-1',
+      }),
+    ).toThrow('belongs only to Text Editor Views');
+    const { editorSessionId: _editorSessionId, ...missingEditorSession } = textEditorViewRef(
+      'editor-1',
+      'session-1',
+    );
+    expect(() =>
+      openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), missingEditorSession),
+    ).toThrow('requires exact document and editor session identities');
+  });
+
+  it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
     const canvas = openOrFocusMainView(
       createDefaultDesktopWorkbenchLayout('window-1'),
       viewRef('canvas-1', 'canvas'),
@@ -228,4 +253,18 @@ function viewRef(viewId: string, kind: 'canvas' | 'preview' | 'cut') {
         }
       : {}),
   } as const;
+}
+
+function textEditorViewRef(viewId: string, editorSessionId: string) {
+  return {
+    viewId,
+    viewInstanceId: `${viewId}:instance`,
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    kind: 'text-editor' as const,
+    ownerId: 'text-editor-owner-1',
+    displayLabel: 'main.fountain',
+    documentId: 'scripts/main.fountain',
+    editorSessionId,
+  };
 }

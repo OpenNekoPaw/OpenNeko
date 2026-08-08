@@ -4,7 +4,11 @@ import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import { createDefaultDesktopWorkbenchLayout } from '@neko/host/desktop-workbench-contract';
+import {
+  createDefaultDesktopWorkbenchLayout,
+  openOrFocusMainView,
+  setWorkbenchDisplayMode,
+} from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
   createDefaultDesktopApplicationSidebar,
@@ -23,6 +27,11 @@ import { DesktopApplicationSettingsProvider } from './application-settings-conte
 import { createDesktopI18n } from './i18n';
 import { DesktopExtensionManagementRuntime } from './desktop-extension-management-runtime';
 import {
+  TEXT_EDITOR_HOST_ROUTES,
+  type TextEditorHostRequest,
+  type TextEditorHostResult,
+} from '@neko/text-editor-domain';
+import {
   createDefaultAssetCenterFilter,
   type AssetCenterSessionProjection,
 } from '@neko/assets-domain/asset-center/contract';
@@ -35,6 +44,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const rendererInstrumentation = vi.hoisted(() => ({
   extensionRootRender: vi.fn(),
+  textEditorRootRender: vi.fn(),
 }));
 
 vi.mock('./DesktopExtensionManagementSurface', () => ({
@@ -72,10 +82,18 @@ vi.mock('./DesktopAssetCenterMainSurface', () => ({
   ),
 }));
 
+vi.mock('./DesktopTextEditorSurface', () => ({
+  DesktopTextEditorSurface: ({ view }: { readonly view: { readonly viewId: string } }) => {
+    rendererInstrumentation.textEditorRootRender(view.viewId);
+    return <div data-text-editor-root={view.viewId} />;
+  },
+}));
+
 describe('DesktopApplication scene lifecycle', () => {
   afterEach(() => {
     document.body.replaceChildren();
     rendererInstrumentation.extensionRootRender.mockClear();
+    rendererInstrumentation.textEditorRootRender.mockClear();
     vi.restoreAllMocks();
   });
 
@@ -123,6 +141,105 @@ describe('DesktopApplication scene lifecycle', () => {
 
     await act(async () => root.unmount());
     expect(activeSubscriptions).toBe(0);
+  });
+
+  it.each([
+    { label: 'clean', dirty: false, confirmations: [] as boolean[], decision: 'discard' as const },
+    { label: 'dirty save', dirty: true, confirmations: [true], decision: 'save' as const },
+    {
+      label: 'dirty discard',
+      dirty: true,
+      confirmations: [false, true],
+      decision: 'discard' as const,
+    },
+  ])('closes a $label Text Editor tab through its exact session', async (fixture) => {
+    const projection = createTextEditorShellProjection();
+    const confirm = vi.spyOn(globalThis, 'confirm');
+    for (const response of fixture.confirmations) confirm.mockReturnValueOnce(response);
+    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> =>
+      request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet
+        ? readyTextEditorResult(request, fixture.dirty)
+        : {
+            requestId: request.requestId,
+            identity: request.identity,
+            status: 'closed',
+          },
+    );
+    installBridge({ projection, textEditorExecute: execute });
+    const { container, root } = await renderApplication();
+
+    const close = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close story.fountain"]',
+    );
+    if (!close) throw new Error('Desktop fixture requires the Text Editor close control.');
+    await act(async () => close.click());
+    await waitFor(() => execute.mock.calls.length === 2);
+
+    expect(confirm.mock.calls).toHaveLength(fixture.confirmations.length);
+    expect(execute.mock.calls[0]?.[0]).toMatchObject({
+      route: TEXT_EDITOR_HOST_ROUTES.projectionGet,
+      identity: textEditorRuntimeIdentity(projection),
+    });
+    expect(execute.mock.calls[1]?.[0]).toMatchObject({
+      route: TEXT_EDITOR_HOST_ROUTES.close,
+      identity: textEditorRuntimeIdentity(projection),
+      decision: fixture.decision,
+    });
+    await act(async () => root.unmount());
+  });
+
+  it('keeps a dirty Text Editor tab when close is cancelled', async () => {
+    const projection = createTextEditorShellProjection();
+    vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(false);
+    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> =>
+      readyTextEditorResult(request, true),
+    );
+    installBridge({ projection, textEditorExecute: execute });
+    const { container, root } = await renderApplication();
+
+    const close = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close story.fountain"]',
+    );
+    if (!close) throw new Error('Desktop fixture requires the Text Editor close control.');
+    await act(async () => close.click());
+    await waitFor(() => execute.mock.calls.length === 1);
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-text-editor-root="text-editor:view-1"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('keeps the exact Text Editor tab and reports a save conflict during close', async () => {
+    const projection = createTextEditorShellProjection();
+    const getSnapshot = vi.fn(async () => projection);
+    vi.spyOn(globalThis, 'confirm').mockReturnValueOnce(true);
+    const execute = vi.fn(async (request: TextEditorHostRequest): Promise<TextEditorHostResult> => {
+      if (request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
+        return readyTextEditorResult(request, true);
+      }
+      return {
+        requestId: request.requestId,
+        identity: request.identity,
+        status: 'rejected',
+        diagnostic: { code: 'text-document-save-conflict', severity: 'error' },
+      };
+    });
+    installBridge({ projection, getSnapshot, textEditorExecute: execute });
+    const { container, root } = await renderApplication();
+
+    const close = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close story.fountain"]',
+    );
+    if (!close) throw new Error('Desktop fixture requires the Text Editor close control.');
+    await act(async () => close.click());
+    await waitFor(() => container.querySelector('[role="alert"]') !== null);
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'text-document-save-conflict',
+    );
+    expect(container.querySelector('[data-text-editor-root="text-editor:view-1"]')).not.toBeNull();
+    expect(getSnapshot).toHaveBeenCalledTimes(2);
+    await act(async () => root.unmount());
   });
 
   it('uses one committed projection event to switch Settings without a success refresh', async () => {
@@ -1957,6 +2074,7 @@ function installBridge({
   updateWorkbench = vi.fn(),
   assetCenterExecute = vi.fn(),
   projectPortability,
+  textEditorExecute = vi.fn(),
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -1969,6 +2087,7 @@ function installBridge({
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
   readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
   readonly projectPortability?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
+  readonly textEditorExecute?: (request: TextEditorHostRequest) => Promise<TextEditorHostResult>;
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -1980,6 +2099,7 @@ function installBridge({
       applicationSidebar: { update: updateApplicationSidebar },
       workbench: { update: updateWorkbench },
       assetCenter: { execute: assetCenterExecute },
+      textEditor: { execute: textEditorExecute, subscribe: vi.fn(() => () => undefined) },
       agentLaunch: {
         attach: vi.fn(() => new Promise(() => undefined)),
         authorizeResource: vi.fn(),
@@ -2046,6 +2166,124 @@ function createProjection(): DesktopShellProjection {
     agentHome,
     conversationNavigation: projectDesktopConversationNavigation(catalog, agentHome, []),
     domains: [],
+  };
+}
+
+function createTextEditorShellProjection(): DesktopShellProjection {
+  const base = createProjection();
+  const project = {
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    profile: 'content' as const,
+    displayName: 'Screenplay project',
+    createdAt: '2026-08-08T00:00:00.000Z',
+    updatedAt: '2026-08-08T00:00:00.000Z',
+  };
+  const view = {
+    viewId: 'text-editor:view-1',
+    viewInstanceId: 'view-instance-1',
+    projectId: project.projectId,
+    workspaceId: project.workspaceId,
+    kind: 'text-editor' as const,
+    ownerId: 'text-document:session-1',
+    displayLabel: 'story.fountain',
+    documentId: 'story.fountain',
+    editorSessionId: 'text-document:session-1',
+  };
+  const layout = setWorkbenchDisplayMode(
+    openOrFocusMainView(createDefaultDesktopWorkbenchLayout('window-1'), view),
+    'main-only',
+  );
+  const sceneId = 'scene:window-1:workspace-1';
+  const scope = {
+    kind: 'workspace' as const,
+    draftId: 'draft:workspace-1',
+    workspaceId: project.workspaceId,
+    workspaceGrantId: 'workspace-grant:workspace-1',
+  };
+  const scene = parseDesktopWorkbenchSceneProjection({
+    sceneId,
+    windowId: 'window-1',
+    context: { kind: 'agent', agentViewId: 'project-view-1', scope },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface:workspace-1',
+        agentViewId: 'project-view-1',
+        phase: 'draft',
+        scope,
+      },
+      main: {
+        kind: 'workspace-main',
+        workspaceId: project.workspaceId,
+        viewId: view.viewId,
+        viewInstanceId: 'view-instance-1',
+      },
+      rightManager: { kind: 'workspace-resources', workspaceId: project.workspaceId },
+      status: { kind: 'scene-status', sceneId },
+    },
+  });
+  const catalog = { projects: [project] };
+  return {
+    ...base,
+    catalog,
+    conversationNavigation: projectDesktopConversationNavigation(catalog, base.agentHome, []),
+    window: {
+      ...base.window,
+      activeTarget: { kind: 'project', tabId: 'tab-1' },
+      tabs: [
+        {
+          tabId: 'tab-1',
+          projectId: project.projectId,
+          viewId: 'project-view-1',
+          viewInstanceId: 'view-instance-1',
+        },
+      ],
+      workbench: createDesktopWindowComposition({
+        workbenchInstanceId: 'workbench:workspace-1',
+        layout,
+        scene,
+      }),
+    },
+  };
+}
+
+function textEditorRuntimeIdentity(projection: DesktopShellProjection) {
+  return {
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    windowId: 'window-1',
+    viewId: 'text-editor:view-1',
+    viewInstanceId: 'view-instance-1',
+    documentId: 'story.fountain',
+    sessionId: 'text-document:session-1',
+    rendererSessionId: projection.rendererSessionId,
+  };
+}
+
+function readyTextEditorResult(
+  request: TextEditorHostRequest,
+  dirty: boolean,
+): TextEditorHostResult {
+  return {
+    requestId: request.requestId,
+    identity: request.identity,
+    status: 'ready',
+    projection: {
+      identity: {
+        owner: { kind: 'window', windowId: 'window-1', projectId: 'project-1' },
+        workspaceId: 'workspace-1',
+        documentId: 'story.fountain',
+        locator: { kind: 'workspace-file', path: 'story.fountain' },
+      },
+      sessionId: 'text-document:session-1',
+      editSequence: dirty ? 1 : 0,
+      mode: 'fountain',
+      source: '.INT. ROOM - NIGHT\n',
+      dirty,
+      conflict: false,
+      diagnostics: [],
+    },
   };
 }
 

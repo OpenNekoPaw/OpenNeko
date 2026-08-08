@@ -4,13 +4,18 @@
 
 更新日期：2026-08-01
 
-范围：Agent 长期 Markdown 产物、Skill、授权文件写入、Generation 结果、Canvas authoring 与投递状态。
+范围：Agent 长期 Markdown/Fountain 等内容源产物、Skill、授权文件写入、Generation 结果、Canvas authoring 与投递状态。
 
 ## 决策
 
 长期 Markdown 交付物是明确文件 artifact，由 Agent file-authoring capability 在授权 workspace/project
 位置原子写入。Agent message 可以展示摘要或链接，但 transcript、UI card 和 Canvas 节点都不是文件
 内容 authority。
+
+Fountain、TXT、HTML、字幕和普通 JSON/YAML/CSV 等可移植内容源遵守同一原生文件原则。Agent
+不为这些内容创建 Text Document session 或格式专用 mutation Tool；parser、Search、Text Editor
+和 Preview 在文件变化后重建 projection。Canvas `.nkc`、Cut `.otio` 等 owner-declared 结构化项目
+不属于内容文件路径，generic Agent file read/write 必须拒绝其 raw bytes。
 
 交付物包含稳定 artifact identity、content revision/digest、provenance 和 resource ref。图片、音频、
 视频或模型先由 owning domain 提交 durable artifact，再以 `ContentLocator` 引用；不内嵌绝对路径、
@@ -33,6 +38,10 @@ Markdown artifact + revision
 
 Canvas 负责节点 schema、布局、资源 binding、项目 revision 与 mutation；Agent/Skill 不拼装私有
 Canvas JSON。目标冲突、source revision 变化、资源缺失或 apply 失败明确返回 diagnostic。
+
+Canvas apply 失败不得回退 generic file Tool 或 shell 修改 `.nkc`。Cut `.otio` 同样只通过 Cut
+query/authoring capability 修改。完整分类见
+[`adr-agent-content-file-and-structured-project-authoring-boundary.md`](adr-agent-content-file-and-structured-project-authoring-boundary.md)。
 
 ## 验证
 

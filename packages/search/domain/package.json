@@ -18,7 +18,8 @@
     "@neko/chara": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
-    "@neko/markdown": "workspace:*"
+    "@neko/markdown": "workspace:*",
+    "@neko/screenplay-domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

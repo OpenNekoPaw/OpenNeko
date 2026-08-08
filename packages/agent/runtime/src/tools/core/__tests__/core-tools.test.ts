@@ -50,6 +50,8 @@ describe('createCoreTools', () => {
       'utf-8',
     );
     await fs.writeFile(path.join(workspaceRoot, 'ignored', 'secret.txt'), 'ignored\n', 'utf-8');
+    await fs.writeFile(path.join(workspaceRoot, 'story.nkc'), 'CANVAS_RAW_SECRET\n', 'utf-8');
+    await fs.writeFile(path.join(workspaceRoot, 'edit.otio'), 'CUT_RAW_SECRET\n', 'utf-8');
     await fs.writeFile(path.join(outsideRoot, 'secret.txt'), 'outside\n', 'utf-8');
   });
 
@@ -120,15 +122,91 @@ describe('createCoreTools', () => {
       success: true,
       data: expect.objectContaining({ content: expect.stringContaining('Keep this decision') }),
     });
+    const observed = await read.execute({ file_path: 'plan.md' });
+    const freshness = requireFingerprint(observed);
     await expect(
       write.execute({
         file_path: 'plan.md',
         content: '# Existing plan\n- in_progress: review source\n',
+        expected_fingerprint: freshness,
       }),
-    ).resolves.toMatchObject({ success: true });
+    ).resolves.toMatchObject({
+      success: true,
+      data: {
+        contentLocator: { kind: 'workspace-file', path: 'plan.md' },
+        operation: 'replace',
+        byteLength: expect.any(Number),
+        fingerprint: expect.objectContaining({ strategy: 'mtime-size' }),
+      },
+    });
 
     expect(await fs.readFile(briefPath, 'utf-8')).toContain('Keep this decision');
     expect(await fs.readFile(planPath, 'utf-8')).toContain('in_progress');
+  });
+
+  it('creates nested content atomically and rejects stale replacement without partial bytes', async () => {
+    const tools = createCoreTools({ defaultCwd: workspaceRoot });
+    const read = getTool(tools, 'Read');
+    const write = getTool(tools, 'Write');
+
+    await expect(
+      write.execute({ file_path: 'drafts/scene.fountain', content: '.INT. ROOM - DAY\n' }),
+    ).resolves.toMatchObject({
+      success: true,
+      data: {
+        contentLocator: { kind: 'workspace-file', path: 'drafts/scene.fountain' },
+        operation: 'create',
+        fingerprint: expect.objectContaining({ strategy: 'mtime-size' }),
+      },
+    });
+    expect(await fs.readFile(path.join(workspaceRoot, 'drafts/scene.fountain'), 'utf-8')).toBe(
+      '.INT. ROOM - DAY\n',
+    );
+
+    const observed = await read.execute({ file_path: 'src/story.txt' });
+    const staleFreshness = requireFingerprint(observed);
+    await fs.writeFile(
+      path.join(workspaceRoot, 'src/story.txt'),
+      'changed outside Agent\n',
+      'utf-8',
+    );
+    const rejected = await write.execute({
+      file_path: 'src/story.txt',
+      content: 'stale replacement\n',
+      expected_fingerprint: staleFreshness,
+    });
+    expect(rejected).toMatchObject({
+      success: false,
+      error: expect.stringContaining('content-changed'),
+    });
+    expect(await fs.readFile(path.join(workspaceRoot, 'src/story.txt'), 'utf-8')).toBe(
+      'changed outside Agent\n',
+    );
+  });
+
+  it('denies protected project bytes across Read, Write and Grep but lists exact metadata', async () => {
+    const tools = createCoreTools({ defaultCwd: workspaceRoot });
+
+    await expect(getTool(tools, 'Read').execute({ file_path: 'story.nkc' })).resolves.toMatchObject(
+      {
+        success: false,
+        error: expect.stringContaining('canvas domain capability'),
+      },
+    );
+    await expect(
+      getTool(tools, 'Write').execute({ file_path: 'edit.otio', content: 'raw overwrite' }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('cut domain capability'),
+    });
+    const searched = await getTool(tools, 'Grep').execute({ pattern: 'RAW_SECRET', path: '.' });
+    expect(searched).toMatchObject({ success: true });
+    expect(JSON.stringify(searched.data)).not.toContain('RAW_SECRET');
+
+    const listed = await getTool(tools, 'ListDirectory').execute({ path: '.' });
+    expect(listed).toMatchObject({ success: true });
+    expect(JSON.stringify(listed.data)).toContain('story.nkc');
+    expect(JSON.stringify(listed.data)).toContain('edit.otio');
   });
 
   it('blocks reads, listings, and searches outside the workspace root', async () => {
@@ -349,4 +427,16 @@ function getTool(tools: readonly Tool[], name: string): Tool {
     throw new Error(`Missing tool: ${name}`);
   }
   return tool;
+}
+
+function requireFingerprint(result: Awaited<ReturnType<Tool['execute']>>): unknown {
+  if (!result.success || !isRecord(result.data))
+    throw new Error('Expected a successful file read.');
+  const fingerprint = result.data['fingerprint'];
+  if (!isRecord(fingerprint)) throw new Error('Expected file freshness evidence.');
+  return fingerprint;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

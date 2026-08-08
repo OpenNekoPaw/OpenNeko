@@ -838,6 +838,7 @@ function workspace(workspaceId = 'workspace-1'): AgentWorkspaceRuntime {
     clearContext: vi.fn(),
     compactContext: vi.fn(),
     readSkillCatalog: vi.fn(),
+    readCapabilityPromptFragments: () => [],
     listConversations: vi.fn(() => []),
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(),

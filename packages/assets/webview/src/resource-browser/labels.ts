@@ -40,6 +40,7 @@ export interface ResourceBrowserLabels {
   readonly statusEntryConflict: string;
   readonly statusUnreferencedLinked: string;
   readonly preview: string;
+  readonly editText: string;
   readonly openCut: string;
   readonly addToCut: string;
   readonly cutConnecting: string;
@@ -102,6 +103,7 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     statusEntryConflict: 'A real workspace entry conflicts with this library',
     statusUnreferencedLinked: 'Linked but not referenced by project content',
     preview: 'Preview',
+    editText: 'Edit text',
     openCut: 'Open in Cut',
     addToCut: 'Add to Cut',
     cutConnecting: 'Select an open Cut',
@@ -161,6 +163,7 @@ const labels: Record<SupportedLocale, ResourceBrowserLabels> = {
     statusEntryConflict: '工作区存在同名真实目录或文件',
     statusUnreferencedLinked: '已链接，但项目内容暂未引用',
     preview: '预览',
+    editText: '编辑文本',
     openCut: '使用剪辑器打开',
     addToCut: '添加到剪辑',
     cutConnecting: '请选择已打开的剪辑',

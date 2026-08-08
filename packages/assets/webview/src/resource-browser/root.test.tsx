@@ -450,6 +450,54 @@ describe('ResourceBrowserRoot', () => {
     expect(document.querySelector('.neko-resource-browser__actions')).toBeNull();
   });
 
+  it('opens admitted text in the editor by default and Preview only from the explicit menu', async () => {
+    const textProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'files',
+      items: [
+        {
+          resourceId: 'content:story',
+          facet: 'files',
+          role: 'content',
+          depth: 0,
+          kind: 'document',
+          label: 'story.fountain',
+          locator: { kind: 'workspace-file', path: 'story.fountain' },
+          capabilities: ['edit-text', 'preview', 'reveal'],
+        },
+      ],
+    };
+    const runtime = createRuntime(textProjection);
+    render(
+      <ResourceBrowserRoot
+        runtime={runtime}
+        locale="en"
+        previewTarget={{ viewId: 'preview-1', presentation: 'temporary' }}
+      />,
+    );
+
+    const item = await screen.findByRole('treeitem', { name: 'story.fountain' });
+    fireEvent.click(item, { detail: 1 });
+    await waitFor(() => expect(runtime.execute).toHaveBeenCalledTimes(1));
+    expect(runtime.execute).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ route: 'text.edit', resourceId: 'content:story' }),
+    );
+
+    fireEvent.keyDown(item, { key: 'F10', shiftKey: true });
+    const preview = await screen.findByRole('menuitem', { name: 'Preview' });
+    fireEvent.click(preview);
+    await waitFor(() => expect(runtime.execute).toHaveBeenCalledTimes(2));
+    expect(runtime.execute).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        route: 'preview',
+        resourceId: 'content:story',
+        targetPreview: { viewId: 'preview-1', presentation: 'temporary' },
+      }),
+    );
+  });
+
   it('opens a package-owned quick preview on hover and releases it on leave', async () => {
     const runtime = createRuntime();
     const renderQuickPreview = vi.fn((descriptor) => (

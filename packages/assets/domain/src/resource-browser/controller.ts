@@ -387,6 +387,15 @@ export class ResourceBrowserController implements ResourceBrowserHostRuntime {
       return this.commitProjection(await this.readProjection('files', '', 100));
     }
     switch (parsed.route) {
+      case RESOURCE_BROWSER_ROUTES.editText:
+        if (item.facet !== 'files' || !item.capabilities.includes('edit-text')) {
+          throw new ResourceBrowserContractError(
+            'invalid-resource-browser-payload',
+            'Resource Browser Text Editor requires an admitted Workspace File.',
+          );
+        }
+        await this.options.interactions.editText({ identity: this.identity, item });
+        break;
       case RESOURCE_BROWSER_ROUTES.preview:
         if (!parsed.targetPreview) {
           throw new ResourceBrowserContractError(

@@ -5,6 +5,11 @@
 
 Neko 项目文件是持久创作事实。来自 Agent、Assets、Desktop action 或后台任务的写入必须在没有打开 renderer surface 或 UI snapshot 时仍可执行。Renderer 是交互投影，不是后台 authoring executor。
 
+本文件只定义结构化、空间化和时间线项目的 interface authoring。Markdown、Fountain、TXT、HTML、
+字幕和普通 JSON/YAML/CSV 等内容源由 Agent 通过 Workspace 原生文件路径读写，不进入这里的
+domain authoring service。Canvas `.nkc`、Cut `.otio` 即使序列化为 JSON，也因跨字段不变量、对象
+identity 与 project revision 必须留在 owning-domain interface path。
+
 当前保留且适用此边界的编辑领域是 Canvas 与 Cut。未来其他项目格式进入 workspace 时，必须通过新的 contract 和测试加入，不能复用已移除 Sketch、Audio、Model、Puppet 或 Story 的旧命令。
 
 ## Operation 分类
@@ -23,6 +28,11 @@ Neko 项目文件是持久创作事实。来自 Agent、Assets、Desktop action 
 | ------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
 | Canvas | `CanvasProjectAuthoringService`、Canvas authoring capability、`NekoCanvasAPI` 的持久写入 API     | 用 renderer 私有 node mutation 充当 Agent/Assets executor   |
 | Cut    | Desktop Main 通过 shared `NekoCutAPI.routes.handoff` 创建新 `.otio`，或追加到显式 URI + revision | active/recent target、隐藏 surface、renderer import message |
+
+Agent core file policy 必须把 `.nkc`、`.otio` 和未来 owner-declared project format 作为 exact
+protected documents，拒绝 generic read/write。结构化 capability 缺失、未实现或失败时不得回退 raw
+JSON、shell redirection、其他 adapter/provider 或 active/recent target。普通非领域 JSON 保持内容/
+数据文件路径，不因 JSON 语法进入本表。
 
 共享层只拥有 client-neutral target、result、diagnostic、operation classification 和测试 poison helper。领域 edit planning、codec、source policy 与项目 mutation 留在 owning package。
 
@@ -62,3 +72,8 @@ Canvas Board 的二进制生成媒体必须先提交到项目拥有的稳定生�
 - 已打开 editor 能在 host write 后同步；
 - runtime-only command 在缺失 editor/runtime 时明确失败；
 - 路径断言证明 canonical service 被命中，legacy handler 未参与。
+- protected-project 断言证明 generic Agent file read/write 与 shell bypass 不可达；
+- 内容文件断言证明 Markdown/Fountain 不被误路由到 Canvas/Cut authoring service。
+
+内容与结构化项目的完整分类见
+[`adr-agent-content-file-and-structured-project-authoring-boundary.md`](adr-agent-content-file-and-structured-project-authoring-boundary.md)。
