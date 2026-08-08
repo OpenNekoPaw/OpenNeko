@@ -2,17 +2,78 @@
   "schema": "neko.agent-eval.suite",
   "id": "agent-runtime.model-binding",
   "owner": { "kind": "agent-runtime", "id": "session-model-binding" },
-  "target": { "kind": "model", "id": "chat-model-binding", "contractHash": "sha256:5e9c7a8e3d6ffaf067c21789a19103102548d17fe8fe6c1ddaf10d1c8601b70a" },
+  "target": {
+    "kind": "model",
+    "id": "chat-model-binding",
+    "contractHash": "sha256:5e9c7a8e3d6ffaf067c21789a19103102548d17fe8fe6c1ddaf10d1c8601b70a"
+  },
   "runtimeProfiles": [
-    { "id": "canonical-default", "settings": {}, "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" },
-    { "id": "thinking-0", "settings": { "thinkingBudget": 0 }, "configurationHash": "sha256:82a878d0d08ec3a151819cb976bff055754df0ed72be501c66e6188669d98d2c" },
-    { "id": "thinking-128", "settings": { "thinkingBudget": 128 }, "configurationHash": "sha256:6c8b7085878d26c94b0e2120f0c6963161b3326c28d7c081ee150e49bb285c07" }
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "thinking-0",
+      "settings": { "thinkingBudget": 0 },
+      "configurationHash": "sha256:82a878d0d08ec3a151819cb976bff055754df0ed72be501c66e6188669d98d2c"
+    },
+    {
+      "id": "thinking-128",
+      "settings": { "thinkingBudget": 128 },
+      "configurationHash": "sha256:6c8b7085878d26c94b0e2120f0c6963161b3326c28d7c081ee150e49bb285c07"
+    }
   ],
-  "modelProfiles": [{ "id": "nekoapi-gpt-5.5", "selection": "explicit", "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" }, "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe" }],
+  "modelProfiles": [
+    {
+      "id": "nekoapi-gpt-5.5",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
+      "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe"
+    },
+    {
+      "id": "nekoapi-gpt-5.6-luna",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" },
+      "configurationHash": "sha256:25fa5d7fcdf913337ab60da79de94b369131cca7022fddc2922577cc3f85e4b2"
+    }
+  ],
   "judgeProfiles": [],
-  "fixtures": [{ "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true }],
-  "cases": [{ "id": "explicit-chat-model", "file": "cases/explicit-chat-model.json", "group": "canonical", "visibility": "public" }],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "explicit-chat-model",
+      "file": "cases/explicit-chat-model.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "same-conversation-model-switch",
+      "file": "cases/same-conversation-model-switch.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "unavailable-model-update-rejection",
+      "file": "cases/unavailable-model-update-rejection.json",
+      "group": "failure",
+      "visibility": "public"
+    }
+  ],
   "rubricRefs": [],
   "baselinePolicy": { "mode": "none" },
-  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
 }

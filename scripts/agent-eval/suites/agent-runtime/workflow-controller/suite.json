@@ -81,6 +81,18 @@
       "visibility": "public"
     },
     {
+      "id": "session-compact-continuation",
+      "file": "cases/session-compact-continuation.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "entry-compact-session-required",
+      "file": "cases/entry-compact-session-required.json",
+      "group": "boundary",
+      "visibility": "public"
+    },
+    {
       "id": "workspace-board-delivery-resume",
       "file": "cases/workspace-board-delivery-resume.json",
       "group": "failure",

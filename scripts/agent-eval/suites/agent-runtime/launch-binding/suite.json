@@ -1,11 +1,11 @@
 {
   "schema": "neko.agent-eval.suite",
-  "id": "agent-runtime.skill-runtime",
-  "owner": { "kind": "agent-runtime", "id": "skill-runtime" },
+  "id": "agent-runtime.launch-binding",
+  "owner": { "kind": "agent-runtime", "id": "agent-launch-binding" },
   "target": {
-    "kind": "runtime",
-    "id": "skill-trigger-injection-lifecycle",
-    "contractHash": "sha256:d92ed1cfd4320727c909d093f39789b835ea65fac21a50f36f5b4c991334b6c0"
+    "kind": "workflow",
+    "id": "draft-binding-first-submit",
+    "contractHash": "sha256:1d8f56cd2f344126254df289f1f379c52559de9fcf7a1044e7b1a2a19e956072"
   },
   "runtimeProfiles": [
     {
@@ -33,21 +33,21 @@
   ],
   "cases": [
     {
-      "id": "explicit-builtin-injection",
-      "file": "cases/explicit-builtin-injection.json",
-      "group": "canonical",
-      "visibility": "public"
-    },
-    {
-      "id": "model-selected-read-without-approval",
-      "file": "cases/model-selected-read-without-approval.json",
-      "group": "regression",
-      "visibility": "public"
-    },
-    {
-      "id": "entry-explicit-builtin-first-submit",
-      "file": "cases/entry-explicit-builtin-first-submit.json",
+      "id": "entry-assistant-first-submit",
+      "file": "cases/entry-assistant-first-submit.json",
       "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "workspace-bound-first-submit",
+      "file": "cases/workspace-bound-first-submit.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "stale-binding-rejection",
+      "file": "cases/stale-binding-rejection.json",
+      "group": "failure",
       "visibility": "public"
     }
   ],

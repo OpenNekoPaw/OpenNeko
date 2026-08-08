@@ -5,6 +5,13 @@ describe('Desktop Agent external driver adapter', () => {
   it('uses only the renderer/preload public Agent bridge for every operation', async () => {
     const evaluate = vi.fn(async () => ({ accepted: true }));
     const driver = createDesktopAgentDriver({ evaluate });
+    await driver.bindDraft({ target: 'assistant', catalogRef: 'assistant-binding' });
+    await driver.submitDraft({
+      catalogRef: 'initial',
+      input: { kind: 'message', text: 'hello' },
+      expectedStatus: 'rejected',
+    });
+    await driver.prepareSessionAfterDraft();
     await driver.connect(owner());
     await driver.createConversation();
     await driver.submit({
@@ -29,6 +36,21 @@ describe('Desktop Agent external driver adapter', () => {
       toolCallId: 'tool-call-1',
       approved: true,
     });
+    await driver.invokeInput({
+      conversationId: 'conversation-1',
+      trigger: 'command',
+      name: 'compact',
+      resultEvent: 'compressionResult',
+      timeoutMs: 30_000,
+    });
+    await driver.updateConfiguration({
+      conversationId: 'conversation-1',
+      providerId: 'provider',
+      modelId: 'model',
+      expectedStatus: 'applied',
+      turnState: 'idle',
+      timeoutMs: 30_000,
+    });
     await driver.resume({ conversationId: 'conversation-1' });
     await driver.readProjection('conversation-1');
     await driver.observeWorkflowStep({
@@ -46,13 +68,17 @@ describe('Desktop Agent external driver adapter', () => {
     await driver.closeApplication();
     await driver.dispose();
 
-    expect(evaluate).toHaveBeenCalledTimes(14);
+    expect(evaluate).toHaveBeenCalledTimes(19);
     const expressions = evaluate.mock.calls.map(([expression]) => expression).join('\n');
     expect(expressions).toContain('window.openNekoDesktop?.agent');
     expect(expressions).toContain("type: 'sendMessage'");
     expect(expressions).toContain('contextPayloads');
     expect(expressions).toContain("type: 'newConversation'");
     expect(expressions).toContain("type: 'confirmTool'");
+    expect(expressions).toContain("type: 'invokeAgentInput'");
+    expect(expressions).toContain('window.openNekoDesktop?.agentLaunch');
+    expect(expressions).toContain("type: 'updateSettings'");
+    expect(expressions).toContain("type: 'getAgentInputCatalog'");
     expect(expressions).toContain("type: 'getMessageQueue'");
     expect(expressions).toContain("kind: 'wait-for-idle'");
     expect(expressions).toContain("kind: 'read-facts'");
@@ -77,6 +103,174 @@ describe('Desktop Agent external driver adapter', () => {
     });
     expect(expression).toContain('assertObservedIdentity(state, command)');
     expect(expression).toContain('operation identity was not observed');
+  });
+
+  it('captures a rejected Draft catalog input without creating a Session', async () => {
+    const previousWindow = globalThis.window;
+    const draft = {
+      phase: 'draft',
+      draftId: 'draft-1',
+      binding: { kind: 'unbound' },
+      bindingReceipt: null,
+    };
+    const catalog = {
+      connection: {
+        applicationInstanceId: 'app-1',
+        windowId: 'window-1',
+        workbenchInstanceId: 'workbench-1',
+        agentSurfaceId: 'surface-1',
+        viewId: 'view-1',
+        draftId: 'draft-1',
+        connectionId: 'launch-1',
+      },
+      interaction: draft,
+      models: [],
+      configuration: {
+        request: {
+          modelCatalogEntryId: 'provider:model',
+          providerId: 'provider',
+          modelId: 'model',
+          executionMode: 'ask',
+        },
+      },
+      inputs: [
+        {
+          id: 'builtin:compact',
+          name: 'compact',
+          trigger: 'command',
+          executable: { commandId: 'compact', handlerId: 'session.compact' },
+          availability: {
+            status: 'unavailable',
+            diagnostic: { code: 'session-required' },
+          },
+        },
+      ],
+    };
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {},
+        shell: {
+          getSnapshot: vi.fn(async () => ({
+            window: {
+              workbench: {
+                workbenchInstanceId: 'workbench-1',
+                scene: {
+                  context: {
+                    kind: 'agent',
+                    agentViewId: 'view-1',
+                    scope: { kind: 'unbound', draftId: 'draft-1' },
+                  },
+                  slots: {
+                    interaction: {
+                      kind: 'agent',
+                      agentSurfaceId: 'surface-1',
+                      phase: 'draft',
+                    },
+                  },
+                },
+              },
+            },
+          })),
+        },
+        agentLaunch: {
+          attach: vi.fn(async () => catalog),
+          submitDraft: vi.fn(async () => {
+            throw new Error("Agent route 'compact' requires a committed conversation session.");
+          }),
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await expect(
+        driver.submitDraft({
+          catalogRef: 'initial',
+          input: { kind: 'command', name: 'compact' },
+          expectedStatus: 'rejected',
+        }),
+      ).resolves.toMatchObject({
+        accepted: false,
+        status: 'rejected',
+        conversationCreated: false,
+        availability: { diagnostic: { code: 'session-required' } },
+      });
+    } finally {
+      delete globalThis.__openNekoDesktopAgentDraftDriver;
+      globalThis.window = previousWindow;
+    }
+  });
+
+  it('waits for exact requested and effective Conversation configuration evidence', async () => {
+    let publish;
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      openNekoDesktop: {
+        agent: {
+          getBootstrap: vi.fn(async () => ({
+            status: 'ready',
+            connection: connection('app-1', 'connection-1'),
+          })),
+          subscribe: vi.fn((_connection, listener) => {
+            publish = listener;
+            return () => {};
+          }),
+          send: vi.fn(),
+        },
+      },
+    };
+    const driver = createDesktopAgentDriver({
+      evaluate: async (expression) => (0, eval)(expression),
+    });
+    try {
+      await driver.connect(owner());
+      publish({
+        type: 'projectionPatch',
+        patch: {
+          type: 'conversationProjectionPatch',
+          conversationId: 'conversation-1',
+          turnId: 'turn-1',
+          runId: 'run-1',
+          operations: [],
+        },
+      });
+      const updating = driver.updateConfiguration({
+        conversationId: 'conversation-1',
+        providerId: 'provider',
+        modelId: 'model-next',
+        expectedStatus: 'applied',
+        turnState: 'running',
+        runningTurnIdentity: {
+          conversationId: 'conversation-1',
+          turnId: 'turn-1',
+          runId: 'run-1',
+        },
+        timeoutMs: 1000,
+      });
+      await Promise.resolve();
+      publish({ type: 'settingsUpdated', success: true });
+      publish({
+        type: 'settingsData',
+        conversationId: 'conversation-1',
+        selectedProviderId: 'provider',
+        selectedModelId: 'model-next',
+        agentConfiguration: {
+          request: { providerId: 'provider', modelId: 'model-next' },
+          fields: {
+            model: { effectiveValue: { providerId: 'provider', modelId: 'model-next' } },
+          },
+        },
+      });
+      await expect(updating).resolves.toMatchObject({
+        status: 'applied',
+        submissionCountBefore: 0,
+        submissionCountAfter: 0,
+      });
+    } finally {
+      await driver.dispose();
+      globalThis.window = previousWindow;
+    }
   });
 
   it('fails immediately when submit projects a conversation-scoped error before identity', async () => {

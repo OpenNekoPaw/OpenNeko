@@ -1,0 +1,79 @@
+{
+  "schema": "neko.agent-eval.scenario",
+  "id": "entry-explicit-builtin-first-submit",
+  "suiteId": "agent-runtime.skill-runtime",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Select the exact builtin storyboard Skill from the visible Entry composer and use it for the first submitted turn.",
+    "canonicalPath": [
+      "visible Entry $ trigger",
+      "Host input catalog selection",
+      "typed Skill activation intent",
+      "Agent Draft first submit",
+      "Pi Skill Host receipt"
+    ],
+    "observables": [
+      {
+        "ref": "entry-skill-facts",
+        "kind": "runtime-fact",
+        "description": "Exact Host Skill receipt, Draft-to-Session binding, Conversation creation, and terminal Pi facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The exact builtin storyboard identity is injected into the first Assistant turn and the Entry Draft becomes one Session.",
+    "expectedFailure": "Ordinary-prompt fallback, wrong Skill source/fingerprint, missing Conversation materialization, or runtime error fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "skill-submit",
+      "kind": "submit",
+      "prompt": "$storyboard 为雨夜车站给出一个简洁镜头建议。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "entry-skill-facts" },
+    {
+      "id": "binding",
+      "kind": "interaction-binding",
+      "initialPhase": "draft",
+      "initialBindingKind": "unbound",
+      "finalPhase": "session",
+      "finalBindingKind": "assistant",
+      "conversationCreated": true,
+      "evidenceRef": "entry-skill-facts"
+    },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "storyboard",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "storyboard",
+        "fingerprint": "sha256:ab73de988b98b22a9b2598de923c56999abb70ef1cf4bb97c580fabd3b54d719"
+      },
+      "status": "injected",
+      "evidenceRef": "entry-skill-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "entry-skill-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 },
+  "execution": {
+    "evidenceLevel": "visible-desktop",
+    "resourceClass": "visible-ui",
+    "protected": true,
+    "startSurface": "entry"
+  }
+}

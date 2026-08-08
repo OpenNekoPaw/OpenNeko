@@ -13,6 +13,7 @@ export async function runCase(selection, options = {}) {
   assertDesktopEvidenceSupport(executionCase.assertions);
   const windowMode = resolveWindowMode(executionCase, options.windowMode);
   const authorization = readProviderAuthorization(options.providerAuthorization, options.env ?? {});
+  assertAuthorizedModelProfiles(executionCase.modelProfiles, authorization);
   const runDesktop = options.runDesktop ?? runAutomatedDesktopFunctional;
   const scenario = (options.createScenario ?? createDesktopAgentEvaluationScenario)(
     executionCase,
@@ -192,6 +193,8 @@ export function resolveExecutionCase(selection) {
 }
 
 const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
+  'draft-bind',
+  'draft-submit',
   'submit',
   'queue',
   'wait-for-idle',
@@ -200,6 +203,8 @@ const DESKTOP_WORKFLOW_STEP_KINDS = new Set([
   'resume',
   'restart',
   'feedback',
+  'update-configuration',
+  'invoke-input',
 ]);
 
 function readSingleFixture(suite, scenario) {
@@ -232,10 +237,12 @@ function readProviderAuthorization(explicit, env) {
     explicit ??
     (env.OPENNEKO_AGENT_EVAL_PROVIDER_ID ||
     env.OPENNEKO_AGENT_EVAL_MODEL_ID ||
+    env.OPENNEKO_AGENT_EVAL_MODEL_IDS ||
     env.OPENNEKO_AGENT_EVAL_COST_APPROVED
       ? {
           providerId: env.OPENNEKO_AGENT_EVAL_PROVIDER_ID,
           modelId: env.OPENNEKO_AGENT_EVAL_MODEL_ID,
+          modelIds: parseAuthorizedModelIds(env.OPENNEKO_AGENT_EVAL_MODEL_IDS),
           configurationFile: env.OPENNEKO_AGENT_EVAL_CONFIG_PATH,
           costApproved: env.OPENNEKO_AGENT_EVAL_COST_APPROVED === 'true',
         }
@@ -260,6 +267,7 @@ function readProviderAuthorization(explicit, env) {
   return Object.freeze({
     providerId: input.providerId,
     modelId: input.modelId,
+    modelIds: Object.freeze(normalizeAuthorizedModelIds(input.modelId, input.modelIds)),
     configurationFile: resolve(input.configurationFile),
     costApproved: true,
   });
@@ -267,4 +275,39 @@ function readProviderAuthorization(explicit, env) {
 
 function infrastructureBlocker(message) {
   return Object.assign(new Error(message), { code: 'infrastructure-blocked' });
+}
+
+function assertAuthorizedModelProfiles(profiles, authorization) {
+  const unapproved = profiles.filter(
+    (profile) =>
+      profile.selection === 'explicit' &&
+      (profile.chat.providerId !== authorization.providerId ||
+        !authorization.modelIds.includes(profile.chat.modelId)),
+  );
+  if (unapproved.length > 0) {
+    throw infrastructureBlocker(
+      `Desktop Agent case requires additional explicit provider/model authorization: ${unapproved
+        .map((profile) => `${profile.chat.providerId}/${profile.chat.modelId}`)
+        .join(', ')}.`,
+    );
+  }
+}
+
+function parseAuthorizedModelIds(value) {
+  if (value === undefined) return undefined;
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeAuthorizedModelIds(primaryModelId, modelIds) {
+  if (modelIds !== undefined && !Array.isArray(modelIds)) {
+    throw infrastructureBlocker('Desktop Agent authorized model identities must be an array.');
+  }
+  const identities = [primaryModelId, ...(modelIds ?? [])];
+  if (identities.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
+    throw infrastructureBlocker('Desktop Agent authorized model identity is missing.');
+  }
+  return [...new Set(identities)];
 }

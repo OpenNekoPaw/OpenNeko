@@ -1,40 +1,219 @@
 {
   "schema": "neko.agent-eval.coverage-index",
   "targets": [
-    { "kind": "builtin-skill", "id": "skill-creator", "disposition": "suite", "suiteIds": ["skill.skill-creator"] },
-    { "kind": "builtin-skill", "id": "storyboard", "disposition": "suite", "suiteIds": ["skill.storyboard"] },
+    {
+      "kind": "builtin-skill",
+      "id": "skill-creator",
+      "disposition": "suite",
+      "suiteIds": ["skill.skill-creator"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "storyboard",
+      "disposition": "suite",
+      "suiteIds": ["skill.storyboard"]
+    },
     { "kind": "builtin-skill", "id": "image", "disposition": "suite", "suiteIds": ["skill.image"] },
     { "kind": "builtin-skill", "id": "video", "disposition": "suite", "suiteIds": ["skill.video"] },
-    { "kind": "builtin-skill", "id": "media-production", "disposition": "suite", "suiteIds": ["skill.media-production"] },
-    { "kind": "builtin-skill", "id": "media-quality-review", "disposition": "suite", "suiteIds": ["skill.media-quality-review"] },
-    { "kind": "builtin-skill", "id": "scene-to-music", "disposition": "suite", "suiteIds": ["skill.scene-to-music"] },
-    { "kind": "builtin-skill", "id": "video-editing", "disposition": "suite", "suiteIds": ["skill.video-editing"] },
-    { "kind": "builtin-skill", "id": "color-grading", "disposition": "suite", "suiteIds": ["skill.color-grading"] },
-    { "kind": "builtin-skill", "id": "audio-mixing", "disposition": "suite", "suiteIds": ["skill.audio-mixing"] },
-    { "kind": "builtin-skill", "id": "subtitle-assistant", "disposition": "suite", "suiteIds": ["skill.subtitle-assistant"] },
-    { "kind": "builtin-skill", "id": "script-generation", "disposition": "suite", "suiteIds": ["skill.script-generation"] },
-    { "kind": "builtin-skill", "id": "script-to-timeline", "disposition": "suite", "suiteIds": ["skill.script-to-timeline"] },
+    {
+      "kind": "builtin-skill",
+      "id": "media-production",
+      "disposition": "suite",
+      "suiteIds": ["skill.media-production"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "media-quality-review",
+      "disposition": "suite",
+      "suiteIds": ["skill.media-quality-review"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "scene-to-music",
+      "disposition": "suite",
+      "suiteIds": ["skill.scene-to-music"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "video-editing",
+      "disposition": "suite",
+      "suiteIds": ["skill.video-editing"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "color-grading",
+      "disposition": "suite",
+      "suiteIds": ["skill.color-grading"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "audio-mixing",
+      "disposition": "suite",
+      "suiteIds": ["skill.audio-mixing"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "subtitle-assistant",
+      "disposition": "suite",
+      "suiteIds": ["skill.subtitle-assistant"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "script-generation",
+      "disposition": "suite",
+      "suiteIds": ["skill.script-generation"]
+    },
+    {
+      "kind": "builtin-skill",
+      "id": "script-to-timeline",
+      "disposition": "suite",
+      "suiteIds": ["skill.script-to-timeline"]
+    },
 
-    { "kind": "prompt-layer", "id": "base", "disposition": "suite", "suiteIds": ["agent-runtime.prompt-composition"] },
-    { "kind": "prompt-layer", "id": "schema", "disposition": "excluded", "deterministicValidation": { "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts", "reason": "The canonical Builder has no independent runtime schema-module path; its supported composition inputs and secret-free projection are deterministic and covered by the Builder contract tests." } },
-    { "kind": "prompt-layer", "id": "skill", "disposition": "suite", "suiteIds": ["agent-runtime.prompt-composition", "agent-runtime.skill-runtime"] },
-    { "kind": "prompt-layer", "id": "environment", "disposition": "suite", "suiteIds": ["agent-runtime.prompt-composition"] },
-    { "kind": "prompt-layer", "id": "ephemeral", "disposition": "excluded", "deterministicValidation": { "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts", "reason": "The canonical Builder has no Orchestrator-owned ephemeral module path; execution-mode selection and non-mutating composition are deterministic and covered by the Builder contract tests." } },
+    {
+      "kind": "prompt-layer",
+      "id": "base",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.prompt-composition"]
+    },
+    {
+      "kind": "prompt-layer",
+      "id": "schema",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts",
+        "reason": "The canonical Builder has no independent runtime schema-module path; its supported composition inputs and secret-free projection are deterministic and covered by the Builder contract tests."
+      }
+    },
+    {
+      "kind": "prompt-layer",
+      "id": "skill",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.prompt-composition", "agent-runtime.skill-runtime"]
+    },
+    {
+      "kind": "prompt-layer",
+      "id": "environment",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.prompt-composition"]
+    },
+    {
+      "kind": "prompt-layer",
+      "id": "ephemeral",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm --dir packages/agent/runtime exec vitest run src/session/__tests__/system-prompt-builder.test.ts",
+        "reason": "The canonical Builder has no Orchestrator-owned ephemeral module path; execution-mode selection and non-mutating composition are deterministic and covered by the Builder contract tests."
+      }
+    },
 
-    { "kind": "agent-runtime-capability", "id": "evaluation-platform", "disposition": "excluded", "deterministicValidation": { "command": "pnpm test:agent:eval", "reason": "Evaluation platform code is external test infrastructure and cannot change target Agent behavior by itself." } },
-    { "kind": "agent-runtime-capability", "id": "desktop-session-driver", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
-    { "kind": "agent-runtime-capability", "id": "prompt-composition", "disposition": "suite", "suiteIds": ["agent-runtime.prompt-composition"] },
-    { "kind": "agent-runtime-capability", "id": "skill-runtime", "disposition": "suite", "suiteIds": ["agent-runtime.skill-runtime", "skill.storyboard"] },
-    { "kind": "agent-runtime-capability", "id": "capability-tool-routing", "disposition": "suite", "suiteIds": ["agent-runtime.perception-routing", "skill.skill-creator", "skill.image", "skill.video"] },
-    { "kind": "agent-runtime-capability", "id": "provider-model-routing", "disposition": "suite", "suiteIds": ["agent-runtime.model-binding", "agent-runtime.perception-routing"] },
-    { "kind": "agent-runtime-capability", "id": "session-workflows", "disposition": "suite", "suiteIds": ["agent-runtime.workflow-controller"] },
-    { "kind": "agent-runtime-capability", "id": "tool-call-lifecycle", "disposition": "suite", "suiteIds": ["agent-runtime.workflow-controller", "agent-runtime.stream-delivery", "agent-runtime.creative-media-workflow"] },
-    { "kind": "agent-runtime-capability", "id": "creative-media-workflow", "disposition": "suite", "suiteIds": ["agent-runtime.creative-media-workflow"] },
-    { "kind": "agent-runtime-capability", "id": "media-library-content", "disposition": "suite", "suiteIds": ["agent-runtime.media-library-content", "agent-runtime.stream-delivery"] },
-    { "kind": "agent-runtime-capability", "id": "workspace-board-delivery", "disposition": "suite", "suiteIds": ["agent-runtime.creative-media-workflow", "agent-runtime.workflow-controller"] },
-    { "kind": "agent-runtime-capability", "id": "timeline-projection-authority", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
-    { "kind": "agent-runtime-capability", "id": "tool-result-delivery", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
-    { "kind": "agent-runtime-capability", "id": "desktop-event-projection", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] },
-    { "kind": "agent-runtime-capability", "id": "resource-display-projection", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery"] }
+    {
+      "kind": "agent-runtime-capability",
+      "id": "evaluation-platform",
+      "disposition": "excluded",
+      "deterministicValidation": {
+        "command": "pnpm test:agent:eval",
+        "reason": "Evaluation platform code is external test infrastructure and cannot change target Agent behavior by itself."
+      }
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "desktop-session-driver",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.stream-delivery"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "launch-domain-binding",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.launch-binding", "agent-runtime.skill-runtime"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "prompt-composition",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.prompt-composition"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "skill-runtime",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.skill-runtime", "skill.storyboard"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "capability-tool-routing",
+      "disposition": "suite",
+      "suiteIds": [
+        "agent-runtime.perception-routing",
+        "skill.skill-creator",
+        "skill.image",
+        "skill.video"
+      ]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "provider-model-routing",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.model-binding", "agent-runtime.perception-routing"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "session-workflows",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.workflow-controller"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "tool-call-lifecycle",
+      "disposition": "suite",
+      "suiteIds": [
+        "agent-runtime.workflow-controller",
+        "agent-runtime.stream-delivery",
+        "agent-runtime.creative-media-workflow"
+      ]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "creative-media-workflow",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.creative-media-workflow"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "media-library-content",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.media-library-content", "agent-runtime.stream-delivery"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "workspace-board-delivery",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.creative-media-workflow", "agent-runtime.workflow-controller"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "timeline-projection-authority",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.stream-delivery"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "tool-result-delivery",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.stream-delivery"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "desktop-event-projection",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.stream-delivery"]
+    },
+    {
+      "kind": "agent-runtime-capability",
+      "id": "resource-display-projection",
+      "disposition": "suite",
+      "suiteIds": ["agent-runtime.stream-delivery"]
+    }
   ]
 }

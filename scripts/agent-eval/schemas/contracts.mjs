@@ -289,14 +289,29 @@ const SUITE_INDEX_SCHEMA = s.object({
 });
 
 const STEP_SCHEMA = s.union([
+  s.object({ id: ID, kind: s.literal('draft-bind'), target: s.literal('assistant') }),
+  s.object({
+    id: ID,
+    kind: s.literal('draft-submit'),
+    catalogRef: ID,
+    input: s.union([
+      s.object({ kind: s.literal('message'), text: TEXT }),
+      s.object({ kind: s.enum(['command', 'skill']), name: ID }, { args: SHORT_TEXT }),
+    ]),
+    expectedStatus: s.literal('rejected'),
+  }),
   s.object(
     { id: ID, kind: s.literal('submit'), prompt: TEXT },
     {
       delayMs: s.integer({ min: 0, max: 600_000 }),
       contextPayloads: s.array(AGENT_CONTEXT_PAYLOAD_SCHEMA, { minLength: 1, maxLength: 20 }),
+      modelProfileId: ID,
     },
   ),
-  s.object({ id: ID, kind: s.literal('queue'), prompt: TEXT, afterStepId: ID }),
+  s.object(
+    { id: ID, kind: s.literal('queue'), prompt: TEXT, afterStepId: ID },
+    { modelProfileId: ID },
+  ),
   s.object({ id: ID, kind: s.literal('wait-for-idle'), timeoutMs: s.integer({ min: 1 }) }),
   s.object({ id: ID, kind: s.literal('cancel'), afterStepId: ID }),
   s.object({
@@ -310,6 +325,31 @@ const STEP_SCHEMA = s.union([
   s.object({ id: ID, kind: s.literal('resume'), conversationRef: s.literal('current') }),
   s.object({ id: ID, kind: s.literal('restart'), conversationRef: s.literal('current') }),
   s.object({ id: ID, kind: s.literal('feedback'), prompt: TEXT, afterStepId: ID }),
+  s.object(
+    {
+      id: ID,
+      kind: s.literal('update-configuration'),
+      providerId: ID,
+      modelId: EXTERNAL_ID,
+      expectedStatus: s.enum(['applied', 'rejected']),
+      turnState: s.enum(['running', 'idle']),
+      timeoutMs: s.integer({ min: 1, max: 600_000 }),
+    },
+    { modelProfileId: ID, afterStepId: ID },
+  ),
+  s.object(
+    {
+      id: ID,
+      kind: s.literal('invoke-input'),
+      trigger: s.enum(['command', 'skill']),
+      name: ID,
+      timeoutMs: s.integer({ min: 1, max: 600_000 }),
+    },
+    {
+      args: SHORT_TEXT,
+      resultEvent: s.enum(['compressionResult', 'historyCleared']),
+    },
+  ),
   s.object({
     id: ID,
     kind: s.literal('resize'),
@@ -328,11 +368,15 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
     { kind: s.literal('workflow-step'), stepId: ID },
     {
       method: s.enum([
+        'draft.binding.update',
+        'draft.input.submit',
         'message.submit',
         'message.cancel',
         'tool.confirm',
         'session.waitForIdle',
         'session.resume',
+        'agent-input.invoke',
+        'conversation.configuration.update',
         'terminal.resize',
       ]),
     },
@@ -406,6 +450,55 @@ const ASSERTION_SCHEMA = s.union([
     kind: s.literal('model'),
     profileId: ID,
   }),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('model-sequence'),
+    turns: s.array(s.object({ idleStepId: ID, profileId: ID }), { minLength: 2, maxLength: 100 }),
+  }),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('interaction-binding'),
+    initialPhase: s.literal('draft'),
+    initialBindingKind: s.enum(['unbound', 'assistant', 'workspace']),
+    finalPhase: s.literal('session'),
+    finalBindingKind: s.enum(['assistant', 'workspace']),
+    conversationCreated: s.literal(true),
+  }),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('input-invocation'),
+    stepId: ID,
+    trigger: s.enum(['command', 'skill']),
+    name: ID,
+    status: s.literal('completed'),
+  }),
+  s.object(
+    {
+      ...ASSERTION_COMMON,
+      kind: s.literal('draft-rejection'),
+      stepId: ID,
+      catalogRef: ID,
+      initialBindingKind: s.enum(['unbound', 'assistant', 'workspace']),
+      currentBindingKind: s.enum(['unbound', 'assistant', 'workspace']),
+      surfaceBindingKind: s.enum(['unbound', 'assistant', 'workspace']),
+      conversationCreated: s.literal(false),
+      messageIncludes: SHORT_TEXT,
+    },
+    { availabilityCode: ID },
+  ),
+  s.object(
+    {
+      ...ASSERTION_COMMON,
+      kind: s.literal('configuration-update'),
+      stepId: ID,
+      providerId: ID,
+      modelId: EXTERNAL_ID,
+      status: s.enum(['applied', 'rejected']),
+      turnState: s.enum(['running', 'idle']),
+      turnCreated: s.literal(false),
+    },
+    { modelProfileId: ID },
+  ),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -660,6 +753,7 @@ const DESKTOP_EXECUTION_SCHEMA = s.object(
       minLength: 1,
       maxLength: 3,
     }),
+    startSurface: s.enum(['entry', 'workspace']),
   },
 );
 
@@ -954,6 +1048,8 @@ const FAILURE_ATTRIBUTION_SCHEMA = s.object({
 
 const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
   stepKinds: new Set([
+    'draft-bind',
+    'draft-submit',
     'submit',
     'queue',
     'wait-for-idle',
@@ -962,6 +1058,8 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'resume',
     'restart',
     'feedback',
+    'update-configuration',
+    'invoke-input',
     'resize',
   ]),
   assertionKinds: new Set([
@@ -973,6 +1071,11 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'skill',
     'prompt-composition',
     'model',
+    'model-sequence',
+    'interaction-binding',
+    'input-invocation',
+    'draft-rejection',
+    'configuration-update',
     'tool-call',
     'todo-projection',
     'process-order',
@@ -1139,6 +1242,7 @@ function validateWorkflowSteps(steps) {
   const prior = new Map();
   let state = 'idle';
   let hasSessionTurn = false;
+  const draftCatalogRefs = new Set(['initial']);
   let previous;
   for (const step of steps) {
     if ('afterStepId' in step) {
@@ -1155,6 +1259,14 @@ function validateWorkflowSteps(steps) {
       if (step.kind === 'feedback' && referenced.kind !== 'wait-for-idle') {
         throw new Error(`feedback ${step.id} must reference a wait-for-idle step`);
       }
+      if (
+        step.kind === 'update-configuration' &&
+        (step.turnState !== 'running' || !['submit', 'queue', 'feedback'].includes(referenced.kind))
+      ) {
+        throw new Error(
+          `update-configuration ${step.id} running state must reference an active submission`,
+        );
+      }
       if (step.afterStepId !== previous?.id) {
         throw new Error(`${step.kind} ${step.id} afterStepId must reference the previous step`);
       }
@@ -1162,7 +1274,21 @@ function validateWorkflowSteps(steps) {
     if (step.kind === 'feedback' && !step.prompt.includes('${lastAssistant}')) {
       throw new Error(`feedback ${step.id} prompt must include \${lastAssistant}`);
     }
-    if (step.kind === 'submit') {
+    if (step.kind === 'draft-bind') {
+      if (state !== 'idle' || hasSessionTurn) {
+        throw new Error(`draft-bind ${step.id} requires the initial Draft state`);
+      }
+      draftCatalogRefs.add(step.id);
+    } else if (step.kind === 'draft-submit') {
+      if (state !== 'idle' || hasSessionTurn) {
+        throw new Error(`draft-submit ${step.id} requires the initial Draft state`);
+      }
+      if (!draftCatalogRefs.has(step.catalogRef)) {
+        throw new Error(
+          `draft-submit ${step.id} references unknown Draft catalog ${step.catalogRef}`,
+        );
+      }
+    } else if (step.kind === 'submit') {
       if (state !== 'idle') {
         throw new Error(`submit ${step.id} requires idle state; use queue while a turn is active`);
       }
@@ -1184,6 +1310,27 @@ function validateWorkflowSteps(steps) {
         throw new Error(`${step.kind} ${step.id} cannot reference current before a session turn`);
       }
       if (state !== 'idle') throw new Error(`${step.kind} ${step.id} requires idle state`);
+    } else if (step.kind === 'update-configuration') {
+      if (!hasSessionTurn) {
+        throw new Error(`update-configuration ${step.id} requires an established Session`);
+      }
+      if (step.turnState === 'running' && state !== 'active') {
+        throw new Error(`update-configuration ${step.id} requires an active Turn`);
+      }
+      if (step.turnState === 'idle' && state !== 'idle') {
+        throw new Error(`update-configuration ${step.id} requires idle state`);
+      }
+      if (step.turnState === 'running' && step.afterStepId === undefined) {
+        throw new Error(`update-configuration ${step.id} requires an active submission reference`);
+      }
+      if (step.turnState === 'idle' && step.afterStepId !== undefined) {
+        throw new Error(`update-configuration ${step.id} idle state cannot reference a submission`);
+      }
+    } else if (step.kind === 'invoke-input') {
+      if (!hasSessionTurn) {
+        throw new Error(`invoke-input ${step.id} requires an established Session`);
+      }
+      if (state !== 'idle') throw new Error(`invoke-input ${step.id} requires idle state`);
     } else if (step.kind === 'resize') {
       if (state !== 'idle') throw new Error(`resize ${step.id} requires idle state`);
     }

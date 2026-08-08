@@ -222,6 +222,194 @@ describe('Desktop Agent assertion-driven evidence', () => {
     );
   });
 
+  it('proves exact Draft handoff, per-Turn model sequence, and typed compaction receipt', () => {
+    const assertions = [
+      {
+        id: 'binding',
+        kind: 'interaction-binding',
+        initialPhase: 'draft',
+        initialBindingKind: 'workspace',
+        finalPhase: 'session',
+        finalBindingKind: 'workspace',
+        conversationCreated: true,
+        evidenceRef: 'facts',
+      },
+      {
+        id: 'models',
+        kind: 'model-sequence',
+        turns: [
+          { idleStepId: 'first-idle', profileId: 'model-a' },
+          { idleStepId: 'second-idle', profileId: 'model-b' },
+        ],
+        evidenceRef: 'facts',
+      },
+      {
+        id: 'compact',
+        kind: 'input-invocation',
+        stepId: 'compact',
+        trigger: 'command',
+        name: 'compact',
+        status: 'completed',
+        evidenceRef: 'facts',
+      },
+    ];
+    const input = evidenceInput(assertions);
+    input.executionCase.modelProfiles = [
+      {
+        id: 'model-a',
+        selection: 'explicit',
+        chat: { providerId: 'provider-1', modelId: 'model-a' },
+      },
+      {
+        id: 'model-b',
+        selection: 'explicit',
+        chat: { providerId: 'provider-1', modelId: 'model-1' },
+      },
+    ];
+    input.interaction = {
+      initial: {
+        phase: 'draft',
+        bindingKind: 'workspace',
+        draftId: 'draft-1',
+        workspaceId: 'workspace-1',
+      },
+      final: {
+        phase: 'session',
+        bindingKind: 'workspace',
+        draftId: 'draft-1',
+        workspaceId: 'workspace-1',
+        conversationId: 'conversation-1',
+      },
+    };
+    const firstFacts = structuredClone(input.facts);
+    firstFacts.identity.turnId = 'turn-a';
+    firstFacts.identity.runId = 'run-a';
+    firstFacts.configuration.effective.values.modelBinding = {
+      providerId: 'provider-1',
+      modelId: 'model-a',
+    };
+    input.workflow.receipts = {
+      'first-idle': {
+        identity: { conversationId: 'conversation-1', turnId: 'turn-a', runId: 'run-a' },
+        facts: firstFacts,
+      },
+      'second-idle': { identity: input.identity, facts: structuredClone(input.facts) },
+      compact: {
+        accepted: true,
+        trigger: 'command',
+        name: 'compact',
+        result: { type: 'compressionResult', conversationId: 'conversation-1' },
+      },
+    };
+
+    expect(run(input)).toEqual([
+      expect.objectContaining({ id: 'binding', status: 'pass' }),
+      expect.objectContaining({ id: 'models', status: 'pass' }),
+      expect.objectContaining({ id: 'compact', status: 'pass' }),
+    ]);
+
+    input.interaction.final.draftId = 'draft-2';
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('binding') }),
+    );
+    input.interaction.final.draftId = 'draft-1';
+    input.workflow.receipts['first-idle'].identity.turnId = 'turn-1';
+    input.workflow.receipts['first-idle'].facts.identity.turnId = 'turn-1';
+    expect(run(input)[1]).toEqual(
+      expect.objectContaining({
+        status: 'fail',
+        message: expect.stringContaining('distinct Turn identities'),
+      }),
+    );
+  });
+
+  it('proves Draft rejection has no Session side effect and configuration updates create no Turn', () => {
+    const assertions = [
+      {
+        id: 'entry-compact',
+        kind: 'draft-rejection',
+        stepId: 'compact-draft',
+        catalogRef: 'initial',
+        initialBindingKind: 'unbound',
+        currentBindingKind: 'unbound',
+        surfaceBindingKind: 'unbound',
+        conversationCreated: false,
+        messageIncludes: 'committed conversation session',
+        availabilityCode: 'session-required',
+        evidenceRef: 'facts',
+      },
+      {
+        id: 'model-update',
+        kind: 'configuration-update',
+        stepId: 'configure-next',
+        providerId: 'provider-1',
+        modelId: 'model-1',
+        status: 'applied',
+        turnState: 'running',
+        turnCreated: false,
+        evidenceRef: 'facts',
+      },
+    ];
+    const input = evidenceInput(assertions);
+    input.workflow.receipts = {
+      'compact-draft': {
+        accepted: false,
+        status: 'rejected',
+        catalogRef: 'initial',
+        diagnosticMessage: "Agent route 'compact' requires a committed conversation session.",
+        initialBindingKind: 'unbound',
+        currentBindingKind: 'unbound',
+        conversationCreated: false,
+        surfaceBefore: { phase: 'draft', bindingKind: 'unbound', draftId: 'draft-1' },
+        surfaceAfter: { phase: 'draft', bindingKind: 'unbound', draftId: 'draft-1' },
+        availability: { diagnostic: { code: 'session-required' } },
+      },
+      'configure-next': {
+        accepted: true,
+        status: 'applied',
+        conversationId: 'conversation-1',
+        providerId: 'provider-1',
+        modelId: 'model-1',
+        turnStateAtUpdate: 'running',
+        submissionCountBefore: 1,
+        submissionCountAfter: 1,
+        projection: {
+          request: { providerId: 'provider-1', modelId: 'model-1' },
+          fields: {
+            model: {
+              effectiveValue: { providerId: 'provider-1', modelId: 'model-1' },
+            },
+          },
+        },
+      },
+    };
+
+    expect(run(input)).toEqual([
+      expect.objectContaining({
+        id: 'entry-compact',
+        status: 'pass',
+        details: expect.objectContaining({ conversationCreated: false }),
+      }),
+      expect.objectContaining({
+        id: 'model-update',
+        status: 'pass',
+        details: expect.objectContaining({ turnCreated: false }),
+      }),
+    ]);
+
+    input.workflow.receipts['compact-draft'].surfaceAfter.conversationId = 'conversation-2';
+    expect(run(input)[0]).toEqual(
+      expect.objectContaining({ status: 'fail', message: expect.stringContaining('rejection') }),
+    );
+    delete input.workflow.receipts['compact-draft'].surfaceAfter.conversationId;
+    input.workflow.receipts['configure-next'].submissionCountAfter = 2;
+    expect(run(input)[1]).toEqual(
+      expect.objectContaining({
+        status: 'fail',
+        message: expect.stringContaining('configuration update evidence'),
+      }),
+    );
+  });
 });
 
 function run(input) {
@@ -231,6 +419,7 @@ function run(input) {
     workflow: input.workflow,
     projection: input.projection,
     snapshot: input.snapshot,
+    interaction: input.interaction,
   });
   return evaluateHardGates(input.executionCase.assertions, facts, {
     executionCase: input.executionCase,
@@ -257,6 +446,16 @@ function evidenceInput(assertions) {
     facts: {
       identity: {
         ...identity,
+        connection: {
+          applicationInstanceId: 'app-1',
+          connectionId: 'connection-1',
+          windowId: 'window-1',
+          workbenchInstanceId: 'workbench-1',
+          agentSurfaceId: 'surface-1',
+          workspaceId: 'workspace-1',
+          viewId: 'view-1',
+          projectId: 'project-1',
+        },
         branchId: 'branch-1',
         piSessionId: 'pi-session-1',
       },

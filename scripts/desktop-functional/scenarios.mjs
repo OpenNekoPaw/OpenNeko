@@ -9,6 +9,7 @@ import { desktopAgentDiagnosticPortalScenario } from './desktop-agent-diagnostic
 import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-window-convergence.mjs';
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import {
+  desktopAgentEntryWorkspaceSkillScenario,
   desktopConversationNavigationScenario,
   desktopProjectSidebarManagementScenario,
   desktopWorkbenchScenesScenario,
@@ -23,6 +24,7 @@ const scenarios = new Map(
     desktopAgentProviderUiScenario,
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
+    desktopAgentEntryWorkspaceSkillScenario,
     desktopConversationNavigationScenario,
     desktopProjectSidebarManagementScenario,
     desktopWorkbenchScenesScenario,

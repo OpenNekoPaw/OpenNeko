@@ -56,6 +56,13 @@ export const desktopAgentProviderUiScenario = Object.freeze({
     await waitForSelector('.agent-model-config-trigger');
     const entry = await inspectEntryDraft(evaluate);
     checkpoint('visible-entry-draft-ready', entry);
+    await click('.agent-composer-workspace-button', 0);
+    await waitForCondition(
+      evaluate,
+      `document.querySelector('.agent-model-config-trigger') instanceof HTMLButtonElement &&
+        !document.querySelector('.agent-model-config-trigger').disabled`,
+      'Visible Entry Draft did not finish explicit Assistant binding.',
+    );
 
     await click('.agent-model-config-trigger');
     await waitForSelector('.agent-model-config-radio-selected');

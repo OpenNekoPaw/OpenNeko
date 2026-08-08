@@ -252,11 +252,25 @@ function validateReferences(suite, cases, rubrics) {
       `scenario ${scenario.id} model profile`,
     );
     assertReferencesExist(
+      scenario.steps.flatMap((step) =>
+        step.modelProfileId === undefined ? [] : [step.modelProfileId],
+      ),
+      modelProfiles,
+      `scenario ${scenario.id} step model profile`,
+    );
+    assertReferencesExist(
       scenario.assertions
         .filter((assertion) => assertion.kind === 'model')
         .map((assertion) => assertion.profileId),
       modelProfiles,
       `scenario ${scenario.id} model assertion profile`,
+    );
+    assertReferencesExist(
+      scenario.assertions
+        .filter((assertion) => assertion.kind === 'model-sequence')
+        .flatMap((assertion) => assertion.turns.map((turn) => turn.profileId)),
+      modelProfiles,
+      `scenario ${scenario.id} model sequence profile`,
     );
     assertReferencesExist(
       scenario.assertions

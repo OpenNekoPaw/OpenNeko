@@ -53,6 +53,7 @@ const EXPECTED_PROMPT_LAYERS = Object.freeze([
 const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'evaluation-platform',
   'desktop-session-driver',
+  'launch-domain-binding',
   'prompt-composition',
   'skill-runtime',
   'capability-tool-routing',

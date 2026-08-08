@@ -37,6 +37,10 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       ),
       copyFile(
         join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
+        join(workspacePath, 'test.png'),
+      ),
+      copyFile(
+        join(repositoryRoot, 'docs/assets/openneko-desktop.png'),
         join(secondaryWorkspacePath, 'secondary-preview.png'),
       ),
     ]);
@@ -47,6 +51,11 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     await writeFile(
       join(workspacePath, 'agent-reference.txt'),
       'Functional Assistant reference.\n',
+      'utf8',
+    );
+    await writeFile(
+      join(workspacePath, 'test.fountain'),
+      'INT. TEST ROOM - DAY\n\nA fixture scene validates Agent Fountain context.\n',
       'utf8',
     );
     await writeFile(
@@ -82,9 +91,9 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         'name = "Functional Chat"',
         'provider_id = "functional-ollama"',
         'type = "llm"',
-        'capabilities = ["chat"]',
+        'capabilities = ["chat", "vision"]',
         'context_window = 32768',
-        'max_output_tokens = 4096',
+        'max_output_tokens = 8192',
         'enabled = true',
         '',
         '[default_models.llm]',
@@ -558,6 +567,211 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           secondaryWorkspaceScreenshot,
           firstWorkspaceRestoreScreenshot,
           assistantRestoreScreenshot,
+        ],
+      };
+    } finally {
+      await providerServer.close();
+    }
+  },
+});
+
+export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
+  id: 'desktop-agent-entry-workspace-skill',
+  owner: '@neko/agent-runtime',
+  prepare: desktopWorkbenchScenesScenario.prepare,
+  async run({
+    checkpoint,
+    click,
+    evaluate,
+    prepared,
+    pressKey,
+    screenshot,
+    type,
+    waitForSelector,
+  }) {
+    const providerServer = await startFunctionalProviderServer(prepared.providerPort, 750);
+    try {
+      await resizeWindow(evaluate, 1440, 960);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      await assertFixtureWorkspaceCancellation(evaluate);
+      const workspaceActivation = await chooseFixtureWorkspace(evaluate);
+      await waitForSelector('.desktop-scene-workbench--workspace');
+
+      await clickApplicationNavigation(evaluate, click, 0);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const entryDraft = await inspectEntryDraft(evaluate, [workspaceActivation.draftId]);
+      const entryRoot = await markEntryAgentRoot(evaluate, entryDraft.draftId);
+      const entryTriggerControls = await inspectEntryTriggerControls(evaluate);
+      checkpoint('agent-entry-typed-trigger-controls', entryTriggerControls);
+
+      const slashMenu = await openEntrySlashMenu({ evaluate, screenshot, type });
+      checkpoint('agent-entry-unbound-slash-menu', slashMenu.selection);
+      await pressKey('Escape');
+      await waitForCondition(
+        evaluate,
+        `!document.querySelector(
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-command-menu',
+        )`,
+        'Entry slash menu did not close after Escape.',
+      );
+
+      const unboundMention = await inspectUnboundEntryMention({
+        evaluate,
+        pressKey,
+        screenshot,
+        type,
+      });
+      checkpoint('agent-entry-unbound-mention', unboundMention.selection);
+      await pressKey('Escape');
+      await waitForCondition(
+        evaluate,
+        `!document.querySelector(
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu',
+        )`,
+        'Unbound Entry mention menu did not close after Escape.',
+      );
+      const preservedDraftText = 'Keep this Draft text while selecting a Workspace.';
+      await replaceActiveAgentComposerText({ evaluate, pressKey, type }, preservedDraftText);
+
+      await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-button`, 0);
+      await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu`);
+      const targetMenu = await inspectEntryWorkspaceTargetMenu(
+        evaluate,
+        workspaceActivation.projectId,
+      );
+      const targetMenuScreenshot = await screenshot('agent-entry-workspace-target-menu');
+      checkpoint('agent-entry-workspace-target-menu', {
+        entryDraft,
+        entryRoot,
+        workspaceActivation,
+        targetMenu,
+      });
+
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu [role="menuitem"]`,
+        targetMenu.projectMenuIndex,
+      );
+      await waitForCondition(
+        evaluate,
+        `(() => [...document.querySelectorAll(
+          '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-button',
+        )].some((button) => button.textContent?.trim() === ${JSON.stringify(targetMenu.projectLabel)}))()`,
+        'Entry composer did not retain the selected exact Workspace target.',
+      );
+      const boundDraft = await inspectBoundEntryDraft(evaluate, {
+        draftId: entryDraft.draftId,
+        inputValue: preservedDraftText,
+        projectLabel: targetMenu.projectLabel,
+        workspaceId: workspaceActivation.workspaceId,
+      });
+      checkpoint('agent-entry-workspace-bound-draft', boundDraft);
+
+      const workspaceMention = await exerciseWorkspaceDraftMention({
+        evaluate,
+        pressKey,
+        referenceLabel: 'test.png',
+        referenceQuery: 'test',
+        screenshot,
+        type,
+        screenshotLabel: 'agent-entry-workspace-mention-selected',
+      });
+      checkpoint('agent-entry-workspace-mention-selected', workspaceMention.selection);
+
+      const skillMenu = await openStoryboardSkillMenu({ evaluate, screenshot, type });
+      checkpoint('agent-entry-workspace-skill-menu', skillMenu.selection);
+      await click(
+        `${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-command-menu [role="menuitem"]`,
+        skillMenu.selection.menuIndex,
+      );
+      const skillArguments = '请根据所选参考创建一份简洁的分镜。';
+      await type(ACTIVE_AGENT_TEXTAREA_SELECTOR, skillArguments, 0, { clear: false });
+      const submittedInput = `$storyboard ${skillArguments}`;
+      const expectedConversationTitle = submittedInput;
+      await waitForCondition(
+        evaluate,
+        `document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}')?.value === ${JSON.stringify(submittedInput)}`,
+        'Storyboard Skill selection did not preserve typed invocation text and arguments.',
+      );
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const send = document.querySelector('${ACTIVE_AGENT_SEND_SELECTOR}');
+          return send instanceof HTMLButtonElement && !send.disabled;
+        })()`,
+        'Workspace-bound Entry Draft did not enable first submit.',
+      );
+      await click(ACTIVE_AGENT_SEND_SELECTOR);
+
+      let workspaceSession;
+      try {
+        workspaceSession = await waitForWorkspaceSkillSession(evaluate, {
+          workspaceId: workspaceActivation.workspaceId,
+          workspaceGrantId: boundDraft.workspaceGrantId,
+          submittedInput,
+          expectedConversationTitle,
+        });
+      } catch (error) {
+        const failureState = await evaluate(`(async () => {
+          const projection = await window.openNekoDesktop.shell.getSnapshot();
+          const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+          return {
+            scene: projection.window.workbench.scene.context,
+            conversations: projection.agentHome.conversations,
+            transcript: (activeSurface?.textContent ?? '').slice(0, 2400),
+            alerts: [...document.querySelectorAll('[role="alert"]')]
+              .map((element) => element.textContent?.trim() ?? '')
+              .filter(Boolean),
+          };
+        })()`);
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} Provider evidence: ${JSON.stringify(providerServer.snapshot())}. Failure state: ${JSON.stringify(failureState)}`,
+        );
+      }
+      const providerEvidence = providerServer.snapshot();
+      assertFunctionalProviderEvidence(providerEvidence, 1);
+      if (providerEvidence.requests.length !== 1) {
+        throw new Error(
+          `Workspace $storyboard first submit issued duplicate provider requests: ${JSON.stringify(providerEvidence)}`,
+        );
+      }
+      if (providerEvidence.requests[0]?.nativeImageCount !== 1) {
+        throw new Error(
+          `Workspace image first submit did not send one native image part: ${JSON.stringify(providerEvidence)}`,
+        );
+      }
+      const completedScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'agent-workspace-skill-session-complete',
+      );
+      checkpoint('agent-workspace-skill-session-complete', {
+        workspaceSession,
+        provider: providerEvidence,
+      });
+
+      return {
+        entryDraft,
+        entryRoot,
+        entryTriggerControls,
+        slashSelection: slashMenu.selection,
+        unboundMentionSelection: unboundMention.selection,
+        workspaceActivation,
+        targetMenu,
+        boundDraft,
+        mentionSelection: workspaceMention.selection,
+        skillSelection: skillMenu.selection,
+        workspaceSession,
+        provider: providerEvidence,
+        screenshots: [
+          slashMenu.screenshot,
+          unboundMention.screenshot,
+          targetMenuScreenshot,
+          workspaceMention.screenshot,
+          skillMenu.screenshot,
+          completedScreenshot,
         ],
       };
     } finally {
@@ -1813,6 +2027,510 @@ async function inspectRestoredWorkspacePreview(evaluate, expectedViewId) {
       '.project-main-view-stack__item .desktop-preview-surface .neko-preview-root',
     ).length,
   }))()`);
+}
+
+async function exerciseWorkspaceDraftMention({
+  evaluate,
+  pressKey,
+  referenceLabel = 'agent-reference.txt',
+  referenceQuery = 'agent-reference',
+  screenshot,
+  type,
+  screenshotLabel,
+}) {
+  await replaceActiveAgentComposerText({ evaluate, pressKey, type }, `@${referenceQuery}`);
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
+    )].some((item) => item.textContent?.includes(${JSON.stringify(referenceLabel)})))()`,
+    'Workspace Draft @ search did not return its exact authorized Workspace file.',
+  );
+  const selection = await evaluate(`(() => {
+    const item = [...document.querySelectorAll(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
+    )].find((candidate) => candidate.textContent?.includes(${JSON.stringify(referenceLabel)}));
+    if (!(item instanceof HTMLButtonElement)) {
+      throw new Error('Workspace Draft mention result is not interactive.');
+    }
+    item.click();
+    return { label: item.textContent?.trim() ?? '' };
+  })()`);
+  await waitForCondition(
+    evaluate,
+    `document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} [data-agent-context-type="file"]',
+    )?.textContent?.includes(${JSON.stringify(referenceLabel)}) === true`,
+    'Workspace Draft mention selection did not create an exact context reference.',
+  );
+  const referenceProjection = await evaluate(`(() => {
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const tokens = [...(activeSurface?.querySelectorAll('[data-agent-reference-token="true"]') ?? [])];
+    const matchingTokens = tokens.filter(
+      (token) => token.textContent?.includes(${JSON.stringify(referenceLabel)}),
+    );
+    if (tokens.length !== 1 || matchingTokens.length !== 1) {
+      throw new Error(
+        'Workspace Draft mention selection did not retain one canonical reference token: ' +
+          JSON.stringify({
+            tokenCount: tokens.length,
+            matchingTokenCount: matchingTokens.length,
+            labels: tokens.map((token) => token.textContent?.trim() ?? ''),
+          }),
+      );
+    }
+    return {
+      tokenCount: tokens.length,
+      matchingTokenCount: matchingTokens.length,
+      label: matchingTokens[0]?.textContent?.trim() ?? '',
+    };
+  })()`);
+  return {
+    selection: { ...selection, referenceProjection },
+    screenshot: await screenshot(screenshotLabel),
+  };
+}
+
+async function inspectEntryTriggerControls(evaluate) {
+  return evaluate(`(() => {
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    if (!(activeSurface instanceof HTMLElement)) {
+      throw new Error('Entry Agent surface is unavailable for typed-trigger inspection.');
+    }
+    const buttonLabels = [...activeSurface.querySelectorAll('button')].map(
+      (button) => button.textContent?.trim() ?? '',
+    );
+    const duplicateLabels = buttonLabels.filter(
+      (label) =>
+        label === '/' ||
+        label === '$' ||
+        label === '\u5f00\u59cb\u5bf9\u8bdd' ||
+        label === 'Start Chat' ||
+        label === 'Start Conversation',
+    );
+    const result = {
+      duplicateLabels,
+      typedTriggerButtonCount: activeSurface.querySelectorAll(
+        '.agent-composer-tool-button-text',
+      ).length,
+      hasWorkspaceChoice: Boolean(activeSurface.querySelector('.agent-composer-workspace-button')),
+      hasModelConfiguration: Boolean(activeSurface.querySelector('.agent-model-config-trigger')),
+      globalAlertCount: document.querySelectorAll('.shell-diagnostic[role="alert"]').length,
+    };
+    if (
+      result.duplicateLabels.length > 0 ||
+      result.typedTriggerButtonCount !== 0 ||
+      !result.hasWorkspaceChoice ||
+      !result.hasModelConfiguration ||
+      result.globalAlertCount !== 0
+    ) {
+      throw new Error('Entry composer typed-trigger controls are invalid: ' + JSON.stringify(result));
+    }
+    return result;
+  })()`);
+}
+
+async function openEntrySlashMenu({ evaluate, screenshot, type }) {
+  await type(ACTIVE_AGENT_TEXTAREA_SELECTOR, '/');
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-command-menu [role="menuitem"]',
+    )].some((item) => item.querySelector('.agent-composer-popover-primary')
+      ?.textContent?.trim() === '/new'))()`,
+    'Unbound Entry slash menu did not expose the Draft-safe /new command.',
+  );
+  const selection = await evaluate(`(() => {
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const menu = activeSurface?.querySelector('.agent-composer-command-menu');
+    const items = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])];
+    const bounds = menu?.getBoundingClientRect();
+    const result = {
+      itemLabels: items.map((item) =>
+        item.querySelector('.agent-composer-popover-primary')?.textContent?.trim() ?? '',
+      ),
+      typedTriggerButtonCount:
+        activeSurface?.querySelectorAll('.agent-composer-tool-button-text').length ?? -1,
+      globalAlertCount: document.querySelectorAll('.shell-diagnostic[role="alert"]').length,
+      withinViewport:
+        bounds !== undefined &&
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        bounds.left >= 0 &&
+        bounds.top >= 0 &&
+        bounds.right <= window.innerWidth &&
+        bounds.bottom <= window.innerHeight,
+    };
+    if (
+      !(menu instanceof HTMLElement) ||
+      !result.itemLabels.includes('/new') ||
+      result.typedTriggerButtonCount !== 0 ||
+      result.globalAlertCount !== 0 ||
+      !result.withinViewport
+    ) {
+      throw new Error('Entry slash discovery is invalid: ' + JSON.stringify(result));
+    }
+    return result;
+  })()`);
+  return {
+    selection,
+    screenshot: await screenshot('agent-entry-unbound-slash-menu'),
+  };
+}
+
+async function inspectUnboundEntryMention({ evaluate, pressKey, screenshot, type }) {
+  await replaceActiveAgentComposerText({ evaluate, pressKey, type }, '@unbound-scope');
+  await waitForCondition(
+    evaluate,
+    `Boolean(document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu .agent-composer-popover-empty',
+    ))`,
+    'Unbound Entry mention discovery did not remain locally empty.',
+  );
+  const screenshotPath = await screenshot('agent-entry-unbound-mention-local-empty');
+  const selection = await evaluate(`(() => {
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const menu = activeSurface?.querySelector('.agent-composer-mention-menu');
+    const result = {
+      inputValue: activeSurface?.querySelector('.agent-composer-textarea')?.value ?? '',
+      menuItemCount: menu?.querySelectorAll('[role="menuitem"]').length ?? -1,
+      hasLocalEmptyState: Boolean(menu?.querySelector('.agent-composer-popover-empty')),
+      globalAlertCount: document.querySelectorAll('.shell-diagnostic[role="alert"]').length,
+    };
+    if (
+      !(menu instanceof HTMLElement) ||
+      result.inputValue !== '@unbound-scope' ||
+      result.menuItemCount !== 0 ||
+      !result.hasLocalEmptyState ||
+      result.globalAlertCount !== 0
+    ) {
+      throw new Error('Unbound Entry mention discovery escaped its local scope: ' + JSON.stringify(result));
+    }
+    return result;
+  })()`);
+  return { selection, screenshot: screenshotPath };
+}
+
+async function replaceActiveAgentComposerText({ evaluate, pressKey, type }, nextValue) {
+  const currentValue = await evaluate(
+    `document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}')?.value ?? ''`,
+  );
+  await type(ACTIVE_AGENT_TEXTAREA_SELECTOR, '', 0, { clear: false });
+  await pressKey('End');
+  for (let index = 0; index < currentValue.length; index += 1) {
+    await pressKey('Backspace');
+  }
+  await type(ACTIVE_AGENT_TEXTAREA_SELECTOR, nextValue, 0, { clear: false });
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('${ACTIVE_AGENT_TEXTAREA_SELECTOR}')?.value === ${JSON.stringify(nextValue)}`,
+    `Entry composer did not replace its text with ${JSON.stringify(nextValue)}.`,
+  );
+}
+
+async function markEntryAgentRoot(evaluate, expectedDraftId) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    ${requireActiveWorkbenchProjection('projection')}
+    const context = activeWorkbench.scene.context;
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const root = activeSurface?.querySelector('.desktop-agent-root[data-owner-root="agent"]');
+    if (
+      context.kind !== 'agent' ||
+      context.scope.kind !== 'unbound' ||
+      context.scope.draftId !== ${JSON.stringify(expectedDraftId)} ||
+      !(root instanceof HTMLElement) ||
+      root.hidden
+    ) {
+      throw new Error('Entry Agent Root identity could not be captured for Draft verification.');
+    }
+    window.__openNekoFunctionalEntryAgentRoot = root;
+    return {
+      draftId: context.scope.draftId,
+      rootCount: activeSurface.querySelectorAll(
+        '.desktop-agent-root[data-owner-root="agent"]',
+      ).length,
+      viewId: root.dataset.viewId,
+    };
+  })()`);
+}
+
+async function inspectEntryWorkspaceTargetMenu(evaluate, expectedProjectId) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const project = projection.catalog.projects.find(
+      (candidate) => candidate.projectId === ${JSON.stringify(expectedProjectId)},
+    );
+    if (!project) throw new Error('Entry Workspace menu has no exact fixture Project.');
+    const menu = document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-menu',
+    );
+    const items = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])];
+    const projectMenuIndex = items.findIndex(
+      (item) => item.textContent?.trim() === project.displayName,
+    );
+    if (!(menu instanceof HTMLElement) || projectMenuIndex < 0) {
+      throw new Error('Entry Workspace menu did not expose the exact Project target.');
+    }
+    const bounds = menu.getBoundingClientRect();
+    if (
+      bounds.width <= 0 ||
+      bounds.height <= 0 ||
+      bounds.left < 0 ||
+      bounds.top < 0 ||
+      bounds.right > window.innerWidth ||
+      bounds.bottom > window.innerHeight
+    ) {
+      throw new Error('Entry Workspace target menu is clipped outside the visible viewport.');
+    }
+    return {
+      projectId: project.projectId,
+      projectLabel: project.displayName,
+      projectMenuIndex,
+      itemLabels: items.map((item) => item.textContent?.trim() ?? ''),
+      withinViewport: true,
+    };
+  })()`);
+}
+
+async function inspectBoundEntryDraft(evaluate, expected) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    ${requireActiveWorkbenchProjection('projection')}
+    const context = activeWorkbench.scene.context;
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const root = activeSurface?.querySelector('.desktop-agent-root[data-owner-root="agent"]');
+    const inputValue = activeSurface?.querySelector('.agent-composer-textarea')?.value ?? '';
+    const workspaceLabels = [...(activeSurface?.querySelectorAll(
+      '.agent-composer-workspace-button',
+    ) ?? [])].map((button) => button.textContent?.trim() ?? '');
+    const presentationStates = Object.keys(sessionStorage).flatMap((key) => {
+      if (!key.startsWith('openneko:agent:presentation:')) return [];
+      try {
+        return [JSON.parse(sessionStorage.getItem(key) ?? 'null')];
+      } catch {
+        return [];
+      }
+    });
+    const draftSnapshot = presentationStates.find(
+      (state) => state?.entryDraft?.draftId === ${JSON.stringify(expected.draftId)},
+    )?.entryDraft;
+    const workspaceTarget = draftSnapshot?.workspaceTarget;
+    const rootRetained = root === window.__openNekoFunctionalEntryAgentRoot;
+    const result = {
+      sceneKind: context.kind,
+      sceneScope: context.scope.kind,
+      draftId: context.scope.kind === 'unbound' ? context.scope.draftId : undefined,
+      conversationCount: projection.agentHome.conversations.length,
+      inputValue,
+      workspaceLabels,
+      workspaceTarget,
+      rootPresent: root instanceof HTMLElement && !root.hidden,
+      agentRootCount:
+        activeSurface?.querySelectorAll('.desktop-agent-root[data-owner-root="agent"]').length ?? 0,
+      agentRootRetained: rootRetained,
+    };
+    if (
+      context.kind !== 'agent' ||
+      context.scope.kind !== 'unbound' ||
+      context.scope.draftId !== ${JSON.stringify(expected.draftId)} ||
+      projection.agentHome.conversations.length !== 0 ||
+      inputValue !== ${JSON.stringify(expected.inputValue)} ||
+      !workspaceLabels.includes(${JSON.stringify(expected.projectLabel)}) ||
+      workspaceTarget?.context?.kind !== 'workspace' ||
+      workspaceTarget.context.workspaceId !== ${JSON.stringify(expected.workspaceId)} ||
+      typeof workspaceTarget.context.workspaceGrantId !== 'string' ||
+      workspaceTarget.context.workspaceGrantId.length === 0 ||
+      !(root instanceof HTMLElement) ||
+      root.hidden ||
+      !rootRetained
+    ) {
+      throw new Error(
+        'Workspace target selection replaced or materialized the Entry Draft: ' +
+          JSON.stringify(result),
+      );
+    }
+    return {
+      ...result,
+      selectedWorkspaceLabel: ${JSON.stringify(expected.projectLabel)},
+      workspaceId: workspaceTarget.context.workspaceId,
+      workspaceGrantId: workspaceTarget.context.workspaceGrantId,
+    };
+  })()`);
+}
+
+async function openStoryboardSkillMenu({ evaluate, screenshot, type }) {
+  await type(ACTIVE_AGENT_TEXTAREA_SELECTOR, '$storyboard');
+  await waitForCondition(
+    evaluate,
+    `(() => [...document.querySelectorAll(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-command-menu [role="menuitem"]',
+    )].some((item) => item.querySelector('.agent-composer-popover-primary')
+      ?.textContent?.trim() === '$storyboard'))()`,
+    'Entry Workspace Draft Skill menu did not expose $storyboard.',
+  );
+  const selection = await evaluate(`(() => {
+    const menu = document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-command-menu',
+    );
+    const items = [...(menu?.querySelectorAll('[role="menuitem"]') ?? [])];
+    const menuIndex = items.findIndex((item) => item.querySelector(
+      '.agent-composer-popover-primary',
+    )?.textContent?.trim() === '$storyboard');
+    if (!(menu instanceof HTMLElement) || menuIndex < 0) {
+      throw new Error('The exact $storyboard Skill menu item is unavailable.');
+    }
+    const bounds = menu.getBoundingClientRect();
+    if (
+      bounds.width <= 0 ||
+      bounds.height <= 0 ||
+      bounds.left < 0 ||
+      bounds.top < 0 ||
+      bounds.right > window.innerWidth ||
+      bounds.bottom > window.innerHeight
+    ) {
+      throw new Error('Entry Skill menu is clipped outside the visible viewport.');
+    }
+    return {
+      menuIndex,
+      skillName: '$storyboard',
+      itemLabels: items.map((item) => item.textContent?.trim() ?? ''),
+      withinViewport: true,
+    };
+  })()`);
+  return {
+    selection,
+    screenshot: await screenshot('agent-entry-workspace-skill-menu'),
+  };
+}
+
+async function waitForWorkspaceSkillSession(evaluate, expected) {
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const activeWorkbench = projection.window.workbench;
+      const context = activeWorkbench.scene.context;
+      const interaction = activeWorkbench.scene.slots.interaction;
+      const conversation = projection.agentHome.conversations[0];
+      if (conversation?.lastActivity.kind === 'turn-failed') {
+        throw new Error(
+          'Workspace $storyboard initial Turn failed: ' + JSON.stringify(conversation.lastActivity),
+        );
+      }
+      return context.kind === 'agent' &&
+        context.scope.kind === 'workspace' &&
+        context.scope.workspaceId === ${JSON.stringify(expected.workspaceId)} &&
+        context.scope.workspaceGrantId === ${JSON.stringify(expected.workspaceGrantId)} &&
+        typeof context.scope.conversationId === 'string' &&
+        interaction?.kind === 'agent' &&
+        interaction.phase === 'session' &&
+        interaction.scope.kind === 'workspace' &&
+        interaction.scope.conversationId === context.scope.conversationId &&
+        projection.agentHome.conversations.length === 1 &&
+        conversation?.navigation.owner.kind === 'workspace' &&
+        conversation.navigation.owner.workspaceId === ${JSON.stringify(expected.workspaceId)};
+    })()`,
+    'Workspace $storyboard first submit did not materialize its exact Agent Session.',
+  );
+  await waitForCondition(
+    evaluate,
+    `(async () => {
+      const projection = await window.openNekoDesktop.shell.getSnapshot();
+      const activeWorkbench = projection.window.workbench;
+      const context = activeWorkbench.scene.context;
+      const interaction = activeWorkbench.scene.slots.interaction;
+      const conversation = projection.agentHome.conversations[0];
+      const transcript = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}')?.textContent ?? '';
+      const alerts = [...document.querySelectorAll('[role="alert"]')]
+        .map((element) => element.textContent?.trim() ?? '')
+        .filter(Boolean);
+      if (conversation?.lastActivity.kind === 'turn-failed' || alerts.length > 0) {
+        throw new Error(
+          'Workspace $storyboard execution failed: ' + JSON.stringify({
+            lastActivity: conversation?.lastActivity,
+            alerts,
+            transcript: transcript.slice(0, 1200),
+          }),
+        );
+      }
+      return transcript.includes(${JSON.stringify(expected.submittedInput)}) &&
+        transcript.includes('OPENNEKO_FUNCTIONAL_RESPONSE_1') &&
+        conversation?.title === ${JSON.stringify(expected.expectedConversationTitle)} &&
+        !document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-run-status') &&
+        !document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-execution-activity') &&
+        !document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-stop');
+    })()`,
+    'Workspace $storyboard first submit did not complete through its exact Agent Session.',
+  );
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const activeWorkbench = projection.window.workbench;
+    const context = activeWorkbench.scene.context;
+    const interaction = activeWorkbench.scene.slots.interaction;
+    const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+    const conversation = projection.agentHome.conversations[0];
+    const conversationLink = [...document.querySelectorAll('.home-conversation-link')]
+      .find((candidate) => candidate.textContent?.trim() === ${JSON.stringify(expected.expectedConversationTitle)});
+    const projectLink = document.querySelector(
+      '.primary-conversation-group[data-group-kind="project"] .primary-conversation-group__project-link',
+    );
+    const root = activeSurface?.querySelector('.desktop-agent-root[data-owner-root="agent"]');
+    const visibleRoots = [...document.querySelectorAll(
+      '.desktop-agent-root[data-owner-root="agent"]',
+    )].filter((candidate) => candidate instanceof HTMLElement && !candidate.hidden);
+    const alerts = [...document.querySelectorAll('[role="alert"]')]
+      .map((element) => element.textContent?.trim() ?? '')
+      .filter(Boolean);
+    const rootRetained = root === window.__openNekoFunctionalEntryAgentRoot;
+    if (
+      context.kind !== 'agent' ||
+      context.scope.kind !== 'workspace' ||
+      typeof context.scope.conversationId !== 'string' ||
+      interaction?.kind !== 'agent' ||
+      interaction.phase !== 'session' ||
+      projection.agentHome.conversations.length !== 1 ||
+      conversation?.title !== ${JSON.stringify(expected.expectedConversationTitle)} ||
+      !(conversationLink instanceof HTMLElement) ||
+      !(projectLink instanceof HTMLElement) ||
+      getComputedStyle(conversationLink).fontSize !== '11px' ||
+      getComputedStyle(projectLink).fontSize !== '11px' ||
+      visibleRoots.length !== 1 ||
+      !rootRetained ||
+      Boolean(activeSurface?.querySelector('.agent-execution-activity')) ||
+      alerts.length > 0
+    ) {
+      throw new Error('Completed Workspace Skill Session lost exact Scene or Agent Root identity.');
+    }
+    return {
+      conversationId: context.scope.conversationId,
+      conversationCount: projection.agentHome.conversations.length,
+      conversationTitle: conversation.title,
+      conversationTitleVisible: conversationLink.textContent?.trim() === conversation.title,
+      navigationFontSizes: {
+        conversation: getComputedStyle(conversationLink).fontSize,
+        project: getComputedStyle(projectLink).fontSize,
+      },
+      workspaceId: context.scope.workspaceId,
+      workspaceGrantId: context.scope.workspaceGrantId,
+      phase: interaction.phase,
+      sceneScope: context.scope.kind,
+      agentRootCount: visibleRoots.length,
+      agentRootRetained: rootRetained,
+      transcriptContainsSkill: activeSurface?.textContent?.includes(
+        ${JSON.stringify(expected.submittedInput)},
+      ) === true,
+      providerResponseVisible: activeSurface?.textContent?.includes(
+        'OPENNEKO_FUNCTIONAL_RESPONSE_1',
+      ) === true,
+      runStatusVisible: Boolean(activeSurface?.querySelector('.agent-run-status')),
+      executionActivityVisible: Boolean(
+        activeSurface?.querySelector('.agent-execution-activity'),
+      ),
+      stopControlVisible: Boolean(activeSurface?.querySelector('.agent-composer-stop')),
+      alerts,
+    };
+  })()`);
 }
 
 async function chooseFixtureWorkspace(evaluate) {

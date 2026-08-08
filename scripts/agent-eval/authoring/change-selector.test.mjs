@@ -51,6 +51,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/agent/runtime/src/tools/read-image-tool.ts',
         'packages/agent/runtime/src/runtime/capability/capability-runtime-bindings.ts',
         'packages/host/src/settings/config-manager.ts',
+        'packages/agent/runtime/src/application/agent-launch-service.ts',
         'packages/agent/runtime/src/session/agent-session.ts',
         'packages/agent/runtime/src/subagent/task-tool.ts',
         'packages/agent/runtime/src/runtime/session/execution-ownership.ts',
@@ -90,6 +91,11 @@ describe('Agent Evaluation change-to-suite selector', () => {
         expect.objectContaining({
           behaviorId: 'provider-model-routing',
           suiteId: 'agent-runtime.model-binding',
+        }),
+        expect.objectContaining({
+          behaviorId: 'launch-domain-binding',
+          suiteId: 'agent-runtime.launch-binding',
+          suiteIds: ['agent-runtime.launch-binding', 'agent-runtime.skill-runtime'],
         }),
         expect.objectContaining({
           behaviorId: 'session-workflows',
@@ -146,14 +152,26 @@ describe('Agent Evaluation change-to-suite selector', () => {
       'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
     ];
     expect(paths.every(isAgentEvaluationRelevantPath)).toBe(true);
-    expect(selectEvaluationCoverage(paths)).toEqual([
-      {
-        behaviorId: 'session-workflows',
-        suiteId: 'agent-runtime.workflow-controller',
-        suiteIds: ['agent-runtime.workflow-controller'],
-        changedPaths: paths,
-      },
-    ]);
+    expect(selectEvaluationCoverage(paths)).toEqual(
+      expect.arrayContaining([
+        {
+          behaviorId: 'launch-domain-binding',
+          suiteId: 'agent-runtime.launch-binding',
+          suiteIds: ['agent-runtime.launch-binding', 'agent-runtime.skill-runtime'],
+          changedPaths: ['apps/neko-desktop/src/main/desktop-agent-launch-runtime.ts'],
+        },
+        {
+          behaviorId: 'session-workflows',
+          suiteId: 'agent-runtime.workflow-controller',
+          suiteIds: ['agent-runtime.workflow-controller'],
+          changedPaths: [
+            'apps/neko-desktop/src/main/desktop-agent-app-host-composition.ts',
+            'apps/neko-desktop/src/main/desktop-agent-controller-composition.ts',
+            'apps/neko-desktop/src/renderer/DesktopAgentSurface.tsx',
+          ],
+        },
+      ]),
+    );
   });
 
   it('deduplicates files owned by the same behavior and suite', () => {

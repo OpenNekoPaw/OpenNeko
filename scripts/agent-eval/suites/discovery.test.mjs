@@ -58,6 +58,7 @@ describe('Agent Evaluation suite discovery', () => {
     const suiteDirectory = join(root, 'agent-runtime', 'model-binding');
     await fs.mkdir(join(suiteDirectory, 'cases'), { recursive: true });
     const suite = structuredClone(source.suite);
+    suite.cases = [suite.cases[0]];
     suite.fixtures[0].root = 'agent-runtime/model-binding/fixture';
     await fs.writeFile(
       join(suiteDirectory, 'suite.json'),
