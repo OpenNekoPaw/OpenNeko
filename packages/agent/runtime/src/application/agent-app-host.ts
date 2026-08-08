@@ -35,6 +35,7 @@ import {
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
 import {
   buildEnhancedAgentMessage,
+  CapabilityRegistryRuntime,
   createHostAgentContentAccessRuntime,
 } from '@neko/agent-runtime/runtime';
 import { createContentReadCapabilityProvider } from '@neko/agent-runtime';
@@ -46,6 +47,7 @@ import {
   TOOL_NAMES_QUALITY,
   type AgentContextPayload,
   type IToolRegistry,
+  type PromptFragment,
 } from '@neko/agent-contracts';
 import { createNodeHostContentReadService } from '@neko/content/node';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
@@ -230,6 +232,7 @@ export interface AgentWorkspaceRuntime {
     contextWindow: number,
   ): Promise<Awaited<ReturnType<PiConversationRuntime['compactContext']>>>;
   readSkillCatalog(workspaceTrusted: boolean): Promise<AgentSkillCatalog>;
+  readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[];
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']>;
   readConversationEvidence(conversationId: string): AgentConversationEvidence;
   readConversationProjection(
@@ -676,6 +679,7 @@ interface PendingAgentConversationTurns {
 class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   readonly tools = createToolRegistry();
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
+  private readonly capabilities: CapabilityRegistryRuntime;
   private readonly conversations = new Map<string, AgentConversationOwner>();
   private readonly projections = new Map<string, ConversationProjectionStore>();
   private readonly opening = new Map<string, Promise<AgentConversationOwner>>();
@@ -700,9 +704,12 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   constructor(private readonly options: DefaultAgentWorkspaceRuntimeOptions) {
     this.models = createOpenNekoPiModels(options.credentialRuntime.credentials);
-    for (const tool of createAgentContentReadTools(options.workspace)) {
-      this.tools.register(tool);
-    }
+    this.capabilities = new CapabilityRegistryRuntime(
+      { toolRegistry: this.tools },
+      options.logger ? { logger: options.logger } : {},
+    );
+    const context = { hostContext: null };
+    this.capabilities.registerProvider(createAgentContentReadProvider(options.workspace), context);
   }
 
   get workspaceId(): string {
@@ -1221,6 +1228,12 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     return projectAgentSkillCatalog(await this.discoverSkills(workspaceTrusted));
   }
 
+  readCapabilityPromptFragments(locale: 'en' | 'zh'): readonly PromptFragment[] {
+    this.requireActive();
+    this.capabilities.setCapabilityContext({ hostContext: null, locale });
+    return Object.freeze(this.capabilities.getAllPromptFragments());
+  }
+
   listConversations(): ReturnType<NodePiConversationAuthority['listConversations']> {
     this.requireActive();
     return this.options.authority.listConversations();
@@ -1419,6 +1432,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.activeConversationTurns.clear();
     this.visibleBindings.clear();
     this.runtimeProtections.clear();
+    this.capabilities.dispose();
     this.tools.clear();
     this.models.clearProviders();
     this.pluginSkillRoots = [];
@@ -1708,7 +1722,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   }
 }
 
-function createAgentContentReadTools(workspace: AssetWorkspaceResolution) {
+function createAgentContentReadProvider(workspace: AssetWorkspaceResolution) {
   const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
   const contentAccessRuntime = createHostAgentContentAccessRuntime({
     contentRead: createNodeHostContentReadService({
@@ -1721,9 +1735,7 @@ function createAgentContentReadTools(workspace: AssetWorkspaceResolution) {
     documentAccess: createNodeDocumentAccessService(),
     resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
   });
-  return createContentReadCapabilityProvider({ contentAccessRuntime }).getTools({
-    hostContext: null,
-  });
+  return createContentReadCapabilityProvider({ contentAccessRuntime });
 }
 
 interface ExecuteAgentConversationInput {

@@ -115,6 +115,7 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly shell: ResourceBrowserShellPort;
   readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
+  readonly openTextEditor: ResourceBrowserNodeSourceOptions['openTextEditor'];
   readonly openCut: ResourceBrowserNodeSourceOptions['openCut'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
   readonly selectWorkspaceFiles: ResourceBrowserNodeSourceOptions['selectWorkspaceFiles'];
@@ -946,6 +947,7 @@ export class ResourceBrowserNodeRuntime {
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
+      openTextEditor: this.options.openTextEditor,
       openCut: this.options.openCut,
       selectSource: this.options.selectSource,
       selectWorkspaceFiles: this.options.selectWorkspaceFiles,

@@ -335,6 +335,7 @@ describe('Resource Browser contract', () => {
         'source.recovery.plan',
         'source.relink',
         'source.remove',
+        'text.edit',
         'thumbnail.resolve',
       ].sort(),
     );

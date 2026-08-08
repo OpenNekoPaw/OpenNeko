@@ -1084,6 +1084,7 @@ function createComposition(
     refreshEntityProjections: effects.refreshEntityProjections,
     host,
     openPreview: effects.openPreview ?? (async () => undefined),
+    openTextEditor: async () => undefined,
     openCut: effects.openCut ?? (async () => undefined),
     selectSource: effects.selectSource ?? (async () => undefined),
     selectWorkspaceFiles: async () => undefined,

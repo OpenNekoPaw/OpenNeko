@@ -962,6 +962,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     );
     const systemPrompt = [
       promptBuilder.buildForExecutionMode(settings.executionMode),
+      ...input.workspace
+        .readCapabilityPromptFragments(locale)
+        .map((fragment) => fragment.content.trim())
+        .filter(Boolean),
       settings.customSystemPrompt.trim(),
     ]
       .filter(Boolean)

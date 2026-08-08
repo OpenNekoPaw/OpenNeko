@@ -126,6 +126,10 @@ export interface ResourceBrowserInteractionPort {
       readonly presentation: 'temporary' | 'side';
     };
   }): Promise<void>;
+  editText(input: {
+    readonly identity: ResourceBrowserIdentity;
+    readonly item: ResourceBrowserContentItem;
+  }): Promise<void>;
   openCut(input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserItem;

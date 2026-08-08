@@ -6,6 +6,7 @@
 
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import type { ContentFingerprint, ContentReadService } from '@neko/content';
 import type {
   ToolResult,
   ToolCategory,
@@ -26,14 +27,17 @@ const DEFAULT_LIMIT = 2000;
 
 export interface ReadToolOptions {
   readonly fileAccessPolicy?: CoreFileAccessPolicy;
+  readonly workspaceReader?: ContentReadService;
 }
 
 export class ReadTool extends BuiltinTool {
   private readonly fileAccessPolicy?: CoreFileAccessPolicy;
+  private readonly workspaceReader?: ContentReadService;
 
   constructor(options?: ReadToolOptions) {
     super();
     this.fileAccessPolicy = options?.fileAccessPolicy ?? createNoWorkspaceFileAccessPolicy();
+    this.workspaceReader = options?.workspaceReader;
   }
 
   readonly name = 'Read';
@@ -79,7 +83,14 @@ export class ReadTool extends BuiltinTool {
         );
       }
       const resolved = authorization?.path ?? path.resolve(filePath);
-      const content = await fs.readFile(resolved, 'utf-8');
+      const workspacePath = authorization?.allowed
+        ? authorization.workspaceRelativePath
+        : undefined;
+      const loaded: { readonly content: string; readonly fingerprint?: ContentFingerprint } =
+        workspacePath
+          ? await this.readWorkspaceFile(workspacePath, options?.signal)
+          : { content: await fs.readFile(resolved, 'utf-8') };
+      const content = loaded.content;
       const allLines = content.split('\n');
       const startIdx = Math.max(0, offset - 1);
       const endIdx = Math.min(allLines.length, startIdx + limit);
@@ -99,6 +110,8 @@ export class ReadTool extends BuiltinTool {
       });
 
       return this.success({
+        path: workspacePath ?? resolved,
+        ...(loaded.fingerprint ? { fingerprint: loaded.fingerprint } : {}),
         content: formatted.join('\n'),
         totalLines: allLines.length,
         linesShown: lines.length,
@@ -122,5 +135,28 @@ export class ReadTool extends BuiltinTool {
         ),
       );
     }
+  }
+
+  private async readWorkspaceFile(
+    workspacePath: string,
+    signal: AbortSignal | undefined,
+  ): Promise<{
+    readonly content: string;
+    readonly fingerprint: ContentFingerprint;
+  }> {
+    if (!this.workspaceReader) {
+      throw new Error('Workspace Read requires the canonical Content reader.');
+    }
+    const result = await this.workspaceReader.read(
+      { kind: 'workspace-file', path: workspacePath },
+      { ...(signal ? { signal } : {}) },
+    );
+    if (result.status !== 'ready') {
+      throw new Error(result.diagnostic.code);
+    }
+    return {
+      content: new TextDecoder().decode(result.bytes),
+      fingerprint: result.fingerprint,
+    };
   }
 }

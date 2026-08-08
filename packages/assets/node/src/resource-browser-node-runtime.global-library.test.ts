@@ -229,6 +229,7 @@ async function createFixture(): Promise<{
       external: { openExternal: async () => undefined },
     },
     openPreview: async () => undefined,
+    openTextEditor: async () => undefined,
     openCut: async () => undefined,
     selectSource: async () => undefined,
     selectWorkspaceFiles: async () => undefined,

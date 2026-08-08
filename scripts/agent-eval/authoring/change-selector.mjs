@@ -62,6 +62,13 @@ const RULES = Object.freeze([
     'packages/agent/runtime/src/pi/personal-skill-manager',
     'packages/skills/src/builtins/',
   ]),
+  rule('screenplay-authoring', 'agent-runtime.screenplay-authoring', [
+    'packages/agent/runtime/src/tools/core/file-access-policy',
+    'packages/agent/runtime/src/tools/core/read-tool',
+    'packages/agent/runtime/src/tools/core/write-tool',
+    'packages/content/src/node/workspace-content-writer',
+    'packages/text-editor/domain/src/text-document-session',
+  ]),
   rule('capability-tool-routing', 'agent-runtime.perception-routing', [
     'packages/quality/src/',
     'packages/agent/runtime/src/tools/',

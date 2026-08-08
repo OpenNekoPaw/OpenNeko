@@ -426,6 +426,7 @@ export function ResourceBrowserRoot({
       | 'content.import-files'
       | 'content.trash'
       | 'preview'
+      | 'text.edit'
       | 'cut.open'
       | 'reveal',
     item?: ResourceBrowserItem,
@@ -879,6 +880,10 @@ export function ResourceBrowserRoot({
                         void execute(RESOURCE_BROWSER_ROUTES.openCut, item);
                         return;
                       }
+                      if (item.capabilities.includes('edit-text') && !pending) {
+                        void execute(RESOURCE_BROWSER_ROUTES.editText, item);
+                        return;
+                      }
                       if (isWorkspaceDocument(item, '.nkc') && onOpenCanvas && !pending) {
                         onOpenCanvas(item, 'main');
                         return;
@@ -1076,6 +1081,7 @@ export function ResourceBrowserRoot({
               return;
             }
             if (!item) return;
+            if (action === 'edit-text') void execute(RESOURCE_BROWSER_ROUTES.editText, item);
             if (action === 'preview') void execute(RESOURCE_BROWSER_ROUTES.preview, item);
             if (action === 'open-cut') void execute(RESOURCE_BROWSER_ROUTES.openCut, item);
             if (action === 'reveal') void execute(RESOURCE_BROWSER_ROUTES.reveal, item);
@@ -1180,6 +1186,7 @@ type ResourceBrowserContextAction =
   | 'link-library'
   | 'add-library'
   | 'preview'
+  | 'edit-text'
   | 'open-cut'
   | 'reveal'
   | 'recover'
@@ -1247,6 +1254,9 @@ function ResourceBrowserContextMenu({
         },
         { action: 'import-files', label: labels.importFiles, icon: <PlusIcon size={14} /> },
       );
+    }
+    if (item.capabilities.includes('edit-text')) {
+      actions.push({ action: 'edit-text', label: labels.editText, icon: <EditIcon size={14} /> });
     }
     if (previewAvailable && item.capabilities.includes('preview')) {
       actions.push({ action: 'preview', label: labels.preview, icon: <PlayIcon size={14} /> });

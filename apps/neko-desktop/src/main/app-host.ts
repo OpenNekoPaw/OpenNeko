@@ -80,6 +80,14 @@ import {
 import type { AssetCenterSessionProjection } from '@neko/assets-domain/asset-center/contract';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { DesktopPreviewRuntime } from './desktop-preview-runtime';
+import type { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
+import {
+  TEXT_EDITOR_HOST_ROUTES,
+  parseTextEditorHostRequest,
+  type TextEditorHostResult,
+  type TextEditorProjectionEvent,
+  type TextEditorRuntimeIdentity,
+} from '@neko/text-editor-domain';
 import type { PreviewProjection, PreviewRuntimeRequest } from '@neko/preview-domain';
 import type {
   CanvasHostIntentResult,
@@ -176,6 +184,7 @@ export interface DesktopAppHostOptions {
   readonly assetCenter?: AssetCenterNodeRuntime;
   readonly projectPortability?: ProjectPortabilityRuntime;
   readonly preview?: DesktopPreviewRuntime;
+  readonly textEditor?: DesktopTextEditorRuntime;
   readonly canvas?: DesktopCanvasRuntime;
   readonly cut?: DesktopCutRuntime;
   readonly settings: DesktopApplicationSettingsService;
@@ -204,12 +213,14 @@ export class DesktopAppHost {
   readonly assetCenter: AssetCenterNodeRuntime | undefined;
   readonly projectPortability: ProjectPortabilityRuntime | undefined;
   readonly preview: DesktopPreviewRuntime | undefined;
+  readonly textEditor: DesktopTextEditorRuntime | undefined;
   readonly canvas: DesktopCanvasRuntime | undefined;
   readonly cut: DesktopCutRuntime | undefined;
   readonly settings: DesktopApplicationSettingsService;
   private readonly resourceSubscriptions = new Map<number, () => void>();
   private readonly canvasSubscriptions = new Map<number, Map<string, () => void>>();
   private readonly cutSubscriptions = new Map<number, Map<string, () => void>>();
+  private readonly textEditorSubscriptions = new Map<number, Map<string, () => void>>();
   private disposed = false;
 
   constructor(private readonly options: DesktopAppHostOptions) {
@@ -233,6 +244,7 @@ export class DesktopAppHost {
     this.assetCenter = options.assetCenter;
     this.projectPortability = options.projectPortability;
     this.preview = options.preview;
+    this.textEditor = options.textEditor;
     this.canvas = options.canvas;
     this.cut = options.cut;
     this.settings = options.settings;
@@ -1607,6 +1619,31 @@ export class DesktopAppHost {
     return this.preview.execute(window.windowId, payload);
   }
 
+  async executeTextEditorRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+    publish: (event: TextEditorProjectionEvent) => void,
+  ): Promise<TextEditorHostResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    const runtime = this.textEditor;
+    if (!runtime) throw new Error('Desktop Text Editor runtime is unavailable.');
+    const request = parseTextEditorHostRequest(payload);
+    if (request.route === TEXT_EDITOR_HOST_ROUTES.projectionGet) {
+      const subscriptions =
+        this.textEditorSubscriptions.get(sender.webContentsId) ?? new Map<string, () => void>();
+      const key = textEditorSubscriptionKey(request.identity);
+      if (!subscriptions.has(key)) {
+        subscriptions.set(
+          key,
+          await runtime.subscribe(window.windowId, request.identity, publish),
+        );
+        this.textEditorSubscriptions.set(sender.webContentsId, subscriptions);
+      }
+    }
+    return runtime.execute(window.windowId, request);
+  }
+
   async getCanvasSnapshot(
     sender: DesktopSenderIdentity,
     payload: unknown,
@@ -1700,6 +1737,7 @@ export class DesktopAppHost {
     this.assetCenter?.detachWindow(windowId);
     this.projectPortability?.detachWindow(windowId);
     this.preview?.detachWindow(windowId);
+    this.textEditor?.detachWindow(windowId);
     this.canvas?.detachWindow(windowId);
     this.cut?.detachWindow(windowId);
     this.options.assistantPreviewLifecycle?.detachWindow(windowId);
@@ -1724,6 +1762,10 @@ export class DesktopAppHost {
       disposeSubscription();
     }
     this.cutSubscriptions.delete(webContentsId);
+    for (const disposeSubscription of this.textEditorSubscriptions.get(webContentsId)?.values() ?? []) {
+      disposeSubscription();
+    }
+    this.textEditorSubscriptions.delete(webContentsId);
   }
 
   async dispose(): Promise<void> {
@@ -1778,6 +1820,16 @@ export class DesktopAppHost {
       }
     }
     this.cutSubscriptions.clear();
+    for (const subscriptions of this.textEditorSubscriptions.values()) {
+      for (const disposeSubscription of subscriptions.values()) {
+        try {
+          disposeSubscription();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+    }
+    this.textEditorSubscriptions.clear();
     try {
       this.assetCenter?.dispose();
     } catch (error) {
@@ -1790,6 +1842,11 @@ export class DesktopAppHost {
     }
     try {
       this.preview?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.textEditor?.dispose();
     } catch (error) {
       errors.push(error);
     }
@@ -2049,6 +2106,7 @@ export class DesktopAppHost {
   ): void {
     const workbenches = [projection.window.workbench.layout];
     this.preview?.reconcileWindow(windowId, workbenches);
+    this.textEditor?.reconcileWindow(windowId, workbenches);
     this.canvas?.reconcileWindow(windowId, workbenches);
     this.cut?.reconcileWindow(windowId, workbenches);
   }
@@ -2218,5 +2276,15 @@ function cutSubscriptionKey(identity: ReturnType<typeof parseDesktopCutHostIdent
     identity.documentId,
     identity.sessionId,
     identity.rendererSessionId,
+  ].join(':');
+}
+
+function textEditorSubscriptionKey(identity: TextEditorRuntimeIdentity): string {
+  return [
+    identity.windowId,
+    identity.viewId,
+    identity.viewInstanceId,
+    identity.documentId,
+    identity.sessionId,
   ].join(':');
 }

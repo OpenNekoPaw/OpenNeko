@@ -3,6 +3,7 @@ import {
   createDesktopContentSecurityPolicy,
   createDesktopWebPreferences,
   DESKTOP_APP_ORIGIN,
+  desktopRendererContentSecurityPolicyOptions,
   desktopRendererOrigin,
   configureDesktopWindowSecurity,
   isAllowedDesktopRendererUrl,
@@ -52,12 +53,33 @@ describe('Desktop security policy', () => {
 
   it('authorizes only the configured Vite development resource nonce', () => {
     const policy = createDesktopContentSecurityPolicy('http://localhost:5173', {
-      viteDevelopmentNonce: 'openneko-vite-development',
+      viteDevelopmentNonce: 'openneko-renderer-style',
     });
 
-    expect(policy).toContain("script-src 'self' 'nonce-openneko-vite-development'");
-    expect(policy).toContain("style-src 'self' 'nonce-openneko-vite-development'");
+    expect(policy).toContain("script-src 'self' 'nonce-openneko-renderer-style'");
+    expect(policy).toContain("style-src 'self' 'nonce-openneko-renderer-style'");
     expect(policy).not.toContain("'unsafe-inline'");
+  });
+
+  it('can authorize renderer-generated styles without authorizing inline scripts', () => {
+    const policy = createDesktopContentSecurityPolicy(DESKTOP_APP_ORIGIN, {
+      styleNonce: 'openneko-renderer-style',
+    });
+
+    expect(policy).toContain("script-src 'self'");
+    expect(policy).not.toContain("script-src 'self' 'nonce-openneko-renderer-style'");
+    expect(policy).toContain("style-src 'self' 'nonce-openneko-renderer-style'");
+    expect(policy).not.toContain("'unsafe-inline'");
+  });
+
+  it('keeps the renderer style nonce in development and packaged window policies', () => {
+    expect(desktopRendererContentSecurityPolicyOptions(false)).toEqual({
+      styleNonce: 'openneko-renderer-style',
+    });
+    expect(desktopRendererContentSecurityPolicyOptions(true)).toEqual({
+      styleNonce: 'openneko-renderer-style',
+      viteDevelopmentNonce: 'openneko-renderer-style',
+    });
   });
 
   it('disposes navigation security after Electron destroys the WebContents', () => {

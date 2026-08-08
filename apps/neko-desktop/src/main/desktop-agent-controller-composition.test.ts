@@ -751,6 +751,7 @@ function createWorkspace(
       diagnostics: [],
       warnings: [],
     })),
+    readCapabilityPromptFragments: () => [],
     listConversations: () => records,
     readConversationEvidence: vi.fn(),
     readConversationProjection: vi.fn(() => projection),

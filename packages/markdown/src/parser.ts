@@ -1,5 +1,6 @@
 import type { MarkdownPromptSpanInput, MarkdownAnnotation } from './annotations';
 import type { MarkdownDiagnostic } from './diagnostics';
+import { isOpenNekoMarkdownExternalUrlProtocol, OPENNEKO_GFM_PROFILE } from './gfm-profile';
 import {
   freezeNormalizedMarkdownDocument,
   NormalizedMarkdownDocument,
@@ -112,7 +113,9 @@ interface NormalizationContext {
   readonly diagnostics: MarkdownDiagnostic[];
 }
 
-const parser = unified().use(remarkParse).use(remarkGfm);
+const parser = unified().use(remarkParse).use(remarkGfm, {
+  singleTilde: OPENNEKO_GFM_PROFILE.singleTildeStrikethrough,
+});
 const EXTENSION_RE = /(!?)\[\[([^\]\n]+)\]\]|@([\p{L}\p{N}_.-]{1,80})/gu;
 
 export function parseNormalizedMarkdown(
@@ -760,8 +763,8 @@ function diagnoseDestination(
   range: MarkdownSourceRange,
   context: NormalizationContext,
 ): void {
-  const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(destination)?.[1]?.toLocaleLowerCase();
-  if (!scheme || scheme === 'http' || scheme === 'https' || scheme === 'mailto') return;
+  const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(destination)?.[1]?.toLowerCase();
+  if (!scheme || isOpenNekoMarkdownExternalUrlProtocol(scheme)) return;
   context.diagnostics.push({
     code: 'MD_UNSAFE_DESTINATION',
     severity: 'warning',

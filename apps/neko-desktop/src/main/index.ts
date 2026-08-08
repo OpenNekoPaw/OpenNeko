@@ -20,7 +20,6 @@ import {
   DESKTOP_SHELL_CHANNELS,
   type DesktopShellProjectionEvent,
 } from '@neko/host/desktop-shell-contract';
-import { DESKTOP_VITE_CSP_NONCE } from '../shared/vite-development-security';
 import { DesktopAppHost } from './app-host';
 import {
   registerDesktopOpenNekoProtocol,
@@ -32,6 +31,7 @@ import { registerDesktopIpc } from './ipc';
 import { DesktopRendererRecovery } from './renderer-recovery';
 import {
   configureDesktopWindowSecurity,
+  desktopRendererContentSecurityPolicyOptions,
   DESKTOP_APP_ORIGIN,
   createDesktopWebPreferences,
 } from './security';
@@ -91,6 +91,7 @@ import {
   registerDesktopResourceRequestAuthorization,
 } from './desktop-resource-registry';
 import { DesktopPreviewRuntime } from './desktop-preview-runtime';
+import { DesktopTextEditorRuntime } from './desktop-text-editor-runtime';
 import { CanvasGenerationNodeRuntime } from '@neko/canvas-node';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
@@ -457,6 +458,7 @@ async function startDesktop(): Promise<void> {
     shell: shellService,
     resources: resourceRegistry,
   });
+  const textEditorRuntime = new DesktopTextEditorRuntime({ shell: shellService });
   const cutRuntime = new DesktopCutRuntime({
     shell: shellService,
     host,
@@ -701,6 +703,7 @@ async function startDesktop(): Promise<void> {
         }).execute(intent),
     },
     openPreview: (input) => previewRuntime.open(input).then(() => undefined),
+    openTextEditor: (input) => textEditorRuntime.open(input).then(() => undefined),
     openQuickPreview: (input) => previewRuntime.openQuickPreview(input),
     releaseQuickPreview: (windowId, previewSessionId) =>
       previewRuntime.releaseQuickPreview(windowId, previewSessionId),
@@ -1124,6 +1127,7 @@ async function startDesktop(): Promise<void> {
     assetCenter,
     projectPortability,
     preview: previewRuntime,
+    textEditor: textEditorRuntime,
     canvas: canvasRuntime,
     cut: cutRuntime,
     settings: applicationSettings,
@@ -1243,11 +1247,7 @@ async function startDesktop(): Promise<void> {
       const disposeSecurity = configureDesktopWindowSecurity(
         createdWindow,
         allowedOrigin,
-        developmentUrl
-          ? {
-              viteDevelopmentNonce: DESKTOP_VITE_CSP_NONCE,
-            }
-          : undefined,
+        desktopRendererContentSecurityPolicyOptions(Boolean(developmentUrl)),
       );
       appHost.windows.addDisposable(registration.windowId, { dispose: disposeSecurity });
       const disposeShellSubscription = appHost.shell.subscribe(registration.windowId, (event) =>
@@ -1322,7 +1322,37 @@ async function startDesktop(): Promise<void> {
           );
         }
       });
-      createdWindow.on('close', () => {
+      let textEditorCloseApproved = false;
+      let textEditorClosePromptActive = false;
+      createdWindow.on('close', (closeEvent) => {
+        if (
+          !textEditorCloseApproved &&
+          !shutdownStarted &&
+          textEditorRuntime.hasDirtySessions(registration.windowId)
+        ) {
+          closeEvent.preventDefault();
+          if (textEditorClosePromptActive) return;
+          textEditorClosePromptActive = true;
+          void promptTextEditorClose(createdWindow)
+            .then(async (decision) => {
+              if (decision === 'cancel') return;
+              const result = await textEditorRuntime.closeWindow(registration.windowId, decision);
+              if (result !== 'closed') return;
+              textEditorCloseApproved = true;
+              createdWindow.close();
+            })
+            .catch((error: unknown) => {
+              appHost.reportError(
+                'desktop-text-editor-close-failed',
+                'Desktop Text Editor could not complete the Window close decision.',
+                error,
+              );
+            })
+            .finally(() => {
+              textEditorClosePromptActive = false;
+            });
+          return;
+        }
         const event = appHost.windows.windowClosing(
           registration.windowId,
           appHost.applicationIdentity.instanceId,
@@ -1397,17 +1427,23 @@ async function startDesktop(): Promise<void> {
     event.preventDefault();
     if (shutdownStarted) return;
     shutdownStarted = true;
-    void shutdownDesktop()
+    void closeDirtyTextEditorsForApplication()
+      .then(async (proceed) => {
+        if (!proceed) {
+          shutdownStarted = false;
+          return;
+        }
+        await shutdownDesktop();
+        shutdownComplete = true;
+        app.quit();
+      })
       .catch((error: unknown) => {
+        shutdownStarted = false;
         appHost.reportError(
           'desktop-shutdown-failed',
           'Desktop shutdown did not release every owned resource.',
           error,
         );
-      })
-      .finally(() => {
-        shutdownComplete = true;
-        app.quit();
       });
   });
 
@@ -1426,6 +1462,35 @@ async function startDesktop(): Promise<void> {
     for (const transport of managedLogTransports) transport.dispose();
     managedLogTransports.clear();
     workspaceLoggers.clear();
+  }
+
+  async function closeDirtyTextEditorsForApplication(): Promise<boolean> {
+    for (const [windowId, owner] of windowsById) {
+      if (owner.isDestroyed() || !textEditorRuntime.hasDirtySessions(windowId)) continue;
+      const decision = await promptTextEditorClose(owner);
+      if (decision === 'cancel') return false;
+      if ((await textEditorRuntime.closeWindow(windowId, decision)) !== 'closed') return false;
+    }
+    return true;
+  }
+
+  async function promptTextEditorClose(
+    owner: BrowserWindow,
+  ): Promise<import('@neko/text-editor-domain').TextDocumentCloseDecision> {
+    const zh = app.getLocale().toLocaleLowerCase().startsWith('zh');
+    const result = await dialog.showMessageBox(owner, {
+      type: 'warning',
+      title: zh ? '保存文档更改' : 'Save document changes',
+      message: zh ? '文档包含未保存的更改。' : 'A document has unsaved changes.',
+      detail: zh
+        ? '关闭前保存、更改后放弃，或取消并返回编辑器。'
+        : 'Save before closing, discard the changes, or cancel and return to the editor.',
+      buttons: zh ? ['保存', '放弃', '取消'] : ['Save', 'Discard', 'Cancel'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+    return result.response === 0 ? 'save' : result.response === 1 ? 'discard' : 'cancel';
   }
 }
 

@@ -28,19 +28,19 @@ file bytes SHALL remain authoritative, and every read and save MUST use the cano
 ### Requirement: Text edits are revisioned and atomic
 
 Every edit command SHALL carry exact project, workspace, document, session and request identities plus
-the expected document revision. The session SHALL apply only ordered, non-overlapping in-bounds
+the expected document edit sequence. The session SHALL apply only ordered, non-overlapping in-bounds
 changes to the observed source and SHALL publish one new immutable projection for an accepted
 command.
 
 #### Scenario: Renderer submits an accepted edit
 
-- **WHEN** an edit references the current session revision and valid source ranges
-- **THEN** the session applies all changes atomically, increments its concurrency revision and marks the document dirty
+- **WHEN** an edit references the current session edit sequence and valid source ranges
+- **THEN** the session applies all changes atomically, increments its concurrency edit sequence and marks the document dirty
 - **AND** diagnostics and format projections are associated with the accepted source only
 
 #### Scenario: A stale edit arrives
 
-- **WHEN** an edit carries a stale revision, mismatched identity, reused request identity or invalid range
+- **WHEN** an edit carries a stale edit sequence, mismatched identity, reused request identity or invalid range
 - **THEN** the owning session rejects only that command with a typed diagnostic
 - **AND** it does not retry against current text, switch documents or partially apply changes
 
@@ -54,13 +54,13 @@ command.
 
 Save SHALL encode the accepted working source with the loaded UTF-8 BOM and LF/CRLF convention and
 SHALL publish atomically with the loaded Content fingerprint. Save MUST NOT format, normalize,
-overwrite externally changed bytes or clear dirty state for an unsaved later revision.
+overwrite externally changed bytes or clear dirty state for an unsaved later edit sequence.
 
-#### Scenario: User saves the current revision
+#### Scenario: User saves the current edit sequence
 
 - **WHEN** the current working source is dirty and the file fingerprint still matches the loaded base
 - **THEN** the authorized writer atomically replaces the file and returns the new fingerprint
-- **AND** the session clears dirty state only if no later revision remains unsaved
+- **AND** the session clears dirty state only if no later edit sequence remains unsaved
 
 #### Scenario: Workspace file changed externally
 
@@ -192,20 +192,21 @@ composition ends.
 - **THEN** command labels, tooltips, diagnostics and accessibility names update without reloading or rewriting the document
 - **AND** source language and editor locale remain independent
 
-### Requirement: Future non-UI authoring reuses the same application port
+### Requirement: External content authoring remains file-native
 
 The text-document owner SHALL expose one host-neutral open, project, apply-edits, save and close port
-for authorized callers. The port MUST require exact document/session identity and concurrency tokens
-and MUST NOT expose raw paths, a parallel writer or a second format authority.
+for the exact Window editor lifecycle. Agent content authoring MUST NOT consume that port or create an
+Agent-owned Text Document session; it changes the authoritative Workspace file through the separately
+authorized native file path.
 
-#### Scenario: Future Agent adapter edits a document
+#### Scenario: Agent changes a clean open content file
 
-- **WHEN** a separately authorized Agent capability later submits bounded edits for the current exact revision
-- **THEN** the same Text Document session validates, applies and projects those edits
-- **AND** no Markdown screenplay convention, Agent-owned file store or direct filesystem path is required
+- **WHEN** an Agent-native write changes the exact Workspace file observed by a clean Text Document session
+- **THEN** the editor handles it through the canonical external-file change policy
+- **AND** no Agent editor session, format-specific mutation Tool or second writer is created
 
-#### Scenario: AI integration is absent in this change
+#### Scenario: Agent changes a dirty open content file
 
-- **WHEN** this capability is installed without a separately approved Agent authoring change
-- **THEN** no Agent Tool, Prompt, Skill, write grant or autonomous save entry is registered
-- **AND** user editing remains fully available through the same package-owned session path
+- **WHEN** an Agent-native write changes the exact Workspace file while the Window session is dirty
+- **THEN** the Window session preserves its accepted buffer and reports an external-change conflict
+- **AND** it does not merge, overwrite or transfer the dirty buffer to the Agent

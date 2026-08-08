@@ -3,7 +3,7 @@ import { createEpubJsPatchPlugin } from '@neko/preview-webview/epubjs-vite-patch
 import { defineConfig, type Plugin } from 'vite';
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
-import { DESKTOP_VITE_CSP_NONCE } from './src/shared/vite-development-security';
+import { DESKTOP_RENDERER_CSP_NONCE } from './src/shared/vite-development-security';
 
 const functionalFixtureHome = process.env['OPENNEKO_DESKTOP_FUNCTIONAL_HOME'];
 export const DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES = Object.freeze([
@@ -13,6 +13,7 @@ export const DESKTOP_RENDERER_CANONICAL_WORKSPACE_ENTRIES = Object.freeze([
   '@neko/cut-webview/root',
   '@neko/cut-webview/runtime-bridge',
   '@neko/preview-webview/root',
+  '@neko/text-editor-webview/root',
 ] as const);
 
 const canonicalWorkspacePublicEntries = new Set<string>(
@@ -47,7 +48,7 @@ export default defineConfig({
     ? { cacheDir: path.join(functionalFixtureHome, 'vite-renderer-cache') }
     : {}),
   html: {
-    cspNonce: DESKTOP_VITE_CSP_NONCE,
+    cspNonce: DESKTOP_RENDERER_CSP_NONCE,
   },
   resolve: {
     dedupe: [
@@ -57,7 +58,13 @@ export default defineConfig({
       '@neko/canvas-webview',
       '@neko/cut-webview',
       '@neko/preview-webview',
+      '@neko/text-editor-webview',
       '@neko/ui',
+      '@codemirror/autocomplete',
+      '@codemirror/commands',
+      '@codemirror/language',
+      '@codemirror/state',
+      '@codemirror/view',
       'react',
       'react-dom',
       'zustand',
@@ -86,6 +93,7 @@ export default defineConfig({
       '@neko/host/desktop-window-composition-contract',
       '@neko/preview-webview/presentation-snapshot',
       '@neko/preview-webview/root',
+      '@neko/text-editor-webview/root',
       '@neko/media',
       '@neko/media/browser',
       '@neko/ui',
@@ -99,13 +107,28 @@ export default defineConfig({
       '@neko/ui/workbench',
     ],
     include: [
+      '@codemirror/autocomplete',
+      '@codemirror/commands',
+      '@codemirror/lang-json',
+      '@codemirror/lang-markdown',
+      '@codemirror/language',
+      '@codemirror/state',
+      '@codemirror/view',
+      '@milkdown/core',
+      '@milkdown/preset-commonmark',
+      '@milkdown/preset-gfm',
+      '@milkdown/prose/history',
+      '@milkdown/prose/keymap',
+      '@milkdown/prose/state',
       '@zip.js/zip.js',
       '@neko/content/project-file-io',
+      '@neko/entity-domain',
       '@neko/generation',
       '@neko/markdown',
       '@neko/search-domain',
       '@neko/shared',
       '@neko/shared/job-lifecycle',
+      '@neko/preview-domain/authorized-session',
       '@tanstack/react-virtual',
       'clsx',
       'docx-preview',

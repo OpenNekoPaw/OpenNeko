@@ -65,6 +65,7 @@ export interface ResourceBrowserNodeSourceOptions {
     readonly absolutePath: string;
     readonly target: Parameters<ResourceBrowserInteractionPort['preview']>[0]['target'];
   }) => Promise<void>;
+  readonly openTextEditor: ResourceBrowserInteractionPort['editText'];
   readonly openCut: (input: {
     readonly identity: ResourceBrowserIdentity;
     readonly item: ResourceBrowserItem;
@@ -433,6 +434,7 @@ export function createResourceBrowserNodeProjectionSource(
       });
       await options.openPreview({ identity, item, absolutePath, target });
     },
+    editText: options.openTextEditor,
     async openCut({ identity, item }): Promise<void> {
       const absolutePath = await resolveResourceBrowserItemPath({
         workspace: options.workspace,

@@ -1,6 +1,7 @@
 # 文档索引
 
-本文是 `docs/` 的导航入口。根目录 `README_CN.md` / `README.md` 介绍项目和当前能力；`docs/` 只承载当前稳定架构与领域资料。
+本文是 `docs/` 的导航入口。根目录 `README_CN.md` / `README.md` 介绍项目和当前能力；`docs/`
+承载当前稳定架构、领域资料，以及带日期和来源的调研输入。
 
 ## 发现路径
 
@@ -15,6 +16,7 @@
 | Package 角色、拆分与命名      | [`architecture/package-taxonomy.md`](architecture/package-taxonomy.md)     |
 | 系统级架构决策                | [`architecture/README.md`](architecture/README.md)                         |
 | 领域能力和领域架构            | [`domains/README.md`](domains/README.md)                                   |
+| 调研、竞品和技术方案对比      | [`research/README.md`](research/README.md)                                 |
 | 活跃设计变更                  | [`../openspec/`](../openspec/)                                             |
 | 质量门禁机器输入              | [`../quality/README.md`](../quality/README.md)                             |
 
@@ -24,6 +26,7 @@
 | ---------- | ----------------------------------- | ------------------------------------------------ |
 | 系统架构   | `docs/architecture/`                | 跨领域、跨包、跨运行平面的约束和 ADR             |
 | 领域文档   | `docs/domains/<domain>/`            | 单个创作领域的能力模型、数据流和领域架构         |
+| 调研分析   | `docs/research/`                    | 带日期、来源和不确定性说明的决策输入             |
 | 开发中变更 | `openspec/changes/`                 | 尚未固化的需求、设计、任务和规格变更             |
 | 任务队列   | 根目录 TODO（存在时）               | 当前排队事项和轻量行动项，不承载设计正文         |
 | 产品路线   | 根目录 Roadmap（存在时）            | 方向性目标和优先级，不承诺具体发布节奏           |
@@ -36,7 +39,8 @@
 
 - 会约束多个领域或多个运行平面：写入 `docs/architecture/`。
 - 只解释一个领域内部能力：写入 `docs/domains/<domain>/`。
-- 只是观察、对比、阶段进度或临时审计：不要写入当前架构文档；需要推进时转入 OpenSpec、TODO 或 Roadmap。
+- 调研、竞品、开源方案对比或 UX 分析：写入 `docs/research/`，并记录日期、来源与不确定性。
+- 阶段进度或临时审计：不要写入当前架构文档；需要推进时转入 OpenSpec、TODO 或 Roadmap。
 - 仍在设计或实施中：优先写入 `openspec/changes/`。
 - 只是当前排队事项：写入仓库采用的根目录 TODO；没有现存入口时先按仓库治理补齐导航。
 - 只是方向性产品目标：写入仓库采用的根目录 Roadmap；没有现存入口时先按仓库治理补齐导航。

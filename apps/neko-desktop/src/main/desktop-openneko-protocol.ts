@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { protocol } from 'electron';
 import {
   createDesktopContentSecurityPolicy,
+  desktopRendererContentSecurityPolicyOptions,
   DESKTOP_APP_HOST,
   DESKTOP_APP_ORIGIN,
   DESKTOP_RESOURCE_HOST,
@@ -53,7 +54,10 @@ export function createDesktopOpenNekoProtocolHandler(
   resources: Pick<DesktopResourceRegistry, 'handle'>,
 ): (request: Request) => Promise<Response> {
   const absoluteRoot = path.resolve(rendererRoot);
-  const csp = createDesktopContentSecurityPolicy(DESKTOP_APP_ORIGIN);
+  const csp = createDesktopContentSecurityPolicy(
+    DESKTOP_APP_ORIGIN,
+    desktopRendererContentSecurityPolicyOptions(false),
+  );
   return async (request) => {
     try {
       const url = new URL(request.url);

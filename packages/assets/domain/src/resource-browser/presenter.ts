@@ -4,6 +4,7 @@ import {
   type ProjectEntityManagementProjection,
 } from '@neko/entity-domain';
 import { contentLocatorKey } from '@neko/content';
+import { modeForTextDocument } from '@neko/text-editor-domain';
 import { type MediaLibraryProjectionEntry } from '@neko/assets-domain/contracts';
 import type { GlobalAssetItem } from '../global-library/contract';
 import type {
@@ -46,6 +47,8 @@ export function presentResourceBrowserContentItem(
       entry.capabilities,
       options.canvasAvailable ?? false,
       entry.metadata?.mediaType,
+      facet,
+      entry.locator,
     ),
   };
 }
@@ -191,8 +194,18 @@ function presentContentCapabilities(
   capabilities: MediaLibraryProjectionEntry['capabilities'],
   canvasAvailable: boolean,
   mediaType: string | undefined,
+  facet: 'files' | 'media',
+  locator: ResourceBrowserContentItem['locator'],
 ): readonly ResourceBrowserCapability[] {
   const result: ResourceBrowserCapability[] = [];
+  if (
+    facet === 'files' &&
+    locator.kind === 'workspace-file' &&
+    capabilities.includes('read') &&
+    modeForTextDocument(locator.path)
+  ) {
+    result.push('edit-text');
+  }
   if (capabilities.includes('preview')) result.push('preview');
   if (mediaType === 'cut' && capabilities.includes('read') && capabilities.includes('bind')) {
     result.push('open-cut');

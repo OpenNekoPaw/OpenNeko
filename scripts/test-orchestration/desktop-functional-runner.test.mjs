@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import {
   captureDesktopScreenshot,
+  composeDesktopText,
   createAutomatedDesktopLaunch,
   createProcessController,
   dragDesktopElement,
@@ -270,6 +271,7 @@ describe('Desktop automated functional runner contract', () => {
     await typeDesktopText(cdp, '[data-testid="prompt"]', 'hello', 0, {
       platform: 'darwin',
     });
+    await composeDesktopText(cdp, '[data-testid="prompt"]', '中文输入');
     await pressDesktopKey(cdp, 'Enter', ['Shift']);
     await pressDesktopKey(cdp, 'End');
     await scrollDesktopElement(cdp, '[data-testid="timeline"]', 0, { deltaY: 240 });
@@ -279,7 +281,19 @@ describe('Desktop automated functional runner contract', () => {
     assert.equal(Buffer.from(screenshot, 'base64').toString('utf8'), 'synthetic-png');
     assert.deepEqual(
       calls.filter((call) => call.method === 'Input.insertText'),
-      [{ method: 'Input.insertText', params: { text: 'hello' } }],
+      [
+        { method: 'Input.insertText', params: { text: 'hello' } },
+        { method: 'Input.insertText', params: { text: '中文输入' } },
+      ],
+    );
+    assert.deepEqual(
+      calls.filter((call) => call.method === 'Input.imeSetComposition'),
+      [
+        {
+          method: 'Input.imeSetComposition',
+          params: { text: '中文输入', selectionStart: 4, selectionEnd: 4 },
+        },
+      ],
     );
     assert.deepEqual(
       calls

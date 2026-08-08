@@ -68,9 +68,11 @@ describe('AgentAppHost', () => {
     await fixture.composition.dispose();
 
     expect(transport.list().map((entry) => entry.message)).toEqual([
+      'Provider "neko-content-read" registered: 2 tools, 0 provider cards, 0 artifact profiles, 0 provider expression profiles',
       'Workspace runtime attached.',
       'Conversation created.',
       'Conversation deleted.',
+      'Provider "neko-content-read" unregistered',
       'Workspace runtime disposed.',
     ]);
     expect(transport.list().every((entry) => entry.source === 'Workspace')).toBe(true);

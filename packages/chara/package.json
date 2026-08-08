@@ -18,7 +18,8 @@
   "dependencies": {
     "@neko/content": "workspace:*",
     "@neko/entity-domain": "workspace:*",
-    "@neko/shared": "workspace:*"
+    "@neko/shared": "workspace:*",
+    "@neko/screenplay-domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

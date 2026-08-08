@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { link, lstat, open, rename, rm, stat } from 'node:fs/promises';
+import { link, lstat, mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   ContentIoContractError,
@@ -60,6 +60,53 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
     if (bytes.byteLength > maxBytes) return unavailable(locator, 'content-too-large');
 
     const targetPath = path.join(this.options.workspaceRoot, ...locator.path.split('/'));
+    const parentAuthorization = await this.authorizeParent(targetPath);
+    if (!parentAuthorization.authorized) {
+      return unavailable(locator, guardDiagnosticCode(parentAuthorization.diagnostic.code));
+    }
+    try {
+      await mkdir(path.dirname(targetPath), { recursive: true });
+    } catch (error) {
+      return unavailable(locator, writeDiagnostic(error));
+    }
+    const createdParentAuthorization = await (
+      this.options.authorize ?? authorizeWorkspaceLinkedPath
+    )({
+      workspaceRoot: this.options.workspaceRoot,
+      requestedPath: path.dirname(targetPath),
+    });
+    if (!createdParentAuthorization.authorized) {
+      return unavailable(locator, guardDiagnosticCode(createdParentAuthorization.diagnostic.code));
+    }
+
+    const lockPath = path.join(
+      path.dirname(targetPath),
+      `.${path.basename(targetPath)}.write-lock`,
+    );
+    let lockHandle: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      lockHandle = await open(lockPath, 'wx', 0o600);
+    } catch (error) {
+      return unavailable(locator, writeDiagnostic(error));
+    }
+
+    try {
+      return await this.writeLocked(locator, targetPath, bytes, options);
+    } finally {
+      try {
+        await closeLock(lockHandle);
+      } finally {
+        await rm(lockPath, { force: true });
+      }
+    }
+  }
+
+  private async writeLocked(
+    locator: WorkspaceFileContentLocator,
+    targetPath: string,
+    bytes: Uint8Array,
+    options: AuthorizedWorkspaceWriteOptions,
+  ): Promise<AuthorizedWorkspaceWriteResult> {
     let targetState: TargetState;
     try {
       targetState = await inspectTarget(targetPath);
@@ -103,6 +150,15 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
         await link(temporaryPath, targetPath);
         await rm(temporaryPath);
       } else {
+        if (options.expectedFingerprint) {
+          const current = await fingerprintForPath(
+            targetPath,
+            options.expectedFingerprint.strategy,
+          );
+          if (!current || current.value !== options.expectedFingerprint.value) {
+            return unavailable(locator, 'content-changed');
+          }
+        }
         await rename(temporaryPath, targetPath);
       }
       const written = await stat(targetPath);
@@ -116,6 +172,43 @@ export class NodeAuthorizedWorkspaceWriter implements AuthorizedWorkspaceWriter 
       return unavailable(locator, writeDiagnostic(error));
     } finally {
       await rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
+  }
+
+  private async authorizeParent(targetPath: string): Promise<WorkspaceLinkedPathGuardResult> {
+    let candidate = path.dirname(targetPath);
+    while (true) {
+      try {
+        await lstat(candidate);
+        return (this.options.authorize ?? authorizeWorkspaceLinkedPath)({
+          workspaceRoot: this.options.workspaceRoot,
+          requestedPath: candidate,
+        });
+      } catch (error) {
+        if (!isNodeError(error, 'ENOENT')) {
+          return {
+            authorized: false,
+            diagnostic: {
+              code:
+                isNodeError(error, 'EACCES') || isNodeError(error, 'EPERM')
+                  ? 'library-permission-denied'
+                  : 'workspace-path-unavailable',
+              message: 'Workspace content parent cannot be inspected.',
+            },
+          };
+        }
+      }
+      const parent = path.dirname(candidate);
+      if (parent === candidate) {
+        return {
+          authorized: false,
+          diagnostic: {
+            code: 'invalid-workspace-path',
+            message: 'Workspace content parent is outside the workspace.',
+          },
+        };
+      }
+      candidate = parent;
     }
   }
 }
@@ -207,4 +300,9 @@ function abortError(): Error {
   const error = new Error('Workspace content write was cancelled.');
   error.name = 'AbortError';
   return error;
+}
+
+async function closeLock(handle: Awaited<ReturnType<typeof open>> | undefined): Promise<void> {
+  if (!handle) return;
+  await handle.close();
 }

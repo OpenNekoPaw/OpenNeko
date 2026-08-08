@@ -114,6 +114,7 @@ function createComposition(
       external: { openExternal: async () => undefined },
     },
     openPreview: async () => undefined,
+    openTextEditor: async () => undefined,
     openCut: async () => undefined,
     selectSource: async () => undefined,
     selectWorkspaceFiles: overrides.selectWorkspaceFiles ?? (async () => undefined),

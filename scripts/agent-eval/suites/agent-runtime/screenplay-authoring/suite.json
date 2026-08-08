@@ -1,0 +1,56 @@
+{
+  "schema": "neko.agent-eval.suite",
+  "id": "agent-runtime.screenplay-authoring",
+  "owner": { "kind": "agent-runtime", "id": "screenplay-authoring" },
+  "target": {
+    "kind": "capability",
+    "id": "native-content-file-authoring",
+    "contractHash": "sha256:36f4efb53b535960fded19497365f3dc956f3ecdfc08477873874cc29a13c550"
+  },
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "screenplay-authoring-workspace",
+      "root": "shared-fixtures/screenplay-authoring-workspace",
+      "source": "repository",
+      "digest": "sha256:1754489be35f3b583df315917464a3dd454ad4a1adf7b12259d27ab38cd86f8f",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "native-fountain-authoring-visible",
+      "file": "cases/native-fountain-authoring-visible.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "reject-protected-project-raw-access",
+      "file": "cases/reject-protected-project-raw-access.json",
+      "group": "failure",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

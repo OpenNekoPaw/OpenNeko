@@ -1,4 +1,5 @@
 import { isMarkdownParentNode, parseNormalizedMarkdown, type MarkdownNode } from '@neko/markdown';
+import { parseFountainDocument } from '@neko/screenplay-domain';
 import type {
   SemanticCreativeSchemaRef,
   SemanticSourceDescriptor,
@@ -208,49 +209,74 @@ function markdownVisibleText(node: MarkdownNode): string {
 }
 
 function extractFountainSegments(sourceId: string, text: string): readonly SemanticTextSegment[] {
-  const segments: SemanticTextSegment[] = [];
-  const lines = lineSpans(text);
-  let dialogueOwner: string | undefined;
-  for (const line of lines) {
-    const trimmed = line.text.trim();
-    if (!trimmed) {
-      dialogueOwner = undefined;
-      continue;
-    }
-    if (isFountainSceneHeading(trimmed)) {
-      dialogueOwner = undefined;
-      segments.push(
-        makeSegment(sourceId, segments.length, 'fountain-scene', trimmed, text, line, {
-          explicitEntityKind: 'scene',
-          explicitEntityName: cleanFountainSceneName(trimmed),
-        }),
-      );
-      continue;
-    }
-    const characterName = fountainCharacterName(trimmed);
-    if (characterName) {
-      dialogueOwner = characterName;
-      segments.push(
-        makeSegment(sourceId, segments.length, 'fountain-character', characterName, text, line, {
-          explicitEntityKind: 'character',
-          explicitEntityName: characterName,
-        }),
-      );
-      continue;
-    }
-    segments.push(
-      makeSegment(
-        sourceId,
-        segments.length,
-        dialogueOwner ? 'fountain-dialogue' : 'fountain-action',
-        trimmed,
-        text,
-        line,
-        dialogueOwner ? { metadata: { dialogueOwner } } : undefined,
-      ),
+  const parsed = parseFountainDocument(text, sourceId, {
+    maxSourceCodeUnits: Math.max(1, text.length),
+  });
+  if (parsed.status === 'failed') {
+    throw new SemanticTextExtractionError(
+      'semantic-text-unsupported-format',
+      `Canonical Fountain parsing failed for ${sourceId}: ${parsed.diagnostics[0]?.code ?? 'unknown'}`,
     );
   }
-  return segments;
+  const scenesByElement = new Map(
+    parsed.document.scenes.flatMap((scene) =>
+      scene.elementIds.map((elementId) => [elementId, scene] as const),
+    ),
+  );
+  return parsed.document.elements.flatMap((element) => {
+    const scene = scenesByElement.get(element.elementId);
+    const offsets = { start: element.range.start.offset, end: element.range.end.offset };
+    const ordinal = elementOrdinal(element.elementId);
+    switch (element.kind) {
+      case 'scene-heading':
+        return [
+          makeSegment(sourceId, ordinal, 'fountain-scene', element.text, text, offsets, {
+            explicitEntityKind: 'scene',
+            explicitEntityName: scene?.location ?? element.text,
+          }),
+        ];
+      case 'character':
+        return [
+          makeSegment(sourceId, ordinal, 'fountain-character', element.text, text, offsets, {
+            explicitEntityKind: 'character',
+            explicitEntityName: element.text,
+          }),
+        ];
+      case 'dialogue':
+      case 'parenthetical':
+        return [
+          makeSegment(
+            sourceId,
+            ordinal,
+            'fountain-dialogue',
+            element.text,
+            text,
+            offsets,
+            element.dialogueOwner
+              ? { metadata: { dialogueOwner: element.dialogueOwner } }
+              : undefined,
+          ),
+        ];
+      case 'action':
+      case 'transition':
+      case 'centered':
+      case 'lyrics':
+        return [makeSegment(sourceId, ordinal, 'fountain-action', element.text, text, offsets)];
+      default:
+        return [];
+    }
+  });
+}
+
+function elementOrdinal(elementId: string): number {
+  const ordinal = Number(elementId.slice('element:'.length));
+  if (!Number.isSafeInteger(ordinal) || ordinal < 0) {
+    throw new SemanticTextExtractionError(
+      'semantic-text-unsupported-format',
+      `Canonical Fountain element identity is invalid: ${elementId}`,
+    );
+  }
+  return ordinal;
 }
 
 function extractJsonSegments(
@@ -488,26 +514,6 @@ function positionAt(
     lineStart = index + 1;
   }
   return { line, column: bounded - lineStart + 1 };
-}
-
-function isFountainSceneHeading(value: string): boolean {
-  const normalized = value.startsWith('.') ? value.slice(1) : value;
-  return /^(?:INT\.?|EXT\.?|EST\.?|INT\.?\/EXT\.?|I\/E\.?)\s/u.test(normalized.toUpperCase());
-}
-
-function cleanFountainSceneName(value: string): string {
-  return value
-    .replace(/^\.?\s*(?:INT\.?|EXT\.?|EST\.?|INT\.?\/EXT\.?|I\/E\.?)\s*/iu, '')
-    .replace(/\s+-\s+.+$/u, '')
-    .trim();
-}
-
-function fountainCharacterName(value: string): string | undefined {
-  const forced = value.startsWith('@') ? value.slice(1).trim() : undefined;
-  const candidate = forced ?? value;
-  if (!candidate || candidate.length > 80 || /[.!?。！？]$/u.test(candidate)) return undefined;
-  if (!forced && !/^[A-Z0-9 _.'()-]+$/u.test(candidate)) return undefined;
-  return candidate.replace(/\s*\([^)]*\)\s*$/u, '').trim() || undefined;
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {
