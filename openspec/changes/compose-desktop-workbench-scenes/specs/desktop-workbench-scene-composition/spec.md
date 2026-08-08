@@ -685,3 +685,35 @@ MUST NOT classify Renderer instances as `hot-retained`, `suspendable` or `epheme
 - **THEN** every mounted Root, protected runtime, handle and subscription is disposed exactly once
 - **AND** user-scoped in-memory snapshots and pending UI drafts do not leak into the next context
 - **AND** durable project, conversation and explicitly persisted shadow data follow their owning retention policy
+
+### Requirement: Cut Save As rebinds one exact runtime and projection stream
+
+Desktop MUST revalidate the exact renderer, Workbench and unnamed draft View after the native Save As
+selection and before writing. A successful rebind MUST move the canonical document identity,
+subscription identity and authoritative event cursor together.
+
+#### Scenario: An unnamed draft is saved while subscribed
+
+- **WHEN** the user saves an unnamed Cut draft to an authorized Workspace OTIO path
+- **THEN** the returned snapshot and Shell View identify the same saved document and session
+- **AND** later events for that identity are delivered exactly once in sequence
+- **AND** events for the retired draft identity are rejected
+
+#### Scenario: Save As authority changes while the picker is open
+
+- **WHEN** the renderer, Workbench or exact draft View changes before the picker returns
+- **THEN** Desktop rejects the stale Save As before committing the file or session rebind
+- **AND** it does not leave a saved session behind an old draft View
+
+### Requirement: Cut representations tolerate overlapping viewport requests
+
+The Cut Webview MUST own representation requests by exact document/session, request identity and
+representation key. It MUST merge valid out-of-order results and release completed or failed
+in-flight keys without accepting stale-document or removed-Clip results.
+
+#### Scenario: Resize creates overlapping thumbnail batches
+
+- **WHEN** two representation batches for the same Cut session complete out of order
+- **THEN** every still-relevant result is merged by its exact representation key
+- **AND** a later batch does not invalidate an earlier successful batch
+- **AND** failed keys can be requested again without an unbounded retry loop

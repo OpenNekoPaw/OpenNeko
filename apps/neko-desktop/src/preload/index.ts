@@ -124,6 +124,7 @@ import {
 } from '../shared/canvas-bridge-contract';
 import {
   CUT_HOST_RUNTIME_ROUTES,
+  isCutDraftDocumentId,
   parseCutHostRuntimeProjectionEvent,
   parseCutHostRuntimeRequest,
   parseCutHostRuntimeResult,
@@ -131,9 +132,14 @@ import {
   type CutHostRuntimeIdentity,
 } from '@neko/cut-domain';
 import {
+  desktopCutIdentityKey,
   DESKTOP_CUT_CHANNELS,
   isSameCutHostIdentity,
+  isSameCutHostSession,
   parseDesktopCutHostIdentity,
+  parseDesktopCutViewMutationRequest,
+  parseDesktopCutViewMutationResult,
+  rebindDesktopCutProjectionState,
   type OpenNekoDesktopCutBridge,
 } from '../shared/cut-bridge-contract';
 import {
@@ -967,6 +973,22 @@ const bridge: OpenNekoDesktopBridge &
     },
   },
   cut: {
+    async createDraft(value) {
+      const request = parseDesktopCutViewMutationRequest(value);
+      if (request.identity !== undefined) {
+        throw new Error('Desktop Cut draft creation must not carry a document identity.');
+      }
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_CUT_CHANNELS.draftCreate, request);
+      return parseDesktopCutViewMutationResult(response);
+    },
+    async closeView(value) {
+      const request = parseDesktopCutViewMutationRequest(value);
+      if (request.identity === undefined) {
+        throw new Error('Desktop Cut close requires an exact document identity.');
+      }
+      const response: unknown = await ipcRenderer.invoke(DESKTOP_CUT_CHANNELS.viewClose, request);
+      return parseDesktopCutViewMutationResult(response);
+    },
     async getSnapshot(value) {
       const identity = parseDesktopCutHostIdentity(value);
       const response: unknown = await ipcRenderer.invoke(
@@ -977,7 +999,7 @@ const bridge: OpenNekoDesktopBridge &
       if (!isSameCutHostIdentity(snapshot.identity, identity)) {
         throw new Error('Desktop Cut snapshot owner identity does not match.');
       }
-      const key = cutIdentityKey(snapshot.identity);
+      const key = desktopCutIdentityKey(snapshot.identity);
       currentCutIdentities.set(key, snapshot.identity);
       currentCutEventSequences.set(
         key,
@@ -987,7 +1009,7 @@ const bridge: OpenNekoDesktopBridge &
     },
     async execute(value) {
       const request = parseCutHostRuntimeRequest(value);
-      const identity = currentCutIdentities.get(cutIdentityKey(request.identity));
+      const identity = currentCutIdentities.get(desktopCutIdentityKey(request.identity));
       const createsDocument = request.route === CUT_HOST_RUNTIME_ROUTES.documentCreate;
       if (
         (!identity && !createsDocument) ||
@@ -1001,16 +1023,37 @@ const bridge: OpenNekoDesktopBridge &
       );
       const result = parseCutHostRuntimeResult(response);
       const expectedIdentity = identity ?? request.identity;
-      if (!isSameCutHostIdentity(result.snapshot.identity, expectedIdentity)) {
+      const savesDraft =
+        request.route === CUT_HOST_RUNTIME_ROUTES.save &&
+        isCutDraftDocumentId(request.identity.documentId);
+      const reboundDraft =
+        savesDraft &&
+        !isCutDraftDocumentId(result.snapshot.identity.documentId) &&
+        isSameCutHostSession(result.snapshot.identity, expectedIdentity);
+      if (!isSameCutHostIdentity(result.snapshot.identity, expectedIdentity) && !reboundDraft) {
         throw new Error('Desktop Cut response owner identity does not match.');
       }
-      if (createsDocument) {
-        const key = cutIdentityKey(result.snapshot.identity);
-        currentCutIdentities.set(key, result.snapshot.identity);
-        currentCutEventSequences.set(
-          key,
-          preserveDesktopBootstrapEventSequence(currentCutEventSequences.get(key)),
-        );
+      if (createsDocument || reboundDraft) {
+        if (reboundDraft) {
+          if (result.output?.type !== 'identity-rebound') {
+            throw new Error('Desktop Cut draft rebind result is missing its event cursor.');
+          }
+          rebindDesktopCutProjectionState({
+            identities: currentCutIdentities,
+            eventSequences: currentCutEventSequences,
+            listeners: cutListeners,
+            previousIdentity: expectedIdentity,
+            nextIdentity: result.snapshot.identity,
+            eventSequence: result.output.eventSequence,
+          });
+        } else {
+          const key = desktopCutIdentityKey(result.snapshot.identity);
+          currentCutIdentities.set(key, result.snapshot.identity);
+          currentCutEventSequences.set(
+            key,
+            preserveDesktopBootstrapEventSequence(currentCutEventSequences.get(key)),
+          );
+        }
       }
       return result;
     },
@@ -1285,7 +1328,7 @@ ipcRenderer.on(
   DESKTOP_CUT_CHANNELS.projectionEvent,
   (_event: Electron.IpcRendererEvent, value: unknown): void => {
     const event = parseCutHostRuntimeProjectionEvent(value);
-    const key = cutIdentityKey(event.snapshot.identity);
+    const key = desktopCutIdentityKey(event.snapshot.identity);
     const identity = currentCutIdentities.get(key);
     if (!identity || !isSameCutHostIdentity(event.snapshot.identity, identity)) {
       return;
@@ -1414,17 +1457,6 @@ function requireProjectPortabilityResultIdentity(
 }
 
 function canvasIdentityKey(identity: CanvasHostRuntimeIdentity): string {
-  return [
-    identity.windowId,
-    identity.viewId,
-    String(identity.viewInstanceId),
-    identity.documentId,
-    identity.sessionId,
-    identity.rendererSessionId,
-  ].join(':');
-}
-
-function cutIdentityKey(identity: CutHostRuntimeIdentity): string {
   return [
     identity.windowId,
     identity.viewId,

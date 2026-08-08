@@ -66,6 +66,7 @@ import {
   resolveGlobalMediaLibraryTarget,
 } from './global-media-library-files';
 import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync';
+import { WorkspaceDirectoryObserver } from './workspace-directory-observer';
 import {
   createResourceBrowserNodeProjectionSource,
   readGlobalMediaLibraryChildren,
@@ -100,6 +101,10 @@ export interface ResourceBrowserWorkbenchView {
   readonly documentId?: string;
 }
 
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 export interface ResourceBrowserShellPort {
   getProjection(windowId: string): Promise<ResourceBrowserShellProjection>;
   resolveProjectWorkspace(projectId: string): Promise<AssetWorkspaceResolution>;
@@ -113,11 +118,10 @@ export interface ResourceBrowserNodeRuntimeOptions {
   readonly localMetadataRepositories?: LocalMetadataRepositories;
   readonly refreshEntityProjections?: ResourceBrowserNodeSourceOptions['refreshEntityProjections'];
   readonly shell: ResourceBrowserShellPort;
-  readonly host: Pick<NekoHostPorts, 'files' | 'external'>;
+  readonly host: Pick<NekoHostPorts, 'files' | 'external' | 'diagnostics'>;
   readonly openPreview: ResourceBrowserNodeSourceOptions['openPreview'];
-  readonly openCut: ResourceBrowserNodeSourceOptions['openCut'];
+  readonly openCreativeDocument: ResourceBrowserNodeSourceOptions['openCreativeDocument'];
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
-  readonly selectWorkspaceFiles: ResourceBrowserNodeSourceOptions['selectWorkspaceFiles'];
   readonly trashWorkspaceItem: ResourceBrowserNodeSourceOptions['trashWorkspaceItem'];
   readonly selectConfiguredGlobalMediaLibrary: ResourceBrowserNodeSourceOptions['selectGlobalLibrary'];
   readonly selectGlobalMediaLibrarySource: (windowId: string) => Promise<string | undefined>;
@@ -169,6 +173,8 @@ export interface ResourceBrowserNodeRuntimeOptions {
 
 export class ResourceBrowserNodeRuntime {
   private readonly controllers = new Map<string, ResourceBrowserController>();
+  private readonly workspaceObservers = new Map<string, WorkspaceDirectoryObserver>();
+  private readonly workspaceObservationKeys = new Set<string>();
   private readonly homeItemsByWindow = new Map<string, Map<string, GlobalLibraryItem>>();
   private readonly homeThumbnailControllers = new Map<string, Set<AbortController>>();
   private globalAssetMutationTail: Promise<void> = Promise.resolve();
@@ -325,11 +331,7 @@ export class ResourceBrowserNodeRuntime {
         expectedOperationFingerprint: request.expectedOperationFingerprint,
       }),
     );
-    return controller.execute({
-      requestId: `${request.requestId}:refresh`,
-      identity: request.identity,
-      route: RESOURCE_BROWSER_ROUTES.refresh,
-    });
+    return controller.reconcile();
   }
 
   async cancelRecovery(
@@ -359,7 +361,18 @@ export class ResourceBrowserNodeRuntime {
     value: ResourceBrowserIntentRequest | unknown,
   ): Promise<ResourceBrowserProjection> {
     const request = parseResourceBrowserIntentRequest(value);
-    return (await this.resolveController(windowId, request.identity)).execute(request);
+    const controller = await this.resolveController(windowId, request.identity);
+    const projection = await controller.execute(request);
+    if (
+      request.route === RESOURCE_BROWSER_ROUTES.reconcile &&
+      this.workspaceObservationKeys.has(resourceBrowserControllerKey(controller.identity))
+    ) {
+      const workspace = await this.options.shell.resolveAgentWorkspace(
+        request.identity.workspaceId,
+      );
+      this.startWorkspaceObserver(controller, workspace.workspacePath);
+    }
+    return projection;
   }
 
   async subscribe(
@@ -367,7 +380,44 @@ export class ResourceBrowserNodeRuntime {
     identity: ResourceBrowserIdentity,
     listener: (event: ResourceBrowserProjectionEvent) => void,
   ): Promise<() => void> {
-    return (await this.resolveController(windowId, identity)).subscribe(listener);
+    const controller = await this.resolveController(windowId, identity);
+    const key = resourceBrowserControllerKey(controller.identity);
+    const workspace = await this.options.shell.resolveAgentWorkspace(identity.workspaceId);
+    this.workspaceObservationKeys.add(key);
+    this.startWorkspaceObserver(controller, workspace.workspacePath);
+    const unsubscribe = controller.subscribe(listener);
+    return () => {
+      unsubscribe();
+      this.workspaceObservationKeys.delete(key);
+      this.workspaceObservers.get(key)?.dispose();
+      this.workspaceObservers.delete(key);
+    };
+  }
+
+  async reconcileWindow(windowId: string): Promise<void> {
+    this.requireActive();
+    const controllers = [...this.controllers.entries()].filter(
+      ([key, controller]) =>
+        controller.identity.windowId === windowId && this.workspaceObservationKeys.has(key),
+    );
+    await Promise.all(
+      controllers.map(async ([, controller]) => {
+        try {
+          await controller.reconcile();
+          const workspace = await this.options.shell.resolveAgentWorkspace(
+            controller.identity.workspaceId,
+          );
+          const key = resourceBrowserControllerKey(controller.identity);
+          if (this.workspaceObservationKeys.has(key)) {
+            this.startWorkspaceObserver(controller, workspace.workspacePath);
+          }
+        } catch (error) {
+          await controller.reportObservationFailure(
+            `Workspace directory focus reconciliation failed: ${asError(error).message}`,
+          );
+        }
+      }),
+    );
   }
 
   async searchHomeAssets(input: {
@@ -625,6 +675,9 @@ export class ResourceBrowserNodeRuntime {
   detachWindow(windowId: string): void {
     for (const [key, controller] of this.controllers) {
       if (controller.identity.windowId !== windowId) continue;
+      this.workspaceObservers.get(key)?.dispose();
+      this.workspaceObservers.delete(key);
+      this.workspaceObservationKeys.delete(key);
       controller.dispose();
       this.controllers.delete(key);
     }
@@ -641,6 +694,59 @@ export class ResourceBrowserNodeRuntime {
   private async requireHomeWindow(windowId: string): Promise<void> {
     this.requireActive();
     await this.options.shell.getProjection(windowId);
+  }
+
+  private startWorkspaceObserver(
+    controller: ResourceBrowserController,
+    workspacePath: string,
+  ): WorkspaceDirectoryObserver | undefined {
+    const key = resourceBrowserControllerKey(controller.identity);
+    this.workspaceObservers.get(key)?.dispose();
+    this.workspaceObservers.delete(key);
+    let observer: WorkspaceDirectoryObserver | undefined;
+    try {
+      observer = new WorkspaceDirectoryObserver({
+        root: workspacePath,
+        onInvalidated: () => controller.reconcile().then(() => undefined),
+        onError: (error) => {
+          if (observer && this.workspaceObservers.get(key) === observer) {
+            observer.dispose();
+            this.workspaceObservers.delete(key);
+          }
+          this.reportWorkspaceObservationFailure(
+            key,
+            controller,
+            `Workspace directory observation failed: ${error.message}`,
+          );
+        },
+      });
+      this.workspaceObservers.set(key, observer);
+      return observer;
+    } catch (error) {
+      const watchError = asError(error);
+      this.reportWorkspaceObservationFailure(
+        key,
+        controller,
+        `Workspace directory observation failed: ${watchError.message}`,
+      );
+      return undefined;
+    }
+  }
+
+  private reportWorkspaceObservationFailure(
+    key: string,
+    controller: ResourceBrowserController,
+    message: string,
+  ): void {
+    void controller.reportObservationFailure(message).catch((error: unknown) => {
+      if (this.controllers.get(key) !== controller) return;
+      this.options.host.diagnostics?.report({
+        code: 'resource-browser-observation-diagnostic-failed',
+        severity: 'error',
+        message: asError(error).message,
+        metadata: { key },
+      });
+    });
   }
 
   private async withGlobalMediaLibraryMutation<T>(operation: () => Promise<T>): Promise<T> {
@@ -666,6 +772,9 @@ export class ResourceBrowserNodeRuntime {
     this.disposed = true;
     for (const controller of this.controllers.values()) controller.dispose();
     this.controllers.clear();
+    for (const observer of this.workspaceObservers.values()) observer.dispose();
+    this.workspaceObservers.clear();
+    this.workspaceObservationKeys.clear();
     for (const controllers of this.homeThumbnailControllers.values()) {
       for (const controller of controllers) {
         controller.abort(new Error('Desktop Resource Browser runtime was disposed.'));
@@ -918,6 +1027,8 @@ export class ResourceBrowserNodeRuntime {
         candidate.identity.projectId === identity.projectId
       ) {
         candidate.dispose();
+        this.workspaceObservers.get(candidateKey)?.dispose();
+        this.workspaceObservers.delete(candidateKey);
         this.controllers.delete(candidateKey);
       }
     }
@@ -946,9 +1057,8 @@ export class ResourceBrowserNodeRuntime {
       workspace,
       host: this.options.host,
       openPreview: this.options.openPreview,
-      openCut: this.options.openCut,
+      openCreativeDocument: this.options.openCreativeDocument,
       selectSource: this.options.selectSource,
-      selectWorkspaceFiles: this.options.selectWorkspaceFiles,
       trashWorkspaceItem: this.options.trashWorkspaceItem,
       selectGlobalLibrary: this.options.selectConfiguredGlobalMediaLibrary,
       mutateGlobalMediaLibraries: (operation) => this.withGlobalMediaLibraryMutation(operation),

@@ -912,3 +912,47 @@ contain the Resource overlay and is therefore not counted as compact visual acce
 optional retry stopped on the scenario's existing resize-drag nondeterminism, and another lost the
 Desktop CDP connection. Compact graphical acceptance remains unclaimed; neither failure changed the
 focused code gate or the successful wide-window evidence matching the reported defect.
+
+## Cut Save As And Representation Race Qualification
+
+The Cut draft Save As path now revalidates the exact renderer, Workbench and draft View after the
+native picker returns. Its package-owned result carries the event sequence already published by the
+identity rebind, and preload moves the current identity, listener identity and cursor together. If a
+Shell update fails after the authorized file write, Desktop preserves the file, releases the now
+unreachable session and reports that the saved file must be reopened from Resources.
+
+Clip representation requests now retain request-to-key ownership. Overlapping resize/scroll batches
+deduplicate in-flight keys, valid out-of-order batches merge independently, removed-Clip and replaced-
+session results remain stale, and a failed batch releases only its own keys while surfacing the typed
+`media-runtime-unavailable` diagnostic.
+
+Deterministic evidence passed:
+
+- focused Cut/Assets/Desktop contract and runtime suite: `6 files / 71 tests`;
+- adjacent Resource Browser suite: `2 files / 20 tests`;
+- full `@neko/cut-webview`: `33 files / 254 tests`;
+- full `@neko/assets-node`: `14 files / 77 tests`;
+- full repository TypeScript check, Desktop TypeScript check, formatting, lint with existing warnings,
+  strict OpenSpec and `check:quality`;
+- Canvas playback boundary accepts the canonical dynamic public-root import through TypeScript AST
+  inspection and rejects comment/string lookalikes.
+
+The first advisory UI run failed before Timeline mount with `Cut Webview bridge is disposed`. The
+memoized bridge was being permanently disposed by React StrictMode's effect replay. Desktop now
+defers final bridge disposal through the established mounted-token pattern; the focused StrictMode
+regression proves replay keeps the bridge active and final Surface unmount disposes it once.
+
+The repeated isolated development run reached Timeline, Save, playback, midpoint seek, export,
+reopen, resource drop and compact layout with zero console errors, warnings or exceptions. Direct
+pixel inspection confirmed stable color-bar thumbnails in every visible Video Clip at wide editor,
+playing/seeked, post-drop dense and compact states; tiles were nonblank and did not overlap adjacent
+controls. Evidence:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T18-29-05.725Z-cut-openneko-consumer-development/report.json`
+
+The run's overall advisory result remains failed because its independent `cut-empty-draft-add`
+checkpoint expected tab elements that were absent, even though the canonical empty Timeline itself
+passed. The full Desktop suite also remained red in concurrent Preview progressive-loading tests and
+one parallel Resource Browser timeout; the focused Resource Browser timeout test passed alone. These
+failures do not invalidate the focused Cut/Assets or inspected thumbnail evidence, but they remain
+visible as adjacent product/test risks.

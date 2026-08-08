@@ -356,8 +356,8 @@ export class CutApplicationRuntime {
       );
       this.sessions.set(nextKey, entry);
       const snapshot = this.projectSnapshot(entry);
-      this.publish(entry, snapshot);
-      return { snapshot };
+      const eventSequence = this.publish(entry, snapshot);
+      return { snapshot, output: { type: 'identity-rebound', eventSequence } };
     });
   }
 
@@ -920,13 +920,14 @@ export class CutApplicationRuntime {
   private publish(
     entry: CutApplicationRuntimeEntry,
     snapshot: CutHostRuntimeSnapshot = this.projectSnapshot(entry),
-  ): void {
+  ): number {
     entry.sequence += 1;
     const event: CutHostRuntimeProjectionEvent = {
       sequence: entry.sequence,
       snapshot,
     };
     for (const listener of entry.listeners) listener(event);
+    return event.sequence;
   }
 
   private completePreviewRequest(

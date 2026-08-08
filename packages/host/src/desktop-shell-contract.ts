@@ -264,11 +264,21 @@ export interface DesktopStoredStateMetadataRetainedDiagnosticProjection {
   readonly message: string;
 }
 
+export interface DesktopPresentationResetDiagnosticProjection {
+  readonly code: 'desktop-presentation-reset';
+  readonly severity: 'warning';
+  readonly windowId: string;
+  readonly owner: 'cut';
+  readonly removedViewIds: readonly string[];
+  readonly message: string;
+}
+
 export type DesktopShellStateDiagnosticProjection =
   | DesktopStoredWindowInvalidDiagnosticProjection
   | DesktopStoredStateInvalidDiagnosticProjection
   | DesktopShellComponentInvalidDiagnosticProjection
-  | DesktopStoredStateMetadataRetainedDiagnosticProjection;
+  | DesktopStoredStateMetadataRetainedDiagnosticProjection
+  | DesktopPresentationResetDiagnosticProjection;
 
 export interface DesktopShellProjection {
   readonly applicationInstanceId: string;
@@ -984,6 +994,41 @@ function parseDesktopShellStateDiagnosticProjection(
   value: unknown,
 ): DesktopShellStateDiagnosticProjection {
   const record = requireRecord(value, 'Desktop Shell state diagnostic must be an object.');
+  if (record['code'] === 'desktop-presentation-reset') {
+    requireExactKeys(
+      record,
+      ['code', 'severity', 'windowId', 'owner', 'removedViewIds', 'message'],
+      'Desktop Shell state diagnostic',
+    );
+    if (record['severity'] !== 'warning' || record['owner'] !== 'cut') {
+      throw invalidPayload('Desktop presentation reset diagnostic identity is invalid.');
+    }
+    const removedViewIds = requireArray(
+      record['removedViewIds'],
+      'Desktop presentation reset View identities must be an array.',
+    ).map((viewId) =>
+      requireNonEmptyString(viewId, 'Desktop presentation reset View identity is required.'),
+    );
+    if (removedViewIds.length === 0 || new Set(removedViewIds).size !== removedViewIds.length) {
+      throw invalidPayload(
+        'Desktop presentation reset View identities must be unique and non-empty.',
+      );
+    }
+    return {
+      code: 'desktop-presentation-reset',
+      severity: 'warning',
+      windowId: requireNonEmptyString(
+        record['windowId'],
+        'Desktop presentation reset Window identity is required.',
+      ),
+      owner: 'cut',
+      removedViewIds,
+      message: requireNonEmptyString(
+        record['message'],
+        'Desktop presentation reset message is required.',
+      ),
+    };
+  }
   if (record['code'] === 'desktop-stored-state-metadata-retained') {
     requireExactKeys(
       record,

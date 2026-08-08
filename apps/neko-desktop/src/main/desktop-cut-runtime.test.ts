@@ -20,6 +20,7 @@ import {
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
 import {
+  closeCutView,
   createDefaultDesktopWorkbenchLayout,
   getActiveMainView,
   openOrFocusCutView,
@@ -82,6 +83,13 @@ describe('DesktopCutRuntime', () => {
       },
     });
     const identity = createViewIdentity(view, harness.request.rendererSessionId);
+    const events: Array<{ readonly sequence: number; readonly documentId: string }> = [];
+    await harness.runtime.subscribe(harness.request.windowId, identity, (event) =>
+      events.push({
+        sequence: event.sequence,
+        documentId: event.snapshot.identity.documentId,
+      }),
+    );
     await expect(
       harness.runtime.getSnapshot(harness.request.windowId, identity),
     ).resolves.toMatchObject({
@@ -103,6 +111,19 @@ describe('DesktopCutRuntime', () => {
       dirty: false,
       identity: { documentId: 'cuts/saved.otio', sessionId: identity.sessionId },
     });
+    expect(saved.output).toEqual({ type: 'identity-rebound', eventSequence: 1 });
+    expect(events).toEqual([{ sequence: 1, documentId: 'cuts/saved.otio' }]);
+    await harness.runtime.execute(harness.request.windowId, {
+      requestId: 'saved-presentation-request',
+      commandId: 'saved-presentation-command',
+      route: CUT_HOST_RUNTIME_ROUTES.presentationUpdate,
+      identity: saved.snapshot.identity,
+      payload: { ...DEFAULT_CUT_HOST_PRESENTATION, previewVolume: 0.5 },
+    });
+    expect(events).toEqual([
+      { sequence: 1, documentId: 'cuts/saved.otio' },
+      { sequence: 2, documentId: 'cuts/saved.otio' },
+    ]);
     expect(harness.workbench().cutPanel?.views[0]).toMatchObject({
       documentId: 'cuts/saved.otio',
       displayLabel: 'saved.otio',
@@ -315,6 +336,96 @@ describe('DesktopCutRuntime', () => {
     expect(result.snapshot).toMatchObject({ dirty: true, identity });
     expect(harness.workbench().cutPanel?.views[0]).toEqual(view);
     expect(selectDraftDestination).toHaveBeenCalledOnce();
+    await harness.runtime.dispose();
+  });
+
+  it('rejects Save As before writing when its exact draft View changes during selection', async () => {
+    let finishSelection: ((documentId: string) => void) | undefined;
+    const selectDraftDestination = vi.fn(
+      () => new Promise<string>((resolve) => (finishSelection = resolve)),
+    );
+    const harness = await createDraftRuntimeHarness({ selectDraftDestination });
+    await harness.runtime.createDraft(harness.request);
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view?.documentId) throw new Error('Cut draft View fixture is missing.');
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+
+    const saving = harness.runtime.execute(harness.request.windowId, {
+      requestId: 'stale-view-save-request',
+      commandId: 'stale-view-save-command',
+      route: CUT_HOST_RUNTIME_ROUTES.save,
+      identity,
+    });
+    await vi.waitFor(() => expect(selectDraftDestination).toHaveBeenCalledOnce());
+    harness.setWorkbench(closeCutView(harness.workbench(), view.viewId));
+    finishSelection?.('cuts/stale-view.otio');
+
+    await expect(saving).rejects.toThrow('View changed during Save As selection');
+    await expect(
+      readFile(path.join(harness.workspacePath, 'cuts/stale-view.otio')),
+    ).rejects.toThrow();
+    await expect(
+      harness.runtime.getSnapshot(harness.request.windowId, identity),
+    ).resolves.toMatchObject({
+      identity,
+    });
+    await harness.runtime.dispose();
+  });
+
+  it('rejects Save As before writing when its renderer changes during selection', async () => {
+    let finishSelection: ((documentId: string) => void) | undefined;
+    const selectDraftDestination = vi.fn(
+      () => new Promise<string>((resolve) => (finishSelection = resolve)),
+    );
+    const harness = await createDraftRuntimeHarness({ selectDraftDestination });
+    await harness.runtime.createDraft(harness.request);
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view?.documentId) throw new Error('Cut draft View fixture is missing.');
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+
+    const saving = harness.runtime.execute(harness.request.windowId, {
+      requestId: 'stale-renderer-save-request',
+      commandId: 'stale-renderer-save-command',
+      route: CUT_HOST_RUNTIME_ROUTES.save,
+      identity,
+    });
+    await vi.waitFor(() => expect(selectDraftDestination).toHaveBeenCalledOnce());
+    harness.setRendererSessionId('endpoint-2');
+    finishSelection?.('cuts/stale-renderer.otio');
+
+    await expect(saving).rejects.toThrow('renderer identity changed during selection');
+    await expect(
+      readFile(path.join(harness.workspacePath, 'cuts/stale-renderer.otio')),
+    ).rejects.toThrow();
+    await harness.runtime.dispose();
+  });
+
+  it('releases a committed Save As session when the Shell View update fails', async () => {
+    const harness = await createDraftRuntimeHarness({ saveDestination: 'cuts/recoverable.otio' });
+    await harness.runtime.createDraft(harness.request);
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view?.documentId) throw new Error('Cut draft View fixture is missing.');
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+    harness.setWorkbenchUpdateFailure(true);
+
+    await expect(
+      harness.runtime.execute(harness.request.windowId, {
+        requestId: 'failed-view-update-save-request',
+        commandId: 'failed-view-update-save-command',
+        route: CUT_HOST_RUNTIME_ROUTES.save,
+        identity,
+      }),
+    ).rejects.toThrow("saved as 'cuts/recoverable.otio'");
+    expect(
+      parseOtio(await readFile(path.join(harness.workspacePath, 'cuts/recoverable.otio'))),
+    ).toMatchObject({ ok: true });
+    await rm(path.join(harness.workspacePath, 'cuts/recoverable.otio'));
+    await expect(
+      harness.runtime.getSnapshot(harness.request.windowId, {
+        ...identity,
+        documentId: 'cuts/recoverable.otio',
+      }),
+    ).rejects.toThrow();
     await harness.runtime.dispose();
   });
 
@@ -561,7 +672,7 @@ describe('DesktopCutRuntime', () => {
       kind: 'file' as const,
       label: 'story.otio',
       locator: { kind: 'workspace-file' as const, path: documentId },
-      capabilities: ['open-cut'] as const,
+      capabilities: ['open-creative-document'] as const,
     };
 
     expect(runtime.supportsOpen(item)).toBe(true);
@@ -1462,6 +1573,8 @@ async function createDraftRuntimeHarness(options: {
     updatedAt: '2026-08-08T00:00:00.000Z',
   };
   let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+  let rendererSessionId = 'endpoint-1';
+  let failWorkbenchUpdates = false;
   workbench = openOrFocusMainView(workbench, {
     viewId: 'canvas-view-1',
     viewInstanceId: 'view-instance-1',
@@ -1511,7 +1624,7 @@ async function createDraftRuntimeHarness(options: {
   );
   const projection = (): DesktopShellProjection => ({
     applicationInstanceId: 'application-1',
-    rendererSessionId: 'endpoint-1',
+    rendererSessionId,
     catalog: { projects: [project] },
     window: {
       windowId: 'window-1',
@@ -1539,6 +1652,7 @@ async function createDraftRuntimeHarness(options: {
     shell: {
       getProjection: vi.fn(async () => projection()),
       updateWorkbench: vi.fn(async (_windowId, _sessionId, _instanceId, next) => {
+        if (failWorkbenchUpdates) throw new Error('Desktop fixture rejected View update.');
         workbench = next;
         return projection();
       }),
@@ -1569,6 +1683,12 @@ async function createDraftRuntimeHarness(options: {
     workbench: () => workbench,
     setWorkbench: (next: DesktopWorkbenchLayoutProjection) => {
       workbench = next;
+    },
+    setRendererSessionId: (next: string) => {
+      rendererSessionId = next;
+    },
+    setWorkbenchUpdateFailure: (failed: boolean) => {
+      failWorkbenchUpdates = failed;
     },
     resolveCutViewGrant,
     request: {

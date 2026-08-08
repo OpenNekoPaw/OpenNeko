@@ -434,3 +434,16 @@ The canonical fix remains fail-visible after final disposal: methods on a dispos
 - Assistant Preview v1使用现有 Preview Root支持的、可由 Host Content authorization生成 descriptor的内容类型；不支持类型显示 typed unavailable且保留引用。
 - 语音能力只保证入口与 workspace使用同一现有 capability projection；本变更不补建缺失的语音 runtime。
 - PrimarySidebar 保留最近项，但分为 exact session restore 与 container open：conversation恢复 session，Project打开 Workspace draft；Character/Room owner可用后由其投影顶层 session/container，不暴露内部 AgentSession。
+
+### Cut identity rebind and representation request ownership
+
+An unnamed Cut draft Save As remains one canonical session transition. After the native picker
+returns, Desktop revalidates the exact renderer, Workbench and draft View before writing. The Cut
+application returns the authoritative event sequence produced by the rebind; preload moves the
+current identity, listener identity and sequence cursor together before accepting later events.
+
+Clip representations are disposable projections owned by the exact Cut document/session. The
+Webview controller tracks every request by request identity and requested representation key, merges
+valid out-of-order results by key, and rejects results from a replaced document/session or removed
+Clip. Completion and failure release only those in-flight keys, so resize/scroll overlap cannot make
+an earlier valid batch stale or permanently suppress a retry.

@@ -230,3 +230,14 @@ is unchanged by this requirement.
 - **WHEN** a client attempts an unregistered or forged rename command
 - **THEN** Desktop rejects only that operation
 - **AND** it does not expose a raw Host rename call or mutate the file, session, View, or references
+
+### Requirement: Directory observation disposal is fail-local
+
+The Assets Node observer MUST stop publishing invalidations and errors after disposal. Runtime
+diagnostic delivery MUST explicitly settle if the exact controller is disposed concurrently.
+
+#### Scenario: Reconciliation rejects after observer disposal
+
+- **WHEN** a pending authoritative reconciliation rejects after its observer and controller are disposed
+- **THEN** no observer error callback or unhandled promise rejection is emitted
+- **AND** unrelated Resource Browser controllers and projections remain available

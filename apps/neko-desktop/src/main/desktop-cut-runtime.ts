@@ -681,6 +681,26 @@ export class DesktopCutRuntime {
     if (normalized !== documentId || !normalized.toLocaleLowerCase('en-US').endsWith('.otio')) {
       throw new Error('Desktop Cut Save As requires a normalized Workspace OTIO target.');
     }
+    const authorizedProjection = await this.options.shell.getProjection(windowId);
+    if (authorizedProjection.rendererSessionId !== request.identity.rendererSessionId) {
+      throw new Error('Desktop Cut draft Save As renderer identity changed during selection.');
+    }
+    const authorizedWorkbench = authorizedProjection.window.workbench;
+    if (
+      authorizedWorkbench.workbenchInstanceId !==
+      shellProjection.window.workbench.workbenchInstanceId
+    ) {
+      throw new Error('Desktop Cut draft Save As Workbench identity changed during selection.');
+    }
+    const authorizedView = authorizedWorkbench.layout.cutPanel?.views.find(
+      (candidate) =>
+        candidate.viewId === request.identity.viewId &&
+        candidate.viewInstanceId === request.identity.viewInstanceId &&
+        candidate.documentId === request.identity.documentId,
+    );
+    if (!authorizedView) {
+      throw new Error('Desktop Cut draft View changed during Save As selection.');
+    }
     const documentPath = nodePath.join(workspace.workspacePath, ...normalized.split('/'));
     const nextIdentity = { ...request.identity, documentId: normalized };
     const result = await this.application.saveDraftAs({
@@ -695,23 +715,58 @@ export class DesktopCutRuntime {
         new NodeAuthorizedWorkspaceWriter({ workspaceRoot: workspace.workspacePath }),
       ),
     });
-    const projection = await this.options.shell.getProjection(windowId);
-    const workbench = projection.window.workbench;
-    const view = workbench.layout.cutPanel?.views.find(
-      (candidate) => candidate.viewId === request.identity.viewId,
-    );
-    if (!view) throw new Error('Desktop Cut draft View disappeared during Save As.');
-    await this.options.shell.updateWorkbench(
-      windowId,
-      request.identity.rendererSessionId,
-      workbench.workbenchInstanceId,
-      openOrFocusCutView(workbench.layout, {
-        ...view,
-        documentId: normalized,
-        displayLabel: nodePath.posix.basename(normalized),
-      }),
-    );
+    try {
+      const projection = await this.options.shell.getProjection(windowId);
+      if (projection.rendererSessionId !== request.identity.rendererSessionId) {
+        throw new Error('Desktop Cut renderer identity changed after Save As committed.');
+      }
+      const workbench = projection.window.workbench;
+      if (workbench.workbenchInstanceId !== authorizedWorkbench.workbenchInstanceId) {
+        throw new Error('Desktop Cut Workbench identity changed after Save As committed.');
+      }
+      const view = workbench.layout.cutPanel?.views.find(
+        (candidate) =>
+          candidate.viewId === request.identity.viewId &&
+          candidate.viewInstanceId === request.identity.viewInstanceId &&
+          candidate.documentId === request.identity.documentId,
+      );
+      if (!view) throw new Error('Desktop Cut draft View changed after Save As committed.');
+      await this.options.shell.updateWorkbench(
+        windowId,
+        request.identity.rendererSessionId,
+        workbench.workbenchInstanceId,
+        openOrFocusCutView(workbench.layout, {
+          ...view,
+          documentId: normalized,
+          displayLabel: nodePath.posix.basename(normalized),
+        }),
+      );
+    } catch (error) {
+      this.releaseCommittedSaveAsSession(windowId, nextIdentity, normalized);
+      throw new Error(
+        `Cut was saved as '${normalized}', but its View could not be updated. Reopen the saved file from Resources.`,
+        { cause: error },
+      );
+    }
     return result;
+  }
+
+  private releaseCommittedSaveAsSession(
+    windowId: string,
+    identity: CutHostRuntimeIdentity,
+    documentId: string,
+  ): void {
+    this.application.discardSession(windowId, identity);
+    this.options.host.diagnostics?.report({
+      code: 'desktop-cut-save-as-presentation-stale',
+      severity: 'warning',
+      message: `Cut was saved as '${documentId}', but its stale View could not be rebound. Reopen the saved file from Resources.`,
+      metadata: {
+        windowId,
+        viewId: identity.viewId,
+        documentId,
+      },
+    });
   }
 
   subscribe(

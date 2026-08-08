@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const files = {
@@ -22,13 +23,9 @@ export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
   );
   const findings = [];
 
-  requireAnchor(
-    findings,
-    'surface',
-    sources.surface,
-    "from '@neko/canvas-webview/root'",
-    'Desktop Canvas must mount the public Canvas Webview root.',
-  );
+  if (!hasCanvasPublicRootImport(sources.surface)) {
+    findings.push(`${files.surface}: Desktop Canvas must mount the public Canvas Webview root.`);
+  }
   requireAnchor(
     findings,
     'surface',
@@ -63,6 +60,35 @@ export async function checkCanvasPlaybackBoundary(root = repositoryRoot) {
 
 function requireAnchor(findings, key, source, anchor, message) {
   if (!source.includes(anchor)) findings.push(`${files[key]}: ${message}`);
+}
+
+function hasCanvasPublicRootImport(source) {
+  const sourceFile = ts.createSourceFile(
+    files.surface,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  let found = false;
+  const visit = (node) => {
+    if (
+      (ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text === '@neko/canvas-webview/root') ||
+      (ts.isCallExpression(node) &&
+        node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        node.arguments.length === 1 &&
+        ts.isStringLiteral(node.arguments[0]) &&
+        node.arguments[0].text === '@neko/canvas-webview/root')
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

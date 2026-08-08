@@ -162,7 +162,16 @@ export class CutOtioController {
   private previewRequestSequence = 0;
   private currentPreviewRequestId: string | undefined;
   private representationRequestSequence = 0;
-  private currentRepresentationRequestId: string | undefined;
+  private readonly representationRequests = new Map<
+    string,
+    {
+      readonly identity: CutIdentity;
+      readonly keys: ReadonlySet<string>;
+      readonly requests: readonly CutClipRepresentationRequest[];
+      readonly attempt: number;
+    }
+  >();
+  private readonly inFlightRepresentationKeys = new Set<string>();
   private acceptedPresentation?: CutHostPresentationState;
 
   constructor(
@@ -381,8 +390,22 @@ export class CutOtioController {
 
   requestRepresentations(requests: readonly CutClipRepresentationRequest[]): void {
     const identity = this.identity();
+    const requested = requests.filter(
+      (request) => !this.inFlightRepresentationKeys.has(representationKey(request)),
+    );
+    if (requested.length === 0) return;
+    this.dispatchRepresentationRequest(identity, requested, 0);
+  }
+
+  private dispatchRepresentationRequest(
+    identity: CutIdentity,
+    requests: readonly CutClipRepresentationRequest[],
+    attempt: number,
+  ): void {
     const requestId = `${identity.sessionId}:representation:${++this.representationRequestSequence}`;
-    this.currentRepresentationRequestId = requestId;
+    const keys = new Set(requests.map(representationKey));
+    for (const key of keys) this.inFlightRepresentationKeys.add(key);
+    this.representationRequests.set(requestId, { identity, keys, requests, attempt });
     this.bridge.postMessage({
       type: 'cut:request-representations',
       ...identity,
@@ -477,6 +500,9 @@ export class CutOtioController {
     if (value['type'] === 'cut:representations') {
       return this.acceptRepresentations(value);
     }
+    if (value['type'] === 'cut:representation-failed') {
+      return this.acceptRepresentationFailure(value);
+    }
     if (isPreviewReadyMessage(value)) {
       this.events.onPreviewReady?.(value);
       return true;
@@ -486,6 +512,13 @@ export class CutOtioController {
 
   private acceptView(view: TimelineView): void {
     const current = this.store.getState();
+    if (
+      current.view &&
+      (current.view.documentUri !== view.documentUri || current.view.sessionId !== view.sessionId)
+    ) {
+      this.representationRequests.clear();
+      this.inFlightRepresentationKeys.clear();
+    }
     const reconciledView = reconcileTimelineView(current.view, view);
     const selectedClips = retainClipSelections(reconciledView, current.selectedClips);
     const retainedSelection = retainSelection(reconciledView, current.selection);
@@ -580,12 +613,16 @@ export class CutOtioController {
 
   private acceptRepresentations(message: Record<string, unknown>): boolean {
     const currentView = this.store.getState().view;
+    const requestId = message['requestId'];
+    if (typeof requestId !== 'string') return true;
+    const pending = this.representationRequests.get(requestId);
     if (
       !currentView ||
       message['documentUri'] !== currentView.documentUri ||
       message['sessionId'] !== currentView.sessionId ||
-      typeof message['requestId'] !== 'string' ||
-      message['requestId'] !== this.currentRepresentationRequestId
+      !pending ||
+      pending.identity.documentUri !== currentView.documentUri ||
+      pending.identity.sessionId !== currentView.sessionId
     ) {
       return true;
     }
@@ -593,14 +630,66 @@ export class CutOtioController {
     if (!Array.isArray(results) || !results.every(isRepresentationResult)) {
       throw new Error('Cut Host returned invalid Clip representations.');
     }
+    if (results.some((result) => !pending.keys.has(representationKey(result)))) {
+      throw new Error('Cut Host returned unrequested Clip representations.');
+    }
+    this.completeRepresentationRequest(requestId, pending.keys);
+    const currentClipIds = new Set(
+      currentView.tracks.flatMap((track) =>
+        track.items.filter((item) => item.kind === 'clip').map((item) => item.clipId),
+      ),
+    );
     this.store.setState((state) => {
       const representations = new Map(state.representations);
       for (const result of results) {
+        if (!currentClipIds.has(result.clipId)) continue;
         representations.set(representationKey(result), result);
       }
       return { representations: pruneRepresentationCache(representations) };
     });
     return true;
+  }
+
+  private acceptRepresentationFailure(message: Record<string, unknown>): boolean {
+    const requestId = message['requestId'];
+    if (typeof requestId !== 'string') return true;
+    const pending = this.representationRequests.get(requestId);
+    if (!pending) return true;
+    const currentView = this.store.getState().view;
+    if (
+      !currentView ||
+      message['documentUri'] !== currentView.documentUri ||
+      message['sessionId'] !== currentView.sessionId ||
+      pending.identity.documentUri !== currentView.documentUri ||
+      pending.identity.sessionId !== currentView.sessionId
+    ) {
+      return true;
+    }
+    const diagnostic = message['diagnostic'];
+    if (!isCutUserDiagnostic(diagnostic)) {
+      throw new Error('Cut Host returned an invalid representation failure diagnostic.');
+    }
+    this.completeRepresentationRequest(requestId, pending.keys);
+    if (pending.attempt === 0) {
+      this.dispatchRepresentationRequest(pending.identity, pending.requests, 1);
+      return true;
+    }
+    this.store.setState((state) => {
+      const representations = new Map(state.representations);
+      for (const request of pending.requests) {
+        representations.set(representationKey(request), unavailableRepresentation(request));
+      }
+      return {
+        diagnostic,
+        representations: pruneRepresentationCache(representations),
+      };
+    });
+    return true;
+  }
+
+  private completeRepresentationRequest(requestId: string, keys: ReadonlySet<string>): void {
+    this.representationRequests.delete(requestId);
+    for (const key of keys) this.inFlightRepresentationKeys.delete(key);
   }
 
   private identity(): CutIdentity {
@@ -611,6 +700,22 @@ export class CutOtioController {
       sessionId: view.sessionId,
     };
   }
+}
+
+function unavailableRepresentation(
+  request: CutClipRepresentationRequest,
+): CutClipRepresentationResult {
+  return request.kind === 'thumbnail'
+    ? {
+        ...request,
+        status: 'unavailable',
+        message: 'The local media runtime could not generate this thumbnail.',
+      }
+    : {
+        ...request,
+        status: 'unavailable',
+        message: 'The local media runtime could not generate this waveform.',
+      };
 }
 
 function sameCutHostPresentation(

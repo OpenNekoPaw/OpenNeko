@@ -228,3 +228,11 @@ import UI/IPC does not remove or rewrite files previously copied into the Worksp
 ## Open Questions
 
 None. Rename/move and recursive directory management require separate OpenSpec changes.
+
+### 9. Observation disposal is a terminal ownership boundary
+
+Disposing a Workspace directory observer cancels scheduled work and makes completion of any already
+running reconciliation locally irrelevant. A rejection that settles after disposal must not call the
+observer error callback. Runtime diagnostic publication explicitly handles a controller that was
+disposed concurrently, preventing an unhandled rejection while preserving fail-visible errors for a
+still-current observer/controller pair.

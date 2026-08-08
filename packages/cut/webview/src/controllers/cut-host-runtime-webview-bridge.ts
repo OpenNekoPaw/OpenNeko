@@ -8,16 +8,29 @@ import {
 import type { CutWebviewIntent } from './CutOtioController';
 import type { CutWebviewHostBridge } from './CutWebviewHostBridgeContext';
 
-export function createCutHostRuntimeWebviewBridge(runtime: CutHostRuntime): CutWebviewHostBridge {
+export interface PreparedCutWebviewHostBridge extends CutWebviewHostBridge {
+  prepare(): void;
+  dispose(): void;
+}
+
+export function createCutHostRuntimeWebviewBridge(
+  runtime: CutHostRuntime,
+): PreparedCutWebviewHostBridge {
   const listeners = new Set<(message: unknown) => void>();
   let disposeRuntimeSubscription: (() => void) | undefined;
   let requestSequence = 0;
   let projectedSnapshotKey: string | undefined;
+  let currentSnapshot: CutHostRuntimeSnapshot | undefined;
+  let initialSnapshotRequest: Promise<CutHostRuntimeSnapshot> | undefined;
+  let initialSnapshotError = false;
+  let runtimeEventObserved = false;
+  let disposed = false;
 
   const publish = (message: unknown): void => {
     for (const listener of listeners) listener(message);
   };
   const publishSnapshot = (snapshot: CutHostRuntimeSnapshot): void => {
+    currentSnapshot = snapshot;
     const snapshotKey = JSON.stringify([
       snapshot.document,
       snapshot.dirty,
@@ -35,29 +48,76 @@ export function createCutHostRuntimeWebviewBridge(runtime: CutHostRuntime): CutW
     publish({ type: 'cut:export-tasks', tasks: snapshot.export.tasks });
   };
 
+  const replaySnapshot = (
+    listener: (message: unknown) => void,
+    snapshot: CutHostRuntimeSnapshot,
+  ): void => {
+    listener({
+      type: 'cut:runtime-snapshot',
+      view: snapshot.document,
+      dirty: snapshot.dirty,
+      presentation: snapshot.presentation,
+    });
+    listener({ type: 'cut:export-tasks', tasks: snapshot.export.tasks });
+  };
+
+  const ensureRuntimeSubscription = (): void => {
+    if (disposed) throw new Error('Cut Webview bridge is disposed.');
+    if (disposeRuntimeSubscription) return;
+    disposeRuntimeSubscription = runtime.subscribe((event) => {
+      if (disposed) return;
+      runtimeEventObserved = true;
+      publishSnapshot(event.snapshot);
+    });
+  };
+
+  const readInitialSnapshot = (): Promise<CutHostRuntimeSnapshot> => {
+    if (currentSnapshot) return Promise.resolve(currentSnapshot);
+    if (initialSnapshotRequest) return initialSnapshotRequest;
+    initialSnapshotRequest = runtime.getSnapshot().then((snapshot) => {
+      if (!disposed && !runtimeEventObserved) publishSnapshot(snapshot);
+      return currentSnapshot ?? snapshot;
+    });
+    void initialSnapshotRequest.catch(() => {
+      if (disposed) return;
+      initialSnapshotError = true;
+      publish({ type: 'cut:error', diagnostic: { code: 'operation-failed' } });
+    });
+    return initialSnapshotRequest;
+  };
+
   return {
+    prepare() {
+      ensureRuntimeSubscription();
+      void readInitialSnapshot();
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      disposeRuntimeSubscription?.();
+      disposeRuntimeSubscription = undefined;
+      listeners.clear();
+    },
     postIntent(intent) {
       void dispatchIntent({
         intent,
         runtime,
+        readInitialSnapshot,
         nextRequestId: () => `cut-webview-${++requestSequence}`,
         publish,
         publishSnapshot,
       });
     },
     subscribe(listener) {
+      if (disposed) throw new Error('Cut Webview bridge is disposed.');
       listeners.add(listener);
-      if (!disposeRuntimeSubscription) {
-        disposeRuntimeSubscription = runtime.subscribe((event) => {
-          publishSnapshot(event.snapshot);
-        });
+      ensureRuntimeSubscription();
+      if (currentSnapshot) replaySnapshot(listener, currentSnapshot);
+      else if (initialSnapshotError) {
+        listener({ type: 'cut:error', diagnostic: { code: 'operation-failed' } });
       }
       return () => {
         listeners.delete(listener);
-        if (listeners.size === 0) {
-          disposeRuntimeSubscription?.();
-          disposeRuntimeSubscription = undefined;
-        }
       };
     },
   };
@@ -66,6 +126,7 @@ export function createCutHostRuntimeWebviewBridge(runtime: CutHostRuntime): CutW
 async function dispatchIntent(input: {
   readonly intent: CutWebviewIntent;
   readonly runtime: CutHostRuntime;
+  readonly readInitialSnapshot: () => Promise<CutHostRuntimeSnapshot>;
   readonly nextRequestId: () => string;
   readonly publish: (message: unknown) => void;
   readonly publishSnapshot: (snapshot: CutHostRuntimeSnapshot) => void;
@@ -73,7 +134,7 @@ async function dispatchIntent(input: {
   const { intent, runtime } = input;
   if (intent.type === 'cut:ready') {
     try {
-      input.publishSnapshot(await runtime.getSnapshot());
+      input.publishSnapshot(await input.readInitialSnapshot());
     } catch {
       input.publish({ type: 'cut:error', diagnostic: { code: 'operation-failed' } });
     }
@@ -115,6 +176,16 @@ async function dispatchIntent(input: {
       });
     }
   } catch {
+    if (intent.type === 'cut:request-representations') {
+      input.publish({
+        type: 'cut:representation-failed',
+        documentUri: intent.documentUri,
+        sessionId: intent.sessionId,
+        requestId: intent.requestId,
+        diagnostic: { code: 'media-runtime-unavailable' },
+      });
+      return;
+    }
     input.publish({
       type: 'cut:error',
       diagnostic: { code: 'operation-failed' },

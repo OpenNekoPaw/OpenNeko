@@ -113,3 +113,4 @@
       external-file appearance, local diagnostics, creative-document open/focus, and responsive layout.
 - [x] 8.7 Run `pnpm package:desktop` on the supported host and record cross-platform watcher/name/trash
       residual risks that cannot be exercised locally.
+- [x] 8.8 Make Workspace directory observer disposal terminal, explicitly settle concurrent diagnostic publication, and add pending-reconcile/dispose/reject plus sibling-isolation regressions.
