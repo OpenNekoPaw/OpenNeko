@@ -2,6 +2,37 @@
 
 Date: 2026-08-08
 
+## First-submit title and Primary navigation typography
+
+Tasks 16.1-16.5 keep Conversation title ownership in the canonical Agent/Pi path:
+
+- Agent application normalizes and bounds the validated typed first input, retaining `/command` and
+  `$skill` identities without making a title-generation model call.
+- Session materialization passes the title to the exact Workspace runtime, and Pi writes it during
+  Conversation creation before invalidating the authoritative Home projection. Renderer navigation
+  continues to read the catalog title and has no `New conversation` replacement path.
+- Primary navigation Project headers, standalone Assistant/Workspace group headers, Conversation
+  rows and expand controls use the same 11px directory-entry size. The 10px section heading remains
+  a distinct catalog hierarchy.
+
+Verification on 2026-08-08:
+
+- Focused Agent runtime tests: 3 files, 61 tests passed; focused Desktop tests: 3 files, 73 tests
+  passed; Agent runtime and Desktop typechecks passed.
+- Full `@neko/agent-runtime` suite: 111 files, 1015 tests passed. Headless Desktop functional suite:
+  11 files, 142 tests passed. Strict OpenSpec validation, repository OpenSpec checks, formatting,
+  `git diff --check`, `pnpm check:quality` and UI Skill contract checks passed.
+- Visible Electron scenario `desktop-agent-entry-workspace-skill` passed with report
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T10-49-30.261Z-desktop-agent-entry-workspace-skill-development/report.json`.
+  The persisted and visible title was `$storyboard 请根据所选参考创建一份简洁的分镜。`; Project
+  and Conversation computed font sizes were both 11px. The completed Session had one native image
+  provider request, no run status, execution activity, stop control, alert, Console error, warning
+  or Renderer exception. The final screenshot was inspected directly with no clipping or overlap.
+- The full Desktop unit suite had two pre-existing failures in
+  `desktop-agent-content-effects.test.ts`: current mention projections include the already-added
+  `mediaType` field while those unrelated fixture expectations omit it. The three touched Desktop
+  files and the headless suite pass; this change does not alter those content-effect projections.
+
 ## Generation ownership and entry paths
 
 Task 6.7 consumes the implementation and path evidence owned by

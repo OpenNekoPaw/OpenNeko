@@ -70,6 +70,7 @@
 - [ ] 8.2 Move extension manifest/repository validation, contained install/remove planning, personal Skill validation and Plugin Skill/MCP contribution/readiness logic from Desktop Main to the Agent runtime entry with producer tests.
 - [ ] 8.3 Reduce `desktop-extension-manager.ts` and `desktop-plugin-runtime.ts` to bundled-resource/install-root, native trash/picker, process/env/credential adapters, typed IPC composition and disposal; delete app-owned policy/state paths.
 - [ ] 8.4 Add Desktop consumer/delegation and path-absence tests proving all catalog/mutation/instance outcomes come from the Agent package and no foreign marketplace or app-owned fallback returns success.
+- [ ] 8.5 Project verified Pi SkillHost receipts into the canonical Entry/Session input catalog with full source identity and no management-card, display-name or same-name fallback success path.
 
 ## 9. Agent evaluation and verification
 

@@ -50,6 +50,24 @@
 
 ## Decisions
 
+### First-submit title is an Agent-owned persisted fact
+
+The Agent application derives a bounded deterministic title from the already validated typed first
+input and supplies it to the canonical Conversation Session materialization port. Message text is
+used directly after whitespace normalization; command and Skill inputs retain their `/command` or
+`$skill` identity and optional arguments. The Pi catalog persists that title in the same creation
+path that materializes the Conversation and then invalidates the Home projection.
+
+This path does not invoke a model, infer locale from Renderer presentation, translate stored user
+content, or replace the catalog title during projection. A Chinese first input therefore remains a
+Chinese persisted title, while command/Skill-only first inputs never expose the former English
+`New conversation` placeholder. Renderer tab-title projection may remain an immediate disposable
+presentation update, but it is not a second persistence authority.
+
+Primary navigation uses one 11px inherited typography contract for Project headers, standalone
+Assistant/Workspace group headers, Conversation rows and expand/collapse list controls. Section
+headings remain the distinct 10px catalog hierarchy.
+
 ### 1. Agent phase 与领域 binding 正交
 
 Agent application 投影一个 canonical Draft：

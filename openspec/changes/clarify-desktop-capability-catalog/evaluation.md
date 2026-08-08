@@ -91,12 +91,17 @@
   existing input/prompt strictness errors. No reported error references the extension manager,
   plugin runtime or Agent plugin composition files.
 
+## Launch Catalog Ownership
+
+- Plugin/personal/builtin/project Skill installation and runtime provenance remain owned here; executable Entry/Session discovery and first-submit invocation are owned by `unify-agent-launch-and-domain-bindings` and its `agent-runtime.launch-binding` / `agent-runtime.skill-runtime` cases.
+- Required no-fallback evidence includes the exact Pi SkillHost receipt and full source identity, with zero management-card, manifest-only, display-name, personal/builtin substitution or try-next participation.
+
 ## Blocked or Unexecuted Cases
 
-- The repository currently documents that Desktop has no complete-session evaluation driver.
-  Provider-backed execution is therefore expected to remain `infrastructure-blocked` unless that
-  owner is added independently. Key-free or direct runtime tests must not be reported as real Agent
-  behavior acceptance.
+- The repository now has a Desktop-owned complete-session driver, but the current Scenario operation
+  set cannot install a contained global plugin fixture before launch. Provider-backed plugin Skill
+  execution remains `infrastructure-blocked` on that specific fixture/setup capability; key-free or
+  direct runtime tests must not be reported as real Agent behavior acceptance.
 - Current scenario steps cannot install a contained global plugin fixture before Desktop startup, so
   adding either case to an indexed suite now would create a permanently failing scenario rather than
   executable coverage. Deterministic Pi SkillHost, generation swap and synthetic MCP call tests are

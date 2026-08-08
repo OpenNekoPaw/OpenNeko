@@ -132,3 +132,11 @@
 - [x] 15.4 Add Agent application, Pi path and Desktop resolver tests proving the positive image path, locator-only boundary, text continuity and fail-local forbidden paths.
 - [x] 15.5 Run the visible Electron `@test.png` acceptance path, inspect current screenshots directly and record any provider-backed blocker under task 11.7.
 - [x] 15.6 Update Evaluation disposition, run key-free relevant suites and complete the required Neko quality review for this L3 workflow change.
+
+## 16. First-submit Conversation Title And Navigation Typography Regression
+
+- [x] 16.1 Derive one deterministic, bounded Conversation title from the canonical typed first input in the Agent application and pass it through Session materialization to the Pi catalog without a model call or Renderer-owned persistence fallback.
+- [x] 16.2 Notify the authoritative Home projection after the titled Conversation is materialized so Assistant and Workspace navigation display the persisted title after first submit and after reopen.
+- [x] 16.3 Remove the user-visible English default from the canonical first-submit path; preserve command and Skill identity when their optional arguments are absent and cover Chinese first-input titles.
+- [x] 16.4 Normalize the Project, Assistant/Workspace group, Conversation row and expand-control typography inside the Primary navigation while retaining the smaller section-heading hierarchy.
+- [x] 16.5 Add focused Agent application, Pi materialization, Desktop composition and collapsed/expanded CSS contract tests, then run visible Electron acceptance for title refresh, Chinese UI and text layout.

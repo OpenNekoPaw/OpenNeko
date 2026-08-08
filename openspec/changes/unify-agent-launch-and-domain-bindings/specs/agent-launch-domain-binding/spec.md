@@ -114,6 +114,28 @@ The Agent application SHALL validate the exact Draft, binding, resources, typed 
 - **WHEN** the same exact submit request is retried after an uncertain response
 - **THEN** the application returns or resumes the same Conversation and Turn identities without creating duplicate messages, Conversations, Runs, grants or provider calls
 
+### Requirement: First submit persists one content-derived Conversation title
+
+The Agent application SHALL derive one bounded deterministic Conversation title from the canonical
+typed first input and SHALL persist it through the same Pi Conversation materialization path before
+the Home catalog is projected. It SHALL NOT call a model, translate user content, or substitute a
+Renderer-only title or English placeholder as the persisted result.
+
+#### Scenario: Chinese message starts a Conversation
+
+- **WHEN** the user first submits a Chinese message from an Entry or bound Draft
+- **THEN** the materialized Pi Conversation and Home catalog use a compact title derived from that exact Chinese message, and reopening the Conversation preserves the same title
+
+#### Scenario: Command or Skill starts a Conversation without arguments
+
+- **WHEN** the first typed input is a launch-safe command or Skill with no optional arguments
+- **THEN** the persisted title retains the exact `/command` or `$skill` identity instead of displaying an English default placeholder
+
+#### Scenario: Home catalog observes materialization
+
+- **WHEN** the titled Conversation is materialized during first submit
+- **THEN** the authoritative Home projection is invalidated once and the Project or Assistant navigation row reads the persisted Pi catalog title
+
 ### Requirement: Visible execution activity converges with terminal Conversation projection
 
 The Agent Webview SHALL treat the exact Conversation projection as authoritative for visible Turn
