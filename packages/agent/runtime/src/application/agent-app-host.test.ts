@@ -1248,16 +1248,21 @@ describe('AgentAppHost', () => {
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
 
     await Promise.all([
-      workspace.ensureConversation('conversation-materialized'),
-      workspace.ensureConversation('conversation-materialized'),
+      workspace.ensureConversation('conversation-materialized', 'Materialized conversation'),
+      workspace.ensureConversation('conversation-materialized', 'Materialized conversation'),
     ]);
-    await workspace.ensureConversation('conversation-materialized');
+    await workspace.ensureConversation('conversation-materialized', 'Materialized conversation');
 
     expect(
       workspace
         .listConversations()
         .filter((record) => record.conversationId === 'conversation-materialized'),
     ).toHaveLength(1);
+    expect(
+      workspace
+        .listConversations()
+        .find((record) => record.conversationId === 'conversation-materialized')?.title,
+    ).toBe('Materialized conversation');
     expect(workspace.readConversationProjection('conversation-materialized')).toMatchObject({
       conversationId: 'conversation-materialized',
     });

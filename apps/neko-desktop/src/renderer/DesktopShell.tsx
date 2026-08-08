@@ -85,9 +85,9 @@ import {
   DesktopApplicationNavigationButton,
 } from './DesktopApplicationSidebar';
 import {
-  createAgentDraftPresentation,
-  createAgentSessionPresentation,
-  type AgentRootPresentation,
+  createAgentDraftInteraction,
+  createAgentSessionInteraction,
+  type AgentInteractionProjection,
 } from '@neko/agent-contracts';
 import type { DesktopWindowCompositionProjection } from '@neko/host/desktop-window-composition-contract';
 import { DesktopSurfaceErrorBoundary } from './DesktopSurfaceErrorBoundary';
@@ -580,8 +580,12 @@ function DesktopSceneWorkbench({
   const activeResourcePresentation = useResourceDockPresentation(
     activeWorkbench.layout.resourceDock.presentation,
   );
+  const workspaceAgentSurface =
+    workspaceScene && scene.slots.interaction?.kind === 'agent'
+      ? scene.slots.interaction
+      : undefined;
   const workspaceAgentVisible =
-    workspaceScene && activeWorkbench.layout.display.mode !== 'main-only';
+    workspaceAgentSurface !== undefined && activeWorkbench.layout.display.mode !== 'main-only';
   const interactionVisible = Boolean(launchScope) || workspaceAgentVisible;
   const interactionPresentation = launchScope
     ? assistantPreviewVisible
@@ -1094,20 +1098,24 @@ function WorkbenchMainPanelSurface({
 
 function createLaunchAgentPresentation(
   scope: Extract<DesktopWorkbenchSceneProjection['context'], { readonly kind: 'agent' }>['scope'],
-): AgentRootPresentation {
+): AgentInteractionProjection {
   if (scope.kind === 'workspace') {
     throw new Error('Launch Agent presentation cannot use Workspace scope.');
   }
   if (scope.kind === 'unbound') {
-    return createAgentDraftPresentation(scope.draftId, {
-      kind: 'unbound',
+    return createAgentDraftInteraction({
       draftId: scope.draftId,
+      binding: { kind: 'unbound' },
     });
   }
-  const authorityScope = { kind: 'assistant' as const, assistantSpaceId: scope.assistantSpaceId };
+  const binding = {
+    kind: 'assistant' as const,
+    assistantSpaceId: scope.assistantSpaceId,
+    baseGrantIds: [],
+  };
   return scope.conversationId
-    ? createAgentSessionPresentation(authorityScope, scope.conversationId)
-    : createAgentDraftPresentation(scope.draftId, authorityScope);
+    ? createAgentSessionInteraction({ binding, conversationId: scope.conversationId })
+    : createAgentDraftInteraction({ draftId: scope.draftId, binding });
 }
 
 function createDesktopAgentSurfaceProps(input: {
@@ -1141,14 +1149,14 @@ function createDesktopAgentSurfaceProps(input: {
     if (!tab || tab.viewId !== interaction.agentViewId) {
       throw new Error(`Agent Surface '${interaction.agentSurfaceId}' has no exact Workspace View.`);
     }
-    const authorityScope = {
+    const binding = {
       kind: 'workspace' as const,
       workspaceId: scope.workspaceId,
       workspaceGrantId: scope.workspaceGrantId,
     };
     const agentPresentation = scope.conversationId
-      ? createAgentSessionPresentation(authorityScope, scope.conversationId)
-      : createAgentDraftPresentation(scope.draftId, authorityScope);
+      ? createAgentSessionInteraction({ binding, conversationId: scope.conversationId })
+      : createAgentDraftInteraction({ draftId: scope.draftId, binding });
     return {
       binding: 'workspace',
       workbenchInstanceId: input.workbenchInstanceId,
@@ -1168,7 +1176,7 @@ function createDesktopAgentSurfaceProps(input: {
     agentSurfaceId: interaction.agentSurfaceId,
     viewId: interaction.agentViewId,
     agentPresentation,
-    ...(agentPresentation.kind === 'draft' && agentPresentation.scope.kind === 'unbound'
+    ...(agentPresentation.phase === 'draft' && agentPresentation.binding.kind === 'unbound'
       ? {
           composerWorkspace: {
             kind: 'entry' as const,

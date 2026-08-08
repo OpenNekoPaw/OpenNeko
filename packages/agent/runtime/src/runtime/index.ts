@@ -321,7 +321,6 @@ export {
   type AgentMessageRuntimeRequest,
   type AgentMessageTurnAgentExecutionInput,
   type AgentMessageTurnPreconditionReason,
-  type AgentMessageTurnMediaExecutionInput,
   type AgentMessageTurnRuntimeMessage,
   type AgentThreeReferenceImageResource,
   type AgentTurnConfigurationPlan,
@@ -449,14 +448,12 @@ export {
 } from './turn/context-control-runtime';
 
 export {
-  buildRuntimePluginSlashCommandDispatch,
   buildRuntimePluginsAvailableMessage,
   createRuntimePluginSlashCommandRegistry,
   expandRuntimePluginTransferInputs,
   type BuildPluginTransferPlanInput,
   type PluginSlashCommandDef,
   type RegisteredPluginSlashCommand,
-  type RuntimePluginSlashCommandDispatch,
   type RuntimePluginSlashCommandRegistry,
 } from './plugin-transfer-runtime';
 

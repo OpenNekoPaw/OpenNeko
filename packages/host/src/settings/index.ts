@@ -20,6 +20,7 @@ export * from './provider-credential-source';
 export * from './retry-timeout-presets';
 export * from './user-config';
 export * from './user-config-template';
+export * from './workspace-config-manager-authority';
 export * from './types/config';
 export * from './types/error';
 export * from './types/provider';

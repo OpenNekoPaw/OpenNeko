@@ -117,7 +117,12 @@ function isRoleplayCandidateItem(item: MentionItem): boolean {
 function isPlayableRoleplayItem(item: MentionItem): boolean {
   if (item.kind !== 'entity') return false;
   if (!isCharacterEntityType(item.entityType)) return false;
-  return !item.navigationData?.candidateId || isRoleplayCandidateItem(item);
+  return Boolean(
+    !item.navigationData?.candidateId &&
+    item.navigationData?.characterId &&
+    item.navigationData.characterVersionId &&
+    item.navigationData.roleProfileId,
+  );
 }
 
 function isCharacterEntityType(entityType: string | undefined): boolean {

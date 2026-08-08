@@ -38,10 +38,9 @@ import {
   type SelectedFileReference,
 } from './types';
 import {
-  createSkillInvocationCatalog,
-  createSlashCommandCatalog,
   filterSkillInvocations,
   filterSlashCommands,
+  projectAgentComposerInputCatalog,
   type SkillInvocationCatalogItem,
 } from './slash-command-catalog';
 import { findTrailingMentionRange, projectTrailingMention } from './mention-input';
@@ -63,11 +62,10 @@ import { projectContentLocatorPath } from '../../../presenters/content-locator-p
 import type {
   AgentModelSlots,
   AgentQueuedMessageItem,
-  ConversationKind,
+  AgentDomainBinding,
   SessionMode,
 } from '@neko/agent-contracts';
-import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
-import { useAgentHostMessages } from '../../../host-runtime-context';
+import { projectCharacterDraftBindingFromRoleplayItem } from '../roleplay-entry-action';
 import {
   useComposerWorkspacePresentation,
   type AgentComposerWorkspaceTarget,
@@ -111,6 +109,9 @@ interface InputAreaProps {
   onAuthorizeResource?: () => Promise<AgentContextPayload | undefined>;
   draftWorkspaceTarget?: AgentComposerWorkspaceTarget;
   onDraftWorkspaceTargetChange?: (target: AgentComposerWorkspaceTarget | undefined) => void;
+  onDraftCharacterTargetSelect?: (
+    binding: Extract<AgentDomainBinding, { readonly kind: 'character' }>,
+  ) => Promise<void>;
   /** Session-bound @file references selected from the mention menu. */
   selectedFileReferences?: SelectedFileReference[];
   onSelectedFileReferencesChange?: (references: SelectedFileReference[]) => void;
@@ -219,6 +220,7 @@ export function InputArea({
   onAuthorizeResource,
   draftWorkspaceTarget,
   onDraftWorkspaceTargetChange,
+  onDraftCharacterTargetSelect,
   selectedFileReferences: externalSelectedFileReferences,
   onSelectedFileReferencesChange,
   isComposing = false,
@@ -228,7 +230,6 @@ export function InputArea({
   focusRequestTarget = 'none',
   focusRequestId,
 }: InputAreaProps) {
-  const agentHostMessages = useAgentHostMessages();
   const composerWorkspace = useComposerWorkspacePresentation();
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   // Global configuration from context (model, modes, compression, skills)
@@ -253,8 +254,10 @@ export function InputArea({
     mediaUnderstandingSelection,
     onMediaModelSelect,
     onMediaUnderstandingModelSelect,
-    skills,
-    pluginCommands = [],
+    inputCatalog,
+    configurationPolicy,
+    inputCatalogPhase,
+    inputCatalogBindingKind,
     onSlashCommand,
     onRequestFiles,
     mentionItems = [],
@@ -416,11 +419,19 @@ export function InputArea({
   ]);
 
   // Filtered data
-  const slashCommands = createSlashCommandCatalog(skills, pluginCommands);
+  const canonicalInputCatalog =
+    inputCatalog && inputCatalogPhase && inputCatalogBindingKind
+      ? projectAgentComposerInputCatalog({
+          entries: inputCatalog,
+          phase: inputCatalogPhase,
+          bindingKind: inputCatalogBindingKind,
+        })
+      : { commands: [], skills: [] };
+  const slashCommands = canonicalInputCatalog.commands;
   const filteredCommands = sortSlashCommandsForDisplay(
     filterSlashCommands(slashCommands, slashFilter, t),
   );
-  const skillInvocations = createSkillInvocationCatalog(skills);
+  const skillInvocations = canonicalInputCatalog.skills;
   const filteredSkillInvocations = sortSkillInvocationsForDisplay(
     filterSkillInvocations(skillInvocations, skillFilter, t),
   );
@@ -430,9 +441,12 @@ export function InputArea({
   const currentSessionMediaModelCount = getSessionMediaModelCount(sessionMode, mediaModelCounts);
   const showEntryPromptMenu = Boolean(entryPromptMenu);
   const isMediaGenerationSession = isMediaGenerationMode(sessionMode);
-  const isRoleplayConversation = isRoleplayConversationKind(conversationKind);
   const allowCommandMenus =
-    presentation !== 'entry' && !isMediaGenerationSession && !isRoleplayConversation;
+    !isMediaGenerationSession && (slashCommands.length > 0 || skillInvocations.length > 0);
+  const modelConfigurationPolicy = configurationPolicy?.fields.model.policy;
+  const executionModePolicy = configurationPolicy?.fields.executionMode.policy;
+  const modelConfigurationLocked = modelConfigurationPolicy?.status === 'locked';
+  const executionModeLocked = executionModePolicy?.status === 'locked';
   const slashMenuOpen = allowCommandMenus && showSlashMenu;
   const skillMenuOpen = allowCommandMenus && showSkillMenu;
 
@@ -465,12 +479,15 @@ export function InputArea({
       setAtFilter(trailingMention.displayFilter);
       setShowAtMenu(true);
       setSelectedFileIndex(0);
-      if (lastRequestedMentionFilterRef.current !== trailingMention.requestFilter) {
+      if (
+        inputCatalogBindingKind === 'workspace' &&
+        lastRequestedMentionFilterRef.current !== trailingMention.requestFilter
+      ) {
         lastRequestedMentionFilterRef.current = trailingMention.requestFilter;
         onRequestFiles?.(trailingMention.requestFilter);
       }
     },
-    [onRequestFiles, setAtFilter, setSelectedFileIndex, setShowAtMenu],
+    [inputCatalogBindingKind, onRequestFiles, setAtFilter, setSelectedFileIndex, setShowAtMenu],
   );
 
   useEffect(() => {
@@ -532,10 +549,11 @@ export function InputArea({
     'auto',
   ];
   const cycleExecutionMode = useCallback(() => {
+    if (executionModeLocked) return;
     const idx = EXECUTION_MODES.indexOf(executionMode);
     const next = EXECUTION_MODES[(idx + 1) % EXECUTION_MODES.length];
     onExecutionModeChange(next!);
-  }, [executionMode, onExecutionModeChange]);
+  }, [executionMode, executionModeLocked, onExecutionModeChange]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -607,28 +625,30 @@ export function InputArea({
     }
 
     // @ menu navigation
-    if (showAtMenu && filteredMentionItems.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedFileIndex((prev) => (prev + 1) % filteredMentionItems.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedFileIndex(
-          (prev) => (prev - 1 + filteredMentionItems.length) % filteredMentionItems.length,
-        );
-        return;
-      }
-      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-        e.preventDefault();
-        handleMentionSelect(filteredMentionItems[selectedFileIndex]!);
-        return;
-      }
+    if (showAtMenu) {
       if (e.key === 'Escape') {
         e.preventDefault();
         setShowAtMenu(false);
         return;
+      }
+      if (filteredMentionItems.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedFileIndex((prev) => (prev + 1) % filteredMentionItems.length);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedFileIndex(
+            (prev) => (prev - 1 + filteredMentionItems.length) % filteredMentionItems.length,
+          );
+          return;
+        }
+        if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+          e.preventDefault();
+          handleMentionSelect(filteredMentionItems[selectedFileIndex]!);
+          return;
+        }
       }
     }
 
@@ -731,7 +751,15 @@ export function InputArea({
   /** Handle selection from MentionMenu — locator-backed items become file tokens. */
   const handleMentionSelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    if (item.contentLocator) {
+    if (presentation === 'entry' && item.contextPayload) {
+      if (!onAddContextChip) {
+        throw new Error(`Context-backed mention "${item.id}" requires onAddContextChip.`);
+      }
+      replaceActiveMention('');
+      onAddContextChip(item.contextPayload);
+      setShowAtMenu(false);
+      textareaRef.current?.focus();
+    } else if (item.contentLocator) {
       addSelectedFileReference(item);
     } else if (item.contextPayload) {
       if (!onAddContextChip) {
@@ -749,13 +777,9 @@ export function InputArea({
     if (disabled) return;
     if (isRunActive && !inputAreaProjection.canQueue) return;
     closeEntryPromptMenu();
-    const outboundMessageText = appendSelectedFileReferencesToMessage(
-      inputValue,
-      selectedFileReferences,
-    );
     const hasSelectedFileReferences = selectedFileReferences.length > 0;
     if (
-      !outboundMessageText.trim() &&
+      !inputValue.trim() &&
       attachedFiles.length === 0 &&
       contextChips.length === 0 &&
       !hasSelectedFileReferences
@@ -763,13 +787,13 @@ export function InputArea({
       return;
     }
     // Add to history before sending
-    if (outboundMessageText.trim()) {
+    if (inputValue.trim()) {
       addToHistory(inputValue);
     }
     const files = attachedFiles.length > 0 ? attachedFiles : undefined;
     const contextPayloads = contextChips.length > 0 ? contextChips : undefined;
     onSend({
-      messageText: outboundMessageText,
+      messageText: inputValue,
       displayMessageText: inputValue,
       sessionMode,
       attachments: files,
@@ -886,27 +910,6 @@ export function InputArea({
     [onAddContextChip, updateAttachedFiles],
   );
 
-  // Insert slash command
-  const handleSlashClick = () => {
-    if (!allowCommandMenus) return;
-    closeEntryPromptMenu();
-    onInputChange('/');
-    setShowSlashMenu(true);
-    setShowSkillMenu(false);
-    setSlashFilter('');
-    textareaRef.current?.focus();
-  };
-
-  const handleSkillClick = () => {
-    if (!allowCommandMenus) return;
-    closeEntryPromptMenu();
-    onInputChange('$');
-    setShowSkillMenu(true);
-    setShowSlashMenu(false);
-    setSkillFilter('');
-    textareaRef.current?.focus();
-  };
-
   const handleEntryGenerationModeSelect = (mode: Extract<SessionMode, GenCategory>) => {
     closeEntryPromptMenu();
     if (onEntryGenerationModeSelect) {
@@ -919,7 +922,10 @@ export function InputArea({
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    submitRoleplayEntrySelection(agentHostMessages, item, inputValue);
+    if (!onDraftCharacterTargetSelect) {
+      throw new Error('Character selection requires an exact Agent Draft target handler.');
+    }
+    void onDraftCharacterTargetSelect(projectCharacterDraftBindingFromRoleplayItem(item));
     textareaRef.current?.focus();
   };
 
@@ -936,6 +942,7 @@ export function InputArea({
     disabled,
     sessionMode,
     conversationKind,
+    configurationPolicy,
     currentSessionMediaModelCount,
     compactControls: composerPresentation === 'compact',
   });
@@ -993,7 +1000,7 @@ export function InputArea({
             filter={atFilter}
             items={mentionItems}
             selectedIndex={selectedFileIndex}
-            onSelectFile={addSelectedFileReference}
+            onSelectFile={handleMentionSelect}
             onSelectContext={(payload) => {
               if (onAddContextChip) {
                 replaceActiveMention('');
@@ -1182,33 +1189,17 @@ export function InputArea({
                       onMediaUnderstandingModelSelect={onMediaUnderstandingModelSelect}
                       genParams={genParams}
                       onGenParamsChange={onGenParamsChange}
-                      disabled={isBusy}
+                      disabled={isBusy || modelConfigurationLocked}
+                      disabledReason={
+                        modelConfigurationPolicy?.status === 'locked'
+                          ? modelConfigurationPolicy.reason
+                          : undefined
+                      }
                     />
                   ) : null}
                 </div>
               </ComposerMenuRuntimeProvider>
             )}
-
-            {composerPresentation === 'default' && allowCommandMenus ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSlashClick}
-                  className="agent-composer-tool-button agent-composer-tool-button-text"
-                  title={t('chat.input.commands')}
-                >
-                  /
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSkillClick}
-                  className="agent-composer-tool-button agent-composer-tool-button-text"
-                  title={t('chat.input.skills')}
-                >
-                  $
-                </button>
-              </>
-            ) : null}
 
             {/* Token usage pie */}
             {presentation !== 'entry' ? (
@@ -1238,7 +1229,16 @@ export function InputArea({
             {/* Execution mode — runtime control belongs with send/tools, not model config. */}
             {inputAreaProjection.showExecutionModeSelector && (
               <ComposerMenuRuntimeProvider state={composerMenuState} update={setComposerMenuState}>
-                <ModeSelector mode={executionMode} onChange={onExecutionModeChange} />
+                <ModeSelector
+                  mode={executionMode}
+                  onChange={onExecutionModeChange}
+                  disabled={executionModeLocked}
+                  disabledReason={
+                    executionModePolicy?.status === 'locked'
+                      ? executionModePolicy.reason
+                      : undefined
+                  }
+                />
               </ComposerMenuRuntimeProvider>
             )}
 
@@ -1383,10 +1383,6 @@ function getSessionMediaModelCount(
 
 function isMediaGenerationMode(sessionMode: SessionMode): boolean {
   return sessionMode === 'image' || sessionMode === 'video' || sessionMode === 'audio';
-}
-
-function isRoleplayConversationKind(conversationKind: ConversationKind | undefined): boolean {
-  return conversationKind === 'character-dialogue' || conversationKind === 'embody-character';
 }
 
 function buildAgentModelSendConfig(
@@ -1564,28 +1560,6 @@ function QueueActionButton({
       {children}
     </button>
   );
-}
-
-function appendSelectedFileReferencesToMessage(
-  input: string,
-  references: readonly SelectedFileReference[],
-): string {
-  if (references.length === 0) return input;
-  const referenceText = references
-    .map((reference) =>
-      formatFileReferencePath(projectContentLocatorPath(reference.contentLocator)),
-    )
-    .join(' ');
-  return [input.trim(), referenceText].filter(Boolean).join(' ');
-}
-
-function formatFileReferencePath(path: string): string {
-  const escaped = path.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-  return needsQuotedFileReference(path) ? `@"${escaped}"` : `@${path}`;
-}
-
-function needsQuotedFileReference(path: string): boolean {
-  return /[\s"\\]/.test(path);
 }
 
 function getReferenceBasename(path: string): string {

@@ -11,7 +11,7 @@ import {
   type SessionTreeEntry,
 } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
-import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 import { serializeLocalMetadataJson } from '@neko/local-metadata';
 import {
   parsePortablePiConversationManifest,
@@ -34,7 +34,7 @@ export interface PiConversationCatalogRecord {
   readonly activeBranchId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
-  readonly context?: AgentConversationContext;
+  readonly context?: AgentBoundDomainBinding;
 }
 
 export interface PiConversationBranchRecord {

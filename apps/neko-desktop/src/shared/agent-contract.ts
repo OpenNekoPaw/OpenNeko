@@ -454,7 +454,9 @@ export function parseDesktopAgentEvent(value: unknown): DesktopAgentEvent {
   };
 }
 
-function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity {
+export function parseDesktopAgentConnectionIdentity(
+  value: unknown,
+): DesktopAgentConnectionIdentity {
   const record = requireRecord(value, 'Desktop Agent connection identity is required.');
   const common = {
     applicationInstanceId: requireNonEmptyString(
@@ -528,6 +530,8 @@ function parseConnectionIdentity(value: unknown): DesktopAgentConnectionIdentity
     ),
   };
 }
+
+const parseConnectionIdentity = parseDesktopAgentConnectionIdentity;
 
 function parseUnavailableDiagnostic(value: unknown): DesktopAgentUnavailableDiagnostic {
   const record = requireRecord(value, 'Desktop Agent unavailable diagnostic is required.');
@@ -662,7 +666,7 @@ const AGENT_HOST_TO_WEBVIEW_MESSAGE_TYPES = [
   'characterDialogueSessionExited',
   'embodyCharacterSessionStarted',
   'embodyCharacterSessionExited',
-  'skillsList',
+  'agentInputCatalog',
   'contextTokenCount',
   'compressionResult',
   'compressionError',

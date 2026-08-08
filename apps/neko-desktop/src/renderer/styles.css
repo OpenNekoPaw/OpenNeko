@@ -777,7 +777,7 @@ code {
   background: transparent;
   color: var(--neko-desktop-text-subtle);
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
 }
 

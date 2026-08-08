@@ -3,7 +3,9 @@ import {
   createAgentConversationLifecycleService,
   createInMemoryAgentConversationLifecycleRepository,
   projectAgentConversationInitialMessage,
+  projectAgentConversationTitle,
 } from './agent-conversation-lifecycle-service';
+import { projectAgentConfigurationPolicy } from './agent-launch-service';
 
 describe('Agent Conversation lifecycle service', () => {
   it('commits Workspace context and the initial turn once before provider execution', async () => {
@@ -15,7 +17,8 @@ describe('Agent Conversation lifecycle service', () => {
         workspaceId: 'workspace-1',
         workspaceGrantId: 'workspace-grant:1',
       },
-      messageText: 'Inspect this workspace',
+      input: { kind: 'message' as const, text: 'Inspect this workspace' },
+      references: [],
       resourceGrantIds: [],
       configuration: configuration(),
     };
@@ -26,13 +29,13 @@ describe('Agent Conversation lifecycle service', () => {
 
     expect(first).toMatchObject({
       context: input.context,
-      initialMessage: { text: input.messageText },
+      initialInput: { intent: input.input },
       pendingTurn: { requestId: input.requestId, status: 'running' },
     });
     expect(replay.conversationId).toBe(first.conversationId);
     expect(replay.pendingTurn.turnId).toBe(first.pendingTurn.turnId);
     expect(projectAgentConversationInitialMessage(first)).toEqual({
-      id: first.initialMessage.messageId,
+      id: first.initialInput.messageId,
       role: 'user',
       content: 'Inspect this workspace',
       timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
@@ -41,6 +44,7 @@ describe('Agent Conversation lifecycle service', () => {
     expect(fixture.session.materialize).toHaveBeenLastCalledWith({
       conversationId: first.conversationId,
       context: input.context,
+      title: 'Inspect this workspace',
     });
     await fixture.service.waitForProviderIdle();
     expect(fixture.provider.start).toHaveBeenCalledOnce();
@@ -67,7 +71,8 @@ describe('Agent Conversation lifecycle service', () => {
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: ['resource-grant:1'],
       },
-      messageText: 'Summarize the authorized file',
+      input: { kind: 'message', text: 'Summarize the authorized file' },
+      references: [],
       resourceGrantIds: ['resource-grant:1'],
       configuration: configuration(),
     });
@@ -87,6 +92,35 @@ describe('Agent Conversation lifecycle service', () => {
           }),
         ],
       }),
+    );
+  });
+
+  it('persists and executes the exact first-input Skill intent without prompt re-parsing', async () => {
+    const fixture = createFixture();
+    const input = {
+      ...assistantInput('request-skill'),
+      input: {
+        kind: 'skill' as const,
+        catalogEntryId: 'skill:project:fingerprint-one',
+        skillName: 'storyboard',
+        activationId: 'skill:project:fingerprint-one',
+        args: 'Draft three beats',
+      },
+    };
+
+    const committed = await fixture.service.firstSubmit(input);
+    expect(committed.initialInput.intent).toEqual(input.input);
+    expect(projectAgentConversationInitialMessage(committed).content).toBe(
+      '$storyboard Draft three beats',
+    );
+    await fixture.service.startProviderExecution(committed.conversationId);
+    await fixture.service.waitForProviderIdle();
+
+    expect(fixture.provider.start).toHaveBeenCalledWith(
+      expect.objectContaining({ input: input.input }),
+    );
+    expect(JSON.stringify(fixture.provider.start.mock.calls)).not.toContain(
+      'kind":"message","text":"$storyboard',
     );
   });
 
@@ -162,7 +196,8 @@ describe('Agent Conversation lifecycle service', () => {
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: ['resource-grant:1'],
       },
-      messageText: 'Summarize my note',
+      input: { kind: 'message', text: 'Summarize my note' },
+      references: [],
       resourceGrantIds: ['resource-grant:1'],
       configuration: configuration(),
     });
@@ -201,8 +236,40 @@ describe('Agent Conversation lifecycle service', () => {
     expect(replacement.session.materialize).toHaveBeenCalledWith({
       conversationId: committed.conversationId,
       context: committed.context,
+      title: 'request-replay',
     });
     expect(replacement.provider.start).not.toHaveBeenCalled();
+  });
+
+  it('derives bounded persisted titles from the canonical typed first input', () => {
+    expect(
+      projectAgentConversationTitle({ kind: 'message', text: '  请分析\n当前工作区的角色设定  ' }),
+    ).toBe('请分析 当前工作区的角色设定');
+    expect(
+      projectAgentConversationTitle({
+        kind: 'command',
+        catalogEntryId: 'command:new',
+        commandId: 'new',
+        handlerId: 'builtin:new',
+      }),
+    ).toBe('/new');
+    expect(
+      projectAgentConversationTitle({
+        kind: 'skill',
+        catalogEntryId: 'skill:storyboard',
+        skillName: 'storyboard',
+        activationId: 'activation:storyboard',
+      }),
+    ).toBe('$storyboard');
+    expect(
+      projectAgentConversationTitle({
+        kind: 'message',
+        text: 'Create a storyboard shot list for the rainy rooftop chase with lighting notes',
+      }),
+    ).toBe('Create a storyboard shot list for the rainy...');
+    expect(() => projectAgentConversationTitle({ kind: 'message', text: '   ' })).toThrow(
+      'title source must not be empty',
+    );
   });
 
   it('isolates scratch by Conversation and publishes before cleanup', async () => {
@@ -214,7 +281,8 @@ describe('Agent Conversation lifecycle service', () => {
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: [],
       },
-      messageText: 'Create an image',
+      input: { kind: 'message', text: 'Create an image' },
+      references: [],
       resourceGrantIds: [],
       configuration: configuration(),
     });
@@ -260,7 +328,8 @@ describe('Agent Conversation lifecycle service', () => {
         assistantSpaceId: 'assistant-space:default',
         baseGrantIds: [],
       },
-      messageText: 'Create an image',
+      input: { kind: 'message', text: 'Create an image' },
+      references: [],
       resourceGrantIds: [],
       configuration: configuration(),
     });
@@ -315,6 +384,50 @@ describe('Agent Conversation lifecycle service', () => {
       (await fixture.service.readConversation(second.conversationId)).scratchArtifacts[0],
     ).toMatchObject({ scratchArtifactId: secondArtifact.scratchArtifactId, state: 'published' });
   });
+
+  it('updates only future-turn configuration and preserves the committed Turn snapshot', async () => {
+    const fixture = createFixture();
+    const committed = await fixture.service.firstSubmit(assistantInput('request-config-update'));
+    const initialSnapshot = structuredClone(committed.pendingTurn.configuration);
+    const next = configuration('anthropic', 'claude-sonnet-4');
+
+    await fixture.service.updateConfiguration({
+      conversationId: committed.conversationId,
+      request: next.request,
+      projection: next.projection,
+    });
+
+    const updated = await fixture.service.readConversation(committed.conversationId);
+    expect(updated.configuration.request).toEqual(next.request);
+    expect(updated.pendingTurn.configuration).toEqual(initialSnapshot);
+    expect(updated.pendingTurn.configuration.request.providerId).toBe('openai');
+  });
+
+  it('keeps future-turn configuration isolated by exact Conversation identity', async () => {
+    const fixture = createFixture();
+    const first = await fixture.service.firstSubmit(assistantInput('request-config-first'));
+    const second = await fixture.service.firstSubmit(assistantInput('request-config-second'));
+    const next = configuration('anthropic', 'claude-sonnet-4');
+
+    await fixture.service.updateConfiguration({
+      conversationId: first.conversationId,
+      request: next.request,
+      projection: next.projection,
+    });
+
+    await expect(
+      fixture.service.readConversationConfiguration(first.conversationId),
+    ).resolves.toMatchObject({
+      conversationId: first.conversationId,
+      request: { providerId: 'anthropic', modelId: 'claude-sonnet-4' },
+    });
+    await expect(
+      fixture.service.readConversationConfiguration(second.conversationId),
+    ).resolves.toMatchObject({
+      conversationId: second.conversationId,
+      request: { providerId: 'openai', modelId: 'gpt-5' },
+    });
+  });
 });
 
 function assistantInput(requestId: string) {
@@ -325,14 +438,49 @@ function assistantInput(requestId: string) {
       assistantSpaceId: 'assistant-space:default',
       baseGrantIds: [],
     },
-    messageText: requestId,
+    input: { kind: 'message' as const, text: requestId },
+    references: [],
     resourceGrantIds: [],
     configuration: configuration(),
   };
 }
 
-function configuration() {
-  return { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' as const };
+function configuration(providerId = 'openai', modelId = 'gpt-5') {
+  const request = {
+    modelCatalogEntryId: `${providerId}:${modelId}`,
+    providerId,
+    modelId,
+    executionMode: 'ask' as const,
+    temperature: 0.7,
+    maximumOutputTokens: 4096,
+    thinkingBudget: 0,
+  };
+  return {
+    request,
+    projection: projectAgentConfigurationPolicy({
+      models: [
+        {
+          id: request.modelCatalogEntryId,
+          label: 'GPT-5',
+          providerId: request.providerId,
+          modelId: request.modelId,
+          modelType: 'llm',
+          contextWindow: 128_000,
+          maximumOutputTokens: 16_384,
+          purposeCapabilities: ['agent.main'],
+          availability: { status: 'available' },
+        },
+      ],
+      request,
+      source: 'draft-request',
+      defaults: {
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
+      },
+    }),
+  };
 }
 
 function createFixture(options?: {
@@ -385,6 +533,7 @@ function createFixture(options?: {
     service: createAgentConversationLifecycleService({
       repository,
       grants,
+      domainContext: { resolveForTurn: vi.fn(async () => []) },
       scratch,
       publication,
       session,

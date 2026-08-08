@@ -195,6 +195,7 @@ describe('Desktop plugin runtime', () => {
         {
           path: skillRoot,
           source: { kind: 'plugin', pluginId: 'fixture@market' },
+          entryPointKind: 'skill',
         },
       ]);
       expect(pluginRuntime.readiness.get('fixture@market')).toEqual({

@@ -641,6 +641,12 @@ export const chat = {
   'chat.conversation.loading': 'Loading conversation history...',
   'chat.conversation.navigationTargetUnavailable':
     'This conversation is unavailable in the selected workspace.',
+  'chat.directGeneration.title': 'Generation job',
+  'chat.directGeneration.running.image': 'Generating image...',
+  'chat.directGeneration.running.video': 'Generating video...',
+  'chat.directGeneration.running.audio': 'Generating audio...',
+  'chat.directGeneration.succeeded': 'Generated {count} result(s) in job {jobId}',
+  'chat.directGeneration.ended': 'Generation job {jobId} ended with status {phase}',
   'chat.attachFile': 'Attach file',
   'chat.referenceFile': 'Reference file with @',
   'chat.usage.tokens': 'Context estimate',

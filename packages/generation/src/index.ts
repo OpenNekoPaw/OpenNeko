@@ -1,4 +1,5 @@
 export * from './generation-params';
+export * from './direct-operation';
 export type {
   AudioGenerationRequest,
   ControlMode,

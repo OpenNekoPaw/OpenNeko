@@ -24,13 +24,16 @@ import {
   resolveActiveDesktopWindowWorkbench,
   type DesktopShellProjection,
 } from '@neko/host/desktop-shell-contract';
-import { DesktopAppHost } from './app-host';
+import { DesktopAppHost, type DesktopAppHostOptions } from './app-host';
 import { createDesktopSceneTransitionRequest } from '@neko/host/desktop-scene-contract';
 import { createDesktopWorkspaceDirectoryTargetRequest } from '@neko/host/desktop-workspace-grant-contract';
 import { createAssetCenterHostRequest } from '@neko/assets-domain/asset-center';
 import {
   createAgentConversationLifecycleService,
+  createAgentDomainBindingApplicationService,
+  createAgentLaunchDraftSubmissionApplicationService,
   createInMemoryAgentConversationLifecycleRepository,
+  projectAgentConfigurationPolicy,
   type AgentConversationLifecycleService,
   type AssistantResourceService,
   type AgentAppHost,
@@ -57,6 +60,7 @@ import type { PersonalSkillManager } from '@neko/agent-runtime/pi';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
 import { DesktopWorkspaceGrantAuthority } from '@neko/host/desktop-workspace-grant-authority';
 import { AssetCenterNodeRuntime, type AssetCenterNodeRuntimeOptions } from '@neko/assets-node';
+import { createDesktopDirectGenerationRequest } from '../shared/generation-contract';
 
 describe('DesktopAppHost', () => {
   it('keeps Desktop settings sender-bound and opens Agent configuration through its owner action', async () => {
@@ -79,6 +83,7 @@ describe('DesktopAppHost', () => {
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
+      agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
@@ -157,6 +162,7 @@ describe('DesktopAppHost', () => {
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
+      agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
@@ -218,6 +224,7 @@ describe('DesktopAppHost', () => {
       agent,
       assistantWorkspace: createAssistantWorkspaceResolution(),
       agentLaunch: createAgentLaunchRuntime(),
+      agentLaunchSubmission: createAgentLaunchSubmission(),
       workspaceGrants: createWorkspaceGrantAuthority(),
       conversationLifecycle: createConversationLifecycle(),
       extensionManager: createExtensionManager(),
@@ -288,7 +295,8 @@ describe('DesktopAppHost', () => {
   });
 
   it('keeps directory target selection inert until the Draft is submitted', async () => {
-    const fixture = await createShellAppHost();
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ agentLaunch });
     const chooseRequest = createDesktopWorkspaceDirectoryTargetRequest({
       requestId: 'workspace-choose-1',
       rendererSessionId: fixture.projection.rendererSessionId,
@@ -350,26 +358,26 @@ describe('DesktopAppHost', () => {
       agentSurfaceId: currentAgentSurfaceId(afterSelection),
       viewId: initialScene.context.agentViewId,
       connectionId: 'launch-entry-workspace-1',
-      scope: { kind: 'unbound', draftId: initialScene.context.scope.draftId },
-    }).connection;
+      draftId: initialScene.context.scope.draftId,
+      binding: {
+        kind: 'workspace',
+        workspaceId: resolution.workspaceId,
+        workspaceGrantId: selected.grant.workspaceGrantId,
+      },
+    });
+    vi.spyOn(agentLaunch, 'readCatalog').mockReturnValue(entryConnection);
     const transitionScene = vi.spyOn(fixture.appHost.shell, 'transitionScene');
     const submitRequest = {
       requestId: 'workspace-first-submit-1',
       operation: 'submit-draft' as const,
-      connection: entryConnection,
+      connection: entryConnection.connection,
       input: {
-        target: {
-          kind: 'bound-context' as const,
-          draftId: initialScene.context.scope.draftId,
-          context: {
-            kind: 'workspace' as const,
-            workspaceId: resolution.workspaceId,
-            workspaceGrantId: selected.grant.workspaceGrantId,
-          },
-        },
-        messageText: 'Continue in the selected workspace',
+        draft: entryConnection.interaction,
+        input: { kind: 'message' as const, text: 'Continue in the selected workspace' },
+        references: [],
         resourceGrantIds: [],
         configuration: {
+          modelCatalogEntryId: 'openai:gpt-5',
           providerId: 'openai',
           modelId: 'gpt-5',
           executionMode: 'ask' as const,
@@ -434,6 +442,142 @@ describe('DesktopAppHost', () => {
     ).toHaveLength(workspaceConversationCount);
   });
 
+  it('runs direct generation only through the exact Draft Workspace grant', async () => {
+    const agentLaunch = createAgentLaunchRuntime();
+    const submit = vi.fn(async () => createDirectGenerationProjection('image'));
+    const resolveDirectGeneration = vi.fn(async () => ({ submit }));
+    const fixture = await createShellAppHost({ agentLaunch, resolveDirectGeneration });
+    const resolution: AssetWorkspaceResolution = {
+      workspaceId: 'workspace-direct',
+      workspacePath: '/Users/fixture/direct',
+      displayName: 'Direct',
+      locator: { kind: 'variable', value: '${HOME}/direct' },
+    };
+    fixture.registry.resolve.mockResolvedValue(resolution);
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
+      fixture.sender,
+      createDesktopWorkspaceDirectoryTargetRequest({
+        requestId: 'workspace-direct-select',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      }),
+      async () => ({ label: 'Direct', hostResource: resolution.workspacePath }),
+    );
+    if (selected.status !== 'authorized') throw new Error('Expected a Workspace grant.');
+    const scene = activeScene(fixture.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Expected an Entry Draft.');
+    }
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: scene.context.agentViewId,
+      connectionId: 'launch-direct-workspace',
+      draftId: scene.context.scope.draftId,
+      binding: {
+        kind: 'workspace',
+        workspaceId: resolution.workspaceId,
+        workspaceGrantId: selected.grant.workspaceGrantId,
+      },
+    });
+    vi.mocked(agentLaunch.readCatalog).mockReturnValue(catalog);
+    const operation = {
+      mediaKind: 'image' as const,
+      prompt: 'Generate an exact image',
+      providerId: 'image-provider',
+      modelId: 'image-model',
+      aspectRatio: '16:9',
+      width: 1920,
+      height: 1080,
+    };
+
+    await expect(
+      fixture.appHost.executeDirectGenerationRequest(
+        fixture.sender,
+        createDesktopDirectGenerationRequest(
+          'direct-draft-1',
+          { kind: 'agent-draft', connection: catalog.connection },
+          operation,
+        ),
+      ),
+    ).resolves.toEqual({
+      requestId: 'direct-draft-1',
+      projection: createDirectGenerationProjection('image'),
+    });
+    expect(resolveDirectGeneration).toHaveBeenCalledWith(resolution);
+    expect(submit).toHaveBeenCalledWith(operation);
+
+    vi.mocked(agentLaunch.readCatalog).mockReturnValue({
+      ...catalog,
+      interaction: {
+        ...catalog.interaction,
+        binding: {
+          kind: 'workspace',
+          workspaceId: 'workspace-forged',
+          workspaceGrantId: selected.grant.workspaceGrantId,
+        },
+      },
+    });
+    await expect(
+      fixture.appHost.executeDirectGenerationRequest(
+        fixture.sender,
+        createDesktopDirectGenerationRequest(
+          'direct-draft-forged',
+          { kind: 'agent-draft', connection: catalog.connection },
+          operation,
+        ),
+      ),
+    ).rejects.toThrow('resolved to another Workspace');
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves direct generation from an exact registered Session connection', async () => {
+    const submit = vi.fn(async () => createDirectGenerationProjection('video'));
+    const resolveDirectGeneration = vi.fn(async () => ({ submit }));
+    const fixture = await createShellAppHost({ resolveDirectGeneration });
+    const workspace = createWorkspaceResolution();
+    const connection = {
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: 'workbench-session',
+      agentSurfaceId: 'surface-session',
+      projectId: 'project-session',
+      workspaceId: workspace.workspaceId,
+      viewId: 'view-session',
+      connectionId: 'connection-session',
+    };
+    const resolveExactConnection = vi
+      .spyOn(fixture.appHost.agentBridge, 'resolveExactConnection')
+      .mockReturnValue(connection);
+    vi.spyOn(fixture.appHost.shell, 'resolveAgentWorkspace').mockResolvedValue(workspace);
+    const operation = {
+      mediaKind: 'video' as const,
+      prompt: 'Generate an exact video',
+      providerId: 'video-provider',
+      modelId: 'video-model',
+      resolution: '1080p',
+      fps: 24,
+    };
+
+    await fixture.appHost.executeDirectGenerationRequest(
+      fixture.sender,
+      createDesktopDirectGenerationRequest(
+        'direct-session-1',
+        { kind: 'agent-session', connection },
+        operation,
+      ),
+    );
+
+    expect(resolveExactConnection).toHaveBeenCalledWith(connection, {
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+    });
+    expect(resolveDirectGeneration).toHaveBeenCalledWith(workspace);
+    expect(submit).toHaveBeenCalledWith(operation);
+  });
+
   it('binds Agent launch operations to the exact Assistant Scene and connection identity', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });
@@ -442,9 +586,10 @@ describe('DesktopAppHost', () => {
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'assistant') {
       throw new Error('Agent launch AppHost fixture requires an Assistant Scene.');
     }
-    const launchScope = {
+    const launchBinding = {
       kind: 'assistant' as const,
       assistantSpaceId: scene.context.scope.assistantSpaceId,
+      baseGrantIds: [],
     };
     const launchWorkbench = activeWorkbench(projection);
     const launchAgentSurfaceId = currentAgentSurfaceId(projection);
@@ -455,7 +600,8 @@ describe('DesktopAppHost', () => {
       agentSurfaceId: launchAgentSurfaceId,
       viewId: scene.context.agentViewId,
       connectionId: 'launch-1',
-      scope: launchScope,
+      draftId: scene.context.scope.draftId,
+      binding: launchBinding,
     });
     vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
     vi.spyOn(agentLaunch, 'authorizeResource').mockResolvedValue(catalog);
@@ -478,7 +624,12 @@ describe('DesktopAppHost', () => {
         workbenchInstanceId: launchWorkbench.workbenchInstanceId,
         agentSurfaceId: launchAgentSurfaceId,
         viewId: scene.context.agentViewId,
-        scope: launchScope,
+        draft: {
+          phase: 'draft',
+          draftId: scene.context.scope.draftId,
+          binding: launchBinding,
+          bindingReceipt: null,
+        },
       }),
     ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
     expect(agentLaunch.attach).not.toHaveBeenCalled();
@@ -490,7 +641,12 @@ describe('DesktopAppHost', () => {
         workbenchInstanceId: launchWorkbench.workbenchInstanceId,
         agentSurfaceId: 'agent-surface:forged',
         viewId: scene.context.agentViewId,
-        scope: launchScope,
+        draft: {
+          phase: 'draft',
+          draftId: scene.context.scope.draftId,
+          binding: launchBinding,
+          bindingReceipt: null,
+        },
       }),
     ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
 
@@ -513,7 +669,12 @@ describe('DesktopAppHost', () => {
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
       throw new Error('Agent launch AppHost fixture requires an unbound Entry Draft.');
     }
-    const scope = { kind: 'unbound' as const, draftId: scene.context.scope.draftId };
+    const draft = {
+      phase: 'draft' as const,
+      draftId: scene.context.scope.draftId,
+      binding: { kind: 'unbound' as const },
+      bindingReceipt: null,
+    };
     const workbench = activeWorkbench(fixture.projection);
     const agentSurfaceId = currentAgentSurfaceId(fixture.projection);
     const catalog = createLaunchCatalog({
@@ -523,7 +684,8 @@ describe('DesktopAppHost', () => {
       agentSurfaceId,
       viewId: scene.context.agentViewId,
       connectionId: 'launch-entry-1',
-      scope,
+      draftId: scene.context.scope.draftId,
+      binding: draft.binding,
     });
     vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
 
@@ -534,7 +696,7 @@ describe('DesktopAppHost', () => {
         workbenchInstanceId: workbench.workbenchInstanceId,
         agentSurfaceId,
         viewId: scene.context.agentViewId,
-        scope,
+        draft,
       }),
     ).resolves.toMatchObject({ status: 'ready', catalog });
     expect(agentLaunch.attach).toHaveBeenCalledWith({
@@ -543,12 +705,174 @@ describe('DesktopAppHost', () => {
       workbenchInstanceId: workbench.workbenchInstanceId,
       agentSurfaceId,
       viewId: scene.context.agentViewId,
-      scope,
+      draft,
     });
+    const assistantBinding = {
+      kind: 'assistant' as const,
+      assistantSpaceId: 'assistant-space:local-user',
+      baseGrantIds: [],
+    };
+    const boundCatalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: workbench.workbenchInstanceId,
+      agentSurfaceId,
+      viewId: scene.context.agentViewId,
+      connectionId: catalog.connection.connectionId,
+      draftId: scene.context.scope.draftId,
+      binding: assistantBinding,
+    });
+    vi.mocked(agentLaunch.bindTarget).mockResolvedValueOnce(boundCatalog);
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        requestId: 'launch-entry-bind-assistant-1',
+        operation: 'bind-assistant',
+        connection: catalog.connection,
+      }),
+    ).resolves.toEqual({
+      requestId: 'launch-entry-bind-assistant-1',
+      status: 'ready',
+      catalog: boundCatalog,
+    });
+    expect(agentLaunch.bindTarget).toHaveBeenCalledWith(catalog.connection, assistantBinding);
     await fixture.appHost.dispose();
   });
 
-  it('automatically binds an unbound Entry Draft to Assistant and commits first submit once', async () => {
+  it('routes Draft mention search through the sender-bound launch connection and receipt', async () => {
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ agentLaunch });
+    const scene = activeScene(fixture.projection);
+    if (scene.context.kind !== 'agent') throw new Error('Expected an Agent Scene.');
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: scene.context.agentViewId,
+      connectionId: 'launch-workspace-search',
+      draftId: scene.context.scope.draftId,
+      binding: {
+        kind: 'workspace',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      },
+    });
+    const bindingReceiptId = catalog.interaction.bindingReceipt?.bindingReceiptId;
+    if (!bindingReceiptId) throw new Error('Expected a Workspace binding receipt.');
+    vi.mocked(agentLaunch.searchWorkspaceMentions).mockResolvedValueOnce({
+      bindingReceiptId,
+      filter: 'hero',
+      files: [
+        {
+          locator: { kind: 'workspace-file', path: 'hero.md' },
+          name: 'hero.md',
+          type: 'file',
+          referenceReceipt: {
+            catalogEntryId: 'mention:hero',
+            referenceId: 'workspace-reference:hero',
+            ownerKind: 'workspace',
+            ownerId: 'workspace-1',
+            bindingReceiptId,
+          },
+        },
+      ],
+      mentionExtras: [],
+    });
+
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        requestId: 'launch-workspace-search-1',
+        operation: 'search-workspace-mentions',
+        connection: catalog.connection,
+        bindingReceiptId,
+        filter: 'hero',
+      }),
+    ).resolves.toMatchObject({
+      requestId: 'launch-workspace-search-1',
+      status: 'mentions',
+      projection: { bindingReceiptId, filter: 'hero' },
+    });
+    expect(agentLaunch.searchWorkspaceMentions).toHaveBeenCalledWith(
+      catalog.connection,
+      bindingReceiptId,
+      'hero',
+    );
+    await fixture.appHost.dispose();
+  });
+
+  it('materializes the configured default Assistant for an unbound Draft submit', async () => {
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ agentLaunch });
+    const scene = activeScene(fixture.projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
+      throw new Error('Unbound first-submit fixture requires an Entry Draft.');
+    }
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: scene.context.agentViewId,
+      connectionId: 'launch-unbound-submit',
+      draftId: scene.context.scope.draftId,
+      binding: { kind: 'unbound' },
+    });
+    vi.mocked(agentLaunch.readCatalog).mockReturnValue(catalog);
+    const attachAgentConversation = vi.spyOn(fixture.appHost.shell, 'attachAgentConversation');
+
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        requestId: 'unbound-first-submit',
+        operation: 'submit-draft',
+        connection: catalog.connection,
+        input: {
+          draft: catalog.interaction,
+          input: { kind: 'message', text: 'Create a plan' },
+          references: [],
+          resourceGrantIds: [],
+          configuration: {
+            modelCatalogEntryId: 'openai:gpt-5',
+            providerId: 'openai',
+            modelId: 'gpt-5',
+            executionMode: 'ask',
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: 'committed',
+      projection: {
+        session: {
+          phase: 'session',
+          conversationId: 'conversation:lifecycle-1',
+          binding: {
+            kind: 'assistant',
+            assistantSpaceId: 'assistant-space:local-user',
+          },
+        },
+      },
+    });
+    expect(attachAgentConversation).toHaveBeenCalledOnce();
+    expect(agentLaunch.commitResourceGrants).toHaveBeenCalledWith(
+      catalog.connection,
+      'conversation:lifecycle-1',
+      [],
+    );
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant-space:local-user',
+          conversationId: 'conversation:lifecycle-1',
+        },
+      },
+      slots: { interaction: { phase: 'session' } },
+    });
+    await fixture.appHost.conversationLifecycle.waitForProviderIdle();
+    await fixture.appHost.dispose();
+  });
+
+  it('commits an exactly bound Assistant Draft first submit once', async () => {
     let finishProvider: (() => void) | undefined;
     const providerCompletion = new Promise<void>((resolve) => {
       finishProvider = resolve;
@@ -559,6 +883,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      domainContext: { resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -583,31 +908,44 @@ describe('DesktopAppHost', () => {
     if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'unbound') {
       throw new Error('Assistant first-submit fixture requires an unbound Entry Draft.');
     }
-    const connection = createLaunchCatalog({
+    const launchCatalog = createLaunchCatalog({
       applicationInstanceId: 'app-1',
       windowId: fixture.windowId,
       workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
       agentSurfaceId: currentAgentSurfaceId(fixture.projection),
       viewId: scene.context.agentViewId,
       connectionId: 'launch-first-submit',
-      scope: { kind: 'unbound', draftId: scene.context.scope.draftId },
-    }).connection;
+      draftId: scene.context.scope.draftId,
+      binding: {
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        baseGrantIds: [],
+      },
+    });
+    const connection = launchCatalog.connection;
+    vi.spyOn(agentLaunch, 'readCatalog').mockReturnValue(launchCatalog);
     const request = {
       requestId: 'first-submit-request-1',
       operation: 'submit-draft' as const,
       connection,
       input: {
-        target: { kind: 'automatic-assistant' as const, draftId: scene.context.scope.draftId },
-        messageText: 'Create a plan',
+        draft: launchCatalog.interaction,
+        input: { kind: 'message' as const, text: 'Create a plan' },
+        references: [],
         resourceGrantIds: ['grant:entry-1'],
-        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' as const },
+        configuration: {
+          modelCatalogEntryId: 'openai:gpt-5',
+          providerId: 'openai',
+          modelId: 'gpt-5',
+          executionMode: 'ask' as const,
+        },
       },
     };
 
     const transitionScene = vi.spyOn(fixture.appHost.shell, 'transitionScene');
     const attachAgentConversation = vi.spyOn(fixture.appHost.shell, 'attachAgentConversation');
     const first = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
-    expect(providerStart).not.toHaveBeenCalled();
+    expect(providerStart).toHaveBeenCalledOnce();
     expect(attachAgentConversation).toHaveBeenCalledOnce();
     expect(materializeSession).toHaveBeenCalledOnce();
     expect(materializeSession).toHaveBeenLastCalledWith(
@@ -617,12 +955,8 @@ describe('DesktopAppHost', () => {
           kind: 'assistant',
           assistantSpaceId: 'assistant-space:local-user',
         }),
+        title: 'Create a plan',
       }),
-    );
-    expect(agentLaunch.bindResourceGrants).toHaveBeenCalledWith(
-      connection,
-      { kind: 'assistant', assistantSpaceId: 'assistant-space:local-user' },
-      ['grant:entry-1'],
     );
     expect(first).toMatchObject({ status: 'committed' });
     expect(transitionScene).not.toHaveBeenCalled();
@@ -671,7 +1005,7 @@ describe('DesktopAppHost', () => {
       ),
       vi.fn(),
     );
-    expect(providerStart).not.toHaveBeenCalled();
+    expect(providerStart).toHaveBeenCalledOnce();
     if (bootstrap.status !== 'ready') {
       throw new Error('Expected a ready Assistant Agent bootstrap.');
     }
@@ -689,7 +1023,7 @@ describe('DesktopAppHost', () => {
         },
       }),
     );
-    await vi.waitFor(() => expect(providerStart).toHaveBeenCalledOnce());
+    expect(providerStart).toHaveBeenCalledOnce();
     expect(sendProjectionControl).toHaveBeenCalledOnce();
     expect(attachAgentConversation.mock.invocationCallOrder[0]).toBeLessThan(
       providerStart.mock.invocationCallOrder[0]!,
@@ -717,7 +1051,14 @@ describe('DesktopAppHost', () => {
       requestId: request.requestId,
       status: 'committed',
       projection: {
-        conversationId: 'conversation:first-submit-1',
+        session: {
+          phase: 'session',
+          conversationId: 'conversation:first-submit-1',
+          binding: {
+            kind: 'assistant',
+            assistantSpaceId: 'assistant-space:local-user',
+          },
+        },
         turnId: 'turn:first-submit-2',
         turnStatus: 'completed',
       },
@@ -753,11 +1094,112 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('keeps the exact committed Scene when initial provider execution fails', async () => {
+    const providerError = new Error('exact provider unavailable');
+    const reportError = vi.fn();
+    let identity = 0;
+    const conversationLifecycle = createAgentConversationLifecycleService({
+      repository: createInMemoryAgentConversationLifecycleRepository(),
+      grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      domainContext: { resolveForTurn: async () => [] },
+      scratch: {
+        create: async () => undefined,
+        release: async () => undefined,
+        authorizePreview: async () => ({
+          previewSessionId: 'preview-provider-failure',
+          descriptorId: 'descriptor-provider-failure',
+        }),
+      },
+      publication: {
+        publishToAssets: async () => ({ assetId: 'asset-provider-failure' }),
+        publishToWorkspace: async () => ({ documentId: 'document-provider-failure' }),
+      },
+      session: { materialize: async () => undefined },
+      provider: {
+        start: async () => {
+          throw providerError;
+        },
+      },
+      reportError,
+      createIdentity: () => `provider-failure-${(identity += 1)}`,
+      now: () => '2026-08-08T00:00:00.000Z',
+    });
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ conversationLifecycle, agentLaunch });
+    const entryScene = activeScene(fixture.projection);
+    if (entryScene.context.kind !== 'agent' || entryScene.context.scope.kind !== 'unbound') {
+      throw new Error('Provider failure fixture requires an unbound Entry Draft.');
+    }
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: activeWorkbench(fixture.projection).workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(fixture.projection),
+      viewId: entryScene.context.agentViewId,
+      connectionId: 'launch-provider-failure',
+      draftId: entryScene.context.scope.draftId,
+      binding: {
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        baseGrantIds: [],
+      },
+    });
+    vi.spyOn(agentLaunch, 'readCatalog').mockReturnValue(catalog);
+    const request = {
+      requestId: 'first-submit-provider-failure',
+      operation: 'submit-draft' as const,
+      connection: catalog.connection,
+      input: {
+        draft: catalog.interaction,
+        input: { kind: 'message' as const, text: 'Use only this provider' },
+        references: [],
+        resourceGrantIds: [],
+        configuration: {
+          modelCatalogEntryId: 'openai:gpt-5',
+          providerId: 'openai',
+          modelId: 'gpt-5',
+          executionMode: 'ask' as const,
+        },
+      },
+    };
+
+    const first = await fixture.appHost.executeAgentLaunchRequest(fixture.sender, request);
+    expect(first).toMatchObject({ status: 'committed', projection: { turnStatus: 'running' } });
+    const committedScene = activeScene(await fixture.appHost.shell.getProjection(fixture.windowId));
+    expect(committedScene).toMatchObject({
+      context: {
+        kind: 'agent',
+        scope: {
+          kind: 'assistant',
+          conversationId: 'conversation:provider-failure-1',
+        },
+      },
+      slots: { interaction: { phase: 'session' } },
+    });
+
+    await conversationLifecycle.waitForProviderIdle();
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, request),
+    ).resolves.toMatchObject({
+      status: 'committed',
+      projection: {
+        session: { conversationId: 'conversation:provider-failure-1' },
+        turnStatus: 'failed',
+        diagnostic: 'exact provider unavailable',
+      },
+    });
+    expect(activeScene(await fixture.appHost.shell.getProjection(fixture.windowId))).toEqual(
+      committedScene,
+    );
+    await fixture.appHost.dispose();
+  });
+
   it('restores an exact Assistant Conversation from lifecycle context without Project fallback', async () => {
     let identity = 0;
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      domainContext: { resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -783,9 +1225,10 @@ describe('DesktopAppHost', () => {
         assistantSpaceId: 'assistant-space:local-user',
         baseGrantIds: [],
       },
-      messageText: 'Restore me',
+      input: { kind: 'message', text: 'Restore me' },
+      references: [],
       resourceGrantIds: [],
-      configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      configuration: firstSubmitConfiguration(),
     });
     const fixture = await createShellAppHost({ conversationLifecycle });
     setAgentHomeConversation(fixture.agent, {
@@ -866,7 +1309,7 @@ describe('DesktopAppHost', () => {
       expect.objectContaining({
         initialConversationId: record.conversationId,
         initialConversationMessage: {
-          id: record.initialMessage.messageId,
+          id: record.initialInput.messageId,
           role: 'user',
           content: 'Restore me',
           timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
@@ -925,9 +1368,10 @@ describe('DesktopAppHost', () => {
         assistantSpaceId: 'assistant-space:local-user',
         baseGrantIds: [],
       },
-      messageText: 'Do not restore under another owner',
+      input: { kind: 'message', text: 'Do not restore under another owner' },
+      references: [],
       resourceGrantIds: [],
-      configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      configuration: firstSubmitConfiguration(),
     });
     const fixture = await createShellAppHost({ conversationLifecycle });
     const navigation = {
@@ -964,9 +1408,10 @@ describe('DesktopAppHost', () => {
         assistantSpaceId: 'assistant-space:local-user',
         baseGrantIds: [],
       },
-      messageText: 'Create a note',
+      input: { kind: 'message', text: 'Create a note' },
+      references: [],
       resourceGrantIds: [],
-      configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      configuration: firstSubmitConfiguration(),
     });
     const preview = {
       identity: {
@@ -1072,6 +1517,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      domainContext: { resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1121,9 +1567,10 @@ describe('DesktopAppHost', () => {
         workspaceId: workspace.workspaceId,
         workspaceGrantId: selected.grant.workspaceGrantId,
       },
-      messageText: 'Restore this Workspace',
+      input: { kind: 'message', text: 'Restore this Workspace' },
+      references: [],
       resourceGrantIds: [],
-      configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+      configuration: firstSubmitConfiguration(),
     });
     setAgentHomeConversation(fixture.agent, {
       conversationId: record.conversationId,
@@ -1222,7 +1669,7 @@ describe('DesktopAppHost', () => {
       expect.objectContaining({
         initialConversationId: record.conversationId,
         initialConversationMessage: {
-          id: record.initialMessage.messageId,
+          id: record.initialInput.messageId,
           role: 'user',
           content: 'Restore this Workspace',
           timestamp: Date.parse('2026-08-03T00:00:00.000Z'),
@@ -1239,6 +1686,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository: createInMemoryAgentConversationLifecycleRepository(),
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      domainContext: { resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1335,6 +1783,7 @@ describe('DesktopAppHost', () => {
     const conversationLifecycle = createAgentConversationLifecycleService({
       repository,
       grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+      domainContext: { resolveForTurn: async () => [] },
       scratch: {
         create: async () => undefined,
         release: async () => undefined,
@@ -1357,9 +1806,10 @@ describe('DesktopAppHost', () => {
       await conversationLifecycle.firstSubmit({
         requestId: 'canonical-assistant-submit',
         context: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
-        messageText: 'Continue this Assistant conversation',
+        input: { kind: 'message', text: 'Continue this Assistant conversation' },
+        references: [],
         resourceGrantIds: [],
-        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+        configuration: firstSubmitConfiguration(),
       })
     ).conversationId;
     const fixture = await createShellAppHost({ conversationLifecycle });
@@ -2468,6 +2918,7 @@ function createConversationLifecycle() {
   return createAgentConversationLifecycleService({
     repository: createInMemoryAgentConversationLifecycleRepository(),
     grants: { validate: async () => undefined, resolveForTurn: async () => [] },
+    domainContext: { resolveForTurn: async () => [] },
     scratch: {
       create: async () => undefined,
       release: async () => undefined,
@@ -2494,11 +2945,87 @@ async function createShellAppHost(options?: {
   readonly conversationLifecycle?: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
   readonly assetCenter?: AssetCenterNodeRuntime;
+  readonly resolveDirectGeneration?: DesktopAppHostOptions['resolveDirectGeneration'];
 }) {
   const logger = createLogger();
   const fixture = createShellFixture('app-1');
   const agent = createAgentComposition();
   const extensionManager = createExtensionManager();
+  const agentLaunch = options?.agentLaunch ?? createAgentLaunchRuntime();
+  const conversationLifecycle = options?.conversationLifecycle ?? createConversationLifecycle();
+  const agentDomainBindings = createAgentDomainBindingApplicationService({
+    assistant: {
+      resolve: async (binding) => ({ status: 'available', binding, contextPayloads: [] }),
+    },
+    workspace: {
+      resolve: async (binding) => {
+        await fixture.workspaceGrants.resolveAuthorizedWorkspace(
+          binding.workspaceGrantId,
+          binding.workspaceId,
+        );
+        return { status: 'available', binding, contextPayloads: [] };
+      },
+    },
+  });
+  const agentLaunchSubmission = createAgentLaunchDraftSubmissionApplicationService({
+    launch: agentLaunch,
+    entry: {
+      materialize: async () => ({
+        kind: 'assistant',
+        assistantSpaceId: 'assistant-space:local-user',
+        baseGrantIds: [],
+      }),
+    },
+    bindings: agentDomainBindings,
+    lifecycle: conversationLifecycle,
+    resources: {
+      validate: ({ connection, conversationId, resourceGrantIds, references }) => {
+        agentLaunch.validateResourceGrantCommit(connection, conversationId, resourceGrantIds);
+        agentLaunch.validateReferenceCommit(connection, conversationId, references);
+      },
+      commit: async ({ connection, conversationId, resourceGrantIds, references }) => {
+        await agentLaunch.commitResourceGrants(connection, conversationId, resourceGrantIds);
+        agentLaunch.commitReferences(connection, conversationId, references);
+      },
+    },
+    scene: {
+      validate: async ({ connection, draftId, conversationId }) => {
+        const surface = await fixture.service.resolveAgentSurfaceGrant(
+          connection.windowId,
+          connection,
+        );
+        if (
+          surface.interaction.scope.draftId !== draftId ||
+          (conversationId === undefined
+            ? surface.interaction.phase !== 'draft' ||
+              surface.interaction.agentViewId !== connection.viewId
+            : surface.interaction.phase !== 'session' ||
+              surface.interaction.scope.kind === 'unbound' ||
+              surface.interaction.scope.conversationId !== conversationId)
+        ) {
+          throw new Error('Agent Draft submit is not the exact active Draft presentation.');
+        }
+      },
+      handoff: async ({ connection, draftId, conversationId, context }) => {
+        const projection = await fixture.service.getProjection(connection.windowId);
+        await fixture.service.attachAgentConversation({
+          windowId: connection.windowId,
+          rendererSessionId: projection.rendererSessionId,
+          agentViewId: connection.viewId,
+          draftId,
+          context,
+          conversationId,
+        });
+      },
+    },
+    commands: {
+      validate: (intent) => {
+        throw new Error(
+          `Agent Draft command '${intent.commandId}' has no registered launch handler '${intent.handlerId}'.`,
+        );
+      },
+    },
+  });
   const appHost = new DesktopAppHost({
     host: createElectronNekoHostPorts({
       homedir: '/Users/fixture',
@@ -2511,9 +3038,13 @@ async function createShellAppHost(options?: {
     projectManagement: createProjectManagementService(fixture.service, agent),
     agent,
     assistantWorkspace: createAssistantWorkspaceResolution(),
-    agentLaunch: options?.agentLaunch ?? createAgentLaunchRuntime(),
+    ...(options?.resolveDirectGeneration
+      ? { resolveDirectGeneration: options.resolveDirectGeneration }
+      : {}),
+    agentLaunch,
+    agentLaunchSubmission,
     workspaceGrants: fixture.workspaceGrants,
-    conversationLifecycle: options?.conversationLifecycle ?? createConversationLifecycle(),
+    conversationLifecycle,
     assistantResources: options?.assistantResources,
     assetCenter: options?.assetCenter,
     extensionManager,
@@ -2586,18 +3117,99 @@ async function bindAssistantDraft(fixture: Awaited<ReturnType<typeof createShell
   return fixture.appHost.shell.getProjection(fixture.windowId);
 }
 
-function createLaunchCatalog(
-  connection: Parameters<DesktopAgentLaunchRuntime['attach']>[0] & {
-    readonly connectionId: string;
-  },
-) {
+function createLaunchCatalog(input: {
+  readonly applicationInstanceId: string;
+  readonly windowId: string;
+  readonly workbenchInstanceId: string;
+  readonly agentSurfaceId: string;
+  readonly viewId: string;
+  readonly draftId: string;
+  readonly connectionId: string;
+  readonly binding: import('@neko/agent-contracts').AgentDomainBinding;
+}): import('@neko/agent-contracts').AgentLaunchCatalogProjection {
+  const connection = {
+    applicationInstanceId: input.applicationInstanceId,
+    windowId: input.windowId,
+    workbenchInstanceId: input.workbenchInstanceId,
+    agentSurfaceId: input.agentSurfaceId,
+    viewId: input.viewId,
+    draftId: input.draftId,
+    connectionId: input.connectionId,
+  };
   return {
     connection,
+    interaction: {
+      phase: 'draft',
+      draftId: input.draftId,
+      binding: input.binding,
+      bindingReceipt:
+        input.binding.kind === 'unbound'
+          ? null
+          : {
+              bindingReceiptId: `binding:${input.connectionId}`,
+              draftId: input.draftId,
+              connectionId: input.connectionId,
+              binding: input.binding,
+            },
+    },
     models: [],
-    commands: [],
-    skills: [],
-    resources: [],
+    configuration: projectAgentConfigurationPolicy({
+      models: [],
+      request: null,
+      source: 'global-default',
+      defaults: {
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
+      },
+    }),
+    inputs: [],
   };
+}
+
+function firstSubmitConfiguration() {
+  const request = {
+    modelCatalogEntryId: 'openai:gpt-5',
+    providerId: 'openai',
+    modelId: 'gpt-5',
+    executionMode: 'ask' as const,
+    temperature: 0.7,
+    maximumOutputTokens: 4096,
+    thinkingBudget: 0,
+  };
+  return {
+    request,
+    projection: configurationProjection(request),
+  };
+}
+
+function configurationProjection(
+  request: import('@neko/agent-contracts').AgentConfigurationRequest,
+) {
+  return projectAgentConfigurationPolicy({
+    models: [
+      {
+        id: request.modelCatalogEntryId,
+        label: request.modelId,
+        providerId: request.providerId,
+        modelId: request.modelId,
+        modelType: 'llm',
+        contextWindow: 128_000,
+        maximumOutputTokens: 16_384,
+        purposeCapabilities: ['agent.main'],
+        availability: { status: 'available' },
+      },
+    ],
+    request,
+    source: 'draft-request',
+    defaults: {
+      executionMode: 'ask',
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    },
+  });
 }
 
 async function openExtensionsScene(fixture: Awaited<ReturnType<typeof createShellAppHost>>) {
@@ -2746,13 +3358,36 @@ function createAgentLaunchRuntime(): DesktopAgentLaunchRuntime {
       throw new Error('Agent launch catalog read is not expected by this AppHost test.');
     }),
     validateResourceGrants: vi.fn(async () => undefined),
-    bindResourceGrants: vi.fn(async () => undefined),
+    bindTarget: vi.fn(async () => {
+      throw new Error('Agent launch target binding is not expected by this AppHost test.');
+    }),
+    updateConfiguration: vi.fn(() => {
+      throw new Error('Agent launch configuration update is not expected by this AppHost test.');
+    }),
+    searchWorkspaceMentions: vi.fn(async () => {
+      throw new Error('Agent launch mention search is not expected by this AppHost test.');
+    }),
+    validateDraftSubmit: vi.fn((_connection, input) =>
+      configurationProjection(input.configuration),
+    ),
     resolveResourceContexts: vi.fn(async () => []),
+    validateResourceGrantCommit: vi.fn(),
+    validateReferenceCommit: vi.fn(),
     commitResourceGrants: vi.fn(),
+    commitReferences: vi.fn(),
+    resolveReferenceContexts: vi.fn(async () => []),
     readConversationResourceGrants: vi.fn(() => []),
     detach: vi.fn(async () => undefined),
     detachWindow: vi.fn(async () => undefined),
     dispose: vi.fn(async () => undefined),
+  };
+}
+
+function createAgentLaunchSubmission() {
+  return {
+    submit: vi.fn(async (): Promise<never> => {
+      throw new Error('Agent Draft submission is not expected by this AppHost test.');
+    }),
   };
 }
 
@@ -2867,6 +3502,25 @@ function createAssistantWorkspaceResolution(): AssetWorkspaceResolution {
     workspacePath: '/Users/fixture/.openneko/assistant-spaces/local-user',
     displayName: 'Assistant',
     locator: { kind: 'relative', value: 'assistant-spaces/local-user' },
+  };
+}
+
+function createDirectGenerationProjection(mediaKind: 'image' | 'video') {
+  return {
+    jobId: `job-${mediaKind}`,
+    mediaKind,
+    purpose: mediaKind === 'image' ? ('image.generate' as const) : ('video.generate' as const),
+    providerId: `${mediaKind}-provider`,
+    modelId: `${mediaKind}-model`,
+    phase: 'succeeded' as const,
+    resultLocators: [
+      {
+        kind: 'generated-output' as const,
+        outputId: `output-${mediaKind}`,
+        digest: `sha256:${mediaKind}`,
+        path: `generated/${mediaKind}/output.bin`,
+      },
+    ],
   };
 }
 

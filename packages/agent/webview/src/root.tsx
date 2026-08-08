@@ -14,12 +14,14 @@ import {
 } from '@neko/ui/foundation';
 import { AgentHostRuntimeProvider } from './host-runtime-context';
 import type { AgentHostRuntimeAdapter } from './messages';
-import type { AgentRootPresentation } from '@neko/agent-contracts';
+import type { AgentInteractionProjection } from '@neko/agent-contracts';
 import {
   ComposerWorkspaceProvider,
   type AgentComposerWorkspacePresentation,
 } from './components/ComposerWorkspaceContext';
 import './index.css';
+import { DirectGenerationOperationProvider } from './direct-generation-context';
+import type { DirectGenerationOperationPort } from '@neko/generation';
 
 registerDefaultRenderers();
 
@@ -30,8 +32,9 @@ export interface AgentWebviewRootProps {
   readonly initialConversation?: { readonly id: string; readonly title: string };
   readonly initialInput?: { readonly id: string; readonly value: string };
   readonly presentation?: 'default' | 'desktop-dock';
-  readonly agentPresentation?: AgentRootPresentation;
+  readonly agentPresentation?: AgentInteractionProjection;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
+  readonly directGeneration?: DirectGenerationOperationPort;
 }
 
 export function AgentWebviewRoot({
@@ -39,6 +42,7 @@ export function AgentWebviewRoot({
   hostRuntimeAdapter,
   agentPresentation,
   composerWorkspace,
+  directGeneration,
   initialConversation,
   initialInput,
   locale,
@@ -59,14 +63,16 @@ export function AgentWebviewRoot({
       >
         <AgentHostRuntimeProvider adapter={hostRuntimeAdapter}>
           <I18nProvider service={i18nService}>
-            <ComposerWorkspaceProvider value={composerWorkspace}>
-              <AppShell
-                agentPresentation={agentPresentation}
-                initialConversation={initialConversation}
-                initialInput={initialInput}
-                presentation={presentation}
-              />
-            </ComposerWorkspaceProvider>
+            <DirectGenerationOperationProvider value={directGeneration}>
+              <ComposerWorkspaceProvider value={composerWorkspace}>
+                <AppShell
+                  agentPresentation={agentPresentation}
+                  initialConversation={initialConversation}
+                  initialInput={initialInput}
+                  presentation={presentation}
+                />
+              </ComposerWorkspaceProvider>
+            </DirectGenerationOperationProvider>
           </I18nProvider>
         </AgentHostRuntimeProvider>
       </AgentWebviewFoundationBoundary>

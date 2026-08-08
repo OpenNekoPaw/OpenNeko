@@ -15,6 +15,7 @@ import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-ho
 import { ASSISTANT_RESOURCE_HOST_CHANNEL } from '@neko/agent-contracts/assistant-resource-host';
 import { DESKTOP_WORKSPACE_GRANT_CHANNEL } from '@neko/host/desktop-workspace-grant-contract';
 import type { DesktopAppHost } from './app-host';
+import { DESKTOP_DIRECT_GENERATION_CHANNEL } from '../shared/generation-contract';
 
 export function registerDesktopIpc(
   appHost: DesktopAppHost,
@@ -56,6 +57,11 @@ export function registerDesktopIpc(
   );
   ipcMain.handle(AGENT_LAUNCH_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeAgentLaunchRequest(requireSender(event), payload),
+  );
+  ipcMain.handle(
+    DESKTOP_DIRECT_GENERATION_CHANNEL,
+    (event: IpcMainInvokeEvent, payload: unknown) =>
+      appHost.executeDirectGenerationRequest(requireSender(event), payload),
   );
   ipcMain.handle(ASSISTANT_RESOURCE_HOST_CHANNEL, (event: IpcMainInvokeEvent, payload: unknown) =>
     appHost.executeAssistantResourceRequest(requireSender(event), payload),
@@ -301,6 +307,7 @@ export function registerDesktopIpc(
       DESKTOP_AGENT_CHANNELS.bootstrapGet,
       DESKTOP_AGENT_CHANNELS.connectionDetach,
       AGENT_LAUNCH_HOST_CHANNEL,
+      DESKTOP_DIRECT_GENERATION_CHANNEL,
       ASSISTANT_RESOURCE_HOST_CHANNEL,
       DESKTOP_WORKSPACE_GRANT_CHANNEL,
       DESKTOP_AGENT_CHANNELS.messageSend,

@@ -82,6 +82,107 @@ describe('message-list-presenter', () => {
     expect(projection.items.at(-1)?.kind).toBe('execution_activity');
   });
 
+  it('lets a terminal assistant response override stale execution activity', () => {
+    const state = { phase: 'thinking' as const, startedAt: 1_000 };
+    const completedText = projectMessageList({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'Summarize this file',
+          timestamp: 1_000,
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Completed summary',
+          timestamp: 1_100,
+          isStreaming: false,
+        },
+      ],
+      agentState: state,
+      streamingMessageId: null,
+    });
+    const completedTextBlock = projectMessageList({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'Summarize this file',
+          timestamp: 1_000,
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '',
+          timestamp: 1_100,
+          contentBlocks: [
+            {
+              id: 'text-1',
+              type: 'text',
+              timestamp: 1_100,
+              content: 'Completed block summary',
+              isStreaming: false,
+            },
+          ],
+        },
+      ],
+      agentState: state,
+      streamingMessageId: null,
+    });
+
+    expect(completedText.showExecutionActivity).toBe(false);
+    expect(completedTextBlock.showExecutionActivity).toBe(false);
+  });
+
+  it('does not treat an empty assistant response as terminal', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          content: 'Summarize this file',
+          timestamp: 1_000,
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '   ',
+          timestamp: 1_100,
+          isStreaming: false,
+        },
+      ],
+      agentState: { phase: 'thinking', startedAt: 1_000 },
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
+  });
+
+  it('does not let a historical terminal response suppress a later turn activity', () => {
+    const projection = projectMessageList({
+      messages: [
+        {
+          id: 'historical-assistant',
+          role: 'assistant',
+          content: 'Earlier completed response',
+          timestamp: 1_000,
+          isStreaming: false,
+        },
+        {
+          id: 'current-user',
+          role: 'user',
+          content: 'Start another turn',
+          timestamp: 2_000,
+        },
+      ],
+      agentState: { phase: 'thinking', startedAt: 2_000 },
+      streamingMessageId: null,
+    });
+
+    expect(projection.showExecutionActivity).toBe(true);
+  });
+
   it('does not let a historical pending tool suppress a later turn activity', () => {
     const projection = projectMessageList({
       messages: [

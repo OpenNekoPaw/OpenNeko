@@ -263,34 +263,18 @@ describe('webview protocol parser', () => {
     ).toBeNull();
   });
 
-  it('accepts starting Character Dialogue from slash args without conversation scope', () => {
+  it('rejects the retired free-form Character Dialogue launch messages', () => {
     expect(
       parseAgentWebviewToHostMessage({
         type: 'startCharacterDialogueFromSlash',
         args: 'entity:char-xiaoju --roleplay',
       }),
-    ).toEqual({
-      type: 'startCharacterDialogueFromSlash',
-      args: 'entity:char-xiaoju --roleplay',
-    });
-  });
-
-  it('accepts an explicit roleplay Candidate confirmation with stable Search identity', () => {
+    ).toBeNull();
     expect(
       parseAgentWebviewToHostMessage({
         type: 'confirmRoleplayCandidate',
         projectSearchItemId: 'entity-projection:semantic-xiaoju',
         initialUserMessage: '你好，小橘',
-      }),
-    ).toEqual({
-      type: 'confirmRoleplayCandidate',
-      projectSearchItemId: 'entity-projection:semantic-xiaoju',
-      initialUserMessage: '你好，小橘',
-    });
-    expect(
-      parseAgentWebviewToHostMessage({
-        type: 'confirmRoleplayCandidate',
-        projectSearchItemId: '',
       }),
     ).toBeNull();
   });

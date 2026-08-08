@@ -138,6 +138,42 @@ describe('Desktop Agent bridge runtime', () => {
     ).rejects.toMatchObject({ code: 'desktop-agent-identity-mismatch' });
   });
 
+  it('resolves only the exact live Session connection identity', () => {
+    const runtime = createDesktopAgentBridgeRuntime({
+      controllerComposition: createComposition(createEffects()),
+      createIdentity: () => 'connection-exact',
+    });
+    const exactGrant = grant();
+    const projection = runtime.createBootstrap({
+      requestId: 'bootstrap-exact',
+      grant: exactGrant,
+      workspace: workspace(),
+      publish: vi.fn(),
+    });
+    if (projection.status !== 'ready') throw new Error('Expected a ready Agent bootstrap.');
+
+    expect(runtime.resolveExactConnection(projection.connection, exactGrant)).toBe(
+      projection.connection,
+    );
+    expect(() =>
+      runtime.resolveExactConnection(
+        { ...projection.connection, viewId: 'agent-view:stale' },
+        exactGrant,
+      ),
+    ).toThrow("Unknown or stale Desktop Agent connection 'connection-exact'");
+    expect(() =>
+      runtime.resolveExactConnection(projection.connection, {
+        ...exactGrant,
+        windowId: 'window-foreign',
+      }),
+    ).toThrow('does not match its sender-derived Window');
+
+    runtime.detachConnection(projection.connection, exactGrant);
+    expect(() => runtime.resolveExactConnection(projection.connection, exactGrant)).toThrow(
+      "Unknown or stale Desktop Agent connection 'connection-exact'",
+    );
+  });
+
   it('passes the persisted initial user message into the exact session effects owner', () => {
     const effects = createEffects();
     const createEffectsForSession = vi.fn(() => effects);
@@ -732,9 +768,8 @@ function createEffects(
       updateTabState: vi.fn(),
     },
     skill: {
-      listSkills: vi.fn(),
-      invokeSlashCommand: vi.fn(),
-      invokeSkill: vi.fn(),
+      readInputCatalog: vi.fn(),
+      invokeInput: vi.fn(),
       readContextTokenCount: vi.fn(),
       compressContext: vi.fn(),
     },

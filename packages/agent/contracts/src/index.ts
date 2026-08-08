@@ -10,13 +10,16 @@ export * from './agent-capability-activation';
 export * from './agent-context';
 export * from './agent-home';
 export * from './agent-image-transport';
+export * from './agent-availability';
+export * from './agent-interaction-binding';
 export * from './agent-launch';
 export * from './agent-launch-host';
+export * from './agent-model-catalog';
 export * from './agent-output-validation';
-export * from './agent-root-presentation';
 export * from './agent-conversation-context';
 export * from './assistant-resource-host';
 export * from './agent-draft-submit';
+export * from './agent-draft-mention-search';
 export * from './agent-token-budget';
 export * from './creative-ai-invocation';
 export * from './config';
@@ -155,14 +158,14 @@ export type { EnabledStateRecord } from './enabled-state';
 
 export type {
   AgentCommandCatalogEntry,
-  AgentCommandCatalogSource,
+  AgentInputBindingRequirement,
   AgentInputCatalogEntry,
-  AgentInputCatalogEntryBase,
+  AgentInputPhaseRequirement,
+  AgentInputSourceReceipt,
   AgentInputTriggerKind,
   AgentInputTriggerPrefix,
   AgentMentionCatalogEntry,
   AgentSkillInvocationCatalogEntry,
-  AgentSkillInvocationCatalogSource,
   ParsedAgentInputTrigger,
   ParseAgentInputTriggerOptions,
 } from './agent-input-trigger';
@@ -170,9 +173,12 @@ export {
   AGENT_INPUT_TRIGGER_PREFIXES,
   getAgentInputTriggerKind,
   getAgentInputTriggerPrefix,
+  isAgentInputCatalogEntryExecutable,
   isAgentInputTriggerBoundary,
   isAgentInputTriggerPrefix,
   normalizeAgentInputTriggerName,
+  parseAgentInputCatalog,
+  parseAgentInputCatalogEntry,
   parseAgentInputTrigger,
 } from './agent-input-trigger';
 export type {
@@ -456,11 +462,8 @@ export type {
   GetConversationSnapshotWebviewMessage,
   GlobalErrorMessage,
   HistoryClearedMessage,
-  InvokeSkillWebviewMessage,
   InjectContextMessage,
   InvokeAgentCapabilityLifecycleWebviewMessage,
-  InvokePluginSlashCommandWebviewMessage,
-  InvokeSlashCommandWebviewMessage,
   CanvasAuthoringHandoffDeclaredIntentHint,
   CanvasAuthoringMarkdownSourceFormat,
   CanvasAuthoringHandoffSourceFormat,
@@ -509,13 +512,15 @@ export type {
   RevealDocumentLocatorWebviewMessage,
   SettingsDataMessage,
   SettingsUpdatedMessage,
-  SkillsListMessage,
   SlashCommandResultMessage,
   SubAgentEventMessage,
   TabStateMessage,
   UpdateSettingsWebviewMessage,
   UpdateTabStateWebviewMessage,
   AgentWebviewToHostMessage,
+  AgentInputCatalogMessage,
+  GetAgentInputCatalogWebviewMessage,
+  InvokeAgentInputWebviewMessage,
 } from './webview-protocol';
 export type { AgentConfigDiagnostic, AgentConfigDiagnosticCode } from './config-diagnostic';
 export {
@@ -526,6 +531,7 @@ export {
   buildAgentStateSnapshotMessage,
   buildAgentCapabilityActivationProgressMessage,
   buildAgentCapabilityLifecycleResultMessage,
+  buildAgentInputCatalogMessage,
   buildAgentSessionDiagnosticMessage,
   buildConfigStateMessage,
   buildErrorMessage,
@@ -541,7 +547,6 @@ export {
   buildEmbodyCharacterSessionExitedMessage,
   buildEmbodyCharacterSessionStartedMessage,
   buildPluginCommandsMessage,
-  buildPluginSlashCommandInvocation,
   buildPluginsAvailableMessage,
   buildSubAgentEventMessage,
   buildTabStateMessage,
@@ -639,7 +644,6 @@ export * from './agent-capability';
 export * from './agent-observation';
 export * from './agent-profile';
 export * from './agent-runtime-scope';
-export * from './agent-root-presentation';
 export * from './agent-trace';
 export * from './decision-rationale';
 export * from './domain-routing';

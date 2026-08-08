@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentRootPresentation, SettingsState } from '@neko/agent-contracts';
+import type { AgentInteractionProjection, SettingsState } from '@neko/agent-contracts';
 import { AppShell } from './AppShell';
 
 vi.mock('./Header', () => ({
@@ -28,7 +28,7 @@ vi.mock('./ConversationController', () => ({
     initialConversation?: { readonly id: string; readonly title: string };
     initialInput?: { readonly id: string; readonly value: string };
     emptyStatePresentation?: 'default' | 'desktop-dock';
-    agentPresentation?: AgentRootPresentation;
+    agentPresentation?: AgentInteractionProjection;
     settings: SettingsState;
     setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
     setHasConfigSnapshot: React.Dispatch<React.SetStateAction<boolean>>;
@@ -37,7 +37,6 @@ vi.mock('./ConversationController', () => ({
     setMentionItems: unknown;
     mentionSearchFilter: string;
     setMentionSearchFilter: unknown;
-    pluginCommands: readonly unknown[];
     setPluginCommands: unknown;
     updateSettings: unknown;
     workItemsByConversation: unknown;
@@ -57,7 +56,7 @@ vi.mock('./ConversationController', () => ({
       <span data-testid="initial-input">{props.initialInput?.value ?? 'none'}</span>
       <span data-testid="agent-presentation">
         {props.agentPresentation
-          ? `${props.agentPresentation.kind}:${props.agentPresentation.scope.kind}`
+          ? `${props.agentPresentation.phase}:${props.agentPresentation.binding.kind}`
           : 'none'}
       </span>
       <span
@@ -68,9 +67,6 @@ vi.mock('./ConversationController', () => ({
           Array.isArray(props.mentionItems) &&
             typeof props.setMentionItems === 'function' &&
             typeof props.setMentionSearchFilter === 'function',
-        )}
-        data-commands={String(
-          Array.isArray(props.pluginCommands) && typeof props.setPluginCommands === 'function',
         )}
         data-settings={String(typeof props.updateSettings === 'function')}
         data-work-items={String(
@@ -203,7 +199,6 @@ describe('AppShell onboarding lifecycle', () => {
       'data-config',
       'data-files',
       'data-mentions',
-      'data-commands',
       'data-settings',
       'data-work-items',
       'data-plugins',
@@ -217,9 +212,10 @@ describe('AppShell onboarding lifecycle', () => {
     render(
       <AppShell
         agentPresentation={{
-          kind: 'draft',
+          phase: 'draft',
           draftId: 'draft-1',
-          scope: { kind: 'assistant', assistantSpaceId: 'assistant:1' },
+          binding: { kind: 'assistant', assistantSpaceId: 'assistant:1', baseGrantIds: [] },
+          bindingReceipt: null,
         }}
         presentation="desktop-dock"
       />,
@@ -229,7 +225,6 @@ describe('AppShell onboarding lifecycle', () => {
     const wiring = screen.getByTestId('controller-capability-wiring');
     expect(wiring.getAttribute('data-config')).toBe('true');
     expect(wiring.getAttribute('data-files')).toBe('true');
-    expect(wiring.getAttribute('data-commands')).toBe('true');
     expect(wiring.getAttribute('data-plugins')).toBe('true');
   });
 });

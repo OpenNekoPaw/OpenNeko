@@ -1,4 +1,8 @@
 import {
+  parseAgentDraftMentionSearchProjection,
+  type AgentDraftMentionSearchProjection,
+} from './agent-draft-mention-search';
+import {
   parseAgentLaunchCatalogProjection,
   parseAgentLaunchConnectionIdentity,
   type AgentLaunchCatalogProjection,
@@ -6,32 +10,62 @@ import {
   type AgentLaunchResourceKind,
 } from './agent-launch';
 import {
-  parseAgentAuthorityScopeProjection,
-  type AgentAuthorityScopeProjection,
-} from './agent-root-presentation';
-import {
   parseAgentDraftSubmitInput,
   parseAgentDraftSubmitProjection,
   type AgentDraftSubmitInput,
   type AgentDraftSubmitProjection,
 } from './agent-draft-submit';
+import {
+  parseAgentDomainBinding,
+  parseAgentDraftInteractionProjection,
+  type AgentDomainBinding,
+  type AgentDraftInteractionProjection,
+} from './agent-interaction-binding';
+import {
+  parseAgentConfigurationRequest,
+  type AgentConfigurationRequest,
+} from './agent-model-catalog';
 
 export const AGENT_LAUNCH_HOST_CHANNEL = 'neko:agent:launch' as const;
 
 export type AgentLaunchHostRequest =
   | {
       readonly requestId: string;
+      readonly operation: 'bind-assistant';
+      readonly connection: AgentLaunchConnectionIdentity;
+    }
+  | {
+      readonly requestId: string;
+      readonly operation: 'bind-target';
+      readonly connection: AgentLaunchConnectionIdentity;
+      readonly binding: AgentDomainBinding;
+    }
+  | {
+      readonly requestId: string;
       readonly operation: 'attach';
       readonly workbenchInstanceId: string;
       readonly agentSurfaceId: string;
       readonly viewId: string;
-      readonly scope: AgentAuthorityScopeProjection;
+      readonly draft: AgentDraftInteractionProjection;
     }
   | {
       readonly requestId: string;
       readonly operation: 'authorize-resource';
       readonly connection: AgentLaunchConnectionIdentity;
       readonly resourceKind: AgentLaunchResourceKind;
+    }
+  | {
+      readonly requestId: string;
+      readonly operation: 'update-configuration';
+      readonly connection: AgentLaunchConnectionIdentity;
+      readonly configuration: AgentConfigurationRequest;
+    }
+  | {
+      readonly requestId: string;
+      readonly operation: 'search-workspace-mentions';
+      readonly connection: AgentLaunchConnectionIdentity;
+      readonly bindingReceiptId: string;
+      readonly filter: string;
     }
   | {
       readonly requestId: string;
@@ -59,6 +93,11 @@ export type AgentLaunchHostResult =
       readonly requestId: string;
       readonly status: 'committed';
       readonly projection: AgentDraftSubmitProjection;
+    }
+  | {
+      readonly requestId: string;
+      readonly status: 'mentions';
+      readonly projection: AgentDraftMentionSearchProjection;
     };
 
 export interface OpenNekoAgentLaunchBridge {
@@ -67,12 +106,26 @@ export interface OpenNekoAgentLaunchBridge {
       workbenchInstanceId: string,
       agentSurfaceId: string,
       viewId: string,
-      scope: AgentAuthorityScopeProjection,
+      draft: AgentDraftInteractionProjection,
     ): Promise<AgentLaunchCatalogProjection>;
     authorizeResource(
       connection: AgentLaunchConnectionIdentity,
       resourceKind: AgentLaunchResourceKind,
     ): Promise<AgentLaunchCatalogProjection | undefined>;
+    bindTarget(
+      connection: AgentLaunchConnectionIdentity,
+      binding: AgentDomainBinding,
+    ): Promise<AgentLaunchCatalogProjection>;
+    bindAssistant(connection: AgentLaunchConnectionIdentity): Promise<AgentLaunchCatalogProjection>;
+    updateConfiguration(
+      connection: AgentLaunchConnectionIdentity,
+      configuration: AgentConfigurationRequest,
+    ): Promise<AgentLaunchCatalogProjection>;
+    searchWorkspaceMentions(
+      connection: AgentLaunchConnectionIdentity,
+      bindingReceiptId: string,
+      filter: string,
+    ): Promise<AgentDraftMentionSearchProjection>;
     submitDraft(
       connection: AgentLaunchConnectionIdentity,
       input: AgentDraftSubmitInput,
@@ -91,7 +144,7 @@ export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequ
       'workbenchInstanceId',
       'agentSurfaceId',
       'viewId',
-      'scope',
+      'draft',
     ]);
     return {
       requestId,
@@ -99,7 +152,7 @@ export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequ
       workbenchInstanceId: requireIdentity(record['workbenchInstanceId'], 'Workbench'),
       agentSurfaceId: requireIdentity(record['agentSurfaceId'], 'Agent Surface'),
       viewId: requireIdentity(record['viewId'], 'View'),
-      scope: parseAgentAuthorityScopeProjection(record['scope']),
+      draft: parseAgentDraftInteractionProjection(record['draft']),
     };
   }
   if (record['operation'] === 'authorize-resource') {
@@ -110,6 +163,51 @@ export function parseAgentLaunchHostRequest(value: unknown): AgentLaunchHostRequ
       operation: 'authorize-resource',
       connection: parseAgentLaunchConnectionIdentity(record['connection']),
       resourceKind,
+    };
+  }
+  if (record['operation'] === 'update-configuration') {
+    requireExactKeys(record, ['requestId', 'operation', 'connection', 'configuration']);
+    return {
+      requestId,
+      operation: 'update-configuration',
+      connection: parseAgentLaunchConnectionIdentity(record['connection']),
+      configuration: parseAgentConfigurationRequest(record['configuration']),
+    };
+  }
+  if (record['operation'] === 'bind-target') {
+    requireExactKeys(record, ['requestId', 'operation', 'connection', 'binding']);
+    return {
+      requestId,
+      operation: 'bind-target',
+      connection: parseAgentLaunchConnectionIdentity(record['connection']),
+      binding: parseAgentDomainBinding(record['binding']),
+    };
+  }
+  if (record['operation'] === 'bind-assistant') {
+    requireExactKeys(record, ['requestId', 'operation', 'connection']);
+    return {
+      requestId,
+      operation: 'bind-assistant',
+      connection: parseAgentLaunchConnectionIdentity(record['connection']),
+    };
+  }
+  if (record['operation'] === 'search-workspace-mentions') {
+    requireExactKeys(record, [
+      'requestId',
+      'operation',
+      'connection',
+      'bindingReceiptId',
+      'filter',
+    ]);
+    if (typeof record['filter'] !== 'string') {
+      throw new Error('Agent launch Host mention search filter must be a string.');
+    }
+    return {
+      requestId,
+      operation: 'search-workspace-mentions',
+      connection: parseAgentLaunchConnectionIdentity(record['connection']),
+      bindingReceiptId: requireIdentity(record['bindingReceiptId'], 'binding receipt'),
+      filter: record['filter'],
     };
   }
   if (record['operation'] === 'submit-draft') {
@@ -161,6 +259,14 @@ export function parseAgentLaunchHostResult(
       requestId,
       status: 'committed',
       projection: parseAgentDraftSubmitProjection(record['projection']),
+    };
+  }
+  if (record['status'] === 'mentions') {
+    requireExactKeys(record, ['requestId', 'status', 'projection']);
+    return {
+      requestId,
+      status: 'mentions',
+      projection: parseAgentDraftMentionSearchProjection(record['projection']),
     };
   }
   throw new Error(`Unknown Agent launch Host result '${String(record['status'])}'.`);

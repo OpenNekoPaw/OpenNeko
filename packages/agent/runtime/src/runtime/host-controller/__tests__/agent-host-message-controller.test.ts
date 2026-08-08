@@ -35,9 +35,8 @@ function createEffects(): AgentHostControllerEffectPorts {
       updateTabState: vi.fn(),
     },
     skill: {
-      listSkills: vi.fn(),
-      invokeSlashCommand: vi.fn(),
-      invokeSkill: vi.fn(),
+      readInputCatalog: vi.fn(),
+      invokeInput: vi.fn(),
       readContextTokenCount: vi.fn(),
       compressContext: vi.fn(),
     },
@@ -80,11 +79,14 @@ describe('Agent Host message controller', () => {
     const controller = createAgentHostMessageController(effects, context);
 
     expect(controller.identity).toBe(context.identity);
-    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(39);
+    expect(AGENT_SHARED_CONTROLLER_ROUTE_TYPES).toHaveLength(38);
 
     await controller.tryHandle({ type: 'getConversations' });
     await controller.tryHandle({ type: 'getConfig' });
-    await controller.tryHandle({ type: 'getSkills' });
+    await controller.tryHandle({
+      type: 'getAgentInputCatalog',
+      conversationId: 'conversation-1',
+    });
     await controller.tryHandle({
       type: 'openFile',
       contentLocator: { kind: 'workspace-file', path: 'docs/readme.md' },
@@ -96,7 +98,7 @@ describe('Agent Host message controller', () => {
 
     expect(effects.conversation.listConversations).toHaveBeenCalledWith(context);
     expect(effects.config.readConfig).toHaveBeenCalledWith(context);
-    expect(effects.skill.listSkills).toHaveBeenCalledWith(context);
+    expect(effects.skill.readInputCatalog).toHaveBeenCalledWith('conversation-1', context);
     expect(effects.content.openFile).toHaveBeenCalledWith(
       {
         contentLocator: { kind: 'workspace-file', path: 'docs/readme.md' },
@@ -134,7 +136,7 @@ describe('Agent Host message controller', () => {
     const controller = createAgentHostMessageController(effects, createContext());
 
     await expect(controller.tryHandle({ type: 'getConfig' })).rejects.toBe(failure);
-    expect(effects.skill.listSkills).not.toHaveBeenCalled();
+    expect(effects.skill.readInputCatalog).not.toHaveBeenCalled();
     expect(effects.content.openFile).not.toHaveBeenCalled();
   });
 });

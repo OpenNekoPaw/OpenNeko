@@ -40,6 +40,20 @@ describe('Desktop renderer styles', () => {
     );
   });
 
+  it('uses one typography size for primary navigation directory entries', () => {
+    const groupHeadingRule = styles.match(
+      /\.primary-conversation-group__standalone-heading\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const expandRule = styles.match(
+      /\.primary-conversation-group__expand\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(styles).toMatch(/\.home-project-link\s*\{[^}]*font-size\s*:\s*11px/u);
+    expect(groupHeadingRule?.groups?.body).toMatch(/font-size\s*:\s*11px/u);
+    expect(expandRule?.groups?.body).toMatch(/font\s*:\s*inherit/u);
+    expect(expandRule?.groups?.body).toMatch(/font-size\s*:\s*11px/u);
+  });
+
   it('uses icon-only status markers and reveals stable row actions on hover or focus', () => {
     const statusRule = styles.match(/\.home-conversation-status\s*\{(?<body>[\s\S]*?)\n\}/u);
     const unavailableRule = styles.match(

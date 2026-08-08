@@ -435,7 +435,7 @@ describe('MessageList auto-scroll lifecycle', () => {
   it('renders temporary execution activity inside the transcript and removes it at idle', () => {
     virtualItems = [{ index: 1, key: 'execution-activity', start: 80 }];
     const props = {
-      messages: [createMessage('message-1')],
+      messages: [{ ...createMessage('message-1'), role: 'user' as const }],
       isThinking: true,
       streamingMessageId: null,
       activeConversationId: 'conv-1',
@@ -458,6 +458,25 @@ describe('MessageList auto-scroll lifecycle', () => {
         <MessageList {...props} isThinking={false} agentState={null} />
       </MessageActionsProvider>,
     );
+    expect(screen.queryByRole('status', { name: 'Agent execution in progress' })).toBeNull();
+  });
+
+  it('does not render execution activity after the final assistant response is visible', () => {
+    virtualItems = [{ index: 0, key: 'completed-response', start: 0 }];
+
+    const { container } = renderWithI18n(
+      <MessageActionsProvider>
+        <MessageList
+          messages={[createMessage('completed-response')]}
+          isThinking
+          streamingMessageId={null}
+          activeConversationId="conv-1"
+          agentState={{ phase: 'thinking', startedAt: Date.now() }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(container.querySelector('.agent-message-row')).toBeTruthy();
     expect(screen.queryByRole('status', { name: 'Agent execution in progress' })).toBeNull();
   });
 

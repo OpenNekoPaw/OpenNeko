@@ -13,10 +13,16 @@ import type { AgentWorkspaceRuntime } from '@neko/agent-runtime/application';
 import { auditDesktopAgentStartup } from './desktop-agent-bridge-runtime';
 import {
   createAgentControllerComposition,
+  projectAgentConfigurationPolicy,
   projectAgentSecretSafeConfig,
+  resolveAgentConversationTurnContext,
 } from '@neko/agent-runtime/application';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
-import type { AssistantRuntimeSettingsPort } from '@neko/host/settings';
+import {
+  ConfigManager,
+  FileUserConfigManager,
+  type AssistantRuntimeSettingsPort,
+} from '@neko/host/settings';
 
 const temporaryRoots: string[] = [];
 
@@ -27,6 +33,57 @@ afterEach(async () => {
 });
 
 describe('Agent controller composition', () => {
+  it('resolves Session file locators through the exact Conversation binding', async () => {
+    const resolve = vi.fn(async () => [
+      {
+        type: 'file' as const,
+        id: 'file:brief',
+        label: 'brief.md',
+        summary: 'Workspace file: brief.md',
+        data: { text: 'brief contents' },
+      },
+    ]);
+    const context = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    };
+    const references = [
+      {
+        id: 'file:brief',
+        label: 'brief.md',
+        contentLocator: { kind: 'workspace-file' as const, path: 'docs/brief.md' },
+        mediaType: 'text' as const,
+      },
+    ];
+
+    await expect(
+      resolveAgentConversationTurnContext({
+        resolver: { resolve },
+        conversationId: 'conversation-1',
+        context,
+        contextPayloads: [
+          {
+            type: 'entity',
+            id: 'entity-1',
+            label: 'Entity 1',
+            summary: 'Explicit entity context',
+            data: {},
+          },
+        ],
+        fileReferences: references,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({ id: 'entity-1' }),
+      expect.objectContaining({ id: 'file:brief', data: { text: 'brief contents' } }),
+    ]);
+    expect(resolve).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      context,
+      references,
+    });
+  });
+
   it('checkpoints the initial message when provider preflight fails before a Pi turn starts', async () => {
     const workspace = createWorkspace();
     await workspace.createConversation('conversation-1');
@@ -34,7 +91,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
-      runtimeSettings: createRuntimeSettings(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -58,11 +115,15 @@ describe('Agent controller composition', () => {
         conversationId: 'conversation-1',
         turnId: 'turn-1',
         messageText: 'retain this prompt',
-        providerId: 'provider-missing',
-        modelId: 'model-missing',
+        configuration: missingTurnConfiguration('conversation-1', 'turn-1'),
+        context: {
+          kind: 'workspace',
+          workspaceId: workspace.workspaceId,
+          workspaceGrantId: 'workspace-grant-1',
+        },
         locale: 'en',
       }),
-    ).rejects.toThrow('Effective Agent configuration is blocked: missingConfig');
+    ).rejects.toThrow("model 'provider-missing:model-missing' is stale or unavailable");
     expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
       turnId: 'turn-1',
@@ -78,7 +139,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
-      runtimeSettings: createRuntimeSettings(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -104,11 +165,15 @@ describe('Agent controller composition', () => {
         conversationId: 'conversation-bound-port',
         turnId: 'turn-bound-port',
         messageText: 'retain this prompt',
-        providerId: 'provider-missing',
-        modelId: 'model-missing',
+        configuration: missingTurnConfiguration('conversation-bound-port', 'turn-bound-port'),
+        context: {
+          kind: 'workspace',
+          workspaceId: workspace.workspaceId,
+          workspaceGrantId: 'workspace-grant-1',
+        },
         locale: 'en',
       }),
-    ).rejects.toThrow('Effective Agent configuration is blocked: missingConfig');
+    ).rejects.toThrow("model 'provider-missing:model-missing' is stale or unavailable");
     expect(workspace.checkpointFailedInitialTurn).toHaveBeenCalledWith({
       conversationId: 'conversation-bound-port',
       turnId: 'turn-bound-port',
@@ -124,7 +189,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
-      runtimeSettings: createRuntimeSettings(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -220,7 +285,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
-      runtimeSettings: createRuntimeSettings(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -265,7 +330,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
-      runtimeSettings: createRuntimeSettings(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -394,7 +459,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
-      runtimeSettings: createRuntimeSettings(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -570,7 +635,7 @@ describe('Agent controller composition', () => {
       host: createHost(),
       userHome: '/Users/fixture',
       credentialRuntime: createCredentialRuntime(),
-      runtimeSettings: createRuntimeSettings(),
+      resolveWorkspaceConfig: createWorkspaceConfigResolver(),
       resources: {
         registerFile: vi.fn(async () => ({
           url: 'openneko://resource/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -658,11 +723,11 @@ function createWorkspace(
     createdAt: string;
     updatedAt: string;
   }> = [];
-  const createConversation = vi.fn(async (conversationId: string) => {
+  const createConversation = vi.fn(async (conversationId: string, title = 'New conversation') => {
     records.push({
       workspaceId: 'workspace-1',
       conversationId,
-      title: 'New conversation',
+      title,
       activeBranchId: 'main',
       createdAt: '2026-07-28T00:00:00.000Z',
       updatedAt: '2026-07-28T00:00:00.000Z',
@@ -704,9 +769,9 @@ function createWorkspace(
     }),
     tools: createToolRegistry(),
     createConversation,
-    ensureConversation: vi.fn(async (conversationId: string) => {
+    ensureConversation: vi.fn(async (conversationId: string, title: string) => {
       if (!records.some((record) => record.conversationId === conversationId)) {
-        await createConversation(conversationId);
+        await createConversation(conversationId, title);
       }
     }),
     checkpointFailedInitialTurn: vi.fn(async () => undefined),
@@ -871,5 +936,43 @@ function createRuntimeSettings(): AssistantRuntimeSettingsPort {
       settings = {};
     },
     diagnostic: () => undefined,
+  };
+}
+
+function createWorkspaceConfigResolver(): () => ConfigManager {
+  const config = new ConfigManager({
+    userConfigManager: new FileUserConfigManager({
+      filePath: '/fixture/nonexistent/config.toml',
+    }),
+    assistantRuntimeSettings: createRuntimeSettings(),
+  });
+  return () => config;
+}
+
+function missingTurnConfiguration(conversationId: string, turnId: string) {
+  const request = {
+    modelCatalogEntryId: 'provider-missing:model-missing',
+    providerId: 'provider-missing',
+    modelId: 'model-missing',
+    executionMode: 'ask' as const,
+    temperature: 0.7,
+    maximumOutputTokens: 4096,
+    thinkingBudget: 0,
+  };
+  return {
+    conversationId,
+    turnId,
+    request,
+    projection: projectAgentConfigurationPolicy({
+      models: [],
+      request,
+      source: 'draft-request',
+      defaults: {
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
+      },
+    }),
   };
 }

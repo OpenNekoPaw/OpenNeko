@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_LAUNCH_HOST_CHANNEL } from '@neko/agent-contracts/agent-launch-host';
 import { DESKTOP_AGENT_CHANNELS } from '../shared/agent-contract';
+import { projectAgentConfigurationPolicy } from '@neko/agent-runtime/application';
 
 const electron = vi.hoisted(() => ({
   bridge: undefined as typeof window.openNekoDesktop | undefined,
@@ -68,8 +69,10 @@ describe('Desktop Agent launch preload bridge', () => {
 
     await expect(
       bridge.agentLaunch.attach('workbench-1', 'agent-surface-1', 'agent-view:window-1', {
-        kind: 'assistant',
-        assistantSpaceId: 'assistant:1',
+        phase: 'draft',
+        draftId: 'draft:entry',
+        binding: { kind: 'assistant', assistantSpaceId: 'assistant:1', baseGrantIds: [] },
+        bindingReceipt: null,
       }),
     ).resolves.toEqual(createCatalog());
   });
@@ -96,6 +99,82 @@ describe('Desktop Agent launch preload bridge', () => {
       operation: 'detach',
       connection: catalog.connection,
     });
+  });
+
+  it('forwards an exact Draft target binding through the typed launch channel', async () => {
+    const catalog = createCatalog();
+    electron.invoke.mockImplementation(
+      async (
+        channel: string,
+        request: { readonly requestId: string; readonly operation: string },
+      ) => {
+        expect(channel).toBe(AGENT_LAUNCH_HOST_CHANNEL);
+        expect(request).toMatchObject({
+          operation: 'bind-target',
+          connection: catalog.connection,
+          binding: {
+            kind: 'workspace',
+            workspaceId: 'workspace-1',
+            workspaceGrantId: 'workspace-grant-1',
+          },
+        });
+        return { requestId: request.requestId, status: 'ready', catalog };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(
+      bridge.agentLaunch.bindTarget(catalog.connection, {
+        kind: 'workspace',
+        workspaceId: 'workspace-1',
+        workspaceGrantId: 'workspace-grant-1',
+      }),
+    ).resolves.toEqual(catalog);
+  });
+
+  it('forwards Workspace mention search with the exact binding receipt', async () => {
+    const catalog = createCatalog();
+    const projection = {
+      bindingReceiptId: 'binding:launch-1',
+      filter: 'hero',
+      files: [
+        {
+          locator: { kind: 'workspace-file' as const, path: 'hero.md' },
+          name: 'hero.md',
+          type: 'file' as const,
+          referenceReceipt: {
+            catalogEntryId: 'mention:hero',
+            referenceId: 'workspace-reference:hero',
+            ownerKind: 'workspace' as const,
+            ownerId: 'workspace-1',
+            bindingReceiptId: 'binding:launch-1',
+          },
+        },
+      ],
+      mentionExtras: [],
+    };
+    electron.invoke.mockImplementation(
+      async (
+        channel: string,
+        request: { readonly requestId: string; readonly operation: string },
+      ) => {
+        expect(channel).toBe(AGENT_LAUNCH_HOST_CHANNEL);
+        expect(request).toMatchObject({
+          operation: 'search-workspace-mentions',
+          connection: catalog.connection,
+          bindingReceiptId: 'binding:launch-1',
+          filter: 'hero',
+        });
+        return { requestId: request.requestId, status: 'mentions', projection };
+      },
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(
+      bridge.agentLaunch.searchWorkspaceMentions(catalog.connection, 'binding:launch-1', 'hero'),
+    ).resolves.toEqual(projection);
   });
 
   it('keeps queued session events valid until exact Main detach completes', async () => {
@@ -169,13 +248,41 @@ function createCatalog() {
       workbenchInstanceId: 'workbench-1',
       agentSurfaceId: 'agent-surface-1',
       viewId: 'agent-view:window-1',
+      draftId: 'draft:entry',
       connectionId: 'launch-1',
-      scope: { kind: 'assistant' as const, assistantSpaceId: 'assistant:1' },
+    },
+    interaction: {
+      phase: 'draft' as const,
+      draftId: 'draft:entry',
+      binding: {
+        kind: 'assistant' as const,
+        assistantSpaceId: 'assistant:1',
+        baseGrantIds: [],
+      },
+      bindingReceipt: {
+        bindingReceiptId: 'binding:launch-1',
+        draftId: 'draft:entry',
+        connectionId: 'launch-1',
+        binding: {
+          kind: 'assistant' as const,
+          assistantSpaceId: 'assistant:1',
+          baseGrantIds: [],
+        },
+      },
     },
     models: [],
-    commands: [],
-    skills: [],
-    resources: [],
+    configuration: projectAgentConfigurationPolicy({
+      models: [],
+      request: null,
+      source: 'global-default',
+      defaults: {
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
+      },
+    }),
+    inputs: [],
   };
 }
 

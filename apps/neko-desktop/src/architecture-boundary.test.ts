@@ -80,6 +80,28 @@ describe('Desktop architecture boundaries', () => {
     expect(composition).not.toMatch(/\bactiveConversation(?:Id)?\b/u);
   });
 
+  it('delegates Agent launch policy and first submit to package application services', () => {
+    const mainRoot = path.join(sourceRoot, 'main');
+    const application = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');
+    const appHost = readFileSync(path.join(mainRoot, 'app-host.ts'), 'utf8');
+    const launchRuntime = readFileSync(
+      path.join(mainRoot, 'desktop-agent-launch-runtime.ts'),
+      'utf8',
+    );
+
+    expect(application).toContain('createAgentLaunchDraftSubmissionApplicationService');
+    expect(launchRuntime).toContain('createAgentLaunchApplicationService');
+    expect(launchRuntime).toContain('projectAgentLaunchBaseCatalog');
+    expect(appHost).toContain('this.agentLaunchSubmission.submit');
+    expect(appHost).not.toContain('projectAgentLaunchBaseCatalog');
+    expect(appHost).not.toContain('createAgentLaunchApplicationService');
+    for (const source of [appHost, launchRuntime]) {
+      expect(source).not.toMatch(/\b(?:active|current|recent|first)Project\b/u);
+      expect(source).not.toMatch(/\btryNext\b/u);
+      expect(source).not.toMatch(/\b(?:merge|resolve)Model/u);
+    }
+  });
+
   it('keeps provider credentials in Host secret and protected native UI boundaries', () => {
     const mainRoot = path.join(sourceRoot, 'main');
     const application = readFileSync(path.join(mainRoot, 'index.ts'), 'utf8');

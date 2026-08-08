@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentConfigurationPolicyProjection } from '@neko/agent-contracts';
 import { projectAmbientCanvasContext, projectInputAreaUi } from '../input-area-presenter';
 
 describe('input area presenter', () => {
-  it('hides creative authoring controls for Character Dialogue conversations', () => {
+  it('uses projected Character policy to hide unavailable configuration controls', () => {
     expect(
       projectInputAreaUi({
         inputValue: 'hello',
@@ -14,6 +15,7 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'character-dialogue',
+        configurationPolicy: characterConfigurationPolicy(),
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
@@ -150,7 +152,7 @@ describe('input area presenter', () => {
     );
   });
 
-  it('hides creative authoring controls for Embody Character conversations', () => {
+  it('uses the same projected policy for Embody Character configuration controls', () => {
     expect(
       projectInputAreaUi({
         inputValue: '',
@@ -162,6 +164,7 @@ describe('input area presenter', () => {
         disabled: false,
         sessionMode: 'agent',
         conversationKind: 'embody-character',
+        configurationPolicy: characterConfigurationPolicy(),
         currentSessionMediaModelCount: 0,
       }),
     ).toEqual(
@@ -205,3 +208,21 @@ describe('input area presenter', () => {
     });
   });
 });
+
+function characterConfigurationPolicy(): AgentConfigurationPolicyProjection {
+  const unavailable = {
+    status: 'unavailable' as const,
+    owner: 'character-version-lin',
+    reason: 'Character policy does not expose this configuration field.',
+  };
+  return {
+    request: null,
+    fields: {
+      model: { effectiveValue: null, source: 'domain-policy', policy: unavailable },
+      executionMode: { effectiveValue: null, source: 'domain-policy', policy: unavailable },
+      temperature: { effectiveValue: null, source: 'domain-policy', policy: unavailable },
+      maximumOutputTokens: { effectiveValue: null, source: 'domain-policy', policy: unavailable },
+      thinkingBudget: { effectiveValue: null, source: 'domain-policy', policy: unavailable },
+    },
+  };
+}

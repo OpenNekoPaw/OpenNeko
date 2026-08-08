@@ -75,7 +75,7 @@ class DefaultPersonalSkillManager implements PersonalSkillManager {
           isTrusted: () => true,
           isEnabled: () => true,
         },
-      }).discover([{ path: stagingRoot, source: { kind: 'personal' } }]);
+      }).discover([{ path: stagingRoot, source: { kind: 'personal' }, entryPointKind: 'skill' }]);
       if (
         snapshot.records.length !== 1 ||
         snapshot.diagnostics.length > 0 ||

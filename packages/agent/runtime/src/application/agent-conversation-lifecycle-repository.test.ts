@@ -9,6 +9,7 @@ import {
   createPersistentAgentConversationLifecycleRepository,
   initializeAgentConversationLifecycleTables,
 } from './agent-conversation-lifecycle-repository';
+import { projectAgentConfigurationPolicy } from './agent-launch-service';
 
 const roots: string[] = [];
 
@@ -66,10 +67,37 @@ describe('persistent Agent conversation lifecycle repository', () => {
 
     await expect(
       fixture.repository.readConversationContext('conversation:invalid'),
-    ).rejects.toThrow("unknown field 'unexpectedField'");
+    ).rejects.toThrow("unsupported field 'unexpectedField'");
     await expect(fixture.repository.readConversationContext(valid.conversationId)).resolves.toEqual(
       valid.context,
     );
+    await fixture.store.dispose();
+  });
+
+  it('restores independent future-turn configuration without changing the Turn snapshot', async () => {
+    const fixture = await createFixture();
+    const first = createRecord('conversation:first', 'request:first', 'turn:first');
+    const second = createRecord('conversation:second', 'request:second', 'turn:second');
+    await fixture.repository.commitFirstSubmit(first);
+    await fixture.repository.commitFirstSubmit(second);
+    const replacementConfiguration = createRecord(
+      'conversation:first',
+      'request:replacement',
+      'turn:replacement',
+      'anthropic',
+      'claude-sonnet-4',
+    ).configuration;
+
+    await fixture.repository.updateConfiguration('conversation:first', replacementConfiguration);
+    const replacement = createPersistentAgentConversationLifecycleRepository({
+      metadataStore: fixture.store,
+    });
+
+    await expect(replacement.readConversation('conversation:first')).resolves.toMatchObject({
+      configuration: { request: { providerId: 'anthropic', modelId: 'claude-sonnet-4' } },
+      pendingTurn: { configuration: { request: { providerId: 'openai', modelId: 'gpt-5' } } },
+    });
+    await expect(replacement.readConversation('conversation:second')).resolves.toEqual(second);
     await fixture.store.dispose();
   });
 
@@ -121,7 +149,41 @@ function createRecord(
   conversationId: string,
   requestId: string,
   turnId: string,
+  providerId = 'openai',
+  modelId = 'gpt-5',
 ): AgentConversationLifecycleRecord {
+  const request = {
+    modelCatalogEntryId: `${providerId}:${modelId}`,
+    providerId,
+    modelId,
+    executionMode: 'ask' as const,
+    temperature: 0.7,
+    maximumOutputTokens: 4096,
+    thinkingBudget: 0,
+  };
+  const projection = projectAgentConfigurationPolicy({
+    models: [
+      {
+        id: request.modelCatalogEntryId,
+        label: 'GPT-5',
+        providerId: request.providerId,
+        modelId: request.modelId,
+        modelType: 'llm',
+        contextWindow: 128_000,
+        maximumOutputTokens: 16_384,
+        purposeCapabilities: ['agent.main'],
+        availability: { status: 'available' },
+      },
+    ],
+    request,
+    source: 'conversation',
+    defaults: {
+      executionMode: 'ask',
+      temperature: 0.7,
+      maximumOutputTokens: 4096,
+      thinkingBudget: 0,
+    },
+  });
   return {
     conversationId,
     context: {
@@ -130,9 +192,19 @@ function createRecord(
       baseGrantIds: [],
     },
     createdAt: '2026-08-03T00:00:00.000Z',
-    initialMessage: { messageId: `message:${conversationId}`, text: 'Hello', resourceGrantIds: [] },
-    configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
-    pendingTurn: { requestId, turnId, status: 'pending' },
+    initialInput: {
+      messageId: `message:${conversationId}`,
+      intent: { kind: 'message', text: 'Hello' },
+      references: [],
+      resourceGrantIds: [],
+    },
+    configuration: { conversationId, request, projection },
+    pendingTurn: {
+      requestId,
+      turnId,
+      status: 'pending',
+      configuration: { conversationId, turnId, request, projection },
+    },
     scratchArtifacts: [],
   };
 }

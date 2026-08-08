@@ -76,6 +76,11 @@ describe('Header', () => {
             label: 'Xiaoju',
             description: 'Confirmed character',
             entityType: 'character',
+            navigationData: {
+              characterId: 'char-xiaoju',
+              characterVersionId: 'character-version-xiaoju',
+              roleProfileId: 'role-profile-xiaoju',
+            },
           },
           {
             id: 'entity:entity-projection:semantic-ling',
@@ -123,7 +128,7 @@ describe('Header', () => {
     expect(trigger.getAttribute('class')).toContain('is-active');
     expect(screen.getByRole('menu')).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /Xiaoju/ })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /Ling/ }).textContent).toContain('Confirm');
+    expect(screen.queryByRole('menuitem', { name: /Ling/ })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: /Roof/ })).toBeNull();
 
     fireEvent.mouseDown(document.body);

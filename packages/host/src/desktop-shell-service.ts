@@ -66,7 +66,7 @@ import type {
   DesktopWorkspaceGrantAuthorityPort,
   DesktopWorkspaceGrantResolution,
 } from './desktop-workspace-grant-authority';
-import type { AgentConversationContext } from '@neko/agent-contracts';
+import type { AgentBoundDomainBinding } from '@neko/agent-contracts';
 
 const UNAVAILABLE_DOMAIN_CAPABILITIES: readonly DesktopDomainCapabilityProjection[] = [
   unavailableDomain('agent', 'P1.3'),
@@ -542,7 +542,7 @@ export class DesktopShellService {
     readonly rendererSessionId: string;
     readonly agentViewId: string;
     readonly draftId: string;
-    readonly context: AgentConversationContext;
+    readonly context: AgentBoundDomainBinding;
     readonly conversationId: string;
   }): Promise<DesktopWorkbenchSceneProjection> {
     return this.enqueue(async () => {
@@ -652,7 +652,7 @@ export class DesktopShellService {
 
   async restoreAgentConversation(input: {
     readonly request: DesktopSceneTransitionRequest;
-    readonly context: AgentConversationContext;
+    readonly context: AgentBoundDomainBinding;
   }): Promise<DesktopSceneTransitionResult> {
     const request = parseDesktopSceneTransitionRequest(input.request);
     if (request.intent.kind !== 'restore-conversation') {
@@ -691,6 +691,13 @@ export class DesktopShellService {
           request,
           homeConversation.navigation.owner.kind,
           homeConversation.unavailable.message,
+        );
+      }
+      if (context.kind === 'character' || context.kind === 'world') {
+        return unavailableConversationSceneTransition(
+          request,
+          context.kind,
+          `Desktop ${context.kind} Conversation scene provider is unavailable.`,
         );
       }
       const contextOwner =
@@ -2174,7 +2181,7 @@ function unavailableWorkspaceSceneTransition(
 
 function unavailableConversationSceneTransition(
   request: DesktopSceneTransitionRequest,
-  conversationOwnerKind: AgentConversationOwnerRef['kind'],
+  conversationOwnerKind: AgentConversationOwnerRef['kind'] | 'world',
   message: string,
 ): DesktopSceneTransitionResult {
   if (request.intent.kind !== 'restore-conversation') {
@@ -2200,20 +2207,26 @@ function unavailableConversationSceneTransition(
 }
 
 function conversationContextMatchesSceneScope(
-  context: AgentConversationContext,
+  context: AgentBoundDomainBinding,
   scope: DesktopAgentScopeProjection,
 ): boolean {
   if (scope.kind === 'unbound') return false;
-  return context.kind === 'assistant'
-    ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
-    : scope.kind === 'workspace' &&
-        context.workspaceId === scope.workspaceId &&
-        context.workspaceGrantId === scope.workspaceGrantId;
+  if (context.kind === 'assistant') {
+    return scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId;
+  }
+  if (context.kind === 'workspace') {
+    return (
+      scope.kind === 'workspace' &&
+      context.workspaceId === scope.workspaceId &&
+      context.workspaceGrantId === scope.workspaceGrantId
+    );
+  }
+  return false;
 }
 
 function createAssistantConversationScope(
   draftId: string,
-  context: AgentConversationContext,
+  context: AgentBoundDomainBinding,
   conversationId: string,
 ): Extract<DesktopAgentScopeProjection, { readonly kind: 'assistant' }> {
   if (context.kind !== 'assistant') {
@@ -2232,7 +2245,7 @@ function createAssistantConversationScope(
 
 function attachConversationToDraftScene(
   draft: DesktopWorkbenchSceneProjection,
-  context: AgentConversationContext,
+  context: AgentBoundDomainBinding,
   conversationId: string,
 ): DesktopWorkbenchSceneProjection {
   if (

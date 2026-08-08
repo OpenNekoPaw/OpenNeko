@@ -1,57 +1,25 @@
-import * as path from 'node:path';
-import {
-  type GenerationJobPort,
-  type GenerationJobSnapshot,
-  type MediaGenerationResult,
-} from '@neko/generation';
-import {
-  GenerationJobCoordinator,
-  createPersistentGenerationJobStore,
-  initializeGenerationJobTables,
-} from '@neko/generation/job';
-import {
-  GeneratedAssetIndex,
-  createContentReadMediaRequestAssetMaterializer,
-  finalizeMediaGenerationOutputs,
-  createMediaPlatform,
-  type GeneratedMediaKind,
-} from '@neko/generation/media';
-import { ConfigManager, FileUserConfigManager } from '@neko/host/settings';
-import { PathResolver } from '@neko/shared';
-import { contentLocatorsEqual, type GeneratedOutputContentLocator } from '@neko/content';
-import { resolveWorkspaceGeneratedAssetRelativeDirectory } from '@neko/generation';
+import { type GenerationJobPort, type GenerationJobSnapshot } from '@neko/generation';
+import { contentLocatorsEqual } from '@neko/content';
 import {
   type CanvasGenerationApplicationPort,
   type CanvasGenerationWorkspace,
   type CanvasMaterialGenerationContext,
 } from '@neko/canvas-domain';
-import { createNodeHostContentReadService } from '@neko/content/node';
 import { JobLifecycleError, isTerminalJobPhase } from '@neko/shared/job-lifecycle';
-import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/local-metadata/node';
-import { LocalMetadataGeneratedOutputProjectionStore } from '@neko/generation/media';
 import type {
   CanvasGenerationProjectionSnapshot,
   CanvasMaterialActionTarget,
 } from '@neko/canvas-domain';
 
-export interface CanvasGenerationJobOwner {
-  readonly jobs: Pick<
-    GenerationJobPort,
-    'describeGeneration' | 'observeGeneration' | 'regenerateGeneration'
-  >;
-  dispose(): Promise<void>;
+export interface CanvasGenerationWorkspaceJobResolver {
+  getWorkspaceJobs(input: {
+    readonly workspaceId: string;
+    readonly workspaceRoot: string;
+  }): Promise<GenerationJobPort>;
 }
 
 export interface CanvasGenerationNodeRuntimeOptions {
-  readonly homedir: string;
-  readonly createWorkspaceOwner?: (
-    workspace: CanvasGenerationWorkspace,
-  ) => Promise<CanvasGenerationJobOwner>;
-}
-
-interface WorkspaceOwnerEntry {
-  readonly workspacePath: string;
-  readonly owner: CanvasGenerationJobOwner;
+  readonly generation: CanvasGenerationWorkspaceJobResolver;
 }
 
 /**
@@ -62,7 +30,6 @@ interface WorkspaceOwnerEntry {
  * remain owned by @neko/generation.
  */
 export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationPort {
-  private readonly workspaceOwners = new Map<string, Promise<WorkspaceOwnerEntry>>();
   private disposed = false;
 
   constructor(private readonly options: CanvasGenerationNodeRuntimeOptions) {}
@@ -89,11 +56,11 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
         'Desktop Canvas regeneration requires an authoritative succeeded Generation Job result.',
       );
     }
-    const owner = (await this.requireWorkspaceOwner(input.workspace)).owner;
-    const started = await owner.jobs.regenerateGeneration({
+    const jobs = await this.requireWorkspaceJobs(input.workspace);
+    const started = await jobs.regenerateGeneration({
       ref: current.ref,
     });
-    const completed = await waitForTerminalGeneration(owner.jobs, started);
+    const completed = await waitForTerminalGeneration(jobs, started);
     return projectGenerationSnapshot(completed, input.target.mediaKind);
   }
 
@@ -101,26 +68,10 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     // Generation Jobs are workspace-owned and survive renderer/window lifecycles.
   }
 
-  async dispose(): Promise<void> {
-    if (this.disposed) return;
+  dispose(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
     this.disposed = true;
-    const settled = await Promise.allSettled(this.workspaceOwners.values());
-    this.workspaceOwners.clear();
-    const failures: unknown[] = [];
-    for (const result of settled) {
-      if (result.status === 'rejected') {
-        failures.push(result.reason);
-        continue;
-      }
-      try {
-        await result.value.owner.dispose();
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    if (failures.length > 0) {
-      throw new AggregateError(failures, 'Desktop Canvas Generation disposal failed.');
-    }
+    return Promise.resolve();
   }
 
   private async resolveAuthorizedSnapshot(
@@ -135,10 +86,10 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     ) {
       return undefined;
     }
-    const owner = (await this.requireWorkspaceOwner(workspace)).owner;
+    const jobs = await this.requireWorkspaceJobs(workspace);
     let snapshot: GenerationJobSnapshot;
     try {
-      snapshot = await owner.jobs.describeGeneration(target.generation.jobRef);
+      snapshot = await jobs.describeGeneration(target.generation.jobRef);
     } catch (error) {
       if (error instanceof JobLifecycleError && error.code === 'job-not-found') return undefined;
       throw error;
@@ -149,38 +100,12 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
     return ownsResult ? snapshot : undefined;
   }
 
-  private requireWorkspaceOwner(
-    workspace: CanvasGenerationWorkspace,
-  ): Promise<WorkspaceOwnerEntry> {
-    const existing = this.workspaceOwners.get(workspace.workspaceId);
-    if (existing) {
-      return existing.then((entry) => {
-        if (entry.workspacePath !== workspace.workspacePath) {
-          throw new Error(
-            `Desktop Canvas Generation Workspace '${workspace.workspaceId}' changed its authorized root.`,
-          );
-        }
-        return entry;
-      });
-    }
-    const createWorkspaceOwner =
-      this.options.createWorkspaceOwner ??
-      ((authorizedWorkspace) =>
-        createDefaultWorkspaceOwner({
-          homedir: this.options.homedir,
-          workspace: authorizedWorkspace,
-        }));
-    const pending = createWorkspaceOwner(workspace)
-      .then((owner) => ({
-        workspacePath: workspace.workspacePath,
-        owner,
-      }))
-      .catch((error: unknown) => {
-        this.workspaceOwners.delete(workspace.workspaceId);
-        throw error;
-      });
-    this.workspaceOwners.set(workspace.workspaceId, pending);
-    return pending;
+  private requireWorkspaceJobs(workspace: CanvasGenerationWorkspace): Promise<GenerationJobPort> {
+    this.requireActive();
+    return this.options.generation.getWorkspaceJobs({
+      workspaceId: workspace.workspaceId,
+      workspaceRoot: workspace.workspacePath,
+    });
   }
 
   private requireActive(): void {
@@ -188,121 +113,8 @@ export class CanvasGenerationNodeRuntime implements CanvasGenerationApplicationP
   }
 }
 
-async function createDefaultWorkspaceOwner(input: {
-  readonly homedir: string;
-  readonly workspace: CanvasGenerationWorkspace;
-}): Promise<CanvasGenerationJobOwner> {
-  const metadata = await createNodeWorkspaceResourceCacheMetadataBinding({
-    homedir: input.homedir,
-    workDir: input.workspace.workspacePath,
-  });
-  let configManager: ConfigManager | undefined;
-  let coordinator: GenerationJobCoordinator | undefined;
-  try {
-    if (metadata.workspaceId !== input.workspace.workspaceId) {
-      throw new Error(
-        `Desktop Canvas Generation Workspace identity mismatch: expected '${input.workspace.workspaceId}', received '${metadata.workspaceId}'.`,
-      );
-    }
-    await initializeGenerationJobTables(metadata.metadataStore);
-    const generatedAssetStore = new LocalMetadataGeneratedOutputProjectionStore({
-      manifestStore: metadata.manifestStore,
-      workspaceRoot: input.workspace.workspacePath,
-      pathResolver: new PathResolver(
-        new Map([
-          ['WORKSPACE', input.workspace.workspacePath],
-          ['HOME', input.homedir],
-        ]),
-      ),
-    });
-    const generatedAssets = new GeneratedAssetIndex(generatedAssetStore);
-    await generatedAssets.load();
-    configManager = new ConfigManager({
-      userConfigManager: new FileUserConfigManager(),
-      workspacePath: input.workspace.workspacePath,
-    });
-    const media = createMediaPlatform({
-      configManager,
-      requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
-        contentRead: createNodeHostContentReadService({
-          workspaceRoot: input.workspace.workspacePath,
-        }),
-        encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
-      }),
-    });
-    coordinator = new GenerationJobCoordinator({
-      store: createPersistentGenerationJobStore({
-        metadataStore: metadata.metadataStore,
-        workspaceId: metadata.workspaceId,
-      }),
-      execution: media.service,
-      resultCommitter: {
-        commit: ({ ref, generation }) =>
-          commitGenerationResult({
-            operationId: ref.jobId,
-            generation,
-            workspaceRoot: input.workspace.workspacePath,
-            generatedAssets,
-          }),
-      },
-    });
-    await coordinator.recoverPersistedGenerationJobs();
-    const ownedCoordinator = coordinator;
-    const ownedConfigManager = configManager;
-    return {
-      jobs: ownedCoordinator,
-      dispose: async () => {
-        const failures: unknown[] = [];
-        try {
-          await ownedCoordinator.dispose();
-        } catch (error) {
-          failures.push(error);
-        }
-        try {
-          await metadata.dispose();
-        } catch (error) {
-          failures.push(error);
-        }
-        ownedConfigManager.dispose();
-        if (failures.length > 0) {
-          throw new AggregateError(
-            failures,
-            'Desktop Canvas Generation Workspace owner disposal failed.',
-          );
-        }
-      },
-    };
-  } catch (error) {
-    const failures: unknown[] = [error];
-    if (coordinator) {
-      try {
-        await coordinator.dispose();
-      } catch (disposeError) {
-        failures.push(disposeError);
-      }
-    }
-    if (configManager) {
-      try {
-        configManager.dispose();
-      } catch (disposeError) {
-        failures.push(disposeError);
-      }
-    }
-    try {
-      await metadata.dispose();
-    } catch (disposeError) {
-      failures.push(disposeError);
-    }
-    if (failures.length === 1) throw error;
-    throw new AggregateError(
-      failures,
-      'Desktop Canvas Generation Workspace owner initialization failed.',
-    );
-  }
-}
-
 async function waitForTerminalGeneration(
-  jobs: CanvasGenerationJobOwner['jobs'],
+  jobs: Pick<GenerationJobPort, 'observeGeneration'>,
   initial: GenerationJobSnapshot,
 ): Promise<GenerationJobSnapshot> {
   if (isTerminalJobPhase(initial.phase)) return initial;
@@ -376,42 +188,4 @@ function generationSummary(snapshot: GenerationJobSnapshot): CanvasMaterialGener
           : {}),
       };
   }
-}
-
-async function commitGenerationResult(input: {
-  readonly operationId: string;
-  readonly generation: MediaGenerationResult;
-  readonly workspaceRoot: string;
-  readonly generatedAssets: GeneratedAssetIndex;
-}): Promise<readonly GeneratedOutputContentLocator[]> {
-  const mediaKind = toGeneratedMediaKind(input.generation.type);
-  const outputDir = path.join(
-    input.workspaceRoot,
-    resolveWorkspaceGeneratedAssetRelativeDirectory({ mediaKind }),
-  );
-  const finalized = await finalizeMediaGenerationOutputs({
-    workspaceRoot: input.workspaceRoot,
-    operationId: input.operationId,
-    generationType: input.generation.type,
-    mediaKind,
-    outputs: input.generation.outputs,
-    providerId: input.generation.providerId,
-    modelId: input.generation.modelId,
-    request: input.generation.request,
-    outputDir,
-    assetIndex: input.generatedAssets,
-  });
-  return finalized.generatedAssets.map((asset) => {
-    if (!asset.lifecycle) {
-      throw new Error(`Generated asset '${asset.id}' has no durable lifecycle.`);
-    }
-    return asset.lifecycle.contentLocator;
-  });
-}
-
-function toGeneratedMediaKind(type: string): GeneratedMediaKind {
-  if (type.includes('video')) return 'video';
-  if (type.includes('audio') || type.includes('music')) return 'audio';
-  if (type.includes('image')) return 'image';
-  throw new Error(`Unsupported generated media type '${type}'.`);
 }

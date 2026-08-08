@@ -113,7 +113,7 @@ import {
   parseAgentLaunchHostRequest,
   type AgentLaunchHostResult,
 } from '@neko/agent-contracts/agent-launch-host';
-import type { AgentAuthorityScopeProjection } from '@neko/agent-contracts';
+import { type AgentBoundDomainBinding, type AgentDomainBinding } from '@neko/agent-contracts';
 import {
   parseAgentExtensionManagementHostRequest,
   type AgentExtensionManagementHostResult,
@@ -136,6 +136,7 @@ import {
   type DesktopAgentAutomationResult,
 } from '../shared/agent-automation-contract';
 import type { DesktopAgentLaunchRuntime } from './desktop-agent-launch-runtime';
+import type { AgentLaunchDraftSubmissionApplicationService } from '@neko/agent-runtime/application';
 import {
   parseDesktopWorkspaceGrantTargetRequest,
   type DesktopWorkspaceGrantTargetResult,
@@ -148,13 +149,20 @@ import {
 import type { AssistantResourceService } from '@neko/agent-runtime/application';
 import {
   isSameAgentConversationOwner,
-  type AgentConversationContext,
   type AgentConversationOwnerRef,
 } from '@neko/agent-contracts';
 import {
   parseAssistantResourceHostRequest,
   type AssistantResourceHostResult,
 } from '@neko/agent-contracts/assistant-resource-host';
+import type {
+  DirectGenerationOperationPort,
+  DirectGenerationOperationProjection,
+} from '@neko/generation';
+import {
+  parseDesktopDirectGenerationRequest,
+  type DesktopDirectGenerationResult,
+} from '../shared/generation-contract';
 
 export interface DesktopAppHostOptions {
   readonly host: NekoHostPorts;
@@ -164,7 +172,13 @@ export interface DesktopAppHostOptions {
   readonly agent: AgentAppHost;
   readonly assistantWorkspace: AssetWorkspaceResolution;
   readonly agentControllerComposition?: AgentControllerComposition;
+  readonly generationLifecycle?: { dispose(): Promise<void> };
+  readonly resolveDirectGeneration?: (
+    workspace: AssetWorkspaceResolution,
+  ) => Promise<DirectGenerationOperationPort>;
+  readonly workspaceConfigLifecycle?: { dispose(): void };
   readonly agentLaunch: DesktopAgentLaunchRuntime;
+  readonly agentLaunchSubmission: AgentLaunchDraftSubmissionApplicationService;
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources?: AssistantResourceService;
@@ -197,6 +211,7 @@ export class DesktopAppHost {
   readonly agent: AgentAppHost;
   readonly agentBridge: DesktopAgentBridgeRuntime;
   readonly agentLaunch: DesktopAgentLaunchRuntime;
+  readonly agentLaunchSubmission: AgentLaunchDraftSubmissionApplicationService;
   readonly workspaceGrants: DesktopWorkspaceGrantAuthority;
   readonly conversationLifecycle: AgentConversationLifecycleService;
   readonly assistantResources: AssistantResourceService | undefined;
@@ -226,6 +241,7 @@ export class DesktopAppHost {
         : {}),
     });
     this.agentLaunch = options.agentLaunch;
+    this.agentLaunchSubmission = options.agentLaunchSubmission;
     this.workspaceGrants = options.workspaceGrants;
     this.conversationLifecycle = options.conversationLifecycle;
     this.assistantResources = options.assistantResources;
@@ -407,6 +423,14 @@ export class DesktopAppHost {
               initialConversationMessage: projectAgentConversationInitialMessage(firstSubmitRecord),
             }),
         publish,
+        readConversationContext: (conversationId) =>
+          this.conversationLifecycle.readConversationContext(conversationId),
+        readConversationConfiguration: (conversationId) =>
+          this.conversationLifecycle.readConversationConfiguration(conversationId),
+        updateConversationConfiguration: (input) =>
+          this.conversationLifecycle.updateConfiguration(input),
+        readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
+        personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
       });
     }
     const view = await this.shell.resolveAgentViewGrant(window.windowId, request);
@@ -466,6 +490,14 @@ export class DesktopAppHost {
               projectAgentConversationInitialMessage(initialConversationRecord),
           }),
       publish,
+      readConversationContext: (conversationId) =>
+        this.conversationLifecycle.readConversationContext(conversationId),
+      readConversationConfiguration: (conversationId) =>
+        this.conversationLifecycle.readConversationConfiguration(conversationId),
+      updateConversationConfiguration: (input) =>
+        this.conversationLifecycle.updateConfiguration(input),
+      readGlobalSkillCatalog: () => this.agent.readGlobalSkillCatalog(),
+      personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
     });
   }
 
@@ -482,7 +514,8 @@ export class DesktopAppHost {
       if (
         interaction.agentViewId !== request.viewId ||
         interaction.phase !== 'draft' ||
-        !sameAgentScope(interaction.scope, request.scope)
+        !desktopAgentScopeMatchesBinding(interaction.scope, request.draft.binding) ||
+        interaction.scope.draftId !== request.draft.draftId
       ) {
         throw new Error('Agent launch attach does not match its exact Agent Surface.');
       }
@@ -495,7 +528,7 @@ export class DesktopAppHost {
           workbenchInstanceId: surfaceGrant.workbenchInstanceId,
           agentSurfaceId: surfaceGrant.agentSurfaceId,
           viewId: request.viewId,
-          scope: request.scope,
+          draft: request.draft,
         }),
       };
     }
@@ -505,6 +538,60 @@ export class DesktopAppHost {
       connection.windowId !== window.windowId
     ) {
       throw new Error('Agent launch connection does not match its sender-bound Desktop identity.');
+    }
+    if (request.operation === 'bind-assistant') {
+      return {
+        requestId: request.requestId,
+        status: 'ready',
+        catalog: await this.agentLaunch.bindTarget(connection, {
+          kind: 'assistant',
+          assistantSpaceId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          baseGrantIds: [],
+        }),
+      };
+    }
+    if (request.operation === 'bind-target') {
+      if (request.binding.kind === 'assistant') {
+        if (
+          request.binding.assistantSpaceId !== DESKTOP_DEFAULT_ASSISTANT_SPACE_ID ||
+          request.binding.baseGrantIds.length > 0
+        ) {
+          throw new Error('Agent Assistant target is not authorized by this Desktop entry.');
+        }
+      } else if (request.binding.kind === 'workspace') {
+        const resolution = await this.workspaceGrants.resolve(
+          window.windowId,
+          request.binding.workspaceGrantId,
+        );
+        if (resolution.workspace.workspaceId !== request.binding.workspaceId) {
+          throw new Error('Agent Workspace target grant resolves to another Workspace.');
+        }
+      } else if (request.binding.kind === 'character' || request.binding.kind === 'world') {
+        throw new Error(`Agent ${request.binding.kind} binding provider is unavailable.`);
+      }
+      return {
+        requestId: request.requestId,
+        status: 'ready',
+        catalog: await this.agentLaunch.bindTarget(connection, request.binding),
+      };
+    }
+    if (request.operation === 'update-configuration') {
+      return {
+        requestId: request.requestId,
+        status: 'ready',
+        catalog: this.agentLaunch.updateConfiguration(connection, request.configuration),
+      };
+    }
+    if (request.operation === 'search-workspace-mentions') {
+      return {
+        requestId: request.requestId,
+        status: 'mentions',
+        projection: await this.agentLaunch.searchWorkspaceMentions(
+          connection,
+          request.bindingReceiptId,
+          request.filter,
+        ),
+      };
     }
     if (request.operation === 'authorize-resource') {
       const catalog = await this.agentLaunch.authorizeResource(connection, request.resourceKind);
@@ -520,163 +607,14 @@ export class DesktopAppHost {
           };
     }
     if (request.operation === 'submit-draft') {
-      const shellProjection = await this.shell.getProjection(window.windowId);
-      const target = request.input.target;
-      let context: AgentConversationContext;
-      let existingRecord:
-        | Awaited<ReturnType<AgentConversationLifecycleService['readFirstSubmitByRequest']>>
-        | undefined;
-      if (target.kind === 'automatic-assistant') {
-        if (connection.scope.kind !== 'unbound' || connection.scope.draftId !== target.draftId) {
-          throw new Error(
-            'Automatic Assistant draft submit does not match its unbound launch connection.',
-          );
-        }
-        const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
-        if (
-          scene.context.kind !== 'agent' ||
-          scene.context.scope.draftId !== target.draftId ||
-          scene.context.agentViewId !== connection.viewId
-        ) {
-          throw new Error('Automatic Assistant draft submit is not the exact active Entry Draft.');
-        }
-        const assistantSpaceId =
-          scene.context.scope.kind === 'unbound'
-            ? DESKTOP_DEFAULT_ASSISTANT_SPACE_ID
-            : scene.context.scope.kind === 'assistant'
-              ? scene.context.scope.assistantSpaceId
-              : undefined;
-        if (!assistantSpaceId) {
-          throw new Error('Automatic Assistant draft submit cannot use Workspace scope.');
-        }
-        context = {
-          kind: 'assistant',
-          assistantSpaceId,
-          baseGrantIds: request.input.resourceGrantIds,
-        };
-        await this.agentLaunch.bindResourceGrants(
-          connection,
-          { kind: 'assistant', assistantSpaceId },
-          request.input.resourceGrantIds,
-        );
-        if (scene.context.scope.kind === 'assistant' && scene.context.scope.conversationId) {
-          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
-            request.requestId,
-          );
-          if (
-            !existingRecord ||
-            existingRecord.conversationId !== scene.context.scope.conversationId ||
-            !conversationContextMatchesLaunchScope(existingRecord.context, {
-              kind: 'assistant',
-              assistantSpaceId,
-            })
-          ) {
-            throw new Error(
-              'Automatic Assistant draft submit request does not match the committed session.',
-            );
-          }
-        }
-      } else {
-        const scene = resolveActiveDesktopWindowWorkbench(shellProjection.window).scene;
-        const isExactActiveDraft =
-          scene.context.kind === 'agent' &&
-          scene.context.scope.draftId === target.draftId &&
-          scene.context.agentViewId === connection.viewId &&
-          scene.slots.interaction?.phase === 'draft';
-        if (isExactActiveDraft) {
-          context = target.context;
-          if (connection.scope.kind === 'unbound') {
-            if (
-              scene.context.kind !== 'agent' ||
-              scene.context.scope.kind !== 'unbound' ||
-              connection.scope.draftId !== target.draftId
-            ) {
-              throw new Error('Agent draft submit is not the exact active Entry Draft.');
-            }
-            if (context.kind !== 'workspace') {
-              throw new Error(
-                'Unbound Entry target must use automatic Assistant or exact Workspace.',
-              );
-            }
-            const resolution = await this.workspaceGrants.resolve(
-              window.windowId,
-              context.workspaceGrantId,
-            );
-            if (resolution.workspace.workspaceId !== context.workspaceId) {
-              throw new Error('Agent Workspace target grant resolves to another Workspace.');
-            }
-            await this.agentLaunch.bindResourceGrants(
-              connection,
-              {
-                kind: 'workspace',
-                workspaceId: context.workspaceId,
-                workspaceGrantId: context.workspaceGrantId,
-              },
-              request.input.resourceGrantIds,
-            );
-          } else if (!conversationContextMatchesLaunchScope(context, connection.scope)) {
-            throw new Error(
-              'Agent draft submit context does not match its launch connection scope.',
-            );
-          }
-        } else {
-          existingRecord = await this.conversationLifecycle.readFirstSubmitByRequest(
-            request.requestId,
-          );
-          const connectionMatchesCommittedDraft =
-            connection.scope.kind === 'unbound'
-              ? connection.scope.draftId === target.draftId
-              : existingRecord !== undefined &&
-                conversationContextMatchesLaunchScope(existingRecord.context, connection.scope);
-          if (
-            !existingRecord ||
-            scene.context.kind !== 'agent' ||
-            scene.context.scope.kind === 'unbound' ||
-            scene.context.scope.draftId !== target.draftId ||
-            scene.context.scope.conversationId !== existingRecord.conversationId ||
-            scene.slots.interaction?.phase !== 'session' ||
-            !conversationContextMatchesLaunchScope(existingRecord.context, scene.context.scope) ||
-            !conversationContextMatchesLaunchScope(target.context, scene.context.scope) ||
-            !connectionMatchesCommittedDraft
-          ) {
-            throw new Error('Agent draft submit is not the exact active Draft presentation.');
-          }
-          context = existingRecord.context;
-        }
-      }
-      const record =
-        existingRecord ??
-        (await this.conversationLifecycle.firstSubmit({
-          requestId: request.requestId,
-          context,
-          messageText: request.input.messageText,
-          resourceGrantIds: request.input.resourceGrantIds,
-          configuration: request.input.configuration,
-        }));
-      await this.agentLaunch.commitResourceGrants(
-        connection,
-        record.conversationId,
-        record.initialMessage.resourceGrantIds,
-      );
-      await this.shell.attachAgentConversation({
-        windowId: window.windowId,
-        rendererSessionId: shellProjection.rendererSessionId,
-        agentViewId: connection.viewId,
-        draftId: target.draftId,
-        context: record.context,
-        conversationId: record.conversationId,
-      });
       return {
         requestId: request.requestId,
         status: 'committed',
-        projection: {
-          conversationId: record.conversationId,
-          turnId: record.pendingTurn.turnId,
-          turnStatus: record.pendingTurn.status,
-          ...(record.pendingTurn.diagnostic === undefined
-            ? {}
-            : { diagnostic: record.pendingTurn.diagnostic }),
-        },
+        projection: await this.agentLaunchSubmission.submit({
+          requestId: request.requestId,
+          connection,
+          draftInput: request.input,
+        }),
       };
     }
     await this.agentLaunch.detach(connection);
@@ -684,6 +622,23 @@ export class DesktopAppHost {
       requestId: request.requestId,
       status: 'detached',
     };
+  }
+
+  async executeDirectGenerationRequest(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopDirectGenerationResult> {
+    this.requireActive();
+    const request = parseDesktopDirectGenerationRequest(payload);
+    const window = this.windows.resolveSender(sender);
+    const workspace = await this.resolveDirectGenerationWorkspace(window.windowId, request.scope);
+    const resolveDirectGeneration = this.options.resolveDirectGeneration;
+    if (!resolveDirectGeneration) {
+      throw new Error('Desktop Direct Generation composition is unavailable.');
+    }
+    const port = await resolveDirectGeneration(workspace);
+    const projection: DirectGenerationOperationProjection = await port.submit(request.operation);
+    return { requestId: request.requestId, projection };
   }
 
   async executeAssistantResourceRequest(
@@ -764,6 +719,56 @@ export class DesktopAppHost {
       route: 'preview.release',
       status: 'released',
     };
+  }
+
+  private async resolveDirectGenerationWorkspace(
+    windowId: string,
+    scope: import('../shared/generation-contract').DesktopDirectGenerationScope,
+  ): Promise<AssetWorkspaceResolution> {
+    if (scope.connection.applicationInstanceId !== this.applicationIdentity.instanceId) {
+      throw new Error('Desktop Direct Generation scope belongs to another application instance.');
+    }
+    if (scope.connection.windowId !== windowId) {
+      throw new Error('Desktop Direct Generation scope belongs to another Window.');
+    }
+    if (scope.kind === 'agent-draft') {
+      const catalog = this.agentLaunch.readCatalog(scope.connection);
+      const binding = catalog.interaction.binding;
+      if (binding.kind === 'workspace') {
+        const resolution = await this.workspaceGrants.resolve(windowId, binding.workspaceGrantId);
+        if (resolution.workspace.workspaceId !== binding.workspaceId) {
+          throw new Error('Desktop Direct Generation Workspace grant resolved to another Workspace.');
+        }
+        return resolution.workspace;
+      }
+      if (binding.kind === 'assistant') {
+        if (binding.assistantSpaceId !== this.options.assistantWorkspace.workspaceId) {
+          throw new Error('Desktop Direct Generation Assistant scope has no matching Workspace.');
+        }
+        return this.options.assistantWorkspace;
+      }
+      throw new Error(
+        `Desktop Direct Generation requires Workspace authority; Draft binding '${binding.kind}' is unsupported.`,
+      );
+    }
+    const connection = this.agentBridge.resolveExactConnection(scope.connection, {
+      applicationInstanceId: this.applicationIdentity.instanceId,
+      windowId,
+    });
+    if ('assistantSpaceId' in connection) {
+      if (
+        connection.assistantSpaceId !== this.options.assistantWorkspace.workspaceId ||
+        connection.workspaceId !== this.options.assistantWorkspace.workspaceId
+      ) {
+        throw new Error('Desktop Direct Generation Assistant Session has no matching Workspace.');
+      }
+      return this.options.assistantWorkspace;
+    }
+    const workspace = await this.shell.resolveAgentWorkspace(connection.workspaceId);
+    if (workspace.workspaceId !== connection.workspaceId) {
+      throw new Error('Desktop Direct Generation Session resolved to another Workspace.');
+    }
+    return workspace;
   }
 
   async resolveWorkspaceTarget(
@@ -1819,6 +1824,16 @@ export class DesktopAppHost {
       errors.push(error);
     }
     try {
+      await this.options.generationLifecycle?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      this.options.workspaceConfigLifecycle?.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
       await this.shell.dispose();
     } catch (error) {
       errors.push(error);
@@ -2063,12 +2078,21 @@ function isAgentProjectionControlMessage(type: string): boolean {
   );
 }
 
-function conversationOwnerFromContext(
-  context: AgentConversationContext,
-): AgentConversationOwnerRef {
-  return context.kind === 'assistant'
-    ? { kind: 'assistant', assistantSpaceId: context.assistantSpaceId }
-    : { kind: 'workspace', workspaceId: context.workspaceId };
+function conversationOwnerFromContext(context: AgentBoundDomainBinding): AgentConversationOwnerRef {
+  if (context.kind === 'assistant') {
+    return { kind: 'assistant', assistantSpaceId: context.assistantSpaceId };
+  }
+  if (context.kind === 'workspace') {
+    return { kind: 'workspace', workspaceId: context.workspaceId };
+  }
+  if (context.kind === 'character' && context.characterRunId !== undefined) {
+    return {
+      kind: 'character',
+      characterId: context.characterId,
+      characterRunId: context.characterRunId,
+    };
+  }
+  throw new Error(`Desktop ${context.kind} Conversation owner provider is unavailable.`);
 }
 
 function unavailableConversationOwner(
@@ -2169,12 +2193,12 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function sameAgentScope(
-  left: AgentAuthorityScopeProjection,
-  right: AgentAuthorityScopeProjection,
+function desktopAgentScopeMatchesBinding(
+  left: Extract<DesktopWorkbenchSceneProjection['context'], { readonly kind: 'agent' }>['scope'],
+  right: AgentDomainBinding,
 ): boolean {
   if (left.kind === 'unbound' || right.kind === 'unbound') {
-    return left.kind === 'unbound' && right.kind === 'unbound' && left.draftId === right.draftId;
+    return left.kind === 'unbound' && right.kind === 'unbound';
   }
   if (left.kind === 'assistant' && right.kind === 'assistant') {
     return left.assistantSpaceId === right.assistantSpaceId;
@@ -2185,18 +2209,6 @@ function sameAgentScope(
     left.workspaceId === right.workspaceId &&
     left.workspaceGrantId === right.workspaceGrantId
   );
-}
-
-function conversationContextMatchesLaunchScope(
-  context: AgentConversationContext,
-  scope: AgentAuthorityScopeProjection,
-): boolean {
-  if (scope.kind === 'unbound') return false;
-  return context.kind === 'assistant'
-    ? scope.kind === 'assistant' && context.assistantSpaceId === scope.assistantSpaceId
-    : scope.kind === 'workspace' &&
-        context.workspaceId === scope.workspaceId &&
-        context.workspaceGrantId === scope.workspaceGrantId;
 }
 
 function canvasSubscriptionKey(identity: CanvasHostRuntimeIdentity): string {

@@ -6,6 +6,7 @@ import {
 import type {
   AgentControllerComposition,
   AgentControllerEffects,
+  AgentSkillCatalog,
   AgentWorkspaceRuntime,
 } from '@neko/agent-runtime/application';
 import {
@@ -14,6 +15,10 @@ import {
   createElectronAgentHostRouteUnavailableDiagnostic,
   type DesktopAgentConnectionIdentity,
   type AgentContextPayload,
+  type AgentBoundDomainBinding,
+  type AgentConfigurationPolicyProjection,
+  type AgentConfigurationRequest,
+  type AgentConversationConfiguration,
   type Message,
   type ProjectionAttachmentKey,
 } from '@neko/agent-contracts';
@@ -69,6 +74,17 @@ export interface DesktopAgentBridgeRuntime {
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationConfiguration?: (
+      conversationId: string,
+    ) => Promise<AgentConversationConfiguration>;
+    readonly updateConversationConfiguration?: (input: {
+      readonly conversationId: string;
+      readonly request: AgentConfigurationRequest;
+      readonly projection: AgentConfigurationPolicyProjection;
+    }) => Promise<AgentConversationConfiguration>;
+    readonly readGlobalSkillCatalog?: () => Promise<AgentSkillCatalog>;
+    readonly personalSkillOwnerId?: string;
     readonly publish: (event: DesktopAgentEvent) => void;
   }): DesktopAgentBootstrapProjection;
   send(
@@ -79,6 +95,10 @@ export interface DesktopAgentBridgeRuntime {
     request: DesktopAgentMessageRequest,
     grant: DesktopAgentProjectionSenderGrant,
   ): Promise<DesktopAgentMessageResult>;
+  resolveExactConnection(
+    connection: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentProjectionSenderGrant,
+  ): DesktopAgentConnectionIdentity;
   injectContext(input: {
     readonly windowId: string;
     readonly projectId: string;
@@ -185,6 +205,17 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
     readonly workspace: AgentWorkspaceRuntime | undefined;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationConfiguration?: (
+      conversationId: string,
+    ) => Promise<AgentConversationConfiguration>;
+    readonly updateConversationConfiguration?: (input: {
+      readonly conversationId: string;
+      readonly request: AgentConfigurationRequest;
+      readonly projection: AgentConfigurationPolicyProjection;
+    }) => Promise<AgentConversationConfiguration>;
+    readonly readGlobalSkillCatalog?: () => Promise<AgentSkillCatalog>;
+    readonly personalSkillOwnerId?: string;
     readonly publish: (event: DesktopAgentEvent) => void;
   }): DesktopAgentBootstrapProjection {
     this.requireActive();
@@ -233,6 +264,12 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       ...(input.initialConversationMessage === undefined
         ? {}
         : { initialConversationMessage: input.initialConversationMessage }),
+      readConversationContext:
+        input.readConversationContext ?? missingConversationContextDependency,
+      readConversationConfiguration: input.readConversationConfiguration,
+      updateConversationConfiguration: input.updateConversationConfiguration,
+      readGlobalSkillCatalog: input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,
+      personalSkillOwnerId: input.personalSkillOwnerId ?? '',
     });
     const connection: DesktopAgentConnection = {
       identity,
@@ -337,6 +374,22 @@ class DefaultDesktopAgentBridgeRuntime implements DesktopAgentBridgeRuntime {
       'desktop-agent-identity-mismatch',
       `Unknown Desktop Agent projection connection '${request.connection.connectionId}'.`,
     );
+  }
+
+  resolveExactConnection(
+    connectionIdentity: DesktopAgentConnectionIdentity,
+    grant: DesktopAgentProjectionSenderGrant,
+  ): DesktopAgentConnectionIdentity {
+    this.requireActive();
+    assertProjectionSender(connectionIdentity, grant);
+    const connection = this.connections.get(connectionIdentity.connectionId);
+    if (!connection || !isSameExactConnection(connectionIdentity, connection.identity)) {
+      throw new DesktopAgentContractError(
+        'desktop-agent-identity-mismatch',
+        `Unknown or stale Desktop Agent connection '${connectionIdentity.connectionId}'.`,
+      );
+    }
+    return connection.identity;
   }
 
   async injectContext(input: {
@@ -566,6 +619,14 @@ function isSameConnectionGrant(
     actual.workspaceId === expected.workspaceId &&
     actual.viewId === expected.viewId
   );
+}
+
+async function missingConversationContextDependency(): Promise<AgentBoundDomainBinding> {
+  throw new Error('Desktop Agent Session input catalog has no Conversation context dependency.');
+}
+
+async function missingGlobalSkillCatalogDependency(): Promise<AgentSkillCatalog> {
+  throw new Error('Desktop Agent Session input catalog has no global Skill catalog dependency.');
 }
 
 function assertConnectionIdentity(

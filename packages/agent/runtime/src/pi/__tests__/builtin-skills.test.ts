@@ -55,5 +55,5 @@ function discoverBuiltins(env: NodeExecutionEnv) {
   return new PiSkillHost(env, {
     isTrusted: () => true,
     isEnabled: () => true,
-  }).discover([{ path: BUILTIN_ROOT, source: { kind: 'builtin' } }]);
+  }).discover([{ path: BUILTIN_ROOT, source: { kind: 'builtin' }, entryPointKind: 'skill' }]);
 }

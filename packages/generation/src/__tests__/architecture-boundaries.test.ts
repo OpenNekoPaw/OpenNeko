@@ -48,6 +48,7 @@ describe('@neko/generation architecture boundaries', () => {
       [
         'packages/agent/runtime/src/tools/generation/media-agent-tools.ts',
         'packages/canvas/node/src/canvas-generation-node-runtime.ts',
+        'packages/generation/src/media/workspace-generation-job-owner.ts',
         'apps/neko-desktop/src/main/desktop-cut-runtime.ts',
         'packages/cut/node/src/CutApplicationRuntime.ts',
         'packages/cut/node/src/CutExportTaskRegistry.ts',
@@ -60,6 +61,9 @@ describe('@neko/generation architecture boundaries', () => {
     const canvasGenerationSource = sources.get(
       'packages/canvas/node/src/canvas-generation-node-runtime.ts',
     );
+    const generationOwnerSource = sources.get(
+      'packages/generation/src/media/workspace-generation-job-owner.ts',
+    );
     const cutSource = sources.get('apps/neko-desktop/src/main/desktop-cut-runtime.ts');
     const cutApplicationSource = sources.get('packages/cut/node/src/CutApplicationRuntime.ts');
     const cutExportRegistrySource = sources.get('packages/cut/node/src/CutExportTaskRegistry.ts');
@@ -70,13 +74,20 @@ describe('@neko/generation architecture boundaries', () => {
     expect(
       existsSync(resolve(workspaceRoot, 'packages/generation/src/media/media-turn-dispatcher.ts')),
     ).toBe(false);
-    expect(canvasGenerationSource).toContain('new GenerationJobCoordinator');
-    expect(canvasGenerationSource).toContain('createPersistentGenerationJobStore');
-    expect(canvasGenerationSource).toContain('owner.jobs.regenerateGeneration');
+    expect(canvasGenerationSource).toContain('getWorkspaceJobs');
+    expect(canvasGenerationSource).not.toContain('ConfigManager');
+    expect(canvasGenerationSource).not.toContain('createMediaPlatform');
+    expect(canvasGenerationSource).not.toContain('createNodeWorkspaceGenerationJobOwner');
+    expect(canvasGenerationSource).not.toContain('new GenerationJobCoordinator');
+    expect(canvasGenerationSource).not.toContain('createPersistentGenerationJobStore');
+    expect(canvasGenerationSource).toContain('jobs.regenerateGeneration');
     expect(canvasGenerationSource).not.toMatch(
       /\b(?:executeCanvasCreativeAi|CanvasMediaService)\b/u,
     );
     expect(canvasGenerationSource).not.toMatch(/\.generateImage\s*\(/u);
+    expect(generationOwnerSource).toContain('new GenerationJobCoordinator');
+    expect(generationOwnerSource).toContain('createPersistentGenerationJobStore');
+    expect(generationOwnerSource).toContain('finalizeMediaGenerationOutputs');
     expect(cutSource).toContain('new CutApplicationRuntime');
     expect(cutSource).not.toContain('new CutExportTaskRegistry');
     expect(cutApplicationSource).toContain('new CutExportTaskRegistry');

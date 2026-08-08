@@ -4,8 +4,9 @@ import { act, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@neko/ui/i18n/react';
-import type { AgentHostRuntimeAdapter, AgentRootPresentation } from '@neko/agent-contracts';
+import type { AgentHostRuntimeAdapter, AgentInteractionProjection } from '@neko/agent-contracts';
 import type { AgentComposerWorkspacePresentation } from '@neko/agent-webview/root';
+import { projectAgentConfigurationPolicy } from '@neko/agent-runtime/application';
 import { DesktopAgentSurface, prepareDesktopAgentSurfaceResources } from './DesktopAgentSurface';
 import { createDesktopI18n } from './i18n';
 
@@ -21,7 +22,7 @@ vi.mock('@neko/agent-webview/root', async () => {
       presentation,
     }: {
       readonly hostRuntimeAdapter: AgentHostRuntimeAdapter;
-      readonly agentPresentation?: AgentRootPresentation;
+      readonly agentPresentation?: AgentInteractionProjection;
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly composerWorkspace?: AgentComposerWorkspacePresentation;
       readonly locale: string;
@@ -50,7 +51,7 @@ vi.mock('@neko/agent-webview/root', async () => {
           data-initial-conversation-id={initialConversation?.id}
           data-initial-conversation-title={initialConversation?.title}
           data-presentation={presentation}
-          data-agent-presentation={agentPresentation?.kind}
+          data-agent-presentation={agentPresentation?.phase}
           data-composer-workspace={
             composerWorkspace?.kind === 'workspace'
               ? composerWorkspace.label
@@ -133,9 +134,9 @@ describe('DesktopAgentSurface', () => {
       root.render(
         <TestAgentSurface
           agentPresentation={{
-            kind: 'session',
+            phase: 'session',
             conversationId: 'workspace-conversation-1',
-            scope: {
+            binding: {
               kind: 'workspace',
               workspaceId: 'workspace-1',
               workspaceGrantId: 'workspace-grant-1',
@@ -253,8 +254,14 @@ describe('DesktopAgentSurface', () => {
       'agent-surface-assistant-1',
       'agent-view:window-1',
       {
-        kind: 'assistant',
-        assistantSpaceId: 'assistant:1',
+        phase: 'draft',
+        draftId: 'draft-launch-1',
+        binding: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant:1',
+          baseGrantIds: [],
+        },
+        bindingReceipt: null,
       },
     );
     expect(rootNode?.getAttribute('data-agent-presentation')).toBe('draft');
@@ -370,7 +377,7 @@ function TestAgentSurface({
   composerWorkspace,
   initialConversation,
 }: {
-  readonly agentPresentation?: AgentRootPresentation;
+  readonly agentPresentation?: AgentInteractionProjection;
   readonly composerWorkspace?: AgentComposerWorkspacePresentation;
   readonly initialConversation?: { readonly id: string; readonly title: string };
 }): JSX.Element {
@@ -410,12 +417,20 @@ function TestLaunchAgentSurface({
         workbenchInstanceId="workbench-assistant-1"
         agentSurfaceId="agent-surface-assistant-1"
         viewId="agent-view:window-1"
-        agentPresentation={{
-          ...(conversationId
-            ? { kind: 'session' as const, conversationId }
-            : { kind: 'draft' as const, draftId: 'draft-launch-1' }),
-          scope: { kind: 'assistant', assistantSpaceId },
-        }}
+        agentPresentation={
+          conversationId
+            ? {
+                phase: 'session',
+                conversationId,
+                binding: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
+              }
+            : {
+                phase: 'draft',
+                draftId: 'draft-launch-1',
+                binding: { kind: 'assistant', assistantSpaceId, baseGrantIds: [] },
+                bindingReceipt: null,
+              }
+        }
       />
     </I18nProvider>
   );
@@ -439,6 +454,10 @@ function installBridge(
       agentLaunch: {
         attach: launch?.attach ?? vi.fn(),
         authorizeResource: vi.fn(),
+        bindTarget: vi.fn(),
+        bindAssistant: vi.fn(),
+        updateConfiguration: vi.fn(),
+        searchWorkspaceMentions: vi.fn(),
         submitDraft: vi.fn(),
         detach: launch?.detach ?? vi.fn(),
       },
@@ -450,6 +469,7 @@ function installBridge(
         send: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
       },
+      directGeneration: { submit: vi.fn() },
       bootstrap: { get: vi.fn() },
       lifecycle: { subscribe: vi.fn(() => () => undefined) },
       settings: {
@@ -497,6 +517,8 @@ function installBridge(
         subscribe: vi.fn(() => () => undefined),
       },
       cut: {
+        createDraft: vi.fn(),
+        closeView: vi.fn(),
         getSnapshot: vi.fn(),
         execute: vi.fn(),
         subscribe: vi.fn(() => () => undefined),
@@ -523,6 +545,8 @@ function readyAssistantBootstrap() {
 }
 
 function launchCatalog(assistantSpaceId: string, connectionId: string) {
+  const draftId = 'draft-launch-1';
+  const binding = { kind: 'assistant' as const, assistantSpaceId, baseGrantIds: [] };
   return {
     connection: {
       applicationInstanceId: 'app-1',
@@ -530,13 +554,33 @@ function launchCatalog(assistantSpaceId: string, connectionId: string) {
       workbenchInstanceId: 'workbench-assistant-1',
       agentSurfaceId: 'agent-surface-assistant-1',
       viewId: 'agent-view:window-1',
+      draftId,
       connectionId,
-      scope: { kind: 'assistant' as const, assistantSpaceId },
+    },
+    interaction: {
+      phase: 'draft' as const,
+      draftId,
+      binding,
+      bindingReceipt: {
+        bindingReceiptId: `binding:${connectionId}`,
+        draftId,
+        connectionId,
+        binding,
+      },
     },
     models: [],
-    commands: [],
-    skills: [],
-    resources: [],
+    configuration: projectAgentConfigurationPolicy({
+      models: [],
+      request: null,
+      source: 'global-default',
+      defaults: {
+        executionMode: 'ask',
+        temperature: 0.7,
+        maximumOutputTokens: 4096,
+        thinkingBudget: 0,
+      },
+    }),
+    inputs: [],
   };
 }
 

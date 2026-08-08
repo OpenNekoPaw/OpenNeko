@@ -3,6 +3,8 @@ import { cloneElement, isValidElement, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentContextPayload,
+  AgentConfigurationPolicyProjection,
+  AgentInputCatalogEntry,
   ConversationKind,
   MediaUnderstandingModels,
   MessageAttachment,
@@ -21,16 +23,6 @@ import {
   ComposerWorkspaceProvider,
   type AgentComposerWorkspacePresentation,
 } from '../../ComposerWorkspaceContext';
-
-const hostMocks = vi.hoisted(() => ({
-  invokeSkill: vi.fn(),
-  confirmRoleplayCandidate: vi.fn(),
-  startCharacterDialogueFromSlash: vi.fn(),
-}));
-
-vi.mock('../../../host-runtime-context', () => ({
-  useAgentHostMessages: () => hostMocks,
-}));
 
 const translations: Record<string, string> = {
   'chat.input.control.mode': '模式、模型与参数',
@@ -242,6 +234,68 @@ const translations: Record<string, string> = {
   'chat.commands.source.project': '项目',
 };
 
+const executableInputCatalog: readonly AgentInputCatalogEntry[] = [
+  {
+    id: 'command:builtin:clear',
+    name: 'clear',
+    description: 'Clear the exact conversation',
+    trigger: 'command',
+    prefix: '/',
+    phaseRequirement: 'any',
+    bindingRequirement: 'any',
+    source: { kind: 'builtin', sourceId: 'clear' },
+    availability: { status: 'available' },
+    executable: { kind: 'command', commandId: 'clear', handlerId: 'builtin:clear' },
+  },
+  {
+    id: 'skill:personal:quality-review',
+    name: 'quality-review',
+    description: 'Review changed files',
+    trigger: 'skill',
+    prefix: '$',
+    phaseRequirement: 'any',
+    bindingRequirement: 'any',
+    source: { kind: 'personal', ownerId: 'assistant:default', sourceId: 'quality-review' },
+    availability: { status: 'available' },
+    executable: {
+      kind: 'skill',
+      skillName: 'quality-review',
+      activationId: 'skill:personal:quality-review',
+    },
+  },
+];
+
+const characterUnavailableConfigurationPolicy: AgentConfigurationPolicyProjection = {
+  request: null,
+  fields: {
+    model: {
+      effectiveValue: null,
+      source: 'domain-policy',
+      policy: { status: 'unavailable', owner: 'character-version', reason: 'Unavailable.' },
+    },
+    executionMode: {
+      effectiveValue: null,
+      source: 'domain-policy',
+      policy: { status: 'unavailable', owner: 'character-version', reason: 'Unavailable.' },
+    },
+    temperature: {
+      effectiveValue: null,
+      source: 'domain-policy',
+      policy: { status: 'unavailable', owner: 'character-version', reason: 'Unavailable.' },
+    },
+    maximumOutputTokens: {
+      effectiveValue: null,
+      source: 'domain-policy',
+      policy: { status: 'unavailable', owner: 'character-version', reason: 'Unavailable.' },
+    },
+    thinkingBudget: {
+      effectiveValue: null,
+      source: 'domain-policy',
+      policy: { status: 'unavailable', owner: 'character-version', reason: 'Unavailable.' },
+    },
+  },
+};
+
 const chatModels: ChatModelOption[] = [
   {
     id: 'openai:gpt-5.5',
@@ -415,7 +469,11 @@ describe('InputArea composer controls', () => {
   it('merges controlled slash menu updates against the latest Tab-owned state', () => {
     const onComposerMenuStateChange = vi.fn();
     render(
-      <Harness>
+      <Harness
+        inputCatalog={executableInputCatalog}
+        inputCatalogPhase="session"
+        inputCatalogBindingKind="assistant"
+      >
         <InputArea
           inputValue=""
           isThinking={false}
@@ -667,9 +725,13 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByText(/branch|分支|local|本地/iu)).toBeNull();
   });
 
-  it('keeps the Entry composer model-only while reusing the conversation composer shell', () => {
+  it('keeps command and Skill discovery available in the Entry composer', () => {
     render(
-      <Harness>
+      <Harness
+        inputCatalog={executableInputCatalog}
+        inputCatalogPhase="draft"
+        inputCatalogBindingKind="assistant"
+      >
         <InputArea
           presentation="entry"
           inputValue=""
@@ -727,6 +789,31 @@ describe('InputArea composer controls', () => {
 
     await waitFor(() => expect(onTargetChange).toHaveBeenCalledWith(target));
     expect(onSelectProject).toHaveBeenCalledWith('project-1');
+    expect(screen.queryByRole('button', { name: 'chat.emptyState.entry.startChat' })).toBeNull();
+  });
+
+  it('keeps unbound Entry @ discovery local and closes its empty menu with Escape', () => {
+    const onRequestFiles = vi.fn();
+    render(
+      <Harness
+        inputCatalog={executableInputCatalog}
+        inputCatalogPhase="draft"
+        inputCatalogBindingKind="unbound"
+        onRequestFiles={onRequestFiles}
+      >
+        <InputAreaStatefulHarness initialInputValue="" onSend={vi.fn()} />
+      </Harness>,
+    );
+
+    const textbox = screen.getByRole('textbox');
+    fireEvent.change(textbox, { target: { value: '@story' } });
+
+    expect(onRequestFiles).not.toHaveBeenCalled();
+    expect(screen.getByRole('menu')).toBeTruthy();
+
+    fireEvent.keyDown(textbox, { key: 'Escape' });
+
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   it('sends the primary Agent model without composer LLM parameters', () => {
@@ -1203,7 +1290,10 @@ describe('InputArea composer controls', () => {
 
   it('removes the empty top control row for roleplay conversations', () => {
     render(
-      <Harness conversationKind="character-dialogue">
+      <Harness
+        conversationKind="character-dialogue"
+        configurationPolicy={characterUnavailableConfigurationPolicy}
+      >
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
       </Harness>,
     );
@@ -1216,7 +1306,10 @@ describe('InputArea composer controls', () => {
 
   it('removes the empty top control row for embody-character conversations', () => {
     render(
-      <Harness conversationKind="embody-character">
+      <Harness
+        conversationKind="embody-character"
+        configurationPolicy={characterUnavailableConfigurationPolicy}
+      >
         <InputArea inputValue="" isThinking={false} onInputChange={vi.fn()} onSend={vi.fn()} />
       </Harness>,
     );
@@ -1256,22 +1349,32 @@ describe('InputArea composer controls', () => {
   it('inserts an ordinary skill selected from the dollar menu without invoking it', () => {
     render(
       <Harness
-        skills={[
+        inputCatalog={[
           {
-            id: 'quality-review',
+            id: 'skill:project:quality-review',
             name: 'quality-review',
             description: 'Review changed files',
-            tags: [],
-            source: 'project',
-            enabled: true,
+            trigger: 'skill',
+            prefix: '$',
+            phaseRequirement: 'any',
+            bindingRequirement: 'workspace',
+            source: { kind: 'project', workspaceId: 'workspace-1', sourceId: 'skill-source-1' },
+            availability: { status: 'available' },
+            executable: {
+              kind: 'skill',
+              skillName: 'quality-review',
+              activationId: 'skill:project:skill:skill-source-1',
+            },
           },
         ]}
+        inputCatalogPhase="session"
+        inputCatalogBindingKind="workspace"
       >
         <InputAreaStatefulHarness initialInputValue="" onSend={vi.fn()} />
       </Harness>,
     );
 
-    const textarea = screen.getByPlaceholderText('输入任何问题...') as HTMLTextAreaElement;
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: '/' } });
 
     expect(screen.queryByRole('menuitem', { name: /\$quality-review/ })).toBeNull();
@@ -1283,7 +1386,6 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /\$quality-review/ }));
 
     expect(textarea.value).toBe('$quality-review ');
-    expect(hostMocks.invokeSkill).not.toHaveBeenCalled();
   });
 
   it('suppresses slash and skill command affordances in media generation mode', () => {
@@ -1373,6 +1475,48 @@ describe('InputArea composer controls', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
+  it('selects a receipt-backed Workspace file as a Draft context reference', () => {
+    const onAddContextChip = vi.fn();
+    const contextPayload: AgentContextPayload = {
+      type: 'file',
+      id: 'workspace-reference:hero',
+      label: 'hero.md',
+      summary: 'notes/hero.md',
+      data: {
+        contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+        catalogEntryId: 'mention:workspace-reference:hero',
+        referenceId: 'workspace-reference:hero',
+        ownerKind: 'workspace',
+        ownerId: 'workspace-1',
+        bindingReceiptId: 'binding-1',
+      },
+    };
+    render(
+      <Harness
+        onAddContextChip={onAddContextChip}
+        mentionItems={[
+          {
+            id: 'file:hero',
+            kind: 'file',
+            label: 'hero.md',
+            contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+            contextPayload,
+          },
+        ]}
+      >
+        <InputAreaStatefulHarness initialInputValue="" onSend={vi.fn()} presentation="entry" />
+      </Harness>,
+    );
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '@hero' } });
+    fireEvent.click(screen.getByRole('menuitem', { name: /hero\.md/ }));
+
+    expect(onAddContextChip).toHaveBeenCalledWith(contextPayload);
+    expect(document.querySelector('[data-agent-reference-token="true"]')).toBeNull();
+    expect(textarea.value).toBe('');
+  });
+
   it('opens the entry prompt above the composer for asset generation modes', () => {
     const onSessionModeChange = vi.fn();
     const onEntryPromptMenuChange = vi.fn();
@@ -1436,6 +1580,7 @@ describe('InputArea composer controls', () => {
   it('opens the entry prompt for playable unified character entities', () => {
     const onSend = vi.fn();
     const onEntryPromptMenuChange = vi.fn();
+    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
     render(
       <Harness
         mentionItems={[
@@ -1445,6 +1590,11 @@ describe('InputArea composer controls', () => {
             label: '小橘',
             description: '主角',
             entityType: 'character',
+            navigationData: {
+              characterId: 'char-xiaoju',
+              characterVersionId: 'character-version-xiaoju',
+              roleProfileId: 'role-profile-xiaoju',
+            },
           },
           {
             id: 'asset:asset-xiaoju',
@@ -1460,6 +1610,11 @@ describe('InputArea composer controls', () => {
             label: '中文角色',
             description: '统一实体',
             entityType: '角色',
+            navigationData: {
+              characterId: 'char-cn',
+              characterVersionId: 'character-version-cn',
+              roleProfileId: 'role-profile-cn',
+            },
           },
           {
             id: 'scene-1',
@@ -1474,6 +1629,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={onEntryPromptMenuChange}
+          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
@@ -1489,14 +1645,18 @@ describe('InputArea composer controls', () => {
     fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
-      'entity:char-xiaoju --roleplay --skip-enrich',
-    );
+    expect(onDraftCharacterTargetSelect).toHaveBeenCalledWith({
+      kind: 'character',
+      characterId: 'char-xiaoju',
+      characterVersionId: 'character-version-xiaoju',
+      roleProfileId: 'role-profile-xiaoju',
+    });
     expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
   });
 
-  it('uses prefilled entry text as the roleplay opening line', () => {
+  it('preserves prefilled Draft text while binding the exact Character target', () => {
     const onSend = vi.fn();
+    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
     render(
       <Harness
         mentionItems={[
@@ -1505,6 +1665,11 @@ describe('InputArea composer controls', () => {
             kind: 'entity',
             label: '小橘',
             entityType: 'character',
+            navigationData: {
+              characterId: 'char-xiaoju',
+              characterVersionId: 'character-version-xiaoju',
+              roleProfileId: 'role-profile-xiaoju',
+            },
           },
         ]}
       >
@@ -1513,6 +1678,7 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
+          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
@@ -1522,13 +1688,15 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /小橘/ }));
 
     expect(onSend).not.toHaveBeenCalled();
-    expect(hostMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
-      'entity:char-xiaoju --roleplay --skip-enrich "你还记得昨晚的雨吗？"',
+    expect(onDraftCharacterTargetSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ characterVersionId: 'character-version-xiaoju' }),
     );
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('你还记得昨晚的雨吗？');
   });
 
-  it('confirms a projected character Candidate before starting roleplay', () => {
+  it('keeps an Entity candidate unavailable until Chara publishes exact identities', () => {
     const onSend = vi.fn();
+    const onDraftCharacterTargetSelect = vi.fn(async () => undefined);
     render(
       <Harness
         mentionItems={[
@@ -1550,20 +1718,16 @@ describe('InputArea composer controls', () => {
           isThinking={false}
           entryPromptMenu="roleplay"
           onEntryPromptMenuChange={vi.fn()}
+          onDraftCharacterTargetSelect={onDraftCharacterTargetSelect}
           onInputChange={vi.fn()}
           onSend={onSend}
         />
       </Harness>,
     );
 
-    expect(screen.getByText('确认并扮演')).toBeTruthy();
-    fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
-
-    expect(hostMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
-      projectSearchItemId: 'entity-projection:semantic-xiaoju',
-      initialUserMessage: '你好，小橘',
-    });
-    expect(hostMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
+    expect(screen.getByText('未找到可用于角色扮演的角色实体。')).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /小橘/ })).toBeNull();
+    expect(onDraftCharacterTargetSelect).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
   });
 
@@ -1681,7 +1845,7 @@ describe('InputArea composer controls', () => {
     expect(JSON.stringify(onAddContextChip.mock.calls)).not.toContain('/Users');
   });
 
-  it('moves completed @file mentions into reference tokens and preserves @path on send', () => {
+  it('moves completed @file mentions into reference tokens without rewriting the message', () => {
     const onSend = vi.fn();
     render(
       <Harness
@@ -1714,7 +1878,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByTitle('发送'));
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageText: '参考 @assets/【CG】游戏角色.zip',
+        messageText: '参考 ',
         displayMessageText: '参考 ',
         fileReferences: [
           expect.objectContaining({
@@ -1762,7 +1926,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByTitle('发送'));
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageText: '参考 @neko/assets/Characters/hero.png',
+        messageText: '参考 ',
         displayMessageText: '参考 ',
         fileReferences: [
           expect.objectContaining({
@@ -1784,6 +1948,8 @@ describe('InputArea composer controls', () => {
     render(
       <Harness
         onRequestFiles={onRequestFiles}
+        inputCatalogPhase="draft"
+        inputCatalogBindingKind="workspace"
         mentionItems={[
           {
             id: 'media-lamp-spirit',
@@ -1834,7 +2000,7 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByTitle('发送'));
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageText: '参考 @"assets/live2d/按键 黑脸.exp3.json"',
+        messageText: '参考 ',
         displayMessageText: '参考 ',
         fileReferences: [
           expect.objectContaining({
@@ -1849,7 +2015,7 @@ describe('InputArea composer controls', () => {
     );
   });
 
-  it('quotes selected @file references with spaces when sending', () => {
+  it('sends selected @file references separately from unchanged message text', () => {
     const onSend = vi.fn();
     render(
       <Harness
@@ -1868,8 +2034,13 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByTitle('发送'));
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageText: '参考 @"assets/ref file.zip"',
+        messageText: '参考',
         displayMessageText: '参考',
+        fileReferences: [
+          expect.objectContaining({
+            contentLocator: { kind: 'workspace-file', path: 'assets/ref file.zip' },
+          }),
+        ],
       }),
     );
   });
@@ -2276,9 +2447,11 @@ describe('InputArea composer controls', () => {
 function InputAreaStatefulHarness({
   initialInputValue,
   onSend,
+  presentation,
 }: {
   readonly initialInputValue: string;
   readonly onSend: React.ComponentProps<typeof InputArea>['onSend'];
+  readonly presentation?: React.ComponentProps<typeof InputArea>['presentation'];
 }) {
   const [inputValue, setInputValue] = useState(initialInputValue);
   const [selectedFileReferences, setSelectedFileReferences] = useState<
@@ -2287,6 +2460,7 @@ function InputAreaStatefulHarness({
 
   return (
     <InputArea
+      presentation={presentation}
       inputValue={inputValue}
       isThinking={false}
       selectedFileReferences={selectedFileReferences}
@@ -2313,7 +2487,10 @@ function Harness({
   onSessionModeChange = vi.fn(),
   selectedModel = 'openai:gpt-5.5',
   sessionMode = 'agent',
-  skills = [],
+  inputCatalog,
+  inputCatalogPhase,
+  inputCatalogBindingKind,
+  configurationPolicy,
   availableModels = chatModels,
   availableMediaModels = mediaModels,
   mediaModelSelection = {
@@ -2351,7 +2528,12 @@ function Harness({
   >['onSessionModeChange'];
   readonly selectedModel?: string;
   readonly sessionMode?: SessionMode;
-  readonly skills?: React.ComponentProps<typeof InputAreaProvider>['skills'];
+  readonly inputCatalog?: readonly AgentInputCatalogEntry[];
+  readonly inputCatalogPhase?: React.ComponentProps<typeof InputAreaProvider>['inputCatalogPhase'];
+  readonly inputCatalogBindingKind?: React.ComponentProps<
+    typeof InputAreaProvider
+  >['inputCatalogBindingKind'];
+  readonly configurationPolicy?: AgentConfigurationPolicyProjection;
   readonly availableModels?: ChatModelOption[];
   readonly availableMediaModels?: ChatModelOption[];
   readonly mediaModelSelection?: React.ComponentProps<
@@ -2387,7 +2569,10 @@ function Harness({
       maxContextTokens={8192}
       isCompressing={false}
       mediaModelCallCount={0}
-      skills={skills}
+      inputCatalog={inputCatalog}
+      inputCatalogPhase={inputCatalogPhase}
+      inputCatalogBindingKind={inputCatalogBindingKind}
+      configurationPolicy={configurationPolicy}
       onRequestFiles={onRequestFiles}
       mentionItems={mentionItems.map(normalizeMentionItem)}
       onAddContextChip={onAddContextChip}

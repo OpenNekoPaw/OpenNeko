@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { parseAgentConversationContext, type AgentHomeDiagnostic } from '@neko/agent-contracts';
+import { parseAgentBoundDomainBinding, type AgentHomeDiagnostic } from '@neko/agent-contracts';
 import type { PiConversationCatalogRecord } from './node-conversation-authority';
 import { openNodePiConversationStorage } from './node-conversation-storage';
 
@@ -149,10 +149,10 @@ function parseConversationRecord(
     throw new TypeError('Pi conversation catalog row must be an object.');
   }
   const contextJson = readOptionalString(value, 'context_json');
-  let context: ReturnType<typeof parseAgentConversationContext> | undefined;
+  let context: ReturnType<typeof parseAgentBoundDomainBinding> | undefined;
   if (contextJson !== undefined) {
     try {
-      context = parseAgentConversationContext(JSON.parse(contextJson));
+      context = parseAgentBoundDomainBinding(JSON.parse(contextJson));
     } catch (error) {
       if (onInvalidContext === undefined) throw error;
       onInvalidContext(error);

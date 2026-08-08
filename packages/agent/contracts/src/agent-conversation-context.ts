@@ -21,24 +21,12 @@ export interface AgentScratchArtifactRef {
   readonly state: 'recoverable' | 'published';
 }
 
-export type AgentConversationContext =
-  | {
-      readonly kind: 'assistant';
-      readonly assistantSpaceId: string;
-      readonly baseGrantIds: readonly string[];
-    }
-  | {
-      readonly kind: 'workspace';
-      readonly workspaceId: string;
-      readonly workspaceGrantId: string;
-    };
+export class AgentConversationResourceContractError extends Error {
+  readonly code: 'invalid-agent-conversation-resource-contract';
 
-export class AgentConversationContextError extends Error {
-  readonly code: 'invalid-agent-conversation-context';
-
-  constructor(code: AgentConversationContextError['code'], message: string) {
+  constructor(code: AgentConversationResourceContractError['code'], message: string) {
     super(message);
-    this.name = 'AgentConversationContextError';
+    this.name = 'AgentConversationResourceContractError';
     this.code = code;
   }
 }
@@ -97,36 +85,6 @@ export function parseAgentScratchArtifactRef(value: unknown): AgentScratchArtifa
   };
 }
 
-export function parseAgentConversationContext(value: unknown): AgentConversationContext {
-  const record = requireRecord(value, 'Agent Conversation context must be an object.');
-  const kind = record['kind'];
-  if (kind === 'assistant') {
-    requireExactKeys(
-      record,
-      ['kind', 'assistantSpaceId', 'baseGrantIds'],
-      'Assistant Conversation context',
-    );
-    return {
-      kind,
-      assistantSpaceId: requireIdentity(record['assistantSpaceId'], 'Assistant Space'),
-      baseGrantIds: requireIdentityArray(record['baseGrantIds'], 'Assistant Resource grants'),
-    };
-  }
-  if (kind === 'workspace') {
-    requireExactKeys(
-      record,
-      ['kind', 'workspaceId', 'workspaceGrantId'],
-      'Workspace Conversation context',
-    );
-    return {
-      kind,
-      workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-      workspaceGrantId: requireIdentity(record['workspaceGrantId'], 'Workspace grant'),
-    };
-  }
-  throw invalid(`Unknown Agent Conversation context kind '${String(kind)}'.`);
-}
-
 function requireRecord(value: unknown, message: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw invalid(message);
   return value as Record<string, unknown>;
@@ -137,15 +95,6 @@ function requireIdentity(value: unknown, label: string): string {
     throw invalid(`${label} identity is required.`);
   }
   return value;
-}
-
-function requireIdentityArray(value: unknown, label: string): readonly string[] {
-  if (!Array.isArray(value)) throw invalid(`${label} must be an array.`);
-  const identities = value.map((entry) => requireIdentity(entry, label));
-  if (new Set(identities).size !== identities.length) {
-    throw invalid(`${label} must not contain duplicates.`);
-  }
-  return identities;
 }
 
 function requireExactKeys(
@@ -169,6 +118,9 @@ function requireAllowedKeys(
   if (missing) throw invalid(`${label} is missing field '${missing}'.`);
 }
 
-function invalid(message: string): AgentConversationContextError {
-  return new AgentConversationContextError('invalid-agent-conversation-context', message);
+function invalid(message: string): AgentConversationResourceContractError {
+  return new AgentConversationResourceContractError(
+    'invalid-agent-conversation-resource-contract',
+    message,
+  );
 }

@@ -1,4 +1,11 @@
-import { parseAgentConversationContext, parseAgentScratchArtifactRef } from '@neko/agent-contracts';
+import {
+  parseAgentBoundDomainBinding,
+  parseAgentConversationConfiguration,
+  parseAgentConversationTurnConfigurationSnapshot,
+  parseAgentDraftInputIntent,
+  parseAgentInputReferenceReceipt,
+  parseAgentScratchArtifactRef,
+} from '@neko/agent-contracts';
 import {
   LocalMetadataError,
   initializeLocalMetadataTables,
@@ -138,6 +145,11 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
         ...current,
         pendingTurn,
       })),
+    updateConfiguration: (conversationId, configuration) =>
+      writeRecord('update-agent-conversation-configuration', conversationId, (current) => ({
+        ...current,
+        configuration,
+      })),
     readConversation: (conversationId) =>
       options.metadataStore.transaction(
         { mode: 'read', ownership: 'state', operation: 'read-agent-conversation-lifecycle' },
@@ -255,9 +267,9 @@ export function createPersistentAgentConversationLifecycleRepository(options: {
 async function commitContext(
   sql: LocalMetadataSqlExecutor,
   conversationId: string,
-  context: ReturnType<typeof parseAgentConversationContext>,
+  context: ReturnType<typeof parseAgentBoundDomainBinding>,
   operation: string,
-): Promise<ReturnType<typeof parseAgentConversationContext>> {
+): Promise<ReturnType<typeof parseAgentBoundDomainBinding>> {
   await sql.run(
     `INSERT INTO agent_conversation_authority(conversation_id, context_json)
      VALUES (?, ?)
@@ -282,10 +294,10 @@ async function commitContext(
 
 function decodeContextRow(
   row: LocalMetadataSqlRow,
-): ReturnType<typeof parseAgentConversationContext> {
+): ReturnType<typeof parseAgentBoundDomainBinding> {
   const source = readString(row, 'context_json');
   try {
-    return parseAgentConversationContext(JSON.parse(source));
+    return parseAgentBoundDomainBinding(JSON.parse(source));
   } catch (error) {
     if (error instanceof LocalMetadataError) throw error;
     throw persistenceError(
@@ -304,28 +316,24 @@ export function parseAgentConversationLifecycleRecord(
       'conversationId',
       'context',
       'createdAt',
-      'initialMessage',
+      'initialInput',
       'configuration',
       'pendingTurn',
       'scratchArtifacts',
     ],
     'Agent Conversation lifecycle record',
   );
-  const initialMessage = exactRecord(
-    record['initialMessage'],
-    ['messageId', 'text', 'resourceGrantIds'],
-    'Agent initial message',
+  const initialInput = exactRecord(
+    record['initialInput'],
+    ['messageId', 'intent', 'references', 'resourceGrantIds'],
+    'Agent initial input',
   );
-  const configuration = exactRecord(
-    record['configuration'],
-    ['providerId', 'modelId', 'executionMode'],
-    'Agent Conversation configuration',
-  );
+  const configuration = parseAgentConversationConfiguration(record['configuration']);
   const pendingRecord = requireRecord(
     record['pendingTurn'],
     'Agent pending turn must be an object.',
   );
-  const pendingKeys = ['requestId', 'turnId', 'status'];
+  const pendingKeys = ['requestId', 'turnId', 'status', 'configuration'];
   if ('diagnostic' in pendingRecord) pendingKeys.push('diagnostic');
   const pendingTurn = exactRecord(pendingRecord, pendingKeys, 'Agent pending turn');
   const status = pendingTurn['status'];
@@ -350,14 +358,14 @@ export function parseAgentConversationLifecycleRecord(
       'Agent pending turn diagnostic must be a non-empty string.',
     );
   }
-  const executionMode = configuration['executionMode'];
-  if (executionMode !== 'plan' && executionMode !== 'ask' && executionMode !== 'auto') {
+  const resourceGrantIds = identityArray(initialInput['resourceGrantIds'], 'Resource grant');
+  const referencesValue = initialInput['references'];
+  if (!Array.isArray(referencesValue)) {
     throw persistenceError(
       'decode-agent-conversation-lifecycle',
-      `Unknown Agent execution mode '${String(executionMode)}'.`,
+      'Agent initial input references must be an array.',
     );
   }
-  const resourceGrantIds = identityArray(initialMessage['resourceGrantIds'], 'Resource grant');
   const scratchArtifactsValue = record['scratchArtifacts'];
   if (!Array.isArray(scratchArtifactsValue)) {
     throw persistenceError(
@@ -367,22 +375,20 @@ export function parseAgentConversationLifecycleRecord(
   }
   return {
     conversationId: identity(record['conversationId'], 'Conversation'),
-    context: parseAgentConversationContext(record['context']),
+    context: parseAgentBoundDomainBinding(record['context']),
     createdAt: identity(record['createdAt'], 'createdAt'),
-    initialMessage: {
-      messageId: identity(initialMessage['messageId'], 'initial message'),
-      text: identity(initialMessage['text'], 'initial message text'),
+    initialInput: {
+      messageId: identity(initialInput['messageId'], 'initial message'),
+      intent: parseAgentDraftInputIntent(initialInput['intent']),
+      references: referencesValue.map(parseAgentInputReferenceReceipt),
       resourceGrantIds,
     },
-    configuration: {
-      providerId: identity(configuration['providerId'], 'Provider'),
-      modelId: identity(configuration['modelId'], 'Model'),
-      executionMode,
-    },
+    configuration,
     pendingTurn: {
       requestId: identity(pendingTurn['requestId'], 'request'),
       turnId: identity(pendingTurn['turnId'], 'Turn'),
       status,
+      configuration: parseAgentConversationTurnConfigurationSnapshot(pendingTurn['configuration']),
       ...(diagnostic === undefined ? {} : { diagnostic }),
     },
     scratchArtifacts: scratchArtifactsValue.map(parseAgentScratchArtifactRef),

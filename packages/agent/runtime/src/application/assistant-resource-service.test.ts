@@ -71,7 +71,12 @@ function conversationRecord() {
       baseGrantIds: ['grant:1'],
     },
     createdAt: '2026-08-03T00:00:00.000Z',
-    initialMessage: { messageId: 'message:1', text: 'Create', resourceGrantIds: ['grant:1'] },
+    initialInput: {
+      messageId: 'message:1',
+      intent: { kind: 'message', text: 'Create' },
+      references: [],
+      resourceGrantIds: ['grant:1'],
+    },
     configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' as const },
     pendingTurn: { requestId: 'request:1', turnId: 'turn:1', status: 'running' as const },
     scratchArtifacts: [

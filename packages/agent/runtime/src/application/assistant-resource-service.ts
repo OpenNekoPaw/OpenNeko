@@ -2,7 +2,7 @@ import {
   parseAssistantResourceIdentity,
   parseAssistantResourceProjection,
   type AgentResourceGrantKind,
-  type AgentConversationContext,
+  type AgentBoundDomainBinding,
   type AgentScratchArtifactRef,
   type AssistantResourceIdentity,
   type AssistantResourceProjection,
@@ -14,7 +14,7 @@ import type {
 } from './agent-conversation-lifecycle-service';
 
 type AssistantConversationContext = Extract<
-  AgentConversationContext,
+  AgentBoundDomainBinding,
   { readonly kind: 'assistant' }
 >;
 type AssistantConversationRecord = Omit<AgentConversationLifecycleRecord, 'context'> & {

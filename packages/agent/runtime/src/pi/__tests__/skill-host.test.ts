@@ -6,6 +6,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildSkillActivationId,
   PiSkillHost,
   SkillHostError,
   type SkillHostPolicy,
@@ -61,10 +62,12 @@ describe('PiSkillHost', () => {
       {
         path: join(root, 'plugin-b'),
         source: { kind: 'plugin', pluginId: 'beta@market' },
+        entryPointKind: 'skill',
       },
       {
         path: join(root, 'plugin-a'),
         source: { kind: 'plugin', pluginId: 'alpha@market' },
+        entryPointKind: 'skill',
       },
     ]);
 
@@ -95,7 +98,11 @@ describe('PiSkillHost', () => {
     await createSkill(root, 'plugin', 'invalid-source', 'Body');
     await expect(
       new PiSkillHost(env, policy).discover([
-        { path: join(root, 'plugin'), source: { kind: 'plugin', pluginId: '../invalid' } },
+        {
+          path: join(root, 'plugin'),
+          source: { kind: 'plugin', pluginId: '../invalid' },
+          entryPointKind: 'skill',
+        },
       ]),
     ).rejects.toThrow('invalid plugin id');
   });
@@ -112,6 +119,94 @@ describe('PiSkillHost', () => {
 
     expect(snapshot.skills[0]!.disableModelInvocation).toBe(true);
     expect(snapshot.invoke('explicit-only')).toContain('Explicit body');
+  });
+
+  it('keeps same-named Skills and command artifacts in independent entry-point namespaces', async () => {
+    await createSkill(root, 'project', 'review', 'Skill review body');
+    const commandRoot = join(root, 'project-commands');
+    await createCommandArtifact(commandRoot, 'review', 'Command review body', {
+      argumentHint: '<scope>',
+      supportsArguments: true,
+    });
+
+    const snapshot = await new PiSkillHost(env, policy).discover([
+      ...sourceRoots(root, ['project']),
+      {
+        path: commandRoot,
+        source: { kind: 'project' },
+        entryPointKind: 'command-artifact',
+      },
+    ]);
+
+    const skill = snapshot.records.find((record) => record.entryPoint.kind === 'skill');
+    const command = snapshot.records.find(
+      (record) => record.entryPoint.kind === 'command-artifact',
+    );
+    expect(skill).toMatchObject({ name: 'review', entryPoint: { kind: 'skill' } });
+    expect(command).toMatchObject({
+      name: 'review',
+      entryPoint: {
+        kind: 'command-artifact',
+        commandId: 'review',
+        artifactId: 'command:review',
+        argumentHint: '<scope>',
+        supportsArguments: true,
+      },
+    });
+    expect(snapshot.warnings).toEqual([]);
+    expect(buildSkillActivationId(skill!)).not.toBe(buildSkillActivationId(command!));
+    expect(snapshot.invokeExact('review', buildSkillActivationId(skill!))).toContain(
+      'Skill review body',
+    );
+    expect(snapshot.invokeExact('review', buildSkillActivationId(command!))).toContain(
+      'Command review body',
+    );
+  });
+
+  it('isolates invalid command artifacts while preserving valid siblings', async () => {
+    const commandRoot = join(root, 'project-commands');
+    await createCommandArtifact(commandRoot, 'review', 'Review body');
+    await writeFile(
+      join(commandRoot, 'broken.md'),
+      '---\nname: another-name\ndescription: broken fixture\n---\nBroken body\n',
+      'utf8',
+    );
+
+    const snapshot = await new PiSkillHost(env, policy).discover([
+      {
+        path: commandRoot,
+        source: { kind: 'project' },
+        entryPointKind: 'command-artifact',
+      },
+    ]);
+
+    expect(snapshot.records).toEqual([
+      expect.objectContaining({
+        name: 'review',
+        entryPoint: expect.objectContaining({ kind: 'command-artifact' }),
+      }),
+    ]);
+    expect(snapshot.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'invalid_metadata',
+        source: { kind: 'project' },
+        path: join(commandRoot, 'broken.md'),
+      }),
+    ]);
+  });
+
+  it('rejects stale or cross-entry activation identities without name fallback', async () => {
+    const skillRoot = await createSkill(root, 'project', 'review', 'Version one');
+    const host = new PiSkillHost(env, policy);
+    const first = await host.discover(sourceRoots(root, ['project']));
+    const firstRecord = first.records[0]!;
+    await writeFile(join(skillRoot, 'SKILL.md'), skillDocument('review', 'Version two'), 'utf8');
+    const second = await host.discover(sourceRoots(root, ['project']));
+
+    expect(() => second.invokeExact('review', buildSkillActivationId(firstRecord))).toThrowError(
+      expect.objectContaining<Partial<SkillHostError>>({ code: 'skill-not-found' }),
+    );
+    expect(second.invoke('review')).toContain('Version two');
   });
 
   it('exposes only process-local virtual locators and contained relative resources', async () => {
@@ -269,6 +364,33 @@ function skillDocument(name: string, body: string): string {
   return `---\nname: ${name}\ndescription: ${name} fixture\n---\n${body}\n`;
 }
 
+async function createCommandArtifact(
+  commandRoot: string,
+  name: string,
+  body: string,
+  metadata: { readonly argumentHint?: string; readonly supportsArguments?: boolean } = {},
+): Promise<void> {
+  await mkdir(commandRoot, { recursive: true });
+  await writeFile(
+    join(commandRoot, `${name}.md`),
+    [
+      '---',
+      `name: ${name}`,
+      `description: ${name} command fixture`,
+      ...(metadata.argumentHint === undefined ? [] : [`argument-hint: ${metadata.argumentHint}`]),
+      `supports-arguments: ${metadata.supportsArguments ?? false}`,
+      '---',
+      body,
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
 function sourceRoots(root: string, sources: readonly Exclude<SkillSourceKind, 'plugin'>[]) {
-  return sources.map((kind) => ({ path: join(root, kind), source: { kind } }));
+  return sources.map((kind) => ({
+    path: join(root, kind),
+    source: { kind },
+    entryPointKind: 'skill' as const,
+  }));
 }

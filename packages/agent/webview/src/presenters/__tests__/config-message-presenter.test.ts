@@ -318,6 +318,42 @@ describe('config message presenter', () => {
     });
   });
 
+  it('preserves exact Draft reference receipts in projected mention context', () => {
+    const referenceReceipt = {
+      catalogEntryId: 'mention:workspace-reference:hero',
+      referenceId: 'workspace-reference:hero',
+      ownerKind: 'workspace' as const,
+      ownerId: 'workspace-1',
+      bindingReceiptId: 'binding-1',
+    };
+    const projection = projectProjectFilesMessage({
+      type: 'projectFiles',
+      purpose: 'entry',
+      filter: 'hero',
+      files: [
+        {
+          locator: { kind: 'workspace-file', path: 'notes/hero.md' },
+          name: 'hero.md',
+          type: 'file',
+          source: 'workspace',
+          referenceReceipt,
+        },
+      ],
+    });
+
+    expect(projection.mentionItems[0]).toMatchObject({
+      label: 'hero.md',
+      contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+      contextPayload: {
+        id: 'workspace-reference:hero',
+        data: {
+          contentLocator: { kind: 'workspace-file', path: 'notes/hero.md' },
+          ...referenceReceipt,
+        },
+      },
+    });
+  });
+
   it('labels semantic Entity Candidates distinctly from confirmed Entities', () => {
     expect(
       projectProjectFilesMessage({

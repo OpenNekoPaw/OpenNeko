@@ -7,6 +7,10 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type {
+  AgentBindingKind,
+  AgentInputCatalogEntry,
+  AgentInteractionPhase,
+  AgentConfigurationPolicyProjection,
   AmbientCanvasNode,
   MediaUnderstandingModels,
   ShellExecutionMode,
@@ -15,14 +19,7 @@ import type {
 import type { ConversationKind } from '@neko/agent-contracts';
 import type { ChatModelOption } from '@neko/ai-contracts';
 import type { AgentContextPayload } from '@neko/agent-contracts';
-import type {
-  SlashCommand,
-  SkillSummary,
-  MentionItem,
-  PluginSlashCommandDef,
-  GenCategory,
-  GenerationParams,
-} from './InputArea/types';
+import type { SlashCommand, MentionItem, GenCategory, GenerationParams } from './InputArea/types';
 export type MediaCategory = 'image' | 'video' | 'audio';
 
 export interface MediaModelSelection {
@@ -70,10 +67,12 @@ export interface InputAreaContextValue {
   onCompressContext?: () => Promise<void>;
   // Media model call count (per conversation)
   mediaModelCallCount: number;
-  // Skills
-  skills: SkillSummary[];
-  /** Plugin slash commands from external extensions */
-  pluginCommands?: PluginSlashCommandDef[];
+  /** Host-owned executable catalog for the exact Draft or Session binding. */
+  inputCatalog?: readonly AgentInputCatalogEntry[];
+  /** Host-owned field policy for the exact Draft or Session binding. */
+  configurationPolicy?: AgentConfigurationPolicyProjection;
+  inputCatalogPhase?: AgentInteractionPhase;
+  inputCatalogBindingKind?: AgentBindingKind;
   onSlashCommand?: (command: SlashCommand) => void;
   onRequestFiles?: (filter: string) => void;
   /** Unified @mention items (files + canvas nodes + characters) — updated after onRequestFiles */
@@ -123,8 +122,10 @@ export function InputAreaProvider({
       isCompressing: value.isCompressing,
       onCompressContext: value.onCompressContext,
       mediaModelCallCount: value.mediaModelCallCount,
-      skills: value.skills,
-      pluginCommands: value.pluginCommands,
+      inputCatalog: value.inputCatalog,
+      configurationPolicy: value.configurationPolicy,
+      inputCatalogPhase: value.inputCatalogPhase,
+      inputCatalogBindingKind: value.inputCatalogBindingKind,
       onSlashCommand: value.onSlashCommand,
       onRequestFiles: value.onRequestFiles,
       mentionItems: value.mentionItems,
@@ -161,8 +162,10 @@ export function InputAreaProvider({
       value.isCompressing,
       value.onCompressContext,
       value.mediaModelCallCount,
-      value.skills,
-      value.pluginCommands,
+      value.inputCatalog,
+      value.configurationPolicy,
+      value.inputCatalogPhase,
+      value.inputCatalogBindingKind,
       value.onSlashCommand,
       value.onRequestFiles,
       value.mentionItems,

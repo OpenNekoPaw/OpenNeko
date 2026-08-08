@@ -1,9 +1,21 @@
 import {
-  parseAgentConversationContext,
+  parseAgentBoundDomainBinding,
+  parseAgentConfigurationPolicyProjection,
+  parseAgentConfigurationRequest,
+  parseAgentConversationConfiguration,
+  parseAgentConversationTurnConfigurationSnapshot,
+  parseAgentDraftInputIntent,
+  parseAgentInputReferenceReceipt,
   parseAgentScratchArtifactRef,
-  type AgentConversationContext,
+  type AgentBoundDomainBinding,
+  type AgentConfigurationPolicyProjection,
+  type AgentConfigurationRequest,
+  type AgentConversationConfiguration,
+  type AgentConversationTurnConfigurationSnapshot,
   type AgentScratchArtifactRef,
   type AgentContextPayload,
+  type AgentDraftInputIntent,
+  type AgentInputReferenceReceipt,
   type Message,
 } from '@neko/agent-contracts';
 
@@ -11,22 +23,20 @@ export type AgentPendingTurnStatus = 'pending' | 'running' | 'completed' | 'fail
 
 export interface AgentConversationLifecycleRecord {
   readonly conversationId: string;
-  readonly context: AgentConversationContext;
+  readonly context: AgentBoundDomainBinding;
   readonly createdAt: string;
-  readonly initialMessage: {
+  readonly initialInput: {
     readonly messageId: string;
-    readonly text: string;
+    readonly intent: AgentDraftInputIntent;
+    readonly references: readonly AgentInputReferenceReceipt[];
     readonly resourceGrantIds: readonly string[];
   };
-  readonly configuration: {
-    readonly providerId: string;
-    readonly modelId: string;
-    readonly executionMode: 'plan' | 'ask' | 'auto';
-  };
+  readonly configuration: AgentConversationConfiguration;
   readonly pendingTurn: {
     readonly requestId: string;
     readonly turnId: string;
     readonly status: AgentPendingTurnStatus;
+    readonly configuration: AgentConversationTurnConfigurationSnapshot;
     readonly diagnostic?: string;
   };
   readonly scratchArtifacts: readonly AgentScratchArtifactRef[];
@@ -34,10 +44,14 @@ export interface AgentConversationLifecycleRecord {
 
 export interface AgentFirstSubmitInput {
   readonly requestId: string;
-  readonly context: AgentConversationContext;
-  readonly messageText: string;
+  readonly context: AgentBoundDomainBinding;
+  readonly input: AgentDraftInputIntent;
+  readonly references: readonly AgentInputReferenceReceipt[];
   readonly resourceGrantIds: readonly string[];
-  readonly configuration: AgentConversationLifecycleRecord['configuration'];
+  readonly configuration: {
+    readonly request: AgentConfigurationRequest;
+    readonly projection: AgentConfigurationPolicyProjection;
+  };
 }
 
 export function projectAgentConversationInitialMessage(
@@ -50,9 +64,9 @@ export function projectAgentConversationInitialMessage(
     );
   }
   return {
-    id: record.initialMessage.messageId,
+    id: record.initialInput.messageId,
     role: 'user',
-    content: record.initialMessage.text,
+    content: projectInitialInputText(record.initialInput.intent),
     timestamp,
   };
 }
@@ -66,11 +80,15 @@ export interface AgentConversationLifecycleRepositoryPort {
     conversationId: string,
     turn: AgentConversationLifecycleRecord['pendingTurn'],
   ): Promise<AgentConversationLifecycleRecord>;
+  updateConfiguration(
+    conversationId: string,
+    configuration: AgentConversationConfiguration,
+  ): Promise<AgentConversationLifecycleRecord>;
   readConversation(conversationId: string): Promise<AgentConversationLifecycleRecord | undefined>;
   readFirstSubmitByRequest(
     requestId: string,
   ): Promise<AgentConversationLifecycleRecord | undefined>;
-  readConversationContext(conversationId: string): Promise<AgentConversationContext | undefined>;
+  readConversationContext(conversationId: string): Promise<AgentBoundDomainBinding | undefined>;
   addScratchArtifact(
     conversationId: string,
     artifact: AgentScratchArtifactRef,
@@ -88,12 +106,20 @@ export interface AgentConversationLifecycleRepositoryPort {
 
 export interface AgentResourceGrantValidationPort {
   validate(input: {
-    readonly context: AgentConversationContext;
+    readonly context: AgentBoundDomainBinding;
     readonly resourceGrantIds: readonly string[];
   }): Promise<void>;
   resolveForTurn(input: {
-    readonly context: AgentConversationContext;
+    readonly context: AgentBoundDomainBinding;
     readonly resourceGrantIds: readonly string[];
+  }): Promise<readonly AgentContextPayload[]>;
+}
+
+export interface AgentDomainContextResolutionPort {
+  resolveForTurn(input: {
+    readonly conversationId: string;
+    readonly context: AgentBoundDomainBinding;
+    readonly references: readonly AgentInputReferenceReceipt[];
   }): Promise<readonly AgentContextPayload[]>;
 }
 
@@ -119,18 +145,19 @@ export interface AgentProviderExecutionPort {
     readonly requestId: string;
     readonly turnId: string;
     readonly conversationId: string;
-    readonly context: AgentConversationContext;
-    readonly messageText: string;
+    readonly context: AgentBoundDomainBinding;
+    readonly input: AgentDraftInputIntent;
     readonly resourceGrantIds: readonly string[];
     readonly contextPayloads: readonly AgentContextPayload[];
-    readonly configuration: AgentConversationLifecycleRecord['configuration'];
+    readonly configuration: AgentConversationTurnConfigurationSnapshot;
   }): Promise<void>;
 }
 
 export interface AgentConversationSessionMaterializationPort {
   materialize(input: {
     readonly conversationId: string;
-    readonly context: AgentConversationContext;
+    readonly context: AgentBoundDomainBinding;
+    readonly title: string;
   }): Promise<void>;
 }
 
@@ -145,7 +172,13 @@ export interface AgentConversationLifecycleService {
   readFirstSubmitByRequest(
     requestId: string,
   ): Promise<AgentConversationLifecycleRecord | undefined>;
-  readConversationContext(conversationId: string): Promise<AgentConversationContext>;
+  readConversationContext(conversationId: string): Promise<AgentBoundDomainBinding>;
+  readConversationConfiguration(conversationId: string): Promise<AgentConversationConfiguration>;
+  updateConfiguration(input: {
+    readonly conversationId: string;
+    readonly request: AgentConfigurationRequest;
+    readonly projection: AgentConfigurationPolicyProjection;
+  }): Promise<AgentConversationConfiguration>;
   createScratch(input: {
     readonly conversationId: string;
     readonly label: string;
@@ -181,6 +214,7 @@ export interface AgentConversationLifecycleService {
 export function createAgentConversationLifecycleService(options: {
   readonly repository: AgentConversationLifecycleRepositoryPort;
   readonly grants: AgentResourceGrantValidationPort;
+  readonly domainContext: AgentDomainContextResolutionPort;
   readonly scratch: AgentScratchHostPort;
   readonly publication: AgentScratchPublicationPort;
   readonly session: AgentConversationSessionMaterializationPort;
@@ -204,31 +238,66 @@ export function createAgentConversationLifecycleService(options: {
     input: AgentFirstSubmitInput,
   ): Promise<AgentConversationLifecycleRecord> => {
     const requestId = requireIdentity(input.requestId, 'Agent first-submit request');
-    const context = parseAgentConversationContext(input.context);
-    const messageText = requireText(input.messageText, 'Agent first-submit message');
+    const context = parseAgentBoundDomainBinding(input.context);
+    const inputIntent = parseAgentDraftInputIntent(input.input);
+    const references = input.references.map(parseAgentInputReferenceReceipt);
     const resourceGrantIds = requireUniqueIdentities(
       input.resourceGrantIds,
       'Agent first-submit Resource grants',
     );
     await options.grants.validate({ context, resourceGrantIds });
-    const configuration = {
-      providerId: requireIdentity(input.configuration.providerId, 'Agent Provider'),
-      modelId: requireIdentity(input.configuration.modelId, 'Agent Model'),
-      executionMode: requireExecutionMode(input.configuration.executionMode),
-    };
+    const configurationRequest = parseAgentConfigurationRequest(input.configuration.request);
+    const configurationProjection = parseAgentConfigurationPolicyProjection(
+      input.configuration.projection,
+    );
+    if (JSON.stringify(configurationProjection.request) !== JSON.stringify(configurationRequest)) {
+      throw new Error('Agent first-submit configuration projection does not match its request.');
+    }
+    const existing = await options.repository.readFirstSubmitByRequest(requestId);
+    if (existing) {
+      assertSameFirstSubmit(existing, {
+        context,
+        input: inputIntent,
+        references,
+        resourceGrantIds,
+        configuration: {
+          conversationId: existing.conversationId,
+          request: configurationRequest,
+          projection: configurationProjection,
+        },
+      });
+      await options.session.materialize({
+        conversationId: existing.conversationId,
+        context: existing.context,
+        title: projectAgentConversationTitle(existing.initialInput.intent),
+      });
+      return existing;
+    }
     const conversationId = `conversation:${options.createIdentity()}`;
     const turnId = `turn:${options.createIdentity()}`;
+    const configuration = parseAgentConversationConfiguration({
+      conversationId,
+      request: configurationRequest,
+      projection: configurationProjection,
+    });
+    const turnConfiguration = parseAgentConversationTurnConfigurationSnapshot({
+      conversationId,
+      turnId,
+      request: configurationRequest,
+      projection: configurationProjection,
+    });
     const record: AgentConversationLifecycleRecord = {
       conversationId,
       context,
       createdAt: options.now(),
-      initialMessage: {
+      initialInput: {
         messageId: `message:${options.createIdentity()}`,
-        text: messageText,
+        intent: inputIntent,
+        references,
         resourceGrantIds,
       },
       configuration,
-      pendingTurn: { requestId, turnId, status: 'pending' },
+      pendingTurn: { requestId, turnId, status: 'pending', configuration: turnConfiguration },
       scratchArtifacts: [],
     };
     const committed = await options.repository.commitFirstSubmit(record);
@@ -238,9 +307,17 @@ export function createAgentConversationLifecycleService(options: {
         `Agent first-submit request '${requestId}' conflicts with committed request '${exact.pendingTurn.requestId}'.`,
       );
     }
+    assertSameFirstSubmit(exact, {
+      context,
+      input: inputIntent,
+      references,
+      resourceGrantIds,
+      configuration,
+    });
     await options.session.materialize({
       conversationId: exact.conversationId,
       context: exact.context,
+      title: projectAgentConversationTitle(exact.initialInput.intent),
     });
     return exact;
   };
@@ -262,19 +339,26 @@ export function createAgentConversationLifecycleService(options: {
       status: 'running',
     });
     const execution = (async () => {
-      const contextPayloads = await options.grants.resolveForTurn({
-        context: exact.context,
-        resourceGrantIds: exact.initialMessage.resourceGrantIds,
-      });
+      const [domainContextPayloads, resourceContextPayloads] = await Promise.all([
+        options.domainContext.resolveForTurn({
+          conversationId: exact.conversationId,
+          context: exact.context,
+          references: exact.initialInput.references,
+        }),
+        options.grants.resolveForTurn({
+          context: exact.context,
+          resourceGrantIds: exact.initialInput.resourceGrantIds,
+        }),
+      ]);
       await options.provider.start({
         requestId: exact.pendingTurn.requestId,
         turnId: exact.pendingTurn.turnId,
         conversationId: exact.conversationId,
         context: exact.context,
-        messageText: exact.initialMessage.text,
-        resourceGrantIds: exact.initialMessage.resourceGrantIds,
-        contextPayloads,
-        configuration: exact.configuration,
+        input: exact.initialInput.intent,
+        resourceGrantIds: exact.initialInput.resourceGrantIds,
+        contextPayloads: [...domainContextPayloads, ...resourceContextPayloads],
+        configuration: exact.pendingTurn.configuration,
       });
       await options.repository.updatePendingTurn(exact.conversationId, {
         ...exact.pendingTurn,
@@ -306,11 +390,20 @@ export function createAgentConversationLifecycleService(options: {
 
   const readConversationContext = async (
     conversationIdValue: string,
-  ): Promise<AgentConversationContext> => {
+  ): Promise<AgentBoundDomainBinding> => {
     const conversationId = requireIdentity(conversationIdValue, 'Agent Conversation');
     const stored = await options.repository.readConversationContext(conversationId);
     if (stored) return stored;
     throw new Error(`Agent Conversation '${conversationId}' context is not present.`);
+  };
+
+  const readConversationConfiguration = async (
+    conversationIdValue: string,
+  ): Promise<AgentConversationConfiguration> => {
+    const record = await readConversation(
+      requireIdentity(conversationIdValue, 'Agent Conversation'),
+    );
+    return parseAgentConversationConfiguration(record.configuration);
   };
 
   const requireScratch = async (
@@ -352,6 +445,17 @@ export function createAgentConversationLifecycleService(options: {
         requireIdentity(requestId, 'Agent first-submit request'),
       ),
     readConversationContext,
+    readConversationConfiguration,
+    async updateConfiguration(input) {
+      const conversationId = requireIdentity(input.conversationId, 'Agent Conversation');
+      const configuration = parseAgentConversationConfiguration({
+        conversationId,
+        request: input.request,
+        projection: input.projection,
+      });
+      const updated = await options.repository.updateConfiguration(conversationId, configuration);
+      return parseAgentConversationConfiguration(updated.configuration);
+    },
     async createScratch(input) {
       const record = await readConversation(input.conversationId);
       if (record.context.kind !== 'assistant') {
@@ -412,7 +516,7 @@ export function createAgentConversationLifecycleService(options: {
 
 export function createInMemoryAgentConversationLifecycleRepository(): AgentConversationLifecycleRepositoryPort {
   const recordsByConversation = new Map<string, AgentConversationLifecycleRecord>();
-  const contextsByConversation = new Map<string, AgentConversationContext>();
+  const contextsByConversation = new Map<string, AgentBoundDomainBinding>();
   const conversationByRequest = new Map<string, string>();
   const claimedTurns = new Set<string>();
   return {
@@ -436,6 +540,15 @@ export function createInMemoryAgentConversationLifecycleRepository(): AgentConve
     async updatePendingTurn(conversationId, pendingTurn) {
       const current = requireRecord(recordsByConversation, conversationId);
       const next = cloneRecord({ ...current, pendingTurn });
+      recordsByConversation.set(conversationId, next);
+      return cloneRecord(next);
+    },
+    async updateConfiguration(conversationId, configuration) {
+      const current = requireRecord(recordsByConversation, conversationId);
+      if (configuration.conversationId !== conversationId) {
+        throw new Error('Agent Conversation configuration belongs to another Conversation.');
+      }
+      const next = cloneRecord({ ...current, configuration });
       recordsByConversation.set(conversationId, next);
       return cloneRecord(next);
     },
@@ -507,7 +620,7 @@ export function createInMemoryAgentConversationLifecycleRepository(): AgentConve
   };
 }
 
-function cloneContext(context: AgentConversationContext): AgentConversationContext {
+function cloneContext(context: AgentBoundDomainBinding): AgentBoundDomainBinding {
   return context.kind === 'assistant'
     ? { ...context, baseGrantIds: [...context.baseGrantIds] }
     : { ...context };
@@ -529,25 +642,72 @@ function cloneRecord(record: AgentConversationLifecycleRecord): AgentConversatio
       record.context.kind === 'assistant'
         ? { ...record.context, baseGrantIds: [...record.context.baseGrantIds] }
         : { ...record.context },
-    initialMessage: {
-      ...record.initialMessage,
-      resourceGrantIds: [...record.initialMessage.resourceGrantIds],
+    initialInput: {
+      ...record.initialInput,
+      intent: { ...record.initialInput.intent },
+      references: record.initialInput.references.map((reference) => ({ ...reference })),
+      resourceGrantIds: [...record.initialInput.resourceGrantIds],
     },
-    configuration: { ...record.configuration },
-    pendingTurn: { ...record.pendingTurn },
+    configuration: structuredClone(record.configuration),
+    pendingTurn: structuredClone(record.pendingTurn),
     scratchArtifacts: record.scratchArtifacts.map((artifact) => ({ ...artifact })),
   };
+}
+
+const AGENT_CONVERSATION_TITLE_MAX_LENGTH = 50;
+
+export function projectAgentConversationTitle(input: AgentDraftInputIntent): string {
+  const normalized = projectInitialInputText(input).trim().replace(/\s+/g, ' ');
+  if (normalized.length === 0) {
+    throw new Error('Agent Conversation title source must not be empty.');
+  }
+  const characters = Array.from(normalized);
+  if (characters.length <= AGENT_CONVERSATION_TITLE_MAX_LENGTH) return normalized;
+
+  let title = characters.slice(0, AGENT_CONVERSATION_TITLE_MAX_LENGTH).join('').trim();
+  const lastSpace = title.lastIndexOf(' ');
+  if (lastSpace > 20) title = title.slice(0, lastSpace);
+  return `${title}...`;
+}
+
+function projectInitialInputText(input: AgentDraftInputIntent): string {
+  switch (input.kind) {
+    case 'message':
+      return input.text;
+    case 'command':
+      return `/${input.commandId}${input.args ? ` ${input.args}` : ''}`;
+    case 'skill':
+      return `$${input.skillName}${input.args ? ` ${input.args}` : ''}`;
+  }
+}
+
+function assertSameFirstSubmit(
+  record: AgentConversationLifecycleRecord,
+  input: {
+    readonly context: AgentBoundDomainBinding;
+    readonly input: AgentDraftInputIntent;
+    readonly references: readonly AgentInputReferenceReceipt[];
+    readonly resourceGrantIds: readonly string[];
+    readonly configuration: AgentConversationLifecycleRecord['configuration'];
+  },
+): void {
+  if (
+    JSON.stringify(record.context) !== JSON.stringify(input.context) ||
+    JSON.stringify(record.initialInput.intent) !== JSON.stringify(input.input) ||
+    JSON.stringify(record.initialInput.references) !== JSON.stringify(input.references) ||
+    JSON.stringify(record.initialInput.resourceGrantIds) !==
+      JSON.stringify(input.resourceGrantIds) ||
+    JSON.stringify(record.configuration) !== JSON.stringify(input.configuration)
+  ) {
+    throw new Error(
+      `Agent first-submit request '${record.pendingTurn.requestId}' conflicts with its committed input.`,
+    );
+  }
 }
 
 function requireIdentity(value: string, label: string): string {
   if (value.trim().length === 0) throw new Error(`${label} identity is required.`);
   return value;
-}
-
-function requireText(value: string, label: string): string {
-  const text = value.trim();
-  if (text.length === 0) throw new Error(`${label} is required.`);
-  return text;
 }
 
 function requireUniqueIdentities(value: readonly string[], label: string): readonly string[] {
@@ -564,11 +724,4 @@ function describeError(error: unknown): string {
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
-}
-
-function requireExecutionMode(value: 'plan' | 'ask' | 'auto'): 'plan' | 'ask' | 'auto' {
-  if (value !== 'plan' && value !== 'ask' && value !== 'auto') {
-    throw new Error(`Unknown Agent execution mode '${String(value)}'.`);
-  }
-  return value;
 }

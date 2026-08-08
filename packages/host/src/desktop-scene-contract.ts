@@ -133,7 +133,7 @@ export interface DesktopSceneUnavailableDiagnostic {
   readonly metadata: {
     readonly owner: 'workspace-authority' | 'agent-conversation-authority';
     readonly intentKind: 'open-workspace' | 'open-project-workspace' | 'restore-conversation';
-    readonly conversationOwnerKind?: AgentConversationOwnerRef['kind'];
+    readonly conversationOwnerKind?: AgentConversationOwnerRef['kind'] | 'world';
   };
 }
 
@@ -225,7 +225,8 @@ export function parseDesktopSceneTransitionResult(value: unknown): DesktopSceneT
       conversationOwnerKind !== 'assistant' &&
       conversationOwnerKind !== 'workspace' &&
       conversationOwnerKind !== 'character' &&
-      conversationOwnerKind !== 'room'
+      conversationOwnerKind !== 'room' &&
+      conversationOwnerKind !== 'world'
     ) {
       throw invalid(
         `Unknown Desktop Scene unavailable Conversation owner '${String(conversationOwnerKind)}'.`,

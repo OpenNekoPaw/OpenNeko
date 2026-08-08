@@ -115,6 +115,9 @@ export function projectSettingsDataMessage(message: SettingsDataMessage): Settin
         ? { modelGroups: readModelSourceGroups(source.modelGroups) }
         : {}),
       ...(mediaUnderstandingModels ? { mediaUnderstandingModels } : {}),
+      ...(message.agentConfiguration
+        ? { agentConfiguration: structuredClone(message.agentConfiguration) }
+        : {}),
       configDiagnostic,
     },
     selectedModel:
@@ -338,6 +341,7 @@ export function projectProjectFilesMessage(
       ...(file.icon ? { icon: file.icon } : {}),
       ...(file.source ? { source: file.source } : {}),
       ...(file.mediaType ? { mediaType: file.mediaType } : {}),
+      ...(file.referenceReceipt ? { contextPayload: toFileReferenceContextPayload(file) } : {}),
     };
   });
 
@@ -356,6 +360,7 @@ export function projectProjectFilesMessage(
       ...(extra.entityType ? { entityType: extra.entityType } : {}),
       ...(extra.navigationData ? { navigationData: extra.navigationData } : {}),
       ...(extra.thumbnailUri ? { thumbnailUri: extra.thumbnailUri } : {}),
+      ...(extra.referenceReceipt ? { referenceReceipt: extra.referenceReceipt } : {}),
       searchText: [
         extra.label,
         extra.summary,
@@ -418,6 +423,9 @@ export function projectConfigStateMessage(
         }
       : {}),
     ...(mediaUnderstandingModels ? { mediaUnderstandingModels } : {}),
+    ...(message.config.agentConfiguration
+      ? { agentConfiguration: structuredClone(message.config.agentConfiguration) }
+      : {}),
     configDiagnostic: readConfigDiagnostic(message.config.configDiagnostic),
   };
 }
@@ -712,6 +720,25 @@ function toAgentContextPayload(extra: ProjectMentionExtra): AgentContextPayload 
       ...(extra.entityType ? { entityType: extra.entityType } : {}),
       ...(extra.navigationData ? { navigationData: extra.navigationData } : {}),
       ...(extra.thumbnailUri ? { thumbnailUri: extra.thumbnailUri } : {}),
+      ...(extra.referenceReceipt ?? {}),
+    },
+  };
+}
+
+function toFileReferenceContextPayload(file: ProjectFileMentionInfo): AgentContextPayload {
+  if (!file.referenceReceipt) {
+    throw new Error(`Project file mention '${file.name}' has no reference receipt.`);
+  }
+  return {
+    type: 'file',
+    id: file.referenceReceipt.referenceId,
+    label: file.name,
+    summary: projectContentLocatorPath(file.locator),
+    data: {
+      contentLocator: file.locator,
+      ...(file.source ? { source: file.source } : {}),
+      ...(file.mediaType ? { mediaType: file.mediaType } : {}),
+      ...file.referenceReceipt,
     },
   };
 }
@@ -864,7 +891,9 @@ function isProjectFileMentionInfo(value: unknown): value is ProjectFileMentionIn
     (record.type === 'file' || record.type === 'folder') &&
     (record.icon === undefined || typeof record.icon === 'string') &&
     (record.source === undefined || isProjectMentionSource(record.source)) &&
-    (record.mediaType === undefined || isProjectMentionMediaType(record.mediaType)),
+    (record.mediaType === undefined || isProjectMentionMediaType(record.mediaType)) &&
+    (record.referenceReceipt === undefined ||
+      isAgentInputReferenceReceipt(record.referenceReceipt)),
   );
 }
 
@@ -883,7 +912,24 @@ function isProjectMentionExtra(value: unknown): value is ProjectMentionExtra {
     (record.contentLocator === undefined || isContentLocator(record.contentLocator)) &&
     (record.mediaType === undefined || isProjectMentionMediaType(record.mediaType)) &&
     (record.entityType === undefined || typeof record.entityType === 'string') &&
-    (record.navigationData === undefined || isStringRecord(record.navigationData)),
+    (record.navigationData === undefined || isStringRecord(record.navigationData)) &&
+    (record.referenceReceipt === undefined ||
+      isAgentInputReferenceReceipt(record.referenceReceipt)),
+  );
+}
+
+function isAgentInputReferenceReceipt(value: unknown): boolean {
+  const record = asRecord(value);
+  return Boolean(
+    record &&
+    readString(record, 'catalogEntryId') &&
+    readString(record, 'referenceId') &&
+    (record.ownerKind === 'assistant' ||
+      record.ownerKind === 'workspace' ||
+      record.ownerKind === 'character' ||
+      record.ownerKind === 'world') &&
+    readString(record, 'ownerId') &&
+    (record.bindingReceiptId === undefined || readString(record, 'bindingReceiptId')),
   );
 }
 

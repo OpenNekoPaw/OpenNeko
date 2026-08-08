@@ -1,85 +1,135 @@
 import { describe, expect, it } from 'vitest';
 import { parseAgentDraftSubmitInput, parseAgentDraftSubmitProjection } from '../agent-draft-submit';
 
-describe('Agent draft submit contract', () => {
-  it('accepts deterministic Assistant entry targeting for the exact unbound draft', () => {
-    expect(
-      parseAgentDraftSubmitInput({
-        target: { kind: 'automatic-assistant', draftId: 'draft-entry-1' },
-        messageText: 'Help me shape this idea',
-        resourceGrantIds: [],
-        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
-      }),
-    ).toMatchObject({ target: { kind: 'automatic-assistant', draftId: 'draft-entry-1' } });
-  });
+const configuration = {
+  modelCatalogEntryId: 'openai:gpt-5',
+  providerId: 'openai',
+  modelId: 'gpt-5',
+  executionMode: 'ask' as const,
+};
 
-  it('keeps an explicitly bound owner context exact', () => {
+describe('Agent Draft submit contract', () => {
+  it('accepts an ordinary message for the exact unbound Draft', () => {
     expect(
       parseAgentDraftSubmitInput({
-        target: {
-          kind: 'bound-context',
-          draftId: 'draft-workspace-1',
-          context: {
-            kind: 'workspace',
-            workspaceId: 'workspace-1',
-            workspaceGrantId: 'workspace-grant-1',
-          },
+        draft: {
+          phase: 'draft',
+          draftId: 'draft-entry-1',
+          binding: { kind: 'unbound' },
+          bindingReceipt: null,
         },
-        messageText: 'Edit this project',
+        input: { kind: 'message', text: 'Help me shape this idea' },
+        references: [],
         resourceGrantIds: [],
-        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+        configuration,
       }),
     ).toMatchObject({
-      target: {
-        kind: 'bound-context',
-        draftId: 'draft-workspace-1',
-        context: { kind: 'workspace', workspaceId: 'workspace-1' },
-      },
+      draft: { draftId: 'draft-entry-1', binding: { kind: 'unbound' } },
+      input: { kind: 'message' },
     });
   });
 
-  it('rejects a bound target without the exact draft identity', () => {
+  it('keeps an explicitly bound owner and receipt exact', () => {
+    const binding = {
+      kind: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      workspaceGrantId: 'workspace-grant-1',
+    };
+    expect(
+      parseAgentDraftSubmitInput({
+        draft: {
+          phase: 'draft',
+          draftId: 'draft-workspace-1',
+          binding,
+          bindingReceipt: {
+            bindingReceiptId: 'binding-1',
+            draftId: 'draft-workspace-1',
+            connectionId: 'connection-1',
+            binding,
+          },
+        },
+        input: {
+          kind: 'skill',
+          catalogEntryId: 'skill:project:storyboard',
+          skillName: 'storyboard',
+          activationId: 'activation:storyboard',
+          args: 'Create three shots',
+        },
+        references: [
+          {
+            catalogEntryId: 'mention:workspace-1:brief',
+            referenceId: 'workspace-file:brief',
+            ownerKind: 'workspace',
+            ownerId: 'workspace-1',
+            bindingReceiptId: 'binding-1',
+          },
+        ],
+        resourceGrantIds: [],
+        configuration,
+      }),
+    ).toMatchObject({
+      draft: { bindingReceipt: { bindingReceiptId: 'binding-1' } },
+      input: { kind: 'skill', skillName: 'storyboard' },
+    });
+  });
+
+  it('rejects a bound Draft without its exact binding receipt', () => {
     expect(() =>
       parseAgentDraftSubmitInput({
-        target: {
-          kind: 'bound-context',
-          context: {
+        draft: {
+          phase: 'draft',
+          draftId: 'draft-workspace-1',
+          binding: {
             kind: 'workspace',
             workspaceId: 'workspace-1',
             workspaceGrantId: 'workspace-grant-1',
           },
+          bindingReceipt: null,
         },
-        messageText: 'Edit this project',
+        input: { kind: 'message', text: 'Edit this project' },
+        references: [],
         resourceGrantIds: [],
-        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+        configuration,
       }),
-    ).toThrow('unsupported fields');
+    ).toThrow('requires an exact binding receipt');
   });
 
-  it('rejects the superseded caller-supplied context field', () => {
+  it('rejects the superseded messageText and target fields', () => {
     expect(() =>
       parseAgentDraftSubmitInput({
-        context: {
-          kind: 'assistant',
-          assistantSpaceId: 'assistant:default',
-          baseGrantIds: [],
-        },
-        messageText: 'Use the canonical route',
+        target: { kind: 'automatic-assistant', draftId: 'draft-entry-1' },
+        messageText: 'Use the old route',
         resourceGrantIds: [],
-        configuration: { providerId: 'openai', modelId: 'gpt-5', executionMode: 'ask' },
+        configuration,
       }),
-    ).toThrow('unsupported fields');
+    ).toThrow("unsupported field 'target'");
   });
 
-  it('projects a completed initial provider turn as a terminal launch state', () => {
+  it('projects the exact committed Session and immutable Turn identity', () => {
     expect(
       parseAgentDraftSubmitProjection({
-        conversationId: 'conversation-1',
+        session: {
+          phase: 'session',
+          conversationId: 'conversation-1',
+          binding: {
+            kind: 'assistant',
+            assistantSpaceId: 'assistant:default',
+            baseGrantIds: [],
+          },
+        },
         turnId: 'turn-1',
         turnStatus: 'completed',
       }),
     ).toEqual({
-      conversationId: 'conversation-1',
+      session: {
+        phase: 'session',
+        conversationId: 'conversation-1',
+        binding: {
+          kind: 'assistant',
+          assistantSpaceId: 'assistant:default',
+          baseGrantIds: [],
+        },
+      },
       turnId: 'turn-1',
       turnStatus: 'completed',
     });

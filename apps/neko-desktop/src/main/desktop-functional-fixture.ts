@@ -9,6 +9,35 @@ const FUNCTIONAL_WORKSPACE_ENVIRONMENT = 'OPENNEKO_DESKTOP_FUNCTIONAL_WORKSPACE'
 const FUNCTIONAL_CUT_EXPORT_ENVIRONMENT = 'OPENNEKO_DESKTOP_FUNCTIONAL_CUT_EXPORT';
 const FUNCTIONAL_FIXTURE_PREFIX = 'openneko-desktop-functional-';
 const FUNCTIONAL_WORKSPACE_QUEUE = '.openneko-functional-workspace-queue.json';
+const ELECTRON_USER_DATA_ARGUMENT = '--user-data-dir=';
+
+export function resolveDesktopFunctionalUserDataRoot(input: {
+  readonly argv: readonly string[];
+  readonly environment: Readonly<Record<string, string | undefined>>;
+}): string | undefined {
+  if (!input.argv.includes(FUNCTIONAL_FIXTURE_ARGUMENT)) return undefined;
+  const fixtureHome = input.environment[FUNCTIONAL_FIXTURE_ENVIRONMENT];
+  if (!fixtureHome) {
+    throw new Error('Desktop functional userData requires an explicit isolated fixture home.');
+  }
+  const matches = input.argv.filter((argument) => argument.startsWith(ELECTRON_USER_DATA_ARGUMENT));
+  if (matches.length !== 1) {
+    throw new Error('Desktop functional launch requires one explicit Electron userData path.');
+  }
+  const requested = matches[0]?.slice(ELECTRON_USER_DATA_ARGUMENT.length);
+  if (!requested || !path.isAbsolute(requested)) {
+    throw new Error('Desktop functional Electron userData must be an absolute path.');
+  }
+  const resolvedFixtureHome = path.resolve(fixtureHome);
+  const resolvedUserData = path.resolve(requested);
+  if (
+    !path.basename(resolvedFixtureHome).startsWith(FUNCTIONAL_FIXTURE_PREFIX) ||
+    !isStrictDescendant(resolvedFixtureHome, resolvedUserData)
+  ) {
+    throw new Error('Desktop functional Electron userData must be contained by the fixture home.');
+  }
+  return resolvedUserData;
+}
 
 export function resolveDesktopRuntimeHome(input: {
   readonly systemHome: string;

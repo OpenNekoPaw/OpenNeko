@@ -27,6 +27,7 @@ export {
   PiSkillHost,
   PiSkillHostSnapshot,
   SkillHostError,
+  buildSkillActivationId,
   createNodePiSkillHost,
   type ExecuteSkillExternalProcessorInput,
   type SkillExternalProcessorAuthorizer,

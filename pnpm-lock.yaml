@@ -149,6 +149,9 @@ importers:
       '@neko/entity-node':
         specifier: workspace:*
         version: link:../../packages/entity/node
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../../packages/generation
       '@neko/host':
         specifier: workspace:*
         version: link:../../packages/host
@@ -328,6 +331,9 @@ importers:
       typebox:
         specifier: ^1.1.38
         version: 1.1.38
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -626,9 +632,6 @@ importers:
       '@neko/host':
         specifier: workspace:*
         version: link:../../host
-      '@neko/local-metadata':
-        specifier: workspace:*
-        version: link:../../local-metadata
       '@neko/shared':
         specifier: workspace:*
         version: link:../../shared

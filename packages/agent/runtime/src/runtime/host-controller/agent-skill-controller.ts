@@ -4,7 +4,6 @@ import type {
   AgentSkillControllerEffectPort,
 } from './agent-host-controller-contract';
 import {
-  runAgentHostRouteEffect,
   runRequiredConversationRoute,
   type AgentHostControllerRouteOperation,
 } from './agent-host-route-operation';
@@ -17,35 +16,20 @@ export function tryHandleAgentSkillControllerRoute(
   context: AgentHostRouteEffectContext,
 ): AgentSkillControllerRouteOperation {
   switch (message.type) {
-    case 'getSkills':
-      return runAgentHostRouteEffect(() => effects.listSkills(context));
-
-    case 'invokeSlashCommand':
+    case 'getAgentInputCatalog':
       return runRequiredConversationRoute(
         message,
-        'invoke slash command',
+        'read Agent input catalog',
         context,
-        (conversationId) =>
-          effects.invokeSlashCommand(
-            {
-              conversationId,
-              command: message.command,
-              ...(message.args !== undefined ? { args: message.args } : {}),
-            },
-            context,
-          ),
+        (conversationId) => effects.readInputCatalog(conversationId, context),
       );
 
-    case 'invokeSkill':
-      return runRequiredConversationRoute(message, 'invoke skill', context, (conversationId) =>
-        effects.invokeSkill(
-          {
-            conversationId,
-            skillName: message.skillName,
-            ...(message.args !== undefined ? { args: message.args } : {}),
-          },
-          context,
-        ),
+    case 'invokeAgentInput':
+      return runRequiredConversationRoute(
+        message,
+        'invoke Agent input',
+        context,
+        (conversationId) => effects.invokeInput({ conversationId, input: message.input }, context),
       );
 
     case 'getContextTokenCount':

@@ -195,6 +195,7 @@ function projectExecutionActivity(input: MessageListProjectionInput): AgentState
   const state = input.agentState;
   if (!state || state.phase === 'idle') return false;
   if (hasLiveCanonicalExecutionRecord(input.messages)) return false;
+  if (hasTerminalAssistantResponse(input.messages)) return false;
   return state;
 }
 
@@ -215,6 +216,24 @@ function hasLiveCanonicalExecutionRecord(messages: readonly Message[]): boolean 
         return false;
       }) === true,
   );
+}
+
+function hasTerminalAssistantResponse(messages: readonly Message[]): boolean {
+  const lastUserMessageIndex = findLastIndex(messages, (message) => message.role === 'user');
+  return messages
+    .slice(lastUserMessageIndex + 1)
+    .some(
+      (message) =>
+        message.role === 'assistant' &&
+        message.isStreaming !== true &&
+        (message.content.trim().length > 0 ||
+          message.contentBlocks?.some(
+            (block) =>
+              block.type === 'text' &&
+              block.isStreaming !== true &&
+              (block.content?.trim().length ?? 0) > 0,
+          ) === true),
+    );
 }
 
 function findMessageListStreamingItemIndex(

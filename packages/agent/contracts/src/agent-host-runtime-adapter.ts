@@ -20,6 +20,14 @@ export interface AgentHostRuntimeAdapter {
 }
 
 export interface AgentDraftHostRuntimeAdapter extends AgentHostRuntimeAdapter {
+  readLaunchCatalog(): import('./agent-launch').AgentLaunchCatalogProjection;
+  bindTarget(
+    binding: import('./agent-interaction-binding').AgentDomainBinding,
+  ): Promise<import('./agent-launch').AgentLaunchCatalogProjection>;
+  bindAssistant(): Promise<import('./agent-launch').AgentLaunchCatalogProjection>;
+  updateDraftConfiguration(
+    configuration: import('./agent-model-catalog').AgentConfigurationRequest,
+  ): Promise<import('./agent-launch').AgentLaunchCatalogProjection>;
   submitDraft(
     input: import('./agent-draft-submit').AgentDraftSubmitInput,
   ): Promise<import('./agent-draft-submit').AgentDraftSubmitProjection>;
@@ -34,7 +42,11 @@ export function requireAgentDraftHostRuntimeAdapter(
   const candidate = adapter as Partial<AgentDraftHostRuntimeAdapter>;
   if (
     typeof candidate.submitDraft !== 'function' ||
-    typeof candidate.authorizeResource !== 'function'
+    typeof candidate.authorizeResource !== 'function' ||
+    typeof candidate.bindTarget !== 'function' ||
+    typeof candidate.bindAssistant !== 'function' ||
+    typeof candidate.updateDraftConfiguration !== 'function' ||
+    typeof candidate.readLaunchCatalog !== 'function'
   ) {
     throw new Error('Agent Draft presentation requires an exact Draft Host runtime adapter.');
   }
@@ -129,7 +141,6 @@ export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
   getConversationSnapshot: 'implemented',
   getConfig: 'implemented',
   refreshConfigSnapshot: 'implemented',
-  getSkills: 'implemented',
   openUserConfigFile: 'implemented',
   getTabState: 'implemented',
   updateSettings: 'implemented',
@@ -144,11 +155,8 @@ export const ELECTRON_AGENT_HOST_ROUTE_COVERAGE = {
   'dnd:start': 'host-inapplicable',
   mermaidError: 'implemented',
   downloadSvg: 'implemented',
-  invokeSlashCommand: 'implemented',
-  invokeSkill: 'implemented',
-  invokePluginSlashCommand: 'unsupported',
-  startCharacterDialogueFromSlash: 'unsupported',
-  confirmRoleplayCandidate: 'unsupported',
+  getAgentInputCatalog: 'implemented',
+  invokeAgentInput: 'implemented',
   exitCharacterDialogueSession: 'unsupported',
   exitEmbodyCharacterSession: 'unsupported',
   revealContextSource: 'implemented',
@@ -188,7 +196,6 @@ export const AGENT_HOST_ROUTE_AUTHORITY = {
   getConversationSnapshot: SESSION_ANY,
   getConfig: LAUNCH_ANY,
   refreshConfigSnapshot: LAUNCH_ANY,
-  getSkills: LAUNCH_ANY,
   openUserConfigFile: LAUNCH_ANY,
   getTabState: SESSION_ANY,
   updateSettings: SESSION_ANY,
@@ -203,11 +210,8 @@ export const AGENT_HOST_ROUTE_AUTHORITY = {
   'dnd:start': SESSION_WORKSPACE,
   mermaidError: SESSION_ANY,
   downloadSvg: SESSION_WORKSPACE,
-  invokeSlashCommand: SESSION_ANY,
-  invokeSkill: SESSION_ANY,
-  invokePluginSlashCommand: SESSION_ANY,
-  startCharacterDialogueFromSlash: SESSION_WORKSPACE,
-  confirmRoleplayCandidate: SESSION_WORKSPACE,
+  getAgentInputCatalog: SESSION_ANY,
+  invokeAgentInput: SESSION_ANY,
   exitCharacterDialogueSession: SESSION_WORKSPACE,
   exitEmbodyCharacterSession: SESSION_WORKSPACE,
   revealContextSource: SESSION_ANY,
@@ -223,9 +227,6 @@ export const ELECTRON_AGENT_HOST_UNSUPPORTED_ROUTE_OWNERS = {
   sendToPlugin: 'Phase 3',
   invokeAgentCapabilityLifecycle: 'P1.4',
   requestCanvasAuthoringHandoff: 'P1.4',
-  invokePluginSlashCommand: 'Phase 3',
-  startCharacterDialogueFromSlash: 'P1.6',
-  confirmRoleplayCandidate: 'P1.6',
   exitCharacterDialogueSession: 'P1.6',
   exitEmbodyCharacterSession: 'P1.6',
 } as const satisfies Partial<Record<AgentWebviewToHostMessageType, AgentHostRouteFutureOwner>>;

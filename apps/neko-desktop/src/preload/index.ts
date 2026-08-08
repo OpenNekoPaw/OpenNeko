@@ -17,6 +17,12 @@ import {
   type OpenNekoDesktopAgentBridge,
 } from '../shared/agent-contract';
 import {
+  createDesktopDirectGenerationRequest,
+  DESKTOP_DIRECT_GENERATION_CHANNEL,
+  parseDesktopDirectGenerationResult,
+  type OpenNekoDesktopDirectGenerationBridge,
+} from '../shared/generation-contract';
+import {
   createDesktopAgentAutomationRequest,
   DESKTOP_AGENT_AUTOMATION_CHANNEL,
   DESKTOP_AGENT_AUTOMATION_RENDERER_ARGUMENT,
@@ -225,6 +231,7 @@ const settingsListeners = new Set<
 const bridge: OpenNekoDesktopBridge &
   OpenNekoDesktopShellBridge &
   OpenNekoDesktopAgentBridge &
+  OpenNekoDesktopDirectGenerationBridge &
   OpenNekoDesktopAgentAutomationBridge &
   OpenNekoDesktopResourceBrowserBridge &
   OpenNekoDesktopPreviewBridge &
@@ -244,15 +251,29 @@ const bridge: OpenNekoDesktopBridge &
       return parseAssistantResourceHostResult(response, request.requestId);
     },
   },
+  directGeneration: {
+    async submit(scope, operation) {
+      const request = createDesktopDirectGenerationRequest(
+        nextRequestId('desktop-direct-generation'),
+        scope,
+        operation,
+      );
+      const response: unknown = await ipcRenderer.invoke(
+        DESKTOP_DIRECT_GENERATION_CHANNEL,
+        request,
+      );
+      return parseDesktopDirectGenerationResult(response, request.requestId).projection;
+    },
+  },
   agentLaunch: {
-    async attach(workbenchInstanceId, agentSurfaceId, viewId, scope) {
+    async attach(workbenchInstanceId, agentSurfaceId, viewId, draft) {
       const request = parseAgentLaunchHostRequest({
         requestId: nextRequestId('agent-launch-attach'),
         operation: 'attach',
         workbenchInstanceId,
         agentSurfaceId,
         viewId,
-        scope,
+        draft,
       });
       const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
       const result = parseAgentLaunchHostResult(response, request.requestId);
@@ -275,6 +296,62 @@ const bridge: OpenNekoDesktopBridge &
         throw new Error(`Agent launch authorization returned '${result.status}'.`);
       }
       return result.catalog;
+    },
+    async bindTarget(connection, binding) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-bind-target'),
+        operation: 'bind-target',
+        connection,
+        binding,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch target binding returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async bindAssistant(connection) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-bind-assistant'),
+        operation: 'bind-assistant',
+        connection,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch Assistant binding returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async updateConfiguration(connection, configuration) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-update-configuration'),
+        operation: 'update-configuration',
+        connection,
+        configuration,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'ready') {
+        throw new Error(`Agent launch configuration update returned '${result.status}'.`);
+      }
+      return result.catalog;
+    },
+    async searchWorkspaceMentions(connection, bindingReceiptId, filter) {
+      const request = parseAgentLaunchHostRequest({
+        requestId: nextRequestId('agent-launch-search-workspace-mentions'),
+        operation: 'search-workspace-mentions',
+        connection,
+        bindingReceiptId,
+        filter,
+      });
+      const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
+      const result = parseAgentLaunchHostResult(response, request.requestId);
+      if (result.status !== 'mentions') {
+        throw new Error(`Agent launch mention search returned '${result.status}'.`);
+      }
+      return result.projection;
     },
     async submitDraft(connection, input) {
       const request = parseAgentLaunchHostRequest({

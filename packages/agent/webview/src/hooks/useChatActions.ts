@@ -14,6 +14,7 @@ import {
 } from 'react';
 import {
   Message,
+  type AgentInputCatalogMessage,
   type MessageContextReference,
   type AgentFlatPurposeModelRefs,
   type AgentModelSlots,
@@ -24,22 +25,24 @@ import {
 } from '@neko/agent-contracts';
 import { useAgentHostMessages } from '../host-runtime-context';
 import type {
+  GenerationParams,
   MessageAttachment,
   SelectedFileReference,
 } from '../components/ChatView/InputArea/types';
 import {
-  getBuiltinSlashCommand,
-  normalizeSlashCommandName,
   parseAgentInputTrigger,
   type AgentContextPayload,
   type AgentMediaModelSelections,
+  type ParsedAgentInputTrigger,
 } from '@neko/agent-contracts';
+import { resolveAgentInputInvocationIntent } from '../components/ChatView/InputArea/slash-command-catalog';
 import { projectMessageModelSelection } from '../presenters/config-message-presenter';
 import { projectContextReferencesFromPayloads } from '../presenters/context-reference-presenter';
 import { projectContentLocatorPath } from '../presenters/content-locator-presenter';
-import { toAttachmentTypeFromPathReference } from '../presenters/reference-token-presenter';
 import { type ChatModelOption } from '@neko/ai-contracts';
-import { isDocumentFile } from '@neko/media';
+import type { DirectGenerationOperationPort } from '@neko/generation';
+import { projectDirectGenerationOperationInput } from '../direct-generation-input';
+import type { DirectGenerationUiState } from '../components/DirectGenerationStatus';
 
 /** Per-category resolved media model for agent mode */
 export type AgentMediaModels = AgentMediaModelSelections;
@@ -63,7 +66,8 @@ export interface PendingSendIdentity {
 export interface UseChatActionsProps {
   inputValue: string;
   isThinking: boolean;
-  isCharacterRoleSession?: boolean;
+  inputCatalog?: AgentInputCatalogMessage;
+  reportInputDiagnostic?: (message: string) => void;
   selectedModel: string;
   availableModels?: readonly ChatModelOption[];
   sessionMode?: SessionMode;
@@ -88,6 +92,9 @@ export interface UseChatActionsProps {
   setSelectedFileReferences?: (references: SelectedFileReference[]) => void;
   ensureConversationForSend?: (input: PendingSendInput) => void;
   onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
+  directGeneration?: DirectGenerationOperationPort;
+  generationParams?: GenerationParams;
+  onDirectGenerationState?: (state: DirectGenerationUiState) => void;
 }
 
 export interface UseChatActionsReturn {
@@ -100,7 +107,8 @@ export interface UseChatActionsReturn {
 export function useChatActions({
   inputValue,
   isThinking,
-  isCharacterRoleSession = false,
+  inputCatalog,
+  reportInputDiagnostic,
   selectedModel,
   availableModels,
   sessionMode,
@@ -122,6 +130,9 @@ export function useChatActions({
   setSelectedFileReferences,
   ensureConversationForSend,
   onUserMessageSent,
+  directGeneration,
+  generationParams,
+  onDirectGenerationState,
 }: UseChatActionsProps): UseChatActionsReturn {
   const agentHostMessages = useAgentHostMessages();
   // Lightweight dedup guard: prevent double-click within 1s
@@ -147,11 +158,10 @@ export function useChatActions({
       const inputSessionMode = input?.sessionMode;
       const attachments = input?.attachments;
       const contextPayloads = input?.contextPayloads;
-      const fileReferenceAttachments = projectFileReferenceAttachments(input?.fileReferences);
       const fileReferenceContextReferences = projectFileReferenceContextReferences(
         input?.fileReferences,
       );
-      const outboundAttachments = mergeDisplayAttachments(attachments, fileReferenceAttachments);
+      const outboundAttachments = attachments ?? [];
       const outboundContextPayloads = contextPayloads ?? [];
       const trimmed = messageText.trim();
       const hasAttachments = outboundAttachments.length > 0;
@@ -159,6 +169,46 @@ export function useChatActions({
       const selectedFileReferenceCount = input?.fileReferences?.length ?? 0;
       const hasFileReferences = selectedFileReferenceCount > 0;
       if (!trimmed && !hasAttachments && !hasContextPayloads && !hasFileReferences) return;
+      const effectiveSessionMode = inputSessionMode ?? sessionMode ?? 'agent';
+      if (effectiveSessionMode !== 'agent') {
+        if (hasAttachments || hasContextPayloads || hasFileReferences) {
+          reportInputDiagnostic?.(
+            'Direct media generation does not accept attachments or context references.',
+          );
+          return;
+        }
+        if (!directGeneration || !mediaProviderId || !mediaModelId || !generationParams) {
+          reportInputDiagnostic?.(
+            'Direct media generation requires an exact Workspace, provider, model, and parameter binding.',
+          );
+          return;
+        }
+        if (isDuplicate(`${effectiveSessionMode}:${mediaProviderId}:${mediaModelId}:${trimmed}`)) {
+          return;
+        }
+        clearInput();
+        setAttachedFiles([]);
+        setSelectedFileReferences?.([]);
+        onDirectGenerationState?.({ phase: 'running', mediaKind: effectiveSessionMode });
+        void directGeneration
+          .submit(
+            projectDirectGenerationOperationInput({
+              sessionMode: effectiveSessionMode,
+              prompt: trimmed,
+              providerId: mediaProviderId,
+              modelId: mediaModelId,
+              params: generationParams,
+            }),
+          )
+          .then((projection) => onDirectGenerationState?.({ phase: 'completed', projection }))
+          .catch((error: unknown) =>
+            onDirectGenerationState?.({
+              phase: 'failed',
+              message: error instanceof Error ? error.message : String(error),
+            }),
+          );
+        return;
+      }
       if (
         isQueueingSend &&
         !isQueueableRunningTextSend({
@@ -191,29 +241,29 @@ export function useChatActions({
         return;
       }
 
-      const slashCommand = isCharacterRoleSession ? null : parseDirectBuiltinSlashCommand(trimmed);
-      if (slashCommand) {
-        clearInput();
-        setAttachedFiles([]);
-        setSelectedFileReferences?.([]);
-        agentHostMessages.invokeSlashCommand(
-          slashCommand.command,
-          slashCommand.args,
-          conversationId,
-        );
-        return;
-      }
-
-      const skillInvocation = isCharacterRoleSession ? null : parseDirectSkillInvocation(trimmed);
-      if (skillInvocation) {
-        clearInput();
-        setAttachedFiles([]);
-        setSelectedFileReferences?.([]);
-        agentHostMessages.invokeSkill(
-          skillInvocation.skillName,
-          skillInvocation.args,
-          conversationId,
-        );
+      const parsedTrigger = parseAgentInputTrigger(trimmed);
+      if (parsedTrigger?.trigger === 'command' || parsedTrigger?.trigger === 'skill') {
+        try {
+          if (!inputCatalog || inputCatalog.conversationId !== conversationId) {
+            throw new Error(
+              `Agent input '${parsedTrigger.prefix}${parsedTrigger.name}' cannot run before the exact Conversation catalog is available.`,
+            );
+          }
+          const intent = resolveAgentInputInvocationIntent({
+            trigger: parsedTrigger as ParsedAgentInputTrigger & {
+              readonly trigger: 'command' | 'skill';
+            },
+            entries: inputCatalog.entries,
+            phase: inputCatalog.phase,
+            bindingKind: inputCatalog.bindingKind,
+          });
+          clearInput();
+          setAttachedFiles([]);
+          setSelectedFileReferences?.([]);
+          agentHostMessages.invokeAgentInput(intent, conversationId);
+        } catch (error) {
+          reportInputDiagnostic?.(error instanceof Error ? error.message : String(error));
+        }
         return;
       }
 
@@ -254,7 +304,6 @@ export function useChatActions({
         setIsThinking(true);
       }
 
-      const effectiveSessionMode = inputSessionMode ?? sessionMode ?? 'agent';
       const modelProjection = projectMessageModelSelection({
         selectedModel,
         chatModelOptions: availableModels,
@@ -290,7 +339,8 @@ export function useChatActions({
     [
       inputValue,
       isThinking,
-      isCharacterRoleSession,
+      inputCatalog,
+      reportInputDiagnostic,
       selectedModel,
       sessionMode,
       mediaProviderId,
@@ -310,6 +360,9 @@ export function useChatActions({
       setSelectedFileReferences,
       ensureConversationForSend,
       onUserMessageSent,
+      directGeneration,
+      generationParams,
+      onDirectGenerationState,
     ],
   );
 
@@ -446,31 +499,6 @@ function projectAgentModelSendProjection(
   return rest;
 }
 
-function projectFileReferenceAttachments(
-  references: readonly SelectedFileReference[] | undefined,
-): MessageAttachment[] {
-  return (
-    references
-      ?.filter((reference) => !isDocumentFile(projectContentLocatorPath(reference.contentLocator)))
-      .map((reference) => {
-        const path = projectContentLocatorPath(reference.contentLocator);
-        const type = toAttachmentTypeFromPathReference({
-          path,
-          mediaType: reference.mediaType,
-        });
-        return {
-          id: reference.id,
-          name: reference.label,
-          type,
-          path,
-          ...(reference.thumbnailUri && type === 'image'
-            ? { preview: reference.thumbnailUri }
-            : {}),
-        };
-      }) ?? []
-  );
-}
-
 function projectFileReferenceContextReferences(
   references: readonly SelectedFileReference[] | undefined,
 ): MessageContextReference[] {
@@ -527,15 +555,6 @@ function fileReferenceContextType(
   return 'file';
 }
 
-function mergeDisplayAttachments(
-  attachments: readonly MessageAttachment[] | undefined,
-  fileReferences: readonly MessageAttachment[],
-): MessageAttachment[] {
-  if (!attachments || attachments.length === 0) return [...fileReferences];
-  if (fileReferences.length === 0) return [...attachments];
-  return [...attachments, ...fileReferences];
-}
-
 function isQueueableRunningTextSend(input: {
   readonly trimmed: string;
   readonly hasAttachments: boolean;
@@ -549,43 +568,4 @@ function isQueueableRunningTextSend(input: {
     input.selectedFileReferenceCount === 0 &&
     !/^[/$]/.test(input.trimmed)
   );
-}
-
-function parseDirectSkillInvocation(
-  input: string,
-): { readonly skillName: string; readonly args?: string } | null {
-  const parsed = parseAgentInputTrigger(input);
-  if (!parsed || parsed.trigger !== 'skill') {
-    return null;
-  }
-
-  return {
-    skillName: parsed.name,
-    ...(parsed.args ? { args: parsed.args } : {}),
-  };
-}
-
-function parseDirectBuiltinSlashCommand(
-  input: string,
-): { readonly command: string; readonly args?: string } | null {
-  if (!input.startsWith('/')) {
-    return null;
-  }
-
-  const withoutPrefix = input.slice(1);
-  const separatorIndex = withoutPrefix.search(/\s/);
-  const commandToken =
-    separatorIndex === -1 ? withoutPrefix : withoutPrefix.slice(0, Math.max(separatorIndex, 0));
-  const command = normalizeSlashCommandName(commandToken);
-  const definition = command ? getBuiltinSlashCommand(command) : undefined;
-  if (!definition?.availableInDesktop) {
-    return null;
-  }
-
-  if (separatorIndex === -1) {
-    return { command };
-  }
-
-  const args = withoutPrefix.slice(separatorIndex + 1).trim();
-  return { command, ...(args ? { args } : {}) };
 }

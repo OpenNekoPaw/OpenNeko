@@ -142,4 +142,5 @@ export interface SettingsState {
   mediaUnderstandingModels?: MediaUnderstandingModels;
   /** Safe config file diagnostic for the active snapshot, if loading failed. */
   configDiagnostic?: AgentConfigDiagnostic;
+  agentConfiguration?: import('./agent-model-catalog').AgentConfigurationPolicyProjection;
 }

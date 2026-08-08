@@ -1,11 +1,9 @@
 import type { GenerationJobPort, GenerationJobRef, GenerationJobSnapshot } from '@neko/generation';
 import type { CanvasGenerationWorkspace, CanvasMaterialActionTarget } from '@neko/canvas-domain';
 import { JobLifecycleError } from '@neko/shared/job-lifecycle';
+import { WorkspaceGenerationApplicationRuntime } from '@neko/generation/job';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  CanvasGenerationNodeRuntime,
-  type CanvasGenerationJobOwner,
-} from './canvas-generation-node-runtime';
+import { CanvasGenerationNodeRuntime } from './canvas-generation-node-runtime';
 
 const workspace: CanvasGenerationWorkspace = {
   workspaceId: 'workspace-1',
@@ -150,17 +148,22 @@ describe('CanvasGenerationNodeRuntime', () => {
     await runtime.dispose();
   });
 
-  it('owns one Generation runtime per stable workspace identity and disposes it exactly once', async () => {
+  it('delegates exact Workspace ownership without disposing the shared Generation runtime', async () => {
     const fixture = createOwner({
       current: generationSnapshot({
         phase: 'succeeded',
         resultLocators: [resultLocator],
       }),
     });
-    const createWorkspaceOwner = vi.fn(async () => fixture.owner);
+    const createWorkspaceOwner = vi.fn(async () => ({
+      jobs: fixture.owner.jobs as GenerationJobPort,
+      dispose: fixture.owner.dispose,
+    }));
+    const generation = new WorkspaceGenerationApplicationRuntime({
+      createOwner: createWorkspaceOwner,
+    });
     const runtime = new CanvasGenerationNodeRuntime({
-      homedir: '/fixture/home',
-      createWorkspaceOwner,
+      generation,
     });
 
     await runtime.resolveResultActions({ workspace, target });
@@ -171,21 +174,26 @@ describe('CanvasGenerationNodeRuntime', () => {
         workspace: { ...workspace, workspacePath: '/fixture/rebound-workspace' },
         target,
       }),
-    ).rejects.toThrow('changed its authorized root');
+    ).rejects.toThrow('already bound to another authorized root');
 
     await runtime.dispose();
     await runtime.dispose();
-    expect(fixture.dispose).toHaveBeenCalledTimes(1);
+    expect(fixture.dispose).not.toHaveBeenCalled();
     await expect(runtime.resolveResultActions({ workspace, target })).rejects.toThrow(
       'runtime is disposed',
     );
+    await generation.dispose();
+    expect(fixture.dispose).toHaveBeenCalledTimes(1);
   });
 });
 
-function createRuntime(owner: CanvasGenerationJobOwner): CanvasGenerationNodeRuntime {
+function createRuntime(
+  owner: ReturnType<typeof createOwner>['owner'],
+): CanvasGenerationNodeRuntime {
   return new CanvasGenerationNodeRuntime({
-    homedir: '/fixture/home',
-    createWorkspaceOwner: vi.fn(async () => owner),
+    generation: {
+      getWorkspaceJobs: vi.fn(async () => owner.jobs as GenerationJobPort),
+    },
   });
 }
 

@@ -31,6 +31,7 @@ import {
   type CharacterDialogueSessionProjection,
   type EmbodyCharacterSessionProjection,
   type AgentQueuedMessageItem,
+  type AgentInputCatalogMessage,
   type AmbientCanvasNode,
   parseAmbientCanvasUpdateNodes,
 } from '@neko/agent-contracts';
@@ -49,13 +50,7 @@ import {
   type MediaModelSelection,
   type MediaUnderstandingSelection,
 } from './ChatView/InputAreaContext';
-import type {
-  ComposerMenuState,
-  EntryPromptMenu,
-  SkillSummary,
-  MentionItem,
-  PluginSlashCommandDef,
-} from './ChatView/InputArea/types';
+import type { ComposerMenuState, EntryPromptMenu, MentionItem } from './ChatView/InputArea/types';
 import type { PluginsAvailable } from './ChatView/SendToMenu';
 import type { AgentWorkItem } from './AgentWorkItem';
 import type { ActivationProgressTimeline } from '../presenters/activation-progress-presenter';
@@ -75,6 +70,8 @@ import { isCharacterRoleConversationKind } from '../presenters/character-role-se
 import type { ForegroundConversationAvailability } from '../render-lifecycle/conversation-render-contract';
 import type { TabRenderStore, TabViewportSnapshot } from '../render-runtime/tab-render-runtime';
 import { useTabRenderStore } from '../render-runtime/useTabRenderStore';
+import { useDirectGenerationOperationPort } from '../direct-generation-context';
+import { DirectGenerationStatus, type DirectGenerationUiState } from './DirectGenerationStatus';
 
 // =============================================================================
 // Props
@@ -106,7 +103,9 @@ export interface ChatWorkspaceProps {
   mediaUnderstandingModels?: MediaUnderstandingModels;
   mentionItems: MentionItem[];
   onMentionSearchFilterChange: (filter: string) => void;
-  pluginCommands: PluginSlashCommandDef[];
+  inputCatalog?: AgentInputCatalogMessage;
+  configurationPolicy?: import('@neko/agent-contracts').AgentConfigurationPolicyProjection;
+  onInputDiagnostic?: (message: string) => void;
   // Resources
   workItems: AgentWorkItem[];
   pluginsAvailable: PluginsAvailable;
@@ -118,8 +117,6 @@ export interface ChatWorkspaceProps {
   contextTokenCount: number;
   isCompressing: boolean;
   mediaModelCallCount: number;
-  // Skills
-  skills: SkillSummary[];
   activationProgress?: readonly ActivationProgressTimeline[];
   // Context chips
   ambientNodes: AmbientCanvasNode[];
@@ -166,7 +163,9 @@ export function ChatWorkspace({
   mediaUnderstandingModels,
   mentionItems,
   onMentionSearchFilterChange,
-  pluginCommands,
+  inputCatalog,
+  configurationPolicy,
+  onInputDiagnostic,
   workItems,
   pluginsAvailable,
   setActiveTab,
@@ -174,7 +173,6 @@ export function ChatWorkspace({
   contextTokenCount,
   isCompressing,
   mediaModelCallCount,
-  skills,
   activationProgress = [],
   ambientNodes,
   agentState,
@@ -191,6 +189,9 @@ export function ChatWorkspace({
   queuedEditDraftConflictMessage,
 }: ChatWorkspaceProps) {
   const agentHostMessages = useAgentHostMessages();
+  const directGeneration = useDirectGenerationOperationPort();
+  const [directGenerationState, setDirectGenerationState] =
+    useState<DirectGenerationUiState | null>(null);
   const { snapshot: tabRenderSnapshot, updateState: updateTabRenderState } =
     useTabRenderStore(tabRenderStore);
   const tabState = tabRenderSnapshot.state;
@@ -420,7 +421,8 @@ export function ChatWorkspace({
   const { handleSend, triggerSend, handleCancelMessage, copyLastResponse } = useChatActions({
     inputValue,
     isThinking,
-    isCharacterRoleSession,
+    inputCatalog,
+    reportInputDiagnostic: onInputDiagnostic,
     selectedModel,
     availableModels: settings.chatModelOptions,
     sessionMode,
@@ -444,6 +446,9 @@ export function ChatWorkspace({
     setSelectedFileReferences,
     ensureConversationForSend: handleSendWithoutConversation,
     onUserMessageSent,
+    directGeneration,
+    generationParams: genParams,
+    onDirectGenerationState: setDirectGenerationState,
   });
   const pendingSendRequestId = pendingSendRequest?.id;
   const pendingSendIdentity = useMemo<PendingSendIdentity | undefined>(
@@ -661,12 +666,11 @@ export function ChatWorkspace({
 
   // Slash command routing
   const { handleSlashCommand } = useSlashCommands({
-    skills,
-    pluginCommands,
+    inputCatalog,
     inputValue,
     activeConversationId: sessionMutationConversationId,
-    setMessages,
     clearInput,
+    reportInputDiagnostic: onInputDiagnostic,
   });
 
   // ---- Simple callback handlers ----
@@ -790,8 +794,10 @@ export function ChatWorkspace({
       isCompressing={isCompressing}
       onCompressContext={handleCompressContext}
       mediaModelCallCount={mediaModelCallCount}
-      skills={skills}
-      pluginCommands={pluginCommands}
+      inputCatalog={inputCatalog?.entries}
+      configurationPolicy={configurationPolicy}
+      inputCatalogPhase={inputCatalog?.phase}
+      inputCatalogBindingKind={inputCatalog?.bindingKind}
       onSlashCommand={handleSlashCommand}
       onRequestFiles={(filter) => {
         onMentionSearchFilterChange(filter);
@@ -809,6 +815,9 @@ export function ChatWorkspace({
       onGenCategoryChange={setGenCategory}
       onGenParamsChange={updateGenParams}
     >
+      {isVisible && directGenerationState ? (
+        <DirectGenerationStatus state={directGenerationState} />
+      ) : null}
       {isVisible &&
       latestSessionDiagnostic &&
       foregroundConversationAvailability?.kind !== 'unavailable' ? (

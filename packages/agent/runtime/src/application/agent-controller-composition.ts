@@ -26,6 +26,7 @@ import {
 } from '@neko/agent-runtime/runtime/projection/conversation-projection-attachment-server';
 import { projectPiConversationEntries } from '@neko/agent-runtime/runtime/projection/pi-conversation-history-projector';
 import {
+  buildAgentInputCatalogMessage,
   buildAgentStateSnapshotMessage,
   buildConfigStateMessage,
   buildGlobalErrorMessage,
@@ -35,21 +36,28 @@ import {
   buildQueuedMessageEditRequestedMessage,
   buildTabStateMessage,
   type DesktopAgentNeutralFacts,
+  type AgentBoundDomainBinding,
+  type AgentConfigurationPolicyProjection,
+  type AgentConfigurationRequest,
+  type AgentConversationConfiguration,
+  type AgentConversationTurnConfigurationSnapshot,
   type AgentContextPayload,
+  type AgentFileReference,
   type AgentMessageQueueSnapshot,
   type OpenTab,
   type Message,
   type ProjectionAttachmentKey,
   type SettingsDataMessage,
   type TabState,
+  isAgentInputCatalogEntryExecutable,
+  parseAgentConfigurationRequest,
+  type AgentConfigurationFieldProjection,
 } from '@neko/agent-contracts';
-import { ConfigManager } from '@neko/host/settings';
-import { FileUserConfigManager } from '@neko/host/settings';
+import type { ConfigManager } from '@neko/host/settings';
 import {
   buildAssistantSettingsDataMessage,
   buildAssistantSettingsUpdatedMessage,
   type AssistantConfigState,
-  type AssistantRuntimeSettingsPort,
   type AssistantSettingsData,
 } from '@neko/host/settings';
 import { projectLlmParameters } from '@neko/host/settings';
@@ -77,6 +85,14 @@ import {
   type AgentResourceDisplayRegistrationPort,
   type AgentResourceDisplayProjector,
 } from '@neko/agent-runtime/runtime';
+import {
+  assertAgentConfigurationPolicyAllowsRequest,
+  projectAgentConfigurationPolicy,
+  projectAgentInputCatalog,
+  projectAgentModelCatalog,
+} from './agent-launch-service';
+
+const SESSION_COMMAND_HANDLER_IDS = new Set(['builtin:clear', 'builtin:compact']);
 
 export interface AgentControllerEffects extends AgentHostControllerEffectPorts {
   injectContext(payload: AgentContextPayload): Promise<void>;
@@ -130,16 +146,30 @@ export interface AgentControllerComposition {
     readonly identity: DesktopAgentConnectionIdentity;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationConfiguration?: (
+      conversationId: string,
+    ) => Promise<AgentConversationConfiguration>;
+    readonly updateConversationConfiguration?: (input: {
+      readonly conversationId: string;
+      readonly request: AgentConfigurationRequest;
+      readonly projection: AgentConfigurationPolicyProjection;
+    }) => Promise<AgentConversationConfiguration>;
+    readonly readGlobalSkillCatalog?: () => Promise<import('./agent-app-host').AgentSkillCatalog>;
+    readonly personalSkillOwnerId?: string;
   }): AgentControllerEffects;
   readonly startInitialTurn?: (input: {
     readonly workspace: AgentWorkspaceRuntime;
     readonly conversationId: string;
     readonly turnId: string;
     readonly messageText: string;
-    readonly providerId: string;
-    readonly modelId: string;
+    readonly configuration: AgentConversationTurnConfigurationSnapshot;
+    readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
+    readonly skillName?: string;
+    readonly skillActivationId?: string;
+    readonly additionalInstructions?: string;
   }) => Promise<void>;
   dispose?(): Promise<void>;
 }
@@ -151,13 +181,42 @@ export interface AgentConfigInteractionPort {
   }): Promise<void>;
 }
 
+export interface AgentConversationReferenceResolutionPort {
+  resolve(input: {
+    readonly conversationId: string;
+    readonly context: AgentBoundDomainBinding;
+    readonly references: readonly AgentFileReference[];
+  }): Promise<readonly AgentContextPayload[]>;
+}
+
+export async function resolveAgentConversationTurnContext(input: {
+  readonly resolver: AgentConversationReferenceResolutionPort;
+  readonly conversationId: string;
+  readonly context: AgentBoundDomainBinding;
+  readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly fileReferences?: readonly AgentFileReference[];
+}): Promise<readonly AgentContextPayload[]> {
+  const referencePayloads = input.fileReferences?.length
+    ? await input.resolver.resolve({
+        conversationId: input.conversationId,
+        context: input.context,
+        references: input.fileReferences,
+      })
+    : [];
+  return [...(input.contextPayloads ?? []), ...referencePayloads];
+}
+
 export interface CreateAgentControllerCompositionOptions {
   readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy' | 'external'>;
   readonly userHome: string;
   readonly credentialRuntime: AgentCredentialRuntime;
-  readonly runtimeSettings: AssistantRuntimeSettingsPort;
+  readonly resolveWorkspaceConfig: (workspace: {
+    readonly workspaceId: string;
+    readonly workspacePath: string;
+  }) => ConfigManager;
   readonly contentInteraction: AgentContentInteractionPort;
   readonly configInteraction: AgentConfigInteractionPort;
+  readonly conversationReferences?: AgentConversationReferenceResolutionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
   readonly reportError: (error: Error) => void;
 }
@@ -177,7 +236,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     'projection-effects': true,
   } as const);
 
-  private readonly configs = new Map<string, ConfigManager>();
   private readonly confirmations = new Map<string, PiToolConfirmationRegistry>();
   private readonly agentStates = new Map<string, AgentStateRuntime>();
   private readonly pendingDisposals = new Set<Promise<void>>();
@@ -189,6 +247,17 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly identity: DesktopAgentConnectionIdentity;
     readonly initialConversationId?: string;
     readonly initialConversationMessage?: Message;
+    readonly readConversationContext?: (conversationId: string) => Promise<AgentBoundDomainBinding>;
+    readonly readConversationConfiguration?: (
+      conversationId: string,
+    ) => Promise<AgentConversationConfiguration>;
+    readonly updateConversationConfiguration?: (input: {
+      readonly conversationId: string;
+      readonly request: AgentConfigurationRequest;
+      readonly projection: AgentConfigurationPolicyProjection;
+    }) => Promise<AgentConversationConfiguration>;
+    readonly readGlobalSkillCatalog?: () => Promise<import('./agent-app-host').AgentSkillCatalog>;
+    readonly personalSkillOwnerId?: string;
   }): AgentControllerEffects {
     const config = this.getConfig(input.workspace);
     const initialConversation =
@@ -324,9 +393,27 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
               conversationId: input.initialConversationId,
               ...(initialConversationMessage ? { message: initialConversationMessage } : {}),
             },
+        input.readConversationConfiguration ?? missingConversationConfigurationDependency,
+        input.readConversationContext ?? missingConversationContextDependency,
       ),
-      config: this.createConfigEffects(input.workspace, config, state, bind),
-      skill: this.createSkillEffects(input.workspace, config, bind, facts),
+      config: this.createConfigEffects(
+        input.workspace,
+        config,
+        state,
+        bind,
+        input.readConversationConfiguration ?? missingConversationConfigurationDependency,
+        input.updateConversationConfiguration ?? missingConversationConfigurationUpdateDependency,
+      ),
+      skill: this.createSkillEffects(
+        input.workspace,
+        config,
+        bind,
+        facts,
+        input.readConversationContext ?? missingConversationContextDependency,
+        input.readGlobalSkillCatalog ?? missingGlobalSkillCatalogDependency,
+        input.personalSkillOwnerId ?? '',
+        input.readConversationConfiguration ?? missingConversationConfigurationDependency,
+      ),
       content: createAgentContentEffects({
         workspace: input.workspace.workspace,
         host: this.options.host,
@@ -379,10 +466,13 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly conversationId: string;
     readonly turnId: string;
     readonly messageText: string;
-    readonly providerId: string;
-    readonly modelId: string;
+    readonly configuration: AgentConversationTurnConfigurationSnapshot;
+    readonly context: AgentBoundDomainBinding;
     readonly locale: 'en' | 'zh';
     readonly contextPayloads?: readonly AgentContextPayload[];
+    readonly skillName?: string;
+    readonly skillActivationId?: string;
+    readonly additionalInstructions?: string;
   }): Promise<void> => {
     const facts = createDesktopAgentFactsProjector({
       connection: {
@@ -407,11 +497,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             messageText: input.messageText,
             sessionMode: 'agent',
             locale: input.locale,
-            chatModel: {
-              providerId: input.providerId,
-              modelId: input.modelId,
-              category: 'llm',
-            },
             turnId: input.turnId,
             ...(input.contextPayloads?.length ? { contextPayloads: input.contextPayloads } : {}),
           },
@@ -427,6 +512,13 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
             post: () => undefined,
           },
           facts,
+          configuration: input.configuration,
+          conversationContext: input.context,
+          ...(input.skillName ? { skillName: input.skillName } : {}),
+          ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
+          ...(input.additionalInstructions
+            ? { additionalInstructions: input.additionalInstructions }
+            : {}),
         });
       } catch (error) {
         await input.workspace.checkpointFailedInitialTurn({
@@ -444,7 +536,6 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   async dispose(): Promise<void> {
     for (const confirmation of this.confirmations.values()) confirmation.cancelAll();
     this.confirmations.clear();
-    this.configs.clear();
     const results = await Promise.allSettled(this.pendingDisposals);
     this.pendingDisposals.clear();
     const errors = results.flatMap((result) =>
@@ -467,6 +558,12 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       readonly conversationId: string;
       readonly message?: Message;
     },
+    readConversationConfiguration: (
+      conversationId: string,
+    ) => Promise<AgentConversationConfiguration> = missingConversationConfigurationDependency,
+    readConversationContext: (
+      conversationId: string,
+    ) => Promise<AgentBoundDomainBinding> = missingConversationContextDependency,
   ): AgentControllerEffects['conversation'] {
     const postConversationList = async (context: AgentHostRouteEffectContext): Promise<void> => {
       bind(context);
@@ -526,15 +623,22 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       additionalInstructions?: string,
     ): void => {
       bind(context);
-      const operation = this.executeTurn({
-        workspace,
-        config,
-        request,
-        context,
-        facts,
-        ...(skillName ? { skillName } : {}),
-        ...(additionalInstructions ? { additionalInstructions } : {}),
-      });
+      const operation = Promise.all([
+        readConversationConfiguration(request.conversationId),
+        readConversationContext(request.conversationId),
+      ]).then(([configuration, conversationContext]) =>
+        this.executeTurn({
+          workspace,
+          config,
+          request,
+          context,
+          facts,
+          configuration,
+          conversationContext,
+          ...(skillName ? { skillName } : {}),
+          ...(additionalInstructions ? { additionalInstructions } : {}),
+        }),
+      );
       this.track(
         operation.catch(async (error: unknown) => {
           await context.post(buildGlobalErrorMessage(describeError(error)));
@@ -718,6 +822,14 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     config: ConfigManager,
     state: ConnectionState,
     bind: (context: AgentHostRouteEffectContext) => void,
+    readConversationConfiguration: (
+      conversationId: string,
+    ) => Promise<AgentConversationConfiguration>,
+    updateConversationConfiguration: (input: {
+      readonly conversationId: string;
+      readonly request: AgentConfigurationRequest;
+      readonly projection: AgentConfigurationPolicyProjection;
+    }) => Promise<AgentConversationConfiguration>,
   ): AgentControllerEffects['config'] {
     const safeConfig = (): AssistantConfigState =>
       projectAgentSecretSafeConfig(config.getAssistantConfigState());
@@ -726,7 +838,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     return {
       readSettings: async (conversationId, context) => {
         bind(context);
-        await context.post(projectSettingsMessage(safeSettings(), conversationId));
+        const configuration = await readConversationConfiguration(conversationId);
+        await context.post(projectSettingsMessage(safeSettings(), conversationId, configuration));
       },
       readConfig: async (context) => {
         bind(context);
@@ -752,9 +865,28 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       updateSettings: async ({ conversationId, settings }, context) => {
         bind(context);
         try {
-          await config.applyRuntimeAssistantSettingsFromWebview(settings);
+          const current = await readConversationConfiguration(conversationId);
+          const request = projectConversationConfigurationRequest(
+            current.request,
+            settings,
+            config,
+          );
+          assertAgentConfigurationPolicyAllowsRequest(current.projection, request);
+          const projection = projectAgentConfigurationPolicy({
+            models: projectAgentModelCatalog(config.getAssistantConfigState()),
+            request,
+            source: 'conversation',
+            defaults: configurationProjectionDefaults(current.projection),
+            policies: configurationProjectionPolicies(current.projection),
+          });
+          assertExecutableConversationConfiguration(projection);
+          const updated = await updateConversationConfiguration({
+            conversationId,
+            request,
+            projection,
+          });
           await context.post(buildAssistantSettingsUpdatedMessage({ success: true }));
-          await context.post(projectSettingsMessage(safeSettings(), conversationId));
+          await context.post(projectSettingsMessage(safeSettings(), conversationId, updated));
         } catch (error) {
           await context.post(
             buildAssistantSettingsUpdatedMessage({
@@ -791,57 +923,145 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     config: ConfigManager,
     bind: (context: AgentHostRouteEffectContext) => void,
     facts: DesktopAgentFactsProjector,
+    readConversationContext: (conversationId: string) => Promise<AgentBoundDomainBinding>,
+    readGlobalSkillCatalog: () => Promise<import('./agent-app-host').AgentSkillCatalog>,
+    personalSkillOwnerId: string,
+    readConversationConfiguration: (
+      conversationId: string,
+    ) => Promise<AgentConversationConfiguration>,
   ): AgentControllerEffects['skill'] {
-    return {
-      listSkills: async (context) => {
-        bind(context);
-        const catalog = await workspace.readSkillCatalog(true);
-        await context.post({
-          type: 'skillsList',
-          skills: catalog.records.map((skill) => ({
-            name: skill.name,
-            description: skill.description,
-            source: skill.source.kind,
-            enabled: skill.enabled,
-            type: 'skill',
-          })),
-        });
+    const readCatalog = async (conversationId: string) => {
+      if (!personalSkillOwnerId.trim()) {
+        throw new Error('Agent Session input catalog has no personal Skill owner identity.');
+      }
+      const binding = await readConversationContext(conversationId);
+      if (
+        (binding.kind === 'workspace' && binding.workspaceId !== workspace.workspaceId) ||
+        (binding.kind === 'assistant' && binding.assistantSpaceId !== workspace.workspaceId)
+      ) {
+        throw new Error(
+          `Agent Conversation '${conversationId}' binding does not match Workspace runtime '${workspace.workspaceId}'.`,
+        );
+      }
+      const skills =
+        binding.kind === 'assistant'
+          ? await readGlobalSkillCatalog()
+          : await workspace.readSkillCatalog(true);
+      return {
+        binding,
+        entries: projectAgentInputCatalog({
+          skills,
+          phase: 'session',
+          binding,
+          personalSkillOwnerId,
+          commandHandlerIds: SESSION_COMMAND_HANDLER_IDS,
+        }),
+      };
+    };
+    const executeSkillInput = (
+      conversationId: string,
+      input: {
+        readonly skillName: string;
+        readonly activationId: string;
+        readonly args?: string;
       },
-      invokeSlashCommand: async ({ conversationId, command, args }, context) => {
-        bind(context);
-        if (command === 'clear') {
-          await workspace.clearContext(conversationId);
-          await context.post(buildHistoryClearedMessage(conversationId));
-          return;
-        }
-        await context.post({
-          type: 'slashCommandResult',
-          conversationId,
-          command,
-          success: false,
-          error: `Desktop Agent slash command '/${command}' is not implemented.`,
-          ...(args ? { data: { args } } : {}),
-        });
-      },
-      invokeSkill: ({ conversationId, skillName, args }, context) => {
-        bind(context);
-        const request: AgentConversationControllerTurnRequest = {
-          source: 'user-message',
-          conversationId,
-          messageText: args ?? '',
-          sessionMode: 'agent',
-          locale: 'en',
-        };
-        const operation = this.executeTurn({
+      context: AgentHostRouteEffectContext,
+    ): void => {
+      const request: AgentConversationControllerTurnRequest = {
+        source: 'user-message',
+        conversationId,
+        messageText: input.args ?? '',
+        sessionMode: 'agent',
+        locale: 'en',
+      };
+      const operation = Promise.all([
+        readConversationConfiguration(conversationId),
+        readConversationContext(conversationId),
+      ]).then(([configuration, conversationContext]) =>
+        this.executeTurn({
           workspace,
           config,
           request,
           context,
           facts,
-          skillName,
-          ...(args ? { additionalInstructions: args } : {}),
-        });
-        this.track(operation);
+          configuration,
+          conversationContext,
+          skillName: input.skillName,
+          skillActivationId: input.activationId,
+          ...(input.args ? { additionalInstructions: input.args } : {}),
+        }),
+      );
+      this.track(operation);
+    };
+    return {
+      readInputCatalog: async (conversationId, context) => {
+        bind(context);
+        const catalog = await readCatalog(conversationId);
+        await context.post(
+          buildAgentInputCatalogMessage({
+            conversationId,
+            bindingKind: catalog.binding.kind,
+            entries: catalog.entries,
+          }),
+        );
+      },
+      invokeInput: async ({ conversationId, input }, context) => {
+        bind(context);
+        const catalog = await readCatalog(conversationId);
+        const entry = catalog.entries.find((candidate) => candidate.id === input.catalogEntryId);
+        const executableMatches =
+          input.kind === 'command'
+            ? entry?.trigger === 'command' &&
+              entry.executable.commandId === input.commandId &&
+              entry.executable.handlerId === input.handlerId
+            : entry?.trigger === 'skill' &&
+              entry.executable.skillName === input.skillName &&
+              entry.executable.activationId === input.activationId;
+        if (
+          !entry ||
+          !executableMatches ||
+          !isAgentInputCatalogEntryExecutable({
+            entry,
+            phase: 'session',
+            bindingKind: catalog.binding.kind,
+          })
+        ) {
+          throw new Error(
+            `Agent Session ${input.kind} catalog entry '${input.catalogEntryId}' is stale or unavailable.`,
+          );
+        }
+        if (input.kind === 'skill') {
+          executeSkillInput(conversationId, input, context);
+          return;
+        }
+        if (input.handlerId === 'builtin:clear') {
+          await workspace.clearContext(conversationId);
+          await context.post(buildHistoryClearedMessage(conversationId));
+          return;
+        }
+        if (input.handlerId === 'builtin:compact') {
+          const configuration = await readConversationConfiguration(conversationId);
+          const { policy } = await this.resolveModelPolicy(workspace, config, configuration);
+          const result = await workspace.compactContext(
+            conversationId,
+            policy['agent.main'].model.contextWindow,
+          );
+          await context.post({
+            type: 'compressionResult',
+            conversationId,
+            compressedTokens: result.compressedTokens,
+          });
+          return;
+        }
+        executeSkillInput(
+          conversationId,
+          {
+            skillName: input.commandId,
+            activationId: parseCommandArtifactActivationId(input.handlerId),
+            ...(input.args === undefined ? {} : { args: input.args }),
+          },
+          context,
+        );
       },
       readContextTokenCount: async (conversationId, context) => {
         bind(context);
@@ -853,8 +1073,8 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
       compressContext: async (conversationId, context) => {
         bind(context);
-        const settings = config.getAssistantRuntimeSettingsSnapshot();
-        const { policy } = await this.resolveModelPolicy(workspace, config, {}, settings);
+        const configuration = await readConversationConfiguration(conversationId);
+        const { policy } = await this.resolveModelPolicy(workspace, config, configuration);
         const result = await workspace.compactContext(
           conversationId,
           policy['agent.main'].model.contextWindow,
@@ -923,7 +1143,11 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     readonly request: AgentConversationControllerTurnRequest;
     readonly context: AgentHostRouteEffectContext;
     readonly facts: DesktopAgentFactsProjector;
+    readonly configuration:
+      AgentConversationConfiguration | AgentConversationTurnConfigurationSnapshot;
+    readonly conversationContext: AgentBoundDomainBinding;
     readonly skillName?: string;
+    readonly skillActivationId?: string;
     readonly additionalInstructions?: string;
   }): Promise<void> {
     if (input.request.sessionMode !== 'agent') {
@@ -931,9 +1155,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         `Desktop Agent does not support session mode '${input.request.sessionMode}'.`,
       );
     }
-    if (input.request.attachments?.length || input.request.fileReferences?.length) {
+    if (input.request.attachments?.length) {
       throw new Error(
-        'Desktop Agent attachment/file-reference preprocessing is not connected to the Pi turn yet.',
+        'Desktop Agent binary attachment preprocessing is not connected to the Pi turn yet.',
       );
     }
     const record = input.workspace
@@ -944,24 +1168,28 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         `Desktop Agent conversation '${input.request.conversationId}' does not exist.`,
       );
     }
-    const settings = input.config.getAssistantRuntimeSettingsSnapshot();
+    assertTurnRequestMatchesConversationConfiguration(input.request, input.configuration.request);
     const resolved = await this.resolveModelPolicy(
       input.workspace,
       input.config,
-      input.request,
-      settings,
+      input.configuration,
     );
+    const executionMode = requireConfigurationValue(
+      input.configuration.projection.fields.executionMode,
+      'executionMode',
+    );
+    const settings = input.config.getAssistantRuntimeSettingsSnapshot();
     const locale = normalizeLocale(input.request.locale);
     const promptBuilder = createSystemPromptBuilder({
       locale,
-      executionMode: settings.executionMode,
+      executionMode,
     });
     await promptBuilder.loadAgentsFile(
       input.workspace.workspace.workspacePath,
       join(this.options.userHome, '.neko'),
     );
     const systemPrompt = [
-      promptBuilder.buildForExecutionMode(settings.executionMode),
+      promptBuilder.buildForExecutionMode(executionMode),
       settings.customSystemPrompt.trim(),
     ]
       .filter(Boolean)
@@ -971,6 +1199,13 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       models: input.workspace.models,
       initialModelPolicy: resolved.policy,
       baseSystemPrompt: systemPrompt,
+    });
+    const contextPayloads = await resolveAgentConversationTurnContext({
+      resolver: this.options.conversationReferences ?? missingConversationReferenceDependency,
+      conversationId: input.request.conversationId,
+      context: input.conversationContext,
+      contextPayloads: input.request.contextPayloads,
+      fileReferences: input.request.fileReferences,
     });
     const turnInput: AgentTurnInput = {
       conversationId: input.request.conversationId,
@@ -982,16 +1217,15 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         this.createPermissionPolicy(
           input.workspace,
           input.request.conversationId,
-          settings.executionMode,
+          executionMode,
           events,
         ),
       workspaceTrusted: true,
       locale,
       systemPrompt,
-      ...(input.request.contextPayloads?.length
-        ? { contextPayloads: input.request.contextPayloads }
-        : {}),
+      ...(contextPayloads.length ? { contextPayloads } : {}),
       ...(input.skillName ? { skillName: input.skillName } : {}),
+      ...(input.skillActivationId ? { skillActivationId: input.skillActivationId } : {}),
       ...(input.additionalInstructions
         ? { additionalInstructions: input.additionalInstructions }
         : {}),
@@ -1041,35 +1275,56 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   private async resolveModelPolicy(
     workspace: AgentWorkspaceRuntime,
     config: ConfigManager,
-    request: Partial<AgentConversationControllerTurnRequest>,
-    settings: ReturnType<ConfigManager['getAssistantRuntimeSettingsSnapshot']>,
+    conversationConfiguration:
+      AgentConversationConfiguration | AgentConversationTurnConfigurationSnapshot,
   ): Promise<{
     readonly policy: AgentModelPolicy;
     readonly configuration: AgentTurnConfigurationSnapshot;
   }> {
-    const selected =
-      request.agentModels?.primary ??
-      request.chatModel ??
-      (settings.selectedProviderId && settings.selectedModelId
-        ? {
-            providerId: settings.selectedProviderId,
-            modelId: settings.selectedModelId,
-            category: 'llm' as const,
-          }
-        : undefined);
-    if (!selected) {
-      throw new Error('Choose a configured Desktop Agent provider and model before sending.');
-    }
-    const selectionIsRequestOwned =
-      request.agentModels?.primary !== undefined || request.chatModel !== undefined;
-    const requestedSnapshot = config.getEffectiveAgentWorkspaceConfigSnapshot(
-      selectionIsRequestOwned
-        ? {
-            selectedProviderId: selected.providerId,
-            selectedModelId: selected.modelId,
-          }
-        : {},
+    const selected = conversationConfiguration.request;
+    const catalogEntry = projectAgentModelCatalog(config.getAssistantConfigState()).find(
+      (entry) =>
+        entry.id === selected.modelCatalogEntryId &&
+        entry.providerId === selected.providerId &&
+        entry.modelId === selected.modelId,
     );
+    if (!catalogEntry || catalogEntry.availability.status !== 'available') {
+      throw new Error(
+        `Agent Conversation model '${selected.modelCatalogEntryId}' is stale or unavailable.`,
+      );
+    }
+    const requestedBase = config.getEffectiveAgentWorkspaceConfigSnapshot({
+      selectedProviderId: selected.providerId,
+      selectedModelId: selected.modelId,
+    });
+    const requestedSnapshot: EffectiveAgentWorkspaceConfigSnapshot = {
+      ...requestedBase,
+      temperature: requireConfigurationValue(
+        conversationConfiguration.projection.fields.temperature,
+        'temperature',
+      ),
+      maxTokens: requireConfigurationValue(
+        conversationConfiguration.projection.fields.maximumOutputTokens,
+        'maximumOutputTokens',
+      ),
+      thinkingBudget: requireConfigurationValue(
+        conversationConfiguration.projection.fields.thinkingBudget,
+        'thinkingBudget',
+      ),
+      executionMode: requireConfigurationValue(
+        conversationConfiguration.projection.fields.executionMode,
+        'executionMode',
+      ),
+      sources: {
+        ...requestedBase.sources,
+        provider: 'user',
+        model: 'user',
+        temperature: 'user',
+        maxTokens: 'user',
+        thinkingBudget: 'user',
+        executionMode: 'user',
+      },
+    };
     const requestedConfiguration = createEffectiveAgentConfigurationProjection(requestedSnapshot);
     const provider = config.getProvider(selected.providerId);
     const model = config.getModel(selected.modelId);
@@ -1103,11 +1358,11 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
     const parameters = projectLlmParameters({
       provider,
       model,
-      llmConfig: request.llmConfig,
+      llmConfig: undefined,
       runtimeDefaults: {
-        temperature: settings.temperature,
-        maxOutputTokens: settings.maxTokens,
-        thinkingBudget: settings.thinkingBudget,
+        temperature: requestedSnapshot.temperature,
+        maxOutputTokens: requestedSnapshot.maxTokens,
+        thinkingBudget: requestedSnapshot.thinkingBudget,
       },
     });
     const blocking = parameters.diagnostics.find(
@@ -1173,7 +1428,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
           : { thinkingBudget: 'runtime' as const }),
       },
     };
-    const configuration: AgentTurnConfigurationSnapshot = Object.freeze({
+    const turnConfiguration: AgentTurnConfigurationSnapshot = Object.freeze({
       requested: requestedConfiguration,
       effective: createEffectiveAgentConfigurationProjection(effectiveSnapshot),
       diagnostics: Object.freeze(
@@ -1182,7 +1437,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         ),
       ),
     });
-    return { policy, configuration };
+    return { policy, configuration: turnConfiguration };
   }
 
   private createPermissionPolicy(
@@ -1235,17 +1490,10 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
   }
 
   private getConfig(workspace: AgentWorkspaceRuntime): ConfigManager {
-    const existing = this.configs.get(workspace.workspaceId);
-    if (existing) return existing;
-    const config = new ConfigManager({
-      userConfigManager: new FileUserConfigManager({
-        filePath: join(this.options.userHome, '.neko', 'config.toml'),
-      }),
+    return this.options.resolveWorkspaceConfig({
+      workspaceId: workspace.workspaceId,
       workspacePath: workspace.workspace.workspacePath,
-      assistantRuntimeSettings: this.options.runtimeSettings,
     });
-    this.configs.set(workspace.workspaceId, config);
-    return config;
   }
 
   private postMessageQueueSnapshot(
@@ -1406,6 +1654,7 @@ function projectAgentSecretSafeSettings(settings: AssistantSettingsData): Assist
 function projectSettingsMessage(
   settings: AssistantSettingsData,
   conversationId: string,
+  configuration: AgentConversationConfiguration,
 ): SettingsDataMessage {
   const configuredProviderIds = new Set(
     settings.configuredProviders.map((provider) => provider.id),
@@ -1414,6 +1663,21 @@ function projectSettingsMessage(
   return {
     ...message,
     conversationId,
+    selectedProviderId: configuration.request.providerId,
+    selectedModelId: configuration.request.modelId,
+    executionMode: requireConfigurationValue(
+      configuration.projection.fields.executionMode,
+      'executionMode',
+    ),
+    temperature: requireConfigurationValue(
+      configuration.projection.fields.temperature,
+      'temperature',
+    ),
+    maxTokens: requireConfigurationValue(
+      configuration.projection.fields.maximumOutputTokens,
+      'maximumOutputTokens',
+    ),
+    agentConfiguration: configuration.projection,
     providers: settings.providers.map((provider) => ({
       id: provider.id,
       name: provider.name,
@@ -1426,6 +1690,105 @@ function projectSettingsMessage(
     })),
     configuredProviders: settings.configuredProviders.map(projectAssistantConfiguredProviderView),
   };
+}
+
+function projectConversationConfigurationRequest(
+  current: AgentConfigurationRequest,
+  updates: Readonly<Record<string, unknown>>,
+  config: ConfigManager,
+): AgentConfigurationRequest {
+  const allowed = new Set([
+    'providerId',
+    'modelId',
+    'executionMode',
+    'temperature',
+    'maxTokens',
+    'thinkingBudget',
+  ]);
+  const unknown = Object.keys(updates).find((key) => !allowed.has(key));
+  if (unknown) {
+    throw new Error(`Agent Conversation configuration contains unsupported field '${unknown}'.`);
+  }
+  const providerId =
+    typeof updates['providerId'] === 'string' ? updates['providerId'] : current.providerId;
+  const modelId = typeof updates['modelId'] === 'string' ? updates['modelId'] : current.modelId;
+  const model = projectAgentModelCatalog(config.getAssistantConfigState()).find(
+    (entry) => entry.providerId === providerId && entry.modelId === modelId,
+  );
+  return parseAgentConfigurationRequest({
+    modelCatalogEntryId: model?.id ?? `${providerId}:${modelId}`,
+    providerId,
+    modelId,
+    executionMode: updates['executionMode'] ?? current.executionMode,
+    temperature: updates['temperature'] ?? current.temperature,
+    maximumOutputTokens: updates['maxTokens'] ?? current.maximumOutputTokens,
+    thinkingBudget: updates['thinkingBudget'] ?? current.thinkingBudget,
+  });
+}
+
+function configurationProjectionDefaults(projection: AgentConfigurationPolicyProjection) {
+  return {
+    executionMode: requireConfigurationValue(projection.fields.executionMode, 'executionMode'),
+    temperature: requireConfigurationValue(projection.fields.temperature, 'temperature'),
+    maximumOutputTokens: requireConfigurationValue(
+      projection.fields.maximumOutputTokens,
+      'maximumOutputTokens',
+    ),
+    thinkingBudget: requireConfigurationValue(projection.fields.thinkingBudget, 'thinkingBudget'),
+  };
+}
+
+function configurationProjectionPolicies(projection: AgentConfigurationPolicyProjection) {
+  return {
+    model: projection.fields.model.policy,
+    executionMode: projection.fields.executionMode.policy,
+    temperature: projection.fields.temperature.policy,
+    maximumOutputTokens: projection.fields.maximumOutputTokens.policy,
+    thinkingBudget: projection.fields.thinkingBudget.policy,
+  };
+}
+
+function assertExecutableConversationConfiguration(
+  projection: AgentConfigurationPolicyProjection,
+): void {
+  for (const [field, value] of Object.entries(projection.fields)) {
+    if (value.policy.status === 'unavailable') {
+      throw new Error(
+        `Agent Conversation configuration field '${field}' is unavailable: ${value.policy.reason}`,
+      );
+    }
+  }
+}
+
+function requireConfigurationValue<T>(
+  field: AgentConfigurationFieldProjection<T>,
+  name: string,
+): T {
+  if (field.policy.status === 'unavailable' || field.effectiveValue === null) {
+    throw new Error(`Agent Conversation configuration field '${name}' is unavailable.`);
+  }
+  return field.effectiveValue;
+}
+
+function assertTurnRequestMatchesConversationConfiguration(
+  request: Partial<AgentConversationControllerTurnRequest>,
+  configuration: AgentConfigurationRequest,
+): void {
+  const requestedModel = request.agentModels?.primary ?? request.chatModel;
+  if (
+    requestedModel &&
+    (requestedModel.providerId !== configuration.providerId ||
+      requestedModel.modelId !== configuration.modelId)
+  ) {
+    throw new Error(
+      'Agent Turn model receipt does not match its exact Conversation configuration.',
+    );
+  }
+  if (request.llmConfig !== undefined) {
+    throw new Error(
+      'Agent Turn parameters must be updated through the exact Conversation configuration.',
+    );
+  }
 }
 
 function projectAssistantProviderView(
@@ -1605,6 +1968,38 @@ function summarizeToolConfirmation(toolName: string, args: unknown): string {
       ? Object.keys(args).sort().slice(0, 8)
       : [];
   return keys.length === 0 ? `Run ${toolName}` : `Run ${toolName} with ${keys.join(', ')}`;
+}
+
+function parseCommandArtifactActivationId(handlerId: string): string {
+  const prefix = 'command-artifact:';
+  if (!handlerId.startsWith(prefix) || handlerId.length === prefix.length) {
+    throw new Error(`Agent Session command has no registered handler '${handlerId}'.`);
+  }
+  return handlerId.slice(prefix.length);
+}
+
+async function missingConversationContextDependency(): Promise<AgentBoundDomainBinding> {
+  throw new Error('Agent Session input catalog has no Conversation context dependency.');
+}
+
+const missingConversationReferenceDependency: AgentConversationReferenceResolutionPort = {
+  resolve: async () => {
+    throw new Error('Agent Session has no Conversation reference resolver dependency.');
+  },
+};
+
+async function missingConversationConfigurationDependency(): Promise<AgentConversationConfiguration> {
+  throw new Error('Agent Session has no exact Conversation configuration dependency.');
+}
+
+async function missingConversationConfigurationUpdateDependency(): Promise<AgentConversationConfiguration> {
+  throw new Error('Agent Session has no Conversation configuration update dependency.');
+}
+
+async function missingGlobalSkillCatalogDependency(): Promise<
+  import('./agent-app-host').AgentSkillCatalog
+> {
+  throw new Error('Agent Session input catalog has no global Skill catalog dependency.');
 }
 
 function describeError(error: unknown): string {

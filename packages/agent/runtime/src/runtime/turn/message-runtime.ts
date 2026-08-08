@@ -33,9 +33,7 @@ import {
 } from '@neko/agent-contracts';
 import {
   isThreeReferenceContextData,
-  projectThreeReferenceMediaControls,
   type ThreeReferenceContextData,
-  type ThreeReferenceMediaControls,
   type ThreeReferenceOutput,
   type ThreeReferencePurpose,
 } from '@neko/preview-domain';
@@ -204,14 +202,9 @@ export interface MergeReferencedMediaImageAttachmentsInput {
   readonly onError?: (event: { filePath: string; error: unknown }) => void;
 }
 
-export type AgentMessageDispatchRoute =
-  | {
-      readonly kind: 'agent';
-    }
-  | {
-      readonly kind: 'media';
-      readonly mediaModel: ModelRef<MediaModelCategory>;
-    };
+export interface AgentMessageDispatchRoute {
+  readonly kind: 'agent';
+}
 
 export interface PrepareAgentMessageDispatchInput {
   readonly request: AgentMessageRuntimeRequest;
@@ -247,15 +240,6 @@ export interface PreparedAgentMessageDispatch {
 }
 
 export type AgentMessageTurnRuntimeMessage = ErrorMessage | GlobalErrorMessage | AgentPhaseMessage;
-
-export interface AgentMessageTurnMediaExecutionInput {
-  readonly conversationId: string;
-  readonly prompt: string;
-  readonly mediaModel: ModelRef<MediaModelCategory>;
-  readonly userMessage: Pick<Message, 'id' | 'content' | 'timestamp'>;
-  readonly threeReferenceControls?: ThreeReferenceMediaControls;
-  readonly selectedFileReferences?: readonly AgentFileReference[];
-}
 
 export interface AgentMessageTurnAgentExecutionInput {
   readonly conversationId: string;
@@ -306,7 +290,6 @@ export interface RunAgentMessageTurnRuntimeInput {
   readonly persistUserMessage: (conversationId: string, message: Message) => void;
   readonly removeUserMessage?: (conversationId: string, messageId: string) => void;
   readonly persistErrorMessage?: (conversationId: string, message: Message) => void;
-  readonly executeMediaTurn?: (input: AgentMessageTurnMediaExecutionInput) => Promise<void>;
   readonly executeAgentTurn?: (
     input: AgentMessageTurnAgentExecutionInput,
   ) => Promise<AgentMessageTurnAgentExecutionResult | void>;
@@ -323,9 +306,6 @@ export interface RunAgentMessageTurnRuntimeInput {
 export type RunAgentMessageTurnRuntimeResult =
   | {
       readonly status: 'rejected-missing-conversation';
-    }
-  | {
-      readonly status: 'media-dispatched';
     }
   | {
       readonly status: 'agent-dispatched';
@@ -854,6 +834,11 @@ export async function prepareAgentMessageDispatch(
 ): Promise<PreparedAgentMessageDispatch> {
   const startTime = Date.now();
   const request = input.request;
+  if (request.sessionMode !== 'agent') {
+    throw new Error(
+      `Agent message dispatch does not accept direct media session mode '${request.sessionMode}'.`,
+    );
+  }
   const logger = getMessageRuntimeLogger();
   logger.debug('neko.agent.message.assembly.request', {
     conversationId: request.conversationId,
@@ -938,10 +923,7 @@ export async function prepareAgentMessageDispatch(
     attachmentText,
     locale: request.locale,
   });
-  const route: AgentMessageDispatchRoute =
-    request.sessionMode !== 'agent' && request.mediaModel
-      ? { kind: 'media', mediaModel: request.mediaModel }
-      : { kind: 'agent' };
+  const route: AgentMessageDispatchRoute = { kind: 'agent' };
 
   logger.debug('neko.agent.message.assembly.result', {
     conversationId: request.conversationId,
@@ -1039,37 +1021,6 @@ export async function runAgentMessageTurnRuntime(
     }),
   );
 
-  if (prepared.route.kind === 'media' && input.executeMediaTurn) {
-    const threeReferenceControls = projectAgentThreeReferenceMediaControls(
-      input.request.contextPayloads,
-    );
-    try {
-      await input.executeMediaTurn({
-        conversationId,
-        prompt: prepared.enhancedMessage,
-        mediaModel: prepared.route.mediaModel,
-        userMessage: {
-          id: prepared.userMessage.id,
-          content: prepared.userMessage.content,
-          timestamp: prepared.userMessage.timestamp,
-        },
-        ...(threeReferenceControls ? { threeReferenceControls } : {}),
-        ...(input.request.fileReferences
-          ? { selectedFileReferences: input.request.fileReferences }
-          : {}),
-      });
-    } finally {
-      input.postMessage(
-        buildAgentPhaseMessage({
-          conversationId,
-          phase: 'idle',
-          timestamp: input.now?.() ?? Date.now(),
-        }),
-      );
-    }
-    return { status: 'media-dispatched' };
-  }
-
   if (input.executeAgentTurn) {
     const result = await input.executeAgentTurn({
       conversationId,
@@ -1127,19 +1078,6 @@ export async function runAgentMessageTurnRuntime(
     }),
   );
   return { status: 'precondition-unmet', reason: 'no-agent-runtime' };
-}
-
-function projectAgentThreeReferenceMediaControls(
-  payloads: readonly AgentContextPayload[] | undefined,
-): ThreeReferenceMediaControls | undefined {
-  const contexts = (payloads ?? []).flatMap((payload): readonly ThreeReferenceContextData[] => {
-    if (payload.type !== '3d-reference') return [];
-    if (!isThreeReferenceContextData(payload.data)) {
-      throw new Error(`Invalid 3d-reference context payload: ${payload.id}`);
-    }
-    return [payload.data];
-  });
-  return contexts.length > 0 ? projectThreeReferenceMediaControls(contexts) : undefined;
 }
 
 export function buildEnhancedAgentMessage(input: BuildEnhancedAgentMessageInput): string {

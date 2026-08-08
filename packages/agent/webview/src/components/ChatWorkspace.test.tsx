@@ -2,11 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContextPayload } from '@neko/agent-contracts';
-import {
-  parseSendMessageWebviewMessage,
-  type Message,
-  type SettingsState,
-} from '@neko/agent-contracts';
+import { type Message, type SettingsState } from '@neko/agent-contracts';
 import type { ChatWorkspaceProps } from './ChatWorkspace';
 import { ChatWorkspace } from './ChatWorkspace';
 import type { ComposerMenuState } from './ChatView/InputArea/types';
@@ -27,8 +23,37 @@ const hostMocks = vi.hoisted(() => ({
   clearActiveSkill: vi.fn(),
 }));
 
+const directGenerationMocks = vi.hoisted(() => ({
+  submit: vi.fn(async () => ({
+    jobId: 'job-direct-image',
+    mediaKind: 'image' as const,
+    purpose: 'image.generate' as const,
+    providerId: 'image-provider',
+    modelId: 'image-model',
+    phase: 'succeeded' as const,
+    resultLocators: [
+      {
+        kind: 'generated-output' as const,
+        outputId: 'output-image',
+        digest: 'sha256:image',
+        path: 'generated/image/output.png',
+      },
+    ],
+  })),
+}));
+
 vi.mock('../host-runtime-context', () => ({
   useAgentHostMessages: () => hostMocks,
+}));
+
+vi.mock('../direct-generation-context', () => ({
+  useDirectGenerationOperationPort: () => directGenerationMocks,
+}));
+
+vi.mock('../i18n/I18nContext', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
 }));
 
 vi.mock('./ChatView/InputAreaContext', () => ({
@@ -331,15 +356,17 @@ describe('ChatWorkspace pending send', () => {
     expect(hostMocks.sendMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('replays a pending image entry send with the selected direct media model', () => {
+  it('replays a pending image entry through direct generation without an Agent message', async () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-image', conversationId: 'conv-image' });
     const settings = createSettingsWithAgentMediaModels();
+    const setMessages = vi.fn();
 
     render(
       <ChatWorkspace
         {...createProps({
           tabRenderStore: runtime.store,
           settings,
+          setMessages,
           pendingSendRequest: {
             id: 2,
             input: {
@@ -352,7 +379,7 @@ describe('ChatWorkspace pending send', () => {
       />,
     );
 
-    act(() => {
+    await act(async () => {
       runtime.store.updateState({
         modelConfigurationInitialized: true,
         selectedModel: 'test-model',
@@ -364,19 +391,17 @@ describe('ChatWorkspace pending send', () => {
       });
     });
 
-    const payload = { type: 'sendMessage', ...hostMocks.sendMessage.mock.calls[0]?.[0] };
-    expect(payload).toEqual(
-      expect.objectContaining({
-        conversationId: 'conv-image',
-        sessionMode: 'image',
-        mediaModel: {
-          providerId: 'image-provider',
-          modelId: 'image-model',
-          category: 'image',
-        },
-      }),
-    );
-    expect(parseSendMessageWebviewMessage(payload)).not.toBeNull();
+    expect(directGenerationMocks.submit).toHaveBeenCalledWith({
+      mediaKind: 'image',
+      prompt: 'generate a red circle',
+      providerId: 'image-provider',
+      modelId: 'image-model',
+      aspectRatio: '16:9',
+      width: 1920,
+      height: 1080,
+    });
+    expect(hostMocks.sendMessage).not.toHaveBeenCalled();
+    expect(setMessages).not.toHaveBeenCalled();
   });
 
   it('projects hydrated Agent media defaults into the pending send turn policy', () => {
@@ -959,7 +984,6 @@ function createProps(overrides: Partial<ChatWorkspaceProps> = {}): ChatWorkspace
     onModelSelect: noop,
     mentionItems: [],
     onMentionSearchFilterChange: noop,
-    pluginCommands: [],
     workItems: [],
     pluginsAvailable: {},
     setActiveTab: noop as React.Dispatch<
@@ -969,7 +993,6 @@ function createProps(overrides: Partial<ChatWorkspaceProps> = {}): ChatWorkspace
     contextTokenCount: 0,
     isCompressing: false,
     mediaModelCallCount: 0,
-    skills: [],
     ambientNodes: [],
     agentState: null,
     setAmbientNodes: noop as React.Dispatch<

@@ -204,7 +204,7 @@ export interface AgentWorkspaceRuntime {
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
   readonly tools: IToolRegistry;
   createConversation(conversationId: string): Promise<void>;
-  ensureConversation(conversationId: string): Promise<void>;
+  ensureConversation(conversationId: string, title: string): Promise<void>;
   deleteConversation(conversationId: string): Promise<void>;
   clearAllConversations(): Promise<void>;
   openConversation(input: AgentConversationOpenInput): Promise<void>;
@@ -776,7 +776,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     this.options.logger?.info('Workspace runtime attached.', { workspaceId: this.workspaceId });
   }
 
-  async createConversation(conversationId: string): Promise<void> {
+  async createConversation(conversationId: string, title?: string): Promise<void> {
     this.requireActive();
     requireIdentity(conversationId, 'Conversation');
     const lease = this.options.authority.acquireLease(conversationId);
@@ -785,6 +785,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
         lease,
         conversationId,
         branchId: 'main',
+        ...(title === undefined ? {} : { title }),
       });
     } finally {
       this.options.authority.releaseLease(lease);
@@ -797,7 +798,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     });
   }
 
-  async ensureConversation(conversationId: string): Promise<void> {
+  async ensureConversation(conversationId: string, title: string): Promise<void> {
     this.requireActive();
     requireIdentity(conversationId, 'Conversation');
     if (this.options.authority.readConversation(conversationId)) {
@@ -806,7 +807,7 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
     }
     const pending = this.materializing.get(conversationId);
     if (pending) return pending;
-    const operation = this.createConversation(conversationId);
+    const operation = this.createConversation(conversationId, title);
     this.materializing.set(conversationId, operation);
     try {
       await operation;

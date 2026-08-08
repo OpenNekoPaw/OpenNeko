@@ -59,6 +59,7 @@ export {
 
 export {
   createAgentContentEffects,
+  searchAgentWorkspaceMentions,
   type AgentContentInteractionPort,
   type CreateAgentContentEffectsOptions,
 } from './agent-content-effects';

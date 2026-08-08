@@ -18,9 +18,16 @@ import { useTranslation } from '../../../i18n/I18nContext';
 interface ModeSelectorProps {
   mode: ShellExecutionMode;
   onChange: (mode: ShellExecutionMode) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
-export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
+export function ModeSelector({
+  mode,
+  onChange,
+  disabled = false,
+  disabledReason,
+}: ModeSelectorProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useComposerControlMenu('execution-mode');
   const [placement, setPlacement] = useState<DropdownPlacement>({
@@ -63,14 +70,16 @@ export function ModeSelector({ mode, onChange }: ModeSelectorProps) {
     <div className="relative" ref={menuRef}>
       <button
         type="button"
+        disabled={disabled}
         onClick={() => {
+          if (disabled) return;
           if (!isOpen) setPlacement(getPlacement());
           setIsOpen(!isOpen);
         }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         className="agent-control-chip agent-execution-mode-trigger"
-        title={`${t('chat.executionMode.title')} (Shift+Tab)`}
+        title={disabledReason ?? `${t('chat.executionMode.title')} (Shift+Tab)`}
       >
         <span className="agent-control-chip-text">
           {currentMode ? t(currentMode.labelKey) : mode}

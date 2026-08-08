@@ -5,9 +5,9 @@ import type {
   TabRenderStateUpdate,
 } from './tab-render-runtime';
 import {
-  parseAgentConversationContext,
+  parseAgentBoundDomainBinding,
   type AgentContextPayload,
-  type AgentConversationContext,
+  type AgentBoundDomainBinding,
 } from '@neko/agent-contracts';
 
 export interface TabRenderDraftSnapshot extends TabRenderBinding {
@@ -21,7 +21,7 @@ export interface AgentEntryDraftSnapshot {
   readonly contextReferences: readonly AgentContextPayload[];
   readonly workspaceTarget?: {
     readonly label: string;
-    readonly context: Extract<AgentConversationContext, { readonly kind: 'workspace' }>;
+    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
   };
   readonly selectedModel: string;
   readonly executionMode: 'plan' | 'ask' | 'auto';
@@ -348,7 +348,7 @@ function parseEntryWorkspaceTarget(
 ): AgentEntryDraftSnapshot['workspaceTarget'] {
   if (value === undefined) return undefined;
   if (!isRecord(value)) throw new Error(`${path}.workspaceTarget must be an object.`);
-  const context = parseAgentConversationContext(value.context);
+  const context = parseAgentBoundDomainBinding(value.context);
   if (context.kind !== 'workspace') {
     throw new Error(`${path}.workspaceTarget.context must be Workspace-bound.`);
   }

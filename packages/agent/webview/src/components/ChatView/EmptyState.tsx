@@ -8,7 +8,7 @@ interface EmptyStateProps {
   disabled?: boolean;
   onEntryAction?: (action: EmptyStateEntryAction) => void;
   presentation?: 'default' | 'desktop-dock';
-  draftScope?: 'unbound' | 'assistant' | 'workspace';
+  draftScope?: 'unbound' | 'assistant' | 'workspace' | 'character' | 'world';
   skills?: readonly SkillSummary[];
   onSkillSelect?: (skill: SkillSummary) => void;
 }
