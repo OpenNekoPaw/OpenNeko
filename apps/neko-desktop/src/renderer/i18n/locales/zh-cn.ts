@@ -209,6 +209,7 @@ export const zhCN = {
   'home.view.list': '列表',
   'workspace.contentProject': '内容项目',
   'workspace.canvas': '画布',
+  'workspace.canvas.loading': '正在载入画布…',
   'workspace.canvas.noActiveTarget': '请先打开一个画布再添加资源',
   'workspace.cut': '剪辑',
   'workspace.cut.loading': '正在载入剪辑器…',

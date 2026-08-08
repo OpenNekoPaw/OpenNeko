@@ -15,42 +15,37 @@ import { DesktopRootErrorBoundary } from './DesktopSurfaceErrorBoundary';
 import { PreviewViewerSnapshotProvider } from '@neko/preview-webview/presentation-snapshot';
 import { ResourceBrowserPresentationSnapshotProvider } from '@neko/assets-webview/resource-browser/presentation-snapshot';
 
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error('OpenNeko Desktop renderer root is missing.');
-}
-
-void startRenderer(rootElement).catch((error: unknown) => {
-  rootElement.textContent = error instanceof Error ? error.message : String(error);
-  rootElement.setAttribute('role', 'alert');
-  throw error;
-});
-
-async function startRenderer(container: HTMLElement): Promise<void> {
+export async function mountDesktopRenderer(container: HTMLElement): Promise<void> {
   const initialSettings = await initializeDesktopRendererBridge(window.openNekoDesktop);
   const initialLocale = resolveDesktopLocalePreference(initialSettings.preferences.locale);
-  const themeController = startDesktopTheme(document, initialSettings.preferences.theme);
   const desktopI18n = createDesktopI18n(initialLocale);
   applyDesktopLocale(document, initialLocale);
+  const themeController = startDesktopTheme(document, initialSettings.preferences.theme);
 
   const disposeTheme = (): void => themeController.dispose();
+  try {
+    createRoot(container).render(
+      <StrictMode>
+        <DesktopRootErrorBoundary
+          title={desktopI18n.t('shell.rootRenderFailure')}
+          description={desktopI18n.t('shell.rootRenderFailureDetail')}
+          retryLabel={desktopI18n.t('shell.retrySurface')}
+        >
+          <DesktopRendererRoot
+            i18n={desktopI18n}
+            initialSettings={initialSettings}
+            themeController={themeController}
+          />
+        </DesktopRootErrorBoundary>
+      </StrictMode>,
+    );
+  } catch (error) {
+    window.removeEventListener('pagehide', disposeTheme);
+    disposeTheme();
+    throw error;
+  }
   window.addEventListener('pagehide', disposeTheme, { once: true });
   import.meta.hot?.dispose(disposeTheme);
-  createRoot(container).render(
-    <StrictMode>
-      <DesktopRootErrorBoundary
-        title={desktopI18n.t('shell.rootRenderFailure')}
-        description={desktopI18n.t('shell.rootRenderFailureDetail')}
-        retryLabel={desktopI18n.t('shell.retrySurface')}
-      >
-        <DesktopRendererRoot
-          i18n={desktopI18n}
-          initialSettings={initialSettings}
-          themeController={themeController}
-        />
-      </DesktopRootErrorBoundary>
-    </StrictMode>,
-  );
 }
 
 function DesktopRendererRoot({

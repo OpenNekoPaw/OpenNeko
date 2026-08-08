@@ -1,5 +1,5 @@
-import { CanvasWebviewRoot } from '@neko/canvas-webview/root';
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
+import { useTranslation } from '@neko/ui/i18n/react';
 import type {
   DesktopProjectCatalogItem,
   DesktopShellProjection,
@@ -8,6 +8,11 @@ import type { DesktopWorkbenchViewRef } from '@neko/host/desktop-workbench-contr
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createElectronCanvasHostRuntime } from './desktop-canvas-host-runtime';
 import { createDesktopCanvasWebviewDelegate } from './desktop-canvas-webview-delegate';
+
+const CanvasWebviewRoot = lazy(async () => {
+  const module = await import('@neko/canvas-webview/root');
+  return { default: module.CanvasWebviewRoot };
+});
 
 export function DesktopCanvasSurface({
   project,
@@ -18,6 +23,7 @@ export function DesktopCanvasSurface({
   readonly projection: DesktopShellProjection;
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
+  const { locale, t } = useTranslation();
   const documentId = requireCanvasDocumentId(view);
   const identity = useMemo(
     () => ({
@@ -49,12 +55,20 @@ export function DesktopCanvasSurface({
       data-owner-view-id={view.viewId}
       aria-label="Canvas"
     >
-      <CanvasWebviewRoot
-        delegate={delegate}
-        lifecyclePresentation="active"
-        locale="zh-cn"
-        runtime={runtime}
-      />
+      <Suspense
+        fallback={
+          <div className="creative-main-placeholder" role="status">
+            {t('workspace.canvas.loading')}
+          </div>
+        }
+      >
+        <CanvasWebviewRoot
+          delegate={delegate}
+          lifecyclePresentation="active"
+          locale={locale}
+          runtime={runtime}
+        />
+      </Suspense>
     </section>
   );
 }

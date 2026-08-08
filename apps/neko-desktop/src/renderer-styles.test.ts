@@ -4,6 +4,18 @@ import { describe, expect, it } from 'vitest';
 const styles = readFileSync(new URL('./renderer/styles.css', import.meta.url), 'utf8');
 
 describe('Desktop renderer styles', () => {
+  it('keeps the pre-React startup diagnostic independent from runtime theme tokens', () => {
+    const bootstrapStyles = styles.slice(
+      styles.indexOf('.desktop-bootstrap-error'),
+      styles.indexOf('\nbutton {'),
+    );
+
+    expect(bootstrapStyles).toContain('--desktop-bootstrap-foreground: #1f2328');
+    expect(bootstrapStyles).toContain('--desktop-bootstrap-foreground: #f0f3f6');
+    expect(bootstrapStyles).toContain('.desktop-bootstrap-error__retry:focus-visible');
+    expect(bootstrapStyles).not.toContain('var(--neko-');
+  });
+
   it('scopes package-owned Workbench roots to the pure-white Main surface', () => {
     expect(styles).toMatch(
       /\.desktop-agent-root\s*\{[^}]*--neko-sideBar-background:\s*var\(--neko-desktop-main\)/u,

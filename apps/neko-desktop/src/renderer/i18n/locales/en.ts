@@ -228,6 +228,7 @@ export const en = {
   'home.view.list': 'List',
   'workspace.contentProject': 'Content project',
   'workspace.canvas': 'Canvas',
+  'workspace.canvas.loading': 'Loading Canvas…',
   'workspace.canvas.noActiveTarget': 'Open a Canvas before adding resources',
   'workspace.cut': 'Cut',
   'workspace.cut.loading': 'Loading Cut editor…',
