@@ -18,6 +18,7 @@ import {
   type AgentHostRouteEffectContext,
   type AgentConversationControllerTurnRequest,
   createAgentContentEffects,
+  type AgentLinkedMediaLibraryFileSearchInput,
   type AgentContentInteractionPort,
 } from '@neko/agent-runtime/runtime/host-controller';
 import {
@@ -27,10 +28,10 @@ import {
 import { projectPiConversationEntries } from '@neko/agent-runtime/runtime/projection/pi-conversation-history-projector';
 import {
   buildAgentInputCatalogMessage,
+  buildErrorMessage,
   buildAgentSessionDiagnosticMessage,
   buildAgentStateSnapshotMessage,
   buildConfigStateMessage,
-  buildGlobalErrorMessage,
   buildHistoryClearedMessage,
   buildInjectContextMessage,
   buildMessageQueueSnapshotMessage,
@@ -68,6 +69,8 @@ import {
 } from '@neko/host/settings';
 import type { ModelConfig as Model, ProviderConfig as Provider } from '@neko/ai-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
+import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 import {
   AgentQueuedTurnCancellationError,
   type AgentTurnConfigurationSnapshot,
@@ -216,6 +219,10 @@ export interface CreateAgentControllerCompositionOptions {
     readonly workspacePath: string;
   }) => ConfigManager;
   readonly contentInteraction: AgentContentInteractionPort;
+  readonly searchLinkedMediaLibraryFiles?: (
+    workspace: AssetWorkspaceResolution,
+    input: AgentLinkedMediaLibraryFileSearchInput,
+  ) => Promise<readonly WorkspaceFileContentLocator[]>;
   readonly configInteraction: AgentConfigInteractionPort;
   readonly conversationReferences?: AgentConversationReferenceResolutionPort;
   readonly resources: AgentResourceDisplayRegistrationPort;
@@ -380,6 +387,7 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       });
       return disposal;
     };
+    const searchLinkedMediaLibraryFiles = this.options.searchLinkedMediaLibraryFiles;
     const effects: AgentControllerEffects = {
       conversation: this.createConversationEffects(
         input.workspace,
@@ -419,6 +427,13 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
         workspace: input.workspace.workspace,
         host: this.options.host,
         interaction: this.options.contentInteraction,
+        ...(searchLinkedMediaLibraryFiles
+          ? {
+              searchLinkedMediaLibraryFiles: (searchInput) =>
+                searchLinkedMediaLibraryFiles(input.workspace.workspace, searchInput),
+            }
+          : {}),
+        reportMentionContributorError: this.options.reportError,
       }),
       projection: this.createProjectionEffects(projection, resourceDisplay, bind),
       injectContext: async (payload) => {
@@ -642,7 +657,9 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       );
       this.track(
         operation.catch(async (error: unknown) => {
-          await context.post(buildGlobalErrorMessage(describeError(error)));
+          await context.post(
+            buildAgentConversationTurnFailureMessage(request.conversationId, error),
+          );
           throw error;
         }),
       );
@@ -1545,6 +1562,13 @@ class DefaultAgentControllerComposition implements AgentControllerComposition {
       },
     );
   }
+}
+
+export function buildAgentConversationTurnFailureMessage(
+  conversationId: string,
+  error: unknown,
+): ReturnType<typeof buildErrorMessage> {
+  return buildErrorMessage({ conversationId, message: describeError(error) });
 }
 
 function reconcileInitialConversationMessage(

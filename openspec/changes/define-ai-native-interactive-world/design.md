@@ -168,6 +168,8 @@ Desktop Home 首先提供轻量 World Library：已安装/创作 WorldExperience
 
 Canonical producer 是 World package public authoring/publication/runtime service；consumer 是 Chara/Agent adapter、Node repository、World Webview port 和 Desktop composition。Desktop 只保留 Electron sender/path/trust boundary、typed IPC、View/Window lifecycle、native dialog、public port wiring 与 disposal，因为这些逻辑真实依赖 Application 层；所有可脱离 Electron 的规则、事务、codec、projection 和恢复编排留在 World owning package。
 
+World product entry 只有在 package owner 可用后才通过 `unify-agent-launch-and-domain-bindings` 的 typed World binding/context port 向 Agent 贡献 exact WorldExperienceVersion 或 WorldRun、participant、stance、branch 和 participant-scoped WorldView。Agent 只拥有 Draft/Conversation/Turn 与 AI role session，不得从文本或 active Scene 推断 World identity，也不得提交 WorldEvent/WorldState。World provider 未组合时，Agent Entry 和 Desktop 都必须保留 owner-qualified unavailable。
+
 ### 15. 项目事实、本地状态和表现资源保持分离
 
 WorldProject 与 portable WorldSave 使用稳定的 owning-domain 文件结构；WorldVersion 和 WorldExperienceVersion 是用户可发布、选择和绑定的不可变业务版本身份。具体 workspace-relative canonical path 和扩展名由实现 OpenSpec 冻结。用户级 SQLite 只保存 installed catalog、recent run、恢复索引、attention 和可重建 Search projection。素材由 Generation/Content/Asset owner 在 authoring 时提供 durable ContentLocator，并在发布后作为 grounding/reference 被实时 Context Materializer裁剪使用；普通 Generation runtime、cache、opaque URL 和 runtime token 不进入 World Run 或 facts。

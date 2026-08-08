@@ -51,6 +51,7 @@
 - [ ] 6.5 Implement required realtime AI capability resolution with explicit unavailable diagnostics, measured qualification receipts and only explicitly selected author-declared realtime profiles; delete silent model/purpose/profile fallback paths and prove they cannot participate.
 - [ ] 6.6 Add adversarial evaluation cases for prompt injection in imported World content, identity/stance spoofing, hidden-knowledge leakage, Director canon mutation, false utterance promotion and cross-run session contamination.
 - [ ] 6.7 Run focused real Agent evaluations for intent interpretation, multi-character response, World Director proposal and failure recovery, and record scenario IDs, model bindings, evidence and residual risks.
+- [ ] 6.8 Implement the World-owned typed Agent launch binding/context port only after World package authority exists; prove absent-provider unavailable behavior and forbid model-text, active-Scene or Agent-owned World commit fallback.
 
 ## 7. Realtime consumption qualification
 
@@ -78,6 +79,7 @@
 - [ ] 9.4 Add work detail and launch setup for exact version, entry point, stance, optional embodied Character, new/existing Save or branch and a qualified author-supported realtime presentation profile.
 - [ ] 9.5 Replace the current World unavailable projection only after the full package producer/consumer and realtime qualification path is registered; add consumer/path tests proving empty-view, mock-repository, no-op-handler, inference-free continuation and app-owned World success paths are absent or cannot participate.
 - [ ] 9.6 Add a real Electron isolated-fixture scenario covering Home -> World detail -> qualification -> new Run -> realtime user interaction -> interrupted Character response -> Save -> reload -> continue -> branch -> close, including latency evidence, IPC identity, resource revocation and disposal assertions.
+- [ ] 9.7 Compose World New Interaction through the canonical Agent bound Draft and exact Scene handoff without a World-specific Agent runtime or Desktop-owned binding policy.
 
 ## 10. Documentation and quality gates
 

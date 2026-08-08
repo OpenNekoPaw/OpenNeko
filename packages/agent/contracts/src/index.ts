@@ -90,6 +90,7 @@ export type {
   AgentFileReference,
   AgentFileReferenceMediaType,
   AgentFileReferenceSource,
+  AgentAuthorizedContentReferenceContextData,
   ToolCall,
   ToolCallProgress,
   ContentBlock,
@@ -110,6 +111,10 @@ export {
   parseCompositeContentJson,
   type CompositeContentFenceCandidate,
 } from './composite-content-contract';
+export {
+  AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
+  isAgentAuthorizedContentReferenceContextData,
+} from './message';
 export type {
   CloseCurrentConversationTabInput,
   CloseCurrentConversationTabProjection,

@@ -85,6 +85,12 @@ Mention discovery and selected references SHALL be resolved through the current 
 - **WHEN** the user types `@` after selecting an exact Workspace target but before first submit
 - **THEN** search returns authorized files and entities from that Workspace through its Draft binding receipt without creating a Conversation
 
+#### Scenario: Workspace contains linked Media Library files
+
+- **WHEN** a Workspace-bound Draft or Session searches `@` and the Assets owner exposes available linked Media Library content for that exact Workspace
+- **THEN** the same mention projection includes matching files with `source: media-library` and stable `workspace-file` locators under `neko/assets/<libraryName>/...`
+- **AND** the ordinary Workspace file walker does not follow symlinks or expose the linked library physical target or another raw path
+
 #### Scenario: Entry remains unbound
 
 - **WHEN** the user types `@` in an unbound Entry
@@ -95,10 +101,11 @@ Mention discovery and selected references SHALL be resolved through the current 
 - **WHEN** a selected reference belongs to a different Project or Workspace than the current binding
 - **THEN** only that reference or submit is rejected with both expected and actual owner diagnostics and no current-Project substitution occurs
 
-#### Scenario: Fountain screenplay is selected as a text reference
+#### Scenario: Supported structured document is selected
 
-- **WHEN** a Workspace-bound Draft or Session selects an authorized `.fountain` file through its exact ContentLocator
-- **THEN** the Host reads it as bounded text context without requesting binary preprocessing, exposing a raw path, or changing the Conversation owner
+- **WHEN** a Workspace-bound Draft or Session selects an authorized PDF, DOCX, EPUB, CBZ, Fountain or another format declared by the canonical document reader through its exact ContentLocator
+- **THEN** Desktop preserves the locator without reading or rejecting the format and Agent instructs the exact Turn to use the existing `ReadDocument` capability
+- **AND** document images are reachable only through `ReadDocument.imageInfo` locators followed by `ReadImage`, not by reconstructing raw entry paths
 
 #### Scenario: Workspace image is selected for a vision-capable Turn
 
@@ -107,13 +114,18 @@ Mention discovery and selected references SHALL be resolved through the current 
 
 #### Scenario: Selected image cannot be used by the exact model
 
-- **WHEN** an authorized image is selected but its MIME is invalid, its bounded read fails, or the exact selected model does not support image input
-- **THEN** only that reference or Turn fails with an exact diagnostic before provider execution and the application does not switch model, provider, source or analysis path
+- **WHEN** an authorized image is selected but its MIME is invalid, its bounded read fails, or neither the exact selected model nor an exact registered perception capability can process it
+- **THEN** only that reference or Turn fails with an exact diagnostic before unsupported provider execution and the application does not switch model, provider, source or analysis path
 
-#### Scenario: Selected reference requires unsupported preprocessing
+#### Scenario: Selected media requires an unavailable capability
 
-- **WHEN** an authorized reference is audio, video, another unsupported binary type or requires a structured parser that is not composed for Agent context
-- **THEN** only that reference or Turn fails with an exact diagnostic and the Host does not decode it as text, submit an empty context, or switch to another source
+- **WHEN** an authorized reference requires audio transcription, video frame extraction, structured parsing or a generic conversion capability that is not registered for the exact Turn
+- **THEN** only that reference or Turn fails with an exact unavailable-capability diagnostic and the Host does not decode it as text, submit empty context, use a Desktop-private reader, or switch to another source
+
+#### Scenario: One reference fails during Turn preparation
+
+- **WHEN** authorization, content reading, document routing or media capability planning rejects one selected reference
+- **THEN** the failure is projected to that exact Conversation/Turn and no global application error replaces or blocks the Agent Surface, Window Shell, sibling Conversations or sibling Workspaces
 
 ### Requirement: Target changes invalidate target-scoped input state
 

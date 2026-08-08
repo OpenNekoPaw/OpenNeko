@@ -7,7 +7,7 @@
 import type { AgentCapabilityInvocationResult } from './agent-capability-lifecycle';
 import type { PerceptionCard, ToolResultBackfillDiagnostic } from './perception-card';
 import type { ToolResultAttachment } from './tool';
-import type { ContentLocator } from '@neko/content';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 import type { StoryboardTable, StoryboardValidationDiagnostic } from '@neko/canvas-domain';
 import type { StoryboardPlanOverlay } from './storyboard-plan-overlay';
 import type { ArtifactExtensionMap } from './composite-artifact';
@@ -175,6 +175,61 @@ export interface AgentFileReference {
   mediaType?: AgentFileReferenceMediaType;
   source?: AgentFileReferenceSource;
   thumbnailUri?: string;
+}
+
+export const AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND = 'authorized-content-reference' as const;
+const AGENT_FILE_REFERENCE_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'video',
+  'audio',
+  'image',
+  'sequence',
+  'text',
+  'document',
+]);
+const AGENT_FILE_REFERENCE_SOURCES: ReadonlySet<string> = new Set([
+  'workspace',
+  'media-library',
+  'entity-graph',
+  'story',
+  'canvas',
+]);
+const AGENT_AUTHORIZED_CONTENT_REFERENCE_FIELDS = new Set([
+  'kind',
+  'locator',
+  'mediaType',
+  'source',
+  'text',
+]);
+
+export interface AgentAuthorizedContentReferenceContextData {
+  readonly kind: typeof AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND;
+  readonly locator: ContentLocator;
+  readonly mediaType?: AgentFileReferenceMediaType;
+  readonly source?: AgentFileReferenceSource;
+  readonly text?: string;
+}
+
+export function isAgentAuthorizedContentReferenceContextData(
+  value: unknown,
+): value is AgentAuthorizedContentReferenceContextData {
+  if (!isMessageRecord(value)) return false;
+  const locator = validateContentLocator(value['locator']);
+  const mediaType = value['mediaType'];
+  const source = value['source'];
+  return (
+    Object.keys(value).every((key) => AGENT_AUTHORIZED_CONTENT_REFERENCE_FIELDS.has(key)) &&
+    value['kind'] === AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND &&
+    locator.ok &&
+    (mediaType === undefined ||
+      (typeof mediaType === 'string' && AGENT_FILE_REFERENCE_MEDIA_TYPES.has(mediaType))) &&
+    (source === undefined ||
+      (typeof source === 'string' && AGENT_FILE_REFERENCE_SOURCES.has(source))) &&
+    (value['text'] === undefined || typeof value['text'] === 'string')
+  );
+}
+
+function isMessageRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // ---------------------------------------------------------------------------

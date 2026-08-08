@@ -60,6 +60,7 @@ export {
 export {
   createAgentContentEffects,
   searchAgentWorkspaceMentions,
+  type AgentLinkedMediaLibraryFileSearchInput,
   type AgentContentInteractionPort,
   type CreateAgentContentEffectsOptions,
 } from './agent-content-effects';

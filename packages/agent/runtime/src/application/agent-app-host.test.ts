@@ -224,6 +224,20 @@ describe('AgentAppHost', () => {
       prompt: 'ignored for explicit Skill',
       skillName: 'desktop-fixture',
       skillActivationId: buildSkillActivationId(skillRecord),
+      additionalInstructions: 'Use the selected document.',
+      contextPayloads: [
+        {
+          type: 'file',
+          id: 'file:story.epub',
+          label: 'story.epub',
+          summary: 'Workspace content: story.epub',
+          data: {
+            kind: 'authorized-content-reference',
+            locator: { kind: 'workspace-file', path: 'story.epub' },
+            mediaType: 'document',
+          },
+        },
+      ],
       modelPolicy: policy,
       configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
@@ -261,6 +275,8 @@ describe('AgentAppHost', () => {
       ),
       expect.stringContaining('Desktop composition Skill body'),
     ]);
+    expect(prompts[1]).toContain('ContentLocator: {"kind":"workspace-file","path":"story.epub"}');
+    expect(prompts[1]).toContain('Use ReadDocument with source=');
     expect(observedEvents.map((event) => event.type)).toContain('turn.persistence');
     expect(JSON.stringify(first)).not.toContain(fixture.workspace.workspacePath);
     await expect(stat(join(fixture.userDataRoot, 'neko.db'))).resolves.toMatchObject({
@@ -279,6 +295,145 @@ describe('AgentAppHost', () => {
       )),
     ];
     expect(piStorage.every((content) => !content.includes(protectedSecret))).toBe(true);
+  });
+
+  it('materializes authorized text through the Agent content runtime', async () => {
+    const fixture = await createFixture();
+    await writeFile(join(fixture.workspace.workspacePath, 'notes.py'), 'print("locator text")\n');
+    const prompts: string[] = [];
+    const models = createFixtureModels((_model, context) => {
+      const content = context.messages.at(-1)?.content;
+      prompts.push(typeof content === 'string' ? content : JSON.stringify(content));
+      return completedStream(assistant('text observed'));
+    });
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-text-reference',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await workspace.executeTurn({
+      conversationId: 'conversation-text-reference',
+      prompt: 'Read the selected source',
+      contextPayloads: [
+        {
+          type: 'file',
+          id: 'file:notes.py',
+          label: 'notes.py',
+          summary: 'Workspace content: notes.py',
+          data: {
+            kind: 'authorized-content-reference',
+            locator: { kind: 'workspace-file', path: 'notes.py' },
+            mediaType: 'text',
+          },
+        },
+      ],
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+
+    expect(prompts[0]).toContain('print(\\"locator text\\")');
+    expect(prompts[0]).not.toContain(fixture.workspace.workspacePath);
+    const persisted = JSON.stringify(
+      await workspace.readConversationEntries('conversation-text-reference'),
+    );
+    expect(persisted).toContain('workspace-file');
+    expect(persisted).toContain('notes.py');
+    expect(persisted).not.toContain('locator text');
+  });
+
+  it.each(['book.epub', 'comic.cbz', 'report.pdf', 'draft.docx'])(
+    'projects %s as a ReadDocument locator without Desktop preprocessing',
+    async (documentPath) => {
+      const fixture = await createFixture();
+      const prompts: string[] = [];
+      const models = createFixtureModels((_model, context) => {
+        const content = context.messages.at(-1)?.content;
+        prompts.push(typeof content === 'string' ? content : JSON.stringify(content));
+        return completedStream(assistant('document locator observed'));
+      });
+      const policy = fixturePolicy();
+      const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+      await workspace.openConversation({
+        conversationId: `conversation-document-${documentPath}`,
+        models,
+        initialModelPolicy: policy,
+        baseSystemPrompt: 'Desktop Agent fixture',
+      });
+
+      await workspace.executeTurn({
+        conversationId: `conversation-document-${documentPath}`,
+        prompt: 'Read the selected document',
+        contextPayloads: [
+          {
+            type: 'file',
+            id: `file:${documentPath}`,
+            label: documentPath,
+            summary: `Workspace content: ${documentPath}`,
+            data: {
+              kind: 'authorized-content-reference',
+              locator: { kind: 'workspace-file', path: documentPath },
+              mediaType: 'document',
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      });
+
+      expect(prompts[0]).toContain(`source={"kind":"workspace-file","path":"${documentPath}"}`);
+      expect(prompts[0]).toContain('Use ReadDocument');
+      expect(prompts[0]).not.toContain(fixture.workspace.workspacePath);
+    },
+  );
+
+  it('rejects only the current media Turn when no matching perception capability is registered', async () => {
+    const fixture = await createFixture();
+    const provider = vi.fn(() => completedStream(assistant('must not run')));
+    const models = createFixtureModels(provider);
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-video-reference',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-video-reference',
+        prompt: 'Analyze the selected video',
+        contextPayloads: [
+          {
+            type: 'file',
+            id: 'file:clip.mp4',
+            label: 'clip.mp4',
+            summary: 'Workspace content: clip.mp4',
+            data: {
+              kind: 'authorized-content-reference',
+              locator: { kind: 'workspace-file', path: 'clip.mp4' },
+              mediaType: 'video',
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).rejects.toThrow('media perception capability that is not registered for this Turn');
+    expect(provider).not.toHaveBeenCalled();
   });
 
   it('materializes an authorized image locator only at the native Pi provider boundary', async () => {
@@ -314,6 +469,7 @@ describe('AgentAppHost', () => {
           label: 'test.png',
           summary: 'Workspace image: test.png (ContentLocator: workspace-file:test.png)',
           data: {
+            kind: 'authorized-content-reference',
             locator: { kind: 'workspace-file', path: 'test.png' },
             mediaType: 'image',
           },
@@ -338,7 +494,9 @@ describe('AgentAppHost', () => {
     );
     expect(JSON.stringify(contexts[0])).not.toContain(fixture.workspace.workspacePath);
     const persisted = JSON.stringify(await workspace.readConversationEntries('conversation-image'));
-    expect(persisted).toContain('ContentLocator: workspace-file:test.png');
+    expect(persisted).toContain(
+      'ContentLocator: {\\"kind\\":\\"workspace-file\\",\\"path\\":\\"test.png\\"}',
+    );
     expect(persisted).not.toContain('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk');
   });
 
@@ -366,6 +524,7 @@ describe('AgentAppHost', () => {
             label: 'test.png',
             summary: 'Workspace image: test.png',
             data: {
+              kind: 'authorized-content-reference',
               locator: { kind: 'workspace-file', path: 'test.png' },
               mediaType: 'image',
             },
@@ -412,6 +571,7 @@ describe('AgentAppHost', () => {
             label: 'spoofed.jpg',
             summary: 'Workspace image: spoofed.jpg',
             data: {
+              kind: 'authorized-content-reference',
               locator: { kind: 'workspace-file', path: 'spoofed.jpg' },
               mediaType: 'image',
             },

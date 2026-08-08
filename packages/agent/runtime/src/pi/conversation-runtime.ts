@@ -68,6 +68,7 @@ export interface ExecutePiConversationTurnInput {
   readonly turnId: string;
   readonly runId: string;
   readonly prompt: string;
+  readonly durablePrompt?: string;
   readonly images?: readonly ImageContent[];
   readonly modelPolicy: AgentModelPolicy;
   readonly skillSnapshot: PiSkillHostSnapshot;
@@ -80,11 +81,12 @@ export interface ExecutePiConversationTurnInput {
 
 export interface ExecutePiConversationSkillInput extends Omit<
   ExecutePiConversationTurnInput,
-  'prompt'
+  'prompt' | 'durablePrompt'
 > {
   readonly skillName: string;
   readonly activationId: string;
   readonly additionalInstructions?: string;
+  readonly durableAdditionalInstructions?: string;
 }
 
 export interface PiCompactionPolicy {
@@ -169,7 +171,7 @@ export class PiConversationRuntime {
   }
 
   async execute(input: ExecutePiConversationTurnInput): Promise<void> {
-    await this.runPrompt(input, input.prompt, input.images);
+    await this.runPrompt(input, input.prompt, input.images, input.durablePrompt);
   }
 
   async executeSkill(input: ExecutePiConversationSkillInput): Promise<void> {
@@ -178,7 +180,15 @@ export class PiConversationRuntime {
       input.activationId,
       input.additionalInstructions,
     );
-    await this.runPrompt(input, prompt, input.images);
+    const durablePrompt =
+      input.durableAdditionalInstructions === undefined
+        ? undefined
+        : input.skillSnapshot.invokeExact(
+            input.skillName,
+            input.activationId,
+            input.durableAdditionalInstructions,
+          );
+    await this.runPrompt(input, prompt, input.images, durablePrompt);
   }
 
   cancel(identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void {
@@ -337,6 +347,7 @@ export class PiConversationRuntime {
     input: ExecutePiConversationTurnInput | ExecutePiConversationSkillInput,
     prompt: string,
     images?: readonly ImageContent[],
+    durablePrompt?: string,
   ): Promise<void> {
     this.assertReady();
     validateTurnIdentity(input.turnId, input.runId);
@@ -380,13 +391,12 @@ export class PiConversationRuntime {
     );
     this.agent.beforeToolCall = toolBridge.beforeToolCall;
     this.activeTurn = { identity, projector, skills: input.skillSnapshot };
+    const previousMessageCount = this.agent.state.messages.length;
     const turnMessages: AgentMessage[] = [];
     let terminalListenerError: unknown;
     const unsubscribe = this.agent.subscribe(async (event) => {
       if (event.type === 'message_end') {
-        turnMessages.push(
-          images?.length ? stripTransientUserImages(event.message) : structuredClone(event.message),
-        );
+        turnMessages.push(structuredClone(event.message));
       }
       if (event.type === 'agent_end') {
         try {
@@ -398,11 +408,17 @@ export class PiConversationRuntime {
             branchId: this.options.branchId,
             turnId: input.turnId,
             terminalState: terminalState(event),
-            messages: turnMessages,
+            messages: projectDurableTurnMessages(
+              turnMessages,
+              durablePrompt,
+              (images?.length ?? 0) > 0,
+            ),
           });
-          if (images?.length) {
-            this.agent.state.messages = this.agent.state.messages.map(stripTransientUserImages);
-          }
+          this.projectDurableActiveTurnMessages(
+            previousMessageCount,
+            durablePrompt,
+            (images?.length ?? 0) > 0,
+          );
           await projector.persistenceChanged('durable');
         } catch (error) {
           terminalListenerError = error;
@@ -437,8 +453,29 @@ export class PiConversationRuntime {
       if (renewalError !== undefined) throw renewalError;
     } finally {
       unsubscribe();
+      this.projectDurableActiveTurnMessages(
+        previousMessageCount,
+        durablePrompt,
+        (images?.length ?? 0) > 0,
+      );
       this.activeTurn = undefined;
     }
+  }
+
+  private projectDurableActiveTurnMessages(
+    previousMessageCount: number,
+    durablePrompt: string | undefined,
+    stripImages: boolean,
+  ): void {
+    if (!stripImages && durablePrompt === undefined) return;
+    this.agent.state.messages = [
+      ...this.agent.state.messages.slice(0, previousMessageCount),
+      ...projectDurableTurnMessages(
+        this.agent.state.messages.slice(previousMessageCount),
+        durablePrompt,
+        stripImages,
+      ),
+    ];
   }
 
   private assertReady(): void {
@@ -469,12 +506,49 @@ export class PiConversationRuntime {
   }
 }
 
-function stripTransientUserImages(message: AgentMessage): AgentMessage {
+function projectDurableTurnMessages(
+  messages: readonly AgentMessage[],
+  durablePrompt: string | undefined,
+  stripImages: boolean,
+): AgentMessage[] {
+  let promptProjected = false;
+  return messages.map((message) => {
+    const replacePrompt =
+      durablePrompt !== undefined && message.role === 'user' && !promptProjected;
+    if (replacePrompt) promptProjected = true;
+    return projectDurableTurnMessage(
+      message,
+      replacePrompt ? durablePrompt : undefined,
+      stripImages,
+    );
+  });
+}
+
+function projectDurableTurnMessage(
+  message: AgentMessage,
+  durablePrompt: string | undefined,
+  stripImages: boolean,
+): AgentMessage {
   const cloned = structuredClone(message);
-  if (cloned.role !== 'user' || typeof cloned.content === 'string') return cloned;
+  if (cloned.role !== 'user') return cloned;
+  if (typeof cloned.content === 'string') {
+    return durablePrompt === undefined ? cloned : { ...cloned, content: durablePrompt };
+  }
+  let promptProjected = false;
+  const content = cloned.content.flatMap((part) => {
+    if (stripImages && part.type === 'image') return [];
+    if (durablePrompt !== undefined && part.type === 'text' && !promptProjected) {
+      promptProjected = true;
+      return [{ ...part, text: durablePrompt }];
+    }
+    return [part];
+  });
+  if (durablePrompt !== undefined && !promptProjected) {
+    content.unshift({ type: 'text', text: durablePrompt });
+  }
   return {
     ...cloned,
-    content: cloned.content.filter((part) => part.type !== 'image'),
+    content,
   };
 }
 

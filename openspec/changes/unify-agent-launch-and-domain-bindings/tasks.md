@@ -141,6 +141,13 @@
 - [x] 16.4 Normalize the Project, Assistant/Workspace group, Conversation row and expand-control typography inside the Primary navigation while retaining the smaller section-heading hierarchy.
 - [x] 16.5 Add focused Agent application, Pi materialization, Desktop composition and collapsed/expanded CSS contract tests, then run visible Electron acceptance for title refresh, Chinese UI and text layout.
 
+## 17. Workspace Media Library Mention Regression
+
+- [x] 17.1 Add an Assets-owned linked Media Library mention search that returns bounded portable Workspace locators and never exposes or recursively follows the physical link target.
+- [x] 17.2 Inject the exact Workspace media mention contributor into both bound Draft and Session searches without adding a Resource Browser UI dependency or active-Workspace fallback.
+- [x] 17.3 Add Assets Node, Agent composition and Desktop adapter tests for linked media results, source provenance, duplicate handling and unavailable sibling isolation.
+- [x] 17.4 Update the indexed launch-binding Evaluation case and visible Desktop scenario to prove `@` selects linked Media Library content through the exact Workspace binding; keep real-provider execution under task 11.7 when cost authorization is absent.
+
 ## 18. Workspace Grant Restart And Agent Surface Failure Containment
 
 - [x] 18.1 Extend the canonical Agent launch Host result with an owner-qualified unavailable projection for attach without adding an internal contract version or alternate success path.
@@ -148,3 +155,13 @@
 - [x] 18.3 Keep attach/bootstrap failures local to the Agent Surface with an internationalized diagnostic and explicit retry action, without exposing raw IPC, path or grant identities or fabricating an Agent adapter.
 - [x] 18.4 Add contract, Main process-boundary and Renderer regression tests proving exact restore, typed unavailable, retry, sanitized diagnostics and sibling UI preservation.
 - [x] 18.5 Run focused tests, typechecks, strict OpenSpec validation, Agent Evaluation disposition, quality review and visible Electron UI validation, preserving any external runtime blocker.
+
+## 19. Locator-first Unified Content References
+
+- [x] 19.1 Replace the Desktop text/image/structured format policy with an authorization-only Workspace reference adapter that returns exact ContentLocators and no raw path, base64 or extracted content.
+- [x] 19.2 Route bounded text materialization and structured-document instructions through the package-owned Agent content runtime; reuse `ReadDocument` for PDF, DOCX, EPUB, CBZ, Fountain and all formats declared by the canonical document reader.
+- [x] 19.3 Preserve the canonical `ReadDocument -> ReadImage` document-image chain and deterministic native/perception capability selection without try-next provider, source, reader or Tool fallback.
+- [x] 19.4 Project reference preparation and Turn execution failures to the exact Conversation/Turn while retaining application logging and sibling UI availability; remove the global-error projection from this path.
+- [x] 19.5 Add path-level Desktop and Agent tests for bounded text, EPUB/PDF/DOCX/CBZ locator projection, native image handling, unavailable media capability, poisoned Desktop format policy and local failure isolation.
+- [x] 19.6 Update the indexed Agent Evaluation disposition, run key-free focused validation and keep real-provider visible/hidden execution under task 11.7 without cost authorization.
+- [x] 19.7 Run focused typechecks, strict OpenSpec validation, visible Desktop UI validation and Neko quality review; record current artifacts and residual runtime/provider risks.

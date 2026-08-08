@@ -599,6 +599,53 @@ describe('PiConversationRuntime', () => {
     runtime.dispose();
   });
 
+  it('uses transient provider context while checkpointing only the durable locator prompt', async () => {
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+    const prompts: string[] = [];
+    const models = createFixtureModels((_model, context) => {
+      const content = context.messages.at(-1)?.content;
+      prompts.push(typeof content === 'string' ? content : JSON.stringify(content));
+      return completedStream(assistant('stop', 'context read'));
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+
+    await runtime.execute({
+      turnId: 'turn-transient-context',
+      runId: 'run-transient-context',
+      prompt: 'Analyze\n\nTRANSIENT_REFERENCE_CONTENT',
+      durablePrompt: 'Analyze\n\nContentLocator: {"kind":"workspace-file","path":"notes.txt"}',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: { emit: () => undefined },
+    });
+
+    expect(prompts[0]).toContain('TRANSIENT_REFERENCE_CONTENT');
+    const persisted = JSON.stringify(
+      await authority.readBranchEntries('conversation-1', 'branch-main'),
+    );
+    expect(persisted).toContain('ContentLocator');
+    expect(persisted).not.toContain('TRANSIENT_REFERENCE_CONTENT');
+    expect(JSON.stringify(runtime.messages)).not.toContain('TRANSIENT_REFERENCE_CONTENT');
+    runtime.dispose();
+  });
+
   it('keeps the writer lease alive between turns for the lifetime of the runtime', async () => {
     await authority.dispose();
     vi.useFakeTimers();

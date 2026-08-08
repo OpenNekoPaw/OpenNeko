@@ -1,4 +1,5 @@
 import type { MessageAttachment } from '@neko/agent-contracts';
+import type { ContentLocator } from '@neko/content';
 import { isDocumentFile } from '@neko/media';
 
 export type AgentRuntimePromptLocale = 'en' | 'zh';
@@ -180,6 +181,17 @@ export function formatReadDocumentInstruction(
     return `分析该文档前，先调用 ReadDocument，参数使用 source={"kind":"file","path":"${path}"}。不要把整本文档直接内联到聊天上下文。`;
   }
   return `Use ReadDocument with source={"kind":"file","path":"${path}"} before analyzing this document. Do not inline the whole document as chat context.`;
+}
+
+export function formatReadDocumentLocatorInstruction(
+  locator: ContentLocator,
+  locale?: AgentRuntimePromptLocale | string,
+): string {
+  const source = JSON.stringify(locator);
+  if (normalizeAgentRuntimePromptLocale(locale) === 'zh') {
+    return `分析该文档前，先调用 ReadDocument，参数使用 source=${source}。不要把整本文档直接内联到聊天上下文。`;
+  }
+  return `Use ReadDocument with source=${source} before analyzing this document. Do not inline the whole document as chat context.`;
 }
 
 function getAttachmentLabels(locale?: AgentRuntimePromptLocale | string): {

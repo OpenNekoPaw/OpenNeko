@@ -63,6 +63,10 @@ describe('Agent content controller', () => {
         host: {
           files: {
             readDirectory: vi.fn(async () => [
+              { name: 'book.epub', type: 'file' as const },
+              { name: 'comic.cbz', type: 'file' as const },
+              { name: 'draft.docx', type: 'file' as const },
+              { name: 'report.pdf', type: 'file' as const },
               { name: 'test.png', type: 'file' as const },
               { name: 'test.fountain', type: 'file' as const },
             ]),
@@ -70,14 +74,75 @@ describe('Agent content controller', () => {
           },
           paths: {},
         } as Parameters<typeof searchAgentWorkspaceMentions>[0]['host'],
-        filter: 'test',
+        filter: '',
         purpose: 'entry',
       });
 
       expect(projection.files).toEqual([
-        expect.objectContaining({ name: 'test.fountain' }),
+        expect.objectContaining({ name: 'book.epub', mediaType: 'document' }),
+        expect.objectContaining({ name: 'comic.cbz', mediaType: 'document' }),
+        expect.objectContaining({ name: 'draft.docx', mediaType: 'document' }),
+        expect.objectContaining({ name: 'report.pdf', mediaType: 'document' }),
+        expect.objectContaining({ name: 'test.fountain', mediaType: 'document' }),
         expect.objectContaining({ name: 'test.png', mediaType: 'image' }),
       ]);
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true });
+    }
+  });
+
+  it('merges linked Media Library locators and keeps contributor failures local', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-linked-media-'));
+    const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const reportMentionContributorError = vi.fn();
+    const host = {
+      files: {
+        readDirectory: vi.fn(async () => [{ name: 'local.md', type: 'file' as const }]),
+        readText: vi.fn(async () => Promise.reject(missingGitignore)),
+      },
+      paths: {},
+    } as Parameters<typeof searchAgentWorkspaceMentions>[0]['host'];
+    const workspace = {
+      workspaceId: 'workspace-1',
+      workspacePath,
+      displayName: 'Workspace',
+      locator: { kind: 'variable' as const, value: '${HOME}/workspace' },
+    };
+    try {
+      const projection = await searchAgentWorkspaceMentions({
+        workspace,
+        host,
+        filter: '',
+        purpose: 'entry',
+        searchLinkedMediaLibraryFiles: async () => [
+          { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+        ],
+        reportMentionContributorError,
+      });
+
+      expect(projection.files).toEqual([
+        expect.objectContaining({ name: 'local.md', source: 'workspace' }),
+        expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'neko/assets/Reference/hero.png' },
+          name: 'hero.png',
+          source: 'media-library',
+          mediaType: 'image',
+        }),
+      ]);
+
+      const contributorFailure = new Error('linked library unavailable');
+      const fallbackProjection = await searchAgentWorkspaceMentions({
+        workspace,
+        host,
+        filter: '',
+        purpose: 'entry',
+        searchLinkedMediaLibraryFiles: async () => Promise.reject(contributorFailure),
+        reportMentionContributorError,
+      });
+      expect(fallbackProjection.files).toEqual([
+        expect.objectContaining({ name: 'local.md', source: 'workspace' }),
+      ]);
+      expect(reportMentionContributorError).toHaveBeenCalledWith(contributorFailure);
     } finally {
       await rm(workspacePath, { recursive: true, force: true });
     }

@@ -411,6 +411,54 @@ This local functional provider proves the native multimodal request shape withou
 API cost. It does not satisfy task 11.7: no explicitly authorized real-provider visible/hidden
 Evaluation was run, so that task and its cost-dependent residual risk remain open.
 
+## Workspace linked Media Library mention regression
+
+The Workspace mention catalog now composes linked Media Library files through an Assets-owned Node
+source instead of treating the symlinked directory as an ordinary Workspace walk:
+
+- Assets resolves configured linked libraries and returns only bounded portable locators shaped as
+  `neko/assets/<libraryName>/...`; it does not return the physical target path or follow nested links.
+- Bound Draft and Session mention searches use the same optional contributor, preserve
+  `source: media-library`, deduplicate by portable locator and keep ordinary Workspace results when the
+  linked-library contributor fails.
+- Focused Assets, Agent and Desktop tests passed (1 Assets test, 7 Agent content-controller tests and
+  10 Desktop content-effect tests). Agent Runtime, Assets Node and Desktop typechecks passed.
+- `pnpm check:quality` and strict OpenSpec validation passed. The key-free Agent Evaluation harness
+  passed 44 files / 294 tests and 23 suites / 60 cases, including the existing launch-binding and
+  media-library-content owners.
+
+Task 17.4 reuses the indexed
+`agent-runtime.media-library-content/linked-media-search-read` case rather than creating a second
+Evaluation owner. Its focused strict dry-run passed one suite / one case and preserves the canonical
+`QueryProjectSearch -> workspace-file locator -> ReadImage` path, including rejection of absolute,
+cache and `project://assets` paths.
+
+The isolated visible Electron scenario `desktop-agent-linked-media-mention` passed at
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T19-10-04.889Z-desktop-agent-linked-media-mention-development/report.json`:
+
+- The fixture Workspace linked `neko/assets/Reference` to a separate Media Library directory. After
+  the exact Workspace Agent connection became ready, typing `@library-image` returned
+  `neko/assets/Reference/library-image.png` with localized Media Library and image provenance badges.
+  Selection produced one reference token whose title retained only that portable locator; neither
+  the physical link target nor another Host path appeared in the Agent Surface.
+- First submit retained the exact Workspace id and grant, materialized one Conversation, issued one
+  request to the isolated keyless provider and included exactly one native image part. The terminal
+  state showed the final response with no alert, run status, execution activity or stop control.
+- Both screenshots were inspected directly. The selected reference and completed Conversation were
+  visible without clipping or overlap. Canvas and Resources still showed their independent loading
+  labels, so this evidence does not claim those sibling surfaces had completed loading.
+
+The `/`, `$` and `@` path audit found no second Desktop execution implementation. `/` and `$` share
+the contract-owned trigger parser and the Webview catalog-to-intent resolver; Draft execution is
+validated by the exact launch catalog and Session execution by the exact Conversation catalog before
+the Agent runtime handles the command or Skill. Draft and Session `@` transports are lifecycle-specific,
+but both call the same Agent-owned Workspace mention search and the same injected Assets-owned Media
+Library contributor. Desktop only authorizes the exact binding and transports typed requests; it does
+not parse commands, activate Skills or read referenced content through another success path.
+
+The keyless provider and dry-run evidence do not satisfy task 11.7. No real provider/model cost was
+authorized, so matching visible and hidden real-provider complete-session execution remains open.
+
 ## Workspace grant restart and Agent Surface failure containment
 
 The application-restart regression was requalified on 2026-08-08:
@@ -454,3 +502,54 @@ it contains no Agent failure-state screenshot and is not claimed as product evid
 unavailable-state function, localization, retry and sibling containment are covered by the focused
 Renderer test, but UI validation remains `blocked` for that visual state until it is rerun from a
 fresh authoritative Desktop development runtime.
+
+## Locator-first unified content references
+
+The locator-first content reference regression was requalified on 2026-08-09:
+
+- Desktop now performs only exact Workspace grant authorization and projects canonical
+  `workspace-file` locators. The Agent workspace runtime owns bounded strict UTF-8 reads, canonical
+  document routing and native image materialization. PDF, DOCX, EPUB, CBZ and Fountain use the
+  Content-owned document classifier and existing `ReadDocument`; document images retain the
+  `ReadDocument.imageInfo -> ReadImage` chain. Missing audio/video perception rejects only the
+  current Turn, and Turn preparation failure projects an exact Conversation error instead of a
+  global application error.
+- Provider input and durable Pi history are now separate projections of the same Turn. The provider
+  receives transient bounded text, while checkpointed and in-memory Conversation history retain
+  only the authorized locator. Skill invocation uses the same provider/durable context projection,
+  so `$skill` Turns no longer drop document, text or media references. No raw path, base64 payload or
+  extracted text is written into the durable reference prompt.
+- Agent Evaluation disposition is `reuse` for
+  `agent-runtime.stream-delivery/read-document-tool-result`,
+  `agent-runtime.stream-delivery/document-image-native-delivery` and
+  `agent-runtime.launch-binding/workspace-bound-first-submit`. The deterministic Desktop and Agent
+  tests cover the new mention-to-locator preparation boundary and poisoned Desktop format policy,
+  so no second Evaluation owner or scenario was added.
+- `pnpm test:agent:eval` passed 44 files / 294 tests and strict discovery of 23 suites / 60 cases.
+  Focused dry-runs for all three reused cases passed. This is key-free schema, runner and selection
+  evidence only. No real provider/model or cost was authorized, so visible and hidden real behavior
+  execution remains explicitly blocked under task 11.7.
+- `pnpm --dir packages/agent/contracts test` passed 42 files / 271 tests. Agent runtime focused tests
+  passed 4 files / 132 tests and the full runtime passed 111 files / 1033 tests. Desktop passed 75
+  files / 487 tests; Agent Webview passed 90 files / 712 tests and its build passed. Agent contracts,
+  Agent runtime and Desktop typechecks passed. Strict change validation and repository-wide
+  `check:openspec` passed.
+- The authoritative isolated Electron scenario `desktop-agent-entry-workspace-skill` passed at
+  `reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T18-52-19.666Z-desktop-agent-entry-workspace-skill-development/report.json`.
+  It proved unbound local `@`, exact Workspace binding, one selected Workspace image locator,
+  `$storyboard` first submit, one native image provider part, exact Workspace Scene handoff, one
+  provider request, terminal response and absence of global alerts, run status, execution activity
+  and stop controls. All six screenshots were inspected directly: menus, reference token, Skill
+  selection and terminal Agent Surface were visible without clipping or overlap. The terminal
+  screenshot still showed independent Canvas and Resources loading labels, so it is not claimed as
+  evidence that those sibling surfaces had completed loading.
+- `pnpm check:quality`, `pnpm check:legacy-debt`, focused path/reachability scans and
+  `git diff --check` passed. The L3 quality review found no blocking ownership, dependency,
+  canonical-path, user-data, fail-local or test-evidence issue. `pnpm check:unused` still reports only
+  the pre-existing unrelated `activateWorkbenchMainView` export in `DesktopShell.tsx`.
+
+Residual risk: deterministic tests prove locator routing for EPUB, CBZ, PDF and DOCX, while the
+visible representative flow exercised the same boundary with a Workspace image and Skill Turn. A
+real provider-driven visible document selection plus matching hidden complete-session run remains
+unexecuted without explicit cost authorization. Audio/video success also remains capability- and
+provider-dependent; only the exact unavailable-capability rejection is qualified here.

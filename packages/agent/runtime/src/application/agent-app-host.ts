@@ -51,12 +51,15 @@ import {
   createNodeDocumentLowLevelAccess,
 } from '@neko/content/document/node';
 import {
+  isAgentAuthorizedContentReferenceContextData,
+  TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
+  TOOL_NAMES_TRANSCRIBE,
   type AgentContextPayload,
   type IToolRegistry,
 } from '@neko/agent-contracts';
 import { createNodeHostContentReadService } from '@neko/content/node';
-import { validateContentLocator, type ContentLocator } from '@neko/content';
+import type { ContentLocator } from '@neko/content';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
   AgentHomeActivitySummary,
@@ -118,6 +121,7 @@ export interface AgentTurnInput {
 const MAX_AGENT_TURN_IMAGES = 4;
 const MAX_AGENT_TURN_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_AGENT_TURN_IMAGE_DIMENSION = 8_192;
+const MAX_AGENT_TURN_TEXT_BYTES = 256 * 1024;
 
 export interface AgentTurnResult {
   readonly identity: PiToolRunIdentity;
@@ -1176,18 +1180,50 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       typeof input.permissionPolicy === 'function'
         ? input.permissionPolicy(events)
         : input.permissionPolicy;
-    const images = await materializeAgentTurnImages({
+    const contextPayloads = await materializeAgentTurnContextPayloads({
       contextPayloads: input.contextPayloads,
+      contentAccessRuntime: this.contentAccessRuntime,
+      toolNames: new Set(this.tools.list().map((tool) => tool.name)),
+    });
+    const images = await materializeAgentTurnImages({
+      contextPayloads,
       modelPolicy: input.modelPolicy,
       contentAccessRuntime: this.contentAccessRuntime,
+      hasImagePerceptionTool: this.tools
+        .list()
+        .some((tool) => tool.name === TOOL_NAMES_PERCEPTION.IMAGE_UNDERSTAND),
     });
+    const prompt = buildEnhancedAgentMessage({
+      message: input.prompt,
+      contextPayloads,
+      locale: input.locale,
+    });
+    const durablePrompt = buildEnhancedAgentMessage({
+      message: input.prompt,
+      contextPayloads: input.contextPayloads,
+      locale: input.locale,
+    });
+    const hasContextPayloads = (input.contextPayloads?.length ?? 0) > 0;
+    const additionalInstructions =
+      input.skillName !== undefined && hasContextPayloads
+        ? buildEnhancedAgentMessage({
+            message: input.additionalInstructions ?? '',
+            contextPayloads,
+            locale: input.locale,
+          })
+        : input.additionalInstructions;
+    const durableAdditionalInstructions =
+      input.skillName !== undefined && hasContextPayloads
+        ? buildEnhancedAgentMessage({
+            message: input.additionalInstructions ?? '',
+            contextPayloads: input.contextPayloads,
+            locale: input.locale,
+          })
+        : undefined;
     const operation = owner.execute({
       identity,
-      prompt: buildEnhancedAgentMessage({
-        message: input.prompt,
-        contextPayloads: input.contextPayloads,
-        locale: input.locale,
-      }),
+      prompt,
+      durablePrompt,
       modelPolicy: input.modelPolicy,
       skillSnapshot: skills,
       capabilityTools,
@@ -1200,9 +1236,8 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       ...(input.skillActivationId === undefined
         ? {}
         : { skillActivationId: input.skillActivationId }),
-      ...(input.additionalInstructions === undefined
-        ? {}
-        : { additionalInstructions: input.additionalInstructions }),
+      ...(additionalInstructions === undefined ? {} : { additionalInstructions }),
+      ...(durableAdditionalInstructions === undefined ? {} : { durableAdditionalInstructions }),
     });
     this.options.onHomeProjectionChanged();
     try {
@@ -1818,24 +1853,84 @@ function createAgentContentReadTools(contentAccessRuntime: AgentContentAccessRun
   });
 }
 
+async function materializeAgentTurnContextPayloads(input: {
+  readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly contentAccessRuntime: AgentContentAccessRuntime;
+  readonly toolNames: ReadonlySet<string>;
+}): Promise<readonly AgentContextPayload[]> {
+  return Promise.all(
+    (input.contextPayloads ?? []).map(async (payload) => {
+      if (!isAgentAuthorizedContentReferenceContextData(payload.data)) return payload;
+      if (payload.data.mediaType === 'audio') {
+        requireAgentReferenceCapability(payload.label, input.toolNames, [
+          TOOL_NAMES_TRANSCRIBE.TRANSCRIBE_AUDIO,
+          TOOL_NAMES_PERCEPTION.AUDIO_TRANSCRIBE,
+          TOOL_NAMES_PERCEPTION.PERCEIVE,
+        ]);
+        return payload;
+      }
+      if (payload.data.mediaType === 'video') {
+        requireAgentReferenceCapability(payload.label, input.toolNames, [
+          TOOL_NAMES_PERCEPTION.VIDEO_DETECT_SHOTS,
+          TOOL_NAMES_PERCEPTION.PERCEIVE,
+        ]);
+        return payload;
+      }
+      if (payload.data.mediaType && payload.data.mediaType !== 'text') return payload;
+      const loaded = await input.contentAccessRuntime.loadContentAsset({
+        locator: payload.data.locator,
+        maxBytes: MAX_AGENT_TURN_TEXT_BYTES,
+      });
+      if (loaded.status !== 'ready' || !loaded.bytes) {
+        const diagnostic = loaded.diagnostics[0]?.code ?? loaded.status;
+        throw new Error(
+          `Agent text reference '${payload.label}' could not be loaded: ${diagnostic}.`,
+        );
+      }
+      let text: string;
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(loaded.bytes);
+      } catch {
+        throw new Error(`Agent text reference '${payload.label}' is not valid UTF-8.`);
+      }
+      if (text.includes('\u0000')) {
+        throw new Error(`Agent text reference '${payload.label}' contains binary data.`);
+      }
+      return {
+        ...payload,
+        data: { ...payload.data, text },
+      };
+    }),
+  );
+}
+
+function requireAgentReferenceCapability(
+  label: string,
+  toolNames: ReadonlySet<string>,
+  acceptedToolNames: readonly string[],
+): void {
+  if (acceptedToolNames.some((toolName) => toolNames.has(toolName))) return;
+  throw new Error(
+    `Agent reference '${label}' requires a media perception capability that is not registered for this Turn.`,
+  );
+}
+
 async function materializeAgentTurnImages(input: {
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly modelPolicy: AgentModelPolicy;
   readonly contentAccessRuntime: AgentContentAccessRuntime;
+  readonly hasImagePerceptionTool: boolean;
 }): Promise<readonly ImageContent[]> {
   const references = (input.contextPayloads ?? []).flatMap((payload) => {
-    const data = readRecord(payload.data);
-    if (data?.['mediaType'] !== 'image') return [];
-    const validation = validateContentLocator(data['locator']);
-    if (!validation.ok) {
-      throw new Error(`Agent image reference '${payload.label}' has an invalid ContentLocator.`);
-    }
-    return [{ label: payload.label, locator: validation.locator }];
+    if (!isAgentAuthorizedContentReferenceContextData(payload.data)) return [];
+    if (payload.data.mediaType !== 'image' && payload.data.mediaType !== 'sequence') return [];
+    return [{ label: payload.label, locator: payload.data.locator }];
   });
   if (references.length === 0) return [];
   if (!input.modelPolicy['agent.main'].model.input.includes('image')) {
+    if (input.hasImagePerceptionTool) return [];
     throw new Error(
-      `Agent model '${input.modelPolicy['agent.main'].model.provider}/${input.modelPolicy['agent.main'].model.id}' does not support image input.`,
+      `Agent model '${input.modelPolicy['agent.main'].model.provider}/${input.modelPolicy['agent.main'].model.id}' does not support image input and no image perception capability is registered.`,
     );
   }
   if (references.length > MAX_AGENT_TURN_IMAGES) {
@@ -1940,15 +2035,10 @@ function imageExtensions(mimeType: string): readonly string[] {
   }
 }
 
-function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
 interface ExecuteAgentConversationInput {
   readonly identity: PiToolRunIdentity;
   readonly prompt: string;
+  readonly durablePrompt: string;
   readonly images?: readonly ImageContent[];
   readonly modelPolicy: AgentModelPolicy;
   readonly skillSnapshot: Awaited<ReturnType<ReturnType<typeof createNodePiSkillHost>['discover']>>;
@@ -1960,6 +2050,7 @@ interface ExecuteAgentConversationInput {
   readonly skillName?: string;
   readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
+  readonly durableAdditionalInstructions?: string;
 }
 
 class AgentConversationOwner {
@@ -1995,6 +2086,7 @@ class AgentConversationOwner {
             turnId: input.identity.turnId,
             runId: input.identity.runId,
             prompt: input.prompt,
+            durablePrompt: input.durablePrompt,
             ...(input.images === undefined ? {} : { images: input.images }),
             modelPolicy: input.modelPolicy,
             skillSnapshot: input.skillSnapshot,
@@ -2012,6 +2104,9 @@ class AgentConversationOwner {
             ...(input.additionalInstructions === undefined
               ? {}
               : { additionalInstructions: input.additionalInstructions }),
+            ...(input.durableAdditionalInstructions === undefined
+              ? {}
+              : { durableAdditionalInstructions: input.durableAdditionalInstructions }),
             ...(input.images === undefined ? {} : { images: input.images }),
             modelPolicy: input.modelPolicy,
             skillSnapshot: input.skillSnapshot,

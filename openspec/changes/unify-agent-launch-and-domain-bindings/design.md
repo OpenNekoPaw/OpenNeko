@@ -105,6 +105,12 @@ Launch connection 只证明 application/window/workbench/surface/view/draft/send
 
 Workspace `@` 搜索通过 exact `draftId + connectionId + binding receipt` 请求 Workspace content port。切换 target 后，旧 receipt、搜索结果、Project Skills 和 pending query 立即失效。未知、跨 Window、跨 Draft 或已消费 receipt 只拒绝当前请求。Session 搜索始终通过 exact Conversation context，不接受 active/current Project。
 
+Workspace 普通目录与 linked Media Library 是两个明确的 discovery owner。Agent 的普通目录 walker
+不跟随 symlink；Assets Node 通过既有 Media Library link authority 和 content-tree guard 搜索
+`neko/assets/<libraryName>/...`，再由组合时注入的窄 mention contributor 返回 portable locator。
+Entry bound Draft 与 Session 复用同一个 contributor，Desktop 不遍历物理 library target，也不把
+Resource Browser presentation identity 作为 Agent reference identity。
+
 未采用“选择 Workspace 后重建另一套 Root/connection”，因为 target 选择不是 Scene transition；重建会丢失 Draft snapshot并扩大 connection lifecycle 竞态。
 
 ### 4. 领域 owner 提供 binding/context port
@@ -198,16 +204,25 @@ direct-operation bridge 由 `extract-generation-domain-package` 实施；本变�
 
 ### 11. 内容引用和可见运行终态使用各自 authoritative projection
 
-Workspace reference resolver 在 Desktop trust boundary 内只把已授权的 exact Workspace
-`ContentLocator` 解析为绝对读取位置，但内容类别沿用当前 canonical Agent reference contract。
-Fountain screenplay 是 UTF-8 文本创作内容，和 Markdown、字幕、源码等文本引用一样直接进入有界
-Conversation context。授权图片引用保持为 locator，由 Agent workspace owner 使用同一 package-owned
-`AgentContentAccessRuntime` 有界读取，并仅在当前 Turn 的 Pi provider 调用前物化为原生 image content；
-消息引用、UI projection 和 Desktop contract 不携带 raw path 或 base64。exact selected `agent.main`
-必须声明 image input，否则当前 Turn 在读取 provider 内容前明确失败，不切换模型、provider、source 或独立
-vision 流程。音视频、压缩容器和需要专用结构化解析的格式继续拒绝当前引用，不能回退到 raw path、
-空内容或把二进制当文本。读取越界、MIME 不一致、非法图片类型和大小限制仍在当前引用边界
-fail-closed。
+Desktop reference resolver 只验证 exact Workspace binding/grant、引用 receipt 与
+`ContentLocator`，并返回授权后的 locator projection；它不读取或分类内容，不维护扩展名白名单，也不决定
+模型、Tool 或转换路径。Agent workspace owner 使用既有 `AgentContentAccessRuntime` 和运行时 capability
+catalog 为每个引用形成一个确定性处理计划：
+
+- 有界纯文本通过统一 content read service 读取并以严格 UTF-8 注入当前 Turn；
+- PDF、DOC/DOCX、PPT/PPTX、EPUB、CBZ/CBR、XLS/XLSX、Fountain、FDX 等由 content owner
+  声明支持的文档只在 prompt 中投影原始 `ContentLocator`，由既有 `ReadDocument` 读取；
+- 文档内部图片只能使用 `ReadDocument.imageInfo` 返回的 locator，再交给 `ReadImage`；
+- 图片在 exact selected `agent.main` 支持 image input 时可在 provider boundary 有界物化为原生输入；当
+  当前模型不能直接读取像素时，只有 exact Turn policy 已绑定并实际注册的图片感知 capability 才可处理；
+- 音频、视频和其他二进制只能使用当前运行时实际注册的对应感知、转录、抽帧或通用转换 capability。
+
+处理计划在 provider execution 前由 exact reference media type、content owner 支持声明、模型 policy 和实际
+capability registration 唯一确定。不得先尝试原生输入再隐式切换 Tool，不得切换 provider/source，不得把
+二进制当文本，也不得回退到 raw path、旧 InputProcessor 或 Desktop 专用 reader。消息、transcript、UI
+projection 和 Desktop contract 始终只持久化 locator，不携带 raw path、base64 或抽取内容。缺少所需能力、
+读取越界、MIME 不一致、非法格式或转换失败只拒绝当前引用/Turn并返回明确 diagnostic，不能升级为全局
+应用错误或阻止 sibling Conversation、Workspace 与 Window Shell 渲染。
 
 Conversation projection 是 Turn 内容和 terminal completion 的 authoritative read model；
 `AgentStateSnapshot` 只是运行中活动提示。最后一个用户输入之后已经存在同一 Turn 的非 streaming

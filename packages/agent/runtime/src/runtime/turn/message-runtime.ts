@@ -28,6 +28,7 @@ import {
   buildAgentPhaseMessage,
   buildErrorMessage,
   buildGlobalErrorMessage,
+  isAgentAuthorizedContentReferenceContextData,
   isAgentResolvedEntityContextData,
   type AgentContextPayload,
 } from '@neko/agent-contracts';
@@ -46,6 +47,7 @@ import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   extractFileReferencePaths,
   formatReadDocumentInstruction,
+  formatReadDocumentLocatorInstruction,
   normalizeAgentRuntimePromptLocale,
   type AgentBase64ImageAttachment,
   type AgentProcessedAttachments,
@@ -1125,6 +1127,13 @@ export function formatAgentContextPayload(
   const text = extractAgentContextText(payload.data);
   const imageData = extractAgentContextImageData(payload.data);
   const filePath = extractAgentContextFilePath(payload.data);
+  const authorizedContent = isAgentAuthorizedContentReferenceContextData(payload.data)
+    ? payload.data
+    : undefined;
+
+  if (authorizedContent) {
+    return formatAuthorizedContentReference(payload.label, authorizedContent, locale);
+  }
 
   if (payload.type === 'entity') {
     if (!isAgentResolvedEntityContextData(payload.data)) {
@@ -1180,6 +1189,35 @@ export function formatAgentContextPayload(
   }
 
   return `[${labels.context}: ${payload.label}]\n${payload.summary}`;
+}
+
+function formatAuthorizedContentReference(
+  label: string,
+  data: import('@neko/agent-contracts').AgentAuthorizedContentReferenceContextData,
+  locale?: AgentRuntimePromptLocale | string,
+): string {
+  const labels = getEnhancedMessageLabels(locale);
+  if (data.text !== undefined) {
+    return `[${labels.content}: ${label}]\n${data.text}`;
+  }
+  const locator = JSON.stringify(data.locator);
+  if (data.mediaType === 'document') {
+    return `[${labels.document}: ${label}]\nContentLocator: ${locator}\n${formatReadDocumentLocatorInstruction(data.locator, locale)}`;
+  }
+  if (data.mediaType === 'image' || data.mediaType === 'sequence') {
+    return `[${labels.image}: ${label}]\nContentLocator: ${locator}`;
+  }
+  if (data.mediaType === 'text' || data.mediaType === undefined) {
+    return `[${labels.content}: ${label}]\nContentLocator: ${locator}`;
+  }
+  if (data.mediaType === 'audio' || data.mediaType === 'video') {
+    const instruction =
+      normalizeAgentRuntimePromptLocale(locale) === 'zh'
+        ? '仅使用当前运行时实际注册的对应媒体感知工具处理该 ContentLocator；能力不可用时明确报告。'
+        : 'Use only a matching media perception tool registered in the current runtime for this ContentLocator; report when the capability is unavailable.';
+    return `[${labels.content}: ${label}]\nContentLocator: ${locator}\n${instruction}`;
+  }
+  throw new Error(`Agent authorized content reference '${label}' was not materialized as text.`);
 }
 
 function formatThreeReferenceContext(

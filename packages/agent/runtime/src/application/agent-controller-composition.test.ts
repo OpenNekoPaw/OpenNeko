@@ -1,7 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import { waitForDesktopAgentIdle } from './agent-controller-composition';
+import {
+  buildAgentConversationTurnFailureMessage,
+  waitForDesktopAgentIdle,
+} from './agent-controller-composition';
 
 describe('Desktop Agent complete-session idle observation', () => {
+  it('projects Turn preparation failure to the exact Conversation instead of global UI', () => {
+    expect(
+      buildAgentConversationTurnFailureMessage(
+        'conversation-epub',
+        new Error('ReadDocument source is unavailable.'),
+      ),
+    ).toEqual({
+      type: 'error',
+      conversationId: 'conversation-epub',
+      message: 'ReadDocument source is unavailable.',
+    });
+  });
+
   it('waits for a submitted turn identity before accepting terminal idle', async () => {
     const identity = {
       conversationId: 'conversation-1',

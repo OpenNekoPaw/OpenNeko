@@ -10,7 +10,7 @@ Agent Entry Draft 与 Assistant/Workspace 会话目前使用不同的状态与�
 - 让 Workspace、Assistant 通过窄 domain binding/context port 提供精确身份、授权 read model 和 capability contribution；为 Character 与 World 定义相同的可选消费端口，未组合 authoritative provider 时只返回 owner-qualified unavailable。Agent 保持唯一 session/runtime owner，不复制领域事实或建立领域专用 Agent runtime。
 - 在应用进程重启后，从持久化 Workspace Draft 的精确 Window、Workspace 与 grant identity 恢复 Desktop grant authority；恢复失败只投影当前 Agent Surface unavailable，不阻止 Window Shell、Workspace Main 或 sibling Surface 渲染。
 - 将模型发现与模型可执行性分离；Draft 和 Conversation 投影逐字段配置策略、来源和不可用原因，运行中的 Turn 使用不可变配置快照，同一 Conversation 的合法修改只作用于未来 Turn。
-- 让 Workspace 文本创作文件（包括 Fountain screenplay）通过 exact ContentLocator 进入 Conversation context；让授权图片在 exact selected model 支持 image input 时由 Agent workspace owner 有界物化为当前 Turn 的原生多模态输入，同时只在消息引用中保留 locator；其他二进制和未组合的结构化格式继续 fail-visible。terminal Conversation projection 收敛可见执行活动，避免有效引用被误判为未连接的预处理或最终回复后残留“正在处理”。
+- 让 Workspace 引用以 exact ContentLocator 进入唯一 Agent 内容处理路径：有界文本由 Agent workspace owner 读取，PDF、DOCX、EPUB、CBZ、Fountain 等受支持文档由既有 `ReadDocument` 处理，文档图片继续通过 `ReadDocument -> ReadImage`，授权图片按预先确定的模型/感知能力计划处理；Desktop 不再维护格式白名单或结构化文件拒绝路径。未注册的音视频或通用转换能力只拒绝当前引用并给出明确诊断。terminal Conversation projection 收敛可见执行活动，避免有效引用被误判为未连接的预处理或最终回复后残留“正在处理”。
 - **BREAKING**：删除角色特殊文本启动、Entry 原始文本命令/Skill 首发、空 Workspace mention 结果以及所有 active/current Project fallback；同步替换 producer、consumer、fixture 与测试，不保留兼容路径。
 - 明确 World 接入前置条件：World owner/runtime 未实现时返回 owner-qualified unavailable；接入后 World 保持状态/事件 commit authority，并通过现有 AgentSession role scopes 消费模型能力。
 - 明确 Character 接入前置条件：本变更不实现 CharacterProject、published CharacterVersion、CharacterRun、Character Scene 或角色回复；这些产品行为由后续 Chara change 在独立分支实现并组合。

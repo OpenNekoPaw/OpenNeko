@@ -27,6 +27,7 @@ import {
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { readProjectEntityResources } from '@neko/entity-node';
 import { detectMediaType, getMimeType } from '@neko/media';
+import { isSupportedDocumentPath } from '@neko/content/document';
 
 const MAX_SVG_BYTES = 10 * 1024 * 1024;
 
@@ -90,6 +91,16 @@ export interface CreateAgentContentEffectsOptions {
   readonly workspace: AssetWorkspaceResolution;
   readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy' | 'external'>;
   readonly interaction: AgentContentInteractionPort;
+  readonly searchLinkedMediaLibraryFiles?: (
+    input: AgentLinkedMediaLibraryFileSearchInput,
+  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+  readonly reportMentionContributorError?: (error: Error) => void;
+}
+
+export interface AgentLinkedMediaLibraryFileSearchInput {
+  readonly query: string;
+  readonly limit: number;
+  readonly purpose: AgentProjectFileSearchPlan['purpose'];
 }
 
 export async function searchAgentWorkspaceMentions(input: {
@@ -97,6 +108,10 @@ export async function searchAgentWorkspaceMentions(input: {
   readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy'>;
   readonly filter: string;
   readonly purpose: 'entry' | 'mention' | 'roleplay';
+  readonly searchLinkedMediaLibraryFiles?: (
+    input: AgentLinkedMediaLibraryFileSearchInput,
+  ) => Promise<readonly WorkspaceFileContentLocator[]>;
+  readonly reportMentionContributorError?: (error: Error) => void;
 }): Promise<
   ProjectFilesWebviewMessage &
     Required<Pick<ProjectFilesWebviewMessage, 'filter' | 'files' | 'mentionExtras'>>
@@ -104,7 +119,7 @@ export async function searchAgentWorkspaceMentions(input: {
   const projection = await executeAgentProjectFileSearch({
     filter: input.filter,
     purpose: input.purpose,
-    searchProjectFiles: (plan) => searchGrantedWorkspace(input.workspace, input.host, plan),
+    searchProjectFiles: (plan) => searchWorkspaceMentionFiles(input, plan),
     getMentionCandidates: (plan) =>
       searchGrantedWorkspaceEntities(input.workspace, input.host, plan),
     onSearchError: (error) => {
@@ -133,6 +148,12 @@ export function createAgentContentEffects(
         host: options.host,
         filter: input.filter,
         purpose: input.purpose ?? 'mention',
+        ...(options.searchLinkedMediaLibraryFiles
+          ? { searchLinkedMediaLibraryFiles: options.searchLinkedMediaLibraryFiles }
+          : {}),
+        ...(options.reportMentionContributorError
+          ? { reportMentionContributorError: options.reportMentionContributorError }
+          : {}),
       });
       await context.post({
         ...message,
@@ -244,6 +265,46 @@ export function createAgentContentEffects(
       });
     },
   };
+}
+
+async function searchWorkspaceMentionFiles(
+  input: Parameters<typeof searchAgentWorkspaceMentions>[0],
+  plan: AgentProjectFileSearchPlan,
+): Promise<readonly AgentProjectFileCandidate[]> {
+  const workspaceFiles = await searchGrantedWorkspace(input.workspace, input.host, plan);
+  if (!input.searchLinkedMediaLibraryFiles) return workspaceFiles;
+  let linkedMediaLocators: readonly WorkspaceFileContentLocator[];
+  try {
+    linkedMediaLocators = await input.searchLinkedMediaLibraryFiles({
+      query: extractSearchFilter(plan.includePattern),
+      limit: plan.limit,
+      purpose: plan.purpose,
+    });
+  } catch (error) {
+    input.reportMentionContributorError?.(asError(error));
+    return workspaceFiles;
+  }
+  const candidates = new Map<string, AgentProjectFileCandidate>();
+  for (const candidate of workspaceFiles) candidates.set(candidate.relativePath, candidate);
+  for (const locator of linkedMediaLocators) {
+    const validation = validateContentLocator(locator);
+    if (!validation.ok || validation.locator.kind !== 'workspace-file') {
+      throw new Error('Agent linked Media Library contributor returned an invalid locator.');
+    }
+    candidates.set(validation.locator.path, {
+      relativePath: validation.locator.path,
+      source: 'media-library',
+      ...workspaceFilePresentation(validation.locator.path),
+    });
+  }
+  return [...candidates.values()]
+    .sort((left, right) =>
+      left.relativePath.localeCompare(right.relativePath, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      }),
+    )
+    .slice(0, plan.limit);
 }
 
 async function searchGrantedWorkspaceEntities(
@@ -588,13 +649,7 @@ function workspaceFilePresentation(
   if (mimeType.startsWith('video/')) return { mediaType: 'video' };
   if (mimeType.startsWith('audio/')) return { mediaType: 'audio' };
   if (mimeType.startsWith('text/')) return { mediaType: 'text' };
-  if (
-    mimeType === 'application/pdf' ||
-    mimeType === 'application/epub+zip' ||
-    mimeType.includes('officedocument')
-  ) {
-    return { mediaType: 'document' };
-  }
+  if (isSupportedDocumentPath(relativePath)) return { mediaType: 'document' };
   return {};
 }
 
@@ -605,4 +660,8 @@ function isNodeError(error: unknown, code: string): boolean {
     'code' in error &&
     Reflect.get(error, 'code') === code
   );
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }

@@ -99,10 +99,10 @@ Provider, model and parameter resolution SHALL use the exact user request and do
 - **WHEN** the exact configured provider is unavailable when a Turn begins
 - **THEN** that Turn fails or waits according to the canonical provider policy and does not silently switch model, provider, purpose, profile or domain binding
 
-#### Scenario: Selected model lacks the input modality required by a reference
+#### Scenario: Selected model and exact Turn plan lack the input modality required by a reference
 
-- **WHEN** the current Turn contains an authorized image reference and the exact selected `agent.main` model does not declare image input
-- **THEN** that Turn is rejected before provider execution with a modality diagnostic and no other model, provider, purpose or Tool path is attempted
+- **WHEN** the current Turn contains an authorized image reference, the exact selected `agent.main` model does not declare image input and no image perception capability is registered in that Turn's predetermined plan
+- **THEN** that Turn is rejected before provider execution with a modality diagnostic and no other model, provider, purpose or unregistered Tool path is attempted
 
 #### Scenario: Stale model selection is submitted
 
