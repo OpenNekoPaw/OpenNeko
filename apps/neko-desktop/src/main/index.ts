@@ -95,6 +95,7 @@ import { createNodeSqliteLocalMetadataStore } from '@neko/local-metadata/node';
 import {
   AssetCenterNodeRuntime,
   ResourceBrowserNodeRuntime,
+  searchWorkspaceLinkedMediaLibraryContentLocators,
   type ResourceBrowserNodeRuntimeOptions,
 } from '@neko/assets-node';
 import {
@@ -120,6 +121,7 @@ import {
   DesktopCutRuntime,
   parseDesktopCutCanvasHandoffPayload,
 } from './desktop-cut-runtime';
+import { openDesktopCanvasDocument } from './desktop-creative-document-runtime';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
 import {
   createDefaultDesktopApplicationSettingsState,
@@ -784,7 +786,7 @@ async function startDesktop(): Promise<void> {
         kind: 'file',
         label: path.basename(absolutePath),
         locator: target.locator,
-        capabilities: ['open-cut'],
+        capabilities: ['open-creative-document'],
       }),
     openInCut: async ({ absolutePath, identity, target }) => {
       const item = {
@@ -795,9 +797,9 @@ async function startDesktop(): Promise<void> {
         kind: 'file' as const,
         label: path.basename(absolutePath),
         locator: target.locator,
-        capabilities: ['open-cut'] as const,
+        capabilities: ['open-creative-document'] as const,
       };
-      await cutRuntime.open({
+      await cutRuntime.openAlongsideCanvas({
         identity: {
           projectId: identity.projectId,
           workspaceId: identity.workspaceId,
@@ -851,7 +853,10 @@ async function startDesktop(): Promise<void> {
     openQuickPreview: (input) => previewRuntime.openQuickPreview(input),
     releaseQuickPreview: (windowId, previewSessionId) =>
       previewRuntime.releaseQuickPreview(windowId, previewSessionId),
-    openCut: (input) => cutRuntime.open(input),
+    openCreativeDocument: (input) =>
+      input.kind === 'canvas'
+        ? openDesktopCanvasDocument({ shell: shellService, ...input })
+        : cutRuntime.open(input),
     createThumbnail: (targetPath) =>
       createDesktopThumbnailDataUrl(targetPath, { width: 160, height: 100 }),
     createGlobalLibraryThumbnail: createDesktopGlobalLibraryThumbnailFactory(),
@@ -869,16 +874,6 @@ async function startDesktop(): Promise<void> {
         throw new Error('Desktop media source picker returned no directory.');
       }
       return selectedPath;
-    },
-    selectWorkspaceFiles: async (windowId) => {
-      const owner = requireOwnerWindow(windowId);
-      const chinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
-      const result = await dialog.showOpenDialog(owner, {
-        title: chinese ? '导入工作区文件' : 'Import Workspace Files',
-        buttonLabel: chinese ? '导入' : 'Import',
-        properties: ['openFile', 'multiSelections'],
-      });
-      return result.canceled ? undefined : result.filePaths;
     },
     trashWorkspaceItem: (absolutePath) => shell.trashItem(absolutePath),
     selectConfiguredGlobalMediaLibrary: async ({ windowId, libraries }) => {
@@ -1030,15 +1025,12 @@ async function startDesktop(): Promise<void> {
     },
   });
   const conversationReferenceResolver = createDesktopAgentConversationReferenceResolver({
-    resolveWorkspace: async (binding) => ({
-      workspacePath: (
-        await workspaceGrantAuthority.resolveAuthorizedWorkspace(
-          binding.workspaceGrantId,
-          binding.workspaceId,
-        )
-      ).workspace.workspacePath,
-    }),
-    readText: (absolutePath) => host.files.readText(absolutePath),
+    authorizeWorkspace: async (binding) => {
+      await workspaceGrantAuthority.resolveAuthorizedWorkspace(
+        binding.workspaceGrantId,
+        binding.workspaceId,
+      );
+    },
   });
   const agentControllerComposition = createAgentControllerComposition({
     host,
@@ -1105,6 +1097,13 @@ async function startDesktop(): Promise<void> {
         shell.showItemInFolder(path.join(workspace.workspace.workspacePath, contentLocator.path));
       },
     },
+    searchLinkedMediaLibraryFiles: (workspace, input) =>
+      searchWorkspaceLinkedMediaLibraryContentLocators({
+        workspace,
+        files: host.files,
+        query: input.query,
+        limit: input.limit,
+      }),
     configInteraction: {
       openUserConfig: async ({ identity, absolutePath }) => {
         requireOwnerWindow(identity.windowId);
@@ -1135,6 +1134,21 @@ async function startDesktop(): Promise<void> {
           host,
           filter,
           purpose: 'entry',
+          searchLinkedMediaLibraryFiles: (input) =>
+            searchWorkspaceLinkedMediaLibraryContentLocators({
+              workspace: resolution.workspace,
+              files: host.files,
+              query: input.query,
+              limit: input.limit,
+            }),
+          reportMentionContributorError: (error) => {
+            host.diagnostics?.report({
+              code: 'desktop-agent-media-library-mention-search-failed',
+              severity: 'error',
+              message: error.message,
+              metadata: { workspaceId: resolution.workspace.workspaceId },
+            });
+          },
         });
         return {
           filter: projection.filter,
@@ -1733,6 +1747,15 @@ async function startDesktop(): Promise<void> {
           appHost.applicationIdentity.instanceId,
         );
         sendLifecycleEvent(createdWindow, event);
+      });
+      createdWindow.on('focus', () => {
+        void resourceBrowser.reconcileWindow(registration.windowId).catch((error: unknown) => {
+          appHost.reportError(
+            'desktop-resource-browser-focus-reconciliation-failed',
+            `Failed to reconcile Resource Browser for Window '${registration.windowId}'.`,
+            error,
+          );
+        });
       });
       createdWindow.on('closed', () => {
         try {

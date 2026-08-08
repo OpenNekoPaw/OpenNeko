@@ -10,6 +10,7 @@ import {
 import type { ILogger } from '@neko/shared/logger';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { createElectronNekoHostPorts } from './electron-host-ports';
+import { searchWorkspaceLinkedMediaLibraryContentLocators } from '@neko/assets-node';
 
 const temporaryDirectories: string[] = [];
 
@@ -44,6 +45,7 @@ describe('Desktop Agent content effects', () => {
           type: 'file',
           source: 'workspace',
           icon: 'MD',
+          mediaType: 'text',
         },
         {
           locator: { kind: 'workspace-file', path: 'src/guide.ts' },
@@ -51,6 +53,7 @@ describe('Desktop Agent content effects', () => {
           type: 'file',
           source: 'workspace',
           icon: 'TS',
+          mediaType: 'text',
         },
       ],
       mentionExtras: [],
@@ -117,6 +120,7 @@ describe('Desktop Agent content effects', () => {
           name: '小橘.png',
           type: 'file',
           source: 'workspace',
+          mediaType: 'image',
         },
         {
           locator: { kind: 'workspace-file', path: 'docs/小橘设定.md' },
@@ -124,6 +128,7 @@ describe('Desktop Agent content effects', () => {
           type: 'file',
           source: 'workspace',
           icon: 'MD',
+          mediaType: 'text',
         },
       ],
       mentionExtras: [
@@ -146,6 +151,34 @@ describe('Desktop Agent content effects', () => {
         },
       ],
     });
+  });
+
+  it('projects linked Media Library files through the Session mention path', async () => {
+    const fixture = await createFixture();
+    const mediaRoot = await createTemporaryDirectory();
+    await mkdir(path.join(fixture.workspace.workspacePath, 'neko', 'assets'), { recursive: true });
+    await writeWorkspaceFile(mediaRoot, 'shots/hero.png', 'image');
+    await symlink(
+      mediaRoot,
+      path.join(fixture.workspace.workspacePath, 'neko', 'assets', 'Reference'),
+    );
+
+    await fixture.effects.searchProjectFiles(
+      { filter: 'hero', conversationId: 'conversation-1' },
+      fixture.context,
+    );
+
+    expect(fixture.context.post).toHaveBeenCalledWith(
+      expect.objectContaining({
+        files: [
+          expect.objectContaining({
+            locator: { kind: 'workspace-file', path: 'neko/assets/Reference/shots/hero.png' },
+            source: 'media-library',
+            mediaType: 'image',
+          }),
+        ],
+      }),
+    );
   });
 
   it('rejects a mismatched sender-bound workspace grant before any effect runs', async () => {
@@ -352,7 +385,18 @@ async function createFixture(interactionOverrides: Partial<AgentContentInteracti
   };
   return {
     context: createContext(workspace.workspaceId),
-    effects: createAgentContentEffects({ workspace, host, interaction }),
+    effects: createAgentContentEffects({
+      workspace,
+      host,
+      interaction,
+      searchLinkedMediaLibraryFiles: (input) =>
+        searchWorkspaceLinkedMediaLibraryContentLocators({
+          workspace,
+          files: host.files,
+          query: input.query,
+          limit: input.limit,
+        }),
+    }),
     host,
     interaction,
     openExternal,

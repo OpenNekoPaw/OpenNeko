@@ -5,12 +5,10 @@ import {
 } from './desktop-agent-launch-runtime';
 
 describe('Desktop Agent launch native adapter', () => {
-  it('resolves text and image locators while rejecting unsupported binary locators', async () => {
-    const resolveWorkspace = vi.fn(async () => ({ workspacePath: '/workspace/demo' }));
-    const readText = vi.fn(async () => 'brief contents');
+  it('authorizes Workspace references and preserves every content format as a locator', async () => {
+    const authorizeWorkspace = vi.fn(async () => undefined);
     const resolver = createDesktopAgentConversationReferenceResolver({
-      resolveWorkspace,
-      readText,
+      authorizeWorkspace,
     });
     const context = {
       kind: 'workspace' as const,
@@ -29,91 +27,84 @@ describe('Desktop Agent launch native adapter', () => {
             contentLocator: { kind: 'workspace-file', path: 'docs/brief.md' },
             mediaType: 'text',
           },
-        ],
-      }),
-    ).resolves.toEqual([
-      {
-        type: 'file',
-        id: 'file:brief',
-        label: 'brief.md',
-        summary: 'Workspace file: brief.md',
-        data: {
-          locator: { kind: 'workspace-file', path: 'docs/brief.md' },
-          text: 'brief contents',
-        },
-      },
-    ]);
-    expect(readText).toHaveBeenCalledWith('/workspace/demo/docs/brief.md');
-
-    await expect(
-      resolver.resolve({
-        conversationId: 'conversation-1',
-        context,
-        references: [
           {
             id: 'file:screenplay',
             label: 'test.fountain',
             contentLocator: { kind: 'workspace-file', path: 'scripts/test.fountain' },
             mediaType: 'document',
           },
+          {
+            id: 'file:book',
+            label: 'book.epub',
+            contentLocator: { kind: 'workspace-file', path: 'books/book.epub' },
+            mediaType: 'document',
+          },
+          {
+            id: 'file:comic',
+            label: 'comic.cbz',
+            contentLocator: { kind: 'workspace-file', path: 'books/comic.cbz' },
+            mediaType: 'document',
+          },
+          {
+            id: 'file:report',
+            label: 'report.pdf',
+            contentLocator: { kind: 'workspace-file', path: 'docs/report.pdf' },
+            mediaType: 'document',
+          },
+          {
+            id: 'file:draft',
+            label: 'draft.docx',
+            contentLocator: { kind: 'workspace-file', path: 'docs/draft.docx' },
+            mediaType: 'document',
+          },
         ],
       }),
     ).resolves.toEqual([
-      {
-        type: 'file',
+      expect.objectContaining({
+        id: 'file:brief',
+        data: expect.objectContaining({
+          kind: 'authorized-content-reference',
+          locator: { kind: 'workspace-file', path: 'docs/brief.md' },
+          mediaType: 'text',
+        }),
+      }),
+      expect.objectContaining({
         id: 'file:screenplay',
-        label: 'test.fountain',
-        summary: 'Workspace file: test.fountain',
-        data: {
+        data: expect.objectContaining({
           locator: { kind: 'workspace-file', path: 'scripts/test.fountain' },
-          text: 'brief contents',
-        },
-      },
-    ]);
-    expect(readText).toHaveBeenLastCalledWith('/workspace/demo/scripts/test.fountain');
-
-    await expect(
-      resolver.resolve({
-        conversationId: 'conversation-1',
-        context,
-        references: [
-          {
-            id: 'file:image',
-            label: 'image.png',
-            contentLocator: { kind: 'workspace-file', path: 'assets/image.png' },
-            mediaType: 'image',
-          },
-        ],
+          mediaType: 'document',
+        }),
       }),
-    ).resolves.toEqual([
-      {
-        type: 'file',
-        id: 'file:image',
-        label: 'image.png',
-        summary: 'Workspace image: image.png (ContentLocator: workspace-file:assets/image.png)',
-        data: {
-          locator: { kind: 'workspace-file', path: 'assets/image.png' },
-          mediaType: 'image',
-        },
-      },
-    ]);
-    expect(readText).toHaveBeenCalledTimes(2);
-
-    await expect(
-      resolver.resolve({
-        conversationId: 'conversation-1',
-        context,
-        references: [
-          {
-            id: 'file:video',
-            label: 'clip.mp4',
-            contentLocator: { kind: 'workspace-file', path: 'assets/clip.mp4' },
-            mediaType: 'video',
-          },
-        ],
+      expect.objectContaining({
+        id: 'file:book',
+        data: expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'books/book.epub' },
+          mediaType: 'document',
+        }),
       }),
-    ).rejects.toThrow('requires binary or structured-content preprocessing');
-    expect(readText).toHaveBeenCalledTimes(2);
+      expect.objectContaining({
+        id: 'file:comic',
+        data: expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'books/comic.cbz' },
+          mediaType: 'document',
+        }),
+      }),
+      expect.objectContaining({
+        id: 'file:report',
+        data: expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'docs/report.pdf' },
+          mediaType: 'document',
+        }),
+      }),
+      expect.objectContaining({
+        id: 'file:draft',
+        data: expect.objectContaining({
+          locator: { kind: 'workspace-file', path: 'docs/draft.docx' },
+          mediaType: 'document',
+        }),
+      }),
+    ]);
+    expect(authorizeWorkspace).toHaveBeenCalledWith(context);
 
     await expect(
       resolver.resolve({

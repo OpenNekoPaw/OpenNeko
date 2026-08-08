@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import {
   createAgentLaunchApplicationService,
   AGENT_LAUNCH_BUILTIN_COMMAND_HANDLER_IDS,
@@ -10,6 +9,7 @@ import {
 } from '@neko/agent-runtime/application';
 import type { ConfigManager } from '@neko/host/settings';
 import { DESKTOP_DEFAULT_ASSISTANT_SPACE_ID } from '@neko/host/desktop-shell-state';
+import { AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND } from '@neko/agent-contracts';
 import type {
   AgentBoundDomainBinding,
   AgentDomainBinding,
@@ -41,17 +41,14 @@ export interface DesktopAgentConversationReferenceResolver {
 }
 
 export function createDesktopAgentConversationReferenceResolver(input: {
-  readonly resolveWorkspace: (
+  readonly authorizeWorkspace: (
     binding: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>,
-  ) => Promise<{ readonly workspacePath: string }>;
-  readonly readText: (absolutePath: string) => Promise<string>;
+  ) => Promise<void>;
 }): DesktopAgentConversationReferenceResolver {
   const resolveWorkspaceReferences: DesktopAgentConversationReferenceResolver['resolveWorkspaceReferences'] =
     async ({ context, references }) => {
-      const workspace = await input.resolveWorkspace(context);
-      return Promise.all(
-        references.map((reference) => resolveReference(workspace.workspacePath, reference)),
-      );
+      await input.authorizeWorkspace(context);
+      return references.map(resolveReference);
     };
   return {
     async resolve({ context, references }) {
@@ -65,55 +62,22 @@ export function createDesktopAgentConversationReferenceResolver(input: {
     resolveWorkspaceReferences,
   };
 
-  async function resolveReference(
-    workspacePath: string,
-    reference: AgentFileReference,
-  ): Promise<AgentContextPayload> {
+  function resolveReference(reference: AgentFileReference): AgentContextPayload {
     const locator = reference.contentLocator;
     if (locator.kind !== 'workspace-file') {
       throw new Error(`Agent reference '${reference.label}' is not a Workspace file locator.`);
-    }
-    if (reference.mediaType === 'image') {
-      return {
-        type: 'file',
-        id: reference.id,
-        label: reference.label,
-        summary: `Workspace image: ${reference.label} (ContentLocator: workspace-file:${locator.path})`,
-        data: { locator, mediaType: 'image' },
-      };
-    }
-    if (!isAgentTextReference(locator.path, reference.mediaType)) {
-      throw new Error(
-        `Agent reference '${reference.label}' requires binary or structured-content preprocessing that is not available.`,
-      );
-    }
-    const absolutePath = resolve(workspacePath, ...locator.path.split('/'));
-    const relativePath = relative(workspacePath, absolutePath);
-    if (
-      relativePath.length === 0 ||
-      isAbsolute(relativePath) ||
-      relativePath === '..' ||
-      relativePath.startsWith(`..${sep}`)
-    ) {
-      throw new Error(
-        `Agent Workspace reference '${reference.label}' escapes its authorized Workspace.`,
-      );
-    }
-    const text = await input.readText(absolutePath);
-    if (text.includes('\u0000')) {
-      throw new Error(`Agent Workspace reference '${reference.label}' is not a text file.`);
-    }
-    if (text.length > 256 * 1024) {
-      throw new Error(
-        `Agent Workspace reference '${reference.label}' exceeds the provider context limit.`,
-      );
     }
     return {
       type: 'file',
       id: reference.id,
       label: reference.label,
-      summary: `Workspace file: ${reference.label}`,
-      data: { locator, text },
+      summary: `Workspace content: ${reference.label} (ContentLocator: workspace-file:${locator.path})`,
+      data: {
+        kind: AGENT_AUTHORIZED_CONTENT_REFERENCE_KIND,
+        locator,
+        ...(reference.mediaType === undefined ? {} : { mediaType: reference.mediaType }),
+        ...(reference.source === undefined ? {} : { source: reference.source }),
+      },
     };
   }
 }
@@ -503,68 +467,4 @@ function bindingOwnerId(binding: AgentDomainBinding): string {
     case 'world':
       return binding.worldRunId ?? binding.worldExperienceVersionId;
   }
-}
-
-const AGENT_TEXT_REFERENCE_EXTENSIONS = new Set([
-  '.ass',
-  '.bash',
-  '.c',
-  '.cfg',
-  '.cjs',
-  '.conf',
-  '.cpp',
-  '.cs',
-  '.css',
-  '.csv',
-  '.fish',
-  '.fountain',
-  '.go',
-  '.h',
-  '.hpp',
-  '.htm',
-  '.html',
-  '.ini',
-  '.java',
-  '.js',
-  '.json',
-  '.jsx',
-  '.kt',
-  '.kts',
-  '.less',
-  '.log',
-  '.md',
-  '.mjs',
-  '.py',
-  '.rb',
-  '.rs',
-  '.scss',
-  '.sh',
-  '.sql',
-  '.srt',
-  '.ssa',
-  '.toml',
-  '.ts',
-  '.tsv',
-  '.tsx',
-  '.txt',
-  '.vtt',
-  '.xml',
-  '.yaml',
-  '.yml',
-  '.zsh',
-]);
-
-function isAgentTextReference(
-  locatorPath: string,
-  mediaType: AgentFileReference['mediaType'],
-): boolean {
-  if (
-    mediaType === 'image' ||
-    mediaType === 'video' ||
-    mediaType === 'audio' ||
-    mediaType === 'sequence'
-  ) {
-    return false;
-  }
-  return AGENT_TEXT_REFERENCE_EXTENSIONS.has(extname(locatorPath).toLowerCase());
 }

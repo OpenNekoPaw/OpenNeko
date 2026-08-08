@@ -8,6 +8,7 @@ import {
   createResourceBrowserEntityIntentRequest,
   createResourceBrowserSearchRequest,
   createResourceBrowserSnapshotRequest,
+  type ResourceBrowserProjectionEvent,
 } from '@neko/assets-domain/resource-browser/contract';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
@@ -338,9 +339,8 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
       shell,
       host,
       openPreview: async () => undefined,
-      openCut: async () => undefined,
+      openCreativeDocument: async () => undefined,
       selectSource: async () => undefined,
-      selectWorkspaceFiles: async () => undefined,
       trashWorkspaceItem: async () => undefined,
       selectConfiguredGlobalMediaLibrary: async () => undefined,
       selectGlobalMediaLibrarySource: async () => undefined,
@@ -370,6 +370,47 @@ describe('ResourceBrowserNodeRuntime Project identity', () => {
           createResourceBrowserSnapshotRequest({ requestId: 'snapshot-1', identity }),
         ),
       ).resolves.toMatchObject({ identity });
+      const projectionEvents: ResourceBrowserProjectionEvent[] = [];
+      const unsubscribe = await runtime.subscribe(windowId, identity, (event) => {
+        projectionEvents.push(event);
+      });
+      try {
+        await writeFile(path.join(workspacePath, 'externally-added.txt'), 'external', 'utf8');
+        await vi.waitFor(
+          () => {
+            expect(
+              projectionEvents.some((event) =>
+                event.projection.items.some((item) => item.label === 'externally-added.txt'),
+              ),
+            ).toBe(true);
+          },
+          { timeout: 5_000, interval: 25 },
+        );
+        const focusEventStart = projectionEvents.length;
+        await writeFile(path.join(workspacePath, 'focus-reconciled.txt'), 'focus', 'utf8');
+        await runtime.reconcileWindow(windowId);
+        expect(
+          projectionEvents
+            .slice(focusEventStart)
+            .some((event) =>
+              event.projection.items.some((item) => item.label === 'focus-reconciled.txt'),
+            ),
+        ).toBe(true);
+
+        const removalEventStart = projectionEvents.length;
+        await rm(path.join(workspacePath, 'externally-added.txt'));
+        await runtime.reconcileWindow(windowId);
+        expect(
+          projectionEvents
+            .slice(removalEventStart)
+            .some(
+              (event) =>
+                !event.projection.items.some((item) => item.label === 'externally-added.txt'),
+            ),
+        ).toBe(true);
+      } finally {
+        unsubscribe();
+      }
       expect(
         resolveDesktopWindowWorkspaceWorkbench(projection.window, project.workspaceId).layout.main
           .views,
@@ -776,9 +817,8 @@ async function createGlobalLibraryRuntimeFixture(
     shell,
     host,
     openPreview: async () => undefined,
-    openCut: async () => undefined,
+    openCreativeDocument: async () => undefined,
     selectSource: async () => undefined,
-    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: async () => undefined,
     selectConfiguredGlobalMediaLibrary: async () => undefined,
     selectGlobalMediaLibrarySource: async () => undefined,

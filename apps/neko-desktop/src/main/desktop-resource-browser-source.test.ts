@@ -535,8 +535,8 @@ describe('Desktop Resource Browser source', () => {
     await writeFile(path.join(mediaRoot, 'story.otio'), '{"OTIO_SCHEMA":"Timeline.1"}');
     await mkdir(path.join(fixture.workspace, 'neko', 'assets'), { recursive: true });
     await symlink(mediaRoot, path.join(fixture.workspace, 'neko', 'assets', 'Editorial'));
-    const openCut = vi.fn(async () => undefined);
-    const composition = createComposition(fixture.workspace, { openCut });
+    const openCreativeDocument = vi.fn(async () => undefined);
+    const composition = createComposition(fixture.workspace, { openCreativeDocument });
     const mediaRoots = await composition.source.media.search({
       identity,
       query: '',
@@ -574,7 +574,7 @@ describe('Desktop Resource Browser source', () => {
       ]),
     );
 
-    await composition.interactions.openCut({
+    await composition.interactions.openCreativeDocument({
       identity,
       item: {
         resourceId: 'content:story',
@@ -584,13 +584,14 @@ describe('Desktop Resource Browser source', () => {
         kind: 'file',
         label: 'story.otio',
         locator: { kind: 'workspace-file', path: 'story.otio' },
-        capabilities: ['open-cut', 'reveal'],
+        capabilities: ['open-creative-document', 'reveal'],
       },
     });
-    expect(openCut).toHaveBeenCalledWith({
+    expect(openCreativeDocument).toHaveBeenCalledWith({
       identity,
       item: expect.objectContaining({ label: 'story.otio' }),
       absolutePath: expect.stringMatching(/\/workspace\/story\.otio$/u),
+      kind: 'cut',
     });
   });
 
@@ -1042,12 +1043,15 @@ function createComposition(
         ReturnType<typeof createResourceBrowserNodeProjectionSource>['interactions']['preview']
       >[0]['target'];
     }) => Promise<void>;
-    readonly openCut?: (input: {
+    readonly openCreativeDocument?: (input: {
       readonly identity: ResourceBrowserIdentity;
       readonly item: Parameters<
-        ReturnType<typeof createResourceBrowserNodeProjectionSource>['interactions']['openCut']
+        ReturnType<
+          typeof createResourceBrowserNodeProjectionSource
+        >['interactions']['openCreativeDocument']
       >[0]['item'];
       readonly absolutePath: string;
+      readonly kind: 'canvas' | 'cut';
     }) => Promise<void>;
     readonly revealPath?: (absolutePath: string) => Promise<void>;
     readonly selectSource?: (windowId: string) => Promise<string | undefined>;
@@ -1084,9 +1088,8 @@ function createComposition(
     refreshEntityProjections: effects.refreshEntityProjections,
     host,
     openPreview: effects.openPreview ?? (async () => undefined),
-    openCut: effects.openCut ?? (async () => undefined),
+    openCreativeDocument: effects.openCreativeDocument ?? (async () => undefined),
     selectSource: effects.selectSource ?? (async () => undefined),
-    selectWorkspaceFiles: async () => undefined,
     trashWorkspaceItem: async () => undefined,
     selectGlobalLibrary: effects.selectGlobalLibrary ?? (async () => undefined),
     mutateGlobalMediaLibraries: (operation) => operation(),

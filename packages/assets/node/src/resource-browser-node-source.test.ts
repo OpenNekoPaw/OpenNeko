@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HostFileSystemPort } from '@neko/host/ports';
 import type { ResourceBrowserIdentity } from '@neko/assets-domain/resource-browser/contract';
 import { createResourceBrowserNodeProjectionSource } from './resource-browser-node-source';
+import { loadNkc } from '@neko/canvas-domain/nkc';
+import { parseOtio } from '@neko/cut-domain';
 
 describe('Resource Browser Workspace File mutations', () => {
   const roots: string[] = [];
@@ -13,33 +15,148 @@ describe('Resource Browser Workspace File mutations', () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   }, 30_000);
 
-  it('imports large files in Node without transporting bytes through Host file buffers', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-import-'));
+  it('creates an empty ordinary file exclusively through the Content owner', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-create-file-'));
     roots.push(root);
     const workspacePath = path.join(root, 'workspace');
-    const incomingPath = path.join(root, 'large-video.bin');
     await mkdir(workspacePath);
-    const bytes = Buffer.alloc(3 * 1024 * 1024, 7);
-    await writeFile(incomingPath, bytes);
-    const readBytes = vi.fn(async () => {
-      throw new Error('Resource Browser import must not buffer source bytes through Host.');
-    });
-    const writeBytes = vi.fn(async () => {
-      throw new Error('Resource Browser import must not buffer destination bytes through Host.');
-    });
-    const composition = createComposition(workspacePath, createFilePort(readBytes, writeBytes), {
-      selectWorkspaceFiles: async () => [incomingPath],
-    });
+    const composition = createComposition(workspacePath, createFilePort());
 
-    await expect(composition.interactions.importFiles({ identity })).resolves.toBe('imported');
+    await expect(
+      composition.interactions.createFile({ identity, name: 'notes.md' }),
+    ).resolves.toBeUndefined();
 
-    expect(readBytes).not.toHaveBeenCalled();
-    expect(writeBytes).not.toHaveBeenCalled();
-    expect(await readFile(path.join(workspacePath, 'large-video.bin'))).toEqual(bytes);
-    expect((await readdir(workspacePath)).some((name) => name.startsWith('.neko-import-'))).toBe(
-      false,
+    expect(await readFile(path.join(workspacePath, 'notes.md'))).toEqual(Buffer.alloc(0));
+    await expect(
+      composition.interactions.createFile({ identity, name: 'notes.md' }),
+    ).rejects.toThrow('content-conflict');
+    await expect(
+      composition.interactions.createFile({ identity, name: 'board.nkc' }),
+    ).rejects.toThrow('requires New Canvas');
+    expect(await readdir(workspacePath)).toEqual(['notes.md']);
+  });
+
+  it('creates under an explicitly selected Workspace directory', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-create-nested-'));
+    roots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(path.join(workspacePath, 'references'), { recursive: true });
+    const composition = createComposition(workspacePath, createFilePort());
+    const parent = {
+      resourceId: 'content:references',
+      facet: 'files' as const,
+      kind: 'directory' as const,
+      label: 'references',
+      role: 'directory' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: 'references' },
+      capabilities: [],
+    };
+
+    await composition.interactions.createFile({ identity, parent, name: 'sources.txt' });
+
+    expect(await readFile(path.join(workspacePath, 'references', 'sources.txt'))).toEqual(
+      Buffer.alloc(0),
     );
-  }, 30_000);
+  });
+
+  it('rejects a stale selected directory without retrying at Workspace root', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-create-stale-parent-'));
+    roots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(path.join(workspacePath, 'references'), { recursive: true });
+    const composition = createComposition(workspacePath, createFilePort());
+    const parent = {
+      resourceId: 'content:references',
+      facet: 'files' as const,
+      kind: 'directory' as const,
+      label: 'references',
+      role: 'directory' as const,
+      depth: 0,
+      locator: { kind: 'workspace-file' as const, path: 'references' },
+      capabilities: [],
+    };
+    await rm(path.join(workspacePath, 'references'), { recursive: true });
+
+    await expect(
+      composition.interactions.createFile({ identity, parent, name: 'sources.txt' }),
+    ).rejects.toThrow();
+
+    expect(await readdir(workspacePath)).toEqual([]);
+  });
+
+  it('publishes Canvas and Cut documents only through their canonical owners', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-create-documents-'));
+    roots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(workspacePath);
+    const openCreativeDocument = vi.fn(
+      async (input: { readonly absolutePath: string; readonly kind: 'canvas' | 'cut' }) => {
+        const bytes = await readFile(input.absolutePath);
+        if (input.kind === 'canvas') {
+          expect(loadNkc(bytes.toString('utf8')).validation.valid).toBe(true);
+        } else {
+          expect(parseOtio(bytes).ok).toBe(true);
+        }
+      },
+    );
+    const composition = createComposition(workspacePath, createFilePort(), {
+      openCreativeDocument,
+    });
+
+    await expect(
+      composition.interactions.createCreativeDocument({
+        identity,
+        kind: 'canvas',
+        name: 'Storyboard',
+      }),
+    ).resolves.toEqual({ status: 'opened' });
+    await expect(
+      composition.interactions.createCreativeDocument({
+        identity,
+        kind: 'cut',
+        name: 'Rough Cut.otio',
+      }),
+    ).resolves.toEqual({ status: 'opened' });
+
+    const canvas = loadNkc(await readFile(path.join(workspacePath, 'Storyboard.nkc'), 'utf8'));
+    const cut = parseOtio(await readFile(path.join(workspacePath, 'Rough Cut.otio')));
+    expect(canvas.validation.valid).toBe(true);
+    expect(canvas.data.name).toBe('Storyboard');
+    expect(cut.ok).toBe(true);
+    if (!cut.ok) throw new Error('Expected valid Cut document.');
+    expect(cut.document.name).toBe('Rough Cut');
+    expect(openCreativeDocument.mock.calls.map(([input]) => input.kind)).toEqual(['canvas', 'cut']);
+  });
+
+  it('keeps a published creative document and reports a local diagnostic when open fails', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-create-open-failure-'));
+    roots.push(root);
+    const workspacePath = path.join(root, 'workspace');
+    await mkdir(workspacePath);
+    const composition = createComposition(workspacePath, createFilePort(), {
+      openCreativeDocument: async () => {
+        throw new Error('editor unavailable');
+      },
+    });
+
+    await expect(
+      composition.interactions.createCreativeDocument({
+        identity,
+        kind: 'canvas',
+        name: 'Storyboard',
+      }),
+    ).resolves.toMatchObject({
+      status: 'created',
+      diagnostic: {
+        code: 'creative-document-open-failed',
+        message: expect.stringContaining('editor unavailable'),
+      },
+    });
+    expect(
+      loadNkc(await readFile(path.join(workspacePath, 'Storyboard.nkc'), 'utf8')).validation.valid,
+    ).toBe(true);
+  });
 
   it('creates contained directories, refuses overwrite, and delegates deletion to OS Trash', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-mutation-'));
@@ -53,7 +170,7 @@ describe('Resource Browser Workspace File mutations', () => {
     await expect(stat(path.join(workspacePath, 'References'))).resolves.toMatchObject({});
     await expect(
       composition.interactions.createDirectory({ identity, name: 'References' }),
-    ).rejects.toThrow('already exists');
+    ).rejects.toThrow('content-conflict');
     const item = {
       resourceId: 'content:notes.txt',
       facet: 'files' as const,
@@ -73,21 +190,16 @@ describe('Resource Browser Workspace File mutations', () => {
     );
   });
 
-  it('rejects non-portable imported file names before publishing Workspace content', async () => {
-    if (process.platform === 'win32') return;
+  it('rejects non-portable entry names before publishing Workspace content', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'openneko-resource-portable-name-'));
     roots.push(root);
     const workspacePath = path.join(root, 'workspace');
-    const incomingPath = path.join(root, 'not\\portable.txt');
     await mkdir(workspacePath);
-    await writeFile(incomingPath, 'content', 'utf8');
-    const composition = createComposition(workspacePath, createFilePort(), {
-      selectWorkspaceFiles: async () => [incomingPath],
-    });
+    const composition = createComposition(workspacePath, createFilePort());
 
-    await expect(composition.interactions.importFiles({ identity })).rejects.toThrow(
-      'visible portable file name',
-    );
+    await expect(
+      composition.interactions.createFile({ identity, name: 'not\\portable.txt' }),
+    ).rejects.toThrow('portable path segment');
     await expect(readdir(workspacePath)).resolves.toEqual([]);
   });
 });
@@ -96,8 +208,10 @@ function createComposition(
   workspacePath: string,
   files: HostFileSystemPort,
   overrides: {
-    readonly selectWorkspaceFiles?: () => Promise<readonly string[] | undefined>;
     readonly trashWorkspaceItem?: (absolutePath: string) => Promise<void>;
+    readonly openCreativeDocument?: Parameters<
+      typeof createResourceBrowserNodeProjectionSource
+    >[0]['openCreativeDocument'];
   } = {},
 ) {
   return createResourceBrowserNodeProjectionSource({
@@ -114,9 +228,8 @@ function createComposition(
       external: { openExternal: async () => undefined },
     },
     openPreview: async () => undefined,
-    openCut: async () => undefined,
+    openCreativeDocument: overrides.openCreativeDocument ?? (async () => undefined),
     selectSource: async () => undefined,
-    selectWorkspaceFiles: overrides.selectWorkspaceFiles ?? (async () => undefined),
     trashWorkspaceItem: overrides.trashWorkspaceItem ?? (async () => undefined),
     selectGlobalLibrary: async () => undefined,
     mutateGlobalMediaLibraries: (operation) => operation(),

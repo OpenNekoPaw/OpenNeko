@@ -10,3 +10,7 @@ export {
   NodeAuthorizedWorkspaceWriter,
   type NodeAuthorizedWorkspaceWriterOptions,
 } from './workspace-content-writer';
+export {
+  NodeAuthorizedWorkspaceDirectoryCreator,
+  type NodeAuthorizedWorkspaceDirectoryCreatorOptions,
+} from './workspace-directory-creator';

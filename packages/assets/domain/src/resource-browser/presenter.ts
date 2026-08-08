@@ -194,8 +194,12 @@ function presentContentCapabilities(
 ): readonly ResourceBrowserCapability[] {
   const result: ResourceBrowserCapability[] = [];
   if (capabilities.includes('preview')) result.push('preview');
-  if (mediaType === 'cut' && capabilities.includes('read') && capabilities.includes('bind')) {
-    result.push('open-cut');
+  if (
+    (mediaType === 'canvas' || mediaType === 'cut') &&
+    capabilities.includes('read') &&
+    capabilities.includes('bind')
+  ) {
+    result.push('open-creative-document');
   }
   if (capabilities.includes('read')) result.push('reveal');
   if (canvasAvailable && capabilities.includes('bind')) result.push('add-to-canvas');

@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { copyFile, link, lstat, mkdir, realpath, rm } from 'node:fs/promises';
-import { COPYFILE_EXCL } from 'node:constants';
+import { lstat, realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { NekoHostPorts } from '@neko/host/ports';
 import { detectPreviewContentKind, type PreviewContentKind } from '@neko/preview-domain';
@@ -20,6 +19,7 @@ import type {
   ResourceBrowserIdentity,
   ResourceBrowserItem,
 } from '@neko/assets-domain/resource-browser/contract';
+import { presentResourceBrowserContentItem } from '@neko/assets-domain/resource-browser/presenter';
 import {
   createGlobalLibraryOpaqueId,
   createGlobalLibraryThumbnailDescriptor,
@@ -38,6 +38,20 @@ import {
   type GlobalMediaLibraryConnection,
 } from './global-media-library-files';
 import { WorkspaceMediaLibrarySyncService } from './workspace-media-library-sync';
+import {
+  CreativeDocumentCreationService,
+  WorkspaceEntryCreationService,
+} from '@neko/content/project-file-io';
+import {
+  NodeAuthorizedWorkspaceDirectoryCreator,
+  NodeAuthorizedWorkspaceWriter,
+} from '@neko/content/node';
+import {
+  createEmptyCanvasDocumentBytes,
+  isValidCanvasDocumentBytes,
+} from '@neko/canvas-domain/project-file-io';
+import { createEmptyCutDocumentBytes, isValidCutDocumentBytes } from '@neko/cut-domain';
+import type { WorkspaceFileContentLocator } from '@neko/content';
 
 const FILE_SCAN_LIMIT = 5_000;
 const EXCLUDED_DIRECTORIES = new Set([
@@ -65,13 +79,13 @@ export interface ResourceBrowserNodeSourceOptions {
     readonly absolutePath: string;
     readonly target: Parameters<ResourceBrowserInteractionPort['preview']>[0]['target'];
   }) => Promise<void>;
-  readonly openCut: (input: {
+  readonly openCreativeDocument: (input: {
     readonly identity: ResourceBrowserIdentity;
-    readonly item: ResourceBrowserItem;
+    readonly item: ResourceBrowserContentItem;
     readonly absolutePath: string;
+    readonly kind: 'canvas' | 'cut';
   }) => Promise<void>;
   readonly selectSource: (windowId: string) => Promise<string | undefined>;
-  readonly selectWorkspaceFiles: (windowId: string) => Promise<readonly string[] | undefined>;
   readonly trashWorkspaceItem: (absolutePath: string) => Promise<void>;
   readonly selectGlobalLibrary: (input: {
     readonly windowId: string;
@@ -311,6 +325,49 @@ export function createResourceBrowserNodeReadSource(
   };
 }
 
+export async function searchWorkspaceLinkedMediaLibraryContentLocators(input: {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly files: NekoHostPorts['files'];
+  readonly query: string;
+  readonly limit: number;
+}): Promise<readonly WorkspaceFileContentLocator[]> {
+  if (!Number.isInteger(input.limit) || input.limit < 1) {
+    throw new Error('Workspace Media Library mention limit must be a positive integer.');
+  }
+  const locators: WorkspaceFileContentLocator[] = [];
+  const libraries = await listWorkspaceLinkedMediaLibraries(input.workspace.workspacePath);
+  for (const library of libraries) {
+    if (library.availability !== 'available' || locators.length >= input.limit) continue;
+    const absoluteRoot = path.join(
+      input.workspace.workspacePath,
+      ...library.workspacePath.split('/'),
+    );
+    const entries = await searchResourceBrowserContentTree({
+      absoluteRoot,
+      locatorPrefix: library.workspacePath,
+      query: input.query,
+      limit: Math.min(input.limit - locators.length, FILE_SCAN_LIMIT),
+      rootDepth: 0,
+      libraryName: library.name,
+      excludedDirectoryNames: EXCLUDED_DIRECTORIES,
+      files: input.files,
+      joinAbsolutePath: path.join,
+      relativePath: path.relative,
+      classify: (locatorPath) => classifyContent(locatorPath, true),
+    });
+    for (const entry of entries) {
+      if (
+        entry.role === 'content' &&
+        entry.availability === 'available' &&
+        entry.locator.kind === 'workspace-file'
+      ) {
+        locators.push(entry.locator);
+      }
+    }
+  }
+  return locators;
+}
+
 const REFERENCE_REWRITE_BLOCKERS = [
   {
     code: 'reference-owners-not-configured',
@@ -334,19 +391,59 @@ export function createResourceBrowserNodeProjectionSource(
   const workspaceMediaLibrarySync =
     options.workspaceMediaLibrarySync ??
     new WorkspaceMediaLibrarySyncService(options.globalMediaLibraryRoot);
+  const workspaceWriter = new NodeAuthorizedWorkspaceWriter({
+    workspaceRoot: options.workspace.workspacePath,
+  });
+  const workspaceEntryCreation = new WorkspaceEntryCreationService({
+    writer: workspaceWriter,
+    directoryCreator: new NodeAuthorizedWorkspaceDirectoryCreator({
+      workspaceRoot: options.workspace.workspacePath,
+    }),
+  });
+  const creativeDocumentCreation = new CreativeDocumentCreationService({
+    writer: workspaceWriter,
+    owners: {
+      canvas: {
+        extension: '.nkc',
+        createBytes: createEmptyCanvasDocumentBytes,
+        validateBytes: isValidCanvasDocumentBytes,
+      },
+      cut: {
+        extension: '.otio',
+        createBytes: createEmptyCutDocumentBytes,
+        validateBytes: isValidCutDocumentBytes,
+      },
+    },
+  });
 
   const interactions: ResourceBrowserInteractionPort = {
-    async createDirectory({ parent, name }): Promise<void> {
-      const absoluteParent = await resolveWorkspaceFileParent(options.workspace, parent);
-      const target = path.join(absoluteParent, name);
-      await mkdir(target);
+    async createCreativeDocument({ identity, parent, kind, name }) {
+      const targetDirectory = await resolveWorkspaceFileParent(options.workspace, parent);
+      const result = await creativeDocumentCreation.create({ kind, targetDirectory, name });
+      if (result.status === 'unavailable') {
+        throw new Error(`Creative document creation failed: ${result.diagnostic.code}.`);
+      }
+      const item = presentCreatedCreativeDocument(result.path, kind);
+      const absolutePath = await resolveWorkspaceContentLocator(options.workspace, item.locator);
+      try {
+        await options.openCreativeDocument({ identity, item, absolutePath, kind });
+        return { status: 'opened' };
+      } catch (error) {
+        return {
+          status: 'created',
+          diagnostic: {
+            code: 'creative-document-open-failed',
+            message: `Created '${item.label}', but its editor could not open: ${asError(error).message}`,
+            recordId: item.resourceId,
+          },
+        };
+      }
     },
-    async importFiles({ identity, parent }): Promise<'imported' | 'cancelled'> {
-      const selectedFiles = await options.selectWorkspaceFiles(identity.windowId);
-      if (!selectedFiles || selectedFiles.length === 0) return 'cancelled';
-      const absoluteParent = await resolveWorkspaceFileParent(options.workspace, parent);
-      await importWorkspaceFiles(selectedFiles, absoluteParent);
-      return 'imported';
+    async createFile({ parent, name }): Promise<void> {
+      await createWorkspaceEntry('file', parent, name);
+    },
+    async createDirectory({ parent, name }): Promise<void> {
+      await createWorkspaceEntry('directory', parent, name);
     },
     async trashContent({ item }): Promise<void> {
       const absolutePath = await resolveWorkspaceContentLocator(options.workspace, item.locator);
@@ -433,14 +530,21 @@ export function createResourceBrowserNodeProjectionSource(
       });
       await options.openPreview({ identity, item, absolutePath, target });
     },
-    async openCut({ identity, item }): Promise<void> {
+    async openCreativeDocument({ identity, item }): Promise<void> {
+      if (item.locator.kind !== 'workspace-file') {
+        throw new Error('Resource Browser creative-document open requires a Workspace file.');
+      }
+      const kind = creativeDocumentKindForPath(item.locator.path);
+      if (!kind) {
+        throw new Error('Resource Browser creative-document open requires an NKC or OTIO file.');
+      }
       const absolutePath = await resolveResourceBrowserItemPath({
         workspace: options.workspace,
         globalAssetRoot: options.globalAssetRoot,
         memberships: options.assetLibraryMemberships,
         item,
       });
-      await options.openCut({ identity, item, absolutePath });
+      await options.openCreativeDocument({ identity, item, absolutePath, kind });
     },
     async reveal({ item }): Promise<void> {
       const absolutePath = await resolveResourceBrowserItemPath({
@@ -468,6 +572,22 @@ export function createResourceBrowserNodeProjectionSource(
     addToCut: options.addToCut,
   };
   return { source, interactions };
+
+  async function createWorkspaceEntry(
+    kind: 'file' | 'directory',
+    parent: ResourceBrowserContentItem | undefined,
+    name: string,
+  ): Promise<void> {
+    const targetDirectory = await resolveWorkspaceFileParent(options.workspace, parent);
+    const result = await workspaceEntryCreation.create({ kind, targetDirectory, name });
+    if (result.status === 'unavailable') {
+      if (result.diagnostic.code === 'reserved-creative-document-extension') {
+        const action = result.diagnostic.requiredKind === 'canvas' ? 'New Canvas' : 'New Cut';
+        throw new Error(`Workspace entry creation requires ${action} for this file extension.`);
+      }
+      throw new Error(`Workspace entry creation failed: ${result.diagnostic.code}.`);
+    }
+  }
 }
 
 async function resolveWorkspaceFileParent(
@@ -475,7 +595,7 @@ async function resolveWorkspaceFileParent(
   parent: ResourceBrowserContentItem | undefined,
 ): Promise<string> {
   const workspaceRoot = await realpath(workspace.workspacePath);
-  if (!parent) return workspaceRoot;
+  if (!parent) return '';
   if (parent.facet !== 'files' || parent.kind !== 'directory') {
     throw new Error('Resource Browser Workspace File parent must be a Files directory.');
   }
@@ -488,69 +608,7 @@ async function resolveWorkspaceFileParent(
   ) {
     throw new Error('Resource Browser Workspace File parent is outside the authorized Workspace.');
   }
-  return absoluteParent;
-}
-
-async function importWorkspaceFiles(
-  selectedFiles: readonly string[],
-  absoluteParent: string,
-): Promise<void> {
-  const sources = await Promise.all(
-    selectedFiles.map(async (selectedPath) => {
-      const entry = await lstat(selectedPath);
-      if (!entry.isFile() || entry.isSymbolicLink()) {
-        throw new Error('Resource Browser import accepts regular files only.');
-      }
-      const source = await realpath(selectedPath);
-      const name = path.basename(source);
-      if (!isPortableVisibleEntryName(name)) {
-        throw new Error('Resource Browser import requires a visible portable file name.');
-      }
-      return { source, name, destination: path.join(absoluteParent, name) };
-    }),
-  );
-  if (new Set(sources.map((source) => source.name)).size !== sources.length) {
-    throw new Error('Resource Browser import contains duplicate file names.');
-  }
-  await Promise.all(sources.map((source) => assertPathAbsent(source.destination)));
-
-  const staging = path.join(absoluteParent, `.neko-import-${randomUUID()}.tmp`);
-  const published: string[] = [];
-  await mkdir(staging);
-  try {
-    for (const source of sources) {
-      await copyFile(source.source, path.join(staging, source.name), COPYFILE_EXCL);
-    }
-    for (const source of sources) {
-      await link(path.join(staging, source.name), source.destination);
-      published.push(source.destination);
-    }
-  } catch (error: unknown) {
-    await Promise.all(published.map((target) => rm(target, { force: true })));
-    throw error;
-  } finally {
-    await rm(staging, { recursive: true, force: true });
-  }
-}
-
-function isPortableVisibleEntryName(name: string): boolean {
-  return (
-    Boolean(name) &&
-    name !== '.' &&
-    name !== '..' &&
-    !name.startsWith('.') &&
-    !/[\\/\0]/u.test(name)
-  );
-}
-
-async function assertPathAbsent(target: string): Promise<void> {
-  try {
-    await lstat(target);
-  } catch (error: unknown) {
-    if (readErrorCode(error) === 'ENOENT') return;
-    throw error;
-  }
-  throw new Error(`Resource Browser destination '${path.basename(target)}' already exists.`);
+  return path.relative(workspaceRoot, absoluteParent).split(path.sep).join('/');
 }
 
 function isPathInside(candidate: string, root: string): boolean {
@@ -561,6 +619,10 @@ function isPathInside(candidate: string, root: string): boolean {
     !relative.startsWith(`..${path.sep}`) &&
     !path.isAbsolute(relative)
   );
+}
+
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function requireLibraryName(item: ResourceBrowserItem): string {
@@ -942,6 +1004,38 @@ function isCanvasDocument(locatorPath: string): boolean {
 
 function isCutDocument(locatorPath: string): boolean {
   return path.posix.extname(locatorPath).toLocaleLowerCase() === '.otio';
+}
+
+function creativeDocumentKindForPath(locatorPath: string): 'canvas' | 'cut' | undefined {
+  if (isCanvasDocument(locatorPath)) return 'canvas';
+  if (isCutDocument(locatorPath)) return 'cut';
+  return undefined;
+}
+
+function presentCreatedCreativeDocument(
+  locatorPath: string,
+  kind: 'canvas' | 'cut',
+): ResourceBrowserContentItem {
+  const segments = locatorPath.split('/');
+  const label = segments.at(-1);
+  if (!label) throw new Error('Created creative document path has no filename.');
+  const parentPath = segments.slice(0, -1).join('/');
+  return presentResourceBrowserContentItem(
+    {
+      locator: { kind: 'workspace-file', path: locatorPath },
+      ...(parentPath
+        ? { parentLocator: { kind: 'workspace-file' as const, path: parentPath } }
+        : {}),
+      label,
+      availability: 'available',
+      capabilities: ['read', 'bind'],
+      metadata: { mediaType: kind },
+      role: 'content',
+      depth: segments.length - 1,
+    },
+    'files',
+    { canvasAvailable: true },
+  );
 }
 
 export async function resolveResourceBrowserItemPath(input: {
