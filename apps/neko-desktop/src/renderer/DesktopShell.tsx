@@ -739,6 +739,11 @@ function DesktopSceneWorkbench({
   return (
     <>
       <ControlledWorkbenchShell
+        titleBar={
+          workspaceProject ? (
+            <WorkspaceRegionControls actions={actions} disabled={pending} projection={projection} />
+          ) : undefined
+        }
         className={`project-workspace desktop-scene-workbench desktop-scene-workbench--${sceneShape}`}
         primarySidebar={
           <ApplicationPrimarySidebar
@@ -758,15 +763,6 @@ function DesktopSceneWorkbench({
             onOpenSettings={() => actions.onTransitionScene({ kind: 'open-settings' })}
             onToggle={() => actions.onUpdateApplicationSidebar(toggleApplicationSidebar(sidebar))}
             projection={projection}
-            layoutControl={
-              workspaceProject ? (
-                <WorkspaceRegionControls
-                  actions={actions}
-                  disabled={pending}
-                  projection={projection}
-                />
-              ) : undefined
-            }
             lifecycleControl={
               workspaceProject && projectPortabilityPort ? (
                 <ProjectPortabilityControl
@@ -1736,22 +1732,6 @@ function WorkspaceRegionControls({
       />
       <IconButton
         className="workbench-region-toggle"
-        data-workbench-region-control="management"
-        disabled={disabled}
-        icon={<span className={toCodiconClassName('layout-sidebar-right')} aria-hidden="true" />}
-        label={t('workspace.projectResources')}
-        size="xs"
-        title={t('workspace.projectResources')}
-        aria-pressed={managementVisible}
-        onClick={() =>
-          actions.onUpdateWorkbench(
-            instance.workbenchInstanceId,
-            toggleWorkbenchRegion(workbench, 'management'),
-          )
-        }
-      />
-      <IconButton
-        className="workbench-region-toggle"
         data-workbench-region-control="cut-panel"
         disabled={disabled || workbench.cutPanel === undefined}
         icon={<span className={toCodiconClassName('layout-panel')} aria-hidden="true" />}
@@ -1763,6 +1743,22 @@ function WorkspaceRegionControls({
           actions.onUpdateWorkbench(
             instance.workbenchInstanceId,
             toggleWorkbenchRegion(workbench, 'cutPanel'),
+          )
+        }
+      />
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="management"
+        disabled={disabled}
+        icon={<span className={toCodiconClassName('layout-sidebar-right')} aria-hidden="true" />}
+        label={t('workspace.projectResources')}
+        size="xs"
+        title={t('workspace.projectResources')}
+        aria-pressed={managementVisible}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'management'),
           )
         }
       />
@@ -2160,7 +2156,6 @@ function ApplicationPrimarySidebar({
   onOpenSettings,
   onToggle,
   projection,
-  layoutControl,
   lifecycleControl,
 }: {
   readonly activeProjectId?: string;
@@ -2179,7 +2174,6 @@ function ApplicationPrimarySidebar({
   readonly onOpenSettings: () => void;
   readonly onToggle: () => void;
   readonly projection: DesktopShellProjection;
-  readonly layoutControl?: JSX.Element;
   readonly lifecycleControl?: JSX.Element;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -2190,12 +2184,7 @@ function ApplicationPrimarySidebar({
       }`}
       data-primary-sidebar="application"
     >
-      <PrimarySidebarBrand
-        compact={compact}
-        disabled={disabled}
-        layoutControl={layoutControl}
-        onToggle={onToggle}
-      />
+      <PrimarySidebarBrand compact={compact} disabled={disabled} onToggle={onToggle} />
       <nav className="home-primary-navigation" aria-label={t('workspace.primaryNavigation')}>
         <DesktopApplicationNavigationButton
           active={activeSection === 'create'}
@@ -2910,12 +2899,10 @@ function formatStandaloneConversationGroup(
 function PrimarySidebarBrand({
   compact,
   disabled = false,
-  layoutControl,
   onToggle,
 }: {
   readonly compact: boolean;
   readonly disabled?: boolean;
-  readonly layoutControl?: JSX.Element;
   readonly onToggle: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -2934,7 +2921,6 @@ function PrimarySidebarBrand({
           aria-pressed={!compact}
           onClick={onToggle}
         />
-        {layoutControl}
       </div>
     </div>
   );

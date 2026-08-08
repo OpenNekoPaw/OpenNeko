@@ -197,23 +197,32 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('aria-label="Expand sidebar"');
   });
 
-  it('places independent Workspace region controls in PrimarySidebar top chrome only', () => {
+  it('places independent Workspace region controls in shared Workbench title chrome only', () => {
     const markup = renderShell(<DesktopShellView projection={workspaceProjection()} />);
-    const topControls = markup.match(
+    const sidebarControls = markup.match(
       /<div class="primary-sidebar-brand__controls">([\s\S]*?)<\/div>/u,
     )?.[1];
+    const titleChrome = markup.match(
+      /<div class="neko-controlled-workbench-title">([\s\S]*?)<\/div><\/div>/u,
+    )?.[1];
+    if (!titleChrome) throw new Error('Workspace title chrome is missing.');
 
-    expect(topControls).toContain('data-workbench-region-control="primary-sidebar"');
-    expect(topControls).toContain('data-workbench-region-control="agent"');
-    expect(topControls).toContain('data-workbench-region-control="main"');
-    expect(topControls).toContain('data-workbench-region-control="management"');
-    expect(topControls).toContain('codicon-layout-sidebar-left');
-    expect(topControls).toContain('codicon-layout');
-    expect(topControls).toContain('codicon-layout-panel');
-    expect(topControls).toContain('codicon-layout-sidebar-right');
-    expect(topControls?.indexOf('data-workbench-region-control="primary-sidebar"')).toBeLessThan(
-      topControls?.indexOf('data-workbench-region-control="agent"') ?? -1,
+    expect(sidebarControls).toContain('data-workbench-region-control="primary-sidebar"');
+    expect(sidebarControls).not.toContain('data-workbench-region-control="agent"');
+    expect(sidebarControls).not.toContain('data-workbench-region-control="main"');
+    expect(sidebarControls).not.toContain('data-workbench-region-control="management"');
+    expect(titleChrome).toContain('data-workbench-region-control="agent"');
+    expect(titleChrome).toContain('data-workbench-region-control="main"');
+    expect(titleChrome).toContain('data-workbench-region-control="management"');
+    expect(titleChrome).toContain('data-workbench-region-control="cut-panel"');
+    const controlOrder = ['agent', 'main', 'cut-panel', 'management'].map((region) =>
+      titleChrome.indexOf('data-workbench-region-control="' + region + '"'),
     );
+    expect(controlOrder.every((index) => index >= 0)).toBe(true);
+    expect(controlOrder).toEqual([...controlOrder].sort((left, right) => left - right));
+    expect(titleChrome).toContain('codicon-layout');
+    expect(titleChrome).toContain('codicon-layout-panel');
+    expect(titleChrome).toContain('codicon-layout-sidebar-right');
     const footer = markup.match(/<div class="home-navigation-footer">([\s\S]*?)<\/div>/u)?.[1];
     expect(footer).not.toContain('data-workbench-region-control');
     expect(markup).not.toContain('project-main-group__actions');
@@ -224,6 +233,8 @@ describe('Desktop scene Workbench', () => {
     const markup = renderShell(<DesktopShellView projection={agentProjection()} />);
     expect(markup.match(/data-workbench-region-control=/gu) ?? []).toHaveLength(1);
     expect(markup).toContain('data-workbench-region-control="primary-sidebar"');
+    expect(markup).not.toContain('class="neko-controlled-workbench-title"');
+    expect(markup).not.toContain('class="workspace-region-controls"');
   });
 
   it('creates management runtimes only for the current Scene', () => {

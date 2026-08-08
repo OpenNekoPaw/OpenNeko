@@ -53,10 +53,16 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a Window-o
 #### Scenario: Workspace layout controls are available
 
 - **WHEN** the active scene owns an exact Workspace Workbench composition
-- **THEN** PrimarySidebar, Agent, Main and management presentation each has its own compact VS Code-style icon control in the PrimarySidebar top chrome
+- **THEN** PrimarySidebar presentation has its own compact icon control in the PrimarySidebar brand chrome
+- **AND** Agent, Main, management and Cut Panel presentation each has its own compact VS Code-style icon control overlaid at the right side of the existing Workbench top chrome
+- **AND** the Workspace control overlay does not allocate a grid row, add a header background or border, or move Main and dock content downward
+- **AND** its native-aligned position remains stable while the underlying Main, Interaction and Manager panels occupy their complete Workbench tracks without decorative outer margin or Dock padding
+- **AND** the Workspace Main tab strip and adjacent Resource management header share the same `38px` panel chrome height and aligned top/bottom edges
+- **AND** the controls follow the visible spatial order Agent, Main, Cut Panel, then management
 - **AND** each control changes only its owned region while Agent and Main keep at least one business region visible
 - **AND** active, hover and keyboard-focus states do not resize or shift the control row
-- **AND** no layout control is rendered in the sidebar footer, Workspace Main tab header or a domain Surface
+- **AND** a non-Workspace Scene does not mount the Workspace-only control group
+- **AND** no Workspace region control is rendered in the PrimarySidebar, sidebar footer, Workspace Main tab header or a domain Surface
 
 #### Scenario: User toggles the Cut Panel
 
@@ -90,6 +96,16 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a Window-o
 ### Requirement: Workbench uses explicit variable scene shapes
 
 The shared Workbench SHALL reuse the Workspace visual/layout primitives while supporting scene-specific slot counts. It MUST NOT force every scene into the same manager/main split, reinterpret Interaction as Main, place a management Main Root in a narrow manager dock, or drop the Workspace style scope while claiming component reuse.
+
+#### Scenario: Top-level scene panels preserve the complete Workbench extent
+
+- **WHEN** Entry, Workspace, Assets, Extensions, project management or Settings composes a Main, Interaction or Manager panel
+- **THEN** each panel fills its assigned Workbench grid track without decorative outer margin, Dock padding or responsive inset
+- **AND** package-owned Canvas, Preview, Agent, management and Webview Roots receive the complete resulting viewport
+- **AND** each top-level panel shell uses a zero-radius boundary so no Window background is exposed at the viewport or sibling edges
+- **AND** panel borders remain inside the panel box without changing grid sizing
+- **AND** readable page width and content spacing remain package-owned internal padding
+- **AND** a management/Preview resize gutter remains only when two qualified sibling Surfaces are present
 
 #### Scenario: Default Agent draft is shown
 
@@ -425,7 +441,7 @@ Extensions and project management SHALL place their package-owned management Roo
 
 - **WHEN** Assets, Extensions or Projects composes management beside Preview/Detail
 - **THEN** management and Preview/Detail occupy two independent shared panel shells connected by the shared resize primitive
-- **AND** each sibling shell has its own DOM, border, radius, background, clipping and overflow boundary with a visible gutter between them
+- **AND** each sibling shell has its own DOM, border, zero-radius boundary, background, clipping and overflow boundary with a visible gutter between them
 - **AND** the composition does not render both contents on one continuous Main surface separated only by a line
 - **AND** neither shell renders a synthetic single-item Workbench tab strip
 - **AND** Preview/Detail content does not render a descriptor header and inherits the same theme background as its sibling management shell

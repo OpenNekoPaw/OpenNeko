@@ -607,7 +607,7 @@ The final deterministic implementation and quality gates passed:
 - Agent Draft contract `1 file / 5 tests`; Agent Runtime controller `3 files / 10 tests`.
 - Agent Webview composer/controller/presenter `3 files / 121 tests` and package type build.
 - Desktop typecheck plus AppHost, launch/bridge/controller, preload and renderer coverage `7 files /
-  78 tests`.
+78 tests`.
 - Headless Desktop functional coverage `11 files / 128 tests`.
 - Agent Evaluation key-free harness `44 files / 285 tests`; all-suite dry-run `22 suites / 52 cases`.
   These are harness and deterministic workflow evidence, not real-provider behavior acceptance.
@@ -793,3 +793,122 @@ Canvas and contains no hidden Cut UI. The black Preview in tab-return/resource-d
 document's settled zero-time frame; current midpoint captures and runtime media-time evidence show
 the decoded video frame separately. UI validation result: passed. Packaged coverage remains part of
 open task 12.8.
+
+## Full-Bleed Workbench Panels And Native Title Controls
+
+Date: 2026-08-08
+
+Window-level Main, Interaction and Manager panels now fill their complete Workbench grid tracks.
+Desktop decorative Main margins, dock padding and responsive insets were removed while panel-owned
+borders/radii, package-owned content padding and the management/Preview resize gutter remain. The
+Workspace region controls retain the macOS-aligned title overlay at `top: 4px`, `right: 8px`, with a
+`28px` height; they do not add a grid row or move the underlying panel viewport.
+
+Deterministic verification passed:
+
+- Focused Desktop renderer style/Shell suite: `2 files / 50 tests`.
+- Desktop TypeScript check; focused ESLint; functional scenario syntax check; Prettier check.
+- Strict OpenSpec validation and scoped `git diff --check`.
+
+The isolated visible development Electron Workspace scenario passed. It exercised Agent/Main/
+management hide and restore, Agent and resource resize, and every control selected state. Each state
+kept the controls inside the title chrome and outside Main tabs. Main/Interaction margins and both
+Dock paddings were `0px` on all sides; no panel crossed the `1440px` viewport. The Cut control stayed
+unselected and enabled for exact draft creation when no Cut View existed. No console error, warning
+or Renderer exception was observed:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T10-45-07.047Z-desktop-workspace-resize-development/report.json`
+
+The current full Workbench run captured and structurally accepted Entry at `1440x960` and
+`1040x700`, Assets management, Assets + Preview, Extensions, Projects and Settings before a later
+unrelated Resource Browser chrome assertion stopped the scenario. Every captured scene reported all
+four top-level inset groups as `0px`. Assets + Preview retained a `10px` gutter and independent,
+non-overlapping sibling shells. The screenshots were inspected directly: panel borders remain inside
+their full-bleed boxes, package content spacing remains readable, and no content or control overlaps
+the native title area:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T10-47-50.279Z-desktop-workbench-scenes-development/report.json`
+
+The scoped UI inventory passes. The complete adjacent scenario remains failed outside this layout
+slice because the current Workspace Resource Browser exposes one initial-library control while its
+fixture expects none; its report contains no console error, warning or Renderer exception. The full
+Desktop Vitest run also has two unrelated content-effects fixture failures because expected project
+file rows omit the newly projected `mediaType` field (`453/455` tests passed). Neither failure was
+hidden or changed as part of the panel geometry work. Packaged Electron coverage remains part of open
+task 12.8.
+
+## Square Workbench Panel Boundaries
+
+Date: 2026-08-08
+
+The full-bleed top-level Workbench shells now use square outer boundaries. Main, Interaction, Manager,
+independent Preview/Detail, docked/overlay panels and responsive overlay variants all compute
+`border-radius: 0`; their existing borders remain visible. Package-owned composer, cards, inputs,
+buttons and other internal components retain their own radii. The Assets Management/Preview split also
+retains its functional `10px` resize gutter.
+
+The Workspace title controls remain an overlay aligned to the macOS title chrome at `top: 4px`,
+`right: 8px` and `height: 28px`. Removing the outer panel radius does not add a title row, change the
+overlay geometry or move the underlying package viewport.
+
+Deterministic verification passed:
+
+- Focused Desktop renderer style/Shell suite: `2 files / 50 tests`.
+- Desktop TypeScript check; focused ESLint; functional scenario syntax check; Prettier check.
+- Strict OpenSpec validation and scoped `git diff --check`.
+
+The authoritative visible development Electron Workspace scenario passed Agent/Main/management hide
+and restore plus Agent/resource resize. Agent and Resources panels both reported `borderRadius: 0px`
+and retained `1px` borders. The overlay controls remained inside the title chrome and outside Main
+tabs, with no console error, warning or Renderer exception:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T11-22-23.973Z-desktop-workspace-resize-development/report.json`
+
+The current full Workbench run captured and structurally accepted Entry large/small, Assets
+management, Assets + Preview, Extensions, Projects and Settings. Every captured top-level shell
+reported `borderRadius: 0px` and zero outer margin/padding; Assets + Preview retained the `10px`
+gutter and non-overlapping sibling boundaries:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T11-23-14.847Z-desktop-workbench-scenes-development/report.json`
+
+The current screenshots from both scenarios were inspected directly. The outer Workbench panels meet
+the window and sibling boundaries with square edges, while internal component radii remain intact and
+the native-aligned overlay does not overlap tabs or content. The full adjacent scenario remains failed
+after those accepted checkpoints because the existing Resource Browser fixture expects no
+initial-library control but observes one (`refreshCount: 0`, `initialLibraryControlCount: 1`,
+`panelCloseCount: 0`). This unrelated behavior was not changed or hidden. Packaged Electron coverage
+remains part of open task 12.8.
+
+## Workspace Main Tab And Resource Header Alignment
+
+Date: 2026-08-08
+
+The Workspace Main View tab strip and adjacent Resource management header now consume one
+Desktop-owned `38px` panel chrome height. The Desktop scope overrides only the shared editor strip's
+height and vertical padding inside `.project-main-group__tabs`; the `@neko/ui` editor-tab default for
+other consumers remains unchanged. The existing `30px` tab stays vertically centered, and the
+macOS-aligned Workspace control overlay remains independent from panel chrome sizing.
+
+Deterministic verification passed:
+
+- Focused Desktop renderer style/Shell suite: `2 files / 52 tests`.
+- Desktop TypeScript check and functional scenario syntax check.
+
+The authoritative visible development Electron Workspace scenario passed after Agent/Main and
+Main/Resources resize plus all panel hide/restore cycles:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T11-43-31.934Z-desktop-workspace-resize-development/report.json`
+
+Its computed evidence reports `mainHeaderHeight: 38`, `mainTabsHeight: 38`,
+`resourceHeaderHeight: 38`, `topDelta: 0` and `bottomDelta: 0`, with no console errors or warnings.
+The current `01-workspace-resize-draft-mention.png`, `02-workspace-resized-shell-chrome.png` and
+restored-state screenshots were inspected directly: the Main tab strip and Resource title chrome
+share aligned top and bottom edges, the tab label and close target fit, and the Workspace title
+controls do not overlap them.
+
+Supplemental compact geometry also reported the same `38px` heights and zero deltas in
+`2026-08-08T11-45-51.112Z-desktop-workspace-resize-development`, but its screenshot did not visibly
+contain the Resource overlay and is therefore not counted as compact visual acceptance. A later
+optional retry stopped on the scenario's existing resize-drag nondeterminism, and another lost the
+Desktop CDP connection. Compact graphical acceptance remains unclaimed; neither failure changed the
+focused code gate or the successful wide-window evidence matching the reported defect.

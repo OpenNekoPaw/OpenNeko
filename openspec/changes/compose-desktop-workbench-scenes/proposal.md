@@ -21,13 +21,15 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - 只有用户发送首条消息时，Agent authority 才冻结 exact target、model/configuration、resource grants 与 message，原子提交 conversation/initial message/pending turn，物化目标 runtime 后再激活 Assistant/Workspace/Character/Room Scene。提交前不得因 target 选择跳转。
 - Scene 或权限 scope 只由入口动作、已持久化 conversation context 和 owner capability facts 决定：未选择 owner 的普通直接提交确定性使用 Assistant，目录/Project 选择使用 Workspace，角色选择使用对应角色 owner。模型文本不得发明目录/Project identity 或扩大权限；需要 workspace 能力但尚未选择目录时返回明确的选择要求。
 - 资源中心建立 Assets-owned `AssetCenterSession`，由同一 session 的 Management Root 在 Main 管理 catalog/filter/selection，并把选中资源通过授权 descriptor 投影给可选 Secondary Preview Root；Desktop 不拥有 Asset selection、资源事实或 preview 类型判断。
-- 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个视觉、DOM 与 overflow 边界独立的共享 panel shell；两个 shell 各自拥有边框、圆角、背景并由带间距的 resize composition 连接，不能只在同一连续 Main 底板上画分隔线。
+- 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个视觉、DOM 与 overflow 边界独立的共享 panel shell；两个 shell 各自拥有边框、直角边界、背景并由带间距的 resize composition 连接，不能只在同一连续 Main 底板上画分隔线。
 - 扩展/Skill、项目管理和 Settings 也通过明确 Surface slots 组合；缺失真实 owner/public Root 时显示 owner-qualified unavailable，而不是在 Desktop 复制临时业务实现。
 - Conversation 创建本地原子提交 context、conversation、initial message 和 durable pending-turn intent，并在返回 session Scene 前把同一 identity 物化到精确 Assistant/Workspace Agent runtime；外部 provider turn 以 request identity 幂等启动和恢复，不宣称与本地事务原子。
 - Entry Draft 首次提交完成一次 owner/session/endpoint 交接：lifecycle authority 已提交 initial message/pending intent、正确 scope 的 runtime conversation 可启动、session Scene 和新 projection endpoint 同时可附着；旧 launch attachment 只能经旧 endpoint 释放。崩溃重放可修复缺失的本地 session materialization，但不得重复 provider execution 或忽略 endpoint identity mismatch。
 - **BREAKING**：删除 `HomeStartCreating`、Home 独立 Agent composer、`agentInitialInput` handoff、Home/Project/Settings 顶层分支、场景级 sidebar frame，以及通过首个/最近/active Project 或模型意图决定可执行场景的路径；只保留单一 canonical owner-qualified path。
 - PrimarySidebar 将“最近会话”定义为恢复精确 interactive session，将“最近打开”定义为打开 Project/Character/Room 容器并进入新的 owner-bound draft；不得把容器选择当作旧会话恢复，也不得把内部角色 AgentSession 作为 Room 最近项暴露。
-- Workspace 顶部布局 chrome 使用 VS Code 风格的紧凑独立图标控件，分别管理一级侧栏、Agent、Main 与管理面板显隐；Main tab header 和领域 Surface 不再重复渲染布局按钮。
+- Workspace 专属的 Agent、Main、管理面板与 Cut Panel 开关使用 VS Code 风格的紧凑独立图标，并浮置在现有 Workbench 顶部 chrome 右侧而不创建额外 header 行；一级侧栏开关留在自身品牌区，Main tab header 和领域 Surface 不再重复渲染布局按钮，资源管理标题不再提供重复的关闭按钮。Main 上半区域继续承载 Canvas、文件 Preview 或 Editor；每个 OTIO 文档作为 Main 下方 Cut Panel 内的精确 tab，active Cut Root 内组合 Preview 与 Timeline。Cut Panel 开关只修改该 panel 的 presentation，不替换 Main、不创建 standalone Timeline Surface。
+- Window 级 Agent/Main/Manager panel 必须完整占用 Workbench 分配的 grid track，不使用装饰性外层 margin、padding 或顶层圆角缩减或露出 Canvas、Preview、Agent、管理 Root 或 Webview viewport。Workspace 顶部控件保持与 macOS 原生 title chrome 对齐并覆盖 full-bleed 直角 panel；页面内容留白继续由 owning package 内部 padding 拥有，Management/Preview 的 resize gutter 只作为真实兄弟 Surface 的功能性分隔。
+- Workspace Main tab strip 与相邻资源管理标题栏使用同一个 `38px` panel chrome 高度；Desktop 只覆盖当前 Workbench composition 的共享 Tab 默认间距，不改变 `@neko/ui` 在其他消费者中的默认尺寸。
 - Renderer effect 只拥有自身 subscription；后台 task/runtime 由 package application owner 管理，不依赖
   React Root 是否挂载。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实
   Electron exception/DOM 证据验收。

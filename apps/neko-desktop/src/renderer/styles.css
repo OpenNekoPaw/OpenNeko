@@ -362,6 +362,16 @@ code {
   -webkit-app-region: drag;
 }
 
+.project-workspace > .neko-controlled-workbench-title {
+  position: absolute;
+  z-index: 30;
+  top: 4px;
+  right: 8px;
+  grid-area: auto;
+  height: 28px;
+  pointer-events: none;
+}
+
 .home-navigation button,
 .home-navigation .attention-summary {
   -webkit-app-region: no-drag;
@@ -407,33 +417,54 @@ code {
 
 .workspace-region-controls {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
-.primary-sidebar-brand__controls .workbench-region-toggle {
-  width: 22px;
-  height: 22px;
+.primary-sidebar-brand__controls .workbench-region-toggle,
+.neko-controlled-workbench-title .workbench-region-toggle {
   border: 0;
   border-radius: 4px;
   color: var(--neko-desktop-text-muted);
   background: transparent;
 }
 
-.primary-sidebar-brand__controls .workbench-region-toggle .codicon {
+.primary-sidebar-brand__controls .workbench-region-toggle {
+  width: 22px;
+  height: 22px;
+}
+
+.neko-controlled-workbench-title .workbench-region-toggle {
+  width: 28px;
+  height: 28px;
+}
+
+.primary-sidebar-brand__controls .workbench-region-toggle .codicon,
+.neko-controlled-workbench-title .workbench-region-toggle .codicon {
   font-size: 16px;
 }
 
-.primary-sidebar-brand__controls .workbench-region-toggle:hover:not(:disabled) {
+.primary-sidebar-brand__controls .workbench-region-toggle:hover:not(:disabled),
+.neko-controlled-workbench-title .workbench-region-toggle:hover:not(:disabled) {
   color: var(--neko-desktop-text-strong);
   background: var(--neko-desktop-control-hover);
 }
 
-.primary-sidebar-brand__controls .workbench-region-toggle[aria-pressed='true'] {
+.primary-sidebar-brand__controls .workbench-region-toggle[aria-pressed='true'],
+.neko-controlled-workbench-title .workbench-region-toggle[aria-pressed='true'] {
   color: var(--neko-desktop-text-strong);
 }
 
-.primary-sidebar-brand__controls .workbench-region-toggle:active:not(:disabled) {
+.neko-controlled-workbench-title .workbench-region-toggle[aria-pressed='true'] {
+  color: var(--neko-list-activeSelectionForeground, var(--neko-desktop-text-strong));
+  background: var(--neko-list-activeSelectionBackground, var(--neko-accent-soft));
+}
+
+.primary-sidebar-brand__controls .workbench-region-toggle:active:not(:disabled),
+.neko-controlled-workbench-title .workbench-region-toggle:active:not(:disabled) {
   background: var(--neko-desktop-control-pressed);
 }
 
@@ -1738,6 +1769,7 @@ code {
 .project-workspace.neko-controlled-workbench-shell {
   --neko-workbench-background: var(--neko-desktop-window);
   --neko-workbench-chrome: var(--neko-desktop-chrome);
+  --neko-desktop-workbench-panel-header-height: 38px;
   height: 100dvh;
   background: linear-gradient(
     180deg,
@@ -1747,16 +1779,12 @@ code {
 }
 
 .project-workspace .neko-controlled-workbench-main {
-  margin: 8px 8px 8px 0;
+  margin: 0;
   border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-frame);
+  border-radius: 0;
   background: var(--neko-desktop-main);
   box-shadow: none;
   isolation: isolate;
-}
-
-.project-workspace[data-left-presentation='docked'] .neko-controlled-workbench-main {
-  margin-left: 8px;
 }
 
 .project-workspace .neko-controlled-workbench-primary {
@@ -1786,7 +1814,7 @@ code {
   > .neko-controlled-workbench-main__secondary {
   overflow: hidden;
   border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-frame);
+  border-radius: 0;
   background: var(--neko-desktop-main);
   box-shadow: none;
 }
@@ -1815,11 +1843,11 @@ code {
 }
 
 .project-workspace .neko-controlled-workbench-dock--left {
-  padding: 8px 0;
+  padding: 0;
 }
 
 .project-workspace > .neko-controlled-workbench-interaction[data-presentation='docked'] {
-  margin-block: 8px;
+  margin: 0;
 }
 
 .desktop-scene-workbench--agent-only.neko-controlled-workbench-shell {
@@ -1831,7 +1859,7 @@ code {
 }
 
 .desktop-scene-workbench--agent-only > .neko-controlled-workbench-interaction {
-  margin: 8px 8px 8px 0;
+  margin: 0;
 }
 
 .desktop-workbench-slot-target {
@@ -1843,24 +1871,24 @@ code {
 }
 
 .project-workspace .neko-controlled-workbench-dock--right {
-  padding: 8px 8px 8px 0;
+  padding: 0;
 }
 
 .project-workspace .neko-controlled-workbench-dock[data-presentation='overlay'] {
-  top: 8px;
-  bottom: 8px;
+  top: 0;
+  bottom: 0;
   padding: 0;
-  border-radius: var(--neko-desktop-radius-frame);
+  border-radius: 0;
   background: var(--neko-desktop-surface);
   box-shadow: var(--neko-desktop-shadow-overlay);
 }
 
 .project-workspace .neko-controlled-workbench-dock--left[data-presentation='overlay'] {
-  left: calc(var(--neko-controlled-primary-width) + 8px);
+  left: var(--neko-controlled-primary-width);
 }
 
 .project-workspace .neko-controlled-workbench-dock--right[data-presentation='overlay'] {
-  right: 8px;
+  right: 0;
 }
 
 .project-workspace .neko-controlled-workbench-resize-handle::after {
@@ -1970,15 +1998,19 @@ code {
 .project-main-group__tabs {
   display: flex;
   min-width: 0;
-  min-height: 38px;
+  height: var(--neko-desktop-workbench-panel-header-height);
+  min-height: var(--neko-desktop-workbench-panel-header-height);
   flex: 0 0 auto;
   align-items: stretch;
   background: var(--neko-desktop-chrome);
 }
 
 .project-main-group__tabs .neko-workbench-editor-tabs {
+  height: var(--neko-desktop-workbench-panel-header-height);
+  min-height: var(--neko-desktop-workbench-panel-header-height);
   flex: 1 1 auto;
   overflow-x: auto;
+  padding-block: 4px;
 }
 
 .project-main-group__content {
@@ -2146,7 +2178,7 @@ code {
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-frame);
+  border-radius: 0;
   background: var(--neko-desktop-surface);
   box-shadow: none;
 }
@@ -2157,7 +2189,7 @@ code {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: 38px minmax(0, 1fr);
+  grid-template-rows: var(--neko-desktop-workbench-panel-header-height) minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -2534,7 +2566,7 @@ code {
   color: var(--neko-desktop-danger-foreground);
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 980px) {
   .project-workspace.neko-editor-workbench-shell {
     grid-template-columns: 44px 190px minmax(340px, 1fr) 220px;
   }
@@ -2544,7 +2576,7 @@ code {
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1120px) {
   .project-workspace.neko-controlled-workbench-shell {
     grid-template-columns:
       var(--neko-controlled-primary-width)
@@ -2560,26 +2592,26 @@ code {
   .project-workspace .neko-controlled-workbench-dock[data-presentation='docked'] {
     position: absolute;
     z-index: 5;
-    top: 8px;
-    bottom: 8px;
+    top: 0;
+    bottom: 0;
     width: min(360px, calc(100% - 56px));
     padding: 0;
-    border-radius: var(--neko-desktop-radius-frame);
+    border-radius: 0;
     background: var(--neko-desktop-surface);
     box-shadow: var(--neko-desktop-shadow-overlay);
   }
 
   .project-workspace .neko-controlled-workbench-dock--left[data-presentation='docked'] {
-    left: calc(var(--neko-controlled-primary-width) + 8px);
+    left: var(--neko-controlled-primary-width);
   }
 
   .project-workspace.neko-controlled-workbench-shell[data-primary-visible='false']
     .neko-controlled-workbench-dock--left[data-presentation='docked'] {
-    left: 8px;
+    left: 0;
   }
 
   .project-workspace .neko-controlled-workbench-dock--right[data-presentation='docked'] {
-    right: 8px;
+    right: 0;
   }
 }
 
@@ -2628,17 +2660,17 @@ code {
     bottom: 0;
     left: 0;
     width: min(var(--neko-controlled-primary-width), calc(100% - 56px));
-    border-radius: 0 var(--neko-desktop-radius-frame) var(--neko-desktop-radius-frame) 0;
+    border-radius: 0;
     box-shadow: var(--neko-desktop-shadow-overlay);
   }
 
   .project-workspace .neko-controlled-workbench-main {
-    margin: 4px;
-    border-radius: var(--neko-desktop-radius-panel);
+    margin: 0;
+    border-radius: 0;
   }
 
   .desktop-scene-workbench--agent-only > .neko-controlled-workbench-interaction {
-    margin: 4px;
+    margin: 0;
   }
 
   .project-workbench-heading span {

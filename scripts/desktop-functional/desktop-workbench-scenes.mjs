@@ -260,6 +260,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await waitForSelector('[data-settings-surface="main"]');
       const settings = await inspectWorkbench(evaluate, 'management', 'settings');
       assertSingleWorkbench(settings);
+      assertFullBleedWorkbench(settings);
       if (!settings.hasLeftDock || !settings.ownerInMain) {
         throw new Error('Settings did not compose navigation plus Main in the unified Workbench.');
       }
@@ -801,8 +802,15 @@ export const desktopWorkspaceResizeScenario = Object.freeze({
     );
     const shellChrome = await inspectWorkspaceShellChrome(evaluate);
     assertWorkspaceShellChrome(shellChrome);
+    const panelHeaderAlignment = await inspectWorkspacePanelHeaderAlignment(evaluate);
+    assertWorkspacePanelHeaderAlignment(panelHeaderAlignment);
     const workspaceScreenshot = await screenshot('workspace-resized-shell-chrome');
-    const evidence = { workspaceActivation, workspaceDockResize, shellChrome };
+    const evidence = {
+      workspaceActivation,
+      workspaceDockResize,
+      shellChrome,
+      panelHeaderAlignment,
+    };
     checkpoint('workspace-resized-shell-chrome', evidence);
     return { ...evidence, screenshots: [workspaceScreenshot] };
   },
@@ -3350,6 +3358,24 @@ async function exerciseWorkspaceDockResize(evaluate, drag, expectedWorkspaceId) 
       const projection = await window.openNekoDesktop.shell.getSnapshot();
       const activeWorkbench = projection.window.workbench;
       const context = activeWorkbench.scene.context;
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      const primary = document.querySelector('.neko-controlled-workbench-primary');
+      const interaction = document.querySelector(
+        '.neko-controlled-workbench-interaction[data-presentation="docked"]',
+      );
+      const main = document.querySelector('.neko-controlled-workbench-main');
+      const resources = document.querySelector(
+        '.neko-controlled-workbench-dock--right[data-presentation="docked"]',
+      );
+      const bounds = Object.fromEntries(
+        Object.entries({ shell, primary, interaction, main, resources }).map(([name, element]) => {
+          if (!(element instanceof HTMLElement)) {
+            throw new Error('Workspace resize inspection requires the ' + name + ' region.');
+          }
+          const rect = element.getBoundingClientRect();
+          return [name, { left: rect.left, right: rect.right, width: rect.width }];
+        }),
+      );
       return {
         workbenchInstanceId: activeWorkbench.workbenchInstanceId,
         workspaceId:
@@ -3358,6 +3384,8 @@ async function exerciseWorkspaceDockResize(evaluate, drag, expectedWorkspaceId) 
             : null,
         chatWidth: activeWorkbench.layout.display.chatWidth,
         resourceWidth: activeWorkbench.layout.resourceDock.width,
+        viewportWidth: window.innerWidth,
+        bounds,
         alerts: [...document.querySelectorAll('[role="alert"]')]
           .map((element) => element.textContent?.trim() ?? '')
           .filter(Boolean),
@@ -3402,6 +3430,9 @@ async function exerciseWorkspaceDockResize(evaluate, drag, expectedWorkspaceId) 
     if (
       detail.workbenchInstanceId !== initial.workbenchInstanceId ||
       detail.workspaceId !== expectedWorkspaceId ||
+      Object.values(detail.bounds).some(
+        (bounds) => bounds.left < -0.5 || bounds.right > detail.viewportWidth + 0.5,
+      ) ||
       detail.alerts.length > 0
     ) {
       throw new Error(
@@ -3442,11 +3473,45 @@ function assertWorkspaceShellChrome(detail) {
     detail.some(
       (panel) =>
         panel.borderWidths.some((width) => width !== '1px') ||
-        panel.borderRadius === '0px' ||
+        panel.borderRadius !== '0px' ||
         panel.overflow !== 'hidden',
     )
   ) {
     throw new Error(`Workspace resize changed Shell chrome: ${JSON.stringify(detail)}`);
+  }
+}
+
+async function inspectWorkspacePanelHeaderAlignment(evaluate) {
+  return evaluate(`(() => {
+    const mainHeader = document.querySelector('.project-main-group__tabs');
+    const mainTabs = mainHeader?.querySelector('.neko-workbench-editor-tabs');
+    const resourceHeader = document.querySelector('.project-resource-dock__header');
+    if (!(mainHeader instanceof HTMLElement) || !(mainTabs instanceof HTMLElement) ||
+        !(resourceHeader instanceof HTMLElement)) {
+      throw new Error('Workspace panel header alignment requires Main tabs and Resources header.');
+    }
+    const mainHeaderRect = mainHeader.getBoundingClientRect();
+    const mainTabsRect = mainTabs.getBoundingClientRect();
+    const resourceHeaderRect = resourceHeader.getBoundingClientRect();
+    return {
+      mainHeaderHeight: mainHeaderRect.height,
+      mainTabsHeight: mainTabsRect.height,
+      resourceHeaderHeight: resourceHeaderRect.height,
+      topDelta: Math.abs(mainHeaderRect.top - resourceHeaderRect.top),
+      bottomDelta: Math.abs(mainHeaderRect.bottom - resourceHeaderRect.bottom),
+    };
+  })()`);
+}
+
+function assertWorkspacePanelHeaderAlignment(detail) {
+  if (
+    Math.abs(detail.mainHeaderHeight - 38) > 0.5 ||
+    Math.abs(detail.mainTabsHeight - 38) > 0.5 ||
+    Math.abs(detail.resourceHeaderHeight - 38) > 0.5 ||
+    detail.topDelta > 0.5 ||
+    detail.bottomDelta > 0.5
+  ) {
+    throw new Error(`Workspace panel headers are not aligned: ${JSON.stringify(detail)}`);
   }
 }
 
@@ -3820,6 +3885,11 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       ? mainGutter.getBoundingClientRect()
       : undefined;
     const mainStyle = main instanceof HTMLElement ? getComputedStyle(main) : undefined;
+    const leftDockStyle = leftDock instanceof HTMLElement ? getComputedStyle(leftDock) : undefined;
+    const rightDockStyle = rightDock instanceof HTMLElement ? getComputedStyle(rightDock) : undefined;
+    const interactionStyle = interaction instanceof HTMLElement
+      ? getComputedStyle(interaction)
+      : undefined;
     const interactionRect = interaction instanceof HTMLElement
       ? interaction.getBoundingClientRect()
       : undefined;
@@ -3830,6 +3900,9 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       ? getComputedStyle(mainSecondary)
       : undefined;
     const controlledShell = shell;
+    const shellRect = controlledShell.getBoundingClientRect();
+    const titleBar = shell.querySelector(':scope > .neko-controlled-workbench-title');
+    const titleBarRect = titleBar instanceof HTMLElement ? titleBar.getBoundingClientRect() : undefined;
     const previewPresentation = activeSecondaryMainTarget?.querySelector(
       '[data-preview-presentation-owner="preview-webview"]',
     );
@@ -3839,6 +3912,10 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
     return {
       shellCount: document.querySelectorAll('[data-neko-controlled-workbench="true"]').length,
       primaryCount: document.querySelectorAll('[data-primary-sidebar="application"]').length,
+      hasWorkbenchTitleBar: titleBar instanceof HTMLElement,
+      workbenchTitleBarHeight: titleBarRect?.height ?? 0,
+      workbenchTitleBarTopInset: titleBarRect ? titleBarRect.top - shellRect.top : 0,
+      workbenchTitleBarRightInset: titleBarRect ? shellRect.right - titleBarRect.right : 0,
       recentNavigationVisible: Boolean(primary?.querySelector('.home-recent-navigation')),
       recentSectionCount: primary?.querySelectorAll('.home-sidebar-heading').length ?? 0,
       conversationGroupCount: primary?.querySelectorAll('.primary-conversation-group').length ?? 0,
@@ -3905,14 +3982,24 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
           'data-workbench-main-panel',
         ))
         .filter(Boolean),
-      layoutControlInTopBrand: Boolean(
+      sidebarControlInBrand: Boolean(
         primary?.querySelector(
           '.primary-sidebar-brand__controls [data-workbench-region-control="primary-sidebar"]',
         ),
       ),
-      layoutControlKinds: [
+      sidebarControlKinds: [
         ...primary?.querySelectorAll(
           '.primary-sidebar-brand__controls [data-workbench-region-control]',
+        ) ?? [],
+      ].map((element) => element.getAttribute('data-workbench-region-control')),
+      workspaceControlsInTitleBar: Boolean(
+        controlledShell?.querySelector(
+          '.neko-controlled-workbench-title .workspace-region-controls',
+        ),
+      ),
+      workspaceLayoutControlKinds: [
+        ...controlledShell?.querySelectorAll(
+          '.neko-controlled-workbench-title .workspace-region-controls [data-workbench-region-control]',
         ) ?? [],
       ].map((element) => element.getAttribute('data-workbench-region-control')),
       layoutControlInFooter: Boolean(
@@ -3967,6 +4054,40 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       mainVisibility: mainStyle?.visibility,
       mainWidth: mainRect?.width ?? 0,
       ownerWidth: ownerRect?.width ?? 0,
+      topLevelInsets: {
+        mainMargin: mainStyle
+          ? [
+              mainStyle.marginTop,
+              mainStyle.marginRight,
+              mainStyle.marginBottom,
+              mainStyle.marginLeft,
+            ]
+          : [],
+        interactionMargin: interactionStyle
+          ? [
+              interactionStyle.marginTop,
+              interactionStyle.marginRight,
+              interactionStyle.marginBottom,
+              interactionStyle.marginLeft,
+            ]
+          : [],
+        leftDockPadding: leftDockStyle
+          ? [
+              leftDockStyle.paddingTop,
+              leftDockStyle.paddingRight,
+              leftDockStyle.paddingBottom,
+              leftDockStyle.paddingLeft,
+            ]
+          : [],
+        rightDockPadding: rightDockStyle
+          ? [
+              rightDockStyle.paddingTop,
+              rightDockStyle.paddingRight,
+              rightDockStyle.paddingBottom,
+              rightDockStyle.paddingLeft,
+            ]
+          : [],
+      },
       ownerInMain: owner instanceof HTMLElement && mainPrimary instanceof HTMLElement
         ? mainPrimary.contains(owner)
         : false,
@@ -4084,8 +4205,8 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.enclosingMainShadow !== 'none' ||
     detail.primaryMainBorderWidth <= 0 ||
     detail.secondaryMainBorderWidth <= 0 ||
-    detail.primaryMainBorderRadius === '0px' ||
-    detail.secondaryMainBorderRadius === '0px' ||
+    detail.primaryMainBorderRadius !== '0px' ||
+    detail.secondaryMainBorderRadius !== '0px' ||
     detail.primaryMainOverflow !== 'hidden' ||
     detail.secondaryMainOverflow !== 'hidden' ||
     detail.primaryMainShadow === 'none' ||
@@ -4126,15 +4247,20 @@ function assertResponsiveManagementDetailSplit(detail, managementPanelId, detail
 }
 
 function assertWorkspaceTopControls(detail) {
+  assertFullBleedWorkbench(detail);
   if (
-    !detail.layoutControlInTopBrand ||
+    !detail.hasWorkbenchTitleBar ||
+    Math.abs(detail.workbenchTitleBarHeight - 28) > 1 ||
+    Math.abs(detail.workbenchTitleBarTopInset - 4) > 1 ||
+    Math.abs(detail.workbenchTitleBarRightInset - 8) > 1 ||
+    !detail.sidebarControlInBrand ||
+    !detail.workspaceControlsInTitleBar ||
     detail.layoutControlInFooter ||
-    JSON.stringify(detail.layoutControlKinds) !==
-      JSON.stringify(['primary-sidebar', 'agent', 'main', 'management'])
+    JSON.stringify(detail.sidebarControlKinds) !== JSON.stringify(['primary-sidebar']) ||
+    JSON.stringify(detail.workspaceLayoutControlKinds) !==
+      JSON.stringify(['agent', 'main', 'cut-panel', 'management'])
   ) {
-    throw new Error(
-      'Workspace layout control is not beside the PrimarySidebar visibility control.',
-    );
+    throw new Error('Workspace layout controls are not in the shared Workbench title chrome.');
   }
 }
 
@@ -4151,7 +4277,9 @@ function assertSingleWorkbench(detail) {
 
 function assertAgentOnly(detail) {
   assertSingleWorkbench(detail);
+  assertFullBleedWorkbench(detail);
   if (
+    detail.workspaceControlsInTitleBar ||
     !detail.hasAgentDock ||
     detail.interactionPresentation !== 'main' ||
     detail.leftDockPresentation !== 'hidden' ||
@@ -4181,9 +4309,27 @@ function assertAssistantConversationNavigation(detail) {
 
 function assertManagementMain(detail, owner) {
   assertSingleWorkbench(detail);
-  if (detail.leftDockPresentation !== 'hidden' || !detail.ownerInMain || detail.ownerWidth < 420) {
+  assertFullBleedWorkbench(detail);
+  if (
+    detail.workspaceControlsInTitleBar ||
+    detail.leftDockPresentation !== 'hidden' ||
+    !detail.ownerInMain ||
+    detail.ownerWidth < 420
+  ) {
     throw new Error(
       `${owner} was not mounted as the full Workbench Main surface: ${JSON.stringify(detail)}`,
+    );
+  }
+}
+
+function assertFullBleedWorkbench(detail) {
+  const insetGroups = Object.entries(detail.topLevelInsets ?? {});
+  if (
+    insetGroups.length !== 4 ||
+    insetGroups.some(([, values]) => values.some((value) => value !== '0px'))
+  ) {
+    throw new Error(
+      `Desktop Workbench panels did not preserve full-bleed computed geometry: ${JSON.stringify(detail.topLevelInsets)}`,
     );
   }
 }
