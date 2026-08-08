@@ -221,6 +221,10 @@ describe('Canvas material contracts', () => {
       origins: ['referenced', 'generated'],
       selection: { minimum: 1, maximum: 1 },
       effect: 'read',
+      executionPayload: {
+        target: { kind: 'existing', viewId: 'cut-view-1' },
+        choices: ['video', 1, true, null],
+      },
     };
     const intent: CanvasMaterialActionIntent = {
       identity,
@@ -230,6 +234,18 @@ describe('Canvas material contracts', () => {
     };
 
     expect(isCanvasMaterialActionDescriptor(descriptor)).toBe(true);
+    expect(
+      isCanvasMaterialActionDescriptor({
+        ...descriptor,
+        executionPayload: { expected: Number.POSITIVE_INFINITY },
+      }),
+    ).toBe(false);
+    expect(
+      isCanvasMaterialActionDescriptor({
+        ...descriptor,
+        executionPayload: { target: new Date() },
+      }),
+    ).toBe(false);
     expect(isCanvasMaterialActionIntent(intent)).toBe(true);
     expect(isCanvasMaterialActionIntent({ ...intent, selectedNodeIds: [] })).toBe(false);
   });

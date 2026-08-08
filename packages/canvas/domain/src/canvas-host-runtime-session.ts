@@ -342,6 +342,13 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
           `Canvas material action "${intent.action.actionId}" is unavailable for the current selection.`,
         );
       }
+      if (!areJsonValuesEqual(intent.action.payload, descriptor.executionPayload ?? {})) {
+        return rejected(
+          request,
+          'canvas-runtime-stale-identity',
+          'Canvas material action target changed before execution.',
+        );
+      }
       const executeMaterialAction = this.options.effects.executeMaterialAction;
       if (!executeMaterialAction) return unsupported(request, intent.type);
       const result = await executeMaterialAction({
@@ -477,6 +484,31 @@ export class CanvasHostRuntimeSession implements CanvasHostRuntime {
     );
     return result;
   }
+}
+
+function areJsonValuesEqual(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => areJsonValuesEqual(value, right[index]))
+    );
+  }
+  if (!isComparableRecord(left) || !isComparableRecord(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key, index) => key === rightKeys[index] && areJsonValuesEqual(left[key], right[key]),
+    )
+  );
+}
+
+function isComparableRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function rejected(

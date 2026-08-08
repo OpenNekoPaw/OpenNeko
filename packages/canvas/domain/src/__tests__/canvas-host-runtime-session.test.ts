@@ -467,6 +467,55 @@ describe('CanvasHostRuntimeSession', () => {
     expect(resolveMaterialActions).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects a target-sensitive action when its resolved execution payload changed', async () => {
+    const node = referencedImageNode();
+    const executeMaterialAction = vi.fn(async () => ({}));
+    const resolveMaterialActions = vi.fn(async () => [
+      {
+        id: 'cut:add-resource',
+        ownerId: 'cut',
+        label: 'Add to Cut',
+        mediaKinds: ['image'] as const,
+        origins: ['referenced'] as const,
+        selection: { minimum: 1, maximum: 1 },
+        effect: 'handoff' as const,
+        executionPayload: {
+          target: { kind: 'existing', viewId: 'cut-view-current' },
+        },
+      },
+    ]);
+    const runtime = new CanvasHostRuntimeSession({
+      identity,
+      initialCanvas: { ...createEmptyCanvasData('Initial'), nodes: [node] },
+      effects: { resolveMaterialActions, executeMaterialAction },
+    });
+
+    const result = await runtime.executeIntent(
+      request('stale-cut-target', {
+        type: 'execute-material-action',
+        action: {
+          identity: {
+            projectId: identity.projectId,
+            canvasId: identity.documentId,
+            canvasSessionId: identity.sessionId,
+          },
+          actionId: 'cut:add-resource',
+          selectedNodeIds: [node.id],
+          payload: { target: { kind: 'existing', viewId: 'cut-view-previous' } },
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      status: 'rejected',
+      diagnostic: {
+        code: 'canvas-runtime-stale-identity',
+        message: 'Canvas material action target changed before execution.',
+      },
+    });
+    expect(executeMaterialAction).not.toHaveBeenCalled();
+  });
+
   it('isolates presentation state and releases listeners on dispose', async () => {
     const runtime = new CanvasHostRuntimeSession({
       identity,

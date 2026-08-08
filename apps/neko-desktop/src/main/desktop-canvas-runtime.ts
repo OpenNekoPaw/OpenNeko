@@ -130,6 +130,15 @@ export class DesktopCanvasRuntime {
         readonly target: CanvasMaterialActionTarget;
         readonly absolutePath: string;
       }) => Promise<void>;
+      readonly resolveAddToCut?: (input: {
+        readonly identity: CanvasHostRuntimeIdentity;
+        readonly target: CanvasMaterialActionTarget;
+      }) => Promise<Readonly<Record<string, unknown>> | undefined>;
+      readonly addToCut?: (input: {
+        readonly identity: CanvasHostRuntimeIdentity;
+        readonly target: CanvasMaterialActionTarget;
+        readonly executionPayload: Readonly<Record<string, unknown>>;
+      }) => Promise<void>;
       readonly requestProjectMediaLibraryCopy?: (input: {
         readonly identity: CanvasHostRuntimeIdentity;
         readonly workspace: DesktopCanvasViewGrant['workspace'];
@@ -146,6 +155,7 @@ export class DesktopCanvasRuntime {
         readonly preview: string;
         readonly reveal: string;
         readonly openInCut?: string;
+        readonly addToCut?: string;
         readonly copyToProjectMediaLibrary?: string;
         readonly copyToGlobalMediaLibrary?: string;
         readonly regenerate?: string;
@@ -297,6 +307,8 @@ export class DesktopCanvasRuntime {
     const previewResource = this.options.previewResource;
     const resolveCut = this.options.resolveCut;
     const openInCut = this.options.openInCut;
+    const resolveAddToCut = this.options.resolveAddToCut;
+    const addToCut = this.options.addToCut;
     const requestProjectMediaLibraryCopy = this.options.requestProjectMediaLibraryCopy;
     const requestGlobalMediaLibraryCopy = this.options.requestGlobalMediaLibraryCopy;
     const generation = this.options.generation;
@@ -364,6 +376,26 @@ export class DesktopCanvasRuntime {
                 target,
                 absolutePath: await resolveWorkspaceContentLocator(grant.workspace, target.locator),
               }),
+          }
+        : {}),
+      ...(resolveAddToCut && addToCut
+        ? {
+            resolveAddToCut: ({
+              identity: requestIdentity,
+              target,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+            }) => resolveAddToCut({ identity: requestIdentity, target }),
+            addToCut: ({
+              identity: requestIdentity,
+              target,
+              executionPayload,
+            }: {
+              readonly identity: CanvasHostRuntimeIdentity;
+              readonly target: CanvasMaterialActionTarget;
+              readonly executionPayload: Readonly<Record<string, unknown>>;
+            }) => addToCut({ identity: requestIdentity, target, executionPayload }),
           }
         : {}),
       ...(requestProjectMediaLibraryCopy || requestGlobalMediaLibraryCopy

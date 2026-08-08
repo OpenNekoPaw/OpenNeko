@@ -22,7 +22,9 @@ import {
 import {
   createDefaultDesktopWorkbenchLayout,
   getActiveMainView,
+  openOrFocusCutView,
   openOrFocusMainView,
+  setCutPanelPresentation,
   setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
@@ -39,6 +41,322 @@ afterEach(async () => {
 });
 
 describe('DesktopCutRuntime', () => {
+  it('coalesces concurrent draft creation, appends later drafts and rebinds on first save', async () => {
+    const harness = await createDraftRuntimeHarness({ saveDestination: 'cuts/saved.otio' });
+
+    await Promise.all([
+      harness.runtime.createDraft(harness.request),
+      harness.runtime.createDraft(harness.request),
+    ]);
+    expect(harness.workbench().cutPanel?.views).toHaveLength(1);
+
+    await harness.runtime.createDraft(harness.request);
+
+    const [view, secondView] = harness.workbench().cutPanel?.views ?? [];
+    if (!view?.documentId || !secondView?.documentId) {
+      throw new Error('Cut draft View fixtures are missing.');
+    }
+    expect(view.documentId).toMatch(/^cut-draft:/u);
+    expect(view.displayLabel).toBe('Untitled Cut');
+    expect(secondView.documentId).toMatch(/^cut-draft:/u);
+    expect(secondView.documentId).not.toBe(view.documentId);
+    expect(secondView.displayLabel).toBe('Untitled Cut 2');
+    expect(harness.workbench().cutPanel).toMatchObject({
+      activeViewId: secondView.viewId,
+      presentation: 'docked',
+    });
+    expect(harness.workbench().cutPanel?.views).toHaveLength(2);
+    await expect(readFile(path.join(harness.workspacePath, 'Untitled Cut.otio'))).rejects.toThrow();
+    await expect(
+      readFile(path.join(harness.workspacePath, 'Untitled Cut 2.otio')),
+    ).rejects.toThrow();
+    await expect(
+      harness.runtime.getSnapshot(
+        harness.request.windowId,
+        createViewIdentity(secondView, harness.request.rendererSessionId),
+      ),
+    ).resolves.toMatchObject({
+      document: {
+        name: 'Untitled Cut 2',
+        tracks: [expect.objectContaining({ kind: 'Video', items: [] })],
+      },
+    });
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+    await expect(
+      harness.runtime.getSnapshot(harness.request.windowId, identity),
+    ).resolves.toMatchObject({
+      dirty: true,
+      document: {
+        name: 'Untitled Cut',
+        tracks: [expect.objectContaining({ kind: 'Video', items: [] })],
+      },
+    });
+
+    const saved = await harness.runtime.execute(harness.request.windowId, {
+      requestId: 'save-draft-request',
+      commandId: 'save-draft-command',
+      route: CUT_HOST_RUNTIME_ROUTES.save,
+      identity,
+    });
+
+    expect(saved.snapshot).toMatchObject({
+      dirty: false,
+      identity: { documentId: 'cuts/saved.otio', sessionId: identity.sessionId },
+    });
+    expect(harness.workbench().cutPanel?.views[0]).toMatchObject({
+      documentId: 'cuts/saved.otio',
+      displayLabel: 'saved.otio',
+      viewId: view.viewId,
+    });
+    expect(
+      parseOtio(await readFile(path.join(harness.workspacePath, 'cuts/saved.otio'))),
+    ).toMatchObject({ ok: true });
+    await harness.runtime.dispose();
+  });
+
+  it('projects only the exact visible Cut target and treats hidden Cut history as a new draft', async () => {
+    const harness = await createDraftRuntimeHarness({});
+    const sourceIdentity = harness.canvasSourceIdentity();
+
+    await expect(harness.runtime.resolveCanvasHandoffTarget(sourceIdentity)).resolves.toEqual({
+      kind: 'new-cut-draft',
+      workbenchInstanceId: harness.request.workbenchInstanceId,
+    });
+    await harness.runtime.createDraft(harness.request);
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view) throw new Error('Cut target fixture is missing.');
+    await expect(harness.runtime.resolveCanvasHandoffTarget(sourceIdentity)).resolves.toEqual({
+      kind: 'existing-cut',
+      workbenchInstanceId: harness.request.workbenchInstanceId,
+      viewId: view.viewId,
+      viewInstanceId: view.viewInstanceId,
+      documentId: view.documentId,
+      sessionId: `cut-session:${view.viewId}:${view.viewInstanceId}`,
+    });
+
+    harness.setWorkbench(setCutPanelPresentation(harness.workbench(), 'hidden'));
+    await expect(harness.runtime.resolveCanvasHandoffTarget(sourceIdentity)).resolves.toEqual({
+      kind: 'new-cut-draft',
+      workbenchInstanceId: harness.request.workbenchInstanceId,
+    });
+    expect(harness.workbench().cutPanel?.views).toHaveLength(1);
+    await harness.runtime.dispose();
+  });
+
+  it('creates one exact draft for Canvas media, preserves the source and deduplicates its Cut command', async () => {
+    const probe = vi.fn(async () => ({
+      durationSeconds: 3,
+      width: 1920,
+      height: 1080,
+      framesPerSecond: 30,
+      hasVideo: true,
+      hasAudio: true,
+      audioStreams: [],
+    }));
+    const dispose = vi.fn(async () => undefined);
+    const harness = await createDraftRuntimeHarness({
+      createAuthoringMediaAdapter: () => ({ probe, dispose }),
+    });
+    await mkdir(path.join(harness.workspacePath, 'media'));
+    const sourcePath = path.join(harness.workspacePath, 'media', 'clip.mp4');
+    await writeFile(sourcePath, 'source-fixture');
+    const identity = harness.canvasSourceIdentity();
+    const target = await harness.runtime.resolveCanvasHandoffTarget(identity);
+
+    const changed = await harness.runtime.addCanvasMaterial({
+      identity,
+      nodeId: 'video-node-1',
+      label: 'clip.mp4',
+      locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      target,
+    });
+    const existingTarget = await harness.runtime.resolveCanvasHandoffTarget(identity);
+    const replayed = await harness.runtime.addCanvasMaterial({
+      identity,
+      nodeId: 'video-node-1',
+      label: 'clip.mp4',
+      locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      target: existingTarget,
+    });
+
+    expect(changed.document).toMatchObject({
+      tracks: [
+        expect.objectContaining({
+          kind: 'Video',
+          items: [expect.objectContaining({ name: 'clip.mp4', durationSeconds: 3 })],
+        }),
+      ],
+    });
+    expect(replayed).toEqual(changed);
+    expect(probe).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(await readFile(sourcePath, 'utf8')).toBe('source-fixture');
+    expect(harness.workbench().cutPanel?.views).toHaveLength(1);
+    await harness.runtime.dispose();
+  });
+
+  it('rejects a stale Canvas Cut target before probing or mutating either Cut', async () => {
+    const probe = vi.fn();
+    const harness = await createDraftRuntimeHarness({
+      createAuthoringMediaAdapter: () => ({ probe, dispose: vi.fn(async () => undefined) }),
+    });
+    await mkdir(path.join(harness.workspacePath, 'media'));
+    await writeFile(path.join(harness.workspacePath, 'media', 'clip.mp4'), 'source-fixture');
+    const identity = harness.canvasSourceIdentity();
+    await harness.runtime.createDraft(harness.request);
+    const staleTarget = await harness.runtime.resolveCanvasHandoffTarget(identity);
+    await harness.runtime.createDraft(harness.request);
+
+    await expect(
+      harness.runtime.addCanvasMaterial({
+        identity,
+        nodeId: 'video-node-1',
+        label: 'clip.mp4',
+        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+        target: staleTarget,
+      }),
+    ).rejects.toThrow('target changed before execution');
+    expect(probe).not.toHaveBeenCalled();
+    for (const view of harness.workbench().cutPanel?.views ?? []) {
+      await expect(
+        harness.runtime.getSnapshot(
+          harness.request.windowId,
+          createViewIdentity(view, harness.request.rendererSessionId),
+        ),
+      ).resolves.toMatchObject({ document: { tracks: [expect.objectContaining({ items: [] })] } });
+    }
+    await harness.runtime.dispose();
+  });
+
+  it('keeps an unsupported Canvas media handoff local to the newly created empty draft', async () => {
+    const harness = await createDraftRuntimeHarness({
+      createAuthoringMediaAdapter: () => ({
+        probe: vi.fn(async () => ({
+          durationSeconds: 1,
+          width: 0,
+          height: 0,
+          framesPerSecond: 0,
+          hasVideo: false,
+          hasAudio: false,
+          audioStreams: [],
+        })),
+        dispose: vi.fn(async () => undefined),
+      }),
+    });
+    await mkdir(path.join(harness.workspacePath, 'media'));
+    const sourcePath = path.join(harness.workspacePath, 'media', 'unsupported.bin');
+    await writeFile(sourcePath, 'unsupported-source');
+    const identity = harness.canvasSourceIdentity();
+    const target = await harness.runtime.resolveCanvasHandoffTarget(identity);
+
+    await expect(
+      harness.runtime.addCanvasMaterial({
+        identity,
+        nodeId: 'unsupported-node',
+        label: 'unsupported.bin',
+        locator: { kind: 'workspace-file', path: 'media/unsupported.bin' },
+        target,
+      }),
+    ).rejects.toThrow('no supported video or audio stream');
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view) throw new Error('Failed handoff draft View is missing.');
+    await expect(
+      harness.runtime.getSnapshot(
+        harness.request.windowId,
+        createViewIdentity(view, harness.request.rendererSessionId),
+      ),
+    ).resolves.toMatchObject({
+      document: { tracks: [expect.objectContaining({ kind: 'Video', items: [] })] },
+    });
+    expect(await readFile(sourcePath, 'utf8')).toBe('unsupported-source');
+    await harness.runtime.dispose();
+  });
+
+  it('keeps a dirty unnamed draft when discard is cancelled and releases only it when confirmed', async () => {
+    const confirmDiscardDraft = vi
+      .fn<NonNullable<ConstructorParameters<typeof DesktopCutRuntime>[0]['confirmDiscardDraft']>>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const harness = await createDraftRuntimeHarness({ confirmDiscardDraft });
+    await harness.runtime.createDraft(harness.request);
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view?.documentId) throw new Error('Cut draft View fixture is missing.');
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+
+    await expect(
+      harness.runtime.closeView({ ...harness.request, identity }),
+    ).resolves.toMatchObject({ status: 'cancelled' });
+    expect(harness.workbench().cutPanel?.views).toHaveLength(1);
+
+    await expect(
+      harness.runtime.closeView({ ...harness.request, identity }),
+    ).resolves.toMatchObject({ status: 'updated' });
+    expect(harness.workbench().cutPanel).toBeUndefined();
+    await expect(harness.runtime.getSnapshot(harness.request.windowId, identity)).rejects.toThrow();
+    expect(confirmDiscardDraft).toHaveBeenCalledTimes(2);
+    await harness.runtime.dispose();
+  });
+
+  it('preserves the exact unnamed draft when Save As is cancelled', async () => {
+    const selectDraftDestination = vi.fn(async () => undefined);
+    const harness = await createDraftRuntimeHarness({ selectDraftDestination });
+    await harness.runtime.createDraft(harness.request);
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view?.documentId) throw new Error('Cut draft View fixture is missing.');
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+
+    const result = await harness.runtime.execute(harness.request.windowId, {
+      requestId: 'cancel-save-draft-request',
+      commandId: 'cancel-save-draft-command',
+      route: CUT_HOST_RUNTIME_ROUTES.save,
+      identity,
+    });
+
+    expect(result.snapshot).toMatchObject({ dirty: true, identity });
+    expect(harness.workbench().cutPanel?.views[0]).toEqual(view);
+    expect(selectDraftDestination).toHaveBeenCalledOnce();
+    await harness.runtime.dispose();
+  });
+
+  it('fails visibly when draft Save As or discard confirmation is not configured', async () => {
+    const harness = await createDraftRuntimeHarness({});
+    await harness.runtime.createDraft(harness.request);
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view?.documentId) throw new Error('Cut draft View fixture is missing.');
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+
+    await expect(
+      harness.runtime.execute(harness.request.windowId, {
+        requestId: 'save-without-picker-request',
+        commandId: 'save-without-picker-command',
+        route: CUT_HOST_RUNTIME_ROUTES.save,
+        identity,
+      }),
+    ).rejects.toThrow('Save As is unavailable');
+    await expect(harness.runtime.closeView({ ...harness.request, identity })).rejects.toThrow(
+      'discard confirmation is unavailable',
+    );
+    expect(harness.workbench().cutPanel?.views).toHaveLength(1);
+    await expect(
+      harness.runtime.getSnapshot(harness.request.windowId, identity),
+    ).resolves.toMatchObject({ identity });
+    await harness.runtime.dispose();
+  });
+
+  it('closes an expired draft View without resolving it as a Workspace file', async () => {
+    const harness = await createDraftRuntimeHarness({ expiredDraft: true });
+    const view = harness.workbench().cutPanel?.views[0];
+    if (!view) throw new Error('Expired Cut draft View fixture is missing.');
+    const identity = createViewIdentity(view, harness.request.rendererSessionId);
+
+    await expect(
+      harness.runtime.closeView({ ...harness.request, identity }),
+    ).resolves.toMatchObject({ status: 'updated' });
+    expect(harness.workbench().cutPanel).toBeUndefined();
+    expect(harness.resolveCutViewGrant).not.toHaveBeenCalled();
+    await harness.runtime.dispose();
+  });
+
   it('creates and appends an explicit workspace OTIO target through the authorized writer', async () => {
     const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-cut-create-'));
     roots.push(workspacePath);
@@ -1089,5 +1407,182 @@ function createIdentity(documentId: string): CutHostRuntimeIdentity {
     documentId,
     sessionId: 'cut-session:cut-view-1:view-instance-1',
     rendererSessionId: 'endpoint-1',
+  };
+}
+
+function createViewIdentity(
+  view: NonNullable<DesktopWorkbenchLayoutProjection['cutPanel']>['views'][number],
+  rendererSessionId: string,
+): CutHostRuntimeIdentity {
+  if (!view.documentId) throw new Error('Cut View requires a document identity.');
+  return {
+    projectId: view.projectId,
+    workspaceId: view.workspaceId,
+    windowId: 'window-1',
+    viewId: view.viewId,
+    viewInstanceId: view.viewInstanceId,
+    documentId: view.documentId,
+    sessionId: `cut-session:${view.viewId}:${view.viewInstanceId}`,
+    rendererSessionId,
+  };
+}
+
+async function createDraftRuntimeHarness(options: {
+  readonly saveDestination?: string;
+  readonly selectDraftDestination?: NonNullable<
+    ConstructorParameters<typeof DesktopCutRuntime>[0]['selectDraftDestination']
+  >;
+  readonly expiredDraft?: boolean;
+  readonly confirmDiscardDraft?: NonNullable<
+    ConstructorParameters<typeof DesktopCutRuntime>[0]['confirmDiscardDraft']
+  >;
+  readonly createAuthoringMediaAdapter?: NonNullable<
+    ConstructorParameters<typeof DesktopCutRuntime>[0]['createAuthoringMediaAdapter']
+  >;
+}) {
+  const workspacePath = await realpath(await mkdtemp(path.join(tmpdir(), 'openneko-cut-draft-')));
+  roots.push(workspacePath);
+  if (options.saveDestination) {
+    await mkdir(path.dirname(path.join(workspacePath, options.saveDestination)), {
+      recursive: true,
+    });
+  }
+  const workspace = {
+    workspaceId: 'workspace-1',
+    workspacePath,
+    displayName: 'Fixture',
+    locator: { kind: 'relative' as const, value: '.' },
+  };
+  const project = {
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    profile: 'content' as const,
+    displayName: 'Fixture',
+    createdAt: '2026-08-08T00:00:00.000Z',
+    updatedAt: '2026-08-08T00:00:00.000Z',
+  };
+  let workbench = createDefaultDesktopWorkbenchLayout('window-1');
+  workbench = openOrFocusMainView(workbench, {
+    viewId: 'canvas-view-1',
+    viewInstanceId: 'view-instance-1',
+    projectId: 'project-1',
+    workspaceId: 'workspace-1',
+    kind: 'canvas',
+    ownerId: 'canvas-session:canvas-view-1:view-instance-1',
+    displayLabel: 'Workspace Canvas',
+    documentId: 'neko/boards/workspace.nkc',
+  });
+  const scope = {
+    kind: 'workspace' as const,
+    draftId: 'draft:workspace-1',
+    workspaceId: 'workspace-1',
+    workspaceGrantId: 'workspace-grant:workspace-1',
+  };
+  const scene = parseDesktopWorkbenchSceneProjection({
+    sceneId: 'scene:workspace-1',
+    windowId: 'window-1',
+    context: { kind: 'agent', agentViewId: 'project-view-1', scope },
+    slots: {
+      interaction: {
+        kind: 'agent',
+        agentSurfaceId: 'agent-surface:workspace-1',
+        agentViewId: 'project-view-1',
+        phase: 'draft',
+        scope,
+      },
+      rightManager: { kind: 'workspace-resources', workspaceId: 'workspace-1' },
+      status: { kind: 'scene-status', sceneId: 'scene:workspace-1' },
+    },
+  });
+  if (options.expiredDraft) {
+    workbench = openOrFocusCutView(workbench, {
+      viewId: 'cut:project-view-1:expired',
+      viewInstanceId: 'view-instance-1',
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      kind: 'cut',
+      ownerId: 'cut-session:cut:project-view-1:expired:view-instance-1',
+      displayLabel: 'Untitled Cut',
+      documentId: 'cut-draft:expired',
+    });
+  }
+  const resolveCutViewGrant = vi.fn(
+    async (_windowId: string, identity: CutHostRuntimeIdentity) => ({ identity, workspace }),
+  );
+  const projection = (): DesktopShellProjection => ({
+    applicationInstanceId: 'application-1',
+    rendererSessionId: 'endpoint-1',
+    catalog: { projects: [project] },
+    window: {
+      windowId: 'window-1',
+      activeTarget: { kind: 'project', tabId: 'tab-1' },
+      tabs: [
+        {
+          tabId: 'tab-1',
+          projectId: 'project-1',
+          viewId: 'project-view-1',
+          viewInstanceId: 'view-instance-1',
+        },
+      ],
+      workbench: createDesktopWindowComposition({
+        workbenchInstanceId: 'workbench:workspace-1',
+        layout: workbench,
+        scene,
+      }),
+      applicationSidebar: createDefaultDesktopApplicationSidebar('window-1'),
+    },
+    agentHome: { conversations: [], attention: { needsInput: 0, needsReview: 0, running: 0 } },
+    conversationNavigation: { recentProjectIds: [], groups: [] },
+    domains: [],
+  });
+  const runtime = new DesktopCutRuntime({
+    shell: {
+      getProjection: vi.fn(async () => projection()),
+      updateWorkbench: vi.fn(async (_windowId, _sessionId, _instanceId, next) => {
+        workbench = next;
+        return projection();
+      }),
+      resolveAgentWorkspace: vi.fn(async () => workspace),
+      resolveCutCreationGrant: vi.fn(),
+      resolveCutViewGrant,
+    },
+    host: createElectronNekoHostPorts({
+      homedir: workspacePath,
+      nekoHome: path.join(workspacePath, '.neko-home'),
+      workspaceRoot: workspacePath,
+      logger: new ConsoleLogger('DesktopCutDraftRuntimeTest'),
+    }),
+    draftLabel: 'Untitled Cut',
+    ...(options.selectDraftDestination
+      ? { selectDraftDestination: options.selectDraftDestination }
+      : options.saveDestination
+        ? { selectDraftDestination: vi.fn(async () => options.saveDestination) }
+        : {}),
+    ...(options.confirmDiscardDraft ? { confirmDiscardDraft: options.confirmDiscardDraft } : {}),
+    ...(options.createAuthoringMediaAdapter
+      ? { createAuthoringMediaAdapter: options.createAuthoringMediaAdapter }
+      : {}),
+  });
+  return {
+    runtime,
+    workspacePath,
+    workbench: () => workbench,
+    setWorkbench: (next: DesktopWorkbenchLayoutProjection) => {
+      workbench = next;
+    },
+    resolveCutViewGrant,
+    request: {
+      windowId: 'window-1',
+      rendererSessionId: 'endpoint-1',
+      workbenchInstanceId: 'workbench:workspace-1',
+    },
+    canvasSourceIdentity: () => ({
+      projectId: 'project-1',
+      workspaceId: 'workspace-1',
+      windowId: 'window-1',
+      viewId: 'canvas-view-1',
+      viewInstanceId: 'view-instance-1',
+      rendererSessionId: 'endpoint-1',
+    }),
   };
 }

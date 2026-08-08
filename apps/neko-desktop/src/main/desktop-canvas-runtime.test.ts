@@ -14,6 +14,7 @@ import { createElectronNekoHostPorts } from './electron-host-ports';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import {
   CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID,
+  CANVAS_ADD_TO_CUT_ACTION_ID,
   CANVAS_OPEN_IN_CUT_ACTION_ID,
   CANVAS_PREVIEW_ACTION_ID,
   CANVAS_REGENERATE_ACTION_ID,
@@ -495,6 +496,114 @@ describe('DesktopCanvasRuntime', () => {
       identity,
       target: expectedTarget,
       absolutePath,
+    });
+    await runtime.dispose();
+  });
+
+  it('offers Add to Cut for video with the exact owner-projected target payload', async () => {
+    const workspacePath = await mkdtemp(path.join(tmpdir(), 'openneko-canvas-add-cut-action-'));
+    roots.push(workspacePath);
+    await writeFixtureFile(workspacePath, 'media/clip.mp4', 'video');
+    const identity = createIdentity();
+    const executionPayload = {
+      target: {
+        kind: 'existing-cut',
+        workbenchInstanceId: 'workbench-1',
+        viewId: 'cut-view-1',
+        viewInstanceId: 'view-instance-1',
+        documentId: 'cuts/story.otio',
+        sessionId: 'cut-session:cut-view-1:view-instance-1',
+      },
+    } as const;
+    const resolveAddToCut = vi.fn(async () => executionPayload);
+    const addToCut = vi.fn(async () => undefined);
+    const runtime = new DesktopCanvasRuntime({
+      shell: {
+        resolveCanvasViewGrant: vi.fn(async (): Promise<DesktopCanvasViewGrant> => ({
+          identity,
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspacePath,
+            displayName: 'Fixture',
+            locator: { kind: 'relative', value: '.' },
+          },
+        })),
+      },
+      host: createElectronNekoHostPorts({
+        homedir: workspacePath,
+        nekoHome: path.join(workspacePath, '.neko-home'),
+        workspaceRoot: workspacePath,
+        logger: new ConsoleLogger('DesktopCanvasAddCutActionTest'),
+      }),
+      globalMediaLibraryRoot: path.join(workspacePath, '.global-media-libraries'),
+      resolveAddToCut,
+      addToCut,
+    });
+    await runtime.getSnapshot('window-1', identity);
+    const authored = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'request-video-material',
+        commandId: 'command-video-material',
+        identity,
+        intent: {
+          type: 'author-material',
+          request: {
+            kind: 'direct-reference',
+            identity: materialIdentity(identity),
+            locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+            mediaKind: 'video',
+          },
+        },
+      }),
+    );
+    if (authored.status !== 'accepted') throw new Error(authored.diagnostic.message);
+    const node = authored.snapshot.canvas.nodes[0];
+    if (!node) throw new Error('Authored video node is missing.');
+
+    const resolution = await runtime.resolveMaterialActions('window-1', {
+      requestId: 'resolve-add-cut-action',
+      identity,
+      selectedNodeIds: [node.id],
+    });
+    expect(resolution.descriptors).toEqual([
+      expect.objectContaining({
+        id: CANVAS_ADD_TO_CUT_ACTION_ID,
+        ownerId: 'cut',
+        executionPayload,
+      }),
+    ]);
+    expect(
+      resolution.descriptors.some((descriptor) => descriptor.id === CANVAS_OPEN_IN_CUT_ACTION_ID),
+    ).toBe(false);
+
+    const action = await runtime.executeIntent(
+      'window-1',
+      createCanvasHostIntentRequest({
+        requestId: 'request-add-to-cut',
+        commandId: 'command-add-to-cut',
+        identity,
+        intent: {
+          type: 'execute-material-action',
+          action: {
+            identity: materialIdentity(identity),
+            actionId: CANVAS_ADD_TO_CUT_ACTION_ID,
+            selectedNodeIds: [node.id],
+            payload: executionPayload,
+          },
+        },
+      }),
+    );
+
+    expect(action.status).toBe('accepted');
+    expect(addToCut).toHaveBeenCalledWith({
+      identity,
+      target: expect.objectContaining({
+        nodeId: node.id,
+        mediaKind: 'video',
+        locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+      }),
+      executionPayload,
     });
     await runtime.dispose();
   });

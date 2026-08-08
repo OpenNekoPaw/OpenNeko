@@ -5,6 +5,7 @@ import {
   CUT_HOST_RUNTIME_ROUTES,
   CutDocumentSession,
   createOtioTimeline,
+  isCutDraftDocumentId,
   DEFAULT_CUT_HOST_PRESENTATION,
   assertCutHostRuntimeIdentity,
   parseCutHostPresentationState,
@@ -48,7 +49,7 @@ interface CutApplicationRuntimeEntry {
   readonly session: CutDocumentSession;
   readonly listeners: Set<(event: CutHostRuntimeProjectionEvent) => void>;
   readonly completedCommands: Map<string, CutHostRuntimeResult>;
-  readonly documentPath: string;
+  documentPath: string;
   readonly workspacePath: string;
   preview: CutPreviewRuntimeController;
   presentation: CutHostPresentationState;
@@ -259,6 +260,118 @@ export class CutApplicationRuntime {
     identity: CutHostRuntimeIdentity,
   ): Promise<CutHostRuntimeSnapshot> {
     return this.projectSnapshot(await this.requireSession(windowId, identity));
+  }
+
+  hasSession(identity: CutHostRuntimeIdentity): boolean {
+    this.requireActive();
+    return this.sessions.has(cutSessionKey(identity));
+  }
+
+  createDraft(input: {
+    readonly identity: CutHostRuntimeIdentity;
+    readonly name: string;
+    readonly documentPath: string;
+    readonly workspacePath: string;
+    readonly storage: CutDocumentStorage;
+  }): CutHostRuntimeSnapshot {
+    this.requireActive();
+    const key = cutSessionKey(input.identity);
+    if (this.sessions.has(key)) {
+      throw new Error('Cut draft identity already has an active session.');
+    }
+    const session = CutDocumentSession.create(
+      input.identity.documentId,
+      createOtioTimeline(input.name, {
+        profile: '1080p30',
+        editRateNumerator: 30,
+        editRateDenominator: 1,
+        width: 1920,
+        height: 1080,
+      }),
+      {
+        storage: input.storage,
+        createClipId: () => `clip-${randomUUID()}`,
+        createTrackId: () => `track-${randomUUID()}`,
+        createSessionId: () => input.identity.sessionId,
+      },
+    );
+    const entry: CutApplicationRuntimeEntry = {
+      identity: { ...input.identity },
+      session,
+      listeners: new Set(),
+      completedCommands: new Map(),
+      documentPath: input.documentPath,
+      workspacePath: input.workspacePath,
+      preview: this.createPreviewController(
+        input.documentPath,
+        input.workspacePath,
+        input.identity,
+        `draft:${input.identity.sessionId}`,
+      ),
+      presentation: { ...DEFAULT_CUT_HOST_PRESENTATION },
+      sequence: 0,
+    };
+    this.sessions.set(key, entry);
+    return this.projectSnapshot(entry);
+  }
+
+  async saveDraftAs(input: {
+    readonly windowId: string;
+    readonly identity: CutHostRuntimeIdentity;
+    readonly nextIdentity: CutHostRuntimeIdentity;
+    readonly documentPath: string;
+    readonly storage: CutDocumentStorage;
+  }): Promise<CutHostRuntimeResult> {
+    const key = cutSessionKey(input.identity);
+    return this.enqueueSessionOperation(key, async () => {
+      const entry = this.sessions.get(key);
+      if (!entry || entry.identity.windowId !== input.windowId) {
+        throw new Error('Cut draft session is unavailable.');
+      }
+      assertCutHostRuntimeIdentity(entry.identity, input.identity);
+      assertCutHostRuntimeIdentity(
+        { ...entry.identity, documentId: input.nextIdentity.documentId },
+        input.nextIdentity,
+      );
+      const nextKey = cutSessionKey(input.nextIdentity);
+      if (this.sessions.has(nextKey)) {
+        throw new Error('Cut Save As target already has an active session.');
+      }
+      const paths = await CutWorkspaceMediaPaths.create(entry.workspacePath);
+      await entry.session.saveAs({
+        documentUri: input.nextIdentity.documentId,
+        storage: input.storage,
+        rebase: (document) =>
+          paths.rebaseDocument(document, entry.documentPath, input.documentPath),
+      });
+      await entry.preview.dispose();
+      this.sessions.delete(key);
+      entry.identity = { ...input.nextIdentity };
+      entry.documentPath = input.documentPath;
+      entry.preview = this.createPreviewController(
+        input.documentPath,
+        entry.workspacePath,
+        entry.identity,
+        `save-as:${entry.identity.sessionId}`,
+      );
+      this.sessions.set(nextKey, entry);
+      const snapshot = this.projectSnapshot(entry);
+      this.publish(entry, snapshot);
+      return { snapshot };
+    });
+  }
+
+  discardSession(windowId: string, identity: CutHostRuntimeIdentity): void {
+    this.requireActive();
+    const key = cutSessionKey(identity);
+    const entry = this.sessions.get(key);
+    if (!entry || entry.identity.windowId !== windowId) {
+      throw new Error('Cut session is unavailable.');
+    }
+    assertCutHostRuntimeIdentity(entry.identity, identity);
+    entry.listeners.clear();
+    this.sessions.delete(key);
+    this.scheduleDisposal(entry);
   }
 
   async execute(
@@ -622,9 +735,13 @@ export class CutApplicationRuntime {
     identity: CutHostRuntimeIdentity,
   ): Promise<CutApplicationRuntimeEntry> {
     this.requireActive();
-    const grant = await this.options.authorizeSession(windowId, identity);
     const key = cutSessionKey(identity);
     const current = this.sessions.get(key);
+    if (isCutDraftDocumentId(identity.documentId)) {
+      if (current) return current;
+      throw new Error('Unnamed Cut draft session is unavailable in this application process.');
+    }
+    const grant = await this.options.authorizeSession(windowId, identity);
     if (current) return current;
     const pending = this.sessionOpenings.get(key);
     if (pending) return pending;

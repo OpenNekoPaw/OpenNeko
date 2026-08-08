@@ -18,12 +18,19 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     await Promise.all([
       writeFile(
         join(boardsRoot, 'video.nkc'),
-        `${JSON.stringify(canvasDocument('Video View', 'video-node', media.video, 'video'), null, 2)}\n`,
+        `${JSON.stringify(
+          canvasDocument('Video View', 'video-node', media.video, 'video', [
+            cutDocumentNode('cut-document-node', 'story.otio'),
+          ]),
+          null,
+          2,
+        )}\n`,
       ),
       writeFile(
         join(boardsRoot, 'audio.nkc'),
         `${JSON.stringify(canvasDocument('Audio View', 'audio-node', media.audio, 'audio'), null, 2)}\n`,
       ),
+      writeFile(join(workspacePath, 'story.otio'), `${JSON.stringify(emptyOtioDocument())}\n`),
     ]);
     return {
       workspacePath,
@@ -38,6 +45,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     evaluate,
     hover,
     prepared,
+    pressKey,
     restartApplication,
     screenshot,
     waitForSelector,
@@ -93,7 +101,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           activeGroupId: 'main:primary',
           split: { axis: 'columns', ratio: 0.5 },
         },
-        timeline: { presentation: 'hidden', height: 240 },
       })`,
     );
     await waitForSelector('[data-owner-root="canvas"]');
@@ -110,7 +117,7 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     await waitForSelector('[data-canvas-add-action="text"]');
     await click('[data-canvas-add-action="text"]');
-    const authoredNodeCount = await waitForCanvasNodeCount(evaluate, 'canvas:functional:video', 2);
+    const authoredNodeCount = await waitForCanvasNodeCount(evaluate, 'canvas:functional:video', 3);
     checkpoint('canvas-node-authored', { nodeCount: authoredNodeCount });
     await click(
       '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="video-node"]',
@@ -119,6 +126,9 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     );
     await waitForSelector(
       '[data-owner-view-id="canvas:functional:video"] [data-selection-action="preview:open"]',
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:add-resource"]',
     );
     const selectedNodePresentation = await evaluate(`(() => {
       const view = document.querySelector('[data-owner-view-id="canvas:functional:video"]');
@@ -138,6 +148,89 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     checkpoint('canvas-node-selected-without-property-dock', selectedNodePresentation);
     const selectedNodeScreenshot = await screenshot('canvas-node-selected-without-property-dock');
+    const videoActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
+    if (
+      videoActions.visible.join('|') !== '添加到剪辑|预览' &&
+      videoActions.visible.join('|') !== 'Add to Cut|Preview'
+    ) {
+      throw new Error(`Canvas video primary actions are invalid: ${JSON.stringify(videoActions)}`);
+    }
+    if (
+      !videoActions.overflowActionIds.includes('desktop:reveal') ||
+      !videoActions.overflowActionIds.includes('node:duplicate') ||
+      !videoActions.overflowActionIds.includes('delete-selection')
+    ) {
+      throw new Error(
+        `Canvas video overflow actions are incomplete: ${JSON.stringify(videoActions)}`,
+      );
+    }
+    await click('[data-owner-view-id="canvas:functional:video"] [data-selection-overflow="true"]');
+    await waitForSelector('[data-selection-overflow-group="node"]');
+    const videoOverflow = await inspectCanvasOverflow(evaluate);
+    if (
+      !videoOverflow.groups.includes('file') ||
+      !videoOverflow.groups.includes('node') ||
+      !videoOverflow.nodeText.some((text) => ['创建节点副本', 'Duplicate node'].includes(text))
+    ) {
+      throw new Error(
+        `Canvas video overflow grouping is invalid: ${JSON.stringify(videoOverflow)}`,
+      );
+    }
+    const videoOverflowScreenshot = await screenshot('canvas-video-actions-overflow');
+    await pressKey('Escape');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:add-resource"]',
+    );
+    await waitForSelector('[data-workbench-cut-panel="true"] .cut-basic-clip');
+    const newDraftHandoff = await inspectCanvasCutHandoff(evaluate);
+    if (
+      newDraftHandoff.clipCount !== 1 ||
+      !newDraftHandoff.activeLabel ||
+      !['Untitled Cut', '未命名剪辑'].includes(newDraftHandoff.activeLabel)
+    ) {
+      throw new Error(
+        `Canvas media was not added to one new Cut draft: ${JSON.stringify(newDraftHandoff)}`,
+      );
+    }
+    const newDraftHandoffScreenshot = await screenshot('canvas-video-added-to-new-cut');
+    await hideFunctionalCutPanel(evaluate);
+
+    await waitForInteractiveSelector(
+      evaluate,
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="cut-document-node"]',
+    );
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-node-presentation][data-node-id="cut-document-node"]',
+      0,
+      { xRatio: 0.5, yRatio: 0.5 },
+    );
+    await waitForSelector(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:open"]',
+    );
+    const otioActions = await inspectCanvasSelectionActions(evaluate, 'canvas:functional:video');
+    if (
+      otioActions.visible.length !== 2 ||
+      !otioActions.visible.some((label) => ['打开剪辑', 'Open Cut'].includes(label)) ||
+      otioActions.actionIds.includes('cut:add-resource')
+    ) {
+      throw new Error(`Canvas OTIO actions are invalid: ${JSON.stringify(otioActions)}`);
+    }
+    const otioActionsScreenshot = await screenshot('canvas-otio-open-action');
+    await click(
+      '[data-owner-view-id="canvas:functional:video"] [data-selection-action="cut:open"]',
+    );
+    await waitForCondition(
+      evaluate,
+      `(() => {
+        const active = document.querySelector(
+          '[data-workbench-cut-panel="true"] .neko-workbench-editor-tab[aria-selected="true"] .neko-workbench-editor-tab__label'
+        );
+        return active?.textContent?.trim() === 'story.otio';
+      })()`,
+      'Canvas OTIO action did not open the exact Cut document.',
+    );
+    const otioOpenedScreenshot = await screenshot('canvas-otio-opened-in-cut');
+    await hideFunctionalCutPanel(evaluate);
     await evaluate(`(() => {
       const viewport = document.querySelector(
         '[data-owner-view-id="canvas:functional:video"] [data-canvas-viewport-root="true"]',
@@ -248,7 +341,6 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
           groups: [{ groupId: 'main:primary', viewIds: [] }],
           activeGroupId: 'main:primary',
         },
-        timeline: { presentation: 'hidden', height: 240 },
       })`,
     );
     await waitForCanvasRootsRemoved(evaluate);
@@ -371,6 +463,14 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
       authoredNodeCount,
       selectedNodePresentation,
       selectedNodeScreenshot,
+      videoActions,
+      videoOverflow,
+      videoOverflowScreenshot,
+      newDraftHandoff,
+      newDraftHandoffScreenshot,
+      otioActions,
+      otioActionsScreenshot,
+      otioOpenedScreenshot,
       locatorBackedNodes: ['video', 'audio'],
       nativeElements: ['video', 'audio'],
       storylineAdvancedTo: storylinePlayback.currentTime,
@@ -406,10 +506,13 @@ export const canvasOpenNekoConsumerScenario = Object.freeze({
     }
     if (
       evidence.rootCount !== 2 ||
-      evidence.authoredNodeCount !== 2 ||
+      evidence.authoredNodeCount !== 3 ||
       evidence.selectedNodePresentation.nodeLocalActionCount === 0 ||
       evidence.selectedNodePresentation.propertyDockCount !== 0 ||
       !evidence.isolatedUrls ||
+      evidence.newDraftHandoff.clipCount !== 1 ||
+      !evidence.otioActions.actionIds.includes('cut:open') ||
+      evidence.otioActions.actionIds.includes('cut:add-resource') ||
       evidence.storylineAdvancedTo <= 0 ||
       evidence.videoAdvancedTo <= evidence.videoManualStartTime + 0.15 ||
       evidence.audioAdvancedTo <= 0
@@ -776,7 +879,7 @@ async function waitForReleasedUrl(evaluate, url, mediaType) {
   );
 }
 
-function canvasDocument(name, nodeId, path, mediaType) {
+function canvasDocument(name, nodeId, path, mediaType, extraNodes = []) {
   return {
     name,
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
@@ -794,9 +897,117 @@ function canvasDocument(name, nodeId, path, mediaType) {
           mediaType,
         },
       },
+      ...extraNodes,
     ],
     connections: [],
   };
+}
+
+function cutDocumentNode(nodeId, path) {
+  return {
+    id: nodeId,
+    type: 'file',
+    position: { x: 80, y: 360 },
+    size: { width: 260, height: 180 },
+    zIndex: 2,
+    data: {
+      title: path,
+      path,
+      mediaKind: 'document',
+      contentLocator: { kind: 'workspace-file', path },
+    },
+  };
+}
+
+function emptyOtioDocument() {
+  return {
+    OTIO_SCHEMA: 'Timeline.1',
+    name: 'Story',
+    global_start_time: null,
+    metadata: {
+      openneko: {
+        cut: {
+          profile: '1080p30',
+          editRateNumerator: 30,
+          editRateDenominator: 1,
+          width: 1920,
+          height: 1080,
+        },
+      },
+    },
+    tracks: {
+      OTIO_SCHEMA: 'Stack.1',
+      name: 'Tracks',
+      metadata: {},
+      effects: [],
+      markers: [],
+      children: [
+        {
+          OTIO_SCHEMA: 'Track.1',
+          name: 'Video 1',
+          kind: 'Video',
+          children: [],
+          metadata: { openneko: { cut: { trackId: 'video-1' } } },
+          enabled: true,
+          effects: [],
+          markers: [],
+        },
+      ],
+    },
+  };
+}
+
+function inspectCanvasSelectionActions(evaluate, viewId) {
+  return evaluate(`(() => {
+    const root = document.querySelector('[data-owner-view-id=${JSON.stringify(viewId)}]');
+    const actions = [...(root?.querySelectorAll('[data-selection-action]') ?? [])];
+    const overflow = root?.querySelector('[data-selection-overflow="true"]');
+    return {
+      actionIds: actions.map((action) => action.getAttribute('data-selection-action')),
+      visible: actions
+        .filter((action) => action.getAttribute('data-selection-action-location') === 'primary')
+        .map((action) => action.textContent?.trim() ?? ''),
+      overflowActionIds: (overflow?.getAttribute('data-selection-overflow-actions') ?? '')
+        .split(' ')
+        .filter(Boolean),
+    };
+  })()`);
+}
+
+function inspectCanvasOverflow(evaluate) {
+  return evaluate(`(() => ({
+    groups: [...document.querySelectorAll('[data-selection-overflow-group]')]
+      .map((group) => group.getAttribute('data-selection-overflow-group')),
+    nodeText: [...document.querySelectorAll(
+      '[data-selection-overflow-group="node"] [data-selection-action]'
+    )].map((action) => action.textContent?.trim() ?? ''),
+  }))()`);
+}
+
+function inspectCanvasCutHandoff(evaluate) {
+  return evaluate(`(() => {
+    const panel = document.querySelector('[data-workbench-cut-panel="true"]');
+    const active = panel?.querySelector(
+      '.neko-workbench-editor-tab[aria-selected="true"] .neko-workbench-editor-tab__label'
+    );
+    return {
+      activeLabel: active?.textContent?.trim(),
+      clipCount: panel?.querySelectorAll('.cut-basic-clip').length ?? 0,
+      cutRootCount: panel?.querySelectorAll('[data-owner-root="cut"]').length ?? 0,
+    };
+  })()`);
+}
+
+function hideFunctionalCutPanel(evaluate) {
+  return replaceWorkbench(
+    evaluate,
+    `(projection, current) => ({
+      ...current,
+      cutPanel: current.cutPanel
+        ? { ...current.cutPanel, presentation: 'hidden' }
+        : current.cutPanel,
+    })`,
+  );
 }
 
 function delay(milliseconds) {

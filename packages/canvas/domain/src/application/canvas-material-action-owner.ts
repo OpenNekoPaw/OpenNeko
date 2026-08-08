@@ -19,10 +19,11 @@ const MATERIAL_MEDIA_KINDS: readonly CanvasMaterialMediaKind[] = [
 export const CANVAS_PREVIEW_ACTION_ID = 'preview:open';
 export const CANVAS_REVEAL_ACTION_ID = 'desktop:reveal';
 export const CANVAS_OPEN_IN_CUT_ACTION_ID = 'cut:open';
+export const CANVAS_ADD_TO_CUT_ACTION_ID = 'cut:add-resource';
 export const CANVAS_COPY_TO_PROJECT_MEDIA_LIBRARY_ACTION_ID = 'media-library:copy-to-project';
 export const CANVAS_COPY_TO_GLOBAL_MEDIA_LIBRARY_ACTION_ID = 'media-library:copy-to-global';
 export const CANVAS_REGENERATE_ACTION_ID = 'generation:regenerate';
-const CANVAS_EDIT_AND_GENERATE_ACTION_ID = 'generation:edit-and-generate';
+export const CANVAS_EDIT_AND_GENERATE_ACTION_ID = 'generation:edit-and-generate';
 
 export interface CanvasMaterialActionExecutionResult {
   readonly generationProjection?: CanvasGenerationProjectionSnapshot;
@@ -67,6 +68,15 @@ export function createCanvasMaterialActionOwner(options: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
   }) => Promise<void>;
+  readonly resolveAddToCut?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly target: CanvasMaterialActionTarget;
+  }) => Promise<Readonly<Record<string, unknown>> | undefined>;
+  readonly addToCut?: (input: {
+    readonly identity: CanvasHostRuntimeIdentity;
+    readonly target: CanvasMaterialActionTarget;
+    readonly executionPayload: Readonly<Record<string, unknown>>;
+  }) => Promise<void>;
   readonly resolveMediaLibraryCopy?: (input: {
     readonly identity: CanvasHostRuntimeIdentity;
     readonly target: CanvasMaterialActionTarget;
@@ -98,6 +108,7 @@ export function createCanvasMaterialActionOwner(options: {
     readonly preview?: string;
     readonly reveal?: string;
     readonly openInCut?: string;
+    readonly addToCut?: string;
     readonly copyToProjectMediaLibrary?: string;
     readonly copyToGlobalMediaLibrary?: string;
     readonly regenerate?: string;
@@ -147,6 +158,26 @@ export function createCanvasMaterialActionOwner(options: {
           selection: { minimum: 1, maximum: 1 },
           effect: 'handoff',
         });
+      }
+      if (
+        target &&
+        (target.mediaKind === 'video' || target.mediaKind === 'audio') &&
+        options.resolveAddToCut &&
+        options.addToCut
+      ) {
+        const executionPayload = await options.resolveAddToCut({ identity, target });
+        if (executionPayload) {
+          descriptors.push({
+            id: CANVAS_ADD_TO_CUT_ACTION_ID,
+            ownerId: 'cut',
+            label: options.labels?.addToCut ?? 'Add to Cut',
+            mediaKinds: ['video', 'audio'],
+            origins: ['referenced', 'generated'],
+            selection: { minimum: 1, maximum: 1 },
+            effect: 'handoff',
+            executionPayload,
+          });
+        }
       }
       if (target && options.resolveMediaLibraryCopy) {
         const availability = await options.resolveMediaLibraryCopy({ identity, target });
@@ -215,6 +246,14 @@ export function createCanvasMaterialActionOwner(options: {
       }
       if (action.actionId === CANVAS_OPEN_IN_CUT_ACTION_ID && options.openInCut) {
         await options.openInCut({ identity, target });
+        return {};
+      }
+      if (action.actionId === CANVAS_ADD_TO_CUT_ACTION_ID && options.addToCut) {
+        await options.addToCut({
+          identity,
+          target,
+          executionPayload: descriptor.executionPayload ?? {},
+        });
         return {};
       }
       if (

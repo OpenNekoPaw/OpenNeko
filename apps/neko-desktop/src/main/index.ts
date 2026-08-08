@@ -111,7 +111,11 @@ import {
 import { createNodeHostContentReadService } from '@neko/content/node';
 import { DesktopCanvasRuntime } from './desktop-canvas-runtime';
 import { DesktopCanvasMediaRuntime } from './desktop-canvas-media-runtime';
-import { DesktopCutRuntime } from './desktop-cut-runtime';
+import {
+  createDesktopCutCanvasHandoffPayload,
+  DesktopCutRuntime,
+  parseDesktopCutCanvasHandoffPayload,
+} from './desktop-cut-runtime';
 import { createDesktopNativeThemeController } from './desktop-native-theme';
 import {
   createDefaultDesktopApplicationSettingsState,
@@ -519,6 +523,43 @@ async function startDesktop(): Promise<void> {
     shell: shellService,
     host,
     resources: resourceRegistry,
+    draftLabel: app.getLocale().toLocaleLowerCase().startsWith('zh')
+      ? '未命名剪辑'
+      : 'Untitled Cut',
+    selectDraftDestination: async ({ identity, workspacePath, defaultName }) => {
+      const owner = requireOwnerWindow(identity.windowId);
+      const result = await dialog.showSaveDialog(owner, {
+        title: app.getLocale().toLocaleLowerCase().startsWith('zh') ? '保存剪辑' : 'Save Cut',
+        defaultPath: path.join(workspacePath, defaultName),
+        filters: [{ name: 'OpenTimelineIO', extensions: ['otio'] }],
+      });
+      if (result.canceled || !result.filePath) return undefined;
+      const relativePath = path.relative(workspacePath, result.filePath);
+      if (
+        !relativePath ||
+        path.isAbsolute(relativePath) ||
+        relativePath === '..' ||
+        relativePath.startsWith(`..${path.sep}`)
+      ) {
+        throw new Error('Desktop Cut document target must remain inside the granted workspace.');
+      }
+      return relativePath.split(path.sep).join('/');
+    },
+    confirmDiscardDraft: async ({ identity, label }) => {
+      const owner = requireOwnerWindow(identity.windowId);
+      const usesChinese = app.getLocale().toLocaleLowerCase().startsWith('zh');
+      const result = await dialog.showMessageBox(owner, {
+        type: 'warning',
+        title: usesChinese ? '放弃未保存的剪辑？' : 'Discard unsaved Cut?',
+        message: usesChinese
+          ? `“${label}”尚未保存。是否放弃更改？`
+          : `“${label}” has not been saved. Discard changes?`,
+        buttons: usesChinese ? ['取消', '放弃'] : ['Cancel', 'Discard'],
+        defaultId: 0,
+        cancelId: 0,
+      });
+      return result.response === 1;
+    },
     selectMediaFiles: async ({ identity, trackKind }) => {
       const owner = requireOwnerWindow(identity.windowId);
       const result = await dialog.showOpenDialog(owner, {
@@ -576,7 +617,8 @@ async function startDesktop(): Promise<void> {
     materialActionLabels: {
       preview: canvasUsesChineseLabels ? '预览' : 'Preview',
       reveal: canvasUsesChineseLabels ? '在访达中显示' : 'Reveal in Finder',
-      openInCut: canvasUsesChineseLabels ? '在剪辑中打开' : 'Open in Cut',
+      openInCut: canvasUsesChineseLabels ? '打开剪辑' : 'Open Cut',
+      addToCut: canvasUsesChineseLabels ? '添加到剪辑' : 'Add to Cut',
       copyToProjectMediaLibrary: canvasUsesChineseLabels
         ? '复制到项目媒体库'
         : 'Copy to project Media Library',
@@ -736,6 +778,21 @@ async function startDesktop(): Promise<void> {
         },
         item,
         absolutePath,
+      });
+    },
+    resolveAddToCut: async ({ identity }) =>
+      createDesktopCutCanvasHandoffPayload(await cutRuntime.resolveCanvasHandoffTarget(identity)),
+    addToCut: async ({ identity, target, executionPayload }) => {
+      const label =
+        target.locator.kind === 'workspace-file' || target.locator.kind === 'generated-output'
+          ? path.posix.basename(target.locator.path)
+          : target.nodeId;
+      await cutRuntime.addCanvasMaterial({
+        identity,
+        nodeId: target.nodeId,
+        label,
+        locator: target.locator,
+        target: parseDesktopCutCanvasHandoffPayload(executionPayload),
       });
     },
     createPreviewVariant: ({ absolutePath }) =>

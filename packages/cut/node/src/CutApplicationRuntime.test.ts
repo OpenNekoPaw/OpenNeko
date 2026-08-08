@@ -353,6 +353,81 @@ describe('CutApplicationRuntime', () => {
     await runtime.dispose();
   });
 
+  it('owns an unnamed dirty draft without authorizing or writing a document path', async () => {
+    const identity = { ...fixtureIdentity(), documentId: 'cut-draft:draft-1' };
+    const storage: CutDocumentStorage = {
+      read: vi.fn(async () => {
+        throw new Error('Cut draft must not read persisted bytes.');
+      }),
+      write: vi.fn(async () => {
+        throw new Error('Cut draft must not write before Save As.');
+      }),
+    };
+    const authorizeSession = vi.fn(async () => {
+      throw new Error('Attached Cut draft must not request file authorization.');
+    });
+    const runtime = new CutApplicationRuntime({
+      authorizeSession,
+      authorizeNewSession: authorizeSession,
+      resolveResourcePath: async () => {
+        throw new Error('Resource resolution is not part of this scenario.');
+      },
+      readText: async () => {
+        throw new Error('Text reading is not part of this scenario.');
+      },
+      createPreviewMediaAdapter: () => mediaAdapter(),
+    });
+
+    const created = runtime.createDraft({
+      identity,
+      name: 'Untitled Cut',
+      documentPath: '/fixture/Untitled Cut.otio',
+      workspacePath: '/fixture',
+      storage,
+    });
+
+    expect(created).toMatchObject({
+      identity,
+      dirty: true,
+      document: {
+        name: 'Untitled Cut',
+        tracks: [expect.objectContaining({ kind: 'Video', items: [] })],
+      },
+    });
+    await expect(runtime.getSnapshot(identity.windowId, identity)).resolves.toMatchObject({
+      dirty: true,
+    });
+    expect(authorizeSession).not.toHaveBeenCalled();
+    expect(storage.read).not.toHaveBeenCalled();
+    expect(storage.write).not.toHaveBeenCalled();
+    runtime.discardSession(identity.windowId, identity);
+    await runtime.dispose();
+  });
+
+  it('rejects an expired unnamed draft without attempting file authorization', async () => {
+    const identity = { ...fixtureIdentity(), documentId: 'cut-draft:expired' };
+    const authorizeSession = vi.fn(async () => {
+      throw new Error('Expired Cut draft must not request file authorization.');
+    });
+    const runtime = new CutApplicationRuntime({
+      authorizeSession,
+      authorizeNewSession: authorizeSession,
+      resolveResourcePath: async () => {
+        throw new Error('Resource resolution is not part of this scenario.');
+      },
+      readText: async () => {
+        throw new Error('Text reading is not part of this scenario.');
+      },
+      createPreviewMediaAdapter: () => mediaAdapter(),
+    });
+
+    await expect(runtime.getSnapshot(identity.windowId, identity)).rejects.toThrow(
+      'draft session is unavailable in this application process',
+    );
+    expect(authorizeSession).not.toHaveBeenCalled();
+    await runtime.dispose();
+  });
+
   it('rejects removed request fields without affecting independent sessions', async () => {
     const unexpectedField = 'unexpectedField';
     const firstIdentity = fixtureIdentity();

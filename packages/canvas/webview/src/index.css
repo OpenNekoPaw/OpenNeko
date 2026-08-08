@@ -1431,6 +1431,33 @@ html.canvas-webview-document #root,
   cursor: pointer;
 }
 
+.selection-action-overflow {
+  display: flex;
+  min-width: 196px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.selection-action-overflow__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 0;
+  border-top: 1px solid var(--toolbar-border);
+}
+
+.selection-action-overflow__group:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.selection-action-overflow__label {
+  padding: 2px 8px;
+  color: var(--toolbar-fg-secondary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .selection-material-generation-bar {
   position: absolute;
   z-index: 69;
