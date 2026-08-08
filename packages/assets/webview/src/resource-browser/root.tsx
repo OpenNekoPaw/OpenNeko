@@ -1,4 +1,5 @@
 import { type SupportedLocale } from '@neko/ui/i18n';
+import { PositionedContextMenu, type MenuItem } from '@neko/ui/primitives';
 import { CONTENT_LOCATOR_DRAG_MIME, createContentLocatorDragData } from '@neko/content';
 import {
   ChevronDownIcon,
@@ -23,6 +24,7 @@ import {
 import React, {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type DragEvent,
@@ -69,13 +71,11 @@ export interface ResourceBrowserRootProps {
   readonly locale: SupportedLocale;
   readonly chrome?: 'standalone' | 'embedded';
   readonly defaultViewMode?: 'list' | 'grid';
-  readonly refreshControl?: 'visible' | 'hidden';
   readonly lifecyclePresentation?: 'active' | 'suspended';
   readonly previewTarget?: {
     readonly viewId: string;
     readonly presentation: 'temporary' | 'side';
   };
-  readonly onOpenCanvas?: (item: ResourceBrowserItem, presentation: 'main' | 'side') => void;
   readonly renderQuickPreview?: (
     descriptor: ResourceBrowserQuickPreviewResult['descriptor'],
   ) => ReactNode;
@@ -86,14 +86,21 @@ type ResourceBrowserRootState =
   | { readonly kind: 'ready'; readonly projection: ResourceBrowserProjection }
   | { readonly kind: 'error'; readonly message: string };
 
+type ResourceBrowserCreateKind = 'file' | 'directory' | 'canvas' | 'cut';
+
+const FILE_CREATION_KINDS: readonly ResourceBrowserCreateKind[] = [
+  'file',
+  'directory',
+  'canvas',
+  'cut',
+];
+
 export function ResourceBrowserRoot({
   chrome = 'standalone',
   defaultViewMode = 'list',
   locale,
   lifecyclePresentation = 'active',
-  onOpenCanvas,
   previewTarget,
-  refreshControl = 'visible',
   renderQuickPreview,
   runtime,
 }: ResourceBrowserRootProps): ReactElement {
@@ -133,18 +140,26 @@ export function ResourceBrowserRoot({
   const quickPreviewRequestId = useRef<string>();
   const quickPreviewTimer = useRef<ReturnType<typeof setTimeout>>();
   const quickPreviewSession = useRef<string>();
+  const createEntryExtensionId = useId();
   const libraryMenuRef = useRef<HTMLDivElement>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const libraryMenuButtonRef = useRef<HTMLButtonElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     readonly x: number;
     readonly y: number;
     readonly facet: ResourceBrowserFacet;
     readonly item?: ResourceBrowserItem;
+    readonly returnFocus: HTMLElement;
   }>();
-  const [createDirectoryParent, setCreateDirectoryParent] = useState<
-    { readonly invocationId: string; readonly item?: ResourceBrowserItem } | undefined
+  const [createEntry, setCreateEntry] = useState<
+    | {
+        readonly invocationId: string;
+        readonly kind: ResourceBrowserCreateKind;
+        readonly item?: ResourceBrowserItem;
+      }
+    | undefined
   >();
-  const [directoryName, setDirectoryName] = useState('');
+  const [entryName, setEntryName] = useState('');
+  const [createEntryError, setCreateEntryError] = useState<string>();
   const [quickPreview, setQuickPreview] = useState<{
     readonly resourceId: string;
     readonly result: ResourceBrowserQuickPreviewResult;
@@ -157,27 +172,9 @@ export function ResourceBrowserRoot({
       }
     };
     document.addEventListener('pointerdown', closeOnOutsidePointer);
+    libraryMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
   }, [libraryMenuOpen]);
-
-  useEffect(() => {
-    if (!contextMenu) return undefined;
-    const closeOnOutsidePointer = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !contextMenuRef.current?.contains(event.target)) {
-        setContextMenu(undefined);
-      }
-    };
-    const closeOnEscape = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === 'Escape') setContextMenu(undefined);
-    };
-    document.addEventListener('pointerdown', closeOnOutsidePointer);
-    document.addEventListener('keydown', closeOnEscape);
-    contextMenuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [contextMenu]);
 
   const releaseQuickPreview = useCallback(
     (surfaceActive = true): void => {
@@ -417,19 +414,20 @@ export function ResourceBrowserRoot({
 
   const execute = async (
     route:
-      | 'refresh'
       | 'source.link-global-library'
+      | 'projection.reconcile'
       | 'source.add-directory-library'
       | 'source.relink'
       | 'source.remove'
-      | 'content.create-directory'
-      | 'content.import-files'
+      | 'workspace-entry.create-file'
+      | 'workspace-entry.create-directory'
+      | 'creative-document.create'
+      | 'creative-document.open'
       | 'content.trash'
       | 'preview'
-      | 'cut.open'
       | 'reveal',
     item?: ResourceBrowserItem,
-    directoryNameInput?: string,
+    entryNameInput?: string,
   ): Promise<void> => {
     requestSequence.current += 1;
     setPending(true);
@@ -439,7 +437,7 @@ export function ResourceBrowserRoot({
         identity: runtime.identity,
         route,
         ...(item ? { resourceId: item.resourceId } : {}),
-        ...(directoryNameInput ? { directoryName: directoryNameInput } : {}),
+        ...(entryNameInput ? { entryName: entryNameInput } : {}),
         ...(route === RESOURCE_BROWSER_ROUTES.preview && previewTarget
           ? { targetPreview: previewTarget }
           : {}),
@@ -468,6 +466,133 @@ export function ResourceBrowserRoot({
 
   const projection = state.projection;
   const selectedId = selectedIdByFacet[projection.facet];
+  const selectedItem = selectedId
+    ? projection.items.find((item) => item.resourceId === selectedId)
+    : undefined;
+  const creationKinds =
+    projection.facet === 'files' && projection.query.length === 0 ? FILE_CREATION_KINDS : [];
+  const creationTargetLabel = resolveCreationTargetLabel(
+    projection.items,
+    selectedItem,
+    labels.workspaceRoot,
+  );
+
+  const beginCreateEntry = (
+    kind: ResourceBrowserCreateKind,
+    explicitItem?: ResourceBrowserItem | null,
+  ): void => {
+    const item = explicitItem === null ? undefined : (explicitItem ?? selectedItem);
+    if (item?.facet === 'files' && item.kind === 'directory') {
+      setExpandedIds((current) => new Set(current).add(item.resourceId));
+    }
+    setEntryName('');
+    setCreateEntryError(undefined);
+    setCreateEntry({
+      invocationId: `create-${kind}:${globalThis.crypto.randomUUID()}`,
+      kind,
+      ...(item?.facet === 'files' ? { item } : {}),
+    });
+  };
+
+  const submitCreateEntry = async (): Promise<void> => {
+    if (!createEntry || !entryName) return;
+    const submittedEntryName = `${entryName.normalize('NFC')}${creativeDocumentExtension(
+      createEntry.kind,
+    )}`;
+    requestSequence.current += 1;
+    setPending(true);
+    setCreateEntryError(undefined);
+    try {
+      const resultProjection = await runtime.execute({
+        requestId: `resource-intent-${requestSequence.current}`,
+        identity: runtime.identity,
+        route:
+          createEntry.kind === 'canvas' || createEntry.kind === 'cut'
+            ? RESOURCE_BROWSER_ROUTES.createCreativeDocument
+            : createEntry.kind === 'file'
+              ? RESOURCE_BROWSER_ROUTES.createFile
+              : RESOURCE_BROWSER_ROUTES.createDirectory,
+        ...(createEntry.item ? { resourceId: createEntry.item.resourceId } : {}),
+        entryName: submittedEntryName,
+        ...(createEntry.kind === 'canvas' || createEntry.kind === 'cut'
+          ? { documentKind: createEntry.kind }
+          : {}),
+      });
+      reconcileRetainedContainer(resultProjection, setActiveContainerByFacet);
+      const createdPath = resolveCreatedEntryPath(
+        createEntry.item,
+        submittedEntryName,
+        createEntry.kind,
+      );
+      const created = resultProjection.items.find(
+        (item) =>
+          item.facet === 'files' &&
+          item.locator.kind === 'workspace-file' &&
+          item.locator.path === createdPath,
+      );
+      setSelectedIdByFacet((current) => ({
+        ...current,
+        files: created?.resourceId,
+      }));
+      setState({ kind: 'ready', projection: resultProjection });
+      setCreateEntry(undefined);
+      setEntryName('');
+    } catch (error: unknown) {
+      setCreateEntryError(describeError(error));
+    } finally {
+      setPending(false);
+    }
+  };
+  const createEntryExtension = createEntry ? creativeDocumentExtension(createEntry.kind) : '';
+  const createEntryForm = createEntry ? (
+    <form
+      className="neko-resource-browser__create-entry"
+      style={
+        viewMode === 'list'
+          ? { paddingLeft: 7 + resolveCreateEntryDepth(createEntry.item) * 14 }
+          : undefined
+      }
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submitCreateEntry();
+      }}
+    >
+      <span aria-hidden="true">
+        {createEntry.kind === 'directory' ? (
+          <FolderIcon size={14} />
+        ) : createEntry.kind === 'canvas' ? (
+          <CodeIcon size={14} />
+        ) : createEntry.kind === 'cut' ? (
+          <EditIcon size={14} />
+        ) : (
+          <FileIcon size={14} />
+        )}
+      </span>
+      <label className="neko-resource-browser__create-entry-name">
+        <input
+          autoFocus
+          aria-describedby={createEntryExtension ? createEntryExtensionId : undefined}
+          aria-label={labels.entryName}
+          value={entryName}
+          onChange={(event) => {
+            setEntryName(event.currentTarget.value);
+            setCreateEntryError(undefined);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            setCreateEntry(undefined);
+            setEntryName('');
+            setCreateEntryError(undefined);
+          }}
+        />
+        {createEntryExtension ? (
+          <span id={createEntryExtensionId}>{createEntryExtension}</span>
+        ) : null}
+      </label>
+      {createEntryError ? <small role="alert">{createEntryError}</small> : null}
+    </form>
+  ) : null;
   const selectedEntity = selectedId
     ? projection.items.find((item) => item.resourceId === selectedId && item.facet === 'entities')
     : undefined;
@@ -651,6 +776,7 @@ export function ResourceBrowserRoot({
       y: event.clientY,
       facet: projection.facet,
       ...(item ? { item } : {}),
+      returnFocus: event.currentTarget as HTMLElement,
     });
   };
 
@@ -676,65 +802,85 @@ export function ResourceBrowserRoot({
           />
         </div>
         <div className="neko-resource-browser__toolbar">
-          {projection.facet === 'media' ? (
+          {projection.facet === 'files' || projection.facet === 'media' ? (
             <div
               className="neko-resource-browser__library-menu"
               ref={libraryMenuRef}
               onKeyDown={(event) => {
-                if (event.key === 'Escape') setLibraryMenuOpen(false);
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                setLibraryMenuOpen(false);
+                globalThis.queueMicrotask(() => libraryMenuButtonRef.current?.focus());
               }}
             >
               <button
+                ref={libraryMenuButtonRef}
                 type="button"
                 className="neko-resource-browser__icon-button"
-                disabled={pending}
-                aria-label={labels.configureMediaLibraries}
+                disabled={pending || (projection.facet === 'files' && creationKinds.length === 0)}
+                aria-label={
+                  projection.facet === 'files' ? labels.createMenu : labels.configureMediaLibraries
+                }
                 aria-haspopup="menu"
                 aria-expanded={libraryMenuOpen}
-                title={labels.configureMediaLibraries}
+                title={
+                  projection.facet === 'files' ? labels.createMenu : labels.configureMediaLibraries
+                }
                 onClick={() => setLibraryMenuOpen((open) => !open)}
               >
                 <PlusIcon size={15} />
               </button>
               {libraryMenuOpen ? (
                 <div className="neko-resource-browser__library-menu-content" role="menu">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setLibraryMenuOpen(false);
-                      void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
-                    }}
-                  >
-                    <PackageIcon size={14} aria-hidden="true" />
-                    <span>{labels.linkGlobalLibrary}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setLibraryMenuOpen(false);
-                      void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
-                    }}
-                  >
-                    <FolderIcon size={14} aria-hidden="true" />
-                    <span>{labels.addDirectoryLibrary}</span>
-                  </button>
+                  {projection.facet === 'files' ? (
+                    <>
+                      <span className="neko-resource-browser__create-target" role="presentation">
+                        {labels.createTarget.replace('{target}', creationTargetLabel)}
+                      </span>
+                      {creationKinds.map((kind) => (
+                        <button
+                          key={kind}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setLibraryMenuOpen(false);
+                            beginCreateEntry(kind);
+                          }}
+                        >
+                          {createKindIcon(kind)}
+                          <span>{createKindLabel(kind, labels)}</span>
+                        </button>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setLibraryMenuOpen(false);
+                          void execute(RESOURCE_BROWSER_ROUTES.linkGlobalLibrary);
+                        }}
+                      >
+                        <PackageIcon size={14} aria-hidden="true" />
+                        <span>{labels.linkGlobalLibrary}</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setLibraryMenuOpen(false);
+                          void execute(RESOURCE_BROWSER_ROUTES.addDirectoryLibrary);
+                        }}
+                      >
+                        <FolderIcon size={14} aria-hidden="true" />
+                        <span>{labels.addDirectoryLibrary}</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : null}
             </div>
-          ) : null}
-          {refreshControl === 'visible' ? (
-            <button
-              type="button"
-              className="neko-resource-browser__icon-button"
-              disabled={pending}
-              aria-label={labels.refresh}
-              title={labels.refresh}
-              onClick={() => void execute(RESOURCE_BROWSER_ROUTES.refresh)}
-            >
-              <RefreshIcon size={15} />
-            </button>
           ) : null}
           <div className="neko-resource-browser__view-modes">
             <button
@@ -813,6 +959,15 @@ export function ResourceBrowserRoot({
                 key={`${diagnostic.code}:${diagnostic.recordId ?? diagnostic.message}:${String(index)}`}
               >
                 {diagnostic.message}
+                {diagnostic.code === 'workspace-observation-failed' ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void execute(RESOURCE_BROWSER_ROUTES.reconcile)}
+                  >
+                    {labels.rescan}
+                  </button>
+                ) : null}
               </span>
             ))}
           </div>
@@ -831,6 +986,9 @@ export function ResourceBrowserRoot({
             openContextMenu(event);
           }}
         >
+          {createEntry && !createEntry.item && projection.facet === 'files'
+            ? createEntryForm
+            : null}
           {projection.items.length === 0 ? (
             <div className="neko-resource-browser__empty">{labels.empty}</div>
           ) : (
@@ -869,26 +1027,28 @@ export function ResourceBrowserRoot({
                       }));
                       if (event.detail > 1) return;
                       if (item.role === 'directory' || item.role === 'library-root') {
+                        if (
+                          treePresentation &&
+                          navigableFacet &&
+                          event.target instanceof Element &&
+                          event.target.closest('.neko-resource-browser__disclosure')
+                        ) {
+                          void toggleTreeContainer(navigableFacet, item);
+                        }
                         return;
                       }
-                      if (
-                        isWorkspaceDocument(item, '.otio') &&
-                        item.capabilities.includes('open-cut') &&
-                        !pending
-                      ) {
-                        void execute(RESOURCE_BROWSER_ROUTES.openCut, item);
-                        return;
-                      }
-                      if (isWorkspaceDocument(item, '.nkc') && onOpenCanvas && !pending) {
-                        onOpenCanvas(item, 'main');
+                      if (item.capabilities.includes('open-creative-document') && !pending) {
+                        void execute(RESOURCE_BROWSER_ROUTES.openCreativeDocument, item);
                         return;
                       }
                       if (previewTarget && item.capabilities.includes('preview') && !pending) {
                         void execute(RESOURCE_BROWSER_ROUTES.preview, item);
                       }
                     }}
-                    onDoubleClick={() => {
+                    onDoubleClick={(event) => {
                       if (
+                        (event.target instanceof Element &&
+                          event.target.closest('.neko-resource-browser__disclosure')) ||
                         !navigableFacet ||
                         projection.query.length > 0 ||
                         (item.role !== 'directory' && item.role !== 'library-root') ||
@@ -906,11 +1066,16 @@ export function ResourceBrowserRoot({
                       if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
                         event.preventDefault();
                         const bounds = event.currentTarget.getBoundingClientRect();
+                        setSelectedIdByFacet((current) => ({
+                          ...current,
+                          [projection.facet]: item.resourceId,
+                        }));
                         setContextMenu({
                           x: bounds.left + 12,
                           y: bounds.top + 12,
                           facet: projection.facet,
                           item,
+                          returnFocus: event.currentTarget,
                         });
                         return;
                       }
@@ -1021,6 +1186,7 @@ export function ResourceBrowserRoot({
                     </div>
                   ) : null}
                 </div>
+                {createEntry?.item?.resourceId === item.resourceId ? createEntryForm : null}
               </React.Fragment>
             ))
           )}
@@ -1042,23 +1208,31 @@ export function ResourceBrowserRoot({
       {contextMenu ? (
         <ResourceBrowserContextMenu
           menu={contextMenu}
-          menuRef={contextMenuRef}
           labels={labels}
           pending={pending}
           previewAvailable={previewTarget !== undefined}
+          creationKinds={creationKinds}
+          onClose={() => {
+            const returnFocus = contextMenu.returnFocus;
+            setContextMenu(undefined);
+            globalThis.queueMicrotask(() => returnFocus.focus());
+          }}
           onAction={(action) => {
             const item = contextMenu.item;
-            setContextMenu(undefined);
-            if (action === 'create-directory') {
-              setDirectoryName('');
-              setCreateDirectoryParent({
-                invocationId: `create-directory:${globalThis.crypto.randomUUID()}`,
-                ...(item ? { item } : {}),
-              });
+            if (action === 'create-file') {
+              beginCreateEntry('file', item ?? null);
               return;
             }
-            if (action === 'import-files') {
-              void execute(RESOURCE_BROWSER_ROUTES.importFiles, item);
+            if (action === 'create-directory') {
+              beginCreateEntry('directory', item ?? null);
+              return;
+            }
+            if (action === 'create-canvas') {
+              beginCreateEntry('canvas', item ?? null);
+              return;
+            }
+            if (action === 'create-cut') {
+              beginCreateEntry('cut', item ?? null);
               return;
             }
             if (action === 'trash-content') {
@@ -1077,7 +1251,9 @@ export function ResourceBrowserRoot({
             }
             if (!item) return;
             if (action === 'preview') void execute(RESOURCE_BROWSER_ROUTES.preview, item);
-            if (action === 'open-cut') void execute(RESOURCE_BROWSER_ROUTES.openCut, item);
+            if (action === 'open-cut') {
+              void execute(RESOURCE_BROWSER_ROUTES.openCreativeDocument, item);
+            }
             if (action === 'reveal') void execute(RESOURCE_BROWSER_ROUTES.reveal, item);
             if (action === 'recover') void requestRecovery(item, 'existing-global');
             if (action === 'relink') void execute(RESOURCE_BROWSER_ROUTES.relinkSource, item);
@@ -1086,42 +1262,6 @@ export function ResourceBrowserRoot({
             }
           }}
         />
-      ) : null}
-      {createDirectoryParent ? (
-        <div className="neko-resource-browser__dialog-backdrop">
-          <form
-            className="neko-resource-browser__dialog"
-            role="dialog"
-            aria-modal="true"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const name = directoryName.trim();
-              if (!name) return;
-              void execute(
-                RESOURCE_BROWSER_ROUTES.createDirectory,
-                createDirectoryParent.item,
-                name,
-              );
-              setCreateDirectoryParent(undefined);
-            }}
-          >
-            <strong>{labels.createDirectory}</strong>
-            <input
-              autoFocus
-              aria-label={labels.directoryName}
-              value={directoryName}
-              onChange={(event) => setDirectoryName(event.currentTarget.value)}
-            />
-            <div>
-              <button type="submit" disabled={pending || !directoryName.trim()}>
-                {labels.confirm}
-              </button>
-              <button type="button" onClick={() => setCreateDirectoryParent(undefined)}>
-                {labels.recoveryCancel}
-              </button>
-            </div>
-          </form>
-        </div>
       ) : null}
       {recovery ? (
         <div className="neko-resource-browser__dialog-backdrop">
@@ -1174,8 +1314,10 @@ export function ResourceBrowserRoot({
 }
 
 type ResourceBrowserContextAction =
+  | 'create-file'
   | 'create-directory'
-  | 'import-files'
+  | 'create-canvas'
+  | 'create-cut'
   | 'trash-content'
   | 'link-library'
   | 'add-library'
@@ -1187,22 +1329,25 @@ type ResourceBrowserContextAction =
   | 'remove-library';
 
 function ResourceBrowserContextMenu({
+  creationKinds,
   labels,
   menu,
-  menuRef,
   onAction,
+  onClose,
   pending,
   previewAvailable,
 }: {
+  readonly creationKinds: readonly ResourceBrowserCreateKind[];
   readonly labels: ReturnType<typeof getResourceBrowserLabels>;
   readonly menu: {
     readonly x: number;
     readonly y: number;
     readonly facet: ResourceBrowserFacet;
     readonly item?: ResourceBrowserItem;
+    readonly returnFocus: HTMLElement;
   };
-  readonly menuRef: React.RefObject<HTMLDivElement>;
   readonly onAction: (action: ResourceBrowserContextAction) => void;
+  readonly onClose: () => void;
   readonly pending: boolean;
   readonly previewAvailable: boolean;
 }): ReactElement | null {
@@ -1214,14 +1359,7 @@ function ResourceBrowserContextMenu({
   }[] = [];
   if (!item) {
     if (menu.facet === 'files') {
-      actions.push(
-        {
-          action: 'create-directory',
-          label: labels.createDirectory,
-          icon: <FolderIcon size={14} />,
-        },
-        { action: 'import-files', label: labels.importFiles, icon: <PlusIcon size={14} /> },
-      );
+      actions.push(...createContextActions(creationKinds, labels));
     }
     if (menu.facet === 'media') {
       actions.push(
@@ -1239,19 +1377,15 @@ function ResourceBrowserContextMenu({
     }
   } else {
     if (item.facet === 'files' && item.kind === 'directory') {
-      actions.push(
-        {
-          action: 'create-directory',
-          label: labels.createDirectory,
-          icon: <FolderIcon size={14} />,
-        },
-        { action: 'import-files', label: labels.importFiles, icon: <PlusIcon size={14} /> },
-      );
+      actions.push(...createContextActions(creationKinds, labels));
     }
     if (previewAvailable && item.capabilities.includes('preview')) {
       actions.push({ action: 'preview', label: labels.preview, icon: <PlayIcon size={14} /> });
     }
-    if (item.capabilities.includes('open-cut')) {
+    if (
+      item.capabilities.includes('open-creative-document') &&
+      isWorkspaceDocument(item, '.otio')
+    ) {
       actions.push({ action: 'open-cut', label: labels.openCut, icon: <EditIcon size={14} /> });
     }
     if (item.capabilities.includes('reveal')) {
@@ -1280,29 +1414,21 @@ function ResourceBrowserContextMenu({
     }
   }
   if (actions.length === 0) return null;
+  const items: readonly MenuItem[] = actions.map(({ action, icon, label }) => ({
+    label,
+    icon,
+    disabled: pending,
+    danger: action === 'trash-content' || action === 'remove-library',
+    onClick: () => onAction(action),
+  }));
   return (
-    <div
-      ref={menuRef}
+    <PositionedContextMenu
       className="neko-resource-browser__context-menu"
-      role="menu"
-      style={{
-        left: Math.max(4, Math.min(menu.x, globalThis.innerWidth - 210)),
-        top: Math.max(4, Math.min(menu.y, globalThis.innerHeight - 260)),
-      }}
-    >
-      {actions.map(({ action, icon, label }) => (
-        <button
-          key={action}
-          type="button"
-          role="menuitem"
-          disabled={pending}
-          onClick={() => onAction(action)}
-        >
-          {icon}
-          <span>{label}</span>
-        </button>
-      ))}
-    </div>
+      items={items}
+      x={Math.max(4, menu.x)}
+      y={Math.max(4, menu.y)}
+      onClose={onClose}
+    />
   );
 }
 
@@ -1592,6 +1718,84 @@ function buildBreadcrumbs(
     currentId = current.parentResourceId;
   }
   return result;
+}
+
+function resolveCreateEntryDepth(item: ResourceBrowserItem | undefined): number {
+  if (!item || item.facet !== 'files') return 0;
+  return item.kind === 'directory' ? item.depth + 1 : item.depth;
+}
+
+function resolveCreationTargetLabel(
+  items: readonly ResourceBrowserItem[],
+  item: ResourceBrowserItem | undefined,
+  workspaceRootLabel: string,
+): string {
+  if (!item || item.facet !== 'files') return workspaceRootLabel;
+  if (item.kind === 'directory') return item.label;
+  if (!item.parentResourceId) return workspaceRootLabel;
+  return (
+    items.find(
+      (candidate) =>
+        candidate.resourceId === item.parentResourceId &&
+        candidate.facet === 'files' &&
+        candidate.kind === 'directory',
+    )?.label ?? workspaceRootLabel
+  );
+}
+
+function createKindLabel(
+  kind: ResourceBrowserCreateKind,
+  labels: ReturnType<typeof getResourceBrowserLabels>,
+): string {
+  if (kind === 'file') return labels.createFile;
+  if (kind === 'directory') return labels.createDirectory;
+  if (kind === 'canvas') return labels.createCanvas;
+  return labels.createCut;
+}
+
+function creativeDocumentExtension(kind: ResourceBrowserCreateKind): '.nkc' | '.otio' | '' {
+  if (kind === 'canvas') return '.nkc';
+  if (kind === 'cut') return '.otio';
+  return '';
+}
+
+function createKindIcon(kind: ResourceBrowserCreateKind): ReactElement {
+  if (kind === 'directory') return <FolderIcon size={14} aria-hidden="true" />;
+  if (kind === 'canvas') return <CodeIcon size={14} aria-hidden="true" />;
+  if (kind === 'cut') return <EditIcon size={14} aria-hidden="true" />;
+  return <FileIcon size={14} aria-hidden="true" />;
+}
+
+function createContextActions(
+  kinds: readonly ResourceBrowserCreateKind[],
+  labels: ReturnType<typeof getResourceBrowserLabels>,
+): readonly {
+  readonly action: Extract<ResourceBrowserContextAction, `create-${string}`>;
+  readonly label: string;
+  readonly icon: ReactNode;
+}[] {
+  return kinds.map((kind) => ({
+    action: `create-${kind}` as const,
+    label: createKindLabel(kind, labels),
+    icon: createKindIcon(kind),
+  }));
+}
+
+function resolveCreatedEntryPath(
+  item: ResourceBrowserItem | undefined,
+  requestedName: string,
+  kind: 'file' | 'directory' | 'canvas' | 'cut',
+): string {
+  const extension = kind === 'canvas' ? '.nkc' : kind === 'cut' ? '.otio' : '';
+  const name =
+    extension && !requestedName.toLocaleLowerCase('en-US').endsWith(extension)
+      ? `${requestedName}${extension}`
+      : requestedName.slice(0, requestedName.length - (extension ? extension.length : 0)) +
+        extension;
+  if (!item || item.facet !== 'files' || item.locator.kind !== 'workspace-file') return name;
+  if (item.kind === 'directory') return `${item.locator.path}/${name}`;
+  const separator = item.locator.path.lastIndexOf('/');
+  return separator < 0 ? name : `${item.locator.path.slice(0, separator)}/${name}`;
 }
 
 function isWorkspaceDocument(item: ResourceBrowserItem, extension: '.nkc' | '.otio'): boolean {

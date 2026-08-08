@@ -64,6 +64,15 @@
   white-space: nowrap;
 }
 
+.neko-resource-browser__create-target {
+  overflow: hidden;
+  padding: 5px 7px 4px;
+  color: var(--neko-descriptionForeground, #747d78);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .neko-resource-browser__context-menu {
   position: fixed;
   z-index: 40;
@@ -254,6 +263,62 @@
   gap: 6px;
 }
 
+.neko-resource-browser__create-entry {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 7px;
+}
+
+.neko-resource-browser__items[data-view-mode='grid'] .neko-resource-browser__create-entry {
+  grid-column: 1 / -1;
+}
+
+.neko-resource-browser__create-entry > span {
+  display: inline-flex;
+  color: var(--neko-descriptionForeground, #747d78);
+}
+
+.neko-resource-browser__create-entry-name {
+  display: flex;
+  min-width: 0;
+  height: 26px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--neko-focusBorder, #2f6f58);
+  border-radius: 4px;
+  color: var(--neko-foreground, #1f2723);
+  background: var(--neko-inputBackground, #ffffff);
+}
+
+.neko-resource-browser__create-entry input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  border: 0;
+  padding: 0 0 0 7px;
+  color: var(--neko-foreground, #1f2723);
+  background: transparent;
+  outline: none;
+}
+
+.neko-resource-browser__create-entry-name > span {
+  flex: 0 0 auto;
+  padding: 0 7px 0 2px;
+  color: var(--neko-descriptionForeground, #747d78);
+  font-size: 11px;
+  user-select: none;
+}
+
+.neko-resource-browser__create-entry small {
+  grid-column: 2;
+  color: var(--neko-errorForeground, #b42318);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
 .neko-resource-browser__section-title {
   padding: 8px 7px 4px;
   color: var(--neko-descriptionForeground, #747d78);
@@ -324,10 +389,12 @@
   height: 20px;
   place-items: center;
   color: var(--neko-descriptionForeground, #747d78);
+  cursor: pointer;
 }
 
 .neko-resource-browser__disclosure.is-placeholder {
   visibility: hidden;
+  cursor: default;
 }
 
 .neko-resource-browser__items[data-view-mode='grid'] .neko-resource-browser__item-row {

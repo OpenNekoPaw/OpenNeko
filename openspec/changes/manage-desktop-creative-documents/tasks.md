@@ -1,133 +1,115 @@
 ## 1. Freeze contracts and owner boundaries
 
-- [ ] 1.0 Establish `@neko/content/project-file-io` as the canonical owner of the host-neutral
-      creative-document lifecycle coordinator and public contract; Desktop may retain only sender/path
-      authorization, native picker/trash/file adapters, Workbench projection and composition.
-- [ ] 1.1 Define the canonical Desktop creative-document create/import/open/trash-plan/trash-apply
-      request, result, diagnostic, identity, document-kind, and plan contracts with strict parsers and
-      producer/consumer tests.
-- [ ] 1.2 Extend the Assets Resource Browser contract with explicit creative-document, workspace-file
-      trash, empty-directory trash, and container-action capabilities without exposing absolute paths or
-      Desktop implementation types.
-- [ ] 1.3 Define narrow Canvas and Cut document-owner ports for canonical create, validate,
-      save/discard, dirty-state, task-state, and session-release behavior; document their owner,
-      lifecycle, error contract, and replacement condition.
-- [ ] 1.4 Add Main/preload/renderer bridge contract tests proving sender binding, stale
-      project/workspace/window/endpoint/revision rejection, and the absence of generic IPC or filesystem
-      exposure.
+- [x] 1.1 Establish `@neko/content/project-file-io` as the canonical owner of workspace-entry create
+      and creative-document lifecycle contracts; document Assets presentation/projection ownership,
+      Canvas/Cut byte ownership, and Desktop Application-boundary responsibilities.
+- [x] 1.2 Define strict ordinary-file, directory, Canvas, Cut, and open
+      request/result/diagnostic contracts with explicit Project/Workspace/Window/endpoint/request,
+      target-directory, and Resource Browser owner/projection identities.
+- [x] 1.3 Remove `content.import-files` and its picker/copy contract from Assets, Main, preload, and
+      renderer; add poison tests proving a forged or stale import request cannot open a picker or mutate
+      either source or Workspace files.
+- [x] 1.4 Extend Resource Browser contracts with immutable create capabilities, inline naming state,
+      observation/reconciliation diagnostics, and one-shot Rescan recovery without absolute paths,
+      Electron types, normal Refresh, or a generic filesystem bridge.
+- [x] 1.5 Define narrow Canvas and Cut owner ports for canonical create, validate, and open/focus;
+      document lifecycle and exact failure behavior.
+- [x] 1.6 Add producer/consumer and Main/preload/renderer contract tests for sender binding, stale
+      identity rejection, fail-local diagnostics, and absence of import/refresh/rename routes.
 
-## 2. Implement canonical document owner operations
+## 2. Implement ordinary Workspace entry creation
 
-- [ ] 2.1 Expose the existing canonical empty Canvas factory and NKC validation/serialization through
-      the Canvas owner port, including a regression test that forbids Desktop-authored substitute JSON.
-- [ ] 2.2 Expose canonical Cut v1 OTIO construction/validation through the Cut owner port using the
-      existing profile, `createOtioTimeline`, `CutDocumentSession.create`, and codec path.
-- [ ] 2.3 Implement owner default-directory resolution for Canvas and Cut as portable
-      workspace-relative configuration, with path/name/extension validation and protected
-      `neko/boards/workspace.nkc` handling.
-- [ ] 2.4 Add owner tests for valid create bytes, invalid imports, dirty save/discard, task blockers,
-      session release, and explicit identity mismatch failures.
+- [x] 2.1 Implement the canonical portable single-segment name policy with NFC normalization,
+      containment, reserved-name/trailing-dot-space/control-character rejection, and focused tests.
+- [x] 2.2 Implement zero-byte ordinary-file exclusive publication through the existing Content writer,
+      rejecting `.nkc`/`.otio` case-insensitively and preserving every existing target on conflict.
+- [x] 2.3 Implement empty-directory creation with fail-if-exists semantics and no hidden metadata,
+      implicit suffix, recursive parent creation, or partial successful result.
+- [x] 2.4 Implement and test exact target resolution for selected directory, selected-file parent,
+      no-selection root, directory context menu, blank-area root, and stale-target rejection with no
+      recent/root/default fallback.
+- [x] 2.5 Add Desktop authorization/delegation adapters and tests proving Renderer never receives
+      absolute paths or direct Node/Electron filesystem capability.
 
-## 3. Implement Desktop create, import, and open coordination
+## 3. Implement canonical Canvas and Cut creation
 
-- [ ] 3.1 Add package-owned `CreativeDocumentLifecycleCoordinator` with explicit owner and Host-port
-      injection; keep sender binding in the Desktop adapter and require
-      workspace authorization, portable directory/name resolution, request idempotency, and typed
-      fail-visible diagnostics.
-- [ ] 3.2 Implement same-directory staging and exclusive publication for new/imported documents,
-      including conflict detection and cleanup that cannot overwrite an existing target or leave partial
-      bytes.
-- [ ] 3.3 Implement create so publication precedes Resource refresh and exact Workbench open/focus,
-      and so failed owner/publish operations leave every projection unchanged.
-- [ ] 3.4 Implement sender-bound native NKC/OTIO import selection, regular-file and symlink guards,
-      owner validation, byte-preserving copy, and explicit missing-reference projection without adjacent
-      media copy or path rebasing.
-- [ ] 3.5 Switch NKC and OTIO open/focus atomically to the lifecycle coordinator while preserving
-      document-scoped Canvas/Cut identity, duplicate focus, Canvas side-open, and Cut Timeline ownership.
-- [ ] 3.6 Add focused coordinator tests for create/import/open success, conflict races, staging
-      cleanup, invalid codec, wrong extension, path escape, symlink input, missing references, duplicate
-      focus, and exact owner-path counters.
+- [x] 3.1 Expose the existing canonical empty Canvas factory and NKC validation/serialization through
+      the Canvas owner port, including proof that Desktop-authored substitute JSON is unreachable.
+- [x] 3.2 Expose canonical OTIO construction/validation through the Cut owner port using the existing
+      profile, factory, session, and codec paths.
+- [x] 3.3 Implement explicit Resource Browser directory handling with extension append/mismatch rules
+      and protected-path policy.
+- [x] 3.4 Publish owner-produced bytes exclusively before Resource invalidation and exact Workbench
+      open/focus; leave all projections unchanged on owner/publication failure.
+- [x] 3.5 Add owner/coordinator tests for valid bytes, conflict races, staging cleanup, invalid owner
+      output, wrong extension, path escape, duplicate focus, and exact owner-path counters.
 
-## 4. Implement reference-aware two-phase trash
+## 4. Implement live Workspace directory projection
 
-- [ ] 4.1 Extend the existing project-content reference reader with exact target matching and
-      registered owner coverage so Canvas, Cut, and Entity representation references and invalid-owner
-      diagnostics can be reported without rewriting project facts.
-- [ ] 4.2 Implement a bounded short-lived trash-plan registry bound to sender, project, workspace,
-      endpoint, target locator, file/directory fingerprint, session state, task state, and reference
-      snapshot.
-- [ ] 4.3 Implement document trash planning that rejects protected, hidden, external, library-root,
-      symlink, stale, or unauthorized targets and projects dirty resolutions, running-task blockers, and
-      reference acknowledgement requirements.
-- [ ] 4.4 Implement trash apply with repeated authorization/fingerprint checks, explicit
-      save-and-trash or discard-and-trash resolution, owner resource release, injected Electron
-      `trashItem`, post-success Workbench reconciliation, and Resource refresh.
-- [ ] 4.5 Implement trash-failure recovery that leaves Workbench removal uncommitted and remounts
-      previous Views when the unchanged source remains after the operating-system trash call fails.
-- [ ] 4.6 Implement empty-directory plan/apply with visible workspace ownership and zero-entry checks;
-      prove recursive deletion is unreachable and reject every non-empty directory.
-- [ ] 4.7 Add regression tests for clean trash, dirty resolution/cancel, active task rejection,
-      referenced acknowledgement, incomplete reference coverage, expired/stale plans, changed bytes,
-      multi-View/multi-window reconciliation, protected workspace Canvas, external/library sources,
-      non-empty directories, trash failure recovery, and absence of permanent delete.
+- [x] 4.1 Add a Workspace-scoped observation service in `packages/assets/node` whose events only
+      invalidate the authoritative Resource Browser projection; document subscription and release
+      lifecycle.
+- [x] 4.2 Coalesce notification bursts and implement affected-subtree/bounded full reconciliation on
+      scene mount, external mutations, Window/application focus restoration, and watcher restart.
+- [x] 4.3 Invalidate the affected projection immediately after successful in-app create/trash while
+      keeping duplicate watcher notifications semantically transparent.
+- [x] 4.4 Project watcher/reconciliation failures as local diagnostics that preserve valid siblings and
+      expose a one-shot Rescan action only while recovery is required.
+- [x] 4.5 Add deterministic observer tests for external add/remove/change, duplicate/coalesced/missed
+      notifications, focus reconciliation, watcher failure/restart, subscription release, and isolation
+      across Workspaces.
 
-## 5. Add Resource Browser management interaction
+## 5. Add Resource Browser creation interaction
 
-- [ ] 5.1 Complete the UI reuse audit and use public `@neko/ui` `ContextMenu` and existing menu/theme
-      primitives; do not create Assets-local menu, focus, icon, or theme foundations.
-- [ ] 5.2 Replace the unconditional Resource Browser `+` behavior with facet-aware visible actions:
-      Files create/import, Media Library link/add-directory, and only implemented Materials actions.
-- [ ] 5.3 Build capability-derived item, directory, and blank-area context menus with
-      selection-before-open, destructive separators, exact unlink/trash wording, and no unauthorized or
-      unsupported side-open commands.
-- [ ] 5.4 Add pointer plus `Shift+F10`/Menu-key invocation, managed focus restoration, disabled/pending
-      states, and localized Chinese/English labels and diagnostics.
-- [ ] 5.5 Remove redundant row-action clutter after menu replacement while retaining immediately
-      actionable recovery/status controls and discoverable toolbar commands.
-- [ ] 5.6 Add Assets component/contract tests for every facet and target role, capability filtering,
-      keyboard navigation, selection, menu separation, protected/external items, and the canonical
-      lifecycle request path.
+- [x] 5.1 Complete the UI reuse audit and use public `@neko/ui` menu/focus primitives; do not create an
+      Assets-local context-menu, icon, or theme foundation.
+- [x] 5.2 Add the accessible icon-only Files `+` menu with New File, New Folder, New Canvas, and New Cut,
+      resolved-target presentation, and no Import, normal Refresh, or Media Library configuration.
+- [x] 5.3 Add capability-derived directory and blank-area creation menus; keep file item context menus
+      scoped to file operations and support pointer plus `Shift+F10`/Menu-key focus behavior.
+- [x] 5.4 Add inline tree naming at the exact target location with directory expansion, autofocus,
+      Enter commit, Escape cancel, pending state, and local validation/conflict diagnostics.
+- [x] 5.5 Add localized Chinese/English labels, accessible names/tooltips, stable compact layout, and
+      focused Assets tests for all target contexts, capability filtering, keyboard behavior, and
+      canonical command emission.
+- [x] 5.6 Render immutable `.nkc`/`.otio` suffixes beside creative-document stem inputs and submit the
+      complete canonical filename, with focused Canvas/Cut tests.
+- [x] 5.7 Make the directory disclosure triangle single-click expand/collapse without changing
+      selection-only row clicks, double-click navigation, or Arrow Left/Right behavior.
 
-## 6. Add empty-Main shortcuts and lifecycle reconciliation
+## 6. Retain safe open behavior
 
-- [ ] 6.1 Replace the diagnostic-only no-View Main body with compact ready-capability New Canvas, New
-      Cut, and Import/Open shortcuts that reuse existing `@neko/ui` controls and responsive Workbench
-      styling.
-- [ ] 6.2 Route empty-Main shortcuts through the same renderer lifecycle client with no target path,
-      optimistic Workbench mutation, document bytes, dirty state, or owner session state in Renderer.
-- [ ] 6.3 Reconcile create/open/trash results with exact Main Groups, Canvas side split, Cut Timeline,
-      matching Views across project windows, and unrelated View preservation.
-- [ ] 6.4 Add Desktop renderer/lifecycle tests for no-View rendering, unavailable owner diagnostics,
-      create/import command identity, successful View replacement, failed-operation stability, and
-      responsive non-overlapping controls.
+- [x] 6.1 Switch NKC/OTIO open/focus to the canonical lifecycle while preserving exact
+      document identity, duplicate focus, Canvas side-open, Cut Timeline ownership, and unrelated Views.
+- [x] 6.2 Prove View close, Media Library unlink, existing Trash, and forged rename remain distinct from
+      creation without changing their current contracts or behavior.
 
 ## 7. Remove replaced paths and synchronize documentation
 
-- [ ] 7.1 Remove the Resource Browser `onOpenCanvas` callback, asymmetric retired Cut open
-      route, direct workspace permanent-delete entry, active/recent target fallback, and any aliases
-      replaced inside this change boundary.
-- [ ] 7.2 Add path-level architecture tests proving Assets stays browser-safe, Main stays React-free,
-      preload exposes only the lifecycle port, the package-owned coordinator and owner codecs/sessions
-      are invoked, app-local workflow is absent, and retired paths cannot return success.
-- [ ] 7.3 Update Desktop/Assets documentation and relevant architecture/domain navigation with the
-      lifecycle owner, Resource Browser versus empty-Main responsibilities, import reference behavior,
-      system-trash semantics, and protected workspace Canvas boundary.
+- [x] 7.1 Remove the old Resource Browser import UI, Electron picker/copy handler, normal Refresh UI,
+      `onOpenCanvas` callback, asymmetric retired Cut open route, active/recent directory fallback, and
+      direct permanent-delete entry inside this change boundary.
+- [x] 7.2 Add path-level architecture tests proving Assets Webview remains browser-safe, Assets Node
+      owns observation, Content owns creation coordination, Canvas/Cut owners produce domain bytes,
+      Desktop delegates, and import/refresh/rename/generic-domain-file bypasses cannot succeed.
+- [x] 7.3 Update Desktop/Assets and domain documentation with filesystem authority, observation
+      lifecycle, target-resolution rules, ordinary versus domain creation, recovery-only Rescan, trash
+      semantics, and the separately deferred rename lifecycle.
 
 ## 8. Verify the complete user path
 
-- [ ] 8.1 Run `pnpm --filter neko-assets test`,
-      `pnpm --filter neko-assets typecheck:resource-browser`,
-      `pnpm --filter @neko/canvas-domain test`, `pnpm --filter @neko/canvas-domain typecheck`,
-      `pnpm --filter @neko/cut-domain test`, and `pnpm --filter @neko/cut-domain typecheck`.
-- [ ] 8.2 Run the focused Desktop contract/Main/preload/renderer tests, then
+- [x] 8.1 Run `pnpm --filter neko-assets test` and
+      `pnpm --filter neko-assets typecheck:resource-browser`.
+- [x] 8.2 Run Content, Canvas, and Cut focused tests/typechecks for portable creation, owner bytes,
+      exclusive publication, and reserved-extension rejection.
+- [x] 8.3 Run focused Desktop contract/Main/preload/renderer tests, then
       `pnpm --filter @neko/app-desktop test` and `pnpm --filter @neko/app-desktop typecheck`.
-- [ ] 8.3 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, and
-      `pnpm check:unused` because the change modifies shared contracts and removes old paths.
-- [ ] 8.4 Extend and run `pnpm test:functional:headless` with isolated create/import/trash path
-      assertions and a controlled trash adapter.
-- [ ] 8.5 Run `pnpm test:local:ui` against an isolated synthetic workspace and record real Electron
-      evidence for Files toolbar/context menus, empty Main, NKC/OTIO create/import/open, protected and
-      referenced rejection, dirty resolution, successful system trash, View cleanup, Resource refresh,
-      focus, and responsive layout.
-- [ ] 8.6 Run `pnpm package:desktop` on the supported host and document any cross-platform
-      system-trash residual risk that cannot be exercised locally.
+- [ ] 8.4 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, and
+      `pnpm check:unused` because the change alters shared contracts and deletes old routes.
+- [x] 8.5 Extend and run `pnpm test:functional:headless` with isolated root/nested ordinary-file,
+      directory, NKC/OTIO, external filesystem reconciliation, and watcher recovery assertions.
+- [x] 8.6 Run `pnpm test:local:ui` against an isolated synthetic Workspace and record visible real
+      Electron evidence for `+`, directory/blank menus, inline naming, target placement, automatic
+      external-file appearance, local diagnostics, creative-document open/focus, and responsive layout.
+- [x] 8.7 Run `pnpm package:desktop` on the supported host and record cross-platform watcher/name/trash
+      residual risks that cannot be exercised locally.

@@ -176,19 +176,22 @@ describe('ResourceBrowserRoot', () => {
     fireEvent.contextMenu(items!);
     expect((await screen.findByRole('menu')).style).toMatchObject({ left: '4px', top: '4px' });
     fireEvent.click(await screen.findByRole('menuitem', { name: 'New folder' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Folder name' }), {
+    const entryInput = screen.getByRole('textbox', { name: 'File or folder name' });
+    fireEvent.change(entryInput, {
       target: { value: 'References' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    fireEvent.submit(entryInput.closest('form')!);
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({
-          route: 'content.create-directory',
-          directoryName: 'References',
+          route: 'workspace-entry.create-directory',
+          entryName: 'References',
         }),
       ),
     );
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: 'File or folder name' })).toBeNull(),
+    );
 
     vi.stubGlobal(
       'confirm',
@@ -197,6 +200,10 @@ describe('ResourceBrowserRoot', () => {
     const fileButton = screen.getByText('notes.txt').closest('button');
     expect(fileButton).toBeTruthy();
     fireEvent.keyDown(fileButton!, { key: 'F10', shiftKey: true });
+    expect(screen.queryByRole('menuitem', { name: 'New file' })).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(document.activeElement).toBe(fileButton));
+    fireEvent.keyDown(fileButton!, { key: 'ContextMenu' });
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Move to Trash' }));
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
@@ -216,7 +223,7 @@ describe('ResourceBrowserRoot', () => {
     expect(screen.getByRole('menuitem', { name: 'Reveal' })).toBeTruthy();
   }, 15_000);
 
-  it('resets local directory input after the current dialog closes', async () => {
+  it('cancels and resets inline entry naming with Escape', async () => {
     const runtime = createRuntime({
       ...projection,
       facet: 'files',
@@ -229,14 +236,17 @@ describe('ResourceBrowserRoot', () => {
     if (!items) throw new Error('Resource Browser item surface is required.');
     fireEvent.contextMenu(items);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'New folder' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'Folder name' }), {
+    const entryInput = screen.getByRole('textbox', { name: 'File or folder name' });
+    fireEvent.change(entryInput, {
       target: { value: 'Must not leak' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.keyDown(entryInput, { key: 'Escape' });
 
     fireEvent.contextMenu(items);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'New folder' }));
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Folder name' }).value).toBe('');
+    expect(
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'File or folder name' }).value,
+    ).toBe('');
   });
 
   it('omits duplicate package chrome when embedded while keeping toolbar actions', async () => {
@@ -246,24 +256,164 @@ describe('ResourceBrowserRoot', () => {
     await screen.findByText('cat.png');
     expect(screen.queryByText('Resource management')).toBeNull();
     expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
     expect(document.querySelector('.neko-resource-browser__toolbar')).toBeTruthy();
     expect(document.querySelector('.neko-resource-browser__header')).toBeNull();
   });
 
-  it('hides only the global refresh control when composed by Workspace', async () => {
-    render(
-      <ResourceBrowserRoot
-        runtime={createRuntime()}
-        locale="en"
-        chrome="embedded"
-        refreshControl="hidden"
-      />,
-    );
+  it('does not expose a normal refresh control when composed by Workspace', async () => {
+    render(<ResourceBrowserRoot runtime={createRuntime()} locale="en" chrome="embedded" />);
 
     await screen.findByText('cat.png');
     expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Configure media libraries' })).toBeTruthy();
+  });
+
+  it('exposes all four Files creation kinds through one discoverable add menu', async () => {
+    const filesProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'files',
+      items: [],
+    };
+    const runtime = createRuntime(filesProjection);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    await screen.findByText('No matching resources');
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    expect(screen.getByText('Create in Workspace')).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'New file' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'New folder' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'New Canvas' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Cut' }));
+    const input = screen.getByRole('textbox', { name: 'File or folder name' });
+    expect(input).toHaveProperty('value', '');
+    expect(screen.getByText('.otio').tagName).toBe('SPAN');
+    fireEvent.change(input, { target: { value: 'Rough Cut' } });
+    expect(input).toHaveProperty('value', 'Rough Cut');
+    expect(screen.getByText('.otio')).toBeTruthy();
+    fireEvent.submit(input.closest('form')!);
+
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'creative-document.create',
+          documentKind: 'cut',
+          entryName: 'Rough Cut.otio',
+        }),
+      ),
+    );
+  });
+
+  it('keeps toolbar, directory-menu, and blank-area creation targets exact', async () => {
+    const directoryId = 'content:references';
+    const fileId = 'content:references-notes';
+    const filesProjection: ResourceBrowserProjection = {
+      ...projection,
+      facet: 'files',
+      items: [
+        {
+          resourceId: directoryId,
+          facet: 'files',
+          role: 'directory',
+          depth: 0,
+          kind: 'directory',
+          label: 'References',
+          locator: { kind: 'workspace-file', path: 'References' },
+          capabilities: [],
+        },
+        {
+          resourceId: fileId,
+          parentResourceId: directoryId,
+          facet: 'files',
+          role: 'content',
+          depth: 1,
+          kind: 'file',
+          label: 'notes.txt',
+          locator: { kind: 'workspace-file', path: 'References/notes.txt' },
+          capabilities: [],
+        },
+      ],
+    };
+    const runtime = createRuntime(filesProjection);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
+
+    const directoryButton = (await screen.findByText('References')).closest('button');
+    if (!directoryButton) throw new Error('Directory button is required.');
+    fireEvent.click(directoryButton);
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    expect(screen.getByText('Create in References')).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New file' }));
+    const directoryInput = screen.getByRole('textbox', { name: 'File or folder name' });
+    expect(directoryButton.closest('.neko-resource-browser__item-row')?.nextElementSibling).toBe(
+      directoryInput.closest('form'),
+    );
+    fireEvent.change(directoryInput, { target: { value: 'sources.md' } });
+    fireEvent.submit(directoryInput.closest('form')!);
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          route: 'workspace-entry.create-file',
+          resourceId: directoryId,
+          entryName: 'sources.md',
+        }),
+      ),
+    );
+
+    const fileButton = screen.getByText('notes.txt').closest('button');
+    if (!fileButton) throw new Error('File button is required.');
+    fireEvent.click(fileButton);
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New folder' }));
+    const fileInput = screen.getByRole('textbox', { name: 'File or folder name' });
+    expect(fileButton.closest('.neko-resource-browser__item-row')?.nextElementSibling).toBe(
+      fileInput.closest('form'),
+    );
+    fireEvent.change(fileInput, { target: { value: 'Drafts' } });
+    fireEvent.submit(fileInput.closest('form')!);
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          route: 'workspace-entry.create-directory',
+          resourceId: fileId,
+          entryName: 'Drafts',
+        }),
+      ),
+    );
+
+    fireEvent.contextMenu(directoryButton);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New Canvas' }));
+    const contextInput = screen.getByRole('textbox', { name: 'File or folder name' });
+    expect(screen.getByText('.nkc')).toBeTruthy();
+    fireEvent.change(contextInput, { target: { value: 'Board' } });
+    fireEvent.submit(contextInput.closest('form')!);
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          route: 'creative-document.create',
+          documentKind: 'canvas',
+          resourceId: directoryId,
+          entryName: 'Board.nkc',
+        }),
+      ),
+    );
+
+    const items = document.querySelector('.neko-resource-browser__items');
+    if (!items) throw new Error('Resource Browser item surface is required.');
+    fireEvent.contextMenu(items);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New Cut' }));
+    const rootInput = screen.getByRole('textbox', { name: 'File or folder name' });
+    expect(items.firstElementChild).toBe(rootInput.closest('form'));
+    fireEvent.change(rootInput, { target: { value: 'Rough Cut' } });
+    fireEvent.submit(rootInput.closest('form')!);
+    await waitFor(() => {
+      const request = runtime.execute.mock.calls.at(-1)?.[0];
+      expect(request).toMatchObject({
+        route: 'creative-document.create',
+        documentKind: 'cut',
+        entryName: 'Rough Cut.otio',
+      });
+      expect(request).not.toHaveProperty('resourceId');
+    });
   });
 
   it('opens a previewable item on single click without a persistent action footer', async () => {
@@ -452,7 +602,7 @@ describe('ResourceBrowserRoot', () => {
           kind: 'file',
           label: 'story.otio',
           locator: { kind: 'workspace-file', path: 'cuts/story.otio' },
-          capabilities: ['open-cut', 'reveal'],
+          capabilities: ['open-creative-document', 'reveal'],
         },
       ],
     });
@@ -463,7 +613,7 @@ describe('ResourceBrowserRoot', () => {
     await waitFor(() =>
       expect(runtime.execute).toHaveBeenCalledWith(
         expect.objectContaining({
-          route: 'cut.open',
+          route: 'creative-document.open',
           resourceId: 'content:cut',
         }),
       ),
@@ -906,7 +1056,10 @@ describe('ResourceBrowserRoot', () => {
 
     expect(await screen.findByText('characters')).toBeTruthy();
     expect(screen.queryByText('hero.png')).toBeNull();
-    fireEvent.doubleClick(screen.getByText('characters'));
+    const characters = screen.getByRole('treeitem', { name: /characters/i });
+    const disclosure = characters.querySelector('.neko-resource-browser__disclosure');
+    if (!disclosure) throw new Error('Directory disclosure is required.');
+    fireEvent.click(disclosure);
     expect(screen.getByText('characters')).toBeTruthy();
     expect(await screen.findByText('hero.png')).toBeTruthy();
     expect(screen.getByRole('tree')).toBeTruthy();
@@ -930,7 +1083,7 @@ describe('ResourceBrowserRoot', () => {
         parentResourceId: 'content:characters',
       }),
     );
-    fireEvent.doubleClick(screen.getByText('characters'));
+    fireEvent.click(disclosure);
     expect(screen.queryByText('hero.png')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Grid view' }));
@@ -1300,7 +1453,12 @@ describe('ResourceBrowserRoot', () => {
     });
     render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
-    fireEvent.click(await screen.findByText('Footage'));
+    fireEvent.click((await screen.findByText('Footage')).closest('button')!);
+    expect(
+      document.querySelector(
+        '.neko-resource-browser__library-status[data-state="required-unlinked"]',
+      ),
+    ).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Grid view' }));
     expect(
       document.querySelector('.neko-resource-browser__item-row[data-selected="true"] strong')
@@ -1441,18 +1599,24 @@ describe('ResourceBrowserRoot', () => {
           kind: 'document',
           label: 'board.nkc',
           locator: { kind: 'workspace-file', path: 'neko/boards/board.nkc' },
-          capabilities: ['preview', 'reveal'],
+          capabilities: ['open-creative-document', 'preview', 'reveal'],
         },
       ],
     };
     const runtime = createRuntime(canvasProjection);
-    const onOpenCanvas = vi.fn();
-    render(<ResourceBrowserRoot runtime={runtime} locale="en" onOpenCanvas={onOpenCanvas} />);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
     fireEvent.click(await screen.findByText('board.nkc'));
-    expect(onOpenCanvas).toHaveBeenCalledWith(canvasProjection.items[0], 'main');
+    await waitFor(() =>
+      expect(runtime.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          route: 'creative-document.open',
+          resourceId: 'content:board',
+        }),
+      ),
+    );
     expect(screen.queryByRole('button', { name: 'Open Canvas' })).toBeNull();
-    expect(onOpenCanvas).toHaveBeenCalledTimes(1);
+    expect(runtime.execute).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches one Canvas open when the user double-clicks a document', async () => {
@@ -1473,19 +1637,18 @@ describe('ResourceBrowserRoot', () => {
           kind: 'document',
           label: 'board.nkc',
           locator: { kind: 'workspace-file', path: 'neko/boards/board.nkc' },
-          capabilities: ['preview', 'reveal'],
+          capabilities: ['open-creative-document', 'preview', 'reveal'],
         },
       ],
     };
     const runtime = createRuntime(canvasProjection);
-    const onOpenCanvas = vi.fn();
-    render(<ResourceBrowserRoot runtime={runtime} locale="en" onOpenCanvas={onOpenCanvas} />);
+    render(<ResourceBrowserRoot runtime={runtime} locale="en" />);
 
     const canvasDocument = await screen.findByText('board.nkc');
     fireEvent.click(canvasDocument, { detail: 1 });
     fireEvent.click(canvasDocument, { detail: 2 });
 
-    expect(onOpenCanvas).toHaveBeenCalledTimes(1);
+    expect(runtime.execute).toHaveBeenCalledTimes(1);
   });
 });
 
