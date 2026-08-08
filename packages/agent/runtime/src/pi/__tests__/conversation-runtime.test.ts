@@ -21,7 +21,7 @@ import { PiConversationRuntime } from '../conversation-runtime';
 import { DEFAULT_PI_MODEL_REQUEST_TIMEOUT_MS, resolveAgentModelPolicy } from '../model-policy';
 import { NodePiConversationAuthority } from '../node-conversation-authority';
 import { projectOpenNekoTool } from '../openneko-tool';
-import { PiSkillHost } from '../skill-host';
+import { PiSkillHost, buildSkillActivationId } from '../skill-host';
 import type { PiProductAgentEvent } from '../event-projector';
 import { createReadDocumentTool } from '../../tools';
 
@@ -812,7 +812,13 @@ describe('PiConversationRuntime', () => {
     const skills = await new PiSkillHost(skillEnv, {
       isTrusted: () => true,
       isEnabled: () => true,
-    }).discover([{ path: join(root, 'project-skills'), source: { kind: 'project' } }]);
+    }).discover([
+      {
+        path: join(root, 'project-skills'),
+        source: { kind: 'project' },
+        entryPointKind: 'skill',
+      },
+    ]);
     let capturedContext: Context | undefined;
     const models = createFixtureModels((_model, context) => {
       capturedContext = context;
@@ -828,11 +834,29 @@ describe('PiConversationRuntime', () => {
       initialModelPolicy: modelPolicy,
       baseSystemPrompt: 'base',
     });
+    const skill = skills.records[0];
+    if (!skill) throw new Error('Expected the fixture Skill record.');
+
+    await expect(
+      runtime.executeSkill({
+        turnId: 'turn-stale-skill',
+        runId: 'run-stale-skill',
+        skillName: 'fixture-skill',
+        activationId: 'skill:project:stale',
+        modelPolicy,
+        skillSnapshot: skills,
+        capabilityTools: [],
+        permissionPolicy: { preflight: () => ({ allowed: true }) },
+        workspaceTrusted: true,
+        events: { emit: () => undefined },
+      }),
+    ).rejects.toThrow('is not available in this turn snapshot');
 
     await runtime.executeSkill({
       turnId: 'turn-skill',
       runId: 'run-skill',
       skillName: 'fixture-skill',
+      activationId: buildSkillActivationId(skill),
       additionalInstructions: 'Be concise',
       modelPolicy,
       skillSnapshot: skills,
@@ -875,7 +899,13 @@ describe('PiConversationRuntime', () => {
     const skills = await new PiSkillHost(skillEnv, {
       isTrusted: () => true,
       isEnabled: () => true,
-    }).discover([{ path: join(root, 'project-skills'), source: { kind: 'project' } }]);
+    }).discover([
+      {
+        path: join(root, 'project-skills'),
+        source: { kind: 'project' },
+        entryPointKind: 'skill',
+      },
+    ]);
     const locator = skills.records[0]!.locator.value;
     const contexts: Context[] = [];
     let request = 0;

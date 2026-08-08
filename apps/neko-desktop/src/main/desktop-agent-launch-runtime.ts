@@ -1,18 +1,122 @@
 import { randomUUID } from 'node:crypto';
+import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import {
   createAgentLaunchApplicationService,
+  AGENT_LAUNCH_BUILTIN_COMMAND_HANDLER_IDS,
   projectAgentLaunchBaseCatalog,
   type AgentAppHost,
   type AgentLaunchApplicationService,
+  type AgentLaunchWorkspaceMentionSearchPort,
 } from '@neko/agent-runtime/application';
 import type { ConfigManager } from '@neko/host/settings';
+import { DESKTOP_DEFAULT_ASSISTANT_SPACE_ID } from '@neko/host/desktop-shell-state';
 import type {
-  AgentAuthorityScopeProjection,
+  AgentBoundDomainBinding,
+  AgentDomainBinding,
+  AgentDraftInteractionProjection,
+  AgentDraftMentionSearchProjection,
+  AgentDraftSubmitInput,
+  AgentConfigurationRequest,
+  AgentConfigurationPolicyProjection,
+  AgentInputReferenceReceipt,
+  AgentContextPayload,
+  AgentFileReference,
   AgentLaunchCatalogProjection,
   AgentLaunchConnectionIdentity,
   AgentLaunchResourceKind,
-  AgentConversationContext,
+  ProjectFileMentionInfo,
+  ProjectMentionExtra,
 } from '@neko/agent-contracts';
+
+export interface DesktopAgentConversationReferenceResolver {
+  resolve(input: {
+    readonly conversationId: string;
+    readonly context: AgentBoundDomainBinding;
+    readonly references: readonly AgentFileReference[];
+  }): Promise<readonly AgentContextPayload[]>;
+  resolveWorkspaceReferences(input: {
+    readonly context: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>;
+    readonly references: readonly AgentFileReference[];
+  }): Promise<readonly AgentContextPayload[]>;
+}
+
+export function createDesktopAgentConversationReferenceResolver(input: {
+  readonly resolveWorkspace: (
+    binding: Extract<AgentBoundDomainBinding, { readonly kind: 'workspace' }>,
+  ) => Promise<{ readonly workspacePath: string }>;
+  readonly readText: (absolutePath: string) => Promise<string>;
+}): DesktopAgentConversationReferenceResolver {
+  const resolveWorkspaceReferences: DesktopAgentConversationReferenceResolver['resolveWorkspaceReferences'] =
+    async ({ context, references }) => {
+      const workspace = await input.resolveWorkspace(context);
+      return Promise.all(
+        references.map((reference) => resolveReference(workspace.workspacePath, reference)),
+      );
+    };
+  return {
+    async resolve({ context, references }) {
+      if (context.kind !== 'workspace') {
+        throw new Error(
+          `Agent ${context.kind} Conversation does not authorize Workspace file locators.`,
+        );
+      }
+      return resolveWorkspaceReferences({ context, references });
+    },
+    resolveWorkspaceReferences,
+  };
+
+  async function resolveReference(
+    workspacePath: string,
+    reference: AgentFileReference,
+  ): Promise<AgentContextPayload> {
+    const locator = reference.contentLocator;
+    if (locator.kind !== 'workspace-file') {
+      throw new Error(`Agent reference '${reference.label}' is not a Workspace file locator.`);
+    }
+    if (reference.mediaType === 'image') {
+      return {
+        type: 'file',
+        id: reference.id,
+        label: reference.label,
+        summary: `Workspace image: ${reference.label} (ContentLocator: workspace-file:${locator.path})`,
+        data: { locator, mediaType: 'image' },
+      };
+    }
+    if (!isAgentTextReference(locator.path, reference.mediaType)) {
+      throw new Error(
+        `Agent reference '${reference.label}' requires binary or structured-content preprocessing that is not available.`,
+      );
+    }
+    const absolutePath = resolve(workspacePath, ...locator.path.split('/'));
+    const relativePath = relative(workspacePath, absolutePath);
+    if (
+      relativePath.length === 0 ||
+      isAbsolute(relativePath) ||
+      relativePath === '..' ||
+      relativePath.startsWith(`..${sep}`)
+    ) {
+      throw new Error(
+        `Agent Workspace reference '${reference.label}' escapes its authorized Workspace.`,
+      );
+    }
+    const text = await input.readText(absolutePath);
+    if (text.includes('\u0000')) {
+      throw new Error(`Agent Workspace reference '${reference.label}' is not a text file.`);
+    }
+    if (text.length > 256 * 1024) {
+      throw new Error(
+        `Agent Workspace reference '${reference.label}' exceeds the provider context limit.`,
+      );
+    }
+    return {
+      type: 'file',
+      id: reference.id,
+      label: reference.label,
+      summary: `Workspace file: ${reference.label}`,
+      data: { locator, text },
+    };
+  }
+}
 
 export interface DesktopAgentLaunchNativeSelection {
   readonly label: string;
@@ -22,9 +126,20 @@ export interface DesktopAgentLaunchNativeSelection {
 interface DesktopAgentResourceGrant {
   readonly connectionId: string;
   readonly resourceKind: AgentLaunchResourceKind;
-  scope: AgentAuthorityScopeProjection;
+  binding: AgentDomainBinding;
   readonly label: string;
   readonly hostResource?: string;
+  conversationId?: string;
+}
+
+export type DesktopAgentWorkspaceReference =
+  | { readonly kind: 'file'; readonly file: ProjectFileMentionInfo }
+  | { readonly kind: 'entity'; readonly entity: ProjectMentionExtra };
+
+interface DesktopAgentReferenceGrant {
+  readonly connectionId: string;
+  readonly binding: Extract<AgentDomainBinding, { readonly kind: 'workspace' }>;
+  readonly reference: DesktopAgentWorkspaceReference;
   conversationId?: string;
 }
 
@@ -35,21 +150,33 @@ export interface DesktopAgentLaunchRuntime {
     readonly workbenchInstanceId: string;
     readonly agentSurfaceId: string;
     readonly viewId: string;
-    readonly scope: AgentAuthorityScopeProjection;
+    readonly draft: AgentDraftInteractionProjection;
   }): Promise<AgentLaunchCatalogProjection>;
   readCatalog(connection: AgentLaunchConnectionIdentity): AgentLaunchCatalogProjection;
   authorizeResource(
     connection: AgentLaunchConnectionIdentity,
     resourceKind: AgentLaunchResourceKind,
   ): Promise<AgentLaunchCatalogProjection | undefined>;
-  bindResourceGrants(
+  bindTarget(
     connection: AgentLaunchConnectionIdentity,
-    targetScope: Exclude<AgentAuthorityScopeProjection, { readonly kind: 'unbound' }>,
-    resourceGrantIds: readonly string[],
-  ): Promise<void>;
+    binding: AgentDomainBinding,
+  ): Promise<AgentLaunchCatalogProjection>;
+  updateConfiguration(
+    connection: AgentLaunchConnectionIdentity,
+    configuration: AgentConfigurationRequest,
+  ): AgentLaunchCatalogProjection;
+  searchWorkspaceMentions(
+    connection: AgentLaunchConnectionIdentity,
+    bindingReceiptId: string,
+    filter: string,
+  ): Promise<AgentDraftMentionSearchProjection>;
+  validateDraftSubmit(
+    connection: AgentLaunchConnectionIdentity,
+    input: AgentDraftSubmitInput,
+  ): AgentConfigurationPolicyProjection;
   detach(connection: AgentLaunchConnectionIdentity): Promise<void>;
   validateResourceGrants(
-    context: AgentConversationContext,
+    context: AgentBoundDomainBinding,
     resourceGrantIds: readonly string[],
   ): Promise<void>;
   commitResourceGrants(
@@ -57,42 +184,83 @@ export interface DesktopAgentLaunchRuntime {
     conversationId: string,
     resourceGrantIds: readonly string[],
   ): Promise<void>;
+  validateResourceGrantCommit(
+    connection: AgentLaunchConnectionIdentity,
+    conversationId: string | undefined,
+    resourceGrantIds: readonly string[],
+  ): void;
+  validateReferenceCommit(
+    connection: AgentLaunchConnectionIdentity,
+    conversationId: string | undefined,
+    references: readonly AgentInputReferenceReceipt[],
+  ): void;
+  commitReferences(
+    connection: AgentLaunchConnectionIdentity,
+    conversationId: string,
+    references: readonly AgentInputReferenceReceipt[],
+  ): void;
   readConversationResourceGrants(conversationId: string): readonly {
     readonly resourceGrantId: string;
     readonly resourceKind: AgentLaunchResourceKind;
     readonly label: string;
   }[];
   resolveResourceContexts(
-    context: AgentConversationContext,
+    context: AgentBoundDomainBinding,
     resourceGrantIds: readonly string[],
   ): Promise<readonly import('@neko/agent-contracts').AgentContextPayload[]>;
+  resolveReferenceContexts(
+    conversationId: string,
+    context: AgentBoundDomainBinding,
+    references: readonly AgentInputReferenceReceipt[],
+  ): Promise<readonly AgentContextPayload[]>;
   detachWindow(windowId: string): Promise<void>;
   dispose(): Promise<void>;
 }
 
 export function createDesktopAgentLaunchRuntime(input: {
   readonly agent: Pick<AgentAppHost, 'readGlobalSkillCatalog'>;
-  readonly config: Pick<ConfigManager, 'getAssistantConfigState'>;
+  readonly config: Pick<
+    ConfigManager,
+    'getAssistantConfigState' | 'getAssistantRuntimeSettingsSnapshot'
+  >;
   readonly selectResource: (input: {
     readonly windowId: string;
     readonly resourceKind: AgentLaunchResourceKind;
   }) => Promise<DesktopAgentLaunchNativeSelection | undefined>;
   readonly createIdentity?: () => string;
   readonly readTextResource: (hostResource: string) => Promise<string>;
+  readonly workspaceMentions: AgentLaunchWorkspaceMentionSearchPort;
+  readonly readWorkspaceSkillCatalog: (
+    binding: Extract<AgentDomainBinding, { readonly kind: 'workspace' }>,
+  ) => Promise<Awaited<ReturnType<AgentAppHost['readGlobalSkillCatalog']>>>;
+  readonly resolveWorkspaceReferenceContext: (input: {
+    readonly binding: Extract<AgentDomainBinding, { readonly kind: 'workspace' }>;
+    readonly reference: DesktopAgentWorkspaceReference;
+  }) => Promise<AgentContextPayload>;
 }): DesktopAgentLaunchRuntime {
   const createIdentity = input.createIdentity ?? randomUUID;
   const grants = new Map<string, DesktopAgentResourceGrant>();
+  const references = new Map<string, DesktopAgentReferenceGrant>();
   const service: AgentLaunchApplicationService = createAgentLaunchApplicationService({
     createIdentity,
     catalog: {
-      readCatalog: async () =>
-        projectAgentLaunchBaseCatalog({
+      readCatalog: async (interaction) => {
+        const skills =
+          interaction.binding.kind === 'workspace'
+            ? await input.readWorkspaceSkillCatalog(interaction.binding)
+            : await input.agent.readGlobalSkillCatalog();
+        return projectAgentLaunchBaseCatalog({
           config: input.config.getAssistantConfigState(),
-          skills: await input.agent.readGlobalSkillCatalog(),
-        }),
+          thinkingBudget: input.config.getAssistantRuntimeSettingsSnapshot().thinkingBudget,
+          skills,
+          interaction,
+          personalSkillOwnerId: DESKTOP_DEFAULT_ASSISTANT_SPACE_ID,
+          launchCommandHandlerIds: AGENT_LAUNCH_BUILTIN_COMMAND_HANDLER_IDS,
+        });
+      },
     },
     authorization: {
-      authorize: async ({ connection, resourceKind }) => {
+      authorize: async ({ connection, interaction, resourceKind }) => {
         const selected = await input.selectResource({
           windowId: connection.windowId,
           resourceKind,
@@ -102,19 +270,34 @@ export function createDesktopAgentLaunchRuntime(input: {
         grants.set(resourceGrantId, {
           connectionId: connection.connectionId,
           resourceKind,
-          scope: connection.scope,
+          binding: interaction.binding,
           label: selected.label,
           ...(selected.hostResource === undefined ? {} : { hostResource: selected.hostResource }),
         });
         return {
           status: 'authorized',
-          resource: {
-            kind: 'resource',
-            id: `resource:${resourceGrantId}`,
-            label: selected.label,
-            scopeRequirement: connection.scope.kind === 'unbound' ? 'any' : connection.scope.kind,
-            resourceGrantId,
-            resourceKind,
+          entry: {
+            id: `mention:resource:${resourceGrantId}`,
+            name: selected.label,
+            description: `Authorized ${resourceKind}: ${selected.label}`,
+            trigger: 'mention',
+            prefix: '@',
+            phaseRequirement: 'draft',
+            bindingRequirement:
+              interaction.binding.kind === 'unbound' ? 'assistant' : interaction.binding.kind,
+            source: {
+              kind: 'personal',
+              ownerId: bindingOwnerId(interaction.binding),
+              sourceId: resourceGrantId,
+            },
+            availability: { status: 'available' },
+            executable: {
+              kind: 'reference',
+              referenceId: resourceGrantId,
+              ownerKind:
+                interaction.binding.kind === 'unbound' ? 'assistant' : interaction.binding.kind,
+              ownerId: bindingOwnerId(interaction.binding),
+            },
           },
         };
       },
@@ -124,40 +307,51 @@ export function createDesktopAgentLaunchRuntime(input: {
             grants.delete(grantId);
           }
         }
+        for (const [referenceId, reference] of references) {
+          if (reference.connectionId === connection.connectionId && !reference.conversationId) {
+            references.delete(referenceId);
+          }
+        }
       },
     },
+    workspaceMentions: input.workspaceMentions,
   });
   return {
     attach: (attachInput) => service.attach(attachInput),
     readCatalog: (connection) => service.readCatalog(connection),
     authorizeResource: (connection, resourceKind) =>
       service.authorizeResource(connection, resourceKind),
-    async bindResourceGrants(connection, targetScope, resourceGrantIds) {
-      if (connection.scope.kind !== 'unbound') {
-        throw new Error('Agent Resource grant binding requires an unbound launch connection.');
+    bindTarget: (connection, binding) => service.replaceBinding(connection, binding),
+    updateConfiguration: (connection, configuration) =>
+      service.updateConfiguration(connection, configuration),
+    searchWorkspaceMentions: async (connection, bindingReceiptId, filter) => {
+      const projection = await service.searchWorkspaceMentions(
+        connection,
+        bindingReceiptId,
+        filter,
+      );
+      const interaction = service.readCatalog(connection).interaction;
+      if (interaction.binding.kind !== 'workspace') {
+        throw new Error('Agent Workspace mention search resolved outside a Workspace binding.');
       }
-      const pending: DesktopAgentResourceGrant[] = [];
-      for (const resourceGrantId of resourceGrantIds) {
-        const grant = grants.get(resourceGrantId);
-        if (!grant || grant.connectionId !== connection.connectionId) {
-          throw new Error(
-            `Agent Resource grant '${resourceGrantId}' does not belong to its launch connection.`,
-          );
-        }
-        if (sameScope(grant.scope, targetScope)) {
-          continue;
-        }
-        if (
-          grant.scope.kind !== 'unbound' ||
-          grant.scope.draftId !== connection.scope.draftId ||
-          grant.conversationId
-        ) {
-          throw new Error(`Agent Resource grant '${resourceGrantId}' belongs to another scope.`);
-        }
-        pending.push(grant);
+      for (const file of projection.files) {
+        references.set(file.referenceReceipt.referenceId, {
+          connectionId: connection.connectionId,
+          binding: interaction.binding,
+          reference: { kind: 'file', file },
+        });
       }
-      for (const grant of pending) grant.scope = targetScope;
+      for (const entity of projection.mentionExtras) {
+        references.set(entity.referenceReceipt.referenceId, {
+          connectionId: connection.connectionId,
+          binding: interaction.binding,
+          reference: { kind: 'entity', entity },
+        });
+      }
+      return projection;
     },
+    validateDraftSubmit: (connection, draftInput) =>
+      service.validateDraftSubmit(connection, draftInput),
     detach: (connection) => service.detach(connection),
     detachWindow: (windowId) => service.detachWindow(windowId),
     dispose: () => service.dispose(),
@@ -167,17 +361,18 @@ export function createDesktopAgentLaunchRuntime(input: {
         if (!grant) throw new Error(`Agent Resource grant '${resourceGrantId}' is not present.`);
         const scopeMatches =
           context.kind === 'assistant'
-            ? grant.scope.kind === 'assistant' &&
-              grant.scope.assistantSpaceId === context.assistantSpaceId
-            : grant.scope.kind === 'workspace' &&
-              grant.scope.workspaceId === context.workspaceId &&
-              grant.scope.workspaceGrantId === context.workspaceGrantId;
+            ? grant.binding.kind === 'assistant' &&
+              grant.binding.assistantSpaceId === context.assistantSpaceId
+            : context.kind === 'workspace' &&
+              grant.binding.kind === 'workspace' &&
+              grant.binding.workspaceId === context.workspaceId &&
+              grant.binding.workspaceGrantId === context.workspaceGrantId;
         if (!scopeMatches) {
           throw new Error(`Agent Resource grant '${resourceGrantId}' belongs to another scope.`);
         }
       }
     },
-    async commitResourceGrants(connection, conversationId, resourceGrantIds) {
+    validateResourceGrantCommit(connection, conversationId, resourceGrantIds) {
       for (const resourceGrantId of resourceGrantIds) {
         const grant = grants.get(resourceGrantId);
         if (!grant || grant.connectionId !== connection.connectionId) {
@@ -190,7 +385,42 @@ export function createDesktopAgentLaunchRuntime(input: {
             `Agent Resource grant '${resourceGrantId}' is already bound to another Conversation.`,
           );
         }
+      }
+    },
+    async commitResourceGrants(connection, conversationId, resourceGrantIds) {
+      this.validateResourceGrantCommit(connection, conversationId, resourceGrantIds);
+      for (const resourceGrantId of resourceGrantIds) {
+        const grant = grants.get(resourceGrantId);
+        if (!grant) throw new Error(`Agent Resource grant '${resourceGrantId}' is not present.`);
         grant.conversationId = conversationId;
+      }
+    },
+    validateReferenceCommit(connection, conversationId, receipts) {
+      for (const receipt of receipts) {
+        const reference = references.get(receipt.referenceId);
+        if (
+          !reference ||
+          reference.connectionId !== connection.connectionId ||
+          receipt.ownerKind !== 'workspace' ||
+          receipt.ownerId !== reference.binding.workspaceId
+        ) {
+          throw new Error(
+            `Agent reference '${receipt.referenceId}' does not belong to its launch connection.`,
+          );
+        }
+        if (reference.conversationId && reference.conversationId !== conversationId) {
+          throw new Error(
+            `Agent reference '${receipt.referenceId}' is already bound to another Conversation.`,
+          );
+        }
+      }
+    },
+    commitReferences(connection, conversationId, receipts) {
+      this.validateReferenceCommit(connection, conversationId, receipts);
+      for (const receipt of receipts) {
+        const reference = references.get(receipt.referenceId);
+        if (!reference) throw new Error(`Agent reference '${receipt.referenceId}' is not present.`);
+        reference.conversationId = conversationId;
       }
     },
     async resolveResourceContexts(context, resourceGrantIds) {
@@ -223,6 +453,29 @@ export function createDesktopAgentLaunchRuntime(input: {
         }),
       );
     },
+    async resolveReferenceContexts(conversationId, context, receipts) {
+      return Promise.all(
+        receipts.map(async (receipt) => {
+          const reference = references.get(receipt.referenceId);
+          if (!reference || reference.conversationId !== conversationId) {
+            throw new Error(
+              `Agent reference '${receipt.referenceId}' is not committed to Conversation '${conversationId}'.`,
+            );
+          }
+          if (
+            context.kind !== 'workspace' ||
+            reference.binding.workspaceId !== context.workspaceId ||
+            reference.binding.workspaceGrantId !== context.workspaceGrantId
+          ) {
+            throw new Error(`Agent reference '${receipt.referenceId}' belongs to another scope.`);
+          }
+          return input.resolveWorkspaceReferenceContext({
+            binding: reference.binding,
+            reference: reference.reference,
+          });
+        }),
+      );
+    },
     readConversationResourceGrants(conversationId) {
       return [...grants.entries()]
         .filter(([, grant]) => grant.conversationId === conversationId)
@@ -237,19 +490,81 @@ export function createDesktopAgentLaunchRuntime(input: {
 
 const MAX_AGENT_AUTHORIZED_TEXT_CHARS = 256 * 1024;
 
-function sameScope(
-  left: AgentAuthorityScopeProjection,
-  right: Exclude<AgentAuthorityScopeProjection, { readonly kind: 'unbound' }>,
+function bindingOwnerId(binding: AgentDomainBinding): string {
+  switch (binding.kind) {
+    case 'unbound':
+      return DESKTOP_DEFAULT_ASSISTANT_SPACE_ID;
+    case 'assistant':
+      return binding.assistantSpaceId;
+    case 'workspace':
+      return binding.workspaceId;
+    case 'character':
+      return binding.characterRunId ?? binding.characterVersionId;
+    case 'world':
+      return binding.worldRunId ?? binding.worldExperienceVersionId;
+  }
+}
+
+const AGENT_TEXT_REFERENCE_EXTENSIONS = new Set([
+  '.ass',
+  '.bash',
+  '.c',
+  '.cfg',
+  '.cjs',
+  '.conf',
+  '.cpp',
+  '.cs',
+  '.css',
+  '.csv',
+  '.fish',
+  '.fountain',
+  '.go',
+  '.h',
+  '.hpp',
+  '.htm',
+  '.html',
+  '.ini',
+  '.java',
+  '.js',
+  '.json',
+  '.jsx',
+  '.kt',
+  '.kts',
+  '.less',
+  '.log',
+  '.md',
+  '.mjs',
+  '.py',
+  '.rb',
+  '.rs',
+  '.scss',
+  '.sh',
+  '.sql',
+  '.srt',
+  '.ssa',
+  '.toml',
+  '.ts',
+  '.tsv',
+  '.tsx',
+  '.txt',
+  '.vtt',
+  '.xml',
+  '.yaml',
+  '.yml',
+  '.zsh',
+]);
+
+function isAgentTextReference(
+  locatorPath: string,
+  mediaType: AgentFileReference['mediaType'],
 ): boolean {
-  if (left.kind !== right.kind) return false;
-  if (left.kind === 'assistant' && right.kind === 'assistant') {
-    return left.assistantSpaceId === right.assistantSpaceId;
+  if (
+    mediaType === 'image' ||
+    mediaType === 'video' ||
+    mediaType === 'audio' ||
+    mediaType === 'sequence'
+  ) {
+    return false;
   }
-  if (left.kind === 'workspace' && right.kind === 'workspace') {
-    return (
-      left.workspaceId === right.workspaceId &&
-      left.workspaceGrantId === right.workspaceGrantId
-    );
-  }
-  return false;
+  return AGENT_TEXT_REFERENCE_EXTENSIONS.has(extname(locatorPath).toLowerCase());
 }

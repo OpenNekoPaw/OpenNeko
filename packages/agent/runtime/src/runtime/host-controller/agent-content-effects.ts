@@ -16,6 +16,7 @@ import {
   type AgentProjectFileSearchPlan,
   type AgentProjectMentionCandidate,
 } from '@neko/agent-runtime/runtime/message-runtime';
+import type { ProjectFilesWebviewMessage } from '@neko/agent-contracts';
 import type { NekoHostPorts } from '@neko/host/ports';
 import {
   validateContentLocator,
@@ -25,6 +26,7 @@ import {
 } from '@neko/content';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import { readProjectEntityResources } from '@neko/entity-node';
+import { detectMediaType, getMimeType } from '@neko/media';
 
 const MAX_SVG_BYTES = 10 * 1024 * 1024;
 
@@ -90,24 +92,52 @@ export interface CreateAgentContentEffectsOptions {
   readonly interaction: AgentContentInteractionPort;
 }
 
+export async function searchAgentWorkspaceMentions(input: {
+  readonly workspace: AssetWorkspaceResolution;
+  readonly host: Pick<NekoHostPorts, 'files' | 'paths' | 'accessPolicy'>;
+  readonly filter: string;
+  readonly purpose: 'entry' | 'mention' | 'roleplay';
+}): Promise<
+  ProjectFilesWebviewMessage &
+    Required<Pick<ProjectFilesWebviewMessage, 'filter' | 'files' | 'mentionExtras'>>
+> {
+  const projection = await executeAgentProjectFileSearch({
+    filter: input.filter,
+    purpose: input.purpose,
+    searchProjectFiles: (plan) => searchGrantedWorkspace(input.workspace, input.host, plan),
+    getMentionCandidates: (plan) =>
+      searchGrantedWorkspaceEntities(input.workspace, input.host, plan),
+    onSearchError: (error) => {
+      throw error;
+    },
+  });
+  if (!projection.files || !projection.mentionExtras || projection.filter === undefined) {
+    throw new Error('Agent Workspace mention search produced an incomplete projection.');
+  }
+  return {
+    ...projection,
+    filter: projection.filter,
+    files: projection.files,
+    mentionExtras: projection.mentionExtras,
+  };
+}
+
 export function createAgentContentEffects(
   options: CreateAgentContentEffectsOptions,
 ): AgentContentControllerEffectPort {
   return {
     async searchProjectFiles(input, context): Promise<void> {
       assertWorkspaceGrant(options.workspace, context);
-      const message = await executeAgentProjectFileSearch({
-        ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+      const message = await searchAgentWorkspaceMentions({
+        workspace: options.workspace,
+        host: options.host,
         filter: input.filter,
-        ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
-        searchProjectFiles: (plan) => searchGrantedWorkspace(options.workspace, options.host, plan),
-        getMentionCandidates: (plan) =>
-          searchGrantedWorkspaceEntities(options.workspace, options.host, plan),
-        onSearchError: (error) => {
-          throw error;
-        },
+        purpose: input.purpose ?? 'mention',
       });
-      await context.post(message);
+      await context.post({
+        ...message,
+        ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+      });
     },
 
     async openFile(input, context): Promise<void> {
@@ -542,12 +572,29 @@ function titleCaseEntityKind(value: string): string {
   return `${value.charAt(0).toLocaleUpperCase()}${value.slice(1)}`;
 }
 
-function workspaceFilePresentation(relativePath: string): Pick<AgentProjectFileCandidate, 'icon'> {
+function workspaceFilePresentation(
+  relativePath: string,
+): Pick<AgentProjectFileCandidate, 'icon' | 'mediaType'> {
   const extension = relativePath.split('.').pop()?.toLocaleLowerCase();
   if (extension === 'ts' || extension === 'tsx' || extension === 'js' || extension === 'jsx') {
-    return { icon: 'TS' };
+    return { icon: 'TS', mediaType: 'text' };
   }
-  if (extension === 'md' || extension === 'mdx') return { icon: 'MD' };
+  if (extension === 'md' || extension === 'mdx') return { icon: 'MD', mediaType: 'text' };
+  const mimeType = getMimeType(relativePath);
+  if (mimeType.startsWith('image/')) {
+    const detected = detectMediaType(relativePath);
+    return { mediaType: detected === 'sequence' ? 'sequence' : 'image' };
+  }
+  if (mimeType.startsWith('video/')) return { mediaType: 'video' };
+  if (mimeType.startsWith('audio/')) return { mediaType: 'audio' };
+  if (mimeType.startsWith('text/')) return { mediaType: 'text' };
+  if (
+    mimeType === 'application/pdf' ||
+    mimeType === 'application/epub+zip' ||
+    mimeType.includes('officedocument')
+  ) {
+    return { mediaType: 'document' };
+  }
   return {};
 }
 

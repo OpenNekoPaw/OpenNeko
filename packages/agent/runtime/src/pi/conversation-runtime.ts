@@ -83,6 +83,7 @@ export interface ExecutePiConversationSkillInput extends Omit<
   'prompt'
 > {
   readonly skillName: string;
+  readonly activationId: string;
   readonly additionalInstructions?: string;
 }
 
@@ -172,8 +173,12 @@ export class PiConversationRuntime {
   }
 
   async executeSkill(input: ExecutePiConversationSkillInput): Promise<void> {
-    const prompt = input.skillSnapshot.invoke(input.skillName, input.additionalInstructions);
-    await this.runPrompt(input, prompt);
+    const prompt = input.skillSnapshot.invokeExact(
+      input.skillName,
+      input.activationId,
+      input.additionalInstructions,
+    );
+    await this.runPrompt(input, prompt, input.images);
   }
 
   cancel(identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void {
@@ -378,7 +383,11 @@ export class PiConversationRuntime {
     const turnMessages: AgentMessage[] = [];
     let terminalListenerError: unknown;
     const unsubscribe = this.agent.subscribe(async (event) => {
-      if (event.type === 'message_end') turnMessages.push(structuredClone(event.message));
+      if (event.type === 'message_end') {
+        turnMessages.push(
+          images?.length ? stripTransientUserImages(event.message) : structuredClone(event.message),
+        );
+      }
       if (event.type === 'agent_end') {
         try {
           await projector.project(event);
@@ -391,6 +400,9 @@ export class PiConversationRuntime {
             terminalState: terminalState(event),
             messages: turnMessages,
           });
+          if (images?.length) {
+            this.agent.state.messages = this.agent.state.messages.map(stripTransientUserImages);
+          }
           await projector.persistenceChanged('durable');
         } catch (error) {
           terminalListenerError = error;
@@ -455,6 +467,15 @@ export class PiConversationRuntime {
     }
     return active;
   }
+}
+
+function stripTransientUserImages(message: AgentMessage): AgentMessage {
+  const cloned = structuredClone(message);
+  if (cloned.role !== 'user' || typeof cloned.content === 'string') return cloned;
+  return {
+    ...cloned,
+    content: cloned.content.filter((part) => part.type !== 'image'),
+  };
 }
 
 function startLeaseRenewal(

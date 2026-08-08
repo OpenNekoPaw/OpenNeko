@@ -13,6 +13,7 @@ import {
   type SimpleStreamOptions,
 } from '@earendil-works/pi-ai';
 import {
+  buildSkillActivationId,
   NodePiConversationCatalogReader,
   resolveAgentModelPolicy,
   type PiProductAgentEvent,
@@ -31,6 +32,7 @@ import {
 } from '@neko/agent-runtime/application';
 import { createAgentCredentialRuntime } from '@neko/agent-runtime/pi';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
+import type { GenerationJobPort } from '@neko/generation';
 import type { AgentExtensionCatalogSnapshot } from '@neko/agent-contracts';
 import { CapturedLogTransport, ConsoleLogger, LogLevel, type ILogger } from '@neko/shared/logger';
 
@@ -45,6 +47,13 @@ const MODEL: Model<'openai-completions'> = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 8_192,
   maxTokens: 2_048,
+};
+
+const VISION_MODEL: Model<'openai-completions'> = {
+  ...MODEL,
+  id: 'vision-main',
+  name: 'Vision Main',
+  input: ['text', 'image'],
 };
 
 describe('AgentAppHost', () => {
@@ -74,6 +83,53 @@ describe('AgentAppHost', () => {
       'Workspace runtime disposed.',
     ]);
     expect(transport.list().every((entry) => entry.source === 'Workspace')).toBe(true);
+  });
+
+  it('registers Generation Tools without eagerly creating the Workspace Job owner', async () => {
+    const fixture = await createFixture();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    expect(fixture.resolveWorkspaceGenerationJobs).not.toHaveBeenCalled();
+    expect(workspace.tools.list().map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'GenerateImage',
+        'TransformImage',
+        'GenerateVideo',
+        'GenerateMusic',
+        'GenerateTTS',
+        'SubmitGenerationJob',
+        'DescribeGenerationJob',
+        'ObserveGenerationJob',
+        'CancelGenerationJob',
+        'RetryGenerationJob',
+        'ReconcileGenerationJob',
+      ]),
+    );
+  });
+
+  it('isolates Generation owner failure to the requested Tool operation and permits canonical retry', async () => {
+    const fixture = await createFixture();
+    fixture.resolveWorkspaceGenerationJobs.mockRejectedValueOnce(
+      new Error('Workspace Generation owner unavailable.'),
+    );
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+
+    await expect(
+      workspace.tools.execute('DescribeGenerationJob', { jobId: 'generation-missing' }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('Workspace Generation owner unavailable.'),
+    });
+    expect(fixture.resolveWorkspaceGenerationJobs).toHaveBeenCalledOnce();
+    expect(fixture.resolveWorkspaceGenerationJobs).toHaveBeenLastCalledWith(fixture.workspace);
+
+    await expect(
+      workspace.tools.execute('DescribeGenerationJob', { jobId: 'generation-missing' }),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('Generation Job fixture operation is unavailable.'),
+    });
+    expect(fixture.resolveWorkspaceGenerationJobs).toHaveBeenCalledTimes(2);
   });
 
   it('deletes a persisted catalog conversation without attaching its Workspace runtime', async () => {
@@ -111,11 +167,16 @@ describe('AgentAppHost', () => {
     });
     workspace.tools.register(fixtureTool());
     expect(await fixture.composition.attachWorkspace(fixture.workspace)).toBe(workspace);
-    expect(workspace.tools.list().map((tool) => tool.name)).toEqual([
-      'ReadDocument',
-      'ReadImage',
-      'DesktopFixtureTool',
-    ]);
+    expect(workspace.tools.list().map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'ReadDocument',
+        'ReadImage',
+        'GenerateImage',
+        'GenerateVideo',
+        'SubmitGenerationJob',
+        'DesktopFixtureTool',
+      ]),
+    );
     await workspace.openConversation({
       conversationId: 'conversation-1',
       models,
@@ -154,10 +215,15 @@ describe('AgentAppHost', () => {
         },
       },
     });
+    const skillRecord = (await workspace.readSkillCatalog(true)).records.find(
+      (record) => record.name === 'desktop-fixture' && record.entryPoint.kind === 'skill',
+    );
+    if (!skillRecord) throw new Error('Desktop fixture Skill is unavailable.');
     const skill = await workspace.executeTurn({
       conversationId: 'conversation-1',
       prompt: 'ignored for explicit Skill',
       skillName: 'desktop-fixture',
+      skillActivationId: buildSkillActivationId(skillRecord),
       modelPolicy: policy,
       configuration: fixtureConfiguration(),
       permissionPolicy: allowTools(),
@@ -215,6 +281,152 @@ describe('AgentAppHost', () => {
     expect(piStorage.every((content) => !content.includes(protectedSecret))).toBe(true);
   });
 
+  it('materializes an authorized image locator only at the native Pi provider boundary', async () => {
+    const fixture = await createFixture();
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'test.png'),
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const contexts: Context[] = [];
+    const models = createFixtureModels((_model, context) => {
+      contexts.push(context);
+      return completedStream(assistant('image observed'));
+    }, VISION_MODEL);
+    const policy = fixturePolicy(VISION_MODEL, ['llm.chat', 'tools', 'vision']);
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-image',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await workspace.executeTurn({
+      conversationId: 'conversation-image',
+      prompt: 'Analyze the selected image',
+      contextPayloads: [
+        {
+          type: 'file',
+          id: 'file:test.png',
+          label: 'test.png',
+          summary: 'Workspace image: test.png (ContentLocator: workspace-file:test.png)',
+          data: {
+            locator: { kind: 'workspace-file', path: 'test.png' },
+            mediaType: 'image',
+          },
+        },
+      ],
+      modelPolicy: policy,
+      configuration: fixtureConfiguration(),
+      permissionPolicy: allowTools(),
+      workspaceTrusted: true,
+      locale: 'en',
+    });
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.messages).toContainEqual(
+      expect.objectContaining({
+        role: 'user',
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'text', text: expect.stringContaining('test.png') }),
+          expect.objectContaining({ type: 'image', mimeType: 'image/png' }),
+        ]),
+      }),
+    );
+    expect(JSON.stringify(contexts[0])).not.toContain(fixture.workspace.workspacePath);
+    const persisted = JSON.stringify(await workspace.readConversationEntries('conversation-image'));
+    expect(persisted).toContain('ContentLocator: workspace-file:test.png');
+    expect(persisted).not.toContain('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk');
+  });
+
+  it('rejects image locators for a non-vision model before provider execution', async () => {
+    const fixture = await createFixture();
+    const provider = vi.fn(() => completedStream(assistant('must not run')));
+    const models = createFixtureModels(provider);
+    const policy = fixturePolicy();
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-text-only-image',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-text-only-image',
+        prompt: 'Analyze the selected image',
+        contextPayloads: [
+          {
+            type: 'file',
+            id: 'file:test.png',
+            label: 'test.png',
+            summary: 'Workspace image: test.png',
+            data: {
+              locator: { kind: 'workspace-file', path: 'test.png' },
+              mediaType: 'image',
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).rejects.toThrow('does not support image input');
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it('rejects image bytes whose detected format disagrees with the locator MIME', async () => {
+    const fixture = await createFixture();
+    await writeFile(
+      join(fixture.workspace.workspacePath, 'spoofed.jpg'),
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const provider = vi.fn(() => completedStream(assistant('must not run')));
+    const models = createFixtureModels(provider, VISION_MODEL);
+    const policy = fixturePolicy(VISION_MODEL, ['llm.chat', 'tools', 'vision']);
+    const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
+    await workspace.openConversation({
+      conversationId: 'conversation-spoofed-image',
+      models,
+      initialModelPolicy: policy,
+      baseSystemPrompt: 'Desktop Agent fixture',
+    });
+
+    await expect(
+      workspace.executeTurn({
+        conversationId: 'conversation-spoofed-image',
+        prompt: 'Analyze the selected image',
+        contextPayloads: [
+          {
+            type: 'file',
+            id: 'file:spoofed.jpg',
+            label: 'spoofed.jpg',
+            summary: 'Workspace image: spoofed.jpg',
+            data: {
+              locator: { kind: 'workspace-file', path: 'spoofed.jpg' },
+              mediaType: 'image',
+            },
+          },
+        ],
+        modelPolicy: policy,
+        configuration: fixtureConfiguration(),
+        permissionPolicy: allowTools(),
+        workspaceTrusted: true,
+        locale: 'en',
+      }),
+    ).rejects.toThrow("MIME 'image/jpeg' does not match 'image/png'");
+    expect(provider).not.toHaveBeenCalled();
+  });
+
   it('checkpoints the exact initial user message when execution fails before Pi starts', async () => {
     const fixture = await createFixture();
     const workspace = await fixture.composition.attachWorkspace(fixture.workspace);
@@ -266,6 +478,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-catalog-host',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot,
     });
@@ -310,6 +523,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-global-catalog-host',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot,
     });
@@ -342,6 +556,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-missing-builtin-host',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       builtinSkillRoot: join(fixture.root, 'missing-builtin-skills'),
     });
@@ -1078,6 +1293,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-assistant-home-scope',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations,
         findConversation: (conversationId) =>
@@ -1103,6 +1319,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-failed-catalog',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => {
           throw new Error('catalog fixture failed');
@@ -1144,6 +1361,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-local-catalog-failure',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => ({
           records: [invalidRecord, validRecord],
@@ -1229,6 +1447,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-invalid-owner-scope',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => ({ records, diagnostics: [] }),
         findConversation: (conversationId) =>
@@ -1294,6 +1513,7 @@ describe('AgentAppHost', () => {
       userHome: fixture.userHome,
       hostId: 'desktop-host-missing-context',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
       catalogReader: {
         listConversations: () => ({ records: [missingContext, valid], diagnostics: [] }),
         findConversation: (conversationId) =>
@@ -1954,17 +2174,26 @@ describe('AgentAppHost', () => {
       displayName: 'Fixture',
       locator: { kind: 'variable', value: '${HOME}/workspace' },
     };
+    const resolveWorkspaceGenerationJobs = vi.fn(async () => createTestGenerationJobs());
     const composition = createAgentAppHost({
       userDataRoot,
       userHome,
       hostId: 'desktop-host-1',
       credentialRuntime: createTestCredentialRuntime(),
+      resolveWorkspaceGenerationJobs,
       catalogReader: await NodePiConversationCatalogReader.create({ userDataRoot }),
       createIdentity: () => `identity-${(identity += 1)}`,
       ...(createWorkspaceLogger ? { createWorkspaceLogger } : {}),
     });
     compositions.push(composition);
-    return { root, userHome, userDataRoot, workspace, composition };
+    return {
+      root,
+      userHome,
+      userDataRoot,
+      workspace,
+      composition,
+      resolveWorkspaceGenerationJobs,
+    };
   }
 });
 
@@ -1980,6 +2209,7 @@ async function createComposition(
     userHome: fixture.userHome,
     hostId,
     credentialRuntime: createTestCredentialRuntime(),
+    resolveWorkspaceGenerationJobs: async () => createTestGenerationJobs(),
     catalogReader: await NodePiConversationCatalogReader.create({
       userDataRoot: fixture.userDataRoot,
     }),
@@ -2008,6 +2238,25 @@ function createTestCredentialRuntime() {
   });
 }
 
+function createTestGenerationJobs(): GenerationJobPort {
+  const unavailable = async (): Promise<never> => {
+    throw new Error('Generation Job fixture operation is unavailable.');
+  };
+  return {
+    submitGeneration: unavailable,
+    describeGeneration: unavailable,
+    observeGeneration: () => unavailableGenerationObservation(),
+    cancelGeneration: unavailable,
+    retryGeneration: unavailable,
+    regenerateGeneration: unavailable,
+    reconcileGeneration: unavailable,
+  };
+}
+
+async function* unavailableGenerationObservation(): AsyncIterable<never> {
+  yield await Promise.reject(new Error('Generation Job fixture observation is unavailable.'));
+}
+
 async function writeSkill(root: string, name: string, description: string): Promise<void> {
   await mkdir(join(root, name), { recursive: true });
   await writeFile(
@@ -2017,17 +2266,20 @@ async function writeSkill(root: string, name: string, description: string): Prom
   );
 }
 
-function fixturePolicy() {
+function fixturePolicy(
+  model: Model<'openai-completions'> = MODEL,
+  capabilities: readonly string[] = ['llm.chat', 'tools'],
+) {
   return resolveAgentModelPolicy({
     catalog: [
       {
-        model: MODEL,
-        capabilities: ['llm.chat', 'tools'],
+        model,
+        capabilities,
         credentialState: 'configured',
       },
     ],
     userBindings: {
-      'agent.main': { providerId: MODEL.provider, modelId: MODEL.id },
+      'agent.main': { providerId: model.provider, modelId: model.id },
     },
   });
 }
@@ -2057,12 +2309,13 @@ function createFixtureModels(
     context: Context,
     options?: SimpleStreamOptions,
   ) => ReturnType<typeof createAssistantMessageEventStream>,
+  model: Model<'openai-completions'> = MODEL,
 ) {
   const models = createModels();
   models.setProvider(
     createProvider({
       id: MODEL.provider,
-      models: [MODEL],
+      models: [model],
       auth: {
         apiKey: {
           name: 'Fixture',

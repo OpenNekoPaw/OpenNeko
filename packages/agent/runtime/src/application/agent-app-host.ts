@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { ImageContent } from '@earendil-works/pi-ai';
 import type { ILogger } from '@neko/shared/logger';
+import sharp from 'sharp';
 
 import {
   NodePiConversationAuthority,
@@ -33,9 +35,12 @@ import {
   type ConversationProjectionStore,
 } from '@neko/agent-runtime/conversation-projection';
 import { createToolRegistry } from '@neko/agent-runtime/tool-registry';
+import { registerMediaAgentTools } from '@neko/agent-runtime/tools';
+import type { GenerationJobPort } from '@neko/generation';
 import {
   buildEnhancedAgentMessage,
   createHostAgentContentAccessRuntime,
+  type AgentContentAccessRuntime,
 } from '@neko/agent-runtime/runtime';
 import { createContentReadCapabilityProvider } from '@neko/agent-runtime';
 import {
@@ -48,6 +53,7 @@ import {
   type IToolRegistry,
 } from '@neko/agent-contracts';
 import { createNodeHostContentReadService } from '@neko/content/node';
+import { validateContentLocator, type ContentLocator } from '@neko/content';
 import type { EffectiveAgentConfigurationProjection } from '@neko/agent-contracts';
 import type {
   AgentHomeActivitySummary,
@@ -101,9 +107,14 @@ export interface AgentTurnInput {
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly systemPrompt?: string;
   readonly skillName?: string;
+  readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
   readonly events?: PiProductEventSink;
 }
+
+const MAX_AGENT_TURN_IMAGES = 4;
+const MAX_AGENT_TURN_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_AGENT_TURN_IMAGE_DIMENSION = 8_192;
 
 export interface AgentTurnResult {
   readonly identity: PiToolRunIdentity;
@@ -294,6 +305,9 @@ export interface CreateAgentAppHostOptions {
   readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity?: () => string;
   readonly createWorkspaceLogger?: (workspace: AssetWorkspaceResolution) => ILogger;
+  readonly resolveWorkspaceGenerationJobs: (
+    workspace: AssetWorkspaceResolution,
+  ) => Promise<GenerationJobPort>;
 }
 
 export function createAgentAppHost(options: CreateAgentAppHostOptions): AgentAppHost {
@@ -589,6 +603,9 @@ class DefaultAgentAppHost implements AgentAppHost {
       workspaceId: workspace.workspaceId,
       hostId: `${this.options.hostId}:${workspace.workspaceId}`,
     });
+    const generationJobs = createDeferredGenerationJobPort(() =>
+      this.options.resolveWorkspaceGenerationJobs(workspace),
+    );
     if (this.disposed) {
       await authority.dispose();
       throw new Error('Agent AppHost composition was disposed during workspace attach.');
@@ -606,6 +623,7 @@ class DefaultAgentAppHost implements AgentAppHost {
       ...(this.options.assetLoader === undefined ? {} : { assetLoader: this.options.assetLoader }),
       createIdentity: this.options.createIdentity ?? randomUUID,
       credentialRuntime: this.options.credentialRuntime,
+      generationJobs,
       onHomeProjectionChanged: this.emitHomeProjectionChanged,
       canStartTurn: () => !this.pluginRuntimeChanging,
       onReleaseEligible: (candidate) => this.releaseWorkspaceIfEligible(candidate),
@@ -644,6 +662,32 @@ class DefaultAgentAppHost implements AgentAppHost {
   }
 }
 
+function createDeferredGenerationJobPort(
+  resolve: () => Promise<GenerationJobPort>,
+): GenerationJobPort {
+  let pending: Promise<GenerationJobPort> | undefined;
+  const requirePort = (): Promise<GenerationJobPort> => {
+    if (pending) return pending;
+    const attempt = resolve();
+    pending = attempt.catch((error: unknown) => {
+      pending = undefined;
+      throw error;
+    });
+    return pending;
+  };
+  return {
+    submitGeneration: async (input) => (await requirePort()).submitGeneration(input),
+    describeGeneration: async (ref) => (await requirePort()).describeGeneration(ref),
+    observeGeneration: async function* (ref) {
+      yield* (await requirePort()).observeGeneration(ref);
+    },
+    cancelGeneration: async (input) => (await requirePort()).cancelGeneration(input),
+    retryGeneration: async (input) => (await requirePort()).retryGeneration(input),
+    regenerateGeneration: async (input) => (await requirePort()).regenerateGeneration(input),
+    reconcileGeneration: async (input) => (await requirePort()).reconcileGeneration(input),
+  };
+}
+
 interface DefaultAgentWorkspaceRuntimeOptions {
   readonly workspace: AssetWorkspaceResolution;
   readonly authority: NodePiConversationAuthority;
@@ -653,6 +697,7 @@ interface DefaultAgentWorkspaceRuntimeOptions {
   readonly assetLoader?: PiToolResultAssetLoader;
   readonly createIdentity: () => string;
   readonly credentialRuntime: AgentCredentialRuntime;
+  readonly generationJobs: GenerationJobPort;
   readonly onHomeProjectionChanged: () => void;
   readonly canStartTurn: () => boolean;
   readonly onReleaseEligible: (workspace: DefaultAgentWorkspaceRuntime) => Promise<void>;
@@ -676,6 +721,7 @@ interface PendingAgentConversationTurns {
 class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   readonly tools = createToolRegistry();
   readonly models: ReturnType<typeof createOpenNekoPiModels>;
+  private readonly contentAccessRuntime: AgentContentAccessRuntime;
   private readonly conversations = new Map<string, AgentConversationOwner>();
   private readonly projections = new Map<string, ConversationProjectionStore>();
   private readonly opening = new Map<string, Promise<AgentConversationOwner>>();
@@ -700,9 +746,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
 
   constructor(private readonly options: DefaultAgentWorkspaceRuntimeOptions) {
     this.models = createOpenNekoPiModels(options.credentialRuntime.credentials);
-    for (const tool of createAgentContentReadTools(options.workspace)) {
+    this.contentAccessRuntime = createAgentContentAccessRuntime(options.workspace);
+    for (const tool of createAgentContentReadTools(this.contentAccessRuntime)) {
       this.tools.register(tool);
     }
+    registerMediaAgentTools(this.tools, options.generationJobs);
   }
 
   get workspaceId(): string {
@@ -1118,6 +1166,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       typeof input.permissionPolicy === 'function'
         ? input.permissionPolicy(events)
         : input.permissionPolicy;
+    const images = await materializeAgentTurnImages({
+      contextPayloads: input.contextPayloads,
+      modelPolicy: input.modelPolicy,
+      contentAccessRuntime: this.contentAccessRuntime,
+    });
     const operation = owner.execute({
       identity,
       prompt: buildEnhancedAgentMessage({
@@ -1131,8 +1184,12 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
       permissionPolicy,
       workspaceTrusted: input.workspaceTrusted,
       events,
+      ...(images.length === 0 ? {} : { images }),
       ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
       ...(input.skillName === undefined ? {} : { skillName: input.skillName }),
+      ...(input.skillActivationId === undefined
+        ? {}
+        : { skillActivationId: input.skillActivationId }),
       ...(input.additionalInstructions === undefined
         ? {}
         : { additionalInstructions: input.additionalInstructions }),
@@ -1708,9 +1765,11 @@ class DefaultAgentWorkspaceRuntime implements AgentWorkspaceRuntime {
   }
 }
 
-function createAgentContentReadTools(workspace: AssetWorkspaceResolution) {
+function createAgentContentAccessRuntime(
+  workspace: AssetWorkspaceResolution,
+): AgentContentAccessRuntime {
   const documentLowLevelAccess = createNodeDocumentLowLevelAccess();
-  const contentAccessRuntime = createHostAgentContentAccessRuntime({
+  return createHostAgentContentAccessRuntime({
     contentRead: createNodeHostContentReadService({
       workspaceRoot: workspace.workspacePath,
       documentEntryReader: {
@@ -1721,14 +1780,146 @@ function createAgentContentReadTools(workspace: AssetWorkspaceResolution) {
     documentAccess: createNodeDocumentAccessService(),
     resolveDocumentHostFilePath: (source) => resolveWorkspaceContentLocator(workspace, source),
   });
+}
+
+function createAgentContentReadTools(contentAccessRuntime: AgentContentAccessRuntime) {
   return createContentReadCapabilityProvider({ contentAccessRuntime }).getTools({
     hostContext: null,
   });
 }
 
+async function materializeAgentTurnImages(input: {
+  readonly contextPayloads?: readonly AgentContextPayload[];
+  readonly modelPolicy: AgentModelPolicy;
+  readonly contentAccessRuntime: AgentContentAccessRuntime;
+}): Promise<readonly ImageContent[]> {
+  const references = (input.contextPayloads ?? []).flatMap((payload) => {
+    const data = readRecord(payload.data);
+    if (data?.['mediaType'] !== 'image') return [];
+    const validation = validateContentLocator(data['locator']);
+    if (!validation.ok) {
+      throw new Error(`Agent image reference '${payload.label}' has an invalid ContentLocator.`);
+    }
+    return [{ label: payload.label, locator: validation.locator }];
+  });
+  if (references.length === 0) return [];
+  if (!input.modelPolicy['agent.main'].model.input.includes('image')) {
+    throw new Error(
+      `Agent model '${input.modelPolicy['agent.main'].model.provider}/${input.modelPolicy['agent.main'].model.id}' does not support image input.`,
+    );
+  }
+  if (references.length > MAX_AGENT_TURN_IMAGES) {
+    throw new Error(
+      `Agent Turn contains ${references.length} image references; maximum is ${MAX_AGENT_TURN_IMAGES}.`,
+    );
+  }
+  return Promise.all(
+    references.map(async (reference) => {
+      const loaded = await input.contentAccessRuntime.loadContentAsset({
+        locator: reference.locator,
+        maxBytes: MAX_AGENT_TURN_IMAGE_BYTES,
+      });
+      if (loaded.status !== 'ready' || !loaded.bytes || !loaded.mimeType) {
+        const diagnostic = loaded.diagnostics[0]?.code ?? loaded.status;
+        throw new Error(
+          `Agent image reference '${reference.label}' could not be loaded: ${diagnostic}.`,
+        );
+      }
+      const mimeType = await validateAgentTurnImage(
+        reference.label,
+        reference.locator,
+        loaded.bytes,
+        loaded.mimeType,
+      );
+      return {
+        type: 'image' as const,
+        data: Buffer.from(loaded.bytes).toString('base64'),
+        mimeType,
+      };
+    }),
+  );
+}
+
+async function validateAgentTurnImage(
+  label: string,
+  locator: ContentLocator,
+  bytes: Uint8Array,
+  declaredMimeType: string,
+): Promise<string> {
+  let metadata: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
+  try {
+    metadata = await sharp(bytes, {
+      limitInputPixels: MAX_AGENT_TURN_IMAGE_DIMENSION * MAX_AGENT_TURN_IMAGE_DIMENSION,
+    }).metadata();
+  } catch {
+    throw new Error(`Agent image reference '${label}' is not a valid supported image.`);
+  }
+  const detectedMimeType =
+    metadata.format === 'png'
+      ? 'image/png'
+      : metadata.format === 'jpeg'
+        ? 'image/jpeg'
+        : metadata.format === 'webp'
+          ? 'image/webp'
+          : metadata.format === 'gif'
+            ? 'image/gif'
+            : undefined;
+  if (!detectedMimeType) {
+    throw new Error(
+      `Agent image reference '${label}' uses unsupported image format '${metadata.format ?? 'unknown'}'.`,
+    );
+  }
+  if (declaredMimeType !== detectedMimeType) {
+    throw new Error(
+      `Agent image reference '${label}' MIME '${declaredMimeType}' does not match '${detectedMimeType}'.`,
+    );
+  }
+  if (
+    !metadata.width ||
+    !metadata.height ||
+    metadata.width > MAX_AGENT_TURN_IMAGE_DIMENSION ||
+    metadata.height > MAX_AGENT_TURN_IMAGE_DIMENSION
+  ) {
+    throw new Error(`Agent image reference '${label}' exceeds the supported image dimensions.`);
+  }
+  if (
+    locator.kind === 'workspace-file' &&
+    !imageExtensions(detectedMimeType).some((extension) =>
+      locator.path.toLowerCase().endsWith(extension),
+    )
+  ) {
+    throw new Error(
+      `Agent image reference '${label}' extension does not match '${detectedMimeType}'.`,
+    );
+  }
+  return detectedMimeType;
+}
+
+function imageExtensions(mimeType: string): readonly string[] {
+  switch (mimeType) {
+    case 'image/png':
+      return ['.png'];
+    case 'image/jpeg':
+      return ['.jpg', '.jpeg'];
+    case 'image/webp':
+      return ['.webp'];
+    case 'image/gif':
+      return ['.gif'];
+    default:
+      throw new Error(`Unsupported Agent image MIME '${mimeType}'.`);
+  }
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 interface ExecuteAgentConversationInput {
   readonly identity: PiToolRunIdentity;
   readonly prompt: string;
+  readonly images?: readonly ImageContent[];
   readonly modelPolicy: AgentModelPolicy;
   readonly skillSnapshot: Awaited<ReturnType<ReturnType<typeof createNodePiSkillHost>['discover']>>;
   readonly capabilityTools: ReturnType<typeof projectOpenNekoTools>;
@@ -1737,6 +1928,7 @@ interface ExecuteAgentConversationInput {
   readonly events: PiProductEventSink;
   readonly systemPrompt?: string;
   readonly skillName?: string;
+  readonly skillActivationId?: string;
   readonly additionalInstructions?: string;
 }
 
@@ -1768,11 +1960,12 @@ class AgentConversationOwner {
   async execute(input: ExecuteAgentConversationInput): Promise<void> {
     this.requireReady();
     const operation =
-      input.skillName === undefined
+      input.skillName === undefined && input.skillActivationId === undefined
         ? this.runtime.execute({
             turnId: input.identity.turnId,
             runId: input.identity.runId,
             prompt: input.prompt,
+            ...(input.images === undefined ? {} : { images: input.images }),
             modelPolicy: input.modelPolicy,
             skillSnapshot: input.skillSnapshot,
             capabilityTools: input.capabilityTools,
@@ -1784,10 +1977,12 @@ class AgentConversationOwner {
         : this.runtime.executeSkill({
             turnId: input.identity.turnId,
             runId: input.identity.runId,
-            skillName: input.skillName,
+            skillName: requireSkillInvocationIdentity(input).skillName,
+            activationId: requireSkillInvocationIdentity(input).activationId,
             ...(input.additionalInstructions === undefined
               ? {}
               : { additionalInstructions: input.additionalInstructions }),
+            ...(input.images === undefined ? {} : { images: input.images }),
             modelPolicy: input.modelPolicy,
             skillSnapshot: input.skillSnapshot,
             capabilityTools: input.capabilityTools,
@@ -1872,6 +2067,16 @@ class AgentConversationOwner {
       throw new Error('Pi conversation owner already has an active turn.');
     }
   }
+}
+
+function requireSkillInvocationIdentity(input: {
+  readonly skillName?: string;
+  readonly skillActivationId?: string;
+}): { readonly skillName: string; readonly activationId: string } {
+  if (!input.skillName || !input.skillActivationId) {
+    throw new Error('Agent Skill execution requires an exact Skill name and activation identity.');
+  }
+  return { skillName: input.skillName, activationId: input.skillActivationId };
 }
 
 function composeEventSinks(
@@ -2182,10 +2387,22 @@ async function existingSkillRoots(input: {
     {
       path: join(input.workspacePath, '.agents', 'skills'),
       source: { kind: 'project' },
+      entryPointKind: 'skill',
+    },
+    {
+      path: join(input.workspacePath, 'neko', 'commands'),
+      source: { kind: 'project' },
+      entryPointKind: 'command-artifact',
     },
     {
       path: join(input.userHome, '.agents', 'skills'),
       source: { kind: 'personal' },
+      entryPointKind: 'skill',
+    },
+    {
+      path: join(input.userHome, '.neko', 'commands'),
+      source: { kind: 'personal' },
+      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -2193,6 +2410,7 @@ async function existingSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
+            entryPointKind: 'skill' as const,
           },
         ]),
   ];
@@ -2207,6 +2425,12 @@ async function existingGlobalSkillRoots(input: {
     {
       path: join(input.userHome, '.agents', 'skills'),
       source: { kind: 'personal' },
+      entryPointKind: 'skill',
+    },
+    {
+      path: join(input.userHome, '.neko', 'commands'),
+      source: { kind: 'personal' },
+      entryPointKind: 'command-artifact',
     },
     ...(input.builtinSkillRoot === undefined
       ? []
@@ -2214,6 +2438,7 @@ async function existingGlobalSkillRoots(input: {
           {
             path: input.builtinSkillRoot,
             source: { kind: 'builtin' as const },
+            entryPointKind: 'skill' as const,
           },
         ]),
   ];

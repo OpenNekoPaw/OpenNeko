@@ -1,6 +1,10 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentWebviewToHostMessage } from '@neko/agent-contracts';
 import {
+  searchAgentWorkspaceMentions,
   tryHandleAgentContentControllerRoute,
   type AgentContentControllerEffectPort,
   type AgentHostRouteEffectContext,
@@ -45,6 +49,40 @@ async function dispatch(
 }
 
 describe('Agent content controller', () => {
+  it('projects canonical media types for Workspace mention references', async () => {
+    const workspacePath = await mkdtemp(join(tmpdir(), 'agent-mention-media-'));
+    const missingGitignore = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    try {
+      const projection = await searchAgentWorkspaceMentions({
+        workspace: {
+          workspaceId: 'workspace-1',
+          workspacePath,
+          displayName: 'Workspace',
+          locator: { kind: 'variable', value: '${HOME}/workspace' },
+        },
+        host: {
+          files: {
+            readDirectory: vi.fn(async () => [
+              { name: 'test.png', type: 'file' as const },
+              { name: 'test.fountain', type: 'file' as const },
+            ]),
+            readText: vi.fn(async () => Promise.reject(missingGitignore)),
+          },
+          paths: {},
+        } as Parameters<typeof searchAgentWorkspaceMentions>[0]['host'],
+        filter: 'test',
+        purpose: 'entry',
+      });
+
+      expect(projection.files).toEqual([
+        expect.objectContaining({ name: 'test.fountain' }),
+        expect.objectContaining({ name: 'test.png', mediaType: 'image' }),
+      ]);
+    } finally {
+      await rm(workspacePath, { recursive: true, force: true });
+    }
+  });
+
   it('routes all content operations through narrow Host effects with connection context', async () => {
     const effects = createEffects();
     const context = createContext();
