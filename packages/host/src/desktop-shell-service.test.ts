@@ -1800,7 +1800,6 @@ describe('DesktopShellService', () => {
       },
     });
     expect(activeScene(closed.window).slots.main).toBeUndefined();
-    expect(activeScene(closed.window).slots.timeline).toBeUndefined();
 
     fixture.service.setRendererSessionId(windowId, 'renderer-session-2');
     const reattached = await fixture.service.getProjection(windowId);

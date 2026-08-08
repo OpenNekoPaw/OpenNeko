@@ -2,14 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   DESKTOP_SECONDARY_MAIN_GROUP_ID,
   DesktopWorkbenchContractError,
+  closeCutView,
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
+  getActiveCutView,
+  openOrFocusCutView,
   openOrFocusMainView,
   parseDesktopWorkbenchLayout,
+  reorderCutView,
   reorderMainView,
+  resizeCutPanel,
   resizeMainSplit,
+  setCutPanelPresentation,
   setWorkbenchDisplayMode,
-  showWorkbenchTimeline,
   splitMainView,
 } from './desktop-workbench-contract';
 
@@ -24,7 +29,6 @@ describe('Desktop Workbench contract', () => {
         groups: [{ groupId: 'main:primary', viewIds: [] }],
         activeGroupId: 'main:primary',
       },
-      timeline: { presentation: 'hidden', height: 240 },
     });
   });
 
@@ -66,7 +70,7 @@ describe('Desktop Workbench contract', () => {
     expect(focused.main.views).toHaveLength(2);
   });
 
-  it('rejects duplicate membership, missing active Group and dangling Timeline owner', () => {
+  it('rejects duplicate membership and a missing active Group', () => {
     const canvas = openOrFocusMainView(
       createDefaultDesktopWorkbenchLayout('window-1'),
       viewRef('canvas-1', 'canvas'),
@@ -98,33 +102,35 @@ describe('Desktop Workbench contract', () => {
         code: 'desktop-workbench-stale-identity',
       }),
     );
-    expect(() =>
-      parseDesktopWorkbenchLayout({
-        ...canvas,
-        timeline: {
-          presentation: 'docked',
-          ownerViewId: 'canvas-1',
-          height: 240,
-        },
-      }),
-    ).toThrow('attached Cut View');
   });
 
-  it('binds Timeline only to Cut and closes the owner visibly', () => {
+  it('keeps Cut tabs in the Main-below panel without replacing Main', () => {
     const canvas = openOrFocusMainView(
       createDefaultDesktopWorkbenchLayout('window-1'),
       viewRef('canvas-1', 'canvas'),
     );
-    const cut = openOrFocusMainView(canvas, viewRef('cut-1', 'cut'));
-    const withTimeline = showWorkbenchTimeline(cut, 'cut-1');
-    const closed = closeMainView(withTimeline, 'cut-1');
+    const firstCut = openOrFocusCutView(canvas, viewRef('cut-1', 'cut'));
+    const cuts = openOrFocusCutView(firstCut, viewRef('cut-2', 'cut'));
+    const reordered = reorderCutView(cuts, 'cut-1', 'cut-2');
+    const hidden = setCutPanelPresentation(reordered, 'hidden');
+    const resized = resizeCutPanel(hidden, 500);
 
-    expect(withTimeline.timeline).toEqual({
-      presentation: 'docked',
-      ownerViewId: 'cut-1',
-      height: 240,
+    expect(resized.main).toEqual(canvas.main);
+    expect(resized.cutPanel).toMatchObject({
+      presentation: 'hidden',
+      height: 500,
+      activeViewId: 'cut-2',
     });
-    expect(closed.timeline).toEqual({ presentation: 'hidden', height: 240 });
+    expect(resized.cutPanel?.views.map((view) => view.viewId)).toEqual(['cut-2', 'cut-1']);
+    expect(getActiveCutView(resized)?.viewId).toBe('cut-2');
+    expect(closeCutView(resized, 'cut-2').cutPanel?.activeViewId).toBe('cut-1');
+    expect(closeCutView(closeCutView(resized, 'cut-2'), 'cut-1').cutPanel).toBeUndefined();
+    expect(() => openOrFocusMainView(canvas, viewRef('cut-1', 'cut'))).toThrow(
+      'belong to the Cut Panel',
+    );
+    expect(() => openOrFocusCutView(canvas, viewRef('canvas-2', 'canvas'))).toThrow(
+      'accepts only Cut Views',
+    );
   });
 
   it('supports bounded split, reorder, resize and collapse operations', () => {

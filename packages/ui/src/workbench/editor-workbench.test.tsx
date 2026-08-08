@@ -141,13 +141,13 @@ describe('editor workbench shell primitives', () => {
             maxSize: 520,
             onResizeEnd: vi.fn(),
           }}
-          timeline={<div data-testid="timeline" />}
-          timelineVisible
-          timelineHeight={220}
-          timelineResize={{
-            label: 'Resize timeline',
-            minSize: 160,
-            maxSize: 480,
+          bottomPanel={<div data-testid="bottom-panel" />}
+          bottomPanelVisible
+          bottomPanelHeight={420}
+          bottomPanelResize={{
+            label: 'Resize bottom panel',
+            minSize: 280,
+            maxSize: 680,
             onResizeEnd: vi.fn(),
           }}
           statusBar={<div data-testid="status" />}
@@ -161,9 +161,9 @@ describe('editor workbench shell primitives', () => {
     expect(shell?.dataset['rightPresentation']).toBe('docked');
     expect(shell?.dataset['mainSplit']).toBe('columns');
     expect(shell?.dataset['mainComposition']).toBe('independent-shells');
-    expect(shell?.dataset['timelineVisible']).toBe('true');
+    expect(shell?.dataset['bottomPanelVisible']).toBe('true');
     expect(shell?.style.getPropertyValue('--neko-controlled-primary-width')).toBe('232px');
-    expect(shell?.style.getPropertyValue('--neko-controlled-timeline-height')).toBe('220px');
+    expect(shell?.style.getPropertyValue('--neko-controlled-bottom-panel-height')).toBe('420px');
     expect(shell?.style.getPropertyValue('--neko-controlled-main-split-ratio')).toBe('40%');
     expect(
       host.querySelector('.neko-controlled-workbench-main__primary [data-testid="main"]'),
@@ -185,7 +185,7 @@ describe('editor workbench shell primitives', () => {
     expect(host.querySelectorAll('[role="separator"]')).toHaveLength(5);
     expect(host.querySelector('[aria-label="Resize primary"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="Resize Main split"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Resize timeline"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Resize bottom panel"]')).not.toBeNull();
   });
 
   it('moves one retained Interaction between Main and a dock without remounting it', () => {
@@ -313,10 +313,10 @@ describe('editor workbench shell primitives', () => {
             label: 'Resize hidden right',
             onResizeEnd: vi.fn(),
           }}
-          timeline={<div data-testid="timeline" />}
-          timelineVisible={false}
-          timelineResize={{
-            label: 'Resize hidden timeline',
+          bottomPanel={<div data-testid="bottom-panel" />}
+          bottomPanelVisible={false}
+          bottomPanelResize={{
+            label: 'Resize hidden bottom panel',
             onResizeEnd: vi.fn(),
           }}
         />,
@@ -326,7 +326,7 @@ describe('editor workbench shell primitives', () => {
     const shell = host.querySelector<HTMLElement>('[data-neko-controlled-workbench="true"]');
     expect(shell?.dataset['primaryVisible']).toBe('false');
     expect(shell?.dataset['mainSplit']).toBe('none');
-    expect(shell?.dataset['timelineVisible']).toBe('false');
+    expect(shell?.dataset['bottomPanelVisible']).toBe('false');
     expect(host.querySelector('.neko-controlled-workbench-primary')).toBeNull();
     expect(host.querySelector('[role="separator"]')).toBeNull();
   });

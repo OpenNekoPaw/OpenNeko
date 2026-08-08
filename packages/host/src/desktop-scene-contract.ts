@@ -72,8 +72,8 @@ export type DesktopWorkbenchManagerSurfaceRef =
   | { readonly kind: 'workspace-resources'; readonly workspaceId: string }
   | { readonly kind: 'settings-navigation'; readonly settingsSectionId: string };
 
-export interface DesktopWorkbenchTimelineSurfaceRef {
-  readonly kind: 'workspace-timeline';
+export interface DesktopWorkbenchCutPanelSurfaceRef {
+  readonly kind: 'workspace-cut';
   readonly workspaceId: string;
   readonly viewId: string;
   readonly viewInstanceId: string;
@@ -95,7 +95,7 @@ export interface DesktopWorkbenchSceneProjection {
     readonly secondaryMain?: DesktopWorkbenchMainSurfaceRef;
     readonly leftManager?: DesktopWorkbenchManagerSurfaceRef;
     readonly rightManager?: DesktopWorkbenchManagerSurfaceRef;
-    readonly timeline?: DesktopWorkbenchTimelineSurfaceRef;
+    readonly cutPanel?: DesktopWorkbenchCutPanelSurfaceRef;
     readonly status?: DesktopWorkbenchStatusSurfaceRef;
   };
 }
@@ -556,9 +556,9 @@ function parseSceneSlots(value: unknown): DesktopWorkbenchSceneProjection['slots
   const record = requireRecord(value, 'Desktop Scene slots must be an object.');
   requireExactKeys(
     record,
-    ['interaction', 'main', 'secondaryMain', 'leftManager', 'rightManager', 'timeline', 'status'],
+    ['interaction', 'main', 'secondaryMain', 'leftManager', 'rightManager', 'cutPanel', 'status'],
     'Desktop Scene slots',
-    ['interaction', 'main', 'secondaryMain', 'leftManager', 'rightManager', 'timeline', 'status'],
+    ['interaction', 'main', 'secondaryMain', 'leftManager', 'rightManager', 'cutPanel', 'status'],
   );
   return {
     ...(record['interaction'] === undefined
@@ -574,9 +574,9 @@ function parseSceneSlots(value: unknown): DesktopWorkbenchSceneProjection['slots
     ...(record['rightManager'] === undefined
       ? {}
       : { rightManager: parseManagerSurface(record['rightManager']) }),
-    ...(record['timeline'] === undefined
+    ...(record['cutPanel'] === undefined
       ? {}
-      : { timeline: parseTimelineSurface(record['timeline']) }),
+      : { cutPanel: parseCutPanelSurface(record['cutPanel']) }),
     ...(record['status'] === undefined ? {} : { status: parseStatusSurface(record['status']) }),
   };
 }
@@ -694,22 +694,22 @@ function parseManagerSurface(value: unknown): DesktopWorkbenchManagerSurfaceRef 
   throw unsupported(`Unknown Manager Surface kind '${String(kind)}'.`);
 }
 
-function parseTimelineSurface(value: unknown): DesktopWorkbenchTimelineSurfaceRef {
-  const record = requireRecord(value, 'Timeline Surface ref must be an object.');
+function parseCutPanelSurface(value: unknown): DesktopWorkbenchCutPanelSurfaceRef {
+  const record = requireRecord(value, 'Cut Panel Surface ref must be an object.');
   requireExactKeys(
     record,
     ['kind', 'workspaceId', 'viewId', 'viewInstanceId', 'ownerId'],
-    'Workspace Timeline Surface ref',
+    'Workspace Cut Panel Surface ref',
   );
-  if (record['kind'] !== 'workspace-timeline') {
-    throw unsupported('Timeline slot only accepts Workspace Timeline Surface.');
+  if (record['kind'] !== 'workspace-cut') {
+    throw unsupported('Cut Panel slot only accepts Workspace Cut Surface.');
   }
   return {
-    kind: 'workspace-timeline',
+    kind: 'workspace-cut',
     workspaceId: requireIdentity(record['workspaceId'], 'Workspace'),
-    viewId: requireIdentity(record['viewId'], 'Workspace View'),
-    viewInstanceId: requireIdentity(record['viewInstanceId'], 'Workspace View instance identity'),
-    ownerId: requireIdentity(record['ownerId'], 'Timeline owner'),
+    viewId: requireIdentity(record['viewId'], 'Cut View'),
+    viewInstanceId: requireIdentity(record['viewInstanceId'], 'Cut View instance identity'),
+    ownerId: requireIdentity(record['ownerId'], 'Cut owner'),
   };
 }
 
@@ -790,20 +790,20 @@ function validateSceneProjection(projection: DesktopWorkbenchSceneProjection): v
     validateAgentMain(context.scope, slots.secondaryMain);
     validateAgentManager(context.scope, slots.leftManager);
     validateAgentManager(context.scope, slots.rightManager);
-    if (context.scope.kind === 'assistant' && slots.timeline) {
-      throw mismatch('Assistant Scene cannot mount a Workspace Timeline.');
+    if (context.scope.kind !== 'workspace' && slots.cutPanel) {
+      throw mismatch('Assistant or unbound Agent Scene cannot mount a Workspace Cut Panel.');
     }
     if (
       context.scope.kind === 'workspace' &&
-      slots.timeline &&
-      slots.timeline.workspaceId !== context.scope.workspaceId
+      slots.cutPanel &&
+      slots.cutPanel.workspaceId !== context.scope.workspaceId
     ) {
-      throw mismatch('Workspace Timeline does not match Agent Workspace scope.');
+      throw mismatch('Workspace Cut Panel does not match Agent Workspace scope.');
     }
     return;
   }
-  if (slots.interaction || slots.timeline) {
-    throw mismatch(`${context.kind} Scene cannot mount Agent Interaction or Workspace Timeline.`);
+  if (slots.interaction || slots.cutPanel) {
+    throw mismatch(`${context.kind} Scene cannot mount Agent Interaction or Workspace Cut Panel.`);
   }
   if (context.kind === 'asset-center') {
     assertManagerKinds(slots, []);

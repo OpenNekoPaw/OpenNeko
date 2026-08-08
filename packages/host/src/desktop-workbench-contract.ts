@@ -5,7 +5,7 @@ export const DESKTOP_SECONDARY_MAIN_GROUP_ID = 'main:secondary';
 
 export const DESKTOP_WORKBENCH_LIMITS = {
   dockWidth: { min: 280, max: 520 },
-  timelineHeight: { min: 160, max: 480 },
+  cutPanelHeight: { min: 280, max: 680 },
   mainViewCount: { min: 0, max: 8 },
   mainGroupCount: { min: 1, max: 2 },
   mainSplitRatio: { min: 0.25, max: 0.75 },
@@ -59,10 +59,11 @@ export interface DesktopWorkbenchLayoutProjection {
     readonly activeGroupId: string;
     readonly split?: DesktopWorkbenchMainSplit;
   };
-  readonly timeline: {
+  readonly cutPanel?: {
     readonly presentation: 'hidden' | 'docked';
-    readonly ownerViewId?: string;
     readonly height: number;
+    readonly views: readonly DesktopWorkbenchViewRef[];
+    readonly activeViewId: string;
   };
 }
 
@@ -101,10 +102,6 @@ export function createDefaultDesktopWorkbenchLayout(
       groups: [{ groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID, viewIds: [] }],
       activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
     },
-    timeline: {
-      presentation: 'hidden',
-      height: 240,
-    },
   };
 }
 
@@ -112,7 +109,13 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
   const record = requireRecord(value, 'Desktop Workbench layout must be an object.');
   requireExactKeys(
     record,
-    ['windowId', 'resourceDock', 'display', 'main', 'timeline'],
+    [
+      'windowId',
+      'resourceDock',
+      'display',
+      'main',
+      ...(record['cutPanel'] === undefined ? [] : ['cutPanel']),
+    ],
     'Desktop Workbench layout',
   );
   const resourceDock = requireRecord(
@@ -129,13 +132,12 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
     'Desktop Workbench display projection',
   );
   const main = requireRecord(record['main'], 'Desktop Workbench Main projection is required.');
-  const timeline = requireRecord(
-    record['timeline'],
-    'Desktop Workbench Timeline projection is required.',
-  );
   const views = requireArray(main['views'], 'Desktop Workbench Main Views must be an array.').map(
     parseDesktopWorkbenchViewRef,
   );
+  if (views.some((view) => view.kind === 'cut')) {
+    throw invalidPayload('Desktop Workbench Main accepts Canvas and Preview Views, not Cut Views.');
+  }
   if (views.length > DESKTOP_WORKBENCH_LIMITS.mainViewCount.max) {
     throw invalidPayload('Desktop Workbench supports at most eight open Main Views.');
   }
@@ -164,24 +166,10 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
     throw invalidPayload('Desktop Workbench two-Group layout requires a split.');
   }
 
-  const timelinePresentation = requireOneOf(
-    timeline['presentation'],
-    ['hidden', 'docked'] as const,
-    'Desktop Workbench Timeline presentation is invalid.',
-  );
-  const ownerViewId = readOptionalNonEmptyString(
-    timeline['ownerViewId'],
-    'Desktop Workbench Timeline owner identity is invalid.',
-  );
-  if (timelinePresentation === 'hidden' && ownerViewId !== undefined) {
-    throw invalidPayload('Hidden Desktop Timeline cannot retain an owner View.');
-  }
-  if (timelinePresentation === 'docked') {
-    const owner = views.find((view) => view.viewId === ownerViewId);
-    if (!owner || owner.kind !== 'cut') {
-      throw staleIdentity('Desktop Timeline owner must be an attached Cut View.');
-    }
-  }
+  const cutPanel =
+    record['cutPanel'] === undefined
+      ? undefined
+      : parseDesktopWorkbenchCutPanel(record['cutPanel']);
 
   return {
     windowId: requireNonEmptyString(
@@ -223,15 +211,7 @@ export function parseDesktopWorkbenchLayout(value: unknown): DesktopWorkbenchLay
       activeGroupId,
       ...(split === undefined ? {} : { split }),
     },
-    timeline: {
-      presentation: timelinePresentation,
-      ...(ownerViewId === undefined ? {} : { ownerViewId }),
-      height: requireBoundedNumber(
-        timeline['height'],
-        DESKTOP_WORKBENCH_LIMITS.timelineHeight,
-        'Desktop Workbench Timeline height is invalid.',
-      ),
-    },
+    ...(cutPanel === undefined ? {} : { cutPanel }),
   };
 }
 
@@ -259,6 +239,9 @@ export function openOrFocusMainView(
   options: DesktopOpenMainViewOptions = {},
 ): DesktopWorkbenchLayoutProjection {
   const parsedView = parseDesktopWorkbenchViewRef(view);
+  if (parsedView.kind === 'cut') {
+    throw invalidPayload('Desktop Cut Views belong to the Cut Panel, not Main.');
+  }
   const existing = workbench.main.views.find((candidate) => candidate.viewId === parsedView.viewId);
   const existingGroup = findMainGroupForView(workbench, parsedView.viewId);
   if (existing && !existingGroup) {
@@ -391,13 +374,6 @@ export function closeMainView(
       activeGroupId,
       ...(split === undefined ? {} : { split }),
     },
-    timeline:
-      workbench.timeline.ownerViewId === viewId
-        ? {
-            presentation: 'hidden' as const,
-            height: workbench.timeline.height,
-          }
-        : workbench.timeline,
   };
   return parseDesktopWorkbenchLayout(next);
 }
@@ -493,22 +469,99 @@ export function resizeMainSplit(
   });
 }
 
-export function showWorkbenchTimeline(
+export function openOrFocusCutView(
   workbench: DesktopWorkbenchLayoutProjection,
-  ownerViewId: string,
+  view: DesktopWorkbenchViewRef,
 ): DesktopWorkbenchLayoutProjection {
-  const owner = requireMainView(workbench, ownerViewId);
-  if (owner.kind !== 'cut') {
-    throw staleIdentity('Desktop Timeline owner must be an attached Cut View.');
+  const parsedView = parseDesktopWorkbenchViewRef(view);
+  if (parsedView.kind !== 'cut') {
+    throw invalidPayload('Desktop Cut Panel accepts only Cut Views.');
+  }
+  const current = workbench.cutPanel;
+  const views = current?.views.some((candidate) => candidate.viewId === parsedView.viewId)
+    ? current.views.map((candidate) =>
+        candidate.viewId === parsedView.viewId ? parsedView : candidate,
+      )
+    : [...(current?.views ?? []), parsedView];
+  return parseDesktopWorkbenchLayout({
+    ...workbench,
+    cutPanel: {
+      presentation: 'docked',
+      height: current?.height ?? 420,
+      views,
+      activeViewId: parsedView.viewId,
+    },
+  });
+}
+
+export function closeCutView(
+  workbench: DesktopWorkbenchLayoutProjection,
+  viewId: string,
+): DesktopWorkbenchLayoutProjection {
+  const panel = requireCutPanel(workbench);
+  requireCutView(workbench, viewId);
+  const views = panel.views.filter((view) => view.viewId !== viewId);
+  if (views.length === 0) {
+    const { cutPanel: _cutPanel, ...withoutCutPanel } = workbench;
+    return parseDesktopWorkbenchLayout(withoutCutPanel);
   }
   return parseDesktopWorkbenchLayout({
     ...workbench,
-    timeline: {
-      ...workbench.timeline,
-      presentation: 'docked',
-      ownerViewId,
+    cutPanel: {
+      ...panel,
+      views,
+      activeViewId: panel.activeViewId === viewId ? views.at(-1)?.viewId : panel.activeViewId,
     },
   });
+}
+
+export function reorderCutView(
+  workbench: DesktopWorkbenchLayoutProjection,
+  sourceViewId: string,
+  targetViewId: string,
+): DesktopWorkbenchLayoutProjection {
+  const panel = requireCutPanel(workbench);
+  const sourceIndex = panel.views.findIndex((view) => view.viewId === sourceViewId);
+  const targetIndex = panel.views.findIndex((view) => view.viewId === targetViewId);
+  if (sourceIndex < 0 || targetIndex < 0) {
+    throw staleIdentity('Desktop Cut Tab reorder requires two attached Cut Views.');
+  }
+  const views = [...panel.views];
+  const [source] = views.splice(sourceIndex, 1);
+  if (!source) throw staleIdentity('Desktop Cut Tab reorder source is unavailable.');
+  views.splice(targetIndex, 0, source);
+  return parseDesktopWorkbenchLayout({
+    ...workbench,
+    cutPanel: { ...panel, views },
+  });
+}
+
+export function setCutPanelPresentation(
+  workbench: DesktopWorkbenchLayoutProjection,
+  presentation: 'hidden' | 'docked',
+): DesktopWorkbenchLayoutProjection {
+  const panel = requireCutPanel(workbench);
+  return parseDesktopWorkbenchLayout({
+    ...workbench,
+    cutPanel: { ...panel, presentation },
+  });
+}
+
+export function resizeCutPanel(
+  workbench: DesktopWorkbenchLayoutProjection,
+  height: number,
+): DesktopWorkbenchLayoutProjection {
+  const panel = requireCutPanel(workbench);
+  return parseDesktopWorkbenchLayout({
+    ...workbench,
+    cutPanel: { ...panel, height },
+  });
+}
+
+export function getActiveCutView(
+  workbench: DesktopWorkbenchLayoutProjection,
+): DesktopWorkbenchViewRef | undefined {
+  return workbench.cutPanel?.views.find((view) => view.viewId === workbench.cutPanel?.activeViewId);
 }
 
 export function getActiveMainView(
@@ -528,6 +581,22 @@ export function findMainGroupForView(
 
 function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
   const record = requireRecord(value, 'Desktop Workbench Main View must be an object.');
+  requireExactKeys(
+    record,
+    [
+      'viewId',
+      'viewInstanceId',
+      'projectId',
+      'workspaceId',
+      'kind',
+      'ownerId',
+      'displayLabel',
+      ...(record['documentId'] === undefined ? [] : ['documentId']),
+      ...(record['previewPresentation'] === undefined ? [] : ['previewPresentation']),
+      ...(record['previewContentKind'] === undefined ? [] : ['previewContentKind']),
+    ],
+    'Desktop Workbench Main View',
+  );
   const kind = requireOneOf(
     record['kind'],
     ['canvas', 'preview', 'cut'] as const,
@@ -590,6 +659,51 @@ function parseDesktopWorkbenchViewRef(value: unknown): DesktopWorkbenchViewRef {
     ...(documentId ? { documentId } : {}),
     ...(previewPresentation ? { previewPresentation } : {}),
     ...(previewContentKind ? { previewContentKind } : {}),
+  };
+}
+
+function parseDesktopWorkbenchCutPanel(
+  value: unknown,
+): NonNullable<DesktopWorkbenchLayoutProjection['cutPanel']> {
+  const record = requireRecord(value, 'Desktop Workbench Cut Panel projection is required.');
+  requireExactKeys(
+    record,
+    ['presentation', 'height', 'views', 'activeViewId'],
+    'Desktop Workbench Cut Panel projection',
+  );
+  const views = requireArray(record['views'], 'Desktop Cut Panel Views must be an array.').map(
+    parseDesktopWorkbenchViewRef,
+  );
+  if (views.length === 0 || views.length > DESKTOP_WORKBENCH_LIMITS.mainViewCount.max) {
+    throw invalidPayload('Desktop Cut Panel requires between one and eight Cut Views.');
+  }
+  if (views.some((view) => view.kind !== 'cut')) {
+    throw invalidPayload('Desktop Cut Panel accepts only Cut Views.');
+  }
+  const viewIds = new Set(views.map((view) => view.viewId));
+  if (viewIds.size !== views.length) {
+    throw invalidPayload('Desktop Cut Panel View identities must be unique.');
+  }
+  const activeViewId = requireNonEmptyString(
+    record['activeViewId'],
+    'Desktop Cut Panel active View identity is required.',
+  );
+  if (!viewIds.has(activeViewId)) {
+    throw staleIdentity('Desktop Cut Panel active View does not exist.');
+  }
+  return {
+    presentation: requireOneOf(
+      record['presentation'],
+      ['hidden', 'docked'] as const,
+      'Desktop Cut Panel presentation is invalid.',
+    ),
+    height: requireBoundedNumber(
+      record['height'],
+      DESKTOP_WORKBENCH_LIMITS.cutPanelHeight,
+      'Desktop Cut Panel height is invalid.',
+    ),
+    views,
+    activeViewId,
   };
 }
 
@@ -730,6 +844,22 @@ function requireMainView(
 ): DesktopWorkbenchViewRef {
   const view = workbench.main.views.find((candidate) => candidate.viewId === viewId);
   if (!view) throw staleIdentity(`Desktop Main View '${viewId}' does not exist.`);
+  return view;
+}
+
+function requireCutPanel(
+  workbench: DesktopWorkbenchLayoutProjection,
+): NonNullable<DesktopWorkbenchLayoutProjection['cutPanel']> {
+  if (!workbench.cutPanel) throw staleIdentity('Desktop Cut Panel does not exist.');
+  return workbench.cutPanel;
+}
+
+function requireCutView(
+  workbench: DesktopWorkbenchLayoutProjection,
+  viewId: string,
+): DesktopWorkbenchViewRef {
+  const view = requireCutPanel(workbench).views.find((candidate) => candidate.viewId === viewId);
+  if (!view) throw staleIdentity(`Desktop Cut View '${viewId}' does not exist.`);
   return view;
 }
 

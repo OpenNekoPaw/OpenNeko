@@ -21,6 +21,11 @@ import {
   type CutHostRuntimeSnapshot,
   type CutMediaRuntimeAdapter,
 } from '@neko/cut-domain';
+import {
+  parseContentLocatorDragData,
+  type ContentLocator,
+  type ContentLocatorDragData,
+} from '@neko/content';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
 import {
   CutPreviewRuntimeController,
@@ -34,7 +39,6 @@ import { freezeCutExportRequest, readCutExportSettings } from './cutExportReques
 import { generateClipRepresentations, readClipRepresentationRequests } from './clipRepresentations';
 import type { NodeMediaPublisher } from '@neko/media/node';
 import type {
-  ResourceBrowserContentItem,
   ResourceBrowserIdentity,
   ResourceBrowserItem,
 } from '@neko/assets-domain/resource-browser/contract';
@@ -78,10 +82,7 @@ export interface CutApplicationRuntimeOptions {
     readonly workspacePath: string;
     readonly storage: CutDocumentStorage;
   }>;
-  readonly resolveResourcePath: (
-    workspaceId: string,
-    item: ResourceBrowserContentItem,
-  ) => Promise<string>;
+  readonly resolveResourcePath: (workspaceId: string, locator: ContentLocator) => Promise<string>;
   readonly readText: (absolutePath: string) => Promise<string>;
   readonly createMediaPublisher?: (input: {
     readonly windowId: string;
@@ -171,7 +172,7 @@ export class CutApplicationRuntime {
     const current = entry.session.view();
     const sourcePath = await this.options.resolveResourcePath(
       input.resourceIdentity.workspaceId,
-      input.item,
+      input.item.locator,
     );
     const importer = await CutWorkspaceMediaImporter.create(entry.workspacePath);
     const prepared = await importer.prepare(entry.documentPath, sourcePath);
@@ -341,9 +342,18 @@ export class CutApplicationRuntime {
       }
       case CUT_HOST_RUNTIME_ROUTES.mediaDrop: {
         const payload = requireMediaDropPayload(request.payload);
+        const sourcePaths =
+          payload.source.kind === 'content-locator'
+            ? [
+                await this.options.resolveResourcePath(
+                  entry.identity.workspaceId,
+                  payload.source.data.locator,
+                ),
+              ]
+            : payload.source.uris.map(requireLocalFileUri);
         await this.applyMediaPaths(entry, request.requestId, {
           ...payload,
-          sourcePaths: payload.uris.map(requireLocalFileUri),
+          sourcePaths,
         });
         break;
       }
@@ -1117,21 +1127,34 @@ function requireMediaDropPayload(value: unknown): {
   readonly trackId: string;
   readonly timelineStartFrames: number;
   readonly overlapPolicy: 'reject' | 'insert';
-  readonly uris: readonly string[];
+  readonly source:
+    | { readonly kind: 'content-locator'; readonly data: ContentLocatorDragData }
+    | { readonly kind: 'local-file-uris'; readonly uris: readonly string[] };
 } {
   const record = requireObject(value, 'Cut media drop payload is invalid.');
   if (record['type'] !== 'cut:drop-link-media') {
     throw new Error('Cut media drop type is invalid.');
   }
-  const uris = record['uris'];
+  const source = requireObject(record['source'], 'Cut media drop source is invalid.');
+  if (source['kind'] === 'content-locator') {
+    return {
+      ...readMediaPlacement(record),
+      source: {
+        kind: 'content-locator',
+        data: parseContentLocatorDragData(source['data']),
+      },
+    };
+  }
+  const uris = source['uris'];
   if (
+    source['kind'] !== 'local-file-uris' ||
     !Array.isArray(uris) ||
     uris.length === 0 ||
     !uris.every((uri): uri is string => typeof uri === 'string')
   ) {
-    throw new Error('Cut media drop requires at least one local file URI.');
+    throw new Error('Cut media drop source is invalid.');
   }
-  return { ...readMediaPlacement(record), uris };
+  return { ...readMediaPlacement(record), source: { kind: 'local-file-uris', uris } };
 }
 
 function readMediaPlacement(record: Record<string, unknown>): {

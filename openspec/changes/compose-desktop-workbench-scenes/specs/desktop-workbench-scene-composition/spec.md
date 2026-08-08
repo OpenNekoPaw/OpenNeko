@@ -15,7 +15,7 @@ The PrimarySidebar SHALL retain application navigation, recent Projects, recent 
 
 #### Scenario: A scene does not require every slot
 
-- **WHEN** a scene has no qualified producer for Interaction, Main, manager, Timeline or Status
+- **WHEN** a scene has no qualified producer for Interaction, Main, manager or Status
 - **THEN** that slot is omitted or displays an owner-qualified empty/unavailable Surface
 - **AND** Desktop does not insert mock domain content or a technical placeholder as a successful Surface
 
@@ -58,6 +58,29 @@ Sidebar visibility, width, hover reveal and resize lifecycle SHALL be a Window-o
 - **AND** active, hover and keyboard-focus states do not resize or shift the control row
 - **AND** no layout control is rendered in the sidebar footer, Workspace Main tab header or a domain Surface
 
+#### Scenario: User toggles the Cut Panel
+
+- **WHEN** the exact Workspace Workbench has at least one Cut Panel tab
+- **THEN** the Cut Panel control hides or restores the complete active Cut Root below Main
+- **AND** the upper Main Canvas, file Preview or Editor releases or yields the panel space without changing its active View
+- **AND** Agent, Main and management presentation remain unchanged
+- **AND** when no Cut Panel tab exists the control is disabled rather than targeting a historical Cut runtime
+
+#### Scenario: Multiple OTIO documents use Cut Panel tabs
+
+- **WHEN** the user opens two distinct OTIO documents in one Workspace
+- **THEN** Workbench owns two exact Cut View refs in the Main-below Cut Panel tab group
+- **AND** selecting either tab mounts only its one Cut Root containing Preview above Timeline
+- **AND** the active upper Main Canvas, file Preview or Editor remains unchanged
+- **AND** no Timeline-only portal target, standalone Timeline Surface or hidden inactive Cut Root is mounted
+
+#### Scenario: Resource is dragged into the active Cut tab
+
+- **WHEN** the user drags an authorized Workspace resource from Resource management to the active Cut Timeline
+- **THEN** the Cut Root receives one canonical ContentLocator drag payload and adds exactly one clip through the active OTIO owner
+- **AND** renderer code does not construct or persist an absolute path
+- **AND** sibling Cut tabs and the upper Main View remain unchanged
+
 #### Scenario: Packaged layout control icons use canonical font assets
 
 - **WHEN** the PrimarySidebar top controls render from the packaged `openneko://desktop` application
@@ -94,12 +117,12 @@ The Host-neutral scene authority SHALL produce one canonical projection with exa
 
 - **WHEN** Host activates an Agent scene with an Assistant scope
 - **THEN** the projection permits the exact Agent View, Assistant resources and authorized Preview session
-- **AND** it excludes Workspace Main, Workspace Resources and Timeline refs
+- **AND** it excludes Workspace Main and Workspace Resources refs
 
 #### Scenario: Workspace scene is projected
 
 - **WHEN** Host activates a validated Workspace grant
-- **THEN** the projection permits the exact Agent View, Workspace Main, Workspace Resources and applicable Timeline/Status refs for that Workspace
+- **THEN** the projection permits the exact Agent View, Workspace Main, Workspace Resources and Status refs for that Workspace
 - **AND** a mismatched Window, Workbench, Workspace, View, connection or conversation prevents mounting only that Surface
 
 #### Scenario: Invalid slot composition is decoded

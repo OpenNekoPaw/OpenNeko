@@ -10,11 +10,9 @@ import { createDesktopMediaFixtureSet } from '../../../../scripts/desktop-functi
 const VISUAL_SETTLE_MILLISECONDS = 1_000;
 const MEDIA_HAVE_CURRENT_DATA = 2;
 const ACTIVE_CUT_ROOT_SELECTOR =
-  '[data-workbench-slot="main"] ' +
-  '.project-main-view-stack__item[data-main-view-id] ' +
+  '[data-workbench-slot="bottomPanel"] [data-workbench-cut-panel="true"] ' +
   '[data-owner-root="cut"]';
-const ACTIVE_CUT_TIMELINE_SELECTOR =
-  '[data-workbench-slot="timeline"] ' + '[data-testid="desktop-cut-timeline-slot"]';
+const ACTIVE_CUT_TIMELINE_SELECTOR = `${ACTIVE_CUT_ROOT_SELECTOR} .cut-basic-timeline-region`;
 
 export const cutOpenNekoConsumerScenario = Object.freeze({
   id: 'cut-openneko-consumer',
@@ -46,6 +44,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
   async run({
     checkpoint,
     click,
+    drag,
     evaluate,
     prepared,
     readOpenNekoResourceRequests,
@@ -58,7 +57,9 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       `(projection, current, tab, project) => ({
         ...current,
         display: { ...current.display, mode: 'main-only' },
-        main: {
+        cutPanel: {
+          presentation: 'docked',
+          height: 420,
           views: [
             {
               viewId: 'cut:functional',
@@ -66,19 +67,13 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
               projectId: project.projectId,
               workspaceId: project.workspaceId,
               kind: 'cut',
-              ownerId: 'cut:functional',
+              ownerId: 'cut-session:cut:functional:' + tab.viewInstanceId,
               displayLabel: 'qualification.otio',
               documentId: ${JSON.stringify(prepared.documentId)},
             },
           ],
-          groups: [{
-            groupId: 'main:primary',
-            viewIds: ['cut:functional'],
-            activeViewId: 'cut:functional',
-          }],
-          activeGroupId: 'main:primary',
+          activeViewId: 'cut:functional',
         },
-        timeline: { presentation: 'docked', ownerViewId: 'cut:functional', height: 240 },
       })`,
     );
     await waitForSelector(
@@ -121,13 +116,28 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       )})?.querySelector('.cut-preview-controls output')?.textContent`,
     );
     checkpoint('cut-seek-clicked', { output: seekOutput });
-    const seeked = await waitForCutPausedSeek(
-      evaluate,
-      playing.url,
-      requestsBeforeSeek,
-      readOpenNekoResourceRequests,
-      seekTarget.replacementSeconds,
-    );
+    let seeked;
+    try {
+      seeked = await waitForCutPausedSeek(
+        evaluate,
+        playing.url,
+        requestsBeforeSeek,
+        readOpenNekoResourceRequests,
+        seekTarget.replacementSeconds,
+      );
+    } catch {
+      await click(
+        `${ACTIVE_CUT_TIMELINE_SELECTOR} .cut-basic-ruler-tick`,
+        seekTarget.replacementTickIndex,
+      );
+      seeked = await waitForCutPausedSeek(
+        evaluate,
+        playing.url,
+        requestsBeforeSeek,
+        readOpenNekoResourceRequests,
+        seekTarget.replacementSeconds,
+      );
+    }
     const releasedStatus = await waitForReleasedUrl(evaluate, playing.url);
     checkpoint('cut-preview-request-released');
     const readyMidpointState = await seekCutToTimelineMidpoint({ click, evaluate });
@@ -141,12 +151,32 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       visualMidpoint: seekMidpointState.evidence,
     });
     const authoring = await qualifyCutAuthoring({ evaluate, prepared, checkpoint });
+    const tabPanel = await qualifyCutTabPanelPresentation({
+      checkpoint,
+      click,
+      evaluate,
+      screenshot,
+    });
     await waitForCutAuthoringVisible(evaluate);
     const authoringMidpointState = await seekCutToTimelineMidpoint({ click, evaluate });
     const authoringScreenshot = await captureSettledScreenshot(
       screenshot,
       'cut-authoring-complete',
     );
+    const resourceDrop = await qualifyResourceDropToCutTimeline({
+      checkpoint,
+      click,
+      drag,
+      evaluate,
+      screenshot,
+    });
+    await resizeCutWindow(evaluate, 1280, 760);
+    await delay(VISUAL_SETTLE_MILLISECONDS);
+    const compactLayout = await inspectCutLayout(evaluate);
+    if (!compactLayout.previewAboveTimeline || compactLayout.overlaps.length > 0) {
+      throw new Error(`Cut compact layout is invalid: ${JSON.stringify(compactLayout)}`);
+    }
+    const compactScreenshot = await screenshot('cut-preview-timeline-compact');
     const exported = await stat(
       join(prepared.workspacePath, 'exports', 'functional-cut-export.mp4'),
     );
@@ -164,12 +194,22 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       releasedStatus,
       trustedInteractions: seeked.clickEvidence,
       authoring: { ...authoring, exportBytes: exported.size },
+      tabPanel,
+      resourceDrop,
+      compactLayout,
       visualMidpoints: {
         ready: readyMidpointState.evidence,
         seek: seekMidpointState.evidence,
         authoring: authoringMidpointState.evidence,
       },
-      screenshots: [readyScreenshot, seekScreenshot, authoringScreenshot],
+      screenshots: [
+        readyScreenshot,
+        seekScreenshot,
+        ...tabPanel.screenshots,
+        authoringScreenshot,
+        resourceDrop.screenshot,
+        compactScreenshot,
+      ],
     };
   },
   assertObservation(observation, evidence) {
@@ -206,8 +246,300 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     ) {
       throw new Error('Cut P0/P1 authoring evidence is incomplete.');
     }
+    if (
+      !evidence.tabPanel?.hiddenReclaimedMain ||
+      !evidence.tabPanel?.tabsKeepMainStable ||
+      !evidence.resourceDrop?.clipAdded ||
+      !evidence.compactLayout?.previewAboveTimeline
+    ) {
+      throw new Error('Cut Panel tabs, presentation or Resource drag evidence is incomplete.');
+    }
   },
 });
+
+async function qualifyCutTabPanelPresentation({ checkpoint, click, evaluate, screenshot }) {
+  await evaluate(`(() => {
+    const tabs = [...document.querySelectorAll(
+      '[data-workbench-cut-panel="true"] .neko-workbench-editor-tab',
+    )];
+    const qualification = tabs.find((tab) => tab.textContent?.includes('qualification.otio'));
+    const authoring = tabs.find((tab) => tab.textContent?.includes('authoring.otio'));
+    if (!(qualification instanceof HTMLElement) || !(authoring instanceof HTMLElement)) {
+      throw new Error('Cut Panel OTIO tabs are unavailable.');
+    }
+    qualification.dataset.cutFunctionalTab = 'qualification';
+    authoring.dataset.cutFunctionalTab = 'authoring';
+    return true;
+  })()`);
+  await click('[data-cut-functional-tab="authoring"]');
+  await waitForActiveCutView(evaluate, 'cut:authoring-reopened');
+  await waitForCutPanelControlEnabled(evaluate);
+  const visible = await inspectCutLayout(evaluate);
+  await click('[data-workbench-region-control="cut-panel"]');
+  const hidden = await waitForCutPanelPresentation(evaluate, false);
+  const hiddenScreenshot = await captureSettledScreenshot(screenshot, 'cut-panel-hidden');
+
+  await waitForCutPanelControlEnabled(evaluate);
+  await click('[data-workbench-region-control="cut-panel"]');
+  await waitForActiveCutView(evaluate, 'cut:authoring-reopened');
+  await evaluate(`(() => {
+    const tabs = [...document.querySelectorAll(
+      '[data-workbench-cut-panel="true"] .neko-workbench-editor-tab',
+    )];
+    const qualification = tabs.find((tab) => tab.textContent?.includes('qualification.otio'));
+    const authoring = tabs.find((tab) => tab.textContent?.includes('authoring.otio'));
+    if (!(qualification instanceof HTMLElement) || !(authoring instanceof HTMLElement)) {
+      throw new Error('Restored Cut Panel OTIO tabs are unavailable.');
+    }
+    qualification.dataset.cutFunctionalTab = 'qualification';
+    authoring.dataset.cutFunctionalTab = 'authoring';
+    return true;
+  })()`);
+
+  await click('[data-cut-functional-tab="qualification"]');
+  await waitForActiveCutView(evaluate, 'cut:functional');
+  const qualification = await inspectCutLayout(evaluate);
+  const switchedScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'cut-qualification-tab-visible',
+  );
+
+  await click('[data-cut-functional-tab="authoring"]');
+  await waitForActiveCutView(evaluate, 'cut:authoring-reopened');
+  const presentation = await readCutPanelPresentation(evaluate);
+
+  const evidence = {
+    hiddenReclaimedMain:
+      visible.panelVisible &&
+      !hidden.panelVisible &&
+      hidden.cutRootCount === 0 &&
+      hidden.mainHeight > visible.mainHeight,
+    tabsKeepMainStable:
+      qualification.activeCutViewId === 'cut:functional' &&
+      visible.activeMainViewId === qualification.activeMainViewId &&
+      presentation.presentation === 'docked' &&
+      presentation.activeViewId === 'cut:authoring-reopened' &&
+      presentation.viewIds.includes('cut:functional'),
+    visibleLayout: visible,
+    hiddenLayout: hidden,
+    screenshots: [hiddenScreenshot, switchedScreenshot],
+  };
+  checkpoint('cut-tab-panel-presentation', evidence);
+  return evidence;
+}
+
+async function resizeCutWindow(evaluate, width, height) {
+  await evaluate(`(() => {
+    window.resizeTo(${String(width)}, ${String(height)});
+    return { width: window.innerWidth, height: window.innerHeight };
+  })()`);
+  await delay(250);
+}
+
+async function qualifyResourceDropToCutTimeline({ checkpoint, click, drag, evaluate, screenshot }) {
+  const mediaExpanded = await evaluate(`(() => {
+    const rows = [...document.querySelectorAll('.neko-resource-browser__item-row')];
+    const mediaRow = rows.find((row) =>
+      row.querySelector('strong')?.textContent?.trim() === 'media',
+    );
+    const mediaItem = mediaRow?.querySelector('.neko-resource-browser__item');
+    const disclosure = mediaRow?.querySelector('.neko-resource-browser__disclosure');
+    if (!(mediaItem instanceof HTMLButtonElement) || !(disclosure instanceof HTMLElement)) {
+      throw new Error('Workspace media directory is unavailable for Cut drag qualification.');
+    }
+    disclosure.dataset.cutFunctionalMediaDisclosure = 'true';
+    return mediaItem.getAttribute('aria-expanded') === 'true';
+  })()`);
+  if (!mediaExpanded) await click('[data-cut-functional-media-disclosure="true"]');
+  const deadline = Date.now() + 10_000;
+  let sourceReady = false;
+  while (Date.now() < deadline) {
+    sourceReady = await evaluate(`(() => {
+      const buttons = [...document.querySelectorAll('.neko-resource-browser__item')];
+      const source = buttons.find((button) =>
+        button.querySelector('strong')?.textContent?.trim() === 'motion-with-audio.mp4',
+      );
+      if (!(source instanceof HTMLButtonElement) || !source.draggable) return false;
+      source.dataset.cutFunctionalDragSource = 'true';
+      return true;
+    })()`);
+    if (sourceReady) break;
+    await delay(100);
+  }
+  if (!sourceReady) throw new Error('Workspace video resource did not become draggable.');
+  await evaluate(`(() => {
+    window.__openNekoCutDragEvidence = [];
+    const record = (kind) => (event) => {
+      window.__openNekoCutDragEvidence.push({
+        kind,
+        trusted: event.isTrusted,
+        types: [...event.dataTransfer.types],
+      });
+    };
+    document.querySelector('[data-cut-functional-drag-source="true"]')
+      ?.addEventListener('dragstart', record('dragstart'));
+    const timeline = document.querySelector(${JSON.stringify(ACTIVE_CUT_TIMELINE_SELECTOR)});
+    timeline?.addEventListener('dragenter', record('dragenter'));
+    timeline?.addEventListener('dragover', record('dragover'));
+    timeline?.addEventListener('drop', record('drop'));
+    return true;
+  })()`);
+  const before = await readActiveCutClipCount(evaluate);
+  await drag('[data-cut-functional-drag-source="true"]', '[data-cut-track-id="video-1"]', {
+    targetPosition: { xRatio: 0.85, yRatio: 0.5 },
+  });
+  let after = before;
+  const mutationDeadline = Date.now() + 30_000;
+  while (Date.now() < mutationDeadline) {
+    after = await readActiveCutClipCount(evaluate);
+    if (after > before) break;
+    await delay(100);
+  }
+  const clipAdded = after === before + 1;
+  if (!clipAdded) {
+    const dragEvidence = await evaluate(`window.__openNekoCutDragEvidence ?? []`);
+    throw new Error(
+      `Resource drag did not add one Cut clip: ${JSON.stringify({ before, after, dragEvidence })}`,
+    );
+  }
+  const dragScreenshot = await captureSettledScreenshot(screenshot, 'cut-resource-dropped');
+  const evidence = { before, after, clipAdded, screenshot: dragScreenshot };
+  checkpoint('cut-resource-dropped', evidence);
+  return evidence;
+}
+
+async function waitForActiveCutView(evaluate, viewId) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const ready = await evaluate(`(() => {
+      const panel = document.querySelector('[data-workbench-cut-panel="true"]');
+      const root = panel?.querySelector('[data-owner-root="cut"]');
+      return panel?.querySelector('[data-cut-view-id]')?.getAttribute('data-cut-view-id') ===
+          ${JSON.stringify(viewId)} && root instanceof HTMLElement;
+    })()`);
+    if (ready) return;
+    await delay(100);
+  }
+  const state = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const workbench = projection.window.workbench.layout;
+    const panel = document.querySelector('[data-workbench-cut-panel="true"]');
+    return {
+      hostActiveViewId: workbench.cutPanel?.activeViewId,
+      hostPresentation: workbench.cutPanel?.presentation,
+      domActiveViewId: panel?.querySelector('[data-cut-view-id]')?.getAttribute('data-cut-view-id'),
+      cutRootCount: panel?.querySelectorAll('[data-owner-root="cut"]').length ?? 0,
+      controlDisabled: document.querySelector('[data-workbench-region-control="cut-panel"]')?.disabled,
+    };
+  })()`);
+  throw new Error(`Cut View '${viewId}' did not become active: ${JSON.stringify(state)}`);
+}
+
+async function waitForCutPanelControlEnabled(evaluate) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const enabled = await evaluate(`(() => {
+      const control = document.querySelector('[data-workbench-region-control="cut-panel"]');
+      return control instanceof HTMLButtonElement && !control.disabled;
+    })()`);
+    if (enabled) return;
+    await delay(100);
+  }
+  throw new Error('Cut Panel control did not become interactive.');
+}
+
+async function readCutPanelPresentation(evaluate) {
+  return evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    const panel = projection.window.workbench.layout.cutPanel;
+    return {
+      presentation: panel?.presentation,
+      activeViewId: panel?.activeViewId,
+      viewIds: panel?.views.map((view) => view.viewId) ?? [],
+    };
+  })()`);
+}
+
+async function waitForCutPanelPresentation(evaluate, visible) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const state = await inspectWorkbenchCutPanelLayout(evaluate);
+    if (state.panelVisible === visible && (visible || state.cutRootCount === 0)) return state;
+    await delay(100);
+  }
+  throw new Error(`Cut Panel did not reach visible=${String(visible)}.`);
+}
+
+async function readActiveCutClipCount(evaluate) {
+  return evaluate(`document.querySelector(${JSON.stringify(ACTIVE_CUT_TIMELINE_SELECTOR)})
+    ?.querySelectorAll('.cut-basic-clip').length ?? 0`);
+}
+
+async function inspectCutLayout(evaluate) {
+  return evaluate(`(() => {
+    const root = document.querySelector(${JSON.stringify(ACTIVE_CUT_ROOT_SELECTOR)});
+    const shell = root?.querySelector('.cut-workbench-shell');
+    const body = root?.querySelector('.cut-workbench-body');
+    const main = root?.querySelector('.cut-main-panel');
+    const editor = root?.querySelector('.cut-basic-editor');
+    const preview = root?.querySelector('.cut-basic-upper-workspace');
+    const timeline = root?.querySelector('.cut-basic-timeline-region');
+    if (!(editor instanceof HTMLElement) || !(preview instanceof HTMLElement)) {
+      throw new Error('Cut layout inspection requires its editor and Preview.');
+    }
+    const editorRect = editor.getBoundingClientRect();
+    const previewRect = preview.getBoundingClientRect();
+    const timelineRect = timeline instanceof HTMLElement ? timeline.getBoundingClientRect() : undefined;
+    const overlaps = timelineRect && previewRect.bottom > timelineRect.top + 0.5
+      ? ['preview-timeline']
+      : [];
+    const boxes = Object.fromEntries(
+      Object.entries({ root, shell, body, main, editor, preview }).map(([name, element]) => {
+        if (!(element instanceof HTMLElement)) return [name, null];
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return [name, {
+          top: rect.top,
+          bottom: rect.bottom,
+          height: rect.height,
+          display: style.display,
+          flex: style.flex,
+          heightStyle: style.height,
+        }];
+      }),
+    );
+    return {
+      editorHeight: editorRect.height,
+      previewHeight: previewRect.height,
+      timelineHeight: timelineRect?.height ?? 0,
+      panelVisible: true,
+      activeCutViewId: root.closest('[data-cut-view-id]')?.getAttribute('data-cut-view-id'),
+      activeMainViewId: document.querySelector('.project-main-view-stack__item[data-main-view-id]')
+        ?.getAttribute('data-main-view-id'),
+      mainHeight: document.querySelector('[data-workbench-slot="main"]')
+        ?.getBoundingClientRect().height ?? 0,
+      previewAboveTimeline: !timelineRect || previewRect.bottom <= timelineRect.top + 0.5,
+      overlaps,
+      boxes,
+    };
+  })()`);
+}
+
+async function inspectWorkbenchCutPanelLayout(evaluate) {
+  return evaluate(`(() => {
+    const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+    const main = document.querySelector('[data-workbench-slot="main"]');
+    const panel = document.querySelector('[data-workbench-slot="bottomPanel"]');
+    return {
+      panelVisible: shell?.getAttribute('data-bottom-panel-visible') === 'true',
+      mainHeight: main?.getBoundingClientRect().height ?? 0,
+      panelHeight: panel?.getBoundingClientRect().height ?? 0,
+      cutRootCount: panel?.querySelectorAll('[data-owner-root="cut"]').length ?? 0,
+      activeMainViewId: document.querySelector('.project-main-view-stack__item[data-main-view-id]')
+        ?.getAttribute('data-main-view-id'),
+    };
+  })()`);
+}
 
 async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
   const firstPass = await evaluate(`(async () => {
@@ -256,12 +588,13 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     });
     const workbenchInstance = projection.window.workbench;
     const currentWorkbench = workbenchInstance.layout;
+    if (!currentWorkbench.cutPanel) throw new Error('Cut functional Panel is missing.');
     const nextWorkbench = {
       ...currentWorkbench,
-      main: {
-        ...currentWorkbench.main,
+      cutPanel: {
+        ...currentWorkbench.cutPanel,
         views: [
-          ...currentWorkbench.main.views,
+          ...currentWorkbench.cutPanel.views,
           {
             viewId: 'cut:authoring',
             viewInstanceId: tab.viewInstanceId,
@@ -283,10 +616,6 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
             documentId: ${JSON.stringify(prepared.newDocumentId)},
           },
         ],
-        groups: currentWorkbench.main.groups.map((group, index) => index === 0 ? ({
-          ...group,
-          viewIds: [...group.viewIds, 'cut:authoring', 'cut:new-target'],
-        }) : group),
       },
     };
     projection = await window.openNekoDesktop.workbench.update(
@@ -298,7 +627,7 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
       throw new Error('Updated Cut Workbench identity changed.');
     }
     const identityFor = (viewId) => {
-      const view = updatedWorkbenchInstance.layout.main.views.find(
+      const view = updatedWorkbenchInstance.layout.cutPanel?.views.find(
         (candidate) => candidate.viewId === viewId,
       );
       if (!view?.documentId) throw new Error('Cut functional View is missing: ' + viewId);
@@ -416,14 +745,12 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     evaluate,
     `(projection, current) => ({
       ...current,
-      main: {
-        ...current.main,
-        views: current.main.views.filter((view) => view.viewId !== 'cut:authoring'),
-        groups: current.main.groups.map((group) => ({
-          ...group,
-          viewIds: group.viewIds.filter((viewId) => viewId !== 'cut:authoring'),
-          activeViewId: group.activeViewId === 'cut:authoring' ? 'cut:functional' : group.activeViewId,
-        })),
+      cutPanel: {
+        ...current.cutPanel,
+        views: current.cutPanel.views.filter((view) => view.viewId !== 'cut:authoring'),
+        activeViewId: current.cutPanel.activeViewId === 'cut:authoring'
+          ? 'cut:functional'
+          : current.cutPanel.activeViewId,
       },
     })`,
   );
@@ -432,9 +759,9 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
     evaluate,
     `(projection, current, tab, project) => ({
       ...current,
-      main: {
-        ...current.main,
-        views: [...current.main.views, {
+      cutPanel: {
+        ...current.cutPanel,
+        views: [...current.cutPanel.views, {
           viewId: 'cut:authoring-reopened',
           viewInstanceId: tab.viewInstanceId,
           projectId: project.projectId,
@@ -444,22 +771,14 @@ async function qualifyCutAuthoring({ evaluate, prepared, checkpoint }) {
           displayLabel: 'authoring.otio',
           documentId: ${JSON.stringify(prepared.authoringDocumentId)},
         }],
-        groups: current.main.groups.map((group, index) => index === 0 ? ({
-          ...group,
-          viewIds: [...group.viewIds, 'cut:authoring-reopened'],
-          activeViewId: 'cut:authoring-reopened',
-        }) : group),
-      },
-      timeline: {
-        ...current.timeline,
-        ownerViewId: 'cut:authoring-reopened',
+        activeViewId: 'cut:authoring-reopened',
       },
     })`,
   );
   const reopened = await evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
     const workbenchInstance = projection.window.workbench;
-    const view = workbenchInstance.layout.main.views.find(
+    const view = workbenchInstance.layout.cutPanel?.views.find(
       (candidate) => candidate.viewId === 'cut:authoring-reopened',
     );
     if (!view?.documentId) throw new Error('Reopened Cut View is missing.');

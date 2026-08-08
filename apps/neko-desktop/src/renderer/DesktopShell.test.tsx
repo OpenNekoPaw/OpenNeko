@@ -16,7 +16,6 @@ import {
   openCanvasDocumentWorkbench,
   resizeApplicationSidebar,
   resizeProjectDockWorkbench,
-  resizeTimelineWorkbench,
   resolveAssetCenterPreviewSession,
   setResourceDockPresentationWorkbench,
   toggleWorkbenchRegion,
@@ -30,6 +29,7 @@ import {
   DESKTOP_PRIMARY_MAIN_GROUP_ID,
   DESKTOP_WORKBENCH_LIMITS,
   createDefaultDesktopWorkbenchLayout,
+  openOrFocusCutView,
 } from '@neko/host/desktop-workbench-contract';
 import {
   createDefaultDesktopAgentScene,
@@ -67,9 +67,6 @@ describe('Desktop scene Workbench', () => {
     expect(
       resizeApplicationSidebar(createDefaultDesktopApplicationSidebar('window-1'), 288),
     ).toMatchObject({ width: 288 });
-    expect(resizeTimelineWorkbench(workbench, 320)).toMatchObject({
-      timeline: { height: 320 },
-    });
     expect(resizeProjectDockWorkbench(workbench, 'agent', 400).display.chatWidth).toBe(400);
     expect(resizeProjectDockWorkbench(workbench, 'resources', 416).resourceDock.width).toBe(416);
   });
@@ -103,7 +100,7 @@ describe('Desktop scene Workbench', () => {
     );
   });
 
-  it('toggles Agent, Main and management presentation through independent region controls', () => {
+  it('toggles Agent, Main, management and Cut Panel through independent region controls', () => {
     const initial = activeWorkbenchLayout(workspaceProjection());
     const withoutAgent = toggleWorkbenchRegion(initial, 'agent');
     expect(withoutAgent.display.mode).toBe('main-only');
@@ -122,11 +119,41 @@ describe('Desktop scene Workbench', () => {
     expect(withoutManagement.display).toEqual(initial.display);
     expect(withoutManagement.main).toEqual(initial.main);
 
+    const withoutCutPanel = toggleWorkbenchRegion(initial, 'cutPanel');
+    expect(withoutCutPanel.cutPanel?.presentation).toBe('hidden');
+    expect(withoutCutPanel.main).toEqual(initial.main);
+    expect(withoutCutPanel.display).toEqual(initial.display);
+    expect(withoutCutPanel.resourceDock).toEqual(initial.resourceDock);
+
+    const restoredCutPanel = toggleWorkbenchRegion(withoutCutPanel, 'cutPanel');
+    expect(restoredCutPanel.cutPanel?.presentation).toBe('docked');
+    expect(restoredCutPanel.main).toEqual(initial.main);
+
     expect(() => toggleWorkbenchRegion(withoutAgent, 'main')).toThrow(
       'cannot hide Main while Agent is unavailable',
     );
     expect(() => toggleWorkbenchRegion(withoutMain, 'agent')).toThrow(
       'cannot hide Agent while Main is unavailable',
+    );
+  });
+
+  it('switches Cut Panel tabs without replacing the active Main Canvas', () => {
+    const initial = activeWorkbenchLayout(workspaceProjection());
+    const firstCut = initial.cutPanel!.views[0]!;
+    const withSecondCut = openOrFocusCutView(initial, {
+      ...firstCut,
+      viewId: 'cut:view-1:alternate',
+      ownerId: 'cut-session:alternate',
+      displayLabel: 'alternate.otio',
+      documentId: 'cuts/alternate.otio',
+    });
+    expect(withSecondCut.cutPanel?.activeViewId).toBe('cut:view-1:alternate');
+    expect(withSecondCut.cutPanel?.views).toHaveLength(2);
+    expect(withSecondCut.main).toEqual(initial.main);
+
+    const { cutPanel: _cutPanel, ...withoutCutPanel } = withSecondCut;
+    expect(() => toggleWorkbenchRegion(withoutCutPanel, 'cutPanel')).toThrow(
+      'cannot toggle Cut Panel without an attached Cut View',
     );
   });
 
@@ -346,8 +373,8 @@ describe('Desktop scene Workbench', () => {
     expect(markup).toContain('data-agent-scope="workspace"');
     expect(markup).toContain('data-workbench-slot="main"');
     expect(markup).toContain('data-workbench-slot="rightDock"');
-    expect(markup).toContain('data-workbench-slot="timeline"');
-    expect(markup).toContain('data-timeline-visible="true"');
+    expect(markup).toContain('data-workbench-slot="bottomPanel"');
+    expect(markup).toMatch(/data-workbench-region-control="cut-panel"[^>]*aria-pressed="true"/u);
     vi.unstubAllGlobals();
   });
 
@@ -455,12 +482,38 @@ function workspaceProjection(): DesktopShellProjection {
     viewId: 'view-1',
     viewInstanceId: 'view-instance-1',
   };
+  const canvasViewId = 'canvas:view-1:board';
   const cutViewId = 'cut:view-1:story';
   const layout = {
     ...createDefaultDesktopWorkbenchLayout('window-1'),
     resourceDock: { presentation: 'docked' as const, width: 344 },
     display: { mode: 'chat-main' as const, chatPosition: 'left' as const, chatWidth: 376 },
     main: {
+      views: [
+        {
+          viewId: canvasViewId,
+          viewInstanceId: 'view-instance-1',
+          projectId: project.projectId,
+          workspaceId: project.workspaceId,
+          kind: 'canvas' as const,
+          ownerId: 'canvas-document:board',
+          displayLabel: 'board.neko',
+          documentId: 'canvas/board.neko',
+        },
+      ],
+      groups: [
+        {
+          groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+          viewIds: [canvasViewId],
+          activeViewId: canvasViewId,
+        },
+      ],
+      activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
+    },
+    cutPanel: {
+      presentation: 'docked' as const,
+      height: 420,
+      activeViewId: cutViewId,
       views: [
         {
           viewId: cutViewId,
@@ -473,16 +526,7 @@ function workspaceProjection(): DesktopShellProjection {
           documentId: 'cuts/story.otio',
         },
       ],
-      groups: [
-        {
-          groupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
-          viewIds: [cutViewId],
-          activeViewId: cutViewId,
-        },
-      ],
-      activeGroupId: DESKTOP_PRIMARY_MAIN_GROUP_ID,
     },
-    timeline: { presentation: 'docked' as const, ownerViewId: cutViewId, height: 288 },
   };
   return withWorkbench(
     {
@@ -608,17 +652,10 @@ function workspaceScene(): DesktopWorkbenchSceneProjection {
       main: {
         kind: 'workspace-main',
         workspaceId: 'workspace-1',
-        viewId: 'cut:view-1:story',
+        viewId: 'canvas:view-1:board',
         viewInstanceId: 'view-instance-1',
       },
       rightManager: { kind: 'workspace-resources', workspaceId: 'workspace-1' },
-      timeline: {
-        kind: 'workspace-timeline',
-        workspaceId: 'workspace-1',
-        viewId: 'cut:view-1:story',
-        viewInstanceId: 'view-instance-1',
-        ownerId: 'cut-session:story',
-      },
       status: { kind: 'scene-status', sceneId: 'scene:window-1:workspace-1' },
     },
   });

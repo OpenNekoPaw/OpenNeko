@@ -10,7 +10,7 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 
 - 建立唯一的窗口级 `ApplicationPrimarySidebar` 与 `ControlledWorkbenchShell`；Agent、目录工作区、资源中心、扩展/Skill、项目管理和 Settings 都是同一个 Workbench 内的 scene，不再存在 Home/Project/Settings 顶层页面分支。
 - PrimarySidebar 保留应用导航、最近项目、最近 Agent 会话和底部状态/设置；删除 Home 页面不得删除这些窗口级导航投影。
-- 定义 closed、slot-specific Workbench scene projection。Scene authority 只投影 owner-qualified Surface identity；Desktop renderer 只将公开 Roots 放入 Interaction、Main、Secondary Main、Manager、Timeline 和 Status slots。
+- 定义 closed、slot-specific Workbench scene projection。Scene authority 只投影 owner-qualified Surface identity；Desktop renderer 只将公开 Roots 放入 Interaction、Main、Secondary Main、Manager、Cut Panel 和 Status slots。Cut Panel 位于 Main 下方，其 active OTIO Root 内组合 Preview 与 Timeline，不投影 standalone Timeline Surface。
 - 定义可变形 Workbench：默认 draft 只显示 Agent；Assistant 激活后显示 Agent + Preview Main；Workspace 显示 Agent + creative Main + Workspace Resources；未来角色扮演/聊天室显示 Agent 对话或群聊 + Interactive Main + Character Manager。缺少真实 Character/Interactive owner 时必须 owner-qualified unavailable，不在 Desktop 伪造实现。
 - 以现有 `AgentWebviewRoot` 作为入口、assistant session 和 workspace session 的唯一 Agent UI/controller/composer。未创建会话时只隐藏 session-only chrome，不复制 textarea、模型选择、命令、Skill、附件、审批或语音控件。
 - “开始创作”改为创建带全新 `draftId` 的 `unbound` Entry Draft；它没有 conversation、AssistantSpace、Workspace 或角色 owner。用户直接输入并提交时自动绑定 Assistant 用户区并创建精确 session；选择目录/Project 时绑定 Workspace，选择未来 Character/Room 时绑定对应角色 owner。

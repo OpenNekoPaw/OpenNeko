@@ -799,6 +799,9 @@ importers:
       '@neko/assets-domain':
         specifier: workspace:*
         version: link:../../assets/domain
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../../content
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../domain
@@ -824,6 +827,9 @@ importers:
 
   packages/cut/webview:
     dependencies:
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../../content
       '@neko/cut-domain':
         specifier: workspace:*
         version: link:../domain

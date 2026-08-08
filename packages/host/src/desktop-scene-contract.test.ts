@@ -53,6 +53,15 @@ describe('Desktop Scene contract', () => {
         code: 'desktop-scene-scope-mismatch',
       }),
     );
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...projection,
+        slots: {
+          ...projection.slots,
+          cutPanel: { ...projection.slots.cutPanel, workspaceId: 'workspace-other' },
+        },
+      }),
+    ).toThrow('Workspace Cut Panel does not match Agent Workspace scope');
   });
 
   it('rejects incompatible slots, unknown kinds and renderer component payloads', () => {
@@ -84,6 +93,21 @@ describe('Desktop Scene contract', () => {
         },
       }),
     ).toThrow('Assistant Scene Main Surface');
+    expect(() =>
+      parseDesktopWorkbenchSceneProjection({
+        ...assistant,
+        slots: {
+          ...assistant.slots,
+          cutPanel: {
+            kind: 'workspace-cut',
+            workspaceId: 'workspace-1',
+            viewId: 'cut-1',
+            viewInstanceId: 'cut-instance-1',
+            ownerId: 'cut-owner-1',
+          },
+        },
+      }),
+    ).toThrow('cannot mount a Workspace Cut Panel');
     expect(() =>
       parseDesktopWorkbenchSceneProjection({
         ...assistant,
@@ -419,12 +443,12 @@ function workspaceScene() {
         viewInstanceId: 'view-instance-3',
       },
       rightManager: { kind: 'workspace-resources' as const, workspaceId: 'workspace-1' },
-      timeline: {
-        kind: 'workspace-timeline' as const,
+      cutPanel: {
+        kind: 'workspace-cut' as const,
         workspaceId: 'workspace-1',
-        viewId: 'view-1',
+        viewId: 'cut-1',
         viewInstanceId: 'view-instance-3',
-        ownerId: 'cut-1',
+        ownerId: 'cut-owner-1',
       },
       status: { kind: 'scene-status' as const, sceneId: 'scene:window-1:workspace-1' },
     },

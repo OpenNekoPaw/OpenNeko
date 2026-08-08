@@ -160,10 +160,10 @@ export interface ControlledWorkbenchShellProps {
   readonly rightDockPresentation?: ControlledWorkbenchDockPresentation;
   readonly rightDockWidth?: number;
   readonly rightDockResize?: ControlledWorkbenchResizeBinding;
-  readonly timeline?: ReactNode;
-  readonly timelineVisible?: boolean;
-  readonly timelineHeight?: number;
-  readonly timelineResize?: ControlledWorkbenchResizeBinding;
+  readonly bottomPanel?: ReactNode;
+  readonly bottomPanelVisible?: boolean;
+  readonly bottomPanelHeight?: number;
+  readonly bottomPanelResize?: ControlledWorkbenchResizeBinding;
   readonly statusBar?: ReactNode;
   readonly className?: string;
 }
@@ -211,6 +211,10 @@ export function EditorWorkbenchShell({
 }
 
 export function ControlledWorkbenchShell({
+  bottomPanel,
+  bottomPanelHeight = 420,
+  bottomPanelResize,
+  bottomPanelVisible = false,
   className,
   interaction,
   interactionPosition = 'left',
@@ -237,10 +241,6 @@ export function ControlledWorkbenchShell({
   secondaryMain,
   secondaryMainVisible = Boolean(secondaryMain),
   statusBar,
-  timeline,
-  timelineHeight = 240,
-  timelineResize,
-  timelineVisible = false,
   titleBar,
 }: ControlledWorkbenchShellProps): React.ReactElement {
   const interactionSide =
@@ -293,11 +293,11 @@ export function ControlledWorkbenchShell({
     ),
     size: rightColumnWidth,
   });
-  const timelineResizeState = useControlledWorkbenchResize({
-    binding: timelineResize,
+  const bottomPanelResizeState = useControlledWorkbenchResize({
+    binding: bottomPanelResize,
     edge: 'bottom',
-    enabled: Boolean(timeline && timelineVisible),
-    size: timelineHeight,
+    enabled: Boolean(bottomPanel && bottomPanelVisible),
+    size: bottomPanelHeight,
   });
   const mainSplitResizeState = useControlledWorkbenchResize({
     binding: mainSplitResize,
@@ -310,13 +310,13 @@ export function ControlledWorkbenchShell({
     '--neko-controlled-primary-width': string;
     '--neko-controlled-left-dock-width': string;
     '--neko-controlled-right-dock-width': string;
-    '--neko-controlled-timeline-height': string;
+    '--neko-controlled-bottom-panel-height': string;
     '--neko-controlled-main-split-ratio': string;
   } = {
     '--neko-controlled-primary-width': `${primaryResize.size}px`,
     '--neko-controlled-left-dock-width': `${leftResize.size}px`,
     '--neko-controlled-right-dock-width': `${rightResize.size}px`,
-    '--neko-controlled-timeline-height': `${timelineResizeState.size}px`,
+    '--neko-controlled-bottom-panel-height': `${bottomPanelResizeState.size}px`,
     '--neko-controlled-main-split-ratio': `${mainSplitResizeState.size * 100}%`,
   };
 
@@ -331,7 +331,7 @@ export function ControlledWorkbenchShell({
       data-interaction-presentation={interaction ? interactionPresentation : 'hidden'}
       data-main-split={effectiveSplit}
       data-main-composition={mainComposition}
-      data-timeline-visible={timeline && timelineVisible ? 'true' : 'false'}
+      data-bottom-panel-visible={bottomPanel && bottomPanelVisible ? 'true' : 'false'}
       style={shellStyle}
     >
       {titleBar ? <div className="neko-controlled-workbench-title">{titleBar}</div> : null}
@@ -462,20 +462,20 @@ export function ControlledWorkbenchShell({
           ) : null}
         </aside>
       ) : null}
-      {timeline ? (
+      {bottomPanel ? (
         <div
           ref={(element) => {
-            timelineResizeState.containerRef.current = element;
+            bottomPanelResizeState.containerRef.current = element;
           }}
-          className="neko-controlled-workbench-timeline"
-          data-resizing={timelineResizeState.isResizing ? 'true' : 'false'}
+          className="neko-controlled-workbench-bottom-panel"
+          data-resizing={bottomPanelResizeState.isResizing ? 'true' : 'false'}
         >
-          {timeline}
-          {timelineResize && timelineVisible ? (
+          {bottomPanel}
+          {bottomPanelResize && bottomPanelVisible ? (
             <ResizeHandle
               className="neko-controlled-workbench-resize-handle neko-controlled-workbench-resize-handle--top"
-              handleProps={timelineResizeState.handleProps}
-              label={timelineResize.label}
+              handleProps={bottomPanelResizeState.handleProps}
+              label={bottomPanelResize.label}
             />
           ) : null}
         </div>

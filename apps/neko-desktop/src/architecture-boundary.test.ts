@@ -191,7 +191,10 @@ describe('Desktop architecture boundaries', () => {
 
     expect(cutSurface).toContain("import('@neko/cut-webview/root')");
     expect(cutSurface).toMatch(/<CutWebviewRoot[\s\S]*bridge=\{bridge\}/u);
-    expect(cutSurface).toContain('timelineTarget={timelineTarget}');
+    expect(cutSurface).not.toContain('timelineVisible');
+    expect(cutSurface).not.toContain('timelineTarget');
+    expect(shell).toContain('data-workbench-cut-panel="true"');
+    expect(shell).toContain("portalDeck('bottomPanel'");
     expect(previewSurface).toContain("import('@neko/preview-webview/root')");
     expect(previewSurface).toContain('<PreviewRoot');
     expect(previewSurface).toContain('runtime={runtime}');

@@ -256,20 +256,21 @@ describe('DesktopCutRuntime', () => {
       }),
     ).toBe(false);
 
-    await runtime.open({ identity, item, absolutePath: documentPath });
-    const firstViewId = workbench.main.views.find(
-      (view) => view.kind === 'cut' && view.documentId === documentId,
+    await runtime.openAlongsideCanvas({ identity, item, absolutePath: documentPath });
+    const firstViewId = workbench.cutPanel?.views.find(
+      (view) => view.documentId === documentId,
     )?.viewId;
-    await runtime.open({ identity, item, absolutePath: documentPath });
+    await runtime.openAlongsideCanvas({ identity, item, absolutePath: documentPath });
 
     expect(firstViewId).toMatch(/^cut:project-view-1:/u);
     expect(getActiveMainView(workbench)?.kind).toBe('canvas');
     expect(workbench.display.mode).toBe('chat-main');
-    expect(workbench.main.views).toHaveLength(2);
-    expect(workbench.timeline).toMatchObject({
+    expect(workbench.main.views).toHaveLength(1);
+    expect(workbench.cutPanel).toMatchObject({
       presentation: 'docked',
-      ownerViewId: firstViewId,
+      activeViewId: firstViewId,
     });
+    expect(workbench.cutPanel?.views).toHaveLength(1);
 
     const secondDocumentId = 'cuts/alternate.otio';
     const secondDocumentPath = path.join(workspacePath, secondDocumentId);
@@ -291,23 +292,31 @@ describe('DesktopCutRuntime', () => {
       label: 'alternate.otio',
       locator: { kind: 'workspace-file' as const, path: secondDocumentId },
     };
-    await runtime.open({
+    await runtime.openAlongsideCanvas({
       identity,
       item: secondItem,
       absolutePath: secondDocumentPath,
     });
-    const secondViewId = workbench.main.views.find(
-      (view) => view.kind === 'cut' && view.documentId === secondDocumentId,
+    const secondViewId = workbench.cutPanel?.views.find(
+      (view) => view.documentId === secondDocumentId,
     )?.viewId;
     expect(secondViewId).not.toBe(firstViewId);
-    expect(workbench.main.views.filter((view) => view.kind === 'cut')).toHaveLength(2);
+    expect(workbench.cutPanel?.views).toHaveLength(2);
     expect(getActiveMainView(workbench)?.kind).toBe('canvas');
-    expect(workbench.timeline.ownerViewId).toBe(secondViewId);
+    expect(workbench.cutPanel?.activeViewId).toBe(secondViewId);
+
+    await runtime.openAlongsideCanvas({ identity, item, absolutePath: documentPath });
+    expect(getActiveMainView(workbench)?.kind).toBe('canvas');
+    expect(workbench.cutPanel?.views).toHaveLength(2);
+    expect(workbench.cutPanel?.activeViewId).toBe(firstViewId);
 
     await runtime.open({ identity, item, absolutePath: documentPath });
     expect(getActiveMainView(workbench)?.kind).toBe('canvas');
-    expect(workbench.timeline.ownerViewId).toBe(firstViewId);
-    expect(workbench.main.views.filter((view) => view.kind === 'cut')).toHaveLength(2);
+    expect(workbench.cutPanel?.views.find((view) => view.viewId === firstViewId)).toMatchObject({
+      kind: 'cut',
+      documentId,
+      viewId: firstViewId,
+    });
     await runtime.dispose();
   });
 
@@ -868,7 +877,14 @@ describe('DesktopCutRuntime', () => {
       payload: {
         type: 'cut:drop-link-media',
         trackId: videoTrack.trackId,
-        uris: [pathToFileURL(path.join(workspacePath, 'media', 'clip.mp4')).href],
+        source: {
+          kind: 'content-locator',
+          data: {
+            type: 'content-locator',
+            locator: { kind: 'workspace-file', path: 'media/clip.mp4' },
+            name: 'clip.mp4',
+          },
+        },
         timelineStartFrames: 120,
         overlapPolicy: 'insert',
       },

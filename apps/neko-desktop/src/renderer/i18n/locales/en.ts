@@ -273,7 +273,6 @@ export const en = {
     'A completed portable snapshot matches the current project revision.',
   'workspace.portabilityState.coverage-incomplete':
     'Project document coverage is incomplete. A portable snapshot cannot be verified.',
-  'workspace.closeProjectResources': 'Close resource management',
   'workspace.agentToDock': 'Agent to side',
   'workspace.agentToMain': 'Agent to main',
   'workspace.timeline': 'Timeline',
@@ -283,6 +282,11 @@ export const en = {
   'workspace.resizeRightDock': 'Resize right sidebar',
   'workspace.resizeTimeline': 'Resize Timeline',
   'workspace.resizeMainSplit': 'Resize Main split',
+  'workspace.resizeCutPanel': 'Resize Cut panel',
+  'workspace.cutPanel': 'Cut panel',
+  'workspace.cutTabs.label': 'Open OTIO documents',
+  'workspace.cutTabs.empty': 'No OTIO document',
+  'workspace.cutTabs.close': 'Close {name}',
   'workspace.mainTabs.label': 'Open creative documents',
   'workspace.mainTabs.empty': 'No creative document',
   'workspace.mainTabs.emptyDetail':

@@ -58,7 +58,7 @@ DesktopApplication
    ├─ primarySidebar: ApplicationPrimarySidebar
    ├─ currentInteractionOrMain
    ├─ optionalExplicitSecondary
-   ├─ currentManagerOrTimeline
+   ├─ currentManager
    └─ status
 ```
 
@@ -135,10 +135,12 @@ PrimarySidebar 不属于任何旧 Home scene。它持续消费 `catalog.projects
 
 Sidebar 顶部品牌区承载一组 VS Code 风格的窗口级 presentation 图标控件。PrimarySidebar 显隐控件始终存在；exact Workspace composition 另外提供 Agent、Main 与管理面板三个独立控件。每个控件只改变其所属区域的 presentation，不能通过一个混合菜单或 Main 内按钮同时管理多个区域；Agent 与 Main 仍必须保证至少一个业务区域可见。控件使用紧凑、无边框、透明默认态和清晰 hover/pressed/focus 状态，并位于一级侧栏顶部 chrome，不随品牌内容或 Main tab 数量移动。它们不得沉入侧栏 footer、Workspace Main tab header 或领域 Surface。footer 只保留 lifecycle、attention、Settings 等非布局操作。
 
+Workspace Main 上半区域继续承载 Canvas、authorized file Preview 或 Editor。Main 下方的 Cut Panel 是独立可调整高度的可见 composition；其轻量 projection 保存 exact Cut View refs、active View、显隐和高度，但不拥有 OTIO 事实或 runtime。每个 OTIO 文档对应一个 Cut Panel tab；只挂载 active tab 的 `CutWebviewRoot`，并由该 Root 组合上部 Preview、下部 Timeline 与素材拖拽目标。切换 tab 时卸载旧 Root 并从 Cut authority/presentation snapshot 重建新 Root；隐藏 panel 时卸载 active Root但保留轻量 tab refs，不能保留隐藏 DOM/runtime。打开 OTIO 只打开或聚焦对应 Cut tab并显示 panel，不替换当前 Main Canvas/Preview/Editor。关闭最后一个 Cut tab时 panel 回到 canonical hidden fresh state。顶部 Cut Panel 开关只修改 panel presentation；没有 Cut tab 时 disabled，不得回退绑定 Main View 或历史 Cut runtime。Scene 可投影 active `workspace-cut` Surface identity，但不投影 standalone Timeline Surface。
+
 `HomeWorkspace`、`ContentProjectWorkspace` 和 Settings 顶层条件分支被替换为 scene slot builders。
 Scene 切换只更新 active instance/slot projection；PrimarySidebar、ControlledWorkbenchShell 以及未关闭
-instance 的 package Root identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/
-Timeline components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建
+instance 的 package Root identity 保持不变。Project slot builder 复用现有 Agent/Main/Resource/Cut
+components、View identity、layout helpers 和 `.project-workspace` 视觉契约，不自行创建
 Shell 或 sidebar frame。Renderer 必须逐一消费 Host 的 `interaction/main/secondaryMain/leftManager/
 rightManager` 语义，不能把 Interaction 临时当 Main、把 management Main 当 Dock，或仅复用 Shell
 JSX 而丢失 Workspace CSS scope。
@@ -204,13 +206,13 @@ interface DesktopWorkbenchSceneProjection {
     secondaryMain?: MainSurfaceRef;
     leftManager?: ManagerSurfaceRef;
     rightManager?: ManagerSurfaceRef;
-    timeline?: TimelineSurfaceRef;
+    cutPanel?: CutPanelSurfaceRef;
     status?: StatusSurfaceRef;
   };
 }
 ```
 
-Codec 必须验证 context 与每个 slot 的 identity/scope 一致。例如 Assistant scene 不允许 Workspace Main，Asset Preview 必须与同一 AssetCenterSession 配对，Settings 不允许 Agent/Timeline。Unknown kind、缺失 owner、跨 window/view/session ref 和 renderer payload 全部失败。
+Codec 必须验证 context 与每个 slot 的 identity/scope 一致。例如 Assistant scene 不允许 Workspace Main，Asset Preview 必须与同一 AssetCenterSession 配对，Settings 不允许 Agent。Unknown kind、缺失 owner、跨 window/view/session ref 和 renderer payload 全部失败。`DesktopWorkbenchLayoutProjection.cutPanel` 使用一个 canonical shape 保存 presentation、height、exact Cut View refs 与 active View；Main View 不携带 Cut presentation。Scene 只投影 active `workspace-cut` Surface，不保存 Timeline owner 或 standalone Timeline Surface。
 
 ### 3. Scene transitions are typed Host commands
 
@@ -360,7 +362,7 @@ PrimarySidebar 顶部布局控件继续复用 `@neko/ui` 的 Codicon 入口。�
 
 打开显式 Project/Workspace 或恢复 conversation 时，Host Shell 在 Window owner 的一个串行 commit 中同时更新 exact Project `activeTarget`、对应 Workbench attachment、Scene scope/slots 与 Agent `draft | session` phase。Desktop 只有在该提交完成后才返回 transition success；renderer 不得先启动旧 scope 的 launch adapter，再等待布局或 Agent 状态补齐。App composition 可以在返回前 attach 对应 package runtime，但不能改用 active/recent Project 修复不一致状态。
 
-Workspace 的 Main View 集允许因用户关闭最后一个 Preview/View 暂时为空。此时 Workbench 保留 primary group，Scene 移除 `slots.main` 和无 owner 的 Timeline，同时继续保留 exact Workspace scope、Agent Interaction、Workspace Resources 与 Status。Renderer projection 只更新实际存在的 Main/Timeline ref；不得把空 Main 当作 scene corruption。应用重启时现有 `attachProjectWorkbench` 恢复 canonical Canvas，但运行中的关闭操作不隐式发明另一个 View。
+Workspace 的 Main View 集允许因用户关闭最后一个 Preview/View 暂时为空。此时 Workbench 保留 primary group，Scene 移除 `slots.main`，同时继续保留 exact Workspace scope、Agent Interaction、Workspace Resources 与 Status。Renderer projection 只更新实际存在的 Main ref；不得把空 Main 当作 scene corruption。应用重启时现有 `attachProjectWorkbench` 恢复 canonical Canvas，但运行中的关闭操作不隐式发明另一个 View。
 
 Pi transcript 中 `stopReason: error` 的 assistant entry 必须把持久化的 `errorMessage` 投影到 package-owned Agent error presentation。空 content 不得把真实 diagnostic 降级成只有固定 `Error` 标题；错误仍保持 conversation/turn scoped，不自动重试或伪装成功。
 

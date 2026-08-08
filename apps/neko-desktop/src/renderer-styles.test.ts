@@ -185,15 +185,13 @@ describe('Desktop renderer styles', () => {
     const independentMainRule = styles.match(
       /> \.neko-controlled-workbench-main__secondary\s*\{(?<body>[\s\S]*?)\n\}/u,
     );
-    const timelineRule = styles.match(
-      /\.project-workspace \.neko-controlled-workbench-timeline\s*\{(?<body>[\s\S]*?)\n\}/u,
-    );
     const dockPanelRule = styles.match(/\.project-dock-panel\s*\{(?<body>[\s\S]*?)\n\}/u);
 
-    for (const rule of [mainRule, independentMainRule, timelineRule, dockPanelRule]) {
+    for (const rule of [mainRule, independentMainRule, dockPanelRule]) {
       expect(rule?.groups?.body).toMatch(/box-shadow\s*:\s*none/u);
       expect(rule?.groups?.body).not.toMatch(/--neko-desktop-shadow-surface/u);
     }
+    expect(styles).not.toContain('.project-workspace .neko-controlled-workbench-timeline');
     expect(dockPanelRule?.groups?.body).toMatch(
       /border\s*:\s*1px solid var\(--neko-desktop-border\)/u,
     );

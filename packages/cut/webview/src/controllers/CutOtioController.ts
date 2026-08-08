@@ -15,6 +15,7 @@ import type {
   OtioTrackKind,
   TimelineView,
 } from '@neko/cut-domain';
+import type { CutDroppedMediaSource } from '../components/Timeline/droppedMedia';
 import {
   representationKey,
   type CutPlacementMode,
@@ -69,7 +70,7 @@ export type CutWebviewIntent =
   | ({
       readonly type: 'cut:drop-link-media';
       readonly trackId: string;
-      readonly uris: readonly string[];
+      readonly source: CutDroppedMediaSource;
       readonly timelineStartFrames: number;
       readonly overlapPolicy: 'reject' | 'insert';
     } & CutMutationIdentity)
@@ -251,16 +252,15 @@ export class CutOtioController {
 
   dropLinkMedia(
     trackId: string,
-    uris: string | readonly string[],
+    source: CutDroppedMediaSource,
     timelineStartFrames: number,
     overlapPolicy: 'reject' | 'insert',
   ): void {
-    const normalized = typeof uris === 'string' ? [uris] : uris;
     this.enqueueMutation((identity) => ({
       type: 'cut:drop-link-media',
       ...identity,
       trackId,
-      uris: normalized,
+      source,
       timelineStartFrames,
       overlapPolicy,
     }));

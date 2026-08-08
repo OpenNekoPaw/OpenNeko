@@ -559,6 +559,7 @@ export async function pressDesktopKey(cdp, key, modifiers = []) {
     code: descriptor.code,
     windowsVirtualKeyCode: descriptor.virtualKeyCode,
     nativeVirtualKeyCode: descriptor.virtualKeyCode,
+    ...(key === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}),
   };
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...event });
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...event });
@@ -625,6 +626,15 @@ export async function dragDesktopElement(cdp, sourceSelector, targetSelector, op
     pointerType: 'mouse',
   });
   await delayDesktopInputFrame();
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: source.x + 8,
+    y: source.y,
+    button: 'left',
+    buttons: 1,
+    pointerType: 'mouse',
+  });
+  await delayDesktopInputFrame();
   const steps = 8;
   for (let step = 1; step <= steps; step += 1) {
     const progress = step / steps;
@@ -638,6 +648,15 @@ export async function dragDesktopElement(cdp, sourceSelector, targetSelector, op
     });
     await delayDesktopInputFrame();
   }
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: target.x + 1,
+    y: target.y,
+    button: 'left',
+    buttons: 1,
+    pointerType: 'mouse',
+  });
+  await delayDesktopInputFrame();
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     x: target.x,
@@ -711,6 +730,7 @@ function describeKey(input) {
     Enter: ['Enter', 'Enter', 13],
     End: ['End', 'End', 35],
     Escape: ['Escape', 'Escape', 27],
+    F10: ['F10', 'F10', 121],
     Space: [' ', 'Space', 32],
     Tab: ['Tab', 'Tab', 9],
   };

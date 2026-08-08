@@ -39,10 +39,15 @@ import type {
 import { resolveActiveDesktopWindowWorkbench } from '@neko/host/desktop-shell-contract';
 import {
   DESKTOP_WORKBENCH_LIMITS,
+  closeCutView,
   closeMainView,
+  openOrFocusCutView,
   openOrFocusMainView,
+  reorderCutView,
   reorderMainView,
+  resizeCutPanel,
   resizeMainSplit,
+  setCutPanelPresentation,
   setWorkbenchDisplayMode,
   type DesktopWorkbenchLayoutProjection,
   type DesktopWorkbenchMainGroup,
@@ -668,6 +673,8 @@ function DesktopSceneWorkbench({
         }
       : undefined;
   const resourceDockVisible = workspaceScene && activeResourcePresentation !== 'hidden';
+  const cutPanel = workspaceScene ? activeWorkbench.layout.cutPanel : undefined;
+  const cutPanelVisible = cutPanel?.presentation === 'docked';
   const interactionResize =
     workspaceScene && interactionPresentation === 'docked' && !pending
       ? createProjectDockResizeBinding({
@@ -697,6 +704,21 @@ function DesktopSceneWorkbench({
           label: t('workspace.resizeRightDock'),
           workbench: activeWorkbench.layout,
         })
+      : undefined;
+  const cutPanelResize =
+    cutPanelVisible && !pending
+      ? {
+          label: t('workspace.resizeCutPanel'),
+          minSize: DESKTOP_WORKBENCH_LIMITS.cutPanelHeight.min,
+          maxSize: DESKTOP_WORKBENCH_LIMITS.cutPanelHeight.max,
+          onResizeEnd: (height: number) => {
+            if (height === cutPanel.height) return;
+            actions.onUpdateWorkbench(
+              activeWorkbench.workbenchInstanceId,
+              resizeCutPanel(activeWorkbench.layout, height),
+            );
+          },
+        }
       : undefined;
   const portalDeck = (slot: DesktopWorkbenchPortalSlot, visible = true): JSX.Element => (
     <>
@@ -776,6 +798,10 @@ function DesktopSceneWorkbench({
           assetPreviewVisible ? managementSplitRatio : activeWorkbench.layout.main.split?.ratio
         }
         mainSplitResize={mainSplitResize}
+        bottomPanel={cutPanel ? portalDeck('bottomPanel', cutPanelVisible) : undefined}
+        bottomPanelVisible={cutPanelVisible}
+        bottomPanelHeight={cutPanel?.height}
+        bottomPanelResize={cutPanelResize}
         leftDock={portalDeck('leftDock', scene.context.kind === 'settings')}
         leftDockPresentation={scene.context.kind === 'settings' ? 'docked' : 'hidden'}
         leftDockWidth={scene.context.kind === 'settings' ? 300 : undefined}
@@ -783,30 +809,6 @@ function DesktopSceneWorkbench({
         rightDockPresentation={resourceDockVisible ? activeResourcePresentation : 'hidden'}
         rightDockWidth={activeWorkbench.layout.resourceDock.width}
         rightDockResize={resourceDockResize}
-        timeline={portalDeck(
-          'timeline',
-          workspaceScene && activeWorkbench.layout.timeline.presentation === 'docked',
-        )}
-        timelineVisible={
-          workspaceScene && activeWorkbench.layout.timeline.presentation === 'docked'
-        }
-        timelineHeight={activeWorkbench.layout.timeline.height}
-        timelineResize={
-          workspaceScene && !pending
-            ? {
-                label: t('workspace.resizeTimeline'),
-                minSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.min,
-                maxSize: DESKTOP_WORKBENCH_LIMITS.timelineHeight.max,
-                onResizeEnd: (height) => {
-                  if (height === activeWorkbench.layout.timeline.height) return;
-                  actions.onUpdateWorkbench(
-                    activeWorkbench.workbenchInstanceId,
-                    resizeTimelineWorkbench(activeWorkbench.layout, height),
-                  );
-                },
-              }
-            : undefined
-        }
       />
       <DesktopSurfaceErrorBoundary
         key={activeWorkbench.workbenchInstanceId}
@@ -826,7 +828,8 @@ function DesktopSceneWorkbench({
   );
 }
 
-type DesktopWorkbenchPortalSlot = 'main' | 'secondaryMain' | 'leftDock' | 'rightDock' | 'timeline';
+type DesktopWorkbenchPortalSlot =
+  'main' | 'secondaryMain' | 'leftDock' | 'rightDock' | 'bottomPanel';
 
 function createDesktopWorkbenchPortalTargetKey(
   workbenchInstanceId: string,
@@ -1001,16 +1004,12 @@ function DesktopWorkbenchRuntimePortals({
     scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace'
       ? workspaceSlots.rightDock
       : undefined;
-  const timeline =
-    scene.context.kind === 'agent' && scene.context.scope.kind === 'workspace'
-      ? workspaceSlots.timeline
-      : undefined;
   const contentBySlot: Readonly<Record<DesktopWorkbenchPortalSlot, ReactNode>> = {
     main,
     secondaryMain,
     leftDock,
     rightDock,
-    timeline,
+    bottomPanel: workspaceSlots.bottomPanel,
   };
 
   return (
@@ -1370,7 +1369,7 @@ function useDisposeRuntime<T extends { dispose(): void }>(runtime: T | undefined
 
 type ContentProjectWorkbenchSlots = Pick<
   ControlledWorkbenchShellProps,
-  'main' | 'secondaryMain' | 'rightDock' | 'timeline'
+  'main' | 'secondaryMain' | 'rightDock' | 'bottomPanel'
 >;
 
 function useContentProjectWorkbenchSlots({
@@ -1387,7 +1386,6 @@ function useContentProjectWorkbenchSlots({
   readonly project?: DesktopProjectCatalogItem;
 }): ContentProjectWorkbenchSlots {
   const { t } = useTranslation();
-  const [cutTimelineTarget, setCutTimelineTarget] = useState<HTMLDivElement | null>(null);
   const workbench = instance.layout;
   const resourceDockPresentation = useResourceDockPresentation(workbench.resourceDock.presentation);
   if (!project) {
@@ -1408,17 +1406,6 @@ function useContentProjectWorkbenchSlots({
     throw new Error('Desktop Workbench requires a primary Main Group.');
   }
   const secondaryGroup = workbench.main.groups[1];
-  const timelineOwner = workbench.main.views.find(
-    (candidate) => candidate.viewId === workbench.timeline.ownerViewId,
-  );
-  const timelineOwnerGroup = timelineOwner
-    ? workbench.main.groups.find((group) => group.viewIds.includes(timelineOwner.viewId))
-    : undefined;
-  if (timelineOwner && !timelineOwnerGroup) {
-    throw new Error(
-      `Desktop Timeline owner '${timelineOwner.viewId}' is not attached to a Main group.`,
-    );
-  }
   const resourceDock =
     resourceDockPresentation === 'hidden'
       ? undefined
@@ -1431,18 +1418,6 @@ function useContentProjectWorkbenchSlots({
                 <FolderIcon size={15} />
                 <strong>{t('workspace.projectResources')}</strong>
               </span>
-              <IconButton
-                disabled={pending}
-                icon={<CloseIcon size={15} />}
-                label={t('workspace.closeProjectResources')}
-                title={t('workspace.closeProjectResources')}
-                onClick={() =>
-                  actions.onUpdateWorkbench(
-                    instance.workbenchInstanceId,
-                    setResourceDockPresentationWorkbench(workbench, 'hidden'),
-                  )
-                }
-              />
             </header>
             <div className="project-resource-dock__content">
               {assetsCapability?.status === 'ready' ? (
@@ -1480,21 +1455,28 @@ function useContentProjectWorkbenchSlots({
       visible={workbench.display.mode !== 'chat-only'}
       actions={actions}
       canvasCapability={canvasCapability}
-      cutCapability={cutCapability}
       group={primaryGroup}
       previewCapability={previewCapability}
       project={project}
       projection={projection}
       workbenchInstanceId={instance.workbenchInstanceId}
-      timelineOwnerViewId={
-        timelineOwnerGroup?.groupId === primaryGroup.groupId ? timelineOwner?.viewId : undefined
-      }
-      timelineTarget={cutTimelineTarget ?? undefined}
       workbench={workbench}
     />
   );
-  const timelineOwnerRenderedInMain =
-    timelineOwner?.kind === 'cut' && timelineOwnerGroup?.groupId === primaryGroup.groupId;
+  const bottomPanel = workbench.cutPanel ? (
+    cutCapability?.status === 'ready' ? (
+      <CutPanelSurface
+        actions={actions}
+        panel={workbench.cutPanel}
+        project={project}
+        projection={projection}
+        workbench={workbench}
+        workbenchInstanceId={instance.workbenchInstanceId}
+      />
+    ) : (
+      <SceneSurfaceUnavailable owner="cut" />
+    )
+  ) : undefined;
 
   return {
     main: (
@@ -1502,73 +1484,97 @@ function useContentProjectWorkbenchSlots({
         <div className="project-main-host__content">{mainSurface}</div>
       </div>
     ),
+    bottomPanel,
     secondaryMain: secondaryGroup ? (
       <MainViewGroupSurface
         visible={workbench.display.mode !== 'chat-only'}
         actions={actions}
         canvasCapability={canvasCapability}
-        cutCapability={cutCapability}
         group={secondaryGroup}
         previewCapability={previewCapability}
         project={project}
         projection={projection}
         workbenchInstanceId={instance.workbenchInstanceId}
-        timelineOwnerViewId={
-          timelineOwnerGroup?.groupId === secondaryGroup.groupId ? timelineOwner?.viewId : undefined
-        }
-        timelineTarget={cutTimelineTarget ?? undefined}
         workbench={workbench}
       />
     ) : undefined,
     rightDock: resourceDock?.content,
-    timeline:
-      timelineOwner?.kind === 'cut' && cutCapability?.status === 'ready' ? (
-        timelineOwnerRenderedInMain ? (
-          <div
-            className="desktop-cut-timeline-slot"
-            data-testid="desktop-cut-timeline-slot"
-            ref={setCutTimelineTarget}
-          />
-        ) : (
-          <TimelinePlaceholder diagnostic="desktop-cut-timeline-owner-not-mounted-in-primary-main" />
-        )
-      ) : (
-        <TimelinePlaceholder
-          diagnostic={
-            projection.domains.find((candidate) => candidate.surface === 'cut')?.status ===
-            'unavailable'
-              ? 'desktop-domain-surface-unavailable'
-              : 'desktop-cut-timeline-not-mounted'
-          }
-        />
-      ),
   };
+}
+
+function CutPanelSurface({
+  actions,
+  panel,
+  project,
+  projection,
+  workbench,
+  workbenchInstanceId,
+}: {
+  readonly actions: ShellActions;
+  readonly panel: NonNullable<DesktopWorkbenchLayoutProjection['cutPanel']>;
+  readonly project: DesktopProjectCatalogItem;
+  readonly projection: DesktopShellProjection;
+  readonly workbench: DesktopWorkbenchLayoutProjection;
+  readonly workbenchInstanceId: string;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const activeView = panel.views.find((view) => view.viewId === panel.activeViewId);
+  if (!activeView) {
+    throw new Error(`Desktop Cut Panel active View '${panel.activeViewId}' is unavailable.`);
+  }
+  return (
+    <section className="project-cut-panel" data-workbench-cut-panel="true">
+      <header className="project-cut-panel__tabs">
+        <WorkbenchEditorTabs
+          activeId={panel.activeViewId}
+          emptyLabel={t('workspace.cutTabs.empty')}
+          label={t('workspace.cutTabs.label')}
+          tabs={panel.views.map((view) => ({
+            id: view.viewId,
+            label: view.displayLabel,
+            closeLabel: t('workspace.cutTabs.close', { name: view.displayLabel }),
+          }))}
+          onClose={(viewId) => {
+            actions.onUpdateWorkbench(workbenchInstanceId, closeCutView(workbench, viewId));
+          }}
+          onReorder={(sourceViewId, targetViewId) => {
+            actions.onUpdateWorkbench(
+              workbenchInstanceId,
+              reorderCutView(workbench, sourceViewId, targetViewId),
+            );
+          }}
+          onSelect={(viewId) => {
+            const view = panel.views.find((candidate) => candidate.viewId === viewId);
+            if (!view) throw new Error(`Desktop Cut Tab '${viewId}' is unavailable.`);
+            actions.onUpdateWorkbench(workbenchInstanceId, openOrFocusCutView(workbench, view));
+          }}
+        />
+      </header>
+      <div className="project-cut-panel__content" data-cut-view-id={activeView.viewId}>
+        <DesktopCutSurface project={project} projection={projection} view={activeView} />
+      </div>
+    </section>
+  );
 }
 
 function MainViewGroupSurface({
   actions,
   canvasCapability,
-  cutCapability,
   group,
   previewCapability,
   project,
   projection,
   workbenchInstanceId,
-  timelineOwnerViewId,
-  timelineTarget,
   visible,
   workbench,
 }: {
   readonly actions: ShellActions;
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
-  readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly group: DesktopWorkbenchMainGroup;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
   readonly workbenchInstanceId: string;
-  readonly timelineOwnerViewId?: string;
-  readonly timelineTarget?: Element;
   readonly visible: boolean;
   readonly workbench: DesktopWorkbenchLayoutProjection;
 }): JSX.Element {
@@ -1620,10 +1626,8 @@ function MainViewGroupSurface({
           {renderWorkbenchMainView({
             canvasCapability,
             previewCapability,
-            cutCapability,
             project,
             projection,
-            timelineTarget: activeView.viewId === timelineOwnerViewId ? timelineTarget : undefined,
             view: activeView,
           })}
         </div>
@@ -1635,18 +1639,14 @@ function MainViewGroupSurface({
 function renderWorkbenchMainView({
   canvasCapability,
   previewCapability,
-  cutCapability,
   project,
   projection,
-  timelineTarget,
   view,
 }: {
   readonly canvasCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly previewCapability: DesktopShellProjection['domains'][number] | undefined;
-  readonly cutCapability: DesktopShellProjection['domains'][number] | undefined;
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
-  readonly timelineTarget?: Element;
   readonly view: DesktopWorkbenchLayoutProjection['main']['views'][number];
 }): JSX.Element {
   if (view.kind === 'preview' && previewCapability?.status === 'ready') {
@@ -1655,15 +1655,8 @@ function renderWorkbenchMainView({
   if (view.kind === 'canvas' && canvasCapability?.status === 'ready') {
     return <DesktopCanvasSurface project={project} projection={projection} view={view} />;
   }
-  if (view.kind === 'cut' && cutCapability?.status === 'ready') {
-    return (
-      <DesktopCutSurface
-        project={project}
-        projection={projection}
-        timelineTarget={timelineTarget}
-        view={view}
-      />
-    );
+  if (view.kind === 'cut') {
+    throw new Error('Desktop Cut Views must render in the Cut Panel, not Main.');
   }
   return (
     <CreativeMainPlaceholder
@@ -1694,6 +1687,7 @@ function WorkspaceRegionControls({
   const agentVisible = isWorkbenchRegionVisible(workbench, 'agent');
   const mainVisible = isWorkbenchRegionVisible(workbench, 'main');
   const managementVisible = isWorkbenchRegionVisible(workbench, 'management');
+  const cutPanelVisible = isWorkbenchRegionVisible(workbench, 'cutPanel');
   return (
     <div
       className="workspace-region-controls"
@@ -1745,6 +1739,22 @@ function WorkspaceRegionControls({
           actions.onUpdateWorkbench(
             instance.workbenchInstanceId,
             toggleWorkbenchRegion(workbench, 'management'),
+          )
+        }
+      />
+      <IconButton
+        className="workbench-region-toggle"
+        data-workbench-region-control="cut-panel"
+        disabled={disabled || workbench.cutPanel === undefined}
+        icon={<span className={toCodiconClassName('layout-panel')} aria-hidden="true" />}
+        label={t('workspace.cutPanel')}
+        size="xs"
+        title={t('workspace.cutPanel')}
+        aria-pressed={cutPanelVisible}
+        onClick={() =>
+          actions.onUpdateWorkbench(
+            instance.workbenchInstanceId,
+            toggleWorkbenchRegion(workbench, 'cutPanel'),
           )
         }
       />
@@ -1879,19 +1889,6 @@ function toggleApplicationSidebar(
   };
 }
 
-export function resizeTimelineWorkbench(
-  workbench: DesktopWorkbenchLayoutProjection,
-  height: number,
-): DesktopWorkbenchLayoutProjection {
-  return {
-    ...workbench,
-    timeline: {
-      ...workbench.timeline,
-      height,
-    },
-  };
-}
-
 export function resizeProjectDockWorkbench(
   workbench: DesktopWorkbenchLayoutProjection,
   owner: 'agent' | 'resources',
@@ -1936,7 +1933,7 @@ export function activateWorkbenchMainView(
   return openOrFocusMainView(workbench, view);
 }
 
-type WorkbenchRegion = 'agent' | 'main' | 'management';
+type WorkbenchRegion = 'agent' | 'main' | 'management' | 'cutPanel';
 
 function isWorkbenchRegionVisible(
   workbench: DesktopWorkbenchLayoutProjection,
@@ -1946,7 +1943,8 @@ function isWorkbenchRegionVisible(
   if (region === 'main') {
     return workbench.main.views.length > 0 && workbench.display.mode !== 'chat-only';
   }
-  return workbench.resourceDock.presentation !== 'hidden';
+  if (region === 'management') return workbench.resourceDock.presentation !== 'hidden';
+  return workbench.cutPanel?.presentation === 'docked';
 }
 
 export function toggleWorkbenchRegion(
@@ -1975,9 +1973,18 @@ export function toggleWorkbenchRegion(
       workbench.display.chatPosition,
     );
   }
-  return setResourceDockPresentationWorkbench(
+  if (region === 'management') {
+    return setResourceDockPresentationWorkbench(
+      workbench,
+      isWorkbenchRegionVisible(workbench, 'management') ? 'hidden' : 'docked',
+    );
+  }
+  if (!workbench.cutPanel) {
+    throw new Error('Desktop Workbench cannot toggle Cut Panel without an attached Cut View.');
+  }
+  return setCutPanelPresentation(
     workbench,
-    isWorkbenchRegionVisible(workbench, 'management') ? 'hidden' : 'docked',
+    workbench.cutPanel.presentation === 'docked' ? 'hidden' : 'docked',
   );
 }
 

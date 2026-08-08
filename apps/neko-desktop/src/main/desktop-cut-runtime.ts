@@ -29,15 +29,19 @@ import type { DesktopShellService } from '@neko/host/desktop-shell-service';
 import { resolveDesktopWindowWorkspaceWorkbench } from '@neko/host/desktop-shell-contract';
 import type { DesktopResourceRegistry } from './desktop-resource-registry';
 import {
-  getActiveMainView,
-  openOrFocusMainView,
-  showWorkbenchTimeline,
+  openOrFocusCutView,
   type DesktopWorkbenchLayoutProjection,
 } from '@neko/host/desktop-workbench-contract';
 
 type DesktopCutOpenResourceItem = ResourceBrowserContentItem & {
   readonly locator: WorkspaceFileContentLocator;
 };
+
+interface DesktopCutOpenInput {
+  readonly identity: ResourceBrowserIdentity;
+  readonly item: ResourceBrowserItem;
+  readonly absolutePath: string;
+}
 
 export interface DesktopCutRuntimeOptions {
   readonly shell: Pick<
@@ -102,9 +106,9 @@ export class DesktopCutRuntime {
           ),
         };
       },
-      resolveResourcePath: async (workspaceId, item) => {
+      resolveResourcePath: async (workspaceId, locator) => {
         const workspace = await options.shell.resolveAgentWorkspace(workspaceId);
-        return resolveWorkspaceContentLocator(workspace, item.locator);
+        return resolveWorkspaceContentLocator(workspace, locator);
       },
       readText: (absolutePath) => options.host.files.readText(absolutePath),
       ...(resources === undefined
@@ -136,12 +140,7 @@ export class DesktopCutRuntime {
       ...(options.selectMediaFiles === undefined
         ? {}
         : { selectMediaFiles: options.selectMediaFiles }),
-      reportExportFailure: ({
-        identity,
-        sourceSnapshotId,
-        outputWorkspaceRelativePath,
-        error,
-      }) => {
+      reportExportFailure: ({ identity, sourceSnapshotId, outputWorkspaceRelativePath, error }) => {
         options.host.diagnostics?.report({
           code: 'desktop-cut-export-failed',
           severity: 'error',
@@ -165,11 +164,15 @@ export class DesktopCutRuntime {
     );
   }
 
-  async open(input: {
-    readonly identity: ResourceBrowserIdentity;
-    readonly item: ResourceBrowserItem;
-    readonly absolutePath: string;
-  }): Promise<void> {
+  open(input: DesktopCutOpenInput): Promise<void> {
+    return this.openDocument(input);
+  }
+
+  openAlongsideCanvas(input: DesktopCutOpenInput): Promise<void> {
+    return this.openDocument(input);
+  }
+
+  private async openDocument(input: DesktopCutOpenInput): Promise<void> {
     this.requireActive();
     if (!this.supportsOpen(input.item)) {
       throw new Error('Desktop Cut requires a workspace-file OTIO ContentLocator.');
@@ -201,7 +204,7 @@ export class DesktopCutRuntime {
     if (resolvedPath !== input.absolutePath) {
       throw new Error('Desktop Cut Resource path does not match its authorized ContentLocator.');
     }
-    const existing = workspaceWorkbench.layout.main.views.find(
+    const existing = workspaceWorkbench.layout.cutPanel?.views.find(
       (view) =>
         view.kind === 'cut' &&
         view.projectId === project.projectId &&
@@ -220,12 +223,7 @@ export class DesktopCutRuntime {
       displayLabel: input.item.label,
       documentId: locator.path,
     };
-    const activeBeforeOpen = getActiveMainView(workspaceWorkbench.layout);
-    let workbench = openOrFocusMainView(workspaceWorkbench.layout, view);
-    if (activeBeforeOpen?.kind === 'canvas') {
-      workbench = openOrFocusMainView(workbench, activeBeforeOpen);
-    }
-    workbench = showWorkbenchTimeline(workbench, view.viewId);
+    const workbench = openOrFocusCutView(workspaceWorkbench.layout, view);
     await this.options.shell.updateWorkbench(
       input.identity.windowId,
       current.rendererSessionId,
@@ -283,8 +281,7 @@ export class DesktopCutRuntime {
     this.application.reconcileSessions(
       windowId,
       workbenches
-        .flatMap((workbench) => workbench.main.views)
-        .filter((view) => view.kind === 'cut')
+        .flatMap((workbench) => workbench.cutPanel?.views ?? [])
         .map((view) => view.ownerId),
     );
   }

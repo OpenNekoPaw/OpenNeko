@@ -1043,8 +1043,8 @@ export class DesktopShellService {
     ) {
       throw new Error('Desktop Cut Window or renderer identity is stale.');
     }
-    const view = projection.window.workbench.layout.main.views.find(
-      (candidate) => candidate.viewId === identity.viewId && candidate.kind === 'cut',
+    const view = projection.window.workbench.layout.cutPanel?.views.find(
+      (candidate) => candidate.viewId === identity.viewId,
     );
     if (
       !view ||
@@ -2319,6 +2319,20 @@ function createWorkspaceAgentScene(input: {
       `Workspace '${input.workspaceId}' active Main View is not attached to its Workbench.`,
     );
   }
+  const cutView =
+    input.workbench.cutPanel?.presentation === 'docked'
+      ? input.workbench.cutPanel.views.find(
+          (view) =>
+            view.viewId === input.workbench.cutPanel?.activeViewId &&
+            view.workspaceId === input.workspaceId,
+        )
+      : undefined;
+  if (input.workbench.cutPanel?.presentation === 'docked' && !cutView) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      `Workspace '${input.workspaceId}' Cut Panel has no authoritative active Cut View.`,
+    );
+  }
   const sceneId = `scene:${input.current.windowId}:${input.workspaceId}`;
   const scope = {
     kind: 'workspace' as const,
@@ -2326,13 +2340,6 @@ function createWorkspaceAgentScene(input: {
     workspaceId: input.workspaceId,
     workspaceGrantId: input.workspaceGrantId,
   };
-  const timelineOwner = input.workbench.timeline.ownerViewId
-    ? input.workbench.main.views.find(
-        (view) =>
-          view.viewId === input.workbench.timeline.ownerViewId &&
-          view.workspaceId === input.workspaceId,
-      )
-    : undefined;
   return parseDesktopWorkbenchSceneProjection({
     sceneId,
     windowId: input.current.windowId,
@@ -2351,18 +2358,18 @@ function createWorkspaceAgentScene(input: {
         viewId: mainView.viewId,
         viewInstanceId: mainView.viewInstanceId,
       },
-      rightManager: { kind: 'workspace-resources', workspaceId: input.workspaceId },
-      ...(timelineOwner
+      ...(cutView
         ? {
-            timeline: {
-              kind: 'workspace-timeline',
+            cutPanel: {
+              kind: 'workspace-cut',
               workspaceId: input.workspaceId,
-              viewId: timelineOwner.viewId,
-              viewInstanceId: timelineOwner.viewInstanceId,
-              ownerId: timelineOwner.ownerId,
+              viewId: cutView.viewId,
+              viewInstanceId: cutView.viewInstanceId,
+              ownerId: cutView.ownerId,
             },
           }
         : {}),
+      rightManager: { kind: 'workspace-resources', workspaceId: input.workspaceId },
       status: { kind: 'scene-status', sceneId },
     },
   });
@@ -2383,74 +2390,70 @@ function synchronizeWorkspaceSceneWithWorkbench(
         (view) => view.viewId === activeGroup.activeViewId && view.workspaceId === workspaceId,
       )
     : undefined;
-  if (!activeView) {
-    if (workbench.main.views.length > 0) {
-      throw new DesktopSceneContractError(
-        'desktop-scene-scope-mismatch',
-        `Workspace '${workspaceId}' has Views without an authoritative active Main View.`,
-      );
-    }
-    const { main: _main, timeline: _timeline, ...retainedSlots } = scene.slots;
-    if (!_main && !_timeline) return scene;
-    return parseDesktopWorkbenchSceneProjection({
-      ...scene,
-      slots: retainedSlots,
-    });
-  }
-
-  const timelineView = workbench.timeline.ownerViewId
-    ? workbench.main.views.find(
-        (view) =>
-          view.viewId === workbench.timeline.ownerViewId && view.workspaceId === workspaceId,
-      )
-    : undefined;
-  if (workbench.timeline.ownerViewId && !timelineView) {
+  if (!activeView && workbench.main.views.length > 0) {
     throw new DesktopSceneContractError(
       'desktop-scene-scope-mismatch',
-      `Workspace '${workspaceId}' Timeline owner is not attached to its Workbench.`,
+      `Workspace '${workspaceId}' has Views without an authoritative active Main View.`,
+    );
+  }
+  const cutView =
+    workbench.cutPanel?.presentation === 'docked'
+      ? workbench.cutPanel.views.find(
+          (view) =>
+            view.viewId === workbench.cutPanel?.activeViewId && view.workspaceId === workspaceId,
+        )
+      : undefined;
+  if (workbench.cutPanel?.presentation === 'docked' && !cutView) {
+    throw new DesktopSceneContractError(
+      'desktop-scene-scope-mismatch',
+      `Workspace '${workspaceId}' Cut Panel has no authoritative active Cut View.`,
     );
   }
 
-  const main = {
-    kind: 'workspace-main' as const,
-    workspaceId,
-    viewId: activeView.viewId,
-    viewInstanceId: activeView.viewInstanceId,
-  };
-  const timeline = timelineView
+  const main = activeView
     ? {
-        kind: 'workspace-timeline' as const,
+        kind: 'workspace-main' as const,
         workspaceId,
-        viewId: timelineView.viewId,
-        viewInstanceId: timelineView.viewInstanceId,
-        ownerId: timelineView.ownerId,
+        viewId: activeView.viewId,
+        viewInstanceId: activeView.viewInstanceId,
+      }
+    : undefined;
+  const cutPanel = cutView
+    ? {
+        kind: 'workspace-cut' as const,
+        workspaceId,
+        viewId: cutView.viewId,
+        viewInstanceId: cutView.viewInstanceId,
+        ownerId: cutView.ownerId,
       }
     : undefined;
   const currentMain = scene.slots.main;
-  const currentTimeline = scene.slots.timeline;
+  const currentCutPanel = scene.slots.cutPanel;
   if (
-    currentMain?.kind === 'workspace-main' &&
-    currentMain.workspaceId === main.workspaceId &&
-    currentMain.viewId === main.viewId &&
-    currentMain.viewInstanceId === main.viewInstanceId &&
-    ((!currentTimeline && !timeline) ||
-      (currentTimeline &&
-        timeline &&
-        currentTimeline.workspaceId === timeline.workspaceId &&
-        currentTimeline.viewId === timeline.viewId &&
-        currentTimeline.viewInstanceId === timeline.viewInstanceId &&
-        currentTimeline.ownerId === timeline.ownerId))
+    ((!currentMain && !main) ||
+      (currentMain?.kind === 'workspace-main' &&
+        main &&
+        currentMain.workspaceId === main.workspaceId &&
+        currentMain.viewId === main.viewId &&
+        currentMain.viewInstanceId === main.viewInstanceId)) &&
+    ((!currentCutPanel && !cutPanel) ||
+      (currentCutPanel &&
+        cutPanel &&
+        currentCutPanel.workspaceId === cutPanel.workspaceId &&
+        currentCutPanel.viewId === cutPanel.viewId &&
+        currentCutPanel.viewInstanceId === cutPanel.viewInstanceId &&
+        currentCutPanel.ownerId === cutPanel.ownerId))
   ) {
     return scene;
   }
 
-  const { main: _main, timeline: _timeline, ...retainedSlots } = scene.slots;
+  const { main: _main, cutPanel: _cutPanel, ...retainedSlots } = scene.slots;
   return parseDesktopWorkbenchSceneProjection({
     ...scene,
     slots: {
       ...retainedSlots,
-      main,
-      ...(timeline ? { timeline } : {}),
+      ...(main ? { main } : {}),
+      ...(cutPanel ? { cutPanel } : {}),
     },
   });
 }

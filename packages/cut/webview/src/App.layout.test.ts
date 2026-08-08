@@ -31,12 +31,23 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/<PreviewControls/);
     expect(app).toMatch(/<PropertyPanelInline/);
     expect(app).toMatch(/<Timeline/);
-    expect(app).toMatch(/createPortal\(/);
-    expect(app).toMatch(/timelineTarget/);
+    expect(app).toMatch(/<Timeline onOpenPackage=\{linkMediaToSelectedTrack\} onSeek=\{seek\} \/>/);
+    expect(app).not.toMatch(/timelineVisible|data-cut-timeline-visible/);
+    expect(app).not.toMatch(/createPortal\(/);
+    expect(app).not.toMatch(/timelineTarget|timeline-only/);
     expect(timeline).toMatch(/<TimelineControls/);
     expect(timeline).toMatch(/<TimelineMinimap/);
     expect(timeline).toMatch(/<TimelineRuler/);
     expect(timeline).toMatch(/<TimelineTrack/);
+  });
+
+  it('stretches the Cut editor through the Workbench height chain', () => {
+    expect(styles).toMatch(/\.cut-workbench-shell\s*\{[^}]*height:\s*100%;/);
+    expect(styles).toMatch(/\.cut-workbench-body\s*\{[^}]*height:\s*100%;/);
+    expect(styles).toMatch(
+      /\.cut-main-panel,\s*\.cut-preview-timeline-panel\s*\{[^}]*height:\s*100%;/,
+    );
+    expect(styles).toMatch(/\.cut-basic-editor\s*\{[^}]*height:\s*100%;/);
   });
 
   it('scopes standalone Webview resets and theme tokens to the embeddable Cut root', () => {
@@ -71,7 +82,7 @@ describe('Cut OTIO Webview boundary', () => {
   it('retains bounded track entry and direct file drop/link entry', () => {
     expect(timeline).toMatch(/audioTrackCount < 3/);
     expect(timeline).toMatch(/subtitleTrackCount < 1/);
-    expect(timeline).toMatch(/readDroppedMediaUris/);
+    expect(timeline).toMatch(/readDroppedMediaSource/);
     expect(timeline).toMatch(/controller\.dropLinkMedia/);
     expect(toolbar).toMatch(/timeline\.controls\.addMedia/);
     expect(track).not.toMatch(/cut-basic-track-add|props\.onLinkMedia/);

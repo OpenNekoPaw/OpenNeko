@@ -21,7 +21,7 @@ import {
   type CutPlacementMode,
   type CutPresentationSelection,
 } from '../../stores/cut-presentation-store';
-import { readDroppedMediaUris } from './droppedMedia';
+import { readDroppedMediaSource } from './droppedMedia';
 import { ExportPanel } from './export';
 import { TimelineControls } from './TimelineControls';
 import { TimelineMinimap } from './TimelineMinimap';
@@ -601,8 +601,8 @@ export function Timeline(props: TimelineProps) {
     const row = event.target.closest<HTMLElement>('[data-cut-track-id]');
     const trackId = row?.dataset['cutTrackId'];
     const track = view?.tracks.find((candidate) => candidate.trackId === trackId);
-    const uris = readDroppedMediaUris(event.dataTransfer);
-    if (!row || !trackId || !track || uris.length === 0) {
+    const source = readDroppedMediaSource(event.dataTransfer);
+    if (!row || !trackId || !track || !source) {
       showToast(t('timeline.dropMediaHere'), 'error');
       return;
     }
@@ -616,7 +616,7 @@ export function Timeline(props: TimelineProps) {
         : pointerTimeSeconds;
     controller.dropLinkMedia(
       trackId,
-      uris,
+      source,
       Math.max(0, Math.round(targetTimeSeconds * rate)),
       overlapPolicyForMode(placementMode),
     );
@@ -740,7 +740,10 @@ export function Timeline(props: TimelineProps) {
       <div
         className="cut-basic-timeline-scroll"
         onContextMenu={contextMenu.handleTimelineContextMenu}
-        onDragOver={(event) => event.preventDefault()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+        }}
         onDrop={dropMedia}
         onPointerDown={beginBoxSelection}
         ref={scrollRef}

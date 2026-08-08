@@ -17,12 +17,10 @@ const CutWebviewRoot = lazy(async () => {
 export function DesktopCutSurface({
   project,
   projection,
-  timelineTarget,
   view,
 }: {
   readonly project: DesktopProjectCatalogItem;
   readonly projection: DesktopShellProjection;
-  readonly timelineTarget?: Element;
   readonly view: DesktopWorkbenchViewRef;
 }): JSX.Element {
   const { locale, t } = useTranslation();
@@ -67,12 +65,7 @@ export function DesktopCutSurface({
           </div>
         }
       >
-        <CutWebviewRoot
-          bridge={bridge}
-          lifecyclePresentation="active"
-          locale={locale}
-          timelineTarget={timelineTarget}
-        />
+        <CutWebviewRoot bridge={bridge} lifecyclePresentation="active" locale={locale} />
       </Suspense>
     </section>
   );

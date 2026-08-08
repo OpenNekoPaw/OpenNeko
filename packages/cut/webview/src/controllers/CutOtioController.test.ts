@@ -315,12 +315,17 @@ describe('CutOtioController', () => {
       succeeded: false,
       diagnostic: { code: 'internal-failure' },
     });
-    controller.dropLinkMedia('track-video', ['file:///workspace/a.mp4'], 90, 'insert');
+    controller.dropLinkMedia(
+      'track-video',
+      { kind: 'local-file-uris', uris: ['file:///workspace/a.mp4'] },
+      90,
+      'insert',
+    );
     expect(postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({
         type: 'cut:drop-link-media',
         trackId: 'track-video',
-        uris: ['file:///workspace/a.mp4'],
+        source: { kind: 'local-file-uris', uris: ['file:///workspace/a.mp4'] },
         timelineStartFrames: 90,
         overlapPolicy: 'insert',
       }),

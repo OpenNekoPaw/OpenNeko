@@ -752,3 +752,44 @@ The broader `desktop-workbench-scenes` run remains failed before reaching Worksp
 existing management + Preview assertion requires a non-`none` shadow while both independent shells
 currently render without shadows. That unrelated assertion was not weakened. Packaged and explicitly
 authorized real-provider coverage remains part of open task 12.8.
+
+## Main-Below Cut Panel
+
+Date: 2026-08-08
+
+Workspace Main now keeps Canvas, file Preview or Editor in the upper area while a separately resizable
+Cut Panel occupies the lower area. The canonical Host layout stores only lightweight Cut View refs,
+active View identity, presentation and height. Cut Views are rejected from Main, Main Views are
+rejected from the Cut Panel, and the Scene projects only the active owner-qualified `workspace-cut`
+Surface. Opening an OTIO document focuses a Cut Panel tab without replacing the active upper Main.
+Only the active Cut Root mounts; hiding the panel or switching tabs unmounts the prior Root. The
+package-owned Cut Root composes Preview above Timeline and remains the single target for authorized
+Workspace resource drag payloads.
+
+Deterministic verification passed:
+
+- Host Workbench/Scene/Shell: `3 files / 66 tests` plus direct TypeScript check.
+- Shared Workbench: `2 files / 13 tests` plus `@neko/ui` TypeScript check.
+- Cut Webview: `33 files / 248 tests` plus TypeScript build.
+- Desktop Cut/Shell/styles/boundaries: `4 files / 74 tests` plus Desktop typecheck.
+- Desktop functional runner contract: `14 tests`.
+- Application boundaries: `1449 files / 0 findings`; legacy debt: `0` blocking findings; unused
+  analysis, focused ESLint, `git diff --check` and strict OpenSpec validation also passed. Focused
+  ESLint retained nine existing Cut warning-level findings and reported no errors.
+
+The authoritative visible development Electron scenario passed through native playback, midpoint
+seek, dirty export/reopen, three OTIO tabs, complete panel hide/restore, trusted Workspace resource
+drag/drop and a `1280x760` compact layout. Hiding the panel increased upper Main height from `362` to
+`782`, removed every Cut Root, and preserved the exact Canvas Main View. Dragging
+`motion-with-audio.mp4` added exactly one clip (`3 -> 4`) without changing sibling Cut tabs. The run
+recorded no console errors, warnings, Renderer exceptions or poisoned requests:
+
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T03-41-17.886Z-cut-openneko-consumer-development/report.json`
+
+All seven screenshots were inspected directly. The large and compact states keep Canvas above the
+Cut Panel, Preview above Timeline, OTIO tabs within the panel, and Resource management as an
+independent right panel without overlap or clipping. The hidden state gives the reclaimed height to
+Canvas and contains no hidden Cut UI. The black Preview in tab-return/resource-drop captures is the
+document's settled zero-time frame; current midpoint captures and runtime media-time evidence show
+the decoded video frame separately. UI validation result: passed. Packaged coverage remains part of
+open task 12.8.

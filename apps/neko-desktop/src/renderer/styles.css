@@ -1861,23 +1861,6 @@ code {
   right: 8px;
 }
 
-.project-workspace .neko-controlled-workbench-timeline {
-  margin: 0 8px 8px 0;
-  overflow: hidden;
-  border: 1px solid var(--neko-desktop-border);
-  border-radius: var(--neko-desktop-radius-panel);
-  background: var(--neko-desktop-surface);
-  box-shadow: none;
-}
-
-.project-workspace[data-left-presentation='docked'] .neko-controlled-workbench-timeline {
-  margin-left: 8px;
-}
-
-.project-workspace[data-timeline-visible='true'] .neko-controlled-workbench-main {
-  margin-bottom: 6px;
-}
-
 .project-workspace .neko-controlled-workbench-resize-handle::after {
   border-radius: 999px;
 }
@@ -2013,6 +1996,41 @@ code {
 
 .project-main-view-stack__item[hidden] {
   display: none;
+}
+
+.project-cut-panel {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--neko-editor-background);
+}
+
+.project-cut-panel__tabs {
+  display: flex;
+  min-width: 0;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  background: var(--neko-desktop-chrome);
+}
+
+.project-cut-panel__tabs .neko-workbench-editor-tabs {
+  flex: 1 1 auto;
+  overflow-x: auto;
+}
+
+.project-cut-panel__content,
+.desktop-cut-surface {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .project-portability-panel {
@@ -2619,10 +2637,6 @@ code {
 
   .desktop-scene-workbench--agent-only > .neko-controlled-workbench-interaction {
     margin: 4px;
-  }
-
-  .project-workspace .neko-controlled-workbench-timeline {
-    margin: 0 4px 4px;
   }
 
   .project-workbench-heading span {

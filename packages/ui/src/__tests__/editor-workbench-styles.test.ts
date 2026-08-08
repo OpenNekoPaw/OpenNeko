@@ -58,4 +58,12 @@ describe('Workbench editor tab styles', () => {
     expect(rightHandle?.groups?.body).not.toMatch(/-4px/u);
     expect(topHandle?.groups?.body).not.toMatch(/-4px/u);
   });
+
+  it('lets dock tracks shrink inside the viewport when requested widths exceed available space', () => {
+    const shell = styles.match(/\.neko-controlled-workbench-shell\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(shell?.groups?.body).toContain('minmax(0, var(--neko-controlled-left-dock-width))');
+    expect(shell?.groups?.body).toContain('minmax(0, var(--neko-controlled-right-dock-width))');
+    expect(shell?.groups?.body).toContain('minmax(420px, 1fr)');
+  });
 });
