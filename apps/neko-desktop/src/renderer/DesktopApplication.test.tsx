@@ -26,6 +26,10 @@ import {
   createDefaultAssetCenterFilter,
   type AssetCenterSessionProjection,
 } from '@neko/assets-domain/asset-center/contract';
+import type {
+  DesktopProjectPortabilityRequest,
+  OpenNekoDesktopProjectPortabilityBridge,
+} from '@neko/assets-domain/contracts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -810,7 +814,9 @@ describe('DesktopApplication scene lifecycle', () => {
       container.querySelector('[data-workbench-main-shell="secondary"]')?.hasAttribute('hidden'),
     ).toBe(true);
     expect(container.querySelector('[data-workbench-main-gutter="true"]')).toBeNull();
-    expect(container.querySelector('[aria-label="Open project: Project one"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Open project: Project one"]')).toBeNull();
+    expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
+    expect(projectButton.closest('[data-project-id="content:workspace-1"]')).not.toBeNull();
     expect(container.textContent).toContain('Project one');
     await act(async () => root.unmount());
   });
@@ -1100,12 +1106,30 @@ describe('DesktopApplication scene lifecycle', () => {
     const deleteConversation = vi.fn(async () => projection);
     const removeProjects = vi.fn(async () => projection);
     const deleteProjectConversations = vi.fn(async () => projection);
+    const inspectPortability = vi.fn(async (request: DesktopProjectPortabilityRequest) => ({
+      requestId: request.requestId,
+      identity: request.identity,
+      portability: {
+        state: 'linked-ready' as const,
+        requirementFingerprint: 'requirements:empty',
+        libraries: [],
+      },
+    }));
+    const projectPortability = {
+      inspect: inspectPortability,
+      plan: vi.fn(),
+      resume: vi.fn(),
+      execute: vi.fn(),
+      cancel: vi.fn(),
+      subscribe: vi.fn(() => () => undefined),
+    } satisfies OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
     installBridge({
       projection,
       transition,
       deleteConversation,
       removeProjects,
       deleteProjectConversations,
+      projectPortability,
     });
     vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     const { container, root } = await renderApplication();
@@ -1125,6 +1149,7 @@ describe('DesktopApplication scene lifecycle', () => {
     expect(
       conversationRow.querySelectorAll(':scope > .primary-navigation-row-actions button'),
     ).toHaveLength(1);
+    expect(container.querySelectorAll('.home-navigation-footer__actions button')).toHaveLength(1);
 
     await openContextMenu(projectRow);
     await selectContextMenuItem('Open project');
@@ -1152,6 +1177,28 @@ describe('DesktopApplication scene lifecycle', () => {
       { kind: 'open-project-management' },
       activeScene(projection).sceneId,
     );
+
+    await openContextMenu(projectRow);
+    await selectContextMenuItem('Project portability');
+    await waitFor(() => inspectPortability.mock.calls.length === 1);
+    expect(inspectPortability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: {
+          projectId: project.projectId,
+          workspaceId: project.workspaceId,
+          windowId: projection.window.windowId,
+          rendererSessionId: projection.rendererSessionId,
+        },
+      }),
+    );
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      'Linked media is available on this machine.',
+    );
+    const closePortability = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close project portability"]',
+    );
+    if (!closePortability) throw new Error('Project portability dialog requires a close command.');
+    await act(async () => closePortability.click());
 
     await openContextMenu(projectRow);
     await selectContextMenuItem('Delete Workspace conversations for Context menu project');
@@ -1909,6 +1956,7 @@ function installBridge({
   updateApplicationSidebar = vi.fn(),
   updateWorkbench = vi.fn(),
   assetCenterExecute = vi.fn(),
+  projectPortability,
 }: {
   readonly getSnapshot?: () => Promise<DesktopShellProjection>;
   readonly projection: DesktopShellProjection;
@@ -1920,6 +1968,7 @@ function installBridge({
   readonly updateApplicationSidebar?: ReturnType<typeof vi.fn>;
   readonly updateWorkbench?: ReturnType<typeof vi.fn>;
   readonly assetCenterExecute?: ReturnType<typeof vi.fn>;
+  readonly projectPortability?: OpenNekoDesktopProjectPortabilityBridge['projectPortability'];
 }): void {
   Object.defineProperty(window, 'openNekoDesktop', {
     configurable: true,
@@ -1934,9 +1983,13 @@ function installBridge({
       agentLaunch: {
         attach: vi.fn(() => new Promise(() => undefined)),
         authorizeResource: vi.fn(),
+        bindTarget: vi.fn(),
+        bindAssistant: vi.fn(),
+        searchWorkspaceMentions: vi.fn(),
+        submitDraft: vi.fn(),
         detach: vi.fn(),
       },
-      projectPortability: undefined,
+      projectPortability,
     },
   });
 }

@@ -592,7 +592,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'missing-project');
       return {
         diagnostic: row?.querySelector('.management-surface-row__diagnostic')?.textContent?.trim() ?? '',
-        openDisabled: row?.querySelector('.management-surface-row-actions button')?.disabled === true,
+        openDisabled: row?.getAttribute('data-workspace-open-disabled') === 'true',
         listMode: document.querySelector(${JSON.stringify(`${ACTIVE_WORKBENCH} .project-management-catalog .management-surface-list.is-list`)}) !== null,
       };
     })()`);
@@ -675,7 +675,6 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
       const toolbar = root?.querySelector('.management-surface-toolbar');
       const list = root?.querySelector('.management-surface-list');
       const finalRow = [...(list?.querySelectorAll('.management-surface-row') ?? [])].at(-1);
-      const open = finalRow?.querySelector('.management-surface-row-actions button:first-child');
       const removal = finalRow?.querySelector(
         '.management-surface-row-actions button:last-child',
       );
@@ -685,7 +684,7 @@ export const noActiveProjectCatalogsScenario = Object.freeze({
         headerTop: header instanceof HTMLElement ? header.getBoundingClientRect().top : -1,
         toolbarTop: toolbar instanceof HTMLElement ? toolbar.getBoundingClientRect().top : -1,
         diagnostic: finalRow?.querySelector('.management-surface-row__diagnostic')?.textContent?.trim() ?? '',
-        openDisabled: open instanceof HTMLButtonElement && open.disabled,
+        openDisabled: finalRow?.getAttribute('data-workspace-open-disabled') === 'true',
         removalEnabled: removal instanceof HTMLButtonElement && !removal.disabled,
       };
     })()`);

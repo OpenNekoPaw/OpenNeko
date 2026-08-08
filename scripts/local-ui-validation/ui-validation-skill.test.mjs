@@ -209,10 +209,9 @@ describe('neko-ui-validation repository Skill', () => {
     ]) {
       assert.match(cutScenario, new RegExp(`captureSettledScreenshot\\([\\s\\S]*?'${label}'`, 'u'));
     }
-    assert.match(
-      cutScenario,
-      /screenshots: \[readyScreenshot, seekScreenshot, authoringScreenshot\]/u,
-    );
+    for (const screenshot of ['readyScreenshot', 'seekScreenshot', 'authoringScreenshot']) {
+      assert.match(cutScenario, new RegExp(`\\b${screenshot},`, 'u'));
+    }
     assert.match(cutScenario, /interaction\.kind === 'playback-toggle' && interaction\.trusted/u);
     assert.match(cutScenario, /Cut P0\/P1 authoring evidence is incomplete/u);
     assert.match(cutScenario, /seekCutToTimelineMidpoint/u);
@@ -220,7 +219,7 @@ describe('neko-ui-validation repository Skill', () => {
     assert.match(cutScenario, /const replacementSeconds = durationSeconds \* 0\.625/u);
     assert.match(cutScenario, /const ACTIVE_CUT_ROOT_SELECTOR =/u);
     assert.match(cutScenario, /const ACTIVE_CUT_TIMELINE_SELECTOR =/u);
-    assert.match(cutScenario, /ownerViewId: 'cut:authoring-reopened'/u);
+    assert.match(cutScenario, /viewId: 'cut:authoring-reopened'/u);
     assert.match(
       cutScenario,
       /document\.querySelector\(\$\{JSON\.stringify\(ACTIVE_CUT_ROOT_SELECTOR\)\}\)/u,

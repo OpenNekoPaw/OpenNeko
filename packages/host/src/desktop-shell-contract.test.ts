@@ -427,6 +427,24 @@ describe('Desktop Shell contract', () => {
     ).toThrowError(DesktopShellContractError);
   });
 
+  it('parses an exact Cut presentation reset diagnostic', () => {
+    const diagnostic = {
+      code: 'desktop-presentation-reset' as const,
+      severity: 'warning' as const,
+      windowId: 'window-1',
+      owner: 'cut' as const,
+      removedViewIds: ['cut:expired-draft'],
+      message: 'Expired unnamed Cut draft presentation was removed.',
+    };
+
+    expect(
+      parseDesktopShellProjection({
+        ...validProjection(),
+        stateDiagnostics: [diagnostic],
+      }).stateDiagnostics,
+    ).toEqual([diagnostic]);
+  });
+
   it('parses exact retained Shell metadata without changing sibling projections', () => {
     const canonical = validProjection();
     const parsed = parseDesktopShellProjection({

@@ -2146,8 +2146,24 @@ code {
 }
 
 .project-cut-panel__tabs .neko-workbench-editor-tabs {
-  flex: 1 1 auto;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  flex: 0 1 auto;
   overflow-x: auto;
+  padding-right: 2px;
+}
+
+.project-cut-panel__add {
+  width: 24px;
+  height: 24px;
+  margin: 7px 8px 7px 0;
+  align-self: center;
+  color: var(--neko-descriptionForeground);
+}
+
+.project-cut-panel__add:hover,
+.project-cut-panel__add:focus-visible {
+  color: var(--neko-foreground);
 }
 
 .project-cut-panel__content,
@@ -2160,15 +2176,17 @@ code {
   overflow: hidden;
 }
 
+.project-portability-dialog {
+  width: min(420px, calc(100vw - 32px));
+}
+
 .project-portability-panel {
-  width: min(360px, calc(100vw - 32px));
+  width: 100%;
   display: grid;
   gap: 12px;
-  padding: 14px;
   color: var(--neko-text-primary);
 }
 
-.project-portability-panel > header,
 .project-portability-panel li,
 .project-portability-panel__operation,
 .project-portability-panel__actions {
@@ -2177,12 +2195,10 @@ code {
   gap: 8px;
 }
 
-.project-portability-panel > header,
 .project-portability-panel li {
   justify-content: space-between;
 }
 
-.project-portability-panel > header span,
 .project-portability-panel small,
 .project-portability-panel > p,
 .project-portability-panel__operation > span {
@@ -2357,8 +2373,7 @@ code {
   background: var(--neko-desktop-surface);
 }
 
-.resource-browser-unavailable > header,
-.timeline-placeholder > header {
+.resource-browser-unavailable > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2375,8 +2390,7 @@ code {
   gap: 7px;
 }
 
-.resource-browser-unavailable > header strong,
-.timeline-placeholder > header strong {
+.resource-browser-unavailable > header strong {
   color: var(--neko-fg);
   font-size: 12px;
 }
@@ -2422,35 +2436,6 @@ code {
   margin: 0;
   font-size: 9px;
   line-height: 1.5;
-}
-
-.timeline-placeholder {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  grid-template-rows: 36px minmax(0, 1fr);
-  background: var(--neko-desktop-surface);
-}
-
-.desktop-cut-timeline-slot {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.timeline-placeholder > div {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--neko-desktop-text-subtle);
-  font-size: 9px;
-}
-
-.timeline-placeholder code {
-  margin-left: 4px;
 }
 
 .project-workspace.neko-editor-workbench-shell {

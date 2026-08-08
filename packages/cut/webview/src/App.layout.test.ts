@@ -132,6 +132,8 @@ describe('Cut OTIO Webview boundary', () => {
     expect(app).toMatch(/usePersistedResize/);
     expect(app).toMatch(/useResizable<HTMLDivElement>/);
     expect(app).toMatch(/edge: 'right'/);
+    expect(styles).toMatch(/\.cut-basic-ruler-row\s*\{[^}]*position:\s*sticky;/);
+    expect(styles).toMatch(/\.cut-basic-ruler-row\s*\{[^}]*top:\s*0;/);
     expect(styles).toMatch(/\.cut-basic-timeline-scroll[\s\S]*overflow: auto/);
     expect(styles).toMatch(/\.cut-basic-track-header[\s\S]*position: sticky/);
   });

@@ -223,6 +223,9 @@ updates, so a cache write failure cannot turn a published snapshot into a failed
   recover action; keep global Asset center selection and state independent.
 - Add a project portability command/menu entry only where project lifecycle commands are owned; do
   not place it in global navigation or the Asset center.
+- Keep the primary application sidebar free of persistent portability controls. Open the portability
+  lifecycle dialog from the exact Project context menu, keep library status on Media facet items, and
+  omit healthy zero-reference state from global navigation.
 
 ### 9. Preserve fail-visible security boundaries
 

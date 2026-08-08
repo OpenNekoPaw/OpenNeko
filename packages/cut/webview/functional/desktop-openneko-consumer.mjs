@@ -46,12 +46,127 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     click,
     drag,
     evaluate,
+    hover,
+    pressKey,
     prepared,
     readOpenNekoResourceRequests,
     screenshot,
     waitForSelector,
   }) {
     await openFixtureWorkspace(evaluate);
+    await waitForSelector('[data-workbench-region-control="cut-panel"]');
+    const emptyControl = await evaluate(`(() => {
+      const control = document.querySelector('[data-workbench-region-control="cut-panel"]');
+      return {
+        exists: control instanceof HTMLButtonElement,
+        disabled: control instanceof HTMLButtonElement ? control.disabled : true,
+        pressed: control?.getAttribute('aria-pressed'),
+      };
+    })()`);
+    if (!emptyControl.exists || emptyControl.disabled || emptyControl.pressed !== 'false') {
+      throw new Error(`Cut empty draft control is invalid: ${JSON.stringify(emptyControl)}`);
+    }
+    await click('[data-workbench-region-control="cut-panel"]');
+    await waitForSelector('.cut-basic-timeline-region [data-cut-track-id]');
+    await delay(VISUAL_SETTLE_MILLISECONDS);
+    const emptyDraft = await evaluate(`(() => {
+      const panel = document.querySelector('[data-workbench-cut-panel="true"]');
+      const views = [...document.querySelectorAll(
+        '[data-workbench-cut-panel="true"] [data-cut-view-id]'
+      )];
+      const timeline = panel?.querySelector('.cut-basic-timeline');
+      const tracks = timeline?.querySelectorAll('[data-cut-track-id]') ?? [];
+      const clips = timeline?.querySelectorAll('.cut-basic-clip') ?? [];
+      const syntheticEmpty = timeline?.querySelector(
+        '[data-cut-empty-timeline="true"], .cut-basic-timeline-empty'
+      );
+      const saveControl = timeline?.querySelector('button[title*="Cmd/Ctrl+S"]');
+      const control = document.querySelector('[data-workbench-region-control="cut-panel"]');
+      return {
+        panelVisible: Boolean(panel),
+        oneActiveRoot: views.length === 1,
+        canonicalTimeline: Boolean(timeline) && tracks.length > 0 && clips.length === 0,
+        syntheticEmptyAbsent: !syntheticEmpty,
+        saveControlVisible: saveControl instanceof HTMLButtonElement && !saveControl.disabled,
+        saveControlIcon: Boolean(saveControl?.querySelector('.codicon-save')),
+        selected: control?.getAttribute('aria-pressed') === 'true',
+      };
+    })()`);
+    const emptyDraftScreenshot = await screenshot('cut-empty-draft');
+    await resizeCutWindow(evaluate, 1280, 760);
+    await delay(VISUAL_SETTLE_MILLISECONDS);
+    const emptyDraftCompact = await evaluate(`(() => {
+      const timeline = document.querySelector('.cut-basic-timeline-region');
+      const bounds = timeline?.getBoundingClientRect();
+      return {
+        timelineVisible: Boolean(bounds && bounds.width > 0 && bounds.height > 0),
+        insideViewport: Boolean(
+          bounds && bounds.left >= 0 && bounds.right <= innerWidth &&
+          bounds.top >= 0 && bounds.bottom <= innerHeight
+        ),
+        syntheticEmptyAbsent: !document.querySelector(
+          '[data-cut-empty-timeline="true"], .cut-basic-timeline-empty'
+        ),
+      };
+    })()`);
+    const emptyDraftCompactScreenshot = await screenshot('cut-empty-draft-compact');
+    await resizeCutWindow(evaluate, 2000, 1250);
+    await delay(VISUAL_SETTLE_MILLISECONDS);
+    const rulerSticky = await evaluate(`(() => {
+      const scroll = document.querySelector('.cut-basic-timeline-scroll');
+      const ruler = scroll?.querySelector('.cut-basic-ruler-row');
+      const track = scroll?.querySelector('.cut-basic-track-row');
+      if (!(scroll instanceof HTMLElement) || !(ruler instanceof HTMLElement) ||
+          !(track instanceof HTMLElement)) {
+        throw new Error('Canonical Cut Timeline scroll geometry is unavailable.');
+      }
+      const originalTrackHeight = track.style.height;
+      track.style.height = '800px';
+      scroll.scrollTop = 120;
+      const scrollBounds = scroll.getBoundingClientRect();
+      const rulerBounds = ruler.getBoundingClientRect();
+      const evidence = {
+        scrollTop: scroll.scrollTop,
+        rulerVisible: rulerBounds.bottom > scrollBounds.top && rulerBounds.top < scrollBounds.bottom,
+        rulerPinnedToTop: Math.abs(rulerBounds.top - scrollBounds.top) <= 2,
+      };
+      scroll.scrollTop = 0;
+      track.style.height = originalTrackHeight;
+      return evidence;
+    })()`);
+    await click('[data-cut-tab-add="true"]');
+    await waitForSelector(
+      '[data-workbench-cut-panel="true"] .neko-workbench-editor-tab:nth-child(2)',
+    );
+    await delay(VISUAL_SETTLE_MILLISECONDS);
+    const emptyDraftAdd = await evaluate(`(() => {
+      const panel = document.querySelector('[data-workbench-cut-panel="true"]');
+      const tabs = [...(panel?.querySelectorAll('.neko-workbench-editor-tab') ?? [])];
+      const labels = tabs.map((tab) =>
+        tab.querySelector('.neko-workbench-editor-tab__label')?.textContent?.trim() ?? ''
+      );
+      const active = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true');
+      return {
+        addControlPresent: panel?.querySelector('[data-cut-tab-add="true"]') instanceof HTMLButtonElement,
+        tabCount: tabs.length,
+        labels,
+        labelsUnique: new Set(labels).size === labels.length,
+        activeLabel: active?.querySelector('.neko-workbench-editor-tab__label')?.textContent?.trim(),
+        oneActiveRoot: panel?.querySelectorAll('[data-cut-view-id]').length === 1,
+        defaultVideoTrack: Boolean(
+          panel?.querySelector(
+            '[data-cut-track-id] .cut-basic-track-type-icon[title="Video"]'
+          )
+        ),
+        syntheticEmptyAbsent: !panel?.querySelector(
+          '[data-cut-empty-timeline="true"], .cut-basic-timeline-empty'
+        ),
+      };
+    })()`);
+    const emptyDraftAddedScreenshot = await screenshot('cut-empty-draft-added');
+    checkpoint('cut-empty-draft', emptyDraft);
+    checkpoint('cut-empty-draft-add', emptyDraftAdd);
+    checkpoint('cut-timeline-ruler-sticky', rulerSticky);
     await replaceWorkbench(
       evaluate,
       `(projection, current, tab, project) => ({
@@ -81,6 +196,13 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
     );
     await waitForCutReady(evaluate);
     checkpoint('cut-ready');
+    const saveControl = await qualifyCutSaveControl({
+      checkpoint,
+      click,
+      evaluate,
+      pressKey,
+      prepared,
+    });
     await evaluate(`(() => {
       window.__openNekoCutClickEvidence = [];
       const root = document.querySelector(${JSON.stringify(ACTIVE_CUT_ROOT_SELECTOR)});
@@ -155,6 +277,7 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       checkpoint,
       click,
       evaluate,
+      hover,
       screenshot,
     });
     await waitForCutAuthoringVisible(evaluate);
@@ -196,6 +319,11 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       authoring: { ...authoring, exportBytes: exported.size },
       tabPanel,
       resourceDrop,
+      saveControl,
+      emptyDraft,
+      emptyDraftCompact,
+      emptyDraftAdd,
+      rulerSticky,
       compactLayout,
       visualMidpoints: {
         ready: readyMidpointState.evidence,
@@ -203,6 +331,9 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
         authoring: authoringMidpointState.evidence,
       },
       screenshots: [
+        emptyDraftScreenshot,
+        emptyDraftCompactScreenshot,
+        emptyDraftAddedScreenshot,
         readyScreenshot,
         seekScreenshot,
         ...tabPanel.screenshots,
@@ -247,8 +378,38 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
       throw new Error('Cut P0/P1 authoring evidence is incomplete.');
     }
     if (
+      !evidence.emptyDraft?.panelVisible ||
+      !evidence.emptyDraft?.oneActiveRoot ||
+      !evidence.emptyDraft?.canonicalTimeline ||
+      !evidence.emptyDraft?.syntheticEmptyAbsent ||
+      !evidence.emptyDraft?.saveControlVisible ||
+      !evidence.emptyDraft?.saveControlIcon ||
+      !evidence.emptyDraft?.selected ||
+      !evidence.emptyDraftCompact?.timelineVisible ||
+      !evidence.emptyDraftCompact?.insideViewport ||
+      !evidence.emptyDraftCompact?.syntheticEmptyAbsent ||
+      evidence.emptyDraftAdd?.tabCount !== 2 ||
+      !evidence.emptyDraftAdd?.addControlPresent ||
+      !evidence.emptyDraftAdd?.labelsUnique ||
+      evidence.emptyDraftAdd?.activeLabel !== evidence.emptyDraftAdd?.labels?.[1] ||
+      !evidence.emptyDraftAdd?.oneActiveRoot ||
+      !evidence.emptyDraftAdd?.defaultVideoTrack ||
+      !evidence.emptyDraftAdd?.syntheticEmptyAbsent ||
+      evidence.rulerSticky?.scrollTop <= 28 ||
+      !evidence.rulerSticky?.rulerVisible ||
+      !evidence.rulerSticky?.rulerPinnedToTop
+    ) {
+      throw new Error('Cut empty draft evidence is incomplete.');
+    }
+    if (
       !evidence.tabPanel?.hiddenReclaimedMain ||
       !evidence.tabPanel?.tabsKeepMainStable ||
+      !evidence.tabPanel?.controlStateTracksPanel ||
+      !evidence.tabPanel?.controlOrderCorrect ||
+      !evidence.saveControl?.trustedClick ||
+      !evidence.saveControl?.persisted ||
+      !evidence.saveControl?.trustedShortcut ||
+      !evidence.saveControl?.shortcutPersisted ||
       !evidence.resourceDrop?.clipAdded ||
       !evidence.compactLayout?.previewAboveTimeline
     ) {
@@ -257,7 +418,68 @@ export const cutOpenNekoConsumerScenario = Object.freeze({
   },
 });
 
-async function qualifyCutTabPanelPresentation({ checkpoint, click, evaluate, screenshot }) {
+async function qualifyCutSaveControl({ checkpoint, click, evaluate, pressKey, prepared }) {
+  const selector = `${ACTIVE_CUT_ROOT_SELECTOR} button[title*="Cmd/Ctrl+S"]`;
+  const control = await evaluate(`(() => {
+    const button = document.querySelector(${JSON.stringify(selector)});
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Cut save control is unavailable.');
+    }
+    window.__openNekoCutSaveClickEvidence = [];
+    window.__openNekoCutSaveKeyEvidence = [];
+    button.addEventListener('click', (event) => {
+      window.__openNekoCutSaveClickEvidence.push({ trusted: event.isTrusted });
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.code === 'KeyS' && (event.metaKey || event.ctrlKey)) {
+        window.__openNekoCutSaveKeyEvidence.push({
+          trusted: event.isTrusted,
+          primary: event.metaKey ? 'meta' : 'control',
+        });
+      }
+    }, { capture: true });
+    const bounds = button.getBoundingClientRect();
+    return {
+      label: button.getAttribute('aria-label'),
+      enabled: !button.disabled,
+      hasIcon: Boolean(button.querySelector('.codicon-save')),
+      width: bounds.width,
+      height: bounds.height,
+    };
+  })()`);
+  const documentPath = join(prepared.workspacePath, prepared.documentId);
+  const before = await stat(documentPath);
+  await click(selector);
+  const deadline = Date.now() + 10_000;
+  let after = before;
+  while (Date.now() < deadline) {
+    after = await stat(documentPath);
+    if (after.mtimeMs > before.mtimeMs) break;
+    await delay(100);
+  }
+  const interactions = await evaluate(`window.__openNekoCutSaveClickEvidence ?? []`);
+  const beforeShortcut = after;
+  await pressKey('s', ['Meta']);
+  const shortcutDeadline = Date.now() + 10_000;
+  let afterShortcut = beforeShortcut;
+  while (Date.now() < shortcutDeadline) {
+    afterShortcut = await stat(documentPath);
+    if (afterShortcut.mtimeMs > beforeShortcut.mtimeMs) break;
+    await delay(100);
+  }
+  const keyInteractions = await evaluate(`window.__openNekoCutSaveKeyEvidence ?? []`);
+  const evidence = {
+    ...control,
+    trustedClick: interactions.some((entry) => entry.trusted === true),
+    persisted: after.mtimeMs > before.mtimeMs,
+    trustedShortcut: keyInteractions.some((entry) => entry.trusted === true),
+    shortcutPersisted: afterShortcut.mtimeMs > beforeShortcut.mtimeMs,
+  };
+  checkpoint('cut-save-control', evidence);
+  return evidence;
+}
+
+async function qualifyCutTabPanelPresentation({ checkpoint, click, evaluate, hover, screenshot }) {
   await evaluate(`(() => {
     const tabs = [...document.querySelectorAll(
       '[data-workbench-cut-panel="true"] .neko-workbench-editor-tab',
@@ -275,13 +497,16 @@ async function qualifyCutTabPanelPresentation({ checkpoint, click, evaluate, scr
   await waitForActiveCutView(evaluate, 'cut:authoring-reopened');
   await waitForCutPanelControlEnabled(evaluate);
   const visible = await inspectCutLayout(evaluate);
+  const visiblePresentation = await waitForCutPanelPresentation(evaluate, true);
   await click('[data-workbench-region-control="cut-panel"]');
   const hidden = await waitForCutPanelPresentation(evaluate, false);
+  await hover('[data-workbench-slot="main"]');
   const hiddenScreenshot = await captureSettledScreenshot(screenshot, 'cut-panel-hidden');
 
   await waitForCutPanelControlEnabled(evaluate);
   await click('[data-workbench-region-control="cut-panel"]');
   await waitForActiveCutView(evaluate, 'cut:authoring-reopened');
+  const restoredPresentation = await waitForCutPanelPresentation(evaluate, true);
   await evaluate(`(() => {
     const tabs = [...document.querySelectorAll(
       '[data-workbench-cut-panel="true"] .neko-workbench-editor-tab',
@@ -320,6 +545,14 @@ async function qualifyCutTabPanelPresentation({ checkpoint, click, evaluate, scr
       presentation.presentation === 'docked' &&
       presentation.activeViewId === 'cut:authoring-reopened' &&
       presentation.viewIds.includes('cut:functional'),
+    controlStateTracksPanel:
+      visiblePresentation.controlPressed &&
+      !hidden.controlPressed &&
+      !hidden.controlDisabled &&
+      restoredPresentation.controlPressed,
+    controlOrderCorrect:
+      JSON.stringify(restoredPresentation.controlOrder) ===
+      JSON.stringify(['agent', 'main', 'cut-panel', 'management']),
     visibleLayout: visible,
     hiddenLayout: hidden,
     screenshots: [hiddenScreenshot, switchedScreenshot],
@@ -537,6 +770,14 @@ async function inspectWorkbenchCutPanelLayout(evaluate) {
       cutRootCount: panel?.querySelectorAll('[data-owner-root="cut"]').length ?? 0,
       activeMainViewId: document.querySelector('.project-main-view-stack__item[data-main-view-id]')
         ?.getAttribute('data-main-view-id'),
+      controlPressed:
+        document.querySelector('[data-workbench-region-control="cut-panel"]')
+          ?.getAttribute('aria-pressed') === 'true',
+      controlDisabled:
+        document.querySelector('[data-workbench-region-control="cut-panel"]')?.disabled === true,
+      controlOrder: [...document.querySelectorAll(
+        '.workspace-region-controls [data-workbench-region-control]',
+      )].map((element) => element.getAttribute('data-workbench-region-control')),
     };
   })()`);
 }

@@ -7,7 +7,11 @@ import {
   createInMemoryDesktopShellStateRepository,
   type InMemoryDesktopShellStateRepository,
 } from './testing/in-memory-desktop-shell-state-repository';
-import { closeMainView, DESKTOP_PRIMARY_MAIN_GROUP_ID } from './desktop-workbench-contract';
+import {
+  closeMainView,
+  DESKTOP_PRIMARY_MAIN_GROUP_ID,
+  openOrFocusCutView,
+} from './desktop-workbench-contract';
 import {
   createDesktopApplicationSidebarMutationRequest,
   createDesktopSceneTransitionRequest,
@@ -2475,6 +2479,67 @@ describe('DesktopShellService', () => {
         ],
       },
     });
+  });
+
+  it('drops expired Cut draft Views on restart while preserving real OTIO siblings', async () => {
+    const file = createMemoryFile();
+    const first = createFixture(file);
+    const windowId = await first.service.claimWindowId();
+    first.service.setRendererSessionId(windowId, 'renderer-session-1');
+    const initial = await first.service.getProjection(windowId);
+    const opened = await openContent(first, windowId, '/workspace/demo', initial.rendererSessionId);
+    const tab = opened.projection.window.tabs[0]!;
+    const project = opened.projection.catalog.projects[0]!;
+    const realView = {
+      viewId: 'cut:real',
+      viewInstanceId: tab.viewInstanceId,
+      projectId: project.projectId,
+      workspaceId: project.workspaceId,
+      kind: 'cut' as const,
+      ownerId: createCutHostSessionId('cut:real', tab.viewInstanceId),
+      displayLabel: 'story.otio',
+      documentId: 'edits/story.otio',
+    };
+    const draftView = {
+      ...realView,
+      viewId: 'cut:expired-draft',
+      ownerId: createCutHostSessionId('cut:expired-draft', tab.viewInstanceId),
+      displayLabel: 'Untitled Cut',
+      documentId: 'cut-draft:expired',
+    };
+    const withReal = openOrFocusCutView(activeWorkbench(opened.projection.window), realView);
+    await first.service.updateWorkbench(
+      windowId,
+      opened.projection.rendererSessionId,
+      activeInstance(opened.projection.window).workbenchInstanceId,
+      openOrFocusCutView(withReal, draftView),
+    );
+    first.service.releaseWindow(windowId);
+    await first.service.dispose();
+
+    const restored = createFixture(file, 'restore');
+    const restoredWindow = await restored.service.claimWindowId();
+    restored.service.setRendererSessionId(restoredWindow, 'renderer-session-2');
+    const projection = await restored.service.getProjection(restoredWindow);
+
+    expect(activeWorkbench(projection.window).cutPanel).toMatchObject({
+      activeViewId: realView.viewId,
+      views: [realView],
+    });
+    expect(projection.stateDiagnostics).toContainEqual({
+      code: 'desktop-presentation-reset',
+      severity: 'warning',
+      windowId,
+      owner: 'cut',
+      removedViewIds: [draftView.viewId],
+      message: expect.stringContaining('Expired unnamed Cut draft presentation was removed'),
+    });
+    const stored = await file.read();
+    expect(
+      stored.windows.flatMap((candidate) =>
+        candidate.tabs.flatMap((storedTab) => storedTab.presentation?.cutPanel?.views ?? []),
+      ),
+    ).not.toContainEqual(expect.objectContaining({ documentId: draftView.documentId }));
   });
 
   it('persists only the bounded presentation identity for a pinned Preview View', async () => {

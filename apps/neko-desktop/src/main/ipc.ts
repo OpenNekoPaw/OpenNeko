@@ -83,6 +83,12 @@ export function registerDesktopIpc(
     (event: IpcMainInvokeEvent, payload: unknown) =>
       appHost.executeCutRequest(requireSender(event), payload),
   );
+  ipcMain.handle(DESKTOP_CUT_CHANNELS.draftCreate, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.createCutDraft(requireSender(event), payload),
+  );
+  ipcMain.handle(DESKTOP_CUT_CHANNELS.viewClose, (event: IpcMainInvokeEvent, payload: unknown) =>
+    appHost.closeCutView(requireSender(event), payload),
+  );
   ipcMain.handle(
     DESKTOP_RESOURCE_BROWSER_CHANNELS.snapshotGet,
     (event: IpcMainInvokeEvent, payload: unknown) =>
@@ -339,6 +345,8 @@ export function registerDesktopIpc(
       DESKTOP_CANVAS_CHANNELS.mediaRequestExecute,
       DESKTOP_CUT_CHANNELS.snapshotGet,
       DESKTOP_CUT_CHANNELS.requestExecute,
+      DESKTOP_CUT_CHANNELS.draftCreate,
+      DESKTOP_CUT_CHANNELS.viewClose,
       DESKTOP_BRIDGE_CHANNELS.bootstrapGet,
       DESKTOP_SHELL_CHANNELS.snapshotGet,
       ASSET_CENTER_HOST_CHANNEL,

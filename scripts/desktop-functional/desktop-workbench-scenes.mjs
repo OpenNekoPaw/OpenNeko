@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, rename, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, rename, symlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 
@@ -111,6 +111,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
     drag,
     evaluate,
     measureRendererResources,
+    pressKey,
     restartApplication,
     screenshot,
     type,
@@ -283,6 +284,13 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         throw new Error('Workspace did not compose Agent, creative Main and right Resources.');
       }
       assertWorkspaceTopControls(workspace);
+      const workspaceMention = await exerciseWorkspaceDraftMention({
+        evaluate,
+        pressKey,
+        screenshot,
+        type,
+        screenshotLabel: 'workspace-draft-mention-large',
+      });
       const workspaceAgentActivation = await inspectActivatedWorkspaceAgent(evaluate);
       const workspaceResourceChrome = await inspectWorkspaceResourceChrome(evaluate);
       const workspaceScreenshot = await screenshot('workspace-large');
@@ -303,14 +311,15 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         workspaceResourceChrome,
         workspaceComposer,
         workspaceDockResize,
+        workspaceMentionSelection: workspaceMention.selection,
       });
 
       const workspacePreview = await openWorkspacePreview(evaluate);
       const workspacePreviewScreenshot = await screenshot('workspace-preview-content-only-large');
       checkpoint('workspace-preview-content-only-large', workspacePreview);
 
-      const displayModes = await exerciseWorkspaceDisplayModes(evaluate, click);
-      checkpoint('workspace-display-modes', displayModes);
+      const displayModes = await exerciseWorkspaceDisplayModes(evaluate, click, screenshot);
+      checkpoint('workspace-display-modes', displayModes.states);
 
       const firstWorkspaceResourcesBeforeSwitch = await inspectRendererResidency(
         evaluate,
@@ -388,12 +397,23 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       if (
         projectSelection.projectDetailInSecondary ||
         projectSelection.mainPanelIds.includes('project-detail') ||
-        !projectSelection.projectOpenActionVisible
+        projectSelection.projectRowActionCount !== 2 ||
+        !projectSelection.projectDoubleClickTargetVisible
       ) {
-        throw new Error('Project selection reserved a sparse Detail shell or lost explicit open.');
+        throw new Error(
+          'Project selection reserved a sparse Detail shell or lost double-click open.',
+        );
       }
       const projectSelectionScreenshot = await screenshot('project-management-selected-large');
       checkpoint('project-management-selected-large', projectSelection);
+
+      await doubleClickProjectCatalogItem(evaluate, workspaceActivation.projectId);
+      await waitForSelector('.desktop-scene-workbench--workspace');
+      const catalogDoubleClickRestore = await inspectExactWorkspace(
+        evaluate,
+        workspaceActivation.workspaceId,
+      );
+      checkpoint('project-management-double-click-exact-restore', catalogDoubleClickRestore);
 
       await waitForNavigationButton(evaluate, 1);
       await clickApplicationNavigation(evaluate, click, 1);
@@ -409,10 +429,41 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
       await restartApplication();
       await waitForDesktopBridge(60_000);
       await waitForSelector('.desktop-scene-workbench--workspace');
+      await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-shell`);
       const reloadedWorkspace = await inspectWorkbench(evaluate, 'workspace', 'workspace');
       assertSingleWorkbench(reloadedWorkspace);
       const reloadRestore = await inspectExactWorkspace(evaluate, workspaceActivation.workspaceId);
-      checkpoint('workspace-reload-restore', { ...reloadedWorkspace, ...reloadRestore });
+      const reloadedWorkspaceAgent = await inspectActivatedWorkspaceAgent(evaluate);
+      const reloadAgentFailure = await evaluate(`(() => {
+        const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+        return {
+          failureVisible: Boolean(activeSurface?.querySelector('.desktop-agent-failure')),
+          alerts: [...(activeSurface?.querySelectorAll('[role="alert"]') ?? [])]
+            .map((element) => element.textContent?.trim()).filter(Boolean),
+          rawGrantErrorVisible:
+            activeSurface?.textContent?.includes('DesktopWorkspaceGrantAuthorityError') === true ||
+            activeSurface?.textContent?.includes('workspace-grant:') === true,
+        };
+      })()`);
+      if (
+        reloadAgentFailure.failureVisible ||
+        reloadAgentFailure.alerts.length > 0 ||
+        reloadAgentFailure.rawGrantErrorVisible
+      ) {
+        throw new Error(
+          `Workspace Agent failed to restore after application restart: ${JSON.stringify(reloadAgentFailure)}`,
+        );
+      }
+      const reloadedWorkspaceScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-agent-reloaded-after-application-restart',
+      );
+      checkpoint('workspace-reload-restore', {
+        ...reloadedWorkspace,
+        ...reloadRestore,
+        agent: reloadedWorkspaceAgent,
+        agentFailure: reloadAgentFailure,
+      });
 
       await waitForNavigationButton(evaluate, 1);
       await clickApplicationNavigation(evaluate, click, 1);
@@ -564,10 +615,13 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
           settingsScreenshot,
           projectSelectionScreenshot,
           workspaceScreenshot,
+          workspaceMention.screenshot,
           workspacePreviewScreenshot,
+          ...displayModes.screenshots,
           smallAssetsScreenshot,
           secondaryWorkspaceScreenshot,
           firstWorkspaceRestoreScreenshot,
+          reloadedWorkspaceScreenshot,
           assistantRestoreScreenshot,
         ],
       };
@@ -710,7 +764,7 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
 
       let workspaceSession;
       try {
-        workspaceSession = await waitForWorkspaceSkillSession(evaluate, {
+        workspaceSession = await waitForWorkspaceSession(evaluate, {
           workspaceId: workspaceActivation.workspaceId,
           workspaceGrantId: boundDraft.workspaceGrantId,
           submittedInput,
@@ -775,6 +829,133 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
           skillMenu.screenshot,
           completedScreenshot,
         ],
+      };
+    } finally {
+      await providerServer.close();
+    }
+  },
+});
+
+export const desktopAgentLinkedMediaMentionScenario = Object.freeze({
+  id: 'desktop-agent-linked-media-mention',
+  owner: '@neko/agent-runtime',
+  async prepare(context) {
+    const prepared = await desktopWorkbenchScenesScenario.prepare(context);
+    const linkedMediaTarget = join(context.fixtureHome, 'linked-media-reference');
+    const linkedMediaDirectory = join(prepared.workspacePath, 'neko', 'assets');
+    await Promise.all([
+      mkdir(linkedMediaTarget, { recursive: true }),
+      mkdir(linkedMediaDirectory, { recursive: true }),
+    ]);
+    await copyFile(
+      join(context.repositoryRoot, 'docs/assets/openneko-desktop.png'),
+      join(linkedMediaTarget, 'library-image.png'),
+    );
+    await symlink(
+      linkedMediaTarget,
+      join(linkedMediaDirectory, 'Reference'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+    return prepared;
+  },
+  async run({ checkpoint, evaluate, prepared, pressKey, screenshot, type, waitForSelector }) {
+    const providerServer = await startFunctionalProviderServer(prepared.providerPort, 750);
+    try {
+      await resizeWindow(evaluate, 1440, 960);
+      await waitForSelector(
+        `.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`,
+      );
+      const entryDraft = await inspectEntryDraft(evaluate);
+      const entryRoot = await markEntryAgentRoot(evaluate, entryDraft.draftId);
+      await assertFixtureWorkspaceCancellation(evaluate);
+      const workspaceActivation = await chooseFixtureWorkspace(evaluate);
+      await waitForSelector('.desktop-scene-workbench--workspace');
+      const workspaceAgent = await inspectActivatedWorkspaceAgent(evaluate);
+
+      const mention = await exerciseWorkspaceDraftMention({
+        evaluate,
+        pressKey,
+        referenceLabel: 'library-image.png',
+        referenceQuery: 'library-image',
+        expectedPortablePath: 'neko/assets/Reference/library-image.png',
+        expectedSourceLabels: ['Media', '媒体'],
+        forbiddenText: 'linked-media-reference',
+        screenshot,
+        type,
+        screenshotLabel: 'workspace-linked-media-mention-selected',
+      });
+      checkpoint('workspace-linked-media-mention-selected', {
+        entryDraft,
+        entryRoot,
+        workspaceActivation,
+        workspaceAgent,
+        mention: mention.selection,
+      });
+
+      const submittedInput = '请描述已选择的媒体库图片。';
+      await type(ACTIVE_AGENT_TEXTAREA_SELECTOR, submittedInput);
+      await waitForCondition(
+        evaluate,
+        `(() => {
+          const send = document.querySelector('${ACTIVE_AGENT_SEND_SELECTOR}');
+          return send instanceof HTMLButtonElement && !send.disabled;
+        })()`,
+        'Workspace linked Media Library reference did not enable first submit.',
+      );
+      await evaluate(`(() => {
+        const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+        const exposed = [
+          activeSurface?.textContent ?? '',
+          ...[...(activeSurface?.querySelectorAll('[title]') ?? [])]
+            .map((element) => element.getAttribute('title') ?? ''),
+        ].some((value) => value.includes('linked-media-reference'));
+        if (exposed) {
+          throw new Error('Workspace mention UI exposed the linked Media Library target path.');
+        }
+        return true;
+      })()`);
+      await evaluate(`(() => {
+        const send = document.querySelector('${ACTIVE_AGENT_SEND_SELECTOR}');
+        if (!(send instanceof HTMLButtonElement)) {
+          throw new Error('Workspace linked Media Library send control is unavailable.');
+        }
+        send.click();
+        return true;
+      })()`);
+
+      const workspaceSession = await waitForWorkspaceSession(evaluate, {
+        workspaceId: workspaceActivation.workspaceId,
+        workspaceGrantId: workspaceActivation.workspaceGrantId,
+        submittedInput,
+        expectedConversationTitle: submittedInput,
+      });
+      const providerEvidence = providerServer.snapshot();
+      assertFunctionalProviderEvidence(providerEvidence, 1);
+      if (
+        providerEvidence.requests.length !== 1 ||
+        providerEvidence.requests[0]?.nativeImageCount !== 1
+      ) {
+        throw new Error(
+          `Linked Media Library first submit did not produce one exact native image request: ${JSON.stringify(providerEvidence)}`,
+        );
+      }
+      const completedScreenshot = await captureSettledScreenshot(
+        screenshot,
+        'workspace-linked-media-session-complete',
+      );
+      checkpoint('workspace-linked-media-session-complete', {
+        workspaceSession,
+        provider: providerEvidence,
+      });
+      return {
+        entryDraft,
+        entryRoot,
+        workspaceActivation,
+        workspaceAgent,
+        mentionSelection: mention.selection,
+        workspaceSession,
+        provider: providerEvidence,
+        screenshots: [mention.screenshot, completedScreenshot],
       };
     } finally {
       await providerServer.close();
@@ -924,7 +1105,7 @@ export const desktopWorkspaceResizeScenario = Object.freeze({
   id: 'desktop-workspace-resize',
   owner: '@neko/app-desktop',
   prepare: desktopWorkbenchScenesScenario.prepare,
-  async run({ checkpoint, drag, evaluate, screenshot, waitForSelector }) {
+  async run({ checkpoint, click, drag, evaluate, pressKey, screenshot, type, waitForSelector }) {
     await resizeWindow(evaluate, 1440, 960);
     await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
     await assertFixtureWorkspaceCancellation(evaluate);
@@ -933,6 +1114,14 @@ export const desktopWorkspaceResizeScenario = Object.freeze({
     await waitForSelector('[data-dock-owner="resources"]');
     const workspace = await inspectWorkbench(evaluate, 'workspace', 'workspace');
     assertSingleWorkbench(workspace);
+    assertWorkspaceTopControls(workspace);
+    const workspaceMention = await exerciseWorkspaceDraftMention({
+      evaluate,
+      pressKey,
+      screenshot,
+      type,
+      screenshotLabel: 'workspace-resize-draft-mention',
+    });
     const workspaceDockResize = await exerciseWorkspaceDockResize(
       evaluate,
       drag,
@@ -943,14 +1132,27 @@ export const desktopWorkspaceResizeScenario = Object.freeze({
     const panelHeaderAlignment = await inspectWorkspacePanelHeaderAlignment(evaluate);
     assertWorkspacePanelHeaderAlignment(panelHeaderAlignment);
     const workspaceScreenshot = await screenshot('workspace-resized-shell-chrome');
+    const displayModes = await exerciseWorkspaceDisplayModes(evaluate, click, screenshot);
+    const cutTabs = await exerciseCutTabAdd(evaluate, click, screenshot);
     const evidence = {
       workspaceActivation,
       workspaceDockResize,
       shellChrome,
       panelHeaderAlignment,
+      displayModes: displayModes.states,
+      cutTabs: cutTabs.states,
+      workspaceMentionSelection: workspaceMention.selection,
     };
     checkpoint('workspace-resized-shell-chrome', evidence);
-    return { ...evidence, screenshots: [workspaceScreenshot] };
+    return {
+      ...evidence,
+      screenshots: [
+        workspaceMention.screenshot,
+        workspaceScreenshot,
+        ...displayModes.screenshots,
+        ...cutTabs.screenshots,
+      ],
+    };
   },
 });
 
@@ -1506,11 +1708,65 @@ async function exerciseProjectConversationGroups({
     screenshot,
     'project-sidebar-project-context-menu',
   );
-  await pressKey('Escape');
+  await evaluate(`(() => {
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find((candidate) =>
+      /Project portability|项目可移植性/u.test(candidate.textContent ?? ''),
+    );
+    if (!(item instanceof HTMLElement)) {
+      throw new Error('Project portability context command is unavailable.');
+    }
+    item.click();
+    return true;
+  })()`);
   await waitForCondition(
     evaluate,
-    `document.querySelector('[role="menu"]') === null`,
-    'Project context menu did not close with Escape.',
+    `(() => {
+      const panel = document.querySelector('.project-portability-panel');
+      return panel instanceof HTMLElement &&
+        panel.dataset.projectPortabilityState !== 'loading';
+    })()`,
+    'Project portability dialog did not resolve its readiness state.',
+  );
+  const portabilityDialog = await evaluate(`(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    const panel = dialog?.querySelector('.project-portability-panel');
+    const projectName = document.querySelector(${JSON.stringify(
+      `${retentionGroupSelector} .primary-conversation-group__project-link`,
+    )})?.textContent?.trim() ?? '';
+    const footerActions = document.querySelectorAll(
+      '.home-navigation-footer__actions button',
+    );
+    const rectangle = dialog?.getBoundingClientRect();
+    return {
+      dialogVisible: dialog instanceof HTMLElement,
+      footerActionCount: footerActions.length,
+      projectNameVisible: projectName.length > 0 && (dialog?.textContent?.includes(projectName) ?? false),
+      state: panel?.getAttribute('data-project-portability-state') ?? '',
+      withinViewport:
+        rectangle !== undefined && rectangle.left >= 0 && rectangle.top >= 0 &&
+        rectangle.right <= window.innerWidth && rectangle.bottom <= window.innerHeight,
+    };
+  })()`);
+  if (
+    !portabilityDialog.dialogVisible ||
+    portabilityDialog.footerActionCount !== 1 ||
+    !portabilityDialog.projectNameVisible ||
+    portabilityDialog.state.length === 0 ||
+    !portabilityDialog.withinViewport
+  ) {
+    throw new Error(
+      `Project portability dialog presentation is incomplete: ${JSON.stringify(portabilityDialog)}`,
+    );
+  }
+  const portabilityDialogScreenshot = await captureSettledScreenshot(
+    screenshot,
+    'project-portability-dialog',
+  );
+  await click('[role="dialog"] button[aria-label]');
+  await waitForCondition(
+    evaluate,
+    `document.querySelector('[role="dialog"]') === null`,
+    'Project portability dialog did not close through its visible close command.',
   );
 
   const conversationContextMenu = await openSidebarContextMenu({
@@ -1895,8 +2151,8 @@ async function exerciseProjectConversationGroups({
       const actions = retainedProject?.querySelectorAll(
         '.management-surface-row-actions button',
       );
-      const cleanupButton = actions?.[1];
-      const removalButton = actions?.[2];
+      const cleanupButton = actions?.[0];
+      const removalButton = actions?.[1];
       return rows.length === 1 &&
         cleanupButton instanceof HTMLButtonElement && cleanupButton.disabled &&
         removalButton instanceof HTMLButtonElement && !removalButton.disabled;
@@ -1917,6 +2173,7 @@ async function exerciseProjectConversationGroups({
     keyboardActions,
     projectHoverActions,
     projectContextMenu,
+    portabilityDialog,
     conversationContextMenu,
     unavailableWorkspaceAction,
     unavailableWorkspaceContextMenu,
@@ -1927,6 +2184,7 @@ async function exerciseProjectConversationGroups({
       projectHoverScreenshot,
       conversationHoverScreenshot,
       projectContextMenuScreenshot,
+      portabilityDialogScreenshot,
       conversationContextMenuScreenshot,
       compactScreenshot,
       darkCompactScreenshot,
@@ -2022,13 +2280,14 @@ function assertProjectContextMenu(menu) {
   const texts = menu?.items.map((item) => item.text) ?? [];
   const has = (...labels) => labels.some((label) => texts.some((text) => text.includes(label)));
   if (
-    menu?.items.length !== 5 ||
+    menu?.items.length !== 6 ||
     menu.separatorCount !== 1 ||
     !menu.withinViewport ||
     menu.background === 'rgba(0, 0, 0, 0)' ||
     !has('Open project', '打开项目') ||
     !has('New conversation', '新建会话') ||
     !has('Project management', '项目管理') ||
+    !has('Project portability', '项目可移植性') ||
     !has('Delete Workspace conversations', '删除') ||
     !has('Remove', '移除') ||
     menu.items.filter((item) => item.danger).length !== 2
@@ -2155,6 +2414,25 @@ async function openProjectWorkspace(evaluate, projectId) {
   );
 }
 
+async function doubleClickProjectCatalogItem(evaluate, projectId) {
+  await evaluate(`(() => {
+    const row = [...document.querySelectorAll('.project-management-catalog .management-surface-row')]
+      .find((candidate) => candidate instanceof HTMLElement &&
+        candidate.dataset.projectId === ${JSON.stringify(projectId)});
+    const target = row?.querySelector('.management-surface-row__select');
+    if (!(target instanceof HTMLButtonElement) || target.disabled) {
+      throw new Error('Exact Project catalog item is unavailable for double-click open.');
+    }
+    target.dispatchEvent(new MouseEvent('dblclick', {
+      bubbles: true,
+      button: 0,
+      detail: 2,
+      view: window,
+    }));
+    return true;
+  })()`);
+}
+
 async function inspectRestoredWorkspacePreview(evaluate, expectedViewId) {
   await waitForCondition(
     evaluate,
@@ -2181,6 +2459,10 @@ async function exerciseWorkspaceDraftMention({
   pressKey,
   referenceLabel = 'agent-reference.txt',
   referenceQuery = 'agent-reference',
+  expectedPortablePath,
+  expectedReferenceKind,
+  expectedSourceLabels = [],
+  forbiddenText,
   screenshot,
   type,
   screenshotLabel,
@@ -2194,20 +2476,51 @@ async function exerciseWorkspaceDraftMention({
     'Workspace Draft @ search did not return its exact authorized Workspace file.',
   );
   const selection = await evaluate(`(() => {
+    const menu = document.querySelector(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu',
+    );
     const item = [...document.querySelectorAll(
       '${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-mention-menu [role="menuitem"]',
     )].find((candidate) => candidate.textContent?.includes(${JSON.stringify(referenceLabel)}));
-    if (!(item instanceof HTMLButtonElement)) {
+    if (!(menu instanceof HTMLElement) || !(item instanceof HTMLButtonElement)) {
       throw new Error('Workspace Draft mention result is not interactive.');
     }
+    const rowTitle = item.getAttribute('title') ?? '';
+    const badgeLabels = [...item.querySelectorAll('.agent-composer-popover-badge')]
+      .map((badge) => badge.textContent?.trim() ?? '')
+      .filter(Boolean);
+    const expectedSourceLabels = ${JSON.stringify(expectedSourceLabels)};
+    if (
+      expectedSourceLabels.length > 0 &&
+      !badgeLabels.some((label) => expectedSourceLabels.includes(label))
+    ) {
+      throw new Error(
+        'Workspace Draft mention did not expose the expected source provenance: ' +
+          JSON.stringify({ badgeLabels }),
+      );
+    }
+    const expectedPortablePath = ${JSON.stringify(expectedPortablePath)};
+    if (expectedPortablePath && rowTitle !== expectedPortablePath) {
+      throw new Error(
+        'Workspace Draft mention did not retain its portable locator: ' +
+          JSON.stringify({ rowTitle }),
+      );
+    }
+    const forbiddenText = ${JSON.stringify(forbiddenText)};
+    if (
+      forbiddenText &&
+      [menu.textContent ?? '', rowTitle].some((value) => value.includes(forbiddenText))
+    ) {
+      throw new Error('Workspace Draft mention exposed forbidden Host path text.');
+    }
     item.click();
-    return { label: item.textContent?.trim() ?? '' };
+    return { label: item.textContent?.trim() ?? '', rowTitle, badgeLabels };
   })()`);
   await waitForCondition(
     evaluate,
-    `document.querySelector(
-      '${ACTIVE_AGENT_SURFACE_SELECTOR} [data-agent-context-type="file"]',
-    )?.textContent?.includes(${JSON.stringify(referenceLabel)}) === true`,
+    `(() => [...document.querySelectorAll(
+      '${ACTIVE_AGENT_SURFACE_SELECTOR} [data-agent-reference-token="true"]',
+    )].some((token) => token.textContent?.includes(${JSON.stringify(referenceLabel)})))()`,
     'Workspace Draft mention selection did not create an exact context reference.',
   );
   const referenceProjection = await evaluate(`(() => {
@@ -2226,10 +2539,28 @@ async function exerciseWorkspaceDraftMention({
           }),
       );
     }
+    const tokenKind = matchingTokens[0]?.getAttribute('data-reference-kind') ?? '';
+    const expectedReferenceKind = ${JSON.stringify(expectedReferenceKind)};
+    if (expectedReferenceKind && tokenKind !== expectedReferenceKind) {
+      throw new Error(
+        'Workspace Draft mention token has the wrong reference kind: ' +
+          JSON.stringify({ tokenKind }),
+      );
+    }
+    const tokenTitle = matchingTokens[0]?.getAttribute('title') ?? '';
+    const expectedPortablePath = ${JSON.stringify(expectedPortablePath)};
+    if (expectedPortablePath && tokenTitle !== expectedPortablePath) {
+      throw new Error(
+        'Workspace Draft mention token lost its portable locator: ' +
+          JSON.stringify({ tokenTitle }),
+      );
+    }
     return {
       tokenCount: tokens.length,
       matchingTokenCount: matchingTokens.length,
       label: matchingTokens[0]?.textContent?.trim() ?? '',
+      tokenKind,
+      tokenTitle,
     };
   })()`);
   return {
@@ -2551,7 +2882,7 @@ async function openStoryboardSkillMenu({ evaluate, screenshot, type }) {
   };
 }
 
-async function waitForWorkspaceSkillSession(evaluate, expected) {
+async function waitForWorkspaceSession(evaluate, expected) {
   await waitForCondition(
     evaluate,
     `(async () => {
@@ -2562,7 +2893,7 @@ async function waitForWorkspaceSkillSession(evaluate, expected) {
       const conversation = projection.agentHome.conversations[0];
       if (conversation?.lastActivity.kind === 'turn-failed') {
         throw new Error(
-          'Workspace $storyboard initial Turn failed: ' + JSON.stringify(conversation.lastActivity),
+          'Workspace initial Turn failed: ' + JSON.stringify(conversation.lastActivity),
         );
       }
       return context.kind === 'agent' &&
@@ -2578,7 +2909,7 @@ async function waitForWorkspaceSkillSession(evaluate, expected) {
         conversation?.navigation.owner.kind === 'workspace' &&
         conversation.navigation.owner.workspaceId === ${JSON.stringify(expected.workspaceId)};
     })()`,
-    'Workspace $storyboard first submit did not materialize its exact Agent Session.',
+    'Workspace first submit did not materialize its exact Agent Session.',
   );
   await waitForCondition(
     evaluate,
@@ -2594,7 +2925,7 @@ async function waitForWorkspaceSkillSession(evaluate, expected) {
         .filter(Boolean);
       if (conversation?.lastActivity.kind === 'turn-failed' || alerts.length > 0) {
         throw new Error(
-          'Workspace $storyboard execution failed: ' + JSON.stringify({
+          'Workspace execution failed: ' + JSON.stringify({
             lastActivity: conversation?.lastActivity,
             alerts,
             transcript: transcript.slice(0, 1200),
@@ -2608,7 +2939,7 @@ async function waitForWorkspaceSkillSession(evaluate, expected) {
         !document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-execution-activity') &&
         !document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-stop');
     })()`,
-    'Workspace $storyboard first submit did not complete through its exact Agent Session.',
+    'Workspace first submit did not complete through its exact Agent Session.',
   );
   return evaluate(`(async () => {
     const projection = await window.openNekoDesktop.shell.getSnapshot();
@@ -2647,7 +2978,7 @@ async function waitForWorkspaceSkillSession(evaluate, expected) {
       Boolean(activeSurface?.querySelector('.agent-execution-activity')) ||
       alerts.length > 0
     ) {
-      throw new Error('Completed Workspace Skill Session lost exact Scene or Agent Root identity.');
+      throw new Error('Completed Workspace Session lost exact Scene or Agent Root identity.');
     }
     return {
       conversationId: context.scope.conversationId,
@@ -2872,12 +3203,21 @@ async function inspectWorkspaceResourceChrome(evaluate) {
     const initialLibraryControlCount = browser.querySelectorAll(
       '.neko-resource-browser__library-menu button',
     ).length;
+    const panelCloseCount = document.querySelectorAll(
+      '.project-resource-dock__header button[aria-label="Close resource management"], ' +
+      '.project-resource-dock__header button[aria-label="关闭资源管理"]',
+    ).length;
     const facets = [...browser.querySelectorAll('.neko-resource-browser__facets [role="tab"]')];
     const facetLabels = facets.map((item) => item.textContent?.trim() ?? '');
-    if (refreshCount !== 0 || initialLibraryControlCount !== 0 || facets.length !== 4) {
+    if (
+      refreshCount !== 0 ||
+      initialLibraryControlCount !== 0 ||
+      panelCloseCount !== 0 ||
+      facets.length !== 4
+    ) {
       throw new Error(
         'Workspace Resource Browser chrome does not match its embedded contract: ' +
-          JSON.stringify({ refreshCount, initialLibraryControlCount, facetLabels }),
+          JSON.stringify({ refreshCount, initialLibraryControlCount, panelCloseCount, facetLabels }),
       );
     }
     const mediaFacet = facets.find((item) =>
@@ -2887,7 +3227,7 @@ async function inspectWorkspaceResourceChrome(evaluate) {
       throw new Error('Workspace Resource Browser Media facet is unavailable.');
     }
     mediaFacet.click();
-    return { refreshCount, initialLibraryControlCount, facetLabels };
+    return { refreshCount, initialLibraryControlCount, panelCloseCount, facetLabels };
   })()`);
   await waitForCondition(
     evaluate,
@@ -3681,16 +4021,53 @@ async function inspectMainSplit(evaluate) {
   })()`);
 }
 
-async function exerciseWorkspaceDisplayModes(evaluate, click) {
+async function exerciseWorkspaceDisplayModes(evaluate, click, screenshot) {
   const cases = [
-    { region: 'agent', mode: 'main-only' },
-    { region: 'agent', mode: 'chat-main' },
-    { region: 'main', mode: 'chat-only' },
-    { region: 'main', mode: 'chat-main' },
-    { region: 'management', resources: 'hidden' },
-    { region: 'management', resources: 'docked' },
+    {
+      label: 'agent-hidden',
+      region: 'agent',
+      mode: 'main-only',
+      pressed: false,
+      selectedRegions: ['main', 'management'],
+    },
+    {
+      label: 'agent-restored',
+      region: 'agent',
+      mode: 'chat-main',
+      pressed: true,
+      selectedRegions: ['agent', 'main', 'management'],
+    },
+    {
+      label: 'main-hidden',
+      region: 'main',
+      mode: 'chat-only',
+      pressed: false,
+      selectedRegions: ['agent', 'management'],
+    },
+    {
+      label: 'main-restored',
+      region: 'main',
+      mode: 'chat-main',
+      pressed: true,
+      selectedRegions: ['agent', 'main', 'management'],
+    },
+    {
+      label: 'management-hidden',
+      region: 'management',
+      resources: 'hidden',
+      pressed: false,
+      selectedRegions: ['agent', 'main'],
+    },
+    {
+      label: 'management-restored',
+      region: 'management',
+      resources: 'docked',
+      pressed: true,
+      selectedRegions: ['agent', 'main', 'management'],
+    },
   ];
-  const observed = [];
+  const states = [];
+  const screenshots = [];
   for (const expected of cases) {
     const selector = `[data-workbench-region-control="${expected.region}"]`;
     await waitForWorkspaceRegionControl(evaluate, expected.region);
@@ -3701,27 +4078,78 @@ async function exerciseWorkspaceDisplayModes(evaluate, click) {
         const projection = await window.openNekoDesktop.shell.getSnapshot();
         ${requireActiveWorkbenchProjection('projection')}
         const workbench = activeWorkbench.layout;
+        const control = document.querySelector(${JSON.stringify(selector)});
         return ${expected.mode ? `workbench.display.mode === ${JSON.stringify(expected.mode)}` : 'true'} &&
-          ${expected.resources ? `workbench.resourceDock.presentation === ${JSON.stringify(expected.resources)}` : 'true'};
+          ${expected.resources ? `workbench.resourceDock.presentation === ${JSON.stringify(expected.resources)}` : 'true'} &&
+          control?.getAttribute('aria-pressed') === ${JSON.stringify(String(expected.pressed))};
       })()`,
       `Workspace region '${expected.region}' did not commit its presentation.`,
     );
-    observed.push(
-      await evaluate(`(async () => {
+    const state = await evaluate(`(async () => {
         const projection = await window.openNekoDesktop.shell.getSnapshot();
         ${requireActiveWorkbenchProjection('projection')}
         const workbench = activeWorkbench.layout;
+        const control = document.querySelector(${JSON.stringify(selector)});
+        const titleBar = document.querySelector('.neko-controlled-workbench-title');
+        const controls = document.querySelector('.workspace-region-controls');
+        const tabs = [...document.querySelectorAll('.neko-workbench-editor-tab')];
+        const titleRect = titleBar?.getBoundingClientRect();
+        const controlsRect = controls?.getBoundingClientRect();
+        const tabRects = tabs.map((tab) => tab.getBoundingClientRect());
         return {
           mode: workbench.display.mode,
           chatPosition: workbench.display.chatPosition,
           resources: workbench.resourceDock.presentation,
           hasAgent: Boolean(document.querySelector('[data-dock-owner="agent"], [data-primary-surface="agent"]')),
           hasMain: Boolean(document.querySelector('[data-main-view-id]')),
+          pressed: control?.getAttribute('aria-pressed') === 'true',
+          selectedRegions: [...document.querySelectorAll(
+            '.workspace-region-controls [data-workbench-region-control][aria-pressed="true"]',
+          )].map((element) => element.getAttribute('data-workbench-region-control')),
+          controlsFitTitleBar: Boolean(
+            titleRect && controlsRect && controlsRect.top >= titleRect.top &&
+            controlsRect.right <= titleRect.right && controlsRect.bottom <= titleRect.bottom
+          ),
+          controlsOverlapTabs: Boolean(
+            controlsRect && tabRects.some((tabRect) =>
+              controlsRect.left < tabRect.right && controlsRect.right > tabRect.left &&
+              controlsRect.top < tabRect.bottom && controlsRect.bottom > tabRect.top
+            )
+          ),
         };
-      })()`),
+      })()`);
+    if (
+      state.pressed !== expected.pressed ||
+      JSON.stringify(state.selectedRegions) !== JSON.stringify(expected.selectedRegions) ||
+      !state.controlsFitTitleBar ||
+      state.controlsOverlapTabs
+    ) {
+      throw new Error(
+        `Workspace region '${expected.region}' lost its visible title control state: ${JSON.stringify(state)}`,
+      );
+    }
+    states.push(state);
+    screenshots.push(await screenshot(`workspace-layout-${expected.label}`));
+  }
+  const cutPanel = await evaluate(`(async () => {
+    const projection = await window.openNekoDesktop.shell.getSnapshot();
+    ${requireActiveWorkbenchProjection('projection')}
+    const control = document.querySelector('[data-workbench-region-control="cut-panel"]');
+    const workbench = activeWorkbench.layout;
+    return {
+      hasCutPanel: Boolean(workbench.cutPanel),
+      disabled: control instanceof HTMLButtonElement && control.disabled,
+      pressed: control?.getAttribute('aria-pressed') === 'true',
+    };
+  })()`);
+  if (cutPanel.hasCutPanel || cutPanel.disabled || cutPanel.pressed) {
+    throw new Error(
+      `Workspace without a Cut View did not expose a creatable, unselected Cut Panel control: ${JSON.stringify(cutPanel)}`,
     );
   }
-  return observed;
+  states.push({ cutPanel });
+  screenshots.push(await screenshot('workspace-layout-cut-panel-creatable'));
+  return { states, screenshots };
 }
 
 async function waitForWorkspaceRegionControl(evaluate, region) {
@@ -3733,6 +4161,71 @@ async function waitForWorkspaceRegionControl(evaluate, region) {
     })()`,
     `Workspace ${region} control did not become interactive.`,
   );
+}
+
+async function exerciseCutTabAdd(evaluate, click, screenshot) {
+  await click('[data-workbench-region-control="cut-panel"]');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll('.project-cut-panel__tabs .neko-workbench-editor-tab').length === 1 &&
+      document.querySelector('[data-cut-tab-add="true"]') instanceof HTMLButtonElement`,
+    'Cut Panel did not create its first exact draft tab.',
+  );
+  const inspect = () =>
+    evaluate(`(() => {
+      const header = document.querySelector('.project-cut-panel__tabs');
+      const tabList = header?.querySelector('.neko-workbench-editor-tabs');
+      const tabs = [...(header?.querySelectorAll('.neko-workbench-editor-tab') ?? [])];
+      const add = header?.querySelector('[data-cut-tab-add="true"]');
+      if (!(header instanceof HTMLElement) || !(tabList instanceof HTMLElement) ||
+          !(add instanceof HTMLButtonElement) || tabs.length === 0) {
+        throw new Error('Cut tab geometry requires a header, tab list, tabs and add control.');
+      }
+      const headerRect = header.getBoundingClientRect();
+      const tabListRect = tabList.getBoundingClientRect();
+      const addRect = add.getBoundingClientRect();
+      const finalTabRect = tabs.at(-1).getBoundingClientRect();
+      return {
+        tabCount: tabs.length,
+        selectedIndex: tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true'),
+        tabToAddGap: addRect.left - finalTabRect.right,
+        listToAddGap: addRect.left - tabListRect.right,
+        addWidth: addRect.width,
+        fitsHeader: addRect.right <= headerRect.right + 0.5,
+        remainingRightSpace: headerRect.right - addRect.right,
+      };
+    })()`);
+  const initial = await inspect();
+  assertCutTabAddGeometry(initial, 'initial');
+  const initialScreenshot = await screenshot('workspace-cut-tab-add-adjacent');
+  await click('[data-cut-tab-add="true"]');
+  await waitForCondition(
+    evaluate,
+    `document.querySelectorAll('.project-cut-panel__tabs .neko-workbench-editor-tab').length === 2 &&
+      document.querySelector('.project-cut-panel__tabs .neko-workbench-editor-tab:last-child')
+        ?.getAttribute('aria-selected') === 'true'`,
+    'Cut Panel did not append and select the second exact draft tab.',
+  );
+  const added = await inspect();
+  assertCutTabAddGeometry(added, 'added');
+  const addedScreenshot = await screenshot('workspace-cut-tab-add-second-draft');
+  return { states: { initial, added }, screenshots: [initialScreenshot, addedScreenshot] };
+}
+
+function assertCutTabAddGeometry(detail, phase) {
+  if (
+    detail.selectedIndex !== detail.tabCount - 1 ||
+    detail.tabToAddGap < -0.5 ||
+    detail.tabToAddGap > 8 ||
+    Math.abs(detail.listToAddGap) > 0.5 ||
+    Math.abs(detail.addWidth - 24) > 0.5 ||
+    !detail.fitsHeader ||
+    detail.remainingRightSpace <= 32
+  ) {
+    throw new Error(
+      `Cut tab add control is not adjacent during ${phase}: ${JSON.stringify(detail)}`,
+    );
+  }
 }
 
 async function inspectAgentDraftControls(evaluate) {
@@ -4056,6 +4549,9 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       workbenchTitleBarRightInset: titleBarRect ? shellRect.right - titleBarRect.right : 0,
       recentNavigationVisible: Boolean(primary?.querySelector('.home-recent-navigation')),
       recentSectionCount: primary?.querySelectorAll('.home-sidebar-heading').length ?? 0,
+      navigationSectionIds: [
+        ...(primary?.querySelectorAll('[data-navigation-section]') ?? []),
+      ].map((section) => section.getAttribute('data-navigation-section')),
       conversationGroupCount: primary?.querySelectorAll('.primary-conversation-group').length ?? 0,
       projectConversationGroupCount:
         primary?.querySelectorAll('.primary-conversation-group[data-group-kind="project"]').length ?? 0,
@@ -4093,9 +4589,13 @@ async function inspectWorkbench(evaluate, expectedShape, expectedOwner) {
       projectDetailInSecondary: Boolean(
         activeSecondaryMainTarget?.querySelector('.project-management-detail'),
       ),
-      projectOpenActionVisible: Boolean(
+      projectRowActionCount:
         activeMainTarget?.querySelector(
-          '.project-management-catalog .management-surface-row-actions button',
+          '.project-management-catalog .management-surface-row-actions',
+        )?.querySelectorAll('button').length ?? -1,
+      projectDoubleClickTargetVisible: Boolean(
+        activeMainTarget?.querySelector(
+          '.project-management-catalog .management-surface-row__select',
         ),
       ),
       mainPanelIds: [
@@ -4249,7 +4749,7 @@ function assertAgentDraftControls(detail) {
     detail.sessionTabsVisible
   ) {
     throw new Error(
-      'Agent draft did not retain the complete launch-safe Workspace Agent controls.',
+      `Agent draft did not retain the complete launch-safe Workspace Agent controls: ${JSON.stringify(detail)}`,
     );
   }
   assertWorkspaceComposer(detail.composer, 'assistant');
@@ -4347,8 +4847,8 @@ function assertManagementDetailSplit(detail, managementPanelId, detailPanelId) {
     detail.secondaryMainBorderRadius !== '0px' ||
     detail.primaryMainOverflow !== 'hidden' ||
     detail.secondaryMainOverflow !== 'hidden' ||
-    detail.primaryMainShadow === 'none' ||
-    detail.secondaryMainShadow === 'none' ||
+    detail.primaryMainShadow !== 'none' ||
+    detail.secondaryMainShadow !== 'none' ||
     detail.mainPanelsOverlap ||
     detail.primaryMainWidth <= 0 ||
     detail.primaryMainWidth < detail.secondaryMainWidth
@@ -4406,7 +4906,11 @@ function assertSingleWorkbench(detail) {
   if (detail.shellCount !== 1 || detail.primaryCount !== 1) {
     throw new Error('Desktop scene did not preserve exactly one Workbench and PrimarySidebar.');
   }
-  if (!detail.recentNavigationVisible || detail.recentSectionCount !== 1) {
+  if (
+    !detail.recentNavigationVisible ||
+    detail.recentSectionCount !== 2 ||
+    JSON.stringify(detail.navigationSectionIds) !== JSON.stringify(['projects', 'conversations'])
+  ) {
     throw new Error(
       'PrimarySidebar did not preserve one authoritative grouped navigation surface.',
     );

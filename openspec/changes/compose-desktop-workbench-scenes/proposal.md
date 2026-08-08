@@ -2,7 +2,7 @@
 
 Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不同的顶层页面结构。Home 拥有独立 Agent composer 和侧栏布局，项目才挂载完整的 package-owned Agent 与受控 Workbench，Settings 又切换到另一套顶层 Surface。这造成 Agent 能力分叉、PrimarySidebar 多实例、resize/显隐状态耦合，以及从入口跳转页面而不是在统一工作台内切换和组装能力的问题。
 
-产品需要取消 Home 与工作区的顶层区别：一个窗口始终只有一个一级侧栏和一个 Workbench，一级侧栏选择场景，场景把 owner-qualified Surface 组装进固定 slots。统一的是 Workbench 组件、视觉和 slot 语义，不是固定显示相同数量的栏位。入口 Agent 必须直接复用完整工作区 Agent，按显式 assistant 或目录 workspace scope 提供模型、命令、Skill、文件引用、执行/审批和语音等同一能力面。资源中心与扩展中心的管理 Root 必须占据 Main，详情或授权 Preview 只能作为按选择出现的 Secondary Main。
+产品需要取消 Home 与工作区的顶层区别：一个窗口始终只有一个一级侧栏和一个 Workbench，一级侧栏选择场景，场景把 owner-qualified Surface 组装进固定 slots。统一的是 Workbench 组件、视觉和 slot 语义，不是固定显示相同数量的栏位。入口与会话必须挂载同一个 package-owned Agent Root；其 Draft binding、模型、命令、Skill、引用和首次提交语义由 `unify-agent-launch-and-domain-bindings` 的 Agent application capability 拥有，本变更只组合对应投影。资源中心与扩展中心的管理 Root 必须占据 Main，详情或授权 Preview 只能作为按选择出现的 Secondary Main。
 
 当前入口仍在创建时隐式绑定 AssistantSpace，并复用稳定 Scene/View identity；从已有会话点击“开始创作”时，package-owned controller 也可能保留旧 Tab、transcript 和输入状态。这不满足“每次开始创作都是新的未会话入口”。此外 Asset Center renderer runtime 的 effect cleanup 与实例 dispose 混在一起，React StrictMode 的开发期 remount 会复用已 dispose 实例并让整个 Desktop 白屏。两者都属于 instance identity 与资源所有权契约缺失，不能通过 active Project、默认 Assistant 或 no-op dispose 兜底。
 
@@ -12,14 +12,14 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - PrimarySidebar 保留应用导航、最近项目、最近 Agent 会话和底部状态/设置；删除 Home 页面不得删除这些窗口级导航投影。
 - 定义 closed、slot-specific Workbench scene projection。Scene authority 只投影 owner-qualified Surface identity；Desktop renderer 只将公开 Roots 放入 Interaction、Main、Secondary Main、Manager、Cut Panel 和 Status slots。Cut Panel 位于 Main 下方，其 active OTIO Root 内组合 Preview 与 Timeline，不投影 standalone Timeline Surface。
 - 定义可变形 Workbench：默认 draft 只显示 Agent；Assistant 激活后显示 Agent + Preview Main；Workspace 显示 Agent + creative Main + Workspace Resources；未来角色扮演/聊天室显示 Agent 对话或群聊 + Interactive Main + Character Manager。缺少真实 Character/Interactive owner 时必须 owner-qualified unavailable，不在 Desktop 伪造实现。
-- 以现有 `AgentWebviewRoot` 作为入口、assistant session 和 workspace session 的唯一 Agent UI/controller/composer。未创建会话时只隐藏 session-only chrome，不复制 textarea、模型选择、命令、Skill、附件、审批或语音控件。
-- “开始创作”改为创建带全新 `draftId` 的 `unbound` Entry Draft；它没有 conversation、AssistantSpace、Workspace 或角色 owner。用户直接输入并提交时自动绑定 Assistant 用户区并创建精确 session；选择目录/Project 时绑定 Workspace，选择未来 Character/Room 时绑定对应角色 owner。
+- 以现有 `AgentWebviewRoot` 作为入口、assistant session 和 workspace session 的唯一 Agent UI/controller/composer。Workbench 只传入 exact Draft/Session presentation 并组合 Root，不拥有 input catalog、模型配置或执行路由。
+- “开始创作”改为请求 Agent application 创建带全新 `draftId` 的 `unbound` Entry Draft；它没有 conversation 或领域 owner。Workspace/Assistant target 及未来 Character/Room target 的选择、可用性和 first submit 由 `unify-agent-launch-and-domain-bindings` 统一解析，owner provider 未组合时保持 unavailable。
 - Agent Webview 以 `draftId` 作为 presentation instance identity；进入新 draft 时必须清除旧 conversation Tabs、active conversation、transcript、输入引用和瞬态错误，同时保留全局模型目录与用户设置。
-- 将 Agent 的 presentation phase 与 authority scope 分离：draft/session 决定会话 chrome，`assistant | workspace` 决定可用目录、资源、Tool、Skill 和 scene composition。
+- 将 Agent 的 presentation phase 与领域 binding 分离：本变更仅消费 phase/binding projection 决定 Workbench composition；目录、资源、Tool、Skill 和模型能力由 Agent launch capability 投影。
 - Assistant scope 使用 OpenNeko 管理的用户资源投影、用户显式授权文件和 conversation-scoped scratch；它不得获得整个用户 Home、配置、凭据、插件安装根或任意本地路径。
 - 用户显式选择已添加 Project 或系统目录时由 Desktop Main 授权并返回只属于当前 `draftId` 的 opaque Workspace target receipt；选择只更新 package-owned Entry Draft snapshot，不绑定 Scene、不激活 Workspace composition、不创建 conversation。
-- 只有用户发送首条消息时，Agent authority 才冻结 exact target、model/configuration、resource grants 与 message，原子提交 conversation/initial message/pending turn，物化目标 runtime 后再激活 Assistant/Workspace/Character/Room Scene。提交前不得因 target 选择跳转。
-- Scene 或权限 scope 只由入口动作、已持久化 conversation context 和 owner capability facts 决定：未选择 owner 的普通直接提交确定性使用 Assistant，目录/Project 选择使用 Workspace，角色选择使用对应角色 owner。模型文本不得发明目录/Project identity 或扩大权限；需要 workspace 能力但尚未选择目录时返回明确的选择要求。
+- Window Scene authority 只消费 Agent application 返回的 committed Conversation/owner projection；在 first submit 尚未完成 target、input、configuration、local commit 和 runtime materialization 前不得切换到 Assistant/Workspace/Character/Room Scene。
+- Scene 只由 typed navigation intent、已提交 Conversation owner 和领域 capability facts 决定；模型文本、active/current/recent Project 和组件可用性不得发明 owner 或可执行 Scene。
 - 资源中心建立 Assets-owned `AssetCenterSession`，由同一 session 的 Management Root 在 Main 管理 catalog/filter/selection，并把选中资源通过授权 descriptor 投影给可选 Secondary Preview Root；Desktop 不拥有 Asset selection、资源事实或 preview 类型判断。
 - 资产、项目与扩展的 Management 和 Preview/Detail 必须呈现为两个视觉、DOM 与 overflow 边界独立的共享 panel shell；两个 shell 各自拥有边框、直角边界、背景并由带间距的 resize composition 连接，不能只在同一连续 Main 底板上画分隔线。
 - 扩展/Skill、项目管理和 Settings 也通过明确 Surface slots 组合；缺失真实 owner/public Root 时显示 owner-qualified unavailable，而不是在 Desktop 复制临时业务实现。
@@ -30,6 +30,8 @@ Desktop 当前把 Home、项目工作区、管理入口和 Settings 实现为不
 - Workspace 专属的 Agent、Main、管理面板与 Cut Panel 开关使用 VS Code 风格的紧凑独立图标，并浮置在现有 Workbench 顶部 chrome 右侧而不创建额外 header 行；一级侧栏开关留在自身品牌区，Main tab header 和领域 Surface 不再重复渲染布局按钮，资源管理标题不再提供重复的关闭按钮。Main 上半区域继续承载 Canvas、文件 Preview 或 Editor；每个 OTIO 文档作为 Main 下方 Cut Panel 内的精确 tab，active Cut Root 内组合 Preview 与 Timeline。Cut Panel 开关只修改该 panel 的 presentation，不替换 Main、不创建 standalone Timeline Surface。
 - Window 级 Agent/Main/Manager panel 必须完整占用 Workbench 分配的 grid track，不使用装饰性外层 margin、padding 或顶层圆角缩减或露出 Canvas、Preview、Agent、管理 Root 或 Webview viewport。Workspace 顶部控件保持与 macOS 原生 title chrome 对齐并覆盖 full-bleed 直角 panel；页面内容留白继续由 owning package 内部 padding 拥有，Management/Preview 的 resize gutter 只作为真实兄弟 Surface 的功能性分隔。
 - Workspace Main tab strip 与相邻资源管理标题栏使用同一个 `38px` panel chrome 高度；Desktop 只覆盖当前 Workbench composition 的共享 Tab 默认间距，不改变 `@neko/ui` 在其他消费者中的默认尺寸。
+- Workspace 没有 Cut tab 时，Cut capability 可用的 Cut Panel 开关请求 Cut application 创建一个 exact 未命名内存草稿并打开空时间线；已有 Cut Panel 的 `+` 紧随最后一个 Cut tab，通过同一 Cut owner 追加并选中新的未命名草稿，而不占用标签栏远端或改变顶部显隐开关语义。草稿不提前写入或伪造 OTIO 文件。active Cut Root 的时间线工具栏保存图标与 `Cmd/Ctrl+S` 通过同一 Cut controller 命令保存当前文档；首次保存通过 Desktop 授权的保存位置选择绑定工作区内 canonical OTIO 文档，关闭 dirty 草稿由 Cut owner 请求放弃确认并只释放该草稿。Timeline 标尺在轨道区域纵向滚动时保持固定可见，并继续与轨道共享同一横向滚动坐标。
+- 未命名 Cut 草稿的 document authority 只存在于当前应用进程；Workbench 可以在当前进程持有其轻量 View ref，但 Desktop 启动恢复必须逐项移除持久快照中无法恢复的 `cut-draft:*` View，返回 presentation-reset diagnostic，并保留所有真实 OTIO、其他 View、Project 与用户文件。失效 draft 不得按 Workspace 文件路径解析，也不得伪造一个新的空文档冒充原草稿。
 - Renderer effect 只拥有自身 subscription；后台 task/runtime 由 package application owner 管理，不依赖
   React Root 是否挂载。StrictMode remount、renderer reload 和生产构建都必须保持可启动，并以真实
   Electron exception/DOM 证据验收。

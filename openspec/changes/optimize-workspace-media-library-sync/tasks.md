@@ -75,6 +75,9 @@
 - [x] 5.6 Keep Media Library browsing available when one project-document owner is invalid by
       projecting incomplete coverage with a bounded owner diagnostic, and align the global Library
       header/toolbars with the shared Home management composition.
+- [x] 5.7 Remove the persistent portability icon from the primary sidebar, expose the exact Project
+      portability command through the Project context menu, and retain library-level status and
+      recovery presentation in the Media facet.
 
 ## 6. Canonical And Retired Paths
 

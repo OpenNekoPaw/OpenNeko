@@ -99,7 +99,11 @@ import type {
   CutHostRuntimeResult,
   CutHostRuntimeSnapshot,
 } from '@neko/cut-domain';
-import { parseDesktopCutHostIdentity } from '../shared/cut-bridge-contract';
+import {
+  parseDesktopCutHostIdentity,
+  parseDesktopCutViewMutationRequest,
+  type DesktopCutViewMutationResult,
+} from '../shared/cut-bridge-contract';
 import type { DesktopCutRuntime } from './desktop-cut-runtime';
 import {
   parseDesktopApplicationSettingsRequest,
@@ -756,7 +760,9 @@ export class DesktopAppHost {
       if (binding.kind === 'workspace') {
         const resolution = await this.workspaceGrants.resolve(windowId, binding.workspaceGrantId);
         if (resolution.workspace.workspaceId !== binding.workspaceId) {
-          throw new Error('Desktop Direct Generation Workspace grant resolved to another Workspace.');
+          throw new Error(
+            'Desktop Direct Generation Workspace grant resolved to another Workspace.',
+          );
         }
         return resolution.workspace;
       }
@@ -1705,6 +1711,34 @@ export class DesktopAppHost {
       this.cutSubscriptions.set(sender.webContentsId, subscriptions);
     }
     return snapshot;
+  }
+
+  async createCutDraft(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopCutViewMutationResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    const request = parseDesktopCutViewMutationRequest(payload);
+    if (request.windowId !== window.windowId || request.identity !== undefined) {
+      throw new Error('Desktop Cut draft request does not match its sender Window.');
+    }
+    const projection = await this.requireCut().createDraft(request);
+    return { requestId: request.requestId, status: 'updated', projection };
+  }
+
+  async closeCutView(
+    sender: DesktopSenderIdentity,
+    payload: unknown,
+  ): Promise<DesktopCutViewMutationResult> {
+    this.requireActive();
+    const window = this.windows.resolveSender(sender);
+    const request = parseDesktopCutViewMutationRequest(payload);
+    if (request.windowId !== window.windowId || request.identity === undefined) {
+      throw new Error('Desktop Cut close request does not match its sender Window.');
+    }
+    const result = await this.requireCut().closeView({ ...request, identity: request.identity });
+    return { requestId: request.requestId, ...result };
   }
 
   async executeCutRequest(

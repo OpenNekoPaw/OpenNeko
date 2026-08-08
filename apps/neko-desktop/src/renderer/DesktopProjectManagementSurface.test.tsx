@@ -20,7 +20,7 @@ describe('Desktop Project Management surfaces', () => {
     document.body.replaceChildren();
   });
 
-  it('keeps local selection separate from the explicit Workspace open command', async () => {
+  it('selects on click and opens the exact Workspace on double click without an open button', async () => {
     const onOpen = vi.fn();
     const { container, root } = await renderWithI18n(
       <DesktopProjectCatalogSurface
@@ -32,11 +32,17 @@ describe('Desktop Project Management surfaces', () => {
         projects={[project()]}
       />,
     );
-    await act(async () => findButton(container, 'Demo').click());
-    expect(findButton(container, 'Demo').getAttribute('aria-pressed')).toBe('true');
+    const projectButton = findButton(container, 'Demo');
+    await act(async () => projectButton.click());
+    expect(projectButton.getAttribute('aria-pressed')).toBe('true');
     expect(onOpen).not.toHaveBeenCalled();
-    await act(async () => findButton(container, 'Open project: Demo').click());
+    expect(container.querySelector('button[aria-label="Open project: Demo"]')).toBeNull();
+    expect(container.querySelectorAll('.management-surface-row-actions button')).toHaveLength(2);
+    await act(async () => {
+      projectButton.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, button: 0 }));
+    });
     expect(onOpen).toHaveBeenCalledWith('project-1');
+    expect(onOpen).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
 
@@ -186,7 +192,17 @@ describe('Desktop Project Management surfaces', () => {
     expect(markup.container.textContent).toContain(
       'currentLocator: Workspace directory is unavailable.',
     );
-    expect(findButton(markup.container, 'Open project: Demo').disabled).toBe(true);
+    const unavailableProject = findButton(markup.container, 'Demo');
+    expect(unavailableProject.disabled).toBe(false);
+    expect(
+      unavailableProject
+        .closest('.management-surface-row')
+        ?.getAttribute('data-workspace-open-disabled'),
+    ).toBe('true');
+    expect(markup.container.querySelector('button[aria-label="Open project: Demo"]')).toBeNull();
+    await act(async () => {
+      unavailableProject.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, button: 0 }));
+    });
     expect(findButton(markup.container, 'Delete Workspace conversations for Demo').disabled).toBe(
       true,
     );

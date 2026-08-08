@@ -22,6 +22,7 @@ export type CodiconName =
   | 'loading'
   | 'lightbulb'
   | 'layout'
+  | 'layout-centered'
   | 'layout-panel'
   | 'layout-sidebar-left'
   | 'layout-sidebar-right'

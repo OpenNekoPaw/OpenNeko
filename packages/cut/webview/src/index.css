@@ -14,198 +14,203 @@
      -------------------------------------------------------------------------- */
   .cut-webview-root {
     /* Surface hierarchy */
-    --nk-bg:               var(--neko-editor-background, #1C1C1E);
-    --nk-bg-elevated:      var(--neko-sideBar-background, #2C2C2E);
-    --nk-bg-panel:         var(--neko-panel-background, #242426);
-    --nk-bg-overlay:       rgba(0, 0, 0, 0.60);
-    --nk-bg-hover:         rgba(255, 255, 255, 0.06);
-    --nk-bg-active:        rgba(255, 255, 255, 0.11);
+    --nk-bg: var(--neko-editor-background, #1c1c1e);
+    --nk-bg-elevated: var(--neko-sideBar-background, #2c2c2e);
+    --nk-bg-panel: var(--neko-panel-background, #242426);
+    --nk-bg-overlay: rgba(0, 0, 0, 0.6);
+    --nk-bg-hover: rgba(255, 255, 255, 0.06);
+    --nk-bg-active: rgba(255, 255, 255, 0.11);
 
     /* Text hierarchy */
-    --nk-fg:               var(--neko-editor-foreground, rgba(255, 255, 255, 0.88));
-    --nk-fg-secondary:     var(--neko-descriptionForeground, rgba(255, 255, 255, 0.50));
-    --nk-fg-tertiary:      rgba(255, 255, 255, 0.28);
-    --nk-fg-placeholder:   rgba(255, 255, 255, 0.30);
+    --nk-fg: var(--neko-editor-foreground, rgba(255, 255, 255, 0.88));
+    --nk-fg-secondary: var(--neko-descriptionForeground, rgba(255, 255, 255, 0.5));
+    --nk-fg-tertiary: rgba(255, 255, 255, 0.28);
+    --nk-fg-placeholder: rgba(255, 255, 255, 0.3);
 
     /* Borders */
-    --nk-border:           rgba(255, 255, 255, 0.09);
-    --nk-border-strong:    rgba(255, 255, 255, 0.15);
-    --nk-border-focus:     var(--neko-focusBorder, #0A84FF);
+    --nk-border: rgba(255, 255, 255, 0.09);
+    --nk-border-strong: rgba(255, 255, 255, 0.15);
+    --nk-border-focus: var(--neko-focusBorder, #0a84ff);
 
     /* Accent */
-    --nk-accent:           var(--neko-button-background, #0A84FF);
-    --nk-accent-hover:     var(--neko-button-hoverBackground, #409CFF);
-    --nk-accent-fg:        var(--neko-button-foreground, #ffffff);
+    --nk-accent: var(--neko-button-background, #0a84ff);
+    --nk-accent-hover: var(--neko-button-hoverBackground, #409cff);
+    --nk-accent-fg: var(--neko-button-foreground, #ffffff);
 
     /* Status */
-    --nk-green:            #30D158;
-    --nk-red:              #FF453A;
-    --nk-yellow:           #FFD60A;
-    --nk-orange:           #FF9F0A;
+    --nk-green: #30d158;
+    --nk-red: #ff453a;
+    --nk-yellow: #ffd60a;
+    --nk-orange: #ff9f0a;
 
     /* Glassmorphism */
-    --nk-glass-bg:         rgba(28, 28, 30, 0.85);
-    --nk-glass-bg-light:   rgba(44, 44, 46, 0.72);
-    --nk-glass-border:     rgba(255, 255, 255, 0.11);
-    --nk-glass-blur:       blur(20px) saturate(160%);
-    --nk-glass-shadow:     0 8px 32px rgba(0, 0, 0, 0.56), 0 2px 8px rgba(0, 0, 0, 0.32);
+    --nk-glass-bg: rgba(28, 28, 30, 0.85);
+    --nk-glass-bg-light: rgba(44, 44, 46, 0.72);
+    --nk-glass-border: rgba(255, 255, 255, 0.11);
+    --nk-glass-blur: blur(20px) saturate(160%);
+    --nk-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.56), 0 2px 8px rgba(0, 0, 0, 0.32);
 
     /* Dialog / modal */
-    --nk-dialog-bg:        var(--neko-sideBar-background, #252526);
-    --nk-dialog-border:    rgba(255, 255, 255, 0.09);
-    --nk-dialog-shadow:    0 24px 64px rgba(0, 0, 0, 0.68), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    --nk-dialog-bg: var(--neko-sideBar-background, #252526);
+    --nk-dialog-border: rgba(255, 255, 255, 0.09);
+    --nk-dialog-shadow: 0 24px 64px rgba(0, 0, 0, 0.68), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 
     /* Buttons */
-    --nk-btn-secondary-bg:        rgba(255, 255, 255, 0.08);
-    --nk-btn-secondary-fg:        rgba(255, 255, 255, 0.85);
-    --nk-btn-secondary-border:    rgba(255, 255, 255, 0.12);
-    --nk-btn-secondary-hover:     rgba(255, 255, 255, 0.14);
-    --nk-btn-danger-bg:           rgba(255, 69, 58, 0.15);
-    --nk-btn-danger-fg:           #FF6B6B;
-    --nk-btn-danger-border:       rgba(255, 69, 58, 0.35);
-    --nk-btn-danger-hover:        rgba(255, 69, 58, 0.28);
+    --nk-btn-secondary-bg: rgba(255, 255, 255, 0.08);
+    --nk-btn-secondary-fg: rgba(255, 255, 255, 0.85);
+    --nk-btn-secondary-border: rgba(255, 255, 255, 0.12);
+    --nk-btn-secondary-hover: rgba(255, 255, 255, 0.14);
+    --nk-btn-danger-bg: rgba(255, 69, 58, 0.15);
+    --nk-btn-danger-fg: #ff6b6b;
+    --nk-btn-danger-border: rgba(255, 69, 58, 0.35);
+    --nk-btn-danger-hover: rgba(255, 69, 58, 0.28);
 
     /* Input */
-    --nk-input-bg:         var(--neko-input-background, rgba(255, 255, 255, 0.08));
-    --nk-input-fg:         var(--neko-input-foreground, rgba(255, 255, 255, 0.88));
-    --nk-input-border:     rgba(255, 255, 255, 0.12);
-    --nk-input-shadow:     inset 0 1px 3px rgba(0, 0, 0, 0.25);
+    --nk-input-bg: var(--neko-input-background, rgba(255, 255, 255, 0.08));
+    --nk-input-fg: var(--neko-input-foreground, rgba(255, 255, 255, 0.88));
+    --nk-input-border: rgba(255, 255, 255, 0.12);
+    --nk-input-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
 
     /* Timeline */
-    --nk-timeline-bg:      #1E1E20;
-    --nk-ruler-bg:         #161618;
-    --nk-track-bg:         #242426;
-    --nk-track-alt:        rgba(255, 255, 255, 0.018);
-    --nk-clip-bg:          rgba(10, 132, 255, 0.28);
-    --nk-clip-border:      rgba(10, 132, 255, 0.65);
-    --nk-clip-text:        rgba(255, 255, 255, 0.92);
-    --nk-clip-selected:    rgba(10, 132, 255, 0.55);
+    --nk-timeline-bg: #1e1e20;
+    --nk-ruler-bg: #161618;
+    --nk-track-bg: #242426;
+    --nk-track-alt: rgba(255, 255, 255, 0.018);
+    --nk-clip-bg: rgba(10, 132, 255, 0.28);
+    --nk-clip-border: rgba(10, 132, 255, 0.65);
+    --nk-clip-text: rgba(255, 255, 255, 0.92);
+    --nk-clip-selected: rgba(10, 132, 255, 0.55);
 
     /* Scrollbar */
-    --nk-scrollbar:        rgba(255, 255, 255, 0.14);
-    --nk-scrollbar-hover:  rgba(255, 255, 255, 0.26);
+    --nk-scrollbar: rgba(255, 255, 255, 0.14);
+    --nk-scrollbar-hover: rgba(255, 255, 255, 0.26);
 
     /* Shadows */
-    --nk-shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.16);
-    --nk-shadow-md:  0 4px 12px rgba(0, 0, 0, 0.32), 0 2px 4px rgba(0, 0, 0, 0.18);
-    --nk-shadow-lg:  0 10px 24px rgba(0, 0, 0, 0.40), 0 4px 8px rgba(0, 0, 0, 0.22);
-    --nk-shadow-xl:  0 20px 48px rgba(0, 0, 0, 0.52), 0 8px 16px rgba(0, 0, 0, 0.26);
+    --nk-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.16);
+    --nk-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.32), 0 2px 4px rgba(0, 0, 0, 0.18);
+    --nk-shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.22);
+    --nk-shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.52), 0 8px 16px rgba(0, 0, 0, 0.26);
 
     /* Radius scale */
-    --nk-r-xs:  4px;
-    --nk-r-sm:  6px;
-    --nk-r-md:  8px;
-    --nk-r-lg:  10px;
-    --nk-r-xl:  12px;
+    --nk-r-xs: 4px;
+    --nk-r-sm: 6px;
+    --nk-r-md: 8px;
+    --nk-r-lg: 10px;
+    --nk-r-xl: 12px;
     --nk-r-2xl: 16px;
     --nk-r-full: 9999px;
 
     /* Shared neko tokens used by Tailwind color classes */
-    --neko-glass:          rgba(255, 255, 255, 0.07);
-    --neko-glass-hover:    rgba(255, 255, 255, 0.12);
-    --neko-glass-active:   rgba(255, 255, 255, 0.18);
-    --neko-surface:        rgba(255, 255, 255, 0.05);
-    --neko-surface-hover:  rgba(255, 255, 255, 0.09);
+    --neko-glass: rgba(255, 255, 255, 0.07);
+    --neko-glass-hover: rgba(255, 255, 255, 0.12);
+    --neko-glass-active: rgba(255, 255, 255, 0.18);
+    --neko-surface: rgba(255, 255, 255, 0.05);
+    --neko-surface-hover: rgba(255, 255, 255, 0.09);
   }
 
   /* --------------------------------------------------------------------------
      Light mode overrides
      -------------------------------------------------------------------------- */
-  :where(.neko-light, [data-neko-theme-kind="neko-light"], [data-neko-theme-kind="neko-high-contrast-light"]) .cut-webview-root {
-    --nk-bg:               var(--neko-editor-background, #F2F2F7);
-    --nk-bg-elevated:      var(--neko-sideBar-background, #FFFFFF);
-    --nk-bg-panel:         var(--neko-panel-background, #F8F8FA);
-    --nk-bg-overlay:       rgba(0, 0, 0, 0.35);
-    --nk-bg-hover:         rgba(0, 0, 0, 0.05);
-    --nk-bg-active:        rgba(0, 0, 0, 0.09);
+  :where(
+      .neko-light,
+      [data-neko-theme-kind='neko-light'],
+      [data-neko-theme-kind='neko-high-contrast-light']
+    )
+    .cut-webview-root {
+    --nk-bg: var(--neko-editor-background, #f2f2f7);
+    --nk-bg-elevated: var(--neko-sideBar-background, #ffffff);
+    --nk-bg-panel: var(--neko-panel-background, #f8f8fa);
+    --nk-bg-overlay: rgba(0, 0, 0, 0.35);
+    --nk-bg-hover: rgba(0, 0, 0, 0.05);
+    --nk-bg-active: rgba(0, 0, 0, 0.09);
 
-    --nk-fg:               var(--neko-editor-foreground, rgba(0, 0, 0, 0.85));
-    --nk-fg-secondary:     var(--neko-descriptionForeground, rgba(0, 0, 0, 0.50));
-    --nk-fg-tertiary:      rgba(0, 0, 0, 0.28);
-    --nk-fg-placeholder:   rgba(0, 0, 0, 0.32);
+    --nk-fg: var(--neko-editor-foreground, rgba(0, 0, 0, 0.85));
+    --nk-fg-secondary: var(--neko-descriptionForeground, rgba(0, 0, 0, 0.5));
+    --nk-fg-tertiary: rgba(0, 0, 0, 0.28);
+    --nk-fg-placeholder: rgba(0, 0, 0, 0.32);
 
-    --nk-border:           rgba(0, 0, 0, 0.10);
-    --nk-border-strong:    rgba(0, 0, 0, 0.18);
+    --nk-border: rgba(0, 0, 0, 0.1);
+    --nk-border-strong: rgba(0, 0, 0, 0.18);
 
-    --nk-accent:           var(--neko-button-background, #007AFF);
-    --nk-accent-hover:     var(--neko-button-hoverBackground, #409CFF);
+    --nk-accent: var(--neko-button-background, #007aff);
+    --nk-accent-hover: var(--neko-button-hoverBackground, #409cff);
 
-    --nk-green:            #28A745;
-    --nk-red:              #DC3545;
-    --nk-yellow:           #D4A017;
+    --nk-green: #28a745;
+    --nk-red: #dc3545;
+    --nk-yellow: #d4a017;
 
-    --nk-glass-bg:         rgba(255, 255, 255, 0.88);
-    --nk-glass-bg-light:   rgba(246, 246, 249, 0.80);
-    --nk-glass-border:     rgba(0, 0, 0, 0.09);
-    --nk-glass-shadow:     0 8px 32px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
+    --nk-glass-bg: rgba(255, 255, 255, 0.88);
+    --nk-glass-bg-light: rgba(246, 246, 249, 0.8);
+    --nk-glass-border: rgba(0, 0, 0, 0.09);
+    --nk-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
 
-    --nk-dialog-bg:        var(--neko-sideBar-background, #FFFFFF);
-    --nk-dialog-border:    rgba(0, 0, 0, 0.09);
-    --nk-dialog-shadow:    0 24px 64px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.90) inset;
+    --nk-dialog-bg: var(--neko-sideBar-background, #ffffff);
+    --nk-dialog-border: rgba(0, 0, 0, 0.09);
+    --nk-dialog-shadow: 0 24px 64px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
 
-    --nk-btn-secondary-bg:        rgba(0, 0, 0, 0.06);
-    --nk-btn-secondary-fg:        rgba(0, 0, 0, 0.80);
-    --nk-btn-secondary-border:    rgba(0, 0, 0, 0.12);
-    --nk-btn-secondary-hover:     rgba(0, 0, 0, 0.11);
-    --nk-btn-danger-bg:           rgba(215, 0, 21, 0.10);
-    --nk-btn-danger-fg:           #D70015;
-    --nk-btn-danger-border:       rgba(215, 0, 21, 0.28);
-    --nk-btn-danger-hover:        rgba(215, 0, 21, 0.18);
+    --nk-btn-secondary-bg: rgba(0, 0, 0, 0.06);
+    --nk-btn-secondary-fg: rgba(0, 0, 0, 0.8);
+    --nk-btn-secondary-border: rgba(0, 0, 0, 0.12);
+    --nk-btn-secondary-hover: rgba(0, 0, 0, 0.11);
+    --nk-btn-danger-bg: rgba(215, 0, 21, 0.1);
+    --nk-btn-danger-fg: #d70015;
+    --nk-btn-danger-border: rgba(215, 0, 21, 0.28);
+    --nk-btn-danger-hover: rgba(215, 0, 21, 0.18);
 
-    --nk-input-bg:         var(--neko-input-background, rgba(0, 0, 0, 0.05));
-    --nk-input-fg:         var(--neko-input-foreground, rgba(0, 0, 0, 0.85));
-    --nk-input-border:     rgba(0, 0, 0, 0.14);
-    --nk-input-shadow:     inset 0 1px 2px rgba(0, 0, 0, 0.08);
+    --nk-input-bg: var(--neko-input-background, rgba(0, 0, 0, 0.05));
+    --nk-input-fg: var(--neko-input-foreground, rgba(0, 0, 0, 0.85));
+    --nk-input-border: rgba(0, 0, 0, 0.14);
+    --nk-input-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
 
-    --nk-timeline-bg:      #EAEAEE;
-    --nk-ruler-bg:         #E0E0E8;
-    --nk-track-bg:         #F0F0F5;
-    --nk-track-alt:        rgba(0, 0, 0, 0.018);
-    --nk-clip-bg:          rgba(0, 122, 255, 0.22);
-    --nk-clip-border:      rgba(0, 122, 255, 0.60);
-    --nk-clip-text:        rgba(0, 0, 0, 0.80);
-    --nk-clip-selected:    rgba(0, 122, 255, 0.45);
+    --nk-timeline-bg: #eaeaee;
+    --nk-ruler-bg: #e0e0e8;
+    --nk-track-bg: #f0f0f5;
+    --nk-track-alt: rgba(0, 0, 0, 0.018);
+    --nk-clip-bg: rgba(0, 122, 255, 0.22);
+    --nk-clip-border: rgba(0, 122, 255, 0.6);
+    --nk-clip-text: rgba(0, 0, 0, 0.8);
+    --nk-clip-selected: rgba(0, 122, 255, 0.45);
 
-    --nk-scrollbar:        rgba(0, 0, 0, 0.18);
-    --nk-scrollbar-hover:  rgba(0, 0, 0, 0.34);
+    --nk-scrollbar: rgba(0, 0, 0, 0.18);
+    --nk-scrollbar-hover: rgba(0, 0, 0, 0.34);
 
-    --nk-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.10), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --nk-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
     --nk-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.07);
     --nk-shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.14), 0 4px 8px rgba(0, 0, 0, 0.08);
-    --nk-shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.18), 0 8px 16px rgba(0, 0, 0, 0.10);
+    --nk-shadow-xl: 0 20px 48px rgba(0, 0, 0, 0.18), 0 8px 16px rgba(0, 0, 0, 0.1);
 
-    --neko-glass:          rgba(0, 0, 0, 0.060);
-    --neko-glass-hover:    rgba(0, 0, 0, 0.100);
-    --neko-glass-active:   rgba(0, 0, 0, 0.150);
-    --neko-surface:        rgba(0, 0, 0, 0.04);
-    --neko-surface-hover:  rgba(0, 0, 0, 0.08);
+    --neko-glass: rgba(0, 0, 0, 0.06);
+    --neko-glass-hover: rgba(0, 0, 0, 0.1);
+    --neko-glass-active: rgba(0, 0, 0, 0.15);
+    --neko-surface: rgba(0, 0, 0, 0.04);
+    --neko-surface-hover: rgba(0, 0, 0, 0.08);
   }
 
   /* --------------------------------------------------------------------------
      High contrast overrides
      -------------------------------------------------------------------------- */
-  :where(.neko-high-contrast, [data-neko-theme-kind="neko-high-contrast"]) .cut-webview-root {
-    --nk-bg:               #000000;
-    --nk-bg-elevated:      #111111;
-    --nk-bg-panel:         #0A0A0A;
-    --nk-fg:               #FFFFFF;
-    --nk-fg-secondary:     rgba(255, 255, 255, 0.75);
-    --nk-fg-tertiary:      rgba(255, 255, 255, 0.50);
-    --nk-border:           rgba(255, 255, 255, 0.35);
-    --nk-border-strong:    rgba(255, 255, 255, 0.55);
-    --nk-glass-bg:         #111111;
-    --nk-glass-bg-light:   #181818;
-    --nk-glass-border:     rgba(255, 255, 255, 0.32);
-    --nk-glass-shadow:     0 4px 16px rgba(0, 0, 0, 0.80);
-    --nk-dialog-bg:        #111111;
-    --nk-dialog-border:    rgba(255, 255, 255, 0.30);
-    --nk-scrollbar:        rgba(255, 255, 255, 0.28);
-    --nk-scrollbar-hover:  rgba(255, 255, 255, 0.50);
-    --neko-glass:          rgba(255, 255, 255, 0.16);
-    --neko-glass-hover:    rgba(255, 255, 255, 0.26);
-    --neko-glass-active:   rgba(255, 255, 255, 0.38);
-    --neko-surface:        rgba(255, 255, 255, 0.12);
-    --neko-surface-hover:  rgba(255, 255, 255, 0.20);
+  :where(.neko-high-contrast, [data-neko-theme-kind='neko-high-contrast']) .cut-webview-root {
+    --nk-bg: #000000;
+    --nk-bg-elevated: #111111;
+    --nk-bg-panel: #0a0a0a;
+    --nk-fg: #ffffff;
+    --nk-fg-secondary: rgba(255, 255, 255, 0.75);
+    --nk-fg-tertiary: rgba(255, 255, 255, 0.5);
+    --nk-border: rgba(255, 255, 255, 0.35);
+    --nk-border-strong: rgba(255, 255, 255, 0.55);
+    --nk-glass-bg: #111111;
+    --nk-glass-bg-light: #181818;
+    --nk-glass-border: rgba(255, 255, 255, 0.32);
+    --nk-glass-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
+    --nk-dialog-bg: #111111;
+    --nk-dialog-border: rgba(255, 255, 255, 0.3);
+    --nk-scrollbar: rgba(255, 255, 255, 0.28);
+    --nk-scrollbar-hover: rgba(255, 255, 255, 0.5);
+    --neko-glass: rgba(255, 255, 255, 0.16);
+    --neko-glass-hover: rgba(255, 255, 255, 0.26);
+    --neko-glass-active: rgba(255, 255, 255, 0.38);
+    --neko-surface: rgba(255, 255, 255, 0.12);
+    --neko-surface-hover: rgba(255, 255, 255, 0.2);
   }
 
   /* --------------------------------------------------------------------------
@@ -407,13 +412,15 @@
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  transition: filter 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    filter 0.15s ease,
+    box-shadow 0.15s ease;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
 }
 
 .nk-btn-primary:hover {
   filter: brightness(1.12);
-  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.40);
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.4);
 }
 
 .nk-btn-primary:active {
@@ -442,7 +449,9 @@
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .nk-btn-secondary:hover {
@@ -473,7 +482,9 @@
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .nk-btn-danger:hover {
@@ -482,7 +493,7 @@
 }
 
 .nk-btn-danger:active {
-  filter: brightness(0.90);
+  filter: brightness(0.9);
 }
 
 .nk-btn-danger:disabled {
@@ -506,7 +517,9 @@
   border-radius: var(--nk-r-sm);
   cursor: pointer;
   color: var(--nk-fg-secondary);
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .icon-button:hover {
@@ -544,12 +557,16 @@
   line-height: 1.4;
   box-shadow: var(--nk-input-shadow);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .nk-input:focus {
   border-color: var(--nk-border-focus);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.20), var(--nk-input-shadow);
+  box-shadow:
+    0 0 0 3px rgba(10, 132, 255, 0.2),
+    var(--nk-input-shadow);
 }
 
 .nk-input::placeholder {
@@ -571,7 +588,9 @@
   box-shadow: var(--nk-input-shadow);
   outline: none;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.4)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -581,11 +600,13 @@
 
 .nk-select:focus {
   border-color: var(--nk-border-focus);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.20), var(--nk-input-shadow);
+  box-shadow:
+    0 0 0 3px rgba(10, 132, 255, 0.2),
+    var(--nk-input-shadow);
 }
 
 /* Light mode select arrow */
-:where(.neko-light, [data-neko-theme-kind="neko-light"]) .cut-webview-root .nk-select {
+:where(.neko-light, [data-neko-theme-kind='neko-light']) .cut-webview-root .nk-select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(0,0,0,0.38)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
@@ -613,7 +634,9 @@
   -webkit-backdrop-filter: blur(22px) saturate(180%);
   border: 1px solid var(--nk-glass-border);
   border-radius: var(--nk-r-lg);
-  box-shadow: 0 16px 52px rgba(0, 0, 0, 0.56), 0 2px 8px rgba(0, 0, 0, 0.28);
+  box-shadow:
+    0 16px 52px rgba(0, 0, 0, 0.56),
+    0 2px 8px rgba(0, 0, 0, 0.28);
   padding: 5px;
   min-width: 180px;
 }
@@ -627,7 +650,9 @@
   font-size: 13px;
   color: var(--nk-fg);
   cursor: pointer;
-  transition: background 0.10s ease, color 0.10s ease;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease;
   user-select: none;
 }
 
@@ -646,7 +671,7 @@
 }
 
 .nk-menu-item:disabled,
-.nk-menu-item[data-disabled="true"] {
+.nk-menu-item[data-disabled='true'] {
   opacity: 0.38;
   cursor: not-allowed;
   pointer-events: none;
@@ -761,12 +786,16 @@
   line-height: 1.4;
   outline: none;
   box-shadow: var(--nk-input-shadow);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .neko-input:focus {
   border-color: var(--nk-border-focus);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.20), var(--nk-input-shadow);
+  box-shadow:
+    0 0 0 3px rgba(10, 132, 255, 0.2),
+    var(--nk-input-shadow);
 }
 
 .neko-input::placeholder {
@@ -791,7 +820,7 @@
 
 .neko-dropdown:focus {
   border-color: var(--nk-border-focus);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.20);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2);
 }
 
 /* =============================================================================
@@ -801,8 +830,8 @@
 .cut-workbench-shell {
   display: flex;
   flex: 1 1 auto;
-  min-width: 0;
   height: 100%;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -811,8 +840,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   flex: 1 1 auto;
-  min-width: 0;
   height: 100%;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -822,9 +851,9 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  height: 100%;
   min-width: 0;
   min-height: 0;
-  height: 100%;
   overflow: hidden;
 }
 
@@ -835,8 +864,8 @@
 .cut-basic-editor {
   display: flex;
   flex: 1 1 auto;
-  height: 100%;
   flex-direction: column;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1064,6 +1093,12 @@
   min-width: 100%;
 }
 
+.cut-basic-ruler-row {
+  position: sticky;
+  top: 0;
+  z-index: 34;
+}
+
 .cut-basic-ruler-spacer,
 .cut-basic-overview-spacer {
   position: sticky;
@@ -1185,7 +1220,9 @@
 }
 
 .cut-basic-clip[data-selected='true'] {
-  box-shadow: inset 0 0 0 1px var(--neko-focusBorder), 0 0 0 1px var(--neko-focusBorder);
+  box-shadow:
+    inset 0 0 0 1px var(--neko-focusBorder),
+    0 0 0 1px var(--neko-focusBorder);
 }
 
 .cut-basic-clip[data-enabled='false'] {
@@ -1391,8 +1428,12 @@
   background: var(--neko-focusBorder);
 }
 
-.cut-basic-overview-clip[data-kind='Audio'] { background: var(--nk-green); }
-.cut-basic-overview-clip[data-kind='Subtitle'] { background: #bf5af2; }
+.cut-basic-overview-clip[data-kind='Audio'] {
+  background: var(--nk-green);
+}
+.cut-basic-overview-clip[data-kind='Subtitle'] {
+  background: #bf5af2;
+}
 
 .cut-basic-overview-viewport {
   position: absolute;
@@ -1401,30 +1442,117 @@
   background: color-mix(in srgb, var(--neko-focusBorder) 12%, transparent);
 }
 
-.cut-basic-export-dialog { width: min(92vw, 720px); max-height: min(88vh, 760px); overflow: auto; }
-.cut-basic-export-config { display: grid; gap: 0; }
+.cut-basic-export-dialog {
+  width: min(92vw, 720px);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+}
+.cut-basic-export-config {
+  display: grid;
+  gap: 0;
+}
 .cut-basic-export-title-field,
-.cut-basic-export-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(220px, 280px); align-items: center; gap: 18px; }
-.cut-basic-export-title-field { padding: 8px 0 16px; }
-.cut-basic-export-title-field input { min-width: 0; height: 30px; border: 1px solid var(--neko-input-border, var(--neko-border)); border-radius: 4px; background: var(--neko-input-background); color: var(--neko-input-foreground); padding: 0 9px; }
-.cut-basic-export-section { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--neko-panel-border); }
-.cut-basic-export-section h3 { margin: 0 0 2px; font-size: 13px; }
-.cut-basic-export-row > :last-child { width: 100%; }
-.cut-basic-export-more { width: max-content; border: 0; background: transparent; color: var(--neko-descriptionForeground); padding: 2px 0; }
-.cut-basic-export-dimensions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.cut-basic-export-history { display: grid; gap: 3px; margin-top: 12px; font-size: 11px; }
-.cut-basic-export-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--neko-panel-border); color: var(--neko-descriptionForeground); font-size: 11px; }
-.cut-basic-export-actions { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 6px; }
-.cut-basic-export-actions button { padding: 4px 10px; background: var(--neko-button-secondaryBackground); }
-.cut-basic-export-actions button:last-child { background: var(--neko-button-background); color: var(--neko-button-foreground); }
-.cut-basic-export-progress { display: grid; justify-items: center; gap: 10px; padding: 18px; }
-.cut-basic-export-spinner { width: 24px; height: 24px; border: 3px solid var(--neko-panel-border); border-top-color: var(--neko-progressBar-background); border-radius: 50%; animation: cut-preview-spin 0.9s linear infinite; }
+.cut-basic-export-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(220px, 280px);
+  align-items: center;
+  gap: 18px;
+}
+.cut-basic-export-title-field {
+  padding: 8px 0 16px;
+}
+.cut-basic-export-title-field input {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--neko-input-border, var(--neko-border));
+  border-radius: 4px;
+  background: var(--neko-input-background);
+  color: var(--neko-input-foreground);
+  padding: 0 9px;
+}
+.cut-basic-export-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--neko-panel-border);
+}
+.cut-basic-export-section h3 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+.cut-basic-export-row > :last-child {
+  width: 100%;
+}
+.cut-basic-export-more {
+  width: max-content;
+  border: 0;
+  background: transparent;
+  color: var(--neko-descriptionForeground);
+  padding: 2px 0;
+}
+.cut-basic-export-dimensions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.cut-basic-export-history {
+  display: grid;
+  gap: 3px;
+  margin-top: 12px;
+  font-size: 11px;
+}
+.cut-basic-export-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--neko-panel-border);
+  color: var(--neko-descriptionForeground);
+  font-size: 11px;
+}
+.cut-basic-export-actions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.cut-basic-export-actions button {
+  padding: 4px 10px;
+  background: var(--neko-button-secondaryBackground);
+}
+.cut-basic-export-actions button:last-child {
+  background: var(--neko-button-background);
+  color: var(--neko-button-foreground);
+}
+.cut-basic-export-progress {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 18px;
+}
+.cut-basic-export-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--neko-panel-border);
+  border-top-color: var(--neko-progressBar-background);
+  border-radius: 50%;
+  animation: cut-preview-spin 0.9s linear infinite;
+}
 
 @media (max-width: 560px) {
   .cut-basic-export-title-field,
-  .cut-basic-export-row { grid-template-columns: 1fr; gap: 5px; }
-  .cut-basic-export-footer { align-items: flex-start; flex-direction: column; }
-  .cut-basic-export-actions { align-self: flex-end; }
+  .cut-basic-export-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .cut-basic-export-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .cut-basic-export-actions {
+    align-self: flex-end;
+  }
 }
 
 .cut-property-panel-shell {
@@ -1449,7 +1577,7 @@
   padding: 5px 9px;
   border-radius: var(--nk-r-xs);
   cursor: pointer;
-  transition: background 0.10s ease;
+  transition: background 0.1s ease;
 }
 
 .neko-list-item:hover {
@@ -1477,7 +1605,9 @@
 .timeline-element {
   cursor: pointer;
   border-radius: var(--nk-r-sm);
-  transition: opacity 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    opacity 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .timeline-element:hover {
@@ -1485,7 +1615,9 @@
 }
 
 .timeline-element.selected {
-  box-shadow: 0 0 0 2px var(--nk-border-focus), 0 2px 8px rgba(10, 132, 255, 0.30);
+  box-shadow:
+    0 0 0 2px var(--nk-border-focus),
+    0 2px 8px rgba(10, 132, 255, 0.3);
 }
 
 /* =============================================================================
@@ -1870,7 +2002,7 @@
   border: none;
   cursor: pointer;
   user-select: none;
-  transition: background 0.10s ease;
+  transition: background 0.1s ease;
 }
 
 .nk-prop-group-header:hover {
@@ -1939,12 +2071,16 @@
   line-height: 1.4;
   box-shadow: var(--nk-input-shadow);
   outline: none;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .nk-prop-input:focus {
   border-color: var(--nk-border-focus);
-  box-shadow: 0 0 0 2.5px rgba(10, 132, 255, 0.20), var(--nk-input-shadow);
+  box-shadow:
+    0 0 0 2.5px rgba(10, 132, 255, 0.2),
+    var(--nk-input-shadow);
 }
 
 .nk-prop-input:disabled {
@@ -1997,7 +2133,9 @@
   background: var(--nk-accent);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
   cursor: pointer;
-  transition: transform 0.10s ease, box-shadow 0.10s ease;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
 }
 
 .nk-prop-slider::-webkit-slider-thumb:hover {
@@ -2067,8 +2205,12 @@
 }
 
 @keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position:  200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .animate-shimmer {
@@ -2076,14 +2218,30 @@
 }
 
 @keyframes nk-fade-in {
-  from { opacity: 0; transform: translateY(3px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes nk-scale-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1.00); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.nk-fade-in  { animation: nk-fade-in  0.18s ease both; }
-.nk-scale-in { animation: nk-scale-in 0.18s ease both; }
+.nk-fade-in {
+  animation: nk-fade-in 0.18s ease both;
+}
+.nk-scale-in {
+  animation: nk-scale-in 0.18s ease both;
+}

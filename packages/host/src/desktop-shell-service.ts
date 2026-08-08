@@ -19,6 +19,7 @@ import {
   type DesktopUnavailableProjectProfile,
 } from './desktop-shell-contract';
 import {
+  closeCutView,
   closeMainView,
   createDefaultDesktopWorkbenchLayout,
   openOrFocusMainView,
@@ -58,7 +59,7 @@ import {
 } from './desktop-shell-state';
 import type { AssetWorkspaceResolution } from '@neko/assets-domain/contracts';
 import type { CanvasHostRuntimeIdentity } from '@neko/canvas-domain';
-import type { CutHostRuntimeIdentity } from '@neko/cut-domain';
+import { isCutDraftDocumentId, type CutHostRuntimeIdentity } from '@neko/cut-domain';
 import { createCanvasHostSessionId } from '@neko/canvas-domain';
 import { createCutHostSessionId } from '@neko/cut-domain';
 import type { DesktopStartupTargetPreference } from './application-settings-contract';
@@ -284,13 +285,29 @@ export class DesktopShellService {
         return windowId;
       }
       const restoredWindow = requireStoredWindow(state, windowId);
-      const qualifiedWindow = this.agentHomeProjectionSource
+      const agentQualifiedWindow = this.agentHomeProjectionSource
         ? reconcilePersistedAgentSurface(
             restoredWindow,
             this.readAgentHomeProjection(),
             this.createIdentity,
           )
         : restoredWindow;
+      const cutDraftCleanup = discardExpiredCutDraftPresentations(agentQualifiedWindow);
+      const qualifiedWindow = cutDraftCleanup.window;
+      if (cutDraftCleanup.removedViewIds.length > 0) {
+        this.isolatedWindowDiagnostics = [
+          ...this.isolatedWindowDiagnostics,
+          {
+            code: 'desktop-presentation-reset',
+            severity: 'warning',
+            windowId,
+            owner: 'cut',
+            removedViewIds: cutDraftCleanup.removedViewIds,
+            message:
+              'Expired unnamed Cut draft presentation was removed because its in-memory document ended with the previous application process.',
+          },
+        ];
+      }
       const restoredWorkbench = restoreWindowWorkbench(state, qualifiedWindow, this.createIdentity);
       const restoredScene = synchronizeWorkspaceSceneWithWorkbench(
         activeDesktopWorkbench(qualifiedWindow).scene,
@@ -1597,6 +1614,41 @@ function reconcilePersistedAgentSurface(
   return replaceActiveDesktopWorkbench(window, {
     scene: createReplacementAgentDraftScene(window.workbench.scene, `draft:${createIdentity()}`),
   });
+}
+
+function discardExpiredCutDraftPresentations(window: DesktopStoredWindow): {
+  readonly window: DesktopStoredWindow;
+  readonly removedViewIds: readonly string[];
+} {
+  const removedViewIds = new Set<string>();
+  const discardFromLayout = (
+    layout: DesktopWorkbenchLayoutProjection,
+  ): DesktopWorkbenchLayoutProjection => {
+    let next = layout;
+    for (const view of layout.cutPanel?.views ?? []) {
+      if (view.documentId && isCutDraftDocumentId(view.documentId)) {
+        removedViewIds.add(view.viewId);
+        next = closeCutView(next, view.viewId);
+      }
+    }
+    return next;
+  };
+  const active = activeDesktopWorkbench(window);
+  const activeLayout = discardFromLayout(active.layout);
+  const tabs = window.tabs.map((tab) => {
+    if (!tab.presentation) return tab;
+    const presentation = discardFromLayout(tab.presentation);
+    return presentation === tab.presentation ? tab : { ...tab, presentation };
+  });
+  const tabsChanged = tabs.some((tab, index) => tab !== window.tabs[index]);
+  const withActiveLayout =
+    activeLayout === active.layout
+      ? window
+      : replaceActiveDesktopWorkbench(window, { layout: activeLayout });
+  return {
+    window: tabsChanged ? { ...withActiveLayout, tabs } : withActiveLayout,
+    removedViewIds: [...removedViewIds],
+  };
 }
 
 function isPersistedAgentSurfaceQualified(

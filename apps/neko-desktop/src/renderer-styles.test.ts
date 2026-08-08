@@ -42,6 +42,21 @@ describe('Desktop renderer styles', () => {
     expect(dragStripRule?.groups?.body).toMatch(/-webkit-app-region\s*:\s*drag/u);
   });
 
+  it('keeps the Cut add target adjacent to the final tab while allowing tab overflow', () => {
+    const tabsRule = styles.match(
+      /\.project-cut-panel__tabs \.neko-workbench-editor-tabs\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+    const addRule = styles.match(/\.project-cut-panel__add\s*\{(?<body>[\s\S]*?)\n\}/u);
+
+    expect(tabsRule?.groups?.body).toMatch(/width\s*:\s*max-content/u);
+    expect(tabsRule?.groups?.body).toMatch(/max-width\s*:\s*calc\(100% - 32px\)/u);
+    expect(tabsRule?.groups?.body).toMatch(/flex\s*:\s*0 1 auto/u);
+    expect(tabsRule?.groups?.body).toMatch(/padding-right\s*:\s*2px/u);
+    expect(addRule?.groups?.body).toMatch(/width\s*:\s*24px/u);
+    expect(addRule?.groups?.body).toMatch(/height\s*:\s*24px/u);
+    expect(addRule?.groups?.body).toMatch(/margin\s*:\s*7px 8px 7px 0/u);
+  });
+
   it('reserves stable Project-group columns while actions use the overlay track', () => {
     const projectGroupRule = styles.match(
       /\.primary-conversation-group__header\s*\{(?<body>[\s\S]*?)\n\}/u,

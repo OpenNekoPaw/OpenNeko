@@ -255,6 +255,7 @@ export const en = {
   'workspace.resources': 'Resources',
   'workspace.projectResources': 'Resource management',
   'workspace.portability': 'Project portability',
+  'workspace.portabilityClose': 'Close project portability',
   'workspace.portabilityLoading': 'Checking project media',
   'workspace.portabilityCreate': 'Create portable snapshot',
   'workspace.portabilityResume': 'Resume snapshot',
@@ -288,6 +289,7 @@ export const en = {
   'workspace.cutTabs.label': 'Open OTIO documents',
   'workspace.cutTabs.empty': 'No OTIO document',
   'workspace.cutTabs.close': 'Close {name}',
+  'workspace.cutTabs.add': 'New Cut timeline',
   'workspace.mainTabs.label': 'Open creative documents',
   'workspace.mainTabs.empty': 'No creative document',
   'workspace.mainTabs.emptyDetail':

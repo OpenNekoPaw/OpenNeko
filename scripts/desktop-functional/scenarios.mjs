@@ -1,7 +1,10 @@
 import { canvasOpenNekoConsumerScenario } from '../../packages/canvas/webview/functional/desktop-openneko-consumer.mjs';
 import { cutOpenNekoConsumerScenario } from '../../packages/cut/webview/functional/desktop-openneko-consumer.mjs';
 import { previewOpenNekoConsumerScenario } from '../../packages/preview/webview/functional/desktop-openneko-consumer.mjs';
-import { resourceBrowserEntityManagementScenario } from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
+import {
+  resourceBrowserEntityManagementScenario,
+  workspaceFileCreationScenario,
+} from '../../packages/assets/webview/functional/desktop-entity-management.mjs';
 import { resourceBrowserInvalidEntityDocumentScenario } from '../../packages/assets/webview/functional/desktop-invalid-entity-document.mjs';
 import { assetLibraryRecordRemovalScenario } from '../../packages/assets/webview/functional/desktop-asset-record-removal.mjs';
 import { desktopAgentProviderUiScenario } from './desktop-agent-provider-ui.mjs';
@@ -10,6 +13,7 @@ import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-windo
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import {
   desktopAgentEntryWorkspaceSkillScenario,
+  desktopAgentLinkedMediaMentionScenario,
   desktopAgentWorkspaceRestartScenario,
   desktopAgentWorkspaceRestartUnavailableScenario,
   desktopConversationNavigationScenario,
@@ -27,12 +31,14 @@ const scenarios = new Map(
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
     desktopAgentEntryWorkspaceSkillScenario,
+    desktopAgentLinkedMediaMentionScenario,
     desktopAgentWorkspaceRestartScenario,
     desktopAgentWorkspaceRestartUnavailableScenario,
     desktopConversationNavigationScenario,
     desktopProjectSidebarManagementScenario,
     desktopWorkbenchScenesScenario,
     desktopWorkspaceResizeScenario,
+    workspaceFileCreationScenario,
     resourceBrowserEntityManagementScenario,
     resourceBrowserInvalidEntityDocumentScenario,
     assetLibraryRecordRemovalScenario,

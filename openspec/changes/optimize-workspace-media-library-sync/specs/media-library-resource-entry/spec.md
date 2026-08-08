@@ -46,6 +46,14 @@ copies an entire library, or reports partial mutation as success.
   failure state for a new independent destination
 - **AND** the project Media Library remains a browser rather than owning copy transaction state
 
+#### Scenario: Project navigation is idle
+
+- **WHEN** no portability operation requires user attention
+- **THEN** the primary application sidebar does not display a persistent portability icon or healthy
+  zero-reference status
+- **AND** the exact Project context menu exposes the portability command while Media facet items
+  continue to display library-level availability, missing counts, diagnostics, and recovery actions
+
 ### Requirement: Media Library status remains stable across list and grid presentation
 
 Required, unavailable, incomplete, and unreferenced link states SHALL retain the same identity,
