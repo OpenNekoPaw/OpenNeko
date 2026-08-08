@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 
@@ -779,6 +779,144 @@ export const desktopAgentEntryWorkspaceSkillScenario = Object.freeze({
     } finally {
       await providerServer.close();
     }
+  },
+});
+
+export const desktopAgentWorkspaceRestartScenario = Object.freeze({
+  id: 'desktop-agent-workspace-restart',
+  owner: '@neko/agent-runtime',
+  prepare: desktopWorkbenchScenesScenario.prepare,
+  async run({
+    checkpoint,
+    evaluate,
+    restartApplication,
+    screenshot,
+    waitForDesktopBridge,
+    waitForSelector,
+  }) {
+    await resizeWindow(evaluate, 1200, 800);
+    await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
+    const cancellation = await assertFixtureWorkspaceCancellation(evaluate);
+    const activation = await chooseFixtureWorkspace(evaluate);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-shell`);
+    const beforeRestart = await inspectActivatedWorkspaceAgent(evaluate);
+    const beforeScreenshot = await captureSettledScreenshot(
+      screenshot,
+      'workspace-agent-before-application-restart',
+    );
+
+    await restartApplication();
+    await waitForDesktopBridge(60_000);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-shell`);
+    const exactWorkspace = await inspectExactWorkspace(evaluate, activation.workspaceId);
+    const afterRestart = await inspectActivatedWorkspaceAgent(evaluate);
+    const composer = await inspectComposerPresentation(evaluate);
+    assertWorkspaceComposer(composer, 'workspace');
+    if (!composer.toolbarFitsSurface) {
+      throw new Error('Restored Workspace Agent composer overflowed its narrow Surface.');
+    }
+    const failure = await evaluate(`(() => {
+      const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+      return {
+        failureVisible: Boolean(activeSurface?.querySelector('.desktop-agent-failure')),
+        alerts: [...(activeSurface?.querySelectorAll('[role="alert"]') ?? [])]
+          .map((element) => element.textContent?.trim()).filter(Boolean),
+        rawGrantErrorVisible:
+          activeSurface?.textContent?.includes('DesktopWorkspaceGrantAuthorityError') === true ||
+          activeSurface?.textContent?.includes('workspace-grant:') === true,
+      };
+    })()`);
+    if (failure.failureVisible || failure.alerts.length > 0 || failure.rawGrantErrorVisible) {
+      throw new Error(
+        `Workspace Agent failed to restore after application restart: ${JSON.stringify(failure)}`,
+      );
+    }
+    const afterScreenshot = await captureSettledScreenshot(
+      screenshot,
+      'workspace-agent-after-application-restart',
+    );
+    const evidence = {
+      activation,
+      cancellation,
+      beforeRestart,
+      afterRestart,
+      exactWorkspace,
+      composer,
+      failure,
+    };
+    checkpoint('workspace-agent-application-restart', evidence);
+    return { ...evidence, screenshots: [beforeScreenshot, afterScreenshot] };
+  },
+});
+
+export const desktopAgentWorkspaceRestartUnavailableScenario = Object.freeze({
+  id: 'desktop-agent-workspace-restart-unavailable',
+  owner: '@neko/agent-runtime',
+  prepare: desktopWorkbenchScenesScenario.prepare,
+  async run({
+    checkpoint,
+    evaluate,
+    prepared,
+    restartApplication,
+    screenshot,
+    waitForDesktopBridge,
+    waitForSelector,
+  }) {
+    await resizeWindow(evaluate, 1200, 800);
+    await waitForSelector(`.desktop-scene-workbench--agent-only ${ACTIVE_AGENT_TEXTAREA_SELECTOR}`);
+    const cancellation = await assertFixtureWorkspaceCancellation(evaluate);
+    const activation = await chooseFixtureWorkspace(evaluate);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-shell`);
+    await inspectActivatedWorkspaceAgent(evaluate);
+
+    const unavailableWorkspacePath = `${prepared.workspacePath}-unavailable`;
+    await rename(prepared.workspacePath, unavailableWorkspacePath);
+    await restartApplication();
+    await waitForDesktopBridge(60_000);
+    await waitForSelector('.desktop-scene-workbench--workspace');
+    await waitForSelector(`${ACTIVE_AGENT_SURFACE_SELECTOR} .desktop-agent-failure`);
+    const failure = await evaluate(`(() => {
+      const shell = document.querySelector('[data-neko-controlled-workbench="true"]');
+      const activeSurface = document.querySelector('${ACTIVE_AGENT_SURFACE_SELECTOR}');
+      const alert = activeSurface?.querySelector('.desktop-agent-failure[role="alert"]');
+      const retry = alert?.querySelector('.desktop-agent-failure__retry');
+      const text = alert?.textContent?.trim() ?? '';
+      return {
+        shellVisible: shell instanceof HTMLElement && shell.getBoundingClientRect().width > 0,
+        workspaceMainVisible: Boolean(document.querySelector('[data-main-view-id]')),
+        resourcesVisible: Boolean(document.querySelector('[data-dock-owner="resources"]')),
+        failureVisible: alert instanceof HTMLElement && alert.getBoundingClientRect().width > 0,
+        retryVisible: retry instanceof HTMLButtonElement && retry.getBoundingClientRect().width > 0,
+        localizedTitle: text.includes('Agent 暂不可用') || text.includes('Agent unavailable'),
+        rawGrantErrorVisible:
+          text.includes('DesktopWorkspaceGrantAuthorityError') ||
+          text.includes('Error invoking remote method') ||
+          text.includes('workspace-grant:'),
+      };
+    })()`);
+    if (
+      !failure.shellVisible ||
+      !failure.workspaceMainVisible ||
+      !failure.resourcesVisible ||
+      !failure.failureVisible ||
+      !failure.retryVisible ||
+      !failure.localizedTitle ||
+      failure.rawGrantErrorVisible
+    ) {
+      throw new Error(
+        `Workspace Agent restart failure was not contained locally: ${JSON.stringify(failure)}`,
+      );
+    }
+    const failureScreenshot = await captureSettledScreenshot(
+      screenshot,
+      'workspace-agent-unavailable-after-application-restart',
+    );
+    const evidence = { activation, cancellation, failure };
+    checkpoint('workspace-agent-application-restart-unavailable', evidence);
+    return { ...evidence, screenshots: [failureScreenshot] };
   },
 });
 

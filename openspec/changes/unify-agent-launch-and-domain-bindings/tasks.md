@@ -140,3 +140,11 @@
 - [x] 16.3 Remove the user-visible English default from the canonical first-submit path; preserve command and Skill identity when their optional arguments are absent and cover Chinese first-input titles.
 - [x] 16.4 Normalize the Project, Assistant/Workspace group, Conversation row and expand-control typography inside the Primary navigation while retaining the smaller section-heading hierarchy.
 - [x] 16.5 Add focused Agent application, Pi materialization, Desktop composition and collapsed/expanded CSS contract tests, then run visible Electron acceptance for title refresh, Chinese UI and text layout.
+
+## 18. Workspace Grant Restart And Agent Surface Failure Containment
+
+- [x] 18.1 Extend the canonical Agent launch Host result with an owner-qualified unavailable projection for attach without adding an internal contract version or alternate success path.
+- [x] 18.2 Restore the exact persisted Workspace grant in the sender- and Scene-validated Main attach boundary before launch catalog composition, with no replacement grant or active Workspace fallback.
+- [x] 18.3 Keep attach/bootstrap failures local to the Agent Surface with an internationalized diagnostic and explicit retry action, without exposing raw IPC, path or grant identities or fabricating an Agent adapter.
+- [x] 18.4 Add contract, Main process-boundary and Renderer regression tests proving exact restore, typed unavailable, retry, sanitized diagnostics and sibling UI preservation.
+- [x] 18.5 Run focused tests, typechecks, strict OpenSpec validation, Agent Evaluation disposition, quality review and visible Electron UI validation, preserving any external runtime blocker.

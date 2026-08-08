@@ -330,6 +330,12 @@ export const en = {
   'workspace.futureOwner': 'Owned by {owner}',
   'agent.connecting': 'Connecting to Agent…',
   'agent.loading': 'Loading Agent interface…',
+  'agent.unavailable': 'Agent unavailable',
+  'agent.unavailableDetail': 'Workspace access for this Agent panel is currently unavailable.',
+  'agent.runtimeUnavailableDetail': 'The Agent runtime required by this panel is unavailable.',
+  'agent.connectionFailureDetail':
+    'The Agent panel could not connect. Other workspace tools remain available.',
+  'agent.retry': 'Retry',
   'attention.needsInput': 'Needs input',
   'attention.needsReview': 'Needs review',
   'attention.running': 'Running',

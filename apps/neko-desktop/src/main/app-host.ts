@@ -519,6 +519,25 @@ export class DesktopAppHost {
       ) {
         throw new Error('Agent launch attach does not match its exact Agent Surface.');
       }
+      if (request.draft.binding.kind === 'workspace') {
+        try {
+          await this.workspaceGrants.restore(
+            window.windowId,
+            request.draft.binding.workspaceGrantId,
+            request.draft.binding.workspaceId,
+          );
+        } catch {
+          return {
+            requestId: request.requestId,
+            status: 'unavailable',
+            diagnostic: {
+              code: 'agent-workspace-binding-unavailable',
+              owner: 'workspace',
+              message: 'The exact Workspace access for this Agent draft is unavailable.',
+            },
+          };
+        }
+      }
       return {
         requestId: request.requestId,
         status: 'ready',

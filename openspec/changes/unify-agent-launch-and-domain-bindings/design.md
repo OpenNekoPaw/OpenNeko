@@ -215,6 +215,21 @@ Assistant 最终响应时，Webview 不再渲染通用“正在处理”，即�
 未完成的 streaming text、pending Tool、queue 或没有任何 canonical 输出的运行仍显示活动状态。该投影规则
 不取消 runtime、不修改 queue、不伪造 idle，也不影响后台任务保护。
 
+### 12. Persisted Workspace Draft 只在 exact attach 边界恢复进程级 grant
+
+Workspace grant 是 Desktop Main 信任边界内的进程级 authority，不是可持久化的 Workspace 或
+Conversation 事实。Window Scene 可以持久化其 opaque identity 与 exact Workspace identity，但应用重启后
+新的 grant authority 必须在该 Draft 首次 attach 时调用 canonical `restore(windowId,
+workspaceGrantId, workspaceId)` 重建同一 identity。该调用发生在 Main 已校验 exact Window、Workbench、
+Agent Surface、View、Draft 和 binding 的 attach 边界；已有 grant 走同一方法完成 owner 校验，不增加
+startup/attach 双路径，也不生成替代 grant。
+
+恢复失败只返回 owner-qualified Agent launch unavailable projection，不抛成全局 IPC rejection，不修改
+Scene、Project、Workspace 或 Draft 的 authoritative identity，也不读取 active/current/recent Workspace。
+Renderer 在当前 Agent Surface 内显示国际化诊断和显式重试入口；未知异步 bootstrap 错误同样局部显示，
+不得泄露 raw IPC 文本、绝对路径或 opaque grant identity。没有可用 runtime adapter 时不得伪造可操作的
+Agent Root 或 no-op 成功，但 Window Shell、Workspace Main、Canvas 和 sibling Surface 必须继续渲染。
+
 ## Risks / Trade-offs
 
 - [Character/World 成熟度不同导致 union 形同假能力] → provider 未实现时只投影 unavailable；任务按 Assistant/Workspace、Character、World 三阶段设 gate，后阶段不得阻塞前阶段正确性。

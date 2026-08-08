@@ -74,7 +74,43 @@ describe('Desktop Agent launch preload bridge', () => {
         binding: { kind: 'assistant', assistantSpaceId: 'assistant:1', baseGrantIds: [] },
         bindingReceipt: null,
       }),
-    ).resolves.toEqual(createCatalog());
+    ).resolves.toEqual({
+      requestId: expect.stringContaining('agent-launch-attach'),
+      status: 'ready',
+      catalog: createCatalog(),
+    });
+  });
+
+  it('preserves an unavailable attach result instead of throwing an IPC error', async () => {
+    electron.invoke.mockImplementation(
+      async (_channel: string, request: { readonly requestId: string }) => ({
+        requestId: request.requestId,
+        status: 'unavailable',
+        diagnostic: {
+          code: 'agent-workspace-binding-unavailable',
+          owner: 'workspace',
+          message: 'Workspace access is unavailable.',
+        },
+      }),
+    );
+    const bridge = electron.bridge;
+    if (!bridge) throw new Error('Desktop preload bridge was not exposed.');
+
+    await expect(
+      bridge.agentLaunch.attach('workbench-1', 'agent-surface-1', 'agent-view:window-1', {
+        phase: 'draft',
+        draftId: 'draft:workspace',
+        binding: {
+          kind: 'workspace',
+          workspaceId: 'workspace-1',
+          workspaceGrantId: 'workspace-grant-1',
+        },
+        bindingReceipt: null,
+      }),
+    ).resolves.toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'agent-workspace-binding-unavailable', owner: 'workspace' },
+    });
   });
 
   it('preserves cancellation and detaches the exact connection', async () => {

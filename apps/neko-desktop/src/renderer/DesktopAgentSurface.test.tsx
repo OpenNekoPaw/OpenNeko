@@ -229,14 +229,60 @@ describe('DesktopAgentSurface', () => {
     });
     await act(async () => undefined);
 
-    expect(container.textContent).toContain('Projection effects are unavailable.');
+    expect(container.textContent).toContain(
+      'The Agent runtime required by this panel is unavailable.',
+    );
+    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it('renders a typed Workspace attach failure as a local translated diagnostic', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const attach = vi.fn(async () => ({
+      requestId: 'attach-workspace-unavailable',
+      status: 'unavailable' as const,
+      diagnostic: {
+        code: 'agent-workspace-binding-unavailable',
+        owner: 'workspace',
+        message: "Workspace grant 'workspace-grant:private' is not present.",
+      },
+    }));
+    installBridge(getBootstrap, { attach, detach: vi.fn(async () => undefined) });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () =>
+      root.render(
+        <TestAgentSurface
+          agentPresentation={{
+            phase: 'draft',
+            draftId: 'draft-workspace-unavailable',
+            binding: {
+              kind: 'workspace',
+              workspaceId: 'workspace-1',
+              workspaceGrantId: 'workspace-grant:private',
+            },
+            bindingReceipt: null,
+          }}
+        />,
+      ),
+    );
+    await act(async () => undefined);
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'Workspace access for this Agent panel is currently unavailable.',
+    );
+    expect(alert?.textContent).not.toContain('workspace-grant:private');
+    expect(container.querySelector('.desktop-agent-failure__retry')).not.toBeNull();
     expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
   it('mounts Assistant draft through the same Root and detaches its exact launch identity', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
-    const attach = vi.fn(async () => launchCatalog('assistant:1', 'launch-1'));
+    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-1'));
     const detach = vi.fn(async () => undefined);
     installBridge(getBootstrap, { attach, detach });
     const container = document.createElement('div');
@@ -275,8 +321,8 @@ describe('DesktopAgentSurface', () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const attach = vi
       .fn()
-      .mockResolvedValueOnce(launchCatalog('assistant:1', 'launch-1'))
-      .mockResolvedValueOnce(launchCatalog('assistant:2', 'launch-2'));
+      .mockResolvedValueOnce(launchReady('assistant:1', 'launch-1'))
+      .mockResolvedValueOnce(launchReady('assistant:2', 'launch-2'));
     const detach = vi.fn(async () => undefined);
     installBridge(getBootstrap, { attach, detach });
     const container = document.createElement('div');
@@ -298,7 +344,7 @@ describe('DesktopAgentSurface', () => {
   it('keeps the Root DOM identity while attaching an Assistant committed session', async () => {
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const getAssistantBootstrap = vi.fn(async () => readyAssistantBootstrap());
-    const attach = vi.fn(async () => launchCatalog('assistant:1', 'launch-1'));
+    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-1'));
     const detach = vi.fn(async () => undefined);
     installBridge(getBootstrap, { attach, detach, getAssistantBootstrap });
     const container = document.createElement('div');
@@ -340,7 +386,7 @@ describe('DesktopAgentSurface', () => {
     });
     const getBootstrap = vi.fn(async () => readyBootstrap());
     const getAssistantBootstrap = vi.fn(() => sessionBootstrap);
-    const attach = vi.fn(async () => launchCatalog('assistant:1', 'launch-1'));
+    const attach = vi.fn(async () => launchReady('assistant:1', 'launch-1'));
     const detach = vi.fn(async () => undefined);
     installBridge(getBootstrap, { attach, detach, getAssistantBootstrap });
     const container = document.createElement('div');
@@ -368,6 +414,51 @@ describe('DesktopAgentSurface', () => {
     expect(container.querySelector('[data-testid="agent-root"]')).toBe(agentRoot);
     expect(agentRoot?.getAttribute('data-agent-presentation')).toBe('session');
     expect(agentRoot?.closest('.desktop-agent-root')?.hasAttribute('hidden')).toBe(false);
+    await act(async () => root.unmount());
+  });
+
+  it('contains an async launch error, sanitizes transport details, and retries in place', async () => {
+    const getBootstrap = vi.fn(async () => readyBootstrap());
+    const attach = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error(
+          "Error invoking remote method 'neko:agent:launch': Workspace grant 'workspace-grant:private' is not present.",
+        ),
+      )
+      .mockResolvedValueOnce(launchReady('assistant:1', 'launch-retry'));
+    installBridge(getBootstrap, { attach, detach: vi.fn(async () => undefined) });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <>
+          <div data-testid="sibling-surface">Canvas</div>
+          <TestLaunchAgentSurface assistantSpaceId="assistant:1" />
+        </>,
+      );
+    });
+    await act(async () => undefined);
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain('The Agent panel could not connect');
+    expect(alert?.textContent).not.toContain('workspace-grant:private');
+    expect(alert?.textContent).not.toContain('Error invoking remote method');
+    expect(container.querySelector('[data-testid="sibling-surface"]')?.textContent).toBe('Canvas');
+    expect(container.querySelector('[data-testid="agent-root"]')).toBeNull();
+
+    await act(async () => {
+      const retry = container.querySelector<HTMLButtonElement>('.desktop-agent-failure__retry');
+      if (!retry) throw new Error('Agent failure fixture requires a retry action.');
+      retry.click();
+    });
+    await act(async () => undefined);
+
+    expect(attach).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-testid="agent-root"]')).not.toBeNull();
+    expect(container.querySelector('[role="alert"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });
@@ -581,6 +672,14 @@ function launchCatalog(assistantSpaceId: string, connectionId: string) {
       },
     }),
     inputs: [],
+  };
+}
+
+function launchReady(assistantSpaceId: string, connectionId: string) {
+  return {
+    requestId: `attach:${connectionId}`,
+    status: 'ready' as const,
+    catalog: launchCatalog(assistantSpaceId, connectionId),
   };
 }
 

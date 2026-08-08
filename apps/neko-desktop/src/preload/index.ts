@@ -277,10 +277,10 @@ const bridge: OpenNekoDesktopBridge &
       });
       const response: unknown = await ipcRenderer.invoke(AGENT_LAUNCH_HOST_CHANNEL, request);
       const result = parseAgentLaunchHostResult(response, request.requestId);
-      if (result.status !== 'ready') {
+      if (result.status !== 'ready' && result.status !== 'unavailable') {
         throw new Error(`Agent launch attach returned '${result.status}'.`);
       }
-      return result.catalog;
+      return result;
     },
     async authorizeResource(connection, resourceKind) {
       const request = parseAgentLaunchHostRequest({

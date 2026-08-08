@@ -1,9 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Button, RefreshIcon } from '@neko/ui';
 import { useTranslation } from '@neko/ui/i18n/react';
-import type {
-  AgentInteractionProjection,
-  AgentLaunchCatalogProjection,
-} from '@neko/agent-contracts';
+import type { AgentInteractionProjection, AgentLaunchHostResult } from '@neko/agent-contracts';
 import type { DesktopAgentBootstrapProjection } from '../shared/agent-contract';
 import type { DesktopProjectTabProjection } from '@neko/host/desktop-shell-contract';
 import {
@@ -33,8 +31,12 @@ type DesktopAgentSurfaceState =
       readonly initialConversation?: { readonly id: string; readonly title: string };
       readonly initialInput?: { readonly id: string; readonly value: string };
     }
-  | { readonly kind: 'unavailable'; readonly connectionKey: string; readonly message: string }
-  | { readonly kind: 'error'; readonly connectionKey: string; readonly message: string };
+  | {
+      readonly kind: 'unavailable';
+      readonly connectionKey: string;
+      readonly reason: 'binding' | 'runtime';
+    }
+  | { readonly kind: 'error'; readonly connectionKey: string };
 
 type DesktopAgentSurfaceRuntimeAdapter =
   ElectronAgentHostRuntimeAdapter | ElectronAgentLaunchHostRuntimeAdapter;
@@ -61,6 +63,7 @@ export type DesktopAgentSurfaceProps =
 
 export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Element {
   const [state, setState] = useState<DesktopAgentSurfaceState>({ kind: 'loading' });
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const { locale, t } = useTranslation();
   const viewId = props.binding === 'workspace' ? props.tab.viewId : props.viewId;
   const projectId = props.binding === 'workspace' ? props.tab.projectId : undefined;
@@ -70,7 +73,10 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
 
   useEffect(() => {
     let active = true;
-    let bootstrapOperation: Promise<DesktopAgentBootstrapProjection | AgentLaunchCatalogProjection>;
+    let bootstrapOperation: Promise<
+      | DesktopAgentBootstrapProjection
+      | Extract<AgentLaunchHostResult, { readonly status: 'ready' | 'unavailable' }>
+    >;
     if (agentPresentation?.phase === 'draft') {
       bootstrapOperation = Promise.all([
         loadDesktopAgentWebviewRootModule(),
@@ -80,7 +86,7 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
           viewId,
           agentPresentation,
         ),
-      ]).then(([, catalog]) => catalog);
+      ]).then(([, result]) => result);
     } else if (binding === 'workspace') {
       if (projectId === undefined) {
         throw new Error('Workspace-bound Agent requires a Project identity.');
@@ -126,28 +132,31 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     void bootstrapOperation
       .then((bootstrap) => {
         if (!active) {
-          if (!('status' in bootstrap)) {
-            reportCleanupFailure(window.openNekoDesktop.agentLaunch.detach(bootstrap.connection));
+          if (bootstrap.status === 'ready' && 'catalog' in bootstrap) {
+            reportCleanupFailure(
+              window.openNekoDesktop.agentLaunch.detach(bootstrap.catalog.connection),
+            );
           } else if (bootstrap.status === 'ready') {
             reportCleanupFailure(window.openNekoDesktop.agent.detach(bootstrap.connection));
           }
           return;
         }
-        if ('status' in bootstrap && bootstrap.status === 'unavailable') {
+        if (bootstrap.status === 'unavailable') {
           setState({
             kind: 'unavailable',
             connectionKey,
-            message: bootstrap.diagnostic.message,
+            reason: 'owner' in bootstrap.diagnostic ? 'binding' : 'runtime',
           });
           return;
         }
-        if (!('status' in bootstrap)) {
+        if ('catalog' in bootstrap) {
           if (agentPresentation?.phase !== 'draft') {
             throw new Error('Agent launch adapter requires a Draft presentation.');
           }
+          const catalog = bootstrap.catalog;
           const launchAdapter = createElectronAgentLaunchHostRuntimeAdapter({
             bridge: window.openNekoDesktop,
-            catalog: bootstrap,
+            catalog,
             draftId: agentPresentation.draftId,
           });
           setState({
@@ -157,11 +166,11 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             directGeneration: {
               submit: (operation) =>
                 window.openNekoDesktop.directGeneration.submit(
-                  { kind: 'agent-draft', connection: bootstrap.connection },
+                  { kind: 'agent-draft', connection: catalog.connection },
                   operation,
                 ),
             },
-            agentPresentation: bootstrap.interaction,
+            agentPresentation: catalog.interaction,
             ...(props.binding === 'workspace' && props.initialConversation
               ? { initialConversation: props.initialConversation }
               : {}),
@@ -194,15 +203,15 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
             : {}),
         });
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (active) {
-          setState({ kind: 'error', connectionKey, message: describeError(error) });
+          setState({ kind: 'error', connectionKey });
         }
       });
     return () => {
       active = false;
     };
-  }, [binding, connectionKey, projectId, viewId]);
+  }, [binding, connectionKey, projectId, retryAttempt, viewId]);
 
   const activeAdapter = state.kind === 'ready' ? state.adapter : undefined;
   let content: JSX.Element;
@@ -212,7 +221,23 @@ export function DesktopAgentSurface(props: DesktopAgentSurfaceProps): JSX.Elemen
     state.connectionKey === connectionKey &&
     (state.kind === 'unavailable' || state.kind === 'error')
   ) {
-    content = <AgentSurfaceStatus message={state.message} error />;
+    content = (
+      <AgentSurfaceFailure
+        detail={
+          state.kind === 'unavailable'
+            ? state.reason === 'binding'
+              ? t('agent.unavailableDetail')
+              : t('agent.runtimeUnavailableDetail')
+            : t('agent.connectionFailureDetail')
+        }
+        retryLabel={t('agent.retry')}
+        title={t('agent.unavailable')}
+        onRetry={() => {
+          setState({ kind: 'loading' });
+          setRetryAttempt((attempt) => attempt + 1);
+        }}
+      />
+    );
   } else if (state.kind !== 'ready') {
     content = <AgentSurfaceStatus message={t('agent.connecting')} />;
   } else {
@@ -302,9 +327,7 @@ function createDesktopAgentSurfaceKey(props: DesktopAgentSurfaceProps): string {
   ].join(':');
 }
 
-function projectAgentBindingKey(
-  binding: AgentInteractionProjection['binding'],
-): readonly string[] {
+function projectAgentBindingKey(binding: AgentInteractionProjection['binding']): readonly string[] {
   switch (binding.kind) {
     case 'unbound':
       return ['unbound'];
@@ -344,22 +367,42 @@ export async function prepareDesktopAgentSurfaceResources(input: {
   return bootstrap;
 }
 
-function AgentSurfaceStatus({
-  message,
-  error = false,
-}: {
-  readonly message: string;
-  readonly error?: boolean;
-}): JSX.Element {
+function AgentSurfaceStatus({ message }: { readonly message: string }): JSX.Element {
   return (
-    <div className={`desktop-agent-status ${error ? 'is-error' : ''}`} role="status">
+    <div className="desktop-agent-status" role="status">
       {message}
     </div>
   );
 }
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function AgentSurfaceFailure({
+  detail,
+  onRetry,
+  retryLabel,
+  title,
+}: {
+  readonly detail: string;
+  readonly onRetry: () => void;
+  readonly retryLabel: string;
+  readonly title: string;
+}): JSX.Element {
+  return (
+    <div className="desktop-agent-failure" role="alert">
+      <div className="desktop-agent-failure__content">
+        <strong>{title}</strong>
+        <p>{detail}</p>
+        <Button
+          className="desktop-agent-failure__retry"
+          leadingIcon={<RefreshIcon size={13} />}
+          onClick={onRetry}
+          size="xs"
+          variant="secondary"
+        >
+          {retryLabel}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function reportCleanupFailure(operation: Promise<void>): void {

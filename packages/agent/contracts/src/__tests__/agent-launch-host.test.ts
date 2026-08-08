@@ -46,6 +46,31 @@ describe('Agent launch Host contract', () => {
     ).toThrow('request identity mismatch');
   });
 
+  it('parses an owner-qualified unavailable attach result without transport details', () => {
+    expect(
+      parseAgentLaunchHostResult(
+        {
+          requestId: 'attach-unavailable-1',
+          status: 'unavailable',
+          diagnostic: {
+            code: 'agent-workspace-binding-unavailable',
+            owner: 'workspace',
+            message: 'The exact Workspace access for this Agent draft is unavailable.',
+          },
+        },
+        'attach-unavailable-1',
+      ),
+    ).toEqual({
+      requestId: 'attach-unavailable-1',
+      status: 'unavailable',
+      diagnostic: {
+        code: 'agent-workspace-binding-unavailable',
+        owner: 'workspace',
+        message: 'The exact Workspace access for this Agent draft is unavailable.',
+      },
+    });
+  });
+
   it('parses an exact target binding without accepting renderer authority fields', () => {
     const request = parseAgentLaunchHostRequest({
       requestId: 'bind-1',

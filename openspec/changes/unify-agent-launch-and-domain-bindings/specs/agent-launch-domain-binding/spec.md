@@ -179,3 +179,25 @@ Conversation records that cannot satisfy the canonical owner or context contract
 
 - **WHEN** a persisted Character or World Conversation binding cannot be resolved by an authoritative owner
 - **THEN** Agent preserves and rejects only that Conversation and does not guess from a current domain record, current Project, fixture or transcript text
+
+### Requirement: Persisted Workspace Draft grant authority is restored exactly and fails locally
+
+Desktop Main SHALL restore the same process-scoped Workspace grant identity from the exact persisted
+Window, Workspace and Draft binding when that Draft attaches after application restart. It SHALL NOT
+generate a replacement grant, resolve another Workspace, or let restoration failure reject Window Shell
+startup or replace the complete Desktop UI with an IPC error.
+
+#### Scenario: Workspace Draft attaches after application restart
+
+- **WHEN** a persisted Workspace Draft attaches in a new application process whose grant authority does not yet contain its `workspaceGrantId`
+- **THEN** Desktop restores that same grant identity for the exact Window and Workspace before composing the Draft catalog, and the Agent Root mounts normally
+
+#### Scenario: Persisted Workspace cannot restore its grant
+
+- **WHEN** the exact persisted Workspace is missing or its grant cannot be restored
+- **THEN** attach returns an owner-qualified unavailable diagnostic for only that Agent Surface, preserves the persisted identities and sibling UI, and does not use an active, current, recent or first Workspace
+
+#### Scenario: Agent attach fails unexpectedly in Renderer
+
+- **WHEN** an Agent attach or bootstrap request rejects after the Desktop Surface has mounted
+- **THEN** Renderer displays an internationalized local Agent diagnostic with an explicit retry action, does not expose raw IPC, path or grant identity text, and does not prevent the Window Shell or sibling Surfaces from rendering

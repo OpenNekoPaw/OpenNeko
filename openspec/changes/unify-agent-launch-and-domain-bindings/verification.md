@@ -410,3 +410,47 @@ text overflow or residual processing state.
 This local functional provider proves the native multimodal request shape without incurring external
 API cost. It does not satisfy task 11.7: no explicitly authorized real-provider visible/hidden
 Evaluation was run, so that task and its cost-dependent residual risk remain open.
+
+## Workspace grant restart and Agent Surface failure containment
+
+The application-restart regression was requalified on 2026-08-08:
+
+- Desktop Main restores the persisted Workspace Draft's exact `workspaceGrantId` only after the
+  sender, Window, Workbench, Agent Surface, View, Draft and Workspace binding match the active Scene.
+  Restore failure returns the canonical owner-qualified `unavailable` result and does not call Agent
+  launch attach, generate another grant, resolve an active Workspace or reject Shell startup.
+- Preload preserves `ready | unavailable` as the typed attach result. Renderer mounts no fake Agent
+  adapter for an unavailable result, sanitizes unknown asynchronous attach failures, and displays a
+  translated panel-local diagnostic with an explicit retry command.
+- Focused Agent contract tests passed 1 file / 5 tests. Focused Desktop Main, preload and Renderer
+  tests passed 3 files / 60 tests, including exact grant restore after clearing process authority,
+  typed unavailable decoding, raw IPC/grant text suppression, sibling Canvas DOM preservation and
+  retry to a normally mounted Agent Root. Agent contracts and Desktop typechecks passed.
+- `pnpm test:local:ui:contract` passed 6 tests. `pnpm test:agent:eval` remained at 44 files / 294
+  tests with the 23-suite / 60-case strict dry-run disposition already recorded above; this restart
+  fix changes Host recovery and UI projection rather than prompts, Skills, provider selection or
+  model behavior, and no external provider cost was authorized.
+- `pnpm check:quality`, `pnpm check:application-boundaries`, `pnpm check:legacy-debt`, strict
+  OpenSpec validation, focused Prettier and `git diff --check` passed. The L2 quality review found no
+  blocking ownership, dependency-direction, canonical-path, fail-local, user-data or test-evidence
+  issue. `pnpm check:unused` still reports only the pre-existing unrelated
+  `activateWorkbenchMainView` export in `DesktopShell.tsx`.
+
+The authoritative visible development Electron success scenario passed at
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T13-27-42.552Z-desktop-agent-workspace-restart-development/report.json`.
+Before and after a complete application restart it retained the same exact Workspace and grant
+identities and displayed `工作区已就绪`. The composer and toolbar fit the narrow Agent Surface; no
+failure panel, alert, raw grant diagnostic, Console error, warning or Renderer exception was present.
+Both current screenshots were inspected directly: Agent, Canvas and Resources remained visible and
+coherent without clipping, overlap, blank regions or stale error text.
+
+The visible unavailable-state inventory remains explicitly blocked. The first attempt could not
+start a second Forge runtime because an existing development server already owned port 5173. A
+second isolated Electron fixture connected to that server but stopped before React mounted because
+the pre-existing Vite module graph retained an unrelated Canvas export error
+(`CANVAS_ADD_TO_CUT_ACTION_ID`). The fail-visible report is preserved at
+`reports/desktop-functional/replace-desktop-media-scheme-with-http-resource-gateway/2026-08-08T13-34-00.560Z-desktop-agent-workspace-restart-unavailable-development/report.json`;
+it contains no Agent failure-state screenshot and is not claimed as product evidence. The required
+unavailable-state function, localization, retry and sibling containment are covered by the focused
+Renderer test, but UI validation remains `blocked` for that visual state until it is rerun from a
+fresh authoritative Desktop development runtime.

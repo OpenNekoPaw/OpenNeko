@@ -8,6 +8,7 @@ Agent Entry Draft 与 Assistant/Workspace 会话目前使用不同的状态与�
 - 建立唯一的 Draft submit application path：验证目标、资源授权、typed input 与有效配置，原子创建 exact Conversation 或领域 Run attachment，再切换到对应 Scene；禁止根据文本、active/current/recent Project 或组件状态推断 owner。
 - 统一 Entry 与 Session 的 `@`、`/`、`$` catalog 和 typed invocation；catalog 项声明 phase、scope、owner 与可用性诊断，launch-safe 项可用于 Draft，session-only 项不得退化为普通模型 prompt。
 - 让 Workspace、Assistant 通过窄 domain binding/context port 提供精确身份、授权 read model 和 capability contribution；为 Character 与 World 定义相同的可选消费端口，未组合 authoritative provider 时只返回 owner-qualified unavailable。Agent 保持唯一 session/runtime owner，不复制领域事实或建立领域专用 Agent runtime。
+- 在应用进程重启后，从持久化 Workspace Draft 的精确 Window、Workspace 与 grant identity 恢复 Desktop grant authority；恢复失败只投影当前 Agent Surface unavailable，不阻止 Window Shell、Workspace Main 或 sibling Surface 渲染。
 - 将模型发现与模型可执行性分离；Draft 和 Conversation 投影逐字段配置策略、来源和不可用原因，运行中的 Turn 使用不可变配置快照，同一 Conversation 的合法修改只作用于未来 Turn。
 - 让 Workspace 文本创作文件（包括 Fountain screenplay）通过 exact ContentLocator 进入 Conversation context；让授权图片在 exact selected model 支持 image input 时由 Agent workspace owner 有界物化为当前 Turn 的原生多模态输入，同时只在消息引用中保留 locator；其他二进制和未组合的结构化格式继续 fail-visible。terminal Conversation projection 收敛可见执行活动，避免有效引用被误判为未连接的预处理或最终回复后残留“正在处理”。
 - **BREAKING**：删除角色特殊文本启动、Entry 原始文本命令/Skill 首发、空 Workspace mention 结果以及所有 active/current Project fallback；同步替换 producer、consumer、fixture 与测试，不保留兼容路径。

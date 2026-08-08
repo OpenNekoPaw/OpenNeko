@@ -10,6 +10,8 @@ import { desktopInvalidWindowConvergenceScenario } from './desktop-invalid-windo
 import { noActiveProjectCatalogsScenario } from './no-active-project-catalogs.mjs';
 import {
   desktopAgentEntryWorkspaceSkillScenario,
+  desktopAgentWorkspaceRestartScenario,
+  desktopAgentWorkspaceRestartUnavailableScenario,
   desktopConversationNavigationScenario,
   desktopProjectSidebarManagementScenario,
   desktopWorkbenchScenesScenario,
@@ -25,6 +27,8 @@ const scenarios = new Map(
     desktopAgentDiagnosticPortalScenario,
     desktopInvalidWindowConvergenceScenario,
     desktopAgentEntryWorkspaceSkillScenario,
+    desktopAgentWorkspaceRestartScenario,
+    desktopAgentWorkspaceRestartUnavailableScenario,
     desktopConversationNavigationScenario,
     desktopProjectSidebarManagementScenario,
     desktopWorkbenchScenesScenario,

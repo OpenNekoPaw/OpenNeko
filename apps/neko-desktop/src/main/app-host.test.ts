@@ -738,6 +738,116 @@ describe('DesktopAppHost', () => {
     await fixture.appHost.dispose();
   });
 
+  it('restores the exact Workspace grant on Draft attach after the process authority is rebuilt', async () => {
+    const agentLaunch = createAgentLaunchRuntime();
+    const fixture = await createShellAppHost({ agentLaunch });
+    const workspace = createWorkspaceResolution();
+    fixture.registry.resolve.mockResolvedValue(workspace);
+    const selected = await fixture.appHost.resolveWorkspaceTarget(
+      fixture.sender,
+      createDesktopWorkspaceDirectoryTargetRequest({
+        requestId: 'restart-workspace-grant',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+      }),
+      async () => ({ label: workspace.displayName, hostResource: workspace.workspacePath }),
+    );
+    if (selected.status !== 'authorized') throw new Error('Expected Workspace authorization.');
+    const opened = await fixture.appHost.transitionScene(
+      fixture.sender,
+      createDesktopSceneTransitionRequest({
+        requestId: 'restart-workspace-open',
+        rendererSessionId: fixture.projection.rendererSessionId,
+        windowId: fixture.windowId,
+        sceneId: activeScene(fixture.projection).sceneId,
+        intent: { kind: 'open-workspace', workspaceGrantId: selected.grant.workspaceGrantId },
+      }),
+    );
+    if (opened.status !== 'transitioned') throw new Error('Expected Workspace Scene.');
+    const projection = await fixture.appHost.shell.getProjection(fixture.windowId);
+    const scene = activeScene(projection);
+    if (scene.context.kind !== 'agent' || scene.context.scope.kind !== 'workspace') {
+      throw new Error('Workspace grant restart fixture requires a Workspace Draft.');
+    }
+    const draft = {
+      phase: 'draft' as const,
+      draftId: scene.context.scope.draftId,
+      binding: {
+        kind: 'workspace' as const,
+        workspaceId: scene.context.scope.workspaceId,
+        workspaceGrantId: scene.context.scope.workspaceGrantId,
+      },
+      bindingReceipt: null,
+    };
+    const workbench = activeWorkbench(projection);
+    const catalog = createLaunchCatalog({
+      applicationInstanceId: 'app-1',
+      windowId: fixture.windowId,
+      workbenchInstanceId: workbench.workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(projection),
+      viewId: scene.context.agentViewId,
+      connectionId: 'launch-workspace-restart',
+      draftId: draft.draftId,
+      binding: draft.binding,
+    });
+    vi.spyOn(agentLaunch, 'attach').mockResolvedValue(catalog);
+    fixture.appHost.workspaceGrants.releaseWindow(fixture.windowId);
+    const restore = vi.spyOn(fixture.appHost.workspaceGrants, 'restore');
+    const request = {
+      operation: 'attach' as const,
+      workbenchInstanceId: workbench.workbenchInstanceId,
+      agentSurfaceId: currentAgentSurfaceId(projection),
+      viewId: scene.context.agentViewId,
+      draft,
+    };
+
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        requestId: 'launch-workspace-after-restart',
+        ...request,
+      }),
+    ).resolves.toEqual({
+      requestId: 'launch-workspace-after-restart',
+      status: 'ready',
+      catalog,
+    });
+    expect(restore).toHaveBeenCalledWith(
+      fixture.windowId,
+      selected.grant.workspaceGrantId,
+      workspace.workspaceId,
+    );
+    await expect(
+      fixture.appHost.workspaceGrants.resolveAuthorizedWorkspace(
+        selected.grant.workspaceGrantId,
+        workspace.workspaceId,
+      ),
+    ).resolves.toMatchObject({ workspaceGrantId: selected.grant.workspaceGrantId });
+
+    fixture.appHost.workspaceGrants.releaseWindow(fixture.windowId);
+    fixture.registry.resolve.mockRejectedValueOnce(
+      new Error(`/private/workspaces/${workspace.workspaceId} is unavailable`),
+    );
+    await expect(
+      fixture.appHost.executeAgentLaunchRequest(fixture.sender, {
+        requestId: 'launch-workspace-restore-unavailable',
+        ...request,
+      }),
+    ).resolves.toEqual({
+      requestId: 'launch-workspace-restore-unavailable',
+      status: 'unavailable',
+      diagnostic: {
+        code: 'agent-workspace-binding-unavailable',
+        owner: 'workspace',
+        message: 'The exact Workspace access for this Agent draft is unavailable.',
+      },
+    });
+    expect(agentLaunch.attach).toHaveBeenCalledTimes(1);
+    await expect(fixture.appHost.shell.getProjection(fixture.windowId)).resolves.toMatchObject({
+      window: expect.any(Object),
+    });
+    await fixture.appHost.dispose();
+  });
+
   it('routes Draft mention search through the sender-bound launch connection and receipt', async () => {
     const agentLaunch = createAgentLaunchRuntime();
     const fixture = await createShellAppHost({ agentLaunch });

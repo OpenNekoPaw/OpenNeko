@@ -25,6 +25,10 @@ import {
   parseAgentConfigurationRequest,
   type AgentConfigurationRequest,
 } from './agent-model-catalog';
+import {
+  parseAgentAvailabilityDiagnostic,
+  type AgentAvailabilityDiagnostic,
+} from './agent-availability';
 
 export const AGENT_LAUNCH_HOST_CHANNEL = 'neko:agent:launch' as const;
 
@@ -87,6 +91,11 @@ export type AgentLaunchHostResult =
     }
   | {
       readonly requestId: string;
+      readonly status: 'unavailable';
+      readonly diagnostic: AgentAvailabilityDiagnostic;
+    }
+  | {
+      readonly requestId: string;
       readonly status: 'cancelled' | 'detached';
     }
   | {
@@ -107,7 +116,7 @@ export interface OpenNekoAgentLaunchBridge {
       agentSurfaceId: string,
       viewId: string,
       draft: AgentDraftInteractionProjection,
-    ): Promise<AgentLaunchCatalogProjection>;
+    ): Promise<Extract<AgentLaunchHostResult, { readonly status: 'ready' | 'unavailable' }>>;
     authorizeResource(
       connection: AgentLaunchConnectionIdentity,
       resourceKind: AgentLaunchResourceKind,
@@ -244,6 +253,14 @@ export function parseAgentLaunchHostResult(
       requestId,
       status: 'ready',
       catalog: parseAgentLaunchCatalogProjection(record['catalog']),
+    };
+  }
+  if (record['status'] === 'unavailable') {
+    requireExactKeys(record, ['requestId', 'status', 'diagnostic']);
+    return {
+      requestId,
+      status: 'unavailable',
+      diagnostic: parseAgentAvailabilityDiagnostic(record['diagnostic']),
     };
   }
   if (record['status'] === 'cancelled' || record['status'] === 'detached') {
