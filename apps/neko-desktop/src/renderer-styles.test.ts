@@ -54,6 +54,16 @@ describe('Desktop renderer styles', () => {
     expect(expandRule?.groups?.body).toMatch(/font-size\s*:\s*11px/u);
   });
 
+  it('uses one typography size for primary navigation counts', () => {
+    const countRule = styles.match(
+      /\.primary-conversation-group__count\s*\{(?<body>[\s\S]*?)\n\}/u,
+    );
+
+    expect(styles).toMatch(/\.home-sidebar-heading\s*\{[^}]*font-size\s*:\s*10px/u);
+    expect(countRule?.groups?.body).toMatch(/font-size\s*:\s*10px/u);
+    expect(countRule?.groups?.body).toMatch(/line-height\s*:\s*1\.2/u);
+  });
+
   it('uses icon-only status markers and reveals stable row actions on hover or focus', () => {
     const statusRule = styles.match(/\.home-conversation-status\s*\{(?<body>[\s\S]*?)\n\}/u);
     const unavailableRule = styles.match(

@@ -758,6 +758,8 @@ code {
 .primary-conversation-group__count {
   min-width: 18px;
   color: var(--neko-desktop-text-subtle);
+  font-size: 10px;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
