@@ -444,6 +444,7 @@ export const desktopWorkbenchScenesScenario = Object.freeze({
         initialEntryDraft,
         freshEntryDraft,
       });
+      await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-workspace-button`, 0);
       await click(`${ACTIVE_AGENT_SURFACE_SELECTOR} .agent-composer-tool-button`, 0);
       await waitForCondition(
         evaluate,
@@ -4207,14 +4208,21 @@ async function startFunctionalProviderServer(port, responseDelayMs) {
   const requests = [];
   const server = createServer((request, response) => {
     const requestIndex = requests.length + 1;
-    requests.push({
+    const evidence = {
       method: request.method,
       url: request.url,
       authorization: request.headers.authorization,
       apiKey: request.headers['x-api-key'],
-    });
-    request.resume();
+      bodyBytes: 0,
+      nativeImageCount: 0,
+    };
+    requests.push(evidence);
+    const chunks = [];
+    request.on('data', (chunk) => chunks.push(chunk));
     request.once('end', () => {
+      const body = Buffer.concat(chunks);
+      evidence.bodyBytes = body.byteLength;
+      evidence.nativeImageCount = countNativeImageParts(body);
       setTimeout(() => {
         response.writeHead(200, {
           'content-type': 'text/event-stream',
@@ -4236,6 +4244,28 @@ async function startFunctionalProviderServer(port, responseDelayMs) {
     snapshot: () => ({ requests: requests.map((request) => ({ ...request })) }),
     close: () => closeServer(server),
   };
+}
+
+function countNativeImageParts(body) {
+  let payload;
+  try {
+    payload = JSON.parse(body.toString('utf8'));
+  } catch {
+    return 0;
+  }
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  return messages.reduce((count, message) => {
+    const content = Array.isArray(message?.content) ? message.content : [];
+    return (
+      count +
+      content.filter(
+        (part) =>
+          part?.type === 'image_url' &&
+          typeof part.image_url?.url === 'string' &&
+          part.image_url.url.startsWith('data:image/'),
+      ).length
+    );
+  }, 0);
 }
 
 function assertFunctionalProviderEvidence(evidence, minimumRequestCount) {
