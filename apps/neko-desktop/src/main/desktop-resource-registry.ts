@@ -35,6 +35,18 @@ export interface DesktopResourceSetEntry {
   readonly contentType: string;
 }
 
+export interface DesktopResourceTreeEntry {
+  readonly virtualPath: string;
+  readonly byteLength: number;
+  readonly contentType: string;
+  read(signal: AbortSignal): Promise<Uint8Array>;
+}
+
+export interface DesktopResourceTree {
+  readonly entries: readonly DesktopResourceTreeEntry[];
+  release(): void;
+}
+
 interface RegisteredFileSource {
   readonly absolutePath: string;
   readonly mediaType: string;
@@ -67,7 +79,20 @@ interface ResourceSetRegistration extends RegistrationBase {
   readonly entries: ReadonlyMap<string, RegisteredFileSource>;
 }
 
-type ResourceRegistration = FileRegistration | PcmRegistration | ResourceSetRegistration;
+interface RegisteredResourceTreeEntry {
+  readonly byteLength: number;
+  readonly contentType: string;
+  read(signal: AbortSignal): Promise<Uint8Array>;
+}
+
+interface ResourceTreeRegistration extends RegistrationBase {
+  readonly kind: 'resource-tree';
+  readonly entries: ReadonlyMap<string, RegisteredResourceTreeEntry>;
+  readonly releaseSource: () => void;
+}
+
+type ResourceRegistration =
+  FileRegistration | PcmRegistration | ResourceSetRegistration | ResourceTreeRegistration;
 
 interface ByteRange {
   readonly start: number;
@@ -158,6 +183,43 @@ export class DesktopResourceRegistry {
       registration.id,
       `${resourceUrl(registration.id)}/${encodeVirtualPath(normalizedEntryPath)}`,
     );
+  }
+
+  registerResourceTree(
+    owner: DesktopResourceOwner,
+    tree: DesktopResourceTree,
+  ): DesktopResourceLease {
+    this.requireActive();
+    const base = this.createBase(owner);
+    if (tree.entries.length === 0) {
+      throw new Error('Desktop resource tree requires at least one entry.');
+    }
+    const records = new Map<string, RegisteredResourceTreeEntry>();
+    for (const entry of tree.entries) {
+      const virtualPath = normalizeVirtualPath(entry.virtualPath);
+      if (records.has(virtualPath)) {
+        throw new Error(`Desktop resource tree contains duplicate path '${virtualPath}'.`);
+      }
+      if (!Number.isSafeInteger(entry.byteLength) || entry.byteLength < 0) {
+        throw new Error(`Desktop resource tree entry length is invalid: ${virtualPath}`);
+      }
+      if (typeof entry.read !== 'function') {
+        throw new Error(`Desktop resource tree entry reader is invalid: ${virtualPath}`);
+      }
+      records.set(virtualPath, {
+        byteLength: entry.byteLength,
+        contentType: requireMediaType(entry.contentType),
+        read: entry.read,
+      });
+    }
+    const registration: ResourceTreeRegistration = {
+      ...base,
+      kind: 'resource-tree',
+      entries: records,
+      releaseSource: tree.release,
+    };
+    this.registrations.set(registration.id, registration);
+    return this.createLease(registration.id, `${resourceUrl(registration.id)}/`);
   }
 
   createMediaPublisher(owner: DesktopResourceOwner): NodeMediaPublisher {
@@ -253,6 +315,11 @@ export class DesktopResourceRegistry {
       virtualPath = decodeVirtualPath(route.virtualPath);
     } catch {
       return response(400, 'Resource path is invalid', originHeaders);
+    }
+    if (registration.kind === 'resource-tree') {
+      const entry = registration.entries.get(virtualPath);
+      if (!entry) return response(404, 'Resource not found', originHeaders);
+      return this.serveResourceTreeEntry(request, registration, entry, originHeaders);
     }
     const source = registration.entries.get(virtualPath);
     if (!source) return response(404, 'Resource not found', originHeaders);
@@ -403,6 +470,60 @@ export class DesktopResourceRegistry {
     );
   }
 
+  private async serveResourceTreeEntry(
+    request: Request,
+    registration: ResourceTreeRegistration,
+    entry: RegisteredResourceTreeEntry,
+    originHeaders: Readonly<Record<string, string>>,
+  ): Promise<Response> {
+    const range = parseRange(request.headers.get('Range') ?? undefined, entry.byteLength);
+    const headers: Record<string, string> = {
+      ...originHeaders,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-store',
+      'Content-Type': entry.contentType,
+      'X-Content-Type-Options': 'nosniff',
+    };
+    if (range.status === 'invalid') {
+      return response(416, '', {
+        ...headers,
+        'Content-Range': `bytes */${entry.byteLength}`,
+      });
+    }
+    const selected = range.status === 'partial' ? range.range : undefined;
+    const byteLength = selected ? selected.end - selected.start + 1 : entry.byteLength;
+    headers['Content-Length'] = String(byteLength);
+    if (selected) {
+      headers['Content-Range'] = `bytes ${selected.start}-${selected.end}/${entry.byteLength}`;
+    }
+    if (request.method === 'HEAD') {
+      return new Response(null, { status: selected ? 206 : 200, headers });
+    }
+
+    const readController = new AbortController();
+    const disposeAbortLinks = forwardAbort(
+      [request.signal, registration.abortController.signal],
+      readController,
+    );
+    try {
+      const bytes = await entry.read(readController.signal);
+      if (bytes.byteLength !== entry.byteLength) {
+        return response(409, 'Resource entry length changed', originHeaders);
+      }
+      const selectedBytes = selected ? bytes.slice(selected.start, selected.end + 1) : bytes;
+      const body = new Uint8Array(selectedBytes.byteLength);
+      body.set(selectedBytes);
+      return new Response(body.buffer, { status: selected ? 206 : 200, headers });
+    } catch {
+      if (readController.signal.aborted) {
+        return response(410, 'Resource is no longer available', originHeaders);
+      }
+      return response(500, 'Resource entry read failed', originHeaders);
+    } finally {
+      disposeAbortLinks();
+    }
+  }
+
   private createOriginHeaders(request: Request): Readonly<Record<string, string>> | Response {
     const origin = request.headers.get('Origin');
     if (origin === null) return {};
@@ -472,6 +593,7 @@ export class DesktopResourceRegistry {
     this.registrations.delete(id);
     registration.abortController.abort(new Error('Desktop resource registration was released.'));
     if (registration.kind === 'pcm') registration.priming.resolve();
+    if (registration.kind === 'resource-tree') registration.releaseSource();
   }
 
   private createId(): string {

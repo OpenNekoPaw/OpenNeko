@@ -58,6 +58,11 @@ export class PreviewSessionRegistry {
     return session;
   }
 
+  has(sessionId: string): boolean {
+    this.requireActive();
+    return this.sessions.has(sessionId);
+  }
+
   assertIdentity(identity: PreviewRuntimeIdentity): PreviewSessionSnapshot {
     const session = this.read(identity.sessionId);
     assertSessionIdentity(session.identity, identity);
@@ -86,6 +91,25 @@ export class PreviewSessionRegistry {
       identity,
       presentation,
     });
+    return Object.freeze({
+      sessionId,
+      previous: session,
+      next: freezeSession(projection),
+    });
+  }
+
+  planPreparation(sessionId: string, projection: PreviewProjection): PreviewSessionTransition {
+    const session = this.read(sessionId);
+    if (session.projection.status !== 'loading') {
+      throw new Error(`Preview session '${sessionId}' is not awaiting preparation.`);
+    }
+    assertSessionIdentity(session.identity, projection.identity);
+    if (projection.presentation !== session.projection.presentation) {
+      throw new Error(`Preview session '${sessionId}' preparation changed its presentation.`);
+    }
+    if (projection.status === 'loading') {
+      throw new Error(`Preview session '${sessionId}' preparation did not settle.`);
+    }
     return Object.freeze({
       sessionId,
       previous: session,

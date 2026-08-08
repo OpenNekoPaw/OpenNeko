@@ -15,7 +15,7 @@ const ResourceBrowserRoot = lazy(async () => {
 });
 
 const QuickPreviewSurface = lazy(async () => {
-  const module = await import('@neko/preview-webview/root');
+  const module = await import('@neko/preview-webview/quick-preview');
   return { default: module.QuickPreviewSurface };
 });
 

@@ -6,6 +6,7 @@ import {
   createSourceModelStaging,
   detectPreviewContentKind,
   getPreviewMediaType,
+  getEpubResourceMediaType,
   parsePreviewMediaDescriptor,
   parsePreviewMediaRange,
   parsePreviewProjection,
@@ -25,9 +26,35 @@ const identity: PreviewRuntimeIdentity = {
 };
 
 describe('Preview Host runtime contract', () => {
+  it('parses the exact loading projection without a synthetic descriptor', () => {
+    expect(
+      parsePreviewProjection({ identity, presentation: 'temporary', status: 'loading' }),
+    ).toEqual({ identity, presentation: 'temporary', status: 'loading' });
+    expect(() =>
+      parsePreviewProjection({
+        identity,
+        presentation: 'temporary',
+        status: 'loading',
+        descriptor: {},
+      }),
+    ).toThrow('unsupported fields');
+  });
+
   it('classifies screenplay source as package-owned text preview content', () => {
     expect(detectPreviewContentKind('scripts/episode-1.fountain')).toBe('text');
     expect(getPreviewMediaType('scripts/episode-1.fountain')).toBe('text/plain');
+  });
+
+  it('owns EPUB entry MIME resolution without treating the archive as one binary payload', () => {
+    expect(getEpubResourceMediaType('META-INF/container.xml')).toBe('application/xml');
+    expect(getEpubResourceMediaType('OPS/package.opf')).toBe('application/oebps-package+xml');
+    expect(getEpubResourceMediaType('OPS/toc.ncx')).toBe('application/x-dtbncx+xml');
+    expect(getEpubResourceMediaType('OPS/chapter.xhtml')).toBe('application/xhtml+xml');
+    expect(getEpubResourceMediaType('OPS/style.css')).toBe('text/css');
+    expect(getEpubResourceMediaType('OPS/cover.avif')).toBe('image/avif');
+    expect(getEpubResourceMediaType('OPS/font.woff2')).toBe('font/woff2');
+    expect(getEpubResourceMediaType('OPS/audio.mp3')).toBe('audio/mpeg');
+    expect(getEpubResourceMediaType('OPS/data.bin')).toBe('application/octet-stream');
   });
 
   it('creates the shared source-model staging used by VS Code and Desktop hosts', () => {

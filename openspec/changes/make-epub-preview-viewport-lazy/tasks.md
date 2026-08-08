@@ -13,4 +13,4 @@
 ## 3. Runtime Qualification
 
 - [ ] 3.1 Validate a large image EPUB in visible Electron: loading overlay clears, first chapter is interactive, distant navigation works, and unloaded chapters do not build DOM or decode images.
-- [x] 3.2 Apply `neko-quality-review` and record the remaining complete-ZIP archive read as explicit performance risk rather than claiming byte-range lazy loading.
+- [x] 3.2 Apply `neko-quality-review`; the later `progressive-creative-surface-loading` change replaces the recorded complete-ZIP risk with a package-owned virtual-directory boundary.

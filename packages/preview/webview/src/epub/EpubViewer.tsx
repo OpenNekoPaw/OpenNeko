@@ -104,7 +104,7 @@ function matchesHref(a: string, b: string): boolean {
 
 /**
  * Custom request function for epub.js that uses fetch() instead of XMLHttpRequest.
- * The embedded renderer uses fetch so archive URLs share one request path.
+ * The embedded renderer uses fetch for exact virtual-directory entries.
  */
 export async function fetchForEpub(url: string, type?: string): Promise<unknown> {
   const resp = await fetch(url);
@@ -778,7 +778,7 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
     });
   };
 
-  /** Load EPUB from either the Preview Node host or an embeddable archive URL. */
+  /** Load EPUB from a Host-authorized virtual directory. */
   const loadEpubFromUrl = useCallback(
     async (url: string) => {
       const loadRequest = {};
@@ -791,9 +791,12 @@ export const EpubViewer: FC<{ readonly sourceUrl?: string }> = ({ sourceUrl }) =
         setLoading(true);
         loadingRef.current = true;
         setError(null);
-        // Use one fetch-based request path for Desktop and embeddable archive URLs.
+        if (!url.endsWith('/')) {
+          throw new Error('EPUB virtual directory URL must end with a slash.');
+        }
         const book = ePub(url, {
-          openAs: 'epub',
+          openAs: 'directory',
+          replacements: 'none',
           requestMethod: fetchForEpub as (
             url: string,
             type: string,

@@ -219,7 +219,8 @@ describe('Desktop architecture boundaries', () => {
     expect(shell).toContain("portalDeck('bottomPanel'");
     expect(previewSurface).toContain("import('@neko/preview-webview/root')");
     expect(previewSurface).toContain('<PreviewRoot');
-    expect(previewSurface).toContain('runtime={runtime}');
+    expect(previewSurface).toContain('bootstrap={bootstrap}');
+    expect(previewSurface).toContain('bootstrap.prepare()');
     expect(previewSurface).toContain('chrome="content-only"');
     for (const source of [cutSurface, previewSurface, shell]) {
       expect(source).not.toContain('/host-adapter');

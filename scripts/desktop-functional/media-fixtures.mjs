@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { TextReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -54,11 +55,13 @@ export async function createDesktopMediaFixtureSet(workspacePath) {
   ]);
 
   const pdfPath = join(documentRoot, 'qualification.pdf');
+  const epubPath = join(documentRoot, 'qualification.epub');
   const glbPath = join(modelRoot, 'qualification.glb');
   const gltfPath = join(modelRoot, 'qualification.gltf');
   const gltfBinaryPath = join(modelRoot, 'triangle.bin');
   await Promise.all([
     writeFile(pdfPath, createMinimalPdf()),
+    writeFile(epubPath, await createMinimalEpub()),
     writeFile(glbPath, createMinimalGlb()),
     writeFile(gltfPath, `${JSON.stringify(createGltfManifest(), null, 2)}\n`),
     writeFile(gltfBinaryPath, createTrianglePositions()),
@@ -69,10 +72,57 @@ export async function createDesktopMediaFixtureSet(workspacePath) {
     audio: 'media/tone.wav',
     image: 'media/frame.png',
     pdf: 'documents/qualification.pdf',
+    epub: 'documents/qualification.epub',
     glb: 'models/qualification.glb',
     gltf: 'models/qualification.gltf',
     gltfDependency: 'models/triangle.bin',
   });
+}
+
+async function createMinimalEpub() {
+  const writer = new ZipWriter(new Uint8ArrayWriter(), { useWebWorkers: false });
+  await writer.add('mimetype', new TextReader('application/epub+zip'), { level: 0 });
+  await writer.add(
+    'META-INF/container.xml',
+    new TextReader(
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">' +
+        '<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>' +
+        '</rootfiles></container>',
+    ),
+  );
+  await writer.add(
+    'OEBPS/content.opf',
+    new TextReader(
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="book-id" version="2.0">' +
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">' +
+        '<dc:title>OpenNeko EPUB Qualification</dc:title><dc:language>en</dc:language>' +
+        '<dc:identifier id="book-id">openneko:qualification</dc:identifier></metadata>' +
+        '<manifest><item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>' +
+        '<item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest>' +
+        '<spine toc="toc"><itemref idref="chapter"/></spine></package>',
+    ),
+  );
+  await writer.add(
+    'OEBPS/toc.ncx',
+    new TextReader(
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">' +
+        '<head/><docTitle><text>OpenNeko EPUB Qualification</text></docTitle>' +
+        '<navMap><navPoint id="chapter" playOrder="1"><navLabel><text>Qualification</text></navLabel>' +
+        '<content src="chapter.xhtml"/></navPoint></navMap></ncx>',
+    ),
+  );
+  await writer.add(
+    'OEBPS/chapter.xhtml',
+    new TextReader(
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Qualification</title></head>' +
+        '<body><h1>OpenNeko EPUB Qualification</h1><p>Entry-level progressive preview.</p></body></html>',
+    ),
+  );
+  return writer.close();
 }
 
 async function runFfmpeg(args) {

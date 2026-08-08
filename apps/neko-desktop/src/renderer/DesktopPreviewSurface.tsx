@@ -1,6 +1,7 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo } from 'react';
 import { useTranslation } from '@neko/ui/i18n/react';
 import { usePreviewViewerSnapshotStore } from '@neko/preview-webview/presentation-snapshot';
+import { createPreviewRuntimeBootstrap } from '@neko/preview-webview/runtime-bootstrap';
 import type {
   DesktopProjectCatalogItem,
   DesktopShellProjection,
@@ -51,6 +52,18 @@ export function DesktopPreviewSurface({
     view.viewInstanceId,
     view.viewId,
   ]);
+  const bootstrap = useMemo(() => createPreviewRuntimeBootstrap(runtime), [runtime]);
+  const bootstrapLifetime = useMemo(() => ({ bootstrap, mounted: false }), [bootstrap]);
+  useEffect(() => {
+    bootstrapLifetime.mounted = true;
+    bootstrapLifetime.bootstrap.prepare();
+    return () => {
+      bootstrapLifetime.mounted = false;
+      queueMicrotask(() => {
+        if (!bootstrapLifetime.mounted) bootstrapLifetime.bootstrap.dispose();
+      });
+    };
+  }, [bootstrapLifetime]);
 
   return (
     <section
@@ -67,9 +80,9 @@ export function DesktopPreviewSurface({
         }
       >
         <PreviewRoot
+          bootstrap={bootstrap}
           chrome="content-only"
           lifecyclePresentation="active"
-          runtime={runtime}
           locale={locale}
           snapshotStore={snapshotStore}
         />

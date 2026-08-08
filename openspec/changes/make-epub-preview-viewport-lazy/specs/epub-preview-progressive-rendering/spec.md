@@ -35,8 +35,8 @@ The EPUB waterfall preview SHALL assign stable estimated heights to unloaded cha
 - **WHEN** a visible chapter's resources finish loading
 - **THEN** the Preview replaces that chapter's estimate with its measured height and updates scroll/page metrics without re-rendering sibling placeholders
 
-#### Scenario: Archive bytes still require full open
+#### Scenario: Book metadata and content are requested from a virtual directory
 
-- **WHEN** the current epub.js archive source is opened
-- **THEN** the Preview MAY read the complete authorized ZIP binary before metadata becomes available
-- **AND** it MUST NOT describe that archive transfer as byte-range lazy loading
+- **WHEN** epub.js opens the authorized EPUB source
+- **THEN** the Preview requests the container, package metadata and viewport-relevant content as exact virtual-directory entries
+- **AND** it MUST NOT request or receive the complete ZIP archive binary

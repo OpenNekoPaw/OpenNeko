@@ -15,6 +15,7 @@ const VIEWERS = Object.freeze([
   { key: 'audio', kind: 'audio', pathKey: 'audio' },
   { key: 'video', kind: 'video', pathKey: 'video' },
   { key: 'pdf', kind: 'document', pathKey: 'pdf' },
+  { key: 'epub', kind: 'document', pathKey: 'epub' },
   { key: 'glb', kind: 'model', pathKey: 'glb' },
   { key: 'gltf', kind: 'model', pathKey: 'gltf' },
 ]);
@@ -80,7 +81,7 @@ export const previewOpenNekoConsumerScenario = Object.freeze({
     };
   },
   assertObservation(observation, evidence) {
-    if (observation.openNekoResourceRequestCount < 7) {
+    if (observation.openNekoResourceRequestCount < 10) {
       throw new Error('Preview did not reach the OpenNeko handler for its viewer matrix.');
     }
     if (evidence.viewers.length !== VIEWERS.length) {
@@ -111,6 +112,7 @@ async function waitForViewer(click, evaluate, definition) {
       const video = root.querySelector('video');
       const audio = root.querySelector('audio');
       const pdf = root.querySelector('[data-testid="pdf-preview-ready"]');
+      const epub = root.querySelector('[data-testid="epub-preview-ready"]');
       const model = root.querySelector('[data-testid="model-preview-ready"]');
       const playbackButton = root.querySelector(
         '[data-testid="preview-${definition.key}-toggle-playback"]',
@@ -125,6 +127,8 @@ async function waitForViewer(click, evaluate, definition) {
         audioReady: audio instanceof HTMLAudioElement && audio.readyState >= HTMLMediaElement.HAVE_METADATA,
         audioTime: audio instanceof HTMLAudioElement ? audio.currentTime : 0,
         pdfReady: pdf instanceof HTMLElement && Number(pdf.dataset.pageCount ?? '0') > 0,
+        epubReady:
+          epub instanceof HTMLElement && Number(epub.dataset.spineCount ?? '0') > 0,
         modelReady: model instanceof HTMLElement && model.dataset.viewerStatus === 'ready',
         meshCount: model instanceof HTMLElement ? Number(model.dataset.meshCount ?? '0') : 0,
         playbackButtonCount: root.querySelectorAll(
@@ -148,6 +152,7 @@ async function waitForViewer(click, evaluate, definition) {
         (definition.key === 'audio' && detail.audioTime > 0.1) ||
         (definition.key === 'video' && detail.videoTime > 0.1) ||
         (definition.key === 'pdf' && detail.pdfReady) ||
+        (definition.key === 'epub' && detail.epubReady) ||
         ((definition.key === 'glb' || definition.key === 'gltf') &&
           detail.modelReady &&
           detail.meshCount > 0);

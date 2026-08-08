@@ -2,7 +2,6 @@ import type {
   ModelPreviewFormat,
   ModelPreviewSourceDescriptor,
   PreviewContentKind,
-  PreviewHostRuntime,
   PreviewMediaDescriptor,
   PreviewProjection,
   PreviewHostRuntimeRoute,
@@ -14,6 +13,8 @@ import type {
 import { PREVIEW_HOST_RUNTIME_ROUTES } from '@neko/preview-domain';
 import type { SupportedLocale } from '@neko/ui/i18n';
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -24,23 +25,44 @@ import {
 } from 'react';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService, setLocale } from '../i18n';
-import { ModelViewer } from '../model/ModelViewer';
 import { createSourceModelViewerHost } from '../model/sourceModelViewerHost';
-import { CbzViewer } from '../cbz/CbzViewer';
-import { DocxViewer } from '../docx/DocxViewer';
-import { EpubViewer } from '../epub/EpubViewer';
-import { PdfViewer } from '../pdf/PdfViewer';
-import { AudioPlayer } from '../audio/AudioPlayer';
-import { VideoPlayer } from '../video/VideoPlayer';
 import { PersistedStateProvider } from '../shared/usePersistedState';
 import type { PreviewViewerSnapshot, PreviewViewerSnapshotStore } from './viewer-snapshot';
 import { useOptionalPreviewViewerSnapshotStore } from './viewer-snapshot-context';
-import '../model/model.css';
-import '../styles/player.css';
+import type { PreviewRuntimeBootstrap } from './runtime-bootstrap';
 import './style.css';
 
+const AudioPlayer = lazy(async () => {
+  const module = await import('../audio/AudioPlayer');
+  return { default: module.AudioPlayer };
+});
+const VideoPlayer = lazy(async () => {
+  const module = await import('../video/VideoPlayer');
+  return { default: module.VideoPlayer };
+});
+const PdfViewer = lazy(async () => {
+  const module = await import('../pdf/PdfViewer');
+  return { default: module.PdfViewer };
+});
+const DocxViewer = lazy(async () => {
+  const module = await import('../docx/DocxViewer');
+  return { default: module.DocxViewer };
+});
+const EpubViewer = lazy(async () => {
+  const module = await import('../epub/EpubViewer');
+  return { default: module.EpubViewer };
+});
+const CbzViewer = lazy(async () => {
+  const module = await import('../cbz/CbzViewer');
+  return { default: module.CbzViewer };
+});
+const ModelViewer = lazy(async () => {
+  const module = await import('../model/ModelViewer');
+  return { default: module.ModelViewer };
+});
+
 export interface PreviewRootProps {
-  readonly runtime: PreviewHostRuntime;
+  readonly bootstrap: PreviewRuntimeBootstrap;
   readonly locale: SupportedLocale;
   readonly chrome?: PreviewChrome;
   readonly lifecyclePresentation?: 'active' | 'suspended';
@@ -55,63 +77,6 @@ export interface AuthorizedPreviewRootProps {
   readonly chrome?: PreviewChrome;
   readonly lifecyclePresentation?: 'active' | 'suspended';
   readonly snapshotStore?: PreviewViewerSnapshotStore;
-}
-
-export interface QuickPreviewSurfaceProps {
-  readonly descriptor: Pick<
-    PreviewMediaDescriptor,
-    | 'byteLength'
-    | 'contentKind'
-    | 'contentLocator'
-    | 'descriptorId'
-    | 'displayName'
-    | 'mediaType'
-    | 'url'
-  > &
-    Partial<Pick<PreviewMediaDescriptor, 'sourceFingerprint'>>;
-  readonly locale: SupportedLocale;
-}
-
-export function QuickPreviewSurface({
-  descriptor,
-  locale,
-}: QuickPreviewSurfaceProps): ReactElement {
-  useEffect(() => {
-    setLocale(locale);
-  }, [locale]);
-  const sourceUrl = descriptor.url;
-  return (
-    <section
-      className="neko-preview-quick"
-      data-preview-kind={descriptor.contentKind}
-      aria-label={descriptor.displayName}
-    >
-      {descriptor.contentKind === 'image' ? (
-        <img src={sourceUrl} alt={descriptor.displayName} />
-      ) : null}
-      {descriptor.contentKind === 'video' ? (
-        <I18nProvider service={i18nService}>
-          <VideoPlayer
-            sourceUrl={sourceUrl}
-            displayName={descriptor.displayName}
-            autoPlay
-            compact
-            muted
-          />
-        </I18nProvider>
-      ) : null}
-      {descriptor.contentKind === 'audio' ? (
-        <I18nProvider service={i18nService}>
-          <AudioPlayer
-            sourceUrl={sourceUrl}
-            displayName={descriptor.displayName}
-            autoPlay
-            compact
-          />
-        </I18nProvider>
-      ) : null}
-    </section>
-  );
 }
 
 type PreviewRootState =
@@ -219,15 +184,16 @@ export function PreviewPresentation({
 }
 
 export function PreviewRoot({
+  bootstrap,
   chrome = 'default',
   lifecyclePresentation = 'active',
   locale,
-  runtime,
   snapshotStore,
 }: PreviewRootProps): ReactElement {
   const [state, setState] = useState<PreviewRootState>({ kind: 'loading' });
   const [pendingRoute, setPendingRoute] = useState<PreviewHostRuntimeRoute>();
   const sequence = useRef(0);
+  const runtime = bootstrap.runtime;
 
   useEffect(() => {
     setLocale(locale);
@@ -235,10 +201,12 @@ export function PreviewRoot({
 
   useEffect(() => {
     let active = true;
+    let runtimeEventObserved = false;
     sequence.current = 0;
     setState({ kind: 'loading' });
     const unsubscribe = runtime.subscribe((event) => {
       if (!active) return;
+      runtimeEventObserved = true;
       if (event.sequence !== sequence.current + 1) {
         setState({
           kind: 'error',
@@ -249,10 +217,10 @@ export function PreviewRoot({
       sequence.current = event.sequence;
       setState({ kind: 'ready', projection: event.projection });
     });
-    void runtime
+    void bootstrap
       .getSnapshot()
       .then((projection) => {
-        if (active) setState({ kind: 'ready', projection });
+        if (active && !runtimeEventObserved) setState({ kind: 'ready', projection });
       })
       .catch((error: unknown) => {
         if (active) setState({ kind: 'error', message: describeError(error) });
@@ -261,7 +229,7 @@ export function PreviewRoot({
       active = false;
       unsubscribe();
     };
-  }, [runtime]);
+  }, [bootstrap, runtime]);
 
   if (state.kind === 'loading') {
     return (
@@ -279,6 +247,11 @@ export function PreviewRoot({
     );
   }
   const projection = state.projection;
+  if (projection.status === 'loading') {
+    return (
+      <PreviewStatus chrome={chrome} message={label(locale, '正在载入预览…', 'Loading preview…')} />
+    );
+  }
   if (projection.status !== 'ready') {
     return (
       <PreviewStatus
@@ -454,37 +427,43 @@ function ImagePreview({ descriptor, sourceUrl }: PreviewViewerProps): ReactEleme
 
 function VideoPreview({
   descriptor,
+  locale,
   onSnapshotChange,
   snapshot,
   sourceUrl,
 }: PreviewViewerProps): ReactElement {
   return (
-    <I18nProvider service={i18nService}>
-      <VideoPlayer
-        sourceUrl={sourceUrl}
-        displayName={descriptor.displayName}
-        initialSnapshot={snapshot?.media}
-        onSnapshotChange={(media) => onSnapshotChange({ media })}
-      />
-    </I18nProvider>
+    <ViewerModuleBoundary locale={locale}>
+      <I18nProvider service={i18nService}>
+        <VideoPlayer
+          sourceUrl={sourceUrl}
+          displayName={descriptor.displayName}
+          initialSnapshot={snapshot?.media}
+          onSnapshotChange={(media) => onSnapshotChange({ media })}
+        />
+      </I18nProvider>
+    </ViewerModuleBoundary>
   );
 }
 
 function AudioPreview({
   descriptor,
+  locale,
   onSnapshotChange,
   snapshot,
   sourceUrl,
 }: PreviewViewerProps): ReactElement {
   return (
-    <I18nProvider service={i18nService}>
-      <AudioPlayer
-        sourceUrl={sourceUrl}
-        displayName={descriptor.displayName}
-        initialSnapshot={snapshot?.media}
-        onSnapshotChange={(media) => onSnapshotChange({ media })}
-      />
-    </I18nProvider>
+    <ViewerModuleBoundary locale={locale}>
+      <I18nProvider service={i18nService}>
+        <AudioPlayer
+          sourceUrl={sourceUrl}
+          displayName={descriptor.displayName}
+          initialSnapshot={snapshot?.media}
+          onSnapshotChange={(media) => onSnapshotChange({ media })}
+        />
+      </I18nProvider>
+    </ViewerModuleBoundary>
   );
 }
 
@@ -547,7 +526,9 @@ function DocumentPreview({
       initialState={snapshot?.documentState}
       onStateChange={(documentState) => onSnapshotChange({ documentState })}
     >
-      <I18nProvider service={i18nService}>{viewer}</I18nProvider>
+      <ViewerModuleBoundary locale={locale}>
+        <I18nProvider service={i18nService}>{viewer}</I18nProvider>
+      </ViewerModuleBoundary>
     </PersistedStateProvider>
   );
 }
@@ -579,9 +560,31 @@ function ModelPreview({
     setLocale(locale);
   }, [locale]);
   return (
-    <I18nProvider service={i18nService}>
-      <ModelViewer host={host} sessionId={descriptor.descriptorId} />
-    </I18nProvider>
+    <ViewerModuleBoundary locale={locale}>
+      <I18nProvider service={i18nService}>
+        <ModelViewer host={host} sessionId={descriptor.descriptorId} />
+      </I18nProvider>
+    </ViewerModuleBoundary>
+  );
+}
+
+function ViewerModuleBoundary({
+  children,
+  locale,
+}: {
+  readonly children: ReactNode;
+  readonly locale: SupportedLocale;
+}): ReactElement {
+  return (
+    <Suspense
+      fallback={
+        <div className="neko-preview-root__status" role="status">
+          {label(locale, '正在载入查看器…', 'Loading viewer…')}
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
   );
 }
 

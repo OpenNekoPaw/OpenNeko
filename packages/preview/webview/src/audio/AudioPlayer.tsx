@@ -18,6 +18,7 @@ import type {
 } from '../shared/types';
 import { parseLrc, type LrcLine } from './lrc-parser';
 import type { PreviewMediaViewerSnapshot } from '../root/viewer-snapshot';
+import '../styles/player.css';
 
 export interface AudioPlayerProps {
   readonly sourceUrl?: string;

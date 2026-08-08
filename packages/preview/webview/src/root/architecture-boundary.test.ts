@@ -13,7 +13,8 @@ describe('Preview Root architecture boundary', () => {
       'utf8',
     );
 
-    expect(source).toContain("import { ModelViewer } from '../model/ModelViewer'");
+    expect(source).toContain("await import('../model/ModelViewer')");
+    expect(source).not.toContain("from '../model/ModelViewer'");
     expect(source).toContain(
       "import { createSourceModelViewerHost } from '../model/sourceModelViewerHost'",
     );
@@ -34,7 +35,6 @@ describe('Preview Root architecture boundary', () => {
   it('consumes only opaque authorized media URLs without renderer-owned file transport', async () => {
     const source = await readFile(new URL('./index.tsx', import.meta.url), 'utf8');
 
-    expect(source).toContain('const sourceUrl = descriptor.url;');
     expect(source).toContain('sourceUrl: descriptor.url,');
     expect(source).toContain('snapshotStore.read(descriptor.descriptorId)');
     expect(source).toContain('onSnapshotChange: updateSnapshot');
@@ -47,6 +47,18 @@ describe('Preview Root architecture boundary', () => {
     expect(source).not.toContain('new Blob');
     expect(source).not.toContain('absolutePath');
     expect(source).not.toContain('workspacePath');
+    for (const viewerModule of [
+      '../audio/AudioPlayer',
+      '../video/VideoPlayer',
+      '../pdf/PdfViewer',
+      '../docx/DocxViewer',
+      '../epub/EpubViewer',
+      '../cbz/CbzViewer',
+      '../model/ModelViewer',
+    ]) {
+      expect(source).toContain(`await import('${viewerModule}')`);
+      expect(source).not.toContain(`from '${viewerModule}'`);
+    }
     expectProductionRootSource('root/index.tsx', source);
   });
 });

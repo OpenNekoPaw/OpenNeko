@@ -99,6 +99,7 @@
     "@fission-ai/openspec": "1.3.1",
     "@neko/entity-domain": "workspace:*",
     "@neko/media": "workspace:*",
+    "@zip.js/zip.js": "^2.8.26",
     "@vitest/coverage-v8": "4.1.2",
     "dependency-cruiser": "^16.10.4",
     "eslint": "^9.39.4",

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { Uint8ArrayReader, Uint8ArrayWriter, ZipReader } from '@zip.js/zip.js';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -30,17 +31,20 @@ describe('fetchForEpub', () => {
     expect(typeof Reflect.get(NodeList.prototype, 'map')).toBe('function');
   });
 
-  it('returns an ArrayBuffer for epub.js binary archive requests', async () => {
-    const archive = Uint8Array.from([0x50, 0x4b, 0x03, 0x04]);
+  it('returns an ArrayBuffer only for an exact binary entry request', async () => {
+    const binaryEntry = Uint8Array.from([0x50, 0x4b, 0x03, 0x04]);
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(archive, { status: 200 })),
+      vi.fn(async () => new Response(binaryEntry, { status: 200 })),
     );
 
-    const result = await fetchForEpub('http://127.0.0.1:43125/resources/book', 'binary');
+    const result = await fetchForEpub(
+      'openneko://resource/0123456789abcdefghijklmnopqrstuv/OEBPS/font.woff2',
+      'binary',
+    );
 
     expect(result).toBeInstanceOf(ArrayBuffer);
-    expect(Array.from(new Uint8Array(result as ArrayBuffer))).toEqual(Array.from(archive));
+    expect(Array.from(new Uint8Array(result as ArrayBuffer))).toEqual(Array.from(binaryEntry));
   });
 
   it('keeps blob requests as Blob objects', async () => {
@@ -54,21 +58,71 @@ describe('fetchForEpub', () => {
     expect(result).toBeInstanceOf(Blob);
   });
 
-  it('opens an archived EPUB supplied through the embeddable source URL', async () => {
+  it('opens a virtual-directory EPUB without requesting an unrelated distant asset', async () => {
     const archive = readFileSync(
       resolve(
         import.meta.dirname,
         '../../../../../scripts/agent-eval/shared-fixtures/document-image-workspace/synthetic-document.epub',
       ),
     );
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(archive, { status: 200 })),
+    const entries = await readArchiveEntries(archive);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const packageDocument = decoder.decode(entries.get('OEBPS/content.opf'));
+    entries.set(
+      'OEBPS/content.opf',
+      encoder.encode(
+        packageDocument
+          .replace(
+            '</manifest>',
+            '<item id="chapter-2" href="chapter-2.xhtml" media-type="application/xhtml+xml"/>' +
+              '<item id="chapter-3" href="chapter-3.xhtml" media-type="application/xhtml+xml"/>' +
+              '<item id="chapter-4" href="chapter-4.xhtml" media-type="application/xhtml+xml"/>' +
+              '</manifest>',
+          )
+          .replace(
+            '</spine>',
+            '<itemref idref="chapter-2"/><itemref idref="chapter-3"/>' +
+              '<itemref idref="chapter-4"/></spine>',
+          ),
+      ),
     );
+    for (const chapter of [2, 3, 4]) {
+      entries.set(
+        `OEBPS/chapter-${chapter}.xhtml`,
+        encoder.encode(`<html xmlns="http://www.w3.org/1999/xhtml"><body>${chapter}</body></html>`),
+      );
+    }
+    const requests: string[] = [];
+    vi.stubGlobal('fetch', async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      const entryPath = decodeURIComponent(url.pathname).replace(/^\/resources\/book\//u, '');
+      requests.push(entryPath);
+      if (entryPath === 'OEBPS/chapter-4.xhtml') {
+        return new Response('poisoned distant chapter', { status: 500 });
+      }
+      const bytes = entries.get(entryPath);
+      if (!bytes) return new Response('missing', { status: 404 });
+      const body = new Uint8Array(bytes.byteLength);
+      body.set(bytes);
+      return new Response(body.buffer);
+    });
     vi.stubGlobal(
       'IntersectionObserver',
       class {
-        observe(): void {}
+        private observed = 0;
+
+        constructor(private readonly callback: IntersectionObserverCallback) {}
+
+        observe(target: Element): void {
+          this.observed += 1;
+          if (this.observed === 1) {
+            this.callback(
+              [{ target, isIntersecting: true } as IntersectionObserverEntry],
+              this as unknown as IntersectionObserver,
+            );
+          }
+        }
         unobserve(): void {}
         disconnect(): void {}
       },
@@ -86,12 +140,15 @@ describe('fetchForEpub', () => {
         root.render(
           <I18nProvider service={i18nService}>
             <PersistedStateProvider>
-              <EpubViewer sourceUrl="http://127.0.0.1:43125/resources/book" />
+              <EpubViewer sourceUrl="http://127.0.0.1:43125/resources/book/" />
             </PersistedStateProvider>
           </I18nProvider>,
         );
       });
       await vi.waitFor(() => expect(container.textContent).toContain('Page'), {
+        timeout: 5_000,
+      });
+      await vi.waitFor(() => expect(requests).toContain('OEBPS/page.xhtml'), {
         timeout: 5_000,
       });
       expect(container.textContent).not.toContain('Error:');
@@ -101,11 +158,29 @@ describe('fetchForEpub', () => {
       );
       expect(liveChapter).not.toBeNull();
       expect(liveChapter?.style.marginInline).toBe('auto');
+      expect(requests).toContain('META-INF/container.xml');
+      expect(requests).toContain('OEBPS/content.opf');
+      expect(requests).toContain('OEBPS/page.xhtml');
+      expect(requests).not.toContain('OEBPS/chapter-4.xhtml');
     } finally {
       await act(async () => root.unmount());
     }
-  });
+  }, 15_000);
 });
+
+async function readArchiveEntries(archive: Uint8Array): Promise<Map<string, Uint8Array>> {
+  const reader = new ZipReader(new Uint8ArrayReader(archive), { useWebWorkers: false });
+  const entries = new Map<string, Uint8Array>();
+  try {
+    for (const entry of await reader.getEntries()) {
+      if (!entry.directory)
+        entries.set(entry.filename, await entry.getData(new Uint8ArrayWriter()));
+    }
+    return entries;
+  } finally {
+    await reader.close();
+  }
+}
 
 describe('EPUB archive resource readiness', () => {
   it('does not advance before epub.js finishes opening archive resources', async () => {

@@ -52,6 +52,7 @@ import type { ModelSceneSelection } from './modelSceneSelection';
 import { ModelInspectorPanel } from './components/ModelInspectorPanel';
 import { ModelScenePanel } from './components/ModelScenePanel';
 import { ModelOrientationGizmo } from './components/ModelOrientationGizmo';
+import './model.css';
 import { ThreeReferencePurposeControls } from './components/ThreeReferencePurposeControls';
 import {
   ModelViewportControls,

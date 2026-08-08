@@ -53,6 +53,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.2
         version: 4.1.2(vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@25.7.0)(jiti@2.7.0)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0)))
+      '@zip.js/zip.js':
+        specifier: ^2.8.26
+        version: 2.8.26
       dependency-cruiser:
         specifier: ^16.10.4
         version: 16.10.4
@@ -210,6 +213,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: 4.3.4
         version: 4.3.4(vite@6.4.2(patch_hash=dc45f11845a36f6e449d48f96309546ee59c02cf4bf9e3f6ae79992160198537)(@types/node@24.13.3)(jiti@1.21.7)(terser@5.49.0)(tsx@4.21.0)(yaml@2.9.0))
+      '@zip.js/zip.js':
+        specifier: ^2.8.26
+        version: 2.8.26
       autoprefixer:
         specifier: 10.4.27
         version: 10.4.27(postcss@8.5.6)

@@ -1,4 +1,11 @@
 export {
+  createNodeArchiveResource,
+  type CreateNodeArchiveResourceOptions,
+  type NodeArchiveResource,
+  type NodeArchiveResourceEntry,
+} from './node-archive-resource';
+
+export {
   createNodeDocumentLowLevelAccess,
   DEFAULT_DOCUMENT_WHOLE_FILE_MAX_BYTES,
   type CreateNodeDocumentLowLevelAccessOptions,
